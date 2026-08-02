@@ -2,6 +2,8 @@ import { ContentTypes, ContentTypesError, parseContentTypes } from "./content-ty
 import { PartName, PartNameError } from "./part-name.ts";
 import {
   parseRelationships,
+  isRelationshipPartName,
+  relationshipSource,
   Relationships,
   RelationshipsError,
 } from "./relationships.ts";
@@ -9,6 +11,8 @@ import { openZipArchive, type OpenZipArchiveOptions, type ZipArchive, type ZipEn
 import { writeZipArchive } from "./zip/writer.ts";
 
 const CONTENT_TYPES_ITEM_NAME = "[Content_Types].xml";
+const RELATIONSHIPS_CONTENT_TYPE =
+  "application/vnd.openxmlformats-package.relationships+xml";
 const OFFICE_DOCUMENT_RELATIONSHIP_TYPES = new Set([
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument",
   "http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument",
@@ -18,10 +22,13 @@ export type OfficeDocumentFamily = "word" | "spreadsheet" | "presentation";
 
 export type OpcPackageErrorCode =
   | "duplicate_part"
+  | "invalid_relationship_part"
   | "invalid_part_name"
   | "missing_internal_target"
   | "missing_main_part"
   | "multiple_main_parts"
+  | "relationship_source_forbidden"
+  | "relationship_target_forbidden"
   | "unsupported_main_part";
 
 export class OpcPackageError extends Error {
@@ -76,8 +83,25 @@ export class OpcPackage {
   }
 
   relationships(source: PartName | null): Relationships {
+    if (source !== null && isRelationshipPartName(source)) {
+      throw new OpcPackageError(
+        "relationship_source_forbidden",
+        `Relationship part ${JSON.stringify(source.value)} cannot own relationships.`,
+        { partName: source.value },
+      );
+    }
     const relationships = parseRelationships(this.archive, source);
     for (const relationship of relationships.items) {
+      if (
+        relationship.targetMode === "Internal" &&
+        isRelationshipPartName(relationship.targetPartName)
+      ) {
+        throw new OpcPackageError(
+          "relationship_target_forbidden",
+          `Relationship ${JSON.stringify(relationship.id)} targets relationship part ${JSON.stringify(relationship.targetPartName.value)}.`,
+          { partName: relationship.targetPartName.value },
+        );
+      }
       if (
         relationship.targetMode === "Internal" &&
         this.getPart(relationship.targetPartName) === undefined
@@ -179,6 +203,27 @@ export function openOpcPackage(
       throw cause;
     }
     parts.push(Object.freeze({ name, contentType, entry }));
+  }
+  const names = new Set(parts.map((part) => part.name.equivalenceKey));
+  for (const part of parts) {
+    const source = relationshipSource(part.name);
+    if (source === undefined) {
+      continue;
+    }
+    if (part.contentType !== RELATIONSHIPS_CONTENT_TYPE) {
+      throw new OpcPackageError(
+        "invalid_relationship_part",
+        `Relationship part ${JSON.stringify(part.name.value)} has invalid content type ${JSON.stringify(part.contentType)}.`,
+        { partName: part.name.value },
+      );
+    }
+    if (source !== null && !names.has(source.equivalenceKey)) {
+      throw new OpcPackageError(
+        "invalid_relationship_part",
+        `Relationship part ${JSON.stringify(part.name.value)} has no source part ${JSON.stringify(source.value)}.`,
+        { partName: part.name.value },
+      );
+    }
   }
   return new OpcPackage(archive, contentTypes, parts);
 }

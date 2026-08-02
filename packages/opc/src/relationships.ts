@@ -138,6 +138,25 @@ export function relationshipItemName(source: PartName | null): string {
   return `${directory}_rels/${filename}.rels`;
 }
 
+export function relationshipSource(partName: PartName): PartName | null | undefined {
+  if (partName.value === "/_rels/.rels") {
+    return null;
+  }
+  const match = /^(.*)\/_rels\/([^/]+)\.rels$/.exec(partName.value);
+  if (match === null) {
+    return undefined;
+  }
+  const prefix = match[1] ?? "";
+  const filename = match[2];
+  return filename === undefined
+    ? undefined
+    : PartName.parse(`${prefix}/${filename}`);
+}
+
+export function isRelationshipPartName(partName: PartName): boolean {
+  return relationshipSource(partName) !== undefined;
+}
+
 export function parseRelationships(
   archive: ZipArchive,
   source: PartName | null,

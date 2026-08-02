@@ -26,8 +26,10 @@ export type {
 export { PartName, PartNameError } from "./part-name.ts";
 export {
   createRelationship,
+  isRelationshipPartName,
   parseRelationships,
   relationshipItemName,
+  relationshipSource,
   Relationships,
   RelationshipsError,
   serializeRelationships,

@@ -116,6 +116,46 @@ describe("OPC package", () => {
     const pkg = openOpcPackage(buildOfficePackage(formats[0].main, formats[0].contentType));
     expect(pkg.getPart(PartName.parse("/word/document.xml"))?.contentType).toBe(formats[0].contentType);
   });
+
+  test("requires relationship parts to use the reserved media type", () => {
+    const bytes = buildPackage([
+      { name: "_rels/.rels", data: relationshipsXml("") },
+    ], `<Default Extension="rels" ContentType="application/xml"/>`);
+    expectPackageError(() => openOpcPackage(bytes), "invalid_relationship_part");
+  });
+
+  test("rejects orphaned relationship parts", () => {
+    const bytes = buildPackage([
+      { name: "word/_rels/missing.xml.rels", data: relationshipsXml("") },
+    ], `<Default Extension="rels" ContentType="${relationshipContentType}"/>`);
+    expectPackageError(() => openOpcPackage(bytes), "invalid_relationship_part");
+  });
+
+  test("relationship parts cannot own relationships", () => {
+    const pkg = openOpcPackage(buildOfficePackage(formats[0].main, formats[0].contentType));
+    expectPackageError(
+      () => pkg.relationships(PartName.parse("/_rels/.rels")),
+      "relationship_source_forbidden",
+    );
+  });
+
+  test("relationships cannot target relationship parts", () => {
+    const bytes = buildPackage([
+      {
+        name: "_rels/.rels",
+        data: relationshipsXml(`
+          ${relationship("main", "word/document.xml")}
+          <Relationship Id="forbidden" Type="https://example.test/forbidden" Target="_rels/.rels"/>
+        `),
+      },
+      { name: "word/document.xml" },
+    ], `
+      <Default Extension="rels" ContentType="${relationshipContentType}"/>
+      <Default Extension="xml" ContentType="${formats[0].contentType}"/>
+    `);
+    const pkg = openOpcPackage(bytes);
+    expectPackageError(() => pkg.relationships(null), "relationship_target_forbidden");
+  });
 });
 
 function buildOfficePackage(

@@ -255,6 +255,25 @@ describe("package transactions", () => {
       pkg.archive.compressedBytes(beforeEntry),
     );
   });
+
+  test("reserves relationship parts for graph operations", () => {
+    const transaction = beginPackageTransaction(openOpcPackage(source));
+    expect(() => transaction.replacePart("/_rels/.rels", new Uint8Array())).toThrow(
+      PackageTransactionError,
+    );
+    expect(() => transaction.removePart("/_rels/.rels")).toThrow(PackageTransactionError);
+    expect(() => transaction.addPart(
+      "/word/_rels/new.xml.rels",
+      "application/vnd.openxmlformats-package.relationships+xml",
+      new Uint8Array(),
+    )).toThrow(PackageTransactionError);
+    expect(() => transaction.addRelationship("/_rels/.rels", {
+      id: "invalid",
+      type: "https://example.test/invalid",
+      target: "/word/document.xml",
+    })).toThrow(PackageTransactionError);
+    expect(transaction.hasChanges).toBeFalse();
+  });
 });
 
 function buildPackage(): Uint8Array {

@@ -8,6 +8,7 @@ import {
 import { PartName } from "./part-name.ts";
 import {
   createRelationship,
+  isRelationshipPartName,
   relationshipItemName,
   Relationships,
   serializeRelationships,
@@ -25,7 +26,8 @@ export type PackageTransactionErrorCode =
   | "missing_part"
   | "missing_relationship"
   | "missing_source"
-  | "part_removed";
+  | "part_removed"
+  | "reserved_part";
 
 export type PackageRelationshipInput =
   | {
@@ -88,6 +90,7 @@ export class PackageTransaction {
   replacePart(name: PartName | string, bytes: Uint8Array): this {
     this.#assertActive();
     const partName = typeof name === "string" ? PartName.parse(name) : name;
+    this.#assertOrdinaryPart(partName);
     const addition = this.#additions.get(partName.equivalenceKey);
     if (addition !== undefined) {
       this.#additions.set(partName.equivalenceKey, { ...addition, bytes: bytes.slice() });
@@ -119,6 +122,7 @@ export class PackageTransaction {
   ): this {
     this.#assertActive();
     const partName = typeof name === "string" ? PartName.parse(name) : name;
+    this.#assertOrdinaryPart(partName);
     if (
       this.package.getPart(partName) !== undefined ||
       this.#additions.has(partName.equivalenceKey)
@@ -141,6 +145,7 @@ export class PackageTransaction {
   removePart(name: PartName | string): this {
     this.#assertActive();
     const partName = typeof name === "string" ? PartName.parse(name) : name;
+    this.#assertOrdinaryPart(partName);
     if (this.#additions.delete(partName.equivalenceKey)) {
       this.#relationshipSets.delete(sourceKey(partName));
       return this;
@@ -373,6 +378,7 @@ export class PackageTransaction {
 
   #editableRelationships(source: PartName | null): Relationships {
     if (source !== null) {
+      this.#assertOrdinaryPart(source);
       if (this.#removals.has(source.equivalenceKey)) {
         throw new PackageTransactionError(
           "part_removed",
@@ -400,6 +406,16 @@ export class PackageTransaction {
     return existing === undefined
       ? new Relationships(source, [])
       : this.package.relationships(source);
+  }
+
+  #assertOrdinaryPart(partName: PartName): void {
+    if (isRelationshipPartName(partName)) {
+      throw new PackageTransactionError(
+        "reserved_part",
+        `Relationship part ${JSON.stringify(partName.value)} must be edited through relationship operations.`,
+        { partName: partName.value },
+      );
+    }
   }
 }
 
