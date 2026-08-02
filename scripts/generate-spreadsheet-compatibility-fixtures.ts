@@ -29,11 +29,25 @@ const table = buildWorkbookFixture({
     }],
   }],
 });
+const formulas = buildWorkbookFixture({
+  sheets: [{
+    name: "Sample Data",
+    sheetId: 1,
+    relationshipId: "sheet1",
+    xml: `<worksheet xmlns="${namespace}"><dimension ref="B5:D10"/><sheetData>
+      <row r="5"><c r="B5"><v>13</v></c><c r="D5" t="str"><f>IF(B5&gt;0,&quot;OK&quot;,&quot;Check&quot;)</f><v/></c></row>
+      <row r="6"><c r="B6"><v>4</v></c><c r="D6" t="str"><f>IF(B6&gt;0,&quot;OK&quot;,&quot;Check&quot;)</f><v/></c></row>
+      <row r="7"><c r="B7"><v>1</v></c><c r="D7" t="str"><f>IF(B7&gt;0,&quot;OK&quot;,&quot;Check&quot;)</f><v/></c></row>
+      <row r="10"><c r="C10"><f>SUM(B5:B7)</f><v/></c></row>
+    </sheetData></worksheet>`,
+  }],
+});
 
 await Promise.all([
   Bun.write(resolve(outputDirectory, "spreadsheet-original.xlsx"), original),
   Bun.write(resolve(outputDirectory, "spreadsheet-edited.xlsx"), edited),
   Bun.write(resolve(outputDirectory, "spreadsheet-table.xlsx"), table),
+  Bun.write(resolve(outputDirectory, "spreadsheet-formulas.xlsx"), formulas),
 ]);
 
 console.log(outputDirectory);

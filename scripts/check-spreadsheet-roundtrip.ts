@@ -42,3 +42,20 @@ if (projection.rows.join(",") !== "4,2" || tableArtifact.worksheet.cell("B4")?.v
   throw new Error(`spreadsheet-table.xlsx did not preserve its read-only table view: ${JSON.stringify(projection)}`);
 }
 console.log("PASS spreadsheet-table.xlsx");
+
+const formulaFile = Bun.file(resolve(directory, "spreadsheet-formulas.xlsx"));
+if (!await formulaFile.exists()) throw new Error("LibreOffice did not produce spreadsheet-formulas.xlsx.");
+const formulaArtifact = openSpreadsheetArtifact(new Uint8Array(await formulaFile.arrayBuffer()));
+for (const reference of ["D5", "D6", "D7"] as const) {
+  const cached = formulaArtifact.worksheet.cell(reference)?.value;
+  const calculated = formulaArtifact.calculation.value(reference);
+  if (cached?.type !== "string" || cached.value !== "OK" || calculated?.type !== "string" || calculated.value !== cached.value) {
+    throw new Error(`spreadsheet-formulas.xlsx disagrees with LibreOffice at ${reference}.`);
+  }
+}
+const cachedTotal = formulaArtifact.worksheet.cell("C10")?.value;
+const calculatedTotal = formulaArtifact.calculation.value("C10");
+if (cachedTotal?.type !== "number" || cachedTotal.value !== 18 || calculatedTotal?.type !== "number" || calculatedTotal.value !== cachedTotal.value) {
+  throw new Error("spreadsheet-formulas.xlsx disagrees with LibreOffice at C10.");
+}
+console.log("PASS spreadsheet-formulas.xlsx");
