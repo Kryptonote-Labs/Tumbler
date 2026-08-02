@@ -18,7 +18,7 @@
     type SpreadsheetWorksheet,
   } from "@tumbler/sheets";
   import { calculateSpreadsheetViewport } from "./spreadsheet-viewport.ts";
-  import { composeSpreadsheetGridLayout, frozenGridTranslation } from "./spreadsheet-grid-layout.ts";
+  import { composeSpreadsheetGridLayout, frozenGridTranslation, spreadsheetCellLayer } from "./spreadsheet-grid-layout.ts";
   import { coerceSpreadsheetEditValue, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
   import { measureMaximumDigitWidth, spreadsheetFontShorthand } from "./spreadsheet-font-metrics.ts";
   import { spreadsheetCellContentCss, spreadsheetCellCss } from "./spreadsheet-cell-style.ts";
@@ -252,7 +252,7 @@
   }
 
   function cellLayer(row: number, column: number): number {
-    return row <= frozenRows || column <= frozenColumns ? 4 : 1;
+    return spreadsheetCellLayer({ row, column, frozenRows, frozenColumns });
   }
 
   function sourceRow(visualRow: number): number | undefined {

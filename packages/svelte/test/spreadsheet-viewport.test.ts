@@ -3,6 +3,7 @@ import fc from "fast-check";
 import { compile } from "svelte/compiler";
 import { SparseAxisGeometry } from "@tumbler/core";
 import { calculateSpreadsheetViewport, coerceSpreadsheetEditValue, composeSpreadsheetGridLayout, frozenGridTranslation, measureMaximumDigitWidth, spreadsheetFontShorthand } from "../src/index.ts";
+import { spreadsheetCellLayer } from "../src/spreadsheet-grid-layout.ts";
 
 describe("Svelte spreadsheet viewport", () => {
   test("mounts only a small overscanned window for an Excel-sized grid", () => {
@@ -109,8 +110,20 @@ describe("Svelte spreadsheet viewport", () => {
     expect(layout.rows.slice(0, 2).map((row) => row.index)).toEqual([1, 2]);
     expect(layout.columns[0]?.index).toBe(1);
     expect(layout.merges[0]).toMatchObject({ left: 0, top: 0, width: 350, height: 50 });
+    expect(spreadsheetCellLayer({
+      row: layout.merges[0]!.range.start.row,
+      column: layout.merges[0]!.range.start.column,
+      frozenRows: 2,
+      frozenColumns: 1,
+    })).toBeLessThan(3);
     expect(frozenGridTranslation({ row: 1, column: 5, frozenRows: 2, frozenColumns: 1, scrollTop: 400, scrollLeft: 2_000 })).toEqual({ x: 0, y: 400 });
     expect(frozenGridTranslation({ row: 5, column: 1, frozenRows: 2, frozenColumns: 1, scrollTop: 400, scrollLeft: 2_000 })).toEqual({ x: 2_000, y: 0 });
+  });
+
+  test("keeps frozen cells above ordinary cells and below worksheet headers", () => {
+    expect(spreadsheetCellLayer({ row: 5, column: 5, frozenRows: 2, frozenColumns: 1 })).toBe(1);
+    expect(spreadsheetCellLayer({ row: 1, column: 5, frozenRows: 2, frozenColumns: 1 })).toBe(2);
+    expect(spreadsheetCellLayer({ row: 5, column: 1, frozenRows: 2, frozenColumns: 1 })).toBe(2);
   });
 
   test("coerces grid editor input into typed scalar edits", () => {

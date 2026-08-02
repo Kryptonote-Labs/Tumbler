@@ -53,6 +53,15 @@ export function frozenGridTranslation(input: {
   });
 }
 
+export function spreadsheetCellLayer(input: {
+  readonly row: number;
+  readonly column: number;
+  readonly frozenRows: number;
+  readonly frozenColumns: number;
+}): 1 | 2 {
+  return input.row <= input.frozenRows || input.column <= input.frozenColumns ? 2 : 1;
+}
+
 function includeFrozen(items: readonly VirtualGridItem[], geometry: SparseAxisGeometry, frozenCount: number): readonly VirtualGridItem[] {
   const byIndex = new Map(items.map((item) => [item.index, item]));
   for (let index = 1; index <= Math.min(frozenCount, geometry.count); index += 1) {
