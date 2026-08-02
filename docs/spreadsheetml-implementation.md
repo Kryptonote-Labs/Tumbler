@@ -23,8 +23,8 @@ current requirement boundary is:
 | §18.8.1–45 | Stylesheet projection: fonts, fills, borders, colors, alignment, cell/row/column formats, base-style inheritance, apply flags, and number-format records |
 | §20.1.4.1.17, §20.1.6.10 | DrawingML major/minor theme font resolution with cached SpreadsheetML font-name fallback |
 | §18.18.11 | `b`, `d`, `e`, `inlineStr`, `n`, `s`, and `str` cell types |
-| §18.3.1.92, §18.5.1.2–3 | Relationship-resolved table parts, ranges, identities, columns, totals metadata, and table style flags |
-| §18.3.1.2, §18.3.2.7–10 | Worksheet/table AutoFilter ranges, value/custom criteria, button state, and saved value-sort state |
+| §18.3.1.94–95, §18.5.1.2–3 | Relationship-resolved table parts, ranges, identities, columns, totals metadata, and table style flags |
+| §18.3.1.2, §18.3.1.92, §18.3.2.7–10 | Worksheet/table AutoFilter ranges, value/custom criteria, button state, and saved value-sort state |
 
 Both Strict and Transitional vocabulary and relationship namespaces are tested.
 This table is a feature boundary, not a claim of complete conformance to those

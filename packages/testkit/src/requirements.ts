@@ -57,8 +57,8 @@ export const SPREADSHEET_REQUIREMENTS = defineRequirementManifest([
   requirement("XLSX-CALCULATION-STATE", "§18.2.2, §18.6.2", "spreadsheet.calculation", ["workbook.test.ts", "editor.test.ts", "check-spreadsheet-roundtrip.ts"], { recognize: "supported", preserve: "supported", edit: "supported", write: "supported", interoperate: "partial" }),
   requirement("XLSX-THEME-FONTS", "§20.1.6.10, §20.1.4.1.17", "spreadsheet.theme-fonts", ["theme-fonts.test.ts", "styles.test.ts", "spreadsheet-viewport.test.ts"], { render: "partial", preserve: "supported" }),
   requirement("XLSX-CELL-TYPES", "§18.18.11", "spreadsheet.values", ["worksheet.test.ts", "editor.test.ts"], { render: "supported", edit: "partial", write: "partial" }),
-  requirement("XLSX-TABLE-PARTS", "§18.3.1.92, §18.5.1.2–3", "spreadsheet.tables", ["tables.test.ts", "table-view.test.ts", "preservation.test.ts"], { recognize: "supported", preserve: "supported", render: "partial" }),
-  requirement("XLSX-AUTOFILTER", "§18.3.1.2, §18.3.2.7–10", "spreadsheet.filters", ["tables.test.ts", "table-view.test.ts", "spreadsheet-viewport.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }),
+  requirement("XLSX-TABLE-PARTS", "§18.3.1.94–95, §18.5.1.2–3", "spreadsheet.tables", ["tables.test.ts", "table-view.test.ts", "preservation.test.ts"], { recognize: "supported", preserve: "supported", render: "partial" }),
+  requirement("XLSX-AUTOFILTER", "§18.3.1.2, §18.3.1.92, §18.3.2.7–10", "spreadsheet.filters", ["tables.test.ts", "table-view.test.ts", "spreadsheet-viewport.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }),
 ] as const);
 
 function requirement(
