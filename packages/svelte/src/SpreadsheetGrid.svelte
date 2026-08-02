@@ -18,7 +18,7 @@
     type SpreadsheetWorksheet,
   } from "@tumbler/sheets";
   import { calculateSpreadsheetViewport } from "./spreadsheet-viewport.ts";
-  import { composeSpreadsheetGridLayout, frozenAxisExtent, frozenGridTranslation, spreadsheetCellLayer } from "./spreadsheet-grid-layout.ts";
+  import { composeSpreadsheetGridLayout, frozenAxisExtent } from "./spreadsheet-grid-layout.ts";
   import { coerceSpreadsheetEditValue, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
   import { measureMaximumDigitWidth, spreadsheetFontShorthand } from "./spreadsheet-font-metrics.ts";
   import { spreadsheetCellContentCss, spreadsheetCellCss } from "./spreadsheet-cell-style.ts";
@@ -262,15 +262,6 @@
     return formatCellReference({ row: 1, column }).slice(0, -1);
   }
 
-  function cellTransform(row: number, column: number): string {
-    const translation = frozenGridTranslation({ row, column, frozenRows, frozenColumns, scrollTop, scrollLeft });
-    return `translate(${translation.x}px, ${translation.y}px)`;
-  }
-
-  function cellLayer(row: number, column: number): number {
-    return spreadsheetCellLayer({ row, column, frozenRows, frozenColumns });
-  }
-
   function sourceRow(visualRow: number): number | undefined {
     return projectedRows.has(visualRow) ? projectedRows.get(visualRow) : visualRow;
   }
@@ -366,7 +357,7 @@
 
 </script>
 
-{#snippet gridCell(reference: string, visualRow: number, sourceRow: number, column: number, left: number, top: number, width: number, height: number)}
+{#snippet gridCell(reference: string, sourceRow: number, column: number, left: number, top: number, width: number, height: number, zIndex: number)}
   {@const header = tableHeader(sourceRow, column)}
   <div
     class:selected={selected(sourceRow, column)}
@@ -380,8 +371,7 @@
     style:top={`${top}px`}
     style:width={`${width}px`}
     style:height={`${height}px`}
-    style:transform={cellTransform(visualRow, column)}
-    style:z-index={cellLayer(visualRow, column)}
+    style:z-index={zIndex}
     style={spreadsheetCellCss(worksheet, reference)}
     onclick={(event) => select(sourceRow, column, event.shiftKey)}
     onkeydown={(event) => cellKeydown(event, sourceRow, column)}
@@ -425,17 +415,53 @@
         {#each layout.columns as column (column.index)}
           {@const projectedRow = sourceRow(row.index)}
           {@const reference = formatCellReference({ row: projectedRow ?? row.index, column: column.index })}
-          {#if projectedRow !== undefined && worksheet.mergedRange(reference) === undefined}
-            {@render gridCell(reference, row.index, projectedRow, column.index, rowHeaderWidth + column.start, columnHeaderHeight + row.start, column.size, row.size)}
+          {#if row.index > frozenRows && column.index > frozenColumns && projectedRow !== undefined && worksheet.mergedRange(reference) === undefined}
+            {@render gridCell(reference, projectedRow, column.index, rowHeaderWidth + column.start, columnHeaderHeight + row.start, column.size, row.size, 1)}
           {/if}
         {/each}
       {/each}
       {#each layout.merges as merge (`${merge.range.start.row}:${merge.range.start.column}`)}
-        {@const reference = formatCellReference(merge.range.start)}
-        {@render gridCell(reference, merge.range.start.row, merge.range.start.row, merge.range.start.column, rowHeaderWidth + merge.left, columnHeaderHeight + merge.top, merge.width, merge.height)}
+        {#if merge.range.start.row > frozenRows && merge.range.start.column > frozenColumns}
+          {@const reference = formatCellReference(merge.range.start)}
+          {@render gridCell(reference, merge.range.start.row, merge.range.start.column, rowHeaderWidth + merge.left, columnHeaderHeight + merge.top, merge.width, merge.height, 1)}
+        {/if}
       {/each}
     </div>
   </div>
+  {#if frozenRowsHeight > 0}
+    <div class="frozen-row-pane" style:height={`${frozenRowsHeight}px`}>
+      {#each layout.rows.filter((row) => row.index <= frozenRows) as row (row.index)}
+        {#each layout.columns as column (column.index)}
+          {@const projectedRow = sourceRow(row.index)}
+          {@const reference = formatCellReference({ row: projectedRow ?? row.index, column: column.index })}
+          {#if projectedRow !== undefined && worksheet.mergedRange(reference) === undefined}
+            {@render gridCell(reference, projectedRow, column.index, column.start - (column.index <= frozenColumns ? 0 : scrollLeft), row.start, column.size, row.size, 2)}
+          {/if}
+        {/each}
+      {/each}
+      {#each layout.merges.filter((merge) => merge.range.start.row <= frozenRows) as merge (`${merge.range.start.row}:${merge.range.start.column}`)}
+        {@const reference = formatCellReference(merge.range.start)}
+        {@render gridCell(reference, merge.range.start.row, merge.range.start.column, merge.left - (merge.range.start.column <= frozenColumns ? 0 : scrollLeft), merge.top, merge.width, merge.height, 2)}
+      {/each}
+    </div>
+  {/if}
+  {#if frozenColumnsWidth > 0}
+    <div class="frozen-column-pane" style:width={`${frozenColumnsWidth}px`} style:top={`${columnHeaderHeight + frozenRowsHeight}px`}>
+      {#each layout.rows.filter((row) => row.index > frozenRows) as row (row.index)}
+        {#each layout.columns.filter((column) => column.index <= frozenColumns) as column (column.index)}
+          {@const projectedRow = sourceRow(row.index)}
+          {@const reference = formatCellReference({ row: projectedRow ?? row.index, column: column.index })}
+          {#if projectedRow !== undefined && worksheet.mergedRange(reference) === undefined}
+            {@render gridCell(reference, projectedRow, column.index, column.start, row.start - scrollTop - frozenRowsHeight, column.size, row.size, 2)}
+          {/if}
+        {/each}
+      {/each}
+      {#each layout.merges.filter((merge) => merge.range.start.row > frozenRows && merge.range.start.column <= frozenColumns) as merge (`${merge.range.start.row}:${merge.range.start.column}`)}
+        {@const reference = formatCellReference(merge.range.start)}
+        {@render gridCell(reference, merge.range.start.row, merge.range.start.column, merge.left, merge.top - scrollTop - frozenRowsHeight, merge.width, merge.height, 2)}
+      {/each}
+    </div>
+  {/if}
   <div class="column-gutter">
     <div class="scrolling-column-headers" style:left={`${frozenColumnsWidth}px`}>
       {#each gutterLayout.columns.filter((column) => column.index > frozenColumns) as column (column.index)}
@@ -498,6 +524,10 @@
   .tumbler-grid { position: relative; overflow: hidden; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; }
   .grid-scroller { width: 100%; height: 100%; overflow: auto; overscroll-behavior: contain; }
   .canvas { position: relative; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
+  .frozen-row-pane, .frozen-column-pane { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; background: var(--tumbler-sheet-bg, #ffffff); }
+  .frozen-row-pane { left: 52px; right: 0; top: 28px; }
+  .frozen-column-pane { left: 52px; bottom: 0; }
+  .frozen-row-pane .cell, .frozen-column-pane .cell { pointer-events: auto; }
   .column-gutter { position: absolute; left: 52px; right: 0; top: 0; z-index: 3; height: 28px; overflow: hidden; pointer-events: none; background: var(--tumbler-grid-header-bg, #171b17); }
   .row-gutter { position: absolute; left: 0; top: 28px; bottom: 0; z-index: 3; width: 52px; overflow: hidden; pointer-events: none; background: var(--tumbler-grid-header-bg, #171b17); }
   .scrolling-column-headers, .frozen-column-headers, .scrolling-row-headers, .frozen-row-headers { position: absolute; overflow: hidden; }

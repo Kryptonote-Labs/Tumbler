@@ -82,6 +82,15 @@ describe("Svelte spreadsheet viewport", () => {
     expect(result.css?.code).toMatch(/\.row-gutter[^}]*position: absolute[^}]*top: 28px/);
   });
 
+  test("keeps frozen cells in fixed pane overlays outside the scrolling canvas", async () => {
+    const source = await Bun.file(new URL("../src/SpreadsheetGrid.svelte", import.meta.url)).text();
+    const result = compile(source, { filename: "SpreadsheetGrid.svelte", generate: "client", modernAst: true });
+    expect(result.css?.code).toMatch(/\.frozen-row-pane[^}]*position: absolute/);
+    expect(result.css?.code).toMatch(/\.frozen-column-pane[^}]*position: absolute/);
+    expect(source).not.toContain("cellTransform");
+    expect(source).not.toContain("frozenGridTranslation({ row");
+  });
+
   test("rejects invalid viewport geometry", () => {
     const valid = {
       rowCount: 1,
