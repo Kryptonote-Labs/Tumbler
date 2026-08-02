@@ -15,6 +15,7 @@ import { readSharedStrings, richText, type SharedStringTable } from "./shared-st
 import { formatSpreadsheetCellValue } from "./number-format.ts";
 import { readSpreadsheetStyles, type SpreadsheetCellFormat, type SpreadsheetStyles } from "./styles.ts";
 import { SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";
+import { parseSpreadsheetAutoFilter, readSpreadsheetTables, type SpreadsheetAutoFilter, type SpreadsheetTable } from "./tables.ts";
 
 export type SpreadsheetCellValue =
   | { readonly type: "blank" }
@@ -69,6 +70,8 @@ export class SpreadsheetWorksheet {
   readonly columns: readonly SpreadsheetColumn[];
   readonly merges: readonly CellRange[];
   readonly panes: readonly SpreadsheetPane[];
+  readonly tables: readonly SpreadsheetTable[];
+  readonly autoFilter: SpreadsheetAutoFilter | undefined;
   readonly styles: SpreadsheetStyles;
   readonly defaultRowHeight: number;
   readonly defaultColumnWidth: number;
@@ -85,6 +88,8 @@ export class SpreadsheetWorksheet {
     columns: readonly SpreadsheetColumn[];
     merges: readonly CellRange[];
     panes: readonly SpreadsheetPane[];
+    tables: readonly SpreadsheetTable[];
+    autoFilter: SpreadsheetAutoFilter | undefined;
     styles: SpreadsheetStyles;
     defaultRowHeight: number;
     defaultColumnWidth: number;
@@ -98,6 +103,8 @@ export class SpreadsheetWorksheet {
     this.columns = Object.freeze([...input.columns]);
     this.merges = Object.freeze([...input.merges]);
     this.panes = Object.freeze([...input.panes]);
+    this.tables = Object.freeze([...input.tables]);
+    this.autoFilter = input.autoFilter;
     this.styles = input.styles;
     this.defaultRowHeight = input.defaultRowHeight;
     this.defaultColumnWidth = input.defaultColumnWidth;
@@ -182,6 +189,9 @@ export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetS
     throw new SpreadsheetError("invalid_worksheet", "A Worksheet part must have a SpreadsheetML worksheet root element.");
   }
   const sheetFormat = parseSheetFormat(document.root, namespace);
+  const relationshipsNamespace = workbook.conformance === "strict"
+    ? "http://purl.oclc.org/ooxml/officeDocument/relationships"
+    : "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
   return new SpreadsheetWorksheet({
     workbook,
     sheet,
@@ -192,6 +202,8 @@ export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetS
     rows: parseRows(document, namespace, readSharedStrings(workbook)),
     merges: parseMerges(document.root, namespace),
     panes: parsePanes(document.root, namespace),
+    tables: readSpreadsheetTables({ workbook, worksheetPart: part, worksheetRoot: document.root, spreadsheetNamespace: namespace, relationshipsNamespace }),
+    autoFilter: parseSpreadsheetAutoFilter(document.root, namespace),
     styles: readSpreadsheetStyles(workbook),
     defaultRowHeight: sheetFormat.defaultRowHeight,
     defaultColumnWidth: sheetFormat.defaultColumnWidth,

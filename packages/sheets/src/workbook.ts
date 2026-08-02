@@ -51,6 +51,7 @@ export type SpreadsheetErrorCode =
   | "invalid_cell"
   | "invalid_sheet"
   | "invalid_styles"
+  | "invalid_table"
   | "invalid_worksheet"
   | "invalid_workbook"
   | "missing_sheet_relationship"

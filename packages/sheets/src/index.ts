@@ -29,6 +29,18 @@ export {
   columnWidthToPixels,
   SpreadsheetWorksheet,
 } from "./worksheet.ts";
+export type {
+  SpreadsheetAutoFilter,
+  SpreadsheetCustomFilter,
+  SpreadsheetCustomFilterOperator,
+  SpreadsheetFilterColumn,
+  SpreadsheetFilterCriteria,
+  SpreadsheetSortCondition,
+  SpreadsheetSortState,
+  SpreadsheetTable,
+  SpreadsheetTableColumn,
+  SpreadsheetTableStyle,
+} from "./tables.ts";
 export {
   beginSpreadsheetEdit,
   SpreadsheetEditor,

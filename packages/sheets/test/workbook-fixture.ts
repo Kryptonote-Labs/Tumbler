@@ -8,6 +8,13 @@ const WORKSHEET_TYPE = "application/vnd.openxmlformats-officedocument.spreadshee
 const SHARED_STRINGS_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
 const THEME_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.theme+xml";
 const CALCULATION_CHAIN_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml";
+const TABLE_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
+
+export interface TableFixture {
+  readonly relationshipId: string;
+  readonly target: string;
+  readonly xml: string;
+}
 
 export interface SheetFixture {
   readonly name: string;
@@ -18,6 +25,7 @@ export interface SheetFixture {
   readonly xml?: string;
   readonly relationshipType?: string;
   readonly targetMode?: "External";
+  readonly tables?: readonly TableFixture[];
 }
 
 export interface WorkbookFixtureOptions {
@@ -69,6 +77,9 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
         ${options.stylesXml === undefined ? "" : `<Override PartName="/${stylesItemName}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>`}
         ${options.themeXml === undefined ? "" : `<Override PartName="/${themeItemName}" ContentType="${THEME_CONTENT_TYPE}"/>`}
         ${options.calculationChainXml === undefined ? "" : `<Override PartName="/${calculationChainItemName}" ContentType="${CALCULATION_CHAIN_CONTENT_TYPE}"/>`}
+        ${sheets.flatMap((sheet, index) => sheet.tables?.map((table) =>
+          `<Override PartName="/${resolveTargetItemName(worksheetDirectory(directory, sheet, index), table.target)}" ContentType="${TABLE_CONTENT_TYPE}"/>`
+        ) ?? []).join("")}
       </Types>`),
     },
     {
@@ -83,10 +94,27 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
         return `<Relationship Id="${sheet.relationshipId}" Type="${sheet.relationshipType ?? worksheetRelationship}" Target="${target}"${sheet.targetMode === "External" ? ' TargetMode="External"' : ""}/>`;
       }).join("")}${options.sharedStringsXml === undefined ? "" : `<Relationship Id="strings" Type="${officeRelationships}/sharedStrings" Target="strings/shared.xml"/>`}${options.stylesXml === undefined ? "" : `<Relationship Id="styles" Type="${officeRelationships}/styles" Target="styles/style.xml"/>`}${options.themeXml === undefined ? "" : `<Relationship Id="theme" Type="${officeRelationships}/theme" Target="theme/theme1.xml"/>`}${options.calculationChainXml === undefined ? "" : `<Relationship Id="calculation-chain" Type="${officeRelationships}/calcChain" Target="calcChain.xml"/>`}</Relationships>`),
     },
-    ...sheets.flatMap((sheet, index) => sheet.targetMode === "External" ? [] : [{
-      name: resolveTargetItemName(directory, sheet.target ?? `worksheets/sheet${index + 1}.xml`),
-      data: encoder.encode(sheet.xml ?? `<worksheet xmlns="${spreadsheet}"><sheetData/></worksheet>`),
-    }]),
+    ...sheets.flatMap((sheet, index) => {
+      if (sheet.targetMode === "External") return [];
+      const worksheetItemName = resolveTargetItemName(directory, sheet.target ?? `worksheets/sheet${index + 1}.xml`);
+      const worksheetRelationshipItemName = relationshipName(worksheetItemName);
+      return [
+        {
+          name: worksheetItemName,
+          data: encoder.encode(sheet.xml ?? `<worksheet xmlns="${spreadsheet}"><sheetData/></worksheet>`),
+        },
+        ...(sheet.tables === undefined ? [] : [{
+          name: worksheetRelationshipItemName,
+          data: encoder.encode(`<Relationships xmlns="${RELATIONSHIPS}">${sheet.tables.map((table) =>
+            `<Relationship Id="${table.relationshipId}" Type="${officeRelationships}/table" Target="${table.target}"/>`
+          ).join("")}</Relationships>`),
+        }]),
+        ...(sheet.tables?.map((table) => ({
+          name: resolveTargetItemName(worksheetDirectory(directory, sheet, index), table.target),
+          data: encoder.encode(table.xml),
+        })) ?? []),
+      ];
+    }),
     ...(options.sharedStringsXml === undefined ? [] : [{
       name: sharedStringsItemName,
       data: encoder.encode(options.sharedStringsXml),
@@ -95,6 +123,16 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
     ...(options.themeXml === undefined ? [] : [{ name: themeItemName, data: encoder.encode(options.themeXml) }]),
     ...(options.calculationChainXml === undefined ? [] : [{ name: calculationChainItemName, data: encoder.encode(options.calculationChainXml) }]),
   ]);
+}
+
+function worksheetDirectory(directory: string, sheet: SheetFixture, index: number): string {
+  const itemName = resolveTargetItemName(directory, sheet.target ?? `worksheets/sheet${index + 1}.xml`);
+  return itemName.slice(0, itemName.lastIndexOf("/") + 1);
+}
+
+function relationshipName(itemName: string): string {
+  const slash = itemName.lastIndexOf("/");
+  return `${itemName.slice(0, slash + 1)}_rels/${itemName.slice(slash + 1)}.rels`;
 }
 
 function resolveTargetItemName(directory: string, target: string): string {
