@@ -51,7 +51,7 @@ function fixture() {
 
 function model(formula = "Data!$B$2:$B$4"): SupportedChartModel {
   return Object.freeze({
-    status: "supported", kind: "column", grouping: "clustered", holeSize: undefined, title: "Chart", legend: undefined, axes: Object.freeze([]),
+    status: "supported", kind: "column", grouping: "clustered", holeSize: undefined, title: "Chart", titleFormula: "Data!$A$1", legend: undefined, axes: Object.freeze([]),
     series: Object.freeze([{ index: 0, order: 0, title: "Cached", titleFormula: "Data!$A$1", fill: undefined, line: undefined,
       categories: Object.freeze({ kind: "string", formula: "Data!$A$2:$A$4", formatCode: undefined, points: Object.freeze([{ index: 0, value: "Old" }]) }),
       values: Object.freeze({ kind: "number", formula, formatCode: "0", points: Object.freeze([{ index: 0, value: 999 }]) }),

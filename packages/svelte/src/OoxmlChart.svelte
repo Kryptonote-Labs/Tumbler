@@ -24,7 +24,8 @@
 
   function color(series: ChartSeries, index: number, line = false): string {
     const authored = line ? series.line ?? series.fill : series.fill ?? series.line;
-    return (authored === undefined ? undefined : resolveColor?.(authored)) ??
+    const themed = authored ?? { kind: "scheme" as const, value: `accent${index % 6 + 1}` };
+    return resolveColor?.(themed) ??
       (authored?.kind === "rgb" ? authored.value : undefined) ?? palette[index % palette.length]!;
   }
 

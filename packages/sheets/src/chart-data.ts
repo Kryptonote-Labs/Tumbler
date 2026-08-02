@@ -72,7 +72,9 @@ export function resolveSpreadsheetChartData(worksheet: SpreadsheetWorksheet, mod
       : titleSource.calculation.displayText(titleSource.range.start) || item.title;
     return Object.freeze({ ...item, title, categories: resolveSequence(item.categories), values: resolveSequence(item.values) });
   });
-  return Object.freeze({ ...model, series: Object.freeze(series) });
+  const titleSource = model.titleFormula === undefined ? undefined : source(model.titleFormula);
+  const title = titleSource === undefined ? model.title : titleSource.calculation.displayText(titleSource.range.start) || model.title;
+  return Object.freeze({ ...model, title, series: Object.freeze(series) });
 }
 
 function chartPoint(

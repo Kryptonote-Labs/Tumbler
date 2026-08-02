@@ -40,12 +40,15 @@ describe("DrawingML chart parser", () => {
     const profile = profiles[1]!;
     const result = parseOoxmlChart(xml(profile, '<c:plotArea><c:lineChart/><c:barChart/></c:plotArea>'), "transitional");
     expect(result).toMatchObject({ status: "unsupported", reason: expect.stringContaining("Combination") });
+    expect(type("barChart", '<c:grouping val="stacked"/>')).toMatchObject({ status: "unsupported", reason: expect.stringContaining("stacked") });
   });
 
   test("rejects hostile cache shapes", () => {
     const profile = profiles[1]!;
     const source = xml(profile, '<c:plotArea><c:pieChart><c:ser><c:idx val="0"/><c:order val="0"/><c:val><c:numLit><c:pt idx="0"><c:v>NaN</c:v></c:pt></c:numLit></c:val></c:ser></c:pieChart></c:plotArea>');
     expect(() => parseOoxmlChart(source, "transitional")).toThrow(ChartParseError);
+    const outside = xml(profile, '<c:plotArea><c:pieChart><c:ser><c:idx val="0"/><c:order val="0"/><c:val><c:numLit><c:ptCount val="1"/><c:pt idx="1"><c:v>1</c:v></c:pt></c:numLit></c:val></c:ser></c:pieChart></c:plotArea>');
+    expect(() => parseOoxmlChart(outside, "transitional")).toThrow("outside ptCount");
   });
 });
 

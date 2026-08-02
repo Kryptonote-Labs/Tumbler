@@ -12,6 +12,8 @@ import type {
 } from "./model.ts";
 
 const MAX_CACHE_POINTS = 100_000;
+const MAX_SERIES = 1_024;
+const MAX_AXES = 128;
 
 export class ChartParseError extends Error {
   constructor(message: string, options: { cause?: unknown } = {}) {
@@ -35,6 +37,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
   }
   const chart = exactlyOne(document.root, chartNamespace, "chart", "chartSpace");
   const title = parseText(children(chart, chartNamespace, "title")[0], chartNamespace, drawingNamespace);
+  const titleFormula = parseTextFormula(children(chart, chartNamespace, "title")[0], chartNamespace);
   const legend = parseLegend(children(chart, chartNamespace, "legend")[0], chartNamespace);
   const plotAreas = children(chart, chartNamespace, "plotArea");
   if (plotAreas.length !== 1) throw new ChartParseError("A chart must contain exactly one plotArea.");
@@ -43,25 +46,37 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
     child.kind === "element" && child.namespaceUri === chartNamespace && child.localName.endsWith("Chart")
   );
   if (candidates.length !== 1) {
-    return Object.freeze({ status: "unsupported", chartType: candidates[0]?.localName, reason: candidates.length === 0 ? "The plot area has no chart type." : "Combination charts are not supported in this milestone.", title, legend });
+    return unsupported(candidates[0]?.localName, candidates.length === 0 ? "The plot area has no chart type." : "Combination charts are not supported in this milestone.", title, titleFormula, legend);
   }
   const chartType = candidates[0]!;
   const kind = chartKind(chartType, chartNamespace);
   if (kind === undefined) {
-    return Object.freeze({ status: "unsupported", chartType: chartType.localName, reason: `${chartType.localName} is not supported in this milestone.`, title, legend });
+    return unsupported(chartType.localName, `${chartType.localName} is not supported in this milestone.`, title, titleFormula, legend);
   }
   const series = children(chartType, chartNamespace, "ser").map((element) => parseSeries(element, chartNamespace, drawingNamespace));
   const axes = plotArea.children.filter((child): child is LosslessXmlElement =>
     child.kind === "element" && child.namespaceUri === chartNamespace && (child.localName === "catAx" || child.localName === "valAx")
   ).map((element) => parseAxis(element, chartNamespace, drawingNamespace));
+  if (series.length > MAX_SERIES) throw new ChartParseError(`Chart exceeds ${MAX_SERIES} series.`);
+  if (axes.length > MAX_AXES) throw new ChartParseError(`Chart exceeds ${MAX_AXES} axes.`);
   const rawGrouping = val(children(chartType, chartNamespace, "grouping")[0]) ?? "standard";
   const grouping = rawGrouping === "stacked" ? "stacked" as const
     : rawGrouping === "percentStacked" ? "percent-stacked" as const
     : rawGrouping === "clustered" ? "clustered" as const
     : "standard" as const;
+  if (grouping === "stacked" || grouping === "percent-stacked") {
+    return unsupported(chartType.localName, `${rawGrouping} charts are not supported in this milestone.`, title, titleFormula, legend);
+  }
+  if ((kind === "pie" || kind === "doughnut") && series.length > 1) {
+    return unsupported(chartType.localName, "Multiple-series pie-family charts are not supported in this milestone.", title, titleFormula, legend);
+  }
   const rawHole = val(children(chartType, chartNamespace, "holeSize")[0]);
   const holeSize = kind === "doughnut" ? boundedPercent(rawHole ?? "50", "doughnut hole size") : undefined;
-  return Object.freeze({ status: "supported", kind, grouping, holeSize, title, legend, series: Object.freeze(series), axes: Object.freeze(axes) });
+  return Object.freeze({ status: "supported", kind, grouping, holeSize, title, ...(titleFormula === undefined ? {} : { titleFormula }), legend, series: Object.freeze(series), axes: Object.freeze(axes) });
+}
+
+function unsupported(chartType: string | undefined, reason: string, title: string | undefined, titleFormula: string | undefined, legend: ChartLegend | undefined): ChartModel {
+  return Object.freeze({ status: "unsupported", chartType, reason, title, ...(titleFormula === undefined ? {} : { titleFormula }), legend });
 }
 
 function chartKind(element: LosslessXmlElement, namespace: string): ChartKind | undefined {
@@ -101,9 +116,14 @@ function parseSequenceContainer(element: LosslessXmlElement, namespace: string, 
   const cache = children(element, namespace, kind === "number" ? "numCache" : "strCache")[0] ?? element;
   const points = children(cache, namespace, "pt");
   if (points.length > MAX_CACHE_POINTS) throw new ChartParseError(`Chart cache exceeds ${MAX_CACHE_POINTS} points.`);
+  const declaredCountElement = children(cache, namespace, "ptCount")[0];
+  const declaredCountRaw = val(declaredCountElement);
+  const declaredCount = declaredCountRaw === undefined ? undefined : unsigned(declaredCountRaw, "chart cache point count");
+  if (declaredCount !== undefined && declaredCount > MAX_CACHE_POINTS) throw new ChartParseError(`Chart cache exceeds ${MAX_CACHE_POINTS} points.`);
   const seen = new Set<number>();
   const parsed = points.map((point): ChartDataPoint => {
     const index = unsigned(requiredAttr(point, "idx", "cache point index"), "cache point index");
+    if (declaredCount !== undefined && index >= declaredCount) throw new ChartParseError(`Chart cache point ${index} is outside ptCount ${declaredCount}.`);
     if (seen.has(index)) throw new ChartParseError(`Chart cache repeats point ${index}.`);
     seen.add(index);
     const valueElement = exactlyOne(point, namespace, "v", "cache point");
@@ -148,6 +168,12 @@ function parseText(element: LosslessXmlElement | undefined, chartNamespace: stri
   if (texts.length > 0) return texts.join("");
   const values = descendants(element, chartNamespace, "v").map(text);
   return values[0];
+}
+
+function parseTextFormula(element: LosslessXmlElement | undefined, chartNamespace: string): string | undefined {
+  if (element === undefined) return undefined;
+  const reference = descendants(element, chartNamespace, "strRef")[0];
+  return reference === undefined ? undefined : formula(reference, chartNamespace);
 }
 
 function parseSolidFill(parent: LosslessXmlElement | undefined, drawingNamespace: string): ChartColor | undefined {

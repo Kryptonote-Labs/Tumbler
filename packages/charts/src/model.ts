@@ -47,6 +47,7 @@ export interface ChartAxis {
 
 interface ChartModelBase {
   readonly title: string | undefined;
+  readonly titleFormula?: string;
   readonly legend: ChartLegend | undefined;
 }
 
