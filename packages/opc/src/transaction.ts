@@ -6,17 +6,36 @@ import {
   saveOpcPackage,
 } from "./package.ts";
 import { PartName } from "./part-name.ts";
-import { relationshipItemName } from "./relationships.ts";
+import {
+  createRelationship,
+  relationshipItemName,
+  Relationships,
+  serializeRelationships,
+  type NewExternalRelationship,
+} from "./relationships.ts";
 import { writeZipArchiveChanges, type ZipEntryAddition } from "./zip/writer.ts";
 
 export type PackageTransactionStatus = "active" | "committed" | "rolled_back";
 
 export type PackageTransactionErrorCode =
+  | "duplicate_relationship"
   | "duplicate_part"
   | "incoming_relationship"
   | "inactive_transaction"
   | "missing_part"
+  | "missing_relationship"
+  | "missing_source"
   | "part_removed";
+
+export type PackageRelationshipInput =
+  | {
+      readonly id: string;
+      readonly type: string;
+      readonly target: PartName | string;
+      readonly targetMode?: "Internal";
+      readonly fragment?: string;
+    }
+  | NewExternalRelationship;
 
 export class PackageTransactionError extends Error {
   readonly code: PackageTransactionErrorCode;
@@ -49,6 +68,7 @@ export class PackageTransaction {
     readonly compressionMethod: 0 | 8;
   }>();
   readonly #removals = new Map<string, PartName>();
+  readonly #relationshipSets = new Map<string, Relationships>();
 
   constructor(pkg: OpcPackage) {
     this.package = pkg;
@@ -59,7 +79,10 @@ export class PackageTransaction {
   }
 
   get hasChanges(): boolean {
-    return this.#replacements.size !== 0 || this.#additions.size !== 0 || this.#removals.size !== 0;
+    return this.#replacements.size !== 0 ||
+      this.#additions.size !== 0 ||
+      this.#removals.size !== 0 ||
+      this.#relationshipSets.size !== 0;
   }
 
   replacePart(name: PartName | string, bytes: Uint8Array): this {
@@ -119,6 +142,7 @@ export class PackageTransaction {
     this.#assertActive();
     const partName = typeof name === "string" ? PartName.parse(name) : name;
     if (this.#additions.delete(partName.equivalenceKey)) {
+      this.#relationshipSets.delete(sourceKey(partName));
       return this;
     }
     const part = this.package.getPart(partName);
@@ -130,14 +154,67 @@ export class PackageTransaction {
       );
     }
     this.#replacements.delete(partName.equivalenceKey);
+    this.#relationshipSets.delete(sourceKey(part.name));
     this.#removals.set(partName.equivalenceKey, part.name);
+    return this;
+  }
+
+  addRelationship(
+    source: PartName | string | null,
+    input: PackageRelationshipInput,
+  ): this {
+    this.#assertActive();
+    const sourceName = normalizeSource(source);
+    const current = this.#editableRelationships(sourceName);
+    if (current.items.some((relationship) => relationship.id === input.id)) {
+      throw new PackageTransactionError(
+        "duplicate_relationship",
+        `Relationship Id ${JSON.stringify(input.id)} already exists for this source.`,
+      );
+    }
+    const relationship = input.targetMode === "External"
+      ? createRelationship(sourceName, input)
+      : createRelationship(sourceName, {
+          ...input,
+          target: typeof input.target === "string"
+            ? PartName.parse(input.target)
+            : input.target,
+        });
+    this.#relationshipSets.set(
+      sourceKey(sourceName),
+      new Relationships(sourceName, [...current.items, relationship]),
+    );
+    return this;
+  }
+
+  removeRelationship(source: PartName | string | null, id: string): this {
+    this.#assertActive();
+    const sourceName = normalizeSource(source);
+    const current = this.#editableRelationships(sourceName);
+    if (!current.items.some((relationship) => relationship.id === id)) {
+      throw new PackageTransactionError(
+        "missing_relationship",
+        `Relationship Id ${JSON.stringify(id)} does not exist for this source.`,
+      );
+    }
+    this.#relationshipSets.set(
+      sourceKey(sourceName),
+      new Relationships(
+        sourceName,
+        current.items.filter((relationship) => relationship.id !== id),
+      ),
+    );
     return this;
   }
 
   commit(): Uint8Array {
     this.#assertActive();
     this.#validateNoIncomingRelationships();
-    if (this.#additions.size === 0 && this.#removals.size === 0) {
+    if (
+      this.#additions.size === 0 &&
+      this.#removals.size === 0 &&
+      this.#relationshipSets.size === 0
+    ) {
       const output = this.#commitReplacements();
       this.#status = "committed";
       return output;
@@ -168,18 +245,42 @@ export class PackageTransaction {
     const contentTypeAdditions = new Map(
       [...this.#additions.values()].map((addition) => [addition.name, addition.contentType]),
     );
+    for (const relationships of this.#relationshipSets.values()) {
+      const itemName = relationshipItemName(relationships.source);
+      const existing = this.package.archive.get(itemName);
+      if (relationships.items.length === 0) {
+        if (existing !== undefined) {
+          removals.add(existing.name);
+          contentTypeRemovals.add(PartName.fromZipItemName(existing.name).equivalenceKey);
+        }
+        continue;
+      }
+      const bytes = serializeRelationships(relationships);
+      if (existing === undefined) {
+        const partName = PartName.fromZipItemName(itemName);
+        additions.push({ name: itemName, data: bytes, compressionMethod: 8 });
+        contentTypeAdditions.set(
+          partName,
+          "application/vnd.openxmlformats-package.relationships+xml",
+        );
+      } else {
+        replacements.set(existing.name, bytes);
+      }
+    }
     const updatedContentTypes = updateContentTypes(this.package.contentTypes, {
       additions: contentTypeAdditions,
       removals: contentTypeRemovals,
     });
-    replacements.set("[Content_Types].xml", serializeContentTypes(updatedContentTypes));
+    if (!contentTypesEqual(this.package.contentTypes, updatedContentTypes)) {
+      replacements.set("[Content_Types].xml", serializeContentTypes(updatedContentTypes));
+    }
 
     const output = writeZipArchiveChanges(this.package.archive, {
       replacements,
       additions,
       removals,
     });
-    openOpcPackage(output);
+    validateRelationshipGraph(openOpcPackage(output));
     this.#status = "committed";
     return output;
   }
@@ -204,6 +305,7 @@ export class PackageTransaction {
     this.#replacements.clear();
     this.#additions.clear();
     this.#removals.clear();
+    this.#relationshipSets.clear();
     this.#status = "rolled_back";
   }
 
@@ -231,15 +333,30 @@ export class PackageTransaction {
     if (this.#removals.size === 0) {
       return;
     }
-    const sources: Array<PartName | null> = [null, ...this.package.parts.map((part) => part.name)];
+    const sources: Array<PartName | null> = [
+      null,
+      ...this.package.parts.map((part) => part.name),
+      ...[...this.#relationshipSets.values()].map((relationships) => relationships.source),
+    ];
+    const visited = new Set<string>();
     for (const source of sources) {
+      const key = sourceKey(source);
+      if (visited.has(key)) {
+        continue;
+      }
+      visited.add(key);
       if (source !== null && this.#removals.has(source.equivalenceKey)) {
         continue;
       }
-      if (this.package.archive.get(relationshipItemName(source)) === undefined) {
+      const edited = this.#relationshipSets.get(key);
+      if (
+        edited === undefined &&
+        this.package.archive.get(relationshipItemName(source)) === undefined
+      ) {
         continue;
       }
-      for (const relationship of this.package.relationships(source).items) {
+      const relationships = edited ?? this.package.relationships(source);
+      for (const relationship of relationships.items) {
         if (
           relationship.targetMode === "Internal" &&
           this.#removals.has(relationship.targetPartName.equivalenceKey)
@@ -253,8 +370,76 @@ export class PackageTransaction {
       }
     }
   }
+
+  #editableRelationships(source: PartName | null): Relationships {
+    if (source !== null) {
+      if (this.#removals.has(source.equivalenceKey)) {
+        throw new PackageTransactionError(
+          "part_removed",
+          `Cannot edit relationships for removed source ${JSON.stringify(source.value)}.`,
+          { partName: source.value },
+        );
+      }
+      if (
+        this.package.getPart(source) === undefined &&
+        !this.#additions.has(source.equivalenceKey)
+      ) {
+        throw new PackageTransactionError(
+          "missing_source",
+          `Relationship source ${JSON.stringify(source.value)} does not exist.`,
+          { partName: source.value },
+        );
+      }
+    }
+    const key = sourceKey(source);
+    const staged = this.#relationshipSets.get(key);
+    if (staged !== undefined) {
+      return staged;
+    }
+    const existing = this.package.archive.get(relationshipItemName(source));
+    return existing === undefined
+      ? new Relationships(source, [])
+      : this.package.relationships(source);
+  }
 }
 
 export function beginPackageTransaction(pkg: OpcPackage): PackageTransaction {
   return new PackageTransaction(pkg);
+}
+
+function normalizeSource(source: PartName | string | null): PartName | null {
+  return typeof source === "string" ? PartName.parse(source) : source;
+}
+
+function sourceKey(source: PartName | null): string {
+  return source?.equivalenceKey ?? "$package";
+}
+
+function validateRelationshipGraph(pkg: OpcPackage): void {
+  const sources: Array<PartName | null> = [null, ...pkg.parts.map((part) => part.name)];
+  for (const source of sources) {
+    if (pkg.archive.get(relationshipItemName(source)) !== undefined) {
+      pkg.relationships(source);
+    }
+  }
+}
+
+function contentTypesEqual(
+  left: OpcPackage["contentTypes"],
+  right: OpcPackage["contentTypes"],
+): boolean {
+  return left.defaults.length === right.defaults.length &&
+    left.overrides.length === right.overrides.length &&
+    left.defaults.every((item, index) => {
+      const other = right.defaults[index];
+      return other !== undefined &&
+        item.extension === other.extension &&
+        item.contentType === other.contentType;
+    }) &&
+    left.overrides.every((item, index) => {
+      const other = right.overrides[index];
+      return other !== undefined &&
+        item.partName.equals(other.partName) &&
+        item.contentType === other.contentType;
+    });
 }

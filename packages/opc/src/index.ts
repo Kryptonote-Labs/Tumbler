@@ -55,6 +55,7 @@ export {
   PackageTransactionError,
 } from "./transaction.ts";
 export type {
+  PackageRelationshipInput,
   PackageTransactionErrorCode,
   PackageTransactionStatus,
 } from "./transaction.ts";
