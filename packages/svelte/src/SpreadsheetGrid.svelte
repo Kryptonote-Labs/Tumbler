@@ -459,7 +459,7 @@
 {/if}
 
 <style>
-  .tumbler-grid { position: relative; overflow: auto; overscroll-behavior: contain; contain: strict; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; }
+  .tumbler-grid { position: relative; overflow: auto; overscroll-behavior: contain; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; }
   .canvas { position: relative; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
   .column-gutter { position: sticky; top: 0; z-index: 3; width: 100%; height: 28px; background: var(--tumbler-grid-header-bg, #171b17); }
   .row-gutter { position: sticky; left: 0; z-index: 3; width: 52px; background: var(--tumbler-grid-header-bg, #171b17); }

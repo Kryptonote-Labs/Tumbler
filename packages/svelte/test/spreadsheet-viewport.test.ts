@@ -77,6 +77,7 @@ describe("Svelte spreadsheet viewport", () => {
     const result = compile(source, { filename: "SpreadsheetGrid.svelte", generate: "client", modernAst: true });
     expect(result.css?.code).toMatch(/\.column-gutter[^}]*position: sticky[^}]*top: 0/);
     expect(result.css?.code).toMatch(/\.row-gutter[^}]*position: sticky[^}]*left: 0/);
+    expect(result.css?.code).not.toContain("contain: strict");
     expect(source).not.toContain('style:transform={`translate(${scrollLeft}px, ${scrollTop}px)`}');
   });
 
