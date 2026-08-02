@@ -5,6 +5,7 @@ import {
   PartNameError,
   openZipArchive,
   parseContentTypes,
+  updateContentTypes,
   type ContentTypesErrorCode,
 } from "../src/index.ts";
 import { buildStoredZip } from "./zip-builder.ts";
@@ -111,11 +112,24 @@ describe("content types", () => {
   });
 
   test("reports a part without a mapping", () => {
-    const types = parseTypes(`<Types xmlns="${namespace}"/>`);
+    const types = parseTypes(`<Types xmlns="${namespace}"><Default Extension="bin" ContentType="application/octet-stream"/></Types>`);
     expectContentTypesError(
       () => types.require(PartName.parse("/word/document.xml")),
       "missing_content_type",
     );
+  });
+
+  test("matches existing default media types case-insensitively when adding parts", () => {
+    const types = parseTypes(`
+      <Types xmlns="${namespace}">
+        <Default Extension="xml" ContentType="Application/XML"/>
+      </Types>
+    `);
+    const updated = updateContentTypes(types, {
+      additions: new Map([[PartName.parse("/custom/data.xml"), "application/xml"]]),
+    });
+    expect(updated.overrides).toHaveLength(0);
+    expect(updated.require(PartName.parse("/custom/data.xml"))).toBe("Application/XML");
   });
 
   test.each([

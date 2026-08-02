@@ -125,7 +125,10 @@ export function updateContentTypes(
       : contentTypes.defaults.find(
           (item) => asciiLowercase(item.extension) === asciiLowercase(extension),
         );
-    if (matchingDefault?.contentType !== contentType) {
+    if (
+      matchingDefault === undefined ||
+      asciiLowercase(matchingDefault.contentType) !== asciiLowercase(contentType)
+    ) {
       overrideIndex.set(partName.equivalenceKey, overrides.length);
       overrides.push(Object.freeze({ partName, contentType }));
     }
@@ -253,7 +256,7 @@ export function parseContentTypes(archive: ZipArchive): ContentTypes {
     );
   }
 
-  if (!rootSeen) {
+  if (!rootSeen || (defaults.length === 0 && overrides.length === 0)) {
     throw new ContentTypesError("invalid_xml", "The media-types stream is empty.");
   }
   return new ContentTypes(defaults, overrides);
