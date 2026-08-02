@@ -77,6 +77,32 @@ describe("lossless XML edits", () => {
     );
   });
 
+  test("inserts and replaces validated nested markup", () => {
+    const document = parseLosslessXml(encoder.encode(`<root xmlns:x="urn:x"><first/><last/></root>`));
+    const first = document.elements("", "first")[0]!;
+    const last = document.elements("", "last")[0]!;
+    const result = beginLosslessXmlEdit(document)
+      .replaceElementMarkup(first, `<replacement><x:nested>safe &amp; valid</x:nested></replacement>`)
+      .insertMarkupBefore(last, `<middle value="2"/>`)
+      .appendMarkup(document.root, `<tail/>`)
+      .commit();
+    expect(new TextDecoder().decode(result.bytes)).toBe(
+      `<root xmlns:x="urn:x"><replacement><x:nested>safe &amp; valid</x:nested></replacement><middle value="2"/><last/><tail/></root>`,
+    );
+  });
+
+  test("rejects malformed raw markup atomically", () => {
+    const bytes = encoder.encode(`<root><child/></root>`);
+    const document = parseLosslessXml(bytes);
+    const editor = beginLosslessXmlEdit(document).replaceElementMarkup(
+      document.elements("", "child")[0]!,
+      `<broken>`,
+    );
+    expect(() => editor.commit()).toThrow();
+    expect(editor.status).toBe("active");
+    expect(document.originalBytes()).toBe(bytes);
+  });
+
   for (const encoding of ["utf-8", "utf-16le", "utf-16be"] as const) {
     test(`retains ${encoding} and its BOM during edits`, () => {
       const declared = encoding.toUpperCase();

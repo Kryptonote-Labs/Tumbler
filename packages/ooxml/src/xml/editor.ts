@@ -137,6 +137,42 @@ export class LosslessXmlEditor {
     });
   }
 
+  /** Replaces an element with XML markup that is validated with the whole document on commit. */
+  replaceElementMarkup(element: LosslessXmlElement, markup: string): this {
+    this.#assertElement(element);
+    return this.#stage({
+      span: element.span,
+      replacement: markup,
+      label: `markup for ${element.qualified}`,
+    });
+  }
+
+  /** Inserts XML markup immediately before a sibling and validates it on commit. */
+  insertMarkupBefore(sibling: LosslessXmlElement, markup: string): this {
+    this.#assertElement(sibling);
+    return this.#stage({
+      span: { start: sibling.span.start, end: sibling.span.start },
+      replacement: markup,
+      label: `markup before ${sibling.qualified}`,
+    });
+  }
+
+  /** Appends XML markup to a non-self-closing parent and validates it on commit. */
+  appendMarkup(parent: LosslessXmlElement, markup: string): this {
+    this.#assertElement(parent);
+    if (parent.selfClosing || parent.endTagSpan === undefined) {
+      throw new XmlEditError(
+        "self_closing_parent",
+        `Cannot append to self-closing element ${parent.qualified}.`,
+      );
+    }
+    return this.#stage({
+      span: { start: parent.endTagSpan.start, end: parent.endTagSpan.start },
+      replacement: markup,
+      label: `markup in ${parent.qualified}`,
+    });
+  }
+
   removeElement(element: LosslessXmlElement): this {
     this.#assertElement(element);
     return this.#stage({
