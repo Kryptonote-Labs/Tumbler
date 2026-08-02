@@ -37,6 +37,12 @@ every edit or external revision:
 />
 ```
 
+The grid treats application chrome and worksheet colours as separate surfaces.
+`--tumbler-grid-*` variables theme headers and controls. The worksheet canvas
+uses a light document surface by default through `--tumbler-sheet-bg`,
+`--tumbler-sheet-fg`, and `--tumbler-sheet-line`. Authored SpreadsheetML fills,
+font colours, and borders override those canvas defaults.
+
 Pass `readonly` when the host wants selection and table view controls without
 cell writes. Sorting and filtering are always view-only: they use scalar values
 plus supported calculated results or producer caches, and do not change the
