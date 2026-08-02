@@ -42,6 +42,22 @@ export type {
   SpreadsheetTableStyle,
 } from "./tables.ts";
 export {
+  clearSpreadsheetTableFilter,
+  projectSpreadsheetTable,
+  savedSpreadsheetTableView,
+  setSpreadsheetTableSort,
+  setSpreadsheetTableValueFilter,
+  spreadsheetTableDistinctValues,
+} from "./table-view.ts";
+export type {
+  SpreadsheetTableViewCriteria,
+  SpreadsheetTableViewFilter,
+  SpreadsheetTableViewProjection,
+  SpreadsheetTableViewSort,
+  SpreadsheetTableViewState,
+  SpreadsheetTableViewWarning,
+} from "./table-view.ts";
+export {
   beginSpreadsheetEdit,
   SpreadsheetEditor,
 } from "./editor.ts";
