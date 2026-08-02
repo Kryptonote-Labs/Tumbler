@@ -4,6 +4,7 @@ import {
   openSpreadsheet,
   openWorksheet,
   columnWidthToPixels,
+  rowHeightToPixels,
   SpreadsheetError,
   type SpreadsheetErrorCode,
 } from "../src/index.ts";
@@ -139,6 +140,29 @@ describe("SpreadsheetML sparse worksheets", () => {
     expect(columns.size(3)).toBe(columnWidthToPixels(20));
     expect(columns.size(5)).toBe(0);
     expect(columnWidthToPixels(8.7109375)).toBe(61);
+  });
+
+  test("derives automatic row heights from effective fonts and hard-wrapped lines", () => {
+    const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      stylesXml: `<styleSheet xmlns="${namespace}"><fonts count="3"><font><name val="Calibri"/><sz val="11"/></font><font><name val="Calibri"/><sz val="14"/><b/></font><font><name val="Calibri"/><sz val="20"/></font></fonts><fills count="1"><fill/></fills><borders count="1"><border/></borders><cellXfs count="4"><xf fontId="0"/><xf fontId="1"/><xf fontId="2"/><xf fontId="0"><alignment wrapText="1"/></xf></cellXfs></styleSheet>`,
+      sheets: [{
+        name: "Sheet1",
+        sheetId: 1,
+        relationshipId: "sheet1",
+        xml: `<worksheet xmlns="${namespace}"><sheetFormatPr defaultRowHeight="15"/><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>ordinary</t></is></c></row><row r="2"><c r="A2" s="1" t="inlineStr"><is><t>heading</t></is></c></row><row r="3"><c r="A3" s="2" t="inlineStr"><is><t>large</t></is></c></row><row r="4" ht="30"><c r="A4" s="2"/></row><row r="5" hidden="1"><c r="A5" s="2"/></row><row r="6"><c r="A6" s="3" t="inlineStr"><is><t>first&#10;second</t></is></c></row></sheetData></worksheet>`,
+      }],
+    })));
+    const rows = openWorksheet(workbook, workbook.sheets[0]!).rowGeometry(10);
+
+    expect(rows.size(1)).toBe(20);
+    expect(rows.size(2)).toBe(24);
+    expect(rows.size(3)).toBe(32);
+    expect(rows.size(4)).toBe(40);
+    expect(rows.size(5)).toBe(0);
+    expect(rows.size(6)).toBe(40);
+    expect(rowHeightToPixels(18.25)).toBe(24);
+    expect(() => rowHeightToPixels(-1)).toThrow(RangeError);
   });
 
   test.each([

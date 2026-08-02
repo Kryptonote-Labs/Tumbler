@@ -77,6 +77,7 @@ export class SpreadsheetWorksheet {
   readonly defaultColumnWidth: number;
   readonly #cells: ReadonlyMap<string, SpreadsheetCell>;
   readonly #rows: ReadonlyMap<number, SpreadsheetRow>;
+  readonly #automaticRowHeights: ReadonlyMap<number, number>;
 
   constructor(input: {
     workbook: SpreadsheetWorkbook;
@@ -110,6 +111,7 @@ export class SpreadsheetWorksheet {
     this.defaultColumnWidth = input.defaultColumnWidth;
     this.#cells = new Map(input.rows.flatMap((row) => row.cells.map((cell) => [cell.reference, cell] as const)));
     this.#rows = new Map(input.rows.map((row) => [row.index, row]));
+    this.#automaticRowHeights = this.calculateAutomaticRowHeights();
   }
 
   cell(reference: string | CellAddress): SpreadsheetCell | undefined {
@@ -160,13 +162,20 @@ export class SpreadsheetWorksheet {
   rowGeometry(count = EXCEL_MAX_ROWS, projectedRows: ReadonlyMap<number, number | undefined> = new Map()): SparseAxisGeometry {
     const rows = new Map(this.rows
       .filter((row) => row.index <= count && (row.hidden || row.height !== undefined))
-      .map((row) => [row.index, row.hidden ? 0 : (row.height ?? this.defaultRowHeight) * 4 / 3]));
+      .map((row) => [row.index, row.hidden ? 0 : rowHeightToPixels(row.height ?? this.defaultRowHeight)]));
+    for (const [index, height] of this.#automaticRowHeights) {
+      if (index <= count) rows.set(index, rowHeightToPixels(height));
+    }
     for (const [visualRow, sourceRow] of projectedRows) {
       if (visualRow < 1 || visualRow > count) continue;
       if (sourceRow === undefined) rows.set(visualRow, 0);
-      else rows.set(visualRow, (this.#rows.get(sourceRow)?.height ?? this.defaultRowHeight) * 4 / 3);
+      else {
+        const source = this.#rows.get(sourceRow);
+        const height = source?.height ?? this.#automaticRowHeights.get(sourceRow) ?? this.defaultRowHeight;
+        rows.set(visualRow, rowHeightToPixels(height));
+      }
     }
-    return new SparseAxisGeometry(count, this.defaultRowHeight * 4 / 3,
+    return new SparseAxisGeometry(count, rowHeightToPixels(this.defaultRowHeight),
       [...rows].map(([index, size]) => ({ index, size })));
   }
 
@@ -180,6 +189,35 @@ export class SpreadsheetWorksheet {
     return new SparseAxisGeometry(count, columnWidthToPixels(this.defaultColumnWidth, maximumDigitWidth),
       [...overrides].map(([index, size]) => ({ index, size })));
   }
+
+  private calculateAutomaticRowHeights(): ReadonlyMap<number, number> {
+    const normalFontSize = this.styles.resolve(0).font.size ?? 11;
+    const normalLeading = Math.max(0, this.defaultRowHeight - normalFontSize);
+    const heights = new Map<number, number>();
+    for (const row of this.rows) {
+      if (row.hidden || row.height !== undefined) continue;
+      let height = this.defaultRowHeight;
+      if (row.customFormat) {
+        const fontSize = this.styles.cellFormats[row.styleIndex ?? 0]?.font.size ?? normalFontSize;
+        height = Math.max(height, fontSize + normalLeading);
+      }
+      for (const cell of row.cells) {
+        const style = this.styles.cellFormats[this.effectiveStyleIndex(cell.address) ?? 0];
+        if (style === undefined) continue;
+        const fontSize = style.font.size ?? normalFontSize;
+        const lines = style.alignment.wrapText ? hardLineCount(cell.value) : 1;
+        height = Math.max(height, (fontSize + normalLeading) * lines);
+      }
+      if (height > this.defaultRowHeight) heights.set(row.index, height);
+    }
+    return heights;
+  }
+}
+
+/** Projects SpreadsheetML point heights onto Excel's integer 96-DPI pixel grid. */
+export function rowHeightToPixels(points: number): number {
+  if (!Number.isFinite(points) || points < 0) throw new RangeError("Row height must be a finite non-negative measurement.");
+  return Math.round(points * 4 / 3);
 }
 
 export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetSheet): SpreadsheetWorksheet {
@@ -356,6 +394,11 @@ function parseCell(
     formula,
     value: Object.freeze(value),
   });
+}
+
+function hardLineCount(value: SpreadsheetCellValue): number {
+  if (value.type !== "string") return 1;
+  return value.value.split(/\r\n|\r|\n/).length;
 }
 
 function parseDimension(root: LosslessXmlElement, namespace: string): CellRange | undefined {

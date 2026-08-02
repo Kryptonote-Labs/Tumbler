@@ -27,6 +27,7 @@ export type {
 export {
   openWorksheet,
   columnWidthToPixels,
+  rowHeightToPixels,
   SpreadsheetWorksheet,
 } from "./worksheet.ts";
 export type {

@@ -63,6 +63,7 @@ describe("Svelte spreadsheet viewport", () => {
     expect(result.css?.code).toContain("color: var(--tumbler-sheet-fg, #111111)");
     expect(result.css?.code).toContain("background: var(--tumbler-sheet-bg, #ffffff)");
     expect(result.css?.code).toContain("border-right: 1px solid var(--tumbler-sheet-line, #d9ded9)");
+    expect(result.css?.code).toContain("padding: 2px 8px");
   });
 
   test("contains touchpad momentum inside the worksheet scroller", async () => {

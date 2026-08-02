@@ -97,6 +97,11 @@ font before applying the standard column-width conversion. Alignment rendering
 includes General type-sensitive alignment, vertical position, wrapping,
 indentation, reading direction, and rotated or stacked text.
 
+Row geometry preserves explicit point heights and hidden rows. Rows without an
+explicit height grow from the effective cell or row font and hard line breaks,
+then project onto Excel's integer 96-DPI pixel grid. Width-dependent wrapping
+remains a renderer-level fidelity gap.
+
 ## Deliberate current limits
 
 - Only ordinary worksheet sheet targets are accepted. Chart sheets, dialog
