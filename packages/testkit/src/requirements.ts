@@ -60,6 +60,7 @@ export const SPREADSHEET_REQUIREMENTS = defineRequirementManifest([
   requirement("XLSX-CELL-TYPES", "§18.18.11", "spreadsheet.values", ["worksheet.test.ts", "editor.test.ts"], { render: "supported", edit: "partial", write: "partial" }),
   requirement("XLSX-TABLE-PARTS", "§18.3.1.94–95, §18.5.1.2–3", "spreadsheet.tables", ["tables.test.ts", "table-view.test.ts", "preservation.test.ts"], { recognize: "supported", preserve: "supported", render: "partial" }),
   requirement("XLSX-AUTOFILTER", "§18.3.1.2, §18.3.1.92, §18.3.2.7–10", "spreadsheet.filters", ["tables.test.ts", "table-view.test.ts", "spreadsheet-viewport.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }),
+  requirement("XLSX-HYPERLINKS", "§18.3.1.47–48", "spreadsheet.hyperlinks", ["hyperlinks.test.ts", "preservation.test.ts", "spreadsheet-viewport.test.ts"], { recognize: "supported", preserve: "supported", render: "partial" }),
   requirement("XLSX-FORMULA-GRAMMAR", "§2.2.2", "spreadsheet.formula-grammar", ["parser.test.ts", "calculation.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }, "MS-XLSX"),
   requirement("XLSX-FORMULA-EVALUATION", "§18.17.2–7", "spreadsheet.formula-evaluation", ["evaluator.test.ts", "calculation.test.ts", "spreadsheet-viewport.test.ts"], { recognize: "partial", preserve: "supported", render: "partial", edit: "partial" }),
 ] as const);

@@ -26,6 +26,7 @@ current requirement boundary is:
 | §18.18.11 | `b`, `d`, `e`, `inlineStr`, `n`, `s`, and `str` cell types |
 | §18.3.1.94–95, §18.5.1.2–3 | Relationship-resolved table parts, ranges, identities, columns, totals metadata, and table style flags |
 | §18.3.1.2, §18.3.1.92, §18.3.2.7–10 | Worksheet/table AutoFilter ranges, value/custom criteria, button state, and saved value-sort state |
+| §18.3.1.47–48 | Worksheet hyperlink ranges, internal locations, optional display/tooltips, and external hyperlink relationships |
 | MS-XLSX §2.2.2, ECMA-376-1 §18.17.2–7 | Typed formula parsing, references/ranges, bounded dependencies, operators, errors, and the first calculation function set |
 
 Both Strict and Transitional vocabulary and relationship namespaces are tested.
@@ -58,6 +59,8 @@ clauses or to SpreadsheetML as a whole.
   stable value sorts using scalar values and stored formula results;
 - enumerate formatted table values for a fully client-side filter menu using
   calculated overlays or stored caches without changing workbook bytes;
+- expose internal worksheet destinations and inert external relationship targets
+  without dereferencing document-provided URLs during parsing;
 - calculate supported ordinary formulas into an immutable overlay, including
   arithmetic/comparison/concatenation, same- and cross-sheet A1 references,
   ranges, `IF`, `SUM`, `COUNT`, `AVERAGE`, `MIN`, `MAX`, `AND`, `OR`, and `NOT`;
@@ -75,7 +78,9 @@ primitives plus sparse variable-axis geometry. `@tumbler/svelte` supplies
 `SpreadsheetGrid`, an owned virtualized surface with row/column headers, click
 and shift selection, keyboard navigation, styled display, merged cells, frozen
 regions, an inline editor, table sort/filter dropdowns, a read-only mode, and
-typed selection/edit callbacks. Table controls project source rows into visual
+typed selection/edit/hyperlink callbacks. Hyperlink cells are accessible buttons;
+the host owns navigation so document targets never become automatic browser loads.
+Table controls project source rows into visual
 slots; filtered slots collapse through sparse geometry and the source package is
 unchanged. Its pure viewport and grid-layout calculators are usable independently
 of Svelte.
@@ -127,9 +132,12 @@ remains a renderer-level fidelity gap.
   custom filters plus vertical value sorting are projected; dynamic, top-10,
   color, icon, and horizontal sorts remain explicitly unsupported and are not
   applied. User table view state is not written back to SpreadsheetML.
-- Validations, conditional formats, comments, hyperlinks, drawings, charts,
-  pivots, names, and external links are preserved as unknown content but have no
+- Validations, conditional formats, comments, drawings, charts,
+  pivots, names, and external-workbook links are preserved as unknown content but have no
   semantic or visual model.
+- Hyperlink locations that name defined names rather than A1 cell/range
+  destinations remain exposed as raw locations but are not resolved. External
+  targets are inert until a host explicitly approves a user activation.
 - Editing an existing rich/shared string replaces that cell's value with a plain
   inline string; run formatting and phonetic annotations are not retained for
   the intentionally replaced value.

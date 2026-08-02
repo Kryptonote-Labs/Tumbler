@@ -34,6 +34,7 @@ every edit or external revision:
   worksheet={artifact.worksheet}
   calculation={artifact.calculation}
   onedit={editCell}
+  onhyperlink={activateHyperlink}
 />
 ```
 
@@ -46,6 +47,12 @@ font colours, and borders override those canvas defaults.
 Give the grid a constrained width and height in the host layout. It owns its
 two-axis scrolling, keeps row and column headers in place, and contains
 touchpad momentum so reaching a worksheet edge does not scroll the host pane.
+
+`onhyperlink` receives a typed internal or external hyperlink. Internal A1
+destinations can be routed through `artifact.selectSheet`; external relationship
+targets remain inert unless the host accepts their scheme and opens them in
+response to that explicit user action. Tumbler never fetches them while opening
+or rendering a workbook.
 
 Pass `readonly` when the host wants selection and table view controls without
 cell writes. Sorting and filtering are always view-only: they use scalar values
