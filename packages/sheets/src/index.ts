@@ -34,6 +34,11 @@ export {
   readSpreadsheetStyles,
   SpreadsheetStyles,
 } from "./styles.ts";
+export {
+  BUILT_IN_NUMBER_FORMATS,
+  formatSpreadsheetCellValue,
+} from "./number-format.ts";
+export type { SpreadsheetFormatOptions } from "./number-format.ts";
 export type {
   SpreadsheetAlignment,
   SpreadsheetBorder,
