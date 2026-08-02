@@ -83,6 +83,17 @@ describe("SpreadsheetML sparse worksheets", () => {
     expect(() => openWorksheet(first, second.sheets[0]!)).toThrow(TypeError);
   });
 
+  test("resolves cell styles into formatted display text", () => {
+    const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      stylesXml: `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font/></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders><cellXfs count="2"><xf fontId="0" fillId="0" borderId="0" numFmtId="0"/><xf fontId="0" fillId="0" borderId="0" numFmtId="10"/></cellXfs></styleSheet>`,
+      sheets: [{ name: "Sheet1", sheetId: 1, relationshipId: "sheet1", xml: `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" s="1"><v>0.125</v></c></row></sheetData></worksheet>` }],
+    })));
+    const worksheet = openWorksheet(workbook, workbook.sheets[0]!);
+    expect(worksheet.displayText("A1")).toBe("12.50%");
+    expect(worksheet.cellStyle("A1").numberFormatId).toBe(10);
+    expect(worksheet.displayText("B2")).toBe("");
+  });
+
   test.each([
     ["invalid_worksheet", `<worksheet xmlns="NS"/>`],
     ["invalid_worksheet", `<worksheet xmlns="NS"><sheetData><row r="1"/><row r="1"/></sheetData></worksheet>`],

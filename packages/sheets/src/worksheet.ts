@@ -11,6 +11,8 @@ import {
   type CellRange,
 } from "./references.ts";
 import { readSharedStrings, richText, type SharedStringTable } from "./shared-strings.ts";
+import { formatSpreadsheetCellValue } from "./number-format.ts";
+import { readSpreadsheetStyles, type SpreadsheetCellFormat, type SpreadsheetStyles } from "./styles.ts";
 import { SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";
 
 export type SpreadsheetCellValue =
@@ -63,6 +65,7 @@ export class SpreadsheetWorksheet {
   readonly columns: readonly SpreadsheetColumn[];
   readonly merges: readonly CellRange[];
   readonly panes: readonly SpreadsheetPane[];
+  readonly styles: SpreadsheetStyles;
   readonly #cells: ReadonlyMap<string, SpreadsheetCell>;
 
   constructor(input: {
@@ -75,6 +78,7 @@ export class SpreadsheetWorksheet {
     columns: readonly SpreadsheetColumn[];
     merges: readonly CellRange[];
     panes: readonly SpreadsheetPane[];
+    styles: SpreadsheetStyles;
   }) {
     this.workbook = input.workbook;
     this.sheet = input.sheet;
@@ -85,6 +89,7 @@ export class SpreadsheetWorksheet {
     this.columns = Object.freeze([...input.columns]);
     this.merges = Object.freeze([...input.merges]);
     this.panes = Object.freeze([...input.panes]);
+    this.styles = input.styles;
     this.#cells = new Map(input.rows.flatMap((row) => row.cells.map((cell) => [cell.reference, cell] as const)));
   }
 
@@ -93,6 +98,21 @@ export class SpreadsheetWorksheet {
       ? formatCellReference(parseCellReference(reference))
       : formatCellReference(reference);
     return this.#cells.get(normalized);
+  }
+
+  cellStyle(reference: string | CellAddress): SpreadsheetCellFormat {
+    return this.styles.resolve(this.cell(reference)?.styleIndex);
+  }
+
+  displayText(reference: string | CellAddress, locale = "en-US"): string {
+    const cell = this.cell(reference);
+    const style = this.styles.resolve(cell?.styleIndex);
+    return formatSpreadsheetCellValue(cell?.value, {
+      numberFormatId: style.numberFormatId,
+      ...(style.numberFormatCode === undefined ? {} : { numberFormatCode: style.numberFormatCode }),
+      dateSystem: this.workbook.dateSystem,
+      locale,
+    });
   }
 }
 
@@ -122,6 +142,7 @@ export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetS
     rows: parseRows(document, namespace, readSharedStrings(workbook)),
     merges: parseMerges(document.root, namespace),
     panes: parsePanes(document.root, namespace),
+    styles: readSpreadsheetStyles(workbook),
   });
 }
 
