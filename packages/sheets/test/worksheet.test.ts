@@ -61,6 +61,8 @@ describe("SpreadsheetML sparse worksheets", () => {
       { start: { row: 5, column: 1 }, end: { row: 5, column: 2 } },
       { start: { row: 6, column: 3 }, end: { row: 7, column: 4 } },
     ]);
+    expect(worksheet.mergedRange("D7")).toEqual({ start: { row: 6, column: 3 }, end: { row: 7, column: 4 } });
+    expect(worksheet.mergedRange("A1")).toBeUndefined();
     expect(worksheet.rows.map(({ index, height, hidden }) => ({ index, height, hidden }))).toEqual([
       { index: 2, height: 18.25, hidden: false },
       { index: 3, height: undefined, hidden: true },

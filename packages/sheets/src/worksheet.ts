@@ -111,6 +111,14 @@ export class SpreadsheetWorksheet {
     return this.styles.resolve(this.cell(reference)?.styleIndex);
   }
 
+  mergedRange(reference: string | CellAddress): CellRange | undefined {
+    const address = typeof reference === "string" ? parseCellReference(reference) : reference;
+    return this.merges.find((range) =>
+      address.row >= range.start.row && address.row <= range.end.row &&
+      address.column >= range.start.column && address.column <= range.end.column
+    );
+  }
+
   displayText(reference: string | CellAddress, locale = "en-US"): string {
     const cell = this.cell(reference);
     const style = this.styles.resolve(cell?.styleIndex);
