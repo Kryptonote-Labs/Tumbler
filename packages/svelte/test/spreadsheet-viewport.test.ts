@@ -107,6 +107,17 @@ describe("Svelte spreadsheet viewport", () => {
     expect(source).not.toContain("href={hyperlink");
   });
 
+  test("owns pointer range selection without allowing browser text selection", async () => {
+    const source = await Bun.file(new URL("../src/SpreadsheetGrid.svelte", import.meta.url)).text();
+    const result = compile(source, { filename: "SpreadsheetGrid.svelte", generate: "client", modernAst: true });
+    expect(result.warnings).toHaveLength(0);
+    expect(result.css?.code).toMatch(/\.tumbler-grid[^}]*user-select: none/);
+    expect(result.css?.code).toMatch(/\.cell[^}]*input[^}]*user-select: text/);
+    expect(source).toContain("cellPointerDown(event, sourceRow, column)");
+    expect(source).toContain("cellPointerEnter(event, sourceRow, column)");
+    expect(source).toContain('event.pointerType !== "mouse"');
+  });
+
   test("rejects invalid viewport geometry", () => {
     const valid = {
       rowCount: 1,

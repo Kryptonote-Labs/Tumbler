@@ -64,6 +64,9 @@
   let stateWorksheet = $state<SpreadsheetWorksheet>();
   let tableStates = $state<Record<string, SpreadsheetTableViewState>>({});
   let tableMenu = $state<{ key: string; columnId: number; left: number; top: number }>();
+  let selectingPointer = $state<number>();
+  let selectionDragged = $state(false);
+  let suppressCellClick = $state(false);
   const rowHeaderWidth = 52;
   const columnHeaderHeight = 28;
   let tableProjections = $derived(worksheet.tables.map((table) => ({
@@ -181,6 +184,38 @@
     const target = event.currentTarget as HTMLDivElement;
     scrollTop = target.scrollTop;
     scrollLeft = target.scrollLeft;
+  }
+
+  function cellPointerDown(event: PointerEvent, row: number, column: number) {
+    if (event.pointerType !== "mouse" || event.button !== 0 || interactivePointerTarget(event)) return;
+    event.preventDefault();
+    selectingPointer = event.pointerId;
+    selectionDragged = false;
+    select(row, column, event.shiftKey);
+  }
+
+  function cellPointerEnter(event: PointerEvent, row: number, column: number) {
+    if (selectingPointer !== event.pointerId || (event.buttons & 1) === 0) return;
+    event.preventDefault();
+    selectionDragged = true;
+    select(row, column, true);
+  }
+
+  function finishPointerSelection(event: PointerEvent) {
+    if (selectingPointer !== event.pointerId) return;
+    selectingPointer = undefined;
+    if (!selectionDragged) return;
+    suppressCellClick = true;
+    setTimeout(() => { suppressCellClick = false; }, 0);
+  }
+
+  function cellClick(event: MouseEvent, row: number, column: number) {
+    if (suppressCellClick) return;
+    select(row, column, event.shiftKey);
+  }
+
+  function interactivePointerTarget(event: PointerEvent): boolean {
+    return event.target instanceof Element && event.target.closest("button, input") !== null;
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -367,6 +402,8 @@
 
 </script>
 
+<svelte:window onpointerup={finishPointerSelection} onpointercancel={finishPointerSelection} />
+
 {#snippet gridCell(reference: string, sourceRow: number, column: number, left: number, top: number, width: number, height: number, zIndex: number)}
   {@const header = tableHeader(sourceRow, column)}
   {@const hyperlink = worksheet.hyperlink({ row: sourceRow, column })}
@@ -384,7 +421,9 @@
     style:height={`${height}px`}
     style:z-index={zIndex}
     style={spreadsheetCellCss(worksheet, reference)}
-    onclick={(event) => select(sourceRow, column, event.shiftKey)}
+    onpointerdown={(event) => cellPointerDown(event, sourceRow, column)}
+    onpointerenter={(event) => cellPointerEnter(event, sourceRow, column)}
+    onclick={(event) => cellClick(event, sourceRow, column)}
     onkeydown={(event) => cellKeydown(event, sourceRow, column)}
     ondblclick={() => beginEdit(sourceRow, column)}
   >
@@ -549,7 +588,7 @@
 {/if}
 
 <style>
-  .tumbler-grid { position: relative; overflow: hidden; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; }
+  .tumbler-grid { position: relative; overflow: hidden; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; user-select: none; -webkit-user-select: none; }
   .grid-scroller { width: 100%; height: 100%; overflow: auto; overscroll-behavior: contain; }
   .canvas { position: relative; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane, .frozen-column-pane { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; background: var(--tumbler-sheet-bg, #ffffff); }
@@ -583,5 +622,5 @@
   .menu-values { max-height: 220px; overflow: auto; padding: 6px 0; border-top: 1px solid var(--tumbler-grid-line, #2a302a); }
   .menu-values label { display: flex; gap: 8px; align-items: center; padding: 6px 12px; cursor: pointer; }
   .menu-values label:hover { background: color-mix(in srgb, var(--tumbler-grid-accent, #42ff53) 8%, transparent); }
-  .cell input { width: 100%; height: 100%; box-sizing: border-box; border: 0; outline: 0; padding: 0; color: inherit; background: transparent; font: inherit; }
+  .cell input { width: 100%; height: 100%; box-sizing: border-box; border: 0; outline: 0; padding: 0; color: inherit; background: transparent; font: inherit; user-select: text; -webkit-user-select: text; }
 </style>
