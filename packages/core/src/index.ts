@@ -12,3 +12,5 @@ export type {
   GridRange,
   GridSelection,
 } from "./grid-selection.ts";
+export { SparseAxisGeometry } from "./sparse-axis.ts";
+export type { AxisSizeOverride } from "./sparse-axis.ts";
