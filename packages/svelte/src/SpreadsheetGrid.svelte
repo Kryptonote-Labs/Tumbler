@@ -12,6 +12,7 @@
     setSpreadsheetTableValueFilter,
     spreadsheetTableDistinctValues,
     type SpreadsheetCellValue,
+    type SpreadsheetCalculationSnapshot,
     type SpreadsheetTable,
     type SpreadsheetTableViewState,
     type SpreadsheetWorksheet,
@@ -24,6 +25,7 @@
 
   interface Props {
     readonly worksheet: SpreadsheetWorksheet;
+    readonly calculation?: SpreadsheetCalculationSnapshot;
     selection?: GridSelection;
     readonly onselectionchange?: (selection: GridSelection) => void;
     readonly onedit?: (edit: SpreadsheetGridEdit) => void;
@@ -37,6 +39,7 @@
 
   let {
     worksheet,
+    calculation,
     selection = createGridSelection({ row: 1, column: 1 }),
     onselectionchange,
     onedit,
@@ -62,7 +65,15 @@
   const columnHeaderHeight = 28;
   let tableProjections = $derived(worksheet.tables.map((table) => ({
     table,
-    projection: projectSpreadsheetTable(worksheet, table, tableStates[table.partName.value] ?? savedSpreadsheetTableView(table).state),
+    projection: projectSpreadsheetTable(
+      worksheet,
+      table,
+      tableStates[table.partName.value] ?? savedSpreadsheetTableView(table).state,
+      calculation === undefined ? undefined : {
+        value: (row, column) => calculation.value({ row, column }),
+        displayText: (row, column) => calculation.displayText({ row, column }),
+      },
+    ),
   })));
   let projectedRows = $derived.by(() => {
     const result = new Map<number, number | undefined>();
@@ -228,7 +239,7 @@
   }
 
   function displayCell(reference: string): string {
-    return worksheet.displayText(reference);
+    return calculation?.displayText(reference) ?? worksheet.displayText(reference);
   }
 
   function columnLabel(column: number): string {
@@ -291,7 +302,10 @@
   function updateTableState(table: SpreadsheetTable, state: SpreadsheetTableViewState) {
     tableStates = { ...tableStates, [table.partName.value]: state };
     editing = undefined;
-    const projection = projectSpreadsheetTable(worksheet, table, state);
+    const projection = projectSpreadsheetTable(worksheet, table, state, calculation === undefined ? undefined : {
+      value: (row, column) => calculation.value({ row, column }),
+      displayText: (row, column) => calculation.displayText({ row, column }),
+    });
     const bodyStart = table.range.start.row + table.headerRowCount;
     const bodyEnd = table.range.end.row - table.totalsRowCount;
     if (selection.focus.row >= bodyStart && selection.focus.row <= bodyEnd && !projection.rows.includes(selection.focus.row)) {
@@ -321,10 +335,17 @@
   }
 
   function toggleTableValue(table: SpreadsheetTable, columnId: number, value: string, checked: boolean) {
-    const distinct = spreadsheetTableDistinctValues(worksheet, table, columnId);
+    const distinct = tableDistinctValues(table, columnId);
     const values = distinct.filter((candidate) => candidate !== "" && (candidate === value ? checked : valueChecked(table, columnId, candidate)));
     const includeBlank = distinct.includes("") && (value === "" ? checked : valueChecked(table, columnId, ""));
     updateTableState(table, setSpreadsheetTableValueFilter(menuState(table), columnId, values, includeBlank));
+  }
+
+  function tableDistinctValues(table: SpreadsheetTable, columnId: number): readonly string[] {
+    return spreadsheetTableDistinctValues(worksheet, table, columnId, calculation === undefined ? undefined : {
+      value: (row, column) => calculation.value({ row, column }),
+      displayText: (row, column) => calculation.displayText({ row, column }),
+    });
   }
 
 </script>
@@ -414,7 +435,7 @@
 
 {#if tableMenu !== undefined && menuTable() !== undefined}
   {@const table = menuTable()!}
-  {@const values = spreadsheetTableDistinctValues(worksheet, table, tableMenu.columnId)}
+  {@const values = tableDistinctValues(table, tableMenu.columnId)}
   <button class="menu-scrim" aria-label="Close table menu" onclick={() => tableMenu = undefined}></button>
   <div class="table-menu" role="menu" style:left={`${Math.max(8, tableMenu.left)}px`} style:top={`${tableMenu.top}px`}>
     <button type="button" role="menuitem" onclick={() => sortTable(table, tableMenu!.columnId, "ascending")}>Sort ascending</button>
