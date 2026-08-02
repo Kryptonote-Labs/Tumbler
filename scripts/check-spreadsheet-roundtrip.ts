@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { openSpreadsheetArtifact } from "../packages/sheets/src/index.ts";
+import { projectSpreadsheetTable } from "../packages/sheets/src/index.ts";
 
 const directory = resolve(process.argv[2] ?? "compatibility-results/libreoffice");
 const expectations = [
@@ -28,3 +29,16 @@ for (const expectation of expectations) {
   }
   console.log(`PASS ${expectation.name}`);
 }
+
+const tableFile = Bun.file(resolve(directory, "spreadsheet-table.xlsx"));
+if (!await tableFile.exists()) throw new Error("LibreOffice did not produce spreadsheet-table.xlsx.");
+const tableArtifact = openSpreadsheetArtifact(new Uint8Array(await tableFile.arrayBuffer()));
+const table = tableArtifact.worksheet.tables[0];
+if (table?.displayName !== "SampleData" || table.columns.map((column) => column.name).join(",") !== "Item,Value,Status") {
+  throw new Error("spreadsheet-table.xlsx did not preserve its table definition.");
+}
+const projection = projectSpreadsheetTable(tableArtifact.worksheet, table);
+if (projection.rows.join(",") !== "4,2" || tableArtifact.worksheet.cell("B4")?.value.value !== 9) {
+  throw new Error(`spreadsheet-table.xlsx did not preserve its read-only table view: ${JSON.stringify(projection)}`);
+}
+console.log("PASS spreadsheet-table.xlsx");
