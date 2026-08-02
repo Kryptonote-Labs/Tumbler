@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { createGridSelection, moveGridSelection, type GridDirection, type GridSelection } from "@tumbler/core";
   import { EXCEL_MAX_COLUMNS, EXCEL_MAX_ROWS, formatCellReference, type SpreadsheetCellValue, type SpreadsheetWorksheet } from "@tumbler/sheets";
   import { calculateSpreadsheetViewport } from "./spreadsheet-viewport.ts";
@@ -32,6 +33,7 @@
   let scrollTop = $state(0);
   let scrollLeft = $state(0);
   let editing = $state<string>();
+  let editor = $state<HTMLInputElement>();
   let draft = $state("");
   const rowHeaderWidth = 52;
   const columnHeaderHeight = 28;
@@ -54,6 +56,16 @@
     columnGeometry,
   }));
   let layout = $derived(composeSpreadsheetGridLayout({ viewport, rowGeometry, columnGeometry, frozenRows, frozenColumns, merges: worksheet.merges }));
+
+  $effect(() => {
+    const reference = editing;
+    if (reference === undefined) return;
+    void tick().then(() => {
+      if (editing !== reference) return;
+      editor?.focus();
+      editor?.select();
+    });
+  });
 
   function select(row: number, column: number, extend = false) {
     const point = { row, column };
@@ -223,7 +235,7 @@
     ondblclick={() => beginEdit(row, column)}
   >
     {#if editing === reference}
-      <input bind:value={draft} onkeydown={inputKeydown} onblur={() => finishEdit(true)} aria-label={`Edit ${reference}`} />
+      <input bind:this={editor} bind:value={draft} onkeydown={inputKeydown} onblur={() => finishEdit(true)} aria-label={`Edit ${reference}`} />
     {:else}
       <span>{displayCell(reference)}</span>
     {/if}
