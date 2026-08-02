@@ -11,3 +11,13 @@ export type {
   FormulaSourceSpan,
   ParsedFormula,
 } from "./ast.ts";
+export { calculateFormulas, FormulaCalculation } from "./evaluator.ts";
+export type {
+  FormulaCalculationOptions,
+  FormulaCellAddress,
+  FormulaCellInput,
+  FormulaDiagnostic,
+  FormulaDiagnosticCode,
+  FormulaScalarValue,
+  FormulaWorkbookSource,
+} from "./evaluator.ts";
