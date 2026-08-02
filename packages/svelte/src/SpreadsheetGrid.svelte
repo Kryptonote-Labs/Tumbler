@@ -157,7 +157,8 @@
   function cellCss(reference: string): string {
     const style = worksheet.cellStyle(reference);
     const declarations: string[] = [];
-    if (style.font.name !== undefined) declarations.push(`font-family:${cssValue(style.font.name)}`);
+    const fontName = worksheet.styles.resolveFontName(style.font);
+    if (fontName !== undefined) declarations.push(`font-family:${cssValue(fontName)}`);
     if (style.font.size !== undefined) declarations.push(`font-size:${style.font.size}pt`);
     if (style.font.bold) declarations.push("font-weight:700");
     if (style.font.italic) declarations.push("font-style:italic");

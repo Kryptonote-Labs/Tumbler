@@ -3,8 +3,11 @@ import {
   OOXML_NAMESPACES,
   parseLosslessXml,
   parseThemeColorScheme,
+  parseThemeFontScheme,
   THEME_COLOR_SLOTS,
   type ThemeColorScheme,
+  type ThemeFontScheme,
+  type ThemeFontScript,
 } from "@tumbler/ooxml";
 import type { PartName } from "@tumbler/opc";
 import { SpreadsheetError, type SpreadsheetWorkbook } from "./workbook.ts";
@@ -31,6 +34,7 @@ export type SpreadsheetColor =
 
 export interface SpreadsheetFont {
   readonly name: string | undefined;
+  readonly scheme: "major" | "minor" | "none" | undefined;
   readonly size: number | undefined;
   readonly bold: boolean;
   readonly italic: boolean;
@@ -90,7 +94,7 @@ interface FormatRecord {
 }
 
 const DEFAULT_FONT: SpreadsheetFont = Object.freeze({
-  name: undefined, size: undefined, bold: false, italic: false, underline: undefined, strike: false, color: undefined,
+  name: undefined, scheme: undefined, size: undefined, bold: false, italic: false, underline: undefined, strike: false, color: undefined,
 });
 const DEFAULT_FILL: SpreadsheetFill = Object.freeze({ patternType: undefined, foreground: undefined, background: undefined });
 const EMPTY_EDGE: SpreadsheetBorderEdge = Object.freeze({ style: undefined, color: undefined });
@@ -106,6 +110,7 @@ export class SpreadsheetStyles {
   readonly borders: readonly SpreadsheetBorder[];
   readonly cellFormats: readonly SpreadsheetCellFormat[];
   readonly theme: ThemeColorScheme | undefined;
+  readonly themeFonts: ThemeFontScheme | undefined;
   readonly indexedColors: readonly string[];
 
   constructor(input: {
@@ -115,6 +120,7 @@ export class SpreadsheetStyles {
     borders: readonly SpreadsheetBorder[];
     cellFormats: readonly SpreadsheetCellFormat[];
     theme?: ThemeColorScheme;
+    themeFonts?: ThemeFontScheme;
     indexedColors?: readonly string[];
   }) {
     this.partName = input.partName;
@@ -123,6 +129,7 @@ export class SpreadsheetStyles {
     this.borders = Object.freeze([...input.borders]);
     this.cellFormats = Object.freeze([...input.cellFormats]);
     this.theme = input.theme;
+    this.themeFonts = input.themeFonts;
     this.indexedColors = Object.freeze([...(input.indexedColors ?? DEFAULT_INDEXED_COLORS)]);
   }
 
@@ -150,6 +157,13 @@ export class SpreadsheetStyles {
       argb = this.indexedColors[color.index];
     }
     return argb === undefined ? undefined : tintArgb(argb, color.tint);
+  }
+
+  resolveFontName(font: SpreadsheetFont, script: ThemeFontScript = "latin"): string | undefined {
+    const themed = font.scheme === "major" || font.scheme === "minor"
+      ? this.themeFonts?.typeface(font.scheme, script)
+      : undefined;
+    return themed ?? font.name;
   }
 }
 
@@ -191,7 +205,7 @@ export function readSpreadsheetStyles(workbook: SpreadsheetWorkbook): Spreadshee
   const cellRecords = parseRecords(document.root, namespace, "cellXfs");
   if (cellRecords.length === 0) throw styleError("A Styles part must contain at least one cell format.");
   const resolved = cellRecords.map((record) => resolveRecord(record, baseRecords, fonts, fills, borders, numberFormats));
-  const theme = readThemeColorScheme(workbook);
+  const theme = readTheme(workbook);
   const indexedColors = parseIndexedColors(document.root, namespace);
   return new SpreadsheetStyles({
     partName: part.name,
@@ -199,7 +213,7 @@ export function readSpreadsheetStyles(workbook: SpreadsheetWorkbook): Spreadshee
     fills,
     borders,
     cellFormats: resolved,
-    ...(theme === undefined ? {} : { theme }),
+    ...(theme === undefined ? {} : { theme: theme.colors, themeFonts: theme.fonts }),
     ...(indexedColors === undefined ? {} : { indexedColors }),
   });
 }
@@ -211,7 +225,10 @@ function defaultStyles(): SpreadsheetStyles {
   });
 }
 
-function readThemeColorScheme(workbook: SpreadsheetWorkbook): ThemeColorScheme | undefined {
+function readTheme(workbook: SpreadsheetWorkbook): {
+  readonly colors: ThemeColorScheme;
+  readonly fonts: ThemeFontScheme;
+} | undefined {
   const relationshipType = workbook.conformance === "strict"
     ? "http://purl.oclc.org/ooxml/officeDocument/relationships/theme"
     : "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
@@ -223,7 +240,11 @@ function readThemeColorScheme(workbook: SpreadsheetWorkbook): ThemeColorScheme |
   const part = workbook.package.getPart(relationships[0].targetPartName);
   if (part?.contentType !== THEME_CONTENT_TYPE) throw styleError("The Theme part has an unsupported content type.");
   try {
-    return parseThemeColorScheme(workbook.package.readPart(part));
+    const bytes = workbook.package.readPart(part);
+    return Object.freeze({
+      colors: parseThemeColorScheme(bytes),
+      fonts: parseThemeFontScheme(bytes),
+    });
   } catch (cause) {
     throw new SpreadsheetError("invalid_styles", "The workbook Theme part is invalid.", { cause });
   }
@@ -244,8 +265,13 @@ function parseIndexedColors(root: LosslessXmlElement, namespace: string): string
 }
 
 function parseFont(element: LosslessXmlElement, namespace: string): SpreadsheetFont {
+  const scheme = valueChild(element, namespace, "scheme");
+  if (scheme !== undefined && scheme !== "major" && scheme !== "minor" && scheme !== "none") {
+    throw styleError(`Font scheme ${JSON.stringify(scheme)} is invalid.`);
+  }
   return Object.freeze({
     name: valueChild(element, namespace, "name"),
+    scheme,
     size: optionalDouble(valueChild(element, namespace, "sz"), "font size"),
     bold: propertyBoolean(element, namespace, "b"),
     italic: propertyBoolean(element, namespace, "i"),

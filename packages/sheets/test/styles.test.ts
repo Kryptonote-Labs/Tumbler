@@ -16,7 +16,7 @@ describe("SpreadsheetML styles", () => {
     expect(styles.fonts).toHaveLength(2);
     expect(styles.resolve(0)).toMatchObject({ numberFormatId: 0, font: { name: "Aptos", bold: false } });
     expect(styles.resolve(1)).toEqual({
-      font: { name: "Aptos Display", size: 14, bold: true, italic: true, underline: "double", strike: false, color: { type: "rgb", argb: "FF12AB34", tint: 0 } },
+      font: { name: "Aptos Display", scheme: undefined, size: 14, bold: true, italic: true, underline: "double", strike: false, color: { type: "rgb", argb: "FF12AB34", tint: 0 } },
       fill: { patternType: "solid", foreground: { type: "theme", index: 4, tint: 0.25 }, background: undefined },
       border: {
         left: { style: "thin", color: { type: "indexed", index: 64, tint: 0 } },
@@ -50,6 +50,19 @@ describe("SpreadsheetML styles", () => {
     expect(styles.resolveColor(styles.fills[2]?.foreground)).toBe("FF95B3D7");
     expect(styles.resolveColor(styles.fonts[3]?.color)).toBe("FF112233");
     expect(styles.resolveColor({ type: "automatic", tint: 0 })).toBeUndefined();
+  });
+
+  test("resolves scheme fonts through the workbook theme with source fallbacks", () => {
+    const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const styles = readSpreadsheetStyles(openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      stylesXml: `<styleSheet xmlns="${namespace}"><fonts count="3"><font><name val="Cached Minor"/><scheme val="minor"/></font><font><name val="Cached Major"/><scheme val="major"/></font><font><name val="Literal"/></font></fonts><fills count="1"><fill/></fills><borders count="1"><border/></borders><cellXfs count="3"><xf fontId="0"/><xf fontId="1"/><xf fontId="2"/></cellXfs></styleSheet>`,
+      themeXml: officeTheme(),
+    }))));
+
+    expect(styles.resolveFontName(styles.resolve(0).font)).toBe("Aptos");
+    expect(styles.resolveFontName(styles.resolve(1).font)).toBe("Aptos Display");
+    expect(styles.resolveFontName(styles.resolve(2).font)).toBe("Literal");
+    expect(styles.resolveFontName(styles.resolve(0).font, "eastAsian")).toBe("Cached Minor");
   });
 
   test("honours explicit xf apply flags while retaining producer-compatible defaults", () => {
@@ -126,5 +139,5 @@ function officeTheme(): string {
     <a:accent3><a:srgbClr val="9BBB59"/></a:accent3><a:accent4><a:srgbClr val="8064A2"/></a:accent4>
     <a:accent5><a:srgbClr val="4BACC6"/></a:accent5><a:accent6><a:srgbClr val="F79646"/></a:accent6>
     <a:hlink><a:srgbClr val="0000FF"/></a:hlink><a:folHlink><a:srgbClr val="800080"/></a:folHlink>
-  </a:clrScheme><a:fontScheme name="Office"/><a:fmtScheme name="Office"/></a:themeElements></a:theme>`;
+  </a:clrScheme><a:fontScheme name="Office"><a:majorFont><a:latin typeface="Aptos Display"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont><a:minorFont><a:latin typeface="Aptos"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme><a:fmtScheme name="Office"/></a:themeElements></a:theme>`;
 }
