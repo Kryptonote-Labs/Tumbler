@@ -16,6 +16,7 @@ describe("SpreadsheetML workbook discovery", () => {
     })));
 
     expect(workbook.conformance).toBe(conformance);
+    expect(workbook.dateSystem).toBe("1900");
     expect(workbook.part.name.value).toBe("/office/data/book.xml");
     expect(workbook.sheets.map(({ name, state, partName }) => [name, state, partName.value])).toEqual([
       ["January", "visible", "/office/tabs/january.xml"],
@@ -66,6 +67,18 @@ describe("SpreadsheetML workbook discovery", () => {
     expectSpreadsheetError(() => openSpreadsheet(openOpcPackage(buildWorkbookFixture({
       workbookXml: `<workbook xmlns="${namespace}" xmlns:r="${relationships}"><sheets><sheet name="One" sheetId="1" id="sheet1"/></sheets></workbook>`,
     }))), "invalid_sheet");
+  });
+
+  test("retains the workbook date system", () => {
+    const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const relationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      workbookXml: `<workbook xmlns="${namespace}" xmlns:r="${relationships}"><workbookPr date1904="true"/><sheets><sheet name="Sheet1" sheetId="1" r:id="sheet1"/></sheets></workbook>`,
+    })));
+    expect(workbook.dateSystem).toBe("1904");
+    expect(() => openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      workbookXml: `<workbook xmlns="${namespace}" xmlns:r="${relationships}"><workbookPr date1904="maybe"/><sheets><sheet name="Sheet1" sheetId="1" r:id="sheet1"/></sheets></workbook>`,
+    })))).toThrow(SpreadsheetError);
   });
 });
 

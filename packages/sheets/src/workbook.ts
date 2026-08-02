@@ -57,6 +57,7 @@ export class SpreadsheetWorkbook {
   readonly part: OpcPart;
   readonly document: LosslessXmlDocument;
   readonly conformance: "strict" | "transitional";
+  readonly dateSystem: "1900" | "1904";
   readonly sheets: readonly SpreadsheetSheet[];
   readonly #byId: ReadonlyMap<number, SpreadsheetSheet>;
   readonly #byName: ReadonlyMap<string, SpreadsheetSheet>;
@@ -66,12 +67,14 @@ export class SpreadsheetWorkbook {
     part: OpcPart,
     document: LosslessXmlDocument,
     conformance: "strict" | "transitional",
+    dateSystem: "1900" | "1904",
     sheets: readonly SpreadsheetSheet[],
   ) {
     this.package = pkg;
     this.part = part;
     this.document = document;
     this.conformance = conformance;
+    this.dateSystem = dateSystem;
     this.sheets = Object.freeze([...sheets]);
     this.#byId = new Map(sheets.map((sheet) => [sheet.sheetId, sheet]));
     this.#byName = new Map(sheets.map((sheet) => [sheet.name.toLocaleLowerCase("en-US"), sheet]));
@@ -159,7 +162,22 @@ export function openSpreadsheet(pkg: OpcPackage): SpreadsheetWorkbook {
     return Object.freeze({ name, sheetId, relationshipId, state, partName: part.name });
   });
 
-  return new SpreadsheetWorkbook(pkg, main, document, profile.conformance, sheets);
+  const workbookProperties = childElements(document.root, profile.spreadsheet, "workbookPr");
+  if (workbookProperties.length > 1) {
+    throw new SpreadsheetError("invalid_workbook", "A workbook must not repeat workbookPr.");
+  }
+  const rawDate1904 = workbookProperties[0] === undefined
+    ? undefined
+    : optionalUnqualifiedAttribute(workbookProperties[0], "date1904");
+  const dateSystem = rawDate1904 === undefined || rawDate1904 === "0" || rawDate1904 === "false"
+    ? "1900"
+    : rawDate1904 === "1" || rawDate1904 === "true"
+      ? "1904"
+      : undefined;
+  if (dateSystem === undefined) {
+    throw new SpreadsheetError("invalid_workbook", "workbookPr date1904 must be an XML boolean.");
+  }
+  return new SpreadsheetWorkbook(pkg, main, document, profile.conformance, dateSystem, sheets);
 }
 
 function childElements(parent: LosslessXmlElement, namespaceUri: string, localName: string): LosslessXmlElement[] {
