@@ -22,6 +22,20 @@ export {
   LosslessXmlEditor,
   XmlEditError,
 } from "./xml/editor.ts";
+export { identifyOoxmlNamespace, OOXML_NAMESPACES } from "./namespaces.ts";
+export type {
+  OoxmlNamespaceProfile,
+  OoxmlVocabulary,
+} from "./namespaces.ts";
+export {
+  createMarkupCompatibilityView,
+  MarkupCompatibilityError,
+  MarkupCompatibilityView,
+} from "./markup-compatibility.ts";
+export type {
+  MarkupCompatibilityErrorCode,
+  MarkupCompatibilityOptions,
+} from "./markup-compatibility.ts";
 export type {
   NewXmlAttribute,
   XmlEditErrorCode,
