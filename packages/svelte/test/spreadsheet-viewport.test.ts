@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { compile } from "svelte/compiler";
 import { SparseAxisGeometry } from "@tumbler/core";
-import { calculateSpreadsheetViewport } from "../src/index.ts";
+import { calculateSpreadsheetViewport, composeSpreadsheetGridLayout, frozenGridTranslation } from "../src/index.ts";
 
 describe("Svelte spreadsheet viewport", () => {
   test("mounts only a small overscanned window for an Excel-sized grid", () => {
@@ -84,5 +84,24 @@ describe("Svelte spreadsheet viewport", () => {
     expect(viewport.rows.some((row) => row.index === 3)).toBeFalse();
     expect(viewport.columns.find((column) => column.index === 2)).toEqual({ index: 2, start: 100, size: 250 });
     expect(viewport.columns.some((column) => column.index === 4)).toBeFalse();
+  });
+
+  test("composes frozen axes and merged rectangles around a scrolling viewport", () => {
+    const rows = new SparseAxisGeometry(100, 20, [{ index: 2, size: 30 }]);
+    const columns = new SparseAxisGeometry(100, 100, [{ index: 3, size: 150 }]);
+    const viewport = calculateSpreadsheetViewport({
+      rowCount: 100, columnCount: 100, rowHeight: 20, columnWidth: 100,
+      rowGeometry: rows, columnGeometry: columns,
+      scrollTop: 400, scrollLeft: 2_000, viewportHeight: 200, viewportWidth: 500, overscan: 0,
+    });
+    const layout = composeSpreadsheetGridLayout({
+      viewport, rowGeometry: rows, columnGeometry: columns, frozenRows: 2, frozenColumns: 1,
+      merges: [{ start: { row: 1, column: 1 }, end: { row: 2, column: 3 } }],
+    });
+    expect(layout.rows.slice(0, 2).map((row) => row.index)).toEqual([1, 2]);
+    expect(layout.columns[0]?.index).toBe(1);
+    expect(layout.merges[0]).toMatchObject({ left: 0, top: 0, width: 350, height: 50 });
+    expect(frozenGridTranslation({ row: 1, column: 5, frozenRows: 2, frozenColumns: 1, scrollTop: 400, scrollLeft: 2_000 })).toEqual({ x: 0, y: 400 });
+    expect(frozenGridTranslation({ row: 5, column: 1, frozenRows: 2, frozenColumns: 1, scrollTop: 400, scrollLeft: 2_000 })).toEqual({ x: 2_000, y: 0 });
   });
 });

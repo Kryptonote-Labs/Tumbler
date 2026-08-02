@@ -2,6 +2,7 @@
   import { createGridSelection, moveGridSelection, type GridDirection, type GridSelection } from "@tumbler/core";
   import { EXCEL_MAX_COLUMNS, EXCEL_MAX_ROWS, formatCellReference, type SpreadsheetCellValue, type SpreadsheetWorksheet } from "@tumbler/sheets";
   import { calculateSpreadsheetViewport } from "./spreadsheet-viewport.ts";
+  import { composeSpreadsheetGridLayout, frozenGridTranslation } from "./spreadsheet-grid-layout.ts";
 
   interface CellEdit {
     readonly reference: string;
@@ -38,6 +39,11 @@
   let draft = $state("");
   const rowHeaderWidth = 52;
   const columnHeaderHeight = 28;
+  let rowGeometry = $derived(worksheet.rowGeometry(rowCount));
+  let columnGeometry = $derived(worksheet.columnGeometry(columnCount));
+  let frozenPane = $derived(worksheet.panes.find((pane) => pane.state === "frozen" || pane.state === "frozenSplit"));
+  let frozenRows = $derived(Math.min(rowCount, Math.max(0, Math.floor(frozenPane?.ySplit ?? 0))));
+  let frozenColumns = $derived(Math.min(columnCount, Math.max(0, Math.floor(frozenPane?.xSplit ?? 0))));
   let viewport = $derived(calculateSpreadsheetViewport({
     rowCount,
     columnCount,
@@ -48,13 +54,19 @@
     viewportHeight,
     viewportWidth,
     overscan: 3,
-    rowGeometry: worksheet.rowGeometry(rowCount),
-    columnGeometry: worksheet.columnGeometry(columnCount),
+    rowGeometry,
+    columnGeometry,
   }));
+  let layout = $derived(composeSpreadsheetGridLayout({ viewport, rowGeometry, columnGeometry, frozenRows, frozenColumns, merges: worksheet.merges }));
 
   function select(row: number, column: number, extend = false) {
     const point = { row, column };
-    selection = extend ? createGridSelection(selection.anchor, point) : createGridSelection(point);
+    const merge = worksheet.mergedRange(point);
+    selection = extend
+      ? createGridSelection(selection.anchor, merge?.end ?? point)
+      : merge === undefined
+        ? createGridSelection(point)
+        : createGridSelection(merge.start, merge.end);
     onselectionchange?.(selection);
   }
 
@@ -83,7 +95,8 @@
   }
 
   function beginEdit(row: number, column: number) {
-    const reference = formatCellReference({ row, column });
+    const owner = worksheet.mergedRange({ row, column })?.start ?? { row, column };
+    const reference = formatCellReference(owner);
     editing = reference;
     draft = displayValue(worksheet.cell(reference)?.value);
   }
@@ -176,7 +189,44 @@
   function columnLabel(column: number): string {
     return formatCellReference({ row: 1, column }).slice(0, -1);
   }
+
+  function cellTransform(row: number, column: number): string {
+    const translation = frozenGridTranslation({ row, column, frozenRows, frozenColumns, scrollTop, scrollLeft });
+    return `translate(${translation.x}px, ${translation.y}px)`;
+  }
+
+  function cellLayer(row: number, column: number): number {
+    return row <= frozenRows || column <= frozenColumns ? 4 : 1;
+  }
+
 </script>
+
+{#snippet gridCell(reference: string, row: number, column: number, left: number, top: number, width: number, height: number)}
+  <div
+    class:selected={selected(row, column)}
+    class:focused={selection.focus.row === row && selection.focus.column === column}
+    class="cell"
+    role="gridcell"
+    tabindex="-1"
+    aria-selected={selected(row, column)}
+    style:left={`${left}px`}
+    style:top={`${top}px`}
+    style:width={`${width}px`}
+    style:height={`${height}px`}
+    style:transform={cellTransform(row, column)}
+    style:z-index={cellLayer(row, column)}
+    style={cellCss(reference)}
+    onclick={(event) => select(row, column, event.shiftKey)}
+    onkeydown={(event) => cellKeydown(event, row, column)}
+    ondblclick={() => beginEdit(row, column)}
+  >
+    {#if editing === reference}
+      <input bind:value={draft} onkeydown={inputKeydown} onblur={() => finishEdit(true)} aria-label={`Edit ${reference}`} />
+    {:else}
+      <span>{displayCell(reference)}</span>
+    {/if}
+  </div>
+{/snippet}
 
 <div
   class="tumbler-grid"
@@ -191,46 +241,31 @@
 >
   <div class="canvas" style:width={`${viewport.totalWidth + rowHeaderWidth}px`} style:height={`${viewport.totalHeight + columnHeaderHeight}px`}>
     <div class="corner" style:transform={`translate(${scrollLeft}px, ${scrollTop}px)`}></div>
-    {#each viewport.columns as column (column.index)}
+    {#each layout.columns as column (column.index)}
       <div
         class="column-header"
         style:left={`${rowHeaderWidth + column.start}px`}
         style:width={`${column.size}px`}
-        style:transform={`translateY(${scrollTop}px)`}
+        style:transform={`translate(${column.index <= frozenColumns ? scrollLeft : 0}px, ${scrollTop}px)`}
       >{columnLabel(column.index)}</div>
     {/each}
-    {#each viewport.rows as row (row.index)}
+    {#each layout.rows as row (row.index)}
       <div
         class="row-header"
         style:top={`${columnHeaderHeight + row.start}px`}
         style:height={`${row.size}px`}
-        style:transform={`translateX(${scrollLeft}px)`}
+        style:transform={`translate(${scrollLeft}px, ${row.index <= frozenRows ? scrollTop : 0}px)`}
       >{row.index}</div>
-      {#each viewport.columns as column (column.index)}
+      {#each layout.columns as column (column.index)}
         {@const reference = formatCellReference({ row: row.index, column: column.index })}
-        <div
-          class:selected={selected(row.index, column.index)}
-          class:focused={selection.focus.row === row.index && selection.focus.column === column.index}
-          class="cell"
-          role="gridcell"
-          tabindex="-1"
-          aria-selected={selected(row.index, column.index)}
-          style:left={`${rowHeaderWidth + column.start}px`}
-          style:top={`${columnHeaderHeight + row.start}px`}
-          style:width={`${column.size}px`}
-          style:height={`${row.size}px`}
-          style={cellCss(reference)}
-          onclick={(event) => select(row.index, column.index, event.shiftKey)}
-          onkeydown={(event) => cellKeydown(event, row.index, column.index)}
-          ondblclick={() => beginEdit(row.index, column.index)}
-        >
-          {#if editing === reference}
-            <input bind:value={draft} onkeydown={inputKeydown} onblur={() => finishEdit(true)} aria-label={`Edit ${reference}`} />
-          {:else}
-            <span>{displayCell(reference)}</span>
-          {/if}
-        </div>
+        {#if worksheet.mergedRange(reference) === undefined}
+          {@render gridCell(reference, row.index, column.index, rowHeaderWidth + column.start, columnHeaderHeight + row.start, column.size, row.size)}
+        {/if}
       {/each}
+    {/each}
+    {#each layout.merges as merge (`${merge.range.start.row}:${merge.range.start.column}`)}
+      {@const reference = formatCellReference(merge.range.start)}
+      {@render gridCell(reference, merge.range.start.row, merge.range.start.column, rowHeaderWidth + merge.left, columnHeaderHeight + merge.top, merge.width, merge.height)}
     {/each}
   </div>
 </div>
