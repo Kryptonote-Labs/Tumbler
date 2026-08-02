@@ -39,8 +39,16 @@ export type {
   OpcPackageErrorCode,
   OpcPart,
 } from "./package.ts";
-export { writeZipArchive, ZipWriterError } from "./zip/writer.ts";
-export type { ZipWriterErrorCode } from "./zip/writer.ts";
+export {
+  writeZipArchive,
+  writeZipArchiveChanges,
+  ZipWriterError,
+} from "./zip/writer.ts";
+export type {
+  ZipArchiveChanges,
+  ZipEntryAddition,
+  ZipWriterErrorCode,
+} from "./zip/writer.ts";
 export type {
   ExternalRelationship,
   InternalRelationship,

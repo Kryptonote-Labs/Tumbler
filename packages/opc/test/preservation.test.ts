@@ -6,6 +6,7 @@ import {
   PartName,
   saveOpcPackage,
   writeZipArchive,
+  writeZipArchiveChanges,
   ZipWriterError,
 } from "../src/index.ts";
 import { buildDeflatedZip } from "./zip-builder.ts";
@@ -65,6 +66,41 @@ describe("copy-on-write preservation", () => {
       archive,
       new Map([["missing.xml", new Uint8Array()]]),
     )).toThrow(ZipWriterError);
+  });
+
+  test("adds and removes entries while preserving untouched compressed payloads", () => {
+    const source = buildOfficePackage(...formats[0]);
+    const before = openZipArchive(source);
+    const addedData = new TextEncoder().encode("new custom payload");
+    const saved = writeZipArchiveChanges(before, {
+      additions: [{ name: "custom/data.bin", data: addedData }],
+      removals: new Set(["docProps/core.xml"]),
+    });
+    const after = openZipArchive(saved);
+
+    expect(after.get("docProps/core.xml")).toBeUndefined();
+    expect(after.read(after.get("custom/data.bin")!)).toEqual(addedData);
+    for (const entry of before.entries) {
+      if (entry.name !== "docProps/core.xml") {
+        expect(after.compressedBytes(after.get(entry.name)!)).toEqual(
+          before.compressedBytes(entry),
+        );
+      }
+    }
+  });
+
+  test("rejects contradictory and duplicate archive changes", () => {
+    const archive = openZipArchive(buildOfficePackage(...formats[0]));
+    expect(() => writeZipArchiveChanges(archive, {
+      replacements: new Map([["word/document.xml", new Uint8Array()]]),
+      removals: new Set(["word/document.xml"]),
+    })).toThrow(ZipWriterError);
+    expect(() => writeZipArchiveChanges(archive, {
+      additions: [{ name: "word/document.xml", data: new Uint8Array() }],
+    })).toThrow(ZipWriterError);
+    expect(() => writeZipArchiveChanges(archive, {
+      removals: new Set(["missing.xml"]),
+    })).toThrow(ZipWriterError);
   });
 
   test("round-trips generated replacement bytes through deflate and CRC verification", () => {
