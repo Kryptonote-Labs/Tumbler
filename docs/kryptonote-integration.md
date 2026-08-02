@@ -33,6 +33,11 @@ every edit or external revision:
 <SpreadsheetGrid worksheet={artifact.worksheet} onedit={editCell} />
 ```
 
+Pass `readonly` when the host wants selection and table view controls without
+cell writes. Sorting and filtering are always view-only: they use scalar values
+and cached formula results, do not calculate formulas, and do not change the
+artifact bytes.
+
 The artefact viewer can render sheet tabs from `artifact.workbook.sheets` and
 switch with `artifact = artifact.selectSheet(sheet.sheetId)`. The active sheet
 is retained by name when `replace` receives a new agent-produced workbook; if
@@ -61,5 +66,8 @@ that sheet disappeared, the first visible ordinary worksheet is selected.
   and cancellation contract have not been added.
 - Editing returns complete XLSX bytes. Incremental object-storage upload is a
   host optimization, not part of this first boundary.
-- The Svelte component has compiler, geometry, and state tests but no Kryptonote
-  screenshot or interaction baseline yet.
+- Table value/custom filters and value sorts have parser, projection, property,
+  compiler, and geometry coverage. Dynamic/top-10/color/icon filters and
+  horizontal or color/icon sorts remain preserved but unapplied.
+- The Svelte component has no Kryptonote screenshot or browser interaction
+  baseline yet.

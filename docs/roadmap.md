@@ -78,6 +78,7 @@ now implemented:
 - [x] compute the first cell-style and number-format display projection;
 - [x] resolve opaque RGB, theme, indexed, and tinted cell-style colors;
 - [x] render variable geometry, ordinary merges, and frozen pane regions;
+- [x] recognize table parts and project read-only table sorting/filtering in the owned grid;
 - [ ] edit formulas and structural ranges safely;
 - [ ] pass Open XML SDK, LibreOffice, and Microsoft Excel round trips.
 

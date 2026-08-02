@@ -23,6 +23,8 @@ current requirement boundary is:
 | §18.8.1–45 | Stylesheet projection: fonts, fills, borders, colors, alignment, cell/row/column formats, base-style inheritance, apply flags, and number-format records |
 | §20.1.4.1.17, §20.1.6.10 | DrawingML major/minor theme font resolution with cached SpreadsheetML font-name fallback |
 | §18.18.11 | `b`, `d`, `e`, `inlineStr`, `n`, `s`, and `str` cell types |
+| §18.3.1.92, §18.5.1.2–3 | Relationship-resolved table parts, ranges, identities, columns, totals metadata, and table style flags |
+| §18.3.1.2, §18.3.2.7–10 | Worksheet/table AutoFilter ranges, value/custom criteria, button state, and saved value-sort state |
 
 Both Strict and Transitional vocabulary and relationship namespaces are tested.
 This table is a feature boundary, not a claim of complete conformance to those
@@ -50,6 +52,10 @@ clauses or to SpreadsheetML as a whole.
 - invalidate stale calculation chains and request full recalculation after a
   semantic literal edit;
 - leave a semantic no-op byte-identical and copy untouched ZIP payloads exactly.
+- project table body rows through supported saved or user-selected filters and
+  stable value sorts using scalar values and stored formula results;
+- enumerate formatted table values for a fully client-side filter menu without
+  evaluating formulas or changing workbook bytes.
 
 Literal text writes use `inlineStr`. This avoids a workbook-wide shared-string
 reindex for a local edit. Replacing a formula with a literal intentionally
@@ -61,8 +67,11 @@ unrelated package parts are not reserialized.
 primitives plus sparse variable-axis geometry. `@tumbler/svelte` supplies
 `SpreadsheetGrid`, an owned virtualized surface with row/column headers, click
 and shift selection, keyboard navigation, styled display, merged cells, frozen
-regions, an inline editor, and typed selection/edit callbacks. Its pure viewport
-and grid-layout calculators are usable independently of Svelte.
+regions, an inline editor, table sort/filter dropdowns, a read-only mode, and
+typed selection/edit callbacks. Table controls project source rows into visual
+slots; filtered slots collapse through sparse geometry and the source package is
+unchanged. Its pure viewport and grid-layout calculators are usable independently
+of Svelte.
 
 `SpreadsheetArtifact` is the host boundary intended for Kryptonote. It opens
 artefact bytes, chooses and retains an active sheet, exposes the renderable
@@ -99,9 +108,13 @@ indentation, reading direction, and rotated or stacked text.
   calculated, or editable. Tumbler deliberately asks the consuming spreadsheet
   application to recalculate after literal edits. Structural row/column edits do
   not exist.
-- Tables, filters, validations, conditional formats, comments, hyperlinks,
-  drawings, charts, pivots, names, and external links are preserved as unknown
-  content but have no semantic or visual model.
+- Table and AutoFilter support is read-only. Value lists and one/two-condition
+  custom filters plus vertical value sorting are projected; dynamic, top-10,
+  color, icon, and horizontal sorts remain explicitly unsupported and are not
+  applied. User table view state is not written back to SpreadsheetML.
+- Validations, conditional formats, comments, hyperlinks, drawings, charts,
+  pivots, names, and external links are preserved as unknown content but have no
+  semantic or visual model.
 - Editing an existing rich/shared string replaces that cell's value with a plain
   inline string; run formatting and phonetic annotations are not retained for
   the intentionally replaced value.
