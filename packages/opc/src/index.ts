@@ -44,6 +44,15 @@ export {
   writeZipArchiveChanges,
   ZipWriterError,
 } from "./zip/writer.ts";
+export {
+  beginPackageTransaction,
+  PackageTransaction,
+  PackageTransactionError,
+} from "./transaction.ts";
+export type {
+  PackageTransactionErrorCode,
+  PackageTransactionStatus,
+} from "./transaction.ts";
 export type {
   ZipArchiveChanges,
   ZipEntryAddition,
