@@ -124,11 +124,11 @@ export function calculateFormulas(
     const knownFailure = unavailable.get(key);
     if (knownFailure !== undefined) {
       if (asDependency) throw knownFailure;
-      return source.cell(address)?.value ?? BLANK;
+      return readCell(source, address)?.value ?? BLANK;
     }
     const remembered = memo.get(key);
     if (remembered !== undefined) return remembered;
-    const input = source.cell(address);
+    const input = readCell(source, address);
     if (input?.formula === undefined) return input?.value ?? BLANK;
     if (visiting.has(key)) throw new EvaluationUnavailable("circular-reference", "Formula contains a circular reference.");
     visiting.add(key);
@@ -435,4 +435,12 @@ function addressKey(address: FormulaCellAddress): string {
 
 function isRange(value: EvaluationValue): value is RangeEvaluationValue {
   return "kind" in value && value.kind === "range";
+}
+
+function readCell(source: FormulaWorkbookSource, address: FormulaCellAddress): FormulaCellInput | undefined {
+  try {
+    return source.cell(address);
+  } catch {
+    throw new EvaluationUnavailable("unavailable-dependency", "Formula dependency could not be read.");
+  }
 }

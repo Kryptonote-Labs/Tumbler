@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  calculateSpreadsheetWorksheet,
   openSpreadsheetArtifact,
   projectSpreadsheetTable,
   setSpreadsheetTableValueFilter,
@@ -60,6 +61,19 @@ describe("SpreadsheetML calculated-value overlays", () => {
     expect(artifact.calculation.displayText("B1")).toBe("6");
     const edited = artifact.editCell("A1", 5);
     expect(edited.calculation.displayText("B1")).toBe("15");
+  });
+
+  test("keeps cached rendering available when workbook calculation limits are exceeded", () => {
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({ sheets: [{
+      name: "Data",
+      sheetId: 1,
+      relationshipId: "data",
+      xml: sheet(`<row r="1"><c r="A1"><f>1+1</f><v>2</v></c></row>`),
+    }] }));
+    const limited = calculateSpreadsheetWorksheet(artifact.worksheet, { maxFormulaCells: 0 });
+    expect(limited.value("A1")).toBeUndefined();
+    expect(limited.displayText("A1")).toBe("2");
+    expect(limited.diagnostics[0]?.code).toBe("evaluation-limit");
   });
 
   test("supplies calculated values to table filters and sorting", () => {

@@ -1,6 +1,6 @@
 import {
   calculateFormulas,
-  type FormulaCalculation,
+  FormulaCalculation,
   type FormulaCalculationOptions,
   type FormulaCellAddress,
   type FormulaCellInput,
@@ -42,7 +42,19 @@ export function calculateSpreadsheetWorksheet(
   options: FormulaCalculationOptions = {},
 ): SpreadsheetCalculationSnapshot {
   const source = new SpreadsheetFormulaSource(worksheet.workbook, worksheet);
-  return new SpreadsheetCalculationSnapshot(worksheet, calculateFormulas(source, options));
+  try {
+    return new SpreadsheetCalculationSnapshot(worksheet, calculateFormulas(source, options));
+  } catch (cause) {
+    if (!(cause instanceof RangeError)) throw cause;
+    const first = source.formulaCells[0];
+    const diagnostics = first === undefined ? [] : [{
+      code: "evaluation-limit" as const,
+      address: first.address,
+      formula: first.formula,
+      message: cause.message,
+    }];
+    return new SpreadsheetCalculationSnapshot(worksheet, new FormulaCalculation(new Map(), new Map(), diagnostics));
+  }
 }
 
 class SpreadsheetFormulaSource implements FormulaWorkbookSource {
