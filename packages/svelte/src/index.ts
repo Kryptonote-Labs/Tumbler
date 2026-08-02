@@ -5,6 +5,10 @@ export {
   measureMaximumDigitWidth,
   spreadsheetFontShorthand,
 } from "./spreadsheet-font-metrics.ts";
+export {
+  spreadsheetCellContentCss,
+  spreadsheetCellCss,
+} from "./spreadsheet-cell-style.ts";
 export { calculateSpreadsheetViewport } from "./spreadsheet-viewport.ts";
 export type {
   SpreadsheetViewport,
