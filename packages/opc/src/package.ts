@@ -6,6 +6,7 @@ import {
   RelationshipsError,
 } from "./relationships.ts";
 import { openZipArchive, type OpenZipArchiveOptions, type ZipArchive, type ZipEntry } from "./zip/archive.ts";
+import { writeZipArchive } from "./zip/writer.ts";
 
 const CONTENT_TYPES_ITEM_NAME = "[Content_Types].xml";
 const OFFICE_DOCUMENT_RELATIONSHIP_TYPES = new Set([
@@ -180,6 +181,29 @@ export function openOpcPackage(
     parts.push(Object.freeze({ name, contentType, entry }));
   }
   return new OpcPackage(archive, contentTypes, parts);
+}
+
+export function saveOpcPackage(
+  pkg: OpcPackage,
+  replacements: ReadonlyMap<PartName | string, Uint8Array> = new Map(),
+): Uint8Array {
+  if (replacements.size === 0) {
+    return pkg.archive.originalBytes();
+  }
+  const zipReplacements = new Map<string, Uint8Array>();
+  for (const [name, bytes] of replacements) {
+    const partName = typeof name === "string" ? PartName.parse(name) : name;
+    const part = pkg.getPart(partName);
+    if (part === undefined) {
+      throw new OpcPackageError(
+        "missing_internal_target",
+        `Cannot replace missing part ${JSON.stringify(partName.value)}.`,
+        { partName: partName.value },
+      );
+    }
+    zipReplacements.set(part.entry.name, bytes);
+  }
+  return writeZipArchive(pkg.archive, zipReplacements);
 }
 
 function classifyMainContentType(contentType: string): OfficeDocumentFamily | undefined {

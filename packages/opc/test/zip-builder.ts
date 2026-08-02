@@ -80,6 +80,16 @@ export function buildStoredZip(
   return concatenate([...localRecords, centralDirectory, eocd]);
 }
 
+export function buildDeflatedZip(
+  entries: readonly TestZipEntry[],
+  options: TestZipOptions = {},
+): Uint8Array {
+  return buildStoredZip(
+    entries.map((entry) => ({ ...entry, compressionMethod: 8 })),
+    options,
+  );
+}
+
 function concatenate(chunks: readonly Uint8Array[]): Uint8Array {
   const output = new Uint8Array(
     chunks.reduce((total, chunk) => total + chunk.byteLength, 0),

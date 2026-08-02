@@ -31,6 +31,7 @@ export {
   OpcPackage,
   OpcPackageError,
   openOpcPackage,
+  saveOpcPackage,
 } from "./package.ts";
 export type {
   MainOfficeDocumentPart,
@@ -38,6 +39,8 @@ export type {
   OpcPackageErrorCode,
   OpcPart,
 } from "./package.ts";
+export { writeZipArchive, ZipWriterError } from "./zip/writer.ts";
+export type { ZipWriterErrorCode } from "./zip/writer.ts";
 export type {
   ExternalRelationship,
   InternalRelationship,
