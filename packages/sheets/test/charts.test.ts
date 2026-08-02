@@ -34,6 +34,11 @@ describe("Spreadsheet Drawing chart frames", () => {
     expect(frame?.partName).toBeUndefined();
   });
 
+  test("does not project a chart from mismatched graphicData", () => {
+    const worksheet = fixture(profiles[1]!, chartXml(profiles[1]!), false, "urn:not-chart");
+    expect(worksheet.drawing?.charts[0]?.model).toMatchObject({ status: "unsupported", reason: expect.stringContaining("graphicData") });
+  });
+
   test("preserves Chart and Drawing part bytes across an unrelated cell edit", () => {
     const worksheet = fixture(profiles[1]!, chartXml(profiles[1]!));
     const drawingBefore = worksheet.workbook.package.readPart(worksheet.drawing!.part);
@@ -47,8 +52,8 @@ describe("Spreadsheet Drawing chart frames", () => {
   });
 });
 
-function fixture(profile: typeof profiles[number], chart: string, external = false) {
-  const drawing = `<xdr:wsDr xmlns:xdr="${profile.xdr}" xmlns:a="${profile.drawing}" xmlns:c="${profile.chart}" xmlns:r="${profile.relationships}"><xdr:twoCellAnchor><xdr:from><xdr:col>1</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>1</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>6</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>12</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame><a:graphic><a:graphicData uri="${profile.chart}"><c:chart r:id="chart1"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>`;
+function fixture(profile: typeof profiles[number], chart: string, external = false, graphicDataUri = profile.chart) {
+  const drawing = `<xdr:wsDr xmlns:xdr="${profile.xdr}" xmlns:a="${profile.drawing}" xmlns:c="${profile.chart}" xmlns:r="${profile.relationships}"><xdr:twoCellAnchor><xdr:from><xdr:col>1</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>1</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>6</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>12</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame><a:graphic><a:graphicData uri="${graphicDataUri}"><c:chart r:id="chart1"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>`;
   const bytes = buildWorkbookFixture({
     conformance: profile.conformance,
     sheets: [{ name: "Sheet1", sheetId: 1, relationshipId: "sheet1", xml: `<worksheet xmlns="${profile.spreadsheet}" xmlns:r="${profile.relationships}"><sheetData/><drawing r:id="drawing1"/></worksheet>`, relationships: [{ id: "drawing1", type: `${profile.relationships}/drawing`, target: "../drawings/drawing1.xml" }] }],

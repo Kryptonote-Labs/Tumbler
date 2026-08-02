@@ -112,6 +112,7 @@ function readChartFrames(
     const graphicData = graphic === undefined ? undefined : children(graphic, drawingNamespace, "graphicData")[0];
     const chart = graphicData === undefined ? undefined : children(graphicData, chartNamespace, "chart")[0];
     if (chart === undefined) return [];
+    if (attr(graphicData!, "uri") !== chartNamespace) return [unsupportedFrame(anchor, undefined, undefined, "Chart graphicData must identify the Chart vocabulary.")];
     const relationshipId = qualifiedAttr(chart, relationshipsNamespace, "id");
     if (relationshipId === undefined || relationshipId.length === 0) return [unsupportedFrame(anchor, undefined, undefined, "Chart graphic requires a relationship id.")];
     try {
