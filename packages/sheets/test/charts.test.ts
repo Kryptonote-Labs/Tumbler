@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { openOpcPackage } from "@tumbler/opc";
-import { openSpreadsheet, openWorksheet } from "../src/index.ts";
+import { beginSpreadsheetEdit, openSpreadsheet, openWorksheet } from "../src/index.ts";
 import { buildWorkbookFixture } from "./workbook-fixture.ts";
 
 const profiles = [
@@ -27,16 +27,34 @@ describe("Spreadsheet Drawing chart frames", () => {
     expect(frame?.model).toMatchObject({ status: "unsupported", reason: expect.stringContaining("chartSpace") });
     expect(frame?.anchor.kind).toBe("two-cell");
   });
+
+  test("never dereferences an external Chart relationship", () => {
+    const frame = fixture(profiles[1]!, chartXml(profiles[1]!), true).drawing?.charts[0];
+    expect(frame?.model).toMatchObject({ status: "unsupported", reason: expect.stringContaining("internal Chart part") });
+    expect(frame?.partName).toBeUndefined();
+  });
+
+  test("preserves Chart and Drawing part bytes across an unrelated cell edit", () => {
+    const worksheet = fixture(profiles[1]!, chartXml(profiles[1]!));
+    const drawingBefore = worksheet.workbook.package.readPart(worksheet.drawing!.part);
+    const chartPart = worksheet.workbook.package.getPart(worksheet.drawing!.charts[0]!.partName!)!;
+    const chartBefore = worksheet.workbook.package.readPart(chartPart);
+    const saved = beginSpreadsheetEdit(worksheet.workbook).setCellValue(worksheet.sheet, "A1", "changed").commit();
+    const reopened = openSpreadsheet(openOpcPackage(saved));
+    const after = openWorksheet(reopened, reopened.sheets[0]!);
+    expect(after.workbook.package.readPart(after.drawing!.part)).toEqual(drawingBefore);
+    expect(after.workbook.package.readPart(after.workbook.package.getPart(after.drawing!.charts[0]!.partName!)!)).toEqual(chartBefore);
+  });
 });
 
-function fixture(profile: typeof profiles[number], chart: string) {
+function fixture(profile: typeof profiles[number], chart: string, external = false) {
   const drawing = `<xdr:wsDr xmlns:xdr="${profile.xdr}" xmlns:a="${profile.drawing}" xmlns:c="${profile.chart}" xmlns:r="${profile.relationships}"><xdr:twoCellAnchor><xdr:from><xdr:col>1</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>1</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>6</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>12</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame><a:graphic><a:graphicData uri="${profile.chart}"><c:chart r:id="chart1"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>`;
   const bytes = buildWorkbookFixture({
     conformance: profile.conformance,
     sheets: [{ name: "Sheet1", sheetId: 1, relationshipId: "sheet1", xml: `<worksheet xmlns="${profile.spreadsheet}" xmlns:r="${profile.relationships}"><sheetData/><drawing r:id="drawing1"/></worksheet>`, relationships: [{ id: "drawing1", type: `${profile.relationships}/drawing`, target: "../drawings/drawing1.xml" }] }],
     parts: [
       { itemName: "xl/drawings/drawing1.xml", contentType: "application/vnd.openxmlformats-officedocument.drawing+xml", xml: drawing },
-      { itemName: "xl/drawings/_rels/drawing1.xml.rels", xml: `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="chart1" Type="${profile.relationships}/chart" Target="../charts/chart1.xml"/></Relationships>` },
+      { itemName: "xl/drawings/_rels/drawing1.xml.rels", xml: `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="chart1" Type="${profile.relationships}/chart" Target="${external ? "https://example.test/chart.xml" : "../charts/chart1.xml"}"${external ? ' TargetMode="External"' : ""}/></Relationships>` },
       { itemName: "xl/charts/chart1.xml", contentType: "application/vnd.openxmlformats-officedocument.drawingml.chart+xml", xml: chart },
     ],
   });

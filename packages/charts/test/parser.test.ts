@@ -50,6 +50,20 @@ describe("DrawingML chart parser", () => {
     const outside = xml(profile, '<c:plotArea><c:pieChart><c:ser><c:idx val="0"/><c:order val="0"/><c:val><c:numLit><c:ptCount val="1"/><c:pt idx="1"><c:v>1</c:v></c:pt></c:numLit></c:val></c:ser></c:pieChart></c:plotArea>');
     expect(() => parseOoxmlChart(outside, "transitional")).toThrow("outside ptCount");
   });
+
+  test("contains single-byte chart XML damage behind the chart boundary", () => {
+    const profile = profiles[1]!;
+    const valid = xml(profile, '<c:plotArea><c:lineChart><c:ser><c:idx val="0"/><c:order val="0"/></c:ser></c:lineChart></c:plotArea>');
+    for (let index = 0; index < valid.length; index += Math.max(1, Math.floor(valid.length / 200))) {
+      const mutated = valid.slice();
+      mutated[index] = mutated[index]! ^ 0xff;
+      try {
+        parseOoxmlChart(mutated, "transitional");
+      } catch (cause) {
+        expect(cause).toBeInstanceOf(ChartParseError);
+      }
+    }
+  });
 });
 
 function type(name: string, body = "") {
