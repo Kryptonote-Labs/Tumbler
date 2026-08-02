@@ -30,6 +30,15 @@ export {
   THEME_COLOR_SLOTS,
 } from "./theme-colors.ts";
 export type { ThemeColorSlot } from "./theme-colors.ts";
+export {
+  parseThemeFontScheme,
+  ThemeFontScheme,
+} from "./theme-fonts.ts";
+export type {
+  ThemeFontRole,
+  ThemeFontScript,
+  ThemeTypefaceSet,
+} from "./theme-fonts.ts";
 export type {
   OoxmlNamespaceProfile,
   OoxmlVocabulary,
