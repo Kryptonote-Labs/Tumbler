@@ -2,6 +2,7 @@ import { openOpcPackage } from "@tumbler/opc";
 import { beginSpreadsheetEdit, type EditableCellValue } from "./editor.ts";
 import { openWorksheet, type SpreadsheetWorksheet } from "./worksheet.ts";
 import { openSpreadsheet, SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";
+import { calculateSpreadsheetWorksheet, type SpreadsheetCalculationSnapshot } from "./calculation.ts";
 
 export interface OpenSpreadsheetArtifactOptions {
   readonly sheet?: number | string;
@@ -12,12 +13,14 @@ export class SpreadsheetArtifact {
   readonly workbook: SpreadsheetWorkbook;
   readonly activeSheet: SpreadsheetSheet;
   readonly worksheet: SpreadsheetWorksheet;
+  readonly calculation: SpreadsheetCalculationSnapshot;
 
   constructor(workbook: SpreadsheetWorkbook, activeSheet: SpreadsheetSheet) {
     if (!workbook.sheets.includes(activeSheet)) throw new TypeError("The active sheet does not belong to this workbook.");
     this.workbook = workbook;
     this.activeSheet = activeSheet;
     this.worksheet = openWorksheet(workbook, activeSheet);
+    this.calculation = calculateSpreadsheetWorksheet(this.worksheet);
   }
 
   bytes(): Uint8Array {

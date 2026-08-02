@@ -75,6 +75,7 @@ export {
   SpreadsheetArtifact,
 } from "./artifact.ts";
 export type { OpenSpreadsheetArtifactOptions } from "./artifact.ts";
+export { calculateSpreadsheetWorksheet, SpreadsheetCalculationSnapshot } from "./calculation.ts";
 export type {
   SpreadsheetAlignment,
   SpreadsheetBorder,

@@ -30,7 +30,7 @@ export type FormulaExpression =
   | (FormulaSourceSpan & { readonly kind: "binary"; readonly operator: FormulaBinaryOperator; readonly left: FormulaExpression; readonly right: FormulaExpression })
   | (FormulaSourceSpan & { readonly kind: "function"; readonly name: string; readonly arguments: readonly FormulaExpression[] });
 
-export type FormulaErrorValue = "#NULL!" | "#DIV/0!" | "#VALUE!" | "#REF!" | "#NAME?" | "#NUM!" | "#N/A";
+export type FormulaErrorValue = `#${string}`;
 
 export interface ParsedFormula {
   readonly source: string;

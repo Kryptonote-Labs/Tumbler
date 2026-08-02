@@ -144,9 +144,12 @@ export class SpreadsheetWorksheet {
   }
 
   displayText(reference: string | CellAddress, locale = "en-US"): string {
-    const cell = this.cell(reference);
+    return this.formatValue(reference, this.cell(reference)?.value, locale);
+  }
+
+  formatValue(reference: string | CellAddress, value: SpreadsheetCellValue | undefined, locale = "en-US"): string {
     const style = this.styles.resolve(this.effectiveStyleIndex(reference));
-    return formatSpreadsheetCellValue(cell?.value, {
+    return formatSpreadsheetCellValue(value, {
       numberFormatId: style.numberFormatId,
       ...(style.numberFormatCode === undefined ? {} : { numberFormatCode: style.numberFormatCode }),
       dateSystem: this.workbook.dateSystem,

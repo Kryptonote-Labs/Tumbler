@@ -42,6 +42,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@tumbler/core": "workspace:*",
+        "@tumbler/formulas": "workspace:*",
         "@tumbler/ooxml": "workspace:*",
         "@tumbler/opc": "workspace:*",
       },
