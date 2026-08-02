@@ -72,6 +72,14 @@ describe("Svelte spreadsheet viewport", () => {
     expect(result.css?.code).toContain("overscroll-behavior: contain");
   });
 
+  test("pins row and column gutters with native sticky positioning", async () => {
+    const source = await Bun.file(new URL("../src/SpreadsheetGrid.svelte", import.meta.url)).text();
+    const result = compile(source, { filename: "SpreadsheetGrid.svelte", generate: "client", modernAst: true });
+    expect(result.css?.code).toMatch(/\.column-gutter[^}]*position: sticky[^}]*top: 0/);
+    expect(result.css?.code).toMatch(/\.row-gutter[^}]*position: sticky[^}]*left: 0/);
+    expect(source).not.toContain('style:transform={`translate(${scrollLeft}px, ${scrollTop}px)`}');
+  });
+
   test("rejects invalid viewport geometry", () => {
     const valid = {
       rowCount: 1,

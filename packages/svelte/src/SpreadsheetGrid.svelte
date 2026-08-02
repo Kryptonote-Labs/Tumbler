@@ -402,22 +402,28 @@
   onkeydown={handleKeydown}
 >
   <div class="canvas" style:width={`${viewport.totalWidth + rowHeaderWidth}px`} style:height={`${viewport.totalHeight + columnHeaderHeight}px`}>
-    <div class="corner" style:transform={`translate(${scrollLeft}px, ${scrollTop}px)`}></div>
-    {#each layout.columns as column (column.index)}
-      <div
-        class="column-header"
-        style:left={`${rowHeaderWidth + column.start}px`}
-        style:width={`${column.size}px`}
-        style:transform={`translate(${column.index <= frozenColumns ? scrollLeft : 0}px, ${scrollTop}px)`}
-      >{columnLabel(column.index)}</div>
-    {/each}
+    <div class="column-gutter">
+      <div class="corner"></div>
+      {#each layout.columns as column (column.index)}
+        <div
+          class="column-header"
+          style:left={`${rowHeaderWidth + column.start}px`}
+          style:width={`${column.size}px`}
+          style:transform={`translateX(${column.index <= frozenColumns ? scrollLeft : 0}px)`}
+        >{columnLabel(column.index)}</div>
+      {/each}
+    </div>
+    <div class="row-gutter" style:height={`${viewport.totalHeight}px`}>
+      {#each layout.rows as row (row.index)}
+        <div
+          class="row-header"
+          style:top={`${row.start}px`}
+          style:height={`${row.size}px`}
+          style:transform={`translateY(${row.index <= frozenRows ? scrollTop : 0}px)`}
+        >{row.index}</div>
+      {/each}
+    </div>
     {#each layout.rows as row (row.index)}
-      <div
-        class="row-header"
-        style:top={`${columnHeaderHeight + row.start}px`}
-        style:height={`${row.size}px`}
-        style:transform={`translate(${scrollLeft}px, ${row.index <= frozenRows ? scrollTop : 0}px)`}
-      >{row.index}</div>
       {#each layout.columns as column (column.index)}
         {@const projectedRow = sourceRow(row.index)}
         {@const reference = formatCellReference({ row: projectedRow ?? row.index, column: column.index })}
@@ -455,8 +461,10 @@
 <style>
   .tumbler-grid { position: relative; overflow: auto; overscroll-behavior: contain; contain: strict; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; }
   .canvas { position: relative; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
-  .corner, .column-header, .row-header { position: absolute; z-index: 3; box-sizing: border-box; background: var(--tumbler-grid-header-bg, #171b17); color: var(--tumbler-grid-muted, #9aa79a); border: 0 solid var(--tumbler-grid-line, #2a302a); }
-  .corner { left: 0; top: 0; width: 52px; height: 28px; border-right-width: 1px; border-bottom-width: 1px; z-index: 4; }
+  .column-gutter { position: sticky; top: 0; z-index: 3; width: 100%; height: 28px; background: var(--tumbler-grid-header-bg, #171b17); }
+  .row-gutter { position: sticky; left: 0; z-index: 3; width: 52px; background: var(--tumbler-grid-header-bg, #171b17); }
+  .corner, .column-header, .row-header { position: absolute; box-sizing: border-box; background: var(--tumbler-grid-header-bg, #171b17); color: var(--tumbler-grid-muted, #9aa79a); border: 0 solid var(--tumbler-grid-line, #2a302a); }
+  .corner { position: sticky; left: 0; top: 0; width: 52px; height: 28px; border-right-width: 1px; border-bottom-width: 1px; z-index: 1; }
   .column-header { top: 0; height: 28px; display: grid; place-items: center; border-right-width: 1px; border-bottom-width: 1px; }
   .row-header { left: 0; width: 52px; display: grid; place-items: center; border-right-width: 1px; border-bottom-width: 1px; }
   .cell { position: absolute; z-index: 1; box-sizing: border-box; display: flex; align-items: flex-end; overflow: hidden; padding: 5px 8px; white-space: nowrap; text-overflow: ellipsis; color: var(--tumbler-sheet-fg, #111111); border-right: 1px solid var(--tumbler-sheet-line, #d9ded9); border-bottom: 1px solid var(--tumbler-sheet-line, #d9ded9); background: var(--tumbler-sheet-bg, #ffffff); }
