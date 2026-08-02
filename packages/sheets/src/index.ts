@@ -27,6 +27,14 @@ export {
   openWorksheet,
   SpreadsheetWorksheet,
 } from "./worksheet.ts";
+export {
+  beginSpreadsheetEdit,
+  SpreadsheetEditor,
+} from "./editor.ts";
+export type {
+  EditableCellValue,
+  SpreadsheetEditorStatus,
+} from "./editor.ts";
 export type {
   SpreadsheetCell,
   SpreadsheetCellValue,
