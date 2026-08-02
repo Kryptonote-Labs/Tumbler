@@ -43,6 +43,10 @@ uses a light document surface by default through `--tumbler-sheet-bg`,
 `--tumbler-sheet-fg`, and `--tumbler-sheet-line`. Authored SpreadsheetML fills,
 font colours, and borders override those canvas defaults.
 
+Give the grid a constrained width and height in the host layout. It owns its
+two-axis scrolling, keeps row and column headers in place, and contains
+touchpad momentum so reaching a worksheet edge does not scroll the host pane.
+
 Pass `readonly` when the host wants selection and table view controls without
 cell writes. Sorting and filtering are always view-only: they use scalar values
 plus supported calculated results or producer caches, and do not change the

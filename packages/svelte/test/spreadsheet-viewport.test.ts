@@ -65,6 +65,13 @@ describe("Svelte spreadsheet viewport", () => {
     expect(result.css?.code).toContain("border-right: 1px solid var(--tumbler-sheet-line, #d9ded9)");
   });
 
+  test("contains touchpad momentum inside the worksheet scroller", async () => {
+    const source = await Bun.file(new URL("../src/SpreadsheetGrid.svelte", import.meta.url)).text();
+    const result = compile(source, { filename: "SpreadsheetGrid.svelte", generate: "client", modernAst: true });
+    expect(result.css?.code).toContain("overflow: auto");
+    expect(result.css?.code).toContain("overscroll-behavior: contain");
+  });
+
   test("rejects invalid viewport geometry", () => {
     const valid = {
       rowCount: 1,
