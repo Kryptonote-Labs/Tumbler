@@ -40,6 +40,11 @@ export {
   formatSpreadsheetCellValue,
 } from "./number-format.ts";
 export type { SpreadsheetFormatOptions } from "./number-format.ts";
+export {
+  openSpreadsheetArtifact,
+  SpreadsheetArtifact,
+} from "./artifact.ts";
+export type { OpenSpreadsheetArtifactOptions } from "./artifact.ts";
 export type {
   SpreadsheetAlignment,
   SpreadsheetBorder,
