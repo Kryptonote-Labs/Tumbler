@@ -4,7 +4,9 @@ import {
   EXCEL_MAX_COLUMNS,
   EXCEL_MAX_ROWS,
   formatCellReference,
+  formatCellRange,
   parseCellReference,
+  parseCellRange,
 } from "../src/index.ts";
 
 describe("SpreadsheetML cell references", () => {
@@ -45,5 +47,15 @@ describe("SpreadsheetML cell references", () => {
     ]) {
       expect(() => formatCellReference(address)).toThrow(RangeError);
     }
+  });
+
+  test("parses, normalizes, and validates bounded ranges", () => {
+    expect(parseCellRange("B2:D9")).toEqual({
+      start: { row: 2, column: 2 },
+      end: { row: 9, column: 4 },
+    });
+    expect(formatCellRange(parseCellRange("c3"))).toBe("C3");
+    expect(() => parseCellRange("D9:B2")).toThrow(RangeError);
+    expect(() => parseCellRange("A1:B2:C3")).toThrow(RangeError);
   });
 });

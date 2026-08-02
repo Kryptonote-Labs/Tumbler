@@ -5,6 +5,7 @@ const CONTENT_TYPES = "http://schemas.openxmlformats.org/package/2006/content-ty
 const RELATIONSHIPS = "http://schemas.openxmlformats.org/package/2006/relationships";
 const WORKBOOK_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
 const WORKSHEET_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
+const SHARED_STRINGS_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
 
 export interface SheetFixture {
   readonly name: string;
@@ -22,6 +23,7 @@ export interface WorkbookFixtureOptions {
   readonly workbookItemName?: string;
   readonly sheets?: readonly SheetFixture[];
   readonly workbookXml?: string;
+  readonly sharedStringsXml?: string;
 }
 
 export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint8Array {
@@ -40,6 +42,7 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
   const directory = workbookItemName.slice(0, slash + 1);
   const filename = workbookItemName.slice(slash + 1);
   const relationshipItemName = `${directory}_rels/${filename}.rels`;
+  const sharedStringsItemName = `${directory}strings/shared.xml`;
   const workbookXml = options.workbookXml ?? `<workbook xmlns="${spreadsheet}" xmlns:r="${officeRelationships}"><sheets>${sheets.map((sheet) =>
     `<sheet name="${sheet.name}" sheetId="${sheet.sheetId}" r:id="${sheet.relationshipId}"${sheet.state === undefined ? "" : ` state="${sheet.state}"`}/>`
   ).join("")}</sheets></workbook>`;
@@ -54,6 +57,7 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
         ${sheets.filter((sheet) => sheet.targetMode !== "External").map((sheet, index) =>
           `<Override PartName="/${resolveTargetItemName(directory, sheet.target ?? `worksheets/sheet${index + 1}.xml`)}" ContentType="${WORKSHEET_TYPE}"/>`
         ).join("")}
+        ${options.sharedStringsXml === undefined ? "" : `<Override PartName="/${sharedStringsItemName}" ContentType="${SHARED_STRINGS_CONTENT_TYPE}"/>`}
       </Types>`),
     },
     {
@@ -66,11 +70,15 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
       data: encoder.encode(`<Relationships xmlns="${RELATIONSHIPS}">${sheets.map((sheet, index) => {
         const target = sheet.target ?? `worksheets/sheet${index + 1}.xml`;
         return `<Relationship Id="${sheet.relationshipId}" Type="${sheet.relationshipType ?? worksheetRelationship}" Target="${target}"${sheet.targetMode === "External" ? ' TargetMode="External"' : ""}/>`;
-      }).join("")}</Relationships>`),
+      }).join("")}${options.sharedStringsXml === undefined ? "" : `<Relationship Id="strings" Type="${officeRelationships}/sharedStrings" Target="strings/shared.xml"/>`}</Relationships>`),
     },
     ...sheets.flatMap((sheet, index) => sheet.targetMode === "External" ? [] : [{
       name: resolveTargetItemName(directory, sheet.target ?? `worksheets/sheet${index + 1}.xml`),
       data: encoder.encode(sheet.xml ?? `<worksheet xmlns="${spreadsheet}"><sheetData/></worksheet>`),
+    }]),
+    ...(options.sharedStringsXml === undefined ? [] : [{
+      name: sharedStringsItemName,
+      data: encoder.encode(options.sharedStringsXml),
     }]),
   ]);
 }

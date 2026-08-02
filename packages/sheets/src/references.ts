@@ -8,6 +8,11 @@ export interface CellAddress {
   readonly column: number;
 }
 
+export interface CellRange {
+  readonly start: CellAddress;
+  readonly end: CellAddress;
+}
+
 const CELL_REFERENCE = /^([A-Za-z]{1,3})([1-9][0-9]{0,6})$/;
 
 export function parseCellReference(reference: string): CellAddress {
@@ -42,6 +47,25 @@ export function formatCellReference(address: CellAddress): string {
     column = Math.floor(column / 26);
   }
   return `${letters}${address.row}`;
+}
+
+export function parseCellRange(reference: string): CellRange {
+  const pieces = reference.split(":");
+  if (pieces.length < 1 || pieces.length > 2 || pieces[0] === undefined) {
+    throw new RangeError(`${JSON.stringify(reference)} is not an A1 cell range.`);
+  }
+  const start = parseCellReference(pieces[0]);
+  const end = pieces[1] === undefined ? start : parseCellReference(pieces[1]);
+  if (end.row < start.row || end.column < start.column) {
+    throw new RangeError(`${JSON.stringify(reference)} has reversed bounds.`);
+  }
+  return Object.freeze({ start, end });
+}
+
+export function formatCellRange(range: CellRange): string {
+  const start = formatCellReference(range.start);
+  const end = formatCellReference(range.end);
+  return start === end ? start : `${start}:${end}`;
 }
 
 function assertGridCoordinate(value: number, maximum: number, name: string): void {
