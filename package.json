@@ -9,6 +9,7 @@
   "scripts": {
     "check": "tsc --noEmit",
     "compatibility:fixtures": "bun scripts/generate-spreadsheet-compatibility-fixtures.ts",
+    "compatibility:libreoffice": "bash scripts/roundtrip-libreoffice.sh",
     "compatibility:openxml": "bash scripts/validate-openxml.sh",
     "references:fetch": "bash scripts/fetch-reference-sources.sh",
     "test": "bun test --pass-with-no-tests"
