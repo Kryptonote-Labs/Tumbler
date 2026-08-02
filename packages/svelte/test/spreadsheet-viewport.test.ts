@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { compile } from "svelte/compiler";
 import { SparseAxisGeometry } from "@tumbler/core";
-import { calculateSpreadsheetViewport, composeSpreadsheetGridLayout, frozenGridTranslation } from "../src/index.ts";
+import { calculateSpreadsheetViewport, coerceSpreadsheetEditValue, composeSpreadsheetGridLayout, frozenGridTranslation } from "../src/index.ts";
 
 describe("Svelte spreadsheet viewport", () => {
   test("mounts only a small overscanned window for an Excel-sized grid", () => {
@@ -103,5 +103,14 @@ describe("Svelte spreadsheet viewport", () => {
     expect(layout.merges[0]).toMatchObject({ left: 0, top: 0, width: 350, height: 50 });
     expect(frozenGridTranslation({ row: 1, column: 5, frozenRows: 2, frozenColumns: 1, scrollTop: 400, scrollLeft: 2_000 })).toEqual({ x: 0, y: 400 });
     expect(frozenGridTranslation({ row: 5, column: 1, frozenRows: 2, frozenColumns: 1, scrollTop: 400, scrollLeft: 2_000 })).toEqual({ x: 2_000, y: 0 });
+  });
+
+  test("coerces grid editor input into typed scalar edits", () => {
+    expect(coerceSpreadsheetEditValue("42.5", undefined)).toBe(42.5);
+    expect(coerceSpreadsheetEditValue("1e3", { type: "number", value: 1, lexical: "1" })).toBe(1_000);
+    expect(coerceSpreadsheetEditValue("FALSE", { type: "boolean", value: true })).toBeFalse();
+    expect(coerceSpreadsheetEditValue("001", { type: "string", value: "old", storage: "inline" })).toBe("001");
+    expect(coerceSpreadsheetEditValue("12 apples", { type: "number", value: 12, lexical: "12" })).toBe("12 apples");
+    expect(coerceSpreadsheetEditValue("", undefined)).toBe("");
   });
 });

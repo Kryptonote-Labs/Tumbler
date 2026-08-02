@@ -3,17 +3,13 @@
   import { EXCEL_MAX_COLUMNS, EXCEL_MAX_ROWS, formatCellReference, type SpreadsheetCellValue, type SpreadsheetWorksheet } from "@tumbler/sheets";
   import { calculateSpreadsheetViewport } from "./spreadsheet-viewport.ts";
   import { composeSpreadsheetGridLayout, frozenGridTranslation } from "./spreadsheet-grid-layout.ts";
-
-  interface CellEdit {
-    readonly reference: string;
-    readonly value: string;
-  }
+  import { coerceSpreadsheetEditValue, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
 
   interface Props {
     readonly worksheet: SpreadsheetWorksheet;
     selection?: GridSelection;
     readonly onselectionchange?: (selection: GridSelection) => void;
-    readonly onedit?: (edit: CellEdit) => void;
+    readonly onedit?: (edit: SpreadsheetGridEdit) => void;
     readonly rowCount?: number;
     readonly columnCount?: number;
     readonly rowHeight?: number;
@@ -91,6 +87,10 @@
     } else if (event.key === "Enter") {
       event.preventDefault();
       beginEdit(selection.focus.row, selection.focus.column);
+    } else if (event.key === "Delete" || event.key === "Backspace") {
+      event.preventDefault();
+      const owner = worksheet.mergedRange(selection.focus)?.start ?? selection.focus;
+      onedit?.({ reference: formatCellReference(owner), value: null });
     }
   }
 
@@ -111,7 +111,9 @@
   function finishEdit(commit: boolean) {
     const reference = editing;
     editing = undefined;
-    if (commit && reference !== undefined) onedit?.({ reference, value: draft });
+    if (commit && reference !== undefined) {
+      onedit?.({ reference, value: coerceSpreadsheetEditValue(draft, worksheet.cell(reference)?.value) });
+    }
   }
 
   function inputKeydown(event: KeyboardEvent) {
