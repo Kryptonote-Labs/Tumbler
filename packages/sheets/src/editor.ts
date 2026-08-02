@@ -7,7 +7,7 @@ import {
   type LosslessXmlElement,
   type LosslessXmlNode,
 } from "@tumbler/ooxml";
-import { saveOpcPackage, type PartName } from "@tumbler/opc";
+import { beginPackageTransaction, type PackageTransaction, type PartName } from "@tumbler/opc";
 import { formatCellRange, formatCellReference, parseCellReference, type CellAddress, type CellRange } from "./references.ts";
 import { openWorksheet, type SpreadsheetCellValue } from "./worksheet.ts";
 import { SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";
@@ -72,7 +72,14 @@ export class SpreadsheetEditor {
       for (const edit of edits) bytes = applyCellEdit(bytes, this.workbook.conformance, edit.address, edit.value);
       if (!equalBytes(bytes, original.document.originalBytes())) replacements.set(sheet.partName, bytes);
     }
-    const output = saveOpcPackage(this.workbook.package, replacements);
+    if (replacements.size === 0) {
+      this.#status = "committed";
+      return this.workbook.package.archive.originalBytes();
+    }
+    const transaction = beginPackageTransaction(this.workbook.package);
+    for (const [partName, bytes] of replacements) transaction.replacePart(partName, bytes);
+    invalidateCalculationState(transaction, this.workbook);
+    const output = transaction.commit();
     this.#status = "committed";
     return output;
   }
@@ -88,6 +95,61 @@ export class SpreadsheetEditor {
       throw new SpreadsheetError("invalid_worksheet", `The spreadsheet editor is already ${this.#status.replace("_", " ")}.`);
     }
   }
+}
+
+function invalidateCalculationState(
+  transaction: PackageTransaction,
+  workbook: SpreadsheetWorkbook,
+): void {
+  const calculationChain = workbook.calculation.calculationChain;
+  if (calculationChain !== undefined) {
+    transaction
+      .removeRelationship(workbook.part.name, calculationChain.relationshipId)
+      .removePart(calculationChain.partName);
+  }
+
+  const namespace = workbook.conformance === "strict"
+    ? "http://purl.oclc.org/ooxml/spreadsheetml/main"
+    : "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+  const calculationProperties = children(workbook.document.root, namespace, "calcPr")[0];
+  const editor = beginLosslessXmlEdit(workbook.document);
+  if (calculationProperties === undefined) {
+    const markup = `<${qualified(workbook.document.root.prefix, "calcPr")} fullCalcOnLoad="1" forceFullCalc="1"/>`;
+    const laterSibling = workbook.document.root.children.find((child): child is LosslessXmlElement =>
+      child.kind === "element" &&
+      child.namespaceUri === namespace &&
+      CALCULATION_PROPERTY_FOLLOWING_ELEMENTS.has(child.localName)
+    );
+    if (laterSibling === undefined) editor.appendMarkup(workbook.document.root, markup);
+    else editor.insertMarkupBefore(laterSibling, markup);
+  } else {
+    setOrInsertAttribute(editor, calculationProperties, "fullCalcOnLoad", "1");
+    setOrInsertAttribute(editor, calculationProperties, "forceFullCalc", "1");
+  }
+  transaction.replacePart(workbook.part.name, editor.commit().bytes);
+}
+
+const CALCULATION_PROPERTY_FOLLOWING_ELEMENTS = new Set([
+  "oleSize",
+  "customWorkbookViews",
+  "pivotCaches",
+  "smartTagPr",
+  "smartTagTypes",
+  "webPublishing",
+  "fileRecoveryPr",
+  "webPublishObjects",
+  "extLst",
+]);
+
+function setOrInsertAttribute(
+  editor: ReturnType<typeof beginLosslessXmlEdit>,
+  element: LosslessXmlElement,
+  name: string,
+  value: string,
+): void {
+  const existing = attribute(element, name);
+  if (existing === undefined) editor.insertAttribute(element, name, value);
+  else if (existing.value !== value) editor.setAttribute(existing, value);
 }
 
 export function beginSpreadsheetEdit(workbook: SpreadsheetWorkbook): SpreadsheetEditor {

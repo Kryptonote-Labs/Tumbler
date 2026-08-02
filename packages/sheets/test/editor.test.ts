@@ -38,7 +38,11 @@ describe("SpreadsheetML cell editing", () => {
     expect(worksheet.document.source).toContain(`<extLst><ext uri="preserve-me"/></extLst>`);
     expect(worksheet.document.source).toContain(`new &lt;text> &amp; data`);
 
-    for (const itemName of ["xl/workbook.xml", "xl/strings/shared.xml", "xl/worksheets/sheet2.xml"]) {
+    expect(reopened.calculation).toMatchObject({
+      fullCalculationOnLoad: true,
+      forceFullCalculation: true,
+    });
+    for (const itemName of ["xl/strings/shared.xml", "xl/worksheets/sheet2.xml"]) {
       expect(reopenedPackage.archive.compressedBytes(reopenedPackage.archive.get(itemName)!)).toEqual(
         before.archive.compressedBytes(before.archive.get(itemName)!),
       );
@@ -74,6 +78,44 @@ describe("SpreadsheetML cell editing", () => {
     const workbook = openSpreadsheet(openOpcPackage(source));
     expect(beginSpreadsheetEdit(workbook).commit()).toBe(source);
     expect(beginSpreadsheetEdit(workbook).setCellValue(workbook.sheet("Data")!, "B1", 2).commit()).toBe(source);
+  });
+
+  test.each(["strict", "transitional"] as const)("invalidates %s calculation caches after an edit", (conformance) => {
+    const namespace = conformance === "strict"
+      ? "http://purl.oclc.org/ooxml/spreadsheetml/main"
+      : "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const relationships = conformance === "strict"
+      ? "http://purl.oclc.org/ooxml/officeDocument/relationships"
+      : "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    const source = buildWorkbookFixture({
+      conformance,
+      calculationChainXml: `<calcChain xmlns="${namespace}"><c r="B1" i="1"/></calcChain>`,
+      workbookXml: `<workbook xmlns="${namespace}" xmlns:r="${relationships}"><sheets><sheet name="Sheet1" sheetId="1" r:id="sheet1"/></sheets><calcPr calcId="191029" calcMode="manual" fullCalcOnLoad="false"/><extLst><ext uri="preserve"/></extLst></workbook>`,
+      sheets: [{
+        name: "Sheet1",
+        sheetId: 1,
+        relationshipId: "sheet1",
+        xml: `<worksheet xmlns="${namespace}"><sheetData><row r="1"><c r="A1"><v>2</v></c><c r="B1"><f>A1*2</f><v>4</v></c></row></sheetData></worksheet>`,
+      }],
+    });
+    const workbook = openSpreadsheet(openOpcPackage(source));
+    const saved = beginSpreadsheetEdit(workbook).setCellValue(workbook.sheets[0]!, "A1", 3).commit();
+    const pkg = openOpcPackage(saved);
+    const reopened = openSpreadsheet(pkg);
+    const worksheet = openWorksheet(reopened, reopened.sheets[0]!);
+
+    expect(reopened.calculation).toEqual({
+      calculationId: 191029,
+      mode: "manual",
+      fullCalculationOnLoad: true,
+      forceFullCalculation: true,
+      calculationChain: undefined,
+    });
+    expect(pkg.getPart("/xl/calcChain.xml")).toBeUndefined();
+    expect(pkg.relationships(reopened.part.name).get("calculation-chain")).toBeUndefined();
+    expect(worksheet.cell("B1")).toMatchObject({ formula: "A1*2", value: { value: 4 } });
+    expect(reopened.document.source).toContain(`<extLst><ext uri="preserve"/></extLst>`);
+    expect(reopened.document.source.indexOf("calcPr")).toBeLessThan(reopened.document.source.indexOf("extLst"));
   });
 
   test("validates values, ownership, rollback, and terminal state", () => {
