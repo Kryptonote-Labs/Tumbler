@@ -32,6 +32,18 @@ export {
   MarkupCompatibilityError,
   MarkupCompatibilityView,
 } from "./markup-compatibility.ts";
+export {
+  beginCorePropertiesEdit,
+  CoreProperties,
+  CorePropertiesEditor,
+  CorePropertiesError,
+  parseCoreProperties,
+  readCoreProperties,
+} from "./core-properties.ts";
+export type {
+  CorePropertiesErrorCode,
+  CorePropertyName,
+} from "./core-properties.ts";
 export type {
   MarkupCompatibilityErrorCode,
   MarkupCompatibilityOptions,
