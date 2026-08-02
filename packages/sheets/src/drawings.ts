@@ -1,5 +1,6 @@
 import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumbler/ooxml";
 import type { OpcPart, PartName } from "@tumbler/opc";
+import type { SparseAxisGeometry } from "@tumbler/core";
 import { SpreadsheetError, type SpreadsheetWorkbook } from "./workbook.ts";
 
 const DRAWING_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.drawing+xml";
@@ -9,6 +10,28 @@ export interface SpreadsheetDrawing {
   readonly partName: PartName;
   readonly part: OpcPart;
   readonly document: LosslessXmlDocument;
+  readonly anchors: readonly SpreadsheetDrawingAnchor[];
+}
+
+export interface SpreadsheetDrawingMarker {
+  /** Zero-based SpreadsheetDrawingML column. */
+  readonly column: number;
+  /** Zero-based SpreadsheetDrawingML row. */
+  readonly row: number;
+  readonly columnOffsetEmu: number;
+  readonly rowOffsetEmu: number;
+}
+
+export type SpreadsheetDrawingAnchor =
+  | { readonly kind: "absolute"; readonly elementId: number; readonly xEmu: number; readonly yEmu: number; readonly widthEmu: number; readonly heightEmu: number }
+  | { readonly kind: "one-cell"; readonly elementId: number; readonly from: SpreadsheetDrawingMarker; readonly widthEmu: number; readonly heightEmu: number }
+  | { readonly kind: "two-cell"; readonly elementId: number; readonly from: SpreadsheetDrawingMarker; readonly to: SpreadsheetDrawingMarker; readonly editAs: "absolute" | "oneCell" | "twoCell" };
+
+export interface SpreadsheetDrawingBounds {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
 }
 
 /** Discovers the worksheet's single Drawing part through its OPC relationship. */
@@ -46,7 +69,140 @@ export function readSpreadsheetDrawing(input: {
   if (document.root.namespaceUri !== namespace || document.root.localName !== "wsDr") {
     invalid("A spreadsheet Drawing part must have an xdr:wsDr root element.");
   }
-  return Object.freeze({ relationshipId, partName: part.name, part, document });
+  return Object.freeze({
+    relationshipId,
+    partName: part.name,
+    part,
+    document,
+    anchors: parseDrawingAnchors(document.root, namespace),
+  });
+}
+
+/** Resolves an anchor into CSS pixels using the worksheet's current sparse geometry. */
+export function spreadsheetDrawingBounds(
+  anchor: SpreadsheetDrawingAnchor,
+  rows: SparseAxisGeometry,
+  columns: SparseAxisGeometry,
+): SpreadsheetDrawingBounds {
+  if (anchor.kind === "absolute") {
+    return Object.freeze({
+      x: emuToCssPixels(anchor.xEmu),
+      y: emuToCssPixels(anchor.yEmu),
+      width: emuToCssPixels(anchor.widthEmu),
+      height: emuToCssPixels(anchor.heightEmu),
+    });
+  }
+  const from = markerPosition(anchor.from, rows, columns);
+  if (anchor.kind === "one-cell") {
+    return Object.freeze({ ...from, width: emuToCssPixels(anchor.widthEmu), height: emuToCssPixels(anchor.heightEmu) });
+  }
+  const to = markerPosition(anchor.to, rows, columns);
+  return Object.freeze({ x: from.x, y: from.y, width: Math.max(0, to.x - from.x), height: Math.max(0, to.y - from.y) });
+}
+
+/** ECMA-376 DrawingML uses 914,400 EMUs per inch; CSS uses 96 px per inch. */
+export function emuToCssPixels(emu: number): number {
+  if (!Number.isFinite(emu)) throw new RangeError("EMU coordinate must be finite.");
+  return emu / 9_525;
+}
+
+function parseDrawingAnchors(root: LosslessXmlElement, namespace: string): readonly SpreadsheetDrawingAnchor[] {
+  return Object.freeze(root.children.flatMap((child): SpreadsheetDrawingAnchor[] => {
+    if (child.kind !== "element" || child.namespaceUri !== namespace) return [];
+    if (child.localName === "absoluteAnchor") {
+      const position = exactlyOne(child, namespace, "pos", "absoluteAnchor");
+      const extent = exactlyOne(child, namespace, "ext", "absoluteAnchor");
+      return [Object.freeze({
+        kind: "absolute",
+        elementId: child.id,
+        xEmu: coordinate(requiredAttr(position, "x", "absolute anchor x"), true, "absolute anchor x"),
+        yEmu: coordinate(requiredAttr(position, "y", "absolute anchor y"), true, "absolute anchor y"),
+        widthEmu: positiveCoordinate(requiredAttr(extent, "cx", "absolute anchor width"), "absolute anchor width"),
+        heightEmu: positiveCoordinate(requiredAttr(extent, "cy", "absolute anchor height"), "absolute anchor height"),
+      })];
+    }
+    if (child.localName === "oneCellAnchor") {
+      const extent = exactlyOne(child, namespace, "ext", "oneCellAnchor");
+      return [Object.freeze({
+        kind: "one-cell",
+        elementId: child.id,
+        from: parseMarker(exactlyOne(child, namespace, "from", "oneCellAnchor"), namespace),
+        widthEmu: positiveCoordinate(requiredAttr(extent, "cx", "one-cell anchor width"), "one-cell anchor width"),
+        heightEmu: positiveCoordinate(requiredAttr(extent, "cy", "one-cell anchor height"), "one-cell anchor height"),
+      })];
+    }
+    if (child.localName === "twoCellAnchor") {
+      const rawEditAs = attr(child, "editAs") ?? "twoCell";
+      if (rawEditAs !== "absolute" && rawEditAs !== "oneCell" && rawEditAs !== "twoCell") invalid(`twoCellAnchor editAs ${JSON.stringify(rawEditAs)} is invalid.`);
+      return [Object.freeze({
+        kind: "two-cell",
+        elementId: child.id,
+        from: parseMarker(exactlyOne(child, namespace, "from", "twoCellAnchor"), namespace),
+        to: parseMarker(exactlyOne(child, namespace, "to", "twoCellAnchor"), namespace),
+        editAs: rawEditAs,
+      })];
+    }
+    return [];
+  }));
+}
+
+function parseMarker(element: LosslessXmlElement, namespace: string): SpreadsheetDrawingMarker {
+  return Object.freeze({
+    column: gridIndex(textOf(exactlyOne(element, namespace, "col", "drawing marker")), 16_383, "drawing column"),
+    row: gridIndex(textOf(exactlyOne(element, namespace, "row", "drawing marker")), 1_048_575, "drawing row"),
+    columnOffsetEmu: coordinate(textOf(exactlyOne(element, namespace, "colOff", "drawing marker")), false, "drawing column offset"),
+    rowOffsetEmu: coordinate(textOf(exactlyOne(element, namespace, "rowOff", "drawing marker")), false, "drawing row offset"),
+  });
+}
+
+function markerPosition(marker: SpreadsheetDrawingMarker, rows: SparseAxisGeometry, columns: SparseAxisGeometry) {
+  if (marker.column >= columns.count || marker.row >= rows.count) throw new RangeError("Drawing marker is outside the supplied sheet geometry.");
+  return Object.freeze({
+    x: columns.start(marker.column + 1) + emuToCssPixels(marker.columnOffsetEmu),
+    y: rows.start(marker.row + 1) + emuToCssPixels(marker.rowOffsetEmu),
+  });
+}
+
+function exactlyOne(parent: LosslessXmlElement, namespace: string, name: string, context: string): LosslessXmlElement {
+  const matches = children(parent, namespace, name);
+  if (matches.length !== 1) invalid(`${context} must contain exactly one ${name}.`);
+  return matches[0]!;
+}
+
+function textOf(element: LosslessXmlElement): string {
+  let text = "";
+  for (const child of element.children) {
+    if (child.kind === "text" || child.kind === "cdata") text += child.value;
+  }
+  return text.trim();
+}
+
+function requiredAttr(element: LosslessXmlElement, name: string, context: string): string {
+  const value = attr(element, name);
+  if (value === undefined) invalid(`${context} is required.`);
+  return value;
+}
+
+function attr(element: LosslessXmlElement, name: string): string | undefined {
+  return element.attributes.find((candidate) => candidate.namespaceUri === "" && candidate.localName === name)?.value;
+}
+
+function gridIndex(raw: string, maximum: number, context: string): number {
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 0 || value > maximum) invalid(`${context} must be a valid zero-based grid index.`);
+  return value;
+}
+
+function coordinate(raw: string, signed: boolean, context: string): number {
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || (!signed && value < 0)) invalid(`${context} must be ${signed ? "a" : "a non-negative"} safe integer.`);
+  return value;
+}
+
+function positiveCoordinate(raw: string, context: string): number {
+  const value = coordinate(raw, false, context);
+  if (value <= 0) invalid(`${context} must be positive.`);
+  return value;
 }
 
 function children(parent: LosslessXmlElement, namespace: string, name: string): LosslessXmlElement[] {
