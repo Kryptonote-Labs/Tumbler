@@ -178,10 +178,8 @@
   }
 
   function cssColor(color: ReturnType<typeof worksheet.cellStyle>["font"]["color"]): string | undefined {
-    if (color?.type !== "rgb") return undefined;
-    const alpha = color.argb.slice(0, 2);
-    const rgb = color.argb.slice(2);
-    return alpha === "FF" ? `#${rgb}` : `#${rgb}${alpha}`;
+    const argb = worksheet.styles.resolveColor(color);
+    return argb === undefined ? undefined : `#${argb.slice(2)}`;
   }
 
   function cssValue(value: string): string {
