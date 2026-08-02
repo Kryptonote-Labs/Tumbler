@@ -29,9 +29,15 @@ export function parseSpreadsheetChartReference(formula: string, currentSheet: st
 
 /** Refreshes supported chart series from workbook cells while retaining caches for unsupported references. */
 export function resolveSpreadsheetChartData(worksheet: SpreadsheetWorksheet, model: ChartModel): ChartModel {
-  if (model.status !== "supported") return model;
+  return resolveSpreadsheetChartDataSet(worksheet, [model])[0]!;
+}
+
+/** Resolves a worksheet's chart models while sharing formula snapshots across every chart. */
+export function resolveSpreadsheetChartDataSet(worksheet: SpreadsheetWorksheet, models: readonly ChartModel[]): readonly ChartModel[] {
   const snapshots = new Map<number, SpreadsheetCalculationSnapshot>();
-  snapshots.set(worksheet.sheet.sheetId, calculateSpreadsheetWorksheet(worksheet));
+  if (models.some((model) => model.status === "supported")) {
+    snapshots.set(worksheet.sheet.sheetId, calculateSpreadsheetWorksheet(worksheet));
+  }
 
   const source = (formula: string): { worksheet: SpreadsheetWorksheet; calculation: SpreadsheetCalculationSnapshot; range: CellRange } | undefined => {
     const reference = parseSpreadsheetChartReference(formula, worksheet.sheet.name);
@@ -65,16 +71,19 @@ export function resolveSpreadsheetChartData(worksheet: SpreadsheetWorksheet, mod
     return Object.freeze({ ...sequence, points: Object.freeze(points) });
   };
 
-  const series = model.series.map((item): ChartSeries => {
-    const titleSource = item.titleFormula === undefined ? undefined : source(item.titleFormula);
-    const title = titleSource === undefined
-      ? item.title
-      : titleSource.calculation.displayText(titleSource.range.start) || item.title;
-    return Object.freeze({ ...item, title, categories: resolveSequence(item.categories), values: resolveSequence(item.values) });
-  });
-  const titleSource = model.titleFormula === undefined ? undefined : source(model.titleFormula);
-  const title = titleSource === undefined ? model.title : titleSource.calculation.displayText(titleSource.range.start) || model.title;
-  return Object.freeze({ ...model, title, series: Object.freeze(series) });
+  return Object.freeze(models.map((model): ChartModel => {
+    if (model.status !== "supported") return model;
+    const series = model.series.map((item): ChartSeries => {
+      const titleSource = item.titleFormula === undefined ? undefined : source(item.titleFormula);
+      const title = titleSource === undefined
+        ? item.title
+        : titleSource.calculation.displayText(titleSource.range.start) || item.title;
+      return Object.freeze({ ...item, title, categories: resolveSequence(item.categories), values: resolveSequence(item.values) });
+    });
+    const titleSource = model.titleFormula === undefined ? undefined : source(model.titleFormula);
+    const title = titleSource === undefined ? model.title : titleSource.calculation.displayText(titleSource.range.start) || model.title;
+    return Object.freeze({ ...model, title, series: Object.freeze(series) });
+  }));
 }
 
 function chartPoint(

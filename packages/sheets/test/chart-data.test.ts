@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { SupportedChartModel } from "@tumbler/charts";
 import { openOpcPackage } from "@tumbler/opc";
-import { beginSpreadsheetEdit, openSpreadsheet, openWorksheet, parseSpreadsheetChartReference, resolveSpreadsheetChartData } from "../src/index.ts";
+import { beginSpreadsheetEdit, openSpreadsheet, openWorksheet, parseSpreadsheetChartReference, resolveSpreadsheetChartData, resolveSpreadsheetChartDataSet } from "../src/index.ts";
 import { buildWorkbookFixture } from "./workbook-fixture.ts";
 
 describe("Spreadsheet chart data binding", () => {
@@ -38,6 +38,14 @@ describe("Spreadsheet chart data binding", () => {
     if (resolved.status !== "supported") throw new Error("Expected supported chart");
     expect(resolved.series[0]?.values).toBe(cached.series[0]?.values);
     expect(resolved.series[0]?.values?.points).toEqual([{ index: 0, value: 999 }]);
+  });
+
+  test("resolves multiple charts in one shared workbook-data pass", () => {
+    const workbook = fixture();
+    const worksheet = openWorksheet(workbook, workbook.sheet("Dashboard")!);
+    const resolved = resolveSpreadsheetChartDataSet(worksheet, [model(), model()]);
+    expect(resolved).toHaveLength(2);
+    expect(resolved.map((chart) => chart.status === "supported" ? chart.series[0]?.values?.points.at(-1)?.value : undefined)).toEqual([5, 5]);
   });
 });
 

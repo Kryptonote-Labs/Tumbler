@@ -9,7 +9,7 @@
     formatCellReference,
     projectSpreadsheetTable,
     resolveSpreadsheetChartColor,
-    resolveSpreadsheetChartData,
+    resolveSpreadsheetChartDataSet,
     savedSpreadsheetTableView,
     setSpreadsheetTableSort,
     setSpreadsheetTableValueFilter,
@@ -112,11 +112,15 @@
   let rowGeometry = $derived(worksheet.rowGeometry(rowCount, projectedRows));
   let columnGeometry = $derived(worksheet.columnGeometry(columnCount, maximumDigitWidth));
   let drawingRowGeometry = $derived(worksheet.rowGeometry(rowCount));
-  let charts = $derived((worksheet.drawing?.charts ?? []).map((frame) => ({
-    frame,
-    bounds: spreadsheetDrawingBounds(frame.anchor, drawingRowGeometry, columnGeometry),
-    model: resolveSpreadsheetChartData(worksheet, frame.model),
-  })));
+  let charts = $derived.by(() => {
+    const frames = worksheet.drawing?.charts ?? [];
+    const models = resolveSpreadsheetChartDataSet(worksheet, frames.map((frame) => frame.model));
+    return frames.map((frame, index) => ({
+      frame,
+      bounds: spreadsheetDrawingBounds(frame.anchor, drawingRowGeometry, columnGeometry),
+      model: models[index]!,
+    }));
+  });
   let frozenPane = $derived(worksheet.panes.find((pane) => pane.state === "frozen" || pane.state === "frozenSplit"));
   let frozenRows = $derived(Math.min(rowCount, Math.max(0, Math.floor(frozenPane?.ySplit ?? 0))));
   let frozenColumns = $derived(Math.min(columnCount, Math.max(0, Math.floor(frozenPane?.xSplit ?? 0))));
