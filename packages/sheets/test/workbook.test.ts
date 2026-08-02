@@ -80,6 +80,47 @@ describe("SpreadsheetML workbook discovery", () => {
       workbookXml: `<workbook xmlns="${namespace}" xmlns:r="${relationships}"><workbookPr date1904="maybe"/><sheets><sheet name="Sheet1" sheetId="1" r:id="sheet1"/></sheets></workbook>`,
     })))).toThrow(SpreadsheetError);
   });
+
+  test.each(["strict", "transitional"] as const)("models %s workbook calculation state", (conformance) => {
+    const namespace = conformance === "strict"
+      ? "http://purl.oclc.org/ooxml/spreadsheetml/main"
+      : "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const relationships = conformance === "strict"
+      ? "http://purl.oclc.org/ooxml/officeDocument/relationships"
+      : "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      conformance,
+      calculationChainXml: `<calcChain xmlns="${namespace}"><c r="B2" i="1"/></calcChain>`,
+      workbookXml: `<workbook xmlns="${namespace}" xmlns:r="${relationships}"><sheets><sheet name="Sheet1" sheetId="1" r:id="sheet1"/></sheets><calcPr calcId="191029" calcMode="manual" fullCalcOnLoad="true" forceFullCalc="0"/></workbook>`,
+    })));
+
+    expect(workbook.calculation).toEqual({
+      calculationId: 191029,
+      mode: "manual",
+      fullCalculationOnLoad: true,
+      forceFullCalculation: false,
+      calculationChain: {
+        relationshipId: "calculation-chain",
+        partName: expect.objectContaining({ value: "/xl/calcChain.xml" }),
+      },
+    });
+  });
+
+  test("rejects malformed calculation properties", () => {
+    const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const relationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    const workbook = (calculation: string) => buildWorkbookFixture({
+      workbookXml: `<workbook xmlns="${namespace}" xmlns:r="${relationships}"><sheets><sheet name="Sheet1" sheetId="1" r:id="sheet1"/></sheets>${calculation}</workbook>`,
+    });
+    for (const calculation of [
+      `<calcPr calcId="-1"/>`,
+      `<calcPr calcMode="sometimes"/>`,
+      `<calcPr fullCalcOnLoad="yes"/>`,
+      `<calcPr/><calcPr/>`,
+    ]) {
+      expectSpreadsheetError(() => openSpreadsheet(openOpcPackage(workbook(calculation))), "invalid_calculation");
+    }
+  });
 });
 
 function expectSpreadsheetError(action: () => unknown, code: SpreadsheetErrorCode): void {

@@ -10,12 +10,14 @@ const PROFILES = [
     spreadsheet: OOXML_NAMESPACES.strict.spreadsheet,
     officeRelationships: "http://purl.oclc.org/ooxml/officeDocument/relationships",
     worksheetRelationship: "http://purl.oclc.org/ooxml/officeDocument/relationships/worksheet",
+    calculationChainRelationship: "http://purl.oclc.org/ooxml/officeDocument/relationships/calcChain",
   },
   {
     conformance: "transitional",
     spreadsheet: OOXML_NAMESPACES.transitional.spreadsheet,
     officeRelationships: "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
     worksheetRelationship: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
+    calculationChainRelationship: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain",
   },
 ] as const;
 
@@ -29,9 +31,23 @@ export interface SpreadsheetSheet {
   readonly partName: PartName;
 }
 
+export type SpreadsheetCalculationMode = "auto" | "autoNoTable" | "manual";
+
+export interface SpreadsheetCalculationProperties {
+  readonly calculationId: number | undefined;
+  readonly mode: SpreadsheetCalculationMode | undefined;
+  readonly fullCalculationOnLoad: boolean | undefined;
+  readonly forceFullCalculation: boolean | undefined;
+  readonly calculationChain: {
+    readonly relationshipId: string;
+    readonly partName: PartName;
+  } | undefined;
+}
+
 export type SpreadsheetErrorCode =
   | "duplicate_sheet_id"
   | "duplicate_sheet_name"
+  | "invalid_calculation"
   | "invalid_cell"
   | "invalid_sheet"
   | "invalid_styles"
@@ -58,6 +74,7 @@ export class SpreadsheetWorkbook {
   readonly document: LosslessXmlDocument;
   readonly conformance: "strict" | "transitional";
   readonly dateSystem: "1900" | "1904";
+  readonly calculation: SpreadsheetCalculationProperties;
   readonly sheets: readonly SpreadsheetSheet[];
   readonly #byId: ReadonlyMap<number, SpreadsheetSheet>;
   readonly #byName: ReadonlyMap<string, SpreadsheetSheet>;
@@ -68,6 +85,7 @@ export class SpreadsheetWorkbook {
     document: LosslessXmlDocument,
     conformance: "strict" | "transitional",
     dateSystem: "1900" | "1904",
+    calculation: SpreadsheetCalculationProperties,
     sheets: readonly SpreadsheetSheet[],
   ) {
     this.package = pkg;
@@ -75,6 +93,7 @@ export class SpreadsheetWorkbook {
     this.document = document;
     this.conformance = conformance;
     this.dateSystem = dateSystem;
+    this.calculation = Object.freeze(calculation);
     this.sheets = Object.freeze([...sheets]);
     this.#byId = new Map(sheets.map((sheet) => [sheet.sheetId, sheet]));
     this.#byName = new Map(sheets.map((sheet) => [sheet.name.toLocaleLowerCase("en-US"), sheet]));
@@ -177,7 +196,63 @@ export function openSpreadsheet(pkg: OpcPackage): SpreadsheetWorkbook {
   if (dateSystem === undefined) {
     throw new SpreadsheetError("invalid_workbook", "workbookPr date1904 must be an XML boolean.");
   }
-  return new SpreadsheetWorkbook(pkg, main, document, profile.conformance, dateSystem, sheets);
+
+  const calculationProperties = childElements(document.root, profile.spreadsheet, "calcPr");
+  if (calculationProperties.length > 1) {
+    throw new SpreadsheetError("invalid_calculation", "A workbook must not repeat calcPr.");
+  }
+  const calculationElement = calculationProperties[0];
+  const calculationId = parseOptionalUnsignedInteger(calculationElement, "calcId");
+  const mode = calculationElement === undefined
+    ? undefined
+    : optionalUnqualifiedAttribute(calculationElement, "calcMode");
+  if (mode !== undefined && mode !== "auto" && mode !== "autoNoTable" && mode !== "manual") {
+    throw new SpreadsheetError("invalid_calculation", `calcPr calcMode ${JSON.stringify(mode)} is invalid.`);
+  }
+  const calculationChains = relationships.items.filter(
+    (relationship) => relationship.type === profile.calculationChainRelationship,
+  );
+  if (calculationChains.length > 1 || calculationChains[0]?.targetMode === "External") {
+    throw new SpreadsheetError("invalid_calculation", "A workbook may have at most one internal calculation chain.");
+  }
+  const calculationChainRelationship = calculationChains[0];
+  const calculationChain = calculationChainRelationship?.targetMode === "Internal"
+    ? Object.freeze({
+        relationshipId: calculationChainRelationship.id,
+        partName: calculationChainRelationship.targetPartName,
+      })
+    : undefined;
+  const calculation = Object.freeze({
+    calculationId,
+    mode,
+    fullCalculationOnLoad: parseOptionalBoolean(calculationElement, "fullCalcOnLoad"),
+    forceFullCalculation: parseOptionalBoolean(calculationElement, "forceFullCalc"),
+    calculationChain,
+  });
+  return new SpreadsheetWorkbook(pkg, main, document, profile.conformance, dateSystem, calculation, sheets);
+}
+
+function parseOptionalUnsignedInteger(element: LosslessXmlElement | undefined, name: string): number | undefined {
+  if (element === undefined) return undefined;
+  const raw = optionalUnqualifiedAttribute(element, name);
+  if (raw === undefined) return undefined;
+  if (!/^(?:0|[1-9][0-9]*)$/.test(raw)) {
+    throw new SpreadsheetError("invalid_calculation", `calcPr ${name} must be an unsigned integer.`);
+  }
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value > 0xffffffff) {
+    throw new SpreadsheetError("invalid_calculation", `calcPr ${name} is outside the unsigned integer range.`);
+  }
+  return value;
+}
+
+function parseOptionalBoolean(element: LosslessXmlElement | undefined, name: string): boolean | undefined {
+  if (element === undefined) return undefined;
+  const raw = optionalUnqualifiedAttribute(element, name);
+  if (raw === undefined) return undefined;
+  if (raw === "1" || raw === "true") return true;
+  if (raw === "0" || raw === "false") return false;
+  throw new SpreadsheetError("invalid_calculation", `calcPr ${name} must be an XML boolean.`);
 }
 
 function childElements(parent: LosslessXmlElement, namespaceUri: string, localName: string): LosslessXmlElement[] {

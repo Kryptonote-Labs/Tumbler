@@ -19,6 +19,8 @@ export {
 } from "./shared-strings.ts";
 export type {
   SpreadsheetErrorCode,
+  SpreadsheetCalculationMode,
+  SpreadsheetCalculationProperties,
   SpreadsheetSheet,
   SpreadsheetSheetState,
 } from "./workbook.ts";
