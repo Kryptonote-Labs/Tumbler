@@ -9,13 +9,20 @@ import {
 describe("standards requirement manifests", () => {
   test("projects explicit spreadsheet capability stages", () => {
     const matrix = capabilityMatrix(SPREADSHEET_REQUIREMENTS);
-    expect(matrix).toHaveLength(10);
+    expect(matrix).toHaveLength(12);
     expect(matrix.find((entry) => entry.id === "XLSX-CELL-STYLES")).toMatchObject({
       recognize: "unverified",
       preserve: "supported",
       render: "partial",
       edit: "unverified",
       interoperate: "unverified",
+    });
+    expect(matrix.find((entry) => entry.id === "XLSX-CALCULATION-STATE")).toMatchObject({
+      recognize: "supported",
+      preserve: "supported",
+      edit: "supported",
+      write: "supported",
+      interoperate: "partial",
     });
   });
 

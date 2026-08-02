@@ -47,10 +47,20 @@ cell-format references, thousands of deterministic number/date formats, sparse
 variable axes checked against materialized oracles, merged rectangles, frozen
 translations, typed UI entry coercions, and artefact-session replacement flows.
 
-Real-producer and external-validator tests remain a separate next step. Neither
-LibreOffice nor a checked-in Office fixture corpus was available in the initial
-local environment, so synthetic packages are not presented as interoperability
-evidence.
+Calculation tests model Strict and Transitional `calcPr` state, remove stale
+calculation-chain parts and graph edges atomically, verify schema-safe child
+ordering, retain formula source/cached values, and keep semantic no-ops byte
+identical. Style qualification additionally covers cell/row/column precedence,
+explicit `xf` apply flags, DrawingML theme fonts, measured maximum-digit width,
+and DOM-independent CSS contracts for alignment and text rotation. The full
+local suite currently contains more than 300 focused, generated, mutation, and
+property tests.
+
+Compatibility CI generates deterministic before/after XLSX fixtures, validates
+both with Microsoft's Open XML SDK, round-trips them through LibreOffice Calc,
+then reparses the results and checks preservation plus formula recalculation.
+Real-producer corpora and Microsoft Excel automation remain separate next steps,
+so synthetic packages are not presented as full interoperability evidence.
 
 ## Testkit structure
 
@@ -116,7 +126,7 @@ Every emitted package is checked for:
 - XML well-formedness and schema-derived constraints;
 - configured archive and XML resource limits.
 
-A small .NET test utility should run Microsoft's
+A pinned .NET test utility runs Microsoft's
 [`OpenXmlValidator`](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.validation.openxmlvalidator.validate)
 against every generated or edited file. This is a test oracle, not a runtime
 dependency.

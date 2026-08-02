@@ -1,8 +1,7 @@
 # Kryptonote artefact viewer integration
 
-Tumbler now has the boundary needed by Kryptonote, but it has not been wired into
-`Kn-Frontend`. Keeping that as a separate commit makes the application change
-easy to review and avoids coupling the reusable engine to Kryptonote state.
+Tumbler is wired into `Kn-Frontend` as a public Git submodule while its reusable
+packages remain independent of Kryptonote state and visual chrome.
 
 ## Viewer state
 
@@ -41,8 +40,8 @@ that sheet disappeared, the first visible ordinary worksheet is selected.
 
 ## Recommended application wiring
 
-1. Add the private Tumbler workspace packages as local workspace dependencies of
-   `Kn-Frontend`; do not publish them merely to connect the private application.
+1. Keep the frontend submodule pinned to a reviewed Tumbler commit and refresh
+   the Bun lockfile whenever that pin changes.
 2. Route `.xlsx`, `.xltx`, and supported macro-enabled spreadsheet artefacts to
    a dedicated spreadsheet viewer component.
 3. Open bytes in a worker once workbook sizes make main-thread parsing visible.
@@ -56,9 +55,8 @@ that sheet disappeared, the first visible ordinary worksheet is selected.
 
 ## Current integration caveats
 
-- Tumbler is still a private local project, so dependency placement must be
-  decided before `Kn-Frontend` can import it reliably on developer machines and
-  deployment builders.
+- Tumbler is extremely early alpha. The submodule pin is the compatibility
+  boundary; public package APIs may still change between pins.
 - Parsing is synchronous today. The API is worker-safe, but the worker transport
   and cancellation contract have not been added.
 - Editing returns complete XLSX bytes. Incremental object-storage upload is a

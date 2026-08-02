@@ -14,12 +14,14 @@ current requirement boundary is:
 | §12.3.23 | Workbook discovered as the package office-document target; no fixed `/xl/workbook.xml` assumption |
 | §12.3.24 | Ordinary worksheets resolved from each `sheet` relationship and required worksheet media type |
 | §18.2.19–20, §18.2.27 | Ordered sheet collection; required name, unsigned `sheetId`, relationship ID, and visibility state; unique names and IDs |
+| §18.2.2, §18.6.2 | Workbook calculation mode/flags and calculation-chain identity; literal edits remove stale chains and request a full calculation on load |
 | §18.3.1.4 | Sparse cells, references, style indexes, formulas, cached values, and standard cell type tags |
 | §18.3.1.13, §18.3.1.35, §18.3.1.73 | Column spans/widths, used dimension, row index/height/hidden state |
 | §18.3.1.53–55 | Inline rich strings and non-overlapping merged ranges |
 | §18.3.1.66, §18.3.1.87–88 | Split/frozen pane state from worksheet views |
 | §18.4.8–9, §18.4.12 | Shared string tables, rich runs, significant whitespace, and exclusion of phonetic hints from displayed base text |
-| §18.8.2–45 | First stylesheet projection: fonts, fills, borders, colors, alignment, cell formats, base-style inheritance, and number-format records |
+| §18.8.1–45 | Stylesheet projection: fonts, fills, borders, colors, alignment, cell/row/column formats, base-style inheritance, apply flags, and number-format records |
+| §20.1.4.1.17, §20.1.6.10 | DrawingML major/minor theme font resolution with cached SpreadsheetML font-name fallback |
 | §18.18.11 | `b`, `d`, `e`, `inlineStr`, `n`, `s`, and `str` cell types |
 
 Both Strict and Transitional vocabulary and relationship namespaces are tested.
@@ -39,10 +41,14 @@ clauses or to SpreadsheetML as a whole.
 - expose dimensions, merges, column ranges, row layout, and pane state;
 - resolve cell style indexes into fonts, solid fills, borders, alignment, and
   number formats;
+- apply explicit cell styles ahead of row custom formats and column styles;
+- resolve theme fonts and colors while retaining their source identities;
 - format common decimals, grouping, percentages, scientific values, fractions,
   dates, and times while retaining raw values and workbook date-system identity;
 - stage literal string, finite-number, boolean, and clear operations;
 - add missing rows/cells in coordinate order, expand dimensions, save, and reopen;
+- invalidate stale calculation chains and request full recalculation after a
+  semantic literal edit;
 - leave a semantic no-op byte-identical and copy untouched ZIP payloads exactly.
 
 Literal text writes use `inlineStr`. This avoids a workbook-wide shared-string
@@ -70,6 +76,11 @@ as required for cell styles and expected by producers that routinely emit a
 colors use a custom or standard palette, and SpreadsheetML tints are applied in
 HSL space.
 
+The Svelte head measures the widest decimal digit in the resolved Normal-style
+font before applying the standard column-width conversion. Alignment rendering
+includes General type-sensitive alignment, vertical position, wrapping,
+indentation, reading direction, and rotated or stacked text.
+
 ## Deliberate current limits
 
 - Only ordinary worksheet sheet targets are accepted. Chart sheets, dialog
@@ -79,26 +90,29 @@ HSL space.
 - The number-format interpreter covers the common built-ins and a useful custom
   subset. It does not yet implement the entire conditional, locale/currency,
   elapsed-time, fill-character, and fraction language from §18.8.31.
-- Column pixels currently use the standard formula with a seven-pixel maximum
-  digit-width estimate. The browser head does not yet measure the workbook's
-  actual normal-style font metrics.
+- Font fallback still depends on fonts installed in the browser environment;
+  East Asian and complex-script runs are not yet segmented for per-run theme
+  font selection.
 - Merges wholly within one scrolling or frozen region render as one cell.
   Merges crossing a frozen-pane boundary still need quadrant clipping.
 - Formulas are preserved and exposed with cached values, but not tokenized,
-  calculated, or editable. Structural row/column edits do not exist.
+  calculated, or editable. Tumbler deliberately asks the consuming spreadsheet
+  application to recalculate after literal edits. Structural row/column edits do
+  not exist.
 - Tables, filters, validations, conditional formats, comments, hyperlinks,
   drawings, charts, pivots, names, and external links are preserved as unknown
   content but have no semantic or visual model.
 - Editing an existing rich/shared string replaces that cell's value with a plain
   inline string; run formatting and phonetic annotations are not retained for
   the intentionally replaced value.
-- No Microsoft Excel, LibreOffice, Apache POI, or Open XML SDK consumer pass has
-  been recorded yet. Synthetic and property tests are structural evidence, not
-  interoperability certification.
+- Open XML SDK and LibreOffice validation harnesses now run in compatibility CI.
+  Microsoft Excel and Apache POI passes, plus a licensed real-producer corpus,
+  have not been recorded yet.
 
 ## Next qualification boundary
 
-The next useful slice is font measurement and real-producer visual
-qualification. Before calling the slice interoperable, generated and
-real-producer fixtures must pass Open XML SDK validation and open/save cycles in
-LibreOffice and Excel without repair.
+The next useful slice is real-producer visual qualification, followed by
+conditional formatting, richer number formats, and formula/reference modelling.
+Before calling the slice interoperable, real-producer fixtures must pass Excel,
+LibreOffice, and an independent parser without repair or unexplained semantic
+drift.
