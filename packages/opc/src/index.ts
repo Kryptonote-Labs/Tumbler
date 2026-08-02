@@ -10,3 +10,14 @@ export type {
   ZipArchiveLimits,
   ZipEntry,
 } from "./zip/archive.ts";
+export {
+  ContentTypes,
+  ContentTypesError,
+  parseContentTypes,
+} from "./content-types.ts";
+export type {
+  ContentTypeDefault,
+  ContentTypeOverride,
+  ContentTypesErrorCode,
+} from "./content-types.ts";
+export { PartName, PartNameError } from "./part-name.ts";
