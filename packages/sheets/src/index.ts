@@ -56,6 +56,7 @@ export type {
   SpreadsheetTableViewSort,
   SpreadsheetTableViewState,
   SpreadsheetTableViewWarning,
+  SpreadsheetTableValueProvider,
 } from "./table-view.ts";
 export {
   beginSpreadsheetEdit,

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { openSpreadsheetArtifact } from "../src/index.ts";
+import {
+  openSpreadsheetArtifact,
+  projectSpreadsheetTable,
+  setSpreadsheetTableValueFilter,
+  spreadsheetTableDistinctValues,
+} from "../src/index.ts";
 import { buildWorkbookFixture } from "./workbook-fixture.ts";
 
 const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -55,6 +60,29 @@ describe("SpreadsheetML calculated-value overlays", () => {
     expect(artifact.calculation.displayText("B1")).toBe("6");
     const edited = artifact.editCell("A1", 5);
     expect(edited.calculation.displayText("B1")).toBe("15");
+  });
+
+  test("supplies calculated values to table filters and sorting", () => {
+    const relationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({ sheets: [{
+      name: "Data",
+      sheetId: 1,
+      relationshipId: "data",
+      xml: `<worksheet xmlns="${namespace}" xmlns:r="${relationships}"><sheetData>
+        <row r="1"><c r="A1" t="inlineStr"><is><t>Value</t></is></c><c r="B1" t="inlineStr"><is><t>Check</t></is></c></row>
+        <row r="2"><c r="A2"><v>2</v></c><c r="B2" t="str"><f>IF(A2&gt;0,&quot;OK&quot;,&quot;Check&quot;)</f><v/></c></row>
+        <row r="3"><c r="A3"><v>-1</v></c><c r="B3" t="str"><f>IF(A3&gt;0,&quot;OK&quot;,&quot;Check&quot;)</f><v/></c></row>
+      </sheetData><tableParts count="1"><tablePart r:id="table"/></tableParts></worksheet>`,
+      tables: [{ relationshipId: "table", target: "../tables/table1.xml", xml: `<table xmlns="${namespace}" id="1" name="Data" displayName="Data" ref="A1:B3"><autoFilter ref="A1:B3"/><tableColumns count="2"><tableColumn id="1" name="Value"/><tableColumn id="2" name="Check"/></tableColumns></table>` }],
+    }] }));
+    const table = artifact.worksheet.tables[0]!;
+    const provider = {
+      value: (row: number, column: number) => artifact.calculation.value({ row, column }),
+      displayText: (row: number, column: number) => artifact.calculation.displayText({ row, column }),
+    };
+    expect(spreadsheetTableDistinctValues(artifact.worksheet, table, 1, provider)).toEqual(["Check", "OK"]);
+    const state = setSpreadsheetTableValueFilter({ filters: [], sorts: [] }, 1, ["OK"]);
+    expect(projectSpreadsheetTable(artifact.worksheet, table, state, provider).rows).toEqual([2]);
   });
 });
 

@@ -1,4 +1,3 @@
-import { formatCellReference } from "./references.ts";
 import type {
   SpreadsheetCustomFilter,
   SpreadsheetFilterCriteria,
@@ -38,6 +37,11 @@ export interface SpreadsheetTableViewProjection {
   readonly filteredRows: readonly number[];
   readonly state: SpreadsheetTableViewState;
   readonly warnings: readonly SpreadsheetTableViewWarning[];
+}
+
+export interface SpreadsheetTableValueProvider {
+  value(row: number, column: number): SpreadsheetCellValue | undefined;
+  displayText(row: number, column: number): string;
 }
 
 /** Converts supported saved table state into a view state without changing package bytes. */
@@ -83,6 +87,7 @@ export function projectSpreadsheetTable(
   worksheet: SpreadsheetWorksheet,
   table: SpreadsheetTable,
   state: SpreadsheetTableViewState = savedSpreadsheetTableView(table).state,
+  values: SpreadsheetTableValueProvider | undefined = undefined,
 ): SpreadsheetTableViewProjection {
   if (!worksheet.tables.includes(table)) throw new TypeError("The table does not belong to this worksheet.");
   validateState(table, state);
@@ -93,7 +98,7 @@ export function projectSpreadsheetTable(
     : Array.from({ length: bodyEnd - bodyStart + 1 }, (_, index) => bodyStart + index);
   const filters = new Map(state.filters.map((filter) => [filter.columnId, filter.criteria]));
   const rows = sourceRows.filter((row) => [...filters].every(([columnId, criteria]) =>
-    matches(worksheet, row, table.range.start.column + columnId, criteria)
+    matches(worksheet, row, table.range.start.column + columnId, criteria, values)
   ));
   const includedRows = new Set(rows);
   const filteredRows = sourceRows.filter((row) => !includedRows.has(row));
@@ -102,7 +107,7 @@ export function projectSpreadsheetTable(
     rows.sort((left, right) => {
       for (const sort of sorts) {
         const column = table.range.start.column + sort.columnId;
-        const comparison = compareCells(worksheet.cell({ row: left, column })?.value, worksheet.cell({ row: right, column })?.value, sort.caseSensitive);
+        const comparison = compareCells(cellValue(worksheet, left, column, values), cellValue(worksheet, right, column, values), sort.caseSensitive);
         if (comparison !== 0) return sort.direction === "descending" ? -comparison : comparison;
       }
       return left - right;
@@ -122,13 +127,14 @@ export function spreadsheetTableDistinctValues(
   worksheet: SpreadsheetWorksheet,
   table: SpreadsheetTable,
   columnId: number,
+  source: SpreadsheetTableValueProvider | undefined = undefined,
 ): readonly string[] {
   validateColumn(table, columnId);
   const bodyStart = table.range.start.row + table.headerRowCount;
   const bodyEnd = table.range.end.row - table.totalsRowCount;
   const values = new Set<string>();
   for (let row = bodyStart; row <= bodyEnd; row += 1) {
-    values.add(worksheet.displayText({ row, column: table.range.start.column + columnId }));
+    values.add(displayText(worksheet, row, table.range.start.column + columnId, source));
   }
   return Object.freeze([...values].sort((left, right) => collator(false).compare(left, right)));
 }
@@ -167,16 +173,24 @@ function matches(
   row: number,
   column: number,
   criteria: SpreadsheetTableViewCriteria,
+  source: SpreadsheetTableValueProvider | undefined,
 ): boolean {
-  const reference = formatCellReference({ row, column });
-  const value = worksheet.cell(reference)?.value;
-  const text = worksheet.displayText(reference);
+  const value = cellValue(worksheet, row, column, source);
+  const text = displayText(worksheet, row, column, source);
   if (criteria.kind === "values") {
     if (isBlank(value, text)) return criteria.includeBlank;
     return criteria.values.some((candidate) => candidate.localeCompare(text, "en-US", { sensitivity: "base" }) === 0);
   }
   const results = criteria.conditions.map((condition) => matchesCustom(value, text, condition));
   return criteria.join === "and" ? results.every(Boolean) : results.some(Boolean);
+}
+
+function cellValue(worksheet: SpreadsheetWorksheet, row: number, column: number, source: SpreadsheetTableValueProvider | undefined): SpreadsheetCellValue | undefined {
+  return source?.value(row, column) ?? worksheet.cell({ row, column })?.value;
+}
+
+function displayText(worksheet: SpreadsheetWorksheet, row: number, column: number, source: SpreadsheetTableValueProvider | undefined): string {
+  return source?.displayText(row, column) ?? worksheet.displayText({ row, column });
 }
 
 function matchesCustom(value: SpreadsheetCellValue | undefined, text: string, condition: SpreadsheetCustomFilter): boolean {
