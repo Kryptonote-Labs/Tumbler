@@ -218,8 +218,10 @@ function parseMarker(element: LosslessXmlElement, namespace: string): Spreadshee
   return Object.freeze({
     column: gridIndex(textOf(exactlyOne(element, namespace, "col", "drawing marker")), 16_383, "drawing column"),
     row: gridIndex(textOf(exactlyOne(element, namespace, "row", "drawing marker")), 1_048_575, "drawing row"),
-    columnOffsetEmu: coordinate(textOf(exactlyOne(element, namespace, "colOff", "drawing marker")), false, "drawing column offset"),
-    rowOffsetEmu: coordinate(textOf(exactlyOne(element, namespace, "rowOff", "drawing marker")), false, "drawing row offset"),
+    // CT_Marker uses DrawingML ST_Coordinate, which is signed even though
+    // producers ordinarily emit positive in-cell offsets.
+    columnOffsetEmu: coordinate(textOf(exactlyOne(element, namespace, "colOff", "drawing marker")), true, "drawing column offset"),
+    rowOffsetEmu: coordinate(textOf(exactlyOne(element, namespace, "rowOff", "drawing marker")), true, "drawing row offset"),
   });
 }
 

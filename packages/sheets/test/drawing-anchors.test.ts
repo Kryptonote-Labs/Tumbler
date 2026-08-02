@@ -38,6 +38,11 @@ describe("SpreadsheetDrawingML anchors", () => {
   test("rejects incomplete and out-of-grid markers", () => {
     expect(() => fixture('<xdr:oneCellAnchor><xdr:from><xdr:col>16384</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="1" cy="1"/></xdr:oneCellAnchor>')).toThrow("drawing column");
   });
+
+  test("accepts signed ST_Coordinate marker offsets", () => {
+    const worksheet = fixture('<xdr:oneCellAnchor><xdr:from><xdr:col>1</xdr:col><xdr:colOff>-9525</xdr:colOff><xdr:row>1</xdr:row><xdr:rowOff>-19050</xdr:rowOff></xdr:from><xdr:ext cx="9525" cy="9525"/></xdr:oneCellAnchor>');
+    expect(spreadsheetDrawingBounds(worksheet.drawing!.anchors[0]!, new SparseAxisGeometry(5, 20), new SparseAxisGeometry(5, 50))).toEqual({ x: 49, y: 18, width: 1, height: 1 });
+  });
 });
 
 function fixture(body: string) {
