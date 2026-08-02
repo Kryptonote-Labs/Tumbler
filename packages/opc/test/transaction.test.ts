@@ -78,6 +78,76 @@ describe("package transactions", () => {
     rolledBack.rollback();
     expect(() => rolledBack.rollback()).toThrow(PackageTransactionError);
   });
+
+  test("adds an unreferenced part and an exact content-type override", () => {
+    const transaction = beginPackageTransaction(openOpcPackage(source));
+    transaction.addPart(
+      "/custom/data.bin",
+      "application/vnd.tumbler.test-data",
+      encoder.encode("custom payload"),
+    );
+    const reopened = openOpcPackage(transaction.commit());
+    const part = reopened.getPart("/custom/data.bin");
+    expect(part?.contentType).toBe("application/vnd.tumbler.test-data");
+    expect(reopened.readPart(part!)).toEqual(encoder.encode("custom payload"));
+    expect(reopened.contentTypes.overrides.some(
+      (override) => override.partName.equals(part!.name),
+    )).toBeTrue();
+  });
+
+  test("reuses a matching extension default without adding an override", () => {
+    const transaction = beginPackageTransaction(openOpcPackage(source));
+    transaction.addPart("/custom/data.xml", "application/xml", encoder.encode("<data/>"));
+    const reopened = openOpcPackage(transaction.commit());
+    expect(reopened.getPart("/custom/data.xml")?.contentType).toBe("application/xml");
+    expect(reopened.contentTypes.overrides.some(
+      (override) => override.partName.equals(reopened.getPart("/custom/data.xml")!.name),
+    )).toBeFalse();
+  });
+
+  test("removing a staged addition cancels it", () => {
+    const transaction = beginPackageTransaction(openOpcPackage(source));
+    transaction
+      .addPart("/custom/data.xml", "application/xml", encoder.encode("<data/>"))
+      .removePart("/custom/data.xml");
+    expect(transaction.hasChanges).toBeFalse();
+    expect(transaction.commit()).toBe(source);
+  });
+
+  test("removes an unreferenced part and its stale override", () => {
+    const withCustom = beginPackageTransaction(openOpcPackage(source));
+    withCustom.addPart(
+      "/custom/data.bin",
+      "application/vnd.tumbler.test-data",
+      encoder.encode("custom payload"),
+    );
+    const added = withCustom.commit();
+    const removing = beginPackageTransaction(openOpcPackage(added));
+    removing.removePart("/custom/data.bin");
+    const reopened = openOpcPackage(removing.commit());
+    expect(reopened.getPart("/custom/data.bin")).toBeUndefined();
+    expect(reopened.contentTypes.overrides.some(
+      (override) => override.partName.value === "/custom/data.bin",
+    )).toBeFalse();
+  });
+
+  test("refuses to remove a part with an incoming relationship", () => {
+    const transaction = beginPackageTransaction(openOpcPackage(source));
+    transaction.removePart("/word/document.xml");
+    expect(() => transaction.commit()).toThrow(PackageTransactionError);
+    expect(transaction.status).toBe("active");
+  });
+
+  test("copies bytes supplied for additions", () => {
+    const bytes = encoder.encode("original addition");
+    const transaction = beginPackageTransaction(openOpcPackage(source));
+    transaction.addPart("/custom/data.xml", "application/xml", bytes);
+    bytes.fill(0);
+    const reopened = openOpcPackage(transaction.commit());
+    expect(reopened.readPart(reopened.getPart("/custom/data.xml")!)).toEqual(
+      encoder.encode("original addition"),
+    );
+  });
 });
 
 function buildPackage(): Uint8Array {

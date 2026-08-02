@@ -95,6 +95,61 @@ export class ContentTypes {
   }
 }
 
+export interface ContentTypeChanges {
+  readonly additions?: ReadonlyMap<PartName, string>;
+  readonly removals?: ReadonlySet<string>;
+}
+
+export function updateContentTypes(
+  contentTypes: ContentTypes,
+  changes: ContentTypeChanges,
+): ContentTypes {
+  const removals = changes.removals ?? new Set();
+  const overrides = contentTypes.overrides.filter(
+    ({ partName }) => !removals.has(partName.equivalenceKey),
+  );
+  const overrideIndex = new Map(
+    overrides.map((override, index) => [override.partName.equivalenceKey, index]),
+  );
+
+  for (const [partName, contentType] of changes.additions ?? []) {
+    validateMediaType(contentType);
+    const existingIndex = overrideIndex.get(partName.equivalenceKey);
+    if (existingIndex !== undefined) {
+      overrides[existingIndex] = Object.freeze({ partName, contentType });
+      continue;
+    }
+    const extension = partName.extension();
+    const matchingDefault = extension === undefined
+      ? undefined
+      : contentTypes.defaults.find(
+          (item) => asciiLowercase(item.extension) === asciiLowercase(extension),
+        );
+    if (matchingDefault?.contentType !== contentType) {
+      overrideIndex.set(partName.equivalenceKey, overrides.length);
+      overrides.push(Object.freeze({ partName, contentType }));
+    }
+  }
+
+  return new ContentTypes(contentTypes.defaults, overrides);
+}
+
+export function serializeContentTypes(contentTypes: ContentTypes): Uint8Array {
+  const children = [
+    ...contentTypes.defaults.map(
+      ({ extension, contentType }) =>
+        `<Default Extension="${escapeXmlAttribute(extension)}" ContentType="${escapeXmlAttribute(contentType)}"/>`,
+    ),
+    ...contentTypes.overrides.map(
+      ({ partName, contentType }) =>
+        `<Override PartName="${escapeXmlAttribute(partName.value)}" ContentType="${escapeXmlAttribute(contentType)}"/>`,
+    ),
+  ].join("");
+  return new TextEncoder().encode(
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="${CONTENT_TYPES_NAMESPACE}">${children}</Types>`,
+  );
+}
+
 export function parseContentTypes(archive: ZipArchive): ContentTypes {
   const item = archive.get(CONTENT_TYPES_ITEM_NAME);
   if (item === undefined) {
@@ -219,4 +274,14 @@ function validateMediaType(contentType: string | undefined): asserts contentType
 
 function asciiLowercase(value: string): string {
   return value.replace(/[A-Z]/g, (character) => character.toLowerCase());
+}
+
+function escapeXmlAttribute(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll("\t", "&#x9;")
+    .replaceAll("\n", "&#xA;")
+    .replaceAll("\r", "&#xD;");
 }

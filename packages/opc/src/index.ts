@@ -14,8 +14,11 @@ export {
   ContentTypes,
   ContentTypesError,
   parseContentTypes,
+  serializeContentTypes,
+  updateContentTypes,
 } from "./content-types.ts";
 export type {
+  ContentTypeChanges,
   ContentTypeDefault,
   ContentTypeOverride,
   ContentTypesErrorCode,
