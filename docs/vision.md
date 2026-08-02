@@ -2,13 +2,14 @@
 
 ## Summary
 
-Tumbler is a headless, browser-first Office document engine. It will read,
-preserve, render, edit, and write DOCX, XLSX, and PPTX files while allowing an
-application to own every pixel and every interaction in the UI.
+Tumbler is an experimental, headless, browser-first Office document engine. It
+will read, preserve, render, edit, and write DOCX, XLSX, and PPTX files while
+allowing an application to own every pixel and every interaction in the UI.
 
 The initial application head will be purpose-built in Svelte for Kryptonote. The
-headless packages should also be useful independently and are intended to become
-a serious open-source contribution once they have earned a stable API.
+headless packages should also become useful independently. The source is public
+while that architecture is being developed, but the project has not yet earned
+a stable API or a production-readiness claim.
 
 ## The problem
 
@@ -127,5 +128,7 @@ acceptable default once the local document is dirty.
 - Description: **Headless Office document editing for the web.**
 - Working phrase: **Own the document.**
 
-The repository and every current package remain local and private. Publishing,
-package naming, governance, and OSS licensing are later decisions.
+The source repository is public under the MIT License. Every current package
+remains unpublished and private in its package manifest while APIs and package
+boundaries change rapidly. Package publishing, versioning, and mature governance
+remain later decisions.

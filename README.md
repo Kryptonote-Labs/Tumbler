@@ -2,12 +2,37 @@
 
 Headless Office document editing for the web.
 
+> [!CAUTION]
+> **Tumbler is extremely early alpha software. You probably should not use it.**
+>
+> The APIs, package boundaries, file-format behavior, and supported features can
+> change without notice. Packages are not published, releases do not exist yet,
+> and compatibility with real-world Office documents is incomplete. Tumbler can
+> produce files that Office applications reject or repair. Do not use it with
+> important documents unless you keep the originals and are prepared to lose
+> changes.
+
 Tumbler is a browser-first TypeScript project for reading, preserving, editing,
 and writing OOXML documents. It owns no application UI. Format-neutral editing
 engines sit beneath optional framework heads, beginning with Svelte.
 
-This repository is private and local-only while the architecture is being
-developed.
+This repository is public so the architecture, experiments, and test strategy
+can develop in the open. That does **not** mean the project is ready for
+adoption. For now, treat it as active research with source code attached.
+
+## Current status
+
+Tumbler has foundations for OPC packages, loss-aware OOXML editing, and a narrow
+SpreadsheetML vertical slice. It can inspect and transactionally modify parts,
+edit shared core properties, read a subset of workbook and worksheet data, edit
+literal spreadsheet cells, and render an experimental Svelte spreadsheet grid.
+
+It does not currently provide broad or production-ready Office compatibility.
+Word and PowerPoint editing are not implemented. Formula editing, structural
+spreadsheet edits, comprehensive drawing support, external-consumer validation,
+stable APIs, releases, and published packages are all unfinished.
+
+There is no support commitment or migration policy during this stage.
 
 ## Principles
 
@@ -38,6 +63,9 @@ bun install
 bun run check
 bun test
 ```
+
+All workspace packages remain private and are consumed directly from source.
+There is currently no supported installation process.
 
 The first implemented API is the shared OPC layer. It can safely inventory an
 Office package and stage atomic package-graph changes:
@@ -99,3 +127,12 @@ metadata parts, content types, and relationships are created transactionally.
   and tests to ECMA-376 Part 2 requirements and records deliberate gaps.
 - [OOXML implementation status](docs/ooxml-implementation.md) describes the
   loss-aware XML, compatibility view, and Core Properties vertical slice.
+
+## Contributing and security
+
+Experiments, bug reports, test documents that can legally be redistributed, and
+careful review are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before
+starting work. Please report security issues according to
+[SECURITY.md](SECURITY.md), not in a public issue.
+
+Tumbler is available under the [MIT License](LICENSE).

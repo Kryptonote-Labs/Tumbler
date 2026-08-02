@@ -129,11 +129,13 @@ The second format is a deliberate architecture test: if it requires bypassing
 the shared layers, revisit the abstraction rather than cloning the first
 implementation.
 
-## Phase 8: OSS preparation
+## Phase 8: OSS stabilization
 
-Only after the API and preservation model have substantial evidence:
+The source is public early so design and testing can happen in the open. Public
+source is not a claim of stability. Before recommending external adoption:
 
-- choose license and governance;
+- [x] choose a source license;
+- [x] publish explicit early-alpha and security policies;
 - audit dependency and fixture licensing;
 - stabilize package boundaries and names;
 - separate Kryptonote-specific UI from reusable Svelte heads;
