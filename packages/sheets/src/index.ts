@@ -38,6 +38,8 @@ export {
   SpreadsheetWorksheet,
 } from "./worksheet.ts";
 export { emuToCssPixels, spreadsheetDrawingBounds } from "./drawings.ts";
+export { parseSpreadsheetChartReference, resolveSpreadsheetChartData } from "./chart-data.ts";
+export type { SpreadsheetChartReference } from "./chart-data.ts";
 export type {
   SpreadsheetChartFrame,
   SpreadsheetDrawing,
