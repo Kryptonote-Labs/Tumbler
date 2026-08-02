@@ -1,28 +1,41 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { createGridSelection, moveGridSelection, type GridDirection, type GridSelection } from "@tumbler/core";
+  import type { ChartModel } from "@tumbler/charts";
   import {
     EXCEL_MAX_COLUMNS,
     EXCEL_MAX_ROWS,
     clearSpreadsheetTableFilter,
     formatCellReference,
     projectSpreadsheetTable,
+    resolveSpreadsheetChartColor,
+    resolveSpreadsheetChartData,
     savedSpreadsheetTableView,
     setSpreadsheetTableSort,
     setSpreadsheetTableValueFilter,
     spreadsheetTableDistinctValues,
+    spreadsheetDrawingBounds,
+    type SpreadsheetChartFrame,
     type SpreadsheetCellValue,
     type SpreadsheetCalculationSnapshot,
     type SpreadsheetHyperlink,
+    type SpreadsheetDrawingBounds,
     type SpreadsheetTable,
     type SpreadsheetTableViewState,
     type SpreadsheetWorksheet,
   } from "@tumbler/sheets";
   import { calculateSpreadsheetViewport } from "./spreadsheet-viewport.ts";
-  import { composeSpreadsheetGridLayout, frozenAxisExtent } from "./spreadsheet-grid-layout.ts";
+  import { composeSpreadsheetGridLayout, frozenAxisExtent, spreadsheetDrawingRegion } from "./spreadsheet-grid-layout.ts";
   import { coerceSpreadsheetEditValue, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
   import { measureMaximumDigitWidth, spreadsheetFontShorthand } from "./spreadsheet-font-metrics.ts";
   import { spreadsheetCellContentCss, spreadsheetCellCss } from "./spreadsheet-cell-style.ts";
+  import OoxmlChart from "./OoxmlChart.svelte";
+
+  interface RenderableChart {
+    readonly frame: SpreadsheetChartFrame;
+    readonly bounds: SpreadsheetDrawingBounds;
+    readonly model: ChartModel;
+  }
 
   interface Props {
     readonly worksheet: SpreadsheetWorksheet;
@@ -31,6 +44,8 @@
     readonly onselectionchange?: (selection: GridSelection) => void;
     readonly onedit?: (edit: SpreadsheetGridEdit) => void;
     readonly onhyperlink?: (hyperlink: SpreadsheetHyperlink) => void;
+    chartSelection?: number;
+    readonly onchartselectionchange?: (anchorElementId: number | undefined) => void;
     /** Prevents cell edits while retaining selection and table view controls. */
     readonly readonly?: boolean;
     readonly rowCount?: number;
@@ -46,6 +61,8 @@
     onselectionchange,
     onedit,
     onhyperlink,
+    chartSelection,
+    onchartselectionchange,
     readonly = false,
     rowCount = EXCEL_MAX_ROWS,
     columnCount = EXCEL_MAX_COLUMNS,
@@ -94,6 +111,12 @@
   });
   let rowGeometry = $derived(worksheet.rowGeometry(rowCount, projectedRows));
   let columnGeometry = $derived(worksheet.columnGeometry(columnCount, maximumDigitWidth));
+  let drawingRowGeometry = $derived(worksheet.rowGeometry(rowCount));
+  let charts = $derived((worksheet.drawing?.charts ?? []).map((frame) => ({
+    frame,
+    bounds: spreadsheetDrawingBounds(frame.anchor, drawingRowGeometry, columnGeometry),
+    model: resolveSpreadsheetChartData(worksheet, frame.model),
+  })));
   let frozenPane = $derived(worksheet.panes.find((pane) => pane.state === "frozen" || pane.state === "frozenSplit"));
   let frozenRows = $derived(Math.min(rowCount, Math.max(0, Math.floor(frozenPane?.ySplit ?? 0))));
   let frozenColumns = $derived(Math.min(columnCount, Math.max(0, Math.floor(frozenPane?.xSplit ?? 0))));
@@ -303,6 +326,12 @@
     onhyperlink?.(hyperlink);
   }
 
+  function selectChart(event: MouseEvent, frame: SpreadsheetChartFrame) {
+    event.stopPropagation();
+    chartSelection = frame.anchor.elementId;
+    onchartselectionchange?.(chartSelection);
+  }
+
   function columnLabel(column: number): string {
     return formatCellReference({ row: 1, column }).slice(0, -1);
   }
@@ -463,6 +492,27 @@
   </div>
 {/snippet}
 
+{#snippet chartFrame(chart: RenderableChart, left: number, top: number)}
+  <button
+    class="chart-frame"
+    class:selected={chartSelection === chart.frame.anchor.elementId}
+    type="button"
+    aria-label={`Select ${chart.model.title ?? "chart"}`}
+    style:left={`${left}px`}
+    style:top={`${top}px`}
+    style:width={`${Math.max(1, chart.bounds.width)}px`}
+    style:height={`${Math.max(1, chart.bounds.height)}px`}
+    onclick={(event) => selectChart(event, chart.frame)}
+  >
+    <OoxmlChart
+      model={chart.model}
+      width={Math.max(1, chart.bounds.width)}
+      height={Math.max(1, chart.bounds.height)}
+      resolveColor={(color) => resolveSpreadsheetChartColor(worksheet.styles, color)}
+    />
+  </button>
+{/snippet}
+
 <div
   class="tumbler-grid"
   role="grid"
@@ -493,6 +543,9 @@
           {@render gridCell(reference, merge.range.start.row, merge.range.start.column, rowHeaderWidth + merge.left, columnHeaderHeight + merge.top, merge.width, merge.height, 1)}
         {/if}
       {/each}
+      {#each charts.filter((chart) => spreadsheetDrawingRegion(chart.frame.anchor, frozenRows, frozenColumns) === "body") as chart (chart.frame.anchor.elementId)}
+        {@render chartFrame(chart, rowHeaderWidth + chart.bounds.x, columnHeaderHeight + chart.bounds.y)}
+      {/each}
     </div>
   </div>
   {#if frozenRowsHeight > 0}
@@ -510,6 +563,10 @@
         {@const reference = formatCellReference(merge.range.start)}
         {@render gridCell(reference, merge.range.start.row, merge.range.start.column, merge.left - (merge.range.start.column <= frozenColumns ? 0 : scrollLeft), merge.top, merge.width, merge.height, 2)}
       {/each}
+      {#each charts.filter((chart) => spreadsheetDrawingRegion(chart.frame.anchor, frozenRows, frozenColumns) === "frozen-row") as chart (chart.frame.anchor.elementId)}
+        {@const fixedColumn = chart.frame.anchor.kind !== "absolute" && chart.frame.anchor.from.column < frozenColumns}
+        {@render chartFrame(chart, chart.bounds.x - (fixedColumn ? 0 : scrollLeft), chart.bounds.y)}
+      {/each}
     </div>
   {/if}
   {#if frozenColumnsWidth > 0}
@@ -526,6 +583,9 @@
       {#each layout.merges.filter((merge) => merge.range.start.row > frozenRows && merge.range.start.column <= frozenColumns) as merge (`${merge.range.start.row}:${merge.range.start.column}`)}
         {@const reference = formatCellReference(merge.range.start)}
         {@render gridCell(reference, merge.range.start.row, merge.range.start.column, merge.left, merge.top - scrollTop - frozenRowsHeight, merge.width, merge.height, 2)}
+      {/each}
+      {#each charts.filter((chart) => spreadsheetDrawingRegion(chart.frame.anchor, frozenRows, frozenColumns) === "frozen-column") as chart (chart.frame.anchor.elementId)}
+        {@render chartFrame(chart, chart.bounds.x, chart.bounds.y - scrollTop - frozenRowsHeight)}
       {/each}
     </div>
   {/if}
@@ -594,7 +654,7 @@
   .frozen-row-pane, .frozen-column-pane { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane { left: 52px; right: 0; top: 28px; }
   .frozen-column-pane { left: 52px; bottom: 0; }
-  .frozen-row-pane .cell, .frozen-column-pane .cell { pointer-events: auto; }
+  .frozen-row-pane .cell, .frozen-column-pane .cell, .frozen-row-pane .chart-frame, .frozen-column-pane .chart-frame { pointer-events: auto; }
   .column-gutter { position: absolute; left: 52px; right: 0; top: 0; z-index: 3; height: 28px; overflow: hidden; pointer-events: none; background: var(--tumbler-grid-header-bg, #171b17); }
   .row-gutter { position: absolute; left: 0; top: 28px; bottom: 0; z-index: 3; width: 52px; overflow: hidden; pointer-events: none; background: var(--tumbler-grid-header-bg, #171b17); }
   .scrolling-column-headers, .frozen-column-headers, .scrolling-row-headers, .frozen-row-headers { position: absolute; overflow: hidden; }
@@ -607,6 +667,8 @@
   .column-header { top: 0; height: 28px; display: grid; place-items: center; border-right-width: 1px; border-bottom-width: 1px; }
   .row-header { left: 0; width: 52px; display: grid; place-items: center; border-right-width: 1px; border-bottom-width: 1px; }
   .cell { position: absolute; z-index: 1; box-sizing: border-box; display: flex; align-items: flex-end; overflow: hidden; padding: 2px 8px; white-space: nowrap; text-overflow: ellipsis; color: var(--tumbler-sheet-fg, #111111); border-right: 1px solid var(--tumbler-sheet-line, #d9ded9); border-bottom: 1px solid var(--tumbler-sheet-line, #d9ded9); background: var(--tumbler-sheet-bg, #ffffff); }
+  .chart-frame { position: absolute; z-index: 2; overflow: hidden; box-sizing: border-box; padding: 0; border: 0; outline: 0; background: transparent; cursor: default; }
+  .chart-frame.selected, .chart-frame:focus-visible { box-shadow: inset 0 0 0 2px var(--tumbler-grid-accent, #42ff53); }
   .cell.selected::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(65, 255, 83, 0.1)); }
   .cell.focused { z-index: 2; box-shadow: inset 0 0 0 2px var(--tumbler-grid-accent, #42ff53); }
   .cell > * { position: relative; z-index: 1; min-width: 0; max-width: 100%; transform-origin: center; }

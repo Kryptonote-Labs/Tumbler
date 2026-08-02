@@ -16,7 +16,7 @@ export type {
   SpreadsheetViewportInput,
   VirtualGridItem,
 } from "./spreadsheet-viewport.ts";
-export { composeSpreadsheetGridLayout, frozenGridTranslation } from "./spreadsheet-grid-layout.ts";
+export { composeSpreadsheetGridLayout, frozenGridTranslation, spreadsheetDrawingRegion } from "./spreadsheet-grid-layout.ts";
 export type { SpreadsheetGridLayout, SpreadsheetMergeLayout } from "./spreadsheet-grid-layout.ts";
 export { coerceSpreadsheetEditValue } from "./spreadsheet-edit.ts";
 export type { SpreadsheetGridEdit } from "./spreadsheet-edit.ts";

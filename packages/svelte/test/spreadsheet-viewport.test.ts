@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { compile } from "svelte/compiler";
 import { SparseAxisGeometry } from "@tumbler/core";
-import { calculateSpreadsheetViewport, coerceSpreadsheetEditValue, composeSpreadsheetGridLayout, frozenGridTranslation, measureMaximumDigitWidth, spreadsheetFontShorthand } from "../src/index.ts";
+import { calculateSpreadsheetViewport, coerceSpreadsheetEditValue, composeSpreadsheetGridLayout, frozenGridTranslation, measureMaximumDigitWidth, spreadsheetDrawingRegion, spreadsheetFontShorthand } from "../src/index.ts";
 import { frozenAxisExtent, spreadsheetCellLayer } from "../src/spreadsheet-grid-layout.ts";
 
 describe("Svelte spreadsheet viewport", () => {
@@ -177,6 +177,25 @@ describe("Svelte spreadsheet viewport", () => {
     expect(spreadsheetCellLayer({ row: 5, column: 5, frozenRows: 2, frozenColumns: 1 })).toBe(1);
     expect(spreadsheetCellLayer({ row: 1, column: 5, frozenRows: 2, frozenColumns: 1 })).toBe(2);
     expect(spreadsheetCellLayer({ row: 5, column: 1, frozenRows: 2, frozenColumns: 1 })).toBe(2);
+  });
+
+  test("places drawing anchors in the pane containing their top-left marker", () => {
+    const marker = { column: 0, row: 0, columnOffsetEmu: 0, rowOffsetEmu: 0 };
+    const anchor = { kind: "one-cell" as const, elementId: 1, from: marker, widthEmu: 1, heightEmu: 1 };
+    expect(spreadsheetDrawingRegion(anchor, 1, 1)).toBe("frozen-row");
+    expect(spreadsheetDrawingRegion({ ...anchor, from: { ...marker, row: 4 } }, 1, 1)).toBe("frozen-column");
+    expect(spreadsheetDrawingRegion({ ...anchor, from: { ...marker, row: 4, column: 4 } }, 1, 1)).toBe("body");
+    expect(spreadsheetDrawingRegion({ kind: "absolute", elementId: 2, xEmu: 0, yEmu: 0, widthEmu: 1, heightEmu: 1 }, 5, 5)).toBe("body");
+  });
+
+  test("renders selected chart frames above cells but below worksheet gutters", async () => {
+    const source = await Bun.file(new URL("../src/SpreadsheetGrid.svelte", import.meta.url)).text();
+    const result = compile(source, { filename: "SpreadsheetGrid.svelte", generate: "client", modernAst: true });
+    expect(result.warnings).toHaveLength(0);
+    expect(source).toContain("spreadsheetDrawingRegion(chart.frame.anchor");
+    expect(source).toContain("onchartselectionchange?.(chartSelection)");
+    expect(result.css?.code).toMatch(/\.chart-frame[^}]*z-index: 2/);
+    expect(result.css?.code).toMatch(/\.column-gutter[^}]*z-index: 3/);
   });
 
   test("clips scrolling gutters after the frozen axis extent", () => {

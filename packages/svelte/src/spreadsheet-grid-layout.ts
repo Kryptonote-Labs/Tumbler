@@ -1,5 +1,5 @@
 import type { SparseAxisGeometry } from "@tumbler/core";
-import type { CellRange } from "@tumbler/sheets";
+import type { CellRange, SpreadsheetDrawingAnchor } from "@tumbler/sheets";
 import type { SpreadsheetViewport, VirtualGridItem } from "./spreadsheet-viewport.ts";
 
 export interface SpreadsheetMergeLayout {
@@ -60,6 +60,20 @@ export function spreadsheetCellLayer(input: {
   readonly frozenColumns: number;
 }): 1 | 2 {
   return input.row <= input.frozenRows || input.column <= input.frozenColumns ? 2 : 1;
+}
+
+export function spreadsheetDrawingRegion(
+  anchor: SpreadsheetDrawingAnchor,
+  frozenRows: number,
+  frozenColumns: number,
+): "body" | "frozen-row" | "frozen-column" {
+  if (![frozenRows, frozenColumns].every((value) => Number.isSafeInteger(value) && value >= 0)) {
+    throw new RangeError("Frozen row and column counts must be non-negative integers.");
+  }
+  if (anchor.kind === "absolute") return "body";
+  if (anchor.from.row < frozenRows) return "frozen-row";
+  if (anchor.from.column < frozenColumns) return "frozen-column";
+  return "body";
 }
 
 export function frozenAxisExtent(geometry: SparseAxisGeometry, frozenCount: number): number {
