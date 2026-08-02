@@ -17,6 +17,10 @@
         "@tumbler/ooxml": "workspace:*",
       },
     },
+    "packages/formulas": {
+      "name": "@tumbler/formulas",
+      "version": "0.0.0",
+    },
     "packages/ooxml": {
       "name": "@tumbler/ooxml",
       "version": "0.0.0",
@@ -96,6 +100,8 @@
     "@sveltejs/acorn-typescript": ["@sveltejs/acorn-typescript@1.0.11", "", { "peerDependencies": { "acorn": "^8.9.0" } }, "sha512-LFuZUkjJ9iF7JZye/aG5XM0SFcQ5VyL0oVX4WJ9dc0Va3R3s0OauX1BESVCb+YN/ol8TAfqGDDAQsTG627Y5kw=="],
 
     "@tumbler/core": ["@tumbler/core@workspace:packages/core"],
+
+    "@tumbler/formulas": ["@tumbler/formulas@workspace:packages/formulas"],
 
     "@tumbler/ooxml": ["@tumbler/ooxml@workspace:packages/ooxml"],
 
