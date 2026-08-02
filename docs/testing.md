@@ -58,7 +58,9 @@ property tests.
 
 Compatibility CI generates deterministic before/after XLSX fixtures, validates
 both with Microsoft's Open XML SDK, round-trips them through LibreOffice Calc,
-then reparses the results and checks preservation plus formula recalculation.
+forces a full calculation through LibreOffice's documented `XCalculatable`
+interface, then reparses the results and checks preservation plus formula
+recalculation.
 Real-producer corpora and Microsoft Excel automation remain separate next steps,
 so synthetic packages are not presented as full interoperability evidence.
 

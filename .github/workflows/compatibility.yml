@@ -52,7 +52,7 @@ jobs:
       - name: Install LibreOffice Calc
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends libreoffice-calc
+          sudo apt-get install --yes --no-install-recommends libreoffice-calc python3-uno
 
       - name: Generate fixtures
         run: bun run compatibility:fixtures -- "$RUNNER_TEMP/tumbler-input"
