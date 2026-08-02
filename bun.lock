@@ -67,6 +67,7 @@
       "name": "@tumbler/svelte",
       "version": "0.0.0",
       "dependencies": {
+        "@tumbler/charts": "workspace:*",
         "@tumbler/core": "workspace:*",
         "@tumbler/sheets": "workspace:*",
         "@tumbler/slides": "workspace:*",

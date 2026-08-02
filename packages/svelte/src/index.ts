@@ -1,6 +1,7 @@
 /** Replaceable Svelte heads for Tumbler's format packages. */
 /** Owned Svelte heads for Tumbler's format-neutral document models. */
 export { default as SpreadsheetGrid } from "./SpreadsheetGrid.svelte";
+export { default as OoxmlChart } from "./OoxmlChart.svelte";
 export {
   measureMaximumDigitWidth,
   spreadsheetFontShorthand,

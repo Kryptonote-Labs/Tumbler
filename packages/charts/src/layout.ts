@@ -15,6 +15,13 @@ export interface CartesianChartLayout {
   readonly ticks: readonly number[];
 }
 
+export interface PieSlice {
+  readonly index: number;
+  readonly value: number;
+  readonly startAngle: number;
+  readonly endAngle: number;
+}
+
 export function layoutCartesianChart(model: SupportedChartModel, width: number, height: number): CartesianChartLayout {
   finiteSize(width, "chart width");
   finiteSize(height, "chart height");
@@ -59,6 +66,44 @@ export function chartValueCoordinate(value: number, minimum: number, maximum: nu
   }
   const ratio = Math.min(1, Math.max(0, (value - minimum) / (maximum - minimum)));
   return start + (reverse ? 1 - ratio : ratio) * length;
+}
+
+export function layoutPieSlices(model: SupportedChartModel): readonly PieSlice[] {
+  const values = model.series[0]?.values?.points.flatMap((point) =>
+    typeof point.value === "number" && point.value > 0 ? [{ index: point.index, value: point.value }] : []
+  ) ?? [];
+  const total = values.reduce((sum, point) => sum + point.value, 0);
+  if (total <= 0) return Object.freeze([]);
+  let angle = -Math.PI / 2;
+  return Object.freeze(values.map((point) => {
+    const startAngle = angle;
+    angle += point.value / total * Math.PI * 2;
+    return Object.freeze({ ...point, startAngle, endAngle: angle });
+  }));
+}
+
+export function pieArcPath(cx: number, cy: number, outerRadius: number, startAngle: number, endAngle: number, innerRadius = 0): string {
+  if (![cx, cy, outerRadius, startAngle, endAngle, innerRadius].every(Number.isFinite) || outerRadius <= 0 || innerRadius < 0 || innerRadius >= outerRadius) {
+    throw new RangeError("Pie arc geometry is invalid.");
+  }
+  const point = (radius: number, angle: number) => ({ x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius });
+  const outerStart = point(outerRadius, startAngle);
+  const outerEnd = point(outerRadius, endAngle);
+  if (endAngle - startAngle >= Math.PI * 2 - 1e-9) {
+    const middleAngle = startAngle + Math.PI;
+    const outerMiddle = point(outerRadius, middleAngle);
+    if (innerRadius === 0) {
+      return `M ${outerStart.x} ${outerStart.y} A ${outerRadius} ${outerRadius} 0 1 1 ${outerMiddle.x} ${outerMiddle.y} A ${outerRadius} ${outerRadius} 0 1 1 ${outerStart.x} ${outerStart.y} Z`;
+    }
+    const innerStart = point(innerRadius, startAngle);
+    const innerMiddle = point(innerRadius, middleAngle);
+    return `M ${outerStart.x} ${outerStart.y} A ${outerRadius} ${outerRadius} 0 1 1 ${outerMiddle.x} ${outerMiddle.y} A ${outerRadius} ${outerRadius} 0 1 1 ${outerStart.x} ${outerStart.y} L ${innerStart.x} ${innerStart.y} A ${innerRadius} ${innerRadius} 0 1 0 ${innerMiddle.x} ${innerMiddle.y} A ${innerRadius} ${innerRadius} 0 1 0 ${innerStart.x} ${innerStart.y} Z`;
+  }
+  const large = endAngle - startAngle > Math.PI ? 1 : 0;
+  if (innerRadius === 0) return `M ${cx} ${cy} L ${outerStart.x} ${outerStart.y} A ${outerRadius} ${outerRadius} 0 ${large} 1 ${outerEnd.x} ${outerEnd.y} Z`;
+  const innerEnd = point(innerRadius, endAngle);
+  const innerStart = point(innerRadius, startAngle);
+  return `M ${outerStart.x} ${outerStart.y} A ${outerRadius} ${outerRadius} 0 ${large} 1 ${outerEnd.x} ${outerEnd.y} L ${innerEnd.x} ${innerEnd.y} A ${innerRadius} ${innerRadius} 0 ${large} 0 ${innerStart.x} ${innerStart.y} Z`;
 }
 
 function categoryLabels(model: SupportedChartModel): readonly string[] {
