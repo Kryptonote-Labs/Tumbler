@@ -333,7 +333,8 @@ function parseCell(
       value = rawValue === undefined ? { type: "blank" } : { type: "date", value: rawValue };
       break;
     case "n": {
-      if (rawValue === undefined) value = { type: "blank" };
+      // Producers commonly emit an empty v element when a formula has not been calculated yet.
+      if (rawValue === undefined || (formula !== undefined && rawValue === "")) value = { type: "blank" };
       else {
         const number = Number(rawValue);
         if (!Number.isFinite(number) || rawValue.trim() === "") throw new SpreadsheetError("invalid_cell", `Cell ${reference} does not contain a finite number.`);

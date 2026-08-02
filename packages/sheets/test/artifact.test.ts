@@ -5,6 +5,18 @@ import { buildWorkbookFixture } from "./workbook-fixture.ts";
 const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
 describe("spreadsheet artefact host boundary", () => {
+  test("switches to a sheet containing formulas without cached results", () => {
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({ sheets: [
+      { name: "About", sheetId: 1, relationshipId: "about", xml: `<worksheet xmlns="${namespace}"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>About</t></is></c></row></sheetData></worksheet>` },
+      { name: "Sample Data", sheetId: 2, relationshipId: "sample", xml: `<worksheet xmlns="${namespace}"><sheetData><row r="1"><c r="A1"><f>SUM(1,2)</f><v/></c></row></sheetData></worksheet>` },
+    ] }));
+
+    const selected = artifact.selectSheet("Sample Data");
+
+    expect(selected.activeSheet.name).toBe("Sample Data");
+    expect(selected.worksheet.cell("A1")).toMatchObject({ formula: "SUM(1,2)", value: { type: "blank" } });
+  });
+
   test("opens, switches sheets, edits, and returns fresh renderable state", () => {
     const source = workbookBytes(1);
     const initial = openSpreadsheetArtifact(source);
