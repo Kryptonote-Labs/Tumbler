@@ -25,7 +25,7 @@
     type SpreadsheetWorksheet,
   } from "@tumbler/sheets";
   import { calculateSpreadsheetViewport } from "./spreadsheet-viewport.ts";
-  import { composeSpreadsheetGridLayout, frozenAxisExtent, spreadsheetDrawingRegion } from "./spreadsheet-grid-layout.ts";
+  import { composeSpreadsheetGridLayout, frozenAxisExtent, placeSpreadsheetDrawing } from "./spreadsheet-grid-layout.ts";
   import { coerceSpreadsheetEditValue, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
   import { measureMaximumDigitWidth, spreadsheetFontShorthand } from "./spreadsheet-font-metrics.ts";
   import { spreadsheetCellContentCss, spreadsheetCellCss } from "./spreadsheet-cell-style.ts";
@@ -121,6 +121,23 @@
       model: models[index]!,
     }));
   });
+  let visibleCharts = $derived(charts.flatMap((chart) => {
+    const placement = placeSpreadsheetDrawing({
+      anchor: chart.frame.anchor,
+      bounds: chart.bounds,
+      frozenRows,
+      frozenColumns,
+      frozenRowsHeight,
+      frozenColumnsWidth,
+      scrollTop,
+      scrollLeft,
+      viewportWidth,
+      viewportHeight,
+      rowHeaderWidth,
+      columnHeaderHeight,
+    });
+    return placement.visible ? [{ ...chart, placement }] : [];
+  }));
   let frozenPane = $derived(worksheet.panes.find((pane) => pane.state === "frozen" || pane.state === "frozenSplit"));
   let frozenRows = $derived(Math.min(rowCount, Math.max(0, Math.floor(frozenPane?.ySplit ?? 0))));
   let frozenColumns = $derived(Math.min(columnCount, Math.max(0, Math.floor(frozenPane?.xSplit ?? 0))));
@@ -197,6 +214,10 @@
   });
 
   function select(row: number, column: number, extend = false) {
+    if (chartSelection !== undefined) {
+      chartSelection = undefined;
+      onchartselectionchange?.(undefined);
+    }
     const point = { row, column };
     const merge = worksheet.mergedRange(point);
     selection = extend
@@ -547,8 +568,8 @@
           {@render gridCell(reference, merge.range.start.row, merge.range.start.column, rowHeaderWidth + merge.left, columnHeaderHeight + merge.top, merge.width, merge.height, 1)}
         {/if}
       {/each}
-      {#each charts.filter((chart) => spreadsheetDrawingRegion(chart.frame.anchor, frozenRows, frozenColumns) === "body") as chart (chart.frame.anchor.elementId)}
-        {@render chartFrame(chart, rowHeaderWidth + chart.bounds.x, columnHeaderHeight + chart.bounds.y)}
+      {#each visibleCharts.filter((chart) => chart.placement.region === "body") as chart (chart.frame.anchor.elementId)}
+        {@render chartFrame(chart, chart.placement.left, chart.placement.top)}
       {/each}
     </div>
   </div>
@@ -567,9 +588,8 @@
         {@const reference = formatCellReference(merge.range.start)}
         {@render gridCell(reference, merge.range.start.row, merge.range.start.column, merge.left - (merge.range.start.column <= frozenColumns ? 0 : scrollLeft), merge.top, merge.width, merge.height, 2)}
       {/each}
-      {#each charts.filter((chart) => spreadsheetDrawingRegion(chart.frame.anchor, frozenRows, frozenColumns) === "frozen-row") as chart (chart.frame.anchor.elementId)}
-        {@const fixedColumn = chart.frame.anchor.kind !== "absolute" && chart.frame.anchor.from.column < frozenColumns}
-        {@render chartFrame(chart, chart.bounds.x - (fixedColumn ? 0 : scrollLeft), chart.bounds.y)}
+      {#each visibleCharts.filter((chart) => chart.placement.region === "frozen-row") as chart (chart.frame.anchor.elementId)}
+        {@render chartFrame(chart, chart.placement.left, chart.placement.top)}
       {/each}
     </div>
   {/if}
@@ -588,8 +608,8 @@
         {@const reference = formatCellReference(merge.range.start)}
         {@render gridCell(reference, merge.range.start.row, merge.range.start.column, merge.left, merge.top - scrollTop - frozenRowsHeight, merge.width, merge.height, 2)}
       {/each}
-      {#each charts.filter((chart) => spreadsheetDrawingRegion(chart.frame.anchor, frozenRows, frozenColumns) === "frozen-column") as chart (chart.frame.anchor.elementId)}
-        {@render chartFrame(chart, chart.bounds.x, chart.bounds.y - scrollTop - frozenRowsHeight)}
+      {#each visibleCharts.filter((chart) => chart.placement.region === "frozen-column") as chart (chart.frame.anchor.elementId)}
+        {@render chartFrame(chart, chart.placement.left, chart.placement.top)}
       {/each}
     </div>
   {/if}

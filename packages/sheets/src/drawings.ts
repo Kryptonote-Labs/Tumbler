@@ -6,6 +6,7 @@ import { SpreadsheetError, type SpreadsheetWorkbook } from "./workbook.ts";
 
 const DRAWING_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.drawing+xml";
 const CHART_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
+const MAX_DRAWING_ANCHORS = 10_000;
 
 export interface SpreadsheetDrawing {
   readonly relationshipId: string;
@@ -172,7 +173,7 @@ export function emuToCssPixels(emu: number): number {
 }
 
 function parseDrawingAnchors(root: LosslessXmlElement, namespace: string): readonly SpreadsheetDrawingAnchor[] {
-  return Object.freeze(root.children.flatMap((child): SpreadsheetDrawingAnchor[] => {
+  const anchors = root.children.flatMap((child): SpreadsheetDrawingAnchor[] => {
     if (child.kind !== "element" || child.namespaceUri !== namespace) return [];
     if (child.localName === "absoluteAnchor") {
       const position = exactlyOne(child, namespace, "pos", "absoluteAnchor");
@@ -208,7 +209,9 @@ function parseDrawingAnchors(root: LosslessXmlElement, namespace: string): reado
       })];
     }
     return [];
-  }));
+  });
+  if (anchors.length > MAX_DRAWING_ANCHORS) invalid(`Drawing exceeds ${MAX_DRAWING_ANCHORS} anchors.`);
+  return Object.freeze(anchors);
 }
 
 function parseMarker(element: LosslessXmlElement, namespace: string): SpreadsheetDrawingMarker {

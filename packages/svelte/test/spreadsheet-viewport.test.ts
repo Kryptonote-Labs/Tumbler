@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { compile } from "svelte/compiler";
 import { SparseAxisGeometry } from "@tumbler/core";
-import { calculateSpreadsheetViewport, coerceSpreadsheetEditValue, composeSpreadsheetGridLayout, frozenGridTranslation, measureMaximumDigitWidth, spreadsheetDrawingRegion, spreadsheetFontShorthand } from "../src/index.ts";
+import { calculateSpreadsheetViewport, coerceSpreadsheetEditValue, composeSpreadsheetGridLayout, frozenGridTranslation, measureMaximumDigitWidth, placeSpreadsheetDrawing, spreadsheetDrawingRegion, spreadsheetFontShorthand } from "../src/index.ts";
 import { frozenAxisExtent, spreadsheetCellLayer } from "../src/spreadsheet-grid-layout.ts";
 
 describe("Svelte spreadsheet viewport", () => {
@@ -186,13 +186,28 @@ describe("Svelte spreadsheet viewport", () => {
     expect(spreadsheetDrawingRegion({ ...anchor, from: { ...marker, row: 4 } }, 1, 1)).toBe("frozen-column");
     expect(spreadsheetDrawingRegion({ ...anchor, from: { ...marker, row: 4, column: 4 } }, 1, 1)).toBe("body");
     expect(spreadsheetDrawingRegion({ kind: "absolute", elementId: 2, xEmu: 0, yEmu: 0, widthEmu: 1, heightEmu: 1 }, 5, 5)).toBe("body");
+    const placement = placeSpreadsheetDrawing({
+      anchor: { ...anchor, from: { ...marker, row: 4, column: 4 } },
+      bounds: { x: 1_000, y: 2_000, width: 400, height: 300 },
+      frozenRows: 1, frozenColumns: 1, frozenRowsHeight: 20, frozenColumnsWidth: 80,
+      scrollTop: 1_900, scrollLeft: 900, viewportWidth: 800, viewportHeight: 600,
+      rowHeaderWidth: 52, columnHeaderHeight: 28,
+    });
+    expect(placement).toEqual({ region: "body", left: 1_052, top: 2_028, visible: true });
+    expect(placeSpreadsheetDrawing({
+      anchor: { ...anchor, from: { ...marker, row: 100, column: 100 } },
+      bounds: { x: 100_000, y: 100_000, width: 400, height: 300 },
+      frozenRows: 1, frozenColumns: 1, frozenRowsHeight: 20, frozenColumnsWidth: 80,
+      scrollTop: 0, scrollLeft: 0, viewportWidth: 800, viewportHeight: 600,
+      rowHeaderWidth: 52, columnHeaderHeight: 28,
+    }).visible).toBeFalse();
   });
 
   test("renders selected chart frames above cells but below worksheet gutters", async () => {
     const source = await Bun.file(new URL("../src/SpreadsheetGrid.svelte", import.meta.url)).text();
     const result = compile(source, { filename: "SpreadsheetGrid.svelte", generate: "client", modernAst: true });
     expect(result.warnings).toHaveLength(0);
-    expect(source).toContain("spreadsheetDrawingRegion(chart.frame.anchor");
+    expect(source).toContain("placeSpreadsheetDrawing({");
     expect(source).toContain("onchartselectionchange?.(chartSelection)");
     expect(result.css?.code).toMatch(/\.chart-frame[^}]*z-index: 2/);
     expect(result.css?.code).toMatch(/\.column-gutter[^}]*z-index: 3/);

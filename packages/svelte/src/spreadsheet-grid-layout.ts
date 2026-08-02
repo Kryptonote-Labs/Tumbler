@@ -1,5 +1,5 @@
 import type { SparseAxisGeometry } from "@tumbler/core";
-import type { CellRange, SpreadsheetDrawingAnchor } from "@tumbler/sheets";
+import type { CellRange, SpreadsheetDrawingAnchor, SpreadsheetDrawingBounds } from "@tumbler/sheets";
 import type { SpreadsheetViewport, VirtualGridItem } from "./spreadsheet-viewport.ts";
 
 export interface SpreadsheetMergeLayout {
@@ -74,6 +74,71 @@ export function spreadsheetDrawingRegion(
   if (anchor.from.row < frozenRows) return "frozen-row";
   if (anchor.from.column < frozenColumns) return "frozen-column";
   return "body";
+}
+
+export interface SpreadsheetDrawingViewportPlacement {
+  readonly region: "body" | "frozen-row" | "frozen-column";
+  /** Position relative to the canvas or frozen-pane container that owns the drawing. */
+  readonly left: number;
+  readonly top: number;
+  readonly visible: boolean;
+}
+
+export function placeSpreadsheetDrawing(input: {
+  readonly anchor: SpreadsheetDrawingAnchor;
+  readonly bounds: SpreadsheetDrawingBounds;
+  readonly frozenRows: number;
+  readonly frozenColumns: number;
+  readonly frozenRowsHeight: number;
+  readonly frozenColumnsWidth: number;
+  readonly scrollTop: number;
+  readonly scrollLeft: number;
+  readonly viewportWidth: number;
+  readonly viewportHeight: number;
+  readonly rowHeaderWidth: number;
+  readonly columnHeaderHeight: number;
+}): SpreadsheetDrawingViewportPlacement {
+  const region = spreadsheetDrawingRegion(input.anchor, input.frozenRows, input.frozenColumns);
+  let left: number;
+  let top: number;
+  let screenLeft: number;
+  let screenTop: number;
+  let clipLeft: number;
+  let clipTop: number;
+  let clipRight: number;
+  let clipBottom: number;
+  if (region === "body") {
+    left = input.rowHeaderWidth + input.bounds.x;
+    top = input.columnHeaderHeight + input.bounds.y;
+    screenLeft = left - input.scrollLeft;
+    screenTop = top - input.scrollTop;
+    clipLeft = input.rowHeaderWidth + input.frozenColumnsWidth;
+    clipTop = input.columnHeaderHeight + input.frozenRowsHeight;
+    clipRight = input.viewportWidth;
+    clipBottom = input.viewportHeight;
+  } else if (region === "frozen-row") {
+    const fixedColumn = input.anchor.kind !== "absolute" && input.anchor.from.column < input.frozenColumns;
+    left = input.bounds.x - (fixedColumn ? 0 : input.scrollLeft);
+    top = input.bounds.y;
+    screenLeft = input.rowHeaderWidth + left;
+    screenTop = input.columnHeaderHeight + top;
+    clipLeft = input.rowHeaderWidth;
+    clipTop = input.columnHeaderHeight;
+    clipRight = input.viewportWidth;
+    clipBottom = input.columnHeaderHeight + input.frozenRowsHeight;
+  } else {
+    left = input.bounds.x;
+    top = input.bounds.y - input.scrollTop - input.frozenRowsHeight;
+    screenLeft = input.rowHeaderWidth + left;
+    screenTop = input.columnHeaderHeight + input.frozenRowsHeight + top;
+    clipLeft = input.rowHeaderWidth;
+    clipTop = input.columnHeaderHeight + input.frozenRowsHeight;
+    clipRight = input.rowHeaderWidth + input.frozenColumnsWidth;
+    clipBottom = input.viewportHeight;
+  }
+  const visible = screenLeft < clipRight && screenLeft + input.bounds.width > clipLeft &&
+    screenTop < clipBottom && screenTop + input.bounds.height > clipTop;
+  return Object.freeze({ region, left, top, visible });
 }
 
 export function frozenAxisExtent(geometry: SparseAxisGeometry, frozenCount: number): number {
