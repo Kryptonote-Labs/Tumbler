@@ -1,3 +1,6 @@
+import { inflateSync } from "fflate";
+import { crc32 } from "./crc32.ts";
+
 const END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
 const CENTRAL_DIRECTORY_ENTRY_SIGNATURE = 0x02014b50;
 const LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50;
@@ -12,9 +15,12 @@ export type ZipArchiveErrorCode =
   | "archive_too_small"
   | "central_directory_bounds"
   | "duplicate_entry"
+  | "decompression_failed"
   | "encrypted_entry"
+  | "entry_crc_mismatch"
   | "entry_compression_ratio"
   | "entry_count_limit"
+  | "entry_length_mismatch"
   | "entry_size_limit"
   | "invalid_central_directory"
   | "invalid_entry_name"
@@ -34,9 +40,9 @@ export class ZipArchiveError extends Error {
   constructor(
     code: ZipArchiveErrorCode,
     message: string,
-    options: { entryName?: string } = {},
+    options: { entryName?: string; cause?: unknown } = {},
   ) {
-    super(message);
+    super(message, options.cause === undefined ? undefined : { cause: options.cause });
     this.name = "ZipArchiveError";
     this.code = code;
     this.entryName = options.entryName;
@@ -106,10 +112,56 @@ export class ZipArchive {
 
   /** Returns the exact compressed payload stored for an entry without inflating it. */
   compressedBytes(entry: ZipEntry): Uint8Array {
+    this.#assertEntry(entry);
     return this.#source.subarray(
       entry.compressedDataOffset,
       entry.compressedDataOffset + entry.compressedSize,
     );
+  }
+
+  /** Inflates and verifies an entry using the sizes and CRC from its central record. */
+  read(entry: ZipEntry): Uint8Array {
+    this.#assertEntry(entry);
+    const compressed = this.compressedBytes(entry);
+    let output: Uint8Array;
+
+    if (entry.compressionMethod === 0) {
+      output = compressed.slice();
+    } else {
+      try {
+        output = inflateSync(compressed, {
+          out: new Uint8Array(entry.uncompressedSize),
+        });
+      } catch (cause) {
+        throw new ZipArchiveError(
+          "decompression_failed",
+          `Entry ${JSON.stringify(entry.name)} could not be decompressed.`,
+          { entryName: entry.name, cause },
+        );
+      }
+    }
+
+    if (output.byteLength !== entry.uncompressedSize) {
+      throw new ZipArchiveError(
+        "entry_length_mismatch",
+        `Entry ${JSON.stringify(entry.name)} produced ${output.byteLength} bytes; ${entry.uncompressedSize} were declared.`,
+        { entryName: entry.name },
+      );
+    }
+    if (crc32(output) !== entry.crc32) {
+      throw new ZipArchiveError(
+        "entry_crc_mismatch",
+        `Entry ${JSON.stringify(entry.name)} failed its CRC-32 check.`,
+        { entryName: entry.name },
+      );
+    }
+    return output;
+  }
+
+  #assertEntry(entry: ZipEntry): void {
+    if (this.#byName.get(entry.name) !== entry) {
+      throw new TypeError("The ZIP entry does not belong to this archive.");
+    }
   }
 }
 

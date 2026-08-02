@@ -1,3 +1,5 @@
+import { deflateSync } from "fflate";
+
 export interface TestZipEntry {
   readonly name: string;
   readonly data?: Uint8Array;
@@ -26,10 +28,11 @@ export function buildStoredZip(
     const data = entry.data ?? new Uint8Array();
     const flags = (entry.flags ?? 0) | (name.some((byte) => byte > 0x7f) ? 1 << 11 : 0);
     const compressionMethod = entry.compressionMethod ?? 0;
-    const compressedSize = entry.declaredCompressedSize ?? data.byteLength;
+    const compressedData = compressionMethod === 8 ? deflateSync(data) : data;
+    const compressedSize = entry.declaredCompressedSize ?? compressedData.byteLength;
     const uncompressedSize = entry.declaredUncompressedSize ?? data.byteLength;
     const crc = crc32(data);
-    const local = new Uint8Array(30 + name.byteLength + data.byteLength);
+    const local = new Uint8Array(30 + name.byteLength + compressedData.byteLength);
     const localView = new DataView(local.buffer);
 
     writeUint32(localView, 0, 0x04034b50);
@@ -41,7 +44,7 @@ export function buildStoredZip(
     writeUint32(localView, 22, uncompressedSize);
     writeUint16(localView, 26, name.byteLength);
     local.set(name, 30);
-    local.set(data, 30 + name.byteLength);
+    local.set(compressedData, 30 + name.byteLength);
     localRecords.push(local);
 
     const central = new Uint8Array(46 + name.byteLength);

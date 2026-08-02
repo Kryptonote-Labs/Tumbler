@@ -5,6 +5,7 @@ import {
   ZipArchiveError,
   type ZipArchiveErrorCode,
 } from "../src/index.ts";
+import { crc32 } from "../src/zip/crc32.ts";
 import { buildStoredZip } from "./zip-builder.ts";
 
 const officePackageEntries = [
@@ -41,6 +42,61 @@ describe("ZIP inventory", () => {
       buildStoredZip([{ name: "part.xml" }], { comment: "Tumbler 🥃" }),
     );
     expect(archive.comment).toBe("Tumbler 🥃");
+  });
+
+  test.each([0, 8] as const)(
+    "reads and verifies compression method %i",
+    (compressionMethod) => {
+      const expected = utf8("Tumbler reads this payload. ".repeat(100));
+      const archive = openZipArchive(buildStoredZip([
+        { name: "part.xml", data: expected, compressionMethod },
+      ]));
+      const entry = archive.get("part.xml")!;
+
+      expect(archive.read(entry)).toEqual(expected);
+      expect(archive.compressedBytes(entry).byteLength).toBe(entry.compressedSize);
+    },
+  );
+
+  test("calculates the standard CRC-32 check vector", () => {
+    expect(crc32(utf8("123456789"))).toBe(0xcbf43926);
+  });
+
+  test("rejects data that disagrees with its CRC", () => {
+    const bytes = buildStoredZip([{ name: "part.xml", data: utf8("original") }]);
+    const archive = openZipArchive(bytes);
+    const entry = archive.get("part.xml")!;
+    bytes[entry.compressedDataOffset] = (bytes[entry.compressedDataOffset] ?? 0) ^ 0xff;
+
+    expectZipError(() => archive.read(entry), "entry_crc_mismatch");
+  });
+
+  test("rejects a stored entry whose expanded length disagrees with metadata", () => {
+    const archive = openZipArchive(buildStoredZip([
+      {
+        name: "part.xml",
+        data: utf8("short"),
+        declaredUncompressedSize: 6,
+      },
+    ]));
+    expectZipError(() => archive.read(archive.get("part.xml")!), "entry_length_mismatch");
+  });
+
+  test("wraps invalid deflate streams in a typed error", () => {
+    const bytes = buildStoredZip([
+      { name: "part.xml", data: utf8("compress me"), compressionMethod: 8 },
+    ]);
+    const archive = openZipArchive(bytes);
+    const entry = archive.get("part.xml")!;
+    bytes.fill(0xff, entry.compressedDataOffset, entry.compressedDataOffset + entry.compressedSize);
+
+    expectZipError(() => archive.read(entry), "decompression_failed");
+  });
+
+  test("does not accept entries from another archive", () => {
+    const first = openZipArchive(buildStoredZip([{ name: "part.xml" }]));
+    const second = openZipArchive(buildStoredZip([{ name: "part.xml" }]));
+    expect(() => first.read(second.get("part.xml")!)).toThrow(TypeError);
   });
 
   test("round-trips generated safe entry inventories", () => {
