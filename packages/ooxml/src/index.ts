@@ -17,3 +17,14 @@ export type {
   XmlEncoding,
   XmlQualifiedName,
 } from "./xml/source-document.ts";
+export {
+  beginLosslessXmlEdit,
+  LosslessXmlEditor,
+  XmlEditError,
+} from "./xml/editor.ts";
+export type {
+  NewXmlAttribute,
+  XmlEditErrorCode,
+  XmlEditResult,
+  XmlEditorStatus,
+} from "./xml/editor.ts";
