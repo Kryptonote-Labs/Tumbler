@@ -46,8 +46,8 @@ describe("SpreadsheetML sparse worksheets", () => {
 
     expect(worksheet.dimension).toEqual({ start: { row: 2, column: 1 }, end: { row: 3, column: 8 } });
     expect(worksheet.columns).toEqual([
-      { min: 2, max: 4, width: 12.5, hidden: false, customWidth: true },
-      { min: 6, max: 6, width: undefined, hidden: true, customWidth: false },
+      { min: 2, max: 4, width: 12.5, hidden: false, customWidth: true, styleIndex: undefined },
+      { min: 6, max: 6, width: undefined, hidden: true, customWidth: false, styleIndex: undefined },
     ]);
     expect(worksheet.panes).toEqual([{
       workbookViewId: 0,
@@ -95,6 +95,30 @@ describe("SpreadsheetML sparse worksheets", () => {
     expect(worksheet.displayText("A1")).toBe("12.50%");
     expect(worksheet.cellStyle("A1").numberFormatId).toBe(10);
     expect(worksheet.displayText("B2")).toBe("");
+  });
+
+  test("resolves cell, row, and column style precedence", () => {
+    const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      stylesXml: `<styleSheet xmlns="${namespace}"><fonts count="4"><font><name val="Default"/></font><font><name val="Column"/></font><font><name val="Row"/></font><font><name val="Cell"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders><cellXfs count="4"><xf fontId="0"/><xf fontId="1"/><xf fontId="2"/><xf fontId="3"/></cellXfs></styleSheet>`,
+      sheets: [{
+        name: "Sheet1",
+        sheetId: 1,
+        relationshipId: "sheet1",
+        xml: `<worksheet xmlns="${namespace}"><cols><col min="2" max="2" style="1"/></cols><sheetData><row r="1" s="2" customFormat="1"><c r="A1"/><c r="B1"/><c r="C1" s="3"/></row><row r="2" s="2"><c r="A2"/><c r="B2"/></row></sheetData></worksheet>`,
+      }],
+    })));
+    const worksheet = openWorksheet(workbook, workbook.sheets[0]!);
+
+    expect(worksheet.rows[0]).toMatchObject({ styleIndex: 2, customFormat: true });
+    expect(worksheet.rows[1]).toMatchObject({ styleIndex: 2, customFormat: false });
+    expect(worksheet.columns[0]).toMatchObject({ styleIndex: 1 });
+    expect(worksheet.cellStyle("A1").font.name).toBe("Row");
+    expect(worksheet.cellStyle("B1").font.name).toBe("Row");
+    expect(worksheet.cellStyle("C1").font.name).toBe("Cell");
+    expect(worksheet.cellStyle("A2").font.name).toBe("Default");
+    expect(worksheet.cellStyle("B2").font.name).toBe("Column");
+    expect(worksheet.cellStyle("B99").font.name).toBe("Column");
   });
 
   test("builds sparse pixel geometry from standard row and column measurements", () => {

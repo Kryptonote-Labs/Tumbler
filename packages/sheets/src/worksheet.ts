@@ -36,6 +36,8 @@ export interface SpreadsheetRow {
   readonly index: number;
   readonly height: number | undefined;
   readonly hidden: boolean;
+  readonly styleIndex: number | undefined;
+  readonly customFormat: boolean;
   readonly cells: readonly SpreadsheetCell[];
 }
 
@@ -45,6 +47,7 @@ export interface SpreadsheetColumn {
   readonly width: number | undefined;
   readonly hidden: boolean;
   readonly customWidth: boolean;
+  readonly styleIndex: number | undefined;
 }
 
 export interface SpreadsheetPane {
@@ -70,6 +73,7 @@ export class SpreadsheetWorksheet {
   readonly defaultRowHeight: number;
   readonly defaultColumnWidth: number;
   readonly #cells: ReadonlyMap<string, SpreadsheetCell>;
+  readonly #rows: ReadonlyMap<number, SpreadsheetRow>;
 
   constructor(input: {
     workbook: SpreadsheetWorkbook;
@@ -98,6 +102,7 @@ export class SpreadsheetWorksheet {
     this.defaultRowHeight = input.defaultRowHeight;
     this.defaultColumnWidth = input.defaultColumnWidth;
     this.#cells = new Map(input.rows.flatMap((row) => row.cells.map((cell) => [cell.reference, cell] as const)));
+    this.#rows = new Map(input.rows.map((row) => [row.index, row]));
   }
 
   cell(reference: string | CellAddress): SpreadsheetCell | undefined {
@@ -108,7 +113,19 @@ export class SpreadsheetWorksheet {
   }
 
   cellStyle(reference: string | CellAddress): SpreadsheetCellFormat {
-    return this.styles.resolve(this.cell(reference)?.styleIndex);
+    const address = typeof reference === "string" ? parseCellReference(reference) : reference;
+    return this.styles.resolve(this.effectiveStyleIndex(address));
+  }
+
+  effectiveStyleIndex(reference: string | CellAddress): number | undefined {
+    const address = typeof reference === "string" ? parseCellReference(reference) : reference;
+    const cellStyle = this.cell(address)?.styleIndex;
+    if (cellStyle !== undefined) return cellStyle;
+    const row = this.#rows.get(address.row);
+    if (row?.customFormat === true) return row.styleIndex ?? 0;
+    return this.columns.findLast((column) =>
+      address.column >= column.min && address.column <= column.max && column.styleIndex !== undefined
+    )?.styleIndex;
   }
 
   mergedRange(reference: string | CellAddress): CellRange | undefined {
@@ -121,7 +138,7 @@ export class SpreadsheetWorksheet {
 
   displayText(reference: string | CellAddress, locale = "en-US"): string {
     const cell = this.cell(reference);
-    const style = this.styles.resolve(cell?.styleIndex);
+    const style = this.styles.resolve(this.effectiveStyleIndex(reference));
     return formatSpreadsheetCellValue(cell?.value, {
       numberFormatId: style.numberFormatId,
       ...(style.numberFormatCode === undefined ? {} : { numberFormatCode: style.numberFormatCode }),
@@ -236,10 +253,13 @@ function parseRows(document: LosslessXmlDocument, namespace: string, strings: Sh
       cells.push(parseCell(document, cellElement, namespace, reference, address, strings));
     }
     const rawHeight = attr(rowElement, "ht");
+    const rawStyle = attr(rowElement, "s");
     rows.push(Object.freeze({
       index,
       height: rawHeight === undefined ? undefined : nonNegativeDouble(rawHeight, "row height"),
       hidden: xmlBoolean(attr(rowElement, "hidden"), false, "row hidden"),
+      styleIndex: rawStyle === undefined ? undefined : unsignedInteger(rawStyle, "row style index"),
+      customFormat: xmlBoolean(attr(rowElement, "customFormat"), false, "row customFormat"),
       cells: Object.freeze(cells),
     }));
   }
@@ -334,12 +354,14 @@ function parseColumns(root: LosslessXmlElement, namespace: string): SpreadsheetC
       const max = gridInteger(rawMax, EXCEL_MAX_COLUMNS, "column max");
       if (max < min) throw new SpreadsheetError("invalid_worksheet", "Column information has reversed bounds.");
       const rawWidth = attr(column, "width");
+      const rawStyle = attr(column, "style");
       result.push(Object.freeze({
         min,
         max,
         width: rawWidth === undefined ? undefined : nonNegativeDouble(rawWidth, "column width"),
         hidden: xmlBoolean(attr(column, "hidden"), false, "column hidden"),
         customWidth: xmlBoolean(attr(column, "customWidth"), false, "column customWidth"),
+        styleIndex: rawStyle === undefined ? undefined : unsignedInteger(rawStyle, "column style index"),
       }));
     }
   }
