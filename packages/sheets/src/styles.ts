@@ -68,6 +68,7 @@ export interface SpreadsheetAlignment {
   readonly shrinkToFit: boolean;
   readonly textRotation: number;
   readonly indent: number;
+  readonly readingOrder: 0 | 1 | 2;
 }
 
 export interface SpreadsheetCellFormat {
@@ -101,6 +102,7 @@ const EMPTY_EDGE: SpreadsheetBorderEdge = Object.freeze({ style: undefined, colo
 const DEFAULT_BORDER: SpreadsheetBorder = Object.freeze({ left: EMPTY_EDGE, right: EMPTY_EDGE, top: EMPTY_EDGE, bottom: EMPTY_EDGE });
 const DEFAULT_ALIGNMENT: SpreadsheetAlignment = Object.freeze({
   horizontal: undefined, vertical: undefined, wrapText: false, shrinkToFit: false, textRotation: 0, indent: 0,
+  readingOrder: 0,
 });
 
 export class SpreadsheetStyles {
@@ -383,6 +385,19 @@ function parseAlignment(element: LosslessXmlElement | undefined): Partial<Spread
   const shrinkToFit = optionalBoolean(attr(element, "shrinkToFit"), "alignment shrinkToFit");
   const textRotation = optionalUnsigned(attr(element, "textRotation"), "alignment textRotation");
   const indent = optionalUnsigned(attr(element, "indent"), "alignment indent");
+  const readingOrder = optionalUnsigned(attr(element, "readingOrder"), "alignment readingOrder");
+  if (horizontal !== undefined && !HORIZONTAL_ALIGNMENTS.has(horizontal)) {
+    throw styleError(`Horizontal alignment ${JSON.stringify(horizontal)} is invalid.`);
+  }
+  if (vertical !== undefined && !VERTICAL_ALIGNMENTS.has(vertical)) {
+    throw styleError(`Vertical alignment ${JSON.stringify(vertical)} is invalid.`);
+  }
+  if (textRotation !== undefined && textRotation > 180 && textRotation !== 255) {
+    throw styleError("Alignment textRotation must be between 0 and 180, or 255 for stacked text.");
+  }
+  if (readingOrder !== undefined && readingOrder > 2) {
+    throw styleError("Alignment readingOrder must be 0, 1, or 2.");
+  }
   return Object.freeze({
     ...(horizontal === undefined ? {} : { horizontal }),
     ...(vertical === undefined ? {} : { vertical }),
@@ -390,8 +405,14 @@ function parseAlignment(element: LosslessXmlElement | undefined): Partial<Spread
     ...(shrinkToFit === undefined ? {} : { shrinkToFit }),
     ...(textRotation === undefined ? {} : { textRotation }),
     ...(indent === undefined ? {} : { indent }),
+    ...(readingOrder === undefined ? {} : { readingOrder: readingOrder as 0 | 1 | 2 }),
   });
 }
+
+const HORIZONTAL_ALIGNMENTS = new Set([
+  "general", "left", "center", "right", "fill", "justify", "centerContinuous", "distributed",
+]);
+const VERTICAL_ALIGNMENTS = new Set(["top", "center", "bottom", "justify", "distributed"]);
 
 function resolveRecord(
   direct: FormatRecord,

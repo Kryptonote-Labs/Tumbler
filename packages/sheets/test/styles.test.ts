@@ -26,7 +26,7 @@ describe("SpreadsheetML styles", () => {
       },
       numberFormatId: 164,
       numberFormatCode: `£#,##0.00`,
-      alignment: { horizontal: "center", vertical: "top", wrapText: true, shrinkToFit: false, textRotation: 45, indent: 2 },
+      alignment: { horizontal: "center", vertical: "top", wrapText: true, shrinkToFit: false, textRotation: 45, indent: 2, readingOrder: 0 },
     });
     expect(() => styles.resolve(2)).toThrow(SpreadsheetError);
   });
@@ -90,6 +90,9 @@ describe("SpreadsheetML styles", () => {
     `<styleSheet xmlns="NS"><fonts><font/></fonts><fills><fill/></fills><borders><border/></borders><cellXfs><xf fontId="2"/></cellXfs></styleSheet>`,
     `<styleSheet xmlns="NS"><fonts><font><color rgb="FF000000" theme="1"/></font></fonts><fills><fill/></fills><borders><border/></borders><cellXfs><xf/></cellXfs></styleSheet>`,
     `<styleSheet xmlns="NS"><fonts><font/></fonts><fills><fill/></fills><borders><border/></borders><cellStyleXfs><xf/></cellStyleXfs><cellXfs><xf xfId="3"/></cellXfs></styleSheet>`,
+    `<styleSheet xmlns="NS"><fonts><font/></fonts><fills><fill/></fills><borders><border/></borders><cellXfs><xf><alignment horizontal="sideways"/></xf></cellXfs></styleSheet>`,
+    `<styleSheet xmlns="NS"><fonts><font/></fonts><fills><fill/></fills><borders><border/></borders><cellXfs><xf><alignment textRotation="181"/></xf></cellXfs></styleSheet>`,
+    `<styleSheet xmlns="NS"><fonts><font/></fonts><fills><fill/></fills><borders><border/></borders><cellXfs><xf><alignment readingOrder="3"/></xf></cellXfs></styleSheet>`,
   ])("rejects malformed style tables", (template) => {
     const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({ stylesXml: template.replace("NS", namespace) })));
