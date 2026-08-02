@@ -16,6 +16,13 @@ export interface TableFixture {
   readonly xml: string;
 }
 
+export interface SheetRelationshipFixture {
+  readonly id: string;
+  readonly type: string;
+  readonly target: string;
+  readonly targetMode?: "External";
+}
+
 export interface SheetFixture {
   readonly name: string;
   readonly sheetId: number | string;
@@ -26,6 +33,7 @@ export interface SheetFixture {
   readonly relationshipType?: string;
   readonly targetMode?: "External";
   readonly tables?: readonly TableFixture[];
+  readonly relationships?: readonly SheetRelationshipFixture[];
 }
 
 export interface WorkbookFixtureOptions {
@@ -103,11 +111,13 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
           name: worksheetItemName,
           data: encoder.encode(sheet.xml ?? `<worksheet xmlns="${spreadsheet}"><sheetData/></worksheet>`),
         },
-        ...(sheet.tables === undefined ? [] : [{
+        ...(sheet.tables === undefined && sheet.relationships === undefined ? [] : [{
           name: worksheetRelationshipItemName,
-          data: encoder.encode(`<Relationships xmlns="${RELATIONSHIPS}">${sheet.tables.map((table) =>
+          data: encoder.encode(`<Relationships xmlns="${RELATIONSHIPS}">${sheet.tables?.map((table) =>
             `<Relationship Id="${table.relationshipId}" Type="${officeRelationships}/table" Target="${table.target}"/>`
-          ).join("")}</Relationships>`),
+          ).join("") ?? ""}${sheet.relationships?.map((relationship) =>
+            `<Relationship Id="${relationship.id}" Type="${relationship.type}" Target="${relationship.target}"${relationship.targetMode === "External" ? ' TargetMode="External"' : ""}/>`
+          ).join("") ?? ""}</Relationships>`),
         }]),
         ...(sheet.tables?.map((table) => ({
           name: resolveTargetItemName(worksheetDirectory(directory, sheet, index), table.target),

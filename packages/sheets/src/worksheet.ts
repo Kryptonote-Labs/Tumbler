@@ -16,6 +16,7 @@ import { formatSpreadsheetCellValue } from "./number-format.ts";
 import { readSpreadsheetStyles, type SpreadsheetCellFormat, type SpreadsheetStyles } from "./styles.ts";
 import { SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";
 import { parseSpreadsheetAutoFilter, readSpreadsheetTables, type SpreadsheetAutoFilter, type SpreadsheetTable } from "./tables.ts";
+import { readSpreadsheetHyperlinks, spreadsheetHyperlinkAt, type SpreadsheetHyperlink } from "./hyperlinks.ts";
 
 export type SpreadsheetCellValue =
   | { readonly type: "blank" }
@@ -72,6 +73,7 @@ export class SpreadsheetWorksheet {
   readonly panes: readonly SpreadsheetPane[];
   readonly tables: readonly SpreadsheetTable[];
   readonly autoFilter: SpreadsheetAutoFilter | undefined;
+  readonly hyperlinks: readonly SpreadsheetHyperlink[];
   readonly styles: SpreadsheetStyles;
   readonly defaultRowHeight: number;
   readonly defaultColumnWidth: number;
@@ -91,6 +93,7 @@ export class SpreadsheetWorksheet {
     panes: readonly SpreadsheetPane[];
     tables: readonly SpreadsheetTable[];
     autoFilter: SpreadsheetAutoFilter | undefined;
+    hyperlinks: readonly SpreadsheetHyperlink[];
     styles: SpreadsheetStyles;
     defaultRowHeight: number;
     defaultColumnWidth: number;
@@ -106,6 +109,7 @@ export class SpreadsheetWorksheet {
     this.panes = Object.freeze([...input.panes]);
     this.tables = Object.freeze([...input.tables]);
     this.autoFilter = input.autoFilter;
+    this.hyperlinks = Object.freeze([...input.hyperlinks]);
     this.styles = input.styles;
     this.defaultRowHeight = input.defaultRowHeight;
     this.defaultColumnWidth = input.defaultColumnWidth;
@@ -143,6 +147,11 @@ export class SpreadsheetWorksheet {
       address.row >= range.start.row && address.row <= range.end.row &&
       address.column >= range.start.column && address.column <= range.end.column
     );
+  }
+
+  hyperlink(reference: string | CellAddress): SpreadsheetHyperlink | undefined {
+    const address = typeof reference === "string" ? parseCellReference(reference) : reference;
+    return spreadsheetHyperlinkAt(this.hyperlinks, address);
   }
 
   displayText(reference: string | CellAddress, locale = "en-US"): string {
@@ -252,6 +261,14 @@ export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetS
     panes: parsePanes(document.root, namespace),
     tables: readSpreadsheetTables({ workbook, worksheetPart: part, worksheetRoot: document.root, spreadsheetNamespace: namespace, relationshipsNamespace }),
     autoFilter: parseSpreadsheetAutoFilter(document.root, namespace),
+    hyperlinks: readSpreadsheetHyperlinks({
+      workbook,
+      worksheetPart: part,
+      worksheetRoot: document.root,
+      worksheetName: sheet.name,
+      spreadsheetNamespace: namespace,
+      relationshipsNamespace,
+    }),
     styles: readSpreadsheetStyles(workbook),
     defaultRowHeight: sheetFormat.defaultRowHeight,
     defaultColumnWidth: sheetFormat.defaultColumnWidth,

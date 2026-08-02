@@ -8,6 +8,13 @@ export {
   parseCellRange,
 } from "./references.ts";
 export type { CellAddress, CellRange } from "./references.ts";
+export { parseSpreadsheetHyperlinkLocation, spreadsheetHyperlinkAt } from "./hyperlinks.ts";
+export type {
+  SpreadsheetExternalHyperlink,
+  SpreadsheetHyperlink,
+  SpreadsheetHyperlinkDestination,
+  SpreadsheetInternalHyperlink,
+} from "./hyperlinks.ts";
 export {
   openSpreadsheet,
   SpreadsheetError,

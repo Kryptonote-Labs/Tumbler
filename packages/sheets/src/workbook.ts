@@ -49,6 +49,7 @@ export type SpreadsheetErrorCode =
   | "duplicate_sheet_name"
   | "invalid_calculation"
   | "invalid_cell"
+  | "invalid_hyperlink"
   | "invalid_sheet"
   | "invalid_styles"
   | "invalid_table"
