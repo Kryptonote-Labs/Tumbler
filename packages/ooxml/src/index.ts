@@ -23,6 +23,13 @@ export {
   XmlEditError,
 } from "./xml/editor.ts";
 export { identifyOoxmlNamespace, OOXML_NAMESPACES } from "./namespaces.ts";
+export {
+  OoxmlThemeError,
+  parseThemeColorScheme,
+  ThemeColorScheme,
+  THEME_COLOR_SLOTS,
+} from "./theme-colors.ts";
+export type { ThemeColorSlot } from "./theme-colors.ts";
 export type {
   OoxmlNamespaceProfile,
   OoxmlVocabulary,
