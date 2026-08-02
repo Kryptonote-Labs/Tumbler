@@ -42,6 +42,11 @@ spanning the maximum Excel column, 2,000 navigation histories, and 3,000
 virtualization geometries. The Svelte component is compiled during tests and
 must produce no accessibility warnings.
 
+The styled-grid suite additionally generates valid font/fill/border tables and
+cell-format references, thousands of deterministic number/date formats, sparse
+variable axes checked against materialized oracles, merged rectangles, frozen
+translations, typed UI entry coercions, and artefact-session replacement flows.
+
 Real-producer and external-validator tests remain a separate next step. Neither
 LibreOffice nor a checked-in Office fixture corpus was available in the initial
 local environment, so synthetic packages are not presented as interoperability

@@ -75,8 +75,8 @@ now implemented:
 - [x] edit literal string, number, and boolean values and clear cells;
 - [x] save only changed worksheet parts and reopen the result;
 - [x] render an owned, virtualized Svelte grid with edit callbacks;
-- [ ] compute styles and number formats;
-- [ ] render variable geometry, merges, and frozen panes;
+- [x] compute the first cell-style and number-format display projection;
+- [x] render variable geometry, ordinary merges, and frozen pane regions;
 - [ ] edit formulas and structural ranges safely;
 - [ ] pass Open XML SDK, LibreOffice, and Microsoft Excel round trips.
 

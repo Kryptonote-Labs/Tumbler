@@ -19,6 +19,7 @@ current requirement boundary is:
 | §18.3.1.53–55 | Inline rich strings and non-overlapping merged ranges |
 | §18.3.1.66, §18.3.1.87–88 | Split/frozen pane state from worksheet views |
 | §18.4.8–9, §18.4.12 | Shared string tables, rich runs, significant whitespace, and exclusion of phonetic hints from displayed base text |
+| §18.8.2–45 | First stylesheet projection: fonts, fills, borders, colors, alignment, cell formats, base-style inheritance, and number-format records |
 | §18.18.11 | `b`, `d`, `e`, `inlineStr`, `n`, `s`, and `str` cell types |
 
 Both Strict and Transitional vocabulary and relationship namespaces are tested.
@@ -36,6 +37,10 @@ clauses or to SpreadsheetML as a whole.
   strings, and formula string results;
 - retain formula text separately from its stored result;
 - expose dimensions, merges, column ranges, row layout, and pane state;
+- resolve cell style indexes into fonts, solid fills, borders, alignment, and
+  number formats;
+- format common decimals, grouping, percentages, scientific values, fractions,
+  dates, and times while retaining raw values and workbook date-system identity;
 - stage literal string, finite-number, boolean, and clear operations;
 - add missing rows/cells in coordinate order, expand dimensions, save, and reopen;
 - leave a semantic no-op byte-identical and copy untouched ZIP payloads exactly.
@@ -47,20 +52,31 @@ retained inside the rewritten target cell; unrelated worksheet source and
 unrelated package parts are not reserialized.
 
 `@tumbler/core` supplies one-based, immutable selection and arrow-navigation
-primitives. `@tumbler/svelte` supplies `SpreadsheetGrid`, an owned virtualized
-surface with row/column headers, click and shift selection, keyboard navigation,
-an inline editor, and selection/edit callbacks. Its pure viewport calculator is
-usable independently of Svelte.
+primitives plus sparse variable-axis geometry. `@tumbler/svelte` supplies
+`SpreadsheetGrid`, an owned virtualized surface with row/column headers, click
+and shift selection, keyboard navigation, styled display, merged cells, frozen
+regions, an inline editor, and typed selection/edit callbacks. Its pure viewport
+and grid-layout calculators are usable independently of Svelte.
+
+`SpreadsheetArtifact` is the host boundary intended for Kryptonote. It opens
+artefact bytes, chooses and retains an active sheet, exposes the renderable
+worksheet, applies typed cell edits, returns saved bytes, and replaces its model
+from agent-produced revisions while retaining the selected sheet when possible.
 
 ## Deliberate current limits
 
 - Only ordinary worksheet sheet targets are accepted. Chart sheets, dialog
   sheets, macro sheets, and external sheet targets are diagnosed as unsupported.
-- Styles are indexed but not yet parsed, computed, or rendered. Number formats,
-  dates stored as serial numbers, themes, borders, fills, and fonts are pending.
-- The Svelte grid currently uses fixed virtual row and column sizes. Parsed
-  custom sizes, hidden axes, merged-cell geometry, and frozen panes are not yet
-  applied to layout.
+- Theme and indexed colors are retained as typed references but are not yet
+  resolved through the Theme part or legacy palette; RGB colors render now.
+- The number-format interpreter covers the common built-ins and a useful custom
+  subset. It does not yet implement the entire conditional, locale/currency,
+  elapsed-time, fill-character, and fraction language from §18.8.31.
+- Column pixels currently use the standard formula with a seven-pixel maximum
+  digit-width estimate. The browser head does not yet measure the workbook's
+  actual normal-style font metrics.
+- Merges wholly within one scrolling or frozen region render as one cell.
+  Merges crossing a frozen-pane boundary still need quadrant clipping.
 - Formulas are preserved and exposed with cached values, but not tokenized,
   calculated, or editable. Structural row/column edits do not exist.
 - Tables, filters, validations, conditional formats, comments, hyperlinks,
@@ -75,7 +91,7 @@ usable independently of Svelte.
 
 ## Next qualification boundary
 
-The next useful slice is styles plus number-format display, followed by variable
-axis geometry and merged/frozen rendering. Before calling the slice
-interoperable, generated and real-producer fixtures must pass Open XML SDK
-validation and open/save cycles in LibreOffice and Excel without repair.
+The next useful slice is theme color resolution and font measurement, followed
+by Kryptonote viewer integration and real-producer qualification. Before calling
+the slice interoperable, generated and real-producer fixtures must pass Open XML
+SDK validation and open/save cycles in LibreOffice and Excel without repair.
