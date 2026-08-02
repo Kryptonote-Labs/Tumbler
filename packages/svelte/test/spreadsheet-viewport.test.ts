@@ -72,13 +72,13 @@ describe("Svelte spreadsheet viewport", () => {
     expect(result.css?.code).toContain("overscroll-behavior: contain");
   });
 
-  test("pins row and column gutters with native sticky positioning", async () => {
+  test("keeps row and column gutters outside the scrolling canvas", async () => {
     const source = await Bun.file(new URL("../src/SpreadsheetGrid.svelte", import.meta.url)).text();
     const result = compile(source, { filename: "SpreadsheetGrid.svelte", generate: "client", modernAst: true });
-    expect(result.css?.code).toMatch(/\.column-gutter[^}]*position: sticky[^}]*top: 0/);
-    expect(result.css?.code).toMatch(/\.row-gutter[^}]*position: sticky[^}]*left: 0/);
-    expect(result.css?.code).not.toContain("contain: strict");
-    expect(source).not.toContain('style:transform={`translate(${scrollLeft}px, ${scrollTop}px)`}');
+    expect(result.css?.code).toMatch(/\.tumbler-grid[^}]*overflow: hidden/);
+    expect(result.css?.code).toMatch(/\.grid-scroller[^}]*overflow: auto/);
+    expect(result.css?.code).toMatch(/\.column-gutter[^}]*position: absolute[^}]*top: 0/);
+    expect(result.css?.code).toMatch(/\.row-gutter[^}]*position: absolute[^}]*top: 28px/);
   });
 
   test("rejects invalid viewport geometry", () => {
