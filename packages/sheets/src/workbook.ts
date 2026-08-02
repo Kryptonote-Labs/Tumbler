@@ -32,9 +32,12 @@ export interface SpreadsheetSheet {
 export type SpreadsheetErrorCode =
   | "duplicate_sheet_id"
   | "duplicate_sheet_name"
+  | "invalid_cell"
   | "invalid_sheet"
+  | "invalid_worksheet"
   | "invalid_workbook"
   | "missing_sheet_relationship"
+  | "missing_shared_string"
   | "unsupported_document"
   | "unsupported_sheet";
 

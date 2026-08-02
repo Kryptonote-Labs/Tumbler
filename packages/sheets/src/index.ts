@@ -23,3 +23,14 @@ export type {
   SpreadsheetSheet,
   SpreadsheetSheetState,
 } from "./workbook.ts";
+export {
+  openWorksheet,
+  SpreadsheetWorksheet,
+} from "./worksheet.ts";
+export type {
+  SpreadsheetCell,
+  SpreadsheetCellValue,
+  SpreadsheetColumn,
+  SpreadsheetPane,
+  SpreadsheetRow,
+} from "./worksheet.ts";
