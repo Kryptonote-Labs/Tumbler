@@ -10,6 +10,13 @@
         "typescript": "^5.9.2",
       },
     },
+    "packages/charts": {
+      "name": "@tumbler/charts",
+      "version": "0.0.0",
+      "dependencies": {
+        "@tumbler/ooxml": "workspace:*",
+      },
+    },
     "packages/core": {
       "name": "@tumbler/core",
       "version": "0.0.0",
@@ -99,6 +106,8 @@
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
     "@sveltejs/acorn-typescript": ["@sveltejs/acorn-typescript@1.0.11", "", { "peerDependencies": { "acorn": "^8.9.0" } }, "sha512-LFuZUkjJ9iF7JZye/aG5XM0SFcQ5VyL0oVX4WJ9dc0Va3R3s0OauX1BESVCb+YN/ol8TAfqGDDAQsTG627Y5kw=="],
+
+    "@tumbler/charts": ["@tumbler/charts@workspace:packages/charts"],
 
     "@tumbler/core": ["@tumbler/core@workspace:packages/core"],
 
