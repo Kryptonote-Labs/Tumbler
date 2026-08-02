@@ -6,6 +6,27 @@ random editing sequences, and visual comparison with mature Office consumers.
 
 Testing is implemented with each capability rather than after it.
 
+## Running the current suite
+
+From the repository root:
+
+```bash
+bun run check
+bun test
+```
+
+The Phase 1 suite currently covers bounded ZIP inventory and inflation, hostile
+archive mutations, OPC part-name and content-type rules, UTF-8/UTF-16
+infrastructure XML, relationship resolution, main-part discovery for DOCX/XLSX/
+PPTX, byte-identical no-op saves, and exact compressed-payload preservation for
+untouched entries. Property tests use fixed framework-reported seeds so a
+failure can be replayed and shrunk.
+
+Real-producer and external-validator tests remain a separate next step. Neither
+LibreOffice nor a checked-in Office fixture corpus was available in the initial
+local environment, so synthetic packages are not presented as interoperability
+evidence.
+
 ## Testkit structure
 
 The planned shape of `@tumbler/testkit` is:

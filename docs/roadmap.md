@@ -19,13 +19,16 @@ code, unknown bytes are retained, and failures are typed and bounded.
 
 ## Phase 1: OPC vertical slice
 
-- Read ZIP central directory and parts.
-- Parse content types and relationships.
-- Resolve internal and external targets safely.
-- Track clean and dirty parts.
-- Write a no-op round trip with untouched-entry preservation.
-- Reject archive bombs and invalid paths.
-- Add property generators, mutation fuzzing, and standards-linked tests.
+- [x] Read a bounded classic-ZIP central directory and parts.
+- [x] Parse content types and relationships from bounded infrastructure XML.
+- [x] Resolve internal targets safely and retain external targets without fetching.
+- [x] Discover Word, spreadsheet, and presentation main parts through relationships.
+- [ ] Track clean and dirty parts in an editable package transaction.
+- [x] Write a byte-identical no-op save and preserve untouched compressed payloads on replacement.
+- [x] Reject archive bombs, unsafe paths, duplicate logical names, and invalid relationship targets.
+- [x] Add deterministic property tests and byte-level mutation tests for the first slice.
+- [ ] Add licensed real-producer fixtures and external Open XML SDK/LibreOffice validation.
+- [ ] Add/remove parts while updating content types and relationship graphs transactionally.
 
 Exit when representative DOCX, XLSX, and PPTX packages survive no-op round trips
 and validation, including packages with unknown and embedded parts.
