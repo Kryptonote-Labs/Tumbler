@@ -1,9 +1,11 @@
 import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumbler/ooxml";
 import type { OpcPart, PartName } from "@tumbler/opc";
 import type { SparseAxisGeometry } from "@tumbler/core";
+import { ChartParseError, parseOoxmlChart, type ChartModel } from "@tumbler/charts";
 import { SpreadsheetError, type SpreadsheetWorkbook } from "./workbook.ts";
 
 const DRAWING_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.drawing+xml";
+const CHART_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
 
 export interface SpreadsheetDrawing {
   readonly relationshipId: string;
@@ -11,6 +13,14 @@ export interface SpreadsheetDrawing {
   readonly part: OpcPart;
   readonly document: LosslessXmlDocument;
   readonly anchors: readonly SpreadsheetDrawingAnchor[];
+  readonly charts: readonly SpreadsheetChartFrame[];
+}
+
+export interface SpreadsheetChartFrame {
+  readonly anchor: SpreadsheetDrawingAnchor;
+  readonly relationshipId: string | undefined;
+  readonly partName: PartName | undefined;
+  readonly model: ChartModel;
 }
 
 export interface SpreadsheetDrawingMarker {
@@ -69,12 +79,67 @@ export function readSpreadsheetDrawing(input: {
   if (document.root.namespaceUri !== namespace || document.root.localName !== "wsDr") {
     invalid("A spreadsheet Drawing part must have an xdr:wsDr root element.");
   }
+  const anchors = parseDrawingAnchors(document.root, namespace);
   return Object.freeze({
     relationshipId,
     partName: part.name,
     part,
     document,
-    anchors: parseDrawingAnchors(document.root, namespace),
+    anchors,
+    charts: readChartFrames(input.workbook, part, document, anchors, namespace, input.relationshipsNamespace),
+  });
+}
+
+function readChartFrames(
+  workbook: SpreadsheetWorkbook,
+  drawingPart: OpcPart,
+  document: LosslessXmlDocument,
+  anchors: readonly SpreadsheetDrawingAnchor[],
+  spreadsheetDrawingNamespace: string,
+  relationshipsNamespace: string,
+): readonly SpreadsheetChartFrame[] {
+  const chartNamespace = OOXML_NAMESPACES[workbook.conformance].chart;
+  const drawingNamespace = OOXML_NAMESPACES[workbook.conformance].drawing;
+  let relationships: ReturnType<SpreadsheetWorkbook["package"]["relationships"]> | undefined;
+  return Object.freeze(anchors.flatMap((anchor): SpreadsheetChartFrame[] => {
+    const anchorElement = document.element(anchor.elementId);
+    if (anchorElement === undefined) return [];
+    const frames = children(anchorElement, spreadsheetDrawingNamespace, "graphicFrame");
+    if (frames.length === 0) return [];
+    if (frames.length > 1) return [unsupportedFrame(anchor, undefined, undefined, "A drawing anchor repeats graphicFrame.")];
+    const graphic = children(frames[0]!, drawingNamespace, "graphic")[0];
+    const graphicData = graphic === undefined ? undefined : children(graphic, drawingNamespace, "graphicData")[0];
+    const chart = graphicData === undefined ? undefined : children(graphicData, chartNamespace, "chart")[0];
+    if (chart === undefined) return [];
+    const relationshipId = qualifiedAttr(chart, relationshipsNamespace, "id");
+    if (relationshipId === undefined || relationshipId.length === 0) return [unsupportedFrame(anchor, undefined, undefined, "Chart graphic requires a relationship id.")];
+    try {
+      relationships ??= workbook.package.relationships(drawingPart.name);
+      const relationship = relationships.get(relationshipId);
+      const expectedType = `${relationshipsNamespace}/chart`;
+      if (relationship === undefined || relationship.targetMode !== "Internal" || relationship.type !== expectedType) {
+        return [unsupportedFrame(anchor, relationshipId, undefined, "Chart relationship must target an internal Chart part.")];
+      }
+      const chartPart = workbook.package.getPart(relationship.targetPartName);
+      if (chartPart?.contentType !== CHART_CONTENT_TYPE) return [unsupportedFrame(anchor, relationshipId, chartPart?.name, "Chart relationship has an unsupported content type.")];
+      try {
+        return [Object.freeze({ anchor, relationshipId, partName: chartPart.name, model: parseOoxmlChart(workbook.package.readPart(chartPart), workbook.conformance) })];
+      } catch (cause) {
+        if (!(cause instanceof ChartParseError)) throw cause;
+        return [unsupportedFrame(anchor, relationshipId, chartPart.name, cause.message)];
+      }
+    } catch (cause) {
+      return [unsupportedFrame(anchor, relationshipId, undefined, cause instanceof Error ? cause.message : "Chart relationship is invalid.")];
+    }
+  }));
+}
+
+function unsupportedFrame(anchor: SpreadsheetDrawingAnchor, relationshipId: string | undefined, partName: PartName | undefined, reason: string): SpreadsheetChartFrame {
+  return Object.freeze({
+    anchor,
+    relationshipId,
+    partName,
+    model: Object.freeze({ status: "unsupported", chartType: undefined, title: undefined, legend: undefined, reason }),
   });
 }
 

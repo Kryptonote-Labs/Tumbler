@@ -48,6 +48,7 @@
       "name": "@tumbler/sheets",
       "version": "0.0.0",
       "dependencies": {
+        "@tumbler/charts": "workspace:*",
         "@tumbler/core": "workspace:*",
         "@tumbler/formulas": "workspace:*",
         "@tumbler/ooxml": "workspace:*",

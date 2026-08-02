@@ -39,6 +39,7 @@ export {
 } from "./worksheet.ts";
 export { emuToCssPixels, spreadsheetDrawingBounds } from "./drawings.ts";
 export type {
+  SpreadsheetChartFrame,
   SpreadsheetDrawing,
   SpreadsheetDrawingAnchor,
   SpreadsheetDrawingBounds,
