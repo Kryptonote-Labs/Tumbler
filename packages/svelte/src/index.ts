@@ -1,2 +1,9 @@
 /** Replaceable Svelte heads for Tumbler's format packages. */
-export {};
+/** Owned Svelte heads for Tumbler's format-neutral document models. */
+export { default as SpreadsheetGrid } from "./SpreadsheetGrid.svelte";
+export { calculateSpreadsheetViewport } from "./spreadsheet-viewport.ts";
+export type {
+  SpreadsheetViewport,
+  SpreadsheetViewportInput,
+  VirtualGridItem,
+} from "./spreadsheet-viewport.ts";

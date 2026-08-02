@@ -6,8 +6,9 @@
   "exports": "./src/index.ts",
   "dependencies": {
     "@tumbler/core": "workspace:*",
-    "@tumbler/slides": "workspace:*",
     "@tumbler/sheets": "workspace:*",
-    "@tumbler/word": "workspace:*"
+    "@tumbler/slides": "workspace:*",
+    "@tumbler/word": "workspace:*",
+    "svelte": "^5.0.0"
   }
 }
