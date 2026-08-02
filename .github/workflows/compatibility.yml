@@ -59,3 +59,10 @@ jobs:
 
       - name: Round-trip with LibreOffice
         run: bun run compatibility:libreoffice -- "$RUNNER_TEMP/tumbler-input" "$RUNNER_TEMP/tumbler-output"
+
+      - name: Retain LibreOffice outputs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: libreoffice-roundtrip
+          path: ${{ runner.temp }}/tumbler-output

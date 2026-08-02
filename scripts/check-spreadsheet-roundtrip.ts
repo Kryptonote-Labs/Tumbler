@@ -18,8 +18,13 @@ for (const expectation of expectations) {
   if (worksheet.cell("B1")?.value.value !== expectation.input) {
     throw new Error(`${expectation.name} did not preserve the edited input.`);
   }
-  if (worksheet.cell("B2")?.formula !== "B1*2" || worksheet.cell("B2")?.value.value !== expectation.calculated) {
-    throw new Error(`${expectation.name} did not preserve and recalculate its formula.`);
+  const formula = worksheet.cell("B2");
+  if (formula?.formula !== "B1*2" || formula.value.value !== expectation.calculated) {
+    throw new Error(`${expectation.name} did not preserve and recalculate its formula: ${JSON.stringify({
+      formula: formula?.formula,
+      value: formula?.value,
+      expectedValue: expectation.calculated,
+    })}`);
   }
   console.log(`PASS ${expectation.name}`);
 }
