@@ -22,6 +22,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@tumbler/opc": "workspace:*",
+        "saxes": "6.0.0",
       },
     },
     "packages/opc": {

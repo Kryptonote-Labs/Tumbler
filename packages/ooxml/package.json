@@ -5,6 +5,7 @@
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@tumbler/opc": "workspace:*"
+    "@tumbler/opc": "workspace:*",
+    "saxes": "6.0.0"
   }
 }
