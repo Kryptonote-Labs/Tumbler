@@ -62,6 +62,24 @@ const editedBytes = transaction.commit();
 The transaction never mutates `pkg`. A failed commit remains active and leaves
 the source bytes unchanged; rollback discards all staged state.
 
+The shared OOXML layer can now perform the first typed cross-format edit:
+
+```ts
+import {
+  beginCorePropertiesEdit,
+  readCoreProperties,
+} from "@tumbler/ooxml";
+
+const properties = readCoreProperties(pkg);
+const editedBytes = beginCorePropertiesEdit(pkg)
+  .setTitle("Quarterly plan")
+  .setCreator("Kryptonote")
+  .commit();
+```
+
+Existing Core Properties XML is patched against original source spans. Missing
+metadata parts, content types, and relationships are created transactionally.
+
 ## Project documents
 
 - [Vision](docs/vision.md) defines the product, its boundaries, and its principles.
@@ -79,3 +97,5 @@ the source bytes unchanged; rollback discards all staged state.
   implementation handbook distilled from the standards and compatibility sources.
 - [OPC implementation status](docs/opc-implementation.md) maps the current code
   and tests to ECMA-376 Part 2 requirements and records deliberate gaps.
+- [OOXML implementation status](docs/ooxml-implementation.md) describes the
+  loss-aware XML, compatibility view, and Core Properties vertical slice.

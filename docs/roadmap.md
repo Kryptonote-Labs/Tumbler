@@ -35,16 +35,21 @@ and validation, including packages with unknown and embedded parts.
 
 ## Phase 2: shared OOXML vertical slice
 
-- Parse namespaces without losing prefixes or unknown markup.
-- Implement markup-compatibility traversal.
-- Represent Strict and Transitional forms.
-- Establish preservation anchors.
+- [x] Parse namespace-aware XML without losing prefixes, lexical ordering, or unknown markup.
+- [x] Apply atomic source-range edits and reparse before commit.
+- [x] Implement an initial read-only markup-compatibility traversal.
+- [x] Identify the shared Strict and Transitional vocabulary namespaces.
+- [x] Establish source-span preservation anchors.
+- [x] Prove a typed Core Properties edit across DOCX, XLSX, and PPTX.
+- [ ] Complete application-configured MCE processing for format vocabularies.
+- [ ] Add real-producer fixtures and external consumer validation.
 - Add common measurements, colors, themes, and DrawingML only as demanded by the
   first format.
 - Generate useful schema metadata without shipping an enormous runtime validator.
 
-Exit when a known subtree can be edited and rewritten while unknown neighbors
-remain intact.
+The known-subtree preservation exit condition is met for Core Properties.
+Phase 2 remains open for full MCE qualification and the shared primitives
+demanded by the first visible format.
 
 ## Phase 3: headless editing core
 

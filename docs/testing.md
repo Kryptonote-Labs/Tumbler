@@ -24,6 +24,13 @@ command histories, add/remove convergence, incoming-reference protection, and
 failed-commit rollback guarantees. Property tests use framework-reported seeds
 so a failure can be replayed and shrunk.
 
+The shared OOXML suite additionally covers source-span preservation, UTF-8 and
+both UTF-16 byte orders, lexical text/attribute/element patches, Strict and
+Transitional namespace recognition, Markup Compatibility branch selection,
+Core Properties edits across all three Office families, arbitrary-byte parsing,
+exhaustive one-byte fixture mutation, generated Unicode edits, and deterministic
+metadata command histories.
+
 Real-producer and external-validator tests remain a separate next step. Neither
 LibreOffice nor a checked-in Office fixture corpus was available in the initial
 local environment, so synthetic packages are not presented as interoperability
