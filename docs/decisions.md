@@ -45,8 +45,9 @@ regression, and performance budgets.
 
 ### The working project name is Tumbler
 
-Tumbler.js identifies the TypeScript implementation. Current work remains a
-private local monorepo with no registry package or remote repository.
+Tumbler.js identifies the TypeScript implementation. Source is public under MIT
+for early design and contribution, while workspace packages remain private and
+unpublished. Public source is not a stability or support promise.
 
 ### Public APIs wait for evidence
 

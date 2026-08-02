@@ -9,7 +9,7 @@ Svelte heads
       ↓
 Word / Sheets / Slides
       ↓
-Formula engine / Headless editing core
+Chart semantics / Formula engine / Headless editing core
       ↓
 Shared OOXML
       ↓
@@ -109,6 +109,18 @@ engine:
 
 It does not read OOXML, write caches, own workbook state, or depend on a UI. The
 Sheets package adapts SpreadsheetML cells and sheet identity into this engine.
+
+### `@tumbler/charts`
+
+Owns host-independent DrawingML chart semantics and deterministic geometry:
+
+- Chart part parsing, supported chart types, axes, series, legends, and titles;
+- cached string/numeric data and opaque source formulas;
+- cartesian scales and pie-family arc geometry;
+- explicit unsupported models for combinations outside a proven rendering slice.
+
+It does not resolve SpreadsheetML cells or depend on Svelte. Format packages
+bind host-document references; rendering heads consume the resulting model.
 
 ### `@tumbler/slides`
 
