@@ -10,12 +10,16 @@ export const OOXML_NAMESPACES = Object.freeze({
     spreadsheet: "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
     presentation: "http://schemas.openxmlformats.org/presentationml/2006/main",
     drawing: "http://schemas.openxmlformats.org/drawingml/2006/main",
+    spreadsheetDrawing: "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing",
+    chart: "http://schemas.openxmlformats.org/drawingml/2006/chart",
   }),
   strict: Object.freeze({
     wordprocessing: "http://purl.oclc.org/ooxml/wordprocessingml/main",
     spreadsheet: "http://purl.oclc.org/ooxml/spreadsheetml/main",
     presentation: "http://purl.oclc.org/ooxml/presentationml/main",
     drawing: "http://purl.oclc.org/ooxml/drawingml/main",
+    spreadsheetDrawing: "http://purl.oclc.org/ooxml/drawingml/spreadsheetDrawing",
+    chart: "http://purl.oclc.org/ooxml/drawingml/chart",
   }),
 });
 

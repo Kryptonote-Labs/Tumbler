@@ -36,6 +36,14 @@ export interface SheetFixture {
   readonly relationships?: readonly SheetRelationshipFixture[];
 }
 
+export interface PackagePartFixture {
+  /** ZIP item name without a leading slash. */
+  readonly itemName: string;
+  /** Omit for parts covered by a Content Types default, such as `.rels`. */
+  readonly contentType?: string;
+  readonly xml: string;
+}
+
 export interface WorkbookFixtureOptions {
   readonly conformance?: "strict" | "transitional";
   readonly workbookItemName?: string;
@@ -45,6 +53,7 @@ export interface WorkbookFixtureOptions {
   readonly stylesXml?: string;
   readonly themeXml?: string;
   readonly calculationChainXml?: string;
+  readonly parts?: readonly PackagePartFixture[];
 }
 
 export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint8Array {
@@ -88,6 +97,9 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
         ${sheets.flatMap((sheet, index) => sheet.tables?.map((table) =>
           `<Override PartName="/${resolveTargetItemName(worksheetDirectory(directory, sheet, index), table.target)}" ContentType="${TABLE_CONTENT_TYPE}"/>`
         ) ?? []).join("")}
+        ${options.parts?.filter((part) => part.contentType !== undefined).map((part) =>
+          `<Override PartName="/${part.itemName}" ContentType="${part.contentType}"/>`
+        ).join("") ?? ""}
       </Types>`),
     },
     {
@@ -132,6 +144,7 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
     ...(options.stylesXml === undefined ? [] : [{ name: stylesItemName, data: encoder.encode(options.stylesXml) }]),
     ...(options.themeXml === undefined ? [] : [{ name: themeItemName, data: encoder.encode(options.themeXml) }]),
     ...(options.calculationChainXml === undefined ? [] : [{ name: calculationChainItemName, data: encoder.encode(options.calculationChainXml) }]),
+    ...(options.parts?.map((part) => ({ name: part.itemName, data: encoder.encode(part.xml) })) ?? []),
   ]);
 }
 

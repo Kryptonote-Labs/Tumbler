@@ -17,6 +17,7 @@ import { readSpreadsheetStyles, type SpreadsheetCellFormat, type SpreadsheetStyl
 import { SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";
 import { parseSpreadsheetAutoFilter, readSpreadsheetTables, type SpreadsheetAutoFilter, type SpreadsheetTable } from "./tables.ts";
 import { readSpreadsheetHyperlinks, spreadsheetHyperlinkAt, type SpreadsheetHyperlink } from "./hyperlinks.ts";
+import { readSpreadsheetDrawing, type SpreadsheetDrawing } from "./drawings.ts";
 
 export type SpreadsheetCellValue =
   | { readonly type: "blank" }
@@ -74,6 +75,7 @@ export class SpreadsheetWorksheet {
   readonly tables: readonly SpreadsheetTable[];
   readonly autoFilter: SpreadsheetAutoFilter | undefined;
   readonly hyperlinks: readonly SpreadsheetHyperlink[];
+  readonly drawing: SpreadsheetDrawing | undefined;
   readonly styles: SpreadsheetStyles;
   readonly defaultRowHeight: number;
   readonly defaultColumnWidth: number;
@@ -94,6 +96,7 @@ export class SpreadsheetWorksheet {
     tables: readonly SpreadsheetTable[];
     autoFilter: SpreadsheetAutoFilter | undefined;
     hyperlinks: readonly SpreadsheetHyperlink[];
+    drawing: SpreadsheetDrawing | undefined;
     styles: SpreadsheetStyles;
     defaultRowHeight: number;
     defaultColumnWidth: number;
@@ -110,6 +113,7 @@ export class SpreadsheetWorksheet {
     this.tables = Object.freeze([...input.tables]);
     this.autoFilter = input.autoFilter;
     this.hyperlinks = Object.freeze([...input.hyperlinks]);
+    this.drawing = input.drawing;
     this.styles = input.styles;
     this.defaultRowHeight = input.defaultRowHeight;
     this.defaultColumnWidth = input.defaultColumnWidth;
@@ -266,6 +270,13 @@ export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetS
       worksheetPart: part,
       worksheetRoot: document.root,
       worksheetName: sheet.name,
+      spreadsheetNamespace: namespace,
+      relationshipsNamespace,
+    }),
+    drawing: readSpreadsheetDrawing({
+      workbook,
+      worksheetPart: part,
+      worksheetRoot: document.root,
       spreadsheetNamespace: namespace,
       relationshipsNamespace,
     }),

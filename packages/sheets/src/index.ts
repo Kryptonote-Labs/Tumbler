@@ -37,6 +37,7 @@ export {
   rowHeightToPixels,
   SpreadsheetWorksheet,
 } from "./worksheet.ts";
+export type { SpreadsheetDrawing } from "./drawings.ts";
 export type {
   SpreadsheetAutoFilter,
   SpreadsheetCustomFilter,
