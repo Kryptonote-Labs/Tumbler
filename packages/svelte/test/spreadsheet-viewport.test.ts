@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { compile } from "svelte/compiler";
 import { SparseAxisGeometry } from "@tumbler/core";
-import { calculateSpreadsheetViewport, coerceSpreadsheetEditValue, composeSpreadsheetGridLayout, frozenGridTranslation } from "../src/index.ts";
+import { calculateSpreadsheetViewport, coerceSpreadsheetEditValue, composeSpreadsheetGridLayout, frozenGridTranslation, measureMaximumDigitWidth, spreadsheetFontShorthand } from "../src/index.ts";
 
 describe("Svelte spreadsheet viewport", () => {
   test("mounts only a small overscanned window for an Excel-sized grid", () => {
@@ -112,5 +112,20 @@ describe("Svelte spreadsheet viewport", () => {
     expect(coerceSpreadsheetEditValue("001", { type: "string", value: "old", storage: "inline" })).toBe("001");
     expect(coerceSpreadsheetEditValue("12 apples", { type: "number", value: 12, lexical: "12" })).toBe("12 apples");
     expect(coerceSpreadsheetEditValue("", undefined)).toBe("");
+  });
+
+  test("derives standard column metrics from the Normal style font", () => {
+    expect(measureMaximumDigitWidth((digit) => digit === "8" ? 8.6 : 7.2)).toBe(9);
+    expect(measureMaximumDigitWidth(() => Number.NaN)).toBe(7);
+    expect(spreadsheetFontShorthand({
+      name: "cached",
+      scheme: "minor",
+      size: 12,
+      bold: true,
+      italic: true,
+      underline: undefined,
+      strike: false,
+      color: undefined,
+    }, `Aptos "Display"`)).toBe(`italic 700 12pt "Aptos \\"Display\\""`);
   });
 });

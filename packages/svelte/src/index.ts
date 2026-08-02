@@ -1,6 +1,10 @@
 /** Replaceable Svelte heads for Tumbler's format packages. */
 /** Owned Svelte heads for Tumbler's format-neutral document models. */
 export { default as SpreadsheetGrid } from "./SpreadsheetGrid.svelte";
+export {
+  measureMaximumDigitWidth,
+  spreadsheetFontShorthand,
+} from "./spreadsheet-font-metrics.ts";
 export { calculateSpreadsheetViewport } from "./spreadsheet-viewport.ts";
 export type {
   SpreadsheetViewport,

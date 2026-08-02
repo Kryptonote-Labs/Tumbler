@@ -5,6 +5,7 @@
   import { calculateSpreadsheetViewport } from "./spreadsheet-viewport.ts";
   import { composeSpreadsheetGridLayout, frozenGridTranslation } from "./spreadsheet-grid-layout.ts";
   import { coerceSpreadsheetEditValue, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
+  import { measureMaximumDigitWidth, spreadsheetFontShorthand } from "./spreadsheet-font-metrics.ts";
 
   interface Props {
     readonly worksheet: SpreadsheetWorksheet;
@@ -35,10 +36,11 @@
   let editing = $state<string>();
   let editor = $state<HTMLInputElement>();
   let draft = $state("");
+  let maximumDigitWidth = $state(7);
   const rowHeaderWidth = 52;
   const columnHeaderHeight = 28;
   let rowGeometry = $derived(worksheet.rowGeometry(rowCount));
-  let columnGeometry = $derived(worksheet.columnGeometry(columnCount));
+  let columnGeometry = $derived(worksheet.columnGeometry(columnCount, maximumDigitWidth));
   let frozenPane = $derived(worksheet.panes.find((pane) => pane.state === "frozen" || pane.state === "frozenSplit"));
   let frozenRows = $derived(Math.min(rowCount, Math.max(0, Math.floor(frozenPane?.ySplit ?? 0))));
   let frozenColumns = $derived(Math.min(columnCount, Math.max(0, Math.floor(frozenPane?.xSplit ?? 0))));
@@ -65,6 +67,27 @@
       editor?.focus();
       editor?.select();
     });
+  });
+
+  $effect(() => {
+    const styles = worksheet.styles;
+    const font = styles.resolve(0).font;
+    const name = styles.resolveFontName(font);
+    if (name === undefined || typeof document === "undefined") {
+      maximumDigitWidth = 7;
+      return;
+    }
+    let current = true;
+    const shorthand = spreadsheetFontShorthand(font, name);
+    const refresh = () => {
+      const context = document.createElement("canvas").getContext("2d");
+      if (context === null || !current) return;
+      context.font = shorthand;
+      maximumDigitWidth = measureMaximumDigitWidth((digit) => context.measureText(digit).width);
+    };
+    refresh();
+    void document.fonts?.load(shorthand).then(refresh);
+    return () => { current = false; };
   });
 
   function select(row: number, column: number, extend = false) {
