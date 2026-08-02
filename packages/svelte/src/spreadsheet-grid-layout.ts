@@ -62,6 +62,14 @@ export function spreadsheetCellLayer(input: {
   return input.row <= input.frozenRows || input.column <= input.frozenColumns ? 2 : 1;
 }
 
+export function frozenAxisExtent(geometry: SparseAxisGeometry, frozenCount: number): number {
+  if (!Number.isSafeInteger(frozenCount) || frozenCount < 0) {
+    throw new RangeError("Frozen axis count must be a non-negative integer.");
+  }
+  const last = Math.min(frozenCount, geometry.count);
+  return last === 0 ? 0 : geometry.start(last) + geometry.size(last);
+}
+
 function includeFrozen(items: readonly VirtualGridItem[], geometry: SparseAxisGeometry, frozenCount: number): readonly VirtualGridItem[] {
   const byIndex = new Map(items.map((item) => [item.index, item]));
   for (let index = 1; index <= Math.min(frozenCount, geometry.count); index += 1) {

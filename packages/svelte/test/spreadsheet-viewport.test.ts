@@ -3,7 +3,7 @@ import fc from "fast-check";
 import { compile } from "svelte/compiler";
 import { SparseAxisGeometry } from "@tumbler/core";
 import { calculateSpreadsheetViewport, coerceSpreadsheetEditValue, composeSpreadsheetGridLayout, frozenGridTranslation, measureMaximumDigitWidth, spreadsheetFontShorthand } from "../src/index.ts";
-import { spreadsheetCellLayer } from "../src/spreadsheet-grid-layout.ts";
+import { frozenAxisExtent, spreadsheetCellLayer } from "../src/spreadsheet-grid-layout.ts";
 
 describe("Svelte spreadsheet viewport", () => {
   test("mounts only a small overscanned window for an Excel-sized grid", () => {
@@ -141,6 +141,15 @@ describe("Svelte spreadsheet viewport", () => {
     expect(spreadsheetCellLayer({ row: 5, column: 5, frozenRows: 2, frozenColumns: 1 })).toBe(1);
     expect(spreadsheetCellLayer({ row: 1, column: 5, frozenRows: 2, frozenColumns: 1 })).toBe(2);
     expect(spreadsheetCellLayer({ row: 5, column: 1, frozenRows: 2, frozenColumns: 1 })).toBe(2);
+  });
+
+  test("clips scrolling gutters after the frozen axis extent", () => {
+    const geometry = new SparseAxisGeometry(10, 20, [{ index: 1, size: 30 }, { index: 2, size: 0 }, { index: 3, size: 25 }]);
+    expect(frozenAxisExtent(geometry, 0)).toBe(0);
+    expect(frozenAxisExtent(geometry, 1)).toBe(30);
+    expect(frozenAxisExtent(geometry, 2)).toBe(30);
+    expect(frozenAxisExtent(geometry, 3)).toBe(55);
+    expect(() => frozenAxisExtent(geometry, -1)).toThrow(RangeError);
   });
 
   test("coerces grid editor input into typed scalar edits", () => {

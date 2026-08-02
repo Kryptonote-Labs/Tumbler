@@ -18,7 +18,7 @@
     type SpreadsheetWorksheet,
   } from "@tumbler/sheets";
   import { calculateSpreadsheetViewport } from "./spreadsheet-viewport.ts";
-  import { composeSpreadsheetGridLayout, frozenGridTranslation, spreadsheetCellLayer } from "./spreadsheet-grid-layout.ts";
+  import { composeSpreadsheetGridLayout, frozenAxisExtent, frozenGridTranslation, spreadsheetCellLayer } from "./spreadsheet-grid-layout.ts";
   import { coerceSpreadsheetEditValue, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
   import { measureMaximumDigitWidth, spreadsheetFontShorthand } from "./spreadsheet-font-metrics.ts";
   import { spreadsheetCellContentCss, spreadsheetCellCss } from "./spreadsheet-cell-style.ts";
@@ -91,6 +91,8 @@
   let frozenPane = $derived(worksheet.panes.find((pane) => pane.state === "frozen" || pane.state === "frozenSplit"));
   let frozenRows = $derived(Math.min(rowCount, Math.max(0, Math.floor(frozenPane?.ySplit ?? 0))));
   let frozenColumns = $derived(Math.min(columnCount, Math.max(0, Math.floor(frozenPane?.xSplit ?? 0))));
+  let frozenRowsHeight = $derived(frozenAxisExtent(rowGeometry, frozenRows));
+  let frozenColumnsWidth = $derived(frozenAxisExtent(columnGeometry, frozenColumns));
   let viewport = $derived(calculateSpreadsheetViewport({
     rowCount,
     columnCount,
@@ -435,22 +437,40 @@
     </div>
   </div>
   <div class="column-gutter">
-    {#each gutterLayout.columns as column (column.index)}
-      <div
-        class="column-header"
-        style:left={`${column.start - (column.index <= frozenColumns ? 0 : scrollLeft)}px`}
-        style:width={`${column.size}px`}
-      >{columnLabel(column.index)}</div>
-    {/each}
+    <div class="scrolling-column-headers" style:left={`${frozenColumnsWidth}px`}>
+      {#each gutterLayout.columns.filter((column) => column.index > frozenColumns) as column (column.index)}
+        <div
+          class="column-header"
+          style:left={`${column.start - scrollLeft - frozenColumnsWidth}px`}
+          style:width={`${column.size}px`}
+        >{columnLabel(column.index)}</div>
+      {/each}
+    </div>
+    {#if frozenColumnsWidth > 0}
+      <div class="frozen-column-headers" style:width={`${frozenColumnsWidth}px`}>
+        {#each gutterLayout.columns.filter((column) => column.index <= frozenColumns) as column (column.index)}
+          <div class="column-header" style:left={`${column.start}px`} style:width={`${column.size}px`}>{columnLabel(column.index)}</div>
+        {/each}
+      </div>
+    {/if}
   </div>
   <div class="row-gutter">
-    {#each gutterLayout.rows as row (row.index)}
-      <div
-        class="row-header"
-        style:top={`${row.start - (row.index <= frozenRows ? 0 : scrollTop)}px`}
-        style:height={`${row.size}px`}
-      >{row.index}</div>
-    {/each}
+    <div class="scrolling-row-headers" style:top={`${frozenRowsHeight}px`}>
+      {#each gutterLayout.rows.filter((row) => row.index > frozenRows) as row (row.index)}
+        <div
+          class="row-header"
+          style:top={`${row.start - scrollTop - frozenRowsHeight}px`}
+          style:height={`${row.size}px`}
+        >{row.index}</div>
+      {/each}
+    </div>
+    {#if frozenRowsHeight > 0}
+      <div class="frozen-row-headers" style:height={`${frozenRowsHeight}px`}>
+        {#each gutterLayout.rows.filter((row) => row.index <= frozenRows) as row (row.index)}
+          <div class="row-header" style:top={`${row.start}px`} style:height={`${row.size}px`}>{row.index}</div>
+        {/each}
+      </div>
+    {/if}
   </div>
   <div class="corner"></div>
 </div>
@@ -480,6 +500,11 @@
   .canvas { position: relative; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
   .column-gutter { position: absolute; left: 52px; right: 0; top: 0; z-index: 3; height: 28px; overflow: hidden; pointer-events: none; background: var(--tumbler-grid-header-bg, #171b17); }
   .row-gutter { position: absolute; left: 0; top: 28px; bottom: 0; z-index: 3; width: 52px; overflow: hidden; pointer-events: none; background: var(--tumbler-grid-header-bg, #171b17); }
+  .scrolling-column-headers, .frozen-column-headers, .scrolling-row-headers, .frozen-row-headers { position: absolute; overflow: hidden; }
+  .scrolling-column-headers { right: 0; top: 0; bottom: 0; }
+  .frozen-column-headers { left: 0; top: 0; bottom: 0; z-index: 1; background: var(--tumbler-grid-header-bg, #171b17); }
+  .scrolling-row-headers { left: 0; right: 0; bottom: 0; }
+  .frozen-row-headers { left: 0; right: 0; top: 0; z-index: 1; background: var(--tumbler-grid-header-bg, #171b17); }
   .corner, .column-header, .row-header { position: absolute; box-sizing: border-box; background: var(--tumbler-grid-header-bg, #171b17); color: var(--tumbler-grid-muted, #9aa79a); border: 0 solid var(--tumbler-grid-line, #2a302a); }
   .corner { left: 0; top: 0; width: 52px; height: 28px; border-right-width: 1px; border-bottom-width: 1px; z-index: 4; pointer-events: none; }
   .column-header { top: 0; height: 28px; display: grid; place-items: center; border-right-width: 1px; border-bottom-width: 1px; }
