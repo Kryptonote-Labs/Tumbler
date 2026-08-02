@@ -154,10 +154,17 @@ export class SpreadsheetWorksheet {
     });
   }
 
-  rowGeometry(count = EXCEL_MAX_ROWS): SparseAxisGeometry {
-    return new SparseAxisGeometry(count, this.defaultRowHeight * 4 / 3, this.rows
+  rowGeometry(count = EXCEL_MAX_ROWS, projectedRows: ReadonlyMap<number, number | undefined> = new Map()): SparseAxisGeometry {
+    const rows = new Map(this.rows
       .filter((row) => row.index <= count && (row.hidden || row.height !== undefined))
-      .map((row) => ({ index: row.index, size: row.hidden ? 0 : (row.height ?? this.defaultRowHeight) * 4 / 3 })));
+      .map((row) => [row.index, row.hidden ? 0 : (row.height ?? this.defaultRowHeight) * 4 / 3]));
+    for (const [visualRow, sourceRow] of projectedRows) {
+      if (visualRow < 1 || visualRow > count) continue;
+      if (sourceRow === undefined) rows.set(visualRow, 0);
+      else rows.set(visualRow, (this.#rows.get(sourceRow)?.height ?? this.defaultRowHeight) * 4 / 3);
+    }
+    return new SparseAxisGeometry(count, this.defaultRowHeight * 4 / 3,
+      [...rows].map(([index, size]) => ({ index, size })));
   }
 
   columnGeometry(count = EXCEL_MAX_COLUMNS, maximumDigitWidth = 7): SparseAxisGeometry {

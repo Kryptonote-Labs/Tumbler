@@ -131,6 +131,9 @@ describe("SpreadsheetML sparse worksheets", () => {
     expect(rows.defaultSize).toBe(24);
     expect(rows.size(2)).toBe(40);
     expect(rows.size(4)).toBe(0);
+    const projectedRows = worksheet.rowGeometry(10, new Map([[2, 4], [3, undefined]]));
+    expect(projectedRows.size(2)).toBe(24);
+    expect(projectedRows.size(3)).toBe(0);
     expect(columns.defaultSize).toBe(columnWidthToPixels(10));
     expect(columns.size(2)).toBe(columnWidthToPixels(20));
     expect(columns.size(3)).toBe(columnWidthToPixels(20));
