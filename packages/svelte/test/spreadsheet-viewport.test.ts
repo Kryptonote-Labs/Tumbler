@@ -91,6 +91,13 @@ describe("Svelte spreadsheet viewport", () => {
     expect(source).not.toContain("frozenGridTranslation({ row");
   });
 
+  test("disables browser autofill for the transient cell editor", async () => {
+    const source = await Bun.file(new URL("../src/SpreadsheetGrid.svelte", import.meta.url)).text();
+    const result = compile(source, { filename: "SpreadsheetGrid.svelte", generate: "client", modernAst: true });
+    expect(result.warnings).toHaveLength(0);
+    expect(source).toContain('autocomplete="off"');
+  });
+
   test("rejects invalid viewport geometry", () => {
     const valid = {
       rowCount: 1,

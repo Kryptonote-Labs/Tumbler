@@ -378,7 +378,14 @@
     ondblclick={() => beginEdit(sourceRow, column)}
   >
     {#if editing === reference}
-      <input bind:this={editor} bind:value={draft} onkeydown={inputKeydown} onblur={() => finishEdit(true)} aria-label={`Edit ${reference}`} />
+      <input
+        bind:this={editor}
+        bind:value={draft}
+        autocomplete="off"
+        onkeydown={inputKeydown}
+        onblur={() => finishEdit(true)}
+        aria-label={`Edit ${reference}`}
+      />
     {:else}
       <span style={spreadsheetCellContentCss(worksheet, reference)}>{displayCell(reference)}</span>
       {#if header !== undefined && tableButtonVisible(header.table, header.columnId)}
