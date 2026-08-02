@@ -39,6 +39,7 @@
       "dependencies": {
         "@tumbler/core": "workspace:*",
         "@tumbler/ooxml": "workspace:*",
+        "@tumbler/opc": "workspace:*",
       },
     },
     "packages/slides": {
