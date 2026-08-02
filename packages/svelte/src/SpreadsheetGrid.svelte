@@ -13,6 +13,7 @@
     spreadsheetTableDistinctValues,
     type SpreadsheetCellValue,
     type SpreadsheetCalculationSnapshot,
+    type SpreadsheetHyperlink,
     type SpreadsheetTable,
     type SpreadsheetTableViewState,
     type SpreadsheetWorksheet,
@@ -29,6 +30,7 @@
     selection?: GridSelection;
     readonly onselectionchange?: (selection: GridSelection) => void;
     readonly onedit?: (edit: SpreadsheetGridEdit) => void;
+    readonly onhyperlink?: (hyperlink: SpreadsheetHyperlink) => void;
     /** Prevents cell edits while retaining selection and table view controls. */
     readonly readonly?: boolean;
     readonly rowCount?: number;
@@ -43,6 +45,7 @@
     selection = createGridSelection({ row: 1, column: 1 }),
     onselectionchange,
     onedit,
+    onhyperlink,
     readonly = false,
     rowCount = EXCEL_MAX_ROWS,
     columnCount = EXCEL_MAX_COLUMNS,
@@ -218,6 +221,7 @@
   }
 
   function cellKeydown(event: KeyboardEvent, row: number, column: number) {
+    if (event.target !== event.currentTarget) return;
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       select(row, column, event.shiftKey);
@@ -256,6 +260,12 @@
 
   function displayCell(reference: string): string {
     return calculation?.displayText(reference) ?? worksheet.displayText(reference);
+  }
+
+  function activateHyperlink(event: MouseEvent, hyperlink: SpreadsheetHyperlink, row: number, column: number) {
+    event.stopPropagation();
+    select(row, column);
+    onhyperlink?.(hyperlink);
   }
 
   function columnLabel(column: number): string {
@@ -359,6 +369,7 @@
 
 {#snippet gridCell(reference: string, sourceRow: number, column: number, left: number, top: number, width: number, height: number, zIndex: number)}
   {@const header = tableHeader(sourceRow, column)}
+  {@const hyperlink = worksheet.hyperlink({ row: sourceRow, column })}
   <div
     class:selected={selected(sourceRow, column)}
     class:focused={selection.focus.row === sourceRow && selection.focus.column === column}
@@ -387,7 +398,17 @@
         aria-label={`Edit ${reference}`}
       />
     {:else}
-      <span style={spreadsheetCellContentCss(worksheet, reference)}>{displayCell(reference)}</span>
+      {#if hyperlink === undefined}
+        <span style={spreadsheetCellContentCss(worksheet, reference)}>{displayCell(reference)}</span>
+      {:else}
+        <button
+          class="cell-hyperlink"
+          type="button"
+          title={hyperlink.tooltip}
+          style={spreadsheetCellContentCss(worksheet, reference)}
+          onclick={(event) => activateHyperlink(event, hyperlink, sourceRow, column)}
+        >{hyperlink.display ?? displayCell(reference)}</button>
+      {/if}
       {#if header !== undefined && tableButtonVisible(header.table, header.columnId)}
         <button
           class="table-menu-button"
@@ -553,6 +574,8 @@
   .cell.table-header { align-items: center; font-weight: 600; padding-right: 30px; }
   .table-menu-button { position: absolute; right: 4px; top: 50%; width: 20px; height: 20px; padding: 0; translate: 0 -50%; border: 1px solid transparent; border-radius: 3px; color: inherit; background: color-mix(in srgb, currentColor 10%, transparent); cursor: pointer; }
   .table-menu-button:hover, .table-menu-button:focus-visible, .table-menu-button.active { border-color: var(--tumbler-grid-accent, #42ff53); outline: none; }
+  .cell-hyperlink { overflow: hidden; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: inherit; text-decoration: inherit; text-overflow: inherit; white-space: inherit; cursor: pointer; }
+  .cell-hyperlink:focus-visible { outline: 1px solid currentColor; outline-offset: 1px; }
   .menu-scrim { position: fixed; inset: 0; z-index: 9998; border: 0; background: transparent; }
   .table-menu { position: fixed; z-index: 9999; width: 220px; overflow: hidden; border: 1px solid var(--tumbler-grid-line, #2a302a); border-radius: 8px; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-header-bg, #171b17); box-shadow: 0 12px 36px rgb(0 0 0 / 35%); font: 13px/1.3 system-ui, sans-serif; }
   .table-menu > button { display: block; width: 100%; padding: 9px 12px; border: 0; color: inherit; background: transparent; text-align: left; cursor: pointer; }
