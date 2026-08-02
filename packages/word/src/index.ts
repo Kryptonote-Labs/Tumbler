@@ -1,0 +1,2 @@
+/** WordprocessingML editing model. */
+export {};

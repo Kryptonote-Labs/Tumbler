@@ -1,0 +1,2 @@
+/** PresentationML editing model. */
+export {};

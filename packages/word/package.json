@@ -1,0 +1,11 @@
+{
+  "name": "@tumbler/word",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@tumbler/core": "workspace:*",
+    "@tumbler/ooxml": "workspace:*"
+  }
+}

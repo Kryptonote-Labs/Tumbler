@@ -1,0 +1,95 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "tumbler-js",
+      "devDependencies": {
+        "typescript": "^5.9.2",
+      },
+    },
+    "packages/core": {
+      "name": "@tumbler/core",
+      "version": "0.0.0",
+      "dependencies": {
+        "@tumbler/ooxml": "workspace:*",
+      },
+    },
+    "packages/ooxml": {
+      "name": "@tumbler/ooxml",
+      "version": "0.0.0",
+      "dependencies": {
+        "@tumbler/opc": "workspace:*",
+      },
+    },
+    "packages/opc": {
+      "name": "@tumbler/opc",
+      "version": "0.0.0",
+    },
+    "packages/sheets": {
+      "name": "@tumbler/sheets",
+      "version": "0.0.0",
+      "dependencies": {
+        "@tumbler/core": "workspace:*",
+        "@tumbler/ooxml": "workspace:*",
+      },
+    },
+    "packages/slides": {
+      "name": "@tumbler/slides",
+      "version": "0.0.0",
+      "dependencies": {
+        "@tumbler/core": "workspace:*",
+        "@tumbler/ooxml": "workspace:*",
+      },
+    },
+    "packages/svelte": {
+      "name": "@tumbler/svelte",
+      "version": "0.0.0",
+      "dependencies": {
+        "@tumbler/core": "workspace:*",
+        "@tumbler/sheets": "workspace:*",
+        "@tumbler/slides": "workspace:*",
+        "@tumbler/word": "workspace:*",
+      },
+    },
+    "packages/testkit": {
+      "name": "@tumbler/testkit",
+      "version": "0.0.0",
+      "dependencies": {
+        "@tumbler/core": "workspace:*",
+        "@tumbler/ooxml": "workspace:*",
+        "@tumbler/opc": "workspace:*",
+        "@tumbler/sheets": "workspace:*",
+        "@tumbler/slides": "workspace:*",
+        "@tumbler/word": "workspace:*",
+      },
+    },
+    "packages/word": {
+      "name": "@tumbler/word",
+      "version": "0.0.0",
+      "dependencies": {
+        "@tumbler/core": "workspace:*",
+        "@tumbler/ooxml": "workspace:*",
+      },
+    },
+  },
+  "packages": {
+    "@tumbler/core": ["@tumbler/core@workspace:packages/core"],
+
+    "@tumbler/ooxml": ["@tumbler/ooxml@workspace:packages/ooxml"],
+
+    "@tumbler/opc": ["@tumbler/opc@workspace:packages/opc"],
+
+    "@tumbler/sheets": ["@tumbler/sheets@workspace:packages/sheets"],
+
+    "@tumbler/slides": ["@tumbler/slides@workspace:packages/slides"],
+
+    "@tumbler/svelte": ["@tumbler/svelte@workspace:packages/svelte"],
+
+    "@tumbler/testkit": ["@tumbler/testkit@workspace:packages/testkit"],
+
+    "@tumbler/word": ["@tumbler/word@workspace:packages/word"],
+
+    "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+  }
+}

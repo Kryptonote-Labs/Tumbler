@@ -1,0 +1,20 @@
+{
+  "name": "tumbler-js",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "check": "tsc --noEmit",
+    "references:fetch": "bash scripts/fetch-reference-sources.sh",
+    "test": "$npm_execpath test --pass-with-no-tests"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  }
+}

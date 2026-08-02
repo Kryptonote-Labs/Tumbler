@@ -1,0 +1,2 @@
+/** SpreadsheetML editing model. */
+export {};
