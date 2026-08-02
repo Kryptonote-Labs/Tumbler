@@ -61,6 +61,11 @@ export const SPREADSHEET_REQUIREMENTS = defineRequirementManifest([
   requirement("XLSX-TABLE-PARTS", "§18.3.1.94–95, §18.5.1.2–3", "spreadsheet.tables", ["tables.test.ts", "table-view.test.ts", "preservation.test.ts"], { recognize: "supported", preserve: "supported", render: "partial" }),
   requirement("XLSX-AUTOFILTER", "§18.3.1.2, §18.3.1.92, §18.3.2.7–10", "spreadsheet.filters", ["tables.test.ts", "table-view.test.ts", "spreadsheet-viewport.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }),
   requirement("XLSX-HYPERLINKS", "§18.3.1.47–48", "spreadsheet.hyperlinks", ["hyperlinks.test.ts", "preservation.test.ts", "spreadsheet-viewport.test.ts"], { recognize: "supported", preserve: "supported", render: "partial" }),
+  requirement("XLSX-DRAWING-PARTS", "§12.3.8, §18.3.1.36", "spreadsheet.drawings", ["drawings.test.ts", "preservation.test.ts"], { preserve: "supported" }),
+  requirement("XLSX-DRAWING-ANCHORS", "§20.5.2.1, §20.5.2.24, §20.5.2.33", "spreadsheet.drawing-anchors", ["drawing-anchors.test.ts", "spreadsheet-viewport.test.ts"], {}),
+  requirement("XLSX-CHART-PARTS", "§14.2.1, §21.2.2.27, §21.2.2.29", "spreadsheet.charts", ["charts.test.ts", "preservation.test.ts"], { preserve: "supported" }),
+  requirement("XLSX-CHART-SERIES", "§21.2.2.65, §21.2.2.120, §21.2.2.123, §21.2.2.199, §21.2.2.201", "spreadsheet.chart-data", ["charts.test.ts", "chart-data.test.ts"], {}),
+  requirement("XLSX-CHART-RENDERING", "§21.2.2.16, §21.2.2.97, §21.2.2.141", "spreadsheet.chart-rendering", ["chart-layout.test.ts", "spreadsheet-charts.test.ts"], {}),
   requirement("XLSX-FORMULA-GRAMMAR", "§2.2.2", "spreadsheet.formula-grammar", ["parser.test.ts", "calculation.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }, "MS-XLSX"),
   requirement("XLSX-FORMULA-EVALUATION", "§18.17.2–7", "spreadsheet.formula-evaluation", ["evaluator.test.ts", "calculation.test.ts", "spreadsheet-viewport.test.ts"], { recognize: "partial", preserve: "supported", render: "partial", edit: "partial" }),
 ] as const);
