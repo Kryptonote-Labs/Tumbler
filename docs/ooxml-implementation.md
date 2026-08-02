@@ -23,6 +23,7 @@ syntax without trusting it.
 - replacing element text;
 - setting, inserting, and removing attributes;
 - appending simple text elements;
+- inserting, replacing, and appending nested markup with whole-document validation;
 - removing elements;
 - deterministic multiple insertions;
 - overlap rejection;
@@ -69,8 +70,9 @@ Implemented behavior includes:
 - exact preservation of unrelated compressed package entries.
 
 The same tests execute against Word, spreadsheet, and presentation packages.
-This is metadata editing, not yet paragraph, cell, formula, shape, or slide
-editing.
+This shared slice remains metadata-oriented. Spreadsheet cell parsing and
+literal editing now exist in `@tumbler/sheets`; paragraph, shape, and slide
+editing do not.
 
 ## Qualification evidence and gaps
 
@@ -81,13 +83,14 @@ and edit/remove convergence.
 
 Remaining boundaries:
 
-- The lexical writer handles the operations needed by the current vertical
-  slice; it is not a general XML construction API.
+- Raw nested-markup operations are deliberately low-level and are accepted only
+  after the complete result reparses. Format packages should expose typed
+  operations instead of passing user-authored XML through this API.
 - Full MCE processing and preservation inside application-defined extension
   elements need more Part 3 work.
 - Schema-derived validation is intentionally focused. It does not replace the
   official schemas or Open XML SDK validation.
-- No WordprocessingML, SpreadsheetML, PresentationML, or DrawingML semantic
-  model exists yet.
+- The first bounded SpreadsheetML model exists. WordprocessingML,
+  PresentationML, DrawingML, styles, and formula semantics do not yet.
 - Real Microsoft Office, LibreOffice, Open XML SDK, and Apache POI qualification
   remains blocked on local tools and licensed/provenanced fixtures.

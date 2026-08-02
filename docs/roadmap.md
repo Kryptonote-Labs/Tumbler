@@ -65,8 +65,23 @@ framework.
 
 ## Phase 4: first format
 
-Choose the first format deliberately; do not default to spreadsheets merely
-because their grid is visually familiar.
+SpreadsheetML is the selected first format. The first bounded vertical slice is
+now implemented:
+
+- [x] discover ordered worksheet parts through Strict or Transitional relationships;
+- [x] parse sparse scalar cells, formulas with cached values, and shared/inline rich text;
+- [x] parse dimensions, merges, panes, and basic row/column layout;
+- [x] select and navigate the grid without DOM state;
+- [x] edit literal string, number, and boolean values and clear cells;
+- [x] save only changed worksheet parts and reopen the result;
+- [x] render an owned, virtualized Svelte grid with edit callbacks;
+- [ ] compute styles and number formats;
+- [ ] render variable geometry, merges, and frozen panes;
+- [ ] edit formulas and structural ranges safely;
+- [ ] pass Open XML SDK, LibreOffice, and Microsoft Excel round trips.
+
+The remaining format order still follows deliberate value and evidence, not
+visual familiarity alone.
 
 Selection criteria:
 

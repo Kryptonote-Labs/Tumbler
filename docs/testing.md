@@ -31,6 +31,17 @@ Core Properties edits across all three Office families, arbitrary-byte parsing,
 exhaustive one-byte fixture mutation, generated Unicode edits, and deterministic
 metadata command histories.
 
+The first SpreadsheetML suite covers Strict and Transitional workbook graphs,
+case-insensitive sheet-name and numeric identity constraints, A1 references and
+ranges, plain/rich/phonetic shared strings, every standard cell data-type tag,
+formula/cached-value separation, inferred sparse coordinates, dimensions,
+merges, panes, row and column layout, isolated literal cell saves, and exact
+compressed preservation of unrelated package entries. Generated tests include
+5,000 A1 round trips, 200 randomized sparse edit histories, a 10,000-cell sheet
+spanning the maximum Excel column, 2,000 navigation histories, and 3,000
+virtualization geometries. The Svelte component is compiled during tests and
+must produce no accessibility warnings.
+
 Real-producer and external-validator tests remain a separate next step. Neither
 LibreOffice nor a checked-in Office fixture corpus was available in the initial
 local environment, so synthetic packages are not presented as interoperability
