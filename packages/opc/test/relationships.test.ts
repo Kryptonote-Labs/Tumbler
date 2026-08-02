@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  createRelationship,
   parseRelationships,
   PartName,
   relationshipItemName,
+  Relationships,
   RelationshipsError,
+  serializeRelationships,
   type RelationshipsErrorCode,
 } from "../src/index.ts";
 import { openZipArchive } from "../src/zip/archive.ts";
@@ -143,6 +146,38 @@ describe("relationships", () => {
   test("reports a missing relationship item", () => {
     const archive = openZipArchive(buildStoredZip([{ name: "word/document.xml" }]));
     expectRelationshipsError(() => parseRelationships(archive, null), "missing_item");
+  });
+
+  test("creates relative internal targets and serializes parseable XML", () => {
+    const source = PartName.parse("/word/document.xml");
+    const created = createRelationship(source, {
+      id: "image",
+      type: "https://example.test/image",
+      target: PartName.parse("/media/image%201.png"),
+      fragment: "shape 1",
+    });
+    expect(created.target).toBe("../media/image%201.png#shape%201");
+    const xml = serializeRelationships(new Relationships(source, [created]));
+    const reparsed = parsePartRelationships(source, new TextDecoder().decode(xml));
+    const relationship = reparsed.get("image");
+    expect(relationship?.targetMode).toBe("Internal");
+    if (relationship?.targetMode === "Internal") {
+      expect(relationship.targetPartName.value).toBe("/media/image%201.png");
+      expect(relationship.fragment).toBe("shape%201");
+    }
+  });
+
+  test("serializes external targets without resolving them", () => {
+    const created = createRelationship(null, {
+      id: "web",
+      type: "https://example.test/web",
+      target: "https://example.com/?a=1&b=2",
+      targetMode: "External",
+    });
+    const xml = serializeRelationships(new Relationships(null, [created]));
+    expect(parsePackageRelationships(new TextDecoder().decode(xml)).get("web")).toEqual(
+      created,
+    );
   });
 });
 

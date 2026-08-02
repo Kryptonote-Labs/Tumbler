@@ -68,6 +68,66 @@ export class Relationships {
   }
 }
 
+export interface NewInternalRelationship {
+  readonly id: string;
+  readonly type: string;
+  readonly target: PartName;
+  readonly targetMode?: "Internal";
+  readonly fragment?: string;
+}
+
+export interface NewExternalRelationship {
+  readonly id: string;
+  readonly type: string;
+  readonly target: string;
+  readonly targetMode: "External";
+}
+
+export type NewRelationship = NewInternalRelationship | NewExternalRelationship;
+
+export function createRelationship(
+  source: PartName | null,
+  input: NewRelationship,
+): Relationship {
+  validateRelationshipMetadata(input.id, input.type, input.target.toString());
+  if (input.targetMode === "External") {
+    return Object.freeze({
+      id: input.id,
+      type: input.type,
+      target: input.target,
+      targetMode: "External",
+    });
+  }
+  if (input.fragment?.includes("#")) {
+    throw new RelationshipsError(
+      "invalid_target",
+      "A relationship fragment must not contain a number sign.",
+    );
+  }
+  const target = relativeTarget(source, input.target) +
+    (input.fragment === undefined ? "" : `#${encodeURIComponent(input.fragment)}`);
+  return Object.freeze({
+    id: input.id,
+    type: input.type,
+    target,
+    targetMode: "Internal",
+    targetPartName: input.target,
+    fragment: input.fragment,
+  });
+}
+
+export function serializeRelationships(relationships: Relationships): Uint8Array {
+  const children = relationships.items.map((relationship) => {
+    const targetMode = relationship.targetMode === "External"
+      ? ' TargetMode="External"'
+      : "";
+    return `<Relationship Id="${escapeXmlAttribute(relationship.id)}" Type="${escapeXmlAttribute(relationship.type)}" Target="${escapeXmlAttribute(relationship.target)}"${targetMode}/>`;
+  }).join("");
+  return new TextEncoder().encode(
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${RELATIONSHIPS_NAMESPACE}">${children}</Relationships>`,
+  );
+}
+
 export function relationshipItemName(source: PartName | null): string {
   if (source === null) {
     return "_rels/.rels";
@@ -138,12 +198,7 @@ export function parseRelationships(
             "A Relationship is missing Id, Type, or Target.",
           );
         }
-        if (!isXmlId(id) || !ABSOLUTE_IRI.test(type) || target.length === 0) {
-          throw new RelationshipsError(
-            "invalid_relationship",
-            `Relationship ${JSON.stringify(id)} has invalid metadata.`,
-          );
-        }
+        validateRelationshipMetadata(id, type, target);
         if (ids.has(id)) {
           throw new RelationshipsError(
             "duplicate_id",
@@ -225,4 +280,47 @@ function resolveInternalTarget(
 
 function isXmlId(value: string): boolean {
   return /^[:A-Z_a-z][:A-Z_a-z.\-0-9\u00b7\u00c0-\u02ff\u0370-\u1fff\u200c-\u200d\u2070-\u218f\u2c00-\ud7ff\uf900-\ufdcf\ufdf0-\ufffd]*$/u.test(value);
+}
+
+function validateRelationshipMetadata(id: string, type: string, target: string): void {
+  if (!isXmlId(id) || !ABSOLUTE_IRI.test(type) || target.length === 0) {
+    throw new RelationshipsError(
+      "invalid_relationship",
+      `Relationship ${JSON.stringify(id)} has invalid metadata.`,
+    );
+  }
+}
+
+function relativeTarget(source: PartName | null, target: PartName): string {
+  const sourceDirectory = source === null
+    ? []
+    : source.value.slice(1).split("/").slice(0, -1);
+  const targetSegments = target.value.slice(1).split("/");
+  let common = 0;
+  while (
+    common < sourceDirectory.length &&
+    common < targetSegments.length &&
+    asciiEqual(sourceDirectory[common] ?? "", targetSegments[common] ?? "")
+  ) {
+    common += 1;
+  }
+  return [
+    ...sourceDirectory.slice(common).map(() => ".."),
+    ...targetSegments.slice(common),
+  ].join("/");
+}
+
+function asciiEqual(left: string, right: string): boolean {
+  const lower = (value: string) => value.replace(/[A-Z]/g, (character) => character.toLowerCase());
+  return lower(left) === lower(right);
+}
+
+function escapeXmlAttribute(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll("\t", "&#x9;")
+    .replaceAll("\n", "&#xA;")
+    .replaceAll("\r", "&#xD;");
 }

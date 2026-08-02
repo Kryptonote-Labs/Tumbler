@@ -25,10 +25,12 @@ export type {
 } from "./content-types.ts";
 export { PartName, PartNameError } from "./part-name.ts";
 export {
+  createRelationship,
   parseRelationships,
   relationshipItemName,
   Relationships,
   RelationshipsError,
+  serializeRelationships,
 } from "./relationships.ts";
 export {
   OpcPackage,
@@ -64,6 +66,9 @@ export type {
 export type {
   ExternalRelationship,
   InternalRelationship,
+  NewExternalRelationship,
+  NewInternalRelationship,
+  NewRelationship,
   Relationship,
   RelationshipsErrorCode,
 } from "./relationships.ts";
