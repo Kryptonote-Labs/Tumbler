@@ -52,6 +52,26 @@ describe("SpreadsheetML styles", () => {
     expect(styles.resolveColor({ type: "automatic", tint: 0 })).toBeUndefined();
   });
 
+  test("honours explicit xf apply flags while retaining producer-compatible defaults", () => {
+    const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const styles = readSpreadsheetStyles(openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      stylesXml: `<styleSheet xmlns="${namespace}">
+        <fonts count="2"><font><name val="Default"/></font><font><name val="Direct"/></font></fonts>
+        <fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders>
+        <cellStyleXfs count="1"><xf fontId="1" numFmtId="10"><alignment horizontal="center"/></xf></cellStyleXfs>
+        <cellXfs count="3">
+          <xf xfId="0" fontId="0" numFmtId="0"><alignment horizontal="left"/></xf>
+          <xf xfId="0" fontId="0" numFmtId="0" applyFont="0" applyNumberFormat="false" applyAlignment="0"><alignment horizontal="left"/></xf>
+          <xf xfId="0" applyFont="1" applyNumberFormat="true" applyAlignment="1"/>
+        </cellXfs>
+      </styleSheet>`,
+    }))));
+
+    expect(styles.resolve(0)).toMatchObject({ font: { name: "Default" }, numberFormatId: 0, alignment: { horizontal: "left" } });
+    expect(styles.resolve(1)).toMatchObject({ font: { name: "Direct" }, numberFormatId: 10, alignment: { horizontal: "center" } });
+    expect(styles.resolve(2)).toMatchObject({ font: { name: "Default" }, numberFormatId: 0, alignment: { horizontal: undefined } });
+  });
+
   test.each([
     `<styleSheet xmlns="NS"><fonts count="2"><font/></fonts><fills><fill/></fills><borders><border/></borders><cellXfs><xf/></cellXfs></styleSheet>`,
     `<styleSheet xmlns="NS"><fonts><font/></fonts><fills><fill/></fills><borders><border/></borders><cellXfs><xf fontId="2"/></cellXfs></styleSheet>`,

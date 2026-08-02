@@ -82,6 +82,11 @@ interface FormatRecord {
   readonly numberFormatId: number | undefined;
   readonly baseFormatId: number | undefined;
   readonly alignment: Partial<SpreadsheetAlignment> | undefined;
+  readonly applyFont: boolean | undefined;
+  readonly applyFill: boolean | undefined;
+  readonly applyBorder: boolean | undefined;
+  readonly applyNumberFormat: boolean | undefined;
+  readonly applyAlignment: boolean | undefined;
 }
 
 const DEFAULT_FONT: SpreadsheetFont = Object.freeze({
@@ -336,6 +341,11 @@ function parseRecords(root: LosslessXmlElement, namespace: string, collection: s
     numberFormatId: optionalUnsigned(attr(element, "numFmtId"), "numFmtId"),
     baseFormatId: optionalUnsigned(attr(element, "xfId"), "xfId"),
     alignment: parseAlignment(child(element, namespace, "alignment")),
+    applyFont: optionalBoolean(attr(element, "applyFont"), "applyFont"),
+    applyFill: optionalBoolean(attr(element, "applyFill"), "applyFill"),
+    applyBorder: optionalBoolean(attr(element, "applyBorder"), "applyBorder"),
+    applyNumberFormat: optionalBoolean(attr(element, "applyNumberFormat"), "applyNumberFormat"),
+    applyAlignment: optionalBoolean(attr(element, "applyAlignment"), "applyAlignment"),
   }));
 }
 
@@ -367,10 +377,10 @@ function resolveRecord(
 ): SpreadsheetCellFormat {
   const base = direct.baseFormatId === undefined ? undefined : bases[direct.baseFormatId];
   if (direct.baseFormatId !== undefined && base === undefined) throw styleError(`Base style index ${direct.baseFormatId} does not exist.`);
-  const fontId = direct.fontId ?? base?.fontId ?? 0;
-  const fillId = direct.fillId ?? base?.fillId ?? 0;
-  const borderId = direct.borderId ?? base?.borderId ?? 0;
-  const numberFormatId = direct.numberFormatId ?? base?.numberFormatId ?? 0;
+  const fontId = appliedId(direct.fontId, base?.fontId, direct.applyFont);
+  const fillId = appliedId(direct.fillId, base?.fillId, direct.applyFill);
+  const borderId = appliedId(direct.borderId, base?.borderId, direct.applyBorder);
+  const numberFormatId = appliedId(direct.numberFormatId, base?.numberFormatId, direct.applyNumberFormat);
   const font = fonts[fontId];
   const fill = fills[fillId];
   const border = borders[borderId];
@@ -378,8 +388,21 @@ function resolveRecord(
   return Object.freeze({
     font, fill, border, numberFormatId,
     numberFormatCode: numberFormats.get(numberFormatId),
-    alignment: Object.freeze({ ...DEFAULT_ALIGNMENT, ...base?.alignment, ...direct.alignment }),
+    alignment: Object.freeze({
+      ...DEFAULT_ALIGNMENT,
+      ...(direct.applyAlignment === true
+        ? direct.alignment
+        : direct.applyAlignment === false
+          ? base?.alignment
+          : { ...base?.alignment, ...direct.alignment }),
+    }),
   });
+}
+
+function appliedId(direct: number | undefined, base: number | undefined, apply: boolean | undefined): number {
+  if (apply === false) return base ?? 0;
+  if (apply === true) return direct ?? 0;
+  return direct ?? base ?? 0;
 }
 
 function parseCollection<T>(root: LosslessXmlElement, namespace: string, collection: string, item: string, parser: (element: LosslessXmlElement) => T): T[] {
