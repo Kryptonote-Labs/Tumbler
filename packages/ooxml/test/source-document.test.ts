@@ -46,6 +46,18 @@ describe("lossless XML source documents", () => {
     }
   }
 
+  test.each(["utf-16le", "utf-16be"] as const)(
+    "accepts a generic UTF-16 declaration for %s bytes",
+    (encoding) => {
+      const bytes = encodeXmlSource(
+        `<?xml version="1.0" encoding="UTF-16"?><root/>`,
+        encoding,
+        true,
+      );
+      expect(parseLosslessXml(bytes).encoding).toBe(encoding);
+    },
+  );
+
   test.each([
     `<root>`,
     `<root><child></root>`,

@@ -270,7 +270,7 @@ function validateSemantics(
   parser.on("xmldecl", (declaration) => {
     if (
       declaration.encoding !== undefined &&
-      normalizeDeclaredEncoding(declaration.encoding) !== encoding
+      !declaredEncodingMatches(declaration.encoding, encoding)
     ) {
       throw new Error(`XML declaration encoding does not match ${encoding}.`);
     }
@@ -544,12 +544,10 @@ function requireTerminator(source: string, terminator: string, from: number): nu
   return index;
 }
 
-function normalizeDeclaredEncoding(value: string): XmlEncoding | undefined {
+function declaredEncodingMatches(value: string, encoding: XmlEncoding): boolean {
   const normalized = value.toLowerCase();
-  if (normalized === "utf-8") return "utf-8";
-  if (normalized === "utf-16" || normalized === "utf-16le") return "utf-16le";
-  if (normalized === "utf-16be") return "utf-16be";
-  return undefined;
+  return normalized === encoding ||
+    (normalized === "utf-16" && (encoding === "utf-16le" || encoding === "utf-16be"));
 }
 
 function encodeUtf16(source: string, littleEndian: boolean): Uint8Array {
