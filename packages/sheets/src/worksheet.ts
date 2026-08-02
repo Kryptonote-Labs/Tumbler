@@ -1,6 +1,7 @@
 import type { LosslessXmlDocument, LosslessXmlElement } from "@tumbler/ooxml";
 import { OOXML_NAMESPACES, parseLosslessXml } from "@tumbler/ooxml";
 import type { OpcPart } from "@tumbler/opc";
+import { SparseAxisGeometry } from "@tumbler/core";
 import {
   EXCEL_MAX_COLUMNS,
   EXCEL_MAX_ROWS,
@@ -66,6 +67,8 @@ export class SpreadsheetWorksheet {
   readonly merges: readonly CellRange[];
   readonly panes: readonly SpreadsheetPane[];
   readonly styles: SpreadsheetStyles;
+  readonly defaultRowHeight: number;
+  readonly defaultColumnWidth: number;
   readonly #cells: ReadonlyMap<string, SpreadsheetCell>;
 
   constructor(input: {
@@ -79,6 +82,8 @@ export class SpreadsheetWorksheet {
     merges: readonly CellRange[];
     panes: readonly SpreadsheetPane[];
     styles: SpreadsheetStyles;
+    defaultRowHeight: number;
+    defaultColumnWidth: number;
   }) {
     this.workbook = input.workbook;
     this.sheet = input.sheet;
@@ -90,6 +95,8 @@ export class SpreadsheetWorksheet {
     this.merges = Object.freeze([...input.merges]);
     this.panes = Object.freeze([...input.panes]);
     this.styles = input.styles;
+    this.defaultRowHeight = input.defaultRowHeight;
+    this.defaultColumnWidth = input.defaultColumnWidth;
     this.#cells = new Map(input.rows.flatMap((row) => row.cells.map((cell) => [cell.reference, cell] as const)));
   }
 
@@ -114,6 +121,23 @@ export class SpreadsheetWorksheet {
       locale,
     });
   }
+
+  rowGeometry(count = EXCEL_MAX_ROWS): SparseAxisGeometry {
+    return new SparseAxisGeometry(count, this.defaultRowHeight * 4 / 3, this.rows
+      .filter((row) => row.index <= count && (row.hidden || row.height !== undefined))
+      .map((row) => ({ index: row.index, size: row.hidden ? 0 : (row.height ?? this.defaultRowHeight) * 4 / 3 })));
+  }
+
+  columnGeometry(count = EXCEL_MAX_COLUMNS, maximumDigitWidth = 7): SparseAxisGeometry {
+    const overrides = new Map<number, number>();
+    for (const column of this.columns) {
+      for (let index = column.min; index <= Math.min(column.max, count); index += 1) {
+        overrides.set(index, column.hidden ? 0 : columnWidthToPixels(column.width ?? this.defaultColumnWidth, maximumDigitWidth));
+      }
+    }
+    return new SparseAxisGeometry(count, columnWidthToPixels(this.defaultColumnWidth, maximumDigitWidth),
+      [...overrides].map(([index, size]) => ({ index, size })));
+  }
 }
 
 export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetSheet): SpreadsheetWorksheet {
@@ -132,6 +156,7 @@ export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetS
   if (document.root.namespaceUri !== namespace || document.root.localName !== "worksheet") {
     throw new SpreadsheetError("invalid_worksheet", "A Worksheet part must have a SpreadsheetML worksheet root element.");
   }
+  const sheetFormat = parseSheetFormat(document.root, namespace);
   return new SpreadsheetWorksheet({
     workbook,
     sheet,
@@ -143,7 +168,34 @@ export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetS
     merges: parseMerges(document.root, namespace),
     panes: parsePanes(document.root, namespace),
     styles: readSpreadsheetStyles(workbook),
+    defaultRowHeight: sheetFormat.defaultRowHeight,
+    defaultColumnWidth: sheetFormat.defaultColumnWidth,
   });
+}
+
+/** ECMA-376 §18.3.1.13 runtime pixel conversion at the supplied maximum digit width. */
+export function columnWidthToPixels(width: number, maximumDigitWidth = 7): number {
+  if (!Number.isFinite(width) || width < 0 || !Number.isFinite(maximumDigitWidth) || maximumDigitWidth <= 0) {
+    throw new RangeError("Column width and maximum digit width must be finite positive measurements.");
+  }
+  return Math.floor(((256 * width + Math.floor(128 / maximumDigitWidth)) / 256) * maximumDigitWidth);
+}
+
+function parseSheetFormat(root: LosslessXmlElement, namespace: string): { defaultRowHeight: number; defaultColumnWidth: number } {
+  const formats = children(root, namespace, "sheetFormatPr");
+  if (formats.length > 1) throw new SpreadsheetError("invalid_worksheet", "A worksheet must not repeat sheetFormatPr.");
+  const format = formats[0];
+  const rawRowHeight = format === undefined ? undefined : attr(format, "defaultRowHeight");
+  const rawColumnWidth = format === undefined ? undefined : attr(format, "defaultColWidth");
+  const defaultRowHeight = rawRowHeight === undefined ? 15 : nonNegativeDouble(rawRowHeight, "default row height");
+  const defaultColumnWidth = rawColumnWidth === undefined ? 8.43 : nonNegativeDouble(rawColumnWidth, "default column width");
+  if (defaultRowHeight === 0 || defaultColumnWidth === 0) {
+    throw new SpreadsheetError("invalid_worksheet", "Default row and column measurements must be positive.");
+  }
+  return {
+    defaultRowHeight,
+    defaultColumnWidth,
+  };
 }
 
 function parseRows(document: LosslessXmlDocument, namespace: string, strings: SharedStringTable | undefined): SpreadsheetRow[] {

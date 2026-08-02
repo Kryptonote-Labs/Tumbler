@@ -3,6 +3,7 @@ import { openOpcPackage } from "@tumbler/opc";
 import {
   openSpreadsheet,
   openWorksheet,
+  columnWidthToPixels,
   SpreadsheetError,
   type SpreadsheetErrorCode,
 } from "../src/index.ts";
@@ -92,6 +93,23 @@ describe("SpreadsheetML sparse worksheets", () => {
     expect(worksheet.displayText("A1")).toBe("12.50%");
     expect(worksheet.cellStyle("A1").numberFormatId).toBe(10);
     expect(worksheet.displayText("B2")).toBe("");
+  });
+
+  test("builds sparse pixel geometry from standard row and column measurements", () => {
+    const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      sheets: [{ name: "Sheet1", sheetId: 1, relationshipId: "sheet1", xml: `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetFormatPr defaultRowHeight="18" defaultColWidth="10"/><cols><col min="2" max="3" width="20"/><col min="5" max="5" hidden="1"/></cols><sheetData><row r="2" ht="30"/><row r="4" hidden="1"/></sheetData></worksheet>` }],
+    })));
+    const worksheet = openWorksheet(workbook, workbook.sheets[0]!);
+    const rows = worksheet.rowGeometry(10);
+    const columns = worksheet.columnGeometry(10);
+    expect(rows.defaultSize).toBe(24);
+    expect(rows.size(2)).toBe(40);
+    expect(rows.size(4)).toBe(0);
+    expect(columns.defaultSize).toBe(columnWidthToPixels(10));
+    expect(columns.size(2)).toBe(columnWidthToPixels(20));
+    expect(columns.size(3)).toBe(columnWidthToPixels(20));
+    expect(columns.size(5)).toBe(0);
+    expect(columnWidthToPixels(8.7109375)).toBe(61);
   });
 
   test.each([
