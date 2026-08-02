@@ -35,7 +35,7 @@ export class PartName {
   extension(): string | undefined {
     const segment = this.value.slice(this.value.lastIndexOf("/") + 1);
     const dot = segment.lastIndexOf(".");
-    return dot <= 0 || dot === segment.length - 1
+    return dot < 0 || dot === segment.length - 1
       ? undefined
       : segment.slice(dot + 1);
   }

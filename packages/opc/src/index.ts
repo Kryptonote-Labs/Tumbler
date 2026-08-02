@@ -27,6 +27,17 @@ export {
   Relationships,
   RelationshipsError,
 } from "./relationships.ts";
+export {
+  OpcPackage,
+  OpcPackageError,
+  openOpcPackage,
+} from "./package.ts";
+export type {
+  MainOfficeDocumentPart,
+  OfficeDocumentFamily,
+  OpcPackageErrorCode,
+  OpcPart,
+} from "./package.ts";
 export type {
   ExternalRelationship,
   InternalRelationship,

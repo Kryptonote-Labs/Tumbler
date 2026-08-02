@@ -53,6 +53,7 @@ describe("OPC part names", () => {
     const lower = PartName.parse("/word/document.XML");
     expect(lower.equals(PartName.parse("/WORD/DOCUMENT.xml"))).toBeTrue();
     expect(lower.extension()).toBe("XML");
+    expect(PartName.parse("/_rels/.rels").extension()).toBe("rels");
   });
 });
 
