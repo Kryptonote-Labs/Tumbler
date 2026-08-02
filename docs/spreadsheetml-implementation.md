@@ -63,12 +63,19 @@ artefact bytes, chooses and retains an active sheet, exposes the renderable
 worksheet, applies typed cell edits, returns saved bytes, and replaces its model
 from agent-produced revisions while retaining the selected sheet when possible.
 
+Cell style colors retain their source identity while the renderer computes an
+opaque sRGB projection. Explicit SpreadsheetML RGB colors ignore the alpha byte,
+as required for cell styles and expected by producers that routinely emit a
+`00` prefix. Theme colors resolve through the workbook Theme part, indexed
+colors use a custom or standard palette, and SpreadsheetML tints are applied in
+HSL space.
+
 ## Deliberate current limits
 
 - Only ordinary worksheet sheet targets are accepted. Chart sheets, dialog
   sheets, macro sheets, and external sheet targets are diagnosed as unsupported.
-- Theme and indexed colors are retained as typed references but are not yet
-  resolved through the Theme part or legacy palette; RGB colors render now.
+- Unsupported DrawingML theme color expressions remain preserved but unresolved;
+  the current computed view supports sRGB and system-color fallbacks.
 - The number-format interpreter covers the common built-ins and a useful custom
   subset. It does not yet implement the entire conditional, locale/currency,
   elapsed-time, fill-character, and fraction language from §18.8.31.
@@ -91,7 +98,7 @@ from agent-produced revisions while retaining the selected sheet when possible.
 
 ## Next qualification boundary
 
-The next useful slice is theme color resolution and font measurement, followed
-by Kryptonote viewer integration and real-producer qualification. Before calling
-the slice interoperable, generated and real-producer fixtures must pass Open XML
-SDK validation and open/save cycles in LibreOffice and Excel without repair.
+The next useful slice is font measurement and real-producer visual
+qualification. Before calling the slice interoperable, generated and
+real-producer fixtures must pass Open XML SDK validation and open/save cycles in
+LibreOffice and Excel without repair.
