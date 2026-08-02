@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { openSpreadsheetArtifact } from "@tumbler/sheets";
+import { openSpreadsheetArtifact } from "../packages/sheets/src/index.ts";
 
 const directory = resolve(process.argv[2] ?? "compatibility-results/libreoffice");
 const expectations = [

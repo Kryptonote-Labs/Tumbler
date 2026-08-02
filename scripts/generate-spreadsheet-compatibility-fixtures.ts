@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { openSpreadsheetArtifact } from "@tumbler/sheets";
+import { openSpreadsheetArtifact } from "../packages/sheets/src/index.ts";
 import { buildWorkbookFixture } from "../packages/sheets/test/workbook-fixture.ts";
 
 const outputDirectory = resolve(process.argv[2] ?? "compatibility-results/input");
