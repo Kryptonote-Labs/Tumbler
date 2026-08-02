@@ -6,6 +6,7 @@ const RELATIONSHIPS = "http://schemas.openxmlformats.org/package/2006/relationsh
 const WORKBOOK_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
 const WORKSHEET_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
 const SHARED_STRINGS_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
+const THEME_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.theme+xml";
 
 export interface SheetFixture {
   readonly name: string;
@@ -25,6 +26,7 @@ export interface WorkbookFixtureOptions {
   readonly workbookXml?: string;
   readonly sharedStringsXml?: string;
   readonly stylesXml?: string;
+  readonly themeXml?: string;
 }
 
 export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint8Array {
@@ -45,6 +47,7 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
   const relationshipItemName = `${directory}_rels/${filename}.rels`;
   const sharedStringsItemName = `${directory}strings/shared.xml`;
   const stylesItemName = `${directory}styles/style.xml`;
+  const themeItemName = `${directory}theme/theme1.xml`;
   const workbookXml = options.workbookXml ?? `<workbook xmlns="${spreadsheet}" xmlns:r="${officeRelationships}"><sheets>${sheets.map((sheet) =>
     `<sheet name="${sheet.name}" sheetId="${sheet.sheetId}" r:id="${sheet.relationshipId}"${sheet.state === undefined ? "" : ` state="${sheet.state}"`}/>`
   ).join("")}</sheets></workbook>`;
@@ -61,6 +64,7 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
         ).join("")}
         ${options.sharedStringsXml === undefined ? "" : `<Override PartName="/${sharedStringsItemName}" ContentType="${SHARED_STRINGS_CONTENT_TYPE}"/>`}
         ${options.stylesXml === undefined ? "" : `<Override PartName="/${stylesItemName}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>`}
+        ${options.themeXml === undefined ? "" : `<Override PartName="/${themeItemName}" ContentType="${THEME_CONTENT_TYPE}"/>`}
       </Types>`),
     },
     {
@@ -73,7 +77,7 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
       data: encoder.encode(`<Relationships xmlns="${RELATIONSHIPS}">${sheets.map((sheet, index) => {
         const target = sheet.target ?? `worksheets/sheet${index + 1}.xml`;
         return `<Relationship Id="${sheet.relationshipId}" Type="${sheet.relationshipType ?? worksheetRelationship}" Target="${target}"${sheet.targetMode === "External" ? ' TargetMode="External"' : ""}/>`;
-      }).join("")}${options.sharedStringsXml === undefined ? "" : `<Relationship Id="strings" Type="${officeRelationships}/sharedStrings" Target="strings/shared.xml"/>`}${options.stylesXml === undefined ? "" : `<Relationship Id="styles" Type="${officeRelationships}/styles" Target="styles/style.xml"/>`}</Relationships>`),
+      }).join("")}${options.sharedStringsXml === undefined ? "" : `<Relationship Id="strings" Type="${officeRelationships}/sharedStrings" Target="strings/shared.xml"/>`}${options.stylesXml === undefined ? "" : `<Relationship Id="styles" Type="${officeRelationships}/styles" Target="styles/style.xml"/>`}${options.themeXml === undefined ? "" : `<Relationship Id="theme" Type="${officeRelationships}/theme" Target="theme/theme1.xml"/>`}</Relationships>`),
     },
     ...sheets.flatMap((sheet, index) => sheet.targetMode === "External" ? [] : [{
       name: resolveTargetItemName(directory, sheet.target ?? `worksheets/sheet${index + 1}.xml`),
@@ -84,6 +88,7 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
       data: encoder.encode(options.sharedStringsXml),
     }]),
     ...(options.stylesXml === undefined ? [] : [{ name: stylesItemName, data: encoder.encode(options.stylesXml) }]),
+    ...(options.themeXml === undefined ? [] : [{ name: themeItemName, data: encoder.encode(options.themeXml) }]),
   ]);
 }
 

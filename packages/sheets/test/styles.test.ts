@@ -37,6 +37,21 @@ describe("SpreadsheetML styles", () => {
     expect(styles.resolve(undefined)).toMatchObject({ numberFormatId: 0, numberFormatCode: undefined });
   });
 
+  test("renders cell RGB colors as opaque and resolves theme, indexed, and tinted colors", () => {
+    const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const styles = readSpreadsheetStyles(openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      stylesXml: colorStyleSheet(namespace),
+      themeXml: officeTheme(),
+    }))));
+
+    expect(styles.resolveColor(styles.fonts[1]?.color)).toBe("FFFFFFFF");
+    expect(styles.resolveColor(styles.fills[1]?.foreground)).toBe("FF347DB7");
+    expect(styles.resolveColor(styles.fonts[2]?.color)).toBe("FFFFFFFF");
+    expect(styles.resolveColor(styles.fills[2]?.foreground)).toBe("FF95B3D7");
+    expect(styles.resolveColor(styles.fonts[3]?.color)).toBe("FF112233");
+    expect(styles.resolveColor({ type: "automatic", tint: 0 })).toBeUndefined();
+  });
+
   test.each([
     `<styleSheet xmlns="NS"><fonts count="2"><font/></fonts><fills><fill/></fills><borders><border/></borders><cellXfs><xf/></cellXfs></styleSheet>`,
     `<styleSheet xmlns="NS"><fonts><font/></fonts><fills><fill/></fills><borders><border/></borders><cellXfs><xf fontId="2"/></cellXfs></styleSheet>`,
@@ -61,4 +76,35 @@ function styleSheet(namespace: string): string {
     <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
     <cellXfs count="2"><xf xfId="0"/><xf xfId="0" numFmtId="164" fontId="1" fillId="1" borderId="1"><alignment horizontal="center" vertical="top" wrapText="1" textRotation="45" indent="2"/></xf></cellXfs>
   </styleSheet>`;
+}
+
+function colorStyleSheet(namespace: string): string {
+  return `<styleSheet xmlns="${namespace}">
+    <fonts count="4">
+      <font/>
+      <font><color rgb="00FFFFFF"/></font>
+      <font><color theme="0"/></font>
+      <font><color indexed="0"/></font>
+    </fonts>
+    <fills count="3">
+      <fill><patternFill patternType="none"/></fill>
+      <fill><patternFill patternType="solid"><fgColor rgb="00347DB7"/></patternFill></fill>
+      <fill><patternFill patternType="solid"><fgColor theme="4" tint="0.4"/></patternFill></fill>
+    </fills>
+    <borders count="1"><border/></borders>
+    <cellXfs count="1"><xf fontId="0" fillId="0" borderId="0"/></cellXfs>
+    <colors><indexedColors><rgbColor rgb="00112233"/></indexedColors></colors>
+  </styleSheet>`;
+}
+
+function officeTheme(): string {
+  return `<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:themeElements><a:clrScheme name="Office">
+    <a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>
+    <a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>
+    <a:lt2><a:srgbClr val="EEECE1"/></a:lt2><a:dk2><a:srgbClr val="1F497D"/></a:dk2>
+    <a:accent1><a:srgbClr val="4F81BD"/></a:accent1><a:accent2><a:srgbClr val="C0504D"/></a:accent2>
+    <a:accent3><a:srgbClr val="9BBB59"/></a:accent3><a:accent4><a:srgbClr val="8064A2"/></a:accent4>
+    <a:accent5><a:srgbClr val="4BACC6"/></a:accent5><a:accent6><a:srgbClr val="F79646"/></a:accent6>
+    <a:hlink><a:srgbClr val="0000FF"/></a:hlink><a:folHlink><a:srgbClr val="800080"/></a:folHlink>
+  </a:clrScheme><a:fontScheme name="Office"/><a:fmtScheme name="Office"/></a:themeElements></a:theme>`;
 }
