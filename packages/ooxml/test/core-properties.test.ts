@@ -133,6 +133,18 @@ describe("core properties validation", () => {
       CorePropertiesError,
     );
   });
+
+  test("reads localized keywords and rejects unrelated keyword markup", () => {
+    const valid = parseCoreProperties(
+      PartName.parse("/docProps/core.xml"),
+      encoder.encode(`<cp:coreProperties xmlns:cp="${CP}"><cp:keywords xml:lang="en-US">color<cp:value xml:lang="en-GB">colour</cp:value></cp:keywords></cp:coreProperties>`),
+    );
+    expect(valid.values.keywords).toBe("colorcolour");
+    expect(() => parseCoreProperties(
+      PartName.parse("/docProps/core.xml"),
+      encoder.encode(`<cp:coreProperties xmlns:cp="${CP}"><cp:keywords bad="x">no</cp:keywords></cp:coreProperties>`),
+    )).toThrow(CorePropertiesError);
+  });
 });
 
 function existingCoreXml(): string {

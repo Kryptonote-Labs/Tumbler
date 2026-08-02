@@ -18,6 +18,7 @@ const CORE_PROPERTIES_RELATIONSHIP =
 const CORE_PROPERTIES_CONTENT_TYPE =
   "application/vnd.openxmlformats-package.core-properties+xml";
 const XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/";
+const XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace";
 const CP = OOXML_NAMESPACES.coreProperties;
 const DC = OOXML_NAMESPACES.dublinCore;
 const DCTERMS = OOXML_NAMESPACES.dublinCoreTerms;
@@ -324,7 +325,31 @@ function validatePropertyAttributes(
         `${property.name} must have xsi:type="dcterms:W3CDTF".`,
       );
     }
-  } else if (property.name !== "keywords" && attributes.length !== 0) {
+  } else if (property.name === "keywords") {
+    if (
+      attributes.some(
+        (attribute) => attribute.namespaceUri !== XML_NAMESPACE || attribute.localName !== "lang",
+      ) ||
+      element.children.some((child) =>
+        child.kind === "element" &&
+        (
+          child.namespaceUri !== CP ||
+          child.localName !== "value" ||
+          child.children.some((grandchild) => grandchild.kind === "element") ||
+          child.attributes.some(
+            (attribute) =>
+              attribute.namespaceUri !== XMLNS_NAMESPACE &&
+              (attribute.namespaceUri !== XML_NAMESPACE || attribute.localName !== "lang"),
+          )
+        )
+      )
+    ) {
+      throw new CorePropertiesError(
+        "invalid_markup",
+        "keywords may contain only localized value elements and xml:lang attributes.",
+      );
+    }
+  } else if (attributes.length !== 0) {
     throw new CorePropertiesError("invalid_markup", `${property.name} must not have attributes.`);
   }
 }
