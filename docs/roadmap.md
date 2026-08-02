@@ -80,6 +80,7 @@ now implemented:
 - [x] render variable geometry, ordinary merges, and frozen pane regions;
 - [x] recognize table parts and project read-only table sorting/filtering in the owned grid;
 - [x] parse and calculate a bounded first formula slice into read-only value overlays;
+- [x] discover worksheet Drawing/Chart parts and render the first native chart subset;
 - [ ] edit formulas and structural ranges safely;
 - [ ] pass Open XML SDK, LibreOffice, and Microsoft Excel round trips.
 

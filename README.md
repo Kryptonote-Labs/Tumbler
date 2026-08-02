@@ -25,7 +25,8 @@ adoption. For now, treat it as active research with source code attached.
 Tumbler has foundations for OPC packages, loss-aware OOXML editing, and a narrow
 SpreadsheetML vertical slice. It can inspect and transactionally modify parts,
 edit shared core properties, read a subset of workbook and worksheet data, edit
-literal spreadsheet cells, and render an experimental Svelte spreadsheet grid.
+literal spreadsheet cells, and render an experimental Svelte spreadsheet grid
+with a narrow native chart-preview subset.
 
 It does not currently provide broad or production-ready Office compatibility.
 Word and PowerPoint editing are not implemented. Formula editing, structural
@@ -49,6 +50,7 @@ There is no support commitment or migration policy during this stage.
 | --- | --- |
 | `@tumbler/opc` | ZIP package parts, content types, and relationships |
 | `@tumbler/ooxml` | Shared OOXML vocabulary, namespaces, and compatibility |
+| `@tumbler/charts` | Headless DrawingML chart semantics and deterministic layout |
 | `@tumbler/core` | Headless commands, transactions, selection, and history |
 | `@tumbler/word` | WordprocessingML model and editing behavior |
 | `@tumbler/sheets` | SpreadsheetML model and editing behavior |

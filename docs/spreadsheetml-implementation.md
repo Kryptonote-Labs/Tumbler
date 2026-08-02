@@ -27,6 +27,9 @@ current requirement boundary is:
 | §18.3.1.94–95, §18.5.1.2–3 | Relationship-resolved table parts, ranges, identities, columns, totals metadata, and table style flags |
 | §18.3.1.2, §18.3.1.92, §18.3.2.7–10 | Worksheet/table AutoFilter ranges, value/custom criteria, button state, and saved value-sort state |
 | §18.3.1.47–48 | Worksheet hyperlink ranges, internal locations, optional display/tooltips, and external hyperlink relationships |
+| §12.3.8, §18.3.1.36 | Relationship-resolved worksheet Drawing parts with inert external targets and lossless preservation |
+| §20.5.2.1, §20.5.2.24, §20.5.2.33 | Absolute, one-cell, and two-cell drawing anchors projected from EMUs through worksheet row/column geometry |
+| §14.2.1, §21.2.2.16, §21.2.2.27–29, §21.2.2.97, §21.2.2.141 | Read-only native column/bar, line, pie, and doughnut chart models and owned SVG previews |
 | MS-XLSX §2.2.2, ECMA-376-1 §18.17.2–7 | Typed formula parsing, references/ranges, bounded dependencies, operators, errors, and the first calculation function set |
 
 Both Strict and Transitional vocabulary and relationship namespaces are tested.
@@ -66,6 +69,10 @@ clauses or to SpreadsheetML as a whole.
   ranges, `IF`, `SUM`, `COUNT`, `AVERAGE`, `MIN`, `MAX`, `AND`, `OR`, and `NOT`;
 - recalculate supported dependants after scalar edits while leaving formula text,
   cached values, calculation metadata, and package bytes source-owned;
+- discover embedded worksheet charts, expose cached series safely, and refresh
+  simple internal A1 category/value/title references from calculated workbook cells;
+- render supported chart frames as selectable, virtualized SVG overlays with
+  titles, legends, axes, major gridlines, multiple series, and workbook theme colors;
 
 Literal text writes use `inlineStr`. This avoids a workbook-wide shared-string
 reindex for a local edit. Replacing a formula with a literal intentionally
@@ -78,7 +85,7 @@ primitives plus sparse variable-axis geometry. `@tumbler/svelte` supplies
 `SpreadsheetGrid`, an owned virtualized surface with row/column headers, click
 and shift selection, keyboard navigation, styled display, merged cells, frozen
 regions, an inline editor, table sort/filter dropdowns, a read-only mode, and
-typed selection/edit/hyperlink callbacks. Hyperlink cells are accessible buttons;
+typed selection/edit/hyperlink/chart callbacks. Hyperlink cells and chart frames are accessible buttons;
 the host owns navigation so document targets never become automatic browser loads.
 Table controls project source rows into visual
 slots; filtered slots collapse through sparse geometry and the source package is
@@ -132,9 +139,11 @@ remains a renderer-level fidelity gap.
   custom filters plus vertical value sorting are projected; dynamic, top-10,
   color, icon, and horizontal sorts remain explicitly unsupported and are not
   applied. User table view state is not written back to SpreadsheetML.
-- Validations, conditional formats, comments, drawings, charts,
-  pivots, names, and external-workbook links are preserved as unknown content but have no
-  semantic or visual model.
+- Validations, conditional formats, comments, non-chart drawing objects, pivots,
+  names, and external-workbook links are preserved as unknown content but have no
+  semantic or visual model. Chart preview deliberately excludes chartsheets,
+  PivotCharts, ChartEx, 3-D/combination/stacked charts, secondary axes, and
+  structured/defined/external references; anchored fallbacks remain bounded.
 - Hyperlink locations that name defined names rather than A1 cell/range
   destinations remain exposed as raw locations but are not resolved. External
   targets are inert until a host explicitly approves a user activation.
@@ -147,7 +156,7 @@ remains a renderer-level fidelity gap.
 
 ## Next qualification boundary
 
-The next useful slice is real-producer visual qualification, followed by
+The next useful slice is real-producer chart and grid visual qualification, followed by
 conditional formatting, richer number formats, and formula/reference modelling.
 Before calling the slice interoperable, real-producer fixtures must pass Excel,
 LibreOffice, and an independent parser without repair or unexplained semantic

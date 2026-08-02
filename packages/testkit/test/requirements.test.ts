@@ -39,9 +39,9 @@ describe("standards requirement manifests", () => {
       write: "unverified",
     });
     expect(matrix.find((entry) => entry.id === "XLSX-CHART-PARTS")).toMatchObject({
-      recognize: "unverified",
+      recognize: "supported",
       preserve: "supported",
-      render: "unverified",
+      render: "partial",
       edit: "unverified",
       write: "unverified",
     });
