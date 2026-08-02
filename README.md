@@ -39,8 +39,28 @@ bun run check
 bun test
 ```
 
-The initial source files intentionally expose no API. Public types should emerge
-from the first implemented vertical slice rather than speculative abstractions.
+The first implemented API is the shared OPC layer. It can safely inventory an
+Office package and stage atomic package-graph changes:
+
+```ts
+import { beginPackageTransaction, openOpcPackage } from "@tumbler/opc";
+
+const pkg = openOpcPackage(bytes);
+const transaction = beginPackageTransaction(pkg);
+
+transaction
+  .addPart("/custom/data.bin", "application/vnd.example.data", data)
+  .addRelationship(pkg.mainOfficeDocumentPart().name, {
+    id: "customData",
+    type: "https://example.test/relationships/data",
+    target: "/custom/data.bin",
+  });
+
+const editedBytes = transaction.commit();
+```
+
+The transaction never mutates `pkg`. A failed commit remains active and leaves
+the source bytes unchanged; rollback discards all staged state.
 
 ## Project documents
 
@@ -57,3 +77,5 @@ from the first implemented vertical slice rather than speculative abstractions.
 - [Decisions](docs/decisions.md) separates settled direction from open questions.
 - [OOXML engineering reference](docs/reference/README.md) is the local, searchable
   implementation handbook distilled from the standards and compatibility sources.
+- [OPC implementation status](docs/opc-implementation.md) maps the current code
+  and tests to ECMA-376 Part 2 requirements and records deliberate gaps.

@@ -18,9 +18,11 @@ bun test
 The Phase 1 suite currently covers bounded ZIP inventory and inflation, hostile
 archive mutations, OPC part-name and content-type rules, UTF-8/UTF-16
 infrastructure XML, relationship resolution, main-part discovery for DOCX/XLSX/
-PPTX, byte-identical no-op saves, and exact compressed-payload preservation for
-untouched entries. Property tests use fixed framework-reported seeds so a
-failure can be replayed and shrunk.
+PPTX, byte-identical no-op saves, exact compressed-payload preservation for
+untouched entries, atomic part and relationship transactions, deterministic
+command histories, add/remove convergence, incoming-reference protection, and
+failed-commit rollback guarantees. Property tests use framework-reported seeds
+so a failure can be replayed and shrunk.
 
 Real-producer and external-validator tests remain a separate next step. Neither
 LibreOffice nor a checked-in Office fixture corpus was available in the initial
