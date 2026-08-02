@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { compile } from "svelte/compiler";
+import { SparseAxisGeometry } from "@tumbler/core";
 import { calculateSpreadsheetViewport } from "../src/index.ts";
 
 describe("Svelte spreadsheet viewport", () => {
@@ -17,7 +18,7 @@ describe("Svelte spreadsheet viewport", () => {
       overscan: 3,
     });
     expect(viewport.rows.length).toBeLessThanOrEqual(31);
-    expect(viewport.columns.length).toBeLessThanOrEqual(17);
+    expect(viewport.columns.length).toBeLessThanOrEqual(18);
     expect(viewport.rows[0]!.index).toBeGreaterThan(1);
     expect(viewport.columns[0]!.index).toBeGreaterThan(1);
     expect(viewport.totalHeight).toBe(29_360_128);
@@ -69,5 +70,19 @@ describe("Svelte spreadsheet viewport", () => {
     expect(() => calculateSpreadsheetViewport({ ...valid, rowCount: 0 })).toThrow(RangeError);
     expect(() => calculateSpreadsheetViewport({ ...valid, rowHeight: Number.NaN })).toThrow(RangeError);
     expect(() => calculateSpreadsheetViewport({ ...valid, scrollLeft: -1 })).toThrow(RangeError);
+  });
+
+  test("uses sparse variable sizes and omits hidden axes", () => {
+    const rows = new SparseAxisGeometry(100, 20, [{ index: 2, size: 40 }, { index: 3, size: 0 }]);
+    const columns = new SparseAxisGeometry(50, 100, [{ index: 2, size: 250 }, { index: 4, size: 0 }]);
+    const viewport = calculateSpreadsheetViewport({
+      rowCount: 100, columnCount: 50, rowHeight: 20, columnWidth: 100,
+      scrollTop: 15, scrollLeft: 90, viewportHeight: 100, viewportWidth: 400,
+      overscan: 1, rowGeometry: rows, columnGeometry: columns,
+    });
+    expect(viewport.rows.find((row) => row.index === 2)).toEqual({ index: 2, start: 20, size: 40 });
+    expect(viewport.rows.some((row) => row.index === 3)).toBeFalse();
+    expect(viewport.columns.find((column) => column.index === 2)).toEqual({ index: 2, start: 100, size: 250 });
+    expect(viewport.columns.some((column) => column.index === 4)).toBeFalse();
   });
 });

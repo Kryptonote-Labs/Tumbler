@@ -48,6 +48,8 @@
     viewportHeight,
     viewportWidth,
     overscan: 3,
+    rowGeometry: worksheet.rowGeometry(rowCount),
+    columnGeometry: worksheet.columnGeometry(columnCount),
   }));
 
   function select(row: number, column: number, extend = false) {
@@ -121,6 +123,56 @@
     return String(value.value);
   }
 
+  function displayCell(reference: string): string {
+    return worksheet.displayText(reference);
+  }
+
+  function cellCss(reference: string): string {
+    const style = worksheet.cellStyle(reference);
+    const declarations: string[] = [];
+    if (style.font.name !== undefined) declarations.push(`font-family:${cssValue(style.font.name)}`);
+    if (style.font.size !== undefined) declarations.push(`font-size:${style.font.size}pt`);
+    if (style.font.bold) declarations.push("font-weight:700");
+    if (style.font.italic) declarations.push("font-style:italic");
+    if (style.font.underline !== undefined || style.font.strike) {
+      declarations.push(`text-decoration:${[style.font.underline === undefined ? "" : "underline", style.font.strike ? "line-through" : ""].filter(Boolean).join(" ")}`);
+    }
+    const foreground = cssColor(style.font.color);
+    const background = style.fill.patternType === "solid" ? cssColor(style.fill.foreground) : undefined;
+    if (foreground !== undefined) declarations.push(`color:${foreground}`);
+    if (background !== undefined) declarations.push(`background-color:${background}`);
+    if (style.alignment.horizontal !== undefined) declarations.push(`text-align:${horizontalAlignment(style.alignment.horizontal)}`);
+    if (style.alignment.wrapText) declarations.push("white-space:normal;overflow-wrap:anywhere");
+    for (const side of ["left", "right", "top", "bottom"] as const) {
+      const edge = style.border[side];
+      if (edge.style !== undefined) declarations.push(`border-${side}:${borderWidth(edge.style)} ${borderStyle(edge.style)} ${cssColor(edge.color) ?? "currentColor"}`);
+    }
+    return declarations.join(";");
+  }
+
+  function cssColor(color: ReturnType<typeof worksheet.cellStyle>["font"]["color"]): string | undefined {
+    if (color?.type !== "rgb") return undefined;
+    const alpha = color.argb.slice(0, 2);
+    const rgb = color.argb.slice(2);
+    return alpha === "FF" ? `#${rgb}` : `#${rgb}${alpha}`;
+  }
+
+  function cssValue(value: string): string {
+    return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+  }
+
+  function horizontalAlignment(value: string): string {
+    return value === "center" || value === "centerContinuous" ? "center" : value === "right" ? "right" : value === "justify" || value === "distributed" ? "justify" : "left";
+  }
+
+  function borderWidth(value: string): string {
+    return value === "medium" || value.startsWith("medium") ? "2px" : value === "thick" || value === "double" ? "3px" : "1px";
+  }
+
+  function borderStyle(value: string): string {
+    return value === "double" ? "double" : value.includes("Dash") || value.includes("dash") ? "dashed" : value.includes("Dot") || value.includes("dot") ? "dotted" : "solid";
+  }
+
   function columnLabel(column: number): string {
     return formatCellReference({ row: 1, column }).slice(0, -1);
   }
@@ -167,6 +219,7 @@
           style:top={`${columnHeaderHeight + row.start}px`}
           style:width={`${column.size}px`}
           style:height={`${row.size}px`}
+          style={cellCss(reference)}
           onclick={(event) => select(row.index, column.index, event.shiftKey)}
           onkeydown={(event) => cellKeydown(event, row.index, column.index)}
           ondblclick={() => beginEdit(row.index, column.index)}
@@ -174,7 +227,7 @@
           {#if editing === reference}
             <input bind:value={draft} onkeydown={inputKeydown} onblur={() => finishEdit(true)} aria-label={`Edit ${reference}`} />
           {:else}
-            <span>{displayValue(worksheet.cell(reference)?.value)}</span>
+            <span>{displayCell(reference)}</span>
           {/if}
         </div>
       {/each}
@@ -190,7 +243,8 @@
   .column-header { top: 0; height: 28px; display: grid; place-items: center; border-right-width: 1px; border-bottom-width: 1px; }
   .row-header { left: 0; width: 52px; display: grid; place-items: center; border-right-width: 1px; border-bottom-width: 1px; }
   .cell { position: absolute; z-index: 1; box-sizing: border-box; overflow: hidden; padding: 5px 8px; white-space: nowrap; text-overflow: ellipsis; border-right: 1px solid var(--tumbler-grid-line, #2a302a); border-bottom: 1px solid var(--tumbler-grid-line, #2a302a); background: var(--tumbler-grid-cell-bg, transparent); }
-  .cell.selected { background: var(--tumbler-grid-selection-bg, rgba(65, 255, 83, 0.1)); }
+  .cell.selected::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(65, 255, 83, 0.1)); }
   .cell.focused { z-index: 2; box-shadow: inset 0 0 0 2px var(--tumbler-grid-accent, #42ff53); }
+  .cell > * { position: relative; z-index: 1; }
   input { width: 100%; height: 100%; box-sizing: border-box; border: 0; outline: 0; padding: 0; color: inherit; background: transparent; font: inherit; }
 </style>

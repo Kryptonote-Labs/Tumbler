@@ -1,3 +1,5 @@
+import { SparseAxisGeometry } from "@tumbler/core";
+
 export interface SpreadsheetViewportInput {
   readonly rowCount: number;
   readonly columnCount: number;
@@ -8,6 +10,8 @@ export interface SpreadsheetViewportInput {
   readonly viewportHeight: number;
   readonly viewportWidth: number;
   readonly overscan?: number;
+  readonly rowGeometry?: SparseAxisGeometry;
+  readonly columnGeometry?: SparseAxisGeometry;
 }
 
 export interface VirtualGridItem {
@@ -36,21 +40,28 @@ export function calculateSpreadsheetViewport(input: SpreadsheetViewportInput): S
   nonNegative(input.viewportWidth, "viewportWidth");
   const overscan = input.overscan ?? 2;
   integer(overscan, "overscan", 0);
+  const rows = input.rowGeometry ?? new SparseAxisGeometry(input.rowCount, input.rowHeight);
+  const columns = input.columnGeometry ?? new SparseAxisGeometry(input.columnCount, input.columnWidth);
+  if (rows.count !== input.rowCount || columns.count !== input.columnCount) {
+    throw new RangeError("Viewport geometry counts must match the grid counts.");
+  }
   return Object.freeze({
-    rows: Object.freeze(axisItems(input.rowCount, input.rowHeight, input.scrollTop, input.viewportHeight, overscan)),
-    columns: Object.freeze(axisItems(input.columnCount, input.columnWidth, input.scrollLeft, input.viewportWidth, overscan)),
-    totalHeight: input.rowCount * input.rowHeight,
-    totalWidth: input.columnCount * input.columnWidth,
+    rows: Object.freeze(axisItems(rows, input.scrollTop, input.viewportHeight, overscan)),
+    columns: Object.freeze(axisItems(columns, input.scrollLeft, input.viewportWidth, overscan)),
+    totalHeight: rows.totalSize,
+    totalWidth: columns.totalSize,
   });
 }
 
-function axisItems(count: number, size: number, scroll: number, viewport: number, overscan: number): VirtualGridItem[] {
-  const first = Math.max(0, Math.floor(scroll / size) - overscan);
-  const visibleCount = Math.max(1, Math.ceil(viewport / size));
-  const end = Math.min(count, first + visibleCount + overscan * 2);
+function axisItems(axis: SparseAxisGeometry, scroll: number, viewport: number, overscan: number): VirtualGridItem[] {
+  const boundedStart = Math.min(scroll, Math.max(0, axis.totalSize - 1));
+  const boundedEnd = Math.min(Math.max(boundedStart, scroll + viewport - 1), Math.max(0, axis.totalSize - 1));
+  const first = Math.max(1, axis.indexAt(boundedStart) - overscan);
+  const end = Math.min(axis.count, axis.indexAt(boundedEnd) + overscan);
   const result: VirtualGridItem[] = [];
-  for (let zeroBased = first; zeroBased < end; zeroBased += 1) {
-    result.push(Object.freeze({ index: zeroBased + 1, start: zeroBased * size, size }));
+  for (let index = first; index <= end; index += 1) {
+    const size = axis.size(index);
+    if (size > 0) result.push(Object.freeze({ index, start: axis.start(index), size }));
   }
   return result;
 }
