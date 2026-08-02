@@ -1,0 +1,64 @@
+import { describe, expect, test } from "bun:test";
+import { openOpcPackage } from "@tumbler/opc";
+import { openSpreadsheet, readSpreadsheetStyles, SpreadsheetError } from "../src/index.ts";
+import { buildWorkbookFixture } from "./workbook-fixture.ts";
+
+describe("SpreadsheetML styles", () => {
+  test.each(["strict", "transitional"] as const)("resolves inherited and direct %s cell formats", (conformance) => {
+    const namespace = conformance === "strict"
+      ? "http://purl.oclc.org/ooxml/spreadsheetml/main"
+      : "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const styles = readSpreadsheetStyles(openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      conformance,
+      stylesXml: styleSheet(namespace),
+    }))));
+
+    expect(styles.fonts).toHaveLength(2);
+    expect(styles.resolve(0)).toMatchObject({ numberFormatId: 0, font: { name: "Aptos", bold: false } });
+    expect(styles.resolve(1)).toEqual({
+      font: { name: "Aptos Display", size: 14, bold: true, italic: true, underline: "double", strike: false, color: { type: "rgb", argb: "FF12AB34", tint: 0 } },
+      fill: { patternType: "solid", foreground: { type: "theme", index: 4, tint: 0.25 }, background: undefined },
+      border: {
+        left: { style: "thin", color: { type: "indexed", index: 64, tint: 0 } },
+        right: { style: undefined, color: undefined },
+        top: { style: undefined, color: undefined },
+        bottom: { style: "double", color: { type: "automatic", tint: 0 } },
+      },
+      numberFormatId: 164,
+      numberFormatCode: `£#,##0.00`,
+      alignment: { horizontal: "center", vertical: "top", wrapText: true, shrinkToFit: false, textRotation: 45, indent: 2 },
+    });
+    expect(() => styles.resolve(2)).toThrow(SpreadsheetError);
+  });
+
+  test("supplies a General default when a workbook has no Styles part", () => {
+    const styles = readSpreadsheetStyles(openSpreadsheet(openOpcPackage(buildWorkbookFixture())));
+    expect(styles.partName).toBeUndefined();
+    expect(styles.resolve(undefined)).toMatchObject({ numberFormatId: 0, numberFormatCode: undefined });
+  });
+
+  test.each([
+    `<styleSheet xmlns="NS"><fonts count="2"><font/></fonts><fills><fill/></fills><borders><border/></borders><cellXfs><xf/></cellXfs></styleSheet>`,
+    `<styleSheet xmlns="NS"><fonts><font/></fonts><fills><fill/></fills><borders><border/></borders><cellXfs><xf fontId="2"/></cellXfs></styleSheet>`,
+    `<styleSheet xmlns="NS"><fonts><font><color rgb="FF000000" theme="1"/></font></fonts><fills><fill/></fills><borders><border/></borders><cellXfs><xf/></cellXfs></styleSheet>`,
+    `<styleSheet xmlns="NS"><fonts><font/></fonts><fills><fill/></fills><borders><border/></borders><cellStyleXfs><xf/></cellStyleXfs><cellXfs><xf xfId="3"/></cellXfs></styleSheet>`,
+  ])("rejects malformed style tables", (template) => {
+    const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({ stylesXml: template.replace("NS", namespace) })));
+    expect(() => readSpreadsheetStyles(workbook)).toThrow(SpreadsheetError);
+  });
+});
+
+function styleSheet(namespace: string): string {
+  return `<styleSheet xmlns="${namespace}">
+    <numFmts count="1"><numFmt numFmtId="164" formatCode="£#,##0.00"/></numFmts>
+    <fonts count="2">
+      <font><name val="Aptos"/><sz val="11"/></font>
+      <font><name val="Aptos Display"/><sz val="14"/><b/><i val="1"/><u val="double"/><color rgb="12AB34"/></font>
+    </fonts>
+    <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor theme="4" tint="0.25"/></patternFill></fill></fills>
+    <borders count="2"><border><left/><right/><top/><bottom/></border><border><left style="thin"><color indexed="64"/></left><right/><top/><bottom style="double"><color auto="1"/></bottom></border></borders>
+    <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+    <cellXfs count="2"><xf xfId="0"/><xf xfId="0" numFmtId="164" fontId="1" fillId="1" borderId="1"><alignment horizontal="center" vertical="top" wrapText="1" textRotation="45" indent="2"/></xf></cellXfs>
+  </styleSheet>`;
+}

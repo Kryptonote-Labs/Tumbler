@@ -24,6 +24,7 @@ export interface WorkbookFixtureOptions {
   readonly sheets?: readonly SheetFixture[];
   readonly workbookXml?: string;
   readonly sharedStringsXml?: string;
+  readonly stylesXml?: string;
 }
 
 export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint8Array {
@@ -43,6 +44,7 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
   const filename = workbookItemName.slice(slash + 1);
   const relationshipItemName = `${directory}_rels/${filename}.rels`;
   const sharedStringsItemName = `${directory}strings/shared.xml`;
+  const stylesItemName = `${directory}styles/style.xml`;
   const workbookXml = options.workbookXml ?? `<workbook xmlns="${spreadsheet}" xmlns:r="${officeRelationships}"><sheets>${sheets.map((sheet) =>
     `<sheet name="${sheet.name}" sheetId="${sheet.sheetId}" r:id="${sheet.relationshipId}"${sheet.state === undefined ? "" : ` state="${sheet.state}"`}/>`
   ).join("")}</sheets></workbook>`;
@@ -58,6 +60,7 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
           `<Override PartName="/${resolveTargetItemName(directory, sheet.target ?? `worksheets/sheet${index + 1}.xml`)}" ContentType="${WORKSHEET_TYPE}"/>`
         ).join("")}
         ${options.sharedStringsXml === undefined ? "" : `<Override PartName="/${sharedStringsItemName}" ContentType="${SHARED_STRINGS_CONTENT_TYPE}"/>`}
+        ${options.stylesXml === undefined ? "" : `<Override PartName="/${stylesItemName}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>`}
       </Types>`),
     },
     {
@@ -70,7 +73,7 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
       data: encoder.encode(`<Relationships xmlns="${RELATIONSHIPS}">${sheets.map((sheet, index) => {
         const target = sheet.target ?? `worksheets/sheet${index + 1}.xml`;
         return `<Relationship Id="${sheet.relationshipId}" Type="${sheet.relationshipType ?? worksheetRelationship}" Target="${target}"${sheet.targetMode === "External" ? ' TargetMode="External"' : ""}/>`;
-      }).join("")}${options.sharedStringsXml === undefined ? "" : `<Relationship Id="strings" Type="${officeRelationships}/sharedStrings" Target="strings/shared.xml"/>`}</Relationships>`),
+      }).join("")}${options.sharedStringsXml === undefined ? "" : `<Relationship Id="strings" Type="${officeRelationships}/sharedStrings" Target="strings/shared.xml"/>`}${options.stylesXml === undefined ? "" : `<Relationship Id="styles" Type="${officeRelationships}/styles" Target="styles/style.xml"/>`}</Relationships>`),
     },
     ...sheets.flatMap((sheet, index) => sheet.targetMode === "External" ? [] : [{
       name: resolveTargetItemName(directory, sheet.target ?? `worksheets/sheet${index + 1}.xml`),
@@ -80,6 +83,7 @@ export function buildWorkbookFixture(options: WorkbookFixtureOptions = {}): Uint
       name: sharedStringsItemName,
       data: encoder.encode(options.sharedStringsXml),
     }]),
+    ...(options.stylesXml === undefined ? [] : [{ name: stylesItemName, data: encoder.encode(options.stylesXml) }]),
   ]);
 }
 

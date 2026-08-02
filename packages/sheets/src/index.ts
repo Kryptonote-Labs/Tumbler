@@ -30,6 +30,19 @@ export {
   beginSpreadsheetEdit,
   SpreadsheetEditor,
 } from "./editor.ts";
+export {
+  readSpreadsheetStyles,
+  SpreadsheetStyles,
+} from "./styles.ts";
+export type {
+  SpreadsheetAlignment,
+  SpreadsheetBorder,
+  SpreadsheetBorderEdge,
+  SpreadsheetCellFormat,
+  SpreadsheetColor,
+  SpreadsheetFill,
+  SpreadsheetFont,
+} from "./styles.ts";
 export type {
   EditableCellValue,
   SpreadsheetEditorStatus,

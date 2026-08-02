@@ -34,6 +34,7 @@ export type SpreadsheetErrorCode =
   | "duplicate_sheet_name"
   | "invalid_cell"
   | "invalid_sheet"
+  | "invalid_styles"
   | "invalid_worksheet"
   | "invalid_workbook"
   | "missing_sheet_relationship"
