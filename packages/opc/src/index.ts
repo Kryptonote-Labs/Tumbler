@@ -21,3 +21,15 @@ export type {
   ContentTypesErrorCode,
 } from "./content-types.ts";
 export { PartName, PartNameError } from "./part-name.ts";
+export {
+  parseRelationships,
+  relationshipItemName,
+  Relationships,
+  RelationshipsError,
+} from "./relationships.ts";
+export type {
+  ExternalRelationship,
+  InternalRelationship,
+  Relationship,
+  RelationshipsErrorCode,
+} from "./relationships.ts";
