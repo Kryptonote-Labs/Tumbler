@@ -279,7 +279,7 @@ function parseFont(element: LosslessXmlElement, namespace: string): SpreadsheetF
     italic: propertyBoolean(element, namespace, "i"),
     underline: child(element, namespace, "u") === undefined ? undefined : valueChild(element, namespace, "u") ?? "single",
     strike: propertyBoolean(element, namespace, "strike"),
-    color: parseColor(child(element, namespace, "color")),
+    color: parseSpreadsheetColor(child(element, namespace, "color")),
   });
 }
 
@@ -287,8 +287,8 @@ function parseFill(element: LosslessXmlElement, namespace: string): SpreadsheetF
   const pattern = child(element, namespace, "patternFill");
   return Object.freeze({
     patternType: pattern === undefined ? undefined : attr(pattern, "patternType"),
-    foreground: pattern === undefined ? undefined : parseColor(child(pattern, namespace, "fgColor")),
-    background: pattern === undefined ? undefined : parseColor(child(pattern, namespace, "bgColor")),
+    foreground: pattern === undefined ? undefined : parseSpreadsheetColor(child(pattern, namespace, "fgColor")),
+    background: pattern === undefined ? undefined : parseSpreadsheetColor(child(pattern, namespace, "bgColor")),
   });
 }
 
@@ -303,10 +303,10 @@ function parseBorder(element: LosslessXmlElement, namespace: string): Spreadshee
 
 function parseEdge(element: LosslessXmlElement | undefined, namespace: string): SpreadsheetBorderEdge {
   if (element === undefined) return EMPTY_EDGE;
-  return Object.freeze({ style: attr(element, "style"), color: parseColor(child(element, namespace, "color")) });
+  return Object.freeze({ style: attr(element, "style"), color: parseSpreadsheetColor(child(element, namespace, "color")) });
 }
 
-function parseColor(element: LosslessXmlElement | undefined): SpreadsheetColor | undefined {
+export function parseSpreadsheetColor(element: LosslessXmlElement | undefined): SpreadsheetColor | undefined {
   if (element === undefined) return undefined;
   const tint = optionalDouble(attr(element, "tint"), "color tint") ?? 0;
   if (tint < -1 || tint > 1) throw styleError("Color tint must be between -1 and 1.");

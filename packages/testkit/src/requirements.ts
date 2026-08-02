@@ -48,6 +48,7 @@ export const SPREADSHEET_REQUIREMENTS = defineRequirementManifest([
   requirement("XLSX-WORKBOOK-DISCOVERY", "§12.3.23", "spreadsheet.workbook", ["package.test.ts", "workbook.test.ts"], { render: "supported" }),
   requirement("XLSX-WORKSHEET-DISCOVERY", "§12.3.24", "spreadsheet.worksheet", ["workbook.test.ts"], { render: "supported" }),
   requirement("XLSX-SHEET-IDENTITY", "§18.2.19–20, §18.2.27", "spreadsheet.sheets", ["workbook.test.ts"], { render: "supported" }),
+  requirement("XLSX-SHEET-TAB-COLOR", "§18.3.1.82–83", "spreadsheet.sheet-tabs", ["sheet-properties.test.ts"], { recognize: "supported", preserve: "supported", render: "supported" }),
   requirement("XLSX-SPARSE-CELLS", "§18.3.1.4", "spreadsheet.cells", ["worksheet.test.ts", "editor.property.test.ts"], { render: "supported", edit: "supported", write: "supported" }),
   requirement("XLSX-SHEET-GEOMETRY", "§18.3.1.13, §18.3.1.35, §18.3.1.73", "spreadsheet.geometry", ["worksheet.test.ts", "sparse-axis.test.ts", "spreadsheet-viewport.test.ts"], { render: "partial" }),
   requirement("XLSX-MERGED-CELLS", "§18.3.1.55", "spreadsheet.merges", ["worksheet.test.ts", "spreadsheet-viewport.test.ts"], { render: "partial" }),

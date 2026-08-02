@@ -66,6 +66,8 @@ export {
   readSpreadsheetStyles,
   SpreadsheetStyles,
 } from "./styles.ts";
+export { readSpreadsheetSheetProperties } from "./sheet-properties.ts";
+export type { SpreadsheetSheetProperties } from "./sheet-properties.ts";
 export {
   BUILT_IN_NUMBER_FORMATS,
   formatSpreadsheetCellValue,

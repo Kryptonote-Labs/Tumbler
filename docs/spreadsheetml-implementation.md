@@ -14,6 +14,7 @@ current requirement boundary is:
 | §12.3.23 | Workbook discovered as the package office-document target; no fixed `/xl/workbook.xml` assumption |
 | §12.3.24 | Ordinary worksheets resolved from each `sheet` relationship and required worksheet media type |
 | §18.2.19–20, §18.2.27 | Ordered sheet collection; required name, unsigned `sheetId`, relationship ID, and visibility state; unique names and IDs |
+| §18.3.1.82–83 | Worksheet tab colors with RGB, theme, indexed, and tint identity and resolution |
 | §18.2.2, §18.6.2 | Workbook calculation mode/flags and calculation-chain identity; literal edits remove stale chains and request a full calculation on load |
 | §18.3.1.4 | Sparse cells, references, style indexes, formulas, cached values, and standard cell type tags |
 | §18.3.1.13, §18.3.1.35, §18.3.1.73 | Column spans/widths, used dimension, row index/height/hidden state |
