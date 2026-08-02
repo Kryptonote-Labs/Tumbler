@@ -30,12 +30,16 @@ every edit or external revision:
   }
 </script>
 
-<SpreadsheetGrid worksheet={artifact.worksheet} onedit={editCell} />
+<SpreadsheetGrid
+  worksheet={artifact.worksheet}
+  calculation={artifact.calculation}
+  onedit={editCell}
+/>
 ```
 
 Pass `readonly` when the host wants selection and table view controls without
 cell writes. Sorting and filtering are always view-only: they use scalar values
-and cached formula results, do not calculate formulas, and do not change the
+plus supported calculated results or producer caches, and do not change the
 artifact bytes.
 
 The artefact viewer can render sheet tabs from `artifact.workbook.sheets` and

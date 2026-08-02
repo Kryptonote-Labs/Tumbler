@@ -9,7 +9,7 @@ import {
 describe("standards requirement manifests", () => {
   test("projects explicit spreadsheet capability stages", () => {
     const matrix = capabilityMatrix(SPREADSHEET_REQUIREMENTS);
-    expect(matrix).toHaveLength(14);
+    expect(matrix).toHaveLength(16);
     expect(matrix.find((entry) => entry.id === "XLSX-CELL-STYLES")).toMatchObject({
       recognize: "unverified",
       preserve: "supported",
@@ -29,6 +29,13 @@ describe("standards requirement manifests", () => {
       preserve: "supported",
       render: "partial",
       edit: "unverified",
+      write: "unverified",
+    });
+    expect(matrix.find((entry) => entry.id === "XLSX-FORMULA-EVALUATION")).toMatchObject({
+      recognize: "partial",
+      preserve: "supported",
+      render: "partial",
+      edit: "partial",
       write: "unverified",
     });
   });

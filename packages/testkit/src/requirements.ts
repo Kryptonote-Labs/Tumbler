@@ -59,6 +59,8 @@ export const SPREADSHEET_REQUIREMENTS = defineRequirementManifest([
   requirement("XLSX-CELL-TYPES", "§18.18.11", "spreadsheet.values", ["worksheet.test.ts", "editor.test.ts"], { render: "supported", edit: "partial", write: "partial" }),
   requirement("XLSX-TABLE-PARTS", "§18.3.1.94–95, §18.5.1.2–3", "spreadsheet.tables", ["tables.test.ts", "table-view.test.ts", "preservation.test.ts"], { recognize: "supported", preserve: "supported", render: "partial" }),
   requirement("XLSX-AUTOFILTER", "§18.3.1.2, §18.3.1.92, §18.3.2.7–10", "spreadsheet.filters", ["tables.test.ts", "table-view.test.ts", "spreadsheet-viewport.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }),
+  requirement("XLSX-FORMULA-GRAMMAR", "§2.2.2", "spreadsheet.formula-grammar", ["parser.test.ts", "calculation.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }, "MS-XLSX"),
+  requirement("XLSX-FORMULA-EVALUATION", "§18.17.2–7", "spreadsheet.formula-evaluation", ["evaluator.test.ts", "calculation.test.ts", "spreadsheet-viewport.test.ts"], { recognize: "partial", preserve: "supported", render: "partial", edit: "partial" }),
 ] as const);
 
 function requirement(
@@ -67,7 +69,8 @@ function requirement(
   area: string,
   tests: readonly string[],
   statuses: Readonly<Partial<Record<CapabilityStage, CapabilityStatus>>>,
+  source: StandardsRequirement["source"] = "ECMA-376-1",
 ): StandardsRequirement {
   const evidence = Object.fromEntries(Object.entries(statuses).map(([stage, status]) => [stage, { status, tests }]));
-  return { id, source: "ECMA-376-1", clause, area, level: "must", evidence };
+  return { id, source, clause, area, level: "must", evidence };
 }

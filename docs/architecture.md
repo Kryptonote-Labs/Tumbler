@@ -9,7 +9,7 @@ Svelte heads
       ↓
 Word / Sheets / Slides
       ↓
-Headless editing core
+Formula engine / Headless editing core
       ↓
 Shared OOXML
       ↓
@@ -95,6 +95,20 @@ writing.
 
 The spreadsheet package owns spreadsheet semantics. A table/grid UI library may
 help render it, but must not become the workbook model.
+
+### `@tumbler/formulas`
+
+Owns the UI-independent spreadsheet expression grammar and bounded calculation
+engine:
+
+- tokenization and typed formula syntax trees;
+- cell/range references and dependency discovery;
+- scalar coercion, operators, errors, and supported functions;
+- deterministic, resource-limited evaluation;
+- calculated-value snapshots and unsupported-feature diagnostics.
+
+It does not read OOXML, write caches, own workbook state, or depend on a UI. The
+Sheets package adapts SpreadsheetML cells and sheet identity into this engine.
 
 ### `@tumbler/slides`
 

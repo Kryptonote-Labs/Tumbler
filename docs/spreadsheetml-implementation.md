@@ -25,6 +25,7 @@ current requirement boundary is:
 | §18.18.11 | `b`, `d`, `e`, `inlineStr`, `n`, `s`, and `str` cell types |
 | §18.3.1.94–95, §18.5.1.2–3 | Relationship-resolved table parts, ranges, identities, columns, totals metadata, and table style flags |
 | §18.3.1.2, §18.3.1.92, §18.3.2.7–10 | Worksheet/table AutoFilter ranges, value/custom criteria, button state, and saved value-sort state |
+| MS-XLSX §2.2.2, ECMA-376-1 §18.17.2–7 | Typed formula parsing, references/ranges, bounded dependencies, operators, errors, and the first calculation function set |
 
 Both Strict and Transitional vocabulary and relationship namespaces are tested.
 This table is a feature boundary, not a claim of complete conformance to those
@@ -54,8 +55,13 @@ clauses or to SpreadsheetML as a whole.
 - leave a semantic no-op byte-identical and copy untouched ZIP payloads exactly.
 - project table body rows through supported saved or user-selected filters and
   stable value sorts using scalar values and stored formula results;
-- enumerate formatted table values for a fully client-side filter menu without
-  evaluating formulas or changing workbook bytes.
+- enumerate formatted table values for a fully client-side filter menu using
+  calculated overlays or stored caches without changing workbook bytes;
+- calculate supported ordinary formulas into an immutable overlay, including
+  arithmetic/comparison/concatenation, same- and cross-sheet A1 references,
+  ranges, `IF`, `SUM`, `COUNT`, `AVERAGE`, `MIN`, `MAX`, `AND`, `OR`, and `NOT`;
+- recalculate supported dependants after scalar edits while leaving formula text,
+  cached values, calculation metadata, and package bytes source-owned;
 
 Literal text writes use `inlineStr`. This avoids a workbook-wide shared-string
 reindex for a local edit. Replacing a formula with a literal intentionally
@@ -104,10 +110,13 @@ indentation, reading direction, and rotated or stacked text.
   font selection.
 - Merges wholly within one scrolling or frozen region render as one cell.
   Merges crossing a frozen-pane boundary still need quadrant clipping.
-- Formulas are preserved and exposed with cached values, but not tokenized,
-  calculated, or editable. Tumbler deliberately asks the consuming spreadsheet
-  application to recalculate after literal edits. Structural row/column edits do
-  not exist.
+- Formula calculation is deliberately partial. Ordinary scalar formulas in the
+  first grammar/function slice calculate in a bounded overlay; unsupported
+  names, structured/external references, shared/array/data-table/dynamic-array
+  forms, volatile behavior, iterative calculation, and the wider Excel function
+  catalog fall back to producer caches with diagnostics. Formula caches are not
+  written, formula text is not editable, and structural row/column edits do not
+  exist.
 - Table and AutoFilter support is read-only. Value lists and one/two-condition
   custom filters plus vertical value sorting are projected; dynamic, top-10,
   color, icon, and horizontal sorts remain explicitly unsupported and are not

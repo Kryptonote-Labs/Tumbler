@@ -79,6 +79,7 @@ now implemented:
 - [x] resolve opaque RGB, theme, indexed, and tinted cell-style colors;
 - [x] render variable geometry, ordinary merges, and frozen pane regions;
 - [x] recognize table parts and project read-only table sorting/filtering in the owned grid;
+- [x] parse and calculate a bounded first formula slice into read-only value overlays;
 - [ ] edit formulas and structural ranges safely;
 - [ ] pass Open XML SDK, LibreOffice, and Microsoft Excel round trips.
 
