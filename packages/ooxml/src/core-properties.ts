@@ -4,7 +4,7 @@ import {
   openOpcPackage,
   PartName,
   type PackageTransactionStatus,
-} from "@tumbler/opc";
+} from "@tumblerjs/opc";
 import { OOXML_NAMESPACES } from "./namespaces.ts";
 import { beginLosslessXmlEdit } from "./xml/editor.ts";
 import {

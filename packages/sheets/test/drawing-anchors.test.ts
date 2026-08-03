@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { SparseAxisGeometry } from "@tumbler/core";
-import { openOpcPackage } from "@tumbler/opc";
+import { SparseAxisGeometry } from "@tumblerjs/core";
+import { openOpcPackage } from "@tumblerjs/opc";
 import { emuToCssPixels, openSpreadsheet, openWorksheet, spreadsheetDrawingBounds } from "../src/index.ts";
 import { buildWorkbookFixture } from "./workbook-fixture.ts";
 

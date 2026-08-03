@@ -48,15 +48,15 @@ There is no support commitment or migration policy during this stage.
 
 | Package | Responsibility |
 | --- | --- |
-| `@tumbler/opc` | ZIP package parts, content types, and relationships |
-| `@tumbler/ooxml` | Shared OOXML vocabulary, namespaces, and compatibility |
-| `@tumbler/charts` | Headless DrawingML chart semantics and deterministic layout |
-| `@tumbler/core` | Headless commands, transactions, selection, and history |
-| `@tumbler/word` | WordprocessingML model and editing behavior |
-| `@tumbler/sheets` | SpreadsheetML model and editing behavior |
-| `@tumbler/slides` | PresentationML model and editing behavior |
-| `@tumbler/svelte` | Kryptonote's replaceable Svelte head |
-| `@tumbler/testkit` | Fixtures, validators, generators, oracles, and preservation checks |
+| `@tumblerjs/opc` | ZIP package parts, content types, and relationships |
+| `@tumblerjs/ooxml` | Shared OOXML vocabulary, namespaces, and compatibility |
+| `@tumblerjs/charts` | Headless DrawingML chart semantics and deterministic layout |
+| `@tumblerjs/core` | Headless commands, transactions, selection, and history |
+| `@tumblerjs/word` | WordprocessingML model and editing behavior |
+| `@tumblerjs/sheets` | SpreadsheetML model and editing behavior |
+| `@tumblerjs/slides` | PresentationML model and editing behavior |
+| `@tumblerjs/svelte` | Kryptonote's replaceable Svelte head |
+| `@tumblerjs/testkit` | Fixtures, validators, generators, oracles, and preservation checks |
 
 ## Commands
 
@@ -73,7 +73,7 @@ The first implemented API is the shared OPC layer. It can safely inventory an
 Office package and stage atomic package-graph changes:
 
 ```ts
-import { beginPackageTransaction, openOpcPackage } from "@tumbler/opc";
+import { beginPackageTransaction, openOpcPackage } from "@tumblerjs/opc";
 
 const pkg = openOpcPackage(bytes);
 const transaction = beginPackageTransaction(pkg);
@@ -98,7 +98,7 @@ The shared OOXML layer can now perform the first typed cross-format edit:
 import {
   beginCorePropertiesEdit,
   readCoreProperties,
-} from "@tumbler/ooxml";
+} from "@tumblerjs/ooxml";
 
 const properties = readCoreProperties(pkg);
 const editedBytes = beginCorePropertiesEdit(pkg)

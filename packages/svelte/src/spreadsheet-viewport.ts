@@ -1,4 +1,4 @@
-import { SparseAxisGeometry } from "@tumbler/core";
+import { SparseAxisGeometry } from "@tumblerjs/core";
 
 export interface SpreadsheetViewportInput {
   readonly rowCount: number;

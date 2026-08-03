@@ -1,11 +1,25 @@
 {
-  "name": "@tumbler/ooxml",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@tumblerjs/ooxml",
+  "version": "0.1.0-alpha.0",
+  "description": "Shared OOXML parsing, preservation and editing primitives.",
   "type": "module",
   "exports": "./src/index.ts",
+  "files": [
+    "src",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kryptonote-Labs/Tumbler.git",
+    "directory": "packages/ooxml"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
   "dependencies": {
-    "@tumbler/opc": "workspace:*",
+    "@tumblerjs/opc": "workspace:*",
     "saxes": "6.0.0"
   }
 }

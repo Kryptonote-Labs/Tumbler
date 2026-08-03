@@ -9,7 +9,7 @@
     type ChartModel,
     type ChartSeries,
     type SupportedChartModel,
-  } from "@tumbler/charts";
+  } from "@tumblerjs/charts";
 
   interface Props {
     readonly model: ChartModel;

@@ -1,7 +1,7 @@
-import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumbler/ooxml";
-import type { OpcPart, PartName } from "@tumbler/opc";
-import type { SparseAxisGeometry } from "@tumbler/core";
-import { ChartParseError, parseOoxmlChart, type ChartModel } from "@tumbler/charts";
+import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
+import type { OpcPart, PartName } from "@tumblerjs/opc";
+import type { SparseAxisGeometry } from "@tumblerjs/core";
+import { ChartParseError, parseOoxmlChart, type ChartModel } from "@tumblerjs/charts";
 import { SpreadsheetError, type SpreadsheetWorkbook } from "./workbook.ts";
 
 const DRAWING_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.drawing+xml";

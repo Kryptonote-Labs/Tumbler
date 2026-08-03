@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import { openOpcPackage } from "@tumbler/opc";
+import { openOpcPackage } from "@tumblerjs/opc";
 import { formatSpreadsheetCellValue, openSpreadsheet, readSpreadsheetStyles, type SpreadsheetCellValue } from "../src/index.ts";
 import { buildWorkbookFixture } from "./workbook-fixture.ts";
 

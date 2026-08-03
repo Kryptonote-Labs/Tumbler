@@ -1,6 +1,6 @@
-import type { LosslessXmlElement } from "@tumbler/ooxml";
-import { parseLosslessXml } from "@tumbler/ooxml";
-import type { OpcPart, PartName } from "@tumbler/opc";
+import type { LosslessXmlElement } from "@tumblerjs/ooxml";
+import { parseLosslessXml } from "@tumblerjs/ooxml";
+import type { OpcPart, PartName } from "@tumblerjs/opc";
 import { parseCellRange, type CellRange } from "./references.ts";
 import { SpreadsheetError, type SpreadsheetWorkbook } from "./workbook.ts";
 

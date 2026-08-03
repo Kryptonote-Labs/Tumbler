@@ -1,5 +1,5 @@
-import type { SparseAxisGeometry } from "@tumbler/core";
-import type { CellRange, SpreadsheetDrawingAnchor, SpreadsheetDrawingBounds } from "@tumbler/sheets";
+import type { SparseAxisGeometry } from "@tumblerjs/core";
+import type { CellRange, SpreadsheetDrawingAnchor, SpreadsheetDrawingBounds } from "@tumblerjs/sheets";
 import type { SpreadsheetViewport, VirtualGridItem } from "./spreadsheet-viewport.ts";
 
 export interface SpreadsheetMergeLayout {

@@ -66,7 +66,7 @@ so synthetic packages are not presented as full interoperability evidence.
 
 ## Testkit structure
 
-The planned shape of `@tumbler/testkit` is:
+The planned shape of `@tumblerjs/testkit` is:
 
 ```text
 packages/testkit/

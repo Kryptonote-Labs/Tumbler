@@ -1,4 +1,4 @@
-import type { EditableCellValue, SpreadsheetCellValue } from "@tumbler/sheets";
+import type { EditableCellValue, SpreadsheetCellValue } from "@tumblerjs/sheets";
 
 export interface SpreadsheetGridEdit {
   readonly reference: string;

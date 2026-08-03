@@ -1,4 +1,4 @@
-import type { LosslessXmlDocument, LosslessXmlElement } from "@tumbler/ooxml";
+import type { LosslessXmlDocument, LosslessXmlElement } from "@tumblerjs/ooxml";
 import {
   OOXML_NAMESPACES,
   parseLosslessXml,
@@ -8,8 +8,8 @@ import {
   type ThemeColorScheme,
   type ThemeFontScheme,
   type ThemeFontScript,
-} from "@tumbler/ooxml";
-import type { PartName } from "@tumbler/opc";
+} from "@tumblerjs/ooxml";
+import type { PartName } from "@tumblerjs/opc";
 import { SpreadsheetError, type SpreadsheetWorkbook } from "./workbook.ts";
 
 const STYLES_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";

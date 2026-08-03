@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { SupportedChartModel } from "@tumbler/charts";
-import { openOpcPackage } from "@tumbler/opc";
+import type { SupportedChartModel } from "@tumblerjs/charts";
+import { openOpcPackage } from "@tumblerjs/opc";
 import { beginSpreadsheetEdit, openSpreadsheet, openWorksheet, parseSpreadsheetChartReference, resolveSpreadsheetChartData, resolveSpreadsheetChartDataSet } from "../src/index.ts";
 import { buildWorkbookFixture } from "./workbook-fixture.ts";
 

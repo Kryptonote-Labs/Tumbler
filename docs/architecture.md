@@ -24,7 +24,7 @@ import one another.
 
 ## Package responsibilities
 
-### `@tumbler/opc`
+### `@tumblerjs/opc`
 
 Owns the physical OOXML package as a graph of parts and relationships:
 
@@ -41,7 +41,7 @@ Owns the physical OOXML package as a graph of parts and relationships:
 
 It does not know what a paragraph, cell, shape, or slide is.
 
-### `@tumbler/ooxml`
+### `@tumblerjs/ooxml`
 
 Owns behavior shared by the three OOXML vocabularies:
 
@@ -58,7 +58,7 @@ Owns behavior shared by the three OOXML vocabularies:
 This layer should be schema-informed, but generated schema types must not be
 allowed to dictate the public editing API.
 
-### `@tumbler/core`
+### `@tumblerjs/core`
 
 Owns format-neutral editing machinery:
 
@@ -80,14 +80,14 @@ framework behavior.
 The core should describe actions in user-domain language, such as inserting a
 row or applying text emphasis. Raw XML operations remain below the editing API.
 
-### `@tumbler/word`
+### `@tumblerjs/word`
 
 Owns WordprocessingML parsing, editing semantics, layout inputs, and writing.
 Its model must retain the distinction between document structure, style
 inheritance, numbering, sections, headers, footers, notes, fields, drawings,
 comments, and relationships.
 
-### `@tumbler/sheets`
+### `@tumblerjs/sheets`
 
 Owns SpreadsheetML parsing, workbook and worksheet state, cell values and
 formats, formulas and references, tables, names, drawings, layout inputs, and
@@ -96,7 +96,7 @@ writing.
 The spreadsheet package owns spreadsheet semantics. A table/grid UI library may
 help render it, but must not become the workbook model.
 
-### `@tumbler/formulas`
+### `@tumblerjs/formulas`
 
 Owns the UI-independent spreadsheet expression grammar and bounded calculation
 engine:
@@ -110,7 +110,7 @@ engine:
 It does not read OOXML, write caches, own workbook state, or depend on a UI. The
 Sheets package adapts SpreadsheetML cells and sheet identity into this engine.
 
-### `@tumbler/charts`
+### `@tumblerjs/charts`
 
 Owns host-independent DrawingML chart semantics and deterministic geometry:
 
@@ -122,13 +122,13 @@ Owns host-independent DrawingML chart semantics and deterministic geometry:
 It does not resolve SpreadsheetML cells or depend on Svelte. Format packages
 bind host-document references; rendering heads consume the resulting model.
 
-### `@tumbler/slides`
+### `@tumblerjs/slides`
 
 Owns PresentationML parsing, slide ordering, masters and layouts, shapes, text,
 connectors, notes, themes, animations where supported, layout inputs, and
 writing.
 
-### `@tumbler/svelte`
+### `@tumblerjs/svelte`
 
 Owns first-party Svelte rendering and interaction:
 
@@ -147,7 +147,7 @@ If the heads become large, this workspace can later split into
 `svelte-word`, `svelte-sheets`, and `svelte-slides`. There is no need to make
 that split before real code demands it.
 
-### `@tumbler/testkit`
+### `@tumblerjs/testkit`
 
 Owns reusable quality infrastructure:
 

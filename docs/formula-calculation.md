@@ -5,9 +5,9 @@ source or pretending to implement the complete Excel language.
 
 ## Boundary
 
-`@tumbler/formulas` parses stored formula text without the UI's leading `=` and
+`@tumblerjs/formulas` parses stored formula text without the UI's leading `=` and
 produces typed syntax trees. Its evaluator accepts a workbook adapter rather
-than importing SpreadsheetML. `@tumbler/sheets` supplies that adapter and exposes
+than importing SpreadsheetML. `@tumblerjs/sheets` supplies that adapter and exposes
 an immutable `SpreadsheetCalculationSnapshot` on each `SpreadsheetArtifact`.
 
 The renderer uses a calculated value first, then the producer's cached value,

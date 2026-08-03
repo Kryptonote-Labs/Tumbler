@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { compile } from "svelte/compiler";
-import { SparseAxisGeometry } from "@tumbler/core";
+import { SparseAxisGeometry } from "@tumblerjs/core";
 import { calculateSpreadsheetViewport, coerceSpreadsheetEditValue, composeSpreadsheetGridLayout, frozenGridTranslation, measureMaximumDigitWidth, placeSpreadsheetDrawing, spreadsheetDrawingRegion, spreadsheetFontShorthand } from "../src/index.ts";
 import { frozenAxisExtent, spreadsheetCellLayer } from "../src/spreadsheet-grid-layout.ts";
 

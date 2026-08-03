@@ -71,7 +71,7 @@ Implemented behavior includes:
 
 The same tests execute against Word, spreadsheet, and presentation packages.
 This shared slice remains metadata-oriented. Spreadsheet cell parsing and
-literal editing now exist in `@tumbler/sheets`; paragraph, shape, and slide
+literal editing now exist in `@tumblerjs/sheets`; paragraph, shape, and slide
 editing do not.
 
 ## Qualification evidence and gaps

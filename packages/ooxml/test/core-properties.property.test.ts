@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import { openOpcPackage } from "@tumbler/opc";
+import { openOpcPackage } from "@tumblerjs/opc";
 import { beginCorePropertiesEdit, readCoreProperties } from "../src/index.ts";
 import { buildDeflatedZip } from "../../opc/test/zip-builder.ts";
 

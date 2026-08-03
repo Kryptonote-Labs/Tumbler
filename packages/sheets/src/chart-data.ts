@@ -1,4 +1,4 @@
-import type { ChartDataPoint, ChartDataSequence, ChartModel, ChartSeries } from "@tumbler/charts";
+import type { ChartDataPoint, ChartDataSequence, ChartModel, ChartSeries } from "@tumblerjs/charts";
 import type { CellRange } from "./references.ts";
 import { parseCellRange } from "./references.ts";
 import { calculateSpreadsheetWorksheet, type SpreadsheetCalculationSnapshot } from "./calculation.ts";

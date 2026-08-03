@@ -10,8 +10,8 @@ every edit or external revision:
 
 ```svelte
 <script lang="ts">
-  import { openSpreadsheetArtifact } from "@tumbler/sheets";
-  import { SpreadsheetGrid, type SpreadsheetGridEdit } from "@tumbler/svelte";
+  import { openSpreadsheetArtifact } from "@tumblerjs/sheets";
+  import { SpreadsheetGrid, type SpreadsheetGridEdit } from "@tumblerjs/svelte";
 
   let { bytes, onbyteschange } = $props<{
     bytes: Uint8Array;

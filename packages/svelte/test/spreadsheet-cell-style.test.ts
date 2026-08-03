@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { openOpcPackage } from "../../opc/src/index.ts";
-import { openSpreadsheet, openWorksheet } from "@tumbler/sheets";
+import { openSpreadsheet, openWorksheet } from "@tumblerjs/sheets";
 import { buildWorkbookFixture } from "../../sheets/test/workbook-fixture.ts";
 import { spreadsheetCellContentCss, spreadsheetCellCss } from "../src/index.ts";
 

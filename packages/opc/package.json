@@ -1,9 +1,23 @@
 {
-  "name": "@tumbler/opc",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@tumblerjs/opc",
+  "version": "0.1.0-alpha.0",
+  "description": "OPC package primitives for browser-first Office document tooling.",
   "type": "module",
   "exports": "./src/index.ts",
+  "files": [
+    "src",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kryptonote-Labs/Tumbler.git",
+    "directory": "packages/opc"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
   "dependencies": {
     "fflate": "^0.8.3",
     "saxes": "^6.0.0"

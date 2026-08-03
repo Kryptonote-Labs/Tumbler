@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { beginPackageTransaction, openOpcPackage, PartName } from "@tumbler/opc";
+import { beginPackageTransaction, openOpcPackage, PartName } from "@tumblerjs/opc";
 import {
   beginCorePropertiesEdit,
   CorePropertiesError,

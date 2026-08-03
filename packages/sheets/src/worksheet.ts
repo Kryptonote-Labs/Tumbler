@@ -1,7 +1,7 @@
-import type { LosslessXmlDocument, LosslessXmlElement } from "@tumbler/ooxml";
-import { OOXML_NAMESPACES, parseLosslessXml } from "@tumbler/ooxml";
-import type { OpcPart } from "@tumbler/opc";
-import { SparseAxisGeometry } from "@tumbler/core";
+import type { LosslessXmlDocument, LosslessXmlElement } from "@tumblerjs/ooxml";
+import { OOXML_NAMESPACES, parseLosslessXml } from "@tumblerjs/ooxml";
+import type { OpcPart } from "@tumblerjs/opc";
+import { SparseAxisGeometry } from "@tumblerjs/core";
 import {
   EXCEL_MAX_COLUMNS,
   EXCEL_MAX_ROWS,

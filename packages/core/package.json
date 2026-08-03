@@ -1,10 +1,10 @@
 {
-  "name": "@tumbler/core",
+  "name": "@tumblerjs/core",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@tumbler/ooxml": "workspace:*"
+    "@tumblerjs/ooxml": "workspace:*"
   }
 }

@@ -1,5 +1,5 @@
-import type { LosslessXmlElement } from "@tumbler/ooxml";
-import { OOXML_NAMESPACES, parseLosslessXml } from "@tumbler/ooxml";
+import type { LosslessXmlElement } from "@tumblerjs/ooxml";
+import { OOXML_NAMESPACES, parseLosslessXml } from "@tumblerjs/ooxml";
 import { SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";
 import { parseSpreadsheetColor, type SpreadsheetColor } from "./styles.ts";
 

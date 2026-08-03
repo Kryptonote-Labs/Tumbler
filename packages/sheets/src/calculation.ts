@@ -6,7 +6,7 @@ import {
   type FormulaCellInput,
   type FormulaScalarValue,
   type FormulaWorkbookSource,
-} from "@tumbler/formulas";
+} from "@tumblerjs/formulas";
 import { formatCellReference, parseCellReference, type CellAddress } from "./references.ts";
 import { openWorksheet, type SpreadsheetCellValue, type SpreadsheetWorksheet } from "./worksheet.ts";
 import type { SpreadsheetSheet, SpreadsheetWorkbook } from "./workbook.ts";

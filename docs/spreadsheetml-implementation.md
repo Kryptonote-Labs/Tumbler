@@ -38,7 +38,7 @@ clauses or to SpreadsheetML as a whole.
 
 ## Public behavior now available
 
-`@tumbler/sheets` can:
+`@tumblerjs/sheets` can:
 
 - open an OPC spreadsheet package and enumerate ordinary worksheets in tab order;
 - address sheets by case-insensitive name or numeric identity;
@@ -80,8 +80,8 @@ removes the formula. Existing style and unknown cell attributes/children are
 retained inside the rewritten target cell; unrelated worksheet source and
 unrelated package parts are not reserialized.
 
-`@tumbler/core` supplies one-based, immutable selection and arrow-navigation
-primitives plus sparse variable-axis geometry. `@tumbler/svelte` supplies
+`@tumblerjs/core` supplies one-based, immutable selection and arrow-navigation
+primitives plus sparse variable-axis geometry. `@tumblerjs/svelte` supplies
 `SpreadsheetGrid`, an owned virtualized surface with row/column headers, click
 and shift selection, keyboard navigation, styled display, merged cells, frozen
 regions, an inline editor, table sort/filter dropdowns, a read-only mode, and

@@ -1,5 +1,5 @@
-import type { ChartColor } from "@tumbler/charts";
-import type { ThemeColorSlot } from "@tumbler/ooxml";
+import type { ChartColor } from "@tumblerjs/charts";
+import type { ThemeColorSlot } from "@tumblerjs/ooxml";
 import type { SpreadsheetStyles } from "./styles.ts";
 
 /** Resolves the chart color subset through the workbook's DrawingML theme. */

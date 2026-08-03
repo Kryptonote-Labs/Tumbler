@@ -1,4 +1,4 @@
-import type { SpreadsheetFont } from "@tumbler/sheets";
+import type { SpreadsheetFont } from "@tumblerjs/sheets";
 
 /** ECMA-376 column geometry uses the widest decimal digit in the Normal style font. */
 export function measureMaximumDigitWidth(

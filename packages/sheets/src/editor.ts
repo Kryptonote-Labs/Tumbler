@@ -6,8 +6,8 @@ import {
   type LosslessXmlDocument,
   type LosslessXmlElement,
   type LosslessXmlNode,
-} from "@tumbler/ooxml";
-import { beginPackageTransaction, type PackageTransaction, type PartName } from "@tumbler/opc";
+} from "@tumblerjs/ooxml";
+import { beginPackageTransaction, type PackageTransaction, type PartName } from "@tumblerjs/opc";
 import { formatCellRange, formatCellReference, parseCellReference, type CellAddress, type CellRange } from "./references.ts";
 import { openWorksheet, type SpreadsheetCellValue } from "./worksheet.ts";
 import { SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";

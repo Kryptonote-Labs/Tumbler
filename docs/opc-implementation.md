@@ -37,7 +37,7 @@ The vendored fifth-edition text in
   reopen successfully.
 
 The package transaction is intentionally below the future user-facing editing
-history. It provides atomic physical-package changes; `@tumbler/core` will own
+history. It provides atomic physical-package changes; `@tumblerjs/core` will own
 document commands, undo, redo, revisions, and UI-facing events.
 
 ## Deliberate gaps

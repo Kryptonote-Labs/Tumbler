@@ -11,33 +11,33 @@
       },
     },
     "packages/charts": {
-      "name": "@tumbler/charts",
+      "name": "@tumblerjs/charts",
       "version": "0.0.0",
       "dependencies": {
-        "@tumbler/ooxml": "workspace:*",
+        "@tumblerjs/ooxml": "workspace:*",
       },
     },
     "packages/core": {
-      "name": "@tumbler/core",
+      "name": "@tumblerjs/core",
       "version": "0.0.0",
       "dependencies": {
-        "@tumbler/ooxml": "workspace:*",
+        "@tumblerjs/ooxml": "workspace:*",
       },
     },
     "packages/formulas": {
-      "name": "@tumbler/formulas",
+      "name": "@tumblerjs/formulas",
       "version": "0.0.0",
     },
     "packages/ooxml": {
-      "name": "@tumbler/ooxml",
+      "name": "@tumblerjs/ooxml",
       "version": "0.0.0",
       "dependencies": {
-        "@tumbler/opc": "workspace:*",
+        "@tumblerjs/opc": "workspace:*",
         "saxes": "6.0.0",
       },
     },
     "packages/opc": {
-      "name": "@tumbler/opc",
+      "name": "@tumblerjs/opc",
       "version": "0.0.0",
       "dependencies": {
         "fflate": "^0.8.3",
@@ -45,54 +45,54 @@
       },
     },
     "packages/sheets": {
-      "name": "@tumbler/sheets",
+      "name": "@tumblerjs/sheets",
       "version": "0.0.0",
       "dependencies": {
-        "@tumbler/charts": "workspace:*",
-        "@tumbler/core": "workspace:*",
-        "@tumbler/formulas": "workspace:*",
-        "@tumbler/ooxml": "workspace:*",
-        "@tumbler/opc": "workspace:*",
+        "@tumblerjs/charts": "workspace:*",
+        "@tumblerjs/core": "workspace:*",
+        "@tumblerjs/formulas": "workspace:*",
+        "@tumblerjs/ooxml": "workspace:*",
+        "@tumblerjs/opc": "workspace:*",
       },
     },
     "packages/slides": {
-      "name": "@tumbler/slides",
+      "name": "@tumblerjs/slides",
       "version": "0.0.0",
       "dependencies": {
-        "@tumbler/core": "workspace:*",
-        "@tumbler/ooxml": "workspace:*",
+        "@tumblerjs/core": "workspace:*",
+        "@tumblerjs/ooxml": "workspace:*",
       },
     },
     "packages/svelte": {
-      "name": "@tumbler/svelte",
+      "name": "@tumblerjs/svelte",
       "version": "0.0.0",
       "dependencies": {
-        "@tumbler/charts": "workspace:*",
-        "@tumbler/core": "workspace:*",
-        "@tumbler/sheets": "workspace:*",
-        "@tumbler/slides": "workspace:*",
-        "@tumbler/word": "workspace:*",
+        "@tumblerjs/charts": "workspace:*",
+        "@tumblerjs/core": "workspace:*",
+        "@tumblerjs/sheets": "workspace:*",
+        "@tumblerjs/slides": "workspace:*",
+        "@tumblerjs/word": "workspace:*",
         "svelte": "^5.0.0",
       },
     },
     "packages/testkit": {
-      "name": "@tumbler/testkit",
+      "name": "@tumblerjs/testkit",
       "version": "0.0.0",
       "dependencies": {
-        "@tumbler/core": "workspace:*",
-        "@tumbler/ooxml": "workspace:*",
-        "@tumbler/opc": "workspace:*",
-        "@tumbler/sheets": "workspace:*",
-        "@tumbler/slides": "workspace:*",
-        "@tumbler/word": "workspace:*",
+        "@tumblerjs/core": "workspace:*",
+        "@tumblerjs/ooxml": "workspace:*",
+        "@tumblerjs/opc": "workspace:*",
+        "@tumblerjs/sheets": "workspace:*",
+        "@tumblerjs/slides": "workspace:*",
+        "@tumblerjs/word": "workspace:*",
       },
     },
     "packages/word": {
-      "name": "@tumbler/word",
+      "name": "@tumblerjs/word",
       "version": "0.0.0",
       "dependencies": {
-        "@tumbler/core": "workspace:*",
-        "@tumbler/ooxml": "workspace:*",
+        "@tumblerjs/core": "workspace:*",
+        "@tumblerjs/ooxml": "workspace:*",
       },
     },
   },
@@ -109,25 +109,25 @@
 
     "@sveltejs/acorn-typescript": ["@sveltejs/acorn-typescript@1.0.11", "", { "peerDependencies": { "acorn": "^8.9.0" } }, "sha512-LFuZUkjJ9iF7JZye/aG5XM0SFcQ5VyL0oVX4WJ9dc0Va3R3s0OauX1BESVCb+YN/ol8TAfqGDDAQsTG627Y5kw=="],
 
-    "@tumbler/charts": ["@tumbler/charts@workspace:packages/charts"],
+    "@tumblerjs/charts": ["@tumblerjs/charts@workspace:packages/charts"],
 
-    "@tumbler/core": ["@tumbler/core@workspace:packages/core"],
+    "@tumblerjs/core": ["@tumblerjs/core@workspace:packages/core"],
 
-    "@tumbler/formulas": ["@tumbler/formulas@workspace:packages/formulas"],
+    "@tumblerjs/formulas": ["@tumblerjs/formulas@workspace:packages/formulas"],
 
-    "@tumbler/ooxml": ["@tumbler/ooxml@workspace:packages/ooxml"],
+    "@tumblerjs/ooxml": ["@tumblerjs/ooxml@workspace:packages/ooxml"],
 
-    "@tumbler/opc": ["@tumbler/opc@workspace:packages/opc"],
+    "@tumblerjs/opc": ["@tumblerjs/opc@workspace:packages/opc"],
 
-    "@tumbler/sheets": ["@tumbler/sheets@workspace:packages/sheets"],
+    "@tumblerjs/sheets": ["@tumblerjs/sheets@workspace:packages/sheets"],
 
-    "@tumbler/slides": ["@tumbler/slides@workspace:packages/slides"],
+    "@tumblerjs/slides": ["@tumblerjs/slides@workspace:packages/slides"],
 
-    "@tumbler/svelte": ["@tumbler/svelte@workspace:packages/svelte"],
+    "@tumblerjs/svelte": ["@tumblerjs/svelte@workspace:packages/svelte"],
 
-    "@tumbler/testkit": ["@tumbler/testkit@workspace:packages/testkit"],
+    "@tumblerjs/testkit": ["@tumblerjs/testkit@workspace:packages/testkit"],
 
-    "@tumbler/word": ["@tumbler/word@workspace:packages/word"],
+    "@tumblerjs/word": ["@tumblerjs/word@workspace:packages/word"],
 
     "@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
 

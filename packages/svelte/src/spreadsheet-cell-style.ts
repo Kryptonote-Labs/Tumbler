@@ -1,4 +1,4 @@
-import type { SpreadsheetCellValue, SpreadsheetWorksheet } from "@tumbler/sheets";
+import type { SpreadsheetCellValue, SpreadsheetWorksheet } from "@tumblerjs/sheets";
 
 export function spreadsheetCellCss(worksheet: SpreadsheetWorksheet, reference: string): string {
   const style = worksheet.cellStyle(reference);

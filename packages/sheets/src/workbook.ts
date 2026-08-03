@@ -1,6 +1,6 @@
-import type { LosslessXmlAttribute, LosslessXmlDocument, LosslessXmlElement } from "@tumbler/ooxml";
-import { OOXML_NAMESPACES, parseLosslessXml } from "@tumbler/ooxml";
-import type { OpcPackage, OpcPart, PartName } from "@tumbler/opc";
+import type { LosslessXmlAttribute, LosslessXmlDocument, LosslessXmlElement } from "@tumblerjs/ooxml";
+import { OOXML_NAMESPACES, parseLosslessXml } from "@tumblerjs/ooxml";
+import type { OpcPackage, OpcPart, PartName } from "@tumblerjs/opc";
 
 const WORKSHEET_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";

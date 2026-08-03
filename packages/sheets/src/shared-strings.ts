@@ -1,6 +1,6 @@
-import type { LosslessXmlElement } from "@tumbler/ooxml";
-import { OOXML_NAMESPACES, parseLosslessXml } from "@tumbler/ooxml";
-import type { OpcPart, PartName } from "@tumbler/opc";
+import type { LosslessXmlElement } from "@tumblerjs/ooxml";
+import { OOXML_NAMESPACES, parseLosslessXml } from "@tumblerjs/ooxml";
+import type { OpcPart, PartName } from "@tumblerjs/opc";
 import { SpreadsheetError, type SpreadsheetWorkbook } from "./workbook.ts";
 
 const SHARED_STRINGS_CONTENT_TYPE =

@@ -1,11 +1,11 @@
 {
-  "name": "@tumbler/slides",
+  "name": "@tumblerjs/slides",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@tumbler/core": "workspace:*",
-    "@tumbler/ooxml": "workspace:*"
+    "@tumblerjs/core": "workspace:*",
+    "@tumblerjs/ooxml": "workspace:*"
   }
 }

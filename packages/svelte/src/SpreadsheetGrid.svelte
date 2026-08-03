@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { createGridSelection, moveGridSelection, type GridDirection, type GridSelection } from "@tumbler/core";
-  import type { ChartModel } from "@tumbler/charts";
+  import { createGridSelection, moveGridSelection, type GridDirection, type GridSelection } from "@tumblerjs/core";
+  import type { ChartModel } from "@tumblerjs/charts";
   import {
     EXCEL_MAX_COLUMNS,
     EXCEL_MAX_ROWS,
@@ -23,7 +23,7 @@
     type SpreadsheetTable,
     type SpreadsheetTableViewState,
     type SpreadsheetWorksheet,
-  } from "@tumbler/sheets";
+  } from "@tumblerjs/sheets";
   import { calculateSpreadsheetViewport } from "./spreadsheet-viewport.ts";
   import { composeSpreadsheetGridLayout, frozenAxisExtent, placeSpreadsheetDrawing } from "./spreadsheet-grid-layout.ts";
   import { coerceSpreadsheetEditValue, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";

@@ -1,4 +1,4 @@
-import { openOpcPackage } from "@tumbler/opc";
+import { openOpcPackage } from "@tumblerjs/opc";
 import { beginSpreadsheetEdit, type EditableCellValue } from "./editor.ts";
 import { openWorksheet, type SpreadsheetWorksheet } from "./worksheet.ts";
 import { openSpreadsheet, SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";

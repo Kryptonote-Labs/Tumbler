@@ -1,14 +1,14 @@
 {
-  "name": "@tumbler/sheets",
+  "name": "@tumblerjs/sheets",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@tumbler/charts": "workspace:*",
-    "@tumbler/core": "workspace:*",
-    "@tumbler/formulas": "workspace:*",
-    "@tumbler/ooxml": "workspace:*",
-    "@tumbler/opc": "workspace:*"
+    "@tumblerjs/charts": "workspace:*",
+    "@tumblerjs/core": "workspace:*",
+    "@tumblerjs/formulas": "workspace:*",
+    "@tumblerjs/ooxml": "workspace:*",
+    "@tumblerjs/opc": "workspace:*"
   }
 }

@@ -1,15 +1,15 @@
 {
-  "name": "@tumbler/svelte",
+  "name": "@tumblerjs/svelte",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@tumbler/charts": "workspace:*",
-    "@tumbler/core": "workspace:*",
-    "@tumbler/sheets": "workspace:*",
-    "@tumbler/slides": "workspace:*",
-    "@tumbler/word": "workspace:*",
+    "@tumblerjs/charts": "workspace:*",
+    "@tumblerjs/core": "workspace:*",
+    "@tumblerjs/sheets": "workspace:*",
+    "@tumblerjs/slides": "workspace:*",
+    "@tumblerjs/word": "workspace:*",
     "svelte": "^5.0.0"
   }
 }
