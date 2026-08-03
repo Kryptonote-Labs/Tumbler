@@ -12,33 +12,33 @@
     },
     "packages/charts": {
       "name": "@tumblerjs/charts",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
-        "@tumblerjs/ooxml": "workspace:*",
+        "@tumblerjs/ooxml": "0.1.0-alpha.1",
       },
     },
     "packages/core": {
       "name": "@tumblerjs/core",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
-        "@tumblerjs/ooxml": "workspace:*",
+        "@tumblerjs/ooxml": "0.1.0-alpha.1",
       },
     },
     "packages/formulas": {
       "name": "@tumblerjs/formulas",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.0",
     },
     "packages/ooxml": {
       "name": "@tumblerjs/ooxml",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
-        "@tumblerjs/opc": "workspace:*",
+        "@tumblerjs/opc": "0.1.0-alpha.0",
         "saxes": "6.0.0",
       },
     },
     "packages/opc": {
       "name": "@tumblerjs/opc",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.0",
       "dependencies": {
         "fflate": "^0.8.3",
         "saxes": "^6.0.0",
@@ -46,13 +46,13 @@
     },
     "packages/sheets": {
       "name": "@tumblerjs/sheets",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.2",
       "dependencies": {
-        "@tumblerjs/charts": "workspace:*",
-        "@tumblerjs/core": "workspace:*",
-        "@tumblerjs/formulas": "workspace:*",
-        "@tumblerjs/ooxml": "workspace:*",
-        "@tumblerjs/opc": "workspace:*",
+        "@tumblerjs/charts": "0.1.0-alpha.1",
+        "@tumblerjs/core": "0.1.0-alpha.1",
+        "@tumblerjs/formulas": "0.1.0-alpha.0",
+        "@tumblerjs/ooxml": "0.1.0-alpha.1",
+        "@tumblerjs/opc": "0.1.0-alpha.0",
       },
     },
     "packages/slides": {
@@ -65,13 +65,16 @@
     },
     "packages/svelte": {
       "name": "@tumblerjs/svelte",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
-        "@tumblerjs/charts": "workspace:*",
-        "@tumblerjs/core": "workspace:*",
-        "@tumblerjs/sheets": "workspace:*",
-        "@tumblerjs/slides": "workspace:*",
-        "@tumblerjs/word": "workspace:*",
+        "@tumblerjs/charts": "0.1.0-alpha.1",
+        "@tumblerjs/core": "0.1.0-alpha.1",
+        "@tumblerjs/sheets": "0.1.0-alpha.2",
+      },
+      "devDependencies": {
+        "svelte": "^5.0.0",
+      },
+      "peerDependencies": {
         "svelte": "^5.0.0",
       },
     },
