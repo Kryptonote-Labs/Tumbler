@@ -1,15 +1,32 @@
 {
   "name": "@tumblerjs/svelte",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0-alpha.0",
+  "description": "Replaceable Svelte components for Tumbler document models.",
   "type": "module",
   "exports": "./src/index.ts",
+  "files": [
+    "src",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kryptonote-Labs/Tumbler.git",
+    "directory": "packages/svelte"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
   "dependencies": {
     "@tumblerjs/charts": "workspace:*",
     "@tumblerjs/core": "workspace:*",
-    "@tumblerjs/sheets": "workspace:*",
-    "@tumblerjs/slides": "workspace:*",
-    "@tumblerjs/word": "workspace:*",
+    "@tumblerjs/sheets": "workspace:*"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
     "svelte": "^5.0.0"
   }
 }

@@ -1,7 +1,21 @@
 {
   "name": "@tumblerjs/formulas",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0-alpha.0",
+  "description": "Headless spreadsheet formula parsing and calculation for Tumbler.",
   "type": "module",
-  "exports": "./src/index.ts"
+  "exports": "./src/index.ts",
+  "files": [
+    "src",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kryptonote-Labs/Tumbler.git",
+    "directory": "packages/formulas"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  }
 }
