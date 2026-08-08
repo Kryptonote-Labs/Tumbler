@@ -4,7 +4,10 @@
     chartValueCoordinate,
     layoutCartesianChart,
     layoutPieSlices,
+    layoutScatterChart,
     pieArcPath,
+    scatterLinePath,
+    type ChartAxis,
     type ChartColor,
     type ChartModel,
     type ChartSeries,
@@ -16,9 +19,11 @@
     readonly width: number;
     readonly height: number;
     readonly resolveColor?: (color: ChartColor) => string | undefined;
+    readonly formatNumber?: (value: number, formatCode: string | undefined) => string;
+    readonly clipId?: string;
   }
 
-  let { model, width, height, resolveColor }: Props = $props();
+  let { model, width, height, resolveColor, formatNumber, clipId = "tumbler-scatter-clip" }: Props = $props();
   const palette = ["#4472C4", "#ED7D31", "#A5A5A5", "#FFC000", "#5B9BD5", "#70AD47"] as const;
   let accessibleName = $derived(model.title ?? (model.status === "supported" ? `${model.kind} chart` : "Chart preview unavailable"));
 
@@ -65,6 +70,28 @@
       : model.legend?.position === "top" ? (model.title === undefined ? 14 : 30)
       : 38 + index * 18;
   }
+
+  function scatterAxis(model: SupportedChartModel, index: number): ChartAxis | undefined {
+    const id = model.axisIds?.[index];
+    if (id !== undefined) return model.axes.find((axis) => axis.id === id && !axis.deleted);
+    return model.axes.filter((axis) => axis.kind === "value" && !axis.deleted)[index];
+  }
+
+  function tickLabel(value: number, formatCode: string | undefined): string {
+    return formatNumber?.(value, formatCode) ?? new Intl.NumberFormat("en-US", { maximumFractionDigits: 6 }).format(value);
+  }
+
+  function scatterLineVisible(model: SupportedChartModel, series: ChartSeries): boolean {
+    return series.smooth === true || model.scatterStyle === "line" || model.scatterStyle === "line-marker" || model.scatterStyle === "smooth" || model.scatterStyle === "smooth-marker";
+  }
+
+  function scatterMarkerVisible(model: SupportedChartModel, series: ChartSeries): boolean {
+    return series.marker?.symbol !== "none" && (model.scatterStyle === "marker" || model.scatterStyle === "line-marker" || model.scatterStyle === "smooth-marker");
+  }
+
+  function scatterSmooth(model: SupportedChartModel, series: ChartSeries): boolean {
+    return series.smooth === true || model.scatterStyle === "smooth" || model.scatterStyle === "smooth-marker";
+  }
 </script>
 
 {#if model.status === "unsupported"}
@@ -94,6 +121,62 @@
           <rect width="10" height="10" y="-8" fill={color(model.series[0]!, index)} />
           <text x="15">{chartSequenceValue(model.series[0]?.categories, slice.index) ?? slice.index + 1}</text>
         </g>
+      {/each}
+    {/if}
+  </svg>
+{:else if model.kind === "scatter"}
+  {@const layout = layoutScatterChart(model, width, height)}
+  {@const xAxis = scatterAxis(model, 0)}
+  {@const yAxis = scatterAxis(model, 1)}
+  {@const xFormat = xAxis?.numberFormatCode ?? model.series.find((series) => series.xValues?.formatCode !== undefined)?.xValues?.formatCode}
+  {@const yFormat = yAxis?.numberFormatCode ?? model.series.find((series) => series.values?.formatCode !== undefined)?.values?.formatCode}
+  <svg class="chart" role="img" aria-label={accessibleName} viewBox={`0 0 ${width} ${height}`}>
+    <title>{accessibleName}</title>
+    <rect width={width} height={height} fill="#fff" />
+    <defs><clipPath id={clipId}><rect x={layout.plot.x} y={layout.plot.y} width={layout.plot.width} height={layout.plot.height} /></clipPath></defs>
+    {#if model.title !== undefined}<text class="title" x={width / 2} y="22" text-anchor="middle">{model.title}</text>{/if}
+    {#each layout.yTicks as tick (tick)}
+      {@const y = chartValueCoordinate(tick, layout.yMinimum, layout.yMaximum, layout.plot.y, layout.plot.height, true)}
+      {#if yAxis?.majorGridlines}<line class="gridline" x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={y} y2={y} />{/if}
+      <text class="tick" x={layout.plot.x - 6} y={y + 4} text-anchor="end">{tickLabel(tick, yFormat)}</text>
+    {/each}
+    {#each layout.xTicks as tick (tick)}
+      {@const x = chartValueCoordinate(tick, layout.xMinimum, layout.xMaximum, layout.plot.x, layout.plot.width)}
+      {#if xAxis?.majorGridlines}<line class="gridline" x1={x} x2={x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />{/if}
+      <text class="tick" x={x} y={layout.plot.y + layout.plot.height + 17} text-anchor="middle">{tickLabel(tick, xFormat)}</text>
+    {/each}
+    <line class="axis" x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={layout.plot.y + layout.plot.height} y2={layout.plot.y + layout.plot.height} />
+    <line class="axis" x1={layout.plot.x} x2={layout.plot.x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />
+    <g clip-path={`url(#${clipId})`}>
+      {#each model.series as series, seriesIndex (series.index)}
+        {@const points = layout.series[seriesIndex] ?? []}
+        {#if scatterLineVisible(model, series)}
+          <path d={scatterLinePath(points, scatterSmooth(model, series))} fill="none" stroke={color(series, seriesIndex, true)} stroke-width="2" />
+        {/if}
+        {#if scatterMarkerVisible(model, series)}
+          {#each points as point (point.index)}
+            {@const markerSize = series.marker?.size ?? 5}
+            {@const symbol = series.marker?.symbol ?? "auto"}
+            {#if symbol === "square"}
+              <rect x={point.plotX - markerSize / 2} y={point.plotY - markerSize / 2} width={markerSize} height={markerSize} fill={color(series, seriesIndex, true)} />
+            {:else if symbol === "diamond"}
+              <path d={`M ${point.plotX} ${point.plotY - markerSize / 1.5} L ${point.plotX + markerSize / 1.5} ${point.plotY} L ${point.plotX} ${point.plotY + markerSize / 1.5} L ${point.plotX - markerSize / 1.5} ${point.plotY} Z`} fill={color(series, seriesIndex, true)} />
+            {:else if symbol === "triangle"}
+              <path d={`M ${point.plotX} ${point.plotY - markerSize / 1.3} L ${point.plotX + markerSize / 1.2} ${point.plotY + markerSize / 1.5} L ${point.plotX - markerSize / 1.2} ${point.plotY + markerSize / 1.5} Z`} fill={color(series, seriesIndex, true)} />
+            {:else if symbol === "plus" || symbol === "x" || symbol === "dash"}
+              <path d={symbol === "plus" ? `M ${point.plotX - markerSize} ${point.plotY} L ${point.plotX + markerSize} ${point.plotY} M ${point.plotX} ${point.plotY - markerSize} L ${point.plotX} ${point.plotY + markerSize}` : symbol === "x" ? `M ${point.plotX - markerSize} ${point.plotY - markerSize} L ${point.plotX + markerSize} ${point.plotY + markerSize} M ${point.plotX + markerSize} ${point.plotY - markerSize} L ${point.plotX - markerSize} ${point.plotY + markerSize}` : `M ${point.plotX - markerSize} ${point.plotY} L ${point.plotX + markerSize} ${point.plotY}`} fill="none" stroke={color(series, seriesIndex, true)} stroke-width="2" />
+            {:else}
+              <circle cx={point.plotX} cy={point.plotY} r={symbol === "dot" ? Math.max(1, markerSize / 3) : markerSize / 2} fill={color(series, seriesIndex, true)} />
+            {/if}
+          {/each}
+        {/if}
+      {/each}
+    </g>
+    {#if xAxis?.title !== undefined}<text class="axis-title" x={layout.plot.x + layout.plot.width / 2} y={height - 4} text-anchor="middle">{xAxis.title}</text>{/if}
+    {#if yAxis?.title !== undefined}<text class="axis-title" transform={`translate(12 ${layout.plot.y + layout.plot.height / 2}) rotate(-90)`} text-anchor="middle">{yAxis.title}</text>{/if}
+    {#if model.legend !== undefined}
+      {#each model.series as series, index (series.index)}
+        <g transform={`translate(${legendX(model, index)} ${legendY(model, index)})`}><rect width="10" height="10" y="-8" fill={color(series, index)} /><text x="15">{series.title ?? `Series ${index + 1}`}</text></g>
       {/each}
     {/if}
   </svg>
@@ -185,5 +268,6 @@
   .axis { stroke: #777; stroke-width: 1; shape-rendering: crispEdges; }
   .gridline { stroke: #d9d9d9; stroke-width: 1; shape-rendering: crispEdges; }
   .tick, .category { fill: #555; font-size: 10px; }
+  .axis-title { fill: #333; font-size: 11px; font-weight: 600; }
   .chart-fallback { display: grid; place-items: center; padding: 12px; color: #666; background: repeating-linear-gradient(135deg, #fff, #fff 8px, #f7f7f7 8px, #f7f7f7 16px); text-align: center; }
 </style>
