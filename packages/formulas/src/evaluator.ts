@@ -556,9 +556,11 @@ function tokenizeWildcard(source: string): readonly WildcardToken[] {
 /** Greedy glob matching is linear in the combined pattern and candidate lengths. */
 function wildcardMatches(tokens: readonly WildcardToken[], candidate: string): boolean {
   const text = [...candidate.toLocaleLowerCase("en-US")];
-  const pattern = tokens.flatMap((token) => token.kind === "literal"
-    ? [...token.value.toLocaleLowerCase("en-US")].map((value) => Object.freeze({ kind: "literal" as const, value }))
-    : [token]);
+  const pattern: WildcardToken[] = [];
+  for (const token of tokens) {
+    if (token.kind !== "literal") pattern.push(token);
+    else for (const value of token.value.toLocaleLowerCase("en-US")) pattern.push(Object.freeze({ kind: "literal", value }));
+  }
   let textIndex = 0;
   let patternIndex = 0;
   let starIndex = -1;
