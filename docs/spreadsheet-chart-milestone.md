@@ -30,6 +30,8 @@ dereferenced by the chart reader.
 - titles, legends, category/value axes, major gridlines, and multiple series;
 - cached string and numeric series data;
 - simple internal A1 source ranges, refreshed from workbook cells when resolvable;
+- numeric category labels formatted through the chart cache format code or their
+  source cell format, including workbook date-system semantics;
 - theme palette colors and explicit solid fills/lines;
 - owned Svelte SVG rendering, selection, and an accessible bounded fallback;
 - scrolling and frozen-pane integration.
@@ -46,4 +48,3 @@ dereferenced by the chart reader.
 Unsupported or malformed charts remain preserved. When their anchor is safe to
 interpret, the renderer shows a bounded fallback instead of guessing at chart
 semantics or hiding the rest of the worksheet.
-
