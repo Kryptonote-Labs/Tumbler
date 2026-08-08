@@ -22,6 +22,25 @@ export interface PieSlice {
   readonly endAngle: number;
 }
 
+export interface ScatterPoint {
+  readonly index: number;
+  readonly x: number;
+  readonly y: number;
+  readonly plotX: number;
+  readonly plotY: number;
+}
+
+export interface ScatterChartLayout {
+  readonly plot: ChartRect;
+  readonly xMinimum: number;
+  readonly xMaximum: number;
+  readonly yMinimum: number;
+  readonly yMaximum: number;
+  readonly xTicks: readonly number[];
+  readonly yTicks: readonly number[];
+  readonly series: readonly (readonly ScatterPoint[])[];
+}
+
 export function layoutCartesianChart(model: SupportedChartModel, width: number, height: number): CartesianChartLayout {
   finiteSize(width, "chart width");
   finiteSize(height, "chart height");
@@ -54,6 +73,87 @@ export function layoutCartesianChart(model: SupportedChartModel, width: number, 
   }
   if (minimum > maximum) [minimum, maximum] = [maximum, minimum];
   return Object.freeze({ plot, categories, minimum, maximum, ticks: linearTicks(minimum, maximum, 5) });
+}
+
+/** Lays out paired numeric X/Y values without converting them to category positions. */
+export function layoutScatterChart(model: SupportedChartModel, width: number, height: number): ScatterChartLayout {
+  finiteSize(width, "chart width");
+  finiteSize(height, "chart height");
+  const titleHeight = model.title === undefined ? 10 : Math.min(34, Math.max(20, height * 0.12));
+  const legend = model.legend?.overlay === false ? model.legend.position : undefined;
+  const leftLegend = legend === "left" ? Math.min(100, width * 0.22) : 0;
+  const rightLegend = legend === "right" || legend === "top-right" ? Math.min(100, width * 0.22) : 0;
+  const topLegend = legend === "top" ? 24 : 0;
+  const bottomLegend = legend === "bottom" ? 28 : 0;
+  const plot = Object.freeze({
+    x: leftLegend + 58,
+    y: titleHeight + topLegend + 8,
+    width: Math.max(1, width - leftLegend - rightLegend - 76),
+    height: Math.max(1, height - titleHeight - topLegend - bottomLegend - 48),
+  });
+  const rawSeries = model.series.map((series) => {
+    const yByIndex = new Map(series.values?.points.flatMap((point) => typeof point.value === "number" ? [[point.index, point.value] as const] : []) ?? []);
+    return Object.freeze(series.xValues?.points.flatMap((point) => {
+      const y = yByIndex.get(point.index);
+      return typeof point.value === "number" && y !== undefined ? [{ index: point.index, x: point.value, y }] : [];
+    }) ?? []);
+  });
+  const xValues = rawSeries.flatMap((series) => series.map((point) => point.x));
+  const yValues = rawSeries.flatMap((series) => series.map((point) => point.y));
+  const axisById = (index: number) => {
+    const id = model.axisIds?.[index];
+    return id === undefined ? undefined : model.axes.find((axis) => axis.id === id && !axis.deleted);
+  };
+  const visibleValueAxes = model.axes.filter((axis) => axis.kind === "value" && !axis.deleted);
+  const xAxis = axisById(0) ?? visibleValueAxes.find((axis) => axis.position === "bottom" || axis.position === "top");
+  const yAxis = axisById(1) ?? visibleValueAxes.find((axis) => axis.position === "left" || axis.position === "right");
+  const xDomain = numericDomain(xValues, xAxis?.minimum, xAxis?.maximum);
+  const yDomain = numericDomain(yValues, yAxis?.minimum, yAxis?.maximum);
+  const series = rawSeries.map((points) => Object.freeze(points.map((point) => Object.freeze({
+    ...point,
+    plotX: chartValueCoordinate(point.x, xDomain.minimum, xDomain.maximum, plot.x, plot.width),
+    plotY: chartValueCoordinate(point.y, yDomain.minimum, yDomain.maximum, plot.y, plot.height, true),
+  }))));
+  return Object.freeze({
+    plot,
+    xMinimum: xDomain.minimum,
+    xMaximum: xDomain.maximum,
+    yMinimum: yDomain.minimum,
+    yMaximum: yDomain.maximum,
+    xTicks: linearTicks(xDomain.minimum, xDomain.maximum, 5),
+    yTicks: linearTicks(yDomain.minimum, yDomain.maximum, 5),
+    series: Object.freeze(series),
+  });
+}
+
+/** Produces disconnected straight or Catmull-Rom-smoothed paths across consecutive cache indexes. */
+export function scatterLinePath(points: readonly ScatterPoint[], smooth = false): string {
+  const runs: ScatterPoint[][] = [];
+  for (const point of points) {
+    const run = runs.at(-1);
+    if (run === undefined || run.at(-1)!.index + 1 !== point.index) runs.push([point]);
+    else run.push(point);
+  }
+  return runs.map((run) => {
+    if (run.length === 0) return "";
+    let path = `M ${run[0]!.plotX} ${run[0]!.plotY}`;
+    for (let index = 1; index < run.length; index += 1) {
+      const current = run[index]!;
+      if (!smooth) {
+        path += ` L ${current.plotX} ${current.plotY}`;
+        continue;
+      }
+      const previous = run[index - 1]!;
+      const before = run[index - 2] ?? previous;
+      const after = run[index + 1] ?? current;
+      const c1x = previous.plotX + (current.plotX - before.plotX) / 6;
+      const c1y = previous.plotY + (current.plotY - before.plotY) / 6;
+      const c2x = current.plotX - (after.plotX - previous.plotX) / 6;
+      const c2y = current.plotY - (after.plotY - previous.plotY) / 6;
+      path += ` C ${c1x} ${c1y} ${c2x} ${c2y} ${current.plotX} ${current.plotY}`;
+    }
+    return path;
+  }).join(" ");
 }
 
 export function chartSequenceValue(sequence: ChartDataSequence | undefined, index: number): string | number | undefined {
@@ -126,6 +226,25 @@ function linearTicks(minimum: number, maximum: number, count: number): readonly 
   for (let value = first; value <= maximum + step * 1e-9 && ticks.length < 100; value += step) ticks.push(Object.is(value, -0) ? 0 : value);
   if (ticks.length === 0) return Object.freeze([minimum, maximum]);
   return Object.freeze(ticks);
+}
+
+function numericDomain(values: readonly number[], explicitMinimum: number | undefined, explicitMaximum: number | undefined): { readonly minimum: number; readonly maximum: number } {
+  let minimum = explicitMinimum ?? Math.min(...values);
+  let maximum = explicitMaximum ?? Math.max(...values);
+  if (!Number.isFinite(minimum)) minimum = 0;
+  if (!Number.isFinite(maximum)) maximum = 1;
+  if (minimum > maximum) [minimum, maximum] = [maximum, minimum];
+  if (minimum === maximum) {
+    const expansion = Math.max(1, Math.abs(minimum) * 0.05);
+    if (explicitMinimum === undefined) minimum -= expansion;
+    if (explicitMaximum === undefined) maximum += expansion;
+  } else {
+    const padding = (maximum - minimum) * 0.05;
+    if (explicitMinimum === undefined) minimum -= padding;
+    if (explicitMaximum === undefined) maximum += padding;
+  }
+  if (minimum === maximum) maximum = minimum + 1;
+  return Object.freeze({ minimum, maximum });
 }
 
 function finiteSize(value: number, context: string): void {

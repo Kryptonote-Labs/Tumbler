@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chartSequenceValue, chartValueCoordinate, layoutCartesianChart, layoutPieSlices, pieArcPath, type SupportedChartModel } from "../src/index.ts";
+import { chartSequenceValue, chartValueCoordinate, layoutCartesianChart, layoutPieSlices, layoutScatterChart, pieArcPath, scatterLinePath, type SupportedChartModel } from "../src/index.ts";
 
 describe("headless chart layout", () => {
   test("derives categories, value bounds, and stable plot geometry", () => {
@@ -40,6 +40,30 @@ describe("headless chart layout", () => {
     expect(pieArcPath(50, 50, 40, slices[0]!.startAngle, slices[0]!.endAngle, 20)).toContain("A 20 20");
     expect(pieArcPath(50, 50, 40, 0, Math.PI * 2).match(/A 40 40/g)).toHaveLength(2);
     expect(pieArcPath(50, 50, 40, 0, Math.PI * 2, 20).match(/A 20 20/g)).toHaveLength(2);
+  });
+
+  test("pairs sparse scatter coordinates by cache index and uses numeric axes", () => {
+    const source = model();
+    const scatter: SupportedChartModel = { ...source, kind: "scatter", scatterStyle: "marker", axisIds: [10, 20], axes: [
+      { id: 10, kind: "value", position: "bottom", title: undefined, majorGridlines: true, minimum: 0, maximum: 100, deleted: false },
+      { id: 20, kind: "value", position: "left", title: undefined, majorGridlines: true, minimum: -20, maximum: 40, deleted: false },
+    ], series: [{ ...source.series[0]!, xValues: { kind: "number", formula: undefined, formatCode: undefined, points: [{ index: 0, value: 10 }, { index: 1, value: 50 }, { index: 2, value: 90 }] }, values: { kind: "number", formula: undefined, formatCode: undefined, points: [{ index: 0, value: -10 }, { index: 2, value: 30 }] } }] };
+    const layout = layoutScatterChart(scatter, 600, 400);
+    expect(layout).toMatchObject({ xMinimum: 0, xMaximum: 100, yMinimum: -20, yMaximum: 40 });
+    expect(layout.series[0]?.map(({ index, x, y }) => ({ index, x, y }))).toEqual([{ index: 0, x: 10, y: -10 }, { index: 2, x: 90, y: 30 }]);
+    expect(layout.series[0]?.[0]?.plotX).toBeLessThan(layout.series[0]![1]!.plotX);
+    expect(scatterLinePath(layout.series[0]!)).toContain(" M ");
+  });
+
+  test("smooth scatter paths use cubic curves without bridging gaps", () => {
+    const points = [
+      { index: 0, x: 1, y: 1, plotX: 10, plotY: 30 },
+      { index: 1, x: 2, y: 2, plotX: 20, plotY: 10 },
+      { index: 3, x: 4, y: 1, plotX: 40, plotY: 30 },
+    ];
+    const path = scatterLinePath(points, true);
+    expect(path).toContain(" C ");
+    expect(path.match(/M /g)).toHaveLength(2);
   });
 });
 
