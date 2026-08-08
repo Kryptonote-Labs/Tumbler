@@ -7,6 +7,7 @@ import {
   type LosslessXmlElement,
   type LosslessXmlNode,
 } from "@tumblerjs/ooxml";
+import { parseFormula } from "@tumblerjs/formulas";
 import { beginPackageTransaction, type PackageTransaction, type PartName } from "@tumblerjs/opc";
 import { formatCellRange, formatCellReference, parseCellReference, type CellAddress, type CellRange } from "./references.ts";
 import { openWorksheet, type SpreadsheetCellValue } from "./worksheet.ts";
@@ -14,14 +15,25 @@ import { SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } fro
 
 export type EditableCellValue = string | number | boolean | null;
 export type SpreadsheetEditorStatus = "active" | "committed" | "rolled_back";
+export const MAX_FORMULA_LENGTH = 8_192;
 
-interface StagedCellEdit {
+interface StagedCellValueEdit {
+  readonly kind: "value";
   readonly sheet: SpreadsheetSheet;
   readonly address: CellAddress;
   readonly value: EditableCellValue;
 }
 
-/** Stages literal cell edits and commits them as isolated worksheet-part replacements. */
+interface StagedCellFormulaEdit {
+  readonly kind: "formula";
+  readonly sheet: SpreadsheetSheet;
+  readonly address: CellAddress;
+  readonly formula: string;
+}
+
+type StagedCellEdit = StagedCellValueEdit | StagedCellFormulaEdit;
+
+/** Stages ordinary literal or formula edits and commits isolated worksheet-part replacements. */
 export class SpreadsheetEditor {
   readonly workbook: SpreadsheetWorkbook;
   #status: SpreadsheetEditorStatus = "active";
@@ -47,7 +59,19 @@ export class SpreadsheetEditor {
     }
     const address = typeof reference === "string" ? parseCellReference(reference) : parseCellReference(formatCellReference(reference));
     const normalized = formatCellReference(address);
-    this.#edits.set(`${sheet.partName.equivalenceKey}\0${normalized}`, { sheet, address, value });
+    this.#edits.set(`${sheet.partName.equivalenceKey}\0${normalized}`, { kind: "value", sheet, address, value });
+    return this;
+  }
+
+  /** Stores formula source as OOXML expects it: without a leading equals sign. */
+  setCellFormula(sheet: SpreadsheetSheet, reference: string | CellAddress, formula: string): this {
+    this.#assertActive();
+    if (!this.workbook.sheets.includes(sheet)) throw new TypeError("The sheet does not belong to this workbook.");
+    if (formula.length > MAX_FORMULA_LENGTH) throw new RangeError(`Spreadsheet formulas cannot exceed ${MAX_FORMULA_LENGTH} characters.`);
+    parseFormula(formula);
+    const address = typeof reference === "string" ? parseCellReference(reference) : parseCellReference(formatCellReference(reference));
+    const normalized = formatCellReference(address);
+    this.#edits.set(`${sheet.partName.equivalenceKey}\0${normalized}`, { kind: "formula", sheet, address, formula });
     return this;
   }
 
@@ -69,7 +93,7 @@ export class SpreadsheetEditor {
       const sheet = edits[0]!.sheet;
       const original = openWorksheet(this.workbook, sheet);
       let bytes = original.document.originalBytes();
-      for (const edit of edits) bytes = applyCellEdit(bytes, this.workbook.conformance, edit.address, edit.value);
+      for (const edit of edits) bytes = applyCellEdit(bytes, this.workbook.conformance, edit.address, edit);
       if (!equalBytes(bytes, original.document.originalBytes())) replacements.set(sheet.partName, bytes);
     }
     if (replacements.size === 0) {
@@ -160,7 +184,7 @@ function applyCellEdit(
   bytes: Uint8Array,
   conformance: "strict" | "transitional",
   address: CellAddress,
-  value: EditableCellValue,
+  edit: StagedCellEdit,
 ): Uint8Array {
   const document = parseLosslessXml(bytes);
   const namespace = conformance === "strict"
@@ -169,27 +193,30 @@ function applyCellEdit(
   const sheetData = children(document.root, namespace, "sheetData")[0];
   if (sheetData === undefined) throw new SpreadsheetError("invalid_worksheet", "A worksheet must contain sheetData before it can be edited.");
   const location = locateCell(document, sheetData, namespace, address);
-  if (location.cell !== undefined && shouldSkipEdit(document, location.cell, namespace, value)) return bytes;
-  if (location.cell === undefined && value === null) return bytes;
+  if (location.cell !== undefined) {
+    assertOrdinaryFormulaCell(location.cell, namespace, formatCellReference(address));
+    if (shouldSkipEdit(document, location.cell, namespace, edit)) return bytes;
+  }
+  if (location.cell === undefined && edit.kind === "value" && edit.value === null) return bytes;
 
   const editor = beginLosslessXmlEdit(document);
   const reference = formatCellReference(address);
   if (location.cell !== undefined) {
-    editor.replaceElementMarkup(location.cell, serializeExistingCell(document, location.cell, namespace, value));
+    editor.replaceElementMarkup(location.cell, serializeExistingCell(document, location.cell, namespace, edit));
   } else if (location.row !== undefined) {
-    const markup = serializeNewCell(location.row.prefix, reference, newCellValue(value));
+    const markup = serializeNewCell(location.row.prefix, reference, edit);
     const next = location.cells.find(({ address: candidate }) => candidate.column > address.column)?.element;
     if (next !== undefined) editor.insertMarkupBefore(next, markup);
     else if (location.row.selfClosing) editor.replaceElementMarkup(location.row, openSelfClosingElement(document, location.row, markup));
     else editor.appendMarkup(location.row, markup);
   } else {
-    const rowMarkup = `<${qualified(sheetData.prefix, "row")} r="${address.row}">${serializeNewCell(sheetData.prefix, reference, newCellValue(value))}</${qualified(sheetData.prefix, "row")}>`;
+    const rowMarkup = `<${qualified(sheetData.prefix, "row")} r="${address.row}">${serializeNewCell(sheetData.prefix, reference, edit)}</${qualified(sheetData.prefix, "row")}>`;
     const nextRow = location.rows.find(({ index }) => index > address.row)?.element;
     if (nextRow !== undefined) editor.insertMarkupBefore(nextRow, rowMarkup);
     else if (sheetData.selfClosing) editor.replaceElementMarkup(sheetData, openSelfClosingElement(document, sheetData, rowMarkup));
     else editor.appendMarkup(sheetData, rowMarkup);
   }
-  if (value !== null) updateDimension(editor, document, namespace, sheetData, address);
+  if (edit.kind === "formula" || edit.value !== null) updateDimension(editor, document, namespace, sheetData, address);
   return editor.commit().bytes;
 }
 
@@ -225,9 +252,9 @@ function serializeExistingCell(
   document: LosslessXmlDocument,
   cell: LosslessXmlElement,
   namespace: string,
-  value: EditableCellValue,
+  edit: StagedCellEdit,
 ): string {
-  const type = cellType(value);
+  const type = edit.kind === "formula" ? undefined : cellType(edit.value);
   let startTag = document.source.slice(cell.startTagSpan.start, cell.startTagSpan.end);
   const typeAttribute = attribute(cell, "t");
   if (typeAttribute !== undefined) {
@@ -245,12 +272,12 @@ function serializeExistingCell(
     .filter((node) => node.kind !== "element" || node.namespaceUri !== namespace || !["f", "v", "is"].includes(node.localName))
     .map((node) => sourceForNode(document, node))
     .join("");
-  return `${startTag}${serializeValue(cell.prefix, value)}${preserved}</${cell.qualified}>`;
+  return `${startTag}${serializeCellEdit(cell.prefix, edit)}${preserved}</${cell.qualified}>`;
 }
 
-function serializeNewCell(prefix: string, reference: string, value: Exclude<EditableCellValue, null>): string {
-  const type = cellType(value);
-  return `<${qualified(prefix, "c")} r="${reference}"${type === undefined ? "" : ` t="${type}"`}>${serializeValue(prefix, value)}</${qualified(prefix, "c")}>`;
+function serializeNewCell(prefix: string, reference: string, edit: StagedCellEdit): string {
+  const type = edit.kind === "formula" ? undefined : cellType(newCellValue(edit.value));
+  return `<${qualified(prefix, "c")} r="${reference}"${type === undefined ? "" : ` t="${type}"`}>${serializeCellEdit(prefix, edit)}</${qualified(prefix, "c")}>`;
 }
 
 function newCellValue(value: EditableCellValue): Exclude<EditableCellValue, null> {
@@ -267,6 +294,12 @@ function serializeValue(prefix: string, value: EditableCellValue): string {
   return `<${qualified(prefix, "v")}>${lexical}</${qualified(prefix, "v")}>`;
 }
 
+function serializeCellEdit(prefix: string, edit: StagedCellEdit): string {
+  return edit.kind === "formula"
+    ? `<${qualified(prefix, "f")}>${escapeText(edit.formula)}</${qualified(prefix, "f")}>`
+    : serializeValue(prefix, edit.value);
+}
+
 function cellType(value: EditableCellValue): "b" | "inlineStr" | "n" | undefined {
   if (value === null) return undefined;
   if (typeof value === "string") return "inlineStr";
@@ -274,10 +307,18 @@ function cellType(value: EditableCellValue): "b" | "inlineStr" | "n" | undefined
   return "n";
 }
 
-function shouldSkipEdit(document: LosslessXmlDocument, cell: LosslessXmlElement, namespace: string, value: EditableCellValue): boolean {
-  if (children(cell, namespace, "f").length > 0) return false;
-  const current = primitiveCellValue(document, cell, namespace);
-  return Object.is(current, value);
+function shouldSkipEdit(document: LosslessXmlDocument, cell: LosslessXmlElement, namespace: string, edit: StagedCellEdit): boolean {
+  const formula = children(cell, namespace, "f")[0];
+  if (edit.kind === "formula") return formula !== undefined && document.textContent(formula) === edit.formula;
+  if (formula !== undefined) return false;
+  return Object.is(primitiveCellValue(document, cell, namespace), edit.value);
+}
+
+function assertOrdinaryFormulaCell(cell: LosslessXmlElement, namespace: string, reference: string): void {
+  const formula = children(cell, namespace, "f")[0];
+  if (formula !== undefined && formula.attributes.length > 0) {
+    throw new SpreadsheetError("unsupported_formula", `Cell ${reference} participates in a shared, array, or data-table formula and cannot be edited yet.`);
+  }
 }
 
 function primitiveCellValue(document: LosslessXmlDocument, cell: LosslessXmlElement, namespace: string): EditableCellValue | undefined {

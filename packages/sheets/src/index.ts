@@ -79,6 +79,7 @@ export type {
 } from "./table-view.ts";
 export {
   beginSpreadsheetEdit,
+  MAX_FORMULA_LENGTH,
   SpreadsheetEditor,
 } from "./editor.ts";
 export {

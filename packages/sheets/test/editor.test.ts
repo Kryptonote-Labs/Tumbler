@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { openOpcPackage } from "@tumblerjs/opc";
 import {
   beginSpreadsheetEdit,
+  MAX_FORMULA_LENGTH,
   openSpreadsheet,
   openWorksheet,
   SpreadsheetError,
@@ -78,6 +79,58 @@ describe("SpreadsheetML cell editing", () => {
     const workbook = openSpreadsheet(openOpcPackage(source));
     expect(beginSpreadsheetEdit(workbook).commit()).toBe(source);
     expect(beginSpreadsheetEdit(workbook).setCellValue(workbook.sheet("Data")!, "B1", 2).commit()).toBe(source);
+    expect(beginSpreadsheetEdit(workbook).setCellFormula(workbook.sheet("Data")!, "C1", "1+1").commit()).toBe(source);
+  });
+
+  test.each(["strict", "transitional"] as const)("writes ordinary formulas in %s worksheets without stale caches", (conformance) => {
+    const namespace = conformance === "strict"
+      ? "http://purl.oclc.org/ooxml/spreadsheetml/main"
+      : "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const source = buildWorkbookFixture({
+      conformance,
+      sheets: [{
+        name: "Data",
+        sheetId: 1,
+        relationshipId: "data",
+        xml: `<worksheet xmlns="${namespace}"><dimension ref="A1:C2"/><sheetData><row r="1"><c r="A1"><v>2</v></c><c r="B1"><v>3</v></c><c r="C1" s="4" t="str" custom="keep"><f>"old"</f><v>old</v><extLst><ext uri="keep"/></extLst></c></row></sheetData></worksheet>`,
+      }],
+    });
+    const workbook = openSpreadsheet(openOpcPackage(source));
+    const saved = beginSpreadsheetEdit(workbook)
+      .setCellFormula(workbook.sheets[0]!, "C1", `IF(A1<B1,"<&","no")`)
+      .setCellFormula(workbook.sheets[0]!, "D2", "SUM(A1:B1)")
+      .commit();
+    const reopened = openSpreadsheet(openOpcPackage(saved));
+    const worksheet = openWorksheet(reopened, reopened.sheets[0]!);
+
+    expect(worksheet.cell("C1")).toMatchObject({
+      styleIndex: 4,
+      formula: `IF(A1<B1,"<&","no")`,
+      value: { type: "blank" },
+    });
+    expect(worksheet.cell("D2")).toMatchObject({ formula: "SUM(A1:B1)", value: { type: "blank" } });
+    expect(worksheet.document.source).toContain(`<f>IF(A1&lt;B1,"&lt;&amp;","no")</f>`);
+    expect(worksheet.document.source).toContain(`custom="keep"`);
+    expect(worksheet.document.source).toContain(`<extLst><ext uri="keep"/></extLst>`);
+    expect(worksheet.dimension).toEqual({ start: { row: 1, column: 1 }, end: { row: 2, column: 4 } });
+  });
+
+  test("validates formula source and refuses special formula structures", () => {
+    const source = buildWorkbookFixture({
+      sheets: [{
+        name: "Data",
+        sheetId: 1,
+        relationshipId: "data",
+        xml: `<worksheet xmlns="${namespace}"><sheetData><row r="1"><c r="A1"><f t="shared" si="0" ref="A1:A2">1+1</f><v>2</v></c></row></sheetData></worksheet>`,
+      }],
+    });
+    const workbook = openSpreadsheet(openOpcPackage(source));
+    const sheet = workbook.sheets[0]!;
+
+    expect(() => beginSpreadsheetEdit(workbook).setCellFormula(sheet, "B1", "=SUM(A1:A2)")).toThrow("Stored formulas must not include a leading equals sign");
+    expect(() => beginSpreadsheetEdit(workbook).setCellFormula(sheet, "B1", "x".repeat(MAX_FORMULA_LENGTH + 1))).toThrow(RangeError);
+    expect(() => beginSpreadsheetEdit(workbook).setCellFormula(sheet, "A1", "2+2").commit()).toThrow(SpreadsheetError);
+    expect(() => beginSpreadsheetEdit(workbook).setCellValue(sheet, "A1", 4).commit()).toThrow(SpreadsheetError);
   });
 
   test.each(["strict", "transitional"] as const)("invalidates %s calculation caches after an edit", (conformance) => {

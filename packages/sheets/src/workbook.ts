@@ -60,6 +60,7 @@ export type SpreadsheetErrorCode =
   | "missing_sheet_relationship"
   | "missing_shared_string"
   | "unsupported_document"
+  | "unsupported_formula"
   | "unsupported_sheet";
 
 export class SpreadsheetError extends Error {

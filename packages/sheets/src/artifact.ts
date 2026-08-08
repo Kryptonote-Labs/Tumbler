@@ -39,6 +39,12 @@ export class SpreadsheetArtifact {
     return openSpreadsheetArtifact(saved, { sheet: this.activeSheet.name });
   }
 
+  editFormula(reference: string, formula: string): SpreadsheetArtifact {
+    const saved = beginSpreadsheetEdit(this.workbook).setCellFormula(this.activeSheet, reference, formula).commit();
+    if (saved === this.bytes()) return this;
+    return openSpreadsheetArtifact(saved, { sheet: this.activeSheet.name });
+  }
+
   replace(bytes: Uint8Array): SpreadsheetArtifact {
     return openSpreadsheetArtifact(bytes, { sheet: this.activeSheet.name });
   }
