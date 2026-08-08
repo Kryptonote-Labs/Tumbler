@@ -1,7 +1,16 @@
-import type { SpreadsheetCellValue, SpreadsheetWorksheet } from "@tumblerjs/sheets";
+import {
+  applySpreadsheetDifferentialFormats,
+  type SpreadsheetCellValue,
+  type SpreadsheetDifferentialFormat,
+  type SpreadsheetWorksheet,
+} from "@tumblerjs/sheets";
 
-export function spreadsheetCellCss(worksheet: SpreadsheetWorksheet, reference: string): string {
-  const style = worksheet.cellStyle(reference);
+export function spreadsheetCellCss(
+  worksheet: SpreadsheetWorksheet,
+  reference: string,
+  differentialFormats: readonly SpreadsheetDifferentialFormat[] = [],
+): string {
+  const style = applySpreadsheetDifferentialFormats(worksheet.cellStyle(reference), differentialFormats);
   const declarations: string[] = [];
   const fontName = worksheet.styles.resolveFontName(style.font);
   if (fontName !== undefined) declarations.push(`font-family:${cssValue(fontName)}`);

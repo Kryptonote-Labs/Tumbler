@@ -9,6 +9,7 @@
     formatCellReference,
     formatSpreadsheetCellValue,
     projectSpreadsheetTable,
+    projectSpreadsheetConditionalStyles,
     resolveSpreadsheetChartColor,
     resolveSpreadsheetChartDataSet,
     savedSpreadsheetTableView,
@@ -175,6 +176,7 @@
   let gutterLayout = $derived(composeSpreadsheetGridLayout({ viewport: gutterViewport, rowGeometry, columnGeometry, frozenRows, frozenColumns, merges: [] }));
   let hasActiveProjection = $derived(tableProjections.some(({ projection }) => projection.state.filters.length > 0 || projection.state.sorts.length > 0));
   let editable = $derived(!readonly && !hasActiveProjection && onedit !== undefined);
+  let conditionalStyles = $derived(projectSpreadsheetConditionalStyles(worksheet, calculation));
 
   $effect(() => {
     const current = worksheet;
@@ -477,6 +479,7 @@
   {@const header = tableHeader(sourceRow, column)}
   {@const hyperlink = worksheet.hyperlink({ row: sourceRow, column })}
   {@const overflowWidth = editing === reference ? undefined : textOverflowWidth(sourceRow, column)}
+  {@const conditionalFormats = conditionalStyles.formats(reference)}
   <div
     class:selected={selected(sourceRow, column)}
     class:focused={selection.focus.row === sourceRow && selection.focus.column === column}
@@ -491,7 +494,7 @@
     style:width={`${width}px`}
     style:height={`${height}px`}
     style:z-index={overflowWidth === undefined ? zIndex : zIndex + 1}
-    style={spreadsheetCellCss(worksheet, reference)}
+    style={spreadsheetCellCss(worksheet, reference, conditionalFormats)}
     onpointerdown={(event) => cellPointerDown(event, sourceRow, column)}
     onpointerenter={(event) => cellPointerEnter(event, sourceRow, column)}
     onclick={(event) => cellClick(event, sourceRow, column)}
