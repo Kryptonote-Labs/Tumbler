@@ -29,7 +29,7 @@ current requirement boundary is:
 | §18.3.1.47–48 | Worksheet hyperlink ranges, internal locations, optional display/tooltips, and external hyperlink relationships |
 | §12.3.8, §18.3.1.36 | Relationship-resolved worksheet Drawing parts with inert external targets and lossless preservation |
 | §20.5.2.1, §20.5.2.24, §20.5.2.33 | Absolute, one-cell, and two-cell drawing anchors projected from EMUs through worksheet row/column geometry |
-| §14.2.1, §21.2.2.16, §21.2.2.27–29, §21.2.2.97, §21.2.2.141 | Read-only native column/bar, line, pie, and doughnut chart models and owned SVG previews |
+| §14.2.1, §21.2.2.16, §21.2.2.27–29, §21.2.2.97, §21.2.2.141, §21.2.2.161–162 | Read-only native column/bar, line, pie, doughnut, and numeric XY scatter chart models and owned SVG previews |
 | §18.3.1.40, MS-XLSX §2.2.2, ECMA-376-1 §18.17.2–7 | Typed ordinary-formula parsing, writing, references/ranges, bounded dependencies, operators, errors, and the first calculation function set |
 
 Both Strict and Transitional vocabulary and relationship namespaces are tested.
@@ -74,7 +74,8 @@ clauses or to SpreadsheetML as a whole.
 - discover embedded worksheet charts, expose cached series safely, and refresh
   simple internal A1 category/value/title references from calculated workbook cells;
 - render supported chart frames as selectable, virtualized SVG overlays with
-  titles, legends, axes, major gridlines, multiple series, and workbook theme colors;
+  titles, legends, axes, major gridlines, multiple series, workbook theme colors,
+  and numeric XY scatter lines/markers with date-aware axis labels;
 
 Literal text writes use `inlineStr`. This avoids a workbook-wide shared-string
 reindex for a local edit. Replacing a formula with a literal intentionally
