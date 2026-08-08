@@ -6,7 +6,7 @@ Headless Office document editing for the web.
 > **Tumbler is extremely early alpha software. You probably should not use it.**
 >
 > The APIs, package boundaries, file-format behavior, and supported features can
-> change without notice. Packages are not published, releases do not exist yet,
+> change without notice. Published packages are experimental alpha snapshots,
 > and compatibility with real-world Office documents is incomplete. Tumbler can
 > produce files that Office applications reject or repair. Do not use it with
 > important documents unless you keep the originals and are prepared to lose
@@ -31,7 +31,7 @@ with a narrow native chart-preview subset.
 It does not currently provide broad or production-ready Office compatibility.
 Word and PowerPoint editing are not implemented. Formula editing, structural
 spreadsheet edits, comprehensive drawing support, external-consumer validation,
-stable APIs, releases, and published packages are all unfinished.
+stable APIs, and stable releases are all unfinished.
 
 There is no support commitment or migration policy during this stage.
 
@@ -66,8 +66,9 @@ bun run check
 bun test
 ```
 
-All workspace packages remain private and are consumed directly from source.
-There is currently no supported installation process.
+Public packages are distributed under the `alpha` npm tag. Install them with an
+explicit tag, for example `bun add @tumblerjs/sheets@alpha`. Private format and
+test packages remain workspace-only.
 
 The first implemented API is the shared OPC layer. It can safely inventory an
 Office package and stage atomic package-graph changes:
