@@ -247,6 +247,7 @@ export function calculateFormulas(
             row: inspected.firstRow + rowOffset,
             column: inspected.firstColumn + columnOffset,
           }, depth + 1, true);
+          if (name === "AVERAGEIF" && inspectedValue.type === "boolean") continue;
           if (!matchesCriterion(inspectedValue, criterion)) continue;
           if (name === "COUNTIF") {
             count += 1;
@@ -524,7 +525,7 @@ function criterionEquals(value: FormulaScalarValue, operand: Exclude<FormulaScal
   if (operand.type === "string" && operand.value === "") return value.type === "blank" || value.type === "string" && value.value === "";
   if (value.type === "error" && operand.type === "string") return value.value.toLocaleLowerCase("en-US") === operand.value.toLocaleLowerCase("en-US");
   if (value.type !== operand.type) return false;
-  return compare(value, operand) === 0;
+  return compareCriterion(value, operand) === 0;
 }
 
 function sameComparableType(value: FormulaScalarValue, operand: Exclude<FormulaScalarValue, { type: "error" }>): boolean {

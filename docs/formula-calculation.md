@@ -45,7 +45,8 @@ characters, `?` matches one, and `~` escapes `*`, `?`, or `~`. Wildcards do not
 coerce numbers or booleans to text. An empty-string criterion matches blank and
 empty-string cells, while a blank criterion reference is treated as numeric
 zero. A quoted error such as `"#N/A"` can match that cell error; an unquoted
-error criterion propagates the error.
+error criterion propagates the error. As required specifically by `AVERAGEIF`,
+boolean cells in its inspected range are ignored even for a boolean criterion.
 
 Selected numeric cells contribute to `SUMIF` and `AVERAGEIF`; blank, text, and
 boolean result cells are ignored. An error in a selected result cell propagates.

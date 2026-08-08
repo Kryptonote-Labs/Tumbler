@@ -107,11 +107,14 @@ describe("bounded spreadsheet formula calculation", () => {
       "Sheet1!A4": textValue("a?"),
       "Sheet1!A5": textValue("a~"),
       "Sheet1!A6": textValue("beta"),
+      "Sheet1!A7": textValue("A01"),
+      "Sheet1!A8": textValue("A1"),
       "Sheet1!B1": formula(`COUNTIF(A1:A6,"alp*")`),
       "Sheet1!B2": formula(`COUNTIF(A1:A6,"a~*")`),
       "Sheet1!B3": formula(`COUNTIF(A1:A6,"a~?")`),
       "Sheet1!B4": formula(`COUNTIF(A1:A6,"a~~")`),
       "Sheet1!B5": formula(`COUNTIF(A1:A6,"<>*a")`),
+      "Sheet1!B6": formula(`COUNTIF(A7:A8,"A01")`),
     });
 
     const calculation = calculateFormulas(workbook);
@@ -121,6 +124,7 @@ describe("bounded spreadsheet formula calculation", () => {
     expect(calculation.value(address("Sheet1!B3"))).toEqual({ type: "number", value: 1 });
     expect(calculation.value(address("Sheet1!B4"))).toEqual({ type: "number", value: 1 });
     expect(calculation.value(address("Sheet1!B5"))).toEqual({ type: "number", value: 4 });
+    expect(calculation.value(address("Sheet1!B6"))).toEqual({ type: "number", value: 1 });
   });
 
   test("aligns a short result range from its top-left cell across sheets", () => {
@@ -165,6 +169,7 @@ describe("bounded spreadsheet formula calculation", () => {
       "Sheet1!D5": formula(`SUMIF(A1:A6,"<>x",B1:B6)`),
       "Sheet1!D6": formula(`AVERAGEIF(A1:A2,"missing",B1:B2)`),
       "Sheet1!D7": formula(`COUNTIF(A1:A6,#N/A)`),
+      "Sheet1!D8": formula(`AVERAGEIF(A1:A6,TRUE,B1:B6)`),
     });
 
     const calculation = calculateFormulas(workbook);
@@ -176,6 +181,7 @@ describe("bounded spreadsheet formula calculation", () => {
     expect(calculation.value(address("Sheet1!D5"))).toEqual({ type: "error", value: "#DIV/0!" });
     expect(calculation.value(address("Sheet1!D6"))).toEqual({ type: "error", value: "#DIV/0!" });
     expect(calculation.value(address("Sheet1!D7"))).toEqual({ type: "error", value: "#N/A" });
+    expect(calculation.value(address("Sheet1!D8"))).toEqual({ type: "error", value: "#DIV/0!" });
   });
 
   test("ignores non-numeric result cells and does not read unmatched errors", () => {
