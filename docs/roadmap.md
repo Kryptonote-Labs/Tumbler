@@ -82,6 +82,7 @@ now implemented:
 - [x] parse and calculate a bounded first formula slice into read-only value overlays;
 - [x] discover worksheet Drawing/Chart parts and render the first native chart subset;
 - [x] edit ordinary scalar formulas safely through a distinct formula-bar path;
+- [x] pick same- or cross-sheet cell/range references without losing the formula target;
 - [ ] model and edit special formulas and structural ranges safely;
 - [ ] pass Open XML SDK, LibreOffice, and Microsoft Excel round trips.
 

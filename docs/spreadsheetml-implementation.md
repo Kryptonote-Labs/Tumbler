@@ -89,7 +89,10 @@ and shift selection, keyboard navigation, styled display, merged cells, frozen
 regions, a literal inline editor, table sort/filter dropdowns, a read-only mode,
 and typed selection/edit/hyperlink/chart callbacks. `SpreadsheetFormulaBar`
 separately exposes the selected cell's literal or `=`-prefixed formula source so
-formula interpretation remains explicit. Hyperlink cells and chart frames are accessible buttons;
+formula interpretation remains explicit. During formula authoring, host-issued
+grid selections insert same-sheet or safely quoted cross-sheet A1 references at
+the caret. Pointer-drag updates replace the in-progress pick, and switching
+worksheets does not move the original formula target. Hyperlink cells and chart frames are accessible buttons;
 the host owns navigation so document targets never become automatic browser loads.
 Table controls project source rows into visual
 slots; filtered slots collapse through sparse geometry and the source package is
@@ -161,9 +164,9 @@ remains a renderer-level fidelity gap.
 
 ## Next qualification boundary
 
-The next useful slice is formula-bar integration and real-producer formula-write
-qualification, followed by reference picking, real-producer chart/grid visual
-qualification, conditional formatting, and richer number formats.
+The next useful slice is real-producer formula-write and reference-picking
+qualification, followed by real-producer chart/grid visual qualification,
+conditional formatting, and richer number formats.
 Before calling the slice interoperable, real-producer fixtures must pass Excel,
 LibreOffice, and an independent parser without repair or unexplained semantic
 drift.

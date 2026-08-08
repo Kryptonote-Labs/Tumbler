@@ -172,26 +172,31 @@ leading `=` as formula input.
     SpreadsheetFormulaBar,
     SpreadsheetGrid,
     type SpreadsheetFormulaBarEdit,
+    type SpreadsheetFormulaReferencePick,
     type SpreadsheetGridEdit,
   } from "@tumblerjs/svelte";
 
   let artifact = $state(openSpreadsheetArtifact(bytes));
   let selectedReference = $state("A1");
+  let referencePick = $state<SpreadsheetFormulaReferencePick>();
+  let referencePickId = 0;
 
   function editCell(edit: SpreadsheetGridEdit) {
     artifact = artifact.editCell(edit.reference, edit.value);
   }
 
   function editFormulaBar(edit: SpreadsheetFormulaBarEdit) {
+    const sheet = edit.sheet ?? artifact.activeSheet.name;
     artifact = edit.kind === "formula"
-      ? artifact.editFormula(edit.reference, edit.formula)
-      : artifact.editCell(edit.reference, edit.value);
+      ? artifact.editFormulaOnSheet(sheet, edit.reference, edit.formula)
+      : artifact.editCellOnSheet(sheet, edit.reference, edit.value);
   }
 </script>
 
 <SpreadsheetFormulaBar
   worksheet={artifact.worksheet}
   reference={selectedReference}
+  {referencePick}
   onedit={editFormulaBar}
 />
 <SpreadsheetGrid
@@ -200,9 +205,20 @@ leading `=` as formula input.
   onedit={editCell}
   onselectionchange={(selection) => {
     selectedReference = formatCellReference(selection.focus);
+    referencePick = {
+      id: ++referencePickId,
+      sheet: artifact.activeSheet.name,
+      range: selection.range,
+    };
   }}
 />
 ```
+
+While the formula bar contains an `=` formula, each host-issued pick inserts a
+same-sheet A1 reference or a safely quoted cross-sheet reference at the caret.
+Repeated picks replace the in-progress reference so pointer dragging grows one
+range. The formula target remains on its original sheet while the host switches
+worksheets for picking.
 
 Applications own placement, surrounding controls, persistence, navigation, and
 theme variables. Neither component requires a hosted service.
@@ -241,6 +257,7 @@ for the resumable alpha release workflow.
 - [Formats and UI](docs/formats-and-ui.md)
 - [Standards and compatibility](docs/standards-and-compatibility.md)
 - [SpreadsheetML implementation status](docs/spreadsheetml-implementation.md)
+- [Spreadsheet formula authoring](docs/spreadsheet-formula-authoring.md)
 - [Testing](docs/testing.md)
 - [Roadmap](docs/roadmap.md)
 - [OOXML engineering reference](docs/reference/README.md)
