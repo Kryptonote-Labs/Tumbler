@@ -44,3 +44,39 @@ consumers.
 
 By contributing, you agree that your contribution is licensed under the MIT
 License in this repository.
+
+## Alpha releases
+
+Public packages use one lockstep `0.1.0-alpha.N` version and exact versions for
+dependencies within the Tumbler package graph. Releases are deliberately
+maintainer-operated while npm requires web authentication for each package.
+
+After committing a release candidate, qualify the exact packed artifacts against
+Tumbler and the local Kryptonote checkout:
+
+```sh
+bun run release:qualify
+```
+
+This validates package metadata, runs Tumbler's checks and tests, verifies each
+tarball contains its README, license, manifest, and source entry point, mounts
+the packed packages in Kryptonote, and runs Kryptonote's frontend check. A
+successful run records the qualified commit locally.
+
+Push that exact commit to `origin/main`, then inspect the registry plan:
+
+```sh
+bun run release:next
+```
+
+Publish exactly one package at a time:
+
+```sh
+bun run release:publish
+```
+
+The publish command uses npm's URL-based web authentication and exits after one
+package. Rerun it after each successful authentication. Already-published
+packages are detected from the registry and skipped, so an interrupted release
+resumes safely in dependency order. Every publish explicitly uses the `alpha`
+distribution tag.

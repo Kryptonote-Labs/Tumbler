@@ -14,6 +14,8 @@
     "references:fetch": "bash scripts/fetch-reference-sources.sh",
     "release:verify": "bun scripts/verify-release.ts",
     "release:qualify": "bash scripts/qualify-release.sh",
+    "release:next": "bun scripts/publish-next.ts",
+    "release:publish": "bun scripts/publish-next.ts --confirm",
     "test": "bun test --pass-with-no-tests"
   },
   "devDependencies": {

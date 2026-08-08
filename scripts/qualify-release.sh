@@ -31,6 +31,10 @@ if [[ ! -d "$consumer_modules" ]]; then
   printf 'Install the consumer dependencies before qualification: %s\n' "$consumer_root" >&2
   exit 1
 fi
+if [[ -n $(git -C "$repository_root" status --porcelain) ]]; then
+  printf 'Commit or restore all Tumbler changes before release qualification.\n' >&2
+  exit 1
+fi
 
 cd -- "$repository_root"
 bun run release:verify
@@ -79,4 +83,5 @@ for index in "${!packages[@]}"; do
 done
 
 bun run --cwd "$consumer_root" check
+git -C "$repository_root" config --local tumbler.release-qualified "$(git -C "$repository_root" rev-parse HEAD)"
 printf 'All public package tarballs passed Tumbler and consumer qualification.\n'
