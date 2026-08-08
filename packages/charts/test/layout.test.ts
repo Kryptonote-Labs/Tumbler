@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chartSequenceValue, chartValueCoordinate, layoutCartesianChart, layoutPieSlices, layoutScatterChart, pieArcPath, scatterLinePath, type SupportedChartModel } from "../src/index.ts";
+import { chartSequenceValue, chartValueCoordinate, layoutBubbleChart, layoutCartesianChart, layoutPieSlices, layoutScatterChart, pieArcPath, scatterLinePath, type SupportedChartModel } from "../src/index.ts";
 
 describe("headless chart layout", () => {
   test("derives categories, value bounds, and stable plot geometry", () => {
@@ -64,6 +64,54 @@ describe("headless chart layout", () => {
     const path = scatterLinePath(points, true);
     expect(path).toContain(" C ");
     expect(path.match(/M /g)).toHaveLength(2);
+  });
+
+  test("pairs sparse bubble coordinates and sizes by cache index", () => {
+    const source = model();
+    const bubble: SupportedChartModel = {
+      ...source, kind: "bubble", axisIds: [10, 20], bubbleScale: 100,
+      showNegativeBubbles: false, bubbleSizeRepresentation: "area",
+      axes: [
+        { id: 10, kind: "value", position: "bottom", title: undefined, majorGridlines: true, minimum: 0, maximum: 10, deleted: false },
+        { id: 20, kind: "value", position: "left", title: undefined, majorGridlines: true, minimum: 0, maximum: 20, deleted: false },
+      ],
+      series: [{ ...source.series[0]!,
+        xValues: { kind: "number", formula: undefined, formatCode: undefined, points: [{ index: 0, value: 1 }, { index: 1, value: 5 }, { index: 3, value: 9 }] },
+        values: { kind: "number", formula: undefined, formatCode: undefined, points: [{ index: 0, value: 2 }, { index: 2, value: 8 }, { index: 3, value: 18 }] },
+        bubbleSizes: { kind: "number", formula: undefined, formatCode: undefined, points: [{ index: 0, value: 25 }, { index: 1, value: 16 }, { index: 3, value: 100 }] },
+      }],
+    };
+    const layout = layoutBubbleChart(bubble, 600, 400);
+    expect(layout.series[0]?.map(({ index, x, y, size }) => ({ index, x, y, size }))).toEqual([
+      { index: 0, x: 1, y: 2, size: 25 },
+      { index: 3, x: 9, y: 18, size: 100 },
+    ]);
+    expect(layout.series[0]?.[0]?.radius).toBeCloseTo(layout.series[0]![1]!.radius / 2);
+    expect(layout).toMatchObject({ xMinimum: 0, xMaximum: 10, yMinimum: 0, yMaximum: 20 });
+  });
+
+  test("applies width scaling and explicit negative and zero bubble behavior", () => {
+    const source = model();
+    const bubble: SupportedChartModel = {
+      ...source, kind: "bubble", bubbleScale: 200, showNegativeBubbles: true,
+      bubbleSizeRepresentation: "width", axisIds: [1, 2],
+      axes: [
+        { id: 1, kind: "value", position: "bottom", title: undefined, majorGridlines: false, minimum: undefined, maximum: undefined, deleted: false },
+        { id: 2, kind: "value", position: "left", title: undefined, majorGridlines: false, minimum: undefined, maximum: undefined, deleted: false },
+      ],
+      series: [{ ...source.series[0]!,
+        xValues: { kind: "number", formula: undefined, formatCode: undefined, points: [{ index: 0, value: 1 }, { index: 1, value: 2 }, { index: 2, value: 3 }] },
+        values: { kind: "number", formula: undefined, formatCode: undefined, points: [{ index: 0, value: 1 }, { index: 1, value: 2 }, { index: 2, value: 3 }] },
+        bubbleSizes: { kind: "number", formula: undefined, formatCode: undefined, points: [{ index: 0, value: -10 }, { index: 1, value: 0 }, { index: 2, value: 20 }] },
+      }],
+    };
+    const layout = layoutBubbleChart(bubble, 500, 300);
+    expect(layout.series[0]?.map(({ negative }) => negative)).toEqual([true, false, false]);
+    expect(layout.series[0]?.[0]?.radius).toBeCloseTo(layout.series[0]![2]!.radius / 2);
+    expect(layout.series[0]?.[1]?.radius).toBe(0);
+    expect(layout.series[0]?.[2]?.radius).toBeCloseTo(Math.min(layout.plot.width, layout.plot.height) * 0.2);
+    const hidden = layoutBubbleChart({ ...bubble, showNegativeBubbles: false }, 500, 300);
+    expect(hidden.series[0]?.[0]?.radius).toBe(0);
   });
 });
 
