@@ -46,6 +46,24 @@ const edited = artifact
 const output = edited.bytes();
 ```
 
+Project conditional formatting without materializing its ranges:
+
+```ts
+import { projectSpreadsheetConditionalStyles } from "@tumblerjs/sheets";
+
+const conditional = projectSpreadsheetConditionalStyles(
+  artifact.worksheet,
+  artifact.calculation,
+);
+const differentialFormats = conditional.formats("B7");
+console.log(conditional.diagnostics);
+```
+
+The first read-only slice supports `cellIs` comparisons and expressions that
+the bounded formula engine can evaluate. It resolves incremental font, solid
+fill, and border formatting with priority and `stopIfTrue`. Unsupported rule
+kinds remain inert and produce diagnostics when queried.
+
 Formula source passed to the headless API does not include a leading `=`.
 Ordinary formulas are editable; shared, array, data-table, dynamic-array, and
 external-workbook formula structures are not yet editable.

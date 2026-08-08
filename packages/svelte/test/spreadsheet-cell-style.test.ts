@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { openOpcPackage } from "../../opc/src/index.ts";
-import { openSpreadsheet, openWorksheet } from "@tumblerjs/sheets";
+import { openSpreadsheet, openWorksheet, projectSpreadsheetConditionalStyles } from "@tumblerjs/sheets";
 import { buildWorkbookFixture } from "../../sheets/test/workbook-fixture.ts";
 import { spreadsheetCellContentCss, spreadsheetCellCss } from "../src/index.ts";
 
@@ -47,5 +47,36 @@ describe("Svelte spreadsheet cell styles", () => {
     expect(wrapped).toContain("direction:rtl");
     expect(spreadsheetCellContentCss(worksheet, "C1")).toBe("transform:rotate(-45deg)");
     expect(spreadsheetCellContentCss(worksheet, "D1")).toBe("writing-mode:vertical-rl;text-orientation:upright");
+  });
+
+  test("projects conditional font, fill, and border declarations over the authored cell style", () => {
+    const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      stylesXml: `<styleSheet xmlns="${namespace}">
+        <fonts count="1"><font><name val="Aptos"/><sz val="11"/><b/></font></fonts>
+        <fills count="1"><fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/></patternFill></fill></fills>
+        <borders count="1"><border><left style="thin"><color rgb="FF000000"/></left></border></borders>
+        <cellXfs count="1"><xf fontId="0" fillId="0" borderId="0"/></cellXfs>
+        <dxfs count="2">
+          <dxf><font><b val="0"/><i/><color rgb="FFFFFFFF"/></font><fill><patternFill><fgColor rgb="FF1F4E78"/></patternFill></fill></dxf>
+          <dxf><border><left><color rgb="FFFF0000"/></left><bottom style="double"><color rgb="FF00AA00"/></bottom></border></dxf>
+        </dxfs>
+      </styleSheet>`,
+      sheets: [{
+        name: "Sheet1",
+        sheetId: 1,
+        relationshipId: "sheet1",
+        xml: `<worksheet xmlns="${namespace}"><sheetData><row r="1"><c r="A1"><v>7</v></c></row></sheetData><conditionalFormatting sqref="A1"><cfRule type="cellIs" dxfId="0" priority="1" operator="greaterThan"><formula>0</formula></cfRule><cfRule type="cellIs" dxfId="1" priority="2" operator="greaterThan"><formula>0</formula></cfRule></conditionalFormatting></worksheet>`,
+      }],
+    })));
+    const worksheet = openWorksheet(workbook, workbook.sheets[0]!);
+    const formats = projectSpreadsheetConditionalStyles(worksheet).formats("A1");
+    const css = spreadsheetCellCss(worksheet, "A1", formats);
+
+    expect(css).not.toContain("font-weight:700");
+    expect(css).toContain("font-style:italic");
+    expect(css).toContain("color:#FFFFFF");
+    expect(css).toContain("background-color:#1F4E78");
+    expect(css).toContain("border-left:1px solid #FF0000");
+    expect(css).toContain("border-bottom:3px double #00AA00");
   });
 });

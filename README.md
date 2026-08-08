@@ -21,18 +21,19 @@ The implemented format is SpreadsheetML (`.xlsx`). The current alpha can:
 
 - open Strict and Transitional workbooks without assuming conventional part paths;
 - read worksheets, sparse cells, formulas, styles, dimensions, merges, frozen
-  panes, tables, hyperlinks, drawings, and a bounded chart subset;
+  panes, tables, hyperlinks, drawings, conditional formatting, and a bounded
+  chart subset;
 - calculate a bounded formula subset including ordinary A1 references, ranges,
   arithmetic, comparisons, `IF`, `SUM`, `COUNT`, `AVERAGE`, `MIN`, `MAX`, `AND`,
   `OR`, `NOT`, `COUNTIF`, `SUMIF`, and `AVERAGEIF`;
 - edit literal strings, numbers, booleans, blank cells, and ordinary formulas;
 - save surgical worksheet changes while retaining untouched ZIP payloads;
 - render an owned virtualized Svelte grid, formula bar, table views, hyperlinks,
-  and native SVG chart previews.
+  conditional font/fill/border overlays, and native SVG chart previews.
 
 WordprocessingML and PresentationML editing are not implemented yet. Spreadsheet
-formula coverage, structural editing, conditional formatting, validations,
-comments, pivots, and broad chart fidelity remain incomplete.
+formula coverage, structural editing, conditional-format rule coverage,
+validations, comments, pivots, and broad chart fidelity remain incomplete.
 
 ## Install
 

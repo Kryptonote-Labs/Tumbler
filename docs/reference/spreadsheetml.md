@@ -182,6 +182,14 @@ Structural edits can require updating their references and related parts.
 Until structurally editable, preserve them and reject range mutations that would
 silently detach or corrupt them.
 
+The first implemented conditional-format view follows ECMA-376-1 §18.3.1.10
+and §18.3.1.18 for ordered rules and `sqref`, §18.8.14–15 for incremental
+`dxf` formatting, and §18.18.12, §18.18.15, §18.18.25, and §18.18.76 for
+the rule, operator, differential-index, and reference-sequence vocabularies. It
+evaluates `cellIs` and formula expressions lazily per requested cell. Data bars,
+icon sets, color scales, other rule types, cross-sheet/external expressions,
+and rule writing remain explicit gaps.
+
 ## Drawings and charts
 
 Worksheet drawings use anchors tied to cell coordinates plus offsets. Row height

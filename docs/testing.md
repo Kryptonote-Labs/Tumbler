@@ -64,6 +64,13 @@ recalculation.
 Real-producer corpora and Microsoft Excel automation remain separate next steps,
 so synthetic packages are not presented as full interoperability evidence.
 
+Conditional-formatting tests cover Strict and Transitional worksheet markup,
+multi-range sparse projection, all eight numeric `cellIs` operators, expression
+reference translation, calculated-value refresh after edits, differential
+font/fill/border precedence, priority and `stopIfTrue`, unsupported semantic
+diagnostics, malformed input, whole-grid ranges without materialization, no-op
+package preservation, and the Svelte CSS projection contract.
+
 ## Testkit structure
 
 The planned shape of `@tumblerjs/testkit` is:

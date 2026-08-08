@@ -83,6 +83,7 @@ export {
   SpreadsheetEditor,
 } from "./editor.ts";
 export {
+  applySpreadsheetDifferentialFormats,
   readSpreadsheetStyles,
   SpreadsheetStyles,
 } from "./styles.ts";
@@ -99,12 +100,26 @@ export {
 } from "./artifact.ts";
 export type { OpenSpreadsheetArtifactOptions } from "./artifact.ts";
 export { calculateSpreadsheetWorksheet, SpreadsheetCalculationSnapshot } from "./calculation.ts";
+export {
+  parseSpreadsheetConditionalFormatting,
+  projectSpreadsheetConditionalStyles,
+  SpreadsheetConditionalStyleProjection,
+} from "./conditional-formatting.ts";
+export type {
+  SpreadsheetConditionalFormatting,
+  SpreadsheetConditionalFormattingDiagnostic,
+  SpreadsheetConditionalFormattingDiagnosticCode,
+  SpreadsheetConditionalFormattingOperator,
+  SpreadsheetConditionalFormattingRule,
+} from "./conditional-formatting.ts";
 export type {
   SpreadsheetAlignment,
   SpreadsheetBorder,
   SpreadsheetBorderEdge,
   SpreadsheetCellFormat,
   SpreadsheetColor,
+  SpreadsheetDifferentialBorder,
+  SpreadsheetDifferentialFormat,
   SpreadsheetFill,
   SpreadsheetFont,
 } from "./styles.ts";

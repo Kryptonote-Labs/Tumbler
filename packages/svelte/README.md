@@ -19,6 +19,9 @@ bun add @tumblerjs/svelte@alpha @tumblerjs/sheets@alpha
 <SpreadsheetGrid worksheet={artifact.worksheet} calculation={artifact.calculation} />
 ```
 
+The grid automatically projects supported conditional font, fill, and border
+rules from the worksheet. Its source rules and package bytes remain unchanged.
+
 Inline grid edits are always literals. The explicit formula bar treats input
 beginning with `=` as a formula and emits a typed formula edit; applications own
 applying the edit and replacing the artifact.
