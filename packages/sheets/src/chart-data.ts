@@ -83,12 +83,14 @@ export function resolveSpreadsheetChartDataSet(worksheet: SpreadsheetWorksheet, 
         ? item.title
         : titleSource.calculation.displayText(titleSource.range.start) || item.title;
       const xValues = resolveSequence(item.xValues, "value");
+      const bubbleSizes = resolveSequence(item.bubbleSizes, "value");
       return Object.freeze({
         ...item,
         title,
         categories: resolveSequence(item.categories, "category"),
         ...(xValues === undefined ? {} : { xValues }),
         values: resolveSequence(item.values, "value"),
+        ...(bubbleSizes === undefined ? {} : { bubbleSizes }),
       });
     });
     const titleSource = model.titleFormula === undefined ? undefined : source(model.titleFormula);

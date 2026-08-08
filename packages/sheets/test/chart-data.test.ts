@@ -52,6 +52,38 @@ describe("Spreadsheet chart data binding", () => {
     expect(resolved.series[0]?.values?.points.map((point) => point.value)).toEqual([2, 3, 5]);
   });
 
+  test("refreshes bubble X, Y, and size formulas from calculated worksheet cells", () => {
+    const workbook = fixture();
+    const worksheet = openWorksheet(workbook, workbook.sheet("Dashboard")!);
+    const source = model();
+    const numericSource = Object.freeze({
+      kind: "number" as const,
+      formula: "Data!$B$2:$B$4",
+      formatCode: "0",
+      points: Object.freeze([{ index: 0, value: 999 }]),
+    });
+    const bubble: SupportedChartModel = Object.freeze({
+      ...source,
+      kind: "bubble",
+      bubbleScale: 100,
+      showNegativeBubbles: false,
+      bubbleSizeRepresentation: "area",
+      axisIds: Object.freeze([1, 2]),
+      series: Object.freeze(source.series.map((series) => Object.freeze({
+        ...series,
+        categories: undefined,
+        xValues: numericSource,
+        values: numericSource,
+        bubbleSizes: numericSource,
+      }))),
+    });
+    const resolved = resolveSpreadsheetChartData(worksheet, bubble);
+    if (resolved.status !== "supported") throw new Error("Expected supported chart");
+    expect(resolved.series[0]?.xValues?.points.map((point) => point.value)).toEqual([2, 3, 5]);
+    expect(resolved.series[0]?.values?.points.map((point) => point.value)).toEqual([2, 3, 5]);
+    expect(resolved.series[0]?.bubbleSizes?.points.map((point) => point.value)).toEqual([2, 3, 5]);
+  });
+
   test("formats numeric date categories while retaining numeric plotted values", () => {
     const spreadsheet = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
