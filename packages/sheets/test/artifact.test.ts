@@ -49,6 +49,32 @@ describe("spreadsheet artefact host boundary", () => {
     expect(openSpreadsheetArtifact(edited.bytes()).worksheet.cell("C1")?.formula).toBe("SUM(A1:B1)");
   });
 
+  test("edits a formula target while retaining the sheet used for cross-sheet reference picking", () => {
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({ sheets: [
+      {
+        name: "Dashboard",
+        sheetId: 1,
+        relationshipId: "dashboard",
+        xml: `<worksheet xmlns="${namespace}"><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>`,
+      },
+      {
+        name: "Project Inputs",
+        sheetId: 2,
+        relationshipId: "inputs",
+        xml: `<worksheet xmlns="${namespace}"><sheetData><row r="4"><c r="B4"><v>7</v></c></row></sheetData></worksheet>`,
+      },
+    ] })).selectSheet("Project Inputs");
+
+    const edited = artifact.editFormulaOnSheet("Dashboard", "C3", "'Project Inputs'!$B$4*2");
+
+    expect(edited.activeSheet.name).toBe("Project Inputs");
+    const dashboard = edited.selectSheet("Dashboard");
+    expect(dashboard.worksheet.cell("C3")?.formula).toBe("'Project Inputs'!$B$4*2");
+    expect(dashboard.calculation.displayText("C3")).toBe("14");
+    expect(openSpreadsheetArtifact(edited.bytes(), { sheet: "Dashboard" }).worksheet.cell("C3")?.formula)
+      .toBe("'Project Inputs'!$B$4*2");
+  });
+
   test("retains the active sheet across an agent-produced replacement", () => {
     const current = openSpreadsheetArtifact(workbookBytes(1), { sheet: "Notes" });
     const replaced = current.replace(workbookBytes(2));
@@ -68,6 +94,7 @@ describe("spreadsheet artefact host boundary", () => {
     const artifact = openSpreadsheetArtifact(workbookBytes(1));
     expect(artifact.editCell("A1", 1)).toBe(artifact);
     expect(() => artifact.selectSheet("Missing")).toThrow(SpreadsheetError);
+    expect(() => artifact.editFormulaOnSheet("Missing", "A1", "1+1")).toThrow(SpreadsheetError);
   });
 });
 

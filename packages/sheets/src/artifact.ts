@@ -34,19 +34,39 @@ export class SpreadsheetArtifact {
   }
 
   editCell(reference: string, value: EditableCellValue): SpreadsheetArtifact {
-    const saved = beginSpreadsheetEdit(this.workbook).setCellValue(this.activeSheet, reference, value).commit();
+    return this.editCellOnSheet(this.activeSheet, reference, value);
+  }
+
+  /** Edits a worksheet without changing the sheet currently presented by the host. */
+  editCellOnSheet(sheet: SpreadsheetSheet | number | string, reference: string, value: EditableCellValue): SpreadsheetArtifact {
+    const target = this.#resolveSheet(sheet);
+    const saved = beginSpreadsheetEdit(this.workbook).setCellValue(target, reference, value).commit();
     if (saved === this.bytes()) return this;
     return openSpreadsheetArtifact(saved, { sheet: this.activeSheet.name });
   }
 
   editFormula(reference: string, formula: string): SpreadsheetArtifact {
-    const saved = beginSpreadsheetEdit(this.workbook).setCellFormula(this.activeSheet, reference, formula).commit();
+    return this.editFormulaOnSheet(this.activeSheet, reference, formula);
+  }
+
+  /** Writes a formula to its original target sheet while reference picking may display another sheet. */
+  editFormulaOnSheet(sheet: SpreadsheetSheet | number | string, reference: string, formula: string): SpreadsheetArtifact {
+    const target = this.#resolveSheet(sheet);
+    const saved = beginSpreadsheetEdit(this.workbook).setCellFormula(target, reference, formula).commit();
     if (saved === this.bytes()) return this;
     return openSpreadsheetArtifact(saved, { sheet: this.activeSheet.name });
   }
 
   replace(bytes: Uint8Array): SpreadsheetArtifact {
     return openSpreadsheetArtifact(bytes, { sheet: this.activeSheet.name });
+  }
+
+  #resolveSheet(identifier: SpreadsheetSheet | number | string): SpreadsheetSheet {
+    const sheet = typeof identifier === "object" ? identifier : this.workbook.sheet(identifier);
+    if (sheet === undefined || !this.workbook.sheets.includes(sheet)) {
+      throw new SpreadsheetError("unsupported_sheet", `Workbook sheet ${JSON.stringify(identifier)} does not exist.`);
+    }
+    return sheet;
   }
 }
 
