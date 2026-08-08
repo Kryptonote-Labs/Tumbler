@@ -81,7 +81,8 @@ now implemented:
 - [x] recognize table parts and project read-only table sorting/filtering in the owned grid;
 - [x] parse and calculate a bounded first formula slice into read-only value overlays;
 - [x] discover worksheet Drawing/Chart parts and render the first native chart subset;
-- [ ] edit formulas and structural ranges safely;
+- [x] edit ordinary scalar formulas safely through a distinct formula-bar path;
+- [ ] model and edit special formulas and structural ranges safely;
 - [ ] pass Open XML SDK, LibreOffice, and Microsoft Excel round trips.
 
 The remaining format order still follows deliberate value and evidence, not

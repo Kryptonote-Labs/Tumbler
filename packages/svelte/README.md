@@ -12,11 +12,16 @@ bun add @tumblerjs/svelte@alpha @tumblerjs/sheets@alpha
 
 ```svelte
 <script lang="ts">
-  import { SpreadsheetGrid } from "@tumblerjs/svelte";
+  import { SpreadsheetFormulaBar, SpreadsheetGrid } from "@tumblerjs/svelte";
 </script>
 
+<SpreadsheetFormulaBar worksheet={artifact.worksheet} reference="A1" />
 <SpreadsheetGrid worksheet={artifact.worksheet} calculation={artifact.calculation} />
 ```
+
+Inline grid edits are always literals. The explicit formula bar treats input
+beginning with `=` as a formula and emits a typed formula edit; applications own
+applying the edit and replacing the artifact.
 
 Tumbler is developed at
 [Kryptonote-Labs/Tumbler](https://github.com/Kryptonote-Labs/Tumbler).

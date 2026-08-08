@@ -30,7 +30,7 @@ current requirement boundary is:
 | §12.3.8, §18.3.1.36 | Relationship-resolved worksheet Drawing parts with inert external targets and lossless preservation |
 | §20.5.2.1, §20.5.2.24, §20.5.2.33 | Absolute, one-cell, and two-cell drawing anchors projected from EMUs through worksheet row/column geometry |
 | §14.2.1, §21.2.2.16, §21.2.2.27–29, §21.2.2.97, §21.2.2.141 | Read-only native column/bar, line, pie, and doughnut chart models and owned SVG previews |
-| MS-XLSX §2.2.2, ECMA-376-1 §18.17.2–7 | Typed formula parsing, references/ranges, bounded dependencies, operators, errors, and the first calculation function set |
+| §18.3.1.40, MS-XLSX §2.2.2, ECMA-376-1 §18.17.2–7 | Typed ordinary-formula parsing, writing, references/ranges, bounded dependencies, operators, errors, and the first calculation function set |
 
 Both Strict and Transitional vocabulary and relationship namespaces are tested.
 This table is a feature boundary, not a claim of complete conformance to those
@@ -67,6 +67,8 @@ clauses or to SpreadsheetML as a whole.
 - calculate supported ordinary formulas into an immutable overlay, including
   arithmetic/comparison/concatenation, same- and cross-sheet A1 references,
   ranges, `IF`, `SUM`, `COUNT`, `AVERAGE`, `MIN`, `MAX`, `AND`, `OR`, and `NOT`;
+- write ordinary formulas without the UI-only leading equals sign, remove stale
+  cached values and calculation chains, and expose a fresh calculated overlay;
 - recalculate supported dependants after scalar edits while leaving formula text,
   cached values, calculation metadata, and package bytes source-owned;
 - discover embedded worksheet charts, expose cached series safely, and refresh
@@ -84,8 +86,10 @@ unrelated package parts are not reserialized.
 primitives plus sparse variable-axis geometry. `@tumblerjs/svelte` supplies
 `SpreadsheetGrid`, an owned virtualized surface with row/column headers, click
 and shift selection, keyboard navigation, styled display, merged cells, frozen
-regions, an inline editor, table sort/filter dropdowns, a read-only mode, and
-typed selection/edit/hyperlink/chart callbacks. Hyperlink cells and chart frames are accessible buttons;
+regions, a literal inline editor, table sort/filter dropdowns, a read-only mode,
+and typed selection/edit/hyperlink/chart callbacks. `SpreadsheetFormulaBar`
+separately exposes the selected cell's literal or `=`-prefixed formula source so
+formula interpretation remains explicit. Hyperlink cells and chart frames are accessible buttons;
 the host owns navigation so document targets never become automatic browser loads.
 Table controls project source rows into visual
 slots; filtered slots collapse through sparse geometry and the source package is
@@ -132,9 +136,10 @@ remains a renderer-level fidelity gap.
   first grammar/function slice calculate in a bounded overlay; unsupported
   names, structured/external references, shared/array/data-table/dynamic-array
   forms, volatile behavior, iterative calculation, and the wider Excel function
-  catalog fall back to producer caches with diagnostics. Formula caches are not
-  written, formula text is not editable, and structural row/column edits do not
-  exist.
+  catalog fall back to producer caches with diagnostics. Ordinary formula text
+  in the supported grammar is editable; special formula structures are rejected
+  instead of flattened. Formula caches are not written, and structural
+  row/column edits do not exist.
 - Table and AutoFilter support is read-only. Value lists and one/two-condition
   custom filters plus vertical value sorting are projected; dynamic, top-10,
   color, icon, and horizontal sorts remain explicitly unsupported and are not
@@ -156,8 +161,9 @@ remains a renderer-level fidelity gap.
 
 ## Next qualification boundary
 
-The next useful slice is real-producer chart and grid visual qualification, followed by
-conditional formatting, richer number formats, and formula/reference modelling.
+The next useful slice is formula-bar integration and real-producer formula-write
+qualification, followed by reference picking, real-producer chart/grid visual
+qualification, conditional formatting, and richer number formats.
 Before calling the slice interoperable, real-producer fixtures must pass Excel,
 LibreOffice, and an independent parser without repair or unexplained semantic
 drift.
