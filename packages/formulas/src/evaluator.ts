@@ -553,7 +553,7 @@ function tokenizeWildcard(source: string): readonly WildcardToken[] {
   return Object.freeze(tokens);
 }
 
-/** Greedy glob matching is linear in the combined pattern and candidate lengths. */
+/** The capped pattern keeps greedy matching linear in candidate length without regex backtracking. */
 function wildcardMatches(tokens: readonly WildcardToken[], candidate: string): boolean {
   const text = [...candidate.toLocaleLowerCase("en-US")];
   const pattern: WildcardToken[] = [];
