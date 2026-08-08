@@ -99,6 +99,18 @@ export {
 } from "./artifact.ts";
 export type { OpenSpreadsheetArtifactOptions } from "./artifact.ts";
 export { calculateSpreadsheetWorksheet, SpreadsheetCalculationSnapshot } from "./calculation.ts";
+export {
+  parseSpreadsheetConditionalFormatting,
+  projectSpreadsheetConditionalStyles,
+  SpreadsheetConditionalStyleProjection,
+} from "./conditional-formatting.ts";
+export type {
+  SpreadsheetConditionalFormatting,
+  SpreadsheetConditionalFormattingDiagnostic,
+  SpreadsheetConditionalFormattingDiagnosticCode,
+  SpreadsheetConditionalFormattingOperator,
+  SpreadsheetConditionalFormattingRule,
+} from "./conditional-formatting.ts";
 export type {
   SpreadsheetAlignment,
   SpreadsheetBorder,
