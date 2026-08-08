@@ -117,7 +117,7 @@ Owns host-independent DrawingML chart semantics and deterministic geometry:
 - Chart part parsing, supported chart types, axes, series, legends, and titles;
 - cached string/numeric data and opaque source formulas;
 - category-cartesian scales, numeric XY scatter scales, smooth/straight scatter
-  paths, and pie-family arc geometry;
+  paths, bounded bubble geometry, and pie-family arc geometry;
 - explicit unsupported models for combinations outside a proven rendering slice.
 
 It does not resolve SpreadsheetML cells or depend on Svelte. Format packages
