@@ -18,6 +18,10 @@ import { SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } fro
 import { parseSpreadsheetAutoFilter, readSpreadsheetTables, type SpreadsheetAutoFilter, type SpreadsheetTable } from "./tables.ts";
 import { readSpreadsheetHyperlinks, spreadsheetHyperlinkAt, type SpreadsheetHyperlink } from "./hyperlinks.ts";
 import { readSpreadsheetDrawing, type SpreadsheetDrawing } from "./drawings.ts";
+import {
+  parseSpreadsheetConditionalFormatting,
+  type SpreadsheetConditionalFormatting,
+} from "./conditional-formatting.ts";
 
 export type SpreadsheetCellValue =
   | { readonly type: "blank" }
@@ -76,6 +80,7 @@ export class SpreadsheetWorksheet {
   readonly autoFilter: SpreadsheetAutoFilter | undefined;
   readonly hyperlinks: readonly SpreadsheetHyperlink[];
   readonly drawing: SpreadsheetDrawing | undefined;
+  readonly conditionalFormatting: readonly SpreadsheetConditionalFormatting[];
   readonly styles: SpreadsheetStyles;
   readonly defaultRowHeight: number;
   readonly defaultColumnWidth: number;
@@ -97,6 +102,7 @@ export class SpreadsheetWorksheet {
     autoFilter: SpreadsheetAutoFilter | undefined;
     hyperlinks: readonly SpreadsheetHyperlink[];
     drawing: SpreadsheetDrawing | undefined;
+    conditionalFormatting: readonly SpreadsheetConditionalFormatting[];
     styles: SpreadsheetStyles;
     defaultRowHeight: number;
     defaultColumnWidth: number;
@@ -114,6 +120,7 @@ export class SpreadsheetWorksheet {
     this.autoFilter = input.autoFilter;
     this.hyperlinks = Object.freeze([...input.hyperlinks]);
     this.drawing = input.drawing;
+    this.conditionalFormatting = Object.freeze([...input.conditionalFormatting]);
     this.styles = input.styles;
     this.defaultRowHeight = input.defaultRowHeight;
     this.defaultColumnWidth = input.defaultColumnWidth;
@@ -253,6 +260,7 @@ export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetS
   const relationshipsNamespace = workbook.conformance === "strict"
     ? "http://purl.oclc.org/ooxml/officeDocument/relationships"
     : "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const styles = readSpreadsheetStyles(workbook);
   return new SpreadsheetWorksheet({
     workbook,
     sheet,
@@ -280,7 +288,8 @@ export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetS
       spreadsheetNamespace: namespace,
       relationshipsNamespace,
     }),
-    styles: readSpreadsheetStyles(workbook),
+    conditionalFormatting: parseSpreadsheetConditionalFormatting(document, namespace, styles),
+    styles,
     defaultRowHeight: sheetFormat.defaultRowHeight,
     defaultColumnWidth: sheetFormat.defaultColumnWidth,
   });

@@ -63,6 +63,65 @@ describe("SpreadsheetML calculated-value overlays", () => {
     expect(edited.calculation.displayText("B1")).toBe("15");
   });
 
+  test("recalculates cross-sheet conditional aggregates after source edits", () => {
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({ sheets: [
+      {
+        name: "Input Data",
+        sheetId: 1,
+        relationshipId: "inputs",
+        xml: sheet(`
+          <row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>10</v></c></row>
+          <row r="2"><c r="A2"><v>-1</v></c><c r="B2"><v>20</v></c></row>
+          <row r="3"><c r="A3"><v>2</v></c><c r="B3"><v>30</v></c></row>
+        `),
+      },
+      {
+        name: "Results",
+        sheetId: 2,
+        relationshipId: "results",
+        xml: sheet(`
+          <row r="1"><c r="A1"><f>COUNTIF('Input Data'!A1:A3,&quot;&gt;0&quot;)</f><v/></c></row>
+          <row r="2"><c r="A2"><f>SUMIF('Input Data'!A1:A3,&quot;&gt;0&quot;,'Input Data'!B1)</f><v/></c></row>
+          <row r="3"><c r="A3"><f>AVERAGEIF('Input Data'!A1:A3,&quot;&gt;0&quot;,'Input Data'!B1:B1)</f><v/></c></row>
+        `),
+      },
+    ] }), { sheet: "Results" });
+
+    expect(artifact.calculation.displayText("A1")).toBe("2");
+    expect(artifact.calculation.displayText("A2")).toBe("40");
+    expect(artifact.calculation.displayText("A3")).toBe("20");
+
+    const edited = artifact.editCellOnSheet("Input Data", "A2", 3);
+    expect(edited.activeSheet.name).toBe("Results");
+    expect(edited.calculation.displayText("A1")).toBe("3");
+    expect(edited.calculation.displayText("A2")).toBe("60");
+    expect(edited.calculation.displayText("A3")).toBe("20");
+    expect(edited.calculation.diagnostics).toEqual([]);
+  });
+
+  test("writes, reopens, and immutably calculates conditional aggregate formulas", () => {
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({ sheets: [{
+      name: "Data",
+      sheetId: 1,
+      relationshipId: "data",
+      xml: sheet(`
+        <row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>10</v></c></row>
+        <row r="2"><c r="A2"><v>-1</v></c><c r="B2"><v>20</v></c></row>
+        <row r="3"><c r="A3"><v>2</v></c><c r="B3"><v>30</v></c></row>
+      `),
+    }] }));
+
+    const edited = artifact.editFormula("C1", `SUMIF(A1:A3,">0",B1)`);
+    expect(artifact.worksheet.cell("C1")).toBeUndefined();
+    expect(edited.worksheet.cell("C1")?.formula).toBe(`SUMIF(A1:A3,">0",B1)`);
+    expect(edited.calculation.displayText("C1")).toBe("40");
+
+    const reopened = openSpreadsheetArtifact(edited.bytes());
+    expect(reopened.worksheet.cell("C1")?.formula).toBe(`SUMIF(A1:A3,">0",B1)`);
+    expect(reopened.calculation.displayText("C1")).toBe("40");
+    expect(reopened.calculation.diagnostics).toEqual([]);
+  });
+
   test("keeps cached rendering available when workbook calculation limits are exceeded", () => {
     const artifact = openSpreadsheetArtifact(buildWorkbookFixture({ sheets: [{
       name: "Data",

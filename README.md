@@ -21,18 +21,19 @@ The implemented format is SpreadsheetML (`.xlsx`). The current alpha can:
 
 - open Strict and Transitional workbooks without assuming conventional part paths;
 - read worksheets, sparse cells, formulas, styles, dimensions, merges, frozen
-  panes, tables, hyperlinks, drawings, and a bounded chart subset;
+  panes, tables, hyperlinks, drawings, conditional formatting, and a bounded
+  chart subset;
 - calculate a bounded formula subset including ordinary A1 references, ranges,
   arithmetic, comparisons, `IF`, `SUM`, `COUNT`, `AVERAGE`, `MIN`, `MAX`, `AND`,
-  `OR`, and `NOT`;
+  `OR`, `NOT`, `COUNTIF`, `SUMIF`, and `AVERAGEIF`;
 - edit literal strings, numbers, booleans, blank cells, and ordinary formulas;
 - save surgical worksheet changes while retaining untouched ZIP payloads;
 - render an owned virtualized Svelte grid, formula bar, table views, hyperlinks,
-  and native SVG chart previews.
+  conditional font/fill/border overlays, and native SVG chart previews.
 
 WordprocessingML and PresentationML editing are not implemented yet. Spreadsheet
-formula coverage, structural editing, conditional formatting, validations,
-comments, pivots, and broad chart fidelity remain incomplete.
+formula coverage, structural editing, conditional-format rule coverage,
+validations, comments, pivots, and broad chart fidelity remain incomplete.
 
 ## Install
 
@@ -87,6 +88,22 @@ console.log(artifact.calculation.displayText("C7"));
 
 Unsupported formulas retain their source and cached value while exposing a
 diagnostic instead of pretending they were calculated.
+
+Conditional aggregates support same- and cross-sheet ranges and calculate again
+after source edits:
+
+```ts
+artifact = artifact.editFormula(
+  "D7",
+  `SUMIF('Input Data'!A2:A20,">0",'Input Data'!B2)`,
+);
+
+console.log(artifact.calculation.displayText("D7"));
+```
+
+The result range begins at `B2` and is projected to the criteria range's shape,
+matching SpreadsheetML's `SUMIF` range-alignment rule. `SUMIFS`, `COUNTIFS`, and
+`AVERAGEIFS` are not implemented yet.
 
 ## Edit cells
 

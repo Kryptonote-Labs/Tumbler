@@ -27,6 +27,7 @@ current requirement boundary is:
 | §18.3.1.94–95, §18.5.1.2–3 | Relationship-resolved table parts, ranges, identities, columns, totals metadata, and table style flags |
 | §18.3.1.2, §18.3.1.92, §18.3.2.7–10 | Worksheet/table AutoFilter ranges, value/custom criteria, button state, and saved value-sort state |
 | §18.3.1.47–48 | Worksheet hyperlink ranges, internal locations, optional display/tooltips, and external hyperlink relationships |
+| §18.3.1.10, §18.3.1.18, §18.8.14–15, §18.18.12, §18.18.15, §18.18.25, §18.18.76 | Sparse conditional-format ranges; ordered `cellIs` and expression rules; priority/`stopIfTrue`; incremental font, fill, and border differential formats |
 | §12.3.8, §18.3.1.36 | Relationship-resolved worksheet Drawing parts with inert external targets and lossless preservation |
 | §20.5.2.1, §20.5.2.24, §20.5.2.33 | Absolute, one-cell, and two-cell drawing anchors projected from EMUs through worksheet row/column geometry |
 | §14.2.1, §21.2.2.16, §21.2.2.20–22, §21.2.2.27–29, §21.2.2.97, §21.2.2.141, §21.2.2.161–162, §21.2.2.174, §21.2.2.185, §21.2.2.193 | Read-only native column/bar, line, pie, doughnut, numeric XY scatter, and two-dimensional bubble chart models and owned SVG previews |
@@ -66,7 +67,8 @@ clauses or to SpreadsheetML as a whole.
   without dereferencing document-provided URLs during parsing;
 - calculate supported ordinary formulas into an immutable overlay, including
   arithmetic/comparison/concatenation, same- and cross-sheet A1 references,
-  ranges, `IF`, `SUM`, `COUNT`, `AVERAGE`, `MIN`, `MAX`, `AND`, `OR`, and `NOT`;
+  ranges, `IF`, `SUM`, `COUNT`, `AVERAGE`, `MIN`, `MAX`, `AND`, `OR`, `NOT`,
+  `COUNTIF`, `SUMIF`, and `AVERAGEIF` with bounded wildcard criteria;
 - write ordinary formulas without the UI-only leading equals sign, remove stale
   cached values and calculation chains, and expose a fresh calculated overlay;
 - recalculate supported dependants after scalar edits while leaving formula text,
@@ -77,6 +79,9 @@ clauses or to SpreadsheetML as a whole.
   titles, legends, axes, major gridlines, multiple series, workbook theme colors,
   numeric XY scatter lines/markers, and scaled bubble series with date-aware
   numeric axis labels;
+- parse conditional formatting without expanding its ranges, evaluate the eight
+  numeric `cellIs` operators and supported expression formulas against calculated
+  values, and expose unsupported rules/formulas through typed diagnostics;
 
 Literal text writes use `inlineStr`. This avoids a workbook-wide shared-string
 reindex for a local edit. Replacing a formula with a literal intentionally
@@ -88,7 +93,8 @@ unrelated package parts are not reserialized.
 primitives plus sparse variable-axis geometry. `@tumblerjs/svelte` supplies
 `SpreadsheetGrid`, an owned virtualized surface with row/column headers, click
 and shift selection, keyboard navigation, styled display, merged cells, frozen
-regions, a literal inline editor, table sort/filter dropdowns, a read-only mode,
+regions, a literal inline editor, table sort/filter dropdowns, supported
+conditional font/fill/border overlays, a read-only mode,
 and typed selection/edit/hyperlink/chart callbacks. `SpreadsheetFormulaBar`
 separately exposes the selected cell's literal or `=`-prefixed formula source so
 formula interpretation remains explicit. During formula authoring, host-issued
@@ -140,8 +146,9 @@ remains a renderer-level fidelity gap.
 - Formula calculation is deliberately partial. Ordinary scalar formulas in the
   first grammar/function slice calculate in a bounded overlay; unsupported
   names, structured/external references, shared/array/data-table/dynamic-array
-  forms, volatile behavior, iterative calculation, and the wider Excel function
-  catalog fall back to producer caches with diagnostics. Ordinary formula text
+  forms, volatile behavior, iterative calculation, multi-criteria aggregates,
+  and the wider Excel function catalog fall back to producer caches with
+  diagnostics. Ordinary formula text
   in the supported grammar is editable; special formula structures are rejected
   instead of flattened. Formula caches are not written, and structural
   row/column edits do not exist.
@@ -149,9 +156,11 @@ remains a renderer-level fidelity gap.
   custom filters plus vertical value sorting are projected; dynamic, top-10,
   color, icon, and horizontal sorts remain explicitly unsupported and are not
   applied. User table view state is not written back to SpreadsheetML.
-- Validations, conditional formats, comments, non-chart drawing objects, pivots,
-  names, and external-workbook links are preserved as unknown content but have no
-  semantic or visual model. Chart preview deliberately excludes chartsheets,
+- Data validation, conditional-format data bars/icon sets/color scales and other
+  rule families, comments, non-chart drawing objects, pivots, names, and
+  external-workbook links are preserved but have no semantic or visual model.
+  Conditional-format writing and cross-sheet/external rule formulas are also
+  deferred. Chart preview deliberately excludes chartsheets,
   PivotCharts, ChartEx, 3-D/combination/stacked charts, secondary axes, and
   structured/defined/external references; anchored fallbacks remain bounded.
   Bubble preview is limited to 10,000 paired points and deliberately omits 3-D
@@ -170,8 +179,8 @@ remains a renderer-level fidelity gap.
 ## Next qualification boundary
 
 The next useful slice is real-producer formula-write and reference-picking
-qualification, followed by real-producer chart/grid visual qualification,
-conditional formatting, and richer number formats.
+qualification, followed by real-producer chart/grid/conditional-format visual
+qualification, richer conditional-format rule families, and richer number formats.
 Before calling the slice interoperable, real-producer fixtures must pass Excel,
 LibreOffice, and an independent parser without repair or unexplained semantic
 drift.

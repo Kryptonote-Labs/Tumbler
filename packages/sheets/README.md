@@ -25,6 +25,17 @@ console.log(artifact.worksheet.cell("C7")?.formula);
 console.log(artifact.calculation.displayText("C7"));
 ```
 
+Supported conditional aggregates can read same- or cross-sheet ranges and are
+recalculated after source edits:
+
+```ts
+const edited = artifact
+  .editFormula("D7", `SUMIF('Input Data'!A2:A20,">0",'Input Data'!B2)`)
+  .editCellOnSheet("Input Data", "A2", 4);
+
+console.log(edited.calculation.displayText("D7"));
+```
+
 Edits return a fresh artifact with recalculated supported dependants:
 
 ```ts
@@ -34,6 +45,24 @@ const edited = artifact
 
 const output = edited.bytes();
 ```
+
+Project conditional formatting without materializing its ranges:
+
+```ts
+import { projectSpreadsheetConditionalStyles } from "@tumblerjs/sheets";
+
+const conditional = projectSpreadsheetConditionalStyles(
+  artifact.worksheet,
+  artifact.calculation,
+);
+const differentialFormats = conditional.formats("B7");
+console.log(conditional.diagnostics);
+```
+
+The first read-only slice supports `cellIs` comparisons and expressions that
+the bounded formula engine can evaluate. It resolves incremental font, solid
+fill, and border formatting with priority and `stopIfTrue`. Unsupported rule
+kinds remain inert and produce diagnostics when queried.
 
 Formula source passed to the headless API does not include a leading `=`.
 Ordinary formulas are editable; shared, array, data-table, dynamic-array, and
