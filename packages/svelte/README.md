@@ -23,6 +23,9 @@ Inline grid edits are always literals. The explicit formula bar treats input
 beginning with `=` as a formula and emits a typed formula edit; applications own
 applying the edit and replacing the artifact.
 
+Unwrapped left-aligned text paints across consecutive empty cells, matching the
+worksheet convention without widening those cells' interactive hit areas.
+
 Tumbler is developed at
 [Kryptonote-Labs/Tumbler](https://github.com/Kryptonote-Labs/Tumbler).
 
