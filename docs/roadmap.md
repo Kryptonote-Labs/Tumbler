@@ -80,6 +80,7 @@ now implemented:
 - [x] render variable geometry, ordinary merges, and frozen pane regions;
 - [x] recognize table parts and project read-only table sorting/filtering in the owned grid;
 - [x] parse and calculate a bounded first formula slice into read-only value overlays;
+- [x] calculate bounded single-criteria aggregates with cross-sheet range alignment;
 - [x] discover worksheet Drawing/Chart parts and render the first native chart subset;
 - [x] edit ordinary scalar formulas safely through a distinct formula-bar path;
 - [x] pick same- or cross-sheet cell/range references without losing the formula target;

@@ -25,6 +25,17 @@ console.log(artifact.worksheet.cell("C7")?.formula);
 console.log(artifact.calculation.displayText("C7"));
 ```
 
+Supported conditional aggregates can read same- or cross-sheet ranges and are
+recalculated after source edits:
+
+```ts
+const edited = artifact
+  .editFormula("D7", `SUMIF('Input Data'!A2:A20,">0",'Input Data'!B2)`)
+  .editCellOnSheet("Input Data", "A2", 4);
+
+console.log(edited.calculation.displayText("D7"));
+```
+
 Edits return a fresh artifact with recalculated supported dependants:
 
 ```ts
