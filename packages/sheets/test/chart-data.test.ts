@@ -31,6 +31,59 @@ describe("Spreadsheet chart data binding", () => {
     expect(resolved.series[0]?.values?.points.map((point) => point.value)).toEqual([2, 11, 13]);
   });
 
+  test("formats numeric date categories while retaining numeric plotted values", () => {
+    const spreadsheet = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      stylesXml: `<styleSheet xmlns="${spreadsheet}"><fonts count="1"><font/></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>`,
+      sheets: [
+        { name: "Dashboard", sheetId: 1, relationshipId: "dashboard" },
+        {
+          name: "Data",
+          sheetId: 2,
+          relationshipId: "data",
+          xml: `<worksheet xmlns="${spreadsheet}"><sheetData><row r="2"><c r="A2" s="1"><v>1</v></c><c r="B2"><v>10</v></c></row><row r="3"><c r="A3" s="1"><v>32</v></c><c r="B3"><v>20</v></c></row></sheetData></worksheet>`,
+        },
+      ],
+    })));
+    const source = model("Data!$B$2:$B$3");
+    const numericCategories: SupportedChartModel = Object.freeze({
+      ...source,
+      series: Object.freeze(source.series.map((series) => Object.freeze({
+        ...series,
+        categories: Object.freeze({
+          kind: "number" as const,
+          formula: "Data!$A$2:$A$3",
+          formatCode: "yyyy-mm-dd",
+          points: Object.freeze([{ index: 0, value: 999 }]),
+        }),
+      }))),
+    });
+
+    const resolved = resolveSpreadsheetChartData(
+      openWorksheet(workbook, workbook.sheet("Dashboard")!),
+      numericCategories,
+    );
+    if (resolved.status !== "supported") throw new Error("Expected supported chart");
+    expect(resolved.series[0]?.categories?.points.map((point) => point.value)).toEqual(["1900-01-01", "1900-02-01"]);
+    expect(resolved.series[0]?.values?.points.map((point) => point.value)).toEqual([10, 20]);
+
+    const sourceLinkedCategories: SupportedChartModel = Object.freeze({
+      ...numericCategories,
+      series: Object.freeze(numericCategories.series.map((series) => Object.freeze({
+        ...series,
+        categories: series.categories === undefined
+          ? undefined
+          : Object.freeze({ ...series.categories, formatCode: undefined }),
+      }))),
+    });
+    const sourceLinked = resolveSpreadsheetChartData(
+      openWorksheet(workbook, workbook.sheet("Dashboard")!),
+      sourceLinkedCategories,
+    );
+    if (sourceLinked.status !== "supported") throw new Error("Expected supported chart");
+    expect(sourceLinked.series[0]?.categories?.points.map((point) => point.value)).toEqual(["01-01-00", "02-01-00"]);
+  });
+
   test("retains producer caches when a reference is unsupported", () => {
     const workbook = fixture();
     const cached = model("NamedRange");

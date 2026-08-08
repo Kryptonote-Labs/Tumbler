@@ -2,6 +2,7 @@ import type { ChartDataPoint, ChartDataSequence, ChartModel, ChartSeries } from 
 import type { CellRange } from "./references.ts";
 import { parseCellRange } from "./references.ts";
 import { calculateSpreadsheetWorksheet, type SpreadsheetCalculationSnapshot } from "./calculation.ts";
+import { formatSpreadsheetCellValue } from "./number-format.ts";
 import { openWorksheet, type SpreadsheetCellValue, type SpreadsheetWorksheet } from "./worksheet.ts";
 
 const MAX_CHART_RANGE_CELLS = 100_000;
@@ -53,7 +54,10 @@ export function resolveSpreadsheetChartDataSet(worksheet: SpreadsheetWorksheet, 
     return { worksheet: calculation.worksheet, calculation, range: reference.range };
   };
 
-  const resolveSequence = (sequence: ChartDataSequence | undefined): ChartDataSequence | undefined => {
+  const resolveSequence = (
+    sequence: ChartDataSequence | undefined,
+    role: "category" | "value",
+  ): ChartDataSequence | undefined => {
     if (sequence?.formula === undefined) return sequence;
     const resolved = source(sequence.formula);
     if (resolved === undefined) return sequence;
@@ -63,7 +67,7 @@ export function resolveSpreadsheetChartDataSet(worksheet: SpreadsheetWorksheet, 
       for (let column = resolved.range.start.column; column <= resolved.range.end.column; column += 1) {
         const address = { row, column };
         const value = resolved.calculation.value(address) ?? resolved.worksheet.cell(address)?.value;
-        const point = chartPoint(sequence.kind, index, value, resolved.calculation, address);
+        const point = chartPoint(role, sequence, index, value, resolved.calculation, address);
         if (point !== undefined) points.push(point);
         index += 1;
       }
@@ -78,7 +82,12 @@ export function resolveSpreadsheetChartDataSet(worksheet: SpreadsheetWorksheet, 
       const title = titleSource === undefined
         ? item.title
         : titleSource.calculation.displayText(titleSource.range.start) || item.title;
-      return Object.freeze({ ...item, title, categories: resolveSequence(item.categories), values: resolveSequence(item.values) });
+      return Object.freeze({
+        ...item,
+        title,
+        categories: resolveSequence(item.categories, "category"),
+        values: resolveSequence(item.values, "value"),
+      });
     });
     const titleSource = model.titleFormula === undefined ? undefined : source(model.titleFormula);
     const title = titleSource === undefined ? model.title : titleSource.calculation.displayText(titleSource.range.start) || model.title;
@@ -87,13 +96,26 @@ export function resolveSpreadsheetChartDataSet(worksheet: SpreadsheetWorksheet, 
 }
 
 function chartPoint(
-  kind: ChartDataSequence["kind"],
+  role: "category" | "value",
+  sequence: ChartDataSequence,
   index: number,
   value: SpreadsheetCellValue | undefined,
   calculation: SpreadsheetCalculationSnapshot,
   address: { readonly row: number; readonly column: number },
 ): ChartDataPoint | undefined {
-  if (kind === "string") return Object.freeze({ index, value: calculation.displayText(address) });
+  if (role === "category") {
+    if (value?.type === "number" && sequence.formatCode !== undefined && sequence.formatCode.toLowerCase() !== "general") {
+      return Object.freeze({
+        index,
+        value: formatSpreadsheetCellValue(value, {
+          numberFormatCode: sequence.formatCode,
+          dateSystem: calculation.worksheet.workbook.dateSystem,
+        }),
+      });
+    }
+    return Object.freeze({ index, value: calculation.displayText(address) });
+  }
+  if (sequence.kind === "string") return Object.freeze({ index, value: calculation.displayText(address) });
   if (value?.type === "number") return Object.freeze({ index, value: value.value });
   if (value?.type === "boolean") return Object.freeze({ index, value: value.value ? 1 : 0 });
   // Numeric chart series treat text, errors, and blank cells as gaps.
