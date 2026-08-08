@@ -4,6 +4,7 @@ export { chartSequenceValue, chartValueCoordinate, layoutCartesianChart, layoutP
 export type { CartesianChartLayout, ChartRect, PieSlice, ScatterChartLayout, ScatterPoint } from "./layout.ts";
 export type {
   ChartAxis,
+  ChartBubbleSizeRepresentation,
   ChartColor,
   ChartDataPoint,
   ChartDataSequence,

@@ -1,6 +1,8 @@
-export type ChartKind = "bar" | "column" | "line" | "pie" | "doughnut" | "scatter";
+export type ChartKind = "bar" | "column" | "line" | "pie" | "doughnut" | "scatter" | "bubble";
 
 export type ChartScatterStyle = "none" | "line" | "line-marker" | "marker" | "smooth" | "smooth-marker";
+
+export type ChartBubbleSizeRepresentation = "area" | "width";
 
 export type ChartMarkerSymbol = "auto" | "circle" | "dash" | "diamond" | "dot" | "none" | "picture" | "plus" | "square" | "star" | "triangle" | "x";
 
@@ -34,6 +36,8 @@ export interface ChartSeries {
   /** Numeric X coordinates for an XY scatter series. */
   readonly xValues?: ChartDataSequence;
   readonly values: ChartDataSequence | undefined;
+  /** Numeric bubble magnitudes paired to X/Y coordinates by cache index. */
+  readonly bubbleSizes?: ChartDataSequence;
   readonly fill: ChartColor | undefined;
   readonly line: ChartColor | undefined;
   readonly marker?: ChartMarker;
@@ -72,6 +76,9 @@ export interface SupportedChartModel extends ChartModelBase {
   readonly grouping: "clustered" | "stacked" | "percent-stacked" | "standard";
   readonly holeSize: number | undefined;
   readonly scatterStyle?: ChartScatterStyle;
+  readonly bubbleScale?: number;
+  readonly showNegativeBubbles?: boolean;
+  readonly bubbleSizeRepresentation?: ChartBubbleSizeRepresentation;
   readonly axisIds?: readonly number[];
   readonly series: readonly ChartSeries[];
   readonly axes: readonly ChartAxis[];

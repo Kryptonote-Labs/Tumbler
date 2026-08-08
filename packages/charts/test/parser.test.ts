@@ -55,6 +55,44 @@ describe("DrawingML chart parser", () => {
     expect(chart.axes[0]).toMatchObject({ id: 10, kind: "value", position: "bottom", numberFormatCode: "yyyy-mm-dd", numberFormatSourceLinked: false });
   });
 
+  for (const profile of profiles) {
+    test(`reads ${profile.conformance} 2-D bubble series and size semantics`, () => {
+      const chart = parseOoxmlChart(xml(profile, `<c:plotArea><c:bubbleChart>
+        <c:ser><c:idx val="2"/><c:order val="0"/><c:tx><c:v>Pipeline</c:v></c:tx>
+          <c:xVal><c:numRef><c:f>Data!$A$2:$A$5</c:f><c:numCache><c:formatCode>0</c:formatCode><c:ptCount val="4"/><c:pt idx="0"><c:v>1</c:v></c:pt><c:pt idx="2"><c:v>8</c:v></c:pt></c:numCache></c:numRef></c:xVal>
+          <c:yVal><c:numRef><c:f>Data!$B$2:$B$5</c:f><c:numCache><c:formatCode>0.0</c:formatCode><c:ptCount val="4"/><c:pt idx="0"><c:v>4</c:v></c:pt><c:pt idx="2"><c:v>10</c:v></c:pt></c:numCache></c:numRef></c:yVal>
+          <c:bubbleSize><c:numRef><c:f>Data!$C$2:$C$5</c:f><c:numCache><c:formatCode>0</c:formatCode><c:ptCount val="4"/><c:pt idx="0"><c:v>25</c:v></c:pt><c:pt idx="2"><c:v>-9</c:v></c:pt></c:numCache></c:numRef></c:bubbleSize>
+        </c:ser><c:bubbleScale val="175%"/><c:showNegBubbles val="1"/><c:sizeRepresents val="w"/><c:axId val="10"/><c:axId val="20"/>
+      </c:bubbleChart><c:valAx><c:axId val="10"/><c:axPos val="b"/></c:valAx><c:valAx><c:axId val="20"/><c:axPos val="l"/></c:valAx></c:plotArea>`), profile.conformance);
+      expect(chart).toMatchObject({
+        status: "supported", kind: "bubble", bubbleScale: 175,
+        showNegativeBubbles: true, bubbleSizeRepresentation: "width", axisIds: [10, 20],
+      });
+      if (chart.status !== "supported") throw new Error("Expected supported bubble chart");
+      expect(chart.series[0]?.xValues?.points).toEqual([{ index: 0, value: 1 }, { index: 2, value: 8 }]);
+      expect(chart.series[0]?.values?.points).toEqual([{ index: 0, value: 4 }, { index: 2, value: 10 }]);
+      expect(chart.series[0]?.bubbleSizes?.points).toEqual([{ index: 0, value: 25 }, { index: 2, value: -9 }]);
+    });
+  }
+
+  test("uses standard bubble defaults and rejects unsafe bubble variants", () => {
+    expect(type("bubbleChart", '<c:axId val="1"/><c:axId val="2"/>')).toMatchObject({
+      status: "supported", kind: "bubble", bubbleScale: 100,
+      showNegativeBubbles: false, bubbleSizeRepresentation: "area",
+    });
+    expect(type("bubbleChart", '<c:bubble3D/><c:axId val="1"/><c:axId val="2"/>')).toMatchObject({
+      status: "unsupported", reason: expect.stringContaining("3-D"),
+    });
+    expect(type("bubbleChart", '<c:ser><c:idx val="0"/><c:order val="0"/><c:bubble3D val="true"/></c:ser><c:axId val="1"/><c:axId val="2"/>')).toMatchObject({
+      status: "unsupported", reason: expect.stringContaining("3-D"),
+    });
+    expect(type("bubbleChart", '<c:axId val="1"/>')).toMatchObject({
+      status: "unsupported", reason: expect.stringContaining("exactly two"),
+    });
+    expect(() => type("bubbleChart", '<c:bubbleScale val="301%"/><c:axId val="1"/><c:axId val="2"/>')).toThrow(ChartParseError);
+    expect(() => type("bubbleChart", '<c:sizeRepresents val="radius"/><c:axId val="1"/><c:axId val="2"/>')).toThrow(ChartParseError);
+  });
+
   test("returns an explicit model for unsupported and combination charts", () => {
     expect(type("radarChart")).toMatchObject({ status: "unsupported", chartType: "radarChart" });
     const profile = profiles[1]!;

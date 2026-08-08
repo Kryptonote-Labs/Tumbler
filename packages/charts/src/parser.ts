@@ -10,6 +10,7 @@ import type {
   ChartModel,
   ChartSeries,
   ChartScatterStyle,
+  ChartBubbleSizeRepresentation,
   ChartMarker,
   ChartMarkerSymbol,
 } from "./model.ts";
@@ -73,11 +74,35 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
   if ((kind === "pie" || kind === "doughnut") && series.length > 1) {
     return unsupported(chartType.localName, "Multiple-series pie-family charts are not supported in this milestone.", title, titleFormula, legend);
   }
+  if (kind === "bubble") {
+    const chartBubble3D = booleanVal(children(chartType, chartNamespace, "bubble3D")[0], false);
+    const seriesBubble3D = children(chartType, chartNamespace, "ser").some((element) =>
+      booleanVal(children(element, chartNamespace, "bubble3D")[0], false)
+    );
+    if (chartBubble3D || seriesBubble3D) {
+      return unsupported(chartType.localName, "3-D bubble effects are not supported in this milestone.", title, titleFormula, legend);
+    }
+  }
   const rawHole = val(children(chartType, chartNamespace, "holeSize")[0]);
   const holeSize = kind === "doughnut" ? boundedPercent(rawHole ?? "50", "doughnut hole size") : undefined;
   const scatterStyle = kind === "scatter" ? parseScatterStyle(val(children(chartType, chartNamespace, "scatterStyle")[0]) ?? "marker") : undefined;
   const axisIds = children(chartType, chartNamespace, "axId").map((element) => unsigned(val(element) ?? "", "chart axis id"));
-  return Object.freeze({ status: "supported", kind, grouping, holeSize, ...(scatterStyle === undefined ? {} : { scatterStyle }), ...(axisIds.length === 0 ? {} : { axisIds: Object.freeze(axisIds) }), title, ...(titleFormula === undefined ? {} : { titleFormula }), legend, series: Object.freeze(series), axes: Object.freeze(axes) });
+  if (kind === "bubble" && axisIds.length !== 2) {
+    return unsupported(chartType.localName, "A bubble chart must identify exactly two value axes.", title, titleFormula, legend);
+  }
+  const bubbleScale = kind === "bubble" ? parseBubbleScale(val(children(chartType, chartNamespace, "bubbleScale")[0]) ?? "100%") : undefined;
+  const showNegativeBubbles = kind === "bubble" ? booleanVal(children(chartType, chartNamespace, "showNegBubbles")[0], false) : undefined;
+  const bubbleSizeRepresentation = kind === "bubble" ? parseBubbleSizeRepresentation(val(children(chartType, chartNamespace, "sizeRepresents")[0]) ?? "area") : undefined;
+  return Object.freeze({
+    status: "supported", kind, grouping, holeSize,
+    ...(scatterStyle === undefined ? {} : { scatterStyle }),
+    ...(bubbleScale === undefined ? {} : { bubbleScale }),
+    ...(showNegativeBubbles === undefined ? {} : { showNegativeBubbles }),
+    ...(bubbleSizeRepresentation === undefined ? {} : { bubbleSizeRepresentation }),
+    ...(axisIds.length === 0 ? {} : { axisIds: Object.freeze(axisIds) }),
+    title, ...(titleFormula === undefined ? {} : { titleFormula }), legend,
+    series: Object.freeze(series), axes: Object.freeze(axes),
+  });
 }
 
 function unsupported(chartType: string | undefined, reason: string, title: string | undefined, titleFormula: string | undefined, legend: ChartLegend | undefined): ChartModel {
@@ -90,6 +115,7 @@ function chartKind(element: LosslessXmlElement, namespace: string): ChartKind | 
   if (element.localName === "pieChart") return "pie";
   if (element.localName === "doughnutChart") return "doughnut";
   if (element.localName === "scatterChart") return "scatter";
+  if (element.localName === "bubbleChart") return "bubble";
   return undefined;
 }
 
@@ -98,7 +124,8 @@ function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespac
   const titleRef = tx === undefined ? undefined : children(tx, chartNamespace, "strRef")[0];
   const literalTitle = tx === undefined ? undefined : children(tx, chartNamespace, "v")[0];
   const titleCache = titleRef === undefined ? undefined : parseSequenceContainer(titleRef, chartNamespace, "string");
-  const xValues = kind === "scatter" ? parseData(children(element, chartNamespace, "xVal")[0], chartNamespace) : undefined;
+  const xValues = kind === "scatter" || kind === "bubble" ? parseData(children(element, chartNamespace, "xVal")[0], chartNamespace) : undefined;
+  const bubbleSizes = kind === "bubble" ? parseData(children(element, chartNamespace, "bubbleSize")[0], chartNamespace) : undefined;
   const marker = kind === "scatter" ? parseMarker(children(element, chartNamespace, "marker")[0], chartNamespace) : undefined;
   return Object.freeze({
     index: requiredUnsignedVal(element, chartNamespace, "idx", "series index"),
@@ -108,11 +135,27 @@ function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespac
     categories: parseData(children(element, chartNamespace, "cat")[0], chartNamespace),
     ...(xValues === undefined ? {} : { xValues }),
     values: parseData(children(element, chartNamespace, "val")[0] ?? children(element, chartNamespace, "yVal")[0], chartNamespace),
+    ...(bubbleSizes === undefined ? {} : { bubbleSizes }),
     fill: parseSolidFill(children(element, chartNamespace, "spPr")[0], drawingNamespace),
     line: parseLine(children(element, chartNamespace, "spPr")[0], drawingNamespace),
     ...(marker === undefined ? {} : { marker }),
     ...(kind === "scatter" ? { smooth: booleanVal(children(element, chartNamespace, "smooth")[0], false) } : {}),
   });
+}
+
+function parseBubbleScale(raw: string): number {
+  const lexical = raw.endsWith("%") ? raw.slice(0, -1) : raw;
+  const scale = Number(lexical);
+  if (!Number.isFinite(scale) || scale < 0 || scale > 300) {
+    throw new ChartParseError("Bubble scale must be a percentage between zero and 300.");
+  }
+  return scale;
+}
+
+function parseBubbleSizeRepresentation(raw: string): ChartBubbleSizeRepresentation {
+  if (raw === "area") return "area";
+  if (raw === "w") return "width";
+  throw new ChartParseError(`Bubble size representation ${JSON.stringify(raw)} is invalid.`);
 }
 
 function parseData(container: LosslessXmlElement | undefined, namespace: string): ChartDataSequence | undefined {
@@ -311,8 +354,9 @@ function optionalFiniteVal(element: LosslessXmlElement | undefined, context: str
 }
 
 function booleanVal(element: LosslessXmlElement | undefined, fallback: boolean): boolean {
+  if (element === undefined) return fallback;
   const raw = val(element);
-  if (raw === undefined) return fallback;
+  if (raw === undefined) return true;
   if (raw === "1" || raw === "true") return true;
   if (raw === "0" || raw === "false") return false;
   throw new ChartParseError(`Boolean chart value ${JSON.stringify(raw)} is invalid.`);
