@@ -2,8 +2,8 @@ import type { EditableCellValue, SpreadsheetCell } from "@tumblerjs/sheets";
 import { coerceSpreadsheetEditValue } from "./spreadsheet-edit.ts";
 
 export type SpreadsheetFormulaBarEdit =
-  | { readonly kind: "formula"; readonly reference: string; readonly formula: string }
-  | { readonly kind: "value"; readonly reference: string; readonly value: EditableCellValue };
+  | { readonly kind: "formula"; readonly sheet?: string; readonly reference: string; readonly formula: string }
+  | { readonly kind: "value"; readonly sheet?: string; readonly reference: string; readonly value: EditableCellValue };
 
 /** Presents stored formula source with the UI-only equals prefix used by spreadsheet formula bars. */
 export function spreadsheetFormulaBarText(cell: SpreadsheetCell | undefined): string {
@@ -20,8 +20,10 @@ export function spreadsheetFormulaBarEdit(
   reference: string,
   draft: string,
   cell: SpreadsheetCell | undefined,
+  sheet?: string,
 ): SpreadsheetFormulaBarEdit {
-  return draft.startsWith("=")
+  const edit: SpreadsheetFormulaBarEdit = draft.startsWith("=")
     ? { kind: "formula", reference, formula: draft.slice(1) }
     : { kind: "value", reference, value: coerceSpreadsheetEditValue(draft, cell?.value) };
+  return sheet === undefined ? edit : Object.freeze({ ...edit, sheet });
 }

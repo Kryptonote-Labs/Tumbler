@@ -1,31 +1,102 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import type { SpreadsheetWorksheet } from "@tumblerjs/sheets";
   import { spreadsheetFormulaBarEdit, spreadsheetFormulaBarText, type SpreadsheetFormulaBarEdit } from "./spreadsheet-formula-bar.ts";
+  import {
+    insertSpreadsheetFormulaReference,
+    spreadsheetFormulaReferenceText,
+    type SpreadsheetFormulaReferencePick,
+    type SpreadsheetFormulaTextSpan,
+  } from "./spreadsheet-formula-reference.ts";
 
   interface Props {
     readonly worksheet: SpreadsheetWorksheet;
     readonly reference: string;
+    /** A host-issued grid selection event used while authoring a formula. */
+    readonly referencePick?: SpreadsheetFormulaReferencePick;
     readonly onedit?: (edit: SpreadsheetFormulaBarEdit) => boolean | void;
     readonly readonly?: boolean;
   }
 
-  let { worksheet, reference, onedit, readonly = false }: Props = $props();
+  let { worksheet, reference, referencePick, onedit, readonly = false }: Props = $props();
   let draft = $state("");
   let input = $state<HTMLInputElement>();
+  let authoring = $state(false);
+  let targetWorksheet = $state<SpreadsheetWorksheet>();
+  let targetReference = $state("");
+  let selectionStart = $state(0);
+  let selectionEnd = $state(0);
+  let lastReferencePickId = $state<number>();
+  let insertedReferenceSpan = $state<SpreadsheetFormulaTextSpan>();
 
   $effect(() => {
-    draft = spreadsheetFormulaBarText(worksheet.cell(reference));
+    const currentWorksheet = worksheet;
+    const currentReference = reference;
+    if (authoring) return;
+    targetWorksheet = currentWorksheet;
+    targetReference = currentReference;
+    draft = spreadsheetFormulaBarText(currentWorksheet.cell(currentReference));
+    selectionStart = draft.length;
+    selectionEnd = draft.length;
+    insertedReferenceSpan = undefined;
+    lastReferencePickId = referencePick?.id;
+  });
+
+  $effect(() => {
+    const pick = referencePick;
+    if (!authoring || !draft.startsWith("=") || pick === undefined || pick.id === lastReferencePickId || targetWorksheet === undefined) return;
+    lastReferencePickId = pick.id;
+    const insertion = insertSpreadsheetFormulaReference(
+      draft,
+      spreadsheetFormulaReferenceText(pick, targetWorksheet.sheet.name),
+      selectionStart,
+      selectionEnd,
+      insertedReferenceSpan,
+    );
+    draft = insertion.draft;
+    selectionStart = insertion.selectionStart;
+    selectionEnd = insertion.selectionEnd;
+    insertedReferenceSpan = insertion.insertedSpan;
+    void tick().then(() => input?.setSelectionRange(selectionStart, selectionEnd));
   });
 
   function commit() {
-    if (readonly || onedit === undefined) return;
-    const accepted = onedit(spreadsheetFormulaBarEdit(reference, draft, worksheet.cell(reference)));
-    if (accepted !== false) input?.blur();
+    if (readonly || onedit === undefined || targetWorksheet === undefined) return;
+    const accepted = onedit(spreadsheetFormulaBarEdit(
+      targetReference,
+      draft,
+      targetWorksheet.cell(targetReference),
+      targetWorksheet.sheet.name,
+    ));
+    if (accepted !== false) finish();
   }
 
   function cancel() {
-    draft = spreadsheetFormulaBarText(worksheet.cell(reference));
+    if (targetWorksheet === undefined) return;
+    draft = spreadsheetFormulaBarText(targetWorksheet.cell(targetReference));
+    finish();
+  }
+
+  function finish() {
+    authoring = false;
+    insertedReferenceSpan = undefined;
     input?.blur();
+  }
+
+  function beginAuthoring(event: FocusEvent) {
+    authoring = true;
+    lastReferencePickId = referencePick?.id;
+    rememberSelection(event.currentTarget as HTMLInputElement);
+  }
+
+  function updateDraft(event: Event) {
+    insertedReferenceSpan = undefined;
+    rememberSelection(event.currentTarget as HTMLInputElement);
+  }
+
+  function rememberSelection(element: HTMLInputElement) {
+    selectionStart = element.selectionStart ?? draft.length;
+    selectionEnd = element.selectionEnd ?? selectionStart;
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -38,7 +109,7 @@
 </script>
 
 <form class="formula-bar" aria-label="Formula bar" onsubmit={(event) => { event.preventDefault(); commit(); }}>
-  <output class="cell-reference" aria-label="Selected cell">{reference}</output>
+  <output class="cell-reference" aria-label="Formula target">{targetReference || reference}</output>
   <span class="formula-mark" aria-hidden="true">fx</span>
   <input
     bind:this={input}
@@ -47,6 +118,11 @@
     autocomplete="off"
     spellcheck="false"
     disabled={readonly || onedit === undefined}
+    onfocus={beginAuthoring}
+    oninput={updateDraft}
+    onselect={(event) => rememberSelection(event.currentTarget)}
+    onclick={(event) => rememberSelection(event.currentTarget)}
+    onkeyup={(event) => rememberSelection(event.currentTarget)}
     onkeydown={handleKeydown}
   />
 </form>

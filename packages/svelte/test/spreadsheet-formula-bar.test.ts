@@ -21,6 +21,15 @@ describe("Svelte spreadsheet formula bar", () => {
     expect(spreadsheetFormulaBarEdit("A1", "FALSE", undefined)).toEqual({ kind: "value", reference: "A1", value: false });
   });
 
+  test("identifies the original target sheet after the host switches worksheets", () => {
+    expect(spreadsheetFormulaBarEdit("C7", "='Project Inputs'!B4", undefined, "Dashboard")).toEqual({
+      kind: "formula",
+      sheet: "Dashboard",
+      reference: "C7",
+      formula: "'Project Inputs'!B4",
+    });
+  });
+
   test("shows formula source and literal lexical values", () => {
     expect(spreadsheetFormulaBarText({ address: { row: 7, column: 3 }, reference: "C7", styleIndex: 0, formula: "SUM(C5:C6)", value: { type: "number", value: 12, lexical: "12" } })).toBe("=SUM(C5:C6)");
     expect(spreadsheetFormulaBarText({ address: { row: 1, column: 1 }, reference: "A1", styleIndex: 0, formula: undefined, value: { type: "number", value: 1, lexical: "1.00" } })).toBe("1.00");
@@ -33,5 +42,6 @@ describe("Svelte spreadsheet formula bar", () => {
     expect(source).toContain('aria-label="Formula bar"');
     expect(source).toContain('autocomplete="off"');
     expect(source).toContain('spellcheck="false"');
+    expect(source).toContain("referencePick");
   });
 });
