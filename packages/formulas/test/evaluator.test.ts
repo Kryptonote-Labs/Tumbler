@@ -178,6 +178,38 @@ describe("bounded spreadsheet formula calculation", () => {
     expect(calculation.value(address("Sheet1!D7"))).toEqual({ type: "error", value: "#N/A" });
   });
 
+  test("ignores non-numeric result cells and does not read unmatched errors", () => {
+    const calculation = calculateFormulas(source({
+      "Sheet1!A1": value(1),
+      "Sheet1!A2": value(-1),
+      "Sheet1!A3": literal({ type: "error", value: "#N/A" }),
+      "Sheet1!A4": value(2),
+      "Sheet1!B1": literal({ type: "boolean", value: true }),
+      "Sheet1!B2": literal({ type: "error", value: "#DIV/0!" }),
+      "Sheet1!B3": literal({ type: "error", value: "#REF!" }),
+      "Sheet1!B4": value(8),
+      "Sheet1!D1": formula(`SUMIF(A1:A4,">0",B1:B4)`),
+      "Sheet1!D2": formula(`AVERAGEIF(A1:A4,">0",B1:B4)`),
+    }));
+
+    expect(calculation.value(address("Sheet1!D1"))).toEqual({ type: "number", value: 8 });
+    expect(calculation.value(address("Sheet1!D2"))).toEqual({ type: "number", value: 8 });
+    expect(calculation.diagnostics).toEqual([]);
+  });
+
+  test("accepts scalar expression and reference criteria", () => {
+    const calculation = calculateFormulas(source({
+      "Sheet1!A1": value(0),
+      "Sheet1!A2": value(2),
+      "Sheet1!A3": value(3),
+      "Sheet1!B1": formula(`COUNTIF(A1:A3,1+1)`),
+      "Sheet1!B2": formula(`COUNTIF(A1:A3,A4)`),
+    }));
+
+    expect(calculation.value(address("Sheet1!B1"))).toEqual({ type: "number", value: 1 });
+    expect(calculation.value(address("Sheet1!B2"))).toEqual({ type: "number", value: 1 });
+  });
+
   test("rejects non-reference ranges and diagnoses projected ranges beyond the worksheet", () => {
     const calculation = calculateFormulas(source({
       "Sheet1!A1": formula(`COUNTIF(1,"=1")`, { type: "number", value: 91 }),
@@ -247,6 +279,53 @@ describe("bounded spreadsheet formula calculation", () => {
       },
     ), { numRuns: 500 });
   });
+
+  test("matches generated numeric conditional aggregates", () => {
+    fc.assert(fc.property(
+      fc.array(fc.integer({ min: -100, max: 100 }), { minLength: 1, maxLength: 80 }),
+      fc.integer({ min: -100, max: 100 }),
+      (values, threshold) => {
+        const cells: Record<string, FormulaCellInput> = {
+          "Sheet1!C1": formula(`COUNTIF(A1:A${values.length},">=${threshold}")`),
+          "Sheet1!C2": formula(`SUMIF(A1:A${values.length},">=${threshold}",B1)`),
+          "Sheet1!C3": formula(`AVERAGEIF(A1:A${values.length},">=${threshold}",B1:B1)`),
+        };
+        values.forEach((current, index) => {
+          cells[`Sheet1!A${index + 1}`] = value(current);
+          cells[`Sheet1!B${index + 1}`] = value(current * 2);
+        });
+        const selected = values.filter((current) => current >= threshold).map((current) => current * 2);
+        const calculation = calculateFormulas(source(cells));
+        expect(calculation.value(address("Sheet1!C1"))).toEqual({ type: "number", value: selected.length });
+        expect(calculation.value(address("Sheet1!C2"))).toEqual({
+          type: "number",
+          value: selected.reduce((sum, current) => sum + current, 0),
+        });
+        expect(calculation.value(address("Sheet1!C3"))).toEqual(selected.length === 0
+          ? { type: "error", value: "#DIV/0!" }
+          : { type: "number", value: selected.reduce((sum, current) => sum + current, 0) / selected.length });
+      },
+    ), { numRuns: 300 });
+  });
+
+  test("matches generated wildcard criteria against a small reference oracle", () => {
+    const character = fc.constantFrom("a", "b", "A", "B", "x");
+    const wildcardPart = fc.constantFrom("a", "b", "A", "B", "x", "*", "?", "~*", "~?", "~~");
+    fc.assert(fc.property(
+      fc.array(character, { maxLength: 20 }).map((parts) => parts.join("")),
+      fc.array(wildcardPart, { maxLength: 12 }).map((parts) => parts.join("")),
+      (candidate, pattern) => {
+        const calculation = calculateFormulas(source({
+          "Sheet1!A1": textValue(candidate),
+          "Sheet1!B1": formula(`COUNTIF(A1,"${pattern}")`),
+        }));
+        expect(calculation.value(address("Sheet1!B1"))).toEqual({
+          type: "number",
+          value: referenceWildcardMatch(pattern, candidate) ? 1 : 0,
+        });
+      },
+    ), { numRuns: 500 });
+  });
 });
 
 function source(cells: Readonly<Record<string, FormulaCellInput>>): FormulaWorkbookSource {
@@ -294,4 +373,35 @@ function key(cellAddress: FormulaCellAddress): string {
 function addressFromKey(value: string): FormulaCellAddress {
   const [sheet, row, column] = value.split("\u0000");
   return { sheet: sheet!, row: Number(row), column: Number(column) };
+}
+
+function referenceWildcardMatch(pattern: string, candidate: string): boolean {
+  const tokens: (
+    | { readonly kind: "many" }
+    | { readonly kind: "one" }
+    | { readonly kind: "literal"; readonly value: string }
+  )[] = [];
+  const characters = [...pattern.toLocaleLowerCase("en-US")];
+  for (let index = 0; index < characters.length; index += 1) {
+    const current = characters[index]!;
+    if (current === "~" && ["~", "*", "?"].includes(characters[index + 1] ?? "")) {
+      tokens.push({ kind: "literal", value: characters[index + 1]! });
+      index += 1;
+    } else if (current === "*") tokens.push({ kind: "many" });
+    else if (current === "?") tokens.push({ kind: "one" });
+    else tokens.push({ kind: "literal", value: current });
+  }
+  const text = [...candidate.toLocaleLowerCase("en-US")];
+  const matches = Array.from({ length: tokens.length + 1 }, () => Array<boolean>(text.length + 1).fill(false));
+  matches[0]![0] = true;
+  for (let tokenIndex = 1; tokenIndex <= tokens.length; tokenIndex += 1) {
+    const token = tokens[tokenIndex - 1]!;
+    matches[tokenIndex]![0] = token.kind === "many" && matches[tokenIndex - 1]![0]!;
+    for (let textIndex = 1; textIndex <= text.length; textIndex += 1) {
+      matches[tokenIndex]![textIndex] = token.kind === "many"
+        ? matches[tokenIndex - 1]![textIndex]! || matches[tokenIndex]![textIndex - 1]!
+        : (token.kind === "one" || token.value === text[textIndex - 1]) && matches[tokenIndex - 1]![textIndex - 1]!;
+    }
+  }
+  return matches[tokens.length]![text.length]!;
 }
