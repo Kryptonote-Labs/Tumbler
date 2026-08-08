@@ -1,4 +1,13 @@
-export type ChartKind = "bar" | "column" | "line" | "pie" | "doughnut";
+export type ChartKind = "bar" | "column" | "line" | "pie" | "doughnut" | "scatter";
+
+export type ChartScatterStyle = "none" | "line" | "line-marker" | "marker" | "smooth" | "smooth-marker";
+
+export type ChartMarkerSymbol = "auto" | "circle" | "dash" | "diamond" | "dot" | "none" | "plus" | "square" | "star" | "triangle" | "x";
+
+export interface ChartMarker {
+  readonly symbol: ChartMarkerSymbol;
+  readonly size: number;
+}
 
 export type ChartColor =
   | { readonly kind: "rgb"; readonly value: string }
@@ -22,9 +31,13 @@ export interface ChartSeries {
   readonly title: string | undefined;
   readonly titleFormula: string | undefined;
   readonly categories: ChartDataSequence | undefined;
+  /** Numeric X coordinates for an XY scatter series. */
+  readonly xValues?: ChartDataSequence;
   readonly values: ChartDataSequence | undefined;
   readonly fill: ChartColor | undefined;
   readonly line: ChartColor | undefined;
+  readonly marker?: ChartMarker;
+  readonly smooth?: boolean;
 }
 
 export type ChartLegendPosition = "bottom" | "left" | "right" | "top" | "top-right";
@@ -43,6 +56,8 @@ export interface ChartAxis {
   readonly minimum: number | undefined;
   readonly maximum: number | undefined;
   readonly deleted: boolean;
+  readonly numberFormatCode?: string;
+  readonly numberFormatSourceLinked?: boolean;
 }
 
 interface ChartModelBase {
@@ -56,6 +71,8 @@ export interface SupportedChartModel extends ChartModelBase {
   readonly kind: ChartKind;
   readonly grouping: "clustered" | "stacked" | "percent-stacked" | "standard";
   readonly holeSize: number | undefined;
+  readonly scatterStyle?: ChartScatterStyle;
+  readonly axisIds?: readonly number[];
   readonly series: readonly ChartSeries[];
   readonly axes: readonly ChartAxis[];
 }

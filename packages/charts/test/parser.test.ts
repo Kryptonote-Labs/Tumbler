@@ -28,15 +28,33 @@ describe("DrawingML chart parser", () => {
     });
   }
 
-  test("recognizes pie, doughnut, line, and horizontal bar types", () => {
+  test("recognizes pie, doughnut, line, scatter, and horizontal bar types", () => {
     expect(type("pieChart")).toMatchObject({ status: "supported", kind: "pie" });
     expect(type("doughnutChart", '<c:holeSize val="65"/>')).toMatchObject({ status: "supported", kind: "doughnut", holeSize: 65 });
     expect(type("lineChart")).toMatchObject({ status: "supported", kind: "line" });
     expect(type("barChart", '<c:barDir val="bar"/>')).toMatchObject({ status: "supported", kind: "bar" });
+    expect(type("scatterChart", '<c:scatterStyle val="marker"/>')).toMatchObject({ status: "supported", kind: "scatter", scatterStyle: "marker" });
+  });
+
+  test("reads scatter coordinates, style, markers, axes, and numeric formats", () => {
+    const profile = profiles[1]!;
+    const chart = parseOoxmlChart(xml(profile, `<c:plotArea><c:scatterChart><c:scatterStyle val="smoothMarker"/>
+      <c:ser><c:idx val="0"/><c:order val="0"/><c:marker><c:symbol val="diamond"/><c:size val="9"/></c:marker><c:smooth val="1"/>
+        <c:xVal><c:numRef><c:f>Data!$A$2:$A$4</c:f><c:numCache><c:formatCode>yyyy-mm-dd</c:formatCode><c:ptCount val="3"/><c:pt idx="0"><c:v>1</c:v></c:pt><c:pt idx="2"><c:v>3</c:v></c:pt></c:numCache></c:numRef></c:xVal>
+        <c:yVal><c:numRef><c:f>Data!$B$2:$B$4</c:f><c:numCache><c:formatCode>0.0</c:formatCode><c:ptCount val="3"/><c:pt idx="0"><c:v>10</c:v></c:pt><c:pt idx="1"><c:v>20</c:v></c:pt><c:pt idx="2"><c:v>30</c:v></c:pt></c:numCache></c:numRef></c:yVal>
+      </c:ser><c:axId val="10"/><c:axId val="20"/></c:scatterChart>
+      <c:valAx><c:axId val="10"/><c:axPos val="b"/><c:numFmt formatCode="yyyy-mm-dd" sourceLinked="0"/></c:valAx>
+      <c:valAx><c:axId val="20"/><c:axPos val="l"/><c:majorGridlines/></c:valAx></c:plotArea>`), "transitional");
+    expect(chart).toMatchObject({ status: "supported", kind: "scatter", scatterStyle: "smooth-marker", axisIds: [10, 20] });
+    if (chart.status !== "supported") throw new Error("Expected supported chart");
+    expect(chart.series[0]).toMatchObject({ marker: { symbol: "diamond", size: 9 }, smooth: true });
+    expect(chart.series[0]?.xValues?.points).toEqual([{ index: 0, value: 1 }, { index: 2, value: 3 }]);
+    expect(chart.series[0]?.values?.points.map((point) => point.value)).toEqual([10, 20, 30]);
+    expect(chart.axes[0]).toMatchObject({ id: 10, kind: "value", position: "bottom", numberFormatCode: "yyyy-mm-dd", numberFormatSourceLinked: false });
   });
 
   test("returns an explicit model for unsupported and combination charts", () => {
-    expect(type("scatterChart")).toMatchObject({ status: "unsupported", chartType: "scatterChart" });
+    expect(type("radarChart")).toMatchObject({ status: "unsupported", chartType: "radarChart" });
     const profile = profiles[1]!;
     const result = parseOoxmlChart(xml(profile, '<c:plotArea><c:lineChart/><c:barChart/></c:plotArea>'), "transitional");
     expect(result).toMatchObject({ status: "unsupported", reason: expect.stringContaining("Combination") });

@@ -9,6 +9,9 @@ import type {
   ChartLegendPosition,
   ChartModel,
   ChartSeries,
+  ChartScatterStyle,
+  ChartMarker,
+  ChartMarkerSymbol,
 } from "./model.ts";
 
 const MAX_CACHE_POINTS = 100_000;
@@ -53,7 +56,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
   if (kind === undefined) {
     return unsupported(chartType.localName, `${chartType.localName} is not supported in this milestone.`, title, titleFormula, legend);
   }
-  const series = children(chartType, chartNamespace, "ser").map((element) => parseSeries(element, chartNamespace, drawingNamespace));
+  const series = children(chartType, chartNamespace, "ser").map((element) => parseSeries(element, kind, chartNamespace, drawingNamespace));
   const axes = plotArea.children.filter((child): child is LosslessXmlElement =>
     child.kind === "element" && child.namespaceUri === chartNamespace && (child.localName === "catAx" || child.localName === "valAx")
   ).map((element) => parseAxis(element, chartNamespace, drawingNamespace));
@@ -72,7 +75,9 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
   }
   const rawHole = val(children(chartType, chartNamespace, "holeSize")[0]);
   const holeSize = kind === "doughnut" ? boundedPercent(rawHole ?? "50", "doughnut hole size") : undefined;
-  return Object.freeze({ status: "supported", kind, grouping, holeSize, title, ...(titleFormula === undefined ? {} : { titleFormula }), legend, series: Object.freeze(series), axes: Object.freeze(axes) });
+  const scatterStyle = kind === "scatter" ? parseScatterStyle(val(children(chartType, chartNamespace, "scatterStyle")[0]) ?? "lineMarker") : undefined;
+  const axisIds = children(chartType, chartNamespace, "axId").map((element) => unsigned(val(element) ?? "", "chart axis id"));
+  return Object.freeze({ status: "supported", kind, grouping, holeSize, ...(scatterStyle === undefined ? {} : { scatterStyle }), ...(axisIds.length === 0 ? {} : { axisIds: Object.freeze(axisIds) }), title, ...(titleFormula === undefined ? {} : { titleFormula }), legend, series: Object.freeze(series), axes: Object.freeze(axes) });
 }
 
 function unsupported(chartType: string | undefined, reason: string, title: string | undefined, titleFormula: string | undefined, legend: ChartLegend | undefined): ChartModel {
@@ -84,23 +89,29 @@ function chartKind(element: LosslessXmlElement, namespace: string): ChartKind | 
   if (element.localName === "lineChart") return "line";
   if (element.localName === "pieChart") return "pie";
   if (element.localName === "doughnutChart") return "doughnut";
+  if (element.localName === "scatterChart") return "scatter";
   return undefined;
 }
 
-function parseSeries(element: LosslessXmlElement, chartNamespace: string, drawingNamespace: string): ChartSeries {
+function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespace: string, drawingNamespace: string): ChartSeries {
   const tx = children(element, chartNamespace, "tx")[0];
   const titleRef = tx === undefined ? undefined : children(tx, chartNamespace, "strRef")[0];
   const literalTitle = tx === undefined ? undefined : children(tx, chartNamespace, "v")[0];
   const titleCache = titleRef === undefined ? undefined : parseSequenceContainer(titleRef, chartNamespace, "string");
+  const xValues = kind === "scatter" ? parseData(children(element, chartNamespace, "xVal")[0], chartNamespace) : undefined;
+  const marker = kind === "scatter" ? parseMarker(children(element, chartNamespace, "marker")[0], chartNamespace) : undefined;
   return Object.freeze({
     index: requiredUnsignedVal(element, chartNamespace, "idx", "series index"),
     order: requiredUnsignedVal(element, chartNamespace, "order", "series order"),
     title: literalTitle === undefined ? titleCache?.points[0]?.value.toString() : text(literalTitle),
     titleFormula: titleRef === undefined ? undefined : formula(titleRef, chartNamespace),
     categories: parseData(children(element, chartNamespace, "cat")[0], chartNamespace),
+    ...(xValues === undefined ? {} : { xValues }),
     values: parseData(children(element, chartNamespace, "val")[0] ?? children(element, chartNamespace, "yVal")[0], chartNamespace),
     fill: parseSolidFill(children(element, chartNamespace, "spPr")[0], drawingNamespace),
     line: parseLine(children(element, chartNamespace, "spPr")[0], drawingNamespace),
+    ...(marker === undefined ? {} : { marker }),
+    ...(kind === "scatter" ? { smooth: booleanVal(children(element, chartNamespace, "smooth")[0], false) } : {}),
   });
 }
 
@@ -143,6 +154,8 @@ function parseSequenceContainer(element: LosslessXmlElement, namespace: string, 
 
 function parseAxis(element: LosslessXmlElement, namespace: string, drawingNamespace: string): ChartAxis {
   const scaling = children(element, namespace, "scaling")[0];
+  const numberFormat = children(element, namespace, "numFmt")[0];
+  const numberFormatCode = numberFormat?.attributes.find((attribute) => attribute.namespaceUri === "" && attribute.localName === "formatCode")?.value;
   return Object.freeze({
     id: requiredUnsignedVal(element, namespace, "axId", "axis id"),
     kind: element.localName === "catAx" ? "category" : "value",
@@ -152,7 +165,37 @@ function parseAxis(element: LosslessXmlElement, namespace: string, drawingNamesp
     minimum: optionalFiniteVal(scaling === undefined ? undefined : children(scaling, namespace, "min")[0], "axis minimum"),
     maximum: optionalFiniteVal(scaling === undefined ? undefined : children(scaling, namespace, "max")[0], "axis maximum"),
     deleted: booleanVal(children(element, namespace, "delete")[0], false),
+    ...(numberFormatCode === undefined ? {} : { numberFormatCode }),
+    ...(numberFormat === undefined ? {} : { numberFormatSourceLinked: booleanAttribute(numberFormat, "sourceLinked", true) }),
   });
+}
+
+function parseScatterStyle(raw: string): ChartScatterStyle {
+  const styles: Record<string, ChartScatterStyle> = {
+    none: "none", line: "line", lineMarker: "line-marker", marker: "marker", smooth: "smooth", smoothMarker: "smooth-marker",
+  };
+  const style = styles[raw];
+  if (style === undefined) throw new ChartParseError(`Scatter style ${JSON.stringify(raw)} is invalid.`);
+  return style;
+}
+
+function parseMarker(element: LosslessXmlElement | undefined, namespace: string): ChartMarker | undefined {
+  if (element === undefined) return undefined;
+  const rawSymbol = val(children(element, namespace, "symbol")[0]) ?? "auto";
+  const symbols = new Set<ChartMarkerSymbol>(["auto", "circle", "dash", "diamond", "dot", "none", "plus", "square", "star", "triangle", "x"]);
+  if (!symbols.has(rawSymbol as ChartMarkerSymbol)) throw new ChartParseError(`Chart marker symbol ${JSON.stringify(rawSymbol)} is invalid.`);
+  const rawSize = val(children(element, namespace, "size")[0]) ?? "5";
+  const size = Number(rawSize);
+  if (!Number.isInteger(size) || size < 2 || size > 72) throw new ChartParseError("Chart marker size must be an integer between 2 and 72.");
+  return Object.freeze({ symbol: rawSymbol as ChartMarkerSymbol, size });
+}
+
+function booleanAttribute(element: LosslessXmlElement, name: string, fallback: boolean): boolean {
+  const raw = element.attributes.find((attribute) => attribute.namespaceUri === "" && attribute.localName === name)?.value;
+  if (raw === undefined) return fallback;
+  if (raw === "1" || raw === "true") return true;
+  if (raw === "0" || raw === "false") return false;
+  throw new ChartParseError(`Boolean chart attribute ${JSON.stringify(raw)} is invalid.`);
 }
 
 function parseLegend(element: LosslessXmlElement | undefined, namespace: string): ChartLegend | undefined {
