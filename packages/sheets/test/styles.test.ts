@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { openOpcPackage } from "@tumblerjs/opc";
-import { openSpreadsheet, readSpreadsheetStyles, SpreadsheetError } from "../src/index.ts";
+import { applySpreadsheetDifferentialFormats, openSpreadsheet, readSpreadsheetStyles, SpreadsheetError } from "../src/index.ts";
 import { buildWorkbookFixture } from "./workbook-fixture.ts";
 
 describe("SpreadsheetML styles", () => {
@@ -118,6 +118,26 @@ describe("SpreadsheetML styles", () => {
         },
       },
     ]);
+  });
+
+  test("composes ordered differential formats without erasing unspecified base properties", () => {
+    const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const styles = readSpreadsheetStyles(openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      stylesXml: `<styleSheet xmlns="${namespace}">
+        <fonts count="1"><font><name val="Aptos"/><sz val="11"/><b/></font></fonts>
+        <fills count="1"><fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/></patternFill></fill></fills>
+        <borders count="1"><border><left style="thin"><color rgb="FF000000"/></left></border></borders>
+        <cellXfs count="1"><xf fontId="0" fillId="0" borderId="0"/></cellXfs>
+        <dxfs count="2"><dxf><border><left><color rgb="FFFF0000"/></left></border></dxf><dxf><font><b val="0"/><i/></font></dxf></dxfs>
+      </styleSheet>`,
+    }))));
+
+    const resolved = applySpreadsheetDifferentialFormats(styles.resolve(0), [
+      styles.differentialFormats[0]!, styles.differentialFormats[1]!,
+    ]);
+    expect(resolved.font).toMatchObject({ name: "Aptos", size: 11, bold: false, italic: true });
+    expect(resolved.border.left).toEqual({ style: "thin", color: { type: "rgb", argb: "FFFF0000", tint: 0 } });
+    expect(resolved.fill).toEqual(styles.resolve(0).fill);
   });
 
   test.each([

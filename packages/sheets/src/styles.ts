@@ -88,10 +88,10 @@ export interface SpreadsheetDifferentialFormat {
 }
 
 export interface SpreadsheetDifferentialBorder {
-  readonly left: SpreadsheetBorderEdge | undefined;
-  readonly right: SpreadsheetBorderEdge | undefined;
-  readonly top: SpreadsheetBorderEdge | undefined;
-  readonly bottom: SpreadsheetBorderEdge | undefined;
+  readonly left: Readonly<Partial<SpreadsheetBorderEdge>> | undefined;
+  readonly right: Readonly<Partial<SpreadsheetBorderEdge>> | undefined;
+  readonly top: Readonly<Partial<SpreadsheetBorderEdge>> | undefined;
+  readonly bottom: Readonly<Partial<SpreadsheetBorderEdge>> | undefined;
 }
 
 interface FormatRecord {
@@ -286,9 +286,36 @@ function parseDifferentialFill(element: LosslessXmlElement, namespace: string): 
   });
 }
 
-function parseOptionalEdge(element: LosslessXmlElement | undefined, namespace: string): SpreadsheetBorderEdge | undefined {
+function parseOptionalEdge(element: LosslessXmlElement | undefined, namespace: string): Readonly<Partial<SpreadsheetBorderEdge>> | undefined {
   if (element === undefined) return undefined;
-  return Object.freeze({ style: attr(element, "style"), color: parseSpreadsheetColor(child(element, namespace, "color")) });
+  return Object.freeze({
+    ...(attr(element, "style") === undefined ? {} : { style: attr(element, "style") }),
+    ...(child(element, namespace, "color") === undefined ? {} : { color: parseSpreadsheetColor(child(element, namespace, "color")) }),
+  });
+}
+
+/** Applies ordered incremental dxf records without losing unspecified base properties. */
+export function applySpreadsheetDifferentialFormats(
+  base: SpreadsheetCellFormat,
+  formats: readonly SpreadsheetDifferentialFormat[],
+): SpreadsheetCellFormat {
+  if (formats.length === 0) return base;
+  let font = base.font;
+  let fill = base.fill;
+  let border = base.border;
+  for (const format of formats) {
+    if (format.font !== undefined) font = Object.freeze({ ...font, ...format.font });
+    if (format.fill !== undefined) fill = Object.freeze({ ...fill, ...format.fill });
+    if (format.border !== undefined) {
+      border = Object.freeze({
+        left: Object.freeze({ ...border.left, ...format.border.left }),
+        right: Object.freeze({ ...border.right, ...format.border.right }),
+        top: Object.freeze({ ...border.top, ...format.border.top }),
+        bottom: Object.freeze({ ...border.bottom, ...format.border.bottom }),
+      });
+    }
+  }
+  return Object.freeze({ ...base, font, fill, border });
 }
 
 function defaultStyles(): SpreadsheetStyles {

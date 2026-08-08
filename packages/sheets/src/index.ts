@@ -83,6 +83,7 @@ export {
   SpreadsheetEditor,
 } from "./editor.ts";
 export {
+  applySpreadsheetDifferentialFormats,
   readSpreadsheetStyles,
   SpreadsheetStyles,
 } from "./styles.ts";
