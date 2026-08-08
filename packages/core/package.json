@@ -1,6 +1,6 @@
 {
   "name": "@tumblerjs/core",
-  "version": "0.1.0-alpha.3",
+  "version": "0.1.0-alpha.4",
   "description": "Format-neutral document commands, transactions, selection, and history for Tumbler.",
   "type": "module",
   "exports": "./src/index.ts",
@@ -20,6 +20,6 @@
     "tag": "alpha"
   },
   "dependencies": {
-    "@tumblerjs/ooxml": "0.1.0-alpha.3"
+    "@tumblerjs/ooxml": "0.1.0-alpha.4"
   }
 }
