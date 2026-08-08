@@ -21,7 +21,7 @@ describe("public package release graph", () => {
 
   test("rejects internal version drift and reversed dependency order", () => {
     const packages: readonly ReleasePackage[] = [
-      { directory: "sheets", name: "@tumblerjs/sheets", version: "0.1.0-alpha.2", dependencies: { "@tumblerjs/opc": "0.1.0-alpha.1" } },
+      { directory: "sheets", name: "@tumblerjs/sheets", version: "0.1.0-alpha.0", dependencies: { "@tumblerjs/opc": "0.1.0-alpha.1" } },
       { directory: "opc", name: "@tumblerjs/opc", version: "0.1.0-alpha.0", dependencies: {} },
     ];
 

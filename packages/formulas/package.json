@@ -1,6 +1,6 @@
 {
   "name": "@tumblerjs/formulas",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.3",
   "description": "Headless spreadsheet formula parsing and calculation for Tumbler.",
   "type": "module",
   "exports": "./src/index.ts",

@@ -44,6 +44,11 @@ export function validateReleasePackageGraph(
   const errors: string[] = [];
   const byName = new Map(packages.map((pkg) => [pkg.name, pkg]));
   const order = new Map(packages.map((pkg, index) => [pkg.name, index]));
+  const versions = new Set(packages.map((pkg) => pkg.version));
+
+  if (versions.size > 1) {
+    errors.push(`Public packages must share one lockstep version; found ${[...versions].join(", ")}.`);
+  }
 
   for (const [index, pkg] of packages.entries()) {
     for (const [dependency, requestedVersion] of Object.entries(pkg.dependencies)) {
