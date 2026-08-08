@@ -59,3 +59,23 @@ if (cachedTotal?.type !== "number" || cachedTotal.value !== 18 || calculatedTota
   throw new Error("spreadsheet-formulas.xlsx disagrees with LibreOffice at C10.");
 }
 console.log("PASS spreadsheet-formulas.xlsx");
+
+const crossSheetFile = Bun.file(resolve(directory, "spreadsheet-cross-sheet-formula.xlsx"));
+if (!await crossSheetFile.exists()) throw new Error("LibreOffice did not produce spreadsheet-cross-sheet-formula.xlsx.");
+const crossSheetArtifact = openSpreadsheetArtifact(new Uint8Array(await crossSheetFile.arrayBuffer()), { sheet: "Dashboard" });
+const crossSheetCell = crossSheetArtifact.worksheet.cell("C3");
+const crossSheetCalculated = crossSheetArtifact.calculation.value("C3");
+if (
+  crossSheetCell?.formula !== "'Project Inputs'!$B$4*2" ||
+  crossSheetCell.value.type !== "number" ||
+  crossSheetCell.value.value !== 14 ||
+  crossSheetCalculated?.type !== "number" ||
+  crossSheetCalculated.value !== 14
+) {
+  throw new Error(`spreadsheet-cross-sheet-formula.xlsx did not preserve and recalculate its reference: ${JSON.stringify({
+    formula: crossSheetCell?.formula,
+    cached: crossSheetCell?.value,
+    calculated: crossSheetCalculated,
+  })}`);
+}
+console.log("PASS spreadsheet-cross-sheet-formula.xlsx");

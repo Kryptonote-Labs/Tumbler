@@ -45,6 +45,24 @@ const formulas = buildWorkbookFixture({
 const formulaEdited = openSpreadsheetArtifact(formulas)
   .editFormula("C10", "SUM(B5:B7)+1")
   .bytes();
+const crossSheetFormula = openSpreadsheetArtifact(buildWorkbookFixture({
+  sheets: [
+    {
+      name: "Dashboard",
+      sheetId: 1,
+      relationshipId: "dashboard",
+      xml: `<worksheet xmlns="${namespace}"><dimension ref="A1:C3"/><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Dashboard</t></is></c></row></sheetData></worksheet>`,
+    },
+    {
+      name: "Project Inputs",
+      sheetId: 2,
+      relationshipId: "inputs",
+      xml: `<worksheet xmlns="${namespace}"><dimension ref="A1:B4"/><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Inputs</t></is></c></row><row r="4"><c r="B4"><v>7</v></c></row></sheetData></worksheet>`,
+    },
+  ],
+}), { sheet: "Project Inputs" })
+  .editFormulaOnSheet("Dashboard", "C3", "'Project Inputs'!$B$4*2")
+  .bytes();
 const officeRelationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
 const spreadsheetDrawing = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
@@ -81,6 +99,7 @@ await Promise.all([
   Bun.write(resolve(outputDirectory, "spreadsheet-table.xlsx"), table),
   Bun.write(resolve(outputDirectory, "spreadsheet-formulas.xlsx"), formulas),
   Bun.write(resolve(outputDirectory, "spreadsheet-formula-edited.xlsx"), formulaEdited),
+  Bun.write(resolve(outputDirectory, "spreadsheet-cross-sheet-formula.xlsx"), crossSheetFormula),
   Bun.write(resolve(outputDirectory, "spreadsheet-charts.xlsx"), charts),
 ]);
 
