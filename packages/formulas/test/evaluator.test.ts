@@ -72,6 +72,153 @@ describe("bounded spreadsheet formula calculation", () => {
     expect(calculation.diagnostics).toEqual([]);
   });
 
+  test("implements the ECMA-376 conditional aggregate examples", () => {
+    const workbook = source({
+      "Sheet1!A1": value(3),
+      "Sheet1!B1": value(10),
+      "Sheet1!C1": value(7),
+      "Sheet1!D1": value(10),
+      "Sheet1!A2": textValue("apples"),
+      "Sheet1!B2": textValue("melons"),
+      "Sheet1!C2": value(10),
+      "Sheet1!D2": value(15),
+      "Sheet1!F1": formula(`COUNTIF(A1:D1,"=10")`),
+      "Sheet1!F2": formula(`COUNTIF(A1:D1,">5")`),
+      "Sheet1!F3": formula(`SUMIF(A1:D1,"<>10")`),
+      "Sheet1!F4": formula(`SUMIF(A2:B2,"*es",C2:D2)`),
+      "Sheet1!F5": formula(`AVERAGEIF(A1:D1,">5")`),
+    });
+
+    const calculation = calculateFormulas(workbook);
+
+    expect(calculation.value(address("Sheet1!F1"))).toEqual({ type: "number", value: 2 });
+    expect(calculation.value(address("Sheet1!F2"))).toEqual({ type: "number", value: 3 });
+    expect(calculation.value(address("Sheet1!F3"))).toEqual({ type: "number", value: 10 });
+    expect(calculation.value(address("Sheet1!F4"))).toEqual({ type: "number", value: 10 });
+    expect(calculation.value(address("Sheet1!F5"))).toEqual({ type: "number", value: 9 });
+    expect(calculation.diagnostics).toEqual([]);
+  });
+
+  test("matches text case-insensitively with linear wildcards and tilde escaping", () => {
+    const workbook = source({
+      "Sheet1!A1": textValue("Alpha"),
+      "Sheet1!A2": textValue("ALPINE"),
+      "Sheet1!A3": textValue("a*"),
+      "Sheet1!A4": textValue("a?"),
+      "Sheet1!A5": textValue("a~"),
+      "Sheet1!A6": textValue("beta"),
+      "Sheet1!B1": formula(`COUNTIF(A1:A6,"alp*")`),
+      "Sheet1!B2": formula(`COUNTIF(A1:A6,"a~*")`),
+      "Sheet1!B3": formula(`COUNTIF(A1:A6,"a~?")`),
+      "Sheet1!B4": formula(`COUNTIF(A1:A6,"a~~")`),
+      "Sheet1!B5": formula(`COUNTIF(A1:A6,"<>*a")`),
+    });
+
+    const calculation = calculateFormulas(workbook);
+
+    expect(calculation.value(address("Sheet1!B1"))).toEqual({ type: "number", value: 2 });
+    expect(calculation.value(address("Sheet1!B2"))).toEqual({ type: "number", value: 1 });
+    expect(calculation.value(address("Sheet1!B3"))).toEqual({ type: "number", value: 1 });
+    expect(calculation.value(address("Sheet1!B4"))).toEqual({ type: "number", value: 1 });
+    expect(calculation.value(address("Sheet1!B5"))).toEqual({ type: "number", value: 4 });
+  });
+
+  test("aligns a short result range from its top-left cell across sheets", () => {
+    const workbook = source({
+      "Criteria!A1": value(1),
+      "Criteria!A2": value(0),
+      "Criteria!A3": value(1),
+      "Values!C2": value(10),
+      "Values!C3": value(20),
+      "Values!C4": value(30),
+      "Results!A1": formula(`SUMIF(Criteria!A1:A3,1,Values!C2)`),
+      "Results!A2": formula(`AVERAGEIF(Criteria!A1:A3,1,Values!C2:C2)`),
+    });
+
+    const calculation = calculateFormulas(workbook);
+
+    expect(calculation.value(address("Results!A1"))).toEqual({ type: "number", value: 40 });
+    expect(calculation.value(address("Results!A2"))).toEqual({ type: "number", value: 20 });
+    expect(calculation.dependencies(address("Results!A1"))).toEqual([
+      address("Criteria!A1"), address("Criteria!A2"), address("Criteria!A3"),
+      address("Values!C2"), address("Values!C3"), address("Values!C4"),
+    ]);
+  });
+
+  test("defines blank, boolean, text, and error behavior deliberately", () => {
+    const workbook = source({
+      "Sheet1!A2": literal({ type: "string", value: "" }),
+      "Sheet1!A3": literal({ type: "boolean", value: true }),
+      "Sheet1!A4": literal({ type: "number", value: 1 }),
+      "Sheet1!A5": literal({ type: "string", value: "1" }),
+      "Sheet1!A6": literal({ type: "error", value: "#N/A" }),
+      "Sheet1!B1": value(100),
+      "Sheet1!B2": value(200),
+      "Sheet1!B3": literal({ type: "boolean", value: true }),
+      "Sheet1!B4": literal({ type: "string", value: "400" }),
+      "Sheet1!B5": value(500),
+      "Sheet1!B6": literal({ type: "error", value: "#DIV/0!" }),
+      "Sheet1!D1": formula(`COUNTIF(A1:A6,"")`),
+      "Sheet1!D2": formula(`COUNTIF(A1:A6,TRUE)`),
+      "Sheet1!D3": formula(`COUNTIF(A1:A6,"1")`),
+      "Sheet1!D4": formula(`COUNTIF(A1:A6,"#N/A")`),
+      "Sheet1!D5": formula(`SUMIF(A1:A6,"<>x",B1:B6)`),
+      "Sheet1!D6": formula(`AVERAGEIF(A1:A2,"missing",B1:B2)`),
+      "Sheet1!D7": formula(`COUNTIF(A1:A6,#N/A)`),
+    });
+
+    const calculation = calculateFormulas(workbook);
+
+    expect(calculation.value(address("Sheet1!D1"))).toEqual({ type: "number", value: 2 });
+    expect(calculation.value(address("Sheet1!D2"))).toEqual({ type: "number", value: 1 });
+    expect(calculation.value(address("Sheet1!D3"))).toEqual({ type: "number", value: 1 });
+    expect(calculation.value(address("Sheet1!D4"))).toEqual({ type: "number", value: 1 });
+    expect(calculation.value(address("Sheet1!D5"))).toEqual({ type: "error", value: "#DIV/0!" });
+    expect(calculation.value(address("Sheet1!D6"))).toEqual({ type: "error", value: "#DIV/0!" });
+    expect(calculation.value(address("Sheet1!D7"))).toEqual({ type: "error", value: "#N/A" });
+  });
+
+  test("rejects non-reference ranges and diagnoses projected ranges beyond the worksheet", () => {
+    const calculation = calculateFormulas(source({
+      "Sheet1!A1": formula(`COUNTIF(1,"=1")`, { type: "number", value: 91 }),
+      "Sheet1!A2": formula(`SUMIF(A1:A2,1,XFD1048576)`, { type: "number", value: 92 }),
+    }));
+
+    expect(calculation.value(address("Sheet1!A1"))).toEqual({ type: "error", value: "#VALUE!" });
+    expect(calculation.value(address("Sheet1!A2"))).toBeUndefined();
+    expect(calculation.diagnostics).toMatchObject([{
+      code: "unsupported-reference",
+      formula: `SUMIF(A1:A2,1,XFD1048576)`,
+    }]);
+  });
+
+  test("keeps wildcard evaluation bounded on adversarial text", () => {
+    const repeated = "a".repeat(20_000);
+    const calculation = calculateFormulas(source({
+      "Sheet1!A1": textValue(`${repeated}b`),
+      "Sheet1!B1": formula(`COUNTIF(A1,"*a*a*a*a*a*c")`),
+    }), { maxOperations: 20 });
+    expect(calculation.value(address("Sheet1!B1"))).toEqual({ type: "number", value: 0 });
+    expect(calculation.diagnostics).toEqual([]);
+  });
+
+  test("applies operation and criterion-size limits to conditional aggregates", () => {
+    const limitedRange = calculateFormulas(source({
+      "Sheet1!A1": value(1),
+      "Sheet1!B1": formula(`COUNTIF(A1:A10,1)`, { type: "number", value: 7 }),
+    }), { maxOperations: 8 });
+    expect(limitedRange.value(address("Sheet1!B1"))).toBeUndefined();
+    expect(limitedRange.diagnostics[0]?.code).toBe("evaluation-limit");
+
+    const longCriterion = "a".repeat(8_193);
+    const limitedCriterion = calculateFormulas(source({
+      "Sheet1!A1": textValue("a"),
+      "Sheet1!B1": formula(`COUNTIF(A1,"${longCriterion}")`, { type: "number", value: 8 }),
+    }));
+    expect(limitedCriterion.value(address("Sheet1!B1"))).toBeUndefined();
+    expect(limitedCriterion.diagnostics[0]?.code).toBe("evaluation-limit");
+  });
+
   test("diagnoses cycles and keeps their cached values source-owned", () => {
     const calculation = calculateFormulas(source({
       "Sheet1!A1": formula("A2+1"),
@@ -121,6 +268,14 @@ function formula(source: string, cached: FormulaScalarValue = { type: "blank" })
 
 function value(number: number): FormulaCellInput {
   return { formula: undefined, value: { type: "number", value: number } };
+}
+
+function textValue(value: string): FormulaCellInput {
+  return literal({ type: "string", value });
+}
+
+function literal(value: FormulaScalarValue): FormulaCellInput {
+  return { formula: undefined, value };
 }
 
 function address(reference: string): FormulaCellAddress {
