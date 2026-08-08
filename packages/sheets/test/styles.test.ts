@@ -85,6 +85,41 @@ describe("SpreadsheetML styles", () => {
     expect(styles.resolve(2)).toMatchObject({ font: { name: "Default" }, numberFormatId: 0, alignment: { horizontal: undefined } });
   });
 
+  test.each(["strict", "transitional"] as const)("parses incremental %s differential formats", (conformance) => {
+    const namespace = conformance === "strict"
+      ? "http://purl.oclc.org/ooxml/spreadsheetml/main"
+      : "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const styles = readSpreadsheetStyles(openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      conformance,
+      stylesXml: `<styleSheet xmlns="${namespace}">
+        <fonts count="1"><font/></fonts><fills count="1"><fill/></fills><borders count="1"><border/></borders>
+        <cellXfs count="1"><xf/></cellXfs>
+        <dxfs count="2">
+          <dxf><font><b/><i val="0"/><color rgb="00C00000"/></font><fill><patternFill patternType="solid"><fgColor theme="4" tint="0.2"/></patternFill></fill></dxf>
+          <dxf><border><left style="thin"><color indexed="3"/></left><bottom style="double"/></border></dxf>
+        </dxfs>
+      </styleSheet>`,
+    }))));
+
+    expect(styles.differentialFormats).toEqual([
+      {
+        font: { bold: true, italic: false, color: { type: "rgb", argb: "00C00000", tint: 0 } },
+        fill: { patternType: "solid", foreground: { type: "theme", index: 4, tint: 0.2 } },
+        border: undefined,
+      },
+      {
+        font: undefined,
+        fill: undefined,
+        border: {
+          left: { style: "thin", color: { type: "indexed", index: 3, tint: 0 } },
+          right: undefined,
+          top: undefined,
+          bottom: { style: "double", color: undefined },
+        },
+      },
+    ]);
+  });
+
   test.each([
     `<styleSheet xmlns="NS"><fonts count="2"><font/></fonts><fills><fill/></fills><borders><border/></borders><cellXfs><xf/></cellXfs></styleSheet>`,
     `<styleSheet xmlns="NS"><fonts><font/></fonts><fills><fill/></fills><borders><border/></borders><cellXfs><xf fontId="2"/></cellXfs></styleSheet>`,

@@ -105,6 +105,8 @@ export type {
   SpreadsheetBorderEdge,
   SpreadsheetCellFormat,
   SpreadsheetColor,
+  SpreadsheetDifferentialBorder,
+  SpreadsheetDifferentialFormat,
   SpreadsheetFill,
   SpreadsheetFont,
 } from "./styles.ts";

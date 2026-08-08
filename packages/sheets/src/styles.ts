@@ -80,6 +80,20 @@ export interface SpreadsheetCellFormat {
   readonly alignment: SpreadsheetAlignment;
 }
 
+/** Incremental formatting from a Styles-part dxf record (ECMA-376-1 §18.8.14). */
+export interface SpreadsheetDifferentialFormat {
+  readonly font: Readonly<Partial<SpreadsheetFont>> | undefined;
+  readonly fill: Readonly<Partial<SpreadsheetFill>> | undefined;
+  readonly border: SpreadsheetDifferentialBorder | undefined;
+}
+
+export interface SpreadsheetDifferentialBorder {
+  readonly left: SpreadsheetBorderEdge | undefined;
+  readonly right: SpreadsheetBorderEdge | undefined;
+  readonly top: SpreadsheetBorderEdge | undefined;
+  readonly bottom: SpreadsheetBorderEdge | undefined;
+}
+
 interface FormatRecord {
   readonly fontId: number | undefined;
   readonly fillId: number | undefined;
@@ -111,6 +125,7 @@ export class SpreadsheetStyles {
   readonly fills: readonly SpreadsheetFill[];
   readonly borders: readonly SpreadsheetBorder[];
   readonly cellFormats: readonly SpreadsheetCellFormat[];
+  readonly differentialFormats: readonly SpreadsheetDifferentialFormat[];
   readonly theme: ThemeColorScheme | undefined;
   readonly themeFonts: ThemeFontScheme | undefined;
   readonly indexedColors: readonly string[];
@@ -121,6 +136,7 @@ export class SpreadsheetStyles {
     fills: readonly SpreadsheetFill[];
     borders: readonly SpreadsheetBorder[];
     cellFormats: readonly SpreadsheetCellFormat[];
+    differentialFormats?: readonly SpreadsheetDifferentialFormat[];
     theme?: ThemeColorScheme;
     themeFonts?: ThemeFontScheme;
     indexedColors?: readonly string[];
@@ -130,6 +146,7 @@ export class SpreadsheetStyles {
     this.fills = Object.freeze([...input.fills]);
     this.borders = Object.freeze([...input.borders]);
     this.cellFormats = Object.freeze([...input.cellFormats]);
+    this.differentialFormats = Object.freeze([...(input.differentialFormats ?? [])]);
     this.theme = input.theme;
     this.themeFonts = input.themeFonts;
     this.indexedColors = Object.freeze([...(input.indexedColors ?? DEFAULT_INDEXED_COLORS)]);
@@ -207,6 +224,7 @@ export function readSpreadsheetStyles(workbook: SpreadsheetWorkbook): Spreadshee
   const cellRecords = parseRecords(document.root, namespace, "cellXfs");
   if (cellRecords.length === 0) throw styleError("A Styles part must contain at least one cell format.");
   const resolved = cellRecords.map((record) => resolveRecord(record, baseRecords, fonts, fills, borders, numberFormats));
+  const differentialFormats = parseCollection(document.root, namespace, "dxfs", "dxf", (element) => parseDifferentialFormat(element, namespace));
   const theme = readTheme(workbook);
   const indexedColors = parseIndexedColors(document.root, namespace);
   return new SpreadsheetStyles({
@@ -215,9 +233,62 @@ export function readSpreadsheetStyles(workbook: SpreadsheetWorkbook): Spreadshee
     fills,
     borders,
     cellFormats: resolved,
+    differentialFormats,
     ...(theme === undefined ? {} : { theme: theme.colors, themeFonts: theme.fonts }),
     ...(indexedColors === undefined ? {} : { indexedColors }),
   });
+}
+
+function parseDifferentialFormat(element: LosslessXmlElement, namespace: string): SpreadsheetDifferentialFormat {
+  const font = child(element, namespace, "font");
+  const fill = child(element, namespace, "fill");
+  const border = child(element, namespace, "border");
+  return Object.freeze({
+    font: font === undefined ? undefined : parseDifferentialFont(font, namespace),
+    fill: fill === undefined ? undefined : parseDifferentialFill(fill, namespace),
+    border: border === undefined ? undefined : Object.freeze({
+      left: parseOptionalEdge(child(border, namespace, "left") ?? child(border, namespace, "start"), namespace),
+      right: parseOptionalEdge(child(border, namespace, "right") ?? child(border, namespace, "end"), namespace),
+      top: parseOptionalEdge(child(border, namespace, "top"), namespace),
+      bottom: parseOptionalEdge(child(border, namespace, "bottom"), namespace),
+    }),
+  });
+}
+
+function parseDifferentialFont(element: LosslessXmlElement, namespace: string): Readonly<Partial<SpreadsheetFont>> {
+  const scheme = valueChild(element, namespace, "scheme");
+  if (scheme !== undefined && scheme !== "major" && scheme !== "minor" && scheme !== "none") {
+    throw styleError(`Font scheme ${JSON.stringify(scheme)} is invalid.`);
+  }
+  const bold = optionalPropertyBoolean(element, namespace, "b");
+  const italic = optionalPropertyBoolean(element, namespace, "i");
+  const strike = optionalPropertyBoolean(element, namespace, "strike");
+  const underlineElement = child(element, namespace, "u");
+  return Object.freeze({
+    ...(valueChild(element, namespace, "name") === undefined ? {} : { name: valueChild(element, namespace, "name") }),
+    ...(scheme === undefined ? {} : { scheme }),
+    ...(valueChild(element, namespace, "sz") === undefined ? {} : { size: optionalDouble(valueChild(element, namespace, "sz"), "font size") }),
+    ...(bold === undefined ? {} : { bold }),
+    ...(italic === undefined ? {} : { italic }),
+    ...(underlineElement === undefined ? {} : { underline: valueChild(element, namespace, "u") ?? "single" }),
+    ...(strike === undefined ? {} : { strike }),
+    ...(child(element, namespace, "color") === undefined ? {} : { color: parseSpreadsheetColor(child(element, namespace, "color")) }),
+  });
+}
+
+function parseDifferentialFill(element: LosslessXmlElement, namespace: string): Readonly<Partial<SpreadsheetFill>> {
+  const pattern = child(element, namespace, "patternFill");
+  if (pattern === undefined) return Object.freeze({});
+  return Object.freeze({
+    ...(attr(pattern, "patternType") === undefined ? {} : { patternType: attr(pattern, "patternType") }),
+    ...(child(pattern, namespace, "fgColor") === undefined ? {} : { foreground: parseSpreadsheetColor(child(pattern, namespace, "fgColor")) }),
+    ...(child(pattern, namespace, "bgColor") === undefined ? {} : { background: parseSpreadsheetColor(child(pattern, namespace, "bgColor")) }),
+  });
+}
+
+function parseOptionalEdge(element: LosslessXmlElement | undefined, namespace: string): SpreadsheetBorderEdge | undefined {
+  if (element === undefined) return undefined;
+  return Object.freeze({ style: attr(element, "style"), color: parseSpreadsheetColor(child(element, namespace, "color")) });
 }
 
 function defaultStyles(): SpreadsheetStyles {
@@ -495,6 +566,11 @@ function valueChild(parent: LosslessXmlElement, namespace: string, name: string)
 function propertyBoolean(parent: LosslessXmlElement, namespace: string, name: string): boolean {
   const element = child(parent, namespace, name);
   return element === undefined ? false : optionalBoolean(attr(element, "val"), name) ?? true;
+}
+
+function optionalPropertyBoolean(parent: LosslessXmlElement, namespace: string, name: string): boolean | undefined {
+  const element = child(parent, namespace, name);
+  return element === undefined ? undefined : optionalBoolean(attr(element, "val"), name) ?? true;
 }
 
 function requiredUnsigned(element: LosslessXmlElement, name: string): number {
