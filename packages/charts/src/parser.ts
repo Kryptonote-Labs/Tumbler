@@ -75,7 +75,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
   }
   const rawHole = val(children(chartType, chartNamespace, "holeSize")[0]);
   const holeSize = kind === "doughnut" ? boundedPercent(rawHole ?? "50", "doughnut hole size") : undefined;
-  const scatterStyle = kind === "scatter" ? parseScatterStyle(val(children(chartType, chartNamespace, "scatterStyle")[0]) ?? "lineMarker") : undefined;
+  const scatterStyle = kind === "scatter" ? parseScatterStyle(val(children(chartType, chartNamespace, "scatterStyle")[0]) ?? "marker") : undefined;
   const axisIds = children(chartType, chartNamespace, "axId").map((element) => unsigned(val(element) ?? "", "chart axis id"));
   return Object.freeze({ status: "supported", kind, grouping, holeSize, ...(scatterStyle === undefined ? {} : { scatterStyle }), ...(axisIds.length === 0 ? {} : { axisIds: Object.freeze(axisIds) }), title, ...(titleFormula === undefined ? {} : { titleFormula }), legend, series: Object.freeze(series), axes: Object.freeze(axes) });
 }
@@ -182,7 +182,7 @@ function parseScatterStyle(raw: string): ChartScatterStyle {
 function parseMarker(element: LosslessXmlElement | undefined, namespace: string): ChartMarker | undefined {
   if (element === undefined) return undefined;
   const rawSymbol = val(children(element, namespace, "symbol")[0]) ?? "auto";
-  const symbols = new Set<ChartMarkerSymbol>(["auto", "circle", "dash", "diamond", "dot", "none", "plus", "square", "star", "triangle", "x"]);
+  const symbols = new Set<ChartMarkerSymbol>(["auto", "circle", "dash", "diamond", "dot", "none", "picture", "plus", "square", "star", "triangle", "x"]);
   if (!symbols.has(rawSymbol as ChartMarkerSymbol)) throw new ChartParseError(`Chart marker symbol ${JSON.stringify(rawSymbol)} is invalid.`);
   const rawSize = val(children(element, namespace, "size")[0]) ?? "5";
   const size = Number(rawSize);

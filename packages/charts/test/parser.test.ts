@@ -34,6 +34,8 @@ describe("DrawingML chart parser", () => {
     expect(type("lineChart")).toMatchObject({ status: "supported", kind: "line" });
     expect(type("barChart", '<c:barDir val="bar"/>')).toMatchObject({ status: "supported", kind: "bar" });
     expect(type("scatterChart", '<c:scatterStyle val="marker"/>')).toMatchObject({ status: "supported", kind: "scatter", scatterStyle: "marker" });
+    expect(type("scatterChart")).toMatchObject({ status: "supported", kind: "scatter", scatterStyle: "marker" });
+    expect(type("scatterChart", '<c:scatterStyle val="none"/>')).toMatchObject({ status: "supported", kind: "scatter", scatterStyle: "none" });
   });
 
   test("reads scatter coordinates, style, markers, axes, and numeric formats", () => {

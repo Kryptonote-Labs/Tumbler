@@ -2,7 +2,7 @@ export type ChartKind = "bar" | "column" | "line" | "pie" | "doughnut" | "scatte
 
 export type ChartScatterStyle = "none" | "line" | "line-marker" | "marker" | "smooth" | "smooth-marker";
 
-export type ChartMarkerSymbol = "auto" | "circle" | "dash" | "diamond" | "dot" | "none" | "plus" | "square" | "star" | "triangle" | "x";
+export type ChartMarkerSymbol = "auto" | "circle" | "dash" | "diamond" | "dot" | "none" | "picture" | "plus" | "square" | "star" | "triangle" | "x";
 
 export interface ChartMarker {
   readonly symbol: ChartMarkerSymbol;
