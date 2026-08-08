@@ -229,6 +229,7 @@ describe("Svelte spreadsheet viewport", () => {
     expect(coerceSpreadsheetEditValue("001", { type: "string", value: "old", storage: "inline" })).toBe("001");
     expect(coerceSpreadsheetEditValue("12 apples", { type: "number", value: 12, lexical: "12" })).toBe("12 apples");
     expect(coerceSpreadsheetEditValue("", undefined)).toBe("");
+    expect(coerceSpreadsheetEditValue("=SUM(A1:A2)", undefined)).toBe("=SUM(A1:A2)");
   });
 
   test("derives standard column metrics from the Normal style font", () => {
