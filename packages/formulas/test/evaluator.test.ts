@@ -220,14 +220,16 @@ describe("bounded spreadsheet formula calculation", () => {
     const calculation = calculateFormulas(source({
       "Sheet1!A1": formula(`COUNTIF(1,"=1")`, { type: "number", value: 91 }),
       "Sheet1!A2": formula(`SUMIF(A1:A2,1,XFD1048576)`, { type: "number", value: 92 }),
+      "Sheet1!A3": formula(`AVERAGEIF(A1:A2,"never",XFD1048576)`, { type: "number", value: 93 }),
     }));
 
     expect(calculation.value(address("Sheet1!A1"))).toEqual({ type: "error", value: "#VALUE!" });
     expect(calculation.value(address("Sheet1!A2"))).toBeUndefined();
-    expect(calculation.diagnostics).toMatchObject([{
-      code: "unsupported-reference",
-      formula: `SUMIF(A1:A2,1,XFD1048576)`,
-    }]);
+    expect(calculation.value(address("Sheet1!A3"))).toBeUndefined();
+    expect(calculation.diagnostics).toMatchObject([
+      { code: "unsupported-reference", formula: `SUMIF(A1:A2,1,XFD1048576)` },
+      { code: "unsupported-reference", formula: `AVERAGEIF(A1:A2,"never",XFD1048576)` },
+    ]);
   });
 
   test("keeps wildcard evaluation bounded on adversarial text", () => {

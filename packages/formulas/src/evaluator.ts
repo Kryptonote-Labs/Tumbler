@@ -236,6 +236,7 @@ export function calculateFormulas(
         ? inspected
         : referenceGeometry(args[2], sheet, source);
       if (isFormulaError(resultStart)) return resultStart;
+      assertCorrespondingRange(resultStart, inspected.height, inspected.width, limits.maxRangeCells);
 
       let count = 0;
       let total = 0;
@@ -254,7 +255,6 @@ export function calculateFormulas(
             continue;
           }
           const resultAddress = correspondingAddress(resultStart, rowOffset, columnOffset);
-          if (isFormulaError(resultAddress)) return resultAddress;
           const resultValue = cellValue(resultAddress, depth + 1, true);
           if (resultValue.type === "error") return resultValue;
           if (resultValue.type !== "number") continue;
@@ -432,11 +432,12 @@ function correspondingAddress(
   range: FormulaRangeGeometry,
   rowOffset: number,
   columnOffset: number,
-): FormulaCellAddress | Extract<FormulaScalarValue, { type: "error" }> {
-  const row = range.firstRow + rowOffset;
-  const column = range.firstColumn + columnOffset;
-  if (row > MAX_SPREADSHEET_ROW || column > MAX_SPREADSHEET_COLUMN) return error("#REF!");
-  return Object.freeze({ sheet: range.sheet, row, column });
+): FormulaCellAddress {
+  return Object.freeze({
+    sheet: range.sheet,
+    row: range.firstRow + rowOffset,
+    column: range.firstColumn + columnOffset,
+  });
 }
 
 function correspondingRangeAddresses(
@@ -445,10 +446,7 @@ function correspondingRangeAddresses(
   width: number,
   maxRangeCells: number,
 ): FormulaCellAddress[] {
-  assertRangeSize(height, width, maxRangeCells);
-  if (range.firstRow + height - 1 > MAX_SPREADSHEET_ROW || range.firstColumn + width - 1 > MAX_SPREADSHEET_COLUMN) {
-    throw new EvaluationUnavailable("unsupported-reference", "Formula corresponding range extends beyond the worksheet boundary.");
-  }
+  assertCorrespondingRange(range, height, width, maxRangeCells);
   const addresses: FormulaCellAddress[] = [];
   for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
     for (let columnOffset = 0; columnOffset < width; columnOffset += 1) {
@@ -460,6 +458,18 @@ function correspondingRangeAddresses(
     }
   }
   return addresses;
+}
+
+function assertCorrespondingRange(
+  range: FormulaRangeGeometry,
+  height: number,
+  width: number,
+  maxRangeCells: number,
+): void {
+  assertRangeSize(height, width, maxRangeCells);
+  if (range.firstRow + height - 1 > MAX_SPREADSHEET_ROW || range.firstColumn + width - 1 > MAX_SPREADSHEET_COLUMN) {
+    throw new EvaluationUnavailable("unsupported-reference", "Formula corresponding range extends beyond the worksheet boundary.");
+  }
 }
 
 function assertRangeSize(height: number, width: number, maxRangeCells: number): void {
