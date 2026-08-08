@@ -42,6 +42,9 @@ const formulas = buildWorkbookFixture({
     </sheetData></worksheet>`,
   }],
 });
+const formulaEdited = openSpreadsheetArtifact(formulas)
+  .editFormula("C10", "SUM(B5:B7)+1")
+  .bytes();
 const officeRelationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
 const spreadsheetDrawing = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
@@ -77,6 +80,7 @@ await Promise.all([
   Bun.write(resolve(outputDirectory, "spreadsheet-edited.xlsx"), edited),
   Bun.write(resolve(outputDirectory, "spreadsheet-table.xlsx"), table),
   Bun.write(resolve(outputDirectory, "spreadsheet-formulas.xlsx"), formulas),
+  Bun.write(resolve(outputDirectory, "spreadsheet-formula-edited.xlsx"), formulaEdited),
   Bun.write(resolve(outputDirectory, "spreadsheet-charts.xlsx"), charts),
 ]);
 

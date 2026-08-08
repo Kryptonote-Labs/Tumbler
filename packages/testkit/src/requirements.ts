@@ -68,6 +68,7 @@ export const SPREADSHEET_REQUIREMENTS = defineRequirementManifest([
   requirement("XLSX-CHART-RENDERING", "§21.2.2.16, §21.2.2.97, §21.2.2.141", "spreadsheet.chart-rendering", ["layout.test.ts", "chart.test.ts", "spreadsheet-viewport.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }),
   requirement("XLSX-FORMULA-GRAMMAR", "§2.2.2", "spreadsheet.formula-grammar", ["parser.test.ts", "calculation.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }, "MS-XLSX"),
   requirement("XLSX-FORMULA-EVALUATION", "§18.17.2–7", "spreadsheet.formula-evaluation", ["evaluator.test.ts", "calculation.test.ts", "spreadsheet-viewport.test.ts"], { recognize: "partial", preserve: "supported", render: "partial", edit: "partial" }),
+  requirement("XLSX-FORMULA-WRITE", "§18.3.1.40", "spreadsheet.formula-write", ["editor.test.ts", "artifact.test.ts", "spreadsheet-formula-bar.test.ts"], { recognize: "partial", preserve: "supported", render: "partial", edit: "partial", write: "partial" }),
 ] as const);
 
 function requirement(
