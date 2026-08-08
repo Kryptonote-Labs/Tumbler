@@ -28,6 +28,11 @@
   let selectionEnd = $state(0);
   let lastReferencePickId = $state<number>();
   let insertedReferenceSpan = $state<SpreadsheetFormulaTextSpan>();
+  let targetLabel = $derived(
+    targetWorksheet === undefined || targetWorksheet.sheet === worksheet.sheet
+      ? targetReference || reference
+      : `${targetWorksheet.sheet.name}!${targetReference}`,
+  );
 
   $effect(() => {
     const currentWorksheet = worksheet;
@@ -109,7 +114,7 @@
 </script>
 
 <form class="formula-bar" aria-label="Formula bar" onsubmit={(event) => { event.preventDefault(); commit(); }}>
-  <output class="cell-reference" aria-label="Formula target">{targetReference || reference}</output>
+  <output class="cell-reference" aria-label="Formula target">{targetLabel}</output>
   <span class="formula-mark" aria-hidden="true">fx</span>
   <input
     bind:this={input}

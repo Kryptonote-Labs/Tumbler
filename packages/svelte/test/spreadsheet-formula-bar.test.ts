@@ -43,5 +43,6 @@ describe("Svelte spreadsheet formula bar", () => {
     expect(source).toContain('autocomplete="off"');
     expect(source).toContain('spellcheck="false"');
     expect(source).toContain("referencePick");
+    expect(source).toContain("targetWorksheet.sheet.name");
   });
 });
