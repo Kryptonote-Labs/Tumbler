@@ -82,10 +82,12 @@ export function resolveSpreadsheetChartDataSet(worksheet: SpreadsheetWorksheet, 
       const title = titleSource === undefined
         ? item.title
         : titleSource.calculation.displayText(titleSource.range.start) || item.title;
+      const xValues = resolveSequence(item.xValues, "value");
       return Object.freeze({
         ...item,
         title,
         categories: resolveSequence(item.categories, "category"),
+        ...(xValues === undefined ? {} : { xValues }),
         values: resolveSequence(item.values, "value"),
       });
     });

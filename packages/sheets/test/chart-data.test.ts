@@ -31,6 +31,27 @@ describe("Spreadsheet chart data binding", () => {
     expect(resolved.series[0]?.values?.points.map((point) => point.value)).toEqual([2, 11, 13]);
   });
 
+  test("resolves scatter X and Y formulas as paired numeric sequences", () => {
+    const workbook = fixture();
+    const worksheet = openWorksheet(workbook, workbook.sheet("Dashboard")!);
+    const source = model();
+    const scatter: SupportedChartModel = Object.freeze({
+      ...source,
+      kind: "scatter",
+      scatterStyle: "marker",
+      series: Object.freeze(source.series.map((series) => Object.freeze({
+        ...series,
+        categories: undefined,
+        xValues: Object.freeze({ kind: "number" as const, formula: "Data!$B$2:$B$4", formatCode: "0", points: Object.freeze([{ index: 0, value: 999 }]) }),
+        values: Object.freeze({ kind: "number" as const, formula: "Data!$B$2:$B$4", formatCode: "0", points: Object.freeze([{ index: 0, value: 999 }]) }),
+      }))),
+    });
+    const resolved = resolveSpreadsheetChartData(worksheet, scatter);
+    if (resolved.status !== "supported") throw new Error("Expected supported chart");
+    expect(resolved.series[0]?.xValues?.points.map((point) => point.value)).toEqual([2, 3, 5]);
+    expect(resolved.series[0]?.values?.points.map((point) => point.value)).toEqual([2, 3, 5]);
+  });
+
   test("formats numeric date categories while retaining numeric plotted values", () => {
     const spreadsheet = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
