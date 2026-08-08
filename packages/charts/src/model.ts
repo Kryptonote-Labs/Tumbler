@@ -4,6 +4,9 @@ export type ChartScatterStyle = "none" | "line" | "line-marker" | "marker" | "sm
 
 export type ChartBubbleSizeRepresentation = "area" | "width";
 
+/** Maximum bubble count accepted by parsing, host binding, and layout. */
+export const BUBBLE_CHART_POINT_LIMIT = 10_000;
+
 export type ChartMarkerSymbol = "auto" | "circle" | "dash" | "diamond" | "dot" | "none" | "picture" | "plus" | "square" | "star" | "triangle" | "x";
 
 export interface ChartMarker {

@@ -1,4 +1,5 @@
 import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
+import { BUBBLE_CHART_POINT_LIMIT } from "./model.ts";
 import type {
   ChartAxis,
   ChartColor,
@@ -81,6 +82,17 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
     );
     if (chartBubble3D || seriesBubble3D) {
       return unsupported(chartType.localName, "3-D bubble effects are not supported in this milestone.", title, titleFormula, legend);
+    }
+    if (series.some((item) => item.xValues?.kind === "string" || item.values?.kind === "string" || item.bubbleSizes?.kind === "string")) {
+      return unsupported(chartType.localName, "Bubble X, Y, and size sequences must be numeric.", title, titleFormula, legend);
+    }
+    const pointUpperBound = series.reduce((total, item) => total + Math.min(
+      item.xValues?.points.length ?? 0,
+      item.values?.points.length ?? 0,
+      item.bubbleSizes?.points.length ?? 0,
+    ), 0);
+    if (pointUpperBound > BUBBLE_CHART_POINT_LIMIT) {
+      return unsupported(chartType.localName, `Bubble chart exceeds ${BUBBLE_CHART_POINT_LIMIT} potential points.`, title, titleFormula, legend);
     }
   }
   const rawHole = val(children(chartType, chartNamespace, "holeSize")[0]);

@@ -1,4 +1,4 @@
-import type { ChartDataSequence, SupportedChartModel } from "./model.ts";
+import { BUBBLE_CHART_POINT_LIMIT, type ChartDataSequence, type SupportedChartModel } from "./model.ts";
 
 export interface ChartRect {
   readonly x: number;
@@ -57,8 +57,6 @@ export interface BubbleChartLayout {
   readonly yTicks: readonly number[];
   readonly series: readonly (readonly BubblePoint[])[];
 }
-
-const MAX_LAID_OUT_BUBBLES = 100_000;
 
 export function layoutCartesianChart(model: SupportedChartModel, width: number, height: number): CartesianChartLayout {
   finiteSize(width, "chart width");
@@ -147,6 +145,14 @@ export function layoutScatterChart(model: SupportedChartModel, width: number, he
 
 /** Lays out sparse X/Y/size triples with area- or width-proportional bubble radii. */
 export function layoutBubbleChart(model: SupportedChartModel, width: number, height: number): BubbleChartLayout {
+  const pointUpperBound = model.series.reduce((total, series) => total + Math.min(
+    series.xValues?.points.length ?? 0,
+    series.values?.points.length ?? 0,
+    series.bubbleSizes?.points.length ?? 0,
+  ), 0);
+  if (pointUpperBound > BUBBLE_CHART_POINT_LIMIT) {
+    throw new RangeError(`Bubble chart exceeds ${BUBBLE_CHART_POINT_LIMIT} potential points.`);
+  }
   const paired = model.series.map((series) => {
     const yByIndex = numericPoints(series.values);
     const sizeByIndex = numericPoints(series.bubbleSizes);
@@ -158,10 +164,6 @@ export function layoutBubbleChart(model: SupportedChartModel, width: number, hei
         : [];
     }) ?? []);
   });
-  const pointCount = paired.reduce((sum, points) => sum + points.length, 0);
-  if (pointCount > MAX_LAID_OUT_BUBBLES) {
-    throw new RangeError(`Bubble chart exceeds ${MAX_LAID_OUT_BUBBLES} paired points.`);
-  }
   const projectedModel: SupportedChartModel = {
     ...model,
     series: model.series.map((series, seriesIndex) => {

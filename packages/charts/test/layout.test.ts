@@ -113,6 +113,21 @@ describe("headless chart layout", () => {
     const hidden = layoutBubbleChart({ ...bubble, showNegativeBubbles: false }, 500, 300);
     expect(hidden.series[0]?.[0]?.radius).toBe(0);
   });
+
+  test("rejects bubble layouts above the rendering resource limit", () => {
+    const source = model();
+    const points = Array.from({ length: 10_001 }, (_, index) => ({ index, value: index + 1 }));
+    const bubble: SupportedChartModel = {
+      ...source, kind: "bubble", bubbleScale: 100, showNegativeBubbles: false,
+      bubbleSizeRepresentation: "area",
+      series: [{ ...source.series[0]!,
+        xValues: { kind: "number", formula: undefined, formatCode: undefined, points },
+        values: { kind: "number", formula: undefined, formatCode: undefined, points },
+        bubbleSizes: { kind: "number", formula: undefined, formatCode: undefined, points },
+      }],
+    };
+    expect(() => layoutBubbleChart(bubble, 500, 300)).toThrow("exceeds 10000 potential points");
+  });
 });
 
 function model(): SupportedChartModel {

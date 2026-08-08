@@ -89,6 +89,9 @@ describe("DrawingML chart parser", () => {
     expect(type("bubbleChart", '<c:axId val="1"/>')).toMatchObject({
       status: "unsupported", reason: expect.stringContaining("exactly two"),
     });
+    expect(type("bubbleChart", '<c:ser><c:idx val="0"/><c:order val="0"/><c:xVal><c:strLit><c:ptCount val="1"/><c:pt idx="0"><c:v>A</c:v></c:pt></c:strLit></c:xVal></c:ser><c:axId val="1"/><c:axId val="2"/>')).toMatchObject({
+      status: "unsupported", reason: expect.stringContaining("must be numeric"),
+    });
     expect(() => type("bubbleChart", '<c:bubbleScale val="301%"/><c:axId val="1"/><c:axId val="2"/>')).toThrow(ChartParseError);
     expect(() => type("bubbleChart", '<c:sizeRepresents val="radius"/><c:axId val="1"/><c:axId val="2"/>')).toThrow(ChartParseError);
   });
