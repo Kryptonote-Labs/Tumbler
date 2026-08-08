@@ -2,6 +2,7 @@
   import {
     chartSequenceValue,
     chartValueCoordinate,
+    layoutBubbleChart,
     layoutCartesianChart,
     layoutPieSlices,
     layoutScatterChart,
@@ -180,6 +181,53 @@
       {/each}
     {/if}
   </svg>
+{:else if model.kind === "bubble"}
+  {@const layout = layoutBubbleChart(model, width, height)}
+  {@const xAxis = scatterAxis(model, 0)}
+  {@const yAxis = scatterAxis(model, 1)}
+  {@const xFormat = xAxis?.numberFormatCode ?? model.series.find((series) => series.xValues?.formatCode !== undefined)?.xValues?.formatCode}
+  {@const yFormat = yAxis?.numberFormatCode ?? model.series.find((series) => series.values?.formatCode !== undefined)?.values?.formatCode}
+  <svg class="chart" role="img" aria-label={accessibleName} viewBox={`0 0 ${width} ${height}`}>
+    <title>{accessibleName}</title>
+    <rect width={width} height={height} fill="#fff" />
+    <defs><clipPath id={clipId}><rect x={layout.plot.x} y={layout.plot.y} width={layout.plot.width} height={layout.plot.height} /></clipPath></defs>
+    {#if model.title !== undefined}<text class="title" x={width / 2} y="22" text-anchor="middle">{model.title}</text>{/if}
+    {#each layout.yTicks as tick (tick)}
+      {@const y = chartValueCoordinate(tick, layout.yMinimum, layout.yMaximum, layout.plot.y, layout.plot.height, true)}
+      {#if yAxis?.majorGridlines}<line class="gridline" x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={y} y2={y} />{/if}
+      <text class="tick" x={layout.plot.x - 6} y={y + 4} text-anchor="end">{tickLabel(tick, yFormat)}</text>
+    {/each}
+    {#each layout.xTicks as tick (tick)}
+      {@const x = chartValueCoordinate(tick, layout.xMinimum, layout.xMaximum, layout.plot.x, layout.plot.width)}
+      {#if xAxis?.majorGridlines}<line class="gridline" x1={x} x2={x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />{/if}
+      <text class="tick" x={x} y={layout.plot.y + layout.plot.height + 17} text-anchor="middle">{tickLabel(tick, xFormat)}</text>
+    {/each}
+    <line class="axis" x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={layout.plot.y + layout.plot.height} y2={layout.plot.y + layout.plot.height} />
+    <line class="axis" x1={layout.plot.x} x2={layout.plot.x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />
+    <g clip-path={`url(#${clipId})`}>
+      {#each model.series as series, seriesIndex (series.index)}
+        {#each layout.series[seriesIndex] ?? [] as point (point.index)}
+          {#if point.radius > 0}
+            <circle
+              class="bubble"
+              cx={point.plotX}
+              cy={point.plotY}
+              r={point.radius}
+              fill={color(series, seriesIndex)}
+              stroke={color(series, seriesIndex, true)}
+            />
+          {/if}
+        {/each}
+      {/each}
+    </g>
+    {#if xAxis?.title !== undefined}<text class="axis-title" x={layout.plot.x + layout.plot.width / 2} y={height - 4} text-anchor="middle">{xAxis.title}</text>{/if}
+    {#if yAxis?.title !== undefined}<text class="axis-title" transform={`translate(12 ${layout.plot.y + layout.plot.height / 2}) rotate(-90)`} text-anchor="middle">{yAxis.title}</text>{/if}
+    {#if model.legend !== undefined}
+      {#each model.series as series, index (series.index)}
+        <g transform={`translate(${legendX(model, index)} ${legendY(model, index)})`}><circle cx="5" cy="-3" r="5" fill={color(series, index)} /><text x="15">{series.title ?? `Series ${index + 1}`}</text></g>
+      {/each}
+    {/if}
+  </svg>
 {:else}
   {@const layout = layoutCartesianChart(model, width, height)}
   {@const count = Math.max(1, layout.categories.length)}
@@ -269,5 +317,6 @@
   .gridline { stroke: #d9d9d9; stroke-width: 1; shape-rendering: crispEdges; }
   .tick, .category { fill: #555; font-size: 10px; }
   .axis-title { fill: #333; font-size: 11px; font-weight: 600; }
+  .bubble { fill-opacity: 0.72; }
   .chart-fallback { display: grid; place-items: center; padding: 12px; color: #666; background: repeating-linear-gradient(135deg, #fff, #fff 8px, #f7f7f7 8px, #f7f7f7 16px); text-align: center; }
 </style>

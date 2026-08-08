@@ -1,4 +1,4 @@
-import type { ChartDataSequence, SupportedChartModel } from "./model.ts";
+import { BUBBLE_CHART_POINT_LIMIT, type ChartDataSequence, type SupportedChartModel } from "./model.ts";
 
 export interface ChartRect {
   readonly x: number;
@@ -39,6 +39,23 @@ export interface ScatterChartLayout {
   readonly xTicks: readonly number[];
   readonly yTicks: readonly number[];
   readonly series: readonly (readonly ScatterPoint[])[];
+}
+
+export interface BubblePoint extends ScatterPoint {
+  readonly size: number;
+  readonly radius: number;
+  readonly negative: boolean;
+}
+
+export interface BubbleChartLayout {
+  readonly plot: ChartRect;
+  readonly xMinimum: number;
+  readonly xMaximum: number;
+  readonly yMinimum: number;
+  readonly yMaximum: number;
+  readonly xTicks: readonly number[];
+  readonly yTicks: readonly number[];
+  readonly series: readonly (readonly BubblePoint[])[];
 }
 
 export function layoutCartesianChart(model: SupportedChartModel, width: number, height: number): CartesianChartLayout {
@@ -124,6 +141,58 @@ export function layoutScatterChart(model: SupportedChartModel, width: number, he
     yTicks: linearTicks(yDomain.minimum, yDomain.maximum, 5),
     series: Object.freeze(series),
   });
+}
+
+/** Lays out sparse X/Y/size triples with area- or width-proportional bubble radii. */
+export function layoutBubbleChart(model: SupportedChartModel, width: number, height: number): BubbleChartLayout {
+  const pointUpperBound = model.series.reduce((total, series) => total + Math.min(
+    series.xValues?.points.length ?? 0,
+    series.values?.points.length ?? 0,
+    series.bubbleSizes?.points.length ?? 0,
+  ), 0);
+  if (pointUpperBound > BUBBLE_CHART_POINT_LIMIT) {
+    throw new RangeError(`Bubble chart exceeds ${BUBBLE_CHART_POINT_LIMIT} potential points.`);
+  }
+  const paired = model.series.map((series) => {
+    const yByIndex = numericPoints(series.values);
+    const sizeByIndex = numericPoints(series.bubbleSizes);
+    return Object.freeze(series.xValues?.points.flatMap((point) => {
+      const y = yByIndex.get(point.index);
+      const size = sizeByIndex.get(point.index);
+      return typeof point.value === "number" && y !== undefined && size !== undefined
+        ? [{ index: point.index, x: point.value, y, size }]
+        : [];
+    }) ?? []);
+  });
+  const projectedModel: SupportedChartModel = {
+    ...model,
+    series: model.series.map((series, seriesIndex) => {
+      const points = paired[seriesIndex] ?? [];
+      return {
+        ...series,
+        xValues: numericSequence(series.xValues, points.map((point) => ({ index: point.index, value: point.x }))),
+        values: numericSequence(series.values, points.map((point) => ({ index: point.index, value: point.y }))),
+      };
+    }),
+  };
+  const xy = layoutScatterChart(projectedModel, width, height);
+  const visibleMagnitudes = paired.flatMap((points) => points.flatMap((point) =>
+    point.size > 0 || (point.size < 0 && model.showNegativeBubbles === true) ? [Math.abs(point.size)] : []
+  ));
+  const maximumMagnitude = Math.max(1, ...visibleMagnitudes);
+  const maximumRadius = Math.min(xy.plot.width, xy.plot.height) * 0.1 * (model.bubbleScale ?? 100) / 100;
+  const series = paired.map((points, seriesIndex) => {
+    const xyByIndex = new Map((xy.series[seriesIndex] ?? []).map((point) => [point.index, point] as const));
+    return Object.freeze(points.map((point): BubblePoint => {
+      const position = xyByIndex.get(point.index)!;
+      const magnitude = Math.abs(point.size);
+      const visible = point.size > 0 || (point.size < 0 && model.showNegativeBubbles === true);
+      const ratio = visible ? magnitude / maximumMagnitude : 0;
+      const radius = maximumRadius * (model.bubbleSizeRepresentation === "width" ? ratio : Math.sqrt(ratio));
+      return Object.freeze({ ...position, size: point.size, radius, negative: point.size < 0 });
+    }));
+  });
+  return Object.freeze({ ...xy, series: Object.freeze(series) });
 }
 
 /** Produces disconnected straight or Catmull-Rom-smoothed paths across consecutive cache indexes. */
@@ -245,6 +314,24 @@ function numericDomain(values: readonly number[], explicitMinimum: number | unde
   }
   if (minimum === maximum) maximum = minimum + 1;
   return Object.freeze({ minimum, maximum });
+}
+
+function numericPoints(sequence: ChartDataSequence | undefined): ReadonlyMap<number, number> {
+  return new Map(sequence?.points.flatMap((point) =>
+    typeof point.value === "number" ? [[point.index, point.value] as const] : []
+  ) ?? []);
+}
+
+function numericSequence(
+  source: ChartDataSequence | undefined,
+  points: readonly { readonly index: number; readonly value: number }[],
+): ChartDataSequence {
+  return Object.freeze({
+    kind: "number",
+    formula: source?.formula,
+    formatCode: source?.formatCode,
+    points: Object.freeze(points.map((point) => Object.freeze(point))),
+  });
 }
 
 function finiteSize(value: number, context: string): void {

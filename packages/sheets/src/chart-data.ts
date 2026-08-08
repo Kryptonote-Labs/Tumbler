@@ -1,4 +1,4 @@
-import type { ChartDataPoint, ChartDataSequence, ChartModel, ChartSeries } from "@tumblerjs/charts";
+import { BUBBLE_CHART_POINT_LIMIT, type ChartDataPoint, type ChartDataSequence, type ChartModel, type ChartSeries } from "@tumblerjs/charts";
 import type { CellRange } from "./references.ts";
 import { parseCellRange } from "./references.ts";
 import { calculateSpreadsheetWorksheet, type SpreadsheetCalculationSnapshot } from "./calculation.ts";
@@ -83,16 +83,32 @@ export function resolveSpreadsheetChartDataSet(worksheet: SpreadsheetWorksheet, 
         ? item.title
         : titleSource.calculation.displayText(titleSource.range.start) || item.title;
       const xValues = resolveSequence(item.xValues, "value");
+      const bubbleSizes = resolveSequence(item.bubbleSizes, "value");
       return Object.freeze({
         ...item,
         title,
         categories: resolveSequence(item.categories, "category"),
         ...(xValues === undefined ? {} : { xValues }),
         values: resolveSequence(item.values, "value"),
+        ...(bubbleSizes === undefined ? {} : { bubbleSizes }),
       });
     });
     const titleSource = model.titleFormula === undefined ? undefined : source(model.titleFormula);
     const title = titleSource === undefined ? model.title : titleSource.calculation.displayText(titleSource.range.start) || model.title;
+    if (model.kind === "bubble") {
+      const pointUpperBound = series.reduce((total, item) => total + Math.min(
+        item.xValues?.points.length ?? 0,
+        item.values?.points.length ?? 0,
+        item.bubbleSizes?.points.length ?? 0,
+      ), 0);
+      if (pointUpperBound > BUBBLE_CHART_POINT_LIMIT) {
+        return Object.freeze({
+          status: "unsupported", chartType: "bubbleChart",
+          reason: `Bubble chart exceeds ${BUBBLE_CHART_POINT_LIMIT} potential points.`,
+          title, legend: model.legend,
+        });
+      }
+    }
     return Object.freeze({ ...model, title, series: Object.freeze(series) });
   }));
 }

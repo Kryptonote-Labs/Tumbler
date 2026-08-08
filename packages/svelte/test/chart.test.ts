@@ -10,8 +10,20 @@ describe("owned Svelte chart head", () => {
     expect(source).toContain("<svg");
     expect(source).toContain("pieArcPath");
     expect(source).toContain("layoutScatterChart");
+    expect(source).toContain("layoutBubbleChart");
     expect(source).toContain("scatterLinePath");
     expect(source).not.toMatch(/chart\.js|highcharts|plotly|echarts/i);
+  });
+
+  test("renders bubble charts with clipped scaled circles and numeric axes", async () => {
+    const source = await Bun.file(new URL("../src/OoxmlChart.svelte", import.meta.url)).text();
+    const result = compile(source, { filename: "OoxmlChart.svelte", generate: "client", modernAst: true });
+    expect(result.warnings).toEqual([]);
+    expect(source).toContain('model.kind === "bubble"');
+    expect(source).toContain("point.radius > 0");
+    expect(source).toContain('class="bubble"');
+    expect(source).toContain("clip-path");
+    expect(source).toContain("formatNumber");
   });
 
   test("renders numeric scatter axes, clipped series, and authored marker variants", async () => {

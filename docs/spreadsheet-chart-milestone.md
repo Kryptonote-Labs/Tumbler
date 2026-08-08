@@ -19,6 +19,11 @@ The implementation follows ECMA-376 Part 1:
   line, pie-family, and scatter charts;
 - §21.2.2.162, §21.2.3.27, and §21.2.3.40 for scatter and marker style
   semantics.
+- §21.2.2.20–22, §21.2.2.174, §21.2.2.185, and §21.2.2.193 for
+  two-dimensional bubble charts, series sizes, negative bubbles, and size
+  representation;
+- §21.2.3.5 and §21.2.3.43 for the bounded bubble scale and proportional-area
+  or proportional-width size modes.
 
 Both Strict and Transitional namespace and relationship profiles are required.
 Relationship targets are resolved through OPC; external relationships are never
@@ -32,6 +37,8 @@ dereferenced by the chart reader.
 - marker-only, straight-line, straight-line-with-markers, smooth-line, and
   smooth-line-with-markers scatter styles, including common marker shapes;
 - paired sparse numeric X/Y caches and independently scaled numeric axes;
+- two-dimensional bubble charts with sparse numeric X/Y/size pairing, bounded
+  scale factors, opt-in negative bubbles, and area- or width-proportional radii;
 - titles, legends, category/value axes, major gridlines, and multiple series;
 - cached string and numeric series data;
 - simple internal A1 source ranges, refreshed from workbook cells when resolvable;
@@ -47,7 +54,9 @@ dereferenced by the chart reader.
 
 - chart creation or mutation of chart XML and caches;
 - chartsheets, PivotCharts, ChartEx, and embedded/external workbooks;
-- 3-D, combination, area, bubble, stock, radar, and surface charts;
+- 3-D, combination, area, stock, radar, and surface charts;
+- 3-D bubble effects, per-point bubble formatting, bubble data labels,
+  trendlines, error bars, and exact Office bubble-size normalization;
 - secondary axes, trendlines, error bars, and full data-label fidelity;
 - structured, defined-name, dynamic, or external-workbook source references;
 - exact Office text measurement and every theme/style effect.
