@@ -101,6 +101,10 @@ export class SpreadsheetConditionalStyleProjection {
     const matched: SpreadsheetDifferentialFormat[] = [];
     for (const { format, rule } of this.#rules) {
       if (!format.ranges.some((range) => contains(range, address))) continue;
+      if (format.pivot) {
+        this.#diagnose("unsupported-rule", rule, normalized, "PivotTable conditional formatting is unsupported.");
+        continue;
+      }
       const result = this.#matches(rule, format.ranges[0]!.start, address, normalized);
       if (result !== true) continue;
       const differential = rule.differentialFormatId === undefined

@@ -125,6 +125,14 @@ describe("SpreadsheetML conditional formatting", () => {
     ]);
   });
 
+  test("keeps PivotTable conditional formatting inert", () => {
+    const artifact = fixture(`<sheetData><row r="1"><c r="A1"><v>5</v></c></row></sheetData>
+      <conditionalFormatting sqref="A1" pivot="1"><cfRule type="cellIs" dxfId="0" priority="1" operator="greaterThan"><formula>0</formula></cfRule></conditionalFormatting>`);
+    const projection = projectSpreadsheetConditionalStyles(artifact.worksheet);
+    expect(projection.formats("A1")).toEqual([]);
+    expect(projection.diagnostics[0]).toMatchObject({ code: "unsupported-rule", reference: "A1" });
+  });
+
   test("queries a whole-grid range sparsely and preserves the source package on a no-op", () => {
     const bytes = buildFixtureBytes(`<sheetData><row r="1048576"><c r="XFD1048576"><v>0</v></c></row></sheetData><conditionalFormatting sqref="A1:XFD1048576"><cfRule type="cellIs" dxfId="0" priority="1" operator="equal"><formula>0</formula></cfRule></conditionalFormatting>`);
     const artifact = openSpreadsheetArtifact(bytes);
