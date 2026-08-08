@@ -29,6 +29,7 @@
   import { coerceSpreadsheetEditValue, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
   import { measureMaximumDigitWidth, spreadsheetFontShorthand } from "./spreadsheet-font-metrics.ts";
   import { spreadsheetCellContentCss, spreadsheetCellCss } from "./spreadsheet-cell-style.ts";
+  import { spreadsheetTextOverflowWidth } from "./spreadsheet-text-overflow.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
 
   interface RenderableChart {
@@ -345,6 +346,19 @@
     return calculation?.displayText(reference) ?? worksheet.displayText(reference);
   }
 
+  function textOverflowWidth(row: number, column: number): number | undefined {
+    const maximumColumn = layout.columns.reduce((maximum, item) => Math.max(maximum, item.index), column);
+    return spreadsheetTextOverflowWidth({
+      worksheet,
+      calculation,
+      row,
+      column,
+      columnGeometry,
+      maximumColumn,
+      frozenColumns,
+    });
+  }
+
   function activateHyperlink(event: MouseEvent, hyperlink: SpreadsheetHyperlink, row: number, column: number) {
     event.stopPropagation();
     select(row, column);
@@ -461,10 +475,12 @@
 {#snippet gridCell(reference: string, sourceRow: number, column: number, left: number, top: number, width: number, height: number, zIndex: number)}
   {@const header = tableHeader(sourceRow, column)}
   {@const hyperlink = worksheet.hyperlink({ row: sourceRow, column })}
+  {@const overflowWidth = editing === reference ? undefined : textOverflowWidth(sourceRow, column)}
   <div
     class:selected={selected(sourceRow, column)}
     class:focused={selection.focus.row === sourceRow && selection.focus.column === column}
     class:table-header={header !== undefined}
+    class:text-overflow={overflowWidth !== undefined}
     class="cell"
     role="gridcell"
     tabindex="-1"
@@ -473,7 +489,7 @@
     style:top={`${top}px`}
     style:width={`${width}px`}
     style:height={`${height}px`}
-    style:z-index={zIndex}
+    style:z-index={overflowWidth === undefined ? zIndex : zIndex + 1}
     style={spreadsheetCellCss(worksheet, reference)}
     onpointerdown={(event) => cellPointerDown(event, sourceRow, column)}
     onpointerenter={(event) => cellPointerEnter(event, sourceRow, column)}
@@ -492,7 +508,11 @@
       />
     {:else}
       {#if hyperlink === undefined}
-        <span style={spreadsheetCellContentCss(worksheet, reference)}>{displayCell(reference)}</span>
+        <span
+          class:overflow-content={overflowWidth !== undefined}
+          style={spreadsheetCellContentCss(worksheet, reference)}
+          style:width={overflowWidth === undefined ? undefined : `${Math.max(0, overflowWidth - 16)}px`}
+        >{displayCell(reference)}</span>
       {:else}
         <button
           class="cell-hyperlink"
@@ -691,6 +711,8 @@
   .column-header { top: 0; height: 28px; display: grid; place-items: center; border-right-width: 1px; border-bottom-width: 1px; }
   .row-header { left: 0; width: 52px; display: grid; place-items: center; border-right-width: 1px; border-bottom-width: 1px; }
   .cell { position: absolute; z-index: 1; box-sizing: border-box; display: flex; align-items: flex-end; overflow: hidden; padding: 2px 8px; white-space: nowrap; text-overflow: ellipsis; color: var(--tumbler-sheet-fg, #111111); border-right: 1px solid var(--tumbler-sheet-line, #d9ded9); border-bottom: 1px solid var(--tumbler-sheet-line, #d9ded9); background: var(--tumbler-sheet-bg, #ffffff); }
+  .cell.text-overflow { overflow: visible; }
+  .cell > .overflow-content { flex: none; max-width: none; overflow: hidden; pointer-events: none; }
   .chart-frame { position: absolute; z-index: 2; overflow: hidden; box-sizing: border-box; padding: 0; border: 0; outline: 0; background: transparent; cursor: default; }
   .chart-frame.selected, .chart-frame:focus-visible { box-shadow: inset 0 0 0 2px var(--tumbler-grid-accent, #42ff53); }
   .cell.selected::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(65, 255, 83, 0.1)); }

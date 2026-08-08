@@ -23,3 +23,5 @@ export { coerceSpreadsheetEditValue } from "./spreadsheet-edit.ts";
 export type { SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
 export { spreadsheetFormulaBarEdit, spreadsheetFormulaBarText } from "./spreadsheet-formula-bar.ts";
 export type { SpreadsheetFormulaBarEdit } from "./spreadsheet-formula-bar.ts";
+export { spreadsheetTextOverflowWidth } from "./spreadsheet-text-overflow.ts";
+export type { SpreadsheetTextOverflowInput } from "./spreadsheet-text-overflow.ts";
