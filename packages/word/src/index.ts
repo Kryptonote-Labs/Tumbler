@@ -13,6 +13,8 @@ export type {
   WordErrorCode,
   WordFieldCharacter,
   WordHyperlink,
+  WordHeaderFooterReference,
+  WordHeaderFooterStory,
   WordInline,
   WordParagraph,
   WordRun,

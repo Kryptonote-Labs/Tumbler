@@ -17,7 +17,7 @@ describe("owned Svelte Word document head", () => {
   test("mounts only an overscanned page window", () => {
     const layout = {
       fragmentCount: 0,
-      pages: Array.from({ length: 100 }, (_, index) => ({ index, width: 612, height: 792, section: {} as never, columns: [] })),
+      pages: Array.from({ length: 100 }, (_, index) => ({ index, width: 612, height: 792, section: {} as never, columns: [], headerLines: [], footerLines: [], headerTables: [], footerTables: [] })),
     } satisfies WordLayout;
     const viewport = calculateWordPageViewport(layout, 20_000, 800, 24, 1);
     expect(viewport.first).toBeGreaterThan(10);

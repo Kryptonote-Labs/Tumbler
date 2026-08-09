@@ -74,6 +74,18 @@
           style={`left:50%;top:${viewport.offsets[pageIndex]! * scale}px;width:${wordPointsToCssPixels(page.width) * scale}px;height:${wordPointsToCssPixels(page.height) * scale}px`}
         >
           <div class="word-page-content" style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}>
+            {#each [...page.headerLines, ...page.footerLines] as line}
+              {#if line.marker !== undefined}
+                <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(line.marker.y)}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
+              {/if}
+              {#each line.fragments as fragment}
+                {#if fragment.hyperlink === undefined}
+                  <span data-story="header-footer" data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment)}>{fragment.text}</span>
+                {:else}
+                  <button class="hyperlink" onkeydown={(event) => activateHyperlink(event, fragment.hyperlink)} onclick={(event) => activateHyperlink(event, fragment.hyperlink)} data-story="header-footer" data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment)}>{fragment.text}</button>
+                {/if}
+              {/each}
+            {/each}
             {#each page.columns as column}
               {#each column.tables as table}
                 <div

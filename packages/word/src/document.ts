@@ -198,6 +198,24 @@ export interface WordSectionProperties {
   readonly columnCount: number;
   readonly columnSpaceTwips: number;
   readonly breakType: "continuous" | "nextPage" | "nextColumn" | "evenPage" | "oddPage";
+  readonly titlePage: boolean;
+  readonly headerReferences: readonly WordHeaderFooterReference[];
+  readonly footerReferences: readonly WordHeaderFooterReference[];
+}
+
+export interface WordHeaderFooterReference {
+  readonly kind: "header" | "footer";
+  readonly type: "default" | "first" | "even";
+  readonly relationshipId: string;
+}
+
+export interface WordHeaderFooterStory {
+  readonly kind: "header" | "footer";
+  readonly type: "default" | "first" | "even";
+  readonly relationshipId: string;
+  readonly part: OpcPart;
+  readonly source: LosslessXmlDocument;
+  readonly blocks: readonly WordBlock[];
 }
 
 interface ParseBudget {
@@ -218,6 +236,7 @@ export class WordDocument {
   readonly finalSection: WordSectionProperties;
   readonly styles: WordStyles;
   readonly numbering: WordNumbering;
+  readonly headerFooters: readonly WordHeaderFooterStory[];
 
   constructor(input: {
     pkg: OpcPackage;
@@ -228,6 +247,7 @@ export class WordDocument {
     finalSection: WordSectionProperties;
     styles: WordStyles;
     numbering: WordNumbering;
+    headerFooters: readonly WordHeaderFooterStory[];
   }) {
     this.package = input.pkg;
     this.part = input.part;
@@ -237,6 +257,7 @@ export class WordDocument {
     this.finalSection = input.finalSection;
     this.styles = input.styles;
     this.numbering = input.numbering;
+    this.headerFooters = Object.freeze([...input.headerFooters]);
   }
 
   bytes(): Uint8Array {
@@ -291,7 +312,53 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
   const finalSection = parseSection(sectionElements[0], namespace);
   const styles = readWordStyles({ package: pkg, part: main, source, conformance: profile });
   const numbering = readWordNumbering({ package: pkg, part: main, source, conformance: profile });
-  return new WordDocument({ pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering });
+  const headerFooters = readHeaderFooterStories(pkg, main, profile, [...blocks.flatMap(sectionReferences), ...finalSection.headerReferences, ...finalSection.footerReferences], budget);
+  return new WordDocument({ pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters });
+}
+
+function sectionReferences(block: WordBlock): readonly WordHeaderFooterReference[] {
+  if (block.kind !== "paragraph" || block.section === undefined) return [];
+  return [...block.section.headerReferences, ...block.section.footerReferences];
+}
+
+function readHeaderFooterStories(
+  pkg: OpcPackage,
+  main: OpcPart,
+  conformance: WordConformance,
+  references: readonly WordHeaderFooterReference[],
+  budget: ParseBudget,
+): readonly WordHeaderFooterStory[] {
+  if (references.length === 0) return Object.freeze([]);
+  const relationships = pkg.relationships(main.name);
+  const namespace = OOXML_NAMESPACES[conformance].wordprocessing;
+  const expectedTypePrefix = conformance === "strict" ? "http://purl.oclc.org/ooxml/officeDocument/relationships" : "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const seen = new Set<string>();
+  const stories: WordHeaderFooterStory[] = [];
+  for (const reference of references) {
+    const key = `${reference.kind}:${reference.type}:${reference.relationshipId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const relationship = relationships.get(reference.relationshipId);
+    if (relationship?.targetMode !== "Internal" || relationship.type !== `${expectedTypePrefix}/${reference.kind}`) {
+      throw new WordError("invalid_document", `A ${reference.kind} reference must resolve to an internal ${reference.kind} relationship.`);
+    }
+    const part = pkg.getPart(relationship.targetPartName);
+    const expectedContentType = `application/vnd.openxmlformats-officedocument.wordprocessingml.${reference.kind}+xml`;
+    if (part === undefined || part.contentType !== expectedContentType) throw new WordError("invalid_document", `The ${reference.kind} relationship target has the wrong content type.`);
+    let source: LosslessXmlDocument;
+    try { source = parseLosslessXml(pkg.readPart(part)); }
+    catch (cause) { throw new WordError("invalid_document", `The ${reference.kind} part is not valid XML.`, { cause }); }
+    if (source.root.namespaceUri !== namespace || source.root.localName !== (reference.kind === "header" ? "hdr" : "ftr")) {
+      throw new WordError("invalid_document", `The ${reference.kind} part has an invalid root element.`);
+    }
+    let storyRelationships: Relationships | undefined;
+    try { storyRelationships = pkg.relationships(part.name); }
+    catch (cause) { if (!(cause instanceof RelationshipsError) || cause.code !== "missing_item") throw cause; }
+    const blocks = source.root.children.filter((node): node is LosslessXmlElement => node.kind === "element")
+      .map((element) => parseBlock(element, source, namespace, storyRelationships, budget));
+    stories.push(Object.freeze({ ...reference, part, source, blocks: Object.freeze(blocks) }));
+  }
+  return Object.freeze(stories);
 }
 
 function parseBlock(
@@ -541,6 +608,17 @@ function parseSection(element: LosslessXmlElement | undefined, namespace: string
   const height = twipsAttr(pageSize, namespace, "h", 15_840);
   const rawOrientation = pageSize === undefined ? undefined : attr(pageSize, namespace, "orient");
   const rawBreakType = element === undefined ? undefined : valueChild(element, namespace, "type");
+  const references = element === undefined ? [] : element.children.filter((child): child is LosslessXmlElement => child.kind === "element" && child.namespaceUri === namespace && (child.localName === "headerReference" || child.localName === "footerReference"));
+  const headerReferences: WordHeaderFooterReference[] = [];
+  const footerReferences: WordHeaderFooterReference[] = [];
+  for (const reference of references) {
+    const relationshipId = qualifiedAttr(reference, relationshipsNamespace(namespace), "id");
+    if (relationshipId === undefined) throw new WordError("invalid_document", `${reference.localName} is missing its relationship id.`);
+    const rawType = attr(reference, namespace, "type");
+    const type = rawType === "first" || rawType === "even" ? rawType : "default";
+    const value: WordHeaderFooterReference = Object.freeze({ kind: reference.localName === "headerReference" ? "header" : "footer", type, relationshipId });
+    (value.kind === "header" ? headerReferences : footerReferences).push(value);
+  }
   return Object.freeze({
     elementId: element?.id ?? -1,
     pageWidthTwips: width,
@@ -558,6 +636,9 @@ function parseSection(element: LosslessXmlElement | undefined, namespace: string
     breakType: rawBreakType === "continuous" || rawBreakType === "nextColumn" || rawBreakType === "evenPage" || rawBreakType === "oddPage"
       ? rawBreakType
       : "nextPage",
+    titlePage: element !== undefined && children(element, namespace, "titlePg").length > 0,
+    headerReferences: Object.freeze(headerReferences),
+    footerReferences: Object.freeze(footerReferences),
   });
 }
 

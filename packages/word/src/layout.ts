@@ -8,6 +8,7 @@ import type {
   WordRun,
   WordSectionProperties,
   WordTable,
+  WordHeaderFooterStory,
 } from "./document.ts";
 import type { ComputedWordParagraphFormat, ComputedWordTextFormat, WordTabStop } from "./styles.ts";
 import { WordError } from "./document.ts";
@@ -45,6 +46,10 @@ export interface WordLayoutPage {
   readonly height: number;
   readonly section: WordSectionProperties;
   readonly columns: readonly WordLayoutColumn[];
+  readonly headerLines: readonly WordLayoutLine[];
+  readonly footerLines: readonly WordLayoutLine[];
+  readonly headerTables: readonly WordLayoutTable[];
+  readonly footerTables: readonly WordLayoutTable[];
 }
 
 export interface WordLayoutColumn {
@@ -144,7 +149,13 @@ interface MutablePage {
   readonly height: number;
   readonly section: WordSectionProperties;
   readonly columns: MutableColumn[];
+  headerLines: WordLayoutLine[];
+  footerLines: WordLayoutLine[];
+  headerTables: WordLayoutTable[];
+  footerTables: WordLayoutTable[];
 }
+
+type WordLayoutDocumentContext = Pick<WordDocument, "package" | "part" | "source" | "conformance" | "styles" | "numbering" | "blocks">;
 
 type ParagraphAtom = GlyphAtom | TabAtom | DrawingAtom | BreakAtom;
 
@@ -334,6 +345,7 @@ export function layoutWordDocument(
       cursorY += points(prepared.format.spacingAfterTwips);
     }
   }
+  decorateHeaderFooters(document, pages, measurer, budget, sections);
   return Object.freeze({
     pages: Object.freeze(pages.map(freezePage)),
     fragmentCount: budget.fragments,
@@ -346,7 +358,7 @@ export function wordPointsToCssPixels(pointsValue: number): number {
 }
 
 function prepareTable(
-  document: WordDocument,
+  document: WordLayoutDocumentContext,
   table: WordTable,
   availableWidth: number,
   measurer: WordTextMeasurer,
@@ -439,7 +451,7 @@ function placeTable(prepared: PreparedTable, columnX: number, y: number, budget:
 }
 
 function prepareParagraph(
-  document: WordDocument,
+  document: WordLayoutDocumentContext,
   paragraph: WordParagraph,
   columnWidth: number,
   measurer: WordTextMeasurer,
@@ -458,7 +470,7 @@ function prepareParagraph(
   return Object.freeze({ paragraph, format, lines: Object.freeze(lines), marker });
 }
 
-function prepareMarker(document: WordDocument, paragraph: WordParagraph, source: WordListMarker, measurer: WordTextMeasurer): PreparedMarker {
+function prepareMarker(document: WordLayoutDocumentContext, paragraph: WordParagraph, source: WordListMarker, measurer: WordTextMeasurer): PreparedMarker {
   const firstRun = paragraph.inlines.flatMap((inline) => inline.kind === "run" ? [inline] : inline.kind === "hyperlink" || inline.kind === "insertion" ? inline.runs : [])[0];
   const format = firstRun === undefined ? DEFAULT_MARKER_FORMAT : document.styles.runFormat(document, paragraph, firstRun);
   const text = source.text + (source.suffix === "space" ? " " : source.suffix === "tab" ? "\t" : "");
@@ -466,7 +478,7 @@ function prepareMarker(document: WordDocument, paragraph: WordParagraph, source:
   return Object.freeze({ source, text, width: measurement.width, ascent: measurement.ascent, descent: measurement.descent, format });
 }
 
-function paragraphAtoms(document: WordDocument, paragraph: WordParagraph, measurer: WordTextMeasurer): ParagraphAtom[] {
+function paragraphAtoms(document: WordLayoutDocumentContext, paragraph: WordParagraph, measurer: WordTextMeasurer): ParagraphAtom[] {
   const atoms: ParagraphAtom[] = [];
   let logicalOffset = 0;
   let fieldDepth = 0;
@@ -667,6 +679,101 @@ function placeLine(
   });
 }
 
+function decorateHeaderFooters(
+  document: WordDocument,
+  pages: MutablePage[],
+  measurer: WordTextMeasurer,
+  budget: LayoutBudget,
+  sections: readonly { readonly properties: WordSectionProperties; readonly blocks: readonly WordBlock[] }[],
+): void {
+  const effective = new Map<WordSectionProperties, ReadonlyMap<string, string>>();
+  const inherited = new Map<string, string>();
+  for (const section of sections) {
+    for (const reference of [...section.properties.headerReferences, ...section.properties.footerReferences]) {
+      inherited.set(`${reference.kind}:${reference.type}`, reference.relationshipId);
+    }
+    effective.set(section.properties, new Map(inherited));
+  }
+  const sectionPageCounts = new Map<WordSectionProperties, number>();
+  for (const page of pages) {
+    const sectionPageIndex = sectionPageCounts.get(page.section) ?? 0;
+    sectionPageCounts.set(page.section, sectionPageIndex + 1);
+    const references = effective.get(page.section) ?? new Map();
+    for (const kind of ["header", "footer"] as const) {
+      const preferredType = page.section.titlePage && sectionPageIndex === 0 && references.has(`${kind}:first`) ? "first"
+        : (page.index + 1) % 2 === 0 && references.has(`${kind}:even`) ? "even" : "default";
+      const relationshipId = references.get(`${kind}:${preferredType}`);
+      if (relationshipId === undefined) continue;
+      const story = document.headerFooters.find((item) => item.kind === kind && item.relationshipId === relationshipId);
+      if (story === undefined) continue;
+      const context = storyContext(document, story);
+      const left = points(page.section.marginLeftTwips + page.section.gutterTwips);
+      const width = Math.max(1, page.width - left - points(page.section.marginRightTwips));
+      const flow = layoutStory(context, left, width, measurer, budget);
+      const top = kind === "header" ? points(page.section.headerDistanceTwips) : Math.max(0, page.height - points(page.section.footerDistanceTwips) - flow.height);
+      const lines = flow.lines.map((line) => translateLine(line, 0, top));
+      const tables = flow.tables.map((table) => translateTable(table, 0, top));
+      if (kind === "header") { page.headerLines = lines; page.headerTables = tables; }
+      else { page.footerLines = lines; page.footerTables = tables; }
+    }
+  }
+}
+
+function storyContext(document: WordDocument, story: WordHeaderFooterStory): WordLayoutDocumentContext {
+  return {
+    package: document.package,
+    part: story.part,
+    source: story.source,
+    conformance: document.conformance,
+    styles: document.styles,
+    numbering: document.numbering,
+    blocks: story.blocks,
+  };
+}
+
+function layoutStory(
+  context: WordLayoutDocumentContext,
+  x: number,
+  width: number,
+  measurer: WordTextMeasurer,
+  budget: LayoutBudget,
+): { readonly lines: readonly WordLayoutLine[]; readonly tables: readonly WordLayoutTable[]; readonly height: number } {
+  const column: MutableColumn = { index: 0, x, y: 0, width, height: Number.MAX_SAFE_INTEGER, lines: [], tables: [], unsupportedBlocks: [] };
+  const markers = context.numbering.markers(context);
+  let cursor = 0;
+  for (const block of context.blocks) {
+    if (block.kind === "paragraph") {
+      const paragraph = prepareParagraph(context, block, width, measurer, markers.get(block.elementId));
+      cursor += points(paragraph.format.spacingBeforeTwips);
+      for (let index = 0; index < paragraph.lines.length; index += 1) {
+        const line = placeLine(block, paragraph.format, paragraph.lines[index]!, column, cursor, budget, index === 0 ? paragraph.marker : undefined);
+        column.lines.push(line);
+        cursor += line.height;
+      }
+      cursor += points(paragraph.format.spacingAfterTwips);
+    } else if (block.kind === "table") {
+      const table = prepareTable(context, block, width, measurer, markers);
+      column.tables.push(placeTable(table, x, cursor, budget));
+      cursor += table.rowHeights.reduce((sum, value) => sum + value, 0);
+    }
+  }
+  return Object.freeze({ lines: Object.freeze(column.lines), tables: Object.freeze(column.tables), height: cursor });
+}
+
+function translateTable(table: WordLayoutTable, dx: number, dy: number): WordLayoutTable {
+  return Object.freeze({
+    ...table,
+    x: table.x + dx,
+    y: table.y + dy,
+    cells: Object.freeze(table.cells.map((cell) => Object.freeze({
+      ...cell,
+      x: cell.x + dx,
+      y: cell.y + dy,
+      lines: Object.freeze(cell.lines.map((line) => translateLine(line, dx, dy))),
+    }))),
+  });
+}
+
 function createPage(section: WordSectionProperties, pages: MutablePage[], budget: LayoutBudget): MutablePage {
   if (pages.length >= budget.maxPages) throw new WordError("limit_exceeded", `Layout exceeds ${budget.maxPages} pages.`);
   const width = points(section.pageWidthTwips);
@@ -687,7 +794,7 @@ function createPage(section: WordSectionProperties, pages: MutablePage[], budget
     tables: [],
     unsupportedBlocks: [],
   }));
-  const page: MutablePage = { index: pages.length, width, height, section, columns };
+  const page: MutablePage = { index: pages.length, width, height, section, columns, headerLines: [], footerLines: [], headerTables: [], footerTables: [] };
   pages.push(page);
   return page;
 }
@@ -715,6 +822,10 @@ function freezePage(page: MutablePage): WordLayoutPage {
     width: page.width,
     height: page.height,
     section: page.section,
+    headerLines: Object.freeze(page.headerLines),
+    footerLines: Object.freeze(page.footerLines),
+    headerTables: Object.freeze(page.headerTables),
+    footerTables: Object.freeze(page.footerTables),
     columns: Object.freeze(page.columns.map((column): WordLayoutColumn => Object.freeze({
       index: column.index,
       x: column.x,
