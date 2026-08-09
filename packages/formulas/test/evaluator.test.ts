@@ -99,6 +99,52 @@ describe("bounded spreadsheet formula calculation", () => {
     expect(calculation.diagnostics).toEqual([]);
   });
 
+  test("keeps error and multi-branch functions lazy", () => {
+    const workbook = source({
+      "Sheet1!A1": formula("IFERROR(1,MISSING())"),
+      "Sheet1!A2": formula("IFERROR(1/0,5)"),
+      "Sheet1!A3": formula("IFNA(#N/A,7)"),
+      "Sheet1!A4": formula("IFNA(#VALUE!,7)"),
+      "Sheet1!A5": formula(`IFS(FALSE,MISSING(),TRUE,"ready")`),
+      "Sheet1!A6": formula(`SWITCH(2,1,MISSING(),2,"two",MISSING())`),
+      "Sheet1!A7": formula("XOR(TRUE,FALSE,TRUE)"),
+    });
+
+    const calculation = calculateFormulas(workbook);
+
+    expect(calculation.value(address("Sheet1!A1"))).toEqual({ type: "number", value: 1 });
+    expect(calculation.value(address("Sheet1!A2"))).toEqual({ type: "number", value: 5 });
+    expect(calculation.value(address("Sheet1!A3"))).toEqual({ type: "number", value: 7 });
+    expect(calculation.value(address("Sheet1!A4"))).toEqual({ type: "error", value: "#VALUE!" });
+    expect(calculation.value(address("Sheet1!A5"))).toEqual({ type: "string", value: "ready" });
+    expect(calculation.value(address("Sheet1!A6"))).toEqual({ type: "string", value: "two" });
+    expect(calculation.value(address("Sheet1!A7"))).toEqual({ type: "boolean", value: false });
+    expect(calculation.diagnostics).toEqual([]);
+  });
+
+  test("evaluates multi-criteria aggregates across sheets without caches", () => {
+    const workbook = source({
+      "Sales Data!A1": textValue("North"), "Sales Data!B1": textValue("Open"), "Sales Data!C1": value(10),
+      "Sales Data!A2": textValue("North"), "Sales Data!B2": textValue("Closed"), "Sales Data!C2": value(20),
+      "Sales Data!A3": textValue("South"), "Sales Data!B3": textValue("Open"), "Sales Data!C3": value(30),
+      "Sales Data!A4": textValue("North"), "Sales Data!B4": textValue("Open"), "Sales Data!C4": formula("#N/A"),
+      "Summary!A1": formula(`SUMIFS('Sales Data'!C1:C4,'Sales Data'!A1:A4,"North",'Sales Data'!B1:B4,"Open")`),
+      "Summary!A2": formula(`COUNTIFS('Sales Data'!A1:A4,"North",'Sales Data'!B1:B4,"Open")`),
+      "Summary!A3": formula(`AVERAGEIFS('Sales Data'!C1:C3,'Sales Data'!A1:A3,"North")`),
+      "Summary!A4": formula(`AVERAGEIFS('Sales Data'!C1:C3,'Sales Data'!A1:A3,"Missing")`),
+      "Summary!A5": formula(`SUMIFS('Sales Data'!C1:C3,'Sales Data'!A1:A2,"North")`),
+    });
+
+    const calculation = calculateFormulas(workbook);
+
+    expect(calculation.value(address("Summary!A1"))).toEqual({ type: "error", value: "#N/A" });
+    expect(calculation.value(address("Summary!A2"))).toEqual({ type: "number", value: 2 });
+    expect(calculation.value(address("Summary!A3"))).toEqual({ type: "number", value: 15 });
+    expect(calculation.value(address("Summary!A4"))).toEqual({ type: "error", value: "#DIV/0!" });
+    expect(calculation.value(address("Summary!A5"))).toEqual({ type: "error", value: "#VALUE!" });
+    expect(calculation.diagnostics).toEqual([]);
+  });
+
   test("matches text case-insensitively with linear wildcards and tilde escaping", () => {
     const workbook = source({
       "Sheet1!A1": textValue("Alpha"),

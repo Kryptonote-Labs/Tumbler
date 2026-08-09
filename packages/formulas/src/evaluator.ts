@@ -230,6 +230,39 @@ export function calculateFormulas(
       return branch === undefined ? boolean(false) : scalar(evaluate(branch, sheet, depth + 1));
   };
 
+  const callIfError = (onlyNotAvailable: boolean): FormulaFunction => (args, sheet, depth) => {
+    if (args.length !== 2) return error("#VALUE!");
+    const value = scalar(evaluate(args[0]!, sheet, depth + 1));
+    const catches = value.type === "error" && (!onlyNotAvailable || value.value === "#N/A");
+    return catches ? scalar(evaluate(args[1]!, sheet, depth + 1)) : value;
+  };
+
+  const callIfs: FormulaFunction = (args, sheet, depth) => {
+    if (args.length < 2 || args.length % 2 !== 0) return error("#VALUE!");
+    for (let index = 0; index < args.length; index += 2) {
+      const condition = logical(scalar(evaluate(args[index]!, sheet, depth + 1)));
+      if (condition.type === "error") return condition;
+      if (condition.value) return scalar(evaluate(args[index + 1]!, sheet, depth + 1));
+    }
+    return error("#N/A");
+  };
+
+  const callSwitch: FormulaFunction = (args, sheet, depth) => {
+    if (args.length < 3) return error("#VALUE!");
+    const selected = scalar(evaluate(args[0]!, sheet, depth + 1));
+    if (selected.type === "error") return selected;
+    const hasDefault = args.length % 2 === 0;
+    const pairEnd = hasDefault ? args.length - 1 : args.length;
+    for (let index = 1; index < pairEnd; index += 2) {
+      const candidate = scalar(evaluate(args[index]!, sheet, depth + 1));
+      if (candidate.type === "error") return candidate;
+      if (compare(selected, candidate) === 0) {
+        return scalar(evaluate(args[index + 1]!, sheet, depth + 1));
+      }
+    }
+    return hasDefault ? scalar(evaluate(args.at(-1)!, sheet, depth + 1)) : error("#N/A");
+  };
+
   const callConditionalAggregate = (name: "COUNTIF" | "SUMIF" | "AVERAGEIF"): FormulaFunction =>
     (args, sheet, depth) => {
       const validArgumentCount = name === "COUNTIF" ? args.length === 2 : args.length === 2 || args.length === 3;
@@ -274,7 +307,58 @@ export function calculateFormulas(
       return finite(total);
     };
 
-  const callAggregate = (name: "SUM" | "COUNT" | "AVERAGE" | "MIN" | "MAX" | "AND" | "OR" | "NOT"): FormulaFunction =>
+  const callMultiConditionalAggregate = (name: "COUNTIFS" | "SUMIFS" | "AVERAGEIFS"): FormulaFunction =>
+    (args, sheet, depth) => {
+      const countsOnly = name === "COUNTIFS";
+      const firstCriteriaIndex = countsOnly ? 0 : 1;
+      if (
+        args.length < (countsOnly ? 2 : 3) ||
+        (args.length - firstCriteriaIndex) % 2 !== 0
+      ) return error("#VALUE!");
+
+      const resultRange = resolveRangeArgument(args[0]!, sheet, source, limits.maxRangeCells);
+      if (isFormulaError(resultRange)) return resultRange;
+      const criteria: Array<{ readonly range: FormulaRangeGeometry; readonly criterion: FormulaCriterion }> = [];
+      for (let index = firstCriteriaIndex; index < args.length; index += 2) {
+        const range = resolveRangeArgument(args[index]!, sheet, source, limits.maxRangeCells);
+        if (isFormulaError(range)) return range;
+        if (range.height !== resultRange.height || range.width !== resultRange.width) return error("#VALUE!");
+        const criterionValue = scalar(evaluate(args[index + 1]!, sheet, depth + 1));
+        if (criterionValue.type === "error") return criterionValue;
+        criteria.push(Object.freeze({ range, criterion: compileCriterion(criterionValue) }));
+      }
+
+      let count = 0;
+      let total = 0;
+      for (let rowOffset = 0; rowOffset < resultRange.height; rowOffset += 1) {
+        for (let columnOffset = 0; columnOffset < resultRange.width; columnOffset += 1) {
+          operation();
+          let matches = true;
+          for (const item of criteria) {
+            const value = cellValue(correspondingAddress(item.range, rowOffset, columnOffset), depth + 1, true);
+            if (!matchesCriterion(value, item.criterion)) {
+              matches = false;
+              break;
+            }
+          }
+          if (!matches) continue;
+          if (countsOnly) {
+            count += 1;
+            continue;
+          }
+          const resultValue = cellValue(correspondingAddress(resultRange, rowOffset, columnOffset), depth + 1, true);
+          if (resultValue.type === "error") return resultValue;
+          if (resultValue.type !== "number") continue;
+          count += 1;
+          total += resultValue.value;
+        }
+      }
+      if (name === "COUNTIFS") return number(count);
+      if (name === "AVERAGEIFS") return count === 0 ? error("#DIV/0!") : finite(total / count);
+      return finite(total);
+    };
+
+  const callAggregate = (name: "SUM" | "COUNT" | "AVERAGE" | "MIN" | "MAX" | "AND" | "OR" | "XOR" | "NOT"): FormulaFunction =>
     (args, sheet, depth) => {
     const evaluated = args.map((argument) => evaluate(argument, sheet, depth + 1));
     const firstError = flatten(evaluated).find((value) => value.type === "error");
@@ -296,6 +380,7 @@ export function calculateFormulas(
       }
       case "AND": return logicalAggregate(evaluated, true);
       case "OR": return logicalAggregate(evaluated, false);
+      case "XOR": return logicalAggregate(evaluated, false, true);
       case "NOT": {
         if (evaluated.length !== 1) return error("#VALUE!");
         const value = logical(scalar(evaluated[0]!));
@@ -307,10 +392,17 @@ export function calculateFormulas(
 
   const functions = new Map<string, FormulaFunction>([
     ["IF", callIf],
+    ["IFERROR", callIfError(false)],
+    ["IFNA", callIfError(true)],
+    ["IFS", callIfs],
+    ["SWITCH", callSwitch],
     ["COUNTIF", callConditionalAggregate("COUNTIF")],
     ["SUMIF", callConditionalAggregate("SUMIF")],
     ["AVERAGEIF", callConditionalAggregate("AVERAGEIF")],
-    ...(["SUM", "COUNT", "AVERAGE", "MIN", "MAX", "AND", "OR", "NOT"] as const)
+    ["COUNTIFS", callMultiConditionalAggregate("COUNTIFS")],
+    ["SUMIFS", callMultiConditionalAggregate("SUMIFS")],
+    ["AVERAGEIFS", callMultiConditionalAggregate("AVERAGEIFS")],
+    ...(["SUM", "COUNT", "AVERAGE", "MIN", "MAX", "AND", "OR", "XOR", "NOT"] as const)
       .map((name) => [name, callAggregate(name)] as const),
   ]);
 
@@ -656,14 +748,14 @@ function numbersForAggregate(values: readonly EvaluationValue[]): number[] {
   });
 }
 
-function logicalAggregate(values: readonly EvaluationValue[], and: boolean): FormulaScalarValue {
+function logicalAggregate(values: readonly EvaluationValue[], and: boolean, xor = false): FormulaScalarValue {
   const logicals = flatten(values).flatMap((value) => {
     if (value.type === "boolean") return [value.value];
     if (value.type === "number") return [value.value !== 0];
     return [];
   });
   if (logicals.length === 0) return error("#VALUE!");
-  return boolean(and ? logicals.every(Boolean) : logicals.some(Boolean));
+  return boolean(and ? logicals.every(Boolean) : xor ? logicals.filter(Boolean).length % 2 === 1 : logicals.some(Boolean));
 }
 
 function numeric(value: FormulaScalarValue): Extract<FormulaScalarValue, { type: "number" | "error" }> {
