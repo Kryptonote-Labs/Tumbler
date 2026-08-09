@@ -46,12 +46,40 @@ describe("WordprocessingML logical text editing", () => {
     expect(artifact.replaceText(selection(paragraph.elementId, 2, 2), "")).toBe(artifact);
   });
 
-  test("rejects cross-paragraph, newline, and grapheme-splitting edits", () => {
+  test("splits a paragraph and preserves its paragraph properties", () => {
+    const artifact = open(`<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Hello world</w:t></w:r></w:p>`);
+    const paragraph = firstParagraph(artifact);
+    const edited = artifact.replaceText(selection(paragraph.elementId, 5, 6), "\n");
+    const paragraphs = edited.document.blocks.filter((block) => block.kind === "paragraph");
+    expect(paragraphs.map((item) => wordParagraphText(edited.document, item))).toEqual(["Hello", "world"]);
+    expect(edited.document.source.elements(word, "jc")).toHaveLength(2);
+  });
+
+  test("joins paragraphs while preserving the trailing run formatting", () => {
+    const artifact = open(`<w:p><w:r><w:t>One</w:t></w:r></w:p><w:p><w:r><w:rPr><w:i/></w:rPr><w:t>Two</w:t></w:r></w:p>`);
+    const [first, second] = artifact.document.blocks;
+    if (first?.kind !== "paragraph" || second?.kind !== "paragraph") throw new Error("Expected paragraphs.");
+    const edited = artifact.replaceText({ anchor: { paragraphElementId: first.elementId, offset: 3 }, focus: { paragraphElementId: second.elementId, offset: 0 } }, "");
+    const paragraph = firstParagraph(edited);
+    expect(wordParagraphText(edited.document, paragraph)).toBe("OneTwo");
+    expect(edited.document.source.elements(word, "p")).toHaveLength(1);
+    expect(edited.document.source.elements(word, "i")).toHaveLength(1);
+  });
+
+  test("replaces several paragraphs with several paragraphs", () => {
+    const artifact = open(`<w:p><w:r><w:t>Alpha</w:t></w:r></w:p><w:p><w:r><w:t>Middle</w:t></w:r></w:p><w:p><w:r><w:t>Omega</w:t></w:r></w:p>`);
+    const [first, , third] = artifact.document.blocks;
+    if (first?.kind !== "paragraph" || third?.kind !== "paragraph") throw new Error("Expected paragraphs.");
+    const edited = artifact.replaceText({ anchor: { paragraphElementId: first.elementId, offset: 2 }, focus: { paragraphElementId: third.elementId, offset: 3 } }, "1\n2\n3");
+    const text = edited.document.blocks.filter((block) => block.kind === "paragraph").map((paragraph) => wordParagraphText(edited.document, paragraph));
+    expect(text).toEqual(["Al1", "2", "3ga"]);
+  });
+
+  test("rejects container-crossing and grapheme-splitting edits", () => {
     const artifact = open(`<w:p><w:r><w:t>👩‍💻</w:t></w:r></w:p><w:p/>`);
     const [first, second] = artifact.document.blocks;
     if (first?.kind !== "paragraph" || second?.kind !== "paragraph") throw new Error("Expected paragraphs.");
-    expect(() => artifact.replaceText({ anchor: { paragraphElementId: first.elementId, offset: 0 }, focus: { paragraphElementId: second.elementId, offset: 0 } }, "x")).toThrow(WordError);
-    expect(() => artifact.replaceText(selection(first.elementId, 0, 0), "a\nb")).toThrow(WordError);
+    expect(() => artifact.replaceText(selection(first.elementId, 0, 0), "a\rb")).toThrow(WordError);
     expect(() => artifact.replaceText(selection(first.elementId, 1, 1), "x")).toThrow(RangeError);
   });
 });
