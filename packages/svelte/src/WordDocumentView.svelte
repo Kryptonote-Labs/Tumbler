@@ -66,12 +66,47 @@
   }
 
   function activateHyperlink(event: MouseEvent | KeyboardEvent, target: string | undefined) {
-    if (target === undefined || onhyperlink === undefined) return;
+    if (target === undefined) return;
     if (editable && !(event instanceof MouseEvent && (event.ctrlKey || event.metaKey))) return;
     if (event instanceof KeyboardEvent && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
+    if (target.startsWith("#") && scrollToBookmark(target.slice(1))) return;
+    if (onhyperlink === undefined) return;
     onhyperlink(target);
+  }
+
+  function scrollToBookmark(name: string): boolean {
+    if (layout === undefined || viewport === undefined || scroller === undefined) return false;
+    const paragraphElementId = bookmarkParagraph(wordDocument.blocks, name);
+    if (paragraphElementId === undefined) return false;
+    const page = layout.pages.find((candidate) => candidate.columns.some((column) =>
+      column.lines.some((line) => line.paragraphElementId === paragraphElementId) ||
+      column.tables.some((table) => tableContainsParagraph(table, paragraphElementId))
+    ));
+    if (page === undefined) return false;
+    scroller.scrollTop = viewport.offsets[page.index]! * scale;
+    updateViewport();
+    onselectionchange?.({ anchor: { paragraphElementId, offset: 0 }, focus: { paragraphElementId, offset: 0 } });
+    return true;
+  }
+
+  function bookmarkParagraph(blocks: WordDocument["blocks"], name: string): number | undefined {
+    for (const block of blocks) {
+      if (block.kind === "paragraph" && block.inlines.some((inline) => inline.kind === "bookmark-start" && inline.name === name)) return block.elementId;
+      if (block.kind === "table") for (const row of block.rows) for (const cell of row.cells) {
+        const found = bookmarkParagraph(cell.blocks, name);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  }
+
+  function tableContainsParagraph(table: WordLayout["pages"][number]["columns"][number]["tables"][number], paragraphElementId: number): boolean {
+    return table.cells.some((cell) =>
+      cell.lines.some((line) => line.paragraphElementId === paragraphElementId) ||
+      cell.tables.some((nested) => tableContainsParagraph(nested, paragraphElementId))
+    );
   }
 
   function readBrowserSelection() {
