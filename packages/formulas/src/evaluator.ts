@@ -774,7 +774,10 @@ export function calculateFormulas(
     const search = args[5] === undefined ? number(1) : numeric(scalar(evaluate(args[5], sheet, depth + 1)));
     if (match.type === "error") return match;
     if (search.type === "error") return search;
-    const index = findLookupIndex(lookup, readRange(lookupRange, depth), Math.trunc(match.value), Math.trunc(search.value));
+    const matchMode = Math.trunc(match.value);
+    const searchMode = Math.trunc(search.value);
+    if (![-1, 0, 1, 2].includes(matchMode) || ![1, -1, 2, -2].includes(searchMode)) return error("#VALUE!");
+    const index = findLookupIndex(lookup, readRange(lookupRange, depth), matchMode, searchMode);
     if (index === undefined) return args[3] === undefined ? error("#N/A") : scalar(evaluate(args[3], sheet, depth + 1));
     return cellValue(correspondingAddress(resultRange, resultRange.width === 1 ? index : 0, resultRange.width === 1 ? 0 : index), depth + 1, true);
   };

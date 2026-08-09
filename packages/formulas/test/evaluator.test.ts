@@ -273,6 +273,8 @@ describe("bounded spreadsheet formula calculation", () => {
       "Report!A7": formula(`HLOOKUP("C",Data!D1:F2,2,FALSE)`),
       "Report!A8": formula(`CHOOSE(2,MISSING(),"selected",MISSING())`),
       "Report!A9": formula(`XLOOKUP("B*",Data!A1:A3,Data!B1:B3,"none",2)`),
+      "Report!A10": formula(`XLOOKUP("B",Data!A1:A3,Data!B1:B3,"none",0,-1)`),
+      "Report!A11": formula(`XLOOKUP("B",Data!A1:A3,Data!B1:B3,"none",9)`),
     });
 
     const calculation = calculateFormulas(workbook);
@@ -286,6 +288,8 @@ describe("bounded spreadsheet formula calculation", () => {
     expect(calculation.value(address("Report!A7"))).toEqual({ type: "number", value: 300 });
     expect(calculation.value(address("Report!A8"))).toEqual({ type: "string", value: "selected" });
     expect(calculation.value(address("Report!A9"))).toEqual({ type: "number", value: 20 });
+    expect(calculation.value(address("Report!A10"))).toEqual({ type: "number", value: 20 });
+    expect(calculation.value(address("Report!A11"))).toEqual({ type: "error", value: "#VALUE!" });
     expect(calculation.diagnostics).toEqual([]);
   });
 
