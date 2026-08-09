@@ -32,8 +32,8 @@ bun add @tumblerjs/svelte@alpha @tumblerjs/sheets@alpha @tumblerjs/core@alpha
 />
 ```
 
-`FormattingToolbar` is format-neutral. Future Word and Slides heads can supply
-the same state and capability contract without replacing application UI. Its
+`FormattingToolbar` is format-neutral. Word and Sheets supply the same state
+and capability contract without replacing application UI. Its
 font-family field writes arbitrary Office font names rather than limiting files
 to a browser-dependent preset list.
 
@@ -46,6 +46,26 @@ applying the edit and replacing the artifact.
 
 Unwrapped left-aligned text paints across consecutive empty cells, matching the
 worksheet convention without widening those cells' interactive hit areas.
+
+The Word head exposes controlled selection and editing without making the DOM
+canonical state:
+
+```svelte
+<WordDocumentView
+  wordDocument={session.artifact.document}
+  editable
+  {selection}
+  onselectionchange={(next) => selection = next}
+  onedit={(edit) => {
+    session.replaceText(edit.selection, edit.value);
+    selection = { anchor: edit.caret, focus: edit.caret };
+  }}
+/>
+```
+
+Applications own history and persistence, or can use `WordEditingSession` from
+`@tumblerjs/word`. Internal bookmark links scroll inside the owned page surface;
+external targets are passed to the host for its security policy.
 
 Tumbler is developed at
 [Kryptonote-Labs/Tumbler](https://github.com/Kryptonote-Labs/Tumbler).

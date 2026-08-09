@@ -126,6 +126,26 @@ Expand feature families based on real documents and failures. Every feature must
 advance through recognized, preserved, rendered, editable, and interoperable
 states rather than landing as an unqualified checkbox.
 
+## WordprocessingML milestone 4 checkpoint
+
+The second-format architecture checkpoint is implemented as a bounded alpha:
+
+- [x] semantic paragraph/run/style/section model with source identity;
+- [x] explicit virtualized page, line, fragment, table, and drawing geometry;
+- [x] numbering, resolved and nested tables, headers/footers, notes, images, and
+  the shared chart subset;
+- [x] controlled logical text selection and ordinary text editing;
+- [x] safe paragraph splits/joins with explicit wrapper/container guards;
+- [x] cross-paragraph basic direct formatting and bounded editing history;
+- [x] owned Svelte pages and a Kryptonote-compatible artefact boundary;
+- [ ] iterative footnote/body repagination and continuation;
+- [ ] full floating-object wrap, bidi, and language line-breaking fidelity;
+- [ ] comments, content controls, tracked-change commands, and general fields;
+- [ ] external consumer, real-producer visual, performance, and memory gates.
+
+The exact capability claims and safety policy live in
+[wordprocessingml-implementation.md](wordprocessingml-implementation.md).
+
 ## Phase 7: second and third formats
 
 Repeat the same vertical-slice discipline. Shared improvements flow downward

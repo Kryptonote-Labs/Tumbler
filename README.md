@@ -17,7 +17,8 @@ components provide replaceable document surfaces.
 
 ## What works today
 
-The implemented format is SpreadsheetML (`.xlsx`). The current alpha can:
+The deepest implemented format is SpreadsheetML (`.xlsx`). WordprocessingML
+(`.docx`) now has an early milestone-4 vertical slice. The current alpha can:
 
 - open Strict and Transitional workbooks without assuming conventional part paths;
 - read worksheets, sparse cells, formulas, styles, dimensions, merges, frozen
@@ -33,9 +34,16 @@ The implemented format is SpreadsheetML (`.xlsx`). The current alpha can:
 - render an owned virtualized Svelte grid, formula bar, table views, hyperlinks,
   conditional font/fill/border overlays, and native SVG chart previews.
 
-WordprocessingML and PresentationML editing are not implemented yet. Spreadsheet
-formula coverage, structural editing, conditional-format rule coverage,
-validations, comments, pivots, and broad chart fidelity remain incomplete.
+- open Strict and Transitional Word documents through relationships;
+- render owned, virtualized pages with styles, lists, tables, sections,
+  headers/footers, notes, embedded images, and the shared chart subset;
+- edit logical text across producer-split runs, split/join safe paragraphs,
+  format selections, undo/redo, and serialize focused package changes.
+
+PresentationML editing is not implemented yet. Spreadsheet formula coverage,
+structural editing, comments, pivots, and broad chart fidelity remain incomplete.
+Word pagination and editing are deliberately bounded; see the capability matrix
+before using it with important files.
 
 ## Install
 
@@ -49,6 +57,24 @@ For the optional Svelte head:
 
 ```sh
 bun add @tumblerjs/svelte@alpha @tumblerjs/sheets@alpha
+```
+
+For WordprocessingML:
+
+```sh
+bun add @tumblerjs/word@alpha @tumblerjs/svelte@alpha
+```
+
+```ts
+import { openWordEditingSession } from "@tumblerjs/word";
+
+const session = openWordEditingSession(docxBytes);
+const paragraph = session.artifact.document.blocks.find((block) => block.kind === "paragraph")!;
+session.replaceText({
+  anchor: { paragraphElementId: paragraph.elementId, offset: 0 },
+  focus: { paragraphElementId: paragraph.elementId, offset: 0 },
+}, "Hello ");
+const editedDocx = session.artifact.bytes();
 ```
 
 ## Load a workbook
@@ -104,8 +130,8 @@ console.log(artifact.calculation.displayText("D7"));
 ```
 
 The result range begins at `B2` and is projected to the criteria range's shape,
-matching SpreadsheetML's `SUMIF` range-alignment rule. `SUMIFS`, `COUNTIFS`, and
-`AVERAGEIFS` are not implemented yet.
+matching SpreadsheetML's `SUMIF` range-alignment rule. The bounded engine also
+supports the multi-criteria `SUMIFS`, `COUNTIFS`, and `AVERAGEIFS` families.
 
 ## Edit cells
 
@@ -285,10 +311,11 @@ theme variables. Neither component requires a hosted service.
 | `@tumblerjs/charts` | Headless DrawingML chart semantics and deterministic layout |
 | `@tumblerjs/core` | Format-neutral selection, formatting contracts, and sparse geometry |
 | `@tumblerjs/sheets` | SpreadsheetML reading, calculation, preservation, and editing |
+| `@tumblerjs/word` | WordprocessingML reading, page layout, preservation, and editing |
 | `@tumblerjs/svelte` | Replaceable Svelte document heads |
 
-`word`, `slides`, and `testkit` remain private workspaces while their public
-boundaries are unfinished.
+`slides` and `testkit` remain private workspaces while their public boundaries
+are unfinished.
 
 ## Develop
 
@@ -309,6 +336,7 @@ for the resumable alpha release workflow.
 - [Formats and UI](docs/formats-and-ui.md)
 - [Standards and compatibility](docs/standards-and-compatibility.md)
 - [SpreadsheetML implementation status](docs/spreadsheetml-implementation.md)
+- [WordprocessingML implementation status](docs/wordprocessingml-implementation.md)
 - [Spreadsheet formula authoring](docs/spreadsheet-formula-authoring.md)
 - [Cross-format formatting](docs/formatting.md)
 - [Testing](docs/testing.md)
