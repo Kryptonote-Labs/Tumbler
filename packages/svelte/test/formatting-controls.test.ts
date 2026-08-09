@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { compile } from "svelte/compiler";
 import {
   colorFormatting,
+  fontFamilyFormatting,
   fontSizeFormatting,
   formattingColorValue,
   toggleBooleanFormatting,
@@ -19,6 +21,8 @@ describe("formatting toolbar commands", () => {
     expect(toggleUnderlineFormatting({ state: "mixed" })).toEqual({ text: { underline: { set: "single" } } });
     expect(fontSizeFormatting("14.5")).toEqual({ text: { fontSize: { set: 14.5 } } });
     expect(fontSizeFormatting("0")).toBeUndefined();
+    expect(fontFamilyFormatting(" Aptos Display ")).toEqual({ text: { fontFamily: { set: "Aptos Display" } } });
+    expect(fontFamilyFormatting("   ")).toBeUndefined();
     expect(colorFormatting("#12abEF")).toEqual({ text: { color: { set: { type: "rgb", value: "#12abEF" } } } });
     expect(colorFormatting("red")).toBeUndefined();
   });
@@ -27,5 +31,14 @@ describe("formatting toolbar commands", () => {
     expect(formattingColorValue({ state: "value", value: { type: "rgb", value: "#123456" } })).toBe("#123456");
     expect(formattingColorValue({ state: "inherited", value: { type: "automatic" } })).toBe("#000000");
     expect(formattingColorValue({ state: "mixed" })).toBe("#000000");
+  });
+
+  test("compiles accessible formatting controls with an inert font-family field", async () => {
+    const source = await Bun.file(new URL("../src/FormattingToolbar.svelte", import.meta.url)).text();
+    const result = compile(source, { filename: "FormattingToolbar.svelte", generate: "client", modernAst: true });
+    expect(result.warnings).toEqual([]);
+    expect(source).toContain('aria-label="Font family"');
+    expect(source).toContain('autocomplete="off"');
+    expect(source).toContain('spellcheck="false"');
   });
 });

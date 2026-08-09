@@ -20,6 +20,13 @@ export function fontSizeFormatting(value: string): FormattingPatch | undefined {
     : undefined;
 }
 
+export function fontFamilyFormatting(value: string): FormattingPatch | undefined {
+  const family = value.trim();
+  return family.length > 0 && family.length <= 255
+    ? { text: { fontFamily: { set: family } } }
+    : undefined;
+}
+
 export function colorFormatting(value: string): FormattingPatch | undefined {
   return /^#[0-9A-Fa-f]{6}$/.test(value)
     ? { text: { color: { set: { type: "rgb", value } } } }

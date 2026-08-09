@@ -7,6 +7,7 @@
   } from "@tumblerjs/core";
   import {
     colorFormatting,
+    fontFamilyFormatting,
     fontSizeFormatting,
     formattingColorValue,
     toggleBooleanFormatting,
@@ -24,6 +25,11 @@
   let fontSize = $derived(
     state.text.fontSize.state === "value" || state.text.fontSize.state === "inherited"
       ? String(state.text.fontSize.value)
+      : "",
+  );
+  let fontFamily = $derived(
+    state.text.fontFamily.state === "value" || state.text.fontFamily.state === "inherited"
+      ? state.text.fontFamily.value
       : "",
   );
   let color = $derived(formattingColorValue(state.text.color));
@@ -53,6 +59,21 @@
 </script>
 
 <div class="formatting-toolbar" role="toolbar" aria-label="Formatting">
+  {#if capabilities.text.fontFamily}
+    <input
+      class="font-family"
+      class:mixed={state.text.fontFamily.state === "mixed"}
+      type="text"
+      value={fontFamily}
+      placeholder={state.text.fontFamily.state === "mixed" ? "Mixed fonts" : "Font"}
+      aria-label="Font family"
+      title="Font family"
+      autocomplete="off"
+      spellcheck="false"
+      disabled={disabled}
+      onchange={(event) => apply(fontFamilyFormatting(event.currentTarget.value))}
+    />
+  {/if}
   {#if capabilities.text.fontSize !== false}
     <input
       class:mixed={state.text.fontSize.state === "mixed"}
@@ -151,7 +172,7 @@
     font: 13px/1 system-ui, sans-serif;
   }
   .formatting-toolbar::-webkit-scrollbar { display: none; }
-  button, .color-control, input[type="number"] {
+  button, .color-control, input[type="number"], input[type="text"] {
     flex: 0 0 auto;
     box-sizing: border-box;
     height: 30px;
@@ -162,14 +183,15 @@
     font: inherit;
   }
   button { display: grid; width: 30px; padding: 0; place-items: center; cursor: pointer; }
-  button:hover, .color-control:hover, input[type="number"]:hover { background: var(--tumbler-grid-header-bg, #181c18); }
+  button:hover, .color-control:hover, input[type="number"]:hover, input[type="text"]:hover { background: var(--tumbler-grid-header-bg, #181c18); }
   button.active { border-color: color-mix(in srgb, var(--tumbler-grid-accent, #42ff53) 55%, transparent); background: color-mix(in srgb, var(--tumbler-grid-accent, #42ff53) 12%, transparent); }
   button.mixed::after { position: absolute; width: 12px; height: 2px; margin-top: 20px; background: currentColor; content: ""; opacity: 0.65; }
   button { position: relative; }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--tumbler-grid-accent, #42ff53); outline-offset: -2px; }
   button:disabled, input:disabled { cursor: default; opacity: 0.5; }
   input[type="number"] { width: 58px; padding: 0 7px; border-color: var(--tumbler-grid-line, #2a302a); outline: 0; }
-  input[type="number"].mixed { color: var(--tumbler-grid-muted, #9aa79a); }
+  input[type="text"] { width: 132px; padding: 0 8px; border-color: var(--tumbler-grid-line, #2a302a); outline: 0; }
+  input.mixed { color: var(--tumbler-grid-muted, #9aa79a); }
   .underline { text-decoration: underline; text-underline-offset: 2px; }
   .color-control { position: relative; display: grid; width: 34px; place-items: center; cursor: pointer; font-weight: 650; }
   .color-control::after { position: absolute; right: 7px; bottom: 4px; left: 7px; height: 3px; border-radius: 2px; background: var(--format-color, currentColor); content: ""; }

@@ -37,6 +37,7 @@ export { spreadsheetTextOverflowWidth } from "./spreadsheet-text-overflow.ts";
 export type { SpreadsheetTextOverflowInput } from "./spreadsheet-text-overflow.ts";
 export {
   colorFormatting,
+  fontFamilyFormatting,
   fontSizeFormatting,
   formattingColorValue,
   toggleBooleanFormatting,
