@@ -29,6 +29,7 @@ async function registryState(pkg: ReleasePackage): Promise<RegistryPackageState>
   const packageResponse = await fetch(registryPackageUrl(pkg.name), {
     headers: { accept: "application/json" },
   });
+  if (packageResponse.status === 404) return { published: versionResponse.ok };
   if (!packageResponse.ok) throw new Error(`Registry returned HTTP ${packageResponse.status} for ${pkg.name}.`);
   const metadata: unknown = await packageResponse.json();
   const tags = typeof metadata === "object" && metadata !== null && "dist-tags" in metadata
