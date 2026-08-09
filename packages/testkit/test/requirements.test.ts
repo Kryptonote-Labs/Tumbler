@@ -14,7 +14,8 @@ describe("standards requirement manifests", () => {
       recognize: "unverified",
       preserve: "supported",
       render: "partial",
-      edit: "unverified",
+      edit: "partial",
+      write: "partial",
       interoperate: "unverified",
     });
     expect(matrix.find((entry) => entry.id === "XLSX-CALCULATION-STATE")).toMatchObject({
