@@ -7,10 +7,12 @@ import type {
   WordParagraph,
   WordRun,
   WordSectionProperties,
+  WordTable,
 } from "./document.ts";
 import type { ComputedWordParagraphFormat, ComputedWordTextFormat, WordTabStop } from "./styles.ts";
 import { WordError } from "./document.ts";
 import type { WordListMarker } from "./numbering.ts";
+import { resolveWordTableGrid, type ResolvedWordTableCell } from "./table-grid.ts";
 
 const TWIPS_PER_POINT = 20;
 const CSS_PIXELS_PER_POINT = 4 / 3;
@@ -52,7 +54,32 @@ export interface WordLayoutColumn {
   readonly width: number;
   readonly height: number;
   readonly lines: readonly WordLayoutLine[];
+  readonly tables: readonly WordLayoutTable[];
   readonly unsupportedBlocks: readonly { readonly elementId: number; readonly localName: string; readonly y: number }[];
+}
+
+export interface WordLayoutTable {
+  readonly tableElementId: number;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly cells: readonly WordLayoutTableCell[];
+}
+
+export interface WordLayoutTableCell {
+  readonly cellElementId: number;
+  readonly continuationElementIds: readonly number[];
+  readonly row: number;
+  readonly column: number;
+  readonly columnSpan: number;
+  readonly rowSpan: number;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly lines: readonly WordLayoutLine[];
+  readonly nestedTableElementIds: readonly number[];
 }
 
 export interface WordLayoutLine {
@@ -107,6 +134,7 @@ interface MutableColumn {
   readonly width: number;
   readonly height: number;
   readonly lines: WordLayoutLine[];
+  readonly tables: WordLayoutTable[];
   readonly unsupportedBlocks: Array<{ readonly elementId: number; readonly localName: string; readonly y: number }>;
 }
 
@@ -171,6 +199,25 @@ interface PreparedMarker {
   readonly format: ComputedWordTextFormat;
 }
 
+interface PreparedTable {
+  readonly table: WordTable;
+  readonly xOffset: number;
+  readonly width: number;
+  readonly columnOffsets: readonly number[];
+  readonly rowHeights: readonly number[];
+  readonly cells: readonly PreparedTableCell[];
+}
+
+interface PreparedTableCell {
+  readonly resolved: ResolvedWordTableCell;
+  readonly width: number;
+  readonly contentHeight: number;
+  readonly paragraphs: readonly PreparedParagraph[];
+  readonly nestedTableElementIds: readonly number[];
+  readonly margins: { readonly top: number; readonly end: number; readonly bottom: number; readonly start: number };
+  readonly verticalAlignment: "top" | "center" | "bottom";
+}
+
 interface PreparedLine {
   readonly atoms: readonly Exclude<ParagraphAtom, BreakAtom>[];
   readonly startOffset: number;
@@ -230,9 +277,19 @@ export function layoutWordDocument(
 
     for (let blockIndex = 0; blockIndex < section.blocks.length; blockIndex += 1) {
       const block = section.blocks[blockIndex]!;
+      if (block.kind === "table") {
+        const initialColumn = page!.columns[columnIndex]!;
+        const preparedTable = prepareTable(document, block, initialColumn.width, measurer, listMarkers);
+        const height = preparedTable.rowHeights.reduce((sum, value) => sum + value, 0);
+        if (cursorY + height > initialColumn.y + initialColumn.height && cursorY > initialColumn.y) advanceColumn(section.properties);
+        const target = page!.columns[columnIndex]!;
+        target.tables.push(placeTable(preparedTable, target.x, cursorY, budget));
+        cursorY += height;
+        continue;
+      }
       if (block.kind !== "paragraph") {
         const column = page!.columns[columnIndex]!;
-        column.unsupportedBlocks.push(Object.freeze({ elementId: block.elementId, localName: block.kind === "table" ? "tbl" : block.localName, y: cursorY }));
+        column.unsupportedBlocks.push(Object.freeze({ elementId: block.elementId, localName: block.localName, y: cursorY }));
         continue;
       }
       let prepared = prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId));
@@ -286,6 +343,99 @@ export function layoutWordDocument(
 export function wordPointsToCssPixels(pointsValue: number): number {
   if (!Number.isFinite(pointsValue)) throw new TypeError("Word layout points must be finite.");
   return pointsValue * CSS_PIXELS_PER_POINT;
+}
+
+function prepareTable(
+  document: WordDocument,
+  table: WordTable,
+  availableWidth: number,
+  measurer: WordTextMeasurer,
+  listMarkers: ReadonlyMap<number, WordListMarker>,
+): PreparedTable {
+  const grid = resolveWordTableGrid(table);
+  const gridTotal = Math.max(1, grid.columnWidthsTwips.reduce((sum, value) => sum + value, 0));
+  const requested = table.properties.width?.type === "dxa" ? points(table.properties.width.value)
+    : table.properties.width?.type === "pct" ? availableWidth * table.properties.width.value / 5_000
+    : points(gridTotal);
+  const width = Math.max(1, Math.min(availableWidth, requested || availableWidth));
+  const xOffset = table.properties.alignment === "center" ? Math.max(0, (availableWidth - width) / 2)
+    : table.properties.alignment === "end" ? Math.max(0, availableWidth - width)
+    : Math.min(availableWidth - 1, points(table.properties.indentTwips));
+  const scale = width / gridTotal;
+  const columnWidths = grid.columnWidthsTwips.map((value) => value * scale);
+  const columnOffsets = [0];
+  for (const value of columnWidths) columnOffsets.push(columnOffsets.at(-1)! + value);
+  const preparedCells: PreparedTableCell[] = [];
+  const rowHeights = grid.rows.map((row) => row.source.heightTwips === undefined ? 0 : points(row.source.heightTwips));
+  for (const row of grid.rows) for (const cell of row.cells) {
+    const cellWidth = columnOffsets[cell.column + cell.columnSpan]! - columnOffsets[cell.column]!;
+    const sourceMargins = cell.source.margins ?? table.properties.cellMargins;
+    const margins = Object.freeze({ top: points(sourceMargins.topTwips), end: points(sourceMargins.endTwips), bottom: points(sourceMargins.bottomTwips), start: points(sourceMargins.startTwips) });
+    const innerWidth = Math.max(1, cellWidth - margins.start - margins.end);
+    const paragraphs = cell.source.blocks.filter((block): block is WordParagraph => block.kind === "paragraph")
+      .map((paragraph) => prepareParagraph(document, paragraph, innerWidth, measurer, listMarkers.get(paragraph.elementId)));
+    const nestedTableElementIds = cell.source.blocks.filter((block) => block.kind === "table").map((block) => block.elementId);
+    const contentHeight = paragraphs.reduce((sum, paragraph) => sum + paragraphHeight(paragraph), 0) + nestedTableElementIds.length * 18 + margins.top + margins.bottom;
+    preparedCells.push(Object.freeze({ resolved: cell, width: cellWidth, contentHeight, paragraphs: Object.freeze(paragraphs), nestedTableElementIds: Object.freeze(nestedTableElementIds), margins, verticalAlignment: cell.source.verticalAlignment }));
+    if (cell.rowSpan === 1) rowHeights[cell.row] = Math.max(rowHeights[cell.row] ?? 0, contentHeight);
+  }
+  for (const cell of preparedCells.filter((item) => item.resolved.rowSpan > 1)) {
+    const end = Math.min(rowHeights.length, cell.resolved.row + cell.resolved.rowSpan);
+    const current = rowHeights.slice(cell.resolved.row, end).reduce((sum, value) => sum + value, 0);
+    if (current < cell.contentHeight) rowHeights[end - 1] = (rowHeights[end - 1] ?? 0) + cell.contentHeight - current;
+  }
+  for (let index = 0; index < rowHeights.length; index += 1) rowHeights[index] = Math.max(rowHeights[index] ?? 0, 12);
+  return Object.freeze({ table, xOffset, width, columnOffsets: Object.freeze(columnOffsets), rowHeights: Object.freeze(rowHeights), cells: Object.freeze(preparedCells) });
+}
+
+function placeTable(prepared: PreparedTable, columnX: number, y: number, budget: LayoutBudget): WordLayoutTable {
+  const rowOffsets = [0];
+  for (const height of prepared.rowHeights) rowOffsets.push(rowOffsets.at(-1)! + height);
+  const x = columnX + prepared.xOffset;
+  const cells = prepared.cells.map((cell): WordLayoutTableCell => {
+    const cellY = y + rowOffsets[cell.resolved.row]!;
+    const cellHeight = rowOffsets[Math.min(rowOffsets.length - 1, cell.resolved.row + cell.resolved.rowSpan)]! - rowOffsets[cell.resolved.row]!;
+    const bodyHeight = Math.max(0, cellHeight - cell.margins.top - cell.margins.bottom);
+    const textHeight = cell.paragraphs.reduce((sum, paragraph) => sum + paragraphHeight(paragraph), 0);
+    const vertical = cell.verticalAlignment === "center" ? Math.max(0, (bodyHeight - textHeight) / 2)
+      : cell.verticalAlignment === "bottom" ? Math.max(0, bodyHeight - textHeight) : 0;
+    const fake: MutableColumn = {
+      index: 0,
+      x: x + prepared.columnOffsets[cell.resolved.column]! + cell.margins.start,
+      y: cellY + cell.margins.top + vertical,
+      width: Math.max(1, cell.width - cell.margins.start - cell.margins.end),
+      height: bodyHeight,
+      lines: [],
+      tables: [],
+      unsupportedBlocks: [],
+    };
+    let cursor = fake.y;
+    for (const paragraph of cell.paragraphs) {
+      cursor += points(paragraph.format.spacingBeforeTwips);
+      for (let index = 0; index < paragraph.lines.length; index += 1) {
+        const line = paragraph.lines[index]!;
+        const laidOut = placeLine(paragraph.paragraph, paragraph.format, line, fake, cursor, budget, index === 0 ? paragraph.marker : undefined);
+        fake.lines.push(laidOut);
+        cursor += laidOut.height;
+      }
+      cursor += points(paragraph.format.spacingAfterTwips);
+    }
+    return Object.freeze({
+      cellElementId: cell.resolved.source.elementId,
+      continuationElementIds: cell.resolved.continuationElementIds,
+      row: cell.resolved.row,
+      column: cell.resolved.column,
+      columnSpan: cell.resolved.columnSpan,
+      rowSpan: cell.resolved.rowSpan,
+      x: x + prepared.columnOffsets[cell.resolved.column]!,
+      y: cellY,
+      width: cell.width,
+      height: cellHeight,
+      lines: Object.freeze(fake.lines),
+      nestedTableElementIds: cell.nestedTableElementIds,
+    });
+  });
+  return Object.freeze({ tableElementId: prepared.table.elementId, x, y, width: prepared.width, height: rowOffsets.at(-1)!, cells: Object.freeze(cells) });
 }
 
 function prepareParagraph(
@@ -534,6 +684,7 @@ function createPage(section: WordSectionProperties, pages: MutablePage[], budget
     width: columnWidth,
     height: bodyHeight,
     lines: [],
+    tables: [],
     unsupportedBlocks: [],
   }));
   const page: MutablePage = { index: pages.length, width, height, section, columns };
@@ -571,6 +722,7 @@ function freezePage(page: MutablePage): WordLayoutPage {
       width: column.width,
       height: column.height,
       lines: Object.freeze(column.lines),
+      tables: Object.freeze(column.tables),
       unsupportedBlocks: Object.freeze(column.unsupportedBlocks),
     }))),
   });

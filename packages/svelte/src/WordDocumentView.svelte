@@ -52,8 +52,8 @@
     onhyperlink(target);
   }
 
-  function fragmentStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>) {
-    return `${wordTextCss(fragment.format)};left:${wordPointsToCssPixels(fragment.x)}px;top:${wordPointsToCssPixels(fragment.y)}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
+  function fragmentStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0) {
+    return `${wordTextCss(fragment.format)};left:${wordPointsToCssPixels(fragment.x - offsetX)}px;top:${wordPointsToCssPixels(fragment.y - offsetY)}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 </script>
 
@@ -75,6 +75,33 @@
         >
           <div class="word-page-content" style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}>
             {#each page.columns as column}
+              {#each column.tables as table}
+                <div
+                  class="document-table"
+                  data-table={table.tableElementId}
+                  style={`left:${wordPointsToCssPixels(table.x)}px;top:${wordPointsToCssPixels(table.y)}px;width:${wordPointsToCssPixels(table.width)}px;height:${wordPointsToCssPixels(table.height)}px`}
+                >
+                  {#each table.cells as cell}
+                    <div
+                      class="document-cell"
+                      data-cell={cell.cellElementId}
+                      style={`left:${wordPointsToCssPixels(cell.x - table.x)}px;top:${wordPointsToCssPixels(cell.y - table.y)}px;width:${wordPointsToCssPixels(cell.width)}px;height:${wordPointsToCssPixels(cell.height)}px`}
+                    ></div>
+                    {#each cell.lines as line}
+                      {#if line.marker !== undefined}
+                        <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format)};left:${wordPointsToCssPixels(line.marker.x - table.x)}px;top:${wordPointsToCssPixels(line.marker.y - table.y)}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
+                      {/if}
+                      {#each line.fragments as fragment}
+                        {#if fragment.hyperlink === undefined}
+                          <span data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, table.x, table.y)}>{fragment.text}</span>
+                        {:else}
+                          <button class="hyperlink" onkeydown={(event) => activateHyperlink(event, fragment.hyperlink)} onclick={(event) => activateHyperlink(event, fragment.hyperlink)} data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, table.x, table.y)}>{fragment.text}</button>
+                        {/if}
+                      {/each}
+                    {/each}
+                  {/each}
+                </div>
+              {/each}
               {#each column.lines as line}
                 {#if line.marker !== undefined}
                   <span
@@ -117,6 +144,8 @@
   .word-surface { position: relative; min-width: 100%; }
   .word-page { position: absolute; transform: translateX(-50%); overflow: hidden; box-sizing: border-box; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.2); contain: strict; }
   .word-page-content { position: absolute; inset: 0 auto auto 0; overflow: hidden; }
+  .document-table { position: absolute; }
+  .document-cell { position: absolute; box-sizing: border-box; border: 1px solid #b7b7b7; }
   span, button { position: absolute; display: block; box-sizing: border-box; white-space: pre; user-select: text; -webkit-user-select: text; }
   button { margin: 0; border: 0; padding: 0; text-align: inherit; }
   .hyperlink { cursor: pointer; text-decoration: underline; text-decoration-color: currentColor; }

@@ -47,16 +47,49 @@ export interface WordParagraph {
 export interface WordTable {
   readonly kind: "table";
   readonly elementId: number;
+  readonly gridColumnWidthsTwips: readonly number[];
+  readonly properties: WordTableProperties;
   readonly rows: readonly WordTableRow[];
+}
+
+export interface WordTableProperties {
+  readonly width: WordTableWidth | undefined;
+  readonly alignment: "start" | "center" | "end";
+  readonly indentTwips: number;
+  readonly layout: "autofit" | "fixed";
+  readonly cellMargins: WordTableCellMargins;
+}
+
+export interface WordTableWidth {
+  readonly type: "auto" | "dxa" | "pct" | "nil";
+  readonly value: number;
+}
+
+export interface WordTableCellMargins {
+  readonly topTwips: number;
+  readonly endTwips: number;
+  readonly bottomTwips: number;
+  readonly startTwips: number;
 }
 
 export interface WordTableRow {
   readonly elementId: number;
+  readonly gridBefore: number;
+  readonly gridAfter: number;
+  readonly cantSplit: boolean;
+  readonly repeatHeader: boolean;
+  readonly heightTwips: number | undefined;
+  readonly heightRule: "auto" | "atLeast" | "exact";
   readonly cells: readonly WordTableCell[];
 }
 
 export interface WordTableCell {
   readonly elementId: number;
+  readonly gridSpan: number;
+  readonly verticalMerge: "restart" | "continue" | undefined;
+  readonly width: WordTableWidth | undefined;
+  readonly verticalAlignment: "top" | "center" | "bottom";
+  readonly margins: WordTableCellMargins | undefined;
   readonly blocks: readonly WordBlock[];
 }
 
@@ -306,18 +339,96 @@ function parseTable(
   relationships: Relationships | undefined,
   budget: ParseBudget,
 ): WordTable {
+  const properties = onlyChild(element, namespace, "tblPr", "A table must not repeat tblPr.");
+  const grid = onlyChild(element, namespace, "tblGrid", "A table must not repeat tblGrid.");
+  const margins = properties === undefined ? undefined : onlyChild(properties, namespace, "tblCellMar", "Table properties must not repeat tblCellMar.");
+  const tableProperties: WordTableProperties = Object.freeze({
+    width: properties === undefined ? undefined : parseTableWidth(onlyChild(properties, namespace, "tblW", "Table properties must not repeat tblW."), namespace),
+    alignment: properties === undefined ? "start" : tableAlignment(valueChild(properties, namespace, "jc")),
+    indentTwips: properties === undefined ? 0 : tableIndent(onlyChild(properties, namespace, "tblInd", "Table properties must not repeat tblInd."), namespace),
+    layout: properties === undefined || valueChild(properties, namespace, "tblLayout") !== "fixed" ? "autofit" : "fixed",
+    cellMargins: parseCellMargins(margins, namespace, { topTwips: 0, endTwips: 108, bottomTwips: 0, startTwips: 108 }),
+  });
   const rows = children(element, namespace, "tr").map((row): WordTableRow => Object.freeze({
     elementId: row.id,
-    cells: Object.freeze(children(row, namespace, "tc").map((cell): WordTableCell => Object.freeze({
+    ...parseRowProperties(onlyChild(row, namespace, "trPr", "A table row must not repeat trPr."), namespace),
+    cells: Object.freeze(children(row, namespace, "tc").map((cell): WordTableCell => {
+      const cellProperties = onlyChild(cell, namespace, "tcPr", "A table cell must not repeat tcPr.");
+      const rawMerge = cellProperties === undefined ? undefined : onlyChild(cellProperties, namespace, "vMerge", "Cell properties must not repeat vMerge.");
+      const mergeValue = rawMerge === undefined ? undefined : attr(rawMerge, namespace, "val");
+      return Object.freeze({
       elementId: cell.id,
+      gridSpan: cellProperties === undefined ? 1 : integerAttr(onlyChild(cellProperties, namespace, "gridSpan", "Cell properties must not repeat gridSpan."), namespace, "val", 1, 1, 32_767),
+      verticalMerge: rawMerge === undefined ? undefined : mergeValue === "restart" ? "restart" : "continue",
+      width: cellProperties === undefined ? undefined : parseTableWidth(onlyChild(cellProperties, namespace, "tcW", "Cell properties must not repeat tcW."), namespace),
+      verticalAlignment: cellVerticalAlignment(cellProperties === undefined ? undefined : valueChild(cellProperties, namespace, "vAlign")),
+      margins: cellProperties === undefined ? undefined : parseOptionalCellMargins(onlyChild(cellProperties, namespace, "tcMar", "Cell properties must not repeat tcMar."), namespace),
       blocks: Object.freeze(cell.children
         .filter((node): node is LosslessXmlElement => node.kind === "element")
         .filter((child) => child.namespaceUri === namespace && (child.localName === "p" || child.localName === "tbl"))
         .map((child) => parseBlock(child, source, namespace, relationships, budget))),
-    }))),
+    }); })),
   }));
-  return Object.freeze({ kind: "table", elementId: element.id, rows: Object.freeze(rows) });
+  const gridColumnWidthsTwips = grid === undefined ? [] : children(grid, namespace, "gridCol").map((column) => twipsAttr(column, namespace, "w", 0));
+  return Object.freeze({ kind: "table", elementId: element.id, gridColumnWidthsTwips: Object.freeze(gridColumnWidthsTwips), properties: tableProperties, rows: Object.freeze(rows) });
 }
+
+function parseRowProperties(element: LosslessXmlElement | undefined, namespace: string): Pick<WordTableRow, "gridBefore" | "gridAfter" | "cantSplit" | "repeatHeader" | "heightTwips" | "heightRule"> {
+  const height = element === undefined ? undefined : onlyChild(element, namespace, "trHeight", "Row properties must not repeat trHeight.");
+  const rawHeight = height === undefined ? undefined : attr(height, namespace, "val");
+  const rule = height === undefined ? undefined : attr(height, namespace, "hRule");
+  return {
+    gridBefore: element === undefined ? 0 : valueIntegerChild(element, namespace, "gridBefore", 0, 32_767),
+    gridAfter: element === undefined ? 0 : valueIntegerChild(element, namespace, "gridAfter", 0, 32_767),
+    cantSplit: element !== undefined && children(element, namespace, "cantSplit").length > 0,
+    repeatHeader: element !== undefined && children(element, namespace, "tblHeader").length > 0,
+    heightTwips: rawHeight === undefined ? undefined : unsignedInteger(rawHeight, "row height", 0, 2_147_483_647),
+    heightRule: rule === "exact" || rule === "atLeast" ? rule : "auto",
+  };
+}
+
+function valueIntegerChild(element: LosslessXmlElement, namespace: string, name: string, minimum: number, maximum: number): number {
+  const child = onlyChild(element, namespace, name, `${element.localName} must not repeat ${name}.`);
+  const raw = child === undefined ? undefined : attr(child, namespace, "val");
+  return raw === undefined ? minimum : unsignedInteger(raw, name, minimum, maximum);
+}
+
+function parseTableWidth(element: LosslessXmlElement | undefined, namespace: string): WordTableWidth | undefined {
+  if (element === undefined) return undefined;
+  const rawType = attr(element, namespace, "type") ?? "dxa";
+  const type = rawType === "auto" || rawType === "pct" || rawType === "nil" ? rawType : "dxa";
+  const rawValue = attr(element, namespace, "w") ?? "0";
+  return Object.freeze({ type, value: unsignedInteger(rawValue, "table width", 0, 2_147_483_647) });
+}
+
+function tableIndent(element: LosslessXmlElement | undefined, namespace: string): number {
+  if (element === undefined || attr(element, namespace, "type") !== "dxa") return 0;
+  const raw = attr(element, namespace, "w");
+  return raw === undefined ? 0 : unsignedInteger(raw, "table indentation", 0, 2_147_483_647);
+}
+
+function parseOptionalCellMargins(element: LosslessXmlElement | undefined, namespace: string): WordTableCellMargins | undefined {
+  return element === undefined ? undefined : parseCellMargins(element, namespace, { topTwips: 0, endTwips: 0, bottomTwips: 0, startTwips: 0 });
+}
+
+function parseCellMargins(element: LosslessXmlElement | undefined, namespace: string, fallback: WordTableCellMargins): WordTableCellMargins {
+  if (element === undefined) return Object.freeze(fallback);
+  const measurement = (modern: string, legacy: string, defaultValue: number): number => {
+    const child = onlyChild(element, namespace, modern, `Cell margins must not repeat ${modern}.`) ?? onlyChild(element, namespace, legacy, `Cell margins must not repeat ${legacy}.`);
+    const raw = child === undefined ? undefined : attr(child, namespace, "w");
+    return raw === undefined || attr(child!, namespace, "type") !== "dxa" ? defaultValue : unsignedInteger(raw, `${modern} cell margin`, 0, 2_147_483_647);
+  };
+  return Object.freeze({
+    topTwips: measurement("top", "top", fallback.topTwips),
+    endTwips: measurement("end", "right", fallback.endTwips),
+    bottomTwips: measurement("bottom", "bottom", fallback.bottomTwips),
+    startTwips: measurement("start", "left", fallback.startTwips),
+  });
+}
+
+function tableAlignment(value: string | undefined): "start" | "center" | "end" { return value === "center" ? "center" : value === "right" || value === "end" ? "end" : "start"; }
+function cellVerticalAlignment(value: string | undefined): "top" | "center" | "bottom" { return value === "center" || value === "bottom" ? value : "top"; }
+function unsignedInteger(raw: string, label: string, minimum: number, maximum: number): number { if (!/^[0-9]+$/.test(raw)) throw new WordError("invalid_document", `${label} must be an unsigned integer.`); const value = Number(raw); if (!Number.isSafeInteger(value) || value < minimum || value > maximum) throw new WordError("invalid_document", `${label} must be between ${minimum} and ${maximum}.`); return value; }
 
 function parseInline(
   element: LosslessXmlElement,

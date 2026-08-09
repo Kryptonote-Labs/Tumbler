@@ -19,6 +19,9 @@ export type {
   WordRunContent,
   WordSectionProperties,
   WordTable,
+  WordTableCellMargins,
+  WordTableProperties,
+  WordTableWidth,
   WordTableCell,
   WordTableRow,
   WordText,
@@ -61,6 +64,8 @@ export type {
   WordNumberingLevel,
   WordParagraphNumbering,
 } from "./numbering.ts";
+export { resolveWordTableGrid } from "./table-grid.ts";
+export type { ResolvedWordTable, ResolvedWordTableCell, ResolvedWordTableRow } from "./table-grid.ts";
 export { openWordEditingSession, WordEditingSession } from "./session.ts";
 export type {
   WordEditingSessionOptions,
@@ -76,6 +81,8 @@ export type {
   WordLayoutMarker,
   WordLayoutOptions,
   WordLayoutPage,
+  WordLayoutTable,
+  WordLayoutTableCell,
   WordTextMeasurement,
   WordTextMeasurer,
 } from "./layout.ts";
