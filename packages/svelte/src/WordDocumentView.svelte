@@ -117,7 +117,7 @@
   function imageUrl(drawing: WordImageDrawing): string {
     const existing = imageUrls.get(drawing.bytes);
     if (existing !== undefined) return existing;
-    const url = URL.createObjectURL(new Blob([drawing.bytes], { type: drawing.contentType }));
+    const url = URL.createObjectURL(new Blob([Uint8Array.from(drawing.bytes).buffer], { type: drawing.contentType }));
     imageUrls.set(drawing.bytes, url);
     createdUrls.add(url);
     return url;
@@ -149,7 +149,8 @@
             aria-label={editable ? `Edit page ${page.index + 1}` : undefined}
             spellcheck={editable}
             autocapitalize="sentences"
-            autocomplete="off"
+            data-form-type="other"
+            data-lpignore="true"
             onbeforeinput={handleBeforeInput}
             onkeydown={handleKeydown}
             style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
