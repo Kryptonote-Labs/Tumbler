@@ -64,7 +64,13 @@ export function calculateSpreadsheetWorksheet(
       dateSystem: worksheet.workbook.dateSystem,
     });
     const base = calculate(baseSource);
-    const visibility = calculateFilterVisibility(worksheet.workbook, base, tableViewStates, worksheetFilterStates);
+    const visibility = calculateFilterVisibility(
+      worksheet.workbook,
+      base,
+      tableViewStates,
+      worksheetFilterStates,
+      formulaOptions.maxRangeCells ?? 100_000,
+    );
     const calculation = visibility === undefined
       ? base
       : calculate(new SpreadsheetFormulaSource(worksheet.workbook, worksheet, visibility));
@@ -123,11 +129,11 @@ class SpreadsheetFormulaSource implements FormulaWorkbookSource {
     const worksheet = this.#worksheet(sheet);
     const state = this.#visibility?.get(sheetKeyValue);
     const filteredOut = state?.filteredRows.has(row) ?? false;
-    const rawHidden = worksheet.rows.find((candidate) => candidate.index === row)?.hidden ?? false;
+    const rawHidden = worksheet.row(row)?.hidden ?? false;
     return Object.freeze({
       filteredOut,
       manuallyHidden: rawHidden && !filteredOut,
-      determinate: state?.indeterminateRows.has(row) !== true,
+      determinate: state?.indeterminateRanges.some((range) => row >= range.first && row <= range.last) !== true,
     });
   }
 
@@ -148,7 +154,7 @@ class SpreadsheetFormulaSource implements FormulaWorkbookSource {
 
 interface SpreadsheetRowVisibilityState {
   readonly filteredRows: ReadonlySet<number>;
-  readonly indeterminateRows: ReadonlySet<number>;
+  readonly indeterminateRanges: readonly { readonly first: number; readonly last: number }[];
 }
 
 function calculateFilterVisibility(
@@ -156,6 +162,7 @@ function calculateFilterVisibility(
   base: FormulaCalculation,
   tableViewStates: Readonly<Record<string, SpreadsheetTableViewState>> | undefined,
   worksheetFilterStates: Readonly<Record<string, SpreadsheetTableViewState>> | undefined,
+  maxFilterRows: number,
 ): ReadonlyMap<string, SpreadsheetRowVisibilityState> | undefined {
   const worksheets = workbook.sheets.map((sheet) => openWorksheet(workbook, sheet));
   if (!worksheets.some((worksheet) => worksheet.autoFilter !== undefined || worksheet.tables.some((table) => table.autoFilter !== undefined))) {
@@ -164,28 +171,36 @@ function calculateFilterVisibility(
   const result = new Map<string, SpreadsheetRowVisibilityState>();
   for (const worksheet of worksheets) {
     const filteredRows = new Set<number>();
-    const indeterminateRows = new Set<number>();
+    const indeterminateRanges: Array<{ readonly first: number; readonly last: number }> = [];
     const provider = calculationValueProvider(worksheet, base);
     const worksheetState = worksheetFilterStates?.[sheetKey(worksheet.sheet)];
     if (worksheet.autoFilter !== undefined) {
+      const first = worksheet.autoFilter.range.start.row + 1;
+      const last = worksheet.autoFilter.range.end.row;
       const saved = savedSpreadsheetAutoFilterView(worksheet.autoFilter);
-      const projection = projectSpreadsheetAutoFilter(worksheet, worksheet.autoFilter, worksheetState ?? saved.state, provider);
-      projection.filteredRows.forEach((row) => filteredRows.add(row));
+      const effectiveState = worksheetState ?? saved.state;
       if (worksheetState === undefined && saved.warnings.includes("unsupported-filter")) {
-        addRows(indeterminateRows, worksheet.autoFilter.range.start.row + 1, worksheet.autoFilter.range.end.row);
-      }
+        indeterminateRanges.push(Object.freeze({ first, last }));
+      } else if (effectiveState.filters.length > 0 && last - first + 1 > maxFilterRows) {
+        indeterminateRanges.push(Object.freeze({ first, last }));
+      } else if (effectiveState.filters.length > 0) projectSpreadsheetAutoFilter(worksheet, worksheet.autoFilter, effectiveState, provider)
+        .filteredRows.forEach((row) => filteredRows.add(row));
     }
     for (const table of worksheet.tables) {
       if (table.autoFilter === undefined) continue;
       const state = tableViewStates?.[table.partName.value];
       const saved = savedSpreadsheetTableView(table);
-      const projection = projectSpreadsheetTable(worksheet, table, state ?? saved.state, provider);
-      projection.filteredRows.forEach((row) => filteredRows.add(row));
+      const first = table.range.start.row + table.headerRowCount;
+      const last = table.range.end.row - table.totalsRowCount;
+      const effectiveState = state ?? saved.state;
       if (state === undefined && saved.warnings.includes("unsupported-filter")) {
-        addRows(indeterminateRows, table.range.start.row + table.headerRowCount, table.range.end.row - table.totalsRowCount);
-      }
+        indeterminateRanges.push(Object.freeze({ first, last }));
+      } else if (effectiveState.filters.length > 0 && last - first + 1 > maxFilterRows) {
+        indeterminateRanges.push(Object.freeze({ first, last }));
+      } else if (effectiveState.filters.length > 0) projectSpreadsheetTable(worksheet, table, effectiveState, provider)
+        .filteredRows.forEach((row) => filteredRows.add(row));
     }
-    result.set(sheetKey(worksheet.sheet), Object.freeze({ filteredRows, indeterminateRows }));
+    result.set(sheetKey(worksheet.sheet), Object.freeze({ filteredRows, indeterminateRanges: Object.freeze(indeterminateRanges) }));
   }
   return result;
 }
@@ -203,9 +218,6 @@ function calculationValueProvider(worksheet: SpreadsheetWorksheet, calculation: 
   });
 }
 
-function addRows(rows: Set<number>, first: number, last: number): void {
-  for (let row = first; row <= last; row += 1) rows.add(row);
-}
 
 function formulaValue(value: SpreadsheetCellValue): FormulaScalarValue {
   switch (value.type) {

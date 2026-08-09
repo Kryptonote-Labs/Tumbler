@@ -136,6 +136,10 @@ export class SpreadsheetWorksheet {
     return this.#cells.get(normalized);
   }
 
+  row(index: number): SpreadsheetRow | undefined {
+    return this.#rows.get(index);
+  }
+
   cellStyle(reference: string | CellAddress): SpreadsheetCellFormat {
     const address = typeof reference === "string" ? parseCellReference(reference) : reference;
     return this.styles.resolve(this.effectiveStyleIndex(address));

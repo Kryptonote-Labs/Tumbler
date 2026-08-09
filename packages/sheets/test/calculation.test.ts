@@ -123,6 +123,37 @@ describe("SpreadsheetML calculated-value overlays", () => {
     expect(artifact.calculation.diagnostics[0]?.code).toBe("unavailable-dependency");
   });
 
+  test("retains aggregate caches instead of projecting oversized filters", () => {
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({ sheets: [{
+      name: "Data",
+      sheetId: 1,
+      relationshipId: "data",
+      xml: `<worksheet xmlns="${namespace}"><sheetData>
+        <row r="1"><c r="A1" t="inlineStr"><is><t>Status</t></is></c></row>
+        <row r="2"><c r="A2"><v>10</v></c><c r="B2"><f>SUBTOTAL(9,A2)</f><v>99</v></c></row>
+      </sheetData><autoFilter ref="A1:A1048576"><filterColumn colId="0"><filters><filter val="10"/></filters></filterColumn></autoFilter></worksheet>`,
+    }] }));
+
+    const limited = calculateSpreadsheetWorksheet(artifact.worksheet, { maxRangeCells: 10 });
+    expect(limited.value("B2")).toBeUndefined();
+    expect(limited.displayText("B2")).toBe("99");
+    expect(limited.diagnostics[0]?.code).toBe("unavailable-dependency");
+  });
+
+  test("does not treat hidden columns as manually hidden rows", () => {
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({ sheets: [{
+      name: "Data",
+      sheetId: 1,
+      relationshipId: "data",
+      xml: `<worksheet xmlns="${namespace}"><cols><col min="2" max="2" hidden="1"/></cols><sheetData>
+        <row r="1"><c r="A1"><v>10</v></c><c r="B1"><v>20</v></c><c r="C1"><f>SUBTOTAL(109,A1:B1)</f><v/></c></row>
+      </sheetData></worksheet>`,
+    }] }));
+
+    expect(artifact.calculation.displayText("C1")).toBe("30");
+    expect(artifact.calculation.diagnostics).toEqual([]);
+  });
+
   test("recalculates cross-sheet conditional aggregates after source edits", () => {
     const artifact = openSpreadsheetArtifact(buildWorkbookFixture({ sheets: [
       {

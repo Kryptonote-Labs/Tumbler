@@ -107,6 +107,7 @@ export function calculateFormulas(
   const diagnostics: FormulaDiagnostic[] = [];
   const diagnosed = new Set<string>();
   const visiting = new Set<string>();
+  const aggregateFormulaCells = new Map<string, boolean>();
   let operations = 0;
 
   const operation = () => {
@@ -840,7 +841,15 @@ export function calculateFormulas(
           }
           if (visibility?.filteredOut === true || policy.ignoreHidden && visibility?.manuallyHidden === true) continue;
           const input = readCell(source, address);
-          if (policy.ignoreNested && input?.formula !== undefined && formulaContainsAggregate(input.formula)) continue;
+          if (policy.ignoreNested && input?.formula !== undefined) {
+            const key = addressKey(address);
+            let nested = aggregateFormulaCells.get(key);
+            if (nested === undefined) {
+              nested = formulaContainsAggregate(input.formula);
+              aggregateFormulaCells.set(key, nested);
+            }
+            if (nested) continue;
+          }
           const value = cellValue(address, depth + 1, true);
           if (policy.ignoreErrors && value.type === "error") continue;
           cells.push(Object.freeze({ address, input, value }));
