@@ -44,7 +44,7 @@ describe("SpreadsheetML calculated-value overlays", () => {
       name: "Data",
       sheetId: 1,
       relationshipId: "data",
-      xml: sheet(`<row r="1"><c r="A1"><f>XLOOKUP(1,B1:B2,C1:C2)</f><v>42</v></c></row>`),
+      xml: sheet(`<row r="1"><c r="A1"><f>OFFSET(B1,0,0)</f><v>42</v></c></row>`),
     }] }));
     expect(artifact.calculation.value("A1")).toBeUndefined();
     expect(artifact.calculation.displayText("A1")).toBe("42");
@@ -61,6 +61,22 @@ describe("SpreadsheetML calculated-value overlays", () => {
     expect(artifact.calculation.displayText("B1")).toBe("6");
     const edited = artifact.editCell("A1", 5);
     expect(edited.calculation.displayText("B1")).toBe("15");
+  });
+
+  test("passes the workbook's 1904 date system into formula calculation", () => {
+    const relationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({
+      workbookXml: `<workbook xmlns="${namespace}" xmlns:r="${relationships}"><workbookPr date1904="true"/><sheets><sheet name="Data" sheetId="1" r:id="data"/></sheets></workbook>`,
+      sheets: [{
+        name: "Data",
+        sheetId: 1,
+        relationshipId: "data",
+        xml: sheet(`<row r="1"><c r="A1"><f>DATE(1904,1,1)</f><v/></c></row>`),
+      }],
+    }));
+
+    expect(artifact.workbook.dateSystem).toBe("1904");
+    expect(artifact.calculation.value("A1")).toEqual({ type: "number", value: 0, lexical: "0" });
   });
 
   test("recalculates cross-sheet conditional aggregates after source edits", () => {
