@@ -27,6 +27,20 @@ export {
   readWordStyles,
   WordStyles,
 } from "./styles.ts";
+export {
+  layoutWordDocument,
+  wordPointsToCssPixels,
+} from "./layout.ts";
+export type {
+  WordLayout,
+  WordLayoutColumn,
+  WordLayoutFragment,
+  WordLayoutLine,
+  WordLayoutOptions,
+  WordLayoutPage,
+  WordTextMeasurement,
+  WordTextMeasurer,
+} from "./layout.ts";
 export type {
   ComputedWordParagraphFormat,
   ComputedWordTextFormat,

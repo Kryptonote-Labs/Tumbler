@@ -163,6 +163,7 @@ export interface WordSectionProperties {
   readonly gutterTwips: number;
   readonly columnCount: number;
   readonly columnSpaceTwips: number;
+  readonly breakType: "continuous" | "nextPage" | "nextColumn" | "evenPage" | "oddPage";
 }
 
 interface ParseBudget {
@@ -423,6 +424,7 @@ function parseSection(element: LosslessXmlElement | undefined, namespace: string
   const width = twipsAttr(pageSize, namespace, "w", 12_240);
   const height = twipsAttr(pageSize, namespace, "h", 15_840);
   const rawOrientation = pageSize === undefined ? undefined : attr(pageSize, namespace, "orient");
+  const rawBreakType = element === undefined ? undefined : valueChild(element, namespace, "type");
   return Object.freeze({
     elementId: element?.id ?? -1,
     pageWidthTwips: width,
@@ -437,7 +439,16 @@ function parseSection(element: LosslessXmlElement | undefined, namespace: string
     gutterTwips: twipsAttr(pageMargins, namespace, "gutter", 0),
     columnCount: integerAttr(columns, namespace, "num", 1, 1, 45),
     columnSpaceTwips: twipsAttr(columns, namespace, "space", 720),
+    breakType: rawBreakType === "continuous" || rawBreakType === "nextColumn" || rawBreakType === "evenPage" || rawBreakType === "oddPage"
+      ? rawBreakType
+      : "nextPage",
   });
+}
+
+function valueChild(element: LosslessXmlElement, namespace: string, localName: string): string | undefined {
+  const matches = children(element, namespace, localName);
+  if (matches.length > 1) throw new WordError("invalid_document", `${element.localName} must not repeat ${localName}.`);
+  return matches[0] === undefined ? undefined : attr(matches[0], namespace, "val");
 }
 
 function twipsAttr(
