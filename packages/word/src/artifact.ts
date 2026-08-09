@@ -1,5 +1,7 @@
 import { openOpcPackage } from "@tumblerjs/opc";
 import { openWordDocument, type OpenWordDocumentOptions, type WordDocument } from "./document.ts";
+import { replaceWordText } from "./editor.ts";
+import type { WordTextSelection } from "./text.ts";
 
 export interface OpenWordArtifactOptions extends OpenWordDocumentOptions {}
 
@@ -18,6 +20,11 @@ export class WordArtifact {
   replace(bytes: Uint8Array, options: OpenWordArtifactOptions = {}): WordArtifact {
     if (bytes === this.bytes()) return this;
     return openWordArtifact(bytes, options);
+  }
+
+  replaceText(selection: WordTextSelection, value: string): WordArtifact {
+    const bytes = replaceWordText(this.document, selection, value);
+    return bytes === this.bytes() ? this : openWordArtifact(bytes);
   }
 }
 

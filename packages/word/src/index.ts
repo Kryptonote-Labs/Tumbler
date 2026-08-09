@@ -36,6 +36,16 @@ export {
   WordArtifact,
 } from "./artifact.ts";
 export type { OpenWordArtifactOptions } from "./artifact.ts";
+export {
+  wordParagraphText,
+  wordParagraphTextSegments,
+} from "./text.ts";
+export type {
+  WordParagraphTextSegment,
+  WordTextPosition,
+  WordTextSelection,
+} from "./text.ts";
+export { replaceWordText } from "./editor.ts";
 export type {
   WordLayout,
   WordLayoutColumn,
