@@ -33,7 +33,9 @@ bun add @tumblerjs/svelte@alpha @tumblerjs/sheets@alpha @tumblerjs/core@alpha
 ```
 
 `FormattingToolbar` is format-neutral. Future Word and Slides heads can supply
-the same state and capability contract without replacing application UI.
+the same state and capability contract without replacing application UI. Its
+font-family field writes arbitrary Office font names rather than limiting files
+to a browser-dependent preset list.
 
 The grid automatically projects supported conditional font, fill, and border
 rules from the worksheet. Its source rules and package bytes remain unchanged.

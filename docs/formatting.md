@@ -28,6 +28,12 @@ Selection state distinguishes uniform, inherited, mixed, and unavailable
 values. Replaceable UI heads can therefore display indeterminate controls
 without learning any format-specific style representation.
 
+The shared Svelte toolbar exposes font family and size, bold, italic,
+underline, foreground colour, and horizontal alignment when the active adapter
+advertises those capabilities. Font-family values remain ordinary Office style
+names; Tumbler does not require the viewing device to have the font installed in
+order to preserve or write that name.
+
 ## SpreadsheetML adapter
 
 The first adapter implements the contract for rectangular cell ranges. It:

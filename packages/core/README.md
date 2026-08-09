@@ -22,9 +22,32 @@ replaceable heads can drive Sheets, Word, and Slides through one contract:
 import type { FormattingPatch } from "@tumblerjs/core";
 
 const patch: FormattingPatch = {
-  text: { bold: { set: true }, color: { set: { type: "rgb", value: "#C62828" } } },
+  text: {
+    fontFamily: { set: "Aptos" },
+    bold: { set: true },
+    color: { set: { type: "rgb", value: "#C62828" } },
+  },
   block: { horizontalAlignment: { set: "center" } },
 };
+```
+
+Immutable editing history tracks the durable save point while keeping format
+adapters and application UI independent:
+
+```ts
+import {
+  commitEditingHistory,
+  createEditingHistory,
+  editingHistoryIsDirty,
+  markEditingHistorySaved,
+  undoEditingHistory,
+} from "@tumblerjs/core";
+
+let history = createEditingHistory(initialDocument, { limit: 100 });
+history = commitEditingHistory(history, editedDocument);
+history = undoEditingHistory(history);
+history = markEditingHistorySaved(history);
+console.log(editingHistoryIsDirty(history));
 ```
 
 Tumbler is developed at
