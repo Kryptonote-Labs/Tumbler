@@ -17,15 +17,28 @@ import { parseFormula } from "@tumblerjs/formulas";
 const formula = parseFormula("SUM(B5:B7)");
 ```
 
-The bounded evaluator currently supports arithmetic, comparisons, ordinary A1
-references/ranges, core aggregates and logical functions, plus `COUNTIF`,
-`SUMIF`, and `AVERAGEIF`. Conditional aggregates support comparison criteria,
-case-insensitive text, `*`/`?` wildcards, `~` escaping, cross-sheet references,
-and the standard top-left alignment behavior for result ranges.
+The bounded evaluator supports ordinary A1 references and ranges across sheets,
+operators, core aggregates, conditional and multi-criteria aggregates, practical
+math/statistics/text functions, deterministic dates, and scalar lookup families.
+The complete tested list and deliberate compatibility limits live in
+[`docs/formula-calculation.md`](../../docs/formula-calculation.md).
 
-`SUMIFS`, `COUNTIFS`, `AVERAGEIFS`, structured references, defined names, and
-external-workbook references are not supported yet. Unsupported formulas retain
-producer caches at the SpreadsheetML integration layer.
+```ts
+import { calculateFormulas, type FormulaWorkbookSource } from "@tumblerjs/formulas";
+
+const calculation = calculateFormulas(source satisfies FormulaWorkbookSource, {
+  dateSystem: "1900",
+  maxOperations: 1_000_000,
+});
+
+calculation.value({ sheet: "summary", row: 2, column: 3 });
+calculation.diagnostics;
+```
+
+Unsupported formulas retain producer caches at the SpreadsheetML integration
+layer. Structured references, defined names, external books, dynamic arrays,
+volatile functions, and locale-sensitive `TEXT`/`VALUE` conversion are not
+claimed yet.
 
 Tumbler is developed at
 [Kryptonote-Labs/Tumbler](https://github.com/Kryptonote-Labs/Tumbler).

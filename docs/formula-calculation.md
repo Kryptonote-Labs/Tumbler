@@ -19,10 +19,23 @@ Calculation output is not written into `<v>` elements in this milestone.
 - finite numeric, string, boolean, and standard error literals;
 - unary `+`/`-`, percent, arithmetic, exponentiation, concatenation, and comparisons;
 - relative/absolute A1 cells, rectangular ranges, and sheet-qualified references;
-- `IF`, `SUM`, `COUNT`, `AVERAGE`, `MIN`, `MAX`, `AND`, `OR`, and `NOT`;
+- `IF`, `IFERROR`, `IFNA`, `IFS`, `SWITCH`, `AND`, `OR`, `XOR`, and `NOT`;
+- `SUM`, `COUNT`, `COUNTA`, `COUNTBLANK`, `AVERAGE`, `MIN`, `MAX`, `MEDIAN`,
+  `PRODUCT`, `SUMPRODUCT`, `STDEV.S`, `STDEV.P`, `VAR.S`, and `VAR.P`;
+- `ABS`, `INT`, `MOD`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `CEILING.MATH`, and
+  `FLOOR.MATH`;
 - `COUNTIF`, `SUMIF`, and `AVERAGEIF`, including scalar numeric, boolean, and
   text criteria, comparison operators, case-insensitive text matching, and `*`
   and `?` wildcards with `~` escaping;
+- `COUNTIFS`, `SUMIFS`, and `AVERAGEIFS` with same-sized criteria ranges;
+- `LEN`, `LEFT`, `RIGHT`, `MID`, `TRIM`, `UPPER`, `LOWER`, `PROPER`,
+  `SUBSTITUTE`, `FIND`, `SEARCH`, `EXACT`, `CONCAT`, `CONCATENATE`, and
+  `TEXTJOIN`, plus `ISBLANK`, `ISNUMBER`, `ISTEXT`, `ISLOGICAL`, `ISERROR`,
+  `ISERR`, and `ISNA`;
+- `DATE`, invariant ISO or US-slash `DATEVALUE`, `YEAR`, `MONTH`, `DAY`, `DAYS`,
+  `EDATE`, `EOMONTH`, `WEEKDAY` return types 1–3, `NETWORKDAYS`, and `WORKDAY`;
+- scalar `CHOOSE`, `INDEX`, `MATCH`, `XMATCH`, `XLOOKUP`, `VLOOKUP`, and
+  `HLOOKUP`, including exact, bounded approximate, wildcard, and reverse search;
 - dependency ordering, cross-sheet dependencies, circular-reference diagnostics,
   and recalculation after supported scalar edits.
 
@@ -57,7 +70,28 @@ Excel-compatible producer behavior rather than a conformance claim.
 Criteria must remain scalar and criteria/result arguments must be A1 references
 or rectangular ranges. Structured references, defined names, external books,
 and projections beyond worksheet bounds remain unsupported instead of being
-guessed. `SUMIFS`, `COUNTIFS`, and `AVERAGEIFS` are not included yet.
+guessed. Multi-criteria aggregate ranges must have identical dimensions.
+
+## Dates and lookups
+
+Date evaluation is UTC-only and receives the workbook's `date1904` setting from
+SpreadsheetML. The 1900 system deliberately preserves serial 60 as the synthetic
+1900-02-29 value used by Excel. `DATEVALUE` is deterministic rather than
+locale-dependent: it accepts `YYYY-MM-DD` and US `M/D/YYYY`. `TODAY` and `NOW`
+are withheld until the evaluator has an explicit injected clock.
+
+Lookup functions currently return one scalar cell. `XLOOKUP` and `XMATCH`
+support exact, next-smaller, next-larger, and wildcard match modes plus forward,
+reverse, and the two sorted-search mode values. Sorted modes retain bounded
+linear evaluation for now; no binary-search performance claim is made. Lookup
+arrays must be one-dimensional and an `XLOOKUP` result range must have the same
+shape. Dynamic-array results are not synthesized.
+
+`SUBTOTAL` and `AGGREGATE` remain deliberately unsupported. Correct behavior
+requires distinguishing filtered-out rows from manually hidden rows and
+excluding nested subtotals; the evaluator adapter does not expose that provenance
+yet. Returning an ordinary aggregate under those names would silently produce
+incorrect workbook results.
 
 ## Safety and determinism
 
@@ -68,5 +102,6 @@ matcher rather than dynamic regular expressions. Limits produce diagnostics and
 cached-value fallback rather than unbounded work.
 
 Volatile functions, external workbooks, structured references, defined names,
-shared/array/data-table formulas, dynamic arrays, iterative calculation, locale
-variants, and unsupported functions remain outside this slice.
+shared/array/data-table formulas, dynamic arrays, iterative calculation,
+locale-sensitive `TEXT`/`VALUE` conversion, financial/engineering/cube/database
+families, and unsupported functions remain outside this slice.
