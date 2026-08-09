@@ -13,7 +13,7 @@ describe("WordprocessingML tables", () => {
     const grid = resolveWordTableGrid(table);
     expect(grid.columnCount).toBe(3);
     expect(grid.rows[0]?.cells[0]).toMatchObject({ column: 1, columnSpan: 2, rowSpan: 2 });
-    expect(grid.rows[0]?.cells[0]?.continuationElementIds).toEqual([table.rows[1]?.cells[0]?.elementId]);
+    expect(grid.rows[0]?.cells[0]?.continuationElementIds).toEqual([table.rows[1]!.cells[0]!.elementId]);
     expect(grid.rows[1]?.cells).toHaveLength(0);
   });
 
