@@ -18,6 +18,7 @@ export type {
   FormulaCellInput,
   FormulaDiagnostic,
   FormulaDiagnosticCode,
+  FormulaRowVisibility,
   FormulaScalarValue,
   FormulaWorkbookSource,
 } from "./evaluator.ts";

@@ -293,6 +293,80 @@ describe("bounded spreadsheet formula calculation", () => {
     expect(calculation.diagnostics).toEqual([]);
   });
 
+  test("implements SUBTOTAL filtered, hidden, error, and nested-call semantics", () => {
+    const calculation = calculateFormulas(source({
+      "Data!A1": value(10),
+      "Data!A2": value(20),
+      "Data!A3": value(30),
+      "Data!A4": formula("SUBTOTAL(9,A1:A2)"),
+      "Data!A5": formula("#N/A"),
+      "Data!B1": formula("SUBTOTAL(9,A1:A4)"),
+      "Data!B2": formula("SUBTOTAL(109,A1:A4)"),
+      "Data!B3": formula("SUBTOTAL(9,A1:A5)"),
+      "Data!B4": formula("SUBTOTAL(3,A1:A5)"),
+      "Data!B5": formula("SUBTOTAL(12,A1:A3)"),
+    }, {
+      "Data!2": { filteredOut: false, manuallyHidden: true, determinate: true },
+      "Data!3": { filteredOut: true, manuallyHidden: false, determinate: true },
+    }));
+
+    expect(calculation.value(address("Data!B1"))).toEqual({ type: "number", value: 30 });
+    expect(calculation.value(address("Data!B2"))).toEqual({ type: "number", value: 10 });
+    expect(calculation.value(address("Data!B3"))).toEqual({ type: "error", value: "#N/A" });
+    expect(calculation.value(address("Data!B4"))).toEqual({ type: "number", value: 3 });
+    expect(calculation.value(address("Data!B5"))).toEqual({ type: "error", value: "#NUM!" });
+    expect(calculation.diagnostics).toEqual([]);
+  });
+
+  test("implements every AGGREGATE option and extended reducer family", () => {
+    const calculation = calculateFormulas(source({
+      "Data!A1": value(10), "Data!A2": value(20), "Data!A3": value(30),
+      "Data!A4": formula("SUBTOTAL(9,A1:A2)"), "Data!A5": formula("#N/A"),
+      "Data!D6": value(1), "Data!D7": value(2), "Data!D8": value(2), "Data!D9": value(4), "Data!D10": value(5),
+      "Data!B1": formula("_xlfn.AGGREGATE(9,0,A1:A4)"),
+      "Data!B2": formula("AGGREGATE(9,1,A1:A4)"),
+      "Data!B3": formula("AGGREGATE(9,4,A1:A4)"),
+      "Data!B4": formula("AGGREGATE(9,2,A1:A5)"),
+      "Data!B5": formula("AGGREGATE(9,4,A1:A5)"),
+      "Data!C1": formula("AGGREGATE(12,0,D6:D10)"),
+      "Data!C2": formula("AGGREGATE(13,0,D6:D10)"),
+      "Data!C3": formula("AGGREGATE(14,0,D6:D10,2)"),
+      "Data!C4": formula("AGGREGATE(15,0,D6:D10,2)"),
+      "Data!C5": formula("AGGREGATE(16,0,D6:D10,0.25)"),
+      "Data!C6": formula("AGGREGATE(17,0,D6:D10,3)"),
+      "Data!C7": formula("AGGREGATE(18,0,D6:D10,0.5)"),
+      "Data!C8": formula("AGGREGATE(19,0,D6:D10,2)"),
+    }, {
+      "Data!2": { filteredOut: false, manuallyHidden: true, determinate: true },
+      "Data!3": { filteredOut: true, manuallyHidden: false, determinate: true },
+    }));
+
+    expect(calculation.value(address("Data!B1"))).toEqual({ type: "number", value: 30 });
+    expect(calculation.value(address("Data!B2"))).toEqual({ type: "number", value: 10 });
+    expect(calculation.value(address("Data!B3"))).toEqual({ type: "number", value: 60 });
+    expect(calculation.value(address("Data!B4"))).toEqual({ type: "number", value: 30 });
+    expect(calculation.value(address("Data!B5"))).toEqual({ type: "error", value: "#N/A" });
+    expect(calculation.value(address("Data!C1"))).toEqual({ type: "number", value: 2 });
+    expect(calculation.value(address("Data!C2"))).toEqual({ type: "number", value: 2 });
+    expect(calculation.value(address("Data!C3"))).toEqual({ type: "number", value: 4 });
+    expect(calculation.value(address("Data!C4"))).toEqual({ type: "number", value: 2 });
+    expect(calculation.value(address("Data!C5"))).toEqual({ type: "number", value: 2 });
+    expect(calculation.value(address("Data!C6"))).toEqual({ type: "number", value: 4 });
+    expect(calculation.value(address("Data!C7"))).toEqual({ type: "number", value: 2 });
+    expect(calculation.value(address("Data!C8"))).toEqual({ type: "number", value: 2 });
+    expect(calculation.diagnostics).toEqual([]);
+  });
+
+  test("falls back rather than guessing when filter visibility is indeterminate", () => {
+    const calculation = calculateFormulas(source({
+      "Data!A1": value(10),
+      "Data!B1": formula("SUBTOTAL(9,A1)", { type: "number", value: 7 }),
+    }, { "Data!1": { filteredOut: false, manuallyHidden: false, determinate: false } }));
+
+    expect(calculation.value(address("Data!B1"))).toBeUndefined();
+    expect(calculation.diagnostics[0]?.code).toBe("unavailable-dependency");
+  });
+
   test("matches text case-insensitively with linear wildcards and tilde escaping", () => {
     const workbook = source({
       "Sheet1!A1": textValue("Alpha"),
@@ -530,7 +604,10 @@ describe("bounded spreadsheet formula calculation", () => {
   });
 });
 
-function source(cells: Readonly<Record<string, FormulaCellInput>>): FormulaWorkbookSource {
+function source(
+  cells: Readonly<Record<string, FormulaCellInput>>,
+  visibility: Readonly<Record<string, { readonly filteredOut: boolean; readonly manuallyHidden: boolean; readonly determinate: boolean }>> = {},
+): FormulaWorkbookSource {
   const entries = new Map(Object.entries(cells).map(([reference, cell]) => [key(address(reference)), cell]));
   const sheets = new Map(Object.keys(cells).map((reference) => {
     const sheet = reference.slice(0, reference.lastIndexOf("!"));
@@ -540,6 +617,7 @@ function source(cells: Readonly<Record<string, FormulaCellInput>>): FormulaWorkb
     formulaCells: [...entries].flatMap(([cellKey, cell]) => cell.formula === undefined ? [] : [{ address: addressFromKey(cellKey), formula: cell.formula }]),
     cell: (cellAddress) => entries.get(key(cellAddress)),
     resolveSheet: (_currentSheet, name) => sheets.get(name.toLocaleLowerCase("en-US")),
+    rowVisibility: (sheet, row) => visibility[`${sheet}!${row}`] ?? { filteredOut: false, manuallyHidden: false, determinate: true },
   };
 }
 

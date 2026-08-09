@@ -20,10 +20,20 @@ export interface FormulaCellInput {
   readonly value: FormulaScalarValue;
 }
 
+export interface FormulaRowVisibility {
+  /** The row is outside the current AutoFilter result. */
+  readonly filteredOut: boolean;
+  /** The row is hidden manually or by an outline, independently of filtering. */
+  readonly manuallyHidden: boolean;
+  /** False when the adapter cannot classify the row without guessing. */
+  readonly determinate: boolean;
+}
+
 export interface FormulaWorkbookSource {
   readonly formulaCells: Iterable<{ readonly address: FormulaCellAddress; readonly formula: string }>;
   cell(address: FormulaCellAddress): FormulaCellInput | undefined;
   resolveSheet(currentSheet: string, name: string): string | undefined;
+  rowVisibility?(sheet: string, row: number): FormulaRowVisibility;
 }
 
 export type FormulaDiagnosticCode =
@@ -804,6 +814,106 @@ export function calculateFormulas(
     return cellValue(correspondingAddress(table, horizontal ? selectedIndex - 1 : index, horizontal ? index : selectedIndex - 1), depth + 1, true);
   };
 
+  type AggregateCell = {
+    readonly address: FormulaCellAddress;
+    readonly input: FormulaCellInput | undefined;
+    readonly value: FormulaScalarValue;
+  };
+
+  const aggregateCells = (
+    args: readonly FormulaExpression[],
+    sheet: string,
+    depth: number,
+    policy: { readonly ignoreHidden: boolean; readonly ignoreNested: boolean; readonly ignoreErrors: boolean },
+  ): FormulaScalarValue[] | Extract<FormulaScalarValue, { type: "error" }> => {
+    const cells: AggregateCell[] = [];
+    for (const argument of args) {
+      const range = resolveRangeArgument(argument, sheet, source, limits.maxRangeCells);
+      if (isFormulaError(range)) return range;
+      for (let rowOffset = 0; rowOffset < range.height; rowOffset += 1) {
+        for (let columnOffset = 0; columnOffset < range.width; columnOffset += 1) {
+          operation();
+          const address = correspondingAddress(range, rowOffset, columnOffset);
+          const visibility = source.rowVisibility?.(address.sheet, address.row);
+          if (visibility?.determinate === false) {
+            throw new EvaluationUnavailable("unavailable-dependency", "Filtered row visibility cannot be determined safely.");
+          }
+          if (visibility?.filteredOut === true || policy.ignoreHidden && visibility?.manuallyHidden === true) continue;
+          const input = readCell(source, address);
+          if (policy.ignoreNested && input?.formula !== undefined && formulaContainsAggregate(input.formula)) continue;
+          const value = cellValue(address, depth + 1, true);
+          if (policy.ignoreErrors && value.type === "error") continue;
+          cells.push(Object.freeze({ address, input, value }));
+        }
+      }
+    }
+    return cells.map((cell) => cell.value);
+  };
+
+  const reduceAggregate = (functionNumber: number, values: readonly FormulaScalarValue[], k?: number): FormulaScalarValue => {
+    const numericValues = values.flatMap((value) => value.type === "number" ? [value.value] : []);
+    const firstError = values.find((value) => value.type === "error");
+    if (functionNumber !== 2 && functionNumber !== 3 && firstError?.type === "error") return firstError;
+    switch (functionNumber) {
+      case 1: return numericValues.length === 0 ? error("#DIV/0!") : finite(sumNumbers(numericValues) / numericValues.length);
+      case 2: return number(numericValues.length);
+      case 3: return number(values.filter((value) => value.type !== "blank").length);
+      case 4: return finite(numericValues.length === 0 ? 0 : Math.max(...numericValues));
+      case 5: return finite(numericValues.length === 0 ? 0 : Math.min(...numericValues));
+      case 6: return finite(numericValues.length === 0 ? 0 : numericValues.reduce((product, value) => product * value, 1));
+      case 7: return varianceAggregate(numericValues, true, true);
+      case 8: return varianceAggregate(numericValues, false, true);
+      case 9: return finite(sumNumbers(numericValues));
+      case 10: return varianceAggregate(numericValues, true, false);
+      case 11: return varianceAggregate(numericValues, false, false);
+      case 12: return medianAggregate(numericValues);
+      case 13: return modeAggregate(numericValues);
+      case 14: return rankedAggregate(numericValues, k, true);
+      case 15: return rankedAggregate(numericValues, k, false);
+      case 16: return percentileAggregate(numericValues, k, true);
+      case 17: return percentileAggregate(numericValues, k === undefined ? undefined : k / 4, true, true);
+      case 18: return percentileAggregate(numericValues, k, false);
+      case 19: return percentileAggregate(numericValues, k === undefined ? undefined : k / 4, false, true);
+      default: return error("#NUM!");
+    }
+  };
+
+  const callSubtotal: FormulaFunction = (args, sheet, depth) => {
+    if (args.length < 2 || args.length > 255) return error("#VALUE!");
+    const selected = numeric(scalar(evaluate(args[0]!, sheet, depth + 1)));
+    if (selected.type === "error") return selected;
+    const raw = Math.trunc(selected.value);
+    const functionNumber = raw >= 101 && raw <= 111 ? raw - 100 : raw;
+    if (functionNumber < 1 || functionNumber > 11 || raw !== functionNumber && raw !== functionNumber + 100) return error("#NUM!");
+    const values = aggregateCells(args.slice(1), sheet, depth, {
+      ignoreHidden: raw >= 101,
+      ignoreNested: true,
+      ignoreErrors: false,
+    });
+    return isFormulaError(values) ? values : reduceAggregate(functionNumber, values);
+  };
+
+  const callAggregateFunction: FormulaFunction = (args, sheet, depth) => {
+    if (args.length < 3 || args.length > 253) return error("#VALUE!");
+    const selected = numeric(scalar(evaluate(args[0]!, sheet, depth + 1)));
+    const options = numeric(scalar(evaluate(args[1]!, sheet, depth + 1)));
+    if (selected.type === "error") return selected;
+    if (options.type === "error") return options;
+    const functionNumber = Math.trunc(selected.value);
+    const option = Math.trunc(options.value);
+    if (functionNumber < 1 || functionNumber > 19 || option < 0 || option > 7) return error("#NUM!");
+    const needsK = functionNumber >= 14;
+    if (needsK && args.length !== 4) return error("#VALUE!");
+    const kValue = !needsK ? undefined : numeric(scalar(evaluate(args[3]!, sheet, depth + 1)));
+    if (kValue?.type === "error") return kValue;
+    const values = aggregateCells(needsK ? [args[2]!] : args.slice(2), sheet, depth, {
+      ignoreHidden: [1, 3, 5, 7].includes(option),
+      ignoreNested: option <= 3,
+      ignoreErrors: [2, 3, 6, 7].includes(option),
+    });
+    return isFormulaError(values) ? values : reduceAggregate(functionNumber, values, kValue?.value);
+  };
+
   const functions = new Map<string, FormulaFunction>([
     ["IF", callIf],
     ["IFERROR", callIfError(false)],
@@ -838,12 +948,14 @@ export function calculateFormulas(
     ["XLOOKUP", callXlookup],
     ["VLOOKUP", callTableLookup(false)],
     ["HLOOKUP", callTableLookup(true)],
+    ["SUBTOTAL", callSubtotal],
+    ["AGGREGATE", callAggregateFunction],
     ...(["SUM", "COUNT", "AVERAGE", "MIN", "MAX", "AND", "OR", "XOR", "NOT"] as const)
       .map((name) => [name, callAggregate(name)] as const),
   ]);
 
   const call = (name: string, args: readonly FormulaExpression[], sheet: string, depth: number): FormulaScalarValue => {
-    const implementation = functions.get(name);
+    const implementation = functions.get(normalizeFunctionName(name));
     if (implementation === undefined) {
       throw new EvaluationUnavailable("unsupported-function", `Function ${name} is not supported.`);
     }
@@ -1164,6 +1276,90 @@ const MAX_FORMULA_TEXT_CHARACTERS = 32_767;
 const MAX_SPREADSHEET_ROW = 1_048_576;
 const MAX_SPREADSHEET_COLUMN = 16_384;
 const DAY_MILLISECONDS = 86_400_000;
+
+function normalizeFunctionName(name: string): string {
+  return name.startsWith("_XLFN.") ? name.slice("_XLFN.".length) : name;
+}
+
+function formulaContainsAggregate(formula: string): boolean {
+  let expression: FormulaExpression;
+  try {
+    expression = parseFormula(formula).expression;
+  } catch {
+    return false;
+  }
+  const visit = (node: FormulaExpression): boolean => {
+    if (node.kind === "function") {
+      const name = normalizeFunctionName(node.name);
+      return name === "SUBTOTAL" || name === "AGGREGATE" || node.arguments.some(visit);
+    }
+    if (node.kind === "binary") return visit(node.left) || visit(node.right);
+    if (node.kind === "unary" || node.kind === "percent") return visit(node.operand);
+    return false;
+  };
+  return visit(expression);
+}
+
+function sumNumbers(values: readonly number[]): number {
+  return values.reduce((sum, value) => sum + value, 0);
+}
+
+function varianceAggregate(values: readonly number[], sample: boolean, squareRoot: boolean): FormulaScalarValue {
+  if (values.length < (sample ? 2 : 1)) return error("#DIV/0!");
+  const mean = sumNumbers(values) / values.length;
+  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - (sample ? 1 : 0));
+  return finite(squareRoot ? Math.sqrt(variance) : variance);
+}
+
+function medianAggregate(values: readonly number[]): FormulaScalarValue {
+  if (values.length === 0) return error("#NUM!");
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return finite(sorted.length % 2 === 0 ? (sorted[middle - 1]! + sorted[middle]!) / 2 : sorted[middle]!);
+}
+
+function modeAggregate(values: readonly number[]): FormulaScalarValue {
+  const counts = new Map<number, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  let result: number | undefined;
+  let count = 1;
+  for (const [value, occurrences] of counts) {
+    if (occurrences > count || occurrences === count && result !== undefined && value < result) {
+      result = value;
+      count = occurrences;
+    }
+  }
+  return result === undefined ? error("#N/A") : number(result);
+}
+
+function rankedAggregate(values: readonly number[], rawK: number | undefined, largest: boolean): FormulaScalarValue {
+  const k = rawK === undefined ? Number.NaN : Math.trunc(rawK);
+  if (!Number.isFinite(k) || k < 1 || k > values.length) return error("#NUM!");
+  const sorted = [...values].sort((left, right) => largest ? right - left : left - right);
+  return number(sorted[k - 1]!);
+}
+
+function percentileAggregate(
+  values: readonly number[],
+  k: number | undefined,
+  inclusive: boolean,
+  quartile = false,
+): FormulaScalarValue {
+  if (values.length === 0 || k === undefined || !Number.isFinite(k)) return error("#NUM!");
+  if (quartile) {
+    const quartileNumber = k * 4;
+    if (!Number.isInteger(quartileNumber) || inclusive && (quartileNumber < 0 || quartileNumber > 4) || !inclusive && (quartileNumber < 1 || quartileNumber > 3)) {
+      return error("#NUM!");
+    }
+  }
+  if (inclusive ? k < 0 || k > 1 : k <= 0 || k >= 1) return error("#NUM!");
+  const sorted = [...values].sort((left, right) => left - right);
+  const rank = inclusive ? (sorted.length - 1) * k : (sorted.length + 1) * k - 1;
+  if (rank < 0 || rank > sorted.length - 1) return error("#NUM!");
+  const lower = Math.floor(rank);
+  const upper = Math.ceil(rank);
+  return finite(sorted[lower]! + (sorted[upper]! - sorted[lower]!) * (rank - lower));
+}
 
 interface ExcelDateParts {
   readonly year: number;
