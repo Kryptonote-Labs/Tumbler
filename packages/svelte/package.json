@@ -22,7 +22,8 @@
   "dependencies": {
     "@tumblerjs/charts": "0.1.0-alpha.4",
     "@tumblerjs/core": "0.1.0-alpha.4",
-    "@tumblerjs/sheets": "0.1.0-alpha.4"
+    "@tumblerjs/sheets": "0.1.0-alpha.4",
+    "@tumblerjs/word": "workspace:*"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"

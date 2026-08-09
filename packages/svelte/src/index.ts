@@ -4,6 +4,10 @@ export { default as SpreadsheetGrid } from "./SpreadsheetGrid.svelte";
 export { default as SpreadsheetFormulaBar } from "./SpreadsheetFormulaBar.svelte";
 export { default as FormattingToolbar } from "./FormattingToolbar.svelte";
 export { default as OoxmlChart } from "./OoxmlChart.svelte";
+export { default as WordDocumentView } from "./WordDocumentView.svelte";
+export { browserWordTextMeasurer, wordTextCss } from "./word-font-metrics.ts";
+export { calculateWordPageViewport } from "./word-page-viewport.ts";
+export type { WordPageViewport } from "./word-page-viewport.ts";
 export {
   measureMaximumDigitWidth,
   spreadsheetFontShorthand,
