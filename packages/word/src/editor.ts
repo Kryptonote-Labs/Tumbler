@@ -91,30 +91,35 @@ function replaceWordParagraphRange(document: WordDocument, selection: WordTextSe
     anchor: { paragraphElementId: startParagraph.elementId, offset: startPosition.offset },
     focus: { paragraphElementId: startParagraph.elementId, offset: startParagraph.elementId === endParagraph.elementId ? endPosition.offset : startEnd },
   }, lines[0]!));
+  const updatedParagraphs = documentParagraphs(working);
+  const workingStart = updatedParagraphs[startIndex]!;
+  const workingEnd = updatedParagraphs[endIndex]!;
 
   if (startParagraph.elementId === endParagraph.elementId) {
     if (lines.length === 1) return working.bytes();
-    const editedStart = findParagraph(working, startParagraph.elementId);
+    const editedStart = workingStart;
     const splitOffset = startPosition.offset + lines[0]!.length;
     const suffix = wordParagraphText(working, editedStart).slice(splitOffset);
     working = reopenEdited(working, replaceWordText(working, {
       anchor: { paragraphElementId: editedStart.elementId, offset: splitOffset },
       focus: { paragraphElementId: editedStart.elementId, offset: wordParagraphText(working, editedStart).length },
     }, ""));
-    return insertParagraphsAfter(working, findParagraph(working, editedStart.elementId), [
+    return insertParagraphsAfter(working, documentParagraphs(working)[startIndex]!, [
       ...lines.slice(1, -1),
       `${lines.at(-1)!}${suffix}`,
     ]);
   }
 
-  const workingEnd = findParagraph(working, endParagraph.elementId);
   working = reopenEdited(working, replaceWordText(working, {
     anchor: { paragraphElementId: workingEnd.elementId, offset: 0 },
     focus: { paragraphElementId: workingEnd.elementId, offset: endPosition.offset },
   }, lines.length === 1 ? "" : lines.at(-1)!));
+  const finalParagraphs = documentParagraphs(working);
+  const finalStart = finalParagraphs[startIndex]!;
+  const finalEnd = finalParagraphs[endIndex]!;
   return lines.length === 1
-    ? joinParagraphRange(working, startParagraph.elementId, endParagraph.elementId)
-    : retainParagraphBoundaries(working, startParagraph.elementId, endParagraph.elementId, lines.slice(1, -1));
+    ? joinParagraphRange(working, finalStart.elementId, finalEnd.elementId)
+    : retainParagraphBoundaries(working, finalStart.elementId, finalEnd.elementId, lines.slice(1, -1));
 }
 
 function reopenEdited(document: WordDocument, bytes: Uint8Array): WordDocument {
