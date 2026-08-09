@@ -111,7 +111,7 @@ describe("SpreadsheetML conditional formatting", () => {
       <sheetData><row r="1"><c r="A1"><v>5</v></c></row></sheetData>
       <conditionalFormatting sqref="A1">
         <cfRule type="colorScale" dxfId="0" priority="1"><colorScale/></cfRule>
-        <cfRule type="expression" dxfId="0" priority="2"><formula>XLOOKUP(A1,A1:A2,A1:A2)&gt;0</formula></cfRule>
+        <cfRule type="expression" dxfId="0" priority="2"><formula>OFFSET(A1,0,0)&gt;0</formula></cfRule>
         <cfRule type="cellIs" dxfId="0" priority="3" operator="containsText"><formula>5</formula></cfRule>
       </conditionalFormatting>
     `);
