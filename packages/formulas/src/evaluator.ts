@@ -216,15 +216,22 @@ export function calculateFormulas(
     }
   };
 
-  const call = (name: string, args: readonly FormulaExpression[], sheet: string, depth: number): FormulaScalarValue => {
-    if (name === "IF") {
+  type FormulaFunction = (
+    args: readonly FormulaExpression[],
+    sheet: string,
+    depth: number,
+  ) => FormulaScalarValue;
+
+  const callIf: FormulaFunction = (args, sheet, depth) => {
       if (args.length < 2 || args.length > 3) return error("#VALUE!");
       const condition = logical(scalar(evaluate(args[0]!, sheet, depth + 1)));
       if (condition.type === "error") return condition;
       const branch = condition.value ? args[1]! : args[2];
       return branch === undefined ? boolean(false) : scalar(evaluate(branch, sheet, depth + 1));
-    }
-    if (name === "COUNTIF" || name === "SUMIF" || name === "AVERAGEIF") {
+  };
+
+  const callConditionalAggregate = (name: "COUNTIF" | "SUMIF" | "AVERAGEIF"): FormulaFunction =>
+    (args, sheet, depth) => {
       const validArgumentCount = name === "COUNTIF" ? args.length === 2 : args.length === 2 || args.length === 3;
       if (!validArgumentCount) return error("#VALUE!");
       const inspected = resolveRangeArgument(args[0]!, sheet, source, limits.maxRangeCells);
@@ -265,8 +272,10 @@ export function calculateFormulas(
       if (name === "COUNTIF") return number(count);
       if (name === "AVERAGEIF") return count === 0 ? error("#DIV/0!") : finite(total / count);
       return finite(total);
-    }
-    if (!SUPPORTED_FUNCTIONS.has(name)) throw new EvaluationUnavailable("unsupported-function", `Function ${name} is not supported.`);
+    };
+
+  const callAggregate = (name: "SUM" | "COUNT" | "AVERAGE" | "MIN" | "MAX" | "AND" | "OR" | "NOT"): FormulaFunction =>
+    (args, sheet, depth) => {
     const evaluated = args.map((argument) => evaluate(argument, sheet, depth + 1));
     const firstError = flatten(evaluated).find((value) => value.type === "error");
     if (firstError?.type === "error") return firstError;
@@ -294,6 +303,23 @@ export function calculateFormulas(
       }
       default: throw new EvaluationUnavailable("unsupported-function", `Function ${name} is not supported.`);
     }
+    };
+
+  const functions = new Map<string, FormulaFunction>([
+    ["IF", callIf],
+    ["COUNTIF", callConditionalAggregate("COUNTIF")],
+    ["SUMIF", callConditionalAggregate("SUMIF")],
+    ["AVERAGEIF", callConditionalAggregate("AVERAGEIF")],
+    ...(["SUM", "COUNT", "AVERAGE", "MIN", "MAX", "AND", "OR", "NOT"] as const)
+      .map((name) => [name, callAggregate(name)] as const),
+  ]);
+
+  const call = (name: string, args: readonly FormulaExpression[], sheet: string, depth: number): FormulaScalarValue => {
+    const implementation = functions.get(name);
+    if (implementation === undefined) {
+      throw new EvaluationUnavailable("unsupported-function", `Function ${name} is not supported.`);
+    }
+    return implementation(args, sheet, depth);
   };
 
   const diagnose = (address: FormulaCellAddress, formula: string, failure: EvaluationUnavailable) => {
@@ -328,7 +354,6 @@ class EvaluationUnavailable extends Error {
 }
 
 const BLANK = Object.freeze({ type: "blank" as const });
-const SUPPORTED_FUNCTIONS = new Set(["SUM", "COUNT", "AVERAGE", "MIN", "MAX", "AND", "OR", "NOT"]);
 
 function collectReferences(
   expression: FormulaExpression,
