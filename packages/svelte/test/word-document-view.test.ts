@@ -15,6 +15,14 @@ describe("owned Svelte Word document head", () => {
     expect(source).toContain("onbeforeinput={handleBeforeInput}");
   });
 
+  test("compiles recursive body and auxiliary table rendering", async () => {
+    const source = await Bun.file(new URL("../src/WordLayoutTableView.svelte", import.meta.url)).text();
+    const result = compile(source, { filename: "WordLayoutTableView.svelte", generate: "client", modernAst: true });
+    expect(result.warnings).toEqual([]);
+    expect(source).toContain("cell.tables as nested");
+    expect(source).toContain("data-story={story}");
+  });
+
   test("mounts only an overscanned page window", () => {
     const layout = {
       fragmentCount: 0,

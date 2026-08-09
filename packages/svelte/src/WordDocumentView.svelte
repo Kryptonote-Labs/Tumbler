@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from "svelte";
   import { layoutWordDocument, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import OoxmlChart from "./OoxmlChart.svelte";
+  import WordLayoutTableView from "./WordLayoutTableView.svelte";
   import { browserWordTextMeasurer, wordTextCss } from "./word-font-metrics.ts";
   import { calculateWordPageViewport, type WordPageViewport } from "./word-page-viewport.ts";
   import { wordInputEdit, type WordDocumentEdit } from "./word-editing.ts";
@@ -203,39 +204,12 @@
                 {/if}
               {/each}
             {/each}
+            {#each [...page.headerTables, ...page.footerTables, ...page.noteTables] as table}
+              <WordLayoutTableView {table} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} story="auxiliary" />
+            {/each}
             {#each page.columns as column}
               {#each column.tables as table}
-                <div
-                  class="document-table"
-                  data-table={table.tableElementId}
-                  style={`left:${wordPointsToCssPixels(table.x)}px;top:${wordPointsToCssPixels(table.y)}px;width:${wordPointsToCssPixels(table.width)}px;height:${wordPointsToCssPixels(table.height)}px`}
-                >
-                  {#each table.cells as cell}
-                    <div
-                      class="document-cell"
-                      data-cell={cell.cellElementId}
-                      style={`left:${wordPointsToCssPixels(cell.x - table.x)}px;top:${wordPointsToCssPixels(cell.y - table.y)}px;width:${wordPointsToCssPixels(cell.width)}px;height:${wordPointsToCssPixels(cell.height)}px`}
-                    ></div>
-                    {#each cell.lines as line}
-                      {#if line.marker !== undefined}
-                        <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format)};left:${wordPointsToCssPixels(line.marker.x - table.x)}px;top:${wordPointsToCssPixels(line.marker.y - table.y)}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
-                      {/if}
-                      {#each line.fragments as fragment}
-                        {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
-                          <img class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment, table.x, table.y)} />
-                        {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
-                          <div class="document-drawing" style={drawingStyle(fragment, table.x, table.y)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-table-chart-${page.index}-${fragment.contentElementId}`} /></div>
-                        {:else if fragment.kind === "drawing"}
-                          <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment, table.x, table.y)}></div>
-                        {:else if fragment.hyperlink === undefined}
-                          <span data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, table.x, table.y)}>{fragment.text}</span>
-                        {:else}
-                          <button class="hyperlink" onkeydown={(event) => activateHyperlink(event, fragment.hyperlink)} onclick={(event) => activateHyperlink(event, fragment.hyperlink)} data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, table.x, table.y)}>{fragment.text}</button>
-                        {/if}
-                      {/each}
-                    {/each}
-                  {/each}
-                </div>
+                <WordLayoutTableView {table} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} />
               {/each}
               {#each column.lines as line}
                 {#if line.marker !== undefined}
@@ -286,8 +260,6 @@
   .word-page { position: absolute; transform: translateX(-50%); overflow: hidden; box-sizing: border-box; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.2); contain: strict; }
   .word-page-content { position: absolute; inset: 0 auto auto 0; overflow: hidden; }
   .word-page-content.editable { outline: 0; caret-color: var(--tumbler-document-accent, #25a735); }
-  .document-table { position: absolute; }
-  .document-cell { position: absolute; box-sizing: border-box; border: 1px solid #b7b7b7; }
   .document-drawing { position: absolute; display: block; object-fit: contain; overflow: hidden; }
   .drawing-fallback { background: repeating-linear-gradient(135deg, #f3f3f3, #f3f3f3 8px, #fafafa 8px, #fafafa 16px); border: 1px solid #d0d0d0; }
   .note-separator { position: absolute; width: 96px; border-top: 1px solid #777; }
