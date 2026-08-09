@@ -127,6 +127,13 @@ export type {
   EditableCellValue,
   SpreadsheetEditorStatus,
 } from "./editor.ts";
+export {
+  formatSpreadsheetCells,
+  MAX_FORMATTED_CELLS,
+  spreadsheetFormattingState,
+  SPREADSHEET_FORMATTING_CAPABILITIES,
+} from "./formatting.ts";
+export type { SpreadsheetFormattingTarget } from "./formatting.ts";
 export type {
   SpreadsheetCell,
   SpreadsheetCellValue,
