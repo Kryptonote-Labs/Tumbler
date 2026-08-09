@@ -35,11 +35,14 @@ export type WordFormattingTarget = WordTextSelection;
 export interface WordFormattingDocumentAdapter extends FormattingAdapter<WordFormattingTarget, Uint8Array> {}
 
 export function wordFormattingState(document: WordDocument, target: WordFormattingTarget): FormattingState {
-  const paragraph = selectedParagraph(document, target);
-  const runs = selectedRuns(document, paragraph, target);
-  const formats = runs.map((run) => ({ computed: document.styles.runFormat(document, paragraph, run), direct: directRun(document, run) }));
-  const paragraphComputed = document.styles.paragraphFormat(document, paragraph);
-  const paragraphDirect = paragraph.propertiesElementId === undefined ? {} : parseParagraphProperties(requiredElement(document, paragraph.propertiesElementId), namespace(document));
+  const ranges = selectedRanges(document, target);
+  const formats = ranges.flatMap(({ paragraph, start, end }) => selectedRuns(document, paragraph, localSelection(paragraph, start, end))
+    .map((run) => ({ computed: document.styles.runFormat(document, paragraph, run), direct: directRun(document, run) })));
+  const paragraphs = ranges.map(({ paragraph }) => {
+    const computed = document.styles.paragraphFormat(document, paragraph);
+    const direct = paragraph.propertiesElementId === undefined ? {} : parseParagraphProperties(requiredElement(document, paragraph.propertiesElementId), namespace(document));
+    return { computed: sharedAlignment(computed.alignment), direct: direct.alignment === undefined ? undefined : sharedAlignment(computed.alignment) };
+  });
   return Object.freeze({
     text: Object.freeze({
       fontSize: state(formats, (item) => item.computed.fontSizePoints, (item) => item.direct.fontSizePoints),
@@ -50,9 +53,7 @@ export function wordFormattingState(document: WordDocument, target: WordFormatti
       color: state(formats, (item) => officeColor(item.computed), (item) => item.direct.color === undefined ? undefined : officeColor(item.computed), officeColorEqual),
     }),
     block: Object.freeze({
-      horizontalAlignment: paragraphDirect.alignment === undefined
-        ? Object.freeze({ state: "inherited", value: sharedAlignment(paragraphComputed.alignment) })
-        : Object.freeze({ state: "value", value: sharedAlignment(paragraphComputed.alignment) }),
+      horizontalAlignment: paragraphState(paragraphs),
       verticalAlignment: Object.freeze({ state: "unavailable" }),
     }),
   });
@@ -62,18 +63,17 @@ export function wordFormattingState(document: WordDocument, target: WordFormatti
 export function formatWordSelection(document: WordDocument, target: WordFormattingTarget, input: FormattingPatch): Uint8Array {
   const patch = normalizeFormattingPatch(input);
   if (patch.text === undefined && patch.block === undefined) return document.bytes();
-  const paragraph = selectedParagraph(document, target);
-  const start = Math.min(target.anchor.offset, target.focus.offset);
-  const end = Math.max(target.anchor.offset, target.focus.offset);
-  validateRange(wordParagraphText(document, paragraph), start, end);
+  const ranges = selectedRanges(document, target);
   const editor = beginLosslessXmlEdit(document.source);
 
-  if (patch.block?.horizontalAlignment !== undefined) {
-    formatParagraph(editor, document, paragraph, patch.block.horizontalAlignment);
-  }
-  if (patch.text !== undefined && Object.keys(patch.text).length > 0) {
-    for (const run of selectedRuns(document, paragraph, target)) {
-      formatRun(editor, document, paragraph, run, start, end, patch.text);
+  for (const { paragraph, start, end } of ranges) {
+    if (patch.block?.horizontalAlignment !== undefined) {
+      formatParagraph(editor, document, paragraph, patch.block.horizontalAlignment);
+    }
+    if (patch.text !== undefined && Object.keys(patch.text).length > 0 && wordParagraphText(document, paragraph).length > 0) {
+      for (const run of selectedRuns(document, paragraph, localSelection(paragraph, start, end))) {
+        formatRun(editor, document, paragraph, run, start, end, patch.text);
+      }
     }
   }
   if (!editor.hasChanges) return document.bytes();
@@ -190,24 +190,41 @@ function property<T>(prefix: string, name: string, change: { readonly set: T } |
   return change === undefined || "inherit" in change ? "" : `<${qualified(prefix, name)} ${attrs(change.set)}/>`;
 }
 
-function selectedParagraph(document: WordDocument, target: WordFormattingTarget): WordParagraph {
-  if (target.anchor.paragraphElementId !== target.focus.paragraphElementId) {
-    throw new WordError("unsupported_document", "This formatting slice requires a selection inside one paragraph.");
-  }
-  const wanted = target.anchor.paragraphElementId;
-  const visit = (blocks: readonly import("./document.ts").WordBlock[]): WordParagraph | undefined => {
+function documentParagraphs(document: WordDocument): WordParagraph[] {
+  const result: WordParagraph[] = [];
+  const visit = (blocks: readonly import("./document.ts").WordBlock[]): void => {
     for (const block of blocks) {
-      if (block.kind === "paragraph" && block.elementId === wanted) return block;
+      if (block.kind === "paragraph") result.push(block);
       if (block.kind === "table") for (const row of block.rows) for (const cell of row.cells) {
-        const found = visit(cell.blocks);
-        if (found !== undefined) return found;
+        visit(cell.blocks);
       }
     }
-    return undefined;
   };
-  const paragraph = visit(document.blocks);
-  if (paragraph === undefined) throw new WordError("invalid_document", `Paragraph element ${wanted} does not exist.`);
-  return paragraph;
+  visit(document.blocks);
+  return result;
+}
+
+function selectedRanges(document: WordDocument, target: WordFormattingTarget): readonly { readonly paragraph: WordParagraph; readonly start: number; readonly end: number }[] {
+  const paragraphs = documentParagraphs(document);
+  const anchorIndex = paragraphs.findIndex((paragraph) => paragraph.elementId === target.anchor.paragraphElementId);
+  const focusIndex = paragraphs.findIndex((paragraph) => paragraph.elementId === target.focus.paragraphElementId);
+  if (anchorIndex < 0 || focusIndex < 0) throw new WordError("invalid_document", "A selected Word paragraph does not exist.");
+  const forward = anchorIndex < focusIndex || anchorIndex === focusIndex && target.anchor.offset <= target.focus.offset;
+  const firstIndex = forward ? anchorIndex : focusIndex;
+  const lastIndex = forward ? focusIndex : anchorIndex;
+  const firstOffset = forward ? target.anchor.offset : target.focus.offset;
+  const lastOffset = forward ? target.focus.offset : target.anchor.offset;
+  return Object.freeze(paragraphs.slice(firstIndex, lastIndex + 1).map((paragraph, localIndex) => {
+    const length = wordParagraphText(document, paragraph).length;
+    const start = localIndex === 0 ? firstOffset : 0;
+    const end = localIndex === lastIndex - firstIndex ? lastOffset : length;
+    validateRange(wordParagraphText(document, paragraph), start, end);
+    return Object.freeze({ paragraph, start, end });
+  }));
+}
+
+function localSelection(paragraph: WordParagraph, start: number, end: number): WordTextSelection {
+  return { anchor: { paragraphElementId: paragraph.elementId, offset: start }, focus: { paragraphElementId: paragraph.elementId, offset: end } };
 }
 
 function selectedRuns(document: WordDocument, paragraph: WordParagraph, target: WordFormattingTarget): readonly WordRun[] {
@@ -237,6 +254,15 @@ function state<T, D>(items: readonly { computed: ComputedWordTextFormat; direct:
   return items.every((item) => direct(item) === undefined)
     ? Object.freeze({ state: "inherited", value })
     : Object.freeze({ state: "value", value });
+}
+
+function paragraphState(items: readonly { readonly computed: HorizontalAlignment; readonly direct: HorizontalAlignment | undefined }[]): FormattingValue<HorizontalAlignment> {
+  const first = items[0];
+  if (first === undefined) return Object.freeze({ state: "unavailable" });
+  if (items.some((item) => item.computed !== first.computed)) return Object.freeze({ state: "mixed" });
+  return items.every((item) => item.direct === undefined)
+    ? Object.freeze({ state: "inherited", value: first.computed })
+    : Object.freeze({ state: "value", value: first.computed });
 }
 
 function directRun(document: WordDocument, run: WordRun): WordRunProperties {

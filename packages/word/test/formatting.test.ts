@@ -53,6 +53,20 @@ describe("WordprocessingML direct formatting", () => {
     expect(edited.document.source.elements(word, "rPr")[0]?.attributes.some((attribute) => attribute.localName === "rsidRPr")).toBe(true);
     expect(edited.document.styles.paragraphFormat(edited.document, first(edited)).alignment).toBe("end");
   });
+
+  test("formats a selection spanning paragraphs and reports mixed block state", () => {
+    const artifact = open(`<w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:t>First</w:t></w:r></w:p><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>Second</w:t></w:r></w:p>`);
+    const [firstParagraph, secondParagraph] = artifact.document.blocks;
+    if (firstParagraph?.kind !== "paragraph" || secondParagraph?.kind !== "paragraph") throw new Error("Expected paragraphs.");
+    const target = { anchor: { paragraphElementId: firstParagraph.elementId, offset: 2 }, focus: { paragraphElementId: secondParagraph.elementId, offset: 3 } } as const;
+    expect(artifact.formattingState(target).block.horizontalAlignment.state).toBe("mixed");
+    const edited = artifact.applyFormatting(target, { text: { italic: { set: true } }, block: { horizontalAlignment: { set: "center" } } });
+    const paragraphs = edited.document.blocks.filter((block) => block.kind === "paragraph");
+    expect(paragraphs.map((paragraph) => edited.document.styles.paragraphFormat(edited.document, paragraph).alignment)).toEqual(["center", "center"]);
+    expect(edited.document.source.elements(word, "i")).toHaveLength(2);
+    expect(wordParagraphText(edited.document, paragraphs[0]!)).toBe("First");
+    expect(wordParagraphText(edited.document, paragraphs[1]!)).toBe("Second");
+  });
 });
 
 function open(body: string) {
