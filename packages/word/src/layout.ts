@@ -10,6 +10,7 @@ import type {
 } from "./document.ts";
 import type { ComputedWordParagraphFormat, ComputedWordTextFormat, WordTabStop } from "./styles.ts";
 import { WordError } from "./document.ts";
+import type { WordListMarker } from "./numbering.ts";
 
 const TWIPS_PER_POINT = 20;
 const CSS_PIXELS_PER_POINT = 4 / 3;
@@ -64,6 +65,17 @@ export interface WordLayoutLine {
   readonly startOffset: number;
   readonly endOffset: number;
   readonly fragments: readonly WordLayoutFragment[];
+  readonly marker: WordLayoutMarker | undefined;
+}
+
+export interface WordLayoutMarker {
+  readonly text: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly baseline: number;
+  readonly format: ComputedWordTextFormat;
 }
 
 export interface WordLayoutFragment {
@@ -147,6 +159,16 @@ interface PreparedParagraph {
   readonly paragraph: WordParagraph;
   readonly format: ComputedWordParagraphFormat;
   readonly lines: readonly PreparedLine[];
+  readonly marker: PreparedMarker | undefined;
+}
+
+interface PreparedMarker {
+  readonly source: WordListMarker;
+  readonly text: string;
+  readonly width: number;
+  readonly ascent: number;
+  readonly descent: number;
+  readonly format: ComputedWordTextFormat;
 }
 
 interface PreparedLine {
@@ -172,6 +194,7 @@ export function layoutWordDocument(
   };
   const pages: MutablePage[] = [];
   const sections = documentSections(document.blocks, document.finalSection);
+  const listMarkers = document.numbering.markers(document);
   let page: MutablePage | undefined;
   let columnIndex = 0;
   let cursorY = 0;
@@ -212,15 +235,15 @@ export function layoutWordDocument(
         column.unsupportedBlocks.push(Object.freeze({ elementId: block.elementId, localName: block.kind === "table" ? "tbl" : block.localName, y: cursorY }));
         continue;
       }
-      let prepared = prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer);
+      let prepared = prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId));
       const nextBlock = section.blocks[blockIndex + 1];
       const requiredHeight = paragraphHeight(prepared) + (prepared.format.keepNext && nextBlock?.kind === "paragraph"
-        ? firstLineHeight(prepareParagraph(document, nextBlock, page!.columns[columnIndex]!.width, measurer))
+        ? firstLineHeight(prepareParagraph(document, nextBlock, page!.columns[columnIndex]!.width, measurer, listMarkers.get(nextBlock.elementId)))
         : 0);
       const currentColumn = page!.columns[columnIndex]!;
       if ((prepared.format.pageBreakBefore || prepared.format.keepLines && requiredHeight > currentColumn.y + currentColumn.height - cursorY) && cursorY > currentColumn.y) {
         advanceColumn(section.properties);
-        prepared = prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer);
+        prepared = prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId));
       }
       cursorY += points(prepared.format.spacingBeforeTwips);
       for (let lineIndex = 0; lineIndex < prepared.lines.length; lineIndex += 1) {
@@ -245,7 +268,7 @@ export function layoutWordDocument(
             column = page!.columns[columnIndex]!;
           }
         }
-        const laidOut = placeLine(block, prepared.format, line, column, cursorY, budget);
+        const laidOut = placeLine(block, prepared.format, line, column, cursorY, budget, lineIndex === 0 ? prepared.marker : undefined);
         column.lines.push(laidOut);
         cursorY += laidOut.height;
         if (line.breakAfter === "page") addPage(section.properties);
@@ -270,12 +293,27 @@ function prepareParagraph(
   paragraph: WordParagraph,
   columnWidth: number,
   measurer: WordTextMeasurer,
+  markerSource?: WordListMarker,
 ): PreparedParagraph {
-  const format = document.styles.paragraphFormat(document, paragraph);
+  const computed = document.styles.paragraphFormat(document, paragraph);
+  const format = markerSource === undefined ? computed : Object.freeze({
+    ...computed,
+    indentStartTwips: computed.indentStartTwips !== 0 ? computed.indentStartTwips : markerSource.indentStartTwips ?? 720,
+    hangingTwips: computed.hangingTwips !== 0 ? computed.hangingTwips : markerSource.hangingTwips ?? 360,
+  });
   const width = Math.max(1, columnWidth - points(format.indentStartTwips + format.indentEndTwips));
   const atoms = paragraphAtoms(document, paragraph, measurer);
   const lines = breakLines(atoms, width, format);
-  return Object.freeze({ paragraph, format, lines: Object.freeze(lines) });
+  const marker = markerSource === undefined ? undefined : prepareMarker(document, paragraph, markerSource, measurer);
+  return Object.freeze({ paragraph, format, lines: Object.freeze(lines), marker });
+}
+
+function prepareMarker(document: WordDocument, paragraph: WordParagraph, source: WordListMarker, measurer: WordTextMeasurer): PreparedMarker {
+  const firstRun = paragraph.inlines.flatMap((inline) => inline.kind === "run" ? [inline] : inline.kind === "hyperlink" || inline.kind === "insertion" ? inline.runs : [])[0];
+  const format = firstRun === undefined ? DEFAULT_MARKER_FORMAT : document.styles.runFormat(document, paragraph, firstRun);
+  const text = source.text + (source.suffix === "space" ? " " : source.suffix === "tab" ? "\t" : "");
+  const measurement = validMeasurement(measurer.measure(source.text, format));
+  return Object.freeze({ source, text, width: measurement.width, ascent: measurement.ascent, descent: measurement.descent, format });
 }
 
 function paragraphAtoms(document: WordDocument, paragraph: WordParagraph, measurer: WordTextMeasurer): ParagraphAtom[] {
@@ -412,6 +450,7 @@ function placeLine(
   column: MutableColumn,
   y: number,
   budget: LayoutBudget,
+  marker: PreparedMarker | undefined,
 ): WordLayoutLine {
   const startIndent = points(format.indentStartTwips + (line.startOffset === 0 ? format.firstLineTwips - format.hangingTwips : 0));
   const available = Math.max(0, column.width - startIndent - points(format.indentEndTwips));
@@ -466,6 +505,15 @@ function placeLine(
     startOffset: line.startOffset,
     endOffset: line.endOffset,
     fragments: Object.freeze(fragments),
+    marker: marker === undefined ? undefined : Object.freeze({
+      text: marker.text,
+      x: Math.max(column.x, x - points(format.hangingTwips)),
+      y: y + line.ascent - marker.ascent,
+      width: marker.width,
+      height: marker.ascent + marker.descent,
+      baseline: y + line.ascent,
+      format: marker.format,
+    }),
   });
 }
 
@@ -540,6 +588,7 @@ function translateLine(line: WordLayoutLine, dx: number, dy: number): WordLayout
       y: fragment.y + dy,
       baseline: fragment.baseline + dy,
     }))),
+    marker: line.marker === undefined ? undefined : Object.freeze({ ...line.marker, x: line.marker.x + dx, y: line.marker.y + dy, baseline: line.marker.baseline + dy }),
   });
 }
 
@@ -633,3 +682,16 @@ function samePageGeometry(left: WordSectionProperties, right: WordSectionPropert
     left.marginBottomTwips === right.marginBottomTwips && left.marginLeftTwips === right.marginLeftTwips &&
     left.gutterTwips === right.gutterTwips;
 }
+
+const DEFAULT_MARKER_FORMAT: ComputedWordTextFormat = Object.freeze({
+  fontFamily: "Calibri",
+  fontSizePoints: 11,
+  bold: false,
+  italic: false,
+  underline: "none",
+  strike: false,
+  color: "#000000",
+  highlight: undefined,
+  verticalAlign: "baseline",
+  rightToLeft: false,
+});

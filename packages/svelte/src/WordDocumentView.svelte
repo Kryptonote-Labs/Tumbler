@@ -76,6 +76,13 @@
           <div class="word-page-content" style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}>
             {#each page.columns as column}
               {#each column.lines as line}
+                {#if line.marker !== undefined}
+                  <span
+                    class="list-marker"
+                    aria-hidden="true"
+                    style={`${wordTextCss(line.marker.format)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(line.marker.y)}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}
+                  >{line.marker.text}</span>
+                {/if}
                 {#each line.fragments as fragment}
                   {#if fragment.hyperlink === undefined}
                     <span

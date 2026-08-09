@@ -52,6 +52,15 @@ export {
   WORD_FORMATTING_CAPABILITIES,
 } from "./formatting.ts";
 export type { WordFormattingDocumentAdapter, WordFormattingTarget } from "./formatting.ts";
+export { readWordNumbering, WordNumbering } from "./numbering.ts";
+export type {
+  WordAbstractNumbering,
+  WordListMarker,
+  WordNumberFormat,
+  WordNumberingInstance,
+  WordNumberingLevel,
+  WordParagraphNumbering,
+} from "./numbering.ts";
 export { openWordEditingSession, WordEditingSession } from "./session.ts";
 export type {
   WordEditingSessionOptions,
@@ -64,6 +73,7 @@ export type {
   WordLayoutColumn,
   WordLayoutFragment,
   WordLayoutLine,
+  WordLayoutMarker,
   WordLayoutOptions,
   WordLayoutPage,
   WordTextMeasurement,
