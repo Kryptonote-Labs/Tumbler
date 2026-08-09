@@ -68,6 +68,8 @@ export type {
 } from "./numbering.ts";
 export { resolveWordTableGrid } from "./table-grid.ts";
 export type { ResolvedWordTable, ResolvedWordTableCell, ResolvedWordTableRow } from "./table-grid.ts";
+export { readWordDrawings } from "./drawings.ts";
+export type { WordChartDrawing, WordDrawing, WordDrawingAnchor, WordImageDrawing, WordUnsupportedDrawing } from "./drawings.ts";
 export { openWordEditingSession, WordEditingSession } from "./session.ts";
 export type {
   WordEditingSessionOptions,

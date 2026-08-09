@@ -14,6 +14,7 @@ import type { ComputedWordParagraphFormat, ComputedWordTextFormat, WordTabStop }
 import { WordError } from "./document.ts";
 import type { WordListMarker } from "./numbering.ts";
 import { resolveWordTableGrid, type ResolvedWordTableCell } from "./table-grid.ts";
+import type { WordDrawing } from "./drawings.ts";
 
 const TWIPS_PER_POINT = 20;
 const CSS_PIXELS_PER_POINT = 4 / 3;
@@ -124,6 +125,7 @@ export interface WordLayoutFragment {
   readonly endOffset: number;
   readonly format: ComputedWordTextFormat;
   readonly hyperlink: string | undefined;
+  readonly drawing: WordDrawing | undefined;
 }
 
 interface LayoutBudget {
@@ -155,7 +157,7 @@ interface MutablePage {
   footerTables: WordLayoutTable[];
 }
 
-type WordLayoutDocumentContext = Pick<WordDocument, "package" | "part" | "source" | "conformance" | "styles" | "numbering" | "blocks">;
+type WordLayoutDocumentContext = Pick<WordDocument, "package" | "part" | "source" | "conformance" | "styles" | "numbering" | "drawings" | "blocks">;
 
 type ParagraphAtom = GlyphAtom | TabAtom | DrawingAtom | BreakAtom;
 
@@ -185,8 +187,10 @@ interface TabAtom extends AtomBase {
 interface DrawingAtom extends AtomBase {
   readonly kind: "drawing";
   readonly width: number;
+  readonly flowWidth: number;
   readonly ascent: number;
   readonly descent: number;
+  readonly drawing: WordDrawing | undefined;
 }
 
 interface BreakAtom extends AtomBase {
@@ -527,12 +531,18 @@ function paragraphAtoms(document: WordLayoutDocumentContext, paragraph: WordPara
         }));
         logicalOffset += 1;
       } else if (content.kind === "drawing") {
-        const size = format.fontSizePoints;
+        const drawing = document.drawings.get(content.elementId);
+        const width = drawing?.widthPoints ?? format.fontSizePoints;
+        const height = drawing?.heightPoints ?? format.fontSizePoints;
+        const anchored = drawing?.placement === "anchor";
+        const flows = !anchored || drawing.anchor?.wrap !== "none" && drawing.anchor?.behindDocument !== true;
         atoms.push(Object.freeze({
           ...controlAtom("drawing", run, content.elementId, logicalOffset, format, hyperlink),
-          width: size,
-          ascent: size * 0.8,
-          descent: size * 0.2,
+          width,
+          flowWidth: flows ? width : 0,
+          ascent: flows ? height : 0,
+          descent: 0,
+          drawing,
         }));
         logicalOffset += 1;
       }
@@ -644,15 +654,16 @@ function placeLine(
         runElementId: atom.runElementId,
         contentElementId: atom.contentElementId,
         text: atom.kind === "glyph" ? atom.text : atom.kind === "tab" ? "\t" : "\uFFFC",
-        x: cursorX,
-        y: y + line.ascent - ascent,
-        width: atomWidth,
-        height: ascent + descent,
+        x: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? column.x + (atom.drawing.anchor?.horizontalOffsetPoints ?? cursorX - column.x) : cursorX,
+        y: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? y + (atom.drawing.anchor?.verticalOffsetPoints ?? 0) : y + line.ascent - ascent,
+        width: atom.kind === "drawing" ? atom.width : atomWidth,
+        height: atom.kind === "drawing" ? atom.drawing?.heightPoints ?? ascent + descent : ascent + descent,
         baseline: y + line.ascent,
         startOffset: atom.startOffset,
         endOffset: atom.endOffset,
         format: atom.format,
         hyperlink: atom.hyperlink,
+        drawing: atom.kind === "drawing" ? atom.drawing : undefined,
       }));
     }
     cursorX += atomWidth;
@@ -727,6 +738,7 @@ function storyContext(document: WordDocument, story: WordHeaderFooterStory): Wor
     conformance: document.conformance,
     styles: document.styles,
     numbering: document.numbering,
+    drawings: story.drawings,
     blocks: story.blocks,
   };
 }
@@ -897,7 +909,7 @@ function controlAtom<K extends "tab" | "drawing" | "break">(
 }
 
 function atomWidthValue(atom: Exclude<ParagraphAtom, BreakAtom>): number {
-  return atom.kind === "tab" ? (atom as TabAtom & { readonly width?: number }).width ?? DEFAULT_TAB_POINTS : atom.width;
+  return atom.kind === "tab" ? (atom as TabAtom & { readonly width?: number }).width ?? DEFAULT_TAB_POINTS : atom.kind === "drawing" ? atom.flowWidth : atom.width;
 }
 
 function atomAscent(atom: Exclude<ParagraphAtom, BreakAtom>): number {

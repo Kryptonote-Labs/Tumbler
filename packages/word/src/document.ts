@@ -2,6 +2,7 @@ import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type Loss
 import { RelationshipsError, type OpcPackage, type OpcPart, type Relationships } from "@tumblerjs/opc";
 import { readWordStyles, type WordStyles } from "./styles.ts";
 import { readWordNumbering, type WordNumbering } from "./numbering.ts";
+import { readWordDrawings, type WordDrawing } from "./drawings.ts";
 
 const MAIN_DOCUMENT_CONTENT_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
@@ -216,6 +217,7 @@ export interface WordHeaderFooterStory {
   readonly part: OpcPart;
   readonly source: LosslessXmlDocument;
   readonly blocks: readonly WordBlock[];
+  readonly drawings: ReadonlyMap<number, WordDrawing>;
 }
 
 interface ParseBudget {
@@ -237,6 +239,7 @@ export class WordDocument {
   readonly styles: WordStyles;
   readonly numbering: WordNumbering;
   readonly headerFooters: readonly WordHeaderFooterStory[];
+  readonly drawings: ReadonlyMap<number, WordDrawing>;
 
   constructor(input: {
     pkg: OpcPackage;
@@ -248,6 +251,7 @@ export class WordDocument {
     styles: WordStyles;
     numbering: WordNumbering;
     headerFooters: readonly WordHeaderFooterStory[];
+    drawings: ReadonlyMap<number, WordDrawing>;
   }) {
     this.package = input.pkg;
     this.part = input.part;
@@ -258,6 +262,7 @@ export class WordDocument {
     this.styles = input.styles;
     this.numbering = input.numbering;
     this.headerFooters = Object.freeze([...input.headerFooters]);
+    this.drawings = input.drawings;
   }
 
   bytes(): Uint8Array {
@@ -312,8 +317,9 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
   const finalSection = parseSection(sectionElements[0], namespace);
   const styles = readWordStyles({ package: pkg, part: main, source, conformance: profile });
   const numbering = readWordNumbering({ package: pkg, part: main, source, conformance: profile });
+  const drawings = readWordDrawings({ package: pkg, part: main, source, conformance: profile });
   const headerFooters = readHeaderFooterStories(pkg, main, profile, [...blocks.flatMap(sectionReferences), ...finalSection.headerReferences, ...finalSection.footerReferences], budget);
-  return new WordDocument({ pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters });
+  return new WordDocument({ pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings });
 }
 
 function sectionReferences(block: WordBlock): readonly WordHeaderFooterReference[] {
@@ -356,7 +362,8 @@ function readHeaderFooterStories(
     catch (cause) { if (!(cause instanceof RelationshipsError) || cause.code !== "missing_item") throw cause; }
     const blocks = source.root.children.filter((node): node is LosslessXmlElement => node.kind === "element")
       .map((element) => parseBlock(element, source, namespace, storyRelationships, budget));
-    stories.push(Object.freeze({ ...reference, part, source, blocks: Object.freeze(blocks) }));
+    const drawings = readWordDrawings({ package: pkg, part, source, conformance });
+    stories.push(Object.freeze({ ...reference, part, source, blocks: Object.freeze(blocks), drawings }));
   }
   return Object.freeze(stories);
 }

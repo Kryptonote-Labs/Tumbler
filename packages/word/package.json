@@ -5,6 +5,7 @@
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
+    "@tumblerjs/charts": "workspace:*",
     "@tumblerjs/core": "workspace:*",
     "@tumblerjs/ooxml": "workspace:*",
     "@tumblerjs/opc": "workspace:*"

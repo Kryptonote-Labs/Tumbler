@@ -95,6 +95,7 @@
       "name": "@tumblerjs/word",
       "version": "0.0.0",
       "dependencies": {
+        "@tumblerjs/charts": "workspace:*",
         "@tumblerjs/core": "workspace:*",
         "@tumblerjs/ooxml": "workspace:*",
         "@tumblerjs/opc": "workspace:*",
