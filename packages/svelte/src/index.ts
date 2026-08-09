@@ -8,6 +8,8 @@ export { default as WordDocumentView } from "./WordDocumentView.svelte";
 export { browserWordTextMeasurer, wordTextCss } from "./word-font-metrics.ts";
 export { calculateWordPageViewport } from "./word-page-viewport.ts";
 export type { WordPageViewport } from "./word-page-viewport.ts";
+export { openWordArtifact, WordArtifact } from "@tumblerjs/word";
+export type { WordDocument, WordTextSelection } from "@tumblerjs/word";
 export {
   measureMaximumDigitWidth,
   spreadsheetFontShorthand,
