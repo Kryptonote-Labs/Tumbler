@@ -6,6 +6,7 @@
     EXCEL_MAX_COLUMNS,
     EXCEL_MAX_ROWS,
     clearSpreadsheetTableFilter,
+    calculateSpreadsheetWorksheet,
     formatCellReference,
     formatSpreadsheetCellValue,
     projectSpreadsheetTable,
@@ -89,15 +90,18 @@
   let suppressCellClick = $state(false);
   const rowHeaderWidth = 52;
   const columnHeaderHeight = 28;
+  let viewCalculation = $derived(calculation === undefined ? undefined : calculateSpreadsheetWorksheet(worksheet, {
+    tableViewStates: tableStates,
+  }));
   let tableProjections = $derived(worksheet.tables.map((table) => ({
     table,
     projection: projectSpreadsheetTable(
       worksheet,
       table,
       tableStates[table.partName.value] ?? savedSpreadsheetTableView(table).state,
-      calculation === undefined ? undefined : {
-        value: (row, column) => calculation.value({ row, column }),
-        displayText: (row, column) => calculation.displayText({ row, column }),
+      viewCalculation === undefined ? undefined : {
+        value: (row, column) => viewCalculation.value({ row, column }),
+        displayText: (row, column) => viewCalculation.displayText({ row, column }),
       },
     ),
   })));
@@ -117,7 +121,7 @@
   let drawingRowGeometry = $derived(worksheet.rowGeometry(rowCount));
   let charts = $derived.by(() => {
     const frames = worksheet.drawing?.charts ?? [];
-    const models = resolveSpreadsheetChartDataSet(worksheet, frames.map((frame) => frame.model));
+    const models = resolveSpreadsheetChartDataSet(worksheet, frames.map((frame) => frame.model), { tableViewStates: tableStates });
     return frames.map((frame, index) => ({
       frame,
       bounds: spreadsheetDrawingBounds(frame.anchor, drawingRowGeometry, columnGeometry),
@@ -176,7 +180,7 @@
   let gutterLayout = $derived(composeSpreadsheetGridLayout({ viewport: gutterViewport, rowGeometry, columnGeometry, frozenRows, frozenColumns, merges: [] }));
   let hasActiveProjection = $derived(tableProjections.some(({ projection }) => projection.state.filters.length > 0 || projection.state.sorts.length > 0));
   let editable = $derived(!readonly && !hasActiveProjection && onedit !== undefined);
-  let conditionalStyles = $derived(projectSpreadsheetConditionalStyles(worksheet, calculation));
+  let conditionalStyles = $derived(projectSpreadsheetConditionalStyles(worksheet, viewCalculation));
 
   $effect(() => {
     const current = worksheet;
@@ -346,14 +350,14 @@
   }
 
   function displayCell(reference: string): string {
-    return calculation?.displayText(reference) ?? worksheet.displayText(reference);
+    return viewCalculation?.displayText(reference) ?? worksheet.displayText(reference);
   }
 
   function textOverflowWidth(row: number, column: number): number | undefined {
     const maximumColumn = layout.columns.reduce((maximum, item) => Math.max(maximum, item.index), column);
     return spreadsheetTextOverflowWidth({
       worksheet,
-      calculation,
+      calculation: viewCalculation,
       row,
       column,
       columnGeometry,
@@ -425,9 +429,9 @@
   function updateTableState(table: SpreadsheetTable, state: SpreadsheetTableViewState) {
     tableStates = { ...tableStates, [table.partName.value]: state };
     editing = undefined;
-    const projection = projectSpreadsheetTable(worksheet, table, state, calculation === undefined ? undefined : {
-      value: (row, column) => calculation.value({ row, column }),
-      displayText: (row, column) => calculation.displayText({ row, column }),
+    const projection = projectSpreadsheetTable(worksheet, table, state, viewCalculation === undefined ? undefined : {
+      value: (row, column) => viewCalculation.value({ row, column }),
+      displayText: (row, column) => viewCalculation.displayText({ row, column }),
     });
     const bodyStart = table.range.start.row + table.headerRowCount;
     const bodyEnd = table.range.end.row - table.totalsRowCount;
@@ -465,9 +469,9 @@
   }
 
   function tableDistinctValues(table: SpreadsheetTable, columnId: number): readonly string[] {
-    return spreadsheetTableDistinctValues(worksheet, table, columnId, calculation === undefined ? undefined : {
-      value: (row, column) => calculation.value({ row, column }),
-      displayText: (row, column) => calculation.displayText({ row, column }),
+    return spreadsheetTableDistinctValues(worksheet, table, columnId, viewCalculation === undefined ? undefined : {
+      value: (row, column) => viewCalculation.value({ row, column }),
+      displayText: (row, column) => viewCalculation.displayText({ row, column }),
     });
   }
 

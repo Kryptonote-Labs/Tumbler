@@ -1,7 +1,7 @@
 import { BUBBLE_CHART_POINT_LIMIT, type ChartDataPoint, type ChartDataSequence, type ChartModel, type ChartSeries } from "@tumblerjs/charts";
 import type { CellRange } from "./references.ts";
 import { parseCellRange } from "./references.ts";
-import { calculateSpreadsheetWorksheet, type SpreadsheetCalculationSnapshot } from "./calculation.ts";
+import { calculateSpreadsheetWorksheet, type SpreadsheetCalculationOptions, type SpreadsheetCalculationSnapshot } from "./calculation.ts";
 import { formatSpreadsheetCellValue } from "./number-format.ts";
 import { openWorksheet, type SpreadsheetCellValue, type SpreadsheetWorksheet } from "./worksheet.ts";
 
@@ -29,15 +29,19 @@ export function parseSpreadsheetChartReference(formula: string, currentSheet: st
 }
 
 /** Refreshes supported chart series from workbook cells while retaining caches for unsupported references. */
-export function resolveSpreadsheetChartData(worksheet: SpreadsheetWorksheet, model: ChartModel): ChartModel {
-  return resolveSpreadsheetChartDataSet(worksheet, [model])[0]!;
+export function resolveSpreadsheetChartData(worksheet: SpreadsheetWorksheet, model: ChartModel, options: SpreadsheetCalculationOptions = {}): ChartModel {
+  return resolveSpreadsheetChartDataSet(worksheet, [model], options)[0]!;
 }
 
 /** Resolves a worksheet's chart models while sharing formula snapshots across every chart. */
-export function resolveSpreadsheetChartDataSet(worksheet: SpreadsheetWorksheet, models: readonly ChartModel[]): readonly ChartModel[] {
+export function resolveSpreadsheetChartDataSet(
+  worksheet: SpreadsheetWorksheet,
+  models: readonly ChartModel[],
+  options: SpreadsheetCalculationOptions = {},
+): readonly ChartModel[] {
   const snapshots = new Map<number, SpreadsheetCalculationSnapshot>();
   if (models.some((model) => model.status === "supported")) {
-    snapshots.set(worksheet.sheet.sheetId, calculateSpreadsheetWorksheet(worksheet));
+    snapshots.set(worksheet.sheet.sheetId, calculateSpreadsheetWorksheet(worksheet, options));
   }
 
   const source = (formula: string): { worksheet: SpreadsheetWorksheet; calculation: SpreadsheetCalculationSnapshot; range: CellRange } | undefined => {
@@ -48,7 +52,7 @@ export function resolveSpreadsheetChartDataSet(worksheet: SpreadsheetWorksheet, 
     let calculation = snapshots.get(sheet.sheetId);
     if (calculation === undefined) {
       const target = openWorksheet(worksheet.workbook, sheet);
-      calculation = calculateSpreadsheetWorksheet(target);
+      calculation = calculateSpreadsheetWorksheet(target, options);
       snapshots.set(sheet.sheetId, calculation);
     }
     return { worksheet: calculation.worksheet, calculation, range: reference.range };
