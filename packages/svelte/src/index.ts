@@ -2,6 +2,7 @@
 /** Owned Svelte heads for Tumbler's format-neutral document models. */
 export { default as SpreadsheetGrid } from "./SpreadsheetGrid.svelte";
 export { default as SpreadsheetFormulaBar } from "./SpreadsheetFormulaBar.svelte";
+export { default as FormattingToolbar } from "./FormattingToolbar.svelte";
 export { default as OoxmlChart } from "./OoxmlChart.svelte";
 export {
   measureMaximumDigitWidth,
@@ -34,3 +35,10 @@ export type {
 } from "./spreadsheet-formula-reference.ts";
 export { spreadsheetTextOverflowWidth } from "./spreadsheet-text-overflow.ts";
 export type { SpreadsheetTextOverflowInput } from "./spreadsheet-text-overflow.ts";
+export {
+  colorFormatting,
+  fontSizeFormatting,
+  formattingColorValue,
+  toggleBooleanFormatting,
+  toggleUnderlineFormatting,
+} from "./formatting-controls.ts";
