@@ -170,6 +170,12 @@ export interface WordDrawingReference {
   readonly elementId: number;
 }
 
+export interface WordNoteReference {
+  readonly kind: "footnote-reference" | "endnote-reference";
+  readonly elementId: number;
+  readonly id: number;
+}
+
 export interface WordUnsupportedRunContent {
   readonly kind: "unsupported";
   readonly elementId: number;
@@ -182,6 +188,7 @@ export type WordRunContent =
   | WordBreak
   | WordFieldCharacter
   | WordDrawingReference
+  | WordNoteReference
   | WordUnsupportedRunContent;
 
 export interface WordSectionProperties {
@@ -220,6 +227,16 @@ export interface WordHeaderFooterStory {
   readonly drawings: ReadonlyMap<number, WordDrawing>;
 }
 
+export interface WordNoteStory {
+  readonly kind: "footnote" | "endnote";
+  readonly id: number;
+  readonly type: "normal" | "separator" | "continuation-separator" | "continuation-notice";
+  readonly part: OpcPart;
+  readonly source: LosslessXmlDocument;
+  readonly blocks: readonly WordBlock[];
+  readonly drawings: ReadonlyMap<number, WordDrawing>;
+}
+
 interface ParseBudget {
   readonly maxBlocks: number;
   readonly maxInlineItems: number;
@@ -240,6 +257,7 @@ export class WordDocument {
   readonly numbering: WordNumbering;
   readonly headerFooters: readonly WordHeaderFooterStory[];
   readonly drawings: ReadonlyMap<number, WordDrawing>;
+  readonly notes: readonly WordNoteStory[];
 
   constructor(input: {
     pkg: OpcPackage;
@@ -252,6 +270,7 @@ export class WordDocument {
     numbering: WordNumbering;
     headerFooters: readonly WordHeaderFooterStory[];
     drawings: ReadonlyMap<number, WordDrawing>;
+    notes: readonly WordNoteStory[];
   }) {
     this.package = input.pkg;
     this.part = input.part;
@@ -263,6 +282,7 @@ export class WordDocument {
     this.numbering = input.numbering;
     this.headerFooters = Object.freeze([...input.headerFooters]);
     this.drawings = input.drawings;
+    this.notes = Object.freeze([...input.notes]);
   }
 
   bytes(): Uint8Array {
@@ -318,8 +338,51 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
   const styles = readWordStyles({ package: pkg, part: main, source, conformance: profile });
   const numbering = readWordNumbering({ package: pkg, part: main, source, conformance: profile });
   const drawings = readWordDrawings({ package: pkg, part: main, source, conformance: profile });
+  const notes = readNoteStories(pkg, main, profile, budget);
   const headerFooters = readHeaderFooterStories(pkg, main, profile, [...blocks.flatMap(sectionReferences), ...finalSection.headerReferences, ...finalSection.footerReferences], budget);
-  return new WordDocument({ pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings });
+  return new WordDocument({ pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes });
+}
+
+function readNoteStories(pkg: OpcPackage, main: OpcPart, conformance: WordConformance, budget: ParseBudget): readonly WordNoteStory[] {
+  const relationshipPrefix = conformance === "strict" ? "http://purl.oclc.org/ooxml/officeDocument/relationships" : "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const namespace = OOXML_NAMESPACES[conformance].wordprocessing;
+  let relationships: Relationships;
+  try { relationships = pkg.relationships(main.name); }
+  catch (cause) { if (cause instanceof RelationshipsError && cause.code === "missing_item") return Object.freeze([]); throw cause; }
+  const stories: WordNoteStory[] = [];
+  for (const kind of ["footnote", "endnote"] as const) {
+    const plural = `${kind}s`;
+    const matches = relationships.byType(`${relationshipPrefix}/${plural}`);
+    if (matches.length > 1) throw new WordError("invalid_document", `The Main Document must not have multiple ${plural} relationships.`);
+    const relationship = matches[0];
+    if (relationship === undefined) continue;
+    if (relationship.targetMode !== "Internal") throw new WordError("invalid_document", `${plural} must target an internal part.`);
+    const part = pkg.getPart(relationship.targetPartName);
+    const expected = `application/vnd.openxmlformats-officedocument.wordprocessingml.${plural}+xml`;
+    if (part === undefined || part.contentType !== expected) throw new WordError("invalid_document", `The ${plural} relationship target has the wrong content type.`);
+    let source: LosslessXmlDocument;
+    try { source = parseLosslessXml(pkg.readPart(part)); }
+    catch (cause) { throw new WordError("invalid_document", `The ${plural} part is not valid XML.`, { cause }); }
+    if (source.root.namespaceUri !== namespace || source.root.localName !== plural) throw new WordError("invalid_document", `The ${plural} part has an invalid root element.`);
+    let noteRelationships: Relationships | undefined;
+    try { noteRelationships = pkg.relationships(part.name); }
+    catch (cause) { if (!(cause instanceof RelationshipsError) || cause.code !== "missing_item") throw cause; }
+    const drawings = readWordDrawings({ package: pkg, part, source, conformance });
+    for (const element of children(source.root, namespace, kind)) {
+      const rawId = attr(element, namespace, "id");
+      if (rawId === undefined || !/^-?[0-9]+$/.test(rawId)) throw new WordError("invalid_document", `${kind} is missing a signed integer id.`);
+      const id = Number(rawId);
+      if (!Number.isSafeInteger(id)) throw new WordError("invalid_document", `${kind} id is outside the supported range.`);
+      const rawType = attr(element, namespace, "type");
+      const type = rawType === "separator" || rawType === "continuationSeparator" || rawType === "continuationNotice" ? rawType : "normal";
+      const normalizedType = type === "continuationSeparator" ? "continuation-separator" : type === "continuationNotice" ? "continuation-notice" : type;
+      const blocks = element.children.filter((node): node is LosslessXmlElement => node.kind === "element")
+        .filter((child) => child.namespaceUri === namespace && (child.localName === "p" || child.localName === "tbl"))
+        .map((child) => parseBlock(child, source, namespace, noteRelationships, budget));
+      stories.push(Object.freeze({ kind, id, type: normalizedType, part, source, blocks: Object.freeze(blocks), drawings }));
+    }
+  }
+  return Object.freeze(stories);
 }
 
 function sectionReferences(block: WordBlock): readonly WordHeaderFooterReference[] {
@@ -603,6 +666,13 @@ function parseRunContent(
   }
   if (element.localName === "drawing" || element.localName === "object" || element.localName === "pict") {
     return Object.freeze({ kind: "drawing", elementId: element.id });
+  }
+  if (element.localName === "footnoteReference" || element.localName === "endnoteReference") {
+    const rawId = attr(element, namespace, "id");
+    if (rawId === undefined || !/^-?[0-9]+$/.test(rawId)) throw new WordError("invalid_document", `${element.localName} requires a signed integer id.`);
+    const id = Number(rawId);
+    if (!Number.isSafeInteger(id)) throw new WordError("invalid_document", `${element.localName} id is outside the supported range.`);
+    return Object.freeze({ kind: element.localName === "footnoteReference" ? "footnote-reference" : "endnote-reference", elementId: element.id, id });
   }
   return unsupportedRunContent(element);
 }

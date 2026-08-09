@@ -17,6 +17,8 @@ export type {
   WordHeaderFooterStory,
   WordInline,
   WordParagraph,
+  WordNoteReference,
+  WordNoteStory,
   WordRun,
   WordRunContent,
   WordSectionProperties,

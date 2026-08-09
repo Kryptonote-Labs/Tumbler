@@ -92,7 +92,10 @@
           style={`left:50%;top:${viewport.offsets[pageIndex]! * scale}px;width:${wordPointsToCssPixels(page.width) * scale}px;height:${wordPointsToCssPixels(page.height) * scale}px`}
         >
           <div class="word-page-content" style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}>
-            {#each [...page.headerLines, ...page.footerLines] as line}
+            {#if page.noteSeparatorY !== undefined}
+              <div class="note-separator" style={`left:${wordPointsToCssPixels(page.section.marginLeftTwips / 20)}px;top:${wordPointsToCssPixels(page.noteSeparatorY)}px`}></div>
+            {/if}
+            {#each [...page.headerLines, ...page.footerLines, ...page.noteLines] as line}
               {#if line.marker !== undefined}
                 <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(line.marker.y)}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
               {/if}
@@ -196,6 +199,7 @@
   .document-cell { position: absolute; box-sizing: border-box; border: 1px solid #b7b7b7; }
   .document-drawing { position: absolute; display: block; object-fit: contain; overflow: hidden; }
   .drawing-fallback { background: repeating-linear-gradient(135deg, #f3f3f3, #f3f3f3 8px, #fafafa 8px, #fafafa 16px); border: 1px solid #d0d0d0; }
+  .note-separator { position: absolute; width: 96px; border-top: 1px solid #777; }
   span, button { position: absolute; display: block; box-sizing: border-box; white-space: pre; user-select: text; -webkit-user-select: text; }
   button { margin: 0; border: 0; padding: 0; text-align: inherit; }
   .hyperlink { cursor: pointer; text-decoration: underline; text-decoration-color: currentColor; }

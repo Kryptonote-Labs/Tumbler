@@ -9,6 +9,7 @@ import type {
   WordSectionProperties,
   WordTable,
   WordHeaderFooterStory,
+  WordNoteStory,
 } from "./document.ts";
 import type { ComputedWordParagraphFormat, ComputedWordTextFormat, WordTabStop } from "./styles.ts";
 import { WordError } from "./document.ts";
@@ -51,6 +52,9 @@ export interface WordLayoutPage {
   readonly footerLines: readonly WordLayoutLine[];
   readonly headerTables: readonly WordLayoutTable[];
   readonly footerTables: readonly WordLayoutTable[];
+  readonly noteLines: readonly WordLayoutLine[];
+  readonly noteTables: readonly WordLayoutTable[];
+  readonly noteSeparatorY: number | undefined;
 }
 
 export interface WordLayoutColumn {
@@ -112,7 +116,7 @@ export interface WordLayoutMarker {
 }
 
 export interface WordLayoutFragment {
-  readonly kind: "text" | "tab" | "drawing";
+  readonly kind: "text" | "tab" | "drawing" | "note";
   readonly runElementId: number;
   readonly contentElementId: number;
   readonly text: string;
@@ -126,6 +130,7 @@ export interface WordLayoutFragment {
   readonly format: ComputedWordTextFormat;
   readonly hyperlink: string | undefined;
   readonly drawing: WordDrawing | undefined;
+  readonly note: { readonly kind: "footnote" | "endnote"; readonly id: number } | undefined;
 }
 
 interface LayoutBudget {
@@ -155,11 +160,14 @@ interface MutablePage {
   footerLines: WordLayoutLine[];
   headerTables: WordLayoutTable[];
   footerTables: WordLayoutTable[];
+  noteLines: WordLayoutLine[];
+  noteTables: WordLayoutTable[];
+  noteSeparatorY: number | undefined;
 }
 
 type WordLayoutDocumentContext = Pick<WordDocument, "package" | "part" | "source" | "conformance" | "styles" | "numbering" | "drawings" | "blocks">;
 
-type ParagraphAtom = GlyphAtom | TabAtom | DrawingAtom | BreakAtom;
+type ParagraphAtom = GlyphAtom | TabAtom | DrawingAtom | NoteAtom | BreakAtom;
 
 interface AtomBase {
   readonly runElementId: number;
@@ -191,6 +199,16 @@ interface DrawingAtom extends AtomBase {
   readonly ascent: number;
   readonly descent: number;
   readonly drawing: WordDrawing | undefined;
+}
+
+interface NoteAtom extends AtomBase {
+  readonly kind: "note";
+  readonly text: string;
+  readonly width: number;
+  readonly ascent: number;
+  readonly descent: number;
+  readonly noteKind: "footnote" | "endnote";
+  readonly noteId: number;
 }
 
 interface BreakAtom extends AtomBase {
@@ -349,6 +367,7 @@ export function layoutWordDocument(
       cursorY += points(prepared.format.spacingAfterTwips);
     }
   }
+  decorateNotes(document, pages, measurer, budget);
   decorateHeaderFooters(document, pages, measurer, budget, sections);
   return Object.freeze({
     pages: Object.freeze(pages.map(freezePage)),
@@ -545,6 +564,20 @@ function paragraphAtoms(document: WordLayoutDocumentContext, paragraph: WordPara
           drawing,
         }));
         logicalOffset += 1;
+      } else if (content.kind === "footnote-reference" || content.kind === "endnote-reference") {
+        const noteFormat = Object.freeze({ ...format, fontSizePoints: Math.max(1, format.fontSizePoints * 0.7), verticalAlign: "superscript" as const });
+        const text = String(Math.max(1, content.id));
+        const measurement = validMeasurement(measurer.measure(text, noteFormat));
+        atoms.push(Object.freeze({
+          ...controlAtom("note", run, content.elementId, logicalOffset, noteFormat, hyperlink),
+          text,
+          width: measurement.width,
+          ascent: measurement.ascent + noteFormat.fontSizePoints * 0.3,
+          descent: measurement.descent,
+          noteKind: content.kind === "footnote-reference" ? "footnote" : "endnote",
+          noteId: content.id,
+        }));
+        logicalOffset += 1;
       }
     }
   };
@@ -653,7 +686,7 @@ function placeLine(
         kind: atom.kind === "glyph" ? "text" : atom.kind,
         runElementId: atom.runElementId,
         contentElementId: atom.contentElementId,
-        text: atom.kind === "glyph" ? atom.text : atom.kind === "tab" ? "\t" : "\uFFFC",
+        text: atom.kind === "glyph" || atom.kind === "note" ? atom.text : atom.kind === "tab" ? "\t" : "\uFFFC",
         x: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? column.x + (atom.drawing.anchor?.horizontalOffsetPoints ?? cursorX - column.x) : cursorX,
         y: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? y + (atom.drawing.anchor?.verticalOffsetPoints ?? 0) : y + line.ascent - ascent,
         width: atom.kind === "drawing" ? atom.width : atomWidth,
@@ -664,6 +697,7 @@ function placeLine(
         format: atom.format,
         hyperlink: atom.hyperlink,
         drawing: atom.kind === "drawing" ? atom.drawing : undefined,
+        note: atom.kind === "note" ? Object.freeze({ kind: atom.noteKind, id: atom.noteId }) : undefined,
       }));
     }
     cursorX += atomWidth;
@@ -730,7 +764,7 @@ function decorateHeaderFooters(
   }
 }
 
-function storyContext(document: WordDocument, story: WordHeaderFooterStory): WordLayoutDocumentContext {
+function storyContext(document: WordDocument, story: WordHeaderFooterStory | WordNoteStory): WordLayoutDocumentContext {
   return {
     package: document.package,
     part: story.part,
@@ -741,6 +775,53 @@ function storyContext(document: WordDocument, story: WordHeaderFooterStory): Wor
     drawings: story.drawings,
     blocks: story.blocks,
   };
+}
+
+function decorateNotes(document: WordDocument, pages: MutablePage[], measurer: WordTextMeasurer, budget: LayoutBudget): void {
+  const endnotes = new Set<number>();
+  for (const page of pages) {
+    const footnotes = new Set<number>();
+    for (const fragment of pageFragments(page)) {
+      if (fragment.note?.kind === "footnote") footnotes.add(fragment.note.id);
+      else if (fragment.note?.kind === "endnote") endnotes.add(fragment.note.id);
+    }
+    layoutPageNotes(document, page, [...footnotes].map((id) => document.notes.find((note) => note.kind === "footnote" && note.id === id)).filter((note): note is WordNoteStory => note !== undefined), measurer, budget);
+  }
+  const last = pages.at(-1);
+  if (last !== undefined && endnotes.size > 0) {
+    const stories = [...endnotes].map((id) => document.notes.find((note) => note.kind === "endnote" && note.id === id)).filter((note): note is WordNoteStory => note !== undefined);
+    layoutPageNotes(document, last, stories, measurer, budget, true);
+  }
+}
+
+function layoutPageNotes(document: WordDocument, page: MutablePage, stories: readonly WordNoteStory[], measurer: WordTextMeasurer, budget: LayoutBudget, append = false): void {
+  if (stories.length === 0) return;
+  const left = points(page.section.marginLeftTwips + page.section.gutterTwips);
+  const width = Math.max(1, page.width - left - points(page.section.marginRightTwips));
+  const flows = stories.map((story) => ({ story, flow: layoutStory(storyContext(document, story), left + 18, Math.max(1, width - 18), measurer, budget) }));
+  const total = flows.reduce((sum, item) => sum + item.flow.height, 0) + 6;
+  let cursor = Math.max(0, page.height - points(page.section.marginBottomTwips) - total);
+  if (append && page.noteLines.length > 0) cursor = Math.max(cursor, page.noteLines.at(-1)!.y + page.noteLines.at(-1)!.height + 4);
+  page.noteSeparatorY ??= cursor;
+  cursor += 6;
+  for (const { story, flow } of flows) {
+    const translated = flow.lines.map((line) => translateLine(line, 0, cursor));
+    const first = translated[0];
+    if (first !== undefined) {
+      translated[0] = Object.freeze({
+        ...first,
+        marker: Object.freeze({ text: String(Math.max(1, story.id)), x: left, y: first.y, width: 14, height: first.height, baseline: first.baseline, format: first.fragments[0]?.format ?? DEFAULT_MARKER_FORMAT }),
+      });
+    }
+    page.noteLines.push(...translated);
+    page.noteTables.push(...flow.tables.map((table) => translateTable(table, 0, cursor)));
+    cursor += flow.height;
+  }
+}
+
+function pageFragments(page: MutablePage): readonly WordLayoutFragment[] {
+  const body = page.columns.flatMap((column) => [...column.lines.flatMap((line) => line.fragments), ...column.tables.flatMap((table) => table.cells.flatMap((cell) => cell.lines.flatMap((line) => line.fragments)))]);
+  return body;
 }
 
 function layoutStory(
@@ -806,7 +887,7 @@ function createPage(section: WordSectionProperties, pages: MutablePage[], budget
     tables: [],
     unsupportedBlocks: [],
   }));
-  const page: MutablePage = { index: pages.length, width, height, section, columns, headerLines: [], footerLines: [], headerTables: [], footerTables: [] };
+  const page: MutablePage = { index: pages.length, width, height, section, columns, headerLines: [], footerLines: [], headerTables: [], footerTables: [], noteLines: [], noteTables: [], noteSeparatorY: undefined };
   pages.push(page);
   return page;
 }
@@ -838,6 +919,9 @@ function freezePage(page: MutablePage): WordLayoutPage {
     footerLines: Object.freeze(page.footerLines),
     headerTables: Object.freeze(page.headerTables),
     footerTables: Object.freeze(page.footerTables),
+    noteLines: Object.freeze(page.noteLines),
+    noteTables: Object.freeze(page.noteTables),
+    noteSeparatorY: page.noteSeparatorY,
     columns: Object.freeze(page.columns.map((column): WordLayoutColumn => Object.freeze({
       index: column.index,
       x: column.x,
@@ -889,7 +973,7 @@ function tabWidth(currentX: number, stops: readonly WordTabStop[]): number {
   return Math.max(1, Math.ceil((currentX + 0.001) / DEFAULT_TAB_POINTS) * DEFAULT_TAB_POINTS - currentX);
 }
 
-function controlAtom<K extends "tab" | "drawing" | "break">(
+function controlAtom<K extends "tab" | "drawing" | "break" | "note">(
   kind: K,
   run: WordRun,
   contentElementId: number,

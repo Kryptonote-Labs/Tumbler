@@ -13,7 +13,7 @@ export interface WordTextSelection {
 }
 
 export interface WordParagraphTextSegment {
-  readonly kind: "text" | "tab" | "break" | "drawing";
+  readonly kind: "text" | "tab" | "break" | "drawing" | "note";
   readonly elementId: number;
   readonly runElementId: number;
   readonly start: number;
@@ -47,6 +47,7 @@ export function wordParagraphTextSegments(_document: WordDocument, paragraph: Wo
         : content.kind === "tab" ? { kind: "tab" as const, value: "\t" }
         : content.kind === "break" ? { kind: "break" as const, value: "\n" }
         : content.kind === "drawing" ? { kind: "drawing" as const, value: "\uFFFC" }
+        : content.kind === "footnote-reference" || content.kind === "endnote-reference" ? { kind: "note" as const, value: "\uFFFC" }
         : undefined;
       if (projected === undefined) continue;
       const start = offset;
