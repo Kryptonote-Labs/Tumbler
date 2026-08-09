@@ -46,6 +46,13 @@ export type {
   WordTextSelection,
 } from "./text.ts";
 export { replaceWordText } from "./editor.ts";
+export { openWordEditingSession, WordEditingSession } from "./session.ts";
+export type {
+  WordEditingSessionOptions,
+  WordSessionChange,
+  WordSessionChangeReason,
+  WordSessionListener,
+} from "./session.ts";
 export type {
   WordLayout,
   WordLayoutColumn,
