@@ -13,6 +13,7 @@ import {
 } from "@tumblerjs/core";
 import { type OpenWordArtifactOptions, WordArtifact, openWordArtifact } from "./artifact.ts";
 import type { WordTextSelection } from "./text.ts";
+import type { FormattingPatch } from "@tumblerjs/core";
 
 export interface WordEditingSessionOptions extends EditingHistoryOptions, OpenWordArtifactOptions {}
 
@@ -47,6 +48,10 @@ export class WordEditingSession {
 
   replaceText(selection: WordTextSelection, value: string): WordArtifact {
     return this.#commit(this.artifact.replaceText(selection, value));
+  }
+
+  applyFormatting(selection: WordTextSelection, patch: FormattingPatch): WordArtifact {
+    return this.#commit(this.artifact.applyFormatting(selection, patch));
   }
 
   undo(): WordArtifact {

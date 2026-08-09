@@ -46,6 +46,12 @@ export type {
   WordTextSelection,
 } from "./text.ts";
 export { replaceWordText } from "./editor.ts";
+export {
+  formatWordSelection,
+  wordFormattingState,
+  WORD_FORMATTING_CAPABILITIES,
+} from "./formatting.ts";
+export type { WordFormattingDocumentAdapter, WordFormattingTarget } from "./formatting.ts";
 export { openWordEditingSession, WordEditingSession } from "./session.ts";
 export type {
   WordEditingSessionOptions,
