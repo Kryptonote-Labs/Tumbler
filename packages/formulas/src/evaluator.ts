@@ -675,6 +675,132 @@ export function calculateFormulas(
     return number(serial);
   };
 
+  const readRange = (range: FormulaRangeGeometry, depth: number): FormulaScalarValue[] => {
+    const values: FormulaScalarValue[] = [];
+    for (let row = 0; row < range.height; row += 1) {
+      for (let column = 0; column < range.width; column += 1) {
+        operation();
+        values.push(cellValue(correspondingAddress(range, row, column), depth + 1, true));
+      }
+    }
+    return values;
+  };
+
+  const findLookupIndex = (
+    lookup: FormulaScalarValue,
+    values: readonly FormulaScalarValue[],
+    matchMode: number,
+    searchMode: number,
+  ): number | undefined => {
+    const indexes = Array.from({ length: values.length }, (_, index) => index);
+    if (searchMode === -1 || searchMode === -2) indexes.reverse();
+    const wildcard = matchMode === 2 && lookup.type === "string" ? tokenizeWildcard(lookup.value) : undefined;
+    for (const index of indexes) {
+      operation();
+      const candidate = values[index]!;
+      if (candidate.type === "error") continue;
+      const exact = wildcard === undefined
+        ? lookup.type === candidate.type && compare(lookup, candidate) === 0
+        : candidate.type === "string" && wildcardMatches(wildcard, candidate.value);
+      if (exact) return index;
+    }
+    if (matchMode !== -1 && matchMode !== 1) return undefined;
+    let best: { readonly index: number; readonly distance: number } | undefined;
+    for (const index of indexes) {
+      operation();
+      const candidate = values[index]!;
+      if (candidate.type !== lookup.type || candidate.type === "error" || candidate.type === "blank") continue;
+      const comparison = compare(candidate, lookup);
+      if (matchMode === -1 && comparison > 0 || matchMode === 1 && comparison < 0) continue;
+      const distance = Math.abs(comparison);
+      if (best === undefined || distance < best.distance) best = { index, distance };
+    }
+    return best?.index;
+  };
+
+  const callChoose: FormulaFunction = (args, sheet, depth) => {
+    if (args.length < 2) return error("#VALUE!");
+    const selected = numeric(scalar(evaluate(args[0]!, sheet, depth + 1)));
+    if (selected.type === "error") return selected;
+    const index = Math.trunc(selected.value);
+    return index < 1 || index >= args.length ? error("#VALUE!") : scalar(evaluate(args[index]!, sheet, depth + 1));
+  };
+
+  const callIndex: FormulaFunction = (args, sheet, depth) => {
+    if (args.length < 2 || args.length > 3) return error("#VALUE!");
+    const range = resolveRangeArgument(args[0]!, sheet, source, limits.maxRangeCells);
+    if (isFormulaError(range)) return range;
+    const rowValue = numeric(scalar(evaluate(args[1]!, sheet, depth + 1)));
+    const columnValue = args[2] === undefined ? undefined : numeric(scalar(evaluate(args[2], sheet, depth + 1)));
+    if (rowValue.type === "error") return rowValue;
+    if (columnValue?.type === "error") return columnValue;
+    const row = range.height === 1 && columnValue === undefined ? 1 : Math.trunc(rowValue.value);
+    const column = range.height === 1 && columnValue === undefined ? Math.trunc(rowValue.value) : Math.trunc(columnValue?.value ?? 1);
+    if (row < 1 || row > range.height || column < 1 || column > range.width) return error("#REF!");
+    return cellValue(correspondingAddress(range, row - 1, column - 1), depth + 1, true);
+  };
+
+  const callMatch = (extended: boolean): FormulaFunction => (args, sheet, depth) => {
+    const maximum = extended ? 4 : 3;
+    if (args.length < 2 || args.length > maximum) return error("#VALUE!");
+    const lookup = scalar(evaluate(args[0]!, sheet, depth + 1));
+    if (lookup.type === "error") return lookup;
+    const range = resolveRangeArgument(args[1]!, sheet, source, limits.maxRangeCells);
+    if (isFormulaError(range)) return range;
+    if (range.height > 1 && range.width > 1) return error("#N/A");
+    const modeValue = args[2] === undefined ? number(extended ? 0 : 1) : numeric(scalar(evaluate(args[2], sheet, depth + 1)));
+    const searchValue = !extended || args[3] === undefined ? number(1) : numeric(scalar(evaluate(args[3], sheet, depth + 1)));
+    if (modeValue.type === "error") return modeValue;
+    if (searchValue.type === "error") return searchValue;
+    const matchMode = Math.trunc(modeValue.value);
+    const searchMode = Math.trunc(searchValue.value);
+    if (!(extended ? [-1, 0, 1, 2].includes(matchMode) : [-1, 0, 1].includes(matchMode))) return error("#N/A");
+    if (![1, -1, 2, -2].includes(searchMode)) return error("#VALUE!");
+    const lookupMode = extended ? matchMode : matchMode === 1 ? -1 : matchMode === -1 ? 1 : 0;
+    const index = findLookupIndex(lookup, readRange(range, depth), lookupMode, searchMode);
+    return index === undefined ? error("#N/A") : number(index + 1);
+  };
+
+  const callXlookup: FormulaFunction = (args, sheet, depth) => {
+    if (args.length < 3 || args.length > 6) return error("#VALUE!");
+    const lookup = scalar(evaluate(args[0]!, sheet, depth + 1));
+    if (lookup.type === "error") return lookup;
+    const lookupRange = resolveRangeArgument(args[1]!, sheet, source, limits.maxRangeCells);
+    const resultRange = resolveRangeArgument(args[2]!, sheet, source, limits.maxRangeCells);
+    if (isFormulaError(lookupRange)) return lookupRange;
+    if (isFormulaError(resultRange)) return resultRange;
+    if (lookupRange.height > 1 && lookupRange.width > 1 || lookupRange.height !== resultRange.height || lookupRange.width !== resultRange.width) return error("#VALUE!");
+    const match = args[4] === undefined ? number(0) : numeric(scalar(evaluate(args[4], sheet, depth + 1)));
+    const search = args[5] === undefined ? number(1) : numeric(scalar(evaluate(args[5], sheet, depth + 1)));
+    if (match.type === "error") return match;
+    if (search.type === "error") return search;
+    const index = findLookupIndex(lookup, readRange(lookupRange, depth), Math.trunc(match.value), Math.trunc(search.value));
+    if (index === undefined) return args[3] === undefined ? error("#N/A") : scalar(evaluate(args[3], sheet, depth + 1));
+    return cellValue(correspondingAddress(resultRange, resultRange.width === 1 ? index : 0, resultRange.width === 1 ? 0 : index), depth + 1, true);
+  };
+
+  const callTableLookup = (horizontal: boolean): FormulaFunction => (args, sheet, depth) => {
+    if (args.length < 3 || args.length > 4) return error("#VALUE!");
+    const lookup = scalar(evaluate(args[0]!, sheet, depth + 1));
+    if (lookup.type === "error") return lookup;
+    const table = resolveRangeArgument(args[1]!, sheet, source, limits.maxRangeCells);
+    if (isFormulaError(table)) return table;
+    const selected = numeric(scalar(evaluate(args[2]!, sheet, depth + 1)));
+    const approximate = args[3] === undefined ? boolean(true) : logical(scalar(evaluate(args[3], sheet, depth + 1)));
+    if (selected.type === "error") return selected;
+    if (approximate.type === "error") return approximate;
+    const selectedIndex = Math.trunc(selected.value);
+    const selectedLimit = horizontal ? table.height : table.width;
+    if (selectedIndex < 1 || selectedIndex > selectedLimit) return error("#REF!");
+    const lookupLength = horizontal ? table.width : table.height;
+    const lookupValues = Array.from({ length: lookupLength }, (_, index) => cellValue(
+      correspondingAddress(table, horizontal ? 0 : index, horizontal ? index : 0), depth + 1, true,
+    ));
+    const index = findLookupIndex(lookup, lookupValues, approximate.value ? -1 : 0, 1);
+    if (index === undefined) return error("#N/A");
+    return cellValue(correspondingAddress(table, horizontal ? selectedIndex - 1 : index, horizontal ? index : selectedIndex - 1), depth + 1, true);
+  };
+
   const functions = new Map<string, FormulaFunction>([
     ["IF", callIf],
     ["IFERROR", callIfError(false)],
@@ -702,6 +828,13 @@ export function calculateFormulas(
     ...(["DATE", "DATEVALUE", "YEAR", "MONTH", "DAY", "DAYS", "EDATE", "EOMONTH", "WEEKDAY"] as const)
       .map((name) => [name, callDate(name)] as const),
     ...(["NETWORKDAYS", "WORKDAY"] as const).map((name) => [name, callBusinessDate(name)] as const),
+    ["CHOOSE", callChoose],
+    ["INDEX", callIndex],
+    ["MATCH", callMatch(false)],
+    ["XMATCH", callMatch(true)],
+    ["XLOOKUP", callXlookup],
+    ["VLOOKUP", callTableLookup(false)],
+    ["HLOOKUP", callTableLookup(true)],
     ...(["SUM", "COUNT", "AVERAGE", "MIN", "MAX", "AND", "OR", "XOR", "NOT"] as const)
       .map((name) => [name, callAggregate(name)] as const),
   ]);

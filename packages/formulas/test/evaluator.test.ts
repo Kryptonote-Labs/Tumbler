@@ -44,13 +44,13 @@ describe("bounded spreadsheet formula calculation", () => {
 
   test("uses a source cache for unsupported dependencies without claiming it was calculated", () => {
     const workbook = source({
-      "Sheet1!A1": formula("XLOOKUP(1,B1:B2,C1:C2)", { type: "number", value: 42 }),
+      "Sheet1!A1": formula("OFFSET(B1,0,0)", { type: "number", value: 42 }),
       "Sheet1!A2": formula("A1+1"),
     });
     const calculation = calculateFormulas(workbook);
     expect(calculation.value(address("Sheet1!A1"))).toBeUndefined();
     expect(calculation.value(address("Sheet1!A2"))).toEqual({ type: "number", value: 43 });
-    expect(calculation.diagnostics).toMatchObject([{ code: "unsupported-function", formula: "XLOOKUP(1,B1:B2,C1:C2)" }]);
+    expect(calculation.diagnostics).toMatchObject([{ code: "unsupported-function", formula: "OFFSET(B1,0,0)" }]);
   });
 
   test("keeps IF lazy and implements errors, aggregates, logicals, and coercion", () => {
@@ -255,6 +255,38 @@ describe("bounded spreadsheet formula calculation", () => {
 
     expect(calculation.value(address("Sheet1!A1"))).toEqual({ type: "number", value: 0 });
     expect(calculation.value(address("Sheet1!A2"))).toEqual({ type: "number", value: 5 });
+  });
+
+  test("calculates bounded lookup families across sheets without caches", () => {
+    const workbook = source({
+      "Data!A1": textValue("A"), "Data!B1": value(10), "Data!C1": textValue("low"),
+      "Data!A2": textValue("B"), "Data!B2": value(20), "Data!C2": textValue("mid"),
+      "Data!A3": textValue("C"), "Data!B3": value(30), "Data!C3": textValue("high"),
+      "Data!D1": textValue("A"), "Data!E1": textValue("B"), "Data!F1": textValue("C"),
+      "Data!D2": value(100), "Data!E2": value(200), "Data!F2": value(300),
+      "Report!A1": formula(`XLOOKUP("B",Data!A1:A3,Data!B1:B3)`),
+      "Report!A2": formula(`XLOOKUP("missing",Data!A1:A3,Data!B1:B3,"none")`),
+      "Report!A3": formula(`MATCH(25,Data!B1:B3,1)`),
+      "Report!A4": formula(`XMATCH("C",Data!A1:A3)`),
+      "Report!A5": formula(`INDEX(Data!A1:C3,2,3)`),
+      "Report!A6": formula(`VLOOKUP("B",Data!A1:C3,3,FALSE)`),
+      "Report!A7": formula(`HLOOKUP("C",Data!D1:F2,2,FALSE)`),
+      "Report!A8": formula(`CHOOSE(2,MISSING(),"selected",MISSING())`),
+      "Report!A9": formula(`XLOOKUP("B*",Data!A1:A3,Data!B1:B3,"none",2)`),
+    });
+
+    const calculation = calculateFormulas(workbook);
+
+    expect(calculation.value(address("Report!A1"))).toEqual({ type: "number", value: 20 });
+    expect(calculation.value(address("Report!A2"))).toEqual({ type: "string", value: "none" });
+    expect(calculation.value(address("Report!A3"))).toEqual({ type: "number", value: 2 });
+    expect(calculation.value(address("Report!A4"))).toEqual({ type: "number", value: 3 });
+    expect(calculation.value(address("Report!A5"))).toEqual({ type: "string", value: "mid" });
+    expect(calculation.value(address("Report!A6"))).toEqual({ type: "string", value: "mid" });
+    expect(calculation.value(address("Report!A7"))).toEqual({ type: "number", value: 300 });
+    expect(calculation.value(address("Report!A8"))).toEqual({ type: "string", value: "selected" });
+    expect(calculation.value(address("Report!A9"))).toEqual({ type: "number", value: 20 });
+    expect(calculation.diagnostics).toEqual([]);
   });
 
   test("matches text case-insensitively with linear wildcards and tilde escaping", () => {
