@@ -62,7 +62,9 @@ export type {
 } from "./tables.ts";
 export {
   clearSpreadsheetTableFilter,
+  projectSpreadsheetAutoFilter,
   projectSpreadsheetTable,
+  savedSpreadsheetAutoFilterView,
   savedSpreadsheetTableView,
   setSpreadsheetTableSort,
   setSpreadsheetTableValueFilter,
@@ -100,6 +102,7 @@ export {
 } from "./artifact.ts";
 export type { OpenSpreadsheetArtifactOptions } from "./artifact.ts";
 export { calculateSpreadsheetWorksheet, SpreadsheetCalculationSnapshot } from "./calculation.ts";
+export type { SpreadsheetCalculationOptions } from "./calculation.ts";
 export {
   parseSpreadsheetConditionalFormatting,
   projectSpreadsheetConditionalStyles,

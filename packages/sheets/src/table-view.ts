@@ -1,4 +1,5 @@
 import type {
+  SpreadsheetAutoFilter,
   SpreadsheetCustomFilter,
   SpreadsheetFilterCriteria,
   SpreadsheetTable,
@@ -49,14 +50,26 @@ export function savedSpreadsheetTableView(table: SpreadsheetTable): {
   readonly state: SpreadsheetTableViewState;
   readonly warnings: readonly SpreadsheetTableViewWarning[];
 } {
+  return savedSpreadsheetAutoFilterView(table.autoFilter, table.range.start.column, table.columns.length);
+}
+
+/** Converts a worksheet or table AutoFilter into the same headless view state. */
+export function savedSpreadsheetAutoFilterView(
+  autoFilter: SpreadsheetAutoFilter | undefined,
+  firstColumn = autoFilter?.range.start.column ?? 1,
+  columnCount = autoFilter === undefined ? 0 : autoFilter.range.end.column - autoFilter.range.start.column + 1,
+): {
+  readonly state: SpreadsheetTableViewState;
+  readonly warnings: readonly SpreadsheetTableViewWarning[];
+} {
   const warnings: SpreadsheetTableViewWarning[] = [];
   const filters: SpreadsheetTableViewFilter[] = [];
-  for (const column of table.autoFilter?.columns ?? []) {
+  for (const column of autoFilter?.columns ?? []) {
     if (column.criteria?.kind === "unsupported") warnings.push("unsupported-filter");
     else if (column.criteria !== undefined) filters.push(Object.freeze({ columnId: column.columnId, criteria: column.criteria }));
   }
   const sorts: SpreadsheetTableViewSort[] = [];
-  const sortState = table.autoFilter?.sortState;
+  const sortState = autoFilter?.sortState;
   if (sortState?.columnSort === true) warnings.push("unsupported-sort-direction");
   else {
     for (const condition of sortState?.conditions ?? []) {
@@ -64,8 +77,8 @@ export function savedSpreadsheetTableView(table: SpreadsheetTable): {
         warnings.push("unsupported-sort-method");
         continue;
       }
-      const columnId = condition.range.start.column - table.range.start.column;
-      if (columnId < 0 || columnId >= table.columns.length || condition.range.start.column !== condition.range.end.column) {
+      const columnId = condition.range.start.column - firstColumn;
+      if (columnId < 0 || columnId >= columnCount || condition.range.start.column !== condition.range.end.column) {
         warnings.push("unsupported-sort-direction");
         continue;
       }
@@ -90,15 +103,50 @@ export function projectSpreadsheetTable(
   values: SpreadsheetTableValueProvider | undefined = undefined,
 ): SpreadsheetTableViewProjection {
   if (!worksheet.tables.includes(table)) throw new TypeError("The table does not belong to this worksheet.");
-  validateState(table, state);
   const bodyStart = table.range.start.row + table.headerRowCount;
   const bodyEnd = table.range.end.row - table.totalsRowCount;
+  return projectFilterRange(worksheet, table.range.start.column, table.columns.length, bodyStart, bodyEnd, state, values, savedSpreadsheetTableView(table).warnings);
+}
+
+/** Projects the body of a worksheet AutoFilter; its first row is the field header. */
+export function projectSpreadsheetAutoFilter(
+  worksheet: SpreadsheetWorksheet,
+  autoFilter: SpreadsheetAutoFilter,
+  state: SpreadsheetTableViewState = savedSpreadsheetAutoFilterView(autoFilter).state,
+  values: SpreadsheetTableValueProvider | undefined = undefined,
+): SpreadsheetTableViewProjection {
+  const belongsToWorksheet = worksheet.autoFilter === autoFilter || worksheet.tables.some((table) => table.autoFilter === autoFilter);
+  if (!belongsToWorksheet) throw new TypeError("The AutoFilter does not belong to this worksheet.");
+  const columnCount = autoFilter.range.end.column - autoFilter.range.start.column + 1;
+  return projectFilterRange(
+    worksheet,
+    autoFilter.range.start.column,
+    columnCount,
+    autoFilter.range.start.row + 1,
+    autoFilter.range.end.row,
+    state,
+    values,
+    savedSpreadsheetAutoFilterView(autoFilter).warnings,
+  );
+}
+
+function projectFilterRange(
+  worksheet: SpreadsheetWorksheet,
+  firstColumn: number,
+  columnCount: number,
+  bodyStart: number,
+  bodyEnd: number,
+  state: SpreadsheetTableViewState,
+  values: SpreadsheetTableValueProvider | undefined,
+  warnings: readonly SpreadsheetTableViewWarning[],
+): SpreadsheetTableViewProjection {
+  validateState(columnCount, state);
   const sourceRows = bodyEnd < bodyStart
     ? []
     : Array.from({ length: bodyEnd - bodyStart + 1 }, (_, index) => bodyStart + index);
   const filters = new Map(state.filters.map((filter) => [filter.columnId, filter.criteria]));
   const rows = sourceRows.filter((row) => [...filters].every(([columnId, criteria]) =>
-    matches(worksheet, row, table.range.start.column + columnId, criteria, values)
+    matches(worksheet, row, firstColumn + columnId, criteria, values)
   ));
   const includedRows = new Set(rows);
   const filteredRows = sourceRows.filter((row) => !includedRows.has(row));
@@ -106,19 +154,18 @@ export function projectSpreadsheetTable(
   if (sorts.length > 0) {
     rows.sort((left, right) => {
       for (const sort of sorts) {
-        const column = table.range.start.column + sort.columnId;
+        const column = firstColumn + sort.columnId;
         const comparison = compareCells(cellValue(worksheet, left, column, values), cellValue(worksheet, right, column, values), sort.caseSensitive);
         if (comparison !== 0) return sort.direction === "descending" ? -comparison : comparison;
       }
       return left - right;
     });
   }
-  const saved = savedSpreadsheetTableView(table);
   return Object.freeze({
     rows: Object.freeze(rows),
     filteredRows: Object.freeze(filteredRows),
     state: freezeState(state),
-    warnings: saved.warnings,
+    warnings: Object.freeze([...warnings]),
   });
 }
 
@@ -129,7 +176,7 @@ export function spreadsheetTableDistinctValues(
   columnId: number,
   source: SpreadsheetTableValueProvider | undefined = undefined,
 ): readonly string[] {
-  validateColumn(table, columnId);
+  validateColumn(table.columns.length, columnId);
   const bodyStart = table.range.start.row + table.headerRowCount;
   const bodyEnd = table.range.end.row - table.totalsRowCount;
   const values = new Set<string>();
@@ -250,23 +297,23 @@ function freezeState(state: SpreadsheetTableViewState): SpreadsheetTableViewStat
   return Object.freeze({ filters: Object.freeze([...state.filters]), sorts: Object.freeze([...state.sorts]) });
 }
 
-function validateState(table: SpreadsheetTable, state: SpreadsheetTableViewState): void {
+function validateState(columnCount: number, state: SpreadsheetTableViewState): void {
   const filterIds = new Set<number>();
   for (const filter of state.filters) {
-    validateColumn(table, filter.columnId);
+    validateColumn(columnCount, filter.columnId);
     if (filterIds.has(filter.columnId)) throw new RangeError(`Table filter column ${filter.columnId} is repeated.`);
     filterIds.add(filter.columnId);
   }
   const sortIds = new Set<number>();
   for (const sort of state.sorts) {
-    validateColumn(table, sort.columnId);
+    validateColumn(columnCount, sort.columnId);
     if (sortIds.has(sort.columnId)) throw new RangeError(`Table sort column ${sort.columnId} is repeated.`);
     sortIds.add(sort.columnId);
   }
 }
 
-function validateColumn(table: SpreadsheetTable, columnId: number): void {
-  if (!Number.isSafeInteger(columnId) || columnId < 0 || columnId >= table.columns.length) {
+function validateColumn(columnCount: number, columnId: number): void {
+  if (!Number.isSafeInteger(columnId) || columnId < 0 || columnId >= columnCount) {
     throw new RangeError(`Table column ${columnId} is outside the table range.`);
   }
 }

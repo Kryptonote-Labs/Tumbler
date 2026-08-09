@@ -4,6 +4,7 @@ import {
   openSpreadsheetArtifact,
   projectSpreadsheetTable,
   setSpreadsheetTableValueFilter,
+  savedSpreadsheetAutoFilterView,
   spreadsheetTableDistinctValues,
 } from "../src/index.ts";
 import { buildWorkbookFixture } from "./workbook-fixture.ts";
@@ -77,6 +78,49 @@ describe("SpreadsheetML calculated-value overlays", () => {
 
     expect(artifact.workbook.dateSystem).toBe("1904");
     expect(artifact.calculation.value("A1")).toEqual({ type: "number", value: 0, lexical: "0" });
+  });
+
+  test("calculates SUBTOTAL and AGGREGATE from saved and view-only filters", () => {
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({ sheets: [{
+      name: "Data",
+      sheetId: 1,
+      relationshipId: "data",
+      xml: `<worksheet xmlns="${namespace}"><sheetData>
+        <row r="1"><c r="A1" t="inlineStr"><is><t>Status</t></is></c><c r="B1" t="inlineStr"><is><t>Value</t></is></c></row>
+        <row r="2"><c r="A2" t="inlineStr"><is><t>Keep</t></is></c><c r="B2"><v>10</v></c></row>
+        <row r="3" hidden="1"><c r="A3" t="inlineStr"><is><t>Keep</t></is></c><c r="B3"><v>20</v></c></row>
+        <row r="4"><c r="A4" t="inlineStr"><is><t>Drop</t></is></c><c r="B4"><v>30</v></c></row>
+        <row r="5"><c r="C5"><f>SUBTOTAL(9,B2:B4)</f><v/></c><c r="D5"><f>SUBTOTAL(109,B2:B4)</f><v/></c></row>
+        <row r="6"><c r="C6"><f>_xlfn.AGGREGATE(9,0,B2:B4)</f><v/></c><c r="D6"><f>_xlfn.AGGREGATE(9,1,B2:B4)</f><v/></c></row>
+      </sheetData><autoFilter ref="A1:B4"><filterColumn colId="0"><filters><filter val="Keep"/></filters></filterColumn></autoFilter></worksheet>`,
+    }] }));
+
+    expect(artifact.calculation.displayText("C5")).toBe("30");
+    expect(artifact.calculation.displayText("D5")).toBe("10");
+    expect(artifact.calculation.displayText("C6")).toBe("30");
+    expect(artifact.calculation.displayText("D6")).toBe("10");
+
+    const filter = artifact.worksheet.autoFilter!;
+    const state = setSpreadsheetTableValueFilter(savedSpreadsheetAutoFilterView(filter).state, 0, ["Drop"]);
+    const changed = calculateSpreadsheetWorksheet(artifact.worksheet, { worksheetFilterStates: { "1": state } });
+    expect(changed.displayText("C5")).toBe("30");
+    expect(changed.displayText("D5")).toBe("30");
+  });
+
+  test("retains aggregate caches when saved filter visibility is unsupported", () => {
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({ sheets: [{
+      name: "Data",
+      sheetId: 1,
+      relationshipId: "data",
+      xml: `<worksheet xmlns="${namespace}"><sheetData>
+        <row r="1"><c r="A1"><v>1</v></c></row>
+        <row r="2"><c r="A2"><v>10</v></c><c r="B2"><f>SUBTOTAL(9,A2)</f><v>99</v></c></row>
+      </sheetData><autoFilter ref="A1:A2"><filterColumn colId="0"><dynamicFilter type="today"/></filterColumn></autoFilter></worksheet>`,
+    }] }));
+
+    expect(artifact.calculation.value("B2")).toBeUndefined();
+    expect(artifact.calculation.displayText("B2")).toBe("99");
+    expect(artifact.calculation.diagnostics[0]?.code).toBe("unavailable-dependency");
   });
 
   test("recalculates cross-sheet conditional aggregates after source edits", () => {
