@@ -36,6 +36,8 @@ Calculation output is not written into `<v>` elements in this milestone.
   `EDATE`, `EOMONTH`, `WEEKDAY` return types 1–3, `NETWORKDAYS`, and `WORKDAY`;
 - scalar `CHOOSE`, `INDEX`, `MATCH`, `XMATCH`, `XLOOKUP`, `VLOOKUP`, and
   `HLOOKUP`, including exact, bounded approximate, wildcard, and reverse search;
+- `SUBTOTAL` functions 1–11 and 101–111, and `_xlfn.AGGREGATE`/`AGGREGATE`
+  functions 1–19 with options 0–7;
 - dependency ordering, cross-sheet dependencies, circular-reference diagnostics,
   and recalculation after supported scalar edits.
 
@@ -87,11 +89,28 @@ linear evaluation for now; no binary-search performance claim is made. Lookup
 arrays must be one-dimensional and an `XLOOKUP` result range must have the same
 shape. Dynamic-array results are not synthesized.
 
-`SUBTOTAL` and `AGGREGATE` remain deliberately unsupported. Correct behavior
-requires distinguishing filtered-out rows from manually hidden rows and
-excluding nested subtotals; the evaluator adapter does not expose that provenance
-yet. Returning an ordinary aggregate under those names would silently produce
-incorrect workbook results.
+## Visibility-aware aggregates
+
+`SUBTOTAL` follows ECMA-376 Part 1 §18.17.7.305. Function numbers 1–11 include
+manually hidden rows, 101–111 exclude them, and both groups always exclude rows
+outside the active filter result. Referenced nested subtotals are omitted before
+evaluation to prevent double counting. Hidden columns do not affect a horizontal
+range; visibility is row provenance rather than a generic hidden-cell flag.
+
+`AGGREGATE` follows the MS-XLSX future-function grammar and Excel option matrix.
+Functions 1–13 cover the reference-form reducers; functions 14–19 cover `LARGE`,
+`SMALL`, inclusive/exclusive percentiles, and inclusive/exclusive quartiles.
+Options 0–7 independently select manual-hidden-row, error-value, and nested
+`SUBTOTAL`/`AGGREGATE` exclusion. Filtered-out rows are always omitted. Both the
+stored `_xlfn.AGGREGATE` spelling and ordinary `AGGREGATE` are accepted.
+
+SpreadsheetML calculation performs a bounded base pass for filter-column formula
+values, derives saved or view-only filter projections, and then recalculates with
+row provenance. Unsupported saved filter families make affected aggregates fall
+back to producer caches rather than treating a filter-hidden row as manually
+hidden. Calculated array expressions and array constants for `AGGREGATE`'s array
+form remain outside the scalar formula grammar; its array argument must currently
+be an A1 cell or rectangular range.
 
 ## Safety and determinism
 

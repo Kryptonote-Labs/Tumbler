@@ -67,8 +67,8 @@ clauses or to SpreadsheetML as a whole.
   without dereferencing document-provided URLs during parsing;
 - calculate supported ordinary formulas into an immutable overlay, including
   arithmetic/comparison/concatenation, same- and cross-sheet A1 references,
-  ranges, `IF`, `SUM`, `COUNT`, `AVERAGE`, `MIN`, `MAX`, `AND`, `OR`, `NOT`,
-  `COUNTIF`, `SUMIF`, and `AVERAGEIF` with bounded wildcard criteria;
+  conditional and multi-criteria aggregates, deterministic dates, scalar lookup
+  families, and visibility-aware `SUBTOTAL`/`AGGREGATE` reducers;
 - write ordinary formulas without the UI-only leading equals sign, remove stale
   cached values and calculation chains, and expose a fresh calculated overlay;
 - recalculate supported dependants after scalar edits while leaving formula text,
@@ -146,7 +146,7 @@ remains a renderer-level fidelity gap.
 - Formula calculation is deliberately partial. Ordinary scalar formulas in the
   first grammar/function slice calculate in a bounded overlay; unsupported
   names, structured/external references, shared/array/data-table/dynamic-array
-  forms, volatile behavior, iterative calculation, multi-criteria aggregates,
+  forms, volatile behavior, iterative calculation, calculated aggregate arrays,
   and the wider Excel function catalog fall back to producer caches with
   diagnostics. Ordinary formula text
   in the supported grammar is editable; special formula structures are rejected
