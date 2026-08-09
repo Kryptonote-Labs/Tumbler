@@ -53,6 +53,7 @@ describe("WordprocessingML logical text editing", () => {
     const paragraphs = edited.document.blocks.filter((block) => block.kind === "paragraph");
     expect(paragraphs.map((item) => wordParagraphText(edited.document, item))).toEqual(["Hello", "world"]);
     expect(edited.document.source.elements(word, "jc")).toHaveLength(2);
+    expect(edited.document.source.elements(word, "b")).toHaveLength(2);
   });
 
   test("joins paragraphs while preserving the trailing run formatting", () => {
@@ -81,6 +82,13 @@ describe("WordprocessingML logical text editing", () => {
     if (first?.kind !== "paragraph" || second?.kind !== "paragraph") throw new Error("Expected paragraphs.");
     expect(() => artifact.replaceText(selection(first.elementId, 0, 0), "a\rb")).toThrow(WordError);
     expect(() => artifact.replaceText(selection(first.elementId, 1, 1), "x")).toThrow(RangeError);
+  });
+
+  test("blocks structural edits through fields and bookmarks", () => {
+    const field = open(`<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> DATE </w:instrText><w:fldChar w:fldCharType="separate"/><w:t>Today</w:t><w:fldChar w:fldCharType="end"/></w:r></w:p>`);
+    expect(() => field.replaceText(selection(firstParagraph(field).elementId, 2, 2), "\n")).toThrow("fields, links, revisions");
+    const bookmark = open(`<w:p><w:bookmarkStart w:id="1" w:name="mark"/><w:r><w:t>Text</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p>`);
+    expect(() => bookmark.replaceText(selection(firstParagraph(bookmark).elementId, 2, 2), "\n")).toThrow("structural markers");
   });
 });
 

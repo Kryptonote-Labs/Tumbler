@@ -76,6 +76,7 @@ function replaceWordParagraphRange(document: WordDocument, selection: WordTextSe
   const endIndex = forward ? focusIndex : anchorIndex;
   const startParagraph = paragraphs[startIndex]!;
   const endParagraph = paragraphs[endIndex]!;
+  for (const paragraph of paragraphs.slice(startIndex, endIndex + 1)) assertStructuralEditSafe(document, paragraph);
   const startText = wordParagraphText(document, startParagraph);
   const endText = wordParagraphText(document, endParagraph);
   validateOffset(startText, startPosition.offset);
@@ -185,7 +186,23 @@ function paragraphMarkup(document: WordDocument, template: LosslessXmlElement, v
   const prefix = template.prefix;
   const paragraphProperties = template.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.localName === "pPr");
   const properties = paragraphProperties === undefined ? "" : document.source.source.slice(paragraphProperties.span.start, paragraphProperties.span.end);
-  return `<${template.qualified}>${properties}${value === "" ? "" : textRunMarkup(prefix, value)}</${template.qualified}>`;
+  const run = template.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.localName === "r");
+  const runProperties = run?.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.localName === "rPr");
+  const runPropertiesMarkup = runProperties === undefined ? "" : document.source.source.slice(runProperties.span.start, runProperties.span.end);
+  return `<${template.qualified}>${properties}${value === "" ? "" : textRunMarkup(prefix, value, runPropertiesMarkup)}</${template.qualified}>`;
+}
+
+function assertStructuralEditSafe(document: WordDocument, paragraph: WordParagraph): void {
+  const runs = paragraph.inlines.filter((inline) => inline.kind === "run");
+  if (runs.length !== paragraph.inlines.length || runs.some((run) => run.contents.some((content) => content.kind !== "text"))) {
+    throw new WordError("unsupported_document", "Paragraph boundaries cannot be edited through fields, links, revisions, drawings, or structural markers.");
+  }
+  const propertyMarkup = new Set(runs.map((run) => run.propertiesElementId === undefined
+    ? ""
+    : document.source.source.slice(requiredElement(document, run.propertiesElementId).span.start, requiredElement(document, run.propertiesElementId).span.end)));
+  if (propertyMarkup.size > 1) {
+    throw new WordError("unsupported_document", "Paragraph boundaries cannot yet be edited through mixed direct formatting.");
+  }
 }
 
 function paragraphContentMarkup(document: WordDocument, paragraph: LosslessXmlElement): string {
@@ -339,8 +356,8 @@ function requiredElement(document: WordDocument, id: number): LosslessXmlElement
   return element;
 }
 
-function textRunMarkup(prefix: string, value: string): string {
-  return `<${qualified(prefix, "r")}><${qualified(prefix, "t")} xml:space="preserve">${escapeText(value)}</${qualified(prefix, "t")}></${qualified(prefix, "r")}>`;
+function textRunMarkup(prefix: string, value: string, properties = ""): string {
+  return `<${qualified(prefix, "r")}>${properties}<${qualified(prefix, "t")} xml:space="preserve">${escapeText(value)}</${qualified(prefix, "t")}></${qualified(prefix, "r")}>`;
 }
 
 function openSelfClosing(document: WordDocument, element: LosslessXmlElement, content: string): string {
