@@ -14,6 +14,18 @@ export type {
 } from "./grid-selection.ts";
 export { SparseAxisGeometry } from "./sparse-axis.ts";
 export type { AxisSizeOverride } from "./sparse-axis.ts";
+export {
+  commitEditingHistory,
+  createEditingHistory,
+  editingHistoryCanRedo,
+  editingHistoryCanUndo,
+  editingHistoryIsDirty,
+  editingHistoryValue,
+  markEditingHistorySaved,
+  redoEditingHistory,
+  undoEditingHistory,
+} from "./editing-history.ts";
+export type { EditingHistory, EditingHistoryOptions } from "./editing-history.ts";
 export { normalizeFormattingPatch } from "./formatting.ts";
 export type {
   BlockFormattingPatch,
