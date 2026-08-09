@@ -14,3 +14,20 @@ export type {
 } from "./grid-selection.ts";
 export { SparseAxisGeometry } from "./sparse-axis.ts";
 export type { AxisSizeOverride } from "./sparse-axis.ts";
+export { normalizeFormattingPatch } from "./formatting.ts";
+export type {
+  BlockFormattingPatch,
+  BlockFormattingState,
+  FormattingAdapter,
+  FormattingCapabilities,
+  FormattingChange,
+  FormattingPatch,
+  FormattingState,
+  FormattingValue,
+  HorizontalAlignment,
+  OfficeColor,
+  TextFormattingPatch,
+  TextFormattingState,
+  TextUnderline,
+  VerticalAlignment,
+} from "./formatting.ts";
