@@ -89,7 +89,7 @@ export interface WordLayoutTableCell {
   readonly width: number;
   readonly height: number;
   readonly lines: readonly WordLayoutLine[];
-  readonly nestedTableElementIds: readonly number[];
+  readonly tables: readonly WordLayoutTable[];
 }
 
 export interface WordLayoutLine {
@@ -246,7 +246,7 @@ interface PreparedTableCell {
   readonly width: number;
   readonly contentHeight: number;
   readonly paragraphs: readonly PreparedParagraph[];
-  readonly nestedTableElementIds: readonly number[];
+  readonly nestedTables: readonly PreparedTable[];
   readonly margins: { readonly top: number; readonly end: number; readonly bottom: number; readonly start: number };
   readonly verticalAlignment: "top" | "center" | "bottom";
 }
@@ -433,9 +433,11 @@ function prepareTable(
     const innerWidth = Math.max(1, cellWidth - margins.start - margins.end);
     const paragraphs = cell.source.blocks.filter((block): block is WordParagraph => block.kind === "paragraph")
       .map((paragraph) => prepareParagraph(document, paragraph, innerWidth, measurer, listMarkers.get(paragraph.elementId)));
-    const nestedTableElementIds = cell.source.blocks.filter((block) => block.kind === "table").map((block) => block.elementId);
-    const contentHeight = paragraphs.reduce((sum, paragraph) => sum + paragraphHeight(paragraph), 0) + nestedTableElementIds.length * 18 + margins.top + margins.bottom;
-    preparedCells.push(Object.freeze({ resolved: cell, width: cellWidth, contentHeight, paragraphs: Object.freeze(paragraphs), nestedTableElementIds: Object.freeze(nestedTableElementIds), margins, verticalAlignment: cell.source.verticalAlignment }));
+    const nestedTables = cell.source.blocks.filter((block): block is WordTable => block.kind === "table")
+      .map((nested) => prepareTable(document, nested, innerWidth, measurer, listMarkers));
+    const contentHeight = paragraphs.reduce((sum, paragraph) => sum + paragraphHeight(paragraph), 0) +
+      nestedTables.reduce((sum, nested) => sum + nested.rowHeights.reduce((height, row) => height + row, 0), 0) + margins.top + margins.bottom;
+    preparedCells.push(Object.freeze({ resolved: cell, width: cellWidth, contentHeight, paragraphs: Object.freeze(paragraphs), nestedTables: Object.freeze(nestedTables), margins, verticalAlignment: cell.source.verticalAlignment }));
     if (cell.rowSpan === 1) rowHeights[cell.row] = Math.max(rowHeights[cell.row] ?? 0, contentHeight);
   }
   for (const cell of preparedCells.filter((item) => item.resolved.rowSpan > 1)) {
@@ -533,6 +535,11 @@ function placeTable(prepared: PreparedTable, columnX: number, y: number, budget:
       }
       cursor += points(paragraph.format.spacingAfterTwips);
     }
+    for (const nested of cell.nestedTables) {
+      const table = placeTable(nested, fake.x, cursor, budget);
+      fake.tables.push(table);
+      cursor += table.height;
+    }
     return Object.freeze({
       cellElementId: cell.resolved.source.elementId,
       continuationElementIds: cell.resolved.continuationElementIds,
@@ -545,7 +552,7 @@ function placeTable(prepared: PreparedTable, columnX: number, y: number, budget:
       width: cell.width,
       height: cellHeight,
       lines: Object.freeze(fake.lines),
-      nestedTableElementIds: cell.nestedTableElementIds,
+      tables: Object.freeze(fake.tables),
     });
   });
   return Object.freeze({ tableElementId: prepared.table.elementId, x, y, width: prepared.width, height: rowOffsets.at(-1)!, cells: Object.freeze(cells) });
@@ -941,6 +948,7 @@ function translateTable(table: WordLayoutTable, dx: number, dy: number): WordLay
       x: cell.x + dx,
       y: cell.y + dy,
       lines: Object.freeze(cell.lines.map((line) => translateLine(line, dx, dy))),
+      tables: Object.freeze(cell.tables.map((nested) => translateTable(nested, dx, dy))),
     }))),
   });
 }

@@ -49,6 +49,16 @@ describe("WordprocessingML tables", () => {
     expect(layout.pages[0]?.columns[0]?.tables[0]?.height).toBe(10);
   });
 
+  test("lays out nested tables with their own source identity", () => {
+    const artifact = open(`<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>Outer</w:t></w:r></w:p><w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>Inner</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p/></w:tc></w:tr></w:tbl>`);
+    const layout = layoutWordDocument(artifact.document, { measure: (text) => ({ width: text.length * 5, ascent: 8, descent: 2 }) });
+    const outer = layout.pages[0]?.columns[0]?.tables[0];
+    const nested = outer?.cells[0]?.tables[0];
+    expect(nested?.tableElementId).toBe(artifact.document.source.elements(word, "tbl")[1]?.id);
+    expect(nested?.cells[0]?.lines[0]?.fragments[0]?.text).toBe("Inner");
+    expect(nested?.y).toBeGreaterThan(outer?.y ?? 0);
+  });
+
   test("rejects vertical merge continuations without matching restart cells", () => {
     expect(() => resolveWordTableGrid(openTable(`<w:tbl><w:tr><w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc></w:tr></w:tbl>`))).toThrow("no matching restart");
   });
