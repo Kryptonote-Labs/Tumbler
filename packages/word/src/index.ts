@@ -23,3 +23,16 @@ export type {
   WordTableRow,
   WordText,
 } from "./document.ts";
+export {
+  readWordStyles,
+  WordStyles,
+} from "./styles.ts";
+export type {
+  ComputedWordParagraphFormat,
+  ComputedWordTextFormat,
+  WordColor,
+  WordParagraphProperties,
+  WordRunProperties,
+  WordStyle,
+  WordTabStop,
+} from "./styles.ts";

@@ -17,6 +17,11 @@ export interface WordDocumentFixtureOptions {
   readonly documentItemName?: string;
   readonly documentXml?: string;
   readonly relationships?: readonly WordFixtureRelationship[];
+  readonly parts?: readonly {
+    readonly itemName: string;
+    readonly contentType: string;
+    readonly xml: string;
+  }[];
 }
 
 export function buildWordDocumentFixture(options: WordDocumentFixtureOptions = {}): Uint8Array {
@@ -33,7 +38,7 @@ export function buildWordDocumentFixture(options: WordDocumentFixtureOptions = {
   return buildDeflatedZip([
     {
       name: "[Content_Types].xml",
-      data: encoder.encode(`<Types xmlns="${CONTENT_TYPES}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/${documentItemName}" ContentType="${MAIN_DOCUMENT_TYPE}"/></Types>`),
+      data: encoder.encode(`<Types xmlns="${CONTENT_TYPES}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/${documentItemName}" ContentType="${MAIN_DOCUMENT_TYPE}"/>${options.parts?.map((part) => `<Override PartName="/${part.itemName}" ContentType="${part.contentType}"/>`).join("") ?? ""}</Types>`),
     },
     {
       name: "_rels/.rels",
@@ -46,6 +51,7 @@ export function buildWordDocumentFixture(options: WordDocumentFixtureOptions = {
         `<Relationship Id="${relationship.id}" Type="${relationship.type}" Target="${relationship.target}"${relationship.targetMode === "External" ? ' TargetMode="External"' : ""}/>`
       ).join("")}</Relationships>`),
     }]),
+    ...(options.parts?.map((part) => ({ name: part.itemName, data: encoder.encode(part.xml) })) ?? []),
   ]);
 }
 

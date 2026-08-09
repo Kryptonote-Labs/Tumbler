@@ -1,5 +1,6 @@
 import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { RelationshipsError, type OpcPackage, type OpcPart, type Relationships } from "@tumblerjs/opc";
+import { readWordStyles, type WordStyles } from "./styles.ts";
 
 const MAIN_DOCUMENT_CONTENT_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
@@ -180,6 +181,7 @@ export class WordDocument {
   readonly conformance: WordConformance;
   readonly blocks: readonly WordBlock[];
   readonly finalSection: WordSectionProperties;
+  readonly styles: WordStyles;
 
   constructor(input: {
     pkg: OpcPackage;
@@ -188,6 +190,7 @@ export class WordDocument {
     conformance: WordConformance;
     blocks: readonly WordBlock[];
     finalSection: WordSectionProperties;
+    styles: WordStyles;
   }) {
     this.package = input.pkg;
     this.part = input.part;
@@ -195,6 +198,7 @@ export class WordDocument {
     this.conformance = input.conformance;
     this.blocks = Object.freeze([...input.blocks]);
     this.finalSection = input.finalSection;
+    this.styles = input.styles;
   }
 
   bytes(): Uint8Array {
@@ -247,7 +251,8 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
   const sectionElements = children(body, namespace, "sectPr");
   if (sectionElements.length > 1) throw new WordError("invalid_document", "A document body must not repeat final section properties.");
   const finalSection = parseSection(sectionElements[0], namespace);
-  return new WordDocument({ pkg, part: main, source, conformance: profile, blocks, finalSection });
+  const styles = readWordStyles({ package: pkg, part: main, source, conformance: profile });
+  return new WordDocument({ pkg, part: main, source, conformance: profile, blocks, finalSection, styles });
 }
 
 function parseBlock(
