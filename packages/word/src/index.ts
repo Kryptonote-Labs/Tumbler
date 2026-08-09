@@ -31,6 +31,11 @@ export {
   layoutWordDocument,
   wordPointsToCssPixels,
 } from "./layout.ts";
+export {
+  openWordArtifact,
+  WordArtifact,
+} from "./artifact.ts";
+export type { OpenWordArtifactOptions } from "./artifact.ts";
 export type {
   WordLayout,
   WordLayoutColumn,
