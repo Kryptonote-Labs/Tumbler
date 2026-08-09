@@ -336,6 +336,14 @@ describe("bounded spreadsheet formula calculation", () => {
       "Data!C6": formula("AGGREGATE(17,0,D6:D10,3)"),
       "Data!C7": formula("AGGREGATE(18,0,D6:D10,0.5)"),
       "Data!C8": formula("AGGREGATE(19,0,D6:D10,2)"),
+      "Data!E1": formula("AGGREGATE(9,0,A1:A5)"),
+      "Data!E2": formula("AGGREGATE(9,1,A1:A5)"),
+      "Data!E3": formula("AGGREGATE(9,2,A1:A5)"),
+      "Data!E4": formula("AGGREGATE(9,3,A1:A5)"),
+      "Data!E5": formula("AGGREGATE(9,4,A1:A5)"),
+      "Data!E6": formula("AGGREGATE(9,5,A1:A5)"),
+      "Data!E7": formula("AGGREGATE(9,6,A1:A5)"),
+      "Data!E8": formula("AGGREGATE(9,7,A1:A5)"),
     }, {
       "Data!2": { filteredOut: false, manuallyHidden: true, determinate: true },
       "Data!3": { filteredOut: true, manuallyHidden: false, determinate: true },
@@ -354,6 +362,14 @@ describe("bounded spreadsheet formula calculation", () => {
     expect(calculation.value(address("Data!C6"))).toEqual({ type: "number", value: 4 });
     expect(calculation.value(address("Data!C7"))).toEqual({ type: "number", value: 2 });
     expect(calculation.value(address("Data!C8"))).toEqual({ type: "number", value: 2 });
+    expect(calculation.value(address("Data!E1"))).toEqual({ type: "error", value: "#N/A" });
+    expect(calculation.value(address("Data!E2"))).toEqual({ type: "error", value: "#N/A" });
+    expect(calculation.value(address("Data!E3"))).toEqual({ type: "number", value: 30 });
+    expect(calculation.value(address("Data!E4"))).toEqual({ type: "number", value: 10 });
+    expect(calculation.value(address("Data!E5"))).toEqual({ type: "error", value: "#N/A" });
+    expect(calculation.value(address("Data!E6"))).toEqual({ type: "error", value: "#N/A" });
+    expect(calculation.value(address("Data!E7"))).toEqual({ type: "number", value: 60 });
+    expect(calculation.value(address("Data!E8"))).toEqual({ type: "number", value: 40 });
     expect(calculation.diagnostics).toEqual([]);
   });
 
