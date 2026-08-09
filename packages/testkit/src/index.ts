@@ -3,6 +3,7 @@ export {
   capabilityMatrix,
   defineRequirementManifest,
   SPREADSHEET_REQUIREMENTS,
+  WORD_REQUIREMENTS,
 } from "./requirements.ts";
 export type {
   CapabilityEvidence,

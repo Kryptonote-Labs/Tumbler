@@ -4,6 +4,7 @@ import {
   defineFixtureManifest,
   defineRequirementManifest,
   SPREADSHEET_REQUIREMENTS,
+  WORD_REQUIREMENTS,
 } from "../src/index.ts";
 
 describe("standards requirement manifests", () => {
@@ -67,6 +68,24 @@ describe("standards requirement manifests", () => {
     const base = SPREADSHEET_REQUIREMENTS[0]!;
     expect(() => defineRequirementManifest([base, base])).toThrow("Duplicate requirement id");
     expect(() => defineRequirementManifest([{ ...base, id: "XLSX-NO-EVIDENCE", evidence: { render: { status: "supported", tests: [] } } }])).toThrow("without a test");
+  });
+
+  test("projects bounded Word milestone-four claims without interoperability claims", () => {
+    const matrix = capabilityMatrix(WORD_REQUIREMENTS);
+    expect(matrix).toHaveLength(14);
+    expect(matrix.find((entry) => entry.id === "DOCX-PARAGRAPHS-RUNS")).toMatchObject({
+      recognize: "supported",
+      preserve: "supported",
+      render: "partial",
+      edit: "partial",
+      write: "partial",
+      interoperate: "unverified",
+    });
+    expect(matrix.find((entry) => entry.id === "DOCX-FIELDS")).toMatchObject({
+      preserve: "supported",
+      render: "partial",
+      edit: "unsupported",
+    });
   });
 });
 

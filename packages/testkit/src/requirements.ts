@@ -71,6 +71,23 @@ export const SPREADSHEET_REQUIREMENTS = defineRequirementManifest([
   requirement("XLSX-FORMULA-WRITE", "§18.3.1.40", "spreadsheet.formula-write", ["editor.test.ts", "artifact.test.ts", "spreadsheet-formula-bar.test.ts"], { recognize: "partial", preserve: "supported", render: "partial", edit: "partial", write: "partial" }),
 ] as const);
 
+export const WORD_REQUIREMENTS = defineRequirementManifest([
+  requirement("DOCX-MAIN-DOCUMENT", "§11.3.10, §17.2.2", "word.main-document", ["document.test.ts", "package.test.ts"], { recognize: "supported", preserve: "supported", render: "partial" }),
+  requirement("DOCX-PARAGRAPHS-RUNS", "§17.3.1–2", "word.text", ["document.test.ts", "layout.test.ts", "editor.test.ts", "editor.property.test.ts"], { recognize: "supported", preserve: "supported", render: "partial", edit: "partial", write: "partial" }),
+  requirement("DOCX-STYLES-CASCADE", "§17.7", "word.styles", ["styles.test.ts", "formatting.test.ts"], { recognize: "partial", preserve: "supported", render: "partial", edit: "partial", write: "partial" }),
+  requirement("DOCX-SECTIONS-PAGES", "§17.6, §17.10", "word.sections", ["document.test.ts", "layout.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }),
+  requirement("DOCX-NUMBERING", "§17.9", "word.numbering", ["numbering.test.ts", "layout.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }),
+  requirement("DOCX-TABLES", "§17.4", "word.tables", ["tables.test.ts", "word-document-view.test.ts"], { recognize: "partial", preserve: "supported", render: "partial", edit: "partial" }),
+  requirement("DOCX-HEADERS-FOOTERS", "§17.10.2–5", "word.headers-footers", ["header-footer.test.ts", "word-document-view.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }),
+  requirement("DOCX-NOTES", "§17.11", "word.notes", ["notes.test.ts", "word-document-view.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }),
+  requirement("DOCX-HYPERLINKS-BOOKMARKS", "§17.16.22, §17.13.5", "word.links", ["document.test.ts", "word-document-view.test.ts", "editor.test.ts"], { recognize: "partial", preserve: "supported", render: "partial", edit: "partial" }),
+  requirement("DOCX-FIELDS", "§17.16", "word.fields", ["document.test.ts", "layout.test.ts", "editor.test.ts"], { recognize: "partial", preserve: "supported", render: "partial", edit: "unsupported" }),
+  requirement("DOCX-DRAWINGS", "§17.3.3.9, §20.4", "word.drawings", ["drawings.test.ts", "word-document-view.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }),
+  requirement("DOCX-CHARTS", "§14.2.1, §21.2", "word.charts", ["drawings.test.ts", "parser.test.ts", "chart.test.ts"], { recognize: "partial", preserve: "supported", render: "partial" }),
+  requirement("DOCX-DIRECT-FORMATTING", "§17.3.1.29, §17.3.2.28", "word.formatting", ["formatting.test.ts", "session.test.ts"], { recognize: "partial", preserve: "supported", render: "partial", edit: "partial", write: "partial" }),
+  requirement("DOCX-OWNED-EDITOR", "§17.3", "word.editing", ["editor.test.ts", "editor.property.test.ts", "session.test.ts", "word-editing.test.ts", "word-document-view.test.ts"], { preserve: "supported", render: "partial", edit: "partial", write: "partial" }),
+] as const);
+
 function requirement(
   id: string,
   clause: string,
