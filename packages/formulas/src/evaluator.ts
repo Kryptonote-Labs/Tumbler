@@ -390,6 +390,194 @@ export function calculateFormulas(
     }
     };
 
+  const scalarArguments = (args: readonly FormulaExpression[], sheet: string, depth: number) =>
+    args.map((argument) => scalar(evaluate(argument, sheet, depth + 1)));
+
+  const callMath = (name: string): FormulaFunction => (args, sheet, depth) => {
+    const aggregate = name === "PRODUCT";
+    const evaluated = args.map((argument) => evaluate(argument, sheet, depth + 1));
+    const firstError = flatten(evaluated).find((value) => value.type === "error");
+    if (firstError?.type === "error") return firstError;
+    if (aggregate) {
+      if (args.length === 0) return error("#VALUE!");
+      const values = numbersForAggregate(evaluated);
+      return finite(values.reduce((product, value) => product * value, 1));
+    }
+    const values = evaluated.map(scalar);
+    const expected = name === "ABS" || name === "INT" ? [1, 1] : name === "CEILING.MATH" || name === "FLOOR.MATH" ? [1, 3] : [2, 2];
+    if (values.length < expected[0]! || values.length > expected[1]!) return error("#VALUE!");
+    const numericValues: number[] = [];
+    for (const value of values) {
+      const converted = numeric(value);
+      if (converted.type === "error") return converted;
+      numericValues.push(converted.value);
+    }
+    const first = numericValues[0]!;
+    switch (name) {
+      case "ABS": return finite(Math.abs(first));
+      case "INT": return finite(Math.floor(first));
+      case "MOD": {
+        const divisor = numericValues[1]!;
+        return divisor === 0 ? error("#DIV/0!") : finite(first - divisor * Math.floor(first / divisor));
+      }
+      case "ROUND": return excelRound(first, numericValues[1]!, "nearest");
+      case "ROUNDUP": return excelRound(first, numericValues[1]!, "away");
+      case "ROUNDDOWN": return excelRound(first, numericValues[1]!, "toward");
+      case "CEILING.MATH":
+      case "FLOOR.MATH": {
+        const significance = Math.abs(numericValues[1] ?? 1);
+        const mode = numericValues[2] ?? 0;
+        if (significance === 0) return number(0);
+        return finite(mathMultiple(first, significance, mode !== 0, name === "CEILING.MATH"));
+      }
+      default: throw new EvaluationUnavailable("unsupported-function", `Function ${name} is not supported.`);
+    }
+  };
+
+  const callSumProduct: FormulaFunction = (args, sheet, depth) => {
+    if (args.length === 0) return error("#VALUE!");
+    const arrays = args.map((argument) => {
+      const value = evaluate(argument, sheet, depth + 1);
+      return isRange(value) ? value.values : [value];
+    });
+    const length = arrays[0]!.length;
+    if (arrays.some((values) => values.length !== length)) return error("#VALUE!");
+    let total = 0;
+    for (let index = 0; index < length; index += 1) {
+      operation();
+      let product = 1;
+      for (const values of arrays) {
+        const value = values[index]!;
+        if (value.type === "error") return value;
+        product *= value.type === "number" ? value.value : 0;
+      }
+      total += product;
+    }
+    return finite(total);
+  };
+
+  const callStatistic = (name: string): FormulaFunction => (args, sheet, depth) => {
+    if (args.length === 0 || name === "COUNTBLANK" && args.length !== 1) return error("#VALUE!");
+    const evaluated = args.map((argument) => evaluate(argument, sheet, depth + 1));
+    if (name === "COUNTA" || name === "COUNTBLANK") {
+      const values = flatten(evaluated);
+      const count = values.filter((value) => name === "COUNTA"
+        ? value.type !== "blank"
+        : value.type === "blank" || value.type === "string" && value.value === "").length;
+      return number(count);
+    }
+    const firstError = flatten(evaluated).find((value) => value.type === "error");
+    if (firstError?.type === "error") return firstError;
+    const values = numbersForAggregate(evaluated);
+    if (name === "MEDIAN") {
+      if (values.length === 0) return error("#NUM!");
+      const sorted = [...values].sort((left, right) => left - right);
+      const middle = Math.floor(sorted.length / 2);
+      return finite(sorted.length % 2 === 0 ? (sorted[middle - 1]! + sorted[middle]!) / 2 : sorted[middle]!);
+    }
+    const sample = name.endsWith(".S");
+    if (values.length < (sample ? 2 : 1)) return error("#DIV/0!");
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - (sample ? 1 : 0));
+    return finite(name.startsWith("STDEV") ? Math.sqrt(variance) : variance);
+  };
+
+  const callTypePredicate = (name: string): FormulaFunction => (args, sheet, depth) => {
+    if (args.length !== 1) return error("#VALUE!");
+    const value = scalar(evaluate(args[0]!, sheet, depth + 1));
+    switch (name) {
+      case "ISBLANK": return boolean(value.type === "blank");
+      case "ISNUMBER": return boolean(value.type === "number");
+      case "ISTEXT": return boolean(value.type === "string");
+      case "ISLOGICAL": return boolean(value.type === "boolean");
+      case "ISERROR": return boolean(value.type === "error");
+      case "ISERR": return boolean(value.type === "error" && value.value !== "#N/A");
+      case "ISNA": return boolean(value.type === "error" && value.value === "#N/A");
+      default: throw new EvaluationUnavailable("unsupported-function", `Function ${name} is not supported.`);
+    }
+  };
+
+  const callText = (name: string): FormulaFunction => (args, sheet, depth) => {
+    const evaluated = scalarArguments(args, sheet, depth);
+    const firstError = evaluated.find((value) => value.type === "error");
+    if (firstError?.type === "error") return firstError;
+    const arity = textFunctionArity(name);
+    if (args.length < arity[0] || args.length > arity[1]) return error("#VALUE!");
+    const sourceText = evaluated[0] === undefined ? "" : text(evaluated[0]);
+    switch (name) {
+      case "LEN": return number(sourceText.length);
+      case "LOWER": return boundedString(sourceText.toLocaleLowerCase("en-US"));
+      case "UPPER": return boundedString(sourceText.toLocaleUpperCase("en-US"));
+      case "PROPER": return boundedString(properCase(sourceText));
+      case "TRIM": return boundedString(sourceText.trim().replace(/ +/g, " "));
+      case "EXACT": return boolean(sourceText === text(evaluated[1]!));
+      case "LEFT":
+      case "RIGHT": {
+        const count = evaluated[1] === undefined ? number(1) : numeric(evaluated[1]);
+        if (count.type === "error") return count;
+        const size = Math.trunc(count.value);
+        if (size < 0) return error("#VALUE!");
+        return boundedString(name === "LEFT" ? sourceText.slice(0, size) : sourceText.slice(Math.max(0, sourceText.length - size)));
+      }
+      case "MID": {
+        const start = numeric(evaluated[1]!);
+        const count = numeric(evaluated[2]!);
+        if (start.type === "error") return start;
+        if (count.type === "error") return count;
+        const offset = Math.trunc(start.value);
+        const size = Math.trunc(count.value);
+        return offset < 1 || size < 0 ? error("#VALUE!") : boundedString(sourceText.slice(offset - 1, offset - 1 + size));
+      }
+      case "FIND":
+      case "SEARCH": {
+        const needle = sourceText;
+        const haystack = text(evaluated[1]!);
+        const startValue = evaluated[2] === undefined ? number(1) : numeric(evaluated[2]);
+        if (startValue.type === "error") return startValue;
+        const start = Math.trunc(startValue.value);
+        if (start < 1 || start > haystack.length + 1) return error("#VALUE!");
+        const index = name === "FIND"
+          ? haystack.indexOf(needle, start - 1)
+          : haystack.toLocaleLowerCase("en-US").indexOf(needle.toLocaleLowerCase("en-US"), start - 1);
+        return index < 0 ? error("#VALUE!") : number(index + 1);
+      }
+      case "SUBSTITUTE": {
+        const oldText = text(evaluated[1]!);
+        const replacement = text(evaluated[2]!);
+        if (oldText === "") return boundedString(sourceText);
+        if (evaluated[3] === undefined) return boundedString(sourceText.split(oldText).join(replacement));
+        const occurrence = numeric(evaluated[3]);
+        if (occurrence.type === "error") return occurrence;
+        const selected = Math.trunc(occurrence.value);
+        if (selected < 1) return error("#VALUE!");
+        let seen = 0;
+        let cursor = 0;
+        while (true) {
+          operation();
+          const found = sourceText.indexOf(oldText, cursor);
+          if (found < 0) return boundedString(sourceText);
+          seen += 1;
+          if (seen === selected) return boundedString(sourceText.slice(0, found) + replacement + sourceText.slice(found + oldText.length));
+          cursor = found + oldText.length;
+        }
+      }
+      default: throw new EvaluationUnavailable("unsupported-function", `Function ${name} is not supported.`);
+    }
+  };
+
+  const callConcatenate = (join: boolean): FormulaFunction => (args, sheet, depth) => {
+    if (join && args.length < 3 || !join && args.length === 0) return error("#VALUE!");
+    const delimiter = join ? scalar(evaluate(args[0]!, sheet, depth + 1)) : string("");
+    const ignoreEmpty = join ? logical(scalar(evaluate(args[1]!, sheet, depth + 1))) : boolean(false);
+    if (delimiter.type === "error") return delimiter;
+    if (ignoreEmpty.type === "error") return ignoreEmpty;
+    const values = flatten(args.slice(join ? 2 : 0).map((argument) => evaluate(argument, sheet, depth + 1)));
+    const firstError = values.find((value) => value.type === "error");
+    if (firstError?.type === "error") return firstError;
+    const texts = values.map(text).filter((value) => !ignoreEmpty.value || value !== "");
+    return boundedString(texts.join(text(delimiter)));
+  };
+
   const functions = new Map<string, FormulaFunction>([
     ["IF", callIf],
     ["IFERROR", callIfError(false)],
@@ -402,6 +590,18 @@ export function calculateFormulas(
     ["COUNTIFS", callMultiConditionalAggregate("COUNTIFS")],
     ["SUMIFS", callMultiConditionalAggregate("SUMIFS")],
     ["AVERAGEIFS", callMultiConditionalAggregate("AVERAGEIFS")],
+    ...(["ABS", "ROUND", "ROUNDUP", "ROUNDDOWN", "INT", "MOD", "PRODUCT", "CEILING.MATH", "FLOOR.MATH"] as const)
+      .map((name) => [name, callMath(name)] as const),
+    ["SUMPRODUCT", callSumProduct],
+    ...(["COUNTA", "COUNTBLANK", "MEDIAN", "STDEV.S", "STDEV.P", "VAR.S", "VAR.P"] as const)
+      .map((name) => [name, callStatistic(name)] as const),
+    ...(["ISBLANK", "ISNUMBER", "ISTEXT", "ISLOGICAL", "ISERROR", "ISERR", "ISNA"] as const)
+      .map((name) => [name, callTypePredicate(name)] as const),
+    ...(["LEN", "LEFT", "RIGHT", "MID", "TRIM", "UPPER", "LOWER", "PROPER", "SUBSTITUTE", "FIND", "SEARCH", "EXACT"] as const)
+      .map((name) => [name, callText(name)] as const),
+    ["CONCAT", callConcatenate(false)],
+    ["CONCATENATE", callConcatenate(false)],
+    ["TEXTJOIN", callConcatenate(true)],
     ...(["SUM", "COUNT", "AVERAGE", "MIN", "MAX", "AND", "OR", "XOR", "NOT"] as const)
       .map((name) => [name, callAggregate(name)] as const),
   ]);
@@ -724,8 +924,69 @@ function isFormulaError<T>(value: T | Extract<FormulaScalarValue, { type: "error
 
 const NUMBER_CRITERION = /^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[Ee][+-]?[0-9]+)?$/;
 const MAX_CRITERION_CHARACTERS = 8_192;
+const MAX_FORMULA_TEXT_CHARACTERS = 32_767;
 const MAX_SPREADSHEET_ROW = 1_048_576;
 const MAX_SPREADSHEET_COLUMN = 16_384;
+
+function excelRound(
+  value: number,
+  digitsValue: number,
+  direction: "nearest" | "away" | "toward",
+): Extract<FormulaScalarValue, { type: "number" | "error" }> {
+  const digits = Math.trunc(digitsValue);
+  if (Math.abs(digits) > 308) return digits > 0 ? number(value) : number(0);
+  const factor = 10 ** Math.abs(digits);
+  const scaled = digits >= 0 ? value * factor : value / factor;
+  if (!Number.isFinite(scaled)) return number(value);
+  const magnitude = Math.abs(scaled);
+  const rounded = direction === "away"
+    ? Math.ceil(magnitude)
+    : direction === "toward"
+      ? Math.floor(magnitude)
+      : Math.floor(magnitude + 0.5 + Number.EPSILON * magnitude);
+  const result = Math.sign(scaled) * rounded;
+  return finite(digits >= 0 ? result / factor : result * factor);
+}
+
+function mathMultiple(value: number, significance: number, mode: boolean, ceiling: boolean): number {
+  if (value >= 0) {
+    return (ceiling ? Math.ceil(value / significance) : Math.floor(value / significance)) * significance;
+  }
+  const magnitude = Math.abs(value) / significance;
+  const rounded = ceiling
+    ? mode ? Math.ceil(magnitude) : Math.floor(magnitude)
+    : mode ? Math.floor(magnitude) : Math.ceil(magnitude);
+  return -rounded * significance;
+}
+
+function textFunctionArity(name: string): readonly [minimum: number, maximum: number] {
+  switch (name) {
+    case "LEN": case "LOWER": case "UPPER": case "PROPER": case "TRIM": return [1, 1];
+    case "LEFT": case "RIGHT": return [1, 2];
+    case "MID": return [3, 3];
+    case "FIND": case "SEARCH": return [2, 3];
+    case "EXACT": return [2, 2];
+    case "SUBSTITUTE": return [3, 4];
+    default: return [0, 0];
+  }
+}
+
+function properCase(value: string): string {
+  let atWordStart = true;
+  let result = "";
+  for (const character of value) {
+    const letterOrNumber = /[\p{L}\p{N}]/u.test(character);
+    result += letterOrNumber
+      ? atWordStart ? character.toLocaleUpperCase("en-US") : character.toLocaleLowerCase("en-US")
+      : character;
+    atWordStart = !letterOrNumber;
+  }
+  return result;
+}
+
+function boundedString(value: string): FormulaScalarValue {
+  return value.length > MAX_FORMULA_TEXT_CHARACTERS ? error("#VALUE!") : string(value);
+}
 
 function scalar(value: EvaluationValue): FormulaScalarValue {
   return isRange(value) ? error("#VALUE!") : value;

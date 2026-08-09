@@ -145,6 +145,79 @@ describe("bounded spreadsheet formula calculation", () => {
     expect(calculation.diagnostics).toEqual([]);
   });
 
+  test("calculates practical math and statistical families", () => {
+    const workbook = source({
+      "Sheet1!A1": value(1), "Sheet1!A2": value(2), "Sheet1!A3": value(3),
+      "Sheet1!B1": value(4), "Sheet1!B2": value(5), "Sheet1!B3": value(6),
+      "Sheet1!C1": formula("ABS(-3)+INT(-1.2)"),
+      "Sheet1!C2": formula("ROUND(2.675,2)"),
+      "Sheet1!C3": formula("ROUNDUP(-1.21,1)+ROUNDDOWN(-1.29,1)"),
+      "Sheet1!C4": formula("MOD(-3,2)"),
+      "Sheet1!C5": formula("CEILING.MATH(-4.3)+FLOOR.MATH(-4.3)"),
+      "Sheet1!C6": formula("PRODUCT(A1:A3,2)"),
+      "Sheet1!C7": formula("SUMPRODUCT(A1:A3,B1:B3)"),
+      "Sheet1!C8": formula("MEDIAN(A1:A3)"),
+      "Sheet1!C9": formula("VAR.P(A1:A3)"),
+      "Sheet1!C10": formula("STDEV.S(A1:A3)"),
+      "Sheet1!C11": formula("COUNTA(A1:A3,\"\")"),
+      "Sheet1!C12": formula("COUNTBLANK(D1:D3)"),
+    });
+
+    const calculation = calculateFormulas(workbook);
+
+    expect(calculation.value(address("Sheet1!C1"))).toEqual({ type: "number", value: 1 });
+    expect(calculation.value(address("Sheet1!C2"))).toEqual({ type: "number", value: 2.68 });
+    expect(calculation.value(address("Sheet1!C3"))).toEqual({ type: "number", value: -2.5 });
+    expect(calculation.value(address("Sheet1!C4"))).toEqual({ type: "number", value: 1 });
+    expect(calculation.value(address("Sheet1!C5"))).toEqual({ type: "number", value: -9 });
+    expect(calculation.value(address("Sheet1!C6"))).toEqual({ type: "number", value: 12 });
+    expect(calculation.value(address("Sheet1!C7"))).toEqual({ type: "number", value: 32 });
+    expect(calculation.value(address("Sheet1!C8"))).toEqual({ type: "number", value: 2 });
+    expect(calculation.value(address("Sheet1!C9"))?.type).toBe("number");
+    expect(calculation.value(address("Sheet1!C10"))).toEqual({ type: "number", value: 1 });
+    expect(calculation.value(address("Sheet1!C11"))).toEqual({ type: "number", value: 4 });
+    expect(calculation.value(address("Sheet1!C12"))).toEqual({ type: "number", value: 3 });
+    expect(calculation.diagnostics).toEqual([]);
+  });
+
+  test("calculates bounded text and type-predicate families", () => {
+    const workbook = source({
+      "Sheet1!A1": textValue("  hello   WORLD  "),
+      "Sheet1!A2": formula("1/0"),
+      "Sheet1!B1": formula("LEN(A1)"),
+      "Sheet1!B2": formula("TRIM(A1)"),
+      "Sheet1!B3": formula("UPPER(LEFT(TRIM(A1),5))"),
+      "Sheet1!B4": formula("LOWER(RIGHT(TRIM(A1),5))"),
+      "Sheet1!B5": formula(`MID("abcdef",2,3)`),
+      "Sheet1!B6": formula(`PROPER("one TWO-three")`),
+      "Sheet1!B7": formula(`SUBSTITUTE("a-b-a","a","x",2)`),
+      "Sheet1!B8": formula(`FIND("WORLD",A1)`),
+      "Sheet1!B9": formula(`SEARCH("world",A1)`),
+      "Sheet1!B10": formula(`EXACT("A","a")`),
+      "Sheet1!B11": formula(`CONCAT("A",1,TRUE)`),
+      "Sheet1!B12": formula(`TEXTJOIN("-",TRUE,"A","",1)`),
+      "Sheet1!B13": formula("ISNUMBER(1)+ISTEXT(\"x\")+ISLOGICAL(TRUE)+ISBLANK(C1)"),
+      "Sheet1!B14": formula("ISERROR(A2)+ISERR(A2)+ISNA(#N/A)"),
+    });
+
+    const calculation = calculateFormulas(workbook);
+
+    expect(calculation.value(address("Sheet1!B1"))).toEqual({ type: "number", value: 17 });
+    expect(calculation.value(address("Sheet1!B2"))).toEqual({ type: "string", value: "hello WORLD" });
+    expect(calculation.value(address("Sheet1!B3"))).toEqual({ type: "string", value: "HELLO" });
+    expect(calculation.value(address("Sheet1!B4"))).toEqual({ type: "string", value: "world" });
+    expect(calculation.value(address("Sheet1!B5"))).toEqual({ type: "string", value: "bcd" });
+    expect(calculation.value(address("Sheet1!B6"))).toEqual({ type: "string", value: "One Two-Three" });
+    expect(calculation.value(address("Sheet1!B7"))).toEqual({ type: "string", value: "a-b-x" });
+    expect(calculation.value(address("Sheet1!B8"))).toEqual({ type: "number", value: 11 });
+    expect(calculation.value(address("Sheet1!B9"))).toEqual({ type: "number", value: 11 });
+    expect(calculation.value(address("Sheet1!B10"))).toEqual({ type: "boolean", value: false });
+    expect(calculation.value(address("Sheet1!B11"))).toEqual({ type: "string", value: "A1TRUE" });
+    expect(calculation.value(address("Sheet1!B12"))).toEqual({ type: "string", value: "A-1" });
+    expect(calculation.value(address("Sheet1!B13"))).toEqual({ type: "number", value: 4 });
+    expect(calculation.value(address("Sheet1!B14"))).toEqual({ type: "number", value: 3 });
+  });
+
   test("matches text case-insensitively with linear wildcards and tilde escaping", () => {
     const workbook = source({
       "Sheet1!A1": textValue("Alpha"),
