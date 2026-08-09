@@ -42,6 +42,8 @@ export interface FormulaDiagnostic {
 }
 
 export interface FormulaCalculationOptions {
+  /** Workbook date system used by date functions. Defaults to the OOXML 1900 system. */
+  readonly dateSystem?: "1900" | "1904";
   readonly maxFormulaCells?: number;
   readonly maxRangeCells?: number;
   readonly maxOperations?: number;
@@ -84,6 +86,7 @@ export function calculateFormulas(
     maxOperations: options.maxOperations ?? 1_000_000,
     maxEvaluationDepth: options.maxEvaluationDepth ?? 1_000,
   };
+  const dateSystem = options.dateSystem ?? "1900";
   const formulaCells = [...source.formulaCells];
   if (formulaCells.length > limits.maxFormulaCells) throw new RangeError("Formula cell count exceeds the calculation limit.");
   const parsed = new Map<string, ParsedFormula>();
@@ -578,6 +581,100 @@ export function calculateFormulas(
     return boundedString(texts.join(text(delimiter)));
   };
 
+  const callDate = (name: string): FormulaFunction => (args, sheet, depth) => {
+    const evaluated = scalarArguments(args, sheet, depth);
+    const firstError = evaluated.find((value) => value.type === "error");
+    if (firstError?.type === "error") return firstError;
+    const converted = evaluated.map(numeric);
+    const numericError = converted.find((value) => value.type === "error");
+    const numbers = converted.map((value) => value.type === "number" ? value.value : Number.NaN);
+
+    if (name === "DATEVALUE") {
+      if (args.length !== 1) return error("#VALUE!");
+      const parsed = parseInvariantDate(text(evaluated[0]!));
+      return parsed === undefined ? error("#VALUE!") : datePartsToSerial(parsed.year, parsed.month, parsed.day, dateSystem);
+    }
+    if (numericError?.type === "error") return numericError;
+    if ((name === "DATE" && args.length !== 3) || (["YEAR", "MONTH", "DAY"].includes(name) && args.length !== 1)) {
+      return error("#VALUE!");
+    }
+    if (name === "DATE") {
+      let year = Math.trunc(numbers[0]!);
+      if (year >= 0 && year < 1900) year += 1900;
+      if (year < 0 || year > 9999) return error("#NUM!");
+      return normalizedDateToSerial(year, Math.trunc(numbers[1]!), Math.trunc(numbers[2]!), dateSystem);
+    }
+    if (name === "YEAR" || name === "MONTH" || name === "DAY") {
+      const parts = serialToDateParts(numbers[0]!, dateSystem);
+      if (parts === undefined) return error("#NUM!");
+      return number(name === "YEAR" ? parts.year : name === "MONTH" ? parts.month : parts.day);
+    }
+    if (name === "DAYS") {
+      if (args.length !== 2) return error("#VALUE!");
+      return finite(Math.trunc(numbers[0]!) - Math.trunc(numbers[1]!));
+    }
+    if (name === "EDATE" || name === "EOMONTH") {
+      if (args.length !== 2) return error("#VALUE!");
+      const parts = serialToDateParts(numbers[0]!, dateSystem);
+      if (parts === undefined || parts.syntheticLeapDay) return error("#NUM!");
+      const months = Math.trunc(numbers[1]!);
+      const shifted = shiftMonth(parts.year, parts.month, months + (name === "EOMONTH" ? 1 : 0));
+      return name === "EOMONTH"
+        ? normalizedDateToSerial(shifted.year, shifted.month, 0, dateSystem)
+        : normalizedDateToSerial(shifted.year, shifted.month, Math.min(parts.day, daysInMonth(shifted.year, shifted.month)), dateSystem);
+    }
+    if (name === "WEEKDAY") {
+      if (args.length < 1 || args.length > 2) return error("#VALUE!");
+      const serial = Math.trunc(numbers[0]!);
+      const returnType = Math.trunc(numbers[1] ?? 1);
+      const sundayZero = excelSundayZero(serial, dateSystem);
+      if (returnType === 1) return number(sundayZero + 1);
+      if (returnType === 2) return number((sundayZero + 6) % 7 + 1);
+      if (returnType === 3) return number((sundayZero + 6) % 7);
+      return error("#NUM!");
+    }
+    return error("#VALUE!");
+  };
+
+  const callBusinessDate = (name: "NETWORKDAYS" | "WORKDAY"): FormulaFunction => (args, sheet, depth) => {
+    if (args.length < 2 || args.length > 3) return error("#VALUE!");
+    const first = numeric(scalar(evaluate(args[0]!, sheet, depth + 1)));
+    const second = numeric(scalar(evaluate(args[1]!, sheet, depth + 1)));
+    if (first.type === "error") return first;
+    if (second.type === "error") return second;
+    const holidayValues = args[2] === undefined ? [] : flatten([evaluate(args[2], sheet, depth + 1)]);
+    const holidayError = holidayValues.find((value) => value.type === "error");
+    if (holidayError?.type === "error") return holidayError;
+    const holidays = new Set(holidayValues.flatMap((value) => value.type === "number" ? [Math.trunc(value.value)] : []));
+    const businessDay = (serial: number) => {
+      const sundayZero = excelSundayZero(serial, dateSystem);
+      return sundayZero !== 0 && sundayZero !== 6 && !holidays.has(serial);
+    };
+
+    if (name === "NETWORKDAYS") {
+      const start = Math.trunc(first.value);
+      const end = Math.trunc(second.value);
+      const direction = start <= end ? 1 : -1;
+      let count = 0;
+      for (let serial = start; ; serial += direction) {
+        operation();
+        if (businessDay(serial)) count += direction;
+        if (serial === end) break;
+      }
+      return number(count);
+    }
+
+    let serial = Math.trunc(first.value);
+    let remaining = Math.abs(Math.trunc(second.value));
+    const direction = second.value < 0 ? -1 : 1;
+    while (remaining > 0) {
+      operation();
+      serial += direction;
+      if (businessDay(serial)) remaining -= 1;
+    }
+    return number(serial);
+  };
+
   const functions = new Map<string, FormulaFunction>([
     ["IF", callIf],
     ["IFERROR", callIfError(false)],
@@ -602,6 +699,9 @@ export function calculateFormulas(
     ["CONCAT", callConcatenate(false)],
     ["CONCATENATE", callConcatenate(false)],
     ["TEXTJOIN", callConcatenate(true)],
+    ...(["DATE", "DATEVALUE", "YEAR", "MONTH", "DAY", "DAYS", "EDATE", "EOMONTH", "WEEKDAY"] as const)
+      .map((name) => [name, callDate(name)] as const),
+    ...(["NETWORKDAYS", "WORKDAY"] as const).map((name) => [name, callBusinessDate(name)] as const),
     ...(["SUM", "COUNT", "AVERAGE", "MIN", "MAX", "AND", "OR", "XOR", "NOT"] as const)
       .map((name) => [name, callAggregate(name)] as const),
   ]);
@@ -927,6 +1027,87 @@ const MAX_CRITERION_CHARACTERS = 8_192;
 const MAX_FORMULA_TEXT_CHARACTERS = 32_767;
 const MAX_SPREADSHEET_ROW = 1_048_576;
 const MAX_SPREADSHEET_COLUMN = 16_384;
+const DAY_MILLISECONDS = 86_400_000;
+
+interface ExcelDateParts {
+  readonly year: number;
+  readonly month: number;
+  readonly day: number;
+  readonly syntheticLeapDay?: boolean;
+}
+
+function serialToDateParts(serial: number, dateSystem: "1900" | "1904"): ExcelDateParts | undefined {
+  if (!Number.isFinite(serial) || serial < 0) return undefined;
+  const days = Math.floor(serial);
+  if (dateSystem === "1900" && days === 60) {
+    return Object.freeze({ year: 1900, month: 2, day: 29, syntheticLeapDay: true });
+  }
+  const base = dateSystem === "1904" ? Date.UTC(1904, 0, 1) : Date.UTC(1899, 11, 31);
+  const adjusted = dateSystem === "1900" && days > 60 ? days - 1 : days;
+  const date = new Date(base + adjusted * DAY_MILLISECONDS);
+  return Object.freeze({ year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() });
+}
+
+function excelSundayZero(serial: number, dateSystem: "1900" | "1904"): number {
+  const adjusted = dateSystem === "1904" ? serial + 5 : serial - (serial > 59 ? 1 : 0);
+  return ((adjusted % 7) + 7) % 7;
+}
+
+function datePartsToSerial(
+  year: number,
+  month: number,
+  day: number,
+  dateSystem: "1900" | "1904",
+): Extract<FormulaScalarValue, { type: "number" | "error" }> {
+  if (year === 1900 && month === 2 && day === 29 && dateSystem === "1900") return number(60);
+  const date = utcDate(year, month, day);
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() + 1 !== month || date.getUTCDate() !== day) return error("#VALUE!");
+  return dateToSerial(date, dateSystem);
+}
+
+function normalizedDateToSerial(
+  year: number,
+  month: number,
+  day: number,
+  dateSystem: "1900" | "1904",
+): Extract<FormulaScalarValue, { type: "number" | "error" }> {
+  const date = utcDate(year, month, day);
+  return dateToSerial(date, dateSystem);
+}
+
+function dateToSerial(date: Date, dateSystem: "1900" | "1904"): Extract<FormulaScalarValue, { type: "number" | "error" }> {
+  const base = dateSystem === "1904" ? Date.UTC(1904, 0, 1) : Date.UTC(1899, 11, 31);
+  let serial = Math.round((date.getTime() - base) / DAY_MILLISECONDS);
+  if (dateSystem === "1900" && date.getTime() >= Date.UTC(1900, 2, 1)) serial += 1;
+  return serial < 0 || date.getUTCFullYear() > 9999 ? error("#NUM!") : number(serial);
+}
+
+function utcDate(year: number, month: number, day: number): Date {
+  const date = new Date(0);
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCFullYear(year, month - 1, day);
+  return date;
+}
+
+function shiftMonth(year: number, month: number, delta: number): { readonly year: number; readonly month: number } {
+  const absolute = year * 12 + month - 1 + delta;
+  return Object.freeze({ year: Math.floor(absolute / 12), month: ((absolute % 12) + 12) % 12 + 1 });
+}
+
+function daysInMonth(year: number, month: number): number {
+  return utcDate(year, month + 1, 0).getUTCDate();
+}
+
+function parseInvariantDate(value: string): ExcelDateParts | undefined {
+  const normalized = value.trim();
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(normalized);
+  const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(normalized);
+  const parts = iso === null
+    ? slash === null ? undefined : { year: Number(slash[3]), month: Number(slash[1]), day: Number(slash[2]) }
+    : { year: Number(iso[1]), month: Number(iso[2]), day: Number(iso[3]) };
+  if (parts === undefined || parts.month < 1 || parts.month > 12 || parts.day < 1 || parts.day > daysInMonth(parts.year, parts.month)) return undefined;
+  return Object.freeze(parts);
+}
 
 function excelRound(
   value: number,

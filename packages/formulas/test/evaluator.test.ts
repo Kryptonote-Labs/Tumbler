@@ -218,6 +218,45 @@ describe("bounded spreadsheet formula calculation", () => {
     expect(calculation.value(address("Sheet1!B14"))).toEqual({ type: "number", value: 3 });
   });
 
+  test("calculates deterministic dates with Excel's 1900 compatibility leap day", () => {
+    const workbook = source({
+      "Sheet1!A1": formula("DATE(1900,1,1)"),
+      "Sheet1!A2": formula("DATE(1900,3,1)"),
+      "Sheet1!A3": formula("YEAR(60)&\"-\"&MONTH(60)&\"-\"&DAY(60)"),
+      "Sheet1!A4": formula("DATEVALUE(\"2026-08-09\")"),
+      "Sheet1!A5": formula("EDATE(DATE(2024,1,31),1)"),
+      "Sheet1!A6": formula("EOMONTH(DATE(2024,1,15),1)"),
+      "Sheet1!A7": formula("WEEKDAY(DATE(2026,8,9),2)"),
+      "Sheet1!A8": formula("DAYS(DATE(2026,8,9),DATE(2026,8,1))"),
+      "Sheet1!A9": formula("NETWORKDAYS(DATE(2026,8,3),DATE(2026,8,9),DATE(2026,8,5))"),
+      "Sheet1!A10": formula("WORKDAY(DATE(2026,8,7),2,DATE(2026,8,10))"),
+    });
+
+    const calculation = calculateFormulas(workbook);
+
+    expect(calculation.value(address("Sheet1!A1"))).toEqual({ type: "number", value: 1 });
+    expect(calculation.value(address("Sheet1!A2"))).toEqual({ type: "number", value: 61 });
+    expect(calculation.value(address("Sheet1!A3"))).toEqual({ type: "string", value: "1900-2-29" });
+    expect(calculation.value(address("Sheet1!A4"))).toEqual({ type: "number", value: 46_243 });
+    expect(calculation.value(address("Sheet1!A5"))).toEqual({ type: "number", value: 45_351 });
+    expect(calculation.value(address("Sheet1!A6"))).toEqual({ type: "number", value: 45_351 });
+    expect(calculation.value(address("Sheet1!A7"))).toEqual({ type: "number", value: 7 });
+    expect(calculation.value(address("Sheet1!A8"))).toEqual({ type: "number", value: 8 });
+    expect(calculation.value(address("Sheet1!A9"))).toEqual({ type: "number", value: 4 });
+    expect(calculation.value(address("Sheet1!A10"))).toEqual({ type: "number", value: 46_246 });
+    expect(calculation.diagnostics).toEqual([]);
+  });
+
+  test("uses the 1904 workbook date system when requested", () => {
+    const calculation = calculateFormulas(source({
+      "Sheet1!A1": formula("DATE(1904,1,1)"),
+      "Sheet1!A2": formula("WEEKDAY(0,2)"),
+    }), { dateSystem: "1904" });
+
+    expect(calculation.value(address("Sheet1!A1"))).toEqual({ type: "number", value: 0 });
+    expect(calculation.value(address("Sheet1!A2"))).toEqual({ type: "number", value: 5 });
+  });
+
   test("matches text case-insensitively with linear wildcards and tilde escaping", () => {
     const workbook = source({
       "Sheet1!A1": textValue("Alpha"),

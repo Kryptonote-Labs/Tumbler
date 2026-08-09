@@ -43,7 +43,10 @@ export function calculateSpreadsheetWorksheet(
 ): SpreadsheetCalculationSnapshot {
   const source = new SpreadsheetFormulaSource(worksheet.workbook, worksheet);
   try {
-    return new SpreadsheetCalculationSnapshot(worksheet, calculateFormulas(source, options));
+    return new SpreadsheetCalculationSnapshot(worksheet, calculateFormulas(source, {
+      ...options,
+      dateSystem: worksheet.workbook.dateSystem,
+    }));
   } catch (cause) {
     if (!(cause instanceof RangeError)) throw cause;
     const first = source.formulaCells[0];
