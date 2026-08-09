@@ -59,7 +59,7 @@ export function spreadsheetFormattingState(
 ): FormattingState {
   const range = normalizeRange(target);
   validateRangeSize(range);
-  const formats = cells(range).map((address) => worksheet.cellStyle(address));
+  const formats = logicalCells(worksheet, range).map((address) => worksheet.cellStyle(address));
   const styles = worksheet.styles;
   const fonts = formats.map((format) => format.font);
   const alignments = formats.map((format) => format.alignment);
@@ -297,6 +297,16 @@ function cells(range: CellRange): CellAddress[] {
     for (let column = range.start.column; column <= range.end.column; column += 1) result.push({ row, column });
   }
   return result;
+}
+
+/** Merged continuations are presentation coordinates; their top-left owner is the logical cell. */
+function logicalCells(worksheet: SpreadsheetWorksheet, range: CellRange): CellAddress[] {
+  const result = new Map<string, CellAddress>();
+  for (const address of cells(range)) {
+    const owner = worksheet.mergedRange(address)?.start ?? address;
+    result.set(formatCellReference(owner), owner);
+  }
+  return [...result.values()];
 }
 
 function styleWorksheetCells(

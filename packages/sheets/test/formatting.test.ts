@@ -117,6 +117,33 @@ describe("SpreadsheetML formatting", () => {
     expect(spreadsheetFormattingState(worksheet, "A1:B1").text.bold).toEqual({ state: "mixed" });
   });
 
+  test("reads a merged range through its logical top-left cell", () => {
+    const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      stylesXml: `<styleSheet xmlns="${namespace}">
+        <fonts count="2"><font><name val="Aptos"/><sz val="11"/></font><font><name val="Aptos Display"/><sz val="24"/><b/></font></fonts>
+        <fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+        <borders count="1"><border/></borders>
+        <cellXfs count="2"><xf fontId="0" fillId="0" borderId="0" numFmtId="0"/><xf fontId="1" fillId="0" borderId="0" numFmtId="0"/></cellXfs>
+      </styleSheet>`,
+      sheets: [{
+        name: "Dashboard",
+        sheetId: 1,
+        relationshipId: "dashboard",
+        xml: `<worksheet xmlns="${namespace}"><dimension ref="A1:C2"/><sheetData><row r="1"><c r="A1" s="1" t="inlineStr"><is><t>Metric</t></is></c></row></sheetData><mergeCells count="1"><mergeCell ref="A1:B2"/></mergeCells></worksheet>`,
+      }],
+    })));
+    const worksheet = openWorksheet(workbook, workbook.sheets[0]!);
+
+    for (const target of ["B2", "A1:B2"]) {
+      expect(spreadsheetFormattingState(worksheet, target).text).toMatchObject({
+        fontFamily: { state: "value", value: "Aptos Display" },
+        fontSize: { state: "value", value: 24 },
+        bold: { state: "value", value: true },
+      });
+    }
+    expect(spreadsheetFormattingState(worksheet, "A1:C2").text.fontSize).toEqual({ state: "mixed" });
+  });
+
   test.each(["strict", "transitional"] as const)("adds a valid Styles part to a style-less %s workbook", (conformance) => {
     const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
       conformance,
