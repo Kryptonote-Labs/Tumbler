@@ -8,6 +8,7 @@ export const RELEASE_PACKAGE_DIRECTORIES = [
   "charts",
   "core",
   "sheets",
+  "word",
   "svelte",
 ] as const;
 

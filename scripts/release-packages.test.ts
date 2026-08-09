@@ -15,6 +15,7 @@ describe("public package release graph", () => {
       "@tumblerjs/charts",
       "@tumblerjs/core",
       "@tumblerjs/sheets",
+      "@tumblerjs/word",
       "@tumblerjs/svelte",
     ]);
   });

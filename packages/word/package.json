@@ -1,13 +1,28 @@
 {
   "name": "@tumblerjs/word",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0-alpha.5",
+  "description": "Headless WordprocessingML reading, layout, preservation, and editing for Tumbler.",
   "type": "module",
   "exports": "./src/index.ts",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kryptonote-Labs/Tumbler.git",
+    "directory": "packages/word"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
   "dependencies": {
-    "@tumblerjs/charts": "workspace:*",
-    "@tumblerjs/core": "workspace:*",
-    "@tumblerjs/ooxml": "workspace:*",
-    "@tumblerjs/opc": "workspace:*"
+    "@tumblerjs/charts": "0.1.0-alpha.5",
+    "@tumblerjs/core": "0.1.0-alpha.5",
+    "@tumblerjs/ooxml": "0.1.0-alpha.5",
+    "@tumblerjs/opc": "0.1.0-alpha.5"
   }
 }
