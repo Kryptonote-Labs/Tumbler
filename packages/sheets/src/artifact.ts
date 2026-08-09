@@ -1,5 +1,12 @@
 import { openOpcPackage } from "@tumblerjs/opc";
+import type { FormattingAdapter, FormattingCapabilities, FormattingPatch, FormattingState } from "@tumblerjs/core";
 import { beginSpreadsheetEdit, type EditableCellValue } from "./editor.ts";
+import {
+  formatSpreadsheetCells,
+  spreadsheetFormattingState,
+  SPREADSHEET_FORMATTING_CAPABILITIES,
+  type SpreadsheetFormattingTarget,
+} from "./formatting.ts";
 import { openWorksheet, type SpreadsheetWorksheet } from "./worksheet.ts";
 import { openSpreadsheet, SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";
 import { calculateSpreadsheetWorksheet, type SpreadsheetCalculationSnapshot } from "./calculation.ts";
@@ -9,7 +16,7 @@ export interface OpenSpreadsheetArtifactOptions {
 }
 
 /** Immutable host boundary for an artefact viewer: bytes, active sheet, edits, and external revisions. */
-export class SpreadsheetArtifact {
+export class SpreadsheetArtifact implements FormattingAdapter<SpreadsheetFormattingTarget, SpreadsheetArtifact> {
   readonly workbook: SpreadsheetWorkbook;
   readonly activeSheet: SpreadsheetSheet;
   readonly worksheet: SpreadsheetWorksheet;
@@ -53,6 +60,34 @@ export class SpreadsheetArtifact {
   editFormulaOnSheet(sheet: SpreadsheetSheet | number | string, reference: string, formula: string): SpreadsheetArtifact {
     const target = this.#resolveSheet(sheet);
     const saved = beginSpreadsheetEdit(this.workbook).setCellFormula(target, reference, formula).commit();
+    if (saved === this.bytes()) return this;
+    return openSpreadsheetArtifact(saved, { sheet: this.activeSheet.name });
+  }
+
+  formattingCapabilities(_target: SpreadsheetFormattingTarget): FormattingCapabilities {
+    return SPREADSHEET_FORMATTING_CAPABILITIES;
+  }
+
+  formattingState(target: SpreadsheetFormattingTarget): FormattingState {
+    return spreadsheetFormattingState(this.worksheet, target);
+  }
+
+  applyFormatting(target: SpreadsheetFormattingTarget, patch: FormattingPatch): SpreadsheetArtifact {
+    return this.formatCells(target, patch);
+  }
+
+  formatCells(target: SpreadsheetFormattingTarget, patch: FormattingPatch): SpreadsheetArtifact {
+    return this.formatCellsOnSheet(this.activeSheet, target, patch);
+  }
+
+  /** Formats a worksheet without changing the sheet currently presented by the host. */
+  formatCellsOnSheet(
+    sheet: SpreadsheetSheet | number | string,
+    target: SpreadsheetFormattingTarget,
+    patch: FormattingPatch,
+  ): SpreadsheetArtifact {
+    const resolved = this.#resolveSheet(sheet);
+    const saved = formatSpreadsheetCells(this.workbook, resolved, target, patch);
     if (saved === this.bytes()) return this;
     return openSpreadsheetArtifact(saved, { sheet: this.activeSheet.name });
   }

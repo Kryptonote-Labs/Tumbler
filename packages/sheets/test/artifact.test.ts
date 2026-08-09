@@ -96,6 +96,34 @@ describe("spreadsheet artefact host boundary", () => {
     expect(() => artifact.selectSheet("Missing")).toThrow(SpreadsheetError);
     expect(() => artifact.editFormulaOnSheet("Missing", "A1", "1+1")).toThrow(SpreadsheetError);
   });
+
+  test("formats ranges through the immutable client-side artifact boundary", () => {
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({
+      stylesXml: `<styleSheet xmlns="${namespace}"><fonts count="1"><font><name val="Aptos"/><sz val="11"/></font></fonts><fills count="1"><fill/></fills><borders count="1"><border/></borders><cellXfs count="1"><xf fontId="0" fillId="0" borderId="0"/></cellXfs></styleSheet>`,
+      sheets: [{
+        name: "Data",
+        sheetId: 1,
+        relationshipId: "data",
+        xml: `<worksheet xmlns="${namespace}"><sheetData><row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c></row></sheetData></worksheet>`,
+      }],
+    }));
+
+    const formatted = artifact.applyFormatting("A1:B1", {
+      text: { bold: { set: true }, fontSize: { set: 16 } },
+      block: { horizontalAlignment: { set: "center" } },
+    });
+
+    expect(formatted).not.toBe(artifact);
+    expect(artifact.worksheet.cellStyle("A1").font.bold).toBeFalse();
+    expect(formatted.worksheet.cellStyle("A1")).toMatchObject({
+      font: { bold: true, size: 16 },
+      alignment: { horizontal: "center" },
+    });
+    expect(formatted.worksheet.cellStyle("B1")).toEqual(formatted.worksheet.cellStyle("A1"));
+    expect(formatted.formattingState("A1:B1").text.bold).toEqual({ state: "value", value: true });
+    expect(formatted.formattingCapabilities("A1").text.bold).toBeTrue();
+    expect(formatted.formatCells("A1:B1", { text: { bold: { set: true } } })).toBe(formatted);
+  });
 });
 
 function workbookBytes(revision: number): Uint8Array {
