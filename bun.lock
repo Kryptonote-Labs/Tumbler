@@ -12,33 +12,33 @@
     },
     "packages/charts": {
       "name": "@tumblerjs/charts",
-      "version": "0.1.0-alpha.1",
+      "version": "0.1.0-alpha.4",
       "dependencies": {
         "@tumblerjs/ooxml": "0.1.0-alpha.1",
       },
     },
     "packages/core": {
       "name": "@tumblerjs/core",
-      "version": "0.1.0-alpha.1",
+      "version": "0.1.0-alpha.4",
       "dependencies": {
-        "@tumblerjs/ooxml": "0.1.0-alpha.1",
+        "@tumblerjs/ooxml": "0.1.0-alpha.4",
       },
     },
     "packages/formulas": {
       "name": "@tumblerjs/formulas",
-      "version": "0.1.0-alpha.0",
+      "version": "0.1.0-alpha.4",
     },
     "packages/ooxml": {
       "name": "@tumblerjs/ooxml",
-      "version": "0.1.0-alpha.1",
+      "version": "0.1.0-alpha.4",
       "dependencies": {
-        "@tumblerjs/opc": "0.1.0-alpha.0",
+        "@tumblerjs/opc": "0.1.0-alpha.4",
         "saxes": "6.0.0",
       },
     },
     "packages/opc": {
       "name": "@tumblerjs/opc",
-      "version": "0.1.0-alpha.0",
+      "version": "0.1.0-alpha.4",
       "dependencies": {
         "fflate": "^0.8.3",
         "saxes": "^6.0.0",
@@ -46,7 +46,7 @@
     },
     "packages/sheets": {
       "name": "@tumblerjs/sheets",
-      "version": "0.1.0-alpha.2",
+      "version": "0.1.0-alpha.4",
       "dependencies": {
         "@tumblerjs/charts": "0.1.0-alpha.1",
         "@tumblerjs/core": "0.1.0-alpha.1",
@@ -65,7 +65,7 @@
     },
     "packages/svelte": {
       "name": "@tumblerjs/svelte",
-      "version": "0.1.0-alpha.1",
+      "version": "0.1.0-alpha.4",
       "dependencies": {
         "@tumblerjs/charts": "0.1.0-alpha.1",
         "@tumblerjs/core": "0.1.0-alpha.1",
@@ -96,6 +96,7 @@
       "dependencies": {
         "@tumblerjs/core": "workspace:*",
         "@tumblerjs/ooxml": "workspace:*",
+        "@tumblerjs/opc": "workspace:*",
       },
     },
   },
