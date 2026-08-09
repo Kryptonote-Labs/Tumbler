@@ -27,6 +27,8 @@ The implemented format is SpreadsheetML (`.xlsx`). The current alpha can:
   arithmetic, comparisons, `IF`, `SUM`, `COUNT`, `AVERAGE`, `MIN`, `MAX`, `AND`,
   `OR`, `NOT`, `COUNTIF`, `SUMIF`, and `AVERAGEIF`;
 - edit literal strings, numbers, booleans, blank cells, and ordinary formulas;
+- apply font size, family, weight, italics, underline, colour, and horizontal or
+  vertical alignment to cell ranges entirely in the browser;
 - save surgical worksheet changes while retaining untouched ZIP payloads;
 - render an owned virtualized Svelte grid, formula bar, table views, hyperlinks,
   conditional font/fill/border overlays, and native SVG chart previews.
@@ -163,6 +165,31 @@ data-table, dynamic-array, and external-workbook formulas are deliberately
 rejected rather than flattened or corrupted. Saving removes stale calculation
 chains and asks external consumers to perform a full recalculation.
 
+## Format selections
+
+Formatting uses a format-neutral patch shared by Sheets, Word, and Slides. The
+SpreadsheetML adapter is the first implementation:
+
+```ts
+artifact = artifact.applyFormatting("B4:D12", {
+  text: {
+    fontSize: { set: 14 },
+    bold: { set: true },
+    italic: { set: false },
+    underline: { set: "single" },
+    color: { set: { type: "rgb", value: "#C62828" } },
+  },
+  block: { horizontalAlignment: { set: "center" } },
+});
+
+console.log(artifact.formattingState("B4:D12"));
+```
+
+Omitting a property leaves it untouched. `{ set: false }` creates an explicit
+false value, while `{ inherit: true }` returns it to the adapter's inherited or
+default value. Formatting blank cells creates valid styled cells, and repeated
+equivalent edits reuse existing font and cell-format records.
+
 ## Save or download
 
 ```ts
@@ -186,6 +213,7 @@ leading `=` as formula input.
 <script lang="ts">
   import { formatCellReference, openSpreadsheetArtifact } from "@tumblerjs/sheets";
   import {
+    FormattingToolbar,
     SpreadsheetFormulaBar,
     SpreadsheetGrid,
     type SpreadsheetFormulaBarEdit,
@@ -195,6 +223,7 @@ leading `=` as formula input.
 
   let artifact = $state(openSpreadsheetArtifact(bytes));
   let selectedReference = $state("A1");
+  let selectedRange = $state({ start: { row: 1, column: 1 }, end: { row: 1, column: 1 } });
   let referencePick = $state<SpreadsheetFormulaReferencePick>();
   let referencePickId = 0;
 
@@ -216,12 +245,18 @@ leading `=` as formula input.
   {referencePick}
   onedit={editFormulaBar}
 />
+<FormattingToolbar
+  state={artifact.formattingState(selectedRange)}
+  capabilities={artifact.formattingCapabilities(selectedRange)}
+  onformat={(patch) => artifact = artifact.applyFormatting(selectedRange, patch)}
+/>
 <SpreadsheetGrid
   worksheet={artifact.worksheet}
   calculation={artifact.calculation}
   onedit={editCell}
   onselectionchange={(selection) => {
     selectedReference = formatCellReference(selection.focus);
+    selectedRange = selection.range;
     referencePick = {
       id: ++referencePickId,
       sheet: artifact.activeSheet.name,
@@ -248,7 +283,7 @@ theme variables. Neither component requires a hosted service.
 | `@tumblerjs/ooxml` | Loss-aware XML, namespaces, compatibility, themes, and shared metadata |
 | `@tumblerjs/formulas` | Headless spreadsheet formula parsing and bounded calculation |
 | `@tumblerjs/charts` | Headless DrawingML chart semantics and deterministic layout |
-| `@tumblerjs/core` | Format-neutral grid selection and sparse geometry primitives |
+| `@tumblerjs/core` | Format-neutral selection, formatting contracts, and sparse geometry |
 | `@tumblerjs/sheets` | SpreadsheetML reading, calculation, preservation, and editing |
 | `@tumblerjs/svelte` | Replaceable Svelte document heads |
 
@@ -275,6 +310,7 @@ for the resumable alpha release workflow.
 - [Standards and compatibility](docs/standards-and-compatibility.md)
 - [SpreadsheetML implementation status](docs/spreadsheetml-implementation.md)
 - [Spreadsheet formula authoring](docs/spreadsheet-formula-authoring.md)
+- [Cross-format formatting](docs/formatting.md)
 - [Testing](docs/testing.md)
 - [Roadmap](docs/roadmap.md)
 - [OOXML engineering reference](docs/reference/README.md)

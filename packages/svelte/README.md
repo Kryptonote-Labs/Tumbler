@@ -7,17 +7,33 @@ complete ownership of their surrounding interface and styling.
 > and Office-format coverage remains incomplete.
 
 ```sh
-bun add @tumblerjs/svelte@alpha @tumblerjs/sheets@alpha
+bun add @tumblerjs/svelte@alpha @tumblerjs/sheets@alpha @tumblerjs/core@alpha
 ```
 
 ```svelte
 <script lang="ts">
-  import { SpreadsheetFormulaBar, SpreadsheetGrid } from "@tumblerjs/svelte";
+  import { createGridSelection } from "@tumblerjs/core";
+  import { FormattingToolbar, SpreadsheetFormulaBar, SpreadsheetGrid } from "@tumblerjs/svelte";
+
+  let selection = $state(createGridSelection({ row: 1, column: 1 }));
 </script>
 
 <SpreadsheetFormulaBar worksheet={artifact.worksheet} reference="A1" />
-<SpreadsheetGrid worksheet={artifact.worksheet} calculation={artifact.calculation} />
+<FormattingToolbar
+  state={artifact.formattingState(selection.range)}
+  capabilities={artifact.formattingCapabilities(selection.range)}
+  onformat={(patch) => artifact = artifact.applyFormatting(selection.range, patch)}
+/>
+<SpreadsheetGrid
+  worksheet={artifact.worksheet}
+  calculation={artifact.calculation}
+  {selection}
+  onselectionchange={(next) => selection = next}
+/>
 ```
+
+`FormattingToolbar` is format-neutral. Future Word and Slides heads can supply
+the same state and capability contract without replacing application UI.
 
 The grid automatically projects supported conditional font, fill, and border
 rules from the worksheet. Its source rules and package bytes remain unchanged.

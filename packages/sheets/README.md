@@ -46,6 +46,26 @@ const edited = artifact
 const output = edited.bytes();
 ```
 
+Apply semantic formatting without exposing SpreadsheetML style indexes:
+
+```ts
+const formatted = edited.applyFormatting("B4:D12", {
+  text: {
+    fontSize: { set: 14 },
+    bold: { set: true },
+    italic: { set: false },
+    underline: { set: "single" },
+    color: { set: { type: "rgb", value: "#C62828" } },
+  },
+  block: { horizontalAlignment: { set: "center" } },
+});
+
+console.log(formatted.formattingState("B4:D12"));
+```
+
+Formatting is immutable, applies to values and blank cells, preserves unrelated
+number/fill/border properties, and deduplicates equivalent styles.
+
 Project conditional formatting without materializing its ranges:
 
 ```ts
