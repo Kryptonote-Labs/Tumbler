@@ -22,6 +22,7 @@
   let layout = $state<WordLayout>();
   let viewport = $state<WordPageViewport>();
   let mounted = $state(false);
+  let editingFocused = $state(false);
   const imageUrls = new WeakMap<Uint8Array, string>();
   const createdUrls = new Set<string>();
 
@@ -43,7 +44,11 @@
   $effect(() => {
     wordDocument;
     scale;
-    if (mounted) reflow();
+    selection;
+    if (mounted) {
+      reflow();
+      queueMicrotask(restoreBrowserSelection);
+    }
   });
 
   function reflow() {
@@ -75,6 +80,24 @@
     const anchor = logicalPosition(browserSelection.anchorNode, browserSelection.anchorOffset);
     const focus = logicalPosition(browserSelection.focusNode, browserSelection.focusOffset);
     if (anchor !== undefined && focus !== undefined) onselectionchange?.({ anchor, focus });
+  }
+
+  function restoreBrowserSelection() {
+    if (!editable || !editingFocused || selection === undefined || scroller === undefined) return;
+    const anchor = browserPoint(selection.anchor);
+    const focus = browserPoint(selection.focus);
+    if (anchor === undefined || focus === undefined) return;
+    globalThis.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
+  }
+
+  function browserPoint(position: WordTextPosition): { node: Node; offset: number } | undefined {
+    if (scroller === undefined) return undefined;
+    const fragments = [...scroller.querySelectorAll<HTMLElement>(`[data-paragraph="${position.paragraphElementId}"][data-start][data-end]:not([data-story])`)]
+      .filter((fragment) => Number(fragment.dataset.start) <= position.offset && Number(fragment.dataset.end) >= position.offset);
+    const fragment = position.affinity === "before" ? fragments.at(-1) : fragments[0];
+    if (fragment === undefined) return undefined;
+    const node = fragment.firstChild ?? fragment;
+    return { node, offset: Math.max(0, Math.min(node.textContent?.length ?? 0, position.offset - Number(fragment.dataset.start))) };
   }
 
   function logicalPosition(node: Node | null, offset: number): WordTextPosition | undefined {
@@ -151,6 +174,10 @@
             autocapitalize="sentences"
             data-form-type="other"
             data-lpignore="true"
+            onfocusin={() => editingFocused = true}
+            onfocusout={(event) => {
+              if (!(event.relatedTarget instanceof Node) || !scroller?.contains(event.relatedTarget)) editingFocused = false;
+            }}
             onbeforeinput={handleBeforeInput}
             onkeydown={handleKeydown}
             style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
