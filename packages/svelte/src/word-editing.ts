@@ -6,6 +6,8 @@ export interface WordInputEdit {
   readonly caret: WordTextPosition;
 }
 
+export type WordDocumentEdit = WordInputEdit;
+
 /** Converts a browser input intent into one logical Word edit without trusting DOM mutations. */
 export function wordInputEdit(
   document: WordDocument,

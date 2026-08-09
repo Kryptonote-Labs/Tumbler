@@ -9,7 +9,7 @@ export { browserWordTextMeasurer, wordTextCss } from "./word-font-metrics.ts";
 export { calculateWordPageViewport } from "./word-page-viewport.ts";
 export type { WordPageViewport } from "./word-page-viewport.ts";
 export { wordDocumentParagraphs, wordInputEdit } from "./word-editing.ts";
-export type { WordInputEdit } from "./word-editing.ts";
+export type { WordDocumentEdit, WordInputEdit } from "./word-editing.ts";
 export { openWordArtifact, openWordEditingSession, WordArtifact, WordEditingSession, WORD_FORMATTING_CAPABILITIES } from "@tumblerjs/word";
 export type { WordDocument, WordTextPosition, WordTextSelection } from "@tumblerjs/word";
 export {

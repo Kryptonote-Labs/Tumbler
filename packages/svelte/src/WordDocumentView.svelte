@@ -1,17 +1,23 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { layoutWordDocument, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordLayout } from "@tumblerjs/word";
+  import { layoutWordDocument, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import OoxmlChart from "./OoxmlChart.svelte";
   import { browserWordTextMeasurer, wordTextCss } from "./word-font-metrics.ts";
   import { calculateWordPageViewport, type WordPageViewport } from "./word-page-viewport.ts";
+  import { wordInputEdit, type WordDocumentEdit } from "./word-editing.ts";
 
   interface Props {
     readonly wordDocument: WordDocument;
     readonly onhyperlink?: (target: string) => void;
+    readonly editable?: boolean;
+    readonly selection?: WordTextSelection;
+    readonly onselectionchange?: (selection: WordTextSelection) => void;
+    readonly onedit?: (edit: WordDocumentEdit) => void;
+    readonly oncommand?: (command: "undo" | "redo" | "save") => void;
     readonly scale?: number;
   }
 
-  let { wordDocument, onhyperlink, scale = 1 }: Props = $props();
+  let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, scale = 1 }: Props = $props();
   let scroller = $state<HTMLDivElement>();
   let layout = $state<WordLayout>();
   let viewport = $state<WordPageViewport>();
@@ -27,7 +33,11 @@
     reflow();
     const fonts = globalThis.document.fonts;
     fonts?.addEventListener("loadingdone", reflow);
-    return () => fonts?.removeEventListener("loadingdone", reflow);
+    globalThis.document.addEventListener("selectionchange", readBrowserSelection);
+    return () => {
+      fonts?.removeEventListener("loadingdone", reflow);
+      globalThis.document.removeEventListener("selectionchange", readBrowserSelection);
+    };
   });
 
   $effect(() => {
@@ -51,10 +61,49 @@
 
   function activateHyperlink(event: MouseEvent | KeyboardEvent, target: string | undefined) {
     if (target === undefined || onhyperlink === undefined) return;
+    if (editable && !(event instanceof MouseEvent && (event.ctrlKey || event.metaKey))) return;
     if (event instanceof KeyboardEvent && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
     onhyperlink(target);
+  }
+
+  function readBrowserSelection() {
+    if (!editable || scroller === undefined) return;
+    const browserSelection = globalThis.getSelection();
+    if (browserSelection === null || browserSelection.rangeCount === 0 || !scroller.contains(browserSelection.anchorNode)) return;
+    const anchor = logicalPosition(browserSelection.anchorNode, browserSelection.anchorOffset);
+    const focus = logicalPosition(browserSelection.focusNode, browserSelection.focusOffset);
+    if (anchor !== undefined && focus !== undefined) onselectionchange?.({ anchor, focus });
+  }
+
+  function logicalPosition(node: Node | null, offset: number): WordTextPosition | undefined {
+    const element = node instanceof Element ? node : node?.parentElement;
+    const fragment = element?.closest<HTMLElement>("[data-paragraph][data-start][data-end]");
+    if (fragment === null || fragment === undefined || fragment.dataset.story !== undefined) return undefined;
+    const paragraphElementId = Number(fragment.dataset.paragraph);
+    const start = Number(fragment.dataset.start);
+    const end = Number(fragment.dataset.end);
+    if (!Number.isInteger(paragraphElementId) || !Number.isInteger(start) || !Number.isInteger(end)) return undefined;
+    const local = node?.nodeType === Node.TEXT_NODE ? offset : offset === 0 ? 0 : fragment.textContent?.length ?? 0;
+    return { paragraphElementId, offset: Math.min(end, start + local), affinity: local === 0 ? "before" : "after" };
+  }
+
+  function handleBeforeInput(event: InputEvent) {
+    if (!editable || selection === undefined) return;
+    const edit = wordInputEdit(wordDocument, selection, event.inputType, event.data);
+    if (edit === undefined) return;
+    event.preventDefault();
+    onedit?.(edit);
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (!editable || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+    const key = event.key.toLowerCase();
+    const command = key === "s" ? "save" : key === "z" ? event.shiftKey ? "redo" : "undo" : key === "y" ? "redo" : undefined;
+    if (command === undefined) return;
+    event.preventDefault();
+    oncommand?.(command);
   }
 
   function fragmentStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0) {
@@ -91,7 +140,20 @@
           aria-label={`Page ${page.index + 1}`}
           style={`left:50%;top:${viewport.offsets[pageIndex]! * scale}px;width:${wordPointsToCssPixels(page.width) * scale}px;height:${wordPointsToCssPixels(page.height) * scale}px`}
         >
-          <div class="word-page-content" style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}>
+          <div
+            class="word-page-content"
+            class:editable
+            contenteditable={editable}
+            role={editable ? "textbox" : undefined}
+            aria-multiline={editable ? "true" : undefined}
+            aria-label={editable ? `Edit page ${page.index + 1}` : undefined}
+            spellcheck={editable}
+            autocapitalize="sentences"
+            autocomplete="off"
+            onbeforeinput={handleBeforeInput}
+            onkeydown={handleKeydown}
+            style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
+          >
             {#if page.noteSeparatorY !== undefined}
               <div class="note-separator" style={`left:${wordPointsToCssPixels(page.section.marginLeftTwips / 20)}px;top:${wordPointsToCssPixels(page.noteSeparatorY)}px`}></div>
             {/if}
@@ -195,6 +257,7 @@
   .word-surface { position: relative; min-width: 100%; }
   .word-page { position: absolute; transform: translateX(-50%); overflow: hidden; box-sizing: border-box; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.2); contain: strict; }
   .word-page-content { position: absolute; inset: 0 auto auto 0; overflow: hidden; }
+  .word-page-content.editable { outline: 0; caret-color: var(--tumbler-document-accent, #25a735); }
   .document-table { position: absolute; }
   .document-cell { position: absolute; box-sizing: border-box; border: 1px solid #b7b7b7; }
   .document-drawing { position: absolute; display: block; object-fit: contain; overflow: hidden; }

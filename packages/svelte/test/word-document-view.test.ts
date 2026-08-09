@@ -11,7 +11,8 @@ describe("owned Svelte Word document head", () => {
     expect(source).toContain('aria-label="Document pages"');
     expect(source).toContain("calculateWordPageViewport");
     expect(source).toContain("layout.pages.slice");
-    expect(source).not.toContain("contenteditable");
+    expect(source).toContain("contenteditable={editable}");
+    expect(source).toContain("onbeforeinput={handleBeforeInput}");
   });
 
   test("mounts only an overscanned page window", () => {
