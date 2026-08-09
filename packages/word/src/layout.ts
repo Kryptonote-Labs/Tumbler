@@ -311,13 +311,37 @@ export function layoutWordDocument(
     for (let blockIndex = 0; blockIndex < section.blocks.length; blockIndex += 1) {
       const block = section.blocks[blockIndex]!;
       if (block.kind === "table") {
-        const initialColumn = page!.columns[columnIndex]!;
-        const preparedTable = prepareTable(document, block, initialColumn.width, measurer, listMarkers);
-        const height = preparedTable.rowHeights.reduce((sum, value) => sum + value, 0);
-        if (cursorY + height > initialColumn.y + initialColumn.height && cursorY > initialColumn.y) advanceColumn(section.properties);
-        const target = page!.columns[columnIndex]!;
-        target.tables.push(placeTable(preparedTable, target.x, cursorY, budget));
-        cursorY += height;
+        let target = page!.columns[columnIndex]!;
+        const preparedTable = prepareTable(document, block, target.width, measurer, listMarkers);
+        const groups = tableRowGroups(preparedTable);
+        const headerRows = leadingHeaderRows(preparedTable);
+        let groupIndex = 0;
+        while (groupIndex < groups.length) {
+          target = page!.columns[columnIndex]!;
+          const atTop = cursorY === target.y;
+          const repeated = groupIndex > 0 ? headerRows : [];
+          const repeatedHeight = rowSetHeight(preparedTable, repeated);
+          const selected = [...repeated];
+          let used = repeatedHeight;
+          while (groupIndex < groups.length) {
+            const group = groups[groupIndex]!;
+            const groupHeight = rowSetHeight(preparedTable, group);
+            if (selected.length > repeated.length && cursorY + used + groupHeight > target.y + target.height) break;
+            if (selected.length === repeated.length && cursorY + used + groupHeight > target.y + target.height && !atTop) break;
+            selected.push(...group);
+            used += groupHeight;
+            groupIndex += 1;
+            if (cursorY + used >= target.y + target.height) break;
+          }
+          if (selected.length === repeated.length) {
+            advanceColumn(section.properties);
+            continue;
+          }
+          const slice = slicePreparedTable(preparedTable, selected);
+          target.tables.push(placeTable(slice, target.x, cursorY, budget));
+          cursorY += used;
+          if (groupIndex < groups.length) advanceColumn(section.properties);
+        }
         continue;
       }
       if (block.kind !== "paragraph") {
@@ -419,8 +443,62 @@ function prepareTable(
     const current = rowHeights.slice(cell.resolved.row, end).reduce((sum, value) => sum + value, 0);
     if (current < cell.contentHeight) rowHeights[end - 1] = (rowHeights[end - 1] ?? 0) + cell.contentHeight - current;
   }
-  for (let index = 0; index < rowHeights.length; index += 1) rowHeights[index] = Math.max(rowHeights[index] ?? 0, 12);
+  for (let index = 0; index < rowHeights.length; index += 1) {
+    const source = grid.rows[index]!.source;
+    rowHeights[index] = source.heightRule === "exact" && source.heightTwips !== undefined
+      ? Math.max(1, points(source.heightTwips))
+      : Math.max(rowHeights[index] ?? 0, 12);
+  }
   return Object.freeze({ table, xOffset, width, columnOffsets: Object.freeze(columnOffsets), rowHeights: Object.freeze(rowHeights), cells: Object.freeze(preparedCells) });
+}
+
+function leadingHeaderRows(prepared: PreparedTable): readonly number[] {
+  const rows: number[] = [];
+  for (let index = 0; index < prepared.table.rows.length && prepared.table.rows[index]!.repeatHeader; index += 1) rows.push(index);
+  return Object.freeze(rows);
+}
+
+/** Groups rows which cannot be separated because of cantSplit or a vertical merge. */
+function tableRowGroups(prepared: PreparedTable): readonly (readonly number[])[] {
+  const groups: number[][] = [];
+  let start = 0;
+  while (start < prepared.rowHeights.length) {
+    let end = start + 1;
+    for (;;) {
+      const spanningEnd = prepared.cells
+        .filter((cell) => cell.resolved.row < end && cell.resolved.row + cell.resolved.rowSpan > end)
+        .reduce((maximum, cell) => Math.max(maximum, cell.resolved.row + cell.resolved.rowSpan), end);
+      if (spanningEnd === end) break;
+      end = Math.min(prepared.rowHeights.length, spanningEnd);
+    }
+    // cantSplit prevents splitting the row itself; rows are already the minimum pagination unit.
+    groups.push(Array.from({ length: end - start }, (_, index) => start + index));
+    start = end;
+  }
+  return Object.freeze(groups.map((group) => Object.freeze(group)));
+}
+
+function rowSetHeight(prepared: PreparedTable, rows: readonly number[]): number {
+  return rows.reduce((sum, row) => sum + prepared.rowHeights[row]!, 0);
+}
+
+function slicePreparedTable(prepared: PreparedTable, rows: readonly number[]): PreparedTable {
+  const rowMap = new Map(rows.map((row, index) => [row, index]));
+  const cells = prepared.cells.flatMap((cell): PreparedTableCell[] => {
+    const row = rowMap.get(cell.resolved.row);
+    if (row === undefined) return [];
+    const covered = Array.from({ length: cell.resolved.rowSpan }, (_, index) => cell.resolved.row + index);
+    if (!covered.every((sourceRow) => rowMap.has(sourceRow))) return [];
+    return [Object.freeze({
+      ...cell,
+      resolved: Object.freeze({ ...cell.resolved, row, rowSpan: covered.length }),
+    })];
+  });
+  return Object.freeze({
+    ...prepared,
+    rowHeights: Object.freeze(rows.map((row) => prepared.rowHeights[row]!)),
+    cells: Object.freeze(cells),
+  });
 }
 
 function placeTable(prepared: PreparedTable, columnX: number, y: number, budget: LayoutBudget): WordLayoutTable {

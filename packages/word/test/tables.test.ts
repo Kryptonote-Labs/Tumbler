@@ -28,6 +28,27 @@ describe("WordprocessingML tables", () => {
     expect(layout.pages[0]?.columns[0]?.unsupportedBlocks).toHaveLength(0);
   });
 
+  test("paginates at row boundaries and repeats leading header rows", () => {
+    const rows = ["Header", "One", "Two", "Three", "Four"].map((value, index) =>
+      `<w:tr><w:trPr>${index === 0 ? "<w:tblHeader/>" : ""}<w:trHeight w:val="500" w:hRule="exact"/></w:trPr><w:tc><w:p><w:r><w:t>${value}</w:t></w:r></w:p></w:tc></w:tr>`
+    ).join("");
+    const artifact = open(`<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>${rows}</w:tbl><w:sectPr><w:pgSz w:w="5000" w:h="1800"/><w:pgMar w:top="100" w:right="100" w:bottom="100" w:left="100"/></w:sectPr>`);
+    const layout = layoutWordDocument(artifact.document, { measure: (text) => ({ width: text.length * 5, ascent: 8, descent: 2 }) });
+    expect(layout.pages.length).toBeGreaterThan(1);
+    for (const page of layout.pages) {
+      const table = page.columns[0]?.tables[0];
+      expect(table?.cells[0]?.lines[0]?.fragments[0]?.text).toBe("Header");
+      expect(table?.y).toBeGreaterThanOrEqual(page.columns[0]!.y);
+      expect((table?.y ?? 0) + (table?.height ?? 0)).toBeLessThanOrEqual(page.columns[0]!.y + page.columns[0]!.height);
+    }
+  });
+
+  test("honours exact row height instead of expanding it to cell content", () => {
+    const artifact = open(`<w:tbl><w:tblGrid><w:gridCol w:w="1200"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="200" w:hRule="exact"/></w:trPr><w:tc><w:p><w:r><w:t>Several words which wrap</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`);
+    const layout = layoutWordDocument(artifact.document, { measure: (text) => ({ width: text.length * 8, ascent: 8, descent: 2 }) });
+    expect(layout.pages[0]?.columns[0]?.tables[0]?.height).toBe(10);
+  });
+
   test("rejects vertical merge continuations without matching restart cells", () => {
     expect(() => resolveWordTableGrid(openTable(`<w:tbl><w:tr><w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc></w:tr></w:tbl>`))).toThrow("no matching restart");
   });
