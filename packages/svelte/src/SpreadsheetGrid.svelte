@@ -558,7 +558,7 @@
       width={Math.max(1, chart.bounds.width)}
       height={Math.max(1, chart.bounds.height)}
       resolveColor={(color) => resolveSpreadsheetChartColor(worksheet.styles, color)}
-      formatNumber={(value, formatCode) => formatSpreadsheetCellValue({ type: "number", value }, { numberFormatCode: formatCode, dateSystem: worksheet.workbook.dateSystem })}
+      formatNumber={(value, formatCode) => formatSpreadsheetCellValue({ type: "number", value, lexical: String(value) }, { numberFormatCode: formatCode, dateSystem: worksheet.workbook.dateSystem })}
       clipId={`tumbler-scatter-clip-${chart.frame.anchor.elementId}`}
     />
   </button>
