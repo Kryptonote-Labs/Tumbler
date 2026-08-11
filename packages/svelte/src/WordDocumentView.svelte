@@ -70,6 +70,14 @@
     viewport = calculateWordPageViewport(layout, scroller.scrollTop / scale, scroller.clientHeight / scale);
   }
 
+  /** Returns keyboard input to the controlled caret after a host toolbar action. */
+  export function focusEditor() {
+    if (!editable || scroller === undefined) return;
+    editingFocused = true;
+    scroller.querySelector<HTMLElement>(".word-page-content")?.focus({ preventScroll: true });
+    queueMicrotask(restoreBrowserSelection);
+  }
+
   function activateHyperlink(event: MouseEvent | KeyboardEvent, target: string | undefined) {
     if (target === undefined) return;
     if (editable && !(event instanceof MouseEvent && (event.ctrlKey || event.metaKey))) return;
