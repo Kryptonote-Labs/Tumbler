@@ -36,7 +36,7 @@ export interface WordFormattingDocumentAdapter extends FormattingAdapter<WordFor
 
 export function wordFormattingState(document: WordDocument, target: WordFormattingTarget): FormattingState {
   const ranges = selectedRanges(document, target);
-  const formats = ranges.flatMap(({ paragraph, start, end }) => selectedRuns(document, paragraph, localSelection(paragraph, start, end))
+  const formats = ranges.flatMap(({ paragraph, start, end }) => selectedRuns(document, paragraph, localSelection(paragraph, start, end), false)
     .map((run) => ({ computed: document.styles.runFormat(document, paragraph, run), direct: directRun(document, run) })));
   const paragraphs = ranges.map(({ paragraph }) => {
     const computed = document.styles.paragraphFormat(document, paragraph);
@@ -227,7 +227,7 @@ function localSelection(paragraph: WordParagraph, start: number, end: number): W
   return { anchor: { paragraphElementId: paragraph.elementId, offset: start }, focus: { paragraphElementId: paragraph.elementId, offset: end } };
 }
 
-function selectedRuns(document: WordDocument, paragraph: WordParagraph, target: WordFormattingTarget): readonly WordRun[] {
+function selectedRuns(document: WordDocument, paragraph: WordParagraph, target: WordFormattingTarget, required = true): readonly WordRun[] {
   const start = Math.min(target.anchor.offset, target.focus.offset);
   const end = Math.max(target.anchor.offset, target.focus.offset);
   validateRange(wordParagraphText(document, paragraph), start, end);
@@ -242,7 +242,7 @@ function selectedRuns(document: WordDocument, paragraph: WordParagraph, target: 
     if (inline.kind === "run") add(inline);
     else if (inline.kind === "hyperlink" || inline.kind === "insertion") inline.runs.forEach(add);
   }
-  if (runs.length === 0) throw new WordError("unsupported_document", "The selection has no format-capable text run.");
+  if (required && runs.length === 0) throw new WordError("unsupported_document", "The selection has no format-capable text run.");
   return Object.freeze(runs);
 }
 

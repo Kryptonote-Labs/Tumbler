@@ -54,6 +54,15 @@ describe("WordprocessingML direct formatting", () => {
     expect(edited.document.styles.paragraphFormat(edited.document, first(edited)).alignment).toBe("end");
   });
 
+  test("reports unavailable text formatting for an empty paragraph", () => {
+    const artifact = open(`<w:p><w:pPr><w:jc w:val="center"/></w:pPr></w:p>`);
+    const paragraph = first(artifact);
+    const state = artifact.formattingState(selection(paragraph.elementId, 0, 0));
+    expect(state.text.fontFamily.state).toBe("unavailable");
+    expect(state.text.bold.state).toBe("unavailable");
+    expect(state.block.horizontalAlignment).toEqual({ state: "value", value: "center" });
+  });
+
   test("formats a selection spanning paragraphs and reports mixed block state", () => {
     const artifact = open(`<w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:t>First</w:t></w:r></w:p><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>Second</w:t></w:r></w:p>`);
     const [firstParagraph, secondParagraph] = artifact.document.blocks;
