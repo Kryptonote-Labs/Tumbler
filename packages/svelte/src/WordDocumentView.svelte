@@ -114,14 +114,17 @@
   }
 
   function readBrowserSelection() {
-    if (!editable || scroller === undefined) return;
+    const next = browserTextSelection();
+    if (next !== undefined && !sameWordTextSelection(selection, next)) onselectionchange?.(next);
+  }
+
+  function browserTextSelection(): WordTextSelection | undefined {
+    if (!editable || scroller === undefined) return undefined;
     const browserSelection = globalThis.getSelection();
-    if (browserSelection === null || browserSelection.rangeCount === 0 || !scroller.contains(browserSelection.anchorNode)) return;
+    if (browserSelection === null || browserSelection.rangeCount === 0 || !scroller.contains(browserSelection.anchorNode)) return undefined;
     const anchor = logicalPosition(browserSelection.anchorNode, browserSelection.anchorOffset);
     const focus = logicalPosition(browserSelection.focusNode, browserSelection.focusOffset);
-    if (anchor === undefined || focus === undefined) return;
-    const next = { anchor, focus };
-    if (!sameWordTextSelection(selection, next)) onselectionchange?.(next);
+    return anchor === undefined || focus === undefined ? undefined : { anchor, focus };
   }
 
   function restoreBrowserSelection() {
@@ -155,8 +158,11 @@
   }
 
   function handleBeforeInput(event: InputEvent) {
-    if (!editable || selection === undefined) return;
-    const edit = wordInputEdit(wordDocument, selection, event.inputType, event.data);
+    if (!editable) return;
+    // Keyboard navigation changes the DOM selection before Svelte can publish controlled state.
+    const activeSelection = browserTextSelection() ?? selection;
+    if (activeSelection === undefined) return;
+    const edit = wordInputEdit(wordDocument, activeSelection, event.inputType, event.data);
     if (edit === undefined) return;
     event.preventDefault();
     onedit?.(edit);
