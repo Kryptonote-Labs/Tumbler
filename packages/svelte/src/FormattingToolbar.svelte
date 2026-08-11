@@ -72,6 +72,11 @@
       spellcheck="false"
       disabled={disabled}
       onchange={(event) => apply(fontFamilyFormatting(event.currentTarget.value))}
+      onkeydown={(event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        apply(fontFamilyFormatting(event.currentTarget.value));
+      }}
     />
   {/if}
   {#if capabilities.text.fontSize !== false}
@@ -87,6 +92,11 @@
       title="Font size"
       disabled={disabled}
       onchange={(event) => apply(fontSizeFormatting(event.currentTarget.value))}
+      onkeydown={(event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        apply(fontSizeFormatting(event.currentTarget.value));
+      }}
     />
   {/if}
   {#if capabilities.text.bold}
@@ -98,6 +108,7 @@
       aria-pressed={bold}
       title="Bold"
       disabled={disabled}
+      onpointerdown={(event) => event.preventDefault()}
       onclick={() => apply(toggleBooleanFormatting("bold", state.text.bold))}
     ><strong>B</strong></button>
   {/if}
@@ -110,6 +121,7 @@
       aria-pressed={italic}
       title="Italic"
       disabled={disabled}
+      onpointerdown={(event) => event.preventDefault()}
       onclick={() => apply(toggleBooleanFormatting("italic", state.text.italic))}
     ><em>I</em></button>
   {/if}
@@ -122,6 +134,7 @@
       aria-pressed={underline}
       title="Underline"
       disabled={disabled}
+      onpointerdown={(event) => event.preventDefault()}
       onclick={() => apply(toggleUnderlineFormatting(state.text.underline))}
     ><span class="underline">U</span></button>
   {/if}
@@ -149,6 +162,7 @@
         aria-pressed={alignment === value}
         title={`Align ${value}`}
         disabled={disabled}
+        onpointerdown={(event) => event.preventDefault()}
         onclick={() => setAlignment(value)}
       ><span class={value} aria-hidden="true"><i></i><i></i><i></i></span></button>
     {/each}
