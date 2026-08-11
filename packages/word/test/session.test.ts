@@ -40,6 +40,18 @@ describe("Word editing sessions", () => {
     expect(session.canUndo).toBe(false);
     expect(session.dirty).toBe(false);
   });
+
+  test("commits typing text and its formatting as one history operation", () => {
+    const session = openWordEditingSession(fixture(`<w:p/>`));
+    const paragraph = session.artifact.document.blocks[0] as WordParagraph;
+    session.replaceText(selection(paragraph.elementId, 0), "A", { text: { italic: { set: true } } });
+    expect(text(session)).toBe("A");
+    expect(session.canUndo).toBe(true);
+
+    session.undo();
+    expect(text(session)).toBe("");
+    expect(session.canUndo).toBe(false);
+  });
 });
 
 function selection(paragraphElementId: number, offset: number) {

@@ -46,8 +46,8 @@ export class WordEditingSession {
   get canRedo(): boolean { return editingHistoryCanRedo(this.#history); }
   get dirty(): boolean { return editingHistoryIsDirty(this.#history); }
 
-  replaceText(selection: WordTextSelection, value: string): WordArtifact {
-    return this.#commit(this.artifact.replaceText(selection, value));
+  replaceText(selection: WordTextSelection, value: string, typingFormatting?: FormattingPatch): WordArtifact {
+    return this.#commit(this.artifact.replaceText(selection, value, typingFormatting));
   }
 
   applyFormatting(selection: WordTextSelection, patch: FormattingPatch): WordArtifact {

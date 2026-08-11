@@ -39,6 +39,21 @@ describe("WordprocessingML logical text editing", () => {
     expect(text.attributes.find((attribute) => attribute.localName === "space")?.value).toBe("preserve");
   });
 
+  test("applies caret typing formatting without multiplying equivalent runs", () => {
+    const artifact = open(`<w:p/>`);
+    const paragraph = firstParagraph(artifact);
+    const formatting = { text: { bold: { set: true }, fontSize: { set: 18 } } } as const;
+    const first = artifact.replaceText(selection(paragraph.elementId, 0, 0), "A", formatting);
+    const firstParagraphAfter = firstParagraph(first);
+    const second = first.replaceText(selection(firstParagraphAfter.elementId, 1, 1), "B", formatting);
+    const edited = firstParagraph(second);
+
+    expect(wordParagraphText(second.document, edited)).toBe("AB");
+    expect(second.formattingState(selection(edited.elementId, 0, 2)).text.bold).toMatchObject({ value: true });
+    expect(second.formattingState(selection(edited.elementId, 0, 2)).text.fontSize).toMatchObject({ value: 18 });
+    expect(second.document.source.elements(word, "r")).toHaveLength(1);
+  });
+
   test("returns the original artefact for semantic no-ops", () => {
     const artifact = open(`<w:p><w:r><w:t>Hello</w:t></w:r></w:p>`);
     const paragraph = firstParagraph(artifact);
