@@ -13,7 +13,7 @@ describe("owned Svelte Word document head", () => {
     expect(source).toContain("layout.pages.slice");
     expect(source).toContain("contenteditable={editable}");
     expect(source).toContain("onbeforeinput={handleBeforeInput}");
-    expect(source).toContain('class="empty-line"');
+    expect(source).toContain("class:empty-line");
   });
 
   test("compiles recursive body and auxiliary table rendering", async () => {

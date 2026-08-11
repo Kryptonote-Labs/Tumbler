@@ -29,6 +29,14 @@ describe("WordprocessingML page layout", () => {
     expect(layout.fragmentCount).toBe(3);
   });
 
+  test("retains logical offsets for trailing spaces that have no painted width", () => {
+    const document = open(`<w:p><w:r><w:t xml:space="preserve">Hello </w:t></w:r></w:p>`, section({ width: 2_400, height: 3_000, margin: 200 }));
+    const line = layoutWordDocument(document, measurer).pages[0]!.columns[0]!.lines[0]!;
+    expect(line.fragments.map((fragment) => fragment.text).join("")).toBe("Hello");
+    expect(line.endOffset).toBe("Hello ".length);
+    expect(line.fragments.at(-1)?.endOffset).toBe("Hello".length);
+  });
+
   test("honours page, column, and section breaks with explicit page geometry", () => {
     const body = `
       <w:p><w:r><w:t>First</w:t><w:br w:type="column"/><w:t>Second</w:t><w:br w:type="page"/><w:t>Third</w:t></w:r></w:p>

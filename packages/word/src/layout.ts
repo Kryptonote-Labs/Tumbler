@@ -682,6 +682,8 @@ function breakLines(atoms: readonly ParagraphAtom[], width: number, format: Comp
   let lastBreak = -1;
   let offset = atoms[0]?.startOffset ?? 0;
   const push = (breakAfter?: WordBreakType): void => {
+    const logicalStart = line[0]?.startOffset ?? offset;
+    const logicalEnd = line.at(-1)?.endOffset ?? offset;
     let last = line.at(-1);
     while (last?.kind === "glyph" && last.whitespace) {
       lineWidth -= last.width;
@@ -692,14 +694,14 @@ function breakLines(atoms: readonly ParagraphAtom[], width: number, format: Comp
     const descent = Math.max(formatLineHeight(format) * 0.2, ...line.map(atomDescent));
     result.push(Object.freeze({
       atoms: Object.freeze(line),
-      startOffset: line[0]?.startOffset ?? offset,
-      endOffset: line.at(-1)?.endOffset ?? offset,
+      startOffset: logicalStart,
+      endOffset: logicalEnd,
       width: Math.max(0, lineWidth),
       ascent,
       descent,
       breakAfter,
     }));
-    offset = line.at(-1)?.endOffset ?? offset;
+    offset = logicalEnd;
     line = [];
     lineWidth = 0;
     lastBreak = -1;
