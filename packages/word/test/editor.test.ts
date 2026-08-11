@@ -54,6 +54,26 @@ describe("WordprocessingML logical text editing", () => {
     expect(second.document.source.elements(word, "r")).toHaveLength(1);
   });
 
+  test("starts a formatted typing run beside existing plain text", () => {
+    const artifact = open(`<w:p><w:r><w:t>M</w:t></w:r></w:p>`);
+    const paragraph = firstParagraph(artifact);
+    const edited = artifact.replaceText(selection(paragraph.elementId, 1, 1), "y", { text: { bold: { set: true } } });
+    const editedParagraph = firstParagraph(edited);
+
+    expect(wordParagraphText(edited.document, editedParagraph)).toBe("My");
+    expect(edited.formattingState(selection(editedParagraph.elementId, 1, 2)).text.bold).toMatchObject({ value: true });
+  });
+
+  test("starts a plain typing run beside existing bold text", () => {
+    const artifact = open(`<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>M</w:t></w:r></w:p>`);
+    const paragraph = firstParagraph(artifact);
+    const edited = artifact.replaceText(selection(paragraph.elementId, 1, 1), "y", { text: { bold: { set: false } } });
+    const editedParagraph = firstParagraph(edited);
+
+    expect(wordParagraphText(edited.document, editedParagraph)).toBe("My");
+    expect(edited.formattingState(selection(editedParagraph.elementId, 1, 2)).text.bold).toMatchObject({ value: false });
+  });
+
   test("returns the original artefact for semantic no-ops", () => {
     const artifact = open(`<w:p><w:r><w:t>Hello</w:t></w:r></w:p>`);
     const paragraph = firstParagraph(artifact);
