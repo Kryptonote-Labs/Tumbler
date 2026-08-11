@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, untrack } from "svelte";
   import { layoutWordDocument, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import OoxmlChart from "./OoxmlChart.svelte";
   import WordLayoutTableView from "./WordLayoutTableView.svelte";
@@ -46,7 +46,8 @@
     wordDocument;
     scale;
     if (mounted) {
-      reflow();
+      // Reflow reads its freshly-written layout to derive the viewport; that output is not an input dependency.
+      untrack(reflow);
     }
   });
 
