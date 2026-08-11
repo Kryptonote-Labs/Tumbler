@@ -42,6 +42,16 @@
       {#if line.marker !== undefined}
         <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(line.marker.y)}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
       {/if}
+      {#if line.fragments.length === 0}
+        <span
+          class="empty-line"
+          data-story={story}
+          data-paragraph={line.paragraphElementId}
+          data-start={line.startOffset}
+          data-end={line.endOffset}
+          style={`left:${wordPointsToCssPixels(line.x)}px;top:${wordPointsToCssPixels(line.y)}px;width:1px;height:${wordPointsToCssPixels(line.height)}px;line-height:${wordPointsToCssPixels(line.height)}px`}
+        >{"\u200b"}</span>
+      {/if}
       {#each line.fragments as fragment}
         {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
           <img class="document-drawing" src={imageurl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
@@ -70,6 +80,7 @@
   .document-drawing { display: block; object-fit: contain; overflow: hidden; }
   .drawing-fallback { border: 1px solid #d0d0d0; background: repeating-linear-gradient(135deg, #f3f3f3, #f3f3f3 8px, #fafafa 8px, #fafafa 16px); }
   span, button { display: block; white-space: pre; user-select: text; -webkit-user-select: text; }
+  .empty-line { overflow: visible; }
   button { margin: 0; border: 0; padding: 0; text-align: inherit; }
   .hyperlink { cursor: pointer; text-decoration: underline; text-decoration-color: currentColor; }
   .hyperlink:focus-visible { outline: 2px solid var(--tumbler-document-accent, #42ff53); outline-offset: 1px; }

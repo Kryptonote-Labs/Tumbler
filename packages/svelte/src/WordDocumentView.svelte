@@ -260,6 +260,15 @@
                     style={`${wordTextCss(line.marker.format)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(line.marker.y)}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}
                   >{line.marker.text}</span>
                 {/if}
+                {#if line.fragments.length === 0}
+                  <span
+                    class="empty-line"
+                    data-paragraph={line.paragraphElementId}
+                    data-start={line.startOffset}
+                    data-end={line.endOffset}
+                    style={`left:${wordPointsToCssPixels(line.x)}px;top:${wordPointsToCssPixels(line.y)}px;width:1px;height:${wordPointsToCssPixels(line.height)}px;line-height:${wordPointsToCssPixels(line.height)}px`}
+                  >{"\u200b"}</span>
+                {/if}
                 {#each line.fragments as fragment}
                   {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
                     <img class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
@@ -301,6 +310,7 @@
   .word-page { position: absolute; transform: translateX(-50%); overflow: hidden; box-sizing: border-box; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.2); contain: strict; }
   .word-page-content { position: absolute; inset: 0 auto auto 0; overflow: hidden; }
   .word-page-content.editable { outline: 0; caret-color: var(--tumbler-document-accent, #25a735); }
+  .empty-line { overflow: visible; }
   .document-drawing { position: absolute; display: block; object-fit: contain; overflow: hidden; }
   .drawing-fallback { background: repeating-linear-gradient(135deg, #f3f3f3, #f3f3f3 8px, #fafafa 8px, #fafafa 16px); border: 1px solid #d0d0d0; }
   .note-separator { position: absolute; width: 96px; border-top: 1px solid #777; }
