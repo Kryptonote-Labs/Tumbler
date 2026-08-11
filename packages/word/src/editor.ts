@@ -100,15 +100,20 @@ function replaceWordParagraphRange(document: WordDocument, selection: WordTextSe
     if (lines.length === 1) return working.bytes();
     const editedStart = workingStart;
     const splitOffset = startPosition.offset + lines[0]!.length;
-    const suffix = wordParagraphText(working, editedStart).slice(splitOffset);
+    const splitLength = wordParagraphText(working, editedStart).length;
+    const typingProperties = insertionRunPropertiesMarkup(working, editedStart, splitOffset, selection.focus.affinity ?? "after");
+    const suffixMarkup = paragraphRangeMarkup(working, editedStart, splitOffset, splitLength);
     working = reopenEdited(working, replaceWordText(working, {
       anchor: { paragraphElementId: editedStart.elementId, offset: splitOffset },
       focus: { paragraphElementId: editedStart.elementId, offset: wordParagraphText(working, editedStart).length },
     }, ""));
-    return insertParagraphsAfter(working, documentParagraphs(working)[startIndex]!, [
-      ...lines.slice(1, -1),
-      `${lines.at(-1)!}${suffix}`,
-    ]);
+    const paragraphPrefix = requiredElement(working, documentParagraphs(working)[startIndex]!.elementId).prefix;
+    const contents = lines.slice(1).map((line, index, inserted) => {
+      const trailing = index === inserted.length - 1 ? suffixMarkup : "";
+      const typed = line === "" && trailing !== "" ? "" : textRunMarkup(paragraphPrefix, line, typingProperties);
+      return `${typed}${trailing}`;
+    });
+    return insertParagraphContentsAfter(working, documentParagraphs(working)[startIndex]!, contents);
   }
 
   working = reopenEdited(working, replaceWordText(working, {
@@ -165,31 +170,40 @@ function retainParagraphBoundaries(document: WordDocument, startId: number, endI
   const endIndex = siblings.indexOf(end);
   const editor = beginLosslessXmlEdit(document.source);
   for (const sibling of siblings.slice(startIndex + 1, endIndex)) editor.removeElement(sibling);
-  if (middleLines.length > 0) editor.insertMarkupBefore(end, middleLines.map((line) => paragraphMarkup(document, start, line)).join(""));
+  if (middleLines.length > 0) editor.insertMarkupBefore(end, middleLines.map((line) => paragraphMarkup(document, start, paragraphContentMarkupForText(document, start, line))).join(""));
   return commitDocumentEdit(document, editor);
 }
 
 function insertParagraphsAfter(document: WordDocument, paragraph: WordParagraph, values: readonly string[]): Uint8Array {
-  if (values.length === 0) return document.bytes();
+  const element = requiredElement(document, paragraph.elementId);
+  return insertParagraphContentsAfter(document, paragraph, values.map((value) => paragraphContentMarkupForText(document, element, value)));
+}
+
+function insertParagraphContentsAfter(document: WordDocument, paragraph: WordParagraph, contents: readonly string[]): Uint8Array {
+  if (contents.length === 0) return document.bytes();
   const element = requiredElement(document, paragraph.elementId);
   const parent = parentElement(document, element);
   const siblings = parent.children.filter((child): child is LosslessXmlElement => child.kind === "element");
   const next = siblings[siblings.indexOf(element) + 1];
-  const markup = values.map((value) => paragraphMarkup(document, element, value)).join("");
+  const markup = contents.map((content) => paragraphMarkup(document, element, content)).join("");
   const editor = beginLosslessXmlEdit(document.source);
   if (next === undefined) editor.appendMarkup(parent, markup);
   else editor.insertMarkupBefore(next, markup);
   return commitDocumentEdit(document, editor);
 }
 
-function paragraphMarkup(document: WordDocument, template: LosslessXmlElement, value: string): string {
-  const prefix = template.prefix;
-  const paragraphProperties = template.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.localName === "pPr");
-  const properties = paragraphProperties === undefined ? "" : document.source.source.slice(paragraphProperties.span.start, paragraphProperties.span.end);
+function paragraphContentMarkupForText(document: WordDocument, template: LosslessXmlElement, value: string): string {
   const run = template.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.localName === "r");
   const runProperties = run?.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.localName === "rPr");
   const runPropertiesMarkup = runProperties === undefined ? "" : document.source.source.slice(runProperties.span.start, runProperties.span.end);
-  return `<${template.qualified}>${properties}${value === "" ? "" : textRunMarkup(prefix, value, runPropertiesMarkup)}</${template.qualified}>`;
+  return value === "" ? "" : textRunMarkup(template.prefix, value, runPropertiesMarkup);
+}
+
+function paragraphMarkup(document: WordDocument, template: LosslessXmlElement, content: string): string {
+  const prefix = template.prefix;
+  const paragraphProperties = template.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.localName === "pPr");
+  const properties = paragraphProperties === undefined ? "" : document.source.source.slice(paragraphProperties.span.start, paragraphProperties.span.end);
+  return `<${template.qualified}>${properties}${content}</${template.qualified}>`;
 }
 
 function assertStructuralEditSafe(document: WordDocument, paragraph: WordParagraph): void {
@@ -197,12 +211,37 @@ function assertStructuralEditSafe(document: WordDocument, paragraph: WordParagra
   if (runs.length !== paragraph.inlines.length || runs.some((run) => run.contents.some((content) => content.kind !== "text"))) {
     throw new WordError("unsupported_document", "Paragraph boundaries cannot be edited through fields, links, revisions, drawings, or structural markers.");
   }
-  const propertyMarkup = new Set(runs.map((run) => run.propertiesElementId === undefined
-    ? ""
-    : document.source.source.slice(requiredElement(document, run.propertiesElementId).span.start, requiredElement(document, run.propertiesElementId).span.end)));
-  if (propertyMarkup.size > 1) {
-    throw new WordError("unsupported_document", "Paragraph boundaries cannot yet be edited through mixed direct formatting.");
-  }
+}
+
+function insertionRunPropertiesMarkup(
+  document: WordDocument,
+  paragraph: WordParagraph,
+  offset: number,
+  affinity: "before" | "after",
+): string {
+  const target = insertionTarget(wordParagraphTextSegments(document, paragraph), offset, affinity);
+  if (target === undefined) return "";
+  const run = requiredElement(document, target.runElementId);
+  const properties = run.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.localName === "rPr");
+  return properties === undefined ? "" : document.source.source.slice(properties.span.start, properties.span.end);
+}
+
+function paragraphRangeMarkup(document: WordDocument, paragraph: WordParagraph, start: number, end: number): string {
+  const segments = wordParagraphTextSegments(document, paragraph);
+  const runIds = [...new Set(segments.filter((segment) => segment.end > start && segment.start < end).map((segment) => segment.runElementId))];
+  return runIds.map((runElementId) => {
+    const runSegments = segments.filter((segment) => segment.runElementId === runElementId);
+    const value = runSegments.map((segment) => {
+      const localStart = Math.max(0, start - segment.start);
+      const localEnd = Math.min(segment.value.length, end - segment.start);
+      return localEnd <= localStart ? "" : segment.value.slice(localStart, localEnd);
+    }).join("");
+    if (value === "") return "";
+    const run = requiredElement(document, runElementId);
+    const properties = run.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.localName === "rPr");
+    const propertyMarkup = properties === undefined ? "" : document.source.source.slice(properties.span.start, properties.span.end);
+    return textRunMarkup(run.prefix, value, propertyMarkup);
+  }).join("");
 }
 
 function paragraphContentMarkup(document: WordDocument, paragraph: LosslessXmlElement): string {

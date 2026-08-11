@@ -56,6 +56,31 @@ describe("WordprocessingML logical text editing", () => {
     expect(edited.document.source.elements(word, "b")).toHaveLength(2);
   });
 
+  test("splits mixed-format paragraphs without flattening the trailing runs", () => {
+    const artifact = open(`<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>M</w:t></w:r><w:r><w:rPr><w:i/></w:rPr><w:t>y</w:t></w:r></w:p>`);
+    const paragraph = firstParagraph(artifact);
+    const split = artifact.replaceText(selection(paragraph.elementId, 1, 1), "\n");
+    const paragraphs = split.document.blocks.filter((block) => block.kind === "paragraph");
+
+    expect(paragraphs.map((item) => wordParagraphText(split.document, item))).toEqual(["M", "y"]);
+    expect(split.formattingState(selection(paragraphs[0]!.elementId, 0, 1)).text.bold).toMatchObject({ value: true });
+    expect(split.formattingState(selection(paragraphs[1]!.elementId, 0, 1)).text.italic).toMatchObject({ value: true });
+  });
+
+  test("carries the preceding run format into an empty trailing paragraph", () => {
+    const artifact = open(`<w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t>My</w:t></w:r></w:p>`);
+    const paragraph = firstParagraph(artifact);
+    const split = artifact.replaceText(selection(paragraph.elementId, 2, 2), "\n");
+    const paragraphs = split.document.blocks.filter((block) => block.kind === "paragraph");
+    const trailing = paragraphs[1];
+    if (trailing === undefined) throw new Error("Expected a trailing paragraph.");
+    const typed = split.replaceText(selection(trailing.elementId, 0, 0), "Z");
+
+    expect(typed.document.blocks.filter((block) => block.kind === "paragraph").map((item) => wordParagraphText(typed.document, item))).toEqual(["My", "Z"]);
+    expect(typed.document.source.elements(word, "b")).toHaveLength(2);
+    expect(typed.document.source.elements(word, "sz")).toHaveLength(2);
+  });
+
   test("joins paragraphs while preserving the trailing run formatting", () => {
     const artifact = open(`<w:p><w:r><w:t>One</w:t></w:r></w:p><w:p><w:r><w:rPr><w:i/></w:rPr><w:t>Two</w:t></w:r></w:p>`);
     const [first, second] = artifact.document.blocks;
