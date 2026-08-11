@@ -18,8 +18,10 @@ export function browserWordTextMeasurer(context: CanvasTextMetricSource): WordTe
       const fallbackDescent = wordPointsToCssPixels(format.fontSizePoints * 0.2);
       return Object.freeze({
         width: metrics.width * scale,
-        ascent: (metrics.actualBoundingBoxAscent || fallbackAscent) * scale,
-        descent: (metrics.actualBoundingBoxDescent || fallbackDescent) * scale,
+        // Font boxes stay constant for every glyph in a run. Painted glyph boxes do not:
+        // an uppercase T and a lowercase letter can otherwise acquire different baselines.
+        ascent: (metrics.fontBoundingBoxAscent || metrics.emHeightAscent || fallbackAscent) * scale,
+        descent: (metrics.fontBoundingBoxDescent || metrics.emHeightDescent || fallbackDescent) * scale,
       });
     },
   });

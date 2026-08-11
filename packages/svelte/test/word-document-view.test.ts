@@ -40,7 +40,13 @@ describe("owned Svelte Word document head", () => {
     const context = {
       font: "",
       direction: "ltr" as CanvasDirection,
-      measureText: () => ({ width: 40, actualBoundingBoxAscent: 12, actualBoundingBoxDescent: 4 }) as TextMetrics,
+      measureText: () => ({
+        width: 40,
+        fontBoundingBoxAscent: 12,
+        fontBoundingBoxDescent: 4,
+        actualBoundingBoxAscent: 10,
+        actualBoundingBoxDescent: 2,
+      }) as TextMetrics,
     };
     const format = {
       fontFamily: "Aptos", fontSizePoints: 12, bold: true, italic: false, underline: "single" as const,
@@ -49,5 +55,33 @@ describe("owned Svelte Word document head", () => {
     expect(browserWordTextMeasurer(context).measure("Hello", format)).toEqual({ width: 30, ascent: 9, descent: 3 });
     expect(context.font).toContain("700 16px");
     expect(wordTextCss(format)).toContain("text-decoration-line:underline");
+  });
+
+  test("uses stable font boxes instead of glyph-dependent painted bounds", () => {
+    let glyph = "T";
+    const context = {
+      font: "",
+      direction: "ltr" as CanvasDirection,
+      measureText: () => ({
+        width: 8,
+        fontBoundingBoxAscent: 13,
+        fontBoundingBoxDescent: 4,
+        actualBoundingBoxAscent: glyph === "T" ? 12 : 8,
+        actualBoundingBoxDescent: glyph === "T" ? 0 : 3,
+      }) as TextMetrics,
+    };
+    const format = {
+      fontFamily: "Aptos", fontSizePoints: 12, bold: false, italic: false, underline: "none" as const,
+      strike: false, color: "#000000", highlight: undefined, verticalAlign: "baseline" as const, rightToLeft: false,
+    };
+    const measurer = browserWordTextMeasurer(context);
+
+    const uppercase = measurer.measure(glyph, format);
+    glyph = "x";
+    const lowercase = measurer.measure(glyph, format);
+
+    expect(uppercase.ascent).toBe(lowercase.ascent);
+    expect(uppercase.descent).toBe(lowercase.descent);
+    expect(uppercase).toMatchObject({ ascent: 9.75, descent: 3 });
   });
 });
