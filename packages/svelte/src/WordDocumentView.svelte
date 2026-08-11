@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount, untrack } from "svelte";
-  import { layoutWordDocument, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
+  import { layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import OoxmlChart from "./OoxmlChart.svelte";
   import WordLayoutTableView from "./WordLayoutTableView.svelte";
   import { browserWordTextMeasurer, wordTextCss } from "./word-font-metrics.ts";
   import { calculateWordPageViewport, type WordPageViewport } from "./word-page-viewport.ts";
-  import { sameWordTextSelection, wordInputEdit, type WordDocumentEdit } from "./word-editing.ts";
+  import { sameWordTextSelection, wordDocumentParagraphs, wordInputEdit, type WordDocumentEdit } from "./word-editing.ts";
 
   interface Props {
     readonly wordDocument: WordDocument;
@@ -24,6 +24,7 @@
   let viewport = $state<WordPageViewport>();
   let mounted = $state(false);
   let editingFocused = $state(false);
+  let inputSelectionOverride: WordTextSelection | undefined;
   const imageUrls = new WeakMap<Uint8Array, string>();
   const createdUrls = new Set<string>();
 
@@ -160,7 +161,8 @@
   function handleBeforeInput(event: InputEvent) {
     if (!editable) return;
     // Keyboard navigation changes the DOM selection before Svelte can publish controlled state.
-    const activeSelection = browserTextSelection() ?? selection;
+    const activeSelection = inputSelectionOverride ?? browserTextSelection() ?? selection;
+    inputSelectionOverride = undefined;
     if (activeSelection === undefined) return;
     const edit = wordInputEdit(wordDocument, activeSelection, event.inputType, event.data);
     if (edit === undefined) return;
@@ -171,10 +173,69 @@
   function handleKeydown(event: KeyboardEvent) {
     if (!editable || !(event.ctrlKey || event.metaKey) || event.altKey) return;
     const key = event.key.toLowerCase();
+    if (key === "a") {
+      const paragraphs = wordDocumentParagraphs(wordDocument);
+      const first = paragraphs[0];
+      const last = paragraphs.at(-1);
+      if (first === undefined || last === undefined) return;
+      event.preventDefault();
+      const next = {
+        anchor: { paragraphElementId: first.elementId, offset: 0 },
+        focus: { paragraphElementId: last.elementId, offset: wordParagraphText(wordDocument, last).length },
+      };
+      inputSelectionOverride = next;
+      onselectionchange?.(next);
+      queueMicrotask(restoreBrowserSelection);
+      return;
+    }
     const command = key === "s" ? "save" : key === "z" ? event.shiftKey ? "redo" : "undo" : key === "y" ? "redo" : undefined;
     if (command === undefined) return;
     event.preventDefault();
     oncommand?.(command);
+  }
+
+  function handlePagePointerDown(event: PointerEvent, page: WordLayout["pages"][number]) {
+    if (!editable || event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) return;
+    if ((event.target as Element | null)?.closest("[data-paragraph]")) return;
+    const lines = page.columns.flatMap((column) => [
+      ...column.lines,
+      ...tableLines(column.tables),
+    ]);
+    if (lines.length === 0) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / scale;
+    const y = (event.clientY - rect.top) / scale;
+    const line = lines.reduce((closest, candidate) =>
+      lineDistance(candidate, y) < lineDistance(closest, y) ? candidate : closest
+    );
+    const fragments = line.fragments.filter((fragment) => fragment.kind !== "drawing");
+    const offset = x <= wordPointsToCssPixels(line.x)
+      ? line.startOffset
+      : x >= wordPointsToCssPixels(line.x + line.width) || fragments.length === 0
+        ? line.endOffset
+        : fragments.find((fragment) => x < wordPointsToCssPixels(fragment.x + fragment.width / 2))?.startOffset ?? line.endOffset;
+    const next = {
+      anchor: { paragraphElementId: line.paragraphElementId, offset },
+      focus: { paragraphElementId: line.paragraphElementId, offset },
+    };
+    event.preventDefault();
+    editingFocused = true;
+    inputSelectionOverride = next;
+    onselectionchange?.(next);
+    queueMicrotask(restoreBrowserSelection);
+  }
+
+  function tableLines(tables: readonly WordLayout["pages"][number]["columns"][number]["tables"][number][]): WordLayout["pages"][number]["columns"][number]["lines"] {
+    return tables.flatMap((table) => table.cells.flatMap((cell) => [
+      ...cell.lines,
+      ...tableLines(cell.tables),
+    ]));
+  }
+
+  function lineDistance(line: WordLayout["pages"][number]["columns"][number]["lines"][number], y: number): number {
+    const top = wordPointsToCssPixels(line.y);
+    const bottom = wordPointsToCssPixels(line.y + line.height);
+    return y < top ? top - y : y > bottom ? y - bottom : 0;
   }
 
   function fragmentStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0) {
@@ -222,6 +283,7 @@
             autocapitalize="sentences"
             data-form-type="other"
             data-lpignore="true"
+            onpointerdown={(event) => handlePagePointerDown(event, page)}
             onfocusin={() => editingFocused = true}
             onfocusout={(event) => {
               if (!(event.relatedTarget instanceof Node) || !scroller?.contains(event.relatedTarget)) editingFocused = false;
