@@ -5,7 +5,7 @@
   import WordLayoutTableView from "./WordLayoutTableView.svelte";
   import { browserWordTextMeasurer, wordTextCss } from "./word-font-metrics.ts";
   import { calculateWordPageViewport, type WordPageViewport } from "./word-page-viewport.ts";
-  import { wordInputEdit, type WordDocumentEdit } from "./word-editing.ts";
+  import { sameWordTextSelection, wordInputEdit, type WordDocumentEdit } from "./word-editing.ts";
 
   interface Props {
     readonly wordDocument: WordDocument;
@@ -45,11 +45,14 @@
   $effect(() => {
     wordDocument;
     scale;
-    selection;
     if (mounted) {
       reflow();
-      queueMicrotask(restoreBrowserSelection);
     }
+  });
+
+  $effect(() => {
+    selection;
+    if (mounted) queueMicrotask(restoreBrowserSelection);
   });
 
   function reflow() {
@@ -115,7 +118,9 @@
     if (browserSelection === null || browserSelection.rangeCount === 0 || !scroller.contains(browserSelection.anchorNode)) return;
     const anchor = logicalPosition(browserSelection.anchorNode, browserSelection.anchorOffset);
     const focus = logicalPosition(browserSelection.focusNode, browserSelection.focusOffset);
-    if (anchor !== undefined && focus !== undefined) onselectionchange?.({ anchor, focus });
+    if (anchor === undefined || focus === undefined) return;
+    const next = { anchor, focus };
+    if (!sameWordTextSelection(selection, next)) onselectionchange?.(next);
   }
 
   function restoreBrowserSelection() {

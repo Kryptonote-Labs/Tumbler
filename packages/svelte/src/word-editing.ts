@@ -8,6 +8,17 @@ export interface WordInputEdit {
 
 export type WordDocumentEdit = WordInputEdit;
 
+/** Compares logical selections while ignoring browser-only caret affinity. */
+export function sameWordTextSelection(
+  left: WordTextSelection | undefined,
+  right: WordTextSelection,
+): boolean {
+  return left?.anchor.paragraphElementId === right.anchor.paragraphElementId &&
+    left.anchor.offset === right.anchor.offset &&
+    left.focus.paragraphElementId === right.focus.paragraphElementId &&
+    left.focus.offset === right.focus.offset;
+}
+
 /** Converts a browser input intent into one logical Word edit without trusting DOM mutations. */
 export function wordInputEdit(
   document: WordDocument,
