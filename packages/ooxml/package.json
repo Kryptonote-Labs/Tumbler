@@ -1,6 +1,6 @@
 {
   "name": "@tumblerjs/ooxml",
-  "version": "0.1.0-alpha.14",
+  "version": "0.1.0-alpha.15",
   "description": "Shared OOXML parsing, preservation, and editing primitives for Tumbler.",
   "type": "module",
   "exports": "./src/index.ts",
@@ -20,7 +20,7 @@
     "tag": "alpha"
   },
   "dependencies": {
-    "@tumblerjs/opc": "0.1.0-alpha.14",
+    "@tumblerjs/opc": "0.1.0-alpha.15",
     "saxes": "6.0.0"
   }
 }
