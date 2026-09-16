@@ -37,6 +37,11 @@ Both Strict and Transitional vocabulary and relationship namespaces are tested.
 This table is a feature boundary, not a claim of complete conformance to those
 clauses or to SpreadsheetML as a whole.
 
+Inline-string cells may omit `is`, as permitted by `CT_Cell` in the Strict and
+Transitional schemas in Annex A. They read as blank cells while retaining their
+style and original XML. An explicit empty `is` remains an empty string. Formula
+and value elements are still rejected in inline-string cells, following §18.3.1.4.
+
 ## Public behavior now available
 
 `@tumblerjs/sheets` can:

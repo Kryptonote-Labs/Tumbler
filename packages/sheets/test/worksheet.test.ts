@@ -81,6 +81,38 @@ describe("SpreadsheetML sparse worksheets", () => {
     expect(worksheet.cell("Z99")).toBeUndefined();
   });
 
+  test.each(["strict", "transitional"] as const)("reads absent inline-string content as a styled blank in %s", (conformance) => {
+    const namespace = conformance === "strict"
+      ? "http://purl.oclc.org/ooxml/spreadsheetml/main"
+      : "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      conformance,
+      stylesXml: `<styleSheet xmlns="${namespace}"><fonts count="1"><font/></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders><cellXfs count="2"><xf fontId="0" fillId="0" borderId="0" numFmtId="0"/><xf fontId="0" fillId="0" borderId="0" numFmtId="10"/></cellXfs></styleSheet>`,
+      sheets: [{ name: "Data", sheetId: 1, relationshipId: "data", xml: `<worksheet xmlns="${namespace}"><sheetData><row r="1">
+        <c r="A1" s="1" t="inlineStr"/>
+        <c r="B1" s="1" t="inlineStr"></c>
+        <c r="C1" t="inlineStr"><is><t/></is></c>
+        <c r="D1" t="inlineStr"><is/></c>
+      </row></sheetData></worksheet>` }],
+    })));
+    const worksheet = openWorksheet(workbook, workbook.sheets[0]!);
+    for (const reference of ["A1", "B1"]) {
+      expect(worksheet.cell(reference)).toMatchObject({ reference, styleIndex: 1, value: { type: "blank" } });
+      expect(worksheet.displayText(reference)).toBe("");
+    }
+    for (const reference of ["C1", "D1"]) {
+      expect(worksheet.cell(reference)?.value).toEqual({ type: "string", value: "", storage: "inline" });
+    }
+  });
+
+  test.each(["<f>1+1</f>", "<v/>", "<is/><is/>"])("rejects conflicting inline-string content %s", (content) => {
+    const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
+      sheets: [{ name: "Data", sheetId: 1, relationshipId: "data", xml: `<worksheet xmlns="${namespace}"><sheetData><row r="1"><c r="A1" t="inlineStr">${content}</c></row></sheetData></worksheet>` }],
+    })));
+    expectSpreadsheetError(() => openWorksheet(workbook, workbook.sheets[0]!), "invalid_cell");
+  });
+
   test("rejects a sheet from another workbook", () => {
     const first = openSpreadsheet(openOpcPackage(buildWorkbookFixture()));
     const second = openSpreadsheet(openOpcPackage(buildWorkbookFixture()));

@@ -387,10 +387,13 @@ function parseCell(
   let value: SpreadsheetCellValue;
   switch (type) {
     case "inlineStr":
-      if (formula !== undefined || rawValue !== undefined || inlineStrings.length !== 1) {
-        throw new SpreadsheetError("invalid_cell", `Inline string cell ${reference} must contain only one is element.`);
+      if (formula !== undefined || rawValue !== undefined) {
+        throw new SpreadsheetError("invalid_cell", `Inline string cell ${reference} must not contain a formula or value element.`);
       }
-      value = { type: "string", value: richText(inlineStrings[0]!, namespace, document.textContent.bind(document)), storage: "inline" };
+      // CT_Cell makes is optional; producers such as Openpyxl omit it for blank cells.
+      value = inlineStrings[0] === undefined
+        ? { type: "blank" }
+        : { type: "string", value: richText(inlineStrings[0], namespace, document.textContent.bind(document)), storage: "inline" };
       break;
     case "s": {
       if (rawValue === undefined || !/^(?:0|[1-9][0-9]*)$/.test(rawValue)) {

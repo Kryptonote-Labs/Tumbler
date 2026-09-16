@@ -5,6 +5,22 @@ import { buildWorkbookFixture } from "./workbook-fixture.ts";
 const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
 describe("spreadsheet artefact host boundary", () => {
+  test("preserves a styled blank inline-string cell when opening and editing another cell", () => {
+    const blankCell = '<c r="B13" s="0" t="inlineStr"></c>';
+    const source = buildWorkbookFixture({
+      sheets: [{ name: "Data", sheetId: 1, relationshipId: "data", xml: `<worksheet xmlns="${namespace}"><sheetData><row r="13"><c r="A13"><v>1</v></c>${blankCell}</row></sheetData></worksheet>` }],
+    });
+    const artifact = openSpreadsheetArtifact(source);
+    expect(artifact.bytes()).toEqual(source);
+    expect(artifact.worksheet.cell("B13")).toMatchObject({ styleIndex: 0, value: { type: "blank" } });
+
+    const reopened = openSpreadsheetArtifact(artifact.editCell("A13", 2).bytes());
+    expect(reopened.worksheet.displayText("A13")).toBe("2");
+    expect(reopened.worksheet.cell("B13")).toMatchObject({ styleIndex: 0, value: { type: "blank" } });
+    const part = reopened.workbook.package.getPart(reopened.activeSheet.partName)!;
+    expect(new TextDecoder().decode(reopened.workbook.package.readPart(part))).toContain(blankCell);
+  });
+
   test("switches to a sheet containing formulas without cached results", () => {
     const artifact = openSpreadsheetArtifact(buildWorkbookFixture({ sheets: [
       { name: "About", sheetId: 1, relationshipId: "about", xml: `<worksheet xmlns="${namespace}"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>About</t></is></c></row></sheetData></worksheet>` },
