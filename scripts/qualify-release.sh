@@ -77,7 +77,13 @@ for index in "${!packages[@]}"; do
         continue
       fi
       mkdir -p -- "$mounted_package/node_modules"
-      ln -s -- "$(readlink -f -- "$dependency")" "$mounted_package/node_modules/${dependency##*/}"
+      dependency_name=${dependency##*/}
+      dependency_source=$dependency
+      # Resolve peers from the consumer, as a normal package installation does.
+      if bun -e 'const manifest = await Bun.file(process.argv[1]).json(); process.exit(Object.hasOwn(manifest.peerDependencies ?? {}, process.argv[2]) ? 0 : 1)' "$mounted_package/package.json" "$dependency_name"; then
+        dependency_source="$consumer_root/node_modules/$dependency_name"
+      fi
+      ln -s -- "$(readlink -f -- "$dependency_source")" "$mounted_package/node_modules/$dependency_name"
     done
   fi
 done
