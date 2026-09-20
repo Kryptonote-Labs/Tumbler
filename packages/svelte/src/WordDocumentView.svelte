@@ -272,7 +272,7 @@
   style={`--word-scale:${scale}`}
 >
   {#if layout !== undefined && viewport !== undefined}
-    <div class="word-surface" style={`height:${viewport.totalHeight * scale}px`}>
+    <div class="word-surface" style={`height:${viewport.totalHeight * scale}px;width:${viewport.totalWidth * scale}px`}>
       {#each layout.pages.slice(viewport.first, viewport.last + 1) as page, localIndex (page.index)}
         {@const pageIndex = viewport.first + localIndex}
         <section
