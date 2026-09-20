@@ -9,11 +9,33 @@ export interface ZoomGesture {
 /** Handle document zoom without intercepting ordinary wheel or single-finger scrolling. */
 export function zoomGesture(element: HTMLElement, zoom: (gesture: ZoomGesture) => void) {
   let pinch: { distance: number; x: number; y: number } | undefined;
+  let pending: ZoomGesture | undefined;
+  let frame = 0;
+  function enqueue(gesture: ZoomGesture) {
+    if (pending === undefined) pending = gesture;
+    else {
+      // Compose both zoom and midpoint movement when events arrive within one frame.
+      pending = {
+        factor: pending.factor * gesture.factor,
+        x: pending.x,
+        y: pending.y,
+        targetX: gesture.targetX + (pending.targetX - gesture.x) * gesture.factor,
+        targetY: gesture.targetY + (pending.targetY - gesture.y) * gesture.factor,
+      };
+    }
+    if (frame !== 0) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      const next = pending;
+      pending = undefined;
+      if (next !== undefined) zoom(next);
+    });
+  }
   function wheel(event: WheelEvent) {
     if (!event.ctrlKey) return;
     event.preventDefault();
     const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? element.clientHeight : 1;
-    zoom({ factor: Math.exp(-event.deltaY * unit * 0.01), x: event.clientX, y: event.clientY, targetX: event.clientX, targetY: event.clientY });
+    enqueue({ factor: Math.exp(-event.deltaY * unit * 0.01), x: event.clientX, y: event.clientY, targetX: event.clientX, targetY: event.clientY });
   }
   function touch(event: TouchEvent) {
     if (event.touches.length !== 2) { pinch = undefined; return; }
@@ -25,7 +47,7 @@ export function zoomGesture(element: HTMLElement, zoom: (gesture: ZoomGesture) =
       x: (first.clientX + second.clientX) / 2,
       y: (first.clientY + second.clientY) / 2,
     };
-    if (pinch !== undefined && pinch.distance > 0) zoom({ factor: next.distance / pinch.distance, x: pinch.x, y: pinch.y, targetX: next.x, targetY: next.y });
+    if (pinch !== undefined && pinch.distance > 0) enqueue({ factor: next.distance / pinch.distance, x: pinch.x, y: pinch.y, targetX: next.x, targetY: next.y });
     pinch = next;
   }
   function end() { pinch = undefined; }
@@ -35,6 +57,8 @@ export function zoomGesture(element: HTMLElement, zoom: (gesture: ZoomGesture) =
   element.addEventListener('touchend', end);
   element.addEventListener('touchcancel', end);
   return { destroy() {
+    cancelAnimationFrame(frame);
+    pending = undefined;
     element.removeEventListener('wheel', wheel);
     element.removeEventListener('touchstart', touch);
     element.removeEventListener('touchmove', touch);

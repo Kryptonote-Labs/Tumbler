@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { flushSync, tick } from "svelte";
+  import { tick } from "svelte";
   import { createGridSelection, moveGridSelection, type GridDirection, type GridSelection } from "@tumblerjs/core";
   import type { ChartModel } from "@tumblerjs/charts";
   import {
@@ -27,12 +27,13 @@
     type SpreadsheetTableViewState,
     type SpreadsheetWorksheet,
   } from "@tumblerjs/sheets";
-  import { calculateSpreadsheetViewport } from "./spreadsheet-viewport.ts";
+  import { calculateSpreadsheetViewport, type SpreadsheetViewport } from "./spreadsheet-viewport.ts";
   import { composeSpreadsheetGridLayout, frozenAxisExtent, placeSpreadsheetDrawing } from "./spreadsheet-grid-layout.ts";
   import { coerceSpreadsheetEditValue, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
   import { measureMaximumDigitWidth, spreadsheetFontShorthand } from "./spreadsheet-font-metrics.ts";
   import { spreadsheetCellContentCss, spreadsheetCellCss } from "./spreadsheet-cell-style.ts";
   import { spreadsheetTextOverflowWidth } from "./spreadsheet-text-overflow.ts";
+  import { spreadsheetEmptyRegionStart } from "./spreadsheet-empty-region.ts";
   import { zoomGesture, type ZoomGesture } from "./zoom-gesture.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
 
@@ -154,7 +155,8 @@
   let frozenColumns = $derived(Math.min(columnCount, Math.max(0, Math.floor(frozenPane?.xSplit ?? 0))));
   let frozenRowsHeight = $derived(frozenAxisExtent(rowGeometry, frozenRows));
   let frozenColumnsWidth = $derived(frozenAxisExtent(columnGeometry, frozenColumns));
-  let viewport = $derived(calculateSpreadsheetViewport({
+  let previousViewport: SpreadsheetViewport | undefined;
+  let viewport = $derived.by(() => previousViewport = calculateSpreadsheetViewport({
     rowCount,
     columnCount,
     rowHeight,
@@ -166,22 +168,59 @@
     overscan: 3,
     rowGeometry,
     columnGeometry,
-  }));
+  }, previousViewport));
   let layout = $derived(composeSpreadsheetGridLayout({ viewport, rowGeometry, columnGeometry, frozenRows, frozenColumns, merges: worksheet.merges }));
-  let gutterViewport = $derived(calculateSpreadsheetViewport({
-    rowCount,
-    columnCount,
-    rowHeight,
-    columnWidth,
-    scrollTop: Math.max(0, scrollTop - columnHeaderHeight),
-    scrollLeft: Math.max(0, scrollLeft - rowHeaderWidth),
-    viewportHeight,
-    viewportWidth,
-    overscan: 128,
-    rowGeometry,
-    columnGeometry,
-  }));
-  let gutterLayout = $derived(composeSpreadsheetGridLayout({ viewport: gutterViewport, rowGeometry, columnGeometry, frozenRows, frozenColumns, merges: [] }));
+  let maximumVisibleColumn = $derived(layout.columns.at(-1)?.index ?? 1);
+  let emptyRegionStart = $derived(spreadsheetEmptyRegionStart(worksheet));
+  let emptyCorner = $derived.by(() => {
+    if (emptyRegionStart === undefined) return undefined;
+    const rows = layout.rows.filter(row => row.index > Math.max(emptyRegionStart.row, frozenRows));
+    const columns = layout.columns.filter(column => column.index > Math.max(emptyRegionStart.column, frozenColumns));
+    if (rows.length === 0 || columns.length === 0) return undefined;
+    const left = columns[0]!.start;
+    const top = rows[0]!.start;
+    const width = columns.at(-1)!.start + columns.at(-1)!.size - left;
+    const height = rows.at(-1)!.start + rows.at(-1)!.size - top;
+    const lines = [
+      ...columns.map(column => `M${column.start + column.size - left - 0.5},0v${height}`),
+      ...rows.map(row => `M0,${row.start + row.size - top - 0.5}h${width}`),
+    ].join('');
+    return { left, top, width, height, lines };
+  });
+
+  function isEmptyCorner(row: number, column: number) {
+    return emptyRegionStart !== undefined && row > Math.max(emptyRegionStart.row, frozenRows) && column > Math.max(emptyRegionStart.column, frozenColumns);
+  }
+
+  let protectedColumns = $derived(emptyRegionStart === undefined ? layout.columns : layout.columns.filter(column => column.index <= Math.max(emptyRegionStart!.column, frozenColumns)));
+  function columnsForRow(row: number) {
+    return emptyRegionStart !== undefined && row > Math.max(emptyRegionStart.row, frozenRows) ? protectedColumns : layout.columns;
+  }
+
+  function emptyCellAt(event: MouseEvent) {
+    if (scroller === undefined || !(event.target instanceof Element) || event.target.closest('.cell, .chart-frame')) return undefined;
+    const rect = scroller.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / scale + scroller.scrollLeft - rowHeaderWidth;
+    const y = (event.clientY - rect.top) / scale + scroller.scrollTop - columnHeaderHeight;
+    if (x < 0 || y < 0) return undefined;
+    const row = rowGeometry.indexAt(y);
+    const column = columnGeometry.indexAt(x);
+    return isEmptyCorner(row, column) ? { row, column } : undefined;
+  }
+
+  function emptyPointerDown(event: PointerEvent) {
+    const cell = emptyCellAt(event);
+    if (cell === undefined) return;
+    scroller?.closest<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true });
+    cellPointerDown(event, cell.row, cell.column);
+  }
+
+  function emptyPointerMove(event: PointerEvent) {
+    if (selectingPointer === undefined) return;
+    const cell = emptyCellAt(event);
+    if (cell !== undefined) cellPointerEnter(event, cell.row, cell.column);
+  }
+
   let hasActiveProjection = $derived(tableProjections.some(({ projection }) => projection.state.filters.length > 0 || projection.state.sorts.length > 0));
   let editable = $derived(!readonly && !hasActiveProjection && onedit !== undefined);
   let conditionalStyles = $derived(projectSpreadsheetConditionalStyles(worksheet, viewCalculation));
@@ -240,7 +279,7 @@
     onselectionchange?.(selection);
   }
 
-  function zoomGrid(gesture: ZoomGesture) {
+  async function zoomGrid(gesture: ZoomGesture) {
     if (scroller === undefined) return;
     selectingPointer = undefined;
     const rect = scroller.getBoundingClientRect();
@@ -248,7 +287,9 @@
     const y = (gesture.y - rect.top) / scale;
     const documentX = scroller.scrollLeft + x;
     const documentY = scroller.scrollTop + y;
-    flushSync(() => { scale = Math.max(0.25, Math.min(3, scale * gesture.factor)); });
+    scale = Math.max(0.25, Math.min(3, scale * gesture.factor));
+    await tick();
+    if (scroller === undefined) return;
     // Frozen panes stay fixed; only anchor the scrolling portion of each axis.
     if (x > rowHeaderWidth + frozenColumnsWidth) scroller.scrollLeft = documentX - (gesture.targetX - rect.left) / scale;
     if (y > columnHeaderHeight + frozenRowsHeight) scroller.scrollTop = documentY - (gesture.targetY - rect.top) / scale;
@@ -374,7 +415,7 @@
   }
 
   function textOverflowWidth(row: number, column: number): number | undefined {
-    const maximumColumn = layout.columns.reduce((maximum, item) => Math.max(maximum, item.index), column);
+    const maximumColumn = Math.max(maximumVisibleColumn, column);
     return spreadsheetTextOverflowWidth({
       worksheet,
       calculation: viewCalculation,
@@ -588,9 +629,10 @@
   </button>
 {/snippet}
 
+<div class="grid-viewport">
 <div
   class="tumbler-grid"
-  style={`zoom:${scale};width:100%;height:100%`}
+  style={`transform:scale(${scale});width:${100 / scale}%;height:${100 / scale}%`}
   use:zoomGesture={zoomGrid}
   role="grid"
   aria-rowcount={rowCount}
@@ -605,9 +647,33 @@
     bind:clientHeight={viewportHeight}
     onscroll={handleScroll}
   >
-    <div class="canvas" style:width={`${viewport.totalWidth + rowHeaderWidth}px`} style:height={`${viewport.totalHeight + columnHeaderHeight}px`}>
+    <!-- Blank cells use the grid's keyboard handler and coordinate-based pointer selection. -->
+    <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+    <div class="canvas" style:width={`${viewport.totalWidth + rowHeaderWidth}px`} style:height={`${viewport.totalHeight + columnHeaderHeight}px`}
+      onpointerdown={emptyPointerDown} onpointermove={emptyPointerMove}
+      onclick={(event) => { const cell = emptyCellAt(event); if (cell !== undefined) cellClick(event, cell.row, cell.column); }}
+      ondblclick={(event) => { const cell = emptyCellAt(event); if (cell !== undefined) beginEdit(cell.row, cell.column); }}
+    >
+      {#if emptyCorner !== undefined}
+        <svg class="empty-grid" aria-hidden="true" width={emptyCorner.width} height={emptyCorner.height} style:left={`${rowHeaderWidth + emptyCorner.left}px`} style:top={`${columnHeaderHeight + emptyCorner.top}px`}>
+          <path d={emptyCorner.lines} />
+        </svg>
+        {@const startRow = Math.max(selection.range.start.row, emptyRegionStart!.row + 1, frozenRows + 1)}
+        {@const startColumn = Math.max(selection.range.start.column, emptyRegionStart!.column + 1, frozenColumns + 1)}
+        {#if startRow <= selection.range.end.row && startColumn <= selection.range.end.column}
+          <div class="empty-selection" style:left={`${rowHeaderWidth + columnGeometry.start(startColumn)}px`} style:top={`${columnHeaderHeight + rowGeometry.start(startRow)}px`}
+            style:width={`${columnGeometry.start(selection.range.end.column) + columnGeometry.size(selection.range.end.column) - columnGeometry.start(startColumn)}px`}
+            style:height={`${rowGeometry.start(selection.range.end.row) + rowGeometry.size(selection.range.end.row) - rowGeometry.start(startRow)}px`}></div>
+        {/if}
+        {#if isEmptyCorner(selection.focus.row, selection.focus.column)}
+          {@const focus = selection.focus}
+          <div class="empty-corner-cell" class:empty-focus={editing === undefined}>
+            {@render gridCell(formatCellReference(focus), focus.row, focus.column, rowHeaderWidth + columnGeometry.start(focus.column), columnHeaderHeight + rowGeometry.start(focus.row), columnGeometry.size(focus.column), rowGeometry.size(focus.row), 1)}
+          </div>
+        {/if}
+      {/if}
       {#each layout.rows as row (row.index)}
-        {#each layout.columns as column (column.index)}
+        {#each columnsForRow(row.index) as column (column.index)}
           {@const projectedRow = sourceRow(row.index)}
           {@const reference = formatCellReference({ row: projectedRow ?? row.index, column: column.index })}
           {#if row.index > frozenRows && column.index > frozenColumns && projectedRow !== undefined && worksheet.mergedRange(reference) === undefined}
@@ -668,7 +734,7 @@
   {/if}
   <div class="column-gutter">
     <div class="scrolling-column-headers" style:left={`${frozenColumnsWidth}px`}>
-      {#each gutterLayout.columns.filter((column) => column.index > frozenColumns) as column (column.index)}
+      {#each layout.columns.filter((column) => column.index > frozenColumns) as column (column.index)}
         <div
           class="column-header"
           style:left={`${column.start - scrollLeft - frozenColumnsWidth}px`}
@@ -678,7 +744,7 @@
     </div>
     {#if frozenColumnsWidth > 0}
       <div class="frozen-column-headers" style:width={`${frozenColumnsWidth}px`}>
-        {#each gutterLayout.columns.filter((column) => column.index <= frozenColumns) as column (column.index)}
+        {#each layout.columns.filter((column) => column.index <= frozenColumns) as column (column.index)}
           <div class="column-header" style:left={`${column.start}px`} style:width={`${column.size}px`}>{columnLabel(column.index)}</div>
         {/each}
       </div>
@@ -686,7 +752,7 @@
   </div>
   <div class="row-gutter">
     <div class="scrolling-row-headers" style:top={`${frozenRowsHeight}px`}>
-      {#each gutterLayout.rows.filter((row) => row.index > frozenRows) as row (row.index)}
+      {#each layout.rows.filter((row) => row.index > frozenRows) as row (row.index)}
         <div
           class="row-header"
           style:top={`${row.start - scrollTop - frozenRowsHeight}px`}
@@ -696,13 +762,15 @@
     </div>
     {#if frozenRowsHeight > 0}
       <div class="frozen-row-headers" style:height={`${frozenRowsHeight}px`}>
-        {#each gutterLayout.rows.filter((row) => row.index <= frozenRows) as row (row.index)}
+        {#each layout.rows.filter((row) => row.index <= frozenRows) as row (row.index)}
           <div class="row-header" style:top={`${row.start}px`} style:height={`${row.size}px`}>{row.index}</div>
         {/each}
       </div>
     {/if}
   </div>
   <div class="corner"></div>
+</div>
+
 </div>
 
 {#if tableMenu !== undefined && menuTable() !== undefined}
@@ -725,8 +793,13 @@
 {/if}
 
 <style>
-  .tumbler-grid { touch-action: pan-x pan-y; position: relative; overflow: hidden; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; user-select: none; -webkit-user-select: none; }
+  .grid-viewport { width: 100%; height: 100%; overflow: hidden; }
+  .tumbler-grid { transform-origin: top left; touch-action: pan-x pan-y; position: relative; overflow: hidden; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; user-select: none; -webkit-user-select: none; }
   .grid-scroller { width: 100%; height: 100%; overflow: auto; overscroll-behavior: contain; }
+  .empty-grid { background: var(--tumbler-sheet-bg, #ffffff); position: absolute; pointer-events: none; fill: none; stroke: var(--tumbler-sheet-line, #d9ded9); stroke-width: 1; }
+  .empty-selection { position: absolute; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(65, 255, 83, 0.1)); }
+  .empty-focus { pointer-events: none; }
+  .empty-corner-cell .cell.selected::after { background: transparent; }
   .canvas { position: relative; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane, .frozen-column-pane { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane { left: 52px; right: 0; top: 28px; }

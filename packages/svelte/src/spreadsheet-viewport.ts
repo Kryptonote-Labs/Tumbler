@@ -29,7 +29,7 @@ export interface SpreadsheetViewport {
 }
 
 /** Calculates the small row/column window the Svelte head should mount. */
-export function calculateSpreadsheetViewport(input: SpreadsheetViewportInput): SpreadsheetViewport {
+export function calculateSpreadsheetViewport(input: SpreadsheetViewportInput, previous?: SpreadsheetViewport): SpreadsheetViewport {
   integer(input.rowCount, "rowCount", 1);
   integer(input.columnCount, "columnCount", 1);
   positive(input.rowHeight, "rowHeight");
@@ -45,12 +45,25 @@ export function calculateSpreadsheetViewport(input: SpreadsheetViewportInput): S
   if (rows.count !== input.rowCount || columns.count !== input.columnCount) {
     throw new RangeError("Viewport geometry counts must match the grid counts.");
   }
+  const visibleRows = reuseItems(axisItems(rows, input.scrollTop, input.viewportHeight, overscan), previous?.rows);
+  const visibleColumns = reuseItems(axisItems(columns, input.scrollLeft, input.viewportWidth, overscan), previous?.columns);
+  if (previous?.rows === visibleRows && previous.columns === visibleColumns && previous.totalHeight === rows.totalSize && previous.totalWidth === columns.totalSize) return previous;
   return Object.freeze({
-    rows: Object.freeze(axisItems(rows, input.scrollTop, input.viewportHeight, overscan)),
-    columns: Object.freeze(axisItems(columns, input.scrollLeft, input.viewportWidth, overscan)),
+    rows: visibleRows,
+    columns: visibleColumns,
     totalHeight: rows.totalSize,
     totalWidth: columns.totalSize,
   });
+}
+
+/** Retain mounted item identities so scrolling does not invalidate every cell. */
+function reuseItems(items: VirtualGridItem[], previous: readonly VirtualGridItem[] = []): readonly VirtualGridItem[] {
+  const byIndex = new Map(previous.map(item => [item.index, item]));
+  const next = items.map(item => {
+    const existing = byIndex.get(item.index);
+    return existing?.start === item.start && existing.size === item.size ? existing : item;
+  });
+  return next.length === previous.length && next.every((item, index) => item === previous[index]) ? previous : Object.freeze(next);
 }
 
 function axisItems(axis: SparseAxisGeometry, scroll: number, viewport: number, overscan: number): VirtualGridItem[] {

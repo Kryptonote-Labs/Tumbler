@@ -150,10 +150,11 @@ export function frozenAxisExtent(geometry: SparseAxisGeometry, frozenCount: numb
 }
 
 function includeFrozen(items: readonly VirtualGridItem[], geometry: SparseAxisGeometry, frozenCount: number): readonly VirtualGridItem[] {
+  if (frozenCount === 0 || items[0]?.index === 1 && items.at(-1)!.index >= frozenCount) return items;
   const byIndex = new Map(items.map((item) => [item.index, item]));
   for (let index = 1; index <= Math.min(frozenCount, geometry.count); index += 1) {
     const size = geometry.size(index);
-    if (size > 0) byIndex.set(index, Object.freeze({ index, start: geometry.start(index), size }));
+    if (size > 0 && !byIndex.has(index)) byIndex.set(index, Object.freeze({ index, start: geometry.start(index), size }));
   }
   return Object.freeze([...byIndex.values()].sort((left, right) => left.index - right.index));
 }

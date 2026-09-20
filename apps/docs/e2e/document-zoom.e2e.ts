@@ -85,3 +85,48 @@ test('sheet zoom scales cells and headers while retaining editing and scrolling'
   await scroller.evaluate(element => { element.scrollTop = 0; element.scrollLeft = 0; });
   await expect(page.getByRole('gridcell', { name: 'Research', exact: true })).toBeVisible();
 });
+
+
+test('a burst of sheet pinch events retains the full zoom change', async ({ page }) => {
+  await page.goto('/playground/sheet-budget');
+  await expect(page.getByRole('gridcell', { name: 'Research', exact: true })).toBeVisible();
+  const grid = page.getByRole('grid');
+  await grid.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    for (let i = 0; i < 10; i++) element.dispatchEvent(new WheelEvent('wheel', {
+      ctrlKey: true, deltaY: -2, clientX: rect.left + 400, clientY: rect.top + 200, bubbles: true, cancelable: true,
+    }));
+  });
+  await expect.poll(async () => Number(await page.getByLabel('Zoom', { exact: true }).inputValue())).toBeCloseTo(Math.exp(0.2), 5);
+});
+
+test('empty cells remain selectable and editable at 25% without mounting thousands of cells', async ({ page }) => {
+  await page.goto('/playground/sheet-budget');
+  await expect(page.getByRole('gridcell', { name: 'Research', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const grid = page.getByRole('grid');
+  await grid.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    element.dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: 200, clientX: rect.left + 100, clientY: rect.top + 100, bubbles: true, cancelable: true }));
+  });
+  await expect(page.getByLabel('Zoom', { exact: true })).toHaveValue('0.25');
+  await expect.poll(() => page.getByRole('gridcell').count()).toBeLessThan(1500);
+  await page.locator('.grid-scroller').evaluate(element => { element.scrollTop = 0; element.scrollLeft = 0; });
+  const empty = (await page.locator('.empty-grid').boundingBox())!;
+  const x = empty.x + 100;
+  const y = empty.y + 40;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 50, y + 30, { steps: 5 });
+  await page.mouse.up();
+  const selection = (await page.locator('.empty-selection').boundingBox())!;
+  expect(selection.width).toBeGreaterThan(40);
+  expect(selection.height).toBeGreaterThan(20);
+  await page.mouse.dblclick(x, y);
+  const reference = await page.getByLabel('Formula target', { exact: true }).innerText();
+  const editor = page.getByRole('textbox', { name: `Edit ${reference}`, exact: true });
+  await editor.fill('Previously empty');
+  await editor.press('Enter');
+  await expect(page.getByRole('gridcell', { name: 'Previously empty', exact: true })).toBeVisible();
+  await expect(page.getByText('Modified locally', { exact: true })).toBeVisible();
+});

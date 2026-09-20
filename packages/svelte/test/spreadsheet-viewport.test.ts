@@ -26,6 +26,17 @@ describe("Svelte spreadsheet viewport", () => {
     expect(viewport.totalWidth).toBe(1_835_008);
   });
 
+  test("updates a reused window when row sizing and scroll position change", () => {
+    const input = { rowCount: 100, columnCount: 20, rowHeight: 28, columnWidth: 112, scrollTop: 0, scrollLeft: 0, viewportHeight: 280, viewportWidth: 560 };
+    const first = calculateSpreadsheetViewport(input);
+    const resized = calculateSpreadsheetViewport({ ...input, rowHeight: 56 }, first);
+    expect(resized.rows[0]!.size).toBe(56);
+    expect(resized.totalHeight).toBe(5600);
+    const scrolled = calculateSpreadsheetViewport({ ...input, rowHeight: 56, scrollTop: 560 }, resized);
+    expect(scrolled.rows[0]!.index).toBe(9);
+    expect(scrolled.rows[0]!.start).toBe(448);
+  });
+
   test("keeps generated windows ordered and inside their axes", () => {
     fc.assert(fc.property(
       fc.integer({ min: 1, max: 20_000 }),
