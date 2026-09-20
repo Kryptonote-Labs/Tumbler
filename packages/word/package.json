@@ -1,6 +1,6 @@
 {
   "name": "@tumblerjs/word",
-  "version": "0.1.0-alpha.16",
+  "version": "0.1.0-alpha.17",
   "description": "Headless WordprocessingML reading, layout, preservation, and editing for Tumbler.",
   "type": "module",
   "exports": "./src/index.ts",
@@ -20,9 +20,9 @@
     "tag": "alpha"
   },
   "dependencies": {
-    "@tumblerjs/charts": "0.1.0-alpha.16",
-    "@tumblerjs/core": "0.1.0-alpha.16",
-    "@tumblerjs/ooxml": "0.1.0-alpha.16",
-    "@tumblerjs/opc": "0.1.0-alpha.16"
+    "@tumblerjs/charts": "0.1.0-alpha.17",
+    "@tumblerjs/core": "0.1.0-alpha.17",
+    "@tumblerjs/ooxml": "0.1.0-alpha.17",
+    "@tumblerjs/opc": "0.1.0-alpha.17"
   }
 }
