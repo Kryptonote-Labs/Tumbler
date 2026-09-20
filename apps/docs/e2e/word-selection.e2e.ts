@@ -124,3 +124,35 @@ test('paragraph selection also works in view mode', async ({ page }) => {
   await page.mouse.click(point.x, point.y, { clickCount: 3 });
   await expect.poll(() => selectedText(page)).toBe(paragraph);
 });
+
+test('native word boundaries remain intact when only the middle of a word is bold', async ({ page }) => {
+  await openEditor(page);
+  const paragraphId = await page.evaluate(() => {
+    const run = [...document.querySelectorAll<HTMLElement>('.word-page-content [data-paragraph]:not(.caret-anchor)')].find(element => element.textContent?.includes('documents'))!;
+    const start = run.textContent!.indexOf('documents');
+    const range = document.createRange();
+    range.setStart(run.firstChild!, start + 3);
+    range.setEnd(run.firstChild!, start + 6);
+    run.closest<HTMLElement>('[contenteditable]')!.focus();
+    getSelection()!.removeAllRanges();
+    getSelection()!.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+    return run.dataset.paragraph!;
+  });
+  await expect.poll(() => selectedText(page)).toBe('ume');
+  await page.getByRole('button', { name: 'Bold', exact: true }).click();
+  const middle = page.locator(`[data-paragraph="${paragraphId}"]`).filter({ hasText: /^ume$/ });
+  await expect(middle).toHaveCSS('font-weight', '700');
+  const nativeWord = await page.evaluate(id => {
+    const runs = [...document.querySelectorAll<HTMLElement>(`[data-paragraph="${id}"]:not(.caret-anchor)`)];
+    const start = runs.find(run => run.textContent?.endsWith('doc'))!;
+    const selection = getSelection()!;
+    selection.collapse(start.firstChild!, start.textContent!.length - 3);
+    selection.modify('extend', 'forward', 'word');
+    return selection.toString();
+  }, paragraphId);
+  expect(nativeWord).toBe('documents');
+  await expect(page.getByRole('textbox', { name: 'Edit page 1', exact: true })).toHaveAttribute('spellcheck', 'true');
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.locator(`[data-paragraph="${paragraphId}"]`).filter({ hasText: /^ume$/ })).toHaveCount(0);
+});

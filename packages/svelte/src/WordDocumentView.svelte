@@ -418,6 +418,14 @@
     return `${wordTextCss(fragment.format)};left:${wordPointsToCssPixels(fragment.x - offsetX)}px;top:${wordPointsToCssPixels(fragment.y - offsetY)}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 
+  /** Inline runs keep browser word boundaries intact across formatting changes. */
+  function inlineFragmentStyle(line: WordLayout["pages"][number]["columns"][number]["lines"][number], index: number) {
+    const fragment = line.fragments[index]!;
+    const previous = line.fragments.slice(0, index).findLast(item => item.kind !== "drawing");
+    const gap = fragment.x - (previous === undefined ? line.x : previous.x + previous.width);
+    return `${wordTextCss(fragment.format)};margin-left:${wordPointsToCssPixels(gap)}px;top:${wordPointsToCssPixels(fragment.y - line.y)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
+  }
+
   function drawingStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0) {
     return `left:${wordPointsToCssPixels(fragment.x - offsetX)}px;top:${wordPointsToCssPixels(fragment.y - offsetY)}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px`;
   }
@@ -512,32 +520,34 @@
                 >{line.marker.text}</span>
               {/if}
 
-              {#each line.fragments as fragment}
-                {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
-                  <img class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
-                {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
-                  <div class="document-drawing" style={drawingStyle(fragment)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-body-chart-${page.index}-${fragment.contentElementId}`} /></div>
-                {:else if fragment.kind === "drawing"}
-                  <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment)}></div>
-                {:else if fragment.hyperlink === undefined}
-                  <span
-                    data-paragraph={line.paragraphElementId}
-                    data-start={fragment.startOffset}
-                    data-end={fragment.endOffset}
-                    style={fragmentStyle(fragment)}
-                  >{fragment.text}</span>
-                {:else}
-                  <button
-                    class="hyperlink"
-                    onkeydown={(event) => activateHyperlink(event, fragment.hyperlink)}
-                    onclick={(event) => activateHyperlink(event, fragment.hyperlink)}
-                    data-paragraph={line.paragraphElementId}
-                    data-start={fragment.startOffset}
-                    data-end={fragment.endOffset}
-                    style={fragmentStyle(fragment)}
-                  >{fragment.text}</button>
-                {/if}
-              {/each}
+              <div class="text-line" style={`left:${wordPointsToCssPixels(line.x)}px;top:${wordPointsToCssPixels(line.y)}px;height:${wordPointsToCssPixels(line.height)}px`}>
+                {#each line.fragments as fragment, fragmentIndex}
+                  {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
+                    <img class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment, line.x, line.y)} />
+                  {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
+                    <div class="document-drawing" style={drawingStyle(fragment, line.x, line.y)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-body-chart-${page.index}-${fragment.contentElementId}`} /></div>
+                  {:else if fragment.kind === "drawing"}
+                    <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment, line.x, line.y)}></div>
+                  {:else if fragment.hyperlink === undefined}
+                    <span
+                      data-paragraph={line.paragraphElementId}
+                      data-start={fragment.startOffset}
+                      data-end={fragment.endOffset}
+                      style={inlineFragmentStyle(line, fragmentIndex)}
+                    >{fragment.text}</span>
+                  {:else}
+                    <button
+                      class="hyperlink"
+                      onkeydown={(event) => activateHyperlink(event, fragment.hyperlink)}
+                      onclick={(event) => activateHyperlink(event, fragment.hyperlink)}
+                      data-paragraph={line.paragraphElementId}
+                      data-start={fragment.startOffset}
+                      data-end={fragment.endOffset}
+                      style={inlineFragmentStyle(line, fragmentIndex)}
+                    >{fragment.text}</button>
+                  {/if}
+                {/each}
+              </div>
               {#if line.fragments.length === 0 || line.fragments.at(-1)?.endOffset !== line.endOffset}
                 <span
                   class="caret-anchor"
@@ -566,6 +576,8 @@
   .document-drawing { position: absolute; display: block; object-fit: contain; overflow: hidden; }
   .drawing-fallback { background: repeating-linear-gradient(135deg, #f3f3f3, #f3f3f3 8px, #fafafa 8px, #fafafa 16px); border: 1px solid #d0d0d0; }
   .note-separator { position: absolute; width: 96px; border-top: 1px solid #777; }
+  .text-line { position: absolute; white-space: pre; font-size: 0; line-height: 0; }
+  .text-line > span, .text-line > button { position: relative; display: inline; vertical-align: top; }
   span, button { position: absolute; display: block; box-sizing: border-box; white-space: pre; user-select: text; -webkit-user-select: text; }
   button { margin: 0; border: 0; padding: 0; text-align: inherit; }
   .hyperlink { cursor: pointer; text-decoration: underline; text-decoration-color: currentColor; }
