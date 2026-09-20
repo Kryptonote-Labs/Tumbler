@@ -40,6 +40,28 @@ test('both page edges are reachable in a narrow viewer at different zoom levels'
   expect(edges.every(left => left >= 0)).toBe(true);
 });
 
+test('mixed page sizes centre fitting pages within the viewer', async ({ page }) => {
+  await page.goto('/playground/word-pages');
+  const scroller = page.getByLabel('Document pages', { exact: true });
+  await expect(scroller.locator('.word-page').first()).toBeVisible();
+  for (const width of [1440, 1250]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.getByLabel('Zoom', { exact: true }).selectOption('0.75');
+    await expect.poll(() => scroller.evaluate(element => {
+      const portrait = element.querySelector('.word-page')!.getBoundingClientRect();
+      const viewer = element.getBoundingClientRect();
+      return Math.abs((portrait.left + portrait.right) / 2 - (viewer.left + element.clientWidth / 2));
+    })).toBeLessThan(1);
+  }
+  await scroller.evaluate(element => { element.scrollTop = element.scrollHeight; });
+  await expect(page.getByText('A wider view', { exact: true })).toBeVisible();
+  await expect.poll(() => scroller.evaluate(element => {
+    element.scrollLeft = element.scrollWidth;
+    const landscape = element.querySelector('.word-page:last-child')!.getBoundingClientRect();
+    return landscape.right - (element.getBoundingClientRect().left + element.clientWidth);
+  })).toBeLessThanOrEqual(1);
+});
+
 test('Word edits can be downloaded and reopened, then reset', async ({ page }) => {
   await page.goto('/playground/word-brief');
   await expect(page.getByText('A quieter workspace', { exact: true })).toBeVisible();

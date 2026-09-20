@@ -20,6 +20,7 @@
 
   let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, scale = 1 }: Props = $props();
   let scroller = $state<HTMLDivElement>();
+  let viewportWidth = $state(0);
   let layout = $state<WordLayout>();
   let viewport = $state<WordPageViewport>();
   let mounted = $state(false);
@@ -409,6 +410,7 @@
 <div
   class="word-scroller"
   bind:this={scroller}
+  bind:clientWidth={viewportWidth}
   aria-label="Document pages"
   onscroll={updateViewport}
   style={`--word-scale:${scale}`}
@@ -420,7 +422,7 @@
         <section
           class="word-page"
           aria-label={`Page ${page.index + 1}`}
-          style={`left:50%;top:${viewport.offsets[pageIndex]! * scale}px;width:${wordPointsToCssPixels(page.width) * scale}px;height:${wordPointsToCssPixels(page.height) * scale}px`}
+          style={`left:${Math.max(24 * scale, (viewportWidth - wordPointsToCssPixels(page.width) * scale) / 2)}px;top:${viewport.offsets[pageIndex]! * scale}px;width:${wordPointsToCssPixels(page.width) * scale}px;height:${wordPointsToCssPixels(page.height) * scale}px`}
         >
           <div
             class="word-page-content"
@@ -529,7 +531,7 @@
 <style>
   .word-scroller { position: relative; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; background: var(--tumbler-document-workspace, #e7e8ea); color: #000; }
   .word-surface { position: relative; min-width: 100%; }
-  .word-page { position: absolute; transform: translateX(-50%); overflow: hidden; box-sizing: border-box; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.2); contain: strict; }
+  .word-page { position: absolute; overflow: hidden; box-sizing: border-box; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.2); contain: strict; }
   .word-page-content { position: absolute; inset: 0 auto auto 0; overflow: hidden; }
   .word-page-content.editable { outline: 0; caret-color: var(--tumbler-document-accent, #25a735); }
   .caret-anchor { overflow: visible; }
