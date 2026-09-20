@@ -347,3 +347,12 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing and report
 security issues according to [SECURITY.md](SECURITY.md).
 
 Tumbler is available under the [MIT License](LICENSE).
+
+## Documentation and playground
+
+The standalone SvelteKit site lives in [`apps/docs`](apps/docs). Run `bun run dev`
+from the repository root to open the docs and try the current source packages in
+a browser. The server listens on all interfaces for LAN access.
+
+See the [site README](apps/docs/README.md) for browser tests, sample generation,
+and Vercel deployment settings.

@@ -1,0 +1,30 @@
+{
+  "name": "@tumblerjs/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test:e2e": "playwright test",
+    "samples": "bun scripts/generate-samples.ts"
+  },
+  "dependencies": {
+    "@tumblerjs/core": "workspace:*",
+    "@tumblerjs/sheets": "workspace:*",
+    "@tumblerjs/svelte": "workspace:*",
+    "@tumblerjs/word": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@sveltejs/adapter-vercel": "^6.3.4",
+    "@sveltejs/kit": "^2.70.3",
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@types/node": "^22.0.0",
+    "svelte": "^5.57.1",
+    "svelte-check": "^4.7.6",
+    "typescript": "^5.9.2",
+    "vite": "^8.3.0"
+  }
+}

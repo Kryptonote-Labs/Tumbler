@@ -13,3 +13,8 @@ fixtures/private/
 # Local standards/source archive. Recreate with `bun run references:fetch`.
 # These files are useful for implementation but are not part of Tumbler's source.
 docs/reference/vendor/
+
+.svelte-kit/
+.vercel/
+playwright-report/
+test-results/

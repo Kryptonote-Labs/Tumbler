@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "check": "tsc --noEmit",
@@ -16,7 +17,11 @@
     "release:qualify": "bash scripts/qualify-release.sh",
     "release:next": "bun scripts/publish-next.ts",
     "release:publish": "bun scripts/publish-next.ts --confirm",
-    "test": "bun test --pass-with-no-tests"
+    "test": "bun test --pass-with-no-tests",
+    "dev": "bun run --cwd apps/docs dev",
+    "docs:check": "bun run --cwd apps/docs check",
+    "docs:build": "bun run --cwd apps/docs build",
+    "docs:test": "bun run --cwd apps/docs test:e2e"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
