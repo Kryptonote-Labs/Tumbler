@@ -6,6 +6,7 @@ export interface WordPageViewport {
   readonly last: number;
   readonly offsets: readonly number[];
   readonly totalHeight: number;
+  readonly totalWidth: number;
 }
 
 /** Projects a page layout into a small overscanned mounted window. */
@@ -21,7 +22,9 @@ export function calculateWordPageViewport(
   }
   const offsets: number[] = [];
   let cursor = gap;
+  let widestPage = 0;
   for (const page of layout.pages) {
+    widestPage = Math.max(widestPage, wordPointsToCssPixels(page.width));
     offsets.push(cursor);
     cursor += wordPointsToCssPixels(page.height) + gap;
   }
@@ -31,5 +34,5 @@ export function calculateWordPageViewport(
   while (last + 1 < layout.pages.length && offsets[last]! < scrollTop + viewportHeight) last += 1;
   first = Math.max(0, first - overscan);
   last = Math.min(layout.pages.length - 1, last + overscan);
-  return Object.freeze({ first, last, offsets: Object.freeze(offsets), totalHeight: cursor });
+  return Object.freeze({ first, last, offsets: Object.freeze(offsets), totalHeight: cursor, totalWidth: widestPage + gap * 2 });
 }

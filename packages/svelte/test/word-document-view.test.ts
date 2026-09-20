@@ -36,6 +36,19 @@ describe("owned Svelte Word document head", () => {
     expect(viewport.totalHeight).toBeGreaterThan(100_000);
   });
 
+  test("reserves horizontal space for the widest page even outside the mounted window", () => {
+    const layout = {
+      fragmentCount: 0,
+      pages: Array.from({ length: 10 }, (_, index) => ({ index, width: index === 9 ? 792 : 612, height: 792, section: {} as never, columns: [], headerLines: [], footerLines: [], headerTables: [], footerTables: [], noteLines: [], noteTables: [], noteSeparatorY: undefined })),
+    } satisfies WordLayout;
+    const top = calculateWordPageViewport(layout, 0, 800);
+    const bottom = calculateWordPageViewport(layout, 10_000, 800);
+    expect(top.last).toBeLessThan(9);
+    expect(top.totalWidth).toBe(1104);
+    expect(bottom.totalWidth).toBe(top.totalWidth);
+    expect(calculateWordPageViewport(layout, 0, 800, 12).totalWidth).toBe(1080);
+  });
+
   test("converts browser pixel metrics back into document points", () => {
     const context = {
       font: "",
