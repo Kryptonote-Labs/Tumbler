@@ -5,7 +5,6 @@
 <svelte:head><title>Tumbler docs</title><meta name="description" content="Read, render, and edit Office documents with TypeScript and Svelte. Tumbler documentation and a live document playground." /></svelte:head>
 <div class="doc-layout">
   <article>
-    <p class="eyebrow">Introduction</p>
     <h1>Office documents, in your app.</h1>
     <p class="lead">Tumbler gives you TypeScript models and Svelte components for reading, rendering, and editing Word documents and spreadsheets.</p>
     <p>Open a file, render its contents, and export your edits. Your application owns the interface and persistence. Tumbler handles the document underneath.</p>

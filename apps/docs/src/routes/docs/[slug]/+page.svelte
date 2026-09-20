@@ -6,7 +6,7 @@
 <svelte:head><title>{data.doc.title} · Tumbler</title><meta name="description" content={data.doc.description} /></svelte:head>
 <div class="doc-layout">
   <article>
-    <p class="eyebrow">Documentation</p><h1>{data.doc.title}</h1><p class="lead">{data.doc.description}</p>
+    <h1>{data.doc.title}</h1><p class="lead">{data.doc.description}</p>
     {#each data.doc.sections as section}
       <section aria-labelledby={section.id}>
         <h2 id={section.id}>{section.title}</h2>

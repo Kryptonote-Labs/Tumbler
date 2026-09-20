@@ -86,7 +86,7 @@
     void goto(url, { replaceState: true, noScroll: true, keepFocus: true });
   }
 </script>
-<div class="playground-heading"><div><p class="eyebrow">Live examples</p><h1>Playground</h1></div><a class="quiet-link" href={sample.format === 'word' ? '/docs/word' : '/docs/spreadsheets'}>Read the docs <span aria-hidden="true">↗</span></a></div>
+<div class="playground-heading"><h1>Playground</h1><a class="quiet-link" href={sample.format === 'word' ? '/docs/word' : '/docs/spreadsheets'}>Read the docs <span aria-hidden="true">↗</span></a></div>
 <p class="playground-description">Open a sample or bring your own file. Edits stay in this browser until you download them.</p>
 <div class="playground-controls">
   <label class="sample-picker"><span class="control-label">Example</span><select aria-label="Example" value={sample.id} onchange={event => goto(`/playground/${event.currentTarget.value}`)}>{#each samples as item}<option value={item.id}>{item.label} · {item.format === 'word' ? 'Word' : 'Excel'}</option>{/each}</select></label>
@@ -117,7 +117,6 @@
 <style>
   .playground-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
   .playground-heading h1 { font-size: 30px; margin-bottom: 0; }
-  .playground-heading .eyebrow { margin-bottom: 10px; }
   .quiet-link { color: var(--soft); font-size: 12px; }
   .playground-description { color: var(--soft); line-height: 1.7; margin: 15px 0 25px; }
   .playground-controls { display: flex; align-items: flex-end; gap: 14px; margin-bottom: 20px; }
