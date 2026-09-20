@@ -90,7 +90,7 @@ const output = edited.bytes();` }
 
 const session = openWordEditingSession(bytes);
 const document = session.artifact.document;` },
-        { kind: 'text', text: 'WordDocumentView renders a window of pages around the visible area. Its scale prop controls zoom. The scrollable surface fits the widest page, including pages that are not currently mounted.' }
+        { kind: 'text', text: 'WordDocumentView renders a window of pages around the visible area. Its scale prop controls zoom. Use bind:scale to keep your zoom controls in sync with trackpad pinch, Ctrl+wheel, and two-finger touch gestures. Gestures zoom between 25% and 300% around the pointer or touch midpoint. Each page centres within the viewer when it fits; wider pages remain horizontally scrollable.' }
       ] },
       { id: 'editing', title: 'Connect text edits', blocks: [
         { kind: 'text', text: 'The view reports an edit containing the selection, replacement text, and resulting caret. Apply it to the session and pass its next document back to the view. This minimal example uses single-paragraph edits; when inserting paragraph breaks, resolve the caret against the new paragraph list.' },
@@ -161,7 +161,8 @@ session.markSaved();` },
 
 <style>
   .sheet :global(.tumbler-grid) { height: 100%; }
-</style>` }
+</style>` },
+        { kind: 'text', text: 'SpreadsheetGrid supports trackpad pinch, Ctrl+wheel, and two-finger touch zoom from 25% to 300%. Bind its scale prop with bind:scale to synchronise your zoom controls. The grid, row and column headers, frozen panes, and cell editor scale together.' }
       ] },
       { id: 'formulas', title: 'Values and formulas', blocks: [
         { kind: 'text', text: 'Inline grid edits are literal values. SpreadsheetFormulaBar interprets a leading equals sign as a formula. The headless API takes formula source without that leading sign.' },

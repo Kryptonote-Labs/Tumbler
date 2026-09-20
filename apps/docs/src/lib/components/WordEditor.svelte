@@ -3,7 +3,7 @@
   import { WordDocumentView, FormattingToolbar, wordDocumentParagraphs, type WordDocumentEdit } from '@tumblerjs/svelte';
   import { WORD_FORMATTING_CAPABILITIES, wordParagraphText, type WordEditingSession, type WordTextSelection } from '@tumblerjs/word';
   import type { FormattingPatch } from '@tumblerjs/core';
-  let { session, editable, scale, onchange, onerror, ondownload }: {
+  let { session, editable, scale = $bindable(), onchange, onerror, ondownload }: {
     session: WordEditingSession; editable: boolean; scale: number;
     onchange: (bytes: Uint8Array, dirty: boolean) => void; onerror: (message: string) => void; ondownload: () => void;
   } = $props();
@@ -61,5 +61,5 @@
       {#if formatting}<FormattingToolbar state={formatting} capabilities={WORD_FORMATTING_CAPABILITIES} onformat={format} />{:else}<span class="selection-hint">Select text to format</span>{/if}
     </div>
   {/if}
-  <div class="viewer-body"><WordDocumentView bind:this={view} wordDocument={artifact.document} {editable} {scale} {selection} onselectionchange={next => selection = next} onedit={edit} oncommand={command} /></div>
+  <div class="viewer-body"><WordDocumentView bind:this={view} wordDocument={artifact.document} {editable} bind:scale {selection} onselectionchange={next => selection = next} onedit={edit} oncommand={command} /></div>
 </div>

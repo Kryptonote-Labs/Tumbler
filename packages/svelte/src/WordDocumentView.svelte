@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onDestroy, onMount, untrack } from "svelte";
+  import { flushSync, onDestroy, onMount, untrack } from "svelte";
   import { layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
+  import { zoomGesture } from "./zoom-gesture.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
   import WordLayoutTableView from "./WordLayoutTableView.svelte";
   import { browserWordTextMeasurer, wordTextCss } from "./word-font-metrics.ts";
@@ -18,7 +19,7 @@
     readonly scale?: number;
   }
 
-  let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, scale = 1 }: Props = $props();
+  let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, scale = $bindable(1) }: Props = $props();
   let scroller = $state<HTMLDivElement>();
   let viewportWidth = $state(0);
   let layout = $state<WordLayout>();
@@ -56,7 +57,6 @@
 
   $effect(() => {
     wordDocument;
-    scale;
     if (mounted) {
       // Reflow reads its freshly-written layout to derive the viewport; that output is not an input dependency.
       untrack(reflow);
@@ -64,9 +64,36 @@
   });
 
   $effect(() => {
+    scale;
+    if (mounted) untrack(updateViewport);
+  });
+
+  $effect(() => {
     selection;
     if (mounted) queueMicrotask(restoreBrowserSelection);
   });
+
+  /** Keep the document point under the gesture stationary as pages resize and recenter. */
+  function zoomAt(next: number, x: number, y: number, targetX = x, targetY = y) {
+    if (scroller === undefined || layout === undefined || viewport === undefined) return;
+    next = Math.max(0.25, Math.min(3, next));
+    const rect = scroller.getBoundingClientRect();
+    const localX = x - rect.left;
+    const localY = y - rect.top;
+    const documentY = (scroller.scrollTop + localY) / scale;
+    let pageIndex = 0;
+    while (pageIndex + 1 < layout.pages.length && viewport.offsets[pageIndex + 1]! <= documentY) pageIndex++;
+    const page = layout.pages[pageIndex];
+    if (page === undefined) return;
+    const pageWidth = wordPointsToCssPixels(page.width);
+    const left = Math.max(24 * scale, (viewportWidth - pageWidth * scale) / 2);
+    const documentX = (scroller.scrollLeft + localX - left) / scale;
+    flushSync(() => { scale = next; });
+    const nextLeft = Math.max(24 * scale, (viewportWidth - pageWidth * scale) / 2);
+    scroller.scrollLeft = nextLeft + documentX * scale - (targetX - rect.left);
+    scroller.scrollTop = documentY * scale - (targetY - rect.top);
+    updateViewport();
+  }
 
   function reflow() {
     const canvas = globalThis.document.createElement("canvas");
@@ -411,6 +438,7 @@
   class="word-scroller"
   bind:this={scroller}
   bind:clientWidth={viewportWidth}
+  use:zoomGesture={(gesture) => { finishMouseSelection(); zoomAt(scale * gesture.factor, gesture.x, gesture.y, gesture.targetX, gesture.targetY); }}
   aria-label="Document pages"
   onscroll={updateViewport}
   style={`--word-scale:${scale}`}
@@ -529,7 +557,7 @@
 </div>
 
 <style>
-  .word-scroller { position: relative; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; background: var(--tumbler-document-workspace, #e7e8ea); color: #000; }
+  .word-scroller { position: relative; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; background: var(--tumbler-document-workspace, #e7e8ea); color: #000; }
   .word-surface { position: relative; min-width: 100%; }
   .word-page { position: absolute; overflow: hidden; box-sizing: border-box; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.2); contain: strict; }
   .word-page-content { position: absolute; inset: 0 auto auto 0; overflow: hidden; }

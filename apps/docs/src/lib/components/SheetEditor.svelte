@@ -3,8 +3,8 @@
   import { createGridSelection, type FormattingPatch } from '@tumblerjs/core';
   import { formatCellReference, type SpreadsheetArtifact } from '@tumblerjs/sheets';
   import { FormattingToolbar, SpreadsheetFormulaBar, SpreadsheetGrid, type SpreadsheetFormulaBarEdit, type SpreadsheetGridEdit } from '@tumblerjs/svelte';
-  let { initial, editable, onchange, onerror }: {
-    initial: SpreadsheetArtifact; editable: boolean;
+  let { initial, editable, scale = $bindable(1), onchange, onerror }: {
+    initial: SpreadsheetArtifact; editable: boolean; scale?: number;
     onchange: (bytes: Uint8Array, dirty: boolean) => void; onerror: (message: string) => void;
   } = $props();
   let artifact = $state(untrack(() => initial));
@@ -48,6 +48,6 @@
 <div class="editor-root sheet-editor">
   {#if editable}<div class="editing-bar"><button onclick={undo} disabled={!history.length} title="Undo" aria-label="Undo">↶</button><button onclick={redo} disabled={!future.length} title="Redo" aria-label="Redo">↷</button><FormattingToolbar state={artifact.formattingState(selection.range)} capabilities={artifact.formattingCapabilities(selection.range)} onformat={format} /></div>{/if}
   <SpreadsheetFormulaBar worksheet={artifact.worksheet} {reference} readonly={!editable} onedit={formulaEdit} />
-  <div class="viewer-body"><SpreadsheetGrid worksheet={artifact.worksheet} calculation={artifact.calculation} {selection} readonly={!editable} onselectionchange={next => selection = next} onedit={cellEdit} /></div>
+  <div class="viewer-body"><SpreadsheetGrid bind:scale worksheet={artifact.worksheet} calculation={artifact.calculation} {selection} readonly={!editable} onselectionchange={next => selection = next} onedit={cellEdit} /></div>
   <div class="sheet-tabs" aria-label="Worksheets">{#each artifact.workbook.sheets.filter(sheet => sheet.state === 'visible') as sheet}<button class:chosen={sheet.name === artifact.activeSheet.name} aria-pressed={sheet.name === artifact.activeSheet.name} onclick={() => { artifact = artifact.selectSheet(sheet.name); selection = createGridSelection({ row: 1, column: 1 }); }}>{sheet.name}</button>{/each}</div>
 </div>

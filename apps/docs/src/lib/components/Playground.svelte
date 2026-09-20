@@ -96,15 +96,15 @@
   <div class="workspace-toolbar">
     <div class="mode-switch" aria-label="Document mode"><button class:selected={!editable} aria-pressed={!editable} onclick={() => editable = false}>View</button><button class:selected={editable} aria-pressed={editable} onclick={() => editable = true}>Edit</button></div>
     <label><span class="control-label">Width</span><select aria-label="Viewer width" value={width} onchange={resize}><option value="full">Full width</option><option value="360">360 px</option><option value="640">640 px</option><option value="960">960 px</option></select></label>
-    {#if document?.kind === 'word'}<label><span class="sr-only">Zoom</span><select aria-label="Zoom" bind:value={scale}><option value={0.5}>50%</option><option value={0.75}>75%</option><option value={1}>100%</option><option value={1.25}>125%</option></select></label>{/if}
+    {#if document}<label><span class="sr-only">Zoom</span><select aria-label="Zoom" bind:value={scale}>{#if ![0.5, 0.75, 1, 1.25].includes(scale)}<option value={scale}>{Math.round(scale * 100)}%</option>{/if}<option value={0.5}>50%</option><option value={0.75}>75%</option><option value={1}>100%</option><option value={1.25}>125%</option></select></label>{/if}
     <div class="document-actions"><button disabled={!original || loading} onclick={() => original && open(original, filename)}>Reset</button><button disabled={!output || loading} onclick={download}>Download <span aria-hidden="true">↓</span></button></div>
   </div>
   <div class="viewer-stage">
     <div class="viewer-frame" style:width={width === 'full' ? '100%' : `${width}px`}>
       {#if document}
         {#key revision}
-          {#if document.kind === 'word'}<WordEditor session={document.session} {editable} {scale} onchange={changed} onerror={message => error = message} ondownload={download} />
-          {:else}<SheetEditor initial={document.artifact} {editable} onchange={changed} onerror={message => error = message} />{/if}
+          {#if document.kind === 'word'}<WordEditor session={document.session} {editable} bind:scale onchange={changed} onerror={message => error = message} ondownload={download} />
+          {:else}<SheetEditor bind:scale initial={document.artifact} {editable} onchange={changed} onerror={message => error = message} />{/if}
         {/key}
       {:else}<div class="viewer-empty">{loading ? 'Opening sample…' : 'Open a document to begin.'}</div>{/if}
     </div>

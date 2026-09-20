@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { flushSync, tick } from "svelte";
   import { createGridSelection, moveGridSelection, type GridDirection, type GridSelection } from "@tumblerjs/core";
   import type { ChartModel } from "@tumblerjs/charts";
   import {
@@ -33,6 +33,7 @@
   import { measureMaximumDigitWidth, spreadsheetFontShorthand } from "./spreadsheet-font-metrics.ts";
   import { spreadsheetCellContentCss, spreadsheetCellCss } from "./spreadsheet-cell-style.ts";
   import { spreadsheetTextOverflowWidth } from "./spreadsheet-text-overflow.ts";
+  import { zoomGesture, type ZoomGesture } from "./zoom-gesture.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
 
   interface RenderableChart {
@@ -52,6 +53,7 @@
     readonly onchartselectionchange?: (anchorElementId: number | undefined) => void;
     /** Prevents cell edits while retaining selection and table view controls. */
     readonly readonly?: boolean;
+    readonly scale?: number;
     readonly rowCount?: number;
     readonly columnCount?: number;
     readonly rowHeight?: number;
@@ -68,12 +70,14 @@
     chartSelection,
     onchartselectionchange,
     readonly = false,
+    scale = $bindable(1),
     rowCount = EXCEL_MAX_ROWS,
     columnCount = EXCEL_MAX_COLUMNS,
     rowHeight = 28,
     columnWidth = 112,
   }: Props = $props();
 
+  let scroller = $state<HTMLDivElement>();
   let viewportWidth = $state(800);
   let viewportHeight = $state(500);
   let scrollTop = $state(0);
@@ -234,6 +238,22 @@
         ? createGridSelection(point)
         : createGridSelection(merge.start, merge.end);
     onselectionchange?.(selection);
+  }
+
+  function zoomGrid(gesture: ZoomGesture) {
+    if (scroller === undefined) return;
+    selectingPointer = undefined;
+    const rect = scroller.getBoundingClientRect();
+    const x = (gesture.x - rect.left) / scale;
+    const y = (gesture.y - rect.top) / scale;
+    const documentX = scroller.scrollLeft + x;
+    const documentY = scroller.scrollTop + y;
+    flushSync(() => { scale = Math.max(0.25, Math.min(3, scale * gesture.factor)); });
+    // Frozen panes stay fixed; only anchor the scrolling portion of each axis.
+    if (x > rowHeaderWidth + frozenColumnsWidth) scroller.scrollLeft = documentX - (gesture.targetX - rect.left) / scale;
+    if (y > columnHeaderHeight + frozenRowsHeight) scroller.scrollTop = documentY - (gesture.targetY - rect.top) / scale;
+    scrollLeft = scroller.scrollLeft;
+    scrollTop = scroller.scrollTop;
   }
 
   function handleScroll(event: Event) {
@@ -570,6 +590,8 @@
 
 <div
   class="tumbler-grid"
+  style={`zoom:${scale};width:100%;height:100%`}
+  use:zoomGesture={zoomGrid}
   role="grid"
   aria-rowcount={rowCount}
   aria-colcount={columnCount}
@@ -578,6 +600,7 @@
 >
   <div
     class="grid-scroller"
+    bind:this={scroller}
     bind:clientWidth={viewportWidth}
     bind:clientHeight={viewportHeight}
     onscroll={handleScroll}
@@ -702,7 +725,7 @@
 {/if}
 
 <style>
-  .tumbler-grid { position: relative; overflow: hidden; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; user-select: none; -webkit-user-select: none; }
+  .tumbler-grid { touch-action: pan-x pan-y; position: relative; overflow: hidden; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; user-select: none; -webkit-user-select: none; }
   .grid-scroller { width: 100%; height: 100%; overflow: auto; overscroll-behavior: contain; }
   .canvas { position: relative; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane, .frozen-column-pane { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; background: var(--tumbler-sheet-bg, #ffffff); }
