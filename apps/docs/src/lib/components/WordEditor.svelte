@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { WordDocumentView, FormattingToolbar, wordDocumentParagraphs, type WordDocumentEdit } from '@tumblerjs/svelte';
-  import { WORD_FORMATTING_CAPABILITIES, wordParagraphText, type WordEditingSession, type WordTextSelection } from '@tumblerjs/word';
+  import { WORD_FORMATTING_CAPABILITIES, wordParagraphText, type WordEditingSession, type WordTextSelection, type WordDrawingChange } from '@tumblerjs/word';
   import type { FormattingPatch } from '@tumblerjs/core';
   let { session, editable, scale = $bindable(), onchange, onerror, ondownload }: {
     session: WordEditingSession; editable: boolean; scale: number;
@@ -46,6 +46,10 @@
     catch { onerror('Could not format this selection.'); }
     view?.focusEditor();
   }
+  function updateDrawing(size: WordDrawingChange) {
+    try { session.updateDrawing(size); selection = undefined; onerror(''); }
+    catch { onerror('Could not update this drawing.'); }
+  }
   function command(value: 'undo' | 'redo' | 'save') {
     if (value === 'save') { ondownload(); return; }
     if (selection) selections.set(artifact, selection);
@@ -61,5 +65,5 @@
       {#if formatting}<FormattingToolbar state={formatting} capabilities={WORD_FORMATTING_CAPABILITIES} onformat={format} />{:else}<span class="selection-hint">Select text to format</span>{/if}
     </div>
   {/if}
-  <div class="viewer-body"><WordDocumentView bind:this={view} wordDocument={artifact.document} {editable} bind:scale {selection} onselectionchange={next => selection = next} onedit={edit} oncommand={command} /></div>
+  <div class="viewer-body"><WordDocumentView bind:this={view} wordDocument={artifact.document} {editable} bind:scale {selection} onselectionchange={next => selection = next} onedit={edit} ondrawingchange={updateDrawing} oncommand={command} /></div>
 </div>

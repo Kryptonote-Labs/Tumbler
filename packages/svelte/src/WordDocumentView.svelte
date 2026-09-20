@@ -1,8 +1,9 @@
 <script lang="ts">
   import { flushSync, onDestroy, onMount, untrack } from "svelte";
-  import { layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
+  import { layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import { zoomGesture } from "./zoom-gesture.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
+  import WordDrawingView from "./WordDrawingView.svelte";
   import WordLayoutTableView from "./WordLayoutTableView.svelte";
   import { browserWordTextMeasurer, wordTextCss } from "./word-font-metrics.ts";
   import { calculateWordPageViewport, type WordPageViewport } from "./word-page-viewport.ts";
@@ -16,15 +17,18 @@
     readonly onselectionchange?: (selection: WordTextSelection) => void;
     readonly onedit?: (edit: WordDocumentEdit) => void;
     readonly oncommand?: (command: "undo" | "redo" | "save") => void;
+    readonly ondrawingchange?: (change: WordDrawingChange) => void;
+    readonly ondrawingresize?: (size: WordDrawingResize) => void;
     readonly scale?: number;
   }
 
-  let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, scale = $bindable(1) }: Props = $props();
+  let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, scale = $bindable(1) }: Props = $props();
   let scroller = $state<HTMLDivElement>();
   let viewportWidth = $state(0);
   let layout = $state<WordLayout>();
   let viewport = $state<WordPageViewport>();
   let mounted = $state(false);
+  let selectedDrawing = $state<number>();
   let editingFocused = $state(false);
   let inputSelectionOverride: WordTextSelection | undefined;
   let pointerType = "mouse";
@@ -280,6 +284,8 @@
     if (event.button !== 0 || pointerType === "touch" || !(event.currentTarget instanceof HTMLElement)) return;
     if ((event.target as Element | null)?.closest("[data-story]")) return;
     if ((event.ctrlKey || event.metaKey) && (event.target as Element | null)?.closest(".hyperlink")) return;
+    if ((event.target as Element | null)?.closest('[data-word-drawing]')) return;
+    selectedDrawing = undefined;
     const position = pointerPosition(event.clientX, event.clientY);
     if (position === undefined) return;
     const previous = browserTextSelection() ?? selection;
@@ -522,12 +528,8 @@
 
               <div class="text-line" style={`left:${wordPointsToCssPixels(line.x)}px;top:${wordPointsToCssPixels(line.y)}px;height:${wordPointsToCssPixels(line.height)}px`}>
                 {#each line.fragments as fragment, fragmentIndex}
-                  {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
-                    <img class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment, line.x, line.y)} />
-                  {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
-                    <div class="document-drawing" style={drawingStyle(fragment, line.x, line.y)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-body-chart-${page.index}-${fragment.contentElementId}`} /></div>
-                  {:else if fragment.kind === "drawing"}
-                    <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment, line.x, line.y)}></div>
+                  {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
+                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y)} pageX={fragment.x} pageY={fragment.y} pageWidth={page.width} pageHeight={page.height} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} maxWidth={Math.max(fragment.width, page.width - fragment.x - page.section.marginRightTwips / 20)} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} />
                   {:else if fragment.hyperlink === undefined}
                     <span
                       data-paragraph={line.paragraphElementId}
@@ -577,7 +579,7 @@
   .drawing-fallback { background: repeating-linear-gradient(135deg, #f3f3f3, #f3f3f3 8px, #fafafa 8px, #fafafa 16px); border: 1px solid #d0d0d0; }
   .note-separator { position: absolute; width: 96px; border-top: 1px solid #777; }
   .text-line { position: absolute; white-space: pre; font-size: 0; line-height: 0; }
-  .text-line > span, .text-line > button { position: relative; display: inline; vertical-align: top; }
+  .text-line > span, .text-line > button { position: relative; display: inline; vertical-align: top; z-index: 1; }
   span, button { position: absolute; display: block; box-sizing: border-box; white-space: pre; user-select: text; -webkit-user-select: text; }
   button { margin: 0; border: 0; padding: 0; text-align: inherit; }
   .hyperlink { cursor: pointer; text-decoration: underline; text-decoration-color: currentColor; }

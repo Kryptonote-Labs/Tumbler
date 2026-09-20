@@ -1,7 +1,8 @@
 import { openOpcPackage } from "@tumblerjs/opc";
 import type { FormattingAdapter, FormattingCapabilities, FormattingPatch, FormattingState, FormattingValue, OfficeColor } from "@tumblerjs/core";
 import { openWordDocument, type OpenWordDocumentOptions, type WordBlock, type WordDocument, type WordParagraph } from "./document.ts";
-import { replaceWordText } from "./editor.ts";
+import { positionWordDrawing, resizeWordDrawing, type WordDrawingChange, type WordDrawingResize } from "./drawings.ts";
+import { moveInlineWordDrawing, replaceWordText } from "./editor.ts";
 import { formatWordSelection, wordFormattingState, WORD_FORMATTING_CAPABILITIES, type WordFormattingTarget } from "./formatting.ts";
 import type { WordTextSelection } from "./text.ts";
 
@@ -44,6 +45,19 @@ export class WordArtifact implements FormattingAdapter<WordFormattingTarget, Wor
       next = next.applyFormatting(inserted, { text: textFormatting });
     }
     return next;
+  }
+
+  updateDrawing(change: WordDrawingChange): WordArtifact {
+    const resized = this.resizeDrawing(change);
+    const bytes = change.inlinePosition === undefined
+      ? positionWordDrawing(resized.document, change)
+      : moveInlineWordDrawing(resized.document, change.elementId, change.inlinePosition);
+    return bytes === resized.bytes() ? resized : openWordArtifact(bytes);
+  }
+
+  resizeDrawing(size: WordDrawingResize): WordArtifact {
+    const bytes = resizeWordDrawing(this.document, size);
+    return bytes === this.bytes() ? this : openWordArtifact(bytes);
   }
 
   formattingCapabilities(_target: WordFormattingTarget): FormattingCapabilities {

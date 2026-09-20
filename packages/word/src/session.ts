@@ -1,3 +1,4 @@
+import type { WordDrawingChange, WordDrawingResize } from "./drawings.ts";
 import {
   commitEditingHistory,
   createEditingHistory,
@@ -48,6 +49,14 @@ export class WordEditingSession {
 
   replaceText(selection: WordTextSelection, value: string, typingFormatting?: FormattingPatch): WordArtifact {
     return this.#commit(this.artifact.replaceText(selection, value, typingFormatting));
+  }
+
+  updateDrawing(change: WordDrawingChange): WordArtifact {
+    return this.#commit(this.artifact.updateDrawing(change));
+  }
+
+  resizeDrawing(size: WordDrawingResize): WordArtifact {
+    return this.#commit(this.artifact.resizeDrawing(size));
   }
 
   applyFormatting(selection: WordTextSelection, patch: FormattingPatch): WordArtifact {

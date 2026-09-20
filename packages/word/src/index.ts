@@ -101,3 +101,5 @@ export type {
   WordStyle,
   WordTabStop,
 } from "./styles.ts";
+
+export { positionWordDrawing, resizeWordDrawing, type WordDrawingChange, type WordDrawingResize } from "./drawings.ts";

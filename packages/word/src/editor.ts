@@ -1,10 +1,56 @@
 import { beginLosslessXmlEdit, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { beginPackageTransaction, openOpcPackage } from "@tumblerjs/opc";
 import { openWordDocument, WordError, type WordDocument, type WordParagraph } from "./document.ts";
-import { wordParagraphText, wordParagraphTextSegments, type WordParagraphTextSegment, type WordTextSelection } from "./text.ts";
+import { wordParagraphText, wordParagraphTextSegments, type WordParagraphTextSegment, type WordTextSelection, type WordTextPosition } from "./text.ts";
 
 const XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace";
 const MAX_INSERTED_TEXT = 1_000_000;
+
+/** Move an inline drawing to a logical text position without changing its wrapping. */
+export function moveInlineWordDrawing(document: WordDocument, elementId: number, position: WordTextPosition): Uint8Array {
+  if (document.drawings.get(elementId)?.placement !== "inline") throw new WordError("invalid_document", "Only inline drawings can move into text.");
+  const paragraph = findParagraph(document, position.paragraphElementId);
+  validateOffset(wordParagraphText(document, paragraph), position.offset);
+  const segments = wordParagraphTextSegments(document, paragraph);
+  const own = segments.find(segment => segment.elementId === elementId);
+  if (own !== undefined && position.offset >= own.start && position.offset <= own.end) return document.bytes();
+  const element = requiredElement(document, elementId);
+  // Carry inherited namespace bindings when moving between paragraphs or table cells.
+  const bindings = new Map<string, string>();
+  let ancestor: LosslessXmlElement | undefined = element;
+  while (ancestor !== undefined) {
+    for (const attribute of ancestor.attributes) {
+      if ((attribute.qualified === "xmlns" || attribute.prefix === "xmlns") && !bindings.has(attribute.qualified)) {
+        bindings.set(attribute.qualified, document.source.source.slice(attribute.span.start, attribute.span.end));
+      }
+    }
+    const current: LosslessXmlElement = ancestor;
+    ancestor = document.source.elements().find(candidate => candidate.children.includes(current));
+  }
+  const declarations = [...bindings].filter(([name]) => !element.attributes.some(attribute => attribute.qualified === name)).map(([, raw]) => raw).join(" ");
+  const raw = document.source.source.slice(element.span.start, element.span.end);
+  const markup = raw.replace(/^<[^\s>]+/, opening => `${opening} ${declarations}`);
+  const editor = beginLosslessXmlEdit(document.source);
+  const target = insertionTarget(segments, position.offset, position.affinity ?? "after");
+  if (target === undefined) {
+    const destination = requiredElement(document, paragraph.elementId);
+    const run = `<${qualified(destination.prefix, "r")}>${markup}</${qualified(destination.prefix, "r")}>`;
+    if (destination.selfClosing) editor.replaceElementMarkup(destination, openSelfClosing(document, destination, run));
+    else editor.appendMarkup(destination, run);
+  } else {
+    const destination = requiredElement(document, target.elementId);
+    if (target.kind === "text") {
+      const offset = Math.max(0, Math.min(target.value.length, position.offset - target.start));
+      const text = (value: string) => `<${destination.qualified} xml:space="preserve">${escapeText(value)}</${destination.qualified}>`;
+      editor.replaceElementMarkup(destination, text(target.value.slice(0, offset)) + markup + text(target.value.slice(offset)));
+    } else {
+      const original = document.source.source.slice(destination.span.start, destination.span.end);
+      editor.replaceElementMarkup(destination, position.offset <= target.start ? markup + original : original + markup);
+    }
+  }
+  editor.removeElement(element);
+  return commitDocumentEdit(document, editor);
+}
 
 /** Replaces visible logical text inside one paragraph while preserving surrounding OOXML wrappers. */
 export function replaceWordText(document: WordDocument, selection: WordTextSelection, value: string): Uint8Array {

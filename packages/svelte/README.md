@@ -56,12 +56,22 @@ canonical state:
   editable
   {selection}
   onselectionchange={(next) => selection = next}
+  ondrawingchange={(change) => session.updateDrawing(change)}
   onedit={(edit) => {
     session.replaceText(edit.selection, edit.value);
     selection = { anchor: edit.caret, focus: edit.caret };
   }}
 />
 ```
+
+In edit mode, `ondrawingchange` enables dragging, eight resize handles, and inline,
+in-front-of-text, or behind-text placement. Corners preserve proportions; edges
+resize one dimension. Dragging an inline drawing moves it within the text flow without changing its layout.
+Arrow keys nudge a focused floating drawing, Shift increases the step, and Escape cancels
+a drag. `session.updateDrawing(change)` records the position and dimensions as one
+undoable revision and saves them in the DOCX. Square and tight wrapping are not
+exposed. Hosts needing only the bottom-right resize handle can still use
+`ondrawingresize` with `session.resizeDrawing(size)`.
 
 Applications own history and persistence, or can use `WordEditingSession` from
 `@tumblerjs/word`. Internal bookmark links scroll inside the owned page surface;

@@ -108,6 +108,7 @@ const document = session.artifact.document;` },
   <WordDocumentView
     wordDocument={artifact.document}
     editable
+    ondrawingchange={(change) => artifact = session.updateDrawing(change)}
     {selection}
     onselectionchange={(next) => selection = next}
     onedit={(edit) => {
@@ -116,6 +117,9 @@ const document = session.artifact.document;` },
     }}
   />
 </div>` }
+      ] },
+      { id: 'drawings', title: 'Move and resize images and charts', blocks: [
+        { kind: 'text', text: 'Pass ondrawingchange to enable drawing controls in Edit mode. Drag the image or chart to place it on the page. Corner handles preserve proportions; edge handles adjust one dimension. Use the layout control for inline, in-front-of-text, or behind-text placement. Dragging an inline drawing moves it within the text flow without changing its layout. Arrow keys nudge a focused floating drawing, Shift makes larger steps, and Escape cancels a drag. Apply changes with session.updateDrawing(change) for undo, redo, and DOCX export. Square and tight text wrapping are not provided by these controls.' }
       ] },
       { id: 'formatting', title: 'Format a selection', blocks: [
         { kind: 'text', text: 'Read the selection formatting state from the artifact and use WORD_FORMATTING_CAPABILITIES with FormattingToolbar. Applying a patch records an undoable session revision.' },
