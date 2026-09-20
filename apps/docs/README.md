@@ -21,7 +21,7 @@ bun run docs:test
 
 Browser tests use Playwright Chromium. Install it with `bunx playwright install chromium` from this directory. On Raspberry Pi the configuration uses `/usr/bin/chromium` when available. Set `CHROMIUM_PATH` to override it. Tests start an isolated server on port 4175.
 
-The browser tests cover desktop/mobile docs navigation, both edges of a Word page at different zoom levels, edited Word exports, spreadsheet recalculation and export, and failed uploads preserving the current document.
+The browser tests cover desktop/mobile docs navigation, both edges of a Word page at different zoom levels, paragraph and drag selection, edited Word exports, spreadsheet recalculation and export, and failed uploads preserving the current document.
 
 ## Samples and file handling
 

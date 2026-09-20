@@ -25,10 +25,20 @@
   let mounted = $state(false);
   let editingFocused = $state(false);
   let inputSelectionOverride: WordTextSelection | undefined;
+  let pointerType = "mouse";
+  let dragPoint: { x: number; y: number } | undefined;
+  let scrollFrame = 0;
+  let mouseSelection: { origin: WordTextSelection; granularity: "character" | "word" | "paragraph" } | undefined;
+  let paragraphs = $derived(wordDocumentParagraphs(wordDocument));
+  let paragraphOrder = $derived(new Map(paragraphs.map((paragraph, index) => [paragraph.elementId, index])));
+  let paragraphText = $derived(new Map(paragraphs.map(paragraph => [paragraph.elementId, wordParagraphText(wordDocument, paragraph)])));
   const imageUrls = new WeakMap<Uint8Array, string>();
   const createdUrls = new Set<string>();
 
-  onDestroy(() => createdUrls.forEach((url) => URL.revokeObjectURL(url)));
+  onDestroy(() => {
+    createdUrls.forEach((url) => URL.revokeObjectURL(url));
+    finishMouseSelection();
+  });
 
   onMount(() => {
     mounted = true;
@@ -123,12 +133,13 @@
   }
 
   function readBrowserSelection() {
+    if (!editable || mouseSelection !== undefined) return;
     const next = browserTextSelection();
     if (next !== undefined && !sameWordTextSelection(selection, next)) onselectionchange?.(next);
   }
 
   function browserTextSelection(): WordTextSelection | undefined {
-    if (!editable || scroller === undefined) return undefined;
+    if (scroller === undefined) return undefined;
     const browserSelection = globalThis.getSelection();
     if (browserSelection === null || browserSelection.rangeCount === 0 || !scroller.contains(browserSelection.anchorNode)) return undefined;
     const anchor = logicalPosition(browserSelection.anchorNode, browserSelection.anchorOffset);
@@ -137,7 +148,7 @@
   }
 
   function restoreBrowserSelection() {
-    if (!editable || !editingFocused || selection === undefined || scroller === undefined) return;
+    if (!editable || !editingFocused || selection === undefined || scroller === undefined || mouseSelection !== undefined) return;
     const anchor = browserPoint(selection.anchor);
     const focus = browserPoint(selection.focus);
     if (anchor === undefined || focus === undefined) return;
@@ -179,6 +190,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) inputSelectionOverride = undefined;
     if (!editable || !(event.ctrlKey || event.metaKey) || event.altKey) return;
     const key = event.key.toLowerCase();
     if (key === "a") {
@@ -202,35 +214,163 @@
     oncommand?.(command);
   }
 
-  function handlePagePointerDown(event: PointerEvent, page: WordLayout["pages"][number]) {
-    if (!editable || event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) return;
-    if ((event.target as Element | null)?.closest("[data-paragraph]")) return;
-    const lines = page.columns.flatMap((column) => [
-      ...column.lines,
-      ...tableLines(column.tables),
-    ]);
-    if (lines.length === 0) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / scale;
-    const y = (event.clientY - rect.top) / scale;
-    const line = lines.reduce((closest, candidate) =>
-      lineDistance(candidate, y) < lineDistance(closest, y) ? candidate : closest
-    );
-    const fragments = line.fragments.filter((fragment) => fragment.kind !== "drawing");
-    const offset = x <= wordPointsToCssPixels(line.x)
-      ? line.startOffset
-      : x >= wordPointsToCssPixels(line.x + line.width) || fragments.length === 0
-        ? line.endOffset
-        : fragments.find((fragment) => x < wordPointsToCssPixels(fragment.x + fragment.width / 2))?.startOffset ?? line.endOffset;
-    const next = {
-      anchor: { paragraphElementId: line.paragraphElementId, offset },
-      focus: { paragraphElementId: line.paragraphElementId, offset },
+  /** Body text must follow document order, including paragraphs inside tables. */
+  function bodyLines(page: WordLayout["pages"][number]) {
+    return page.columns.flatMap(column => [...column.lines, ...tableLines(column.tables)])
+      .sort((left, right) => (paragraphOrder.get(left.paragraphElementId) ?? 0) - (paragraphOrder.get(right.paragraphElementId) ?? 0) || left.startOffset - right.startOffset);
+  }
+
+  function positionOrder(left: WordTextPosition, right: WordTextPosition) {
+    return (paragraphOrder.get(left.paragraphElementId) ?? 0) - (paragraphOrder.get(right.paragraphElementId) ?? 0) || left.offset - right.offset;
+  }
+
+  function selectionExtent(position: WordTextPosition, granularity: "character" | "word" | "paragraph"): WordTextSelection {
+    const text = paragraphText.get(position.paragraphElementId);
+    if (granularity === "character" || text === undefined) return { anchor: position, focus: position };
+    const segment = granularity === "word"
+      ? [...new Intl.Segmenter(undefined, { granularity: "word" }).segment(text)].find(item => item.index + item.segment.length > Math.min(position.offset, text.length - 1))
+      : undefined;
+    return {
+      anchor: { paragraphElementId: position.paragraphElementId, offset: segment?.index ?? 0 },
+      focus: { paragraphElementId: position.paragraphElementId, offset: segment === undefined ? text.length : segment.index + segment.segment.length },
+    };
+  }
+
+  function setPointerSelection(next: WordTextSelection) {
+    const anchor = browserPoint(next.anchor);
+    const focus = browserPoint(next.focus);
+    if (anchor !== undefined && focus !== undefined) {
+      globalThis.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
+      inputSelectionOverride = undefined;
+    } else {
+      inputSelectionOverride = next;
+    }
+    if (editable) onselectionchange?.(next);
+  }
+
+  function handlePageMouseDown(event: MouseEvent) {
+    if (event.button !== 0 || pointerType === "touch" || !(event.currentTarget instanceof HTMLElement)) return;
+    if ((event.target as Element | null)?.closest("[data-story]")) return;
+    if ((event.ctrlKey || event.metaKey) && (event.target as Element | null)?.closest(".hyperlink")) return;
+    const position = pointerPosition(event.clientX, event.clientY);
+    if (position === undefined) return;
+    const previous = browserTextSelection() ?? selection;
+    const granularity = event.detail >= 3 ? "paragraph" : event.detail === 2 ? "word" : "character";
+    const next = event.shiftKey && previous !== undefined
+      ? { anchor: previous.anchor, focus: position }
+      : selectionExtent(position, granularity);
+    mouseSelection = {
+      origin: event.shiftKey ? { anchor: next.anchor, focus: next.anchor } : next,
+      granularity: event.shiftKey ? "character" : granularity,
     };
     event.preventDefault();
-    editingFocused = true;
-    inputSelectionOverride = next;
-    onselectionchange?.(next);
-    queueMicrotask(restoreBrowserSelection);
+    dragPoint = { x: event.clientX, y: event.clientY };
+    inputSelectionOverride = undefined;
+    if (editable) { event.currentTarget.focus({ preventScroll: true }); editingFocused = true; }
+    setPointerSelection(next);
+  }
+
+  function handleSelectionMove(event: MouseEvent) {
+    if (mouseSelection === undefined) return;
+    if ((event.buttons & 1) === 0) { finishMouseSelection(); return; }
+    event.preventDefault();
+    dragPoint = { x: event.clientX, y: event.clientY };
+    extendMouseSelection();
+    if (scrollFrame === 0) scrollFrame = requestAnimationFrame(scrollDuringSelection);
+  }
+
+  function extendMouseSelection() {
+    if (mouseSelection === undefined || dragPoint === undefined) return;
+    const position = pointerPosition(dragPoint.x, dragPoint.y);
+    if (position === undefined) return;
+    const extent = selectionExtent(position, mouseSelection.granularity);
+    const backwards = positionOrder(position, mouseSelection.origin.anchor) < 0;
+    setPointerSelection({
+      anchor: backwards ? mouseSelection.origin.focus : mouseSelection.origin.anchor,
+      focus: backwards ? extent.anchor : extent.focus,
+    });
+  }
+
+  function scrollDuringSelection() {
+    scrollFrame = 0;
+    if (mouseSelection === undefined || dragPoint === undefined || scroller === undefined) return;
+    const rect = scroller.getBoundingClientRect();
+    const speed = (point: number, start: number, end: number) => point < start ? Math.max(-18, (point - start) / 3) : point > end ? Math.min(18, (point - end) / 3) : 0;
+    const previousTop = scroller.scrollTop;
+    const previousLeft = scroller.scrollLeft;
+    scroller.scrollBy(speed(dragPoint.x, rect.left, rect.right), speed(dragPoint.y, rect.top, rect.bottom));
+    if (scroller.scrollTop !== previousTop || scroller.scrollLeft !== previousLeft) {
+      updateViewport();
+      extendMouseSelection();
+      scrollFrame = requestAnimationFrame(scrollDuringSelection);
+    }
+  }
+
+  function finishMouseSelection() {
+    mouseSelection = undefined;
+    dragPoint = undefined;
+    if (scrollFrame !== 0) cancelAnimationFrame(scrollFrame);
+    scrollFrame = 0;
+  }
+
+  /** Hit-test the nearest laid-out line, rather than letting whitespace select arbitrary DOM nodes. */
+  function pointerPosition(clientX: number, clientY: number): WordTextPosition | undefined {
+    if (scroller === undefined || layout === undefined) return;
+    const pages = [...scroller.querySelectorAll<HTMLElement>(".word-page-content")];
+    const pageElement = pages.reduce<HTMLElement | undefined>((closest, candidate) => {
+      const distance = (element: HTMLElement) => { const rect = element.getBoundingClientRect(); return Math.max(rect.top - clientY, clientY - rect.bottom, 0); };
+      return closest === undefined || distance(candidate) < distance(closest) ? candidate : closest;
+    }, undefined);
+    const page = layout.pages.find(item => item.index === Number(pageElement?.dataset.page));
+    if (pageElement === undefined || page === undefined) return;
+    const lines = bodyLines(page);
+    if (lines.length === 0) return;
+    const rect = pageElement.getBoundingClientRect();
+    const x = (clientX - rect.left) / scale;
+    const y = (clientY - rect.top) / scale;
+    const horizontalDistance = (line: typeof lines[number]) => Math.max(wordPointsToCssPixels(line.x) - x, x - wordPointsToCssPixels(line.x + line.width), 0);
+    const line = lines.reduce((closest, candidate) => {
+      const vertical = lineDistance(candidate, y) - lineDistance(closest, y);
+      return vertical < 0 || vertical === 0 && horizontalDistance(candidate) < horizontalDistance(closest) ? candidate : closest;
+    });
+    const position = (offset: number): WordTextPosition => ({ paragraphElementId: line.paragraphElementId, offset });
+    if (x <= wordPointsToCssPixels(line.x)) return position(line.startOffset);
+    if (x >= wordPointsToCssPixels(line.x + line.width)) return position(line.endOffset);
+    const fragments = line.fragments.filter(fragment => fragment.kind !== "drawing");
+    const fragment = fragments.reduce<typeof fragments[number] | undefined>((closest, candidate) => {
+      const distance = (item: typeof candidate) => Math.max(wordPointsToCssPixels(item.x) - x, x - wordPointsToCssPixels(item.x + item.width), 0);
+      return closest === undefined || distance(candidate) < distance(closest) ? candidate : closest;
+    }, undefined);
+    if (fragment === undefined) return position(line.startOffset);
+    const element = pageElement.querySelector<HTMLElement>(`[data-paragraph="${line.paragraphElementId}"][data-start="${fragment.startOffset}"][data-end="${fragment.endOffset}"]:not(.caret-anchor):not([data-story])`);
+    if (element?.firstChild?.nodeType !== Node.TEXT_NODE) return position(fragment.startOffset);
+    const bounds = element.getBoundingClientRect();
+    const hitX = Math.max(bounds.left + 0.01, Math.min(bounds.right - 0.01, clientX));
+    const hitY = bounds.top + bounds.height / 2;
+    const document = globalThis.document as Document & {
+      caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+      caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    };
+    const caret = document.caretPositionFromPoint?.(hitX, hitY);
+    const range = caret === undefined ? document.caretRangeFromPoint?.(hitX, hitY) : undefined;
+    const node = caret?.offsetNode ?? range?.startContainer;
+    const offset = caret?.offset ?? range?.startOffset;
+    if (node !== undefined && element.contains(node) && offset !== undefined) return logicalPosition(node, offset);
+    // Some engines cannot hit-test positioned text. Measure grapheme boundaries as a fallback.
+    const text = element.textContent ?? "";
+    const boundaries = [0, ...[...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)].map(segment => segment.index + segment.segment.length)];
+    const measure = document.createRange();
+    const rtl = getComputedStyle(element).direction === "rtl";
+    let nearest = 0;
+    let distance = Infinity;
+    for (const boundary of boundaries) {
+      measure.setStart(element.firstChild, 0);
+      measure.setEnd(element.firstChild, boundary);
+      const box = measure.getBoundingClientRect();
+      const delta = Math.abs((rtl ? box.left : box.right) - clientX);
+      if (delta < distance) { distance = delta; nearest = boundary; }
+    }
+    return position(Math.min(fragment.endOffset, fragment.startOffset + nearest));
   }
 
   function tableLines(tables: readonly WordLayout["pages"][number]["columns"][number]["tables"][number][]): WordLayout["pages"][number]["columns"][number]["lines"] {
@@ -264,6 +404,8 @@
   }
 </script>
 
+<svelte:window onmousemove={handleSelectionMove} onmouseup={finishMouseSelection} onblur={finishMouseSelection} />
+
 <div
   class="word-scroller"
   bind:this={scroller}
@@ -282,6 +424,7 @@
         >
           <div
             class="word-page-content"
+            data-page={page.index}
             class:editable
             contenteditable={editable}
             role={editable ? "textbox" : undefined}
@@ -291,7 +434,8 @@
             autocapitalize="sentences"
             data-form-type="other"
             data-lpignore="true"
-            onpointerdown={(event) => handlePagePointerDown(event, page)}
+            onpointerdown={(event) => pointerType = event.pointerType}
+            onmousedown={handlePageMouseDown}
             onfocusin={() => editingFocused = true}
             onfocusout={(event) => {
               if (!(event.relatedTarget instanceof Node) || !scroller?.contains(event.relatedTarget)) editingFocused = false;
@@ -326,53 +470,54 @@
             {/each}
             {#each page.columns as column}
               {#each column.tables as table}
-                <WordLayoutTableView {table} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} />
+                <WordLayoutTableView {table} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} decorationsOnly />
               {/each}
-              {#each column.lines as line}
-                {#if line.marker !== undefined}
+            {/each}
+            {#each bodyLines(page) as line}
+              {#if line.marker !== undefined}
+                <span
+                  class="list-marker"
+                  aria-hidden="true"
+                  style={`${wordTextCss(line.marker.format)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(line.marker.y)}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}
+                >{line.marker.text}</span>
+              {/if}
+
+              {#each line.fragments as fragment}
+                {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
+                  <img class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
+                {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
+                  <div class="document-drawing" style={drawingStyle(fragment)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-body-chart-${page.index}-${fragment.contentElementId}`} /></div>
+                {:else if fragment.kind === "drawing"}
+                  <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment)}></div>
+                {:else if fragment.hyperlink === undefined}
                   <span
-                    class="list-marker"
-                    aria-hidden="true"
-                    style={`${wordTextCss(line.marker.format)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(line.marker.y)}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}
-                  >{line.marker.text}</span>
-                {/if}
-                {#if line.fragments.length === 0 || line.fragments.at(-1)?.endOffset !== line.endOffset}
-                  <span
-                    class="caret-anchor"
-                    class:empty-line={line.fragments.length === 0}
                     data-paragraph={line.paragraphElementId}
-                    data-start={line.fragments.at(-1)?.endOffset ?? line.startOffset}
-                    data-end={line.endOffset}
-                    style={`left:${wordPointsToCssPixels(line.x + line.width)}px;top:${wordPointsToCssPixels(line.y)}px;width:1px;height:${wordPointsToCssPixels(line.height)}px;line-height:${wordPointsToCssPixels(line.height)}px`}
-                  >{"\u200b"}</span>
+                    data-start={fragment.startOffset}
+                    data-end={fragment.endOffset}
+                    style={fragmentStyle(fragment)}
+                  >{fragment.text}</span>
+                {:else}
+                  <button
+                    class="hyperlink"
+                    onkeydown={(event) => activateHyperlink(event, fragment.hyperlink)}
+                    onclick={(event) => activateHyperlink(event, fragment.hyperlink)}
+                    data-paragraph={line.paragraphElementId}
+                    data-start={fragment.startOffset}
+                    data-end={fragment.endOffset}
+                    style={fragmentStyle(fragment)}
+                  >{fragment.text}</button>
                 {/if}
-                {#each line.fragments as fragment}
-                  {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
-                    <img class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
-                  {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
-                    <div class="document-drawing" style={drawingStyle(fragment)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-body-chart-${page.index}-${fragment.contentElementId}`} /></div>
-                  {:else if fragment.kind === "drawing"}
-                    <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment)}></div>
-                  {:else if fragment.hyperlink === undefined}
-                    <span
-                      data-paragraph={line.paragraphElementId}
-                      data-start={fragment.startOffset}
-                      data-end={fragment.endOffset}
-                      style={fragmentStyle(fragment)}
-                    >{fragment.text}</span>
-                  {:else}
-                    <button
-                      class="hyperlink"
-                      onkeydown={(event) => activateHyperlink(event, fragment.hyperlink)}
-                      onclick={(event) => activateHyperlink(event, fragment.hyperlink)}
-                      data-paragraph={line.paragraphElementId}
-                      data-start={fragment.startOffset}
-                      data-end={fragment.endOffset}
-                      style={fragmentStyle(fragment)}
-                    >{fragment.text}</button>
-                  {/if}
-                {/each}
               {/each}
+              {#if line.fragments.length === 0 || line.fragments.at(-1)?.endOffset !== line.endOffset}
+                <span
+                  class="caret-anchor"
+                  class:empty-line={line.fragments.length === 0}
+                  data-paragraph={line.paragraphElementId}
+                  data-start={line.fragments.at(-1)?.endOffset ?? line.startOffset}
+                  data-end={line.endOffset}
+                  style={`left:${wordPointsToCssPixels(line.x + line.width)}px;top:${wordPointsToCssPixels(line.y)}px;width:1px;height:${wordPointsToCssPixels(line.height)}px;line-height:${wordPointsToCssPixels(line.height)}px`}
+                >{paragraphText.get(line.paragraphElementId)?.slice(line.fragments.at(-1)?.endOffset ?? line.startOffset, line.endOffset) || "\u200b"}</span>
+              {/if}
             {/each}
           </div>
         </section>
