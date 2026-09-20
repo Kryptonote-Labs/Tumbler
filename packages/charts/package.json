@@ -17,7 +17,7 @@
   },
   "publishConfig": {
     "access": "public",
-    "tag": "alpha"
+    "tag": "latest"
   },
   "dependencies": {
     "@tumblerjs/ooxml": "0.1.0-alpha.17"

@@ -17,6 +17,6 @@
   },
   "publishConfig": {
     "access": "public",
-    "tag": "alpha"
+    "tag": "latest"
   }
 }

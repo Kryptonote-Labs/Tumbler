@@ -98,8 +98,8 @@ export async function readReleasePackages(root: string): Promise<readonly Releas
     }
     if (manifest.private === true) errors.push(`${expectedName} cannot be private.`);
     if (manifest.license !== "MIT") errors.push(`${expectedName} must declare the MIT license.`);
-    if (publishConfig?.access !== "public" || publishConfig.tag !== "alpha") {
-      errors.push(`${expectedName} must publish publicly under the alpha tag.`);
+    if (publishConfig?.access !== "public" || publishConfig.tag !== "latest") {
+      errors.push(`${expectedName} must publish publicly under the latest tag.`);
     }
     for (const requiredFile of ["src", "README.md", "LICENSE"]) {
       if (!files.includes(requiredFile)) errors.push(`${expectedName} must include ${requiredFile} in files.`);

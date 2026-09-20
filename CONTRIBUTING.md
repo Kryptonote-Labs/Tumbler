@@ -78,5 +78,5 @@ bun run release:publish
 The publish command uses npm's URL-based web authentication and exits after one
 package. Rerun it after each successful authentication. Already-published
 packages are detected from the registry and skipped, so an interrupted release
-resumes safely in dependency order. Every publish explicitly uses the `alpha`
+resumes safely in dependency order. Every publish explicitly uses the `latest`
 distribution tag.

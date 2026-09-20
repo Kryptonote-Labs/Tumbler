@@ -92,7 +92,7 @@ const publish = Bun.spawn([
   "--access",
   "public",
   "--tag",
-  "alpha",
+  "latest",
   "--auth-type",
   "web",
 ], { cwd: root, stdin: "inherit", stdout: "inherit", stderr: "inherit" });
