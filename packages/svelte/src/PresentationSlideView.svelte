@@ -24,8 +24,12 @@
   } from "@tumblerjs/slides";
   import PresentationShape from "./PresentationShape.svelte";
   import PresentationGradient from "./PresentationGradient.svelte";
-  import {loadPresentationFonts, presentationFontContext, type PresentationFontContext} from "./presentation-fonts.ts";
-  import {presentationPlayback} from "./presentation-playback.ts";
+  import {
+    loadPresentationFonts,
+    presentationFontContext,
+    type PresentationFontContext,
+  } from "./presentation-fonts.ts";
+  import { presentationPlayback } from "./presentation-playback.ts";
   import PresentationPattern from "./PresentationPattern.svelte";
   import PresentationPictureFill from "./PresentationPictureFill.svelte";
   import PresentationMedia from "./PresentationMedia.svelte";
@@ -250,20 +254,31 @@
     }
   }
   let loadedFonts = $state<ReturnType<typeof loadPresentationFonts>>();
-  setContext<PresentationFontContext>(presentationFontContext, {family:name=>loadedFonts?.family(name) ?? JSON.stringify(name)});
+  setContext<PresentationFontContext>(presentationFontContext, {
+    family: (name) => loadedFonts?.family(name) ?? JSON.stringify(name),
+  });
   $effect(() => {
     const loaded = loadPresentationFonts(presentation.embeddedFonts ?? []);
     loadedFonts = loaded;
     return loaded.destroy;
   });
-  let playing=$state(false), playbackStep=$state(0);
-  let playbackSteps=$derived(Math.max(0,...(slide.animations??[]).map(effect=>effect.step)));
-  $effect(()=>{slide.part;playing=false;playbackStep=0;});
+  let playing = $state(false),
+    playbackStep = $state(0);
+  let playbackSteps = $derived(
+    Math.max(0, ...(slide.animations ?? []).map((effect) => effect.step)),
+  );
+  $effect(() => {
+    slide.part;
+    playing = false;
+    playbackStep = 0;
+  });
   let mounted = $state(false);
   onMount(() => {
     mounted = true;
   });
-  let fittedHeights = $state<Record<string, {text: SlideText; height: number}>>({});
+  let fittedHeights = $state<
+    Record<string, { text: SlideText; height: number }>
+  >({});
   const images = new Map<Uint8Array, string>();
   function imageUrl(object: SlideObject) {
     if (!mounted || !object.image) return "";
@@ -488,8 +503,16 @@
     />{/if}
   {#if !thumbnail && !editable && slide.animations?.length}
     <div class="playback-controls">
-      <button onclick={()=>{playing=!playing;playbackStep=0;}}>{playing ? "Stop playback" : "Play animations"}</button>
-      {#if playing}<button disabled={playbackStep>=playbackSteps} onclick={()=>playbackStep++}>Next animation</button>{/if}
+      <button
+        onclick={() => {
+          playing = !playing;
+          playbackStep = 0;
+        }}>{playing ? "Stop playback" : "Play animations"}</button
+      >
+      {#if playing}<button
+          disabled={playbackStep >= playbackSteps}
+          onclick={() => playbackStep++}>Next animation</button
+        >{/if}
     </div>
   {/if}
   <div
@@ -507,7 +530,12 @@
       <!-- The slide surface handles keyboard manipulation only in Edit mode. -->
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <svg
-        use:presentationPlayback={{slide,playing:playing && !thumbnail,step:playbackStep,editable:editable || thumbnail}}
+        use:presentationPlayback={{
+          slide,
+          playing: playing && !thumbnail,
+          step: playbackStep,
+          editable: editable || thumbnail,
+        }}
         bind:this={svg}
         class="slide"
         role="group"
@@ -523,8 +551,20 @@
         onkeydown={keydown}
       >
         <title>{slide.title}</title>
-        {#if slide.backgroundPattern}<defs><PresentationPattern pattern={slide.backgroundPattern} id={`${viewId}-background-pattern`}/></defs>{/if}
-        {#if slide.backgroundPicture}<defs><PresentationPictureFill picture={slide.backgroundPicture} id={`${viewId}-background-picture`} width={presentation.width} height={presentation.height}/></defs>{/if}
+        {#if slide.backgroundPattern}<defs
+            ><PresentationPattern
+              pattern={slide.backgroundPattern}
+              id={`${viewId}-background-pattern`}
+            /></defs
+          >{/if}
+        {#if slide.backgroundPicture}<defs
+            ><PresentationPictureFill
+              picture={slide.backgroundPicture}
+              id={`${viewId}-background-picture`}
+              width={presentation.width}
+              height={presentation.height}
+            /></defs
+          >{/if}
         {#if slide.backgroundGradient}<defs
             ><PresentationGradient
               gradient={slide.backgroundGradient}
@@ -536,9 +576,13 @@
         <rect
           width={presentation.width}
           height={presentation.height}
-          fill={slide.backgroundPattern ? `url(#${viewId}-background-pattern)` : slide.backgroundPicture ? `url(#${viewId}-background-picture)` : slide.backgroundGradient
-            ? `url(#${viewId}-background)`
-            : slide.background}
+          fill={slide.backgroundPattern
+            ? `url(#${viewId}-background-pattern)`
+            : slide.backgroundPicture
+              ? `url(#${viewId}-background-picture)`
+              : slide.backgroundGradient
+                ? `url(#${viewId}-background)`
+                : slide.background}
           role="presentation"
           onpointerdown={() => {
             editing = undefined;
@@ -551,7 +595,11 @@
             preview?.objectKey === object.key ? preview : undefined}
           {@const w = change?.width ?? object.transform.width}
           {@const fitted = fittedHeights[object.key]}
-          {@const h = change?.height ?? (fitted && fitted.text === object.text ? Math.max(object.transform.height, fitted.height) : object.transform.height)}
+          {@const h =
+            change?.height ??
+            (fitted && fitted.text === object.text
+              ? Math.max(object.transform.height, fitted.height)
+              : object.transform.height)}
           {@const matrix = change
             ? shapeMatrix({ ...object.transform, ...change })
             : object.matrix}
@@ -563,7 +611,10 @@
             tabindex={editable ? 0 : undefined}
             aria-label={object.name}
             data-slide-object={object.key}
-            data-animation-target={object.layer === "slide" && object.sourcePart === slide.part ? object.shapeId : undefined}
+            data-animation-target={object.layer === "slide" &&
+            object.sourcePart === slide.part
+              ? object.shapeId
+              : undefined}
             class:movable={editable && object.movable}
             onfocus={() => {
               if (editable) selectedKey = object.key;
@@ -602,11 +653,38 @@
                 >Preview unavailable</text
               >
             {:else if object.media && !thumbnail}
-              <foreignObject width={w} height={h}><PresentationMedia media={object.media} poster={object.image ? imageUrl(object) : undefined} active={!editable}/></foreignObject>
+              <foreignObject width={w} height={h}
+                ><PresentationMedia
+                  media={object.media}
+                  poster={object.image ? imageUrl(object) : undefined}
+                  active={!editable}
+                /></foreignObject
+              >
             {:else if object.kind === "picture" && object.image}
-              <defs><PresentationPictureFill picture={object.image} id={`${viewId}-image-${object.elementId}`} width={w} height={h}/>
-              <clipPath id={`${viewId}-clip-${object.elementId}`}><g transform={`scale(${w/object.transform.width} ${h/object.transform.height})`}>{#each object.drawingGeometry?.paths ?? [] as path}<path d={path.d}/>{/each}</g></clipPath></defs>
-              <rect width={w} height={h} fill={`url(#${viewId}-image-${object.elementId})`} clip-path={object.drawingGeometry?.paths.length ? `url(#${viewId}-clip-${object.elementId})` : undefined}/>
+              <defs
+                ><PresentationPictureFill
+                  picture={object.image}
+                  id={`${viewId}-image-${object.elementId}`}
+                  width={w}
+                  height={h}
+                />
+                <clipPath id={`${viewId}-clip-${object.elementId}`}
+                  ><g
+                    transform={`scale(${w / object.transform.width} ${h / object.transform.height})`}
+                    >{#each object.drawingGeometry?.paths ?? [] as path}<path
+                        d={path.d}
+                      />{/each}</g
+                  ></clipPath
+                ></defs
+              >
+              <rect
+                width={w}
+                height={h}
+                fill={`url(#${viewId}-image-${object.elementId})`}
+                clip-path={object.drawingGeometry?.paths.length
+                  ? `url(#${viewId}-clip-${object.elementId})`
+                  : undefined}
+              />
             {:else if object.table}<PresentationTable
                 {onslide}
                 table={object.table}
@@ -683,7 +761,10 @@
               >
                 <PresentationText
                   text={object.text}
-                  onheight={(height) => { if (object.text?.autoFit === "shape") fittedHeights[object.key] = {text: object.text, height}; }}
+                  onheight={(height) => {
+                    if (object.text?.autoFit === "shape")
+                      fittedHeights[object.key] = { text: object.text, height };
+                  }}
                   {onslide}
                   editor={{
                     active: editing === object.key,
@@ -810,8 +891,20 @@
 </div>
 
 <style>
-  .playback-controls {display:flex;gap:8px;padding:8px;border-bottom:1px solid #333;}
-  .playback-controls button {font:inherit;color:inherit;background:transparent;border:1px solid #555;border-radius:4px;padding:5px 10px;}
+  .playback-controls {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    border-bottom: 1px solid #333;
+  }
+  .playback-controls button {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 5px 10px;
+  }
   .presentation-surface {
     height: 100%;
     width: 100%;

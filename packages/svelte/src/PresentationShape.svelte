@@ -11,19 +11,38 @@
     id,
   }: { object: SlideObject; width: number; height: number; id: string } =
     $props();
-  let fill = $derived(object.pattern ? `url(#${id}-pattern)` : object.pictureFill ? `url(#${id}-picture)` : object.gradient ? `url(#${id}-fill)` : object.fill);
+  let fill = $derived(
+    object.pattern
+      ? `url(#${id}-pattern)`
+      : object.pictureFill
+        ? `url(#${id}-picture)`
+        : object.gradient
+          ? `url(#${id}-fill)`
+          : object.fill,
+  );
 </script>
 
 <defs>
-  {#if object.pictureFill}<PresentationPictureFill picture={object.pictureFill} id={`${id}-picture`} width={object.transform.width} height={object.transform.height}/>{/if}
+  {#if object.pictureFill}<PresentationPictureFill
+      picture={object.pictureFill}
+      id={`${id}-picture`}
+      width={object.transform.width}
+      height={object.transform.height}
+    />{/if}
   {#if object.gradient}<PresentationGradient
       gradient={object.gradient}
       id={`${id}-fill`}
       width={object.transform.width}
       height={object.transform.height}
     />{/if}
-  {#if object.pattern}<PresentationPattern pattern={object.pattern} id={`${id}-pattern`}/>{/if}
-  {#if object.shadow || object.effects?.length}<PresentationEffects {object} id={`${id}-shadow`}/>{/if}
+  {#if object.pattern}<PresentationPattern
+      pattern={object.pattern}
+      id={`${id}-pattern`}
+    />{/if}
+  {#if object.shadow || object.effects?.length}<PresentationEffects
+      {object}
+      id={`${id}-shadow`}
+    />{/if}
   {#each [{ end: object.head, suffix: "head" }, { end: object.tail, suffix: "tail" }] as { end, suffix }}
     {#if end}<marker
         id={`${id}-${suffix}`}
@@ -62,7 +81,9 @@
 </defs>
 <g
   transform={`scale(${object.transform.width === 0 ? 1 : width / object.transform.width} ${object.transform.height === 0 ? 1 : height / object.transform.height})`}
-  filter={object.shadow || object.effects?.length ? `url(#${id}-shadow)` : undefined}
+  filter={object.shadow || object.effects?.length
+    ? `url(#${id}-shadow)`
+    : undefined}
 >
   {#each object.drawingGeometry?.paths ?? [] as path}
     <path

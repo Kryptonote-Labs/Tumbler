@@ -1,7 +1,12 @@
 <script lang="ts">
-  import {getContext} from "svelte";
-  import {presentationFontContext, type PresentationFontContext} from "./presentation-fonts.ts";
-  const fonts = getContext<PresentationFontContext | undefined>(presentationFontContext);
+  import { getContext } from "svelte";
+  import {
+    presentationFontContext,
+    type PresentationFontContext,
+  } from "./presentation-fonts.ts";
+  const fonts = getContext<PresentationFontContext | undefined>(
+    presentationFontContext,
+  );
   import {
     presentationTextEdit,
     type SlideTextEditorOptions,
@@ -25,7 +30,7 @@
 
 <div
   class="slide-text"
-  use:presentationTextLayout={{text, onheight}}
+  use:presentationTextLayout={{ text, onheight }}
   style:justify-content={text.anchor === "center"
     ? "center"
     : text.anchor === "bottom"
@@ -33,7 +38,10 @@
       : "flex-start"}
   style:padding={text.inset.map((value) => `${value}px`).join(" ")}
   style:overflow-x={text.horizontalOverflow === "clip" ? "clip" : "visible"}
-  style:overflow-y={text.verticalOverflow === "clip" || text.verticalOverflow === "ellipsis" ? "clip" : "visible"}
+  style:overflow-y={text.verticalOverflow === "clip" ||
+  text.verticalOverflow === "ellipsis"
+    ? "clip"
+    : "visible"}
   style:white-space={text.wrap ? "pre-wrap" : "pre"}
   style:transform={`rotate(${(text.rotation ?? 0) + (text.direction === "vert270" ? 180 : 0)}deg)`}
 >
@@ -66,7 +74,9 @@
         style:font-size={`${paragraph.fontSize ?? Math.max(1, ...paragraph.runs.map((run) => run.fontSize))}px`}
         style:text-align={paragraph.align}
         style:text-align-last={paragraph.distributed ? "justify" : undefined}
-        style:text-justify={paragraph.distributed ? "inter-character" : undefined}
+        style:text-justify={paragraph.distributed
+          ? "inter-character"
+          : undefined}
         style:margin-right={`${paragraph.marginRight ?? 0}px`}
         style:margin-left={`${paragraph.marginLeft}px`}
         style:text-indent={`${paragraph.indent}px`}
@@ -77,13 +87,15 @@
         {#if paragraph.bullet}<span
             data-bullet
             contenteditable="false"
-            style:font-family={fonts?.family(paragraph.bulletFont ?? "Arial") ?? JSON.stringify(paragraph.bulletFont)}
+            style:font-family={fonts?.family(paragraph.bulletFont ?? "Arial") ??
+              JSON.stringify(paragraph.bulletFont)}
             style:color={paragraph.bulletColor}
             style:font-size={`${paragraph.bulletSize ?? 24}px`}
             >{paragraph.bullet}
           </span>{/if}{#each paragraph.runs as run}<span
             data-text-run
-            style:font-family={fonts?.family(run.fontFamily) ?? JSON.stringify(run.fontFamily)}
+            style:font-family={fonts?.family(run.fontFamily) ??
+              JSON.stringify(run.fontFamily)}
             style:font-size={`${run.fontSize}px`}
             style:font-weight={run.bold ? 700 : 400}
             style:font-style={run.italic ? "italic" : "normal"}
@@ -107,7 +119,10 @@
                   }
                 }}
                 onkeydown={(event) => event.stopPropagation()}>{run.text}</a
-              >{:else}{#each run.text.split(/(\t)/) as piece}{#if piece === "\t"}<span data-tab style="display:inline-block;white-space:pre">{piece}</span>{:else}{piece}{/if}{/each}{/if}</span
+              >{:else}{#each run.text.split(/(\t)/) as piece}{#if piece === "\t"}<span
+                    data-tab
+                    style="display:inline-block;white-space:pre">{piece}</span
+                  >{:else}{piece}{/if}{/each}{/if}</span
           >{/each}{#if paragraph.runs.length === 0}<br />{/if}
       </p>
     {/each}
