@@ -151,6 +151,7 @@
   }
   .paragraphs {
     width: 100%;
+    flex-shrink: 0;
   }
   .paragraphs.columns,
   .paragraphs.vertical {

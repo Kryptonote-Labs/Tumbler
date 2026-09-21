@@ -25,18 +25,28 @@ export function presentationTextLayout(
     const padding =
       parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
     const available = Math.max(1, node.clientHeight - padding);
-    if (options.text.autoFit === "normal" && body.scrollHeight > available) {
+    const availableWidth = Math.max(
+      1,
+      node.clientWidth -
+        parseFloat(style.paddingLeft) -
+        parseFloat(style.paddingRight),
+    );
+    // DOM scroll dimensions are rounded to whole, unzoomed CSS pixels.
+    const fits = (scale: number) =>
+      body.scrollHeight * scale <= available &&
+      body.scrollWidth <= Math.ceil(availableWidth / scale) + 1;
+    if (options.text.autoFit === "normal" && !fits(1)) {
       let low = 0.05,
         high = 1;
       for (let i = 0; i < 12; i++) {
         const scale = (low + high) / 2;
         body.style.zoom = String(scale);
-        body.style.width = `${100 / scale}%`;
-        if (body.scrollHeight * scale > available) high = scale;
+        // CSS zoom already compensates percentage widths during layout.
+        // Widening again lets text escape the containing foreignObject.
+        if (!fits(scale)) high = scale;
         else low = scale;
       }
       body.style.zoom = String(low);
-      body.style.width = `${100 / low}%`;
     } else if (options.text.autoFit === "shape") {
       const height = Math.ceil(body.scrollHeight + padding);
       if (height !== lastHeight) {

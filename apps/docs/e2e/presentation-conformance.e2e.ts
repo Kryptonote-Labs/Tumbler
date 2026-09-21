@@ -289,14 +289,12 @@ test("reflections mirror the source shape and fade below it", async ({
       .getByText("A quieter workspace", { exact: true })
       .last(),
   ).toBeVisible();
-  await page
-    .locator("input[type=file]")
-    .setInputFiles({
-      name: "reflection.pptx",
-      mimeType:
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      buffer: Buffer.from(tx.commit()),
-    });
+  await page.locator("input[type=file]").setInputFiles({
+    name: "reflection.pptx",
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    buffer: Buffer.from(tx.commit()),
+  });
   const reflection = page.locator(".slide-stage .slide-reflection");
   await expect(reflection).toBeVisible();
   const bounds = await reflection
@@ -314,4 +312,57 @@ test("reflections mirror the source shape and fade below it", async ({
   expect(bounds.reflected.top).toBeGreaterThan(bounds.original.bottom);
   expect(bounds.reflected.height).toBeCloseTo(bounds.original.height, 0);
   await page.screenshot({ path: "/tmp/tumbler-reflection.png" });
+});
+
+test("autofit keeps every text fragment inside the original box at different zoom levels", async ({
+  page,
+}) => {
+  await page.goto("/playground/slides-rendering");
+  const text = page
+    .locator(".slide-stage .slide-text")
+    .filter({ hasText: "This long heading" });
+  await expect(text).toBeVisible();
+  await expect
+    .poll(() =>
+      text
+        .locator(".paragraphs")
+        .evaluate(
+          (body) =>
+            body.getBoundingClientRect().height /
+            body.parentElement!.getBoundingClientRect().height,
+        ),
+    )
+    .toBeGreaterThan(0.5);
+  for (const zoom of ["100%", "50%", "125%"]) {
+    await page
+      .getByLabel("Zoom", { exact: true })
+      .selectOption({ label: zoom });
+    await expect
+      .poll(() =>
+        text.evaluate((node) => {
+          const box = node.getBoundingClientRect();
+          const walker = document.createTreeWalker(
+            node.querySelector(".paragraphs")!,
+            NodeFilter.SHOW_TEXT,
+          );
+          const bounds: DOMRect[] = [];
+          while (walker.nextNode()) {
+            if (!walker.currentNode.textContent?.trim()) continue;
+            const range = document.createRange();
+            range.selectNodeContents(walker.currentNode);
+            bounds.push(...range.getClientRects());
+          }
+          return Math.max(
+            0,
+            ...bounds.flatMap((r) => [
+              box.left - r.left,
+              r.right - box.right,
+              box.top - r.top,
+              r.bottom - box.bottom,
+            ]),
+          );
+        }),
+      )
+      .toBeLessThan(1);
+  }
 });
