@@ -4,10 +4,12 @@
   import { samples, type Sample } from '$lib/site';
   import { openWordEditingSession, type WordEditingSession } from '@tumblerjs/word';
   import { openSpreadsheetArtifact, type SpreadsheetArtifact } from '@tumblerjs/sheets';
+  import { openPresentationEditingSession, type PresentationEditingSession } from '@tumblerjs/slides';
+  import PresentationEditor from './PresentationEditor.svelte';
   import WordEditor from './WordEditor.svelte';
   import SheetEditor from './SheetEditor.svelte';
   let { sample }: { sample: Sample } = $props();
-  type OpenDocument = { kind: 'word'; session: WordEditingSession } | { kind: 'sheets'; artifact: SpreadsheetArtifact };
+  type OpenDocument = { kind: 'slides'; session: PresentationEditingSession } | { kind: 'word'; session: WordEditingSession } | { kind: 'sheets'; artifact: SpreadsheetArtifact };
   let document = $state<OpenDocument>();
   let original = $state<Uint8Array>();
   let output = $state<Uint8Array>();
@@ -47,7 +49,7 @@
     try {
       const next: OpenDocument = name.toLowerCase().endsWith('.docx')
         ? { kind: 'word', session: openWordEditingSession(bytes) }
-        : { kind: 'sheets', artifact: openSpreadsheetArtifact(bytes) };
+        : name.toLowerCase().endsWith('.pptx') ? { kind: 'slides', session: openPresentationEditingSession(bytes) } : { kind: 'sheets', artifact: openSpreadsheetArtifact(bytes) };
       document = next;
       original = bytes;
       output = bytes;
@@ -63,7 +65,7 @@
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
-    if (!/\.(docx|xlsx)$/i.test(file.name)) { error = 'Choose a DOCX or XLSX file.'; return; }
+    if (!/\.(docx|xlsx|pptx)$/i.test(file.name)) { error = 'Choose a DOCX, XLSX, or PPTX file.'; return; }
     if (file.size > maximumFileSize) { error = 'Choose a file smaller than 20 MB.'; return; }
     const id = ++request;
     try { const bytes = new Uint8Array(await file.arrayBuffer()); if (request === id) open(bytes, file.name); }
@@ -72,7 +74,7 @@
   function changed(bytes: Uint8Array, modified: boolean) { output = bytes; dirty = modified; }
   function download() {
     if (!output) return;
-    const blob = new Blob([Uint8Array.from(output).buffer], { type: document?.kind === 'word' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const blob = new Blob([Uint8Array.from(output).buffer], { type: document?.kind === 'word' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : document?.kind === 'slides' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const link = window.document.createElement('a');
     link.href = url; link.download = filename; link.click();
@@ -86,11 +88,11 @@
     void goto(url, { replaceState: true, noScroll: true, keepFocus: true });
   }
 </script>
-<div class="playground-heading"><h1>Playground</h1><a class="quiet-link" href={sample.format === 'word' ? '/docs/word' : '/docs/spreadsheets'}>Read the docs <span aria-hidden="true">↗</span></a></div>
+<div class="playground-heading"><h1>Playground</h1><a class="quiet-link" href={sample.format === 'word' ? '/docs/word' : sample.format === 'slides' ? '/docs/powerpoint' : '/docs/spreadsheets'}>Read the docs <span aria-hidden="true">↗</span></a></div>
 <p class="playground-description">Open a sample or bring your own file. Edits stay in this browser until you download them.</p>
 <div class="playground-controls">
-  <label class="sample-picker"><span class="control-label">Example</span><select aria-label="Example" value={sample.id} onchange={event => goto(`/playground/${event.currentTarget.value}`)}>{#each samples as item}<option value={item.id}>{item.label} · {item.format === 'word' ? 'Word' : 'Excel'}</option>{/each}</select></label>
-  <div class="file-actions"><input bind:this={fileInput} type="file" accept=".docx,.xlsx" onchange={upload} aria-label="Choose a document" hidden /><button onclick={() => fileInput?.click()}>Open file <span aria-hidden="true">↑</span></button></div>
+  <label class="sample-picker"><span class="control-label">Example</span><select aria-label="Example" value={sample.id} onchange={event => goto(`/playground/${event.currentTarget.value}`)}>{#each samples as item}<option value={item.id}>{item.label} · {item.format === 'word' ? 'Word' : item.format === 'slides' ? 'PowerPoint' : 'Excel'}</option>{/each}</select></label>
+  <div class="file-actions"><input bind:this={fileInput} type="file" accept=".docx,.xlsx,.pptx" onchange={upload} aria-label="Choose a document" hidden /><button onclick={() => fileInput?.click()}>Open file <span aria-hidden="true">↑</span></button></div>
 </div>
 <div class="workspace">
   <div class="workspace-toolbar">
@@ -104,6 +106,7 @@
       {#if document}
         {#key revision}
           {#if document.kind === 'word'}<WordEditor session={document.session} {editable} bind:scale onchange={changed} onerror={message => error = message} ondownload={download} />
+          {:else if document.kind === 'slides'}<PresentationEditor session={document.session} {editable} bind:scale onchange={changed} onerror={message => error = message} />
           {:else}<SheetEditor bind:scale initial={document.artifact} {editable} onchange={changed} onerror={message => error = message} />{/if}
         {/key}
       {:else}<div class="viewer-empty">{loading ? 'Opening sample…' : 'Open a document to begin.'}</div>{/if}
@@ -112,7 +115,7 @@
   <div class="workspace-status"><span class="filename" title={filename}>{filename || sample.file}</span><span aria-live="polite">{dirty ? 'Modified locally' : 'Local preview'}</span></div>
 </div>
 {#if error}<p class="playground-error" role="alert">{error}</p>{/if}
-<div class="playground-footnote"><p>{sample.description}</p><p>DOCX / XLSX · Up to 20 MB · <a href="/docs/compatibility#privacy">Files stay on your device</a></p></div>
+<div class="playground-footnote"><p>{sample.description}</p><p>DOCX / XLSX / PPTX · Up to 20 MB · <a href="/docs/compatibility#privacy">Files stay on your device</a></p></div>
 
 <style>
   .playground-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }

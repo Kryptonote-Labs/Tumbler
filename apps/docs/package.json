@@ -14,7 +14,9 @@
     "@tumblerjs/core": "workspace:*",
     "@tumblerjs/sheets": "workspace:*",
     "@tumblerjs/svelte": "workspace:*",
-    "@tumblerjs/word": "workspace:*"
+    "@tumblerjs/word": "workspace:*",
+    "@tumblerjs/charts": "workspace:*",
+    "@tumblerjs/slides": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

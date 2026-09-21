@@ -40,7 +40,7 @@ The deepest implemented format is SpreadsheetML (`.xlsx`). WordprocessingML
 - edit logical text across producer-split runs, split/join safe paragraphs,
   format selections, undo/redo, and serialize focused package changes.
 
-PresentationML editing is not implemented yet. Spreadsheet formula coverage,
+PresentationML has a private workspace preview with slide viewing, basic object movement/resizing, single-run text editing, undo, and export. See [the Slides README](packages/slides/README.md) for its limits and the local playground examples. Spreadsheet formula coverage,
 structural editing, comments, pivots, and broad chart fidelity remain incomplete.
 Word pagination and editing are deliberately bounded; see the capability matrix
 before using it with important files.

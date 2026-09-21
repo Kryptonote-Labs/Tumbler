@@ -11,6 +11,70 @@ export interface Doc {
 }
 
 export const docs: Record<string, Doc> = {
+  powerpoint: {
+    title: 'PowerPoint',
+    description: 'Open PPTX presentations, view slides, and make small, targeted edits. Available in the local workspace preview; not yet published.',
+    sections: [
+      { id: 'coverage', title: 'What works', blocks: [
+        { kind: 'text', text: 'The reader follows presentation relationships in slide order and resolves slide, layout, master, and theme sources. The viewer draws 186 preset shapes and custom paths, formatted text, embedded raster pictures, tables, and supported OOXML charts. It resolves built-in table styles, theme colours, gradients, ordinary outer shadows, dashed lines, and arrow ends. Group transforms are rendered, with group contents kept read-only.' },
+        { kind: 'text', text: 'Text supports common numbered bullets, character spacing, capitals, baseline offsets, strike-through, and hyperlinks. Slide links navigate within the deck; speaker notes appear below the active slide.' },
+        { kind: 'text', text: 'In Edit mode, drag an eligible slide object to move it and use its edge or corner handles to resize it. Drag the handle above the selection to rotate; hold Shift to snap to 15-degree increments. Rotated objects remain editable. Arrow keys nudge a selection. Double-click a text box or press Enter to edit in place. Select words to format them with the shared text toolbar. Enter adds a paragraph; Ctrl+Enter or Escape finishes editing. Changes apply as you type and support undo/redo. Select a shape to change its fill, outline colour, or outline width. Double-click a table cell to edit it and use Tab or Shift+Tab to move between cells. Drag the table border to move it or its handles to resize it; text keeps its font size.' },
+        { kind: 'note', text: 'This is a first implementation, not full PowerPoint fidelity. Table cells support text and formatting edits; inserting or deleting rows and columns is not supported yet. SmartArt, media playback, 3D effects, and animations are preserved but not rendered or played. Preset/custom geometry, gradients, theme colours, and built-in table styles are supported; exact Office text layout remains incomplete. Browser font availability affects text wrapping. The viewer reports unsupported content on each slide.' }
+      ] },
+      { id: 'viewer', title: 'Render a slide', blocks: [
+        { kind: 'text', text: 'These imports currently require the Tumbler workspace. The presentation package remains private until release qualification. Give the viewer a constrained height. A scale of 1 fits the slide into its available space.' },
+        { kind: 'code', language: 'Svelte', code: `<script lang="ts">
+  import { untrack } from 'svelte';
+  import { openPresentationArtifact } from '@tumblerjs/slides';
+  import { PresentationSlideView } from '@tumblerjs/svelte/slides';
+  let { bytes }: { bytes: Uint8Array } = $props();
+  const artifact = untrack(() => openPresentationArtifact(bytes));
+  let scale = $state(1);
+</script>
+<div style="height: 480px; min-width: 0">
+  {#if artifact.document.slides[0]}
+    <PresentationSlideView presentation={artifact.document}
+      slide={artifact.document.slides[0]} bind:scale />
+  {/if}
+</div>` }
+      ] },
+      { id: 'navigation', title: 'Add slide previews', blocks: [
+        { kind: 'text', text: 'PresentationSlideRail shows selectable thumbnails and supports arrow keys, Home, and End. Bind its index to the active slide. Nearby thumbnails render lazily and update when the presentation changes.' },
+        { kind: 'code', language: 'Svelte', code: `<script lang="ts">
+  import { PresentationSlideRail, PresentationSlideView } from '@tumblerjs/svelte/slides';
+  import type { PresentationDocument } from '@tumblerjs/slides';
+  let { presentation }: { presentation: PresentationDocument } = $props();
+  let index = $state(0);
+</script>
+<div style="display: flex; height: 540px; min-width: 0">
+  <aside style="width: 150px; flex-shrink: 0">
+    <PresentationSlideRail {presentation} bind:index />
+  </aside>
+  <main style="flex: 1; min-width: 0">
+    {#if presentation.slides[index]}
+      <PresentationSlideView {presentation} slide={presentation.slides[index]!} />
+    {/if}
+  </main>
+</div>` }
+      ] },
+      { id: 'edits', title: 'Apply and export edits', blocks: [
+        { kind: 'code', code: `import { openPresentationEditingSession } from '@tumblerjs/slides';
+
+const session = openPresentationEditingSession(bytes);
+// Connect onobjectchange to session.updateObject(change).
+// Connect ontextchange to session.replaceText(slideId, objectKey, value).
+// Reassign your view's artifact after each operation.
+const output = session.artifact.bytes();
+// session.undo(); session.redo();` },
+        { kind: 'text', text: 'Edits replace only the owning slide XML part. Unchanged part payloads, relationships, notes, chart data, and embedded files are retained. Opening and exporting without edits returns the original bytes. ZIP directory records may be removed when writing an edited package.' },
+        { kind: 'text', text: 'Inherited, grouped, animated, signed, or unsupported objects are read-only. Range-based text and formatting edits support ordinary rich text in text boxes and table cells. Fields and hyperlinked text remain read-only. These restrictions avoid silently flattening formatting or changing shared layouts.' }
+      ] },
+      { id: 'examples', title: 'Example decks', blocks: [
+        { kind: 'list', items: ['Workspace presentation: three slides with text, shapes, and a chart.', 'Shapes and pictures: a 4:3 deck with rotation, transparency, rich text, and an embedded image.', 'Compatibility checks: grouped objects, a table, and notes.', 'Everyday PowerPoint features: preset shapes, a gradient, rich text, hyperlinks, speaker notes, and a theme-styled table.'] },
+        { kind: 'text', text: 'Choose these decks in the playground, or download their PPTX files from there. They are original MIT-licensed fixtures generated by scripts/generate-presentation-fixtures.ts using PptxGenJS. They do not establish full compatibility with Microsoft PowerPoint.' }
+      ] }
+    ], next: { href: '/playground/slides-brief', label: 'Try PowerPoint' }
+  },
   installation: {
     title: 'Installation',
     description: 'Add Tumbler to a Svelte 5 application. Parsing and editing run in the browser; your application owns loading and saving files.',
@@ -199,7 +263,7 @@ const output = artifact.bytes();` },
     description: 'Tumbler is early alpha. Use the examples to inspect specific behavior, and test your own files before depending on a feature.',
     sections: [
       { id: 'formats', title: 'Current scope', blocks: [
-        { kind: 'table', headers: ['Format', 'Available today', 'Limits'], rows: [['DOCX', 'Paginated rendering, text edits, formatting, tables, embedded images, and supported charts.', 'Incomplete Word layout and feature coverage. Font availability affects pagination.'], ['XLSX', 'Virtualized grid, cell and ordinary formula edits, formatting, tables, and supported charts.', 'Formula and workbook feature coverage remains incomplete.'], ['DOC / XLS', 'Not supported.', 'Convert legacy binary files to DOCX or XLSX first.'], ['PPTX / PDF', 'No viewer in this playground.', 'Do not interpret shared package parsing as rendering support.']] }
+        { kind: 'table', headers: ['Format', 'Available today', 'Limits'], rows: [['DOCX', 'Paginated rendering, text edits, formatting, tables, embedded images, and supported charts.', 'Incomplete Word layout and feature coverage. Font availability affects pagination.'], ['XLSX', 'Virtualized grid, cell and ordinary formula edits, formatting, tables, and supported charts.', 'Formula and workbook feature coverage remains incomplete.'], ['DOC / XLS', 'Not supported.', 'Convert legacy binary files to DOCX or XLSX first.'], ['PPTX', 'Local workspace preview with slide navigation, tables, shapes, images, charts, and bounded edits.', 'Not published yet. Table row/column operations, SmartArt, media playback, and full PowerPoint fidelity remain unsupported.'], ['PDF', 'No viewer in this playground.', 'PDF rendering is outside the current format packages.']] }
       ] },
       { id: 'checking', title: 'Check a real document', blocks: [
         { kind: 'list', items: ['Keep an unchanged original.', 'Open the file in the playground and inspect the content, page edges, and fonts.', 'Make a small edit and download the result.', 'Reopen the exported file in the application that will consume it.', 'Report a minimal, non-confidential example when something differs.'] },
