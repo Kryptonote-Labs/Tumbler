@@ -3,34 +3,55 @@ export const presentationFontContext = Symbol("presentation-fonts");
 export interface PresentationFontContext {
   family: (name: string) => string;
 }
-const aliases = new WeakMap<Uint8Array, string>();
+interface LoadedFonts extends PresentationFontContext {
+  references: number;
+  faces: FontFace[];
+}
+const documents = new WeakMap<
+  readonly PresentationEmbeddedFont[],
+  LoadedFonts
+>();
 let serial = 0;
-/** Each document gets private font names so two open presentations cannot replace each other's fonts. */
+/** Share font faces across a document's main view and thumbnails, with private family names. */
 export function loadPresentationFonts(
   fonts: readonly PresentationEmbeddedFont[],
 ) {
-  const families = new Map<string, string>(),
-    faces: FontFace[] = [];
-  for (const font of fonts) {
-    let name = families.get(font.family) ?? aliases.get(font.bytes);
-    if (!name) name = `TumblerEmbedded${++serial}`;
-    families.set(font.family, name);
-    aliases.set(font.bytes, name);
-    const face = new FontFace(name, Uint8Array.from(font.bytes).buffer, {
-      weight: font.bold ? "700" : "400",
-      style: font.italic ? "italic" : "normal",
+  let loaded = documents.get(fonts);
+  if (!loaded) {
+    const families = new Map<string, string>();
+    const faces = fonts.map((font) => {
+      const name = families.get(font.family) ?? `TumblerEmbedded${++serial}`;
+      families.set(font.family, name);
+      const face = new FontFace(name, Uint8Array.from(font.bytes).buffer, {
+        weight: font.bold ? "700" : "400",
+        style: font.italic ? "italic" : "normal",
+      });
+      document.fonts.add(face);
+      void face.load().catch(() => {});
+      return face;
     });
-    document.fonts.add(face);
-    faces.push(face);
-    void face.load().catch(() => {});
+    loaded = {
+      references: 0,
+      faces,
+      family: (name) =>
+        families.has(name)
+          ? `"${families.get(name)}", ${JSON.stringify(name)}`
+          : JSON.stringify(name),
+    };
+    documents.set(fonts, loaded);
   }
+  loaded.references++;
+  const shared = loaded;
+  let released = false;
   return {
-    family: (name: string) =>
-      families.has(name)
-        ? `"${families.get(name)}", ${JSON.stringify(name)}`
-        : JSON.stringify(name),
-    destroy: () => {
-      for (const face of faces) document.fonts.delete(face);
+    family: shared.family,
+    destroy() {
+      if (released) return;
+      released = true;
+      if (--shared.references === 0) {
+        for (const face of shared.faces) document.fonts.delete(face);
+        documents.delete(fonts);
+      }
     },
   };
 }
