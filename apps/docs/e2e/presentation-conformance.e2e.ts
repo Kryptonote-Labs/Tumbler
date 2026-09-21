@@ -366,3 +366,41 @@ test("autofit keeps every text fragment inside the original box at different zoo
       .toBeLessThan(1);
   }
 });
+
+test("example video contains visible motion and uses a matching poster", async ({
+  page,
+}) => {
+  await page.goto("/playground/slides-rendering");
+  await page.getByLabel("Slide", { exact: true }).selectOption("4");
+  const video = page.locator(".slide-stage video");
+  await expect
+    .poll(() => video.evaluate((v) => (v as HTMLVideoElement).readyState))
+    .toBeGreaterThanOrEqual(2);
+  const frames = await video.evaluate(async (node) => {
+    const video = node as HTMLVideoElement,
+      canvas = document.createElement("canvas");
+    canvas.width = 96;
+    canvas.height = 54;
+    const ctx = canvas.getContext("2d")!;
+    async function frame(time: number) {
+      await new Promise<void>((resolve) => {
+        video.addEventListener("seeked", () => resolve(), { once: true });
+        video.currentTime = time;
+      });
+      ctx.drawImage(video, 0, 0, 96, 54);
+      return Array.from(ctx.getImageData(0, 0, 96, 54).data);
+    }
+    return {
+      duration: video.duration,
+      poster: video.poster,
+      first: await frame(0.25),
+      last: await frame(4.5),
+    };
+  });
+  expect(frames.duration).toBeGreaterThan(5);
+  expect(frames.poster).toMatch(/^blob:/);
+  expect(
+    frames.first.filter((v, i) => Math.abs(v - frames.last[i]!) > 30).length,
+  ).toBeGreaterThan(30);
+  await page.screenshot({ path: "/tmp/tumbler-motion-video.png" });
+});

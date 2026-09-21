@@ -139,10 +139,11 @@ s = slide(
 s.addMedia({
   objectName: "Video",
   type: "video",
-  path: resolve("apps/docs/e2e/fixtures/media.webm"),
-  x: 1,
+  path: resolve("apps/docs/e2e/fixtures/presentation-video.mp4"),
+  cover: `data:image/png;base64,${Buffer.from(await Bun.file("apps/docs/e2e/fixtures/presentation-video.png").arrayBuffer()).toString("base64")}`,
+  x: 2.4,
   y: 2,
-  w: 11,
+  w: 8.53,
   h: 4.8,
 });
 s = slide(

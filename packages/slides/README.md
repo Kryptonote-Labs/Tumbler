@@ -49,3 +49,5 @@ Embedded media uses browser controls. External media requires an explicit load a
 Run `bun run compatibility:presentation-rendering` to regenerate `rendering-checks.pptx`. Full timing-tree execution, media synchronization, upright reflections on rotated shapes, 3D lighting/bevels, and complete WordArt/vertical typography are still outstanding. Preview tests are not an Office interoperability certification.
 
 Validate generated decks with `bun run compatibility:openxml apps/docs/static/samples/rendering-checks.pptx` using .NET 8 and the Microsoft Open XML SDK. This checks semantic constraints, including the single animation timing root, that the XSD-only validator misses. Passing either validator does not replace opening the deck in PowerPoint.
+
+The rendering deck uses a six-second H.264/MP4 motion clip with a matching poster. Regenerate it with `bash scripts/generate-presentation-video.sh` using FFmpeg and DejaVu Sans, then regenerate the deck. The tiny green WebM remains a separate browser playback test fixture.
