@@ -7,7 +7,7 @@ test("main view and thumbnails share font faces until their last consumer closes
     "document",
   );
   const originalFace = Object.getOwnPropertyDescriptor(globalThis, "FontFace");
-  const faces = new Set();
+  const faces = new Set<Face>();
   let loads = 0;
   class Face {
     constructor(readonly family: string) {}
