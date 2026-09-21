@@ -1,4 +1,7 @@
 <script lang="ts">
+  import {getContext} from "svelte";
+  import {presentationFontContext, type PresentationFontContext} from "./presentation-fonts.ts";
+  const fonts = getContext<PresentationFontContext | undefined>(presentationFontContext);
   import {
     presentationTextEdit,
     type SlideTextEditorOptions,
@@ -74,13 +77,13 @@
         {#if paragraph.bullet}<span
             data-bullet
             contenteditable="false"
-            style:font-family={paragraph.bulletFont}
+            style:font-family={fonts?.family(paragraph.bulletFont ?? "Arial") ?? JSON.stringify(paragraph.bulletFont)}
             style:color={paragraph.bulletColor}
             style:font-size={`${paragraph.bulletSize ?? 24}px`}
             >{paragraph.bullet}
           </span>{/if}{#each paragraph.runs as run}<span
             data-text-run
-            style:font-family={run.fontFamily}
+            style:font-family={fonts?.family(run.fontFamily) ?? JSON.stringify(run.fontFamily)}
             style:font-size={`${run.fontSize}px`}
             style:font-weight={run.bold ? 700 : 400}
             style:font-style={run.italic ? "italic" : "normal"}

@@ -11,6 +11,7 @@ export type {
   OpenPresentationOptions,
   PresentationDiagnostic,
   PresentationDocument,
+  PresentationEmbeddedFont,
   PresentationSlide,
   PresentationObjectChange,
   SlideObject,

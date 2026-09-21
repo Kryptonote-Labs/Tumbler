@@ -1,3 +1,4 @@
+import { embeddedFontBytes } from "./embedded-fonts.ts";
 import { scriptSegments } from "./text-fonts.ts";
 import { isModificationIdList } from "./modification-id.ts";
 import { formatAutoNumber } from "./text-numbering.ts";
@@ -293,6 +294,18 @@ class Reader {
       return this.slide(id, this.load(part), index);
     });
     return {
+      embeddedFonts: this.children(this.p(this.main.xml.root, "embeddedFontLst")).flatMap(entry => {
+        const family = attr(this.p(entry, "font"), "typeface");
+        if (!family) return [];
+        return ["regular", "bold", "italic", "boldItalic"].flatMap(style => {
+          const id = this.rid(this.p(entry, style));
+          const part = id ? this.related(this.main, "font", id) : undefined;
+          if (!part) return [];
+          const bytes = embeddedFontBytes(this.pkg.readPart(part));
+          if (!bytes) { for (const slide of slides) (slide.diagnostics as PresentationDiagnostic[]).push({part:part.name.value,message:`Embedded font ${family} has an unsupported encoding; an installed font is used.`}); return []; }
+          return [{family,bytes,bold:style === "bold" || style === "boldItalic",italic:style === "italic" || style === "boldItalic"}];
+        });
+      }),
       package: this.pkg,
       conformance: this.conformance,
       width,

@@ -36,3 +36,9 @@ test('paragraphs retain custom tabs and distributed alignment', async()=>{
  const p=openPresentationDocument(tx.commit()).slides[0]!.objects.find(o=>o.layer==='slide'&&o.text)!.text!.paragraphs[0]!;
  expect(p.tabs).toEqual([{position:100,alignment:'r'},{position:200,alignment:'dec'}]); expect(p.distributed).toBe(true);expect(p.marginRight).toBe(10);
 });
+test('uncompressed EOT fonts expose their original SFNT bytes', async()=>{
+ const {embeddedFontBytes}=await import('../src/embedded-fonts.ts');
+ const sfnt=new Uint8Array([0,1,0,0,0,0,0,0]);const eot=new Uint8Array(90);const v=new DataView(eot.buffer);
+ v.setUint32(0,90,true);v.setUint32(4,8,true);v.setUint16(34,0x504c,true);eot.set(sfnt,82);
+ expect(embeddedFontBytes(eot)).toEqual(sfnt);v.setUint32(12,4,true);expect(embeddedFontBytes(eot)).toBeUndefined();
+});

@@ -145,7 +145,14 @@ export interface PresentationSlide {
   readonly objects: readonly SlideObject[];
   readonly diagnostics: readonly PresentationDiagnostic[];
 }
+export interface PresentationEmbeddedFont {
+  readonly family: string;
+  readonly bold: boolean;
+  readonly italic: boolean;
+  readonly bytes: Uint8Array;
+}
 export interface PresentationDocument {
+  readonly embeddedFonts?: readonly PresentationEmbeddedFont[];
   readonly package: OpcPackage;
   readonly conformance: "strict" | "transitional";
   readonly width: number;

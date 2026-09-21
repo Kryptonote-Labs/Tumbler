@@ -15,7 +15,7 @@
     type SlideText,
   } from "@tumblerjs/slides";
   import type { FormattingPatch } from "@tumblerjs/core";
-  import { onDestroy, onMount, tick } from "svelte";
+  import { onDestroy, onMount, tick, setContext } from "svelte";
   import type {
     PresentationDocument,
     PresentationObjectChange,
@@ -24,6 +24,7 @@
   } from "@tumblerjs/slides";
   import PresentationShape from "./PresentationShape.svelte";
   import PresentationGradient from "./PresentationGradient.svelte";
+  import {loadPresentationFonts, presentationFontContext, type PresentationFontContext} from "./presentation-fonts.ts";
   import PresentationText from "./PresentationText.svelte";
   import PresentationTable from "./PresentationTable.svelte";
   import OoxmlChart from "./OoxmlChart.svelte";
@@ -244,6 +245,13 @@
       });
     }
   }
+  let loadedFonts = $state<ReturnType<typeof loadPresentationFonts>>();
+  setContext<PresentationFontContext>(presentationFontContext, {family:name=>loadedFonts?.family(name) ?? JSON.stringify(name)});
+  $effect(() => {
+    const loaded = loadPresentationFonts(presentation.embeddedFonts ?? []);
+    loadedFonts = loaded;
+    return loaded.destroy;
+  });
   let mounted = $state(false);
   onMount(() => {
     mounted = true;
