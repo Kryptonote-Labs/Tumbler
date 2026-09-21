@@ -67,7 +67,7 @@ const session = openPresentationEditingSession(bytes);
 const output = session.artifact.bytes();
 // session.undo(); session.redo();` },
         { kind: 'text', text: 'Edits replace only the owning slide XML part. Unchanged part payloads, relationships, notes, chart data, and embedded files are retained. Opening and exporting without edits returns the original bytes. ZIP directory records may be removed when writing an edited package.' },
-        { kind: 'text', text: 'Inherited, grouped, animated, signed, or unsupported objects are read-only. Range-based text and formatting edits support ordinary rich text in text boxes and table cells. Fields and hyperlinked text remain read-only. These restrictions avoid silently flattening formatting or changing shared layouts.' }
+        { kind: 'text', text: 'Move, resize, rotate, and edit slide objects, including grouped objects and placeholders with inherited positions. Edits preserve hyperlinks, line breaks, autofit settings, animation timing, and Office metadata. Shared master/layout objects, fields, signed files, SmartArt cached drawings, and unknown alternate representations remain read-only.' }
       ] },
       { id: 'examples', title: 'Example decks', blocks: [
         { kind: 'list', items: ['Rendering checks: autofit, decimal tabs, picture fills, drawing effects, stacked and combination charts, embedded video, and animation playback.', 'Workspace presentation: three slides with text, shapes, and a chart.', 'Shapes and pictures: a 4:3 deck with rotation, transparency, rich text, and an embedded image.', 'Compatibility checks: grouped objects, a table, and notes.', 'Everyday PowerPoint features: preset shapes, a gradient, rich text, hyperlinks, speaker notes, and a theme-styled table.'] },
