@@ -241,6 +241,20 @@ test("rendering example shows decimal tabs, drawings, charts and playback togeth
   await expect(stage.locator(".chart-frame svg")).toBeVisible();
   await page.getByLabel("Slide", { exact: true }).selectOption("3");
   await expect(stage.locator(".chart-frame path")).toBeAttached();
+  await expect(
+    stage.locator(".chart-frame").getByText("Q1", { exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      stage.locator(".combination-legend").evaluate((legend) => {
+        const bounds = legend.getBoundingClientRect(),
+          chart = legend.closest("svg")!.getBoundingClientRect();
+        return Math.abs(
+          bounds.x + bounds.width / 2 - chart.x - chart.width / 2,
+        );
+      }),
+    )
+    .toBeLessThan(2);
   await page.screenshot({ path: "/tmp/tumbler-rendering-combination.png" });
   await page.getByLabel("Slide", { exact: true }).selectOption("4");
   await expect(stage.locator("video")).toBeVisible();

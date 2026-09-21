@@ -18,6 +18,55 @@
   let plots = $derived(layoutCombinationChart(model, width, height));
   const ticks = (min: number, max: number) =>
     Array.from({ length: 6 }, (_, i) => min + ((max - min) * i) / 5);
+  function positionLegend(
+    node: SVGGElement,
+    options: { model: SupportedChartModel; width: number; height: number },
+  ) {
+    let frame = 0;
+    function update(next: typeof options) {
+      options = next;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const items = Array.from(node.children).filter(
+          (item): item is SVGGElement => item instanceof SVGGElement,
+        );
+        const position = options.model.legend?.position ?? "right";
+        const horizontal = position === "top" || position === "bottom";
+        const widths = items.map((item) => item.getBBox().width);
+        const total =
+          widths.reduce((sum, value) => sum + value, 0) +
+          Math.max(0, items.length - 1) * 24;
+        let x = horizontal
+          ? (options.width - total) / 2
+          : position === "left"
+            ? 8
+            : options.width - Math.max(0, ...widths) - 8;
+        let y =
+          position === "bottom"
+            ? options.height - 12
+            : position === "top" || position === "top-right"
+              ? options.model.title
+                ? 42
+                : 18
+              : (options.height - items.length * 20) / 2 + 12;
+        items.forEach((item, index) => {
+          item.setAttribute("transform", `translate(${x} ${y})`);
+          if (horizontal) x += widths[index]! + 24;
+          else y += 20;
+        });
+      });
+    }
+    const fonts = () => update(options);
+    document.fonts.addEventListener("loadingdone", fonts);
+    update(options);
+    return {
+      update,
+      destroy() {
+        cancelAnimationFrame(frame);
+        document.fonts.removeEventListener("loadingdone", fonts);
+      },
+    };
+  }
 </script>
 
 <svg
@@ -114,17 +163,27 @@
   {/each}
   {#if plots[0]}{@const p = plots[0]}
     {#each p.categories as category, c}<text
-        x={p.plot.x +
-          ((c + 0.5) * p.plot.width) / Math.max(1, p.categories.length)}
-        y={p.plot.y + p.plot.height + 17}
-        text-anchor="middle">{category}</text
+        x={p.model.kind === "bar"
+          ? p.plot.x - 8
+          : p.plot.x +
+            ((c + 0.5) * p.plot.width) / Math.max(1, p.categories.length)}
+        y={p.model.kind === "bar"
+          ? p.plot.y +
+            ((c + 0.5) * p.plot.height) / Math.max(1, p.categories.length) +
+            4
+          : p.plot.y + p.plot.height + 17}
+        text-anchor={p.model.kind === "bar" ? "end" : "middle"}>{category}</text
       >{/each}{/if}
-  {#if model.legend}{#each model.series as series, i}<g
-        transform={`translate(${16 + i * 110} ${height - 10})`}
-        ><rect width="8" height="8" y="-8" fill={color(series, i)} /><text
-          x="12">{series.title ?? `Series ${i + 1}`}</text
-        ></g
-      >{/each}{/if}
+  {#if model.legend}<g
+      class="combination-legend"
+      use:positionLegend={{ model, width, height }}
+      >{#each model.series as series, i}<g
+          transform={`translate(${16 + i * 110} ${height - 10})`}
+          ><rect width="8" height="8" y="-8" fill={color(series, i)} /><text
+            x="12">{series.title ?? `Series ${i + 1}`}</text
+          ></g
+        >{/each}</g
+    >{/if}
 </svg>
 
 <style>

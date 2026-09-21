@@ -29,7 +29,19 @@ export function layoutCombinationChart(
     ),
   );
   const common = layoutCartesianChart(model, width, height);
-  const rect = { ...common.plot, width: Math.max(1, common.plot.width - 40) };
+  const rightAxis = plots.some((plot) =>
+    plot.axes.some(
+      (axis) =>
+        axis.kind === "value" &&
+        !axis.deleted &&
+        axis.position === "right" &&
+        plot.axisIds?.includes(axis.id),
+    ),
+  );
+  const rect = {
+    ...common.plot,
+    width: Math.max(1, common.plot.width - (rightAxis ? 40 : 0)),
+  };
   return plots.map((plot, i) => {
     const axis = plot.axes.find(
       (a) =>
