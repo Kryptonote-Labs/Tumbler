@@ -71,10 +71,12 @@ export function writeZipArchiveChanges(
 ): Uint8Array {
   const replacements = changes.replacements ?? new Map();
   const additions = changes.additions ?? [];
-  const removals = changes.removals ?? new Set();
+  const removals = new Set(changes.removals);
   if (replacements.size === 0 && additions.length === 0 && removals.size === 0) {
     return archive.originalBytes();
   }
+  // OPC directory records are consumed but are not parts; omit them on edited saves.
+  for (const entry of archive.entries) if (entry.name.endsWith("/")) removals.add(entry.name);
   for (const name of replacements.keys()) {
     if (archive.get(name) === undefined) {
       throw new ZipWriterError(

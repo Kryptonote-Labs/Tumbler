@@ -169,7 +169,7 @@ export function openOpcPackage(
   const logicalNames = new Set<string>();
 
   for (const entry of archive.entries) {
-    if (entry.name === CONTENT_TYPES_ITEM_NAME) {
+    if (entry.name === CONTENT_TYPES_ITEM_NAME || entry.name.endsWith("/")) {
       continue;
     }
     let name: PartName;
