@@ -96,6 +96,7 @@
       {#if cell.text}<foreignObject width={w} height={h}
           ><PresentationText
             text={cell.text}
+            linksEnabled={!editable}
             {onslide}
             editor={editable ? { ...editor, active, onnavigate } : undefined}
           /></foreignObject

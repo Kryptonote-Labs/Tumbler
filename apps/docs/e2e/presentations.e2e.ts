@@ -98,7 +98,10 @@ test("compatibility limits are visible; samples and component preview fit narrow
     .getByRole("button", { name: "Grouped rectangle", exact: true })
     .click();
   await expect(
-    page.getByText("Grouped objects are read-only.", { exact: true }),
+    page.getByRole("button", {
+      name: "Resize Grouped rectangle bottom right",
+      exact: true,
+    }),
   ).toBeVisible();
   await page.goto("/components");
   await expect(
@@ -204,6 +207,17 @@ test("DrawingML shapes, theme tables, notes, and internal links render together"
   await page.getByLabel("Slide", { exact: true }).selectOption("2");
   await expect(stage.locator("[data-table-cell]")).toHaveCount(12);
   await expect(stage.getByText("Milestone", { exact: true })).toBeVisible();
+  await page.getByLabel("Slide", { exact: true }).selectOption("1");
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await stage
+    .locator("[data-slide-object]")
+    .filter({ hasText: "Back to the shape gallery" })
+    .dblclick();
+  await expect(
+    page.getByRole("textbox", { name: "Edit slide text" }),
+  ).toBeVisible();
+  await stage.getByRole("link", { name: "Back to the shape gallery" }).click();
+  await expect(page.getByLabel("Slide", { exact: true })).toHaveValue("1");
   expect(errors).toEqual([]);
 });
 
@@ -539,4 +553,35 @@ test("table cells edit in place, format, navigate with Tab, and resize without s
     table.locator('[data-table-cell="0:0"] rect').first(),
   ).not.toHaveAttribute("fill", "none");
   expect(errors).toEqual([]);
+});
+
+test("grouped shapes follow the pointer without losing their group scale", async ({
+  page,
+}) => {
+  await page.goto("/playground/slides-compatibility");
+  const slides = page.getByLabel("Slide", { exact: true });
+  await expect(slides).toBeVisible();
+  await slides.selectOption("1");
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const object = page.locator(
+    '.slide-stage [data-slide-object][aria-label="Grouped rectangle"]',
+  );
+  await expect(object).toBeVisible();
+  const bounds = await object.locator("rect.hit").boundingBox();
+  const x = bounds!.x + bounds!.width / 2,
+    y = bounds!.y + bounds!.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 36, y + 24, { steps: 5 });
+  const preview = await object.locator("rect.hit").boundingBox();
+  expect(preview!.x - bounds!.x).toBeCloseTo(36, 0);
+  expect(preview!.y - bounds!.y).toBeCloseTo(24, 0);
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await object.locator("rect.hit").boundingBox())!.x)
+    .toBeCloseTo(bounds!.x + 36, 0);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect
+    .poll(async () => (await object.locator("rect.hit").boundingBox())!.x)
+    .toBeCloseTo(bounds!.x, 0);
 });

@@ -83,3 +83,58 @@ test("large imported decks keep navigation, fonts and thumbnail counts stable", 
     .toBe(true);
   expect(errors).toEqual([]);
 });
+
+test("imported placeholders and Office pictures edit, move and survive export", async ({
+  page,
+}) => {
+  test.skip(
+    !file,
+    "Set TUMBLER_PRESENTATION_FILE to exercise a private large deck.",
+  );
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/playground/slides-brief");
+  await expect(page.locator(".slide-stage svg")).toBeVisible();
+  await page.locator("input[type=file]").setInputFiles(file!);
+  const slides = page.getByLabel("Slide", { exact: true });
+  await expect.poll(() => slides.locator("option").count()).toBe(36);
+  await slides.selectOption("33");
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const stage = page.locator(".slide-stage");
+  const title = stage.getByRole("button", { name: "Title 1", exact: true });
+  await title.dblclick();
+  const input = page.getByRole("textbox", { name: "Edit slide text" });
+  await expect(input).toBeVisible();
+  await input.fill("An editable imported title");
+  await input.press("Control+Enter");
+  const updated = stage
+    .locator("[data-slide-object]")
+    .filter({ hasText: "An editable imported title" });
+  await updated.click();
+  const before = await updated.getAttribute("transform");
+  await stage.locator("svg.slide").press("ArrowRight");
+  await expect(updated).not.toHaveAttribute("transform", before!);
+  const titleTransform = await updated.getAttribute("transform");
+  const picture = stage
+    .locator("[data-slide-object]")
+    .filter({ has: page.locator("pattern image") })
+    .first();
+  await picture.click();
+  const imageBefore = await picture.getAttribute("transform");
+  await stage.locator("svg.slide").press("ArrowDown");
+  await expect(picture).not.toHaveAttribute("transform", imageBefore!);
+  const imageTransform = await picture.getAttribute("transform");
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: /^Download/ }).click(),
+  ]);
+  const saved = test.info().outputPath("edited-private-deck.pptx");
+  await download.saveAs(saved);
+  await page.locator("input[type=file]").setInputFiles(saved);
+  await expect(slides).toHaveValue("0");
+  await expect.poll(() => slides.locator("option").count()).toBe(36);
+  await slides.selectOption("33");
+  await expect(updated).toHaveAttribute("transform", titleTransform!);
+  await expect(picture).toHaveAttribute("transform", imageTransform!);
+  expect(errors).toEqual([]);
+});

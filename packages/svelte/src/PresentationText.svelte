@@ -19,8 +19,10 @@
     onslide,
     editor,
     onheight,
+    linksEnabled = true,
   }: {
     text: SlideText;
+    linksEnabled?: boolean;
     onheight?: (height: number) => void;
     onslide?: (part: string) => void;
     editor?: Omit<SlideTextEditorOptions, "paragraphs">;
@@ -113,6 +115,10 @@
                 target={run.hyperlink.href ? "_blank" : undefined}
                 rel="noopener noreferrer"
                 onclick={(event) => {
+                  if (!linksEnabled || editor?.active) {
+                    event.preventDefault();
+                    return;
+                  }
                   if (run.hyperlink?.slidePart) {
                     event.preventDefault();
                     onslide?.(run.hyperlink.slidePart);

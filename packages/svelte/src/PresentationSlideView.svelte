@@ -5,6 +5,7 @@
     presentationTextTarget,
     type PresentationTableCellAddress,
     shapeMatrix,
+    multiply,
     resizeSlideTransform,
     slideTextValue,
     type PresentationTextRange,
@@ -167,7 +168,7 @@
         object: SlideObject;
         mode: "move" | "rotate" | Handle;
         center: { x: number; y: number };
-        factor: number;
+        inverse: DOMMatrix;
       }
     | undefined;
   let editing = $state<string>();
@@ -339,27 +340,45 @@
     event.preventDefault();
     const matrix = svg?.getScreenCTM();
     if (!matrix) return;
-    const center = new DOMPoint(
-      object.transform.x + object.transform.width / 2,
-      object.transform.y + object.transform.height / 2,
-    ).matrixTransform(matrix);
+    const parent = new DOMMatrix(
+      object.parentMatrix ? [...object.parentMatrix] : undefined,
+    );
+    const inverse = new DOMMatrix([
+      matrix.a,
+      matrix.b,
+      matrix.c,
+      matrix.d,
+      matrix.e,
+      matrix.f,
+    ])
+      .multiply(parent)
+      .inverse();
+    const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(
+      inverse,
+    );
     drag = {
       pointer: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
+      x: point.x,
+      y: point.y,
       object,
       mode,
-      center,
-      factor,
+      center: {
+        x: object.transform.x + object.transform.width / 2,
+        y: object.transform.y + object.transform.height / 2,
+      },
+      inverse,
     };
     svg?.focus({ preventScroll: true });
   }
   function move(event: PointerEvent) {
     if (!drag || event.pointerId !== drag.pointer) return;
-    const dx = (event.clientX - drag.x) / drag.factor,
-      dy = (event.clientY - drag.y) / drag.factor;
+    const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(
+      drag.inverse,
+    );
+    const dx = point.x - drag.x,
+      dy = point.y - drag.y;
     const { transform, key } = drag.object;
-    if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 5) {
+    if (Math.hypot(dx, dy) < 5 / factor) {
       preview = undefined;
       return;
     }
@@ -371,8 +390,8 @@
         drag.x - drag.center.x,
       );
       const current = Math.atan2(
-        event.clientY - drag.center.y,
-        event.clientX - drag.center.x,
+        point.y - drag.center.y,
+        point.x - drag.center.x,
       );
       const angle = transform.rotation + ((current - initial) * 180) / Math.PI;
       next.rotation =
@@ -395,10 +414,16 @@
     event.preventDefault();
     event.stopPropagation();
     const step = event.shiftKey ? 10 : 1;
+    const inverse = new DOMMatrix(
+      object.parentMatrix ? [...object.parentMatrix] : undefined,
+    ).inverse();
+    const delta = new DOMPoint(dx * step, dy * step, 0, 0).matrixTransform(
+      inverse,
+    );
     onobjectchange?.({
       slideId: slide.id,
       objectKey: object.key,
-      ...resizeSlideTransform(object.transform, handle, dx * step, dy * step),
+      ...resizeSlideTransform(object.transform, handle, delta.x, delta.y),
     });
   }
 
@@ -449,24 +474,21 @@
       return;
     event.preventDefault();
     const step = event.shiftKey ? 10 : 1;
+    const parent = new DOMMatrix(
+      selected.parentMatrix ? [...selected.parentMatrix] : undefined,
+    ).inverse();
+    const delta = new DOMPoint(
+      event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0,
+      event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0,
+      0,
+      0,
+    ).matrixTransform(parent);
     onobjectchange({
       slideId: slide.id,
       objectKey: selected.key,
       ...selected.transform,
-      x:
-        selected.transform.x +
-        (event.key === "ArrowLeft"
-          ? -step
-          : event.key === "ArrowRight"
-            ? step
-            : 0),
-      y:
-        selected.transform.y +
-        (event.key === "ArrowUp"
-          ? -step
-          : event.key === "ArrowDown"
-            ? step
-            : 0),
+      x: selected.transform.x + delta.x,
+      y: selected.transform.y + delta.y,
     });
   }
   function gestures(node: HTMLElement) {
@@ -602,7 +624,10 @@
               ? Math.max(object.transform.height, fitted.height)
               : object.transform.height)}
           {@const matrix = change
-            ? shapeMatrix({ ...object.transform, ...change })
+            ? multiply(
+                object.parentMatrix ?? [1, 0, 0, 1, 0, 0],
+                shapeMatrix({ ...object.transform, ...change }),
+              )
             : object.matrix}
           <!-- Object buttons are focusable only in Edit mode. -->
           <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -772,6 +797,7 @@
                 >
                   <PresentationText
                     text={object.text}
+                    linksEnabled={!editable}
                     onheight={(height) => {
                       if (object.text?.autoFit === "shape")
                         fittedHeights = {
