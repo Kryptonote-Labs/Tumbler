@@ -277,7 +277,7 @@
   onMount(() => {
     mounted = true;
   });
-  let fittedHeights = $state<
+  let fittedHeights = $state.raw<
     Record<string, { text: SlideText; height: number }>
   >({});
   const images = new Map<Uint8Array, string>();
@@ -774,9 +774,9 @@
                     text={object.text}
                     onheight={(height) => {
                       if (object.text?.autoFit === "shape")
-                        fittedHeights[object.key] = {
-                          text: object.text,
-                          height,
+                        fittedHeights = {
+                          ...fittedHeights,
+                          [object.key]: { text: object.text, height },
                         };
                     }}
                     {onslide}
