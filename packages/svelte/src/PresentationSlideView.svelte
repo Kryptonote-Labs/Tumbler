@@ -25,6 +25,7 @@
   import PresentationShape from "./PresentationShape.svelte";
   import PresentationGradient from "./PresentationGradient.svelte";
   import {loadPresentationFonts, presentationFontContext, type PresentationFontContext} from "./presentation-fonts.ts";
+  import PresentationMedia from "./PresentationMedia.svelte";
   import PresentationText from "./PresentationText.svelte";
   import PresentationTable from "./PresentationTable.svelte";
   import OoxmlChart from "./OoxmlChart.svelte";
@@ -573,7 +574,7 @@
               }
             }}
           >
-            {#if object.kind === "unsupported"}
+            {#if object.kind === "unsupported" && !object.media}
               <rect
                 width={w}
                 height={h}
@@ -584,6 +585,8 @@
               <text x="12" y="24" fill="#55615a" font-size="14"
                 >Preview unavailable</text
               >
+            {:else if object.media && !thumbnail}
+              <foreignObject width={w} height={h}><PresentationMedia media={object.media} poster={object.image ? imageUrl(object) : undefined} active={!editable}/></foreignObject>
             {:else if object.kind === "picture" && object.image}
               {@const crop = object.image.crop}
               <svg

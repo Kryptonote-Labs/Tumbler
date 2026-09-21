@@ -16,3 +16,16 @@ test('normal autofit fits dense text and explicit overflow remains visible', asy
  const fitted=await text.evaluate(e=>{const p=e.querySelector<HTMLElement>('.paragraphs')!;return p.getBoundingClientRect().height<=e.getBoundingClientRect().height+1;});
  expect(fitted).toBe(true);
 });
+test('embedded video exposes browser playback controls and loads its metadata', async({page})=>{
+ const pkg=openOpcPackage(new Uint8Array(await readFile(fixture))),tx=beginPackageTransaction(pkg);
+ const part=pkg.getPart('/ppt/slides/slide1.xml')!;
+ tx.addPart('/ppt/media/test.webm','video/webm',new Uint8Array(await readFile(new URL('./fixtures/media.webm',import.meta.url))));
+ tx.addRelationship(part.name,{id:'testVideo',type:'http://schemas.openxmlformats.org/officeDocument/2006/relationships/video',target:'/ppt/media/test.webm'});
+ tx.replacePart(part.name,new TextEncoder().encode(new TextDecoder().decode(pkg.readPart(part)).replace('<p:nvPr></p:nvPr>','<p:nvPr><a:videoFile r:link="testVideo"/></p:nvPr>')));
+ await page.goto('/playground/slides-brief');await expect(page.locator('.slide-stage').getByText('A quieter workspace',{exact:true}).last()).toBeVisible();
+ await page.locator('input[type=file]').setInputFiles({name:'media.pptx',mimeType:'application/vnd.openxmlformats-officedocument.presentationml.presentation',buffer:Buffer.from(tx.commit())});
+ const video=page.locator('.slide-stage video');await expect(video).toBeVisible();
+ await expect.poll(()=>video.evaluate(v=>(v as HTMLVideoElement).readyState)).toBeGreaterThan(0);
+ await video.evaluate(v=>(v as HTMLVideoElement).play());
+ await expect.poll(()=>video.evaluate(v=>(v as HTMLVideoElement).currentTime)).toBeGreaterThan(0);
+});

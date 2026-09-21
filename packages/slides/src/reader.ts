@@ -1,3 +1,4 @@
+import { readPresentationMedia } from "./media.ts";
 import { embeddedFontBytes } from "./embedded-fonts.ts";
 import { scriptSegments } from "./text-fonts.ts";
 import { isModificationIdList } from "./modification-id.ts";
@@ -875,6 +876,7 @@ class Reader {
         )
       )
         diagnostics.push("Some advanced drawing properties are not rendered.");
+      const media = readPresentationMedia(this.pkg,source.part.name.value,this.descendants(element));
       let image: SlideObject["image"];
       if (kind === "picture") {
         const blipFill = this.p(element, "blipFill"),
@@ -999,6 +1001,7 @@ class Reader {
         fill,
         gradient,
         shadow,
+        media,
         strokeDash,
         strokeCap:
           attr(line, "cap") === "rnd"

@@ -42,3 +42,13 @@ test('uncompressed EOT fonts expose their original SFNT bytes', async()=>{
  v.setUint32(0,90,true);v.setUint32(4,8,true);v.setUint16(34,0x504c,true);eot.set(sfnt,82);
  expect(embeddedFontBytes(eot)).toEqual(sfnt);v.setUint32(12,4,true);expect(embeddedFontBytes(eot)).toBeUndefined();
 });
+test('media references resolve internal r:link sources without fetching external URLs', async()=>{
+ const {readPresentationMedia}=await import('../src/media.ts'); const {parseLosslessXml}=await import('@tumblerjs/ooxml');
+ const pkg=openOpcPackage(await fixture()),tx=beginPackageTransaction(pkg);
+ tx.addPart('/ppt/media/test.mp4','video/mp4',new Uint8Array([0,1,2]));
+ tx.addRelationship('/ppt/slides/slide1.xml',{id:'video1',type:'http://schemas.openxmlformats.org/officeDocument/2006/relationships/video',target:'/ppt/media/test.mp4'});
+ const updated=openOpcPackage(tx.commit());
+ const xml=parseLosslessXml(encoder.encode('<a:videoFile xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:link="video1"/>'));
+ const media=readPresentationMedia(updated,'/ppt/slides/slide1.xml',xml.elements());
+ expect(media?.kind).toBe('video');expect(media?.bytes).toEqual(new Uint8Array([0,1,2]));expect(media?.url).toBeUndefined();
+});
