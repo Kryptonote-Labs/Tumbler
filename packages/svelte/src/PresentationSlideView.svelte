@@ -25,6 +25,7 @@
   import PresentationShape from "./PresentationShape.svelte";
   import PresentationGradient from "./PresentationGradient.svelte";
   import {loadPresentationFonts, presentationFontContext, type PresentationFontContext} from "./presentation-fonts.ts";
+  import PresentationPictureFill from "./PresentationPictureFill.svelte";
   import PresentationMedia from "./PresentationMedia.svelte";
   import PresentationText from "./PresentationText.svelte";
   import PresentationTable from "./PresentationTable.svelte";
@@ -510,6 +511,7 @@
         onkeydown={keydown}
       >
         <title>{slide.title}</title>
+        {#if slide.backgroundPicture}<defs><PresentationPictureFill picture={slide.backgroundPicture} id={`${viewId}-background-picture`} width={presentation.width} height={presentation.height}/></defs>{/if}
         {#if slide.backgroundGradient}<defs
             ><PresentationGradient
               gradient={slide.backgroundGradient}
@@ -521,7 +523,7 @@
         <rect
           width={presentation.width}
           height={presentation.height}
-          fill={slide.backgroundGradient
+          fill={slide.backgroundPicture ? `url(#${viewId}-background-picture)` : slide.backgroundGradient
             ? `url(#${viewId}-background)`
             : slide.background}
           role="presentation"
@@ -588,21 +590,9 @@
             {:else if object.media && !thumbnail}
               <foreignObject width={w} height={h}><PresentationMedia media={object.media} poster={object.image ? imageUrl(object) : undefined} active={!editable}/></foreignObject>
             {:else if object.kind === "picture" && object.image}
-              {@const crop = object.image.crop}
-              <svg
-                width={w}
-                height={h}
-                viewBox={`0 0 ${w} ${h}`}
-                overflow="hidden"
-                ><image
-                  href={imageUrl(object)}
-                  x={(-crop[0] * w) / (1 - crop[0] - crop[2])}
-                  y={(-crop[1] * h) / (1 - crop[1] - crop[3])}
-                  width={w / (1 - crop[0] - crop[2])}
-                  height={h / (1 - crop[1] - crop[3])}
-                  preserveAspectRatio="none"
-                /></svg
-              >
+              <defs><PresentationPictureFill picture={object.image} id={`${viewId}-image-${object.elementId}`} width={w} height={h}/>
+              <clipPath id={`${viewId}-clip-${object.elementId}`}><g transform={`scale(${w/object.transform.width} ${h/object.transform.height})`}>{#each object.drawingGeometry?.paths ?? [] as path}<path d={path.d}/>{/each}</g></clipPath></defs>
+              <rect width={w} height={h} fill={`url(#${viewId}-image-${object.elementId})`} clip-path={object.drawingGeometry?.paths.length ? `url(#${viewId}-clip-${object.elementId})` : undefined}/>
             {:else if object.table}<PresentationTable
                 {onslide}
                 table={object.table}

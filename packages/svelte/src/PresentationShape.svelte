@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SlideObject } from "@tumblerjs/slides";
+  import PresentationPictureFill from "./PresentationPictureFill.svelte";
   import PresentationGradient from "./PresentationGradient.svelte";
   let {
     object,
@@ -8,10 +9,11 @@
     id,
   }: { object: SlideObject; width: number; height: number; id: string } =
     $props();
-  let fill = $derived(object.gradient ? `url(#${id}-fill)` : object.fill);
+  let fill = $derived(object.pictureFill ? `url(#${id}-picture)` : object.gradient ? `url(#${id}-fill)` : object.fill);
 </script>
 
 <defs>
+  {#if object.pictureFill}<PresentationPictureFill picture={object.pictureFill} id={`${id}-picture`} width={object.transform.width} height={object.transform.height}/>{/if}
   {#if object.gradient}<PresentationGradient
       gradient={object.gradient}
       id={`${id}-fill`}

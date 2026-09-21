@@ -121,13 +121,8 @@ export interface SlideObject {
   readonly strokeWidth: number;
   readonly cornerRadius: number;
   readonly text: SlideText | undefined;
-  readonly image:
-    | {
-        readonly bytes: Uint8Array;
-        readonly contentType: string;
-        readonly crop: readonly [number, number, number, number];
-      }
-    | undefined;
+  readonly pictureFill?: import("./appearance.ts").DrawingPictureFill;
+  readonly image: import("./appearance.ts").DrawingPictureFill | undefined;
   readonly chart: ChartModel | undefined;
   readonly table: SlideTable | undefined;
   readonly movable: boolean;
@@ -142,6 +137,7 @@ export interface PresentationSlide {
   readonly hidden: boolean;
   readonly notes: string;
   readonly background: string;
+  readonly backgroundPicture?: import("./appearance.ts").DrawingPictureFill;
   readonly backgroundGradient: DrawingGradient | undefined;
   readonly objects: readonly SlideObject[];
   readonly diagnostics: readonly PresentationDiagnostic[];

@@ -19,3 +19,10 @@ export interface DrawingLineEnd {
   readonly width: number;
   readonly length: number;
 }
+export interface DrawingPictureFill {
+ readonly bytes: Uint8Array;
+ readonly contentType: string;
+ readonly crop: readonly [number,number,number,number];
+ readonly stretch?: readonly [number,number,number,number];
+ readonly tile?: {readonly x:number;readonly y:number;readonly scaleX:number;readonly scaleY:number;readonly align:string;readonly flip:string};
+}

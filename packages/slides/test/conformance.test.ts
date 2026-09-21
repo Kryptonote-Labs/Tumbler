@@ -52,3 +52,14 @@ test('media references resolve internal r:link sources without fetching external
  const media=readPresentationMedia(updated,'/ppt/slides/slide1.xml',xml.elements());
  expect(media?.kind).toBe('video');expect(media?.bytes).toEqual(new Uint8Array([0,1,2]));expect(media?.url).toBeUndefined();
 });
+test('SVG picture fills retain crop and tile placement for shapes and backgrounds', async()=>{
+ const pkg=openOpcPackage(await fixture()),tx=beginPackageTransaction(pkg);
+ tx.addPart('/ppt/media/tile.svg','image/svg+xml',encoder.encode('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="10" height="20" fill="green"/></svg>'));
+ tx.addRelationship('/ppt/slides/slide1.xml',{id:'tileImage',type:'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image',target:'/ppt/media/tile.svg'});
+ const fill='<a:blipFill><a:blip r:embed="tileImage"/><a:srcRect l="10000"/><a:tile tx="95250" sx="50000" sy="100000" algn="ctr" flip="xy"/></a:blipFill>';
+ let xml=contents(pkg,'/ppt/slides/slide1.xml').replace('<p:spPr>','<p:spPr>'+fill);
+ xml=xml.replace(/<p:bg>[\s\S]*?<\/p:bg>/, '<p:bg><p:bgPr>'+fill+'</p:bgPr></p:bg>');
+ tx.replacePart('/ppt/slides/slide1.xml',encoder.encode(xml));
+ const slide=openPresentationDocument(tx.commit()).slides[0]!;const picture=slide.objects.find(o=>o.pictureFill)!.pictureFill!;
+ expect(picture.contentType).toBe('image/svg+xml');expect(picture.crop[0]).toBe(0.1);expect(picture.tile).toMatchObject({x:10,scaleX:0.5,flip:'xy',align:'ctr'});
+});

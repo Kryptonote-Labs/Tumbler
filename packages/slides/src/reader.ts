@@ -427,7 +427,7 @@ class Reader {
     if (
       bgProperties &&
       this.children(bgProperties).some((item) =>
-        ["blipFill", "pattFill", "effectDag"].includes(item.localName),
+        ["pattFill", "effectDag"].includes(item.localName),
       )
     )
       context.diagnostics.push({
@@ -458,6 +458,7 @@ class Reader {
       hidden: ["0", "false"].includes(attr(slide.xml.root, "show") ?? ""),
       notes: this.slideNotes(slide),
       background: backgroundColor,
+      backgroundPicture: this.pictureFill(this.child(bgProperties ?? bgStyle,"blipFill")),
       backgroundGradient: this.gradient(
         bgProperties ?? bgStyle,
         context,
@@ -534,6 +535,18 @@ class Reader {
     }
   }
 
+  pictureFill(element: Element | undefined): import("./appearance.ts").DrawingPictureFill | undefined {
+    if (!element) return;
+    const owner=this.owners.get(element), blip=this.child(element,"blip"), id=this.rid(blip,"embed");
+    const part=owner && id ? this.related(owner,"image",id) : undefined;
+    if(!part || !["image/png","image/jpeg","image/gif","image/webp","image/bmp","image/x-ms-bmp","image/svg+xml"].includes(part.contentType))return;
+    const rect=(element:Element|undefined): [number,number,number,number] => ["l","t","r","b"].map(key=>number(element,key)/100000) as [number,number,number,number];
+    const crop=rect(this.child(element,"srcRect"));
+    if(crop[0]+crop[2]>=1 || crop[1]+crop[3]>=1)return;
+    const tile=this.child(element,"tile");
+    return {bytes:this.pkg.readPart(part),contentType:part.contentType,crop,stretch:rect(this.child(this.child(element,"stretch"),"fillRect")),
+      ...(tile?{tile:{x:px(tile,"tx"),y:px(tile,"ty"),scaleX:number(tile,"sx",100000)/100000,scaleY:number(tile,"sy",100000)/100000,align:attr(tile,"algn")??"tl",flip:attr(tile,"flip")??"none"}}:{})};
+  }
   fill(
     element: Element | undefined,
     context: Context,
@@ -859,7 +872,6 @@ class Reader {
         properties.some(
           (item) =>
             this.child(item, "pattFill") ||
-            this.child(item, "blipFill") ||
             this.children(this.child(item, "effectLst")).some(
               (effect) => effect.localName !== "outerShdw",
             ),
@@ -870,7 +882,7 @@ class Reader {
         this.descendants(element).some(
           (item) =>
             item.namespaceUri === this.ns.drawing &&
-            ["duotone", "tile", "effectDag", "scene3d", "sp3d"].includes(
+            ["duotone", "effectDag", "scene3d", "sp3d"].includes(
               item.localName,
             ),
         )
@@ -879,42 +891,10 @@ class Reader {
       const media = readPresentationMedia(this.pkg,source.part.name.value,this.descendants(element));
       let image: SlideObject["image"];
       if (kind === "picture") {
-        const blipFill = this.p(element, "blipFill"),
-          blip = this.child(blipFill, "blip");
-        const id = this.rid(blip, "embed");
-        const part =
-          id === undefined ? undefined : this.related(source, "image", id);
-        if (
-          part &&
-          ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(
-            part.contentType,
-          )
-        ) {
-          const crop = this.child(blipFill, "srcRect");
-          image = {
-            bytes: this.pkg.readPart(part),
-            contentType: part.contentType,
-            crop: [
-              number(crop, "l") / 100000,
-              number(crop, "t") / 100000,
-              number(crop, "r") / 100000,
-              number(crop, "b") / 100000,
-            ],
-          };
-          if (
-            image.crop[0] + image.crop[2] >= 1 ||
-            image.crop[1] + image.crop[3] >= 1
-          ) {
-            image = undefined;
-            diagnostics.push("Invalid image crop.");
-          }
-        } else {
-          kind = "unsupported";
-          diagnostics.push(
-            "Linked or unsupported image format is preserved without loading it.",
-          );
-        }
+        image = this.pictureFill(this.p(element,"blipFill"));
+        if (!image && !media) {kind="unsupported";diagnostics.push("Linked or unsupported image format is preserved without loading it.");}
       }
+      const pictureFill=this.pictureFill(this.child(fillSource,"blipFill"));
       let table: SlideObject["table"];
       const tableElement = this.child(
         this.child(this.child(element, "graphic"), "graphicData"),
@@ -1002,6 +982,7 @@ class Reader {
         gradient,
         shadow,
         media,
+        pictureFill,
         strokeDash,
         strokeCap:
           attr(line, "cap") === "rnd"
