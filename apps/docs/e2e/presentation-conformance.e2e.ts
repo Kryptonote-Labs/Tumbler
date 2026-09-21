@@ -264,3 +264,54 @@ test("rendering example shows decimal tabs, drawings, charts and playback togeth
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("reflections mirror the source shape and fade below it", async ({
+  page,
+}) => {
+  const pkg = openOpcPackage(new Uint8Array(await readFile(fixture))),
+    tx = beginPackageTransaction(pkg);
+  const part = pkg.getPart("/ppt/slides/slide1.xml")!;
+  tx.replacePart(
+    part.name,
+    new TextEncoder().encode(
+      new TextDecoder()
+        .decode(pkg.readPart(part))
+        .replace(
+          "</p:spPr>",
+          '<a:effectLst><a:reflection stA="60000" endA="0" endPos="100000" sy="-100000" algn="bl" dir="5400000" dist="19050"/></a:effectLst></p:spPr>',
+        ),
+    ),
+  );
+  await page.goto("/playground/slides-brief");
+  await expect(
+    page
+      .locator(".slide-stage")
+      .getByText("A quieter workspace", { exact: true })
+      .last(),
+  ).toBeVisible();
+  await page
+    .locator("input[type=file]")
+    .setInputFiles({
+      name: "reflection.pptx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      buffer: Buffer.from(tx.commit()),
+    });
+  const reflection = page.locator(".slide-stage .slide-reflection");
+  await expect(reflection).toBeVisible();
+  const bounds = await reflection
+    .locator("[data-reflection-source]")
+    .evaluate((element) => {
+      const use = element as SVGGElement,
+        source = document.getElementById(use.dataset.reflectionSource!)!;
+      const reflected = use.getBoundingClientRect(),
+        original = source.getBoundingClientRect();
+      return {
+        reflected: { top: reflected.top, height: reflected.height },
+        original: { bottom: original.bottom, height: original.height },
+      };
+    });
+  expect(bounds.reflected.top).toBeGreaterThan(bounds.original.bottom);
+  expect(bounds.reflected.height).toBeCloseTo(bounds.original.height, 0);
+  await page.screenshot({ path: "/tmp/tumbler-reflection.png" });
+});

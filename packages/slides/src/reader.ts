@@ -602,6 +602,35 @@ class Reader {
       background: this.color(this.child(pattern, "bgClr"), context) ?? "#fff",
     };
   }
+  reflection(
+    element: Element | undefined,
+  ): import("./appearance.ts").DrawingReflection | undefined {
+    const effect = this.child(this.child(element, "effectLst"), "reflection");
+    if (!effect) return;
+    const ratio = (name: string, fallback: number) => {
+      const value = attr(effect, name);
+      return value?.endsWith("%")
+        ? numeric(value.slice(0, -1), fallback * 100) / 100
+        : number(effect, name, fallback * 100000) / 100000;
+    };
+    const angle = ((number(effect, "dir") / 60000) * Math.PI) / 180;
+    const distance = px(effect, "dist");
+    return {
+      blur: Math.max(0, px(effect, "blurRad") / 2),
+      startAlpha: Math.max(0, Math.min(1, ratio("stA", 1))),
+      endAlpha: Math.max(0, Math.min(1, ratio("endA", 0))),
+      startPosition: Math.max(0, Math.min(1, ratio("stPos", 0))),
+      endPosition: Math.max(0, Math.min(1, ratio("endPos", 1))),
+      fadeDirection: number(effect, "fadeDir", 5400000) / 60000,
+      x: Math.cos(angle) * distance,
+      y: Math.sin(angle) * distance,
+      scaleX: ratio("sx", 1),
+      scaleY: ratio("sy", 1),
+      skewX: number(effect, "kx") / 60000,
+      skewY: number(effect, "ky") / 60000,
+      alignment: attr(effect, "algn") ?? "b",
+    };
+  }
   effects(
     element: Element | undefined,
     context: Context,
@@ -1093,13 +1122,29 @@ class Reader {
         properties.some((item) =>
           this.children(this.child(item, "effectLst")).some(
             (effect) =>
-              !["outerShdw", "glow", "innerShdw", "softEdge", "blur"].includes(
-                effect.localName,
-              ),
+              ![
+                "outerShdw",
+                "glow",
+                "innerShdw",
+                "softEdge",
+                "blur",
+                "reflection",
+              ].includes(effect.localName),
           ),
         )
       )
         diagnostics.push("Some fills or effects are not rendered.");
+      if (
+        ["0", "false"].includes(
+          attr(
+            this.child(this.child(effects, "effectLst"), "reflection"),
+            "rotWithShape",
+          ) ?? "",
+        )
+      )
+        diagnostics.push(
+          "Reflections that stay upright while the shape rotates are not supported yet.",
+        );
       if (
         this.descendants(element).some(
           (item) =>
@@ -1216,6 +1261,7 @@ class Reader {
         pictureFill,
         pattern: this.pattern(fillSource, context),
         effects: this.effects(effects, context),
+        reflection: this.reflection(effects),
         strokeDash,
         strokeCap:
           attr(line, "cap") === "rnd"

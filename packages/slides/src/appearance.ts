@@ -45,3 +45,18 @@ export interface DrawingPattern {
   readonly foreground: string;
   readonly background: string;
 }
+export interface DrawingReflection {
+  readonly blur: number;
+  readonly startAlpha: number;
+  readonly endAlpha: number;
+  readonly startPosition: number;
+  readonly endPosition: number;
+  readonly fadeDirection: number;
+  readonly x: number;
+  readonly y: number;
+  readonly scaleX: number;
+  readonly scaleY: number;
+  readonly skewX: number;
+  readonly skewY: number;
+  readonly alignment: string;
+}

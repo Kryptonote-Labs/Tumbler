@@ -263,7 +263,7 @@ for (const part of pkg.parts.filter((p) => p.name.value.endsWith(".xml"))) {
       if (block.includes('name="Glow"'))
         return block.replace(
           "</p:spPr>",
-          '<a:effectLst><a:glow rad="114300"><a:srgbClr val="355F46"/></a:glow></a:effectLst></p:spPr>',
+          '<a:effectLst><a:glow rad="114300"><a:srgbClr val="355F46"/></a:glow><a:reflection stA="50000" sy="-100000" endPos="70000" algn="bl" dir="5400000" dist="57150"/></a:effectLst></p:spPr>',
         );
       if (block.includes('name="Soft edge"'))
         return block.replace(

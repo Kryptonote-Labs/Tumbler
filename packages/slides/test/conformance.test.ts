@@ -276,3 +276,34 @@ test("click and after-effect timing retains ordered delays and transition metada
     advanceAfter: 2000,
   });
 });
+
+test("reflection preserves authored transforms, fading and percentage syntax", async () => {
+  const pkg = openOpcPackage(await fixture()),
+    tx = beginPackageTransaction(pkg);
+  const part = "/ppt/slides/slide1.xml";
+  tx.replacePart(
+    part,
+    encoder.encode(
+      contents(pkg, part).replace(
+        "</p:spPr>",
+        '<a:effectLst><a:reflection stA="50%" endA="0" endPos="75000" sy="-100000" algn="bl" dir="5400000" dist="95250" blurRad="19050"/></a:effectLst></p:spPr>',
+      ),
+    ),
+  );
+  const document = openPresentationDocument(tx.commit());
+  const object = document.slides[0]!.objects.find(
+    (object) => object.reflection,
+  )!;
+  expect(object.reflection).toMatchObject({
+    startAlpha: 0.5,
+    endAlpha: 0,
+    endPosition: 0.75,
+    scaleX: 1,
+    scaleY: -1,
+    alignment: "bl",
+    y: 10,
+    blur: 1,
+    fadeDirection: 90,
+  });
+  expect(object.reflection!.x).toBeCloseTo(0);
+});

@@ -122,6 +122,7 @@ export interface SlideObject {
   readonly cornerRadius: number;
   readonly text: SlideText | undefined;
   readonly effects?: readonly import("./appearance.ts").DrawingEffect[];
+  readonly reflection?: import("./appearance.ts").DrawingReflection | undefined;
   readonly pattern?: import("./appearance.ts").DrawingPattern | undefined;
   readonly pictureFill?:
     | import("./appearance.ts").DrawingPictureFill

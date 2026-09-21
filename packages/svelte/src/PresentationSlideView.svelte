@@ -22,6 +22,7 @@
     PresentationSlide,
     SlideObject,
   } from "@tumblerjs/slides";
+  import PresentationReflection from "./PresentationReflection.svelte";
   import PresentationShape from "./PresentationShape.svelte";
   import PresentationGradient from "./PresentationGradient.svelte";
   import {
@@ -641,133 +642,75 @@
               }
             }}
           >
-            {#if object.kind === "unsupported" && !object.media}
-              <rect
+            {#if object.reflection && !object.media}
+              <PresentationReflection
+                reflection={object.reflection}
                 width={w}
                 height={h}
-                fill="#eef0ee"
-                stroke="#99a49b"
-                stroke-dasharray="5 4"
-              />
-              <text x="12" y="24" fill="#55615a" font-size="14"
-                >Preview unavailable</text
-              >
-            {:else if object.media && !thumbnail}
-              <foreignObject width={w} height={h}
-                ><PresentationMedia
-                  media={object.media}
-                  poster={object.image ? imageUrl(object) : undefined}
-                  active={!editable}
-                /></foreignObject
-              >
-            {:else if object.kind === "picture" && object.image}
-              <defs
-                ><PresentationPictureFill
-                  picture={object.image}
-                  id={`${viewId}-image-${object.elementId}`}
-                  width={w}
-                  height={h}
-                />
-                <clipPath id={`${viewId}-clip-${object.elementId}`}
-                  ><g
-                    transform={`scale(${w / object.transform.width} ${h / object.transform.height})`}
-                    >{#each object.drawingGeometry?.paths ?? [] as path}<path
-                        d={path.d}
-                      />{/each}</g
-                  ></clipPath
-                ></defs
-              >
-              <rect
-                width={w}
-                height={h}
-                fill={`url(#${viewId}-image-${object.elementId})`}
-                clip-path={object.drawingGeometry?.paths.length
-                  ? `url(#${viewId}-clip-${object.elementId})`
-                  : undefined}
-              />
-            {:else if object.table}<PresentationTable
-                {onslide}
-                table={object.table}
-                width={w}
-                height={h}
-                editable={editable && !object.restriction}
-                selectedCell={selectedKey === object.key
-                  ? cellAddress
-                  : undefined}
-                editing={editing === object.key}
-                oncellselect={(cell) => selectCell(object, cell)}
-                oncellactivate={(cell, event) => editCell(object, cell, event)}
-                onnavigate={navigateCell}
-                editor={{
-                  point: editPoint,
-                  focusToken,
-                  onselect: (range) => {
-                    if (
-                      textRange.start !== range.start ||
-                      textRange.end !== range.end
-                    ) {
-                      textRange = range;
-                      pendingFormat = undefined;
-                    }
-                  },
-                  onreplace: (range, value) => replace(object, range, value),
-                  onfinish: () => {
-                    editing = undefined;
-                    pendingFormat = undefined;
-                    svg?.focus();
-                  },
-                  onundo,
-                  onshortcut: shortcut,
-                }}
-              />
-            {:else if object.kind === "chart" && object.chart}
-              <foreignObject width={w} height={h}
-                ><div class="chart-frame">
-                  <OoxmlChart
-                    model={object.chart}
-                    width={w}
-                    height={h}
-                    clipId={`${viewId}-slide-chart-${object.elementId}`}
-                  />
-                </div></foreignObject
-              >
-            {:else}
-              <PresentationShape
-                {object}
-                width={w}
-                height={h}
-                id={`${viewId}-shape-${object.elementId}`}
+                source={`${viewId}-content-${object.elementId}`}
+                id={`${viewId}-reflection-${object.elementId}`}
               />
             {/if}
-            {#if object.text}
-              {@const rect = object.drawingGeometry?.textRect ?? [
-                0,
-                0,
-                object.transform.width,
-                object.transform.height,
-              ]}
-              {@const sx = object.transform.width
-                ? w / object.transform.width
-                : 1}
-              {@const sy = object.transform.height
-                ? h / object.transform.height
-                : 1}
-              <foreignObject
-                style:overflow="visible"
-                x={rect[0] * sx}
-                y={rect[1] * sy}
-                width={Math.max(0, (rect[2] - rect[0]) * sx)}
-                height={Math.max(0, (rect[3] - rect[1]) * sy)}
-              >
-                <PresentationText
-                  text={object.text}
-                  onheight={(height) => {
-                    if (object.text?.autoFit === "shape")
-                      fittedHeights[object.key] = { text: object.text, height };
-                  }}
+            <g id={`${viewId}-content-${object.elementId}`}>
+              {#if object.kind === "unsupported" && !object.media}
+                <rect
+                  width={w}
+                  height={h}
+                  fill="#eef0ee"
+                  stroke="#99a49b"
+                  stroke-dasharray="5 4"
+                />
+                <text x="12" y="24" fill="#55615a" font-size="14"
+                  >Preview unavailable</text
+                >
+              {:else if object.media && !thumbnail}
+                <foreignObject width={w} height={h}
+                  ><PresentationMedia
+                    media={object.media}
+                    poster={object.image ? imageUrl(object) : undefined}
+                    active={!editable}
+                  /></foreignObject
+                >
+              {:else if object.kind === "picture" && object.image}
+                <defs
+                  ><PresentationPictureFill
+                    picture={object.image}
+                    id={`${viewId}-image-${object.elementId}`}
+                    width={w}
+                    height={h}
+                  />
+                  <clipPath id={`${viewId}-clip-${object.elementId}`}
+                    ><g
+                      transform={`scale(${w / object.transform.width} ${h / object.transform.height})`}
+                      >{#each object.drawingGeometry?.paths ?? [] as path}<path
+                          d={path.d}
+                        />{/each}</g
+                    ></clipPath
+                  ></defs
+                >
+                <rect
+                  width={w}
+                  height={h}
+                  fill={`url(#${viewId}-image-${object.elementId})`}
+                  clip-path={object.drawingGeometry?.paths.length
+                    ? `url(#${viewId}-clip-${object.elementId})`
+                    : undefined}
+                />
+              {:else if object.table}<PresentationTable
                   {onslide}
+                  table={object.table}
+                  width={w}
+                  height={h}
+                  editable={editable && !object.restriction}
+                  selectedCell={selectedKey === object.key
+                    ? cellAddress
+                    : undefined}
+                  editing={editing === object.key}
+                  oncellselect={(cell) => selectCell(object, cell)}
+                  oncellactivate={(cell, event) =>
+                    editCell(object, cell, event)}
+                  onnavigate={navigateCell}
                   editor={{
-                    active: editing === object.key,
                     point: editPoint,
                     focusToken,
                     onselect: (range) => {
@@ -789,8 +732,82 @@
                     onshortcut: shortcut,
                   }}
                 />
-              </foreignObject>
-            {/if}
+              {:else if object.kind === "chart" && object.chart}
+                <foreignObject width={w} height={h}
+                  ><div class="chart-frame">
+                    <OoxmlChart
+                      model={object.chart}
+                      width={w}
+                      height={h}
+                      clipId={`${viewId}-slide-chart-${object.elementId}`}
+                    />
+                  </div></foreignObject
+                >
+              {:else}
+                <PresentationShape
+                  {object}
+                  width={w}
+                  height={h}
+                  id={`${viewId}-shape-${object.elementId}`}
+                />
+              {/if}
+              {#if object.text}
+                {@const rect = object.drawingGeometry?.textRect ?? [
+                  0,
+                  0,
+                  object.transform.width,
+                  object.transform.height,
+                ]}
+                {@const sx = object.transform.width
+                  ? w / object.transform.width
+                  : 1}
+                {@const sy = object.transform.height
+                  ? h / object.transform.height
+                  : 1}
+                <foreignObject
+                  style:overflow="visible"
+                  x={rect[0] * sx}
+                  y={rect[1] * sy}
+                  width={Math.max(0, (rect[2] - rect[0]) * sx)}
+                  height={Math.max(0, (rect[3] - rect[1]) * sy)}
+                >
+                  <PresentationText
+                    text={object.text}
+                    onheight={(height) => {
+                      if (object.text?.autoFit === "shape")
+                        fittedHeights[object.key] = {
+                          text: object.text,
+                          height,
+                        };
+                    }}
+                    {onslide}
+                    editor={{
+                      active: editing === object.key,
+                      point: editPoint,
+                      focusToken,
+                      onselect: (range) => {
+                        if (
+                          textRange.start !== range.start ||
+                          textRange.end !== range.end
+                        ) {
+                          textRange = range;
+                          pendingFormat = undefined;
+                        }
+                      },
+                      onreplace: (range, value) =>
+                        replace(object, range, value),
+                      onfinish: () => {
+                        editing = undefined;
+                        pendingFormat = undefined;
+                        svg?.focus();
+                      },
+                      onundo,
+                      onshortcut: shortcut,
+                    }}
+                  />
+                </foreignObject>
+              {/if}
+            </g>
             {#if editable && editing !== object.key && !object.table}<rect
                 class="hit"
                 width={Math.max(w, 8)}
