@@ -2,7 +2,7 @@ import {cartesianStack, chartValueCoordinate, layoutCartesianChart} from './layo
 import type {SupportedChartModel} from './model.ts';
 /** Rebind each plot to current host values and share domains only where the authored axes match. */
 export function layoutCombinationChart(model:SupportedChartModel,width:number,height:number) {
- const plots=(model.plots??[model]).map(plot=>({...plot,plots:undefined,series:plot.series.map(series=>model.series.find(s=>s.index===series.index)??series)}));
+ const plots=(model.plots??[model]).map(({plots: _nested, ...plot})=>({...plot,series:plot.series.map(series=>model.series.find(s=>s.index===series.index)??series)}));
  const layouts=plots.map(plot=>layoutCartesianChart({...plot,axes:plot.axes.filter(a=>!plot.axisIds || plot.axisIds.includes(a.id))},width,height));
  const common=layoutCartesianChart(model,width,height);
  const rect={...common.plot,width:Math.max(1,common.plot.width-40)};

@@ -98,7 +98,7 @@ export interface SlideTable {
   readonly cells: readonly SlideTableCell[];
 }
 export interface SlideObject {
-  readonly media?: import("./media.ts").PresentationMedia;
+  readonly media?: import("./media.ts").PresentationMedia | undefined;
   readonly key: string;
   readonly shapeId: string;
   readonly elementId: number;
@@ -122,8 +122,8 @@ export interface SlideObject {
   readonly cornerRadius: number;
   readonly text: SlideText | undefined;
   readonly effects?: readonly import("./appearance.ts").DrawingEffect[];
-  readonly pattern?: import("./appearance.ts").DrawingPattern;
-  readonly pictureFill?: import("./appearance.ts").DrawingPictureFill;
+  readonly pattern?: import("./appearance.ts").DrawingPattern | undefined;
+  readonly pictureFill?: import("./appearance.ts").DrawingPictureFill | undefined;
   readonly image: import("./appearance.ts").DrawingPictureFill | undefined;
   readonly chart: ChartModel | undefined;
   readonly table: SlideTable | undefined;
@@ -139,8 +139,8 @@ export interface PresentationSlide {
   readonly hidden: boolean;
   readonly notes: string;
   readonly background: string;
-  readonly backgroundPattern?: import("./appearance.ts").DrawingPattern;
-  readonly backgroundPicture?: import("./appearance.ts").DrawingPictureFill;
+  readonly backgroundPattern?: import("./appearance.ts").DrawingPattern | undefined;
+  readonly backgroundPicture?: import("./appearance.ts").DrawingPictureFill | undefined;
   readonly backgroundGradient: DrawingGradient | undefined;
   readonly objects: readonly SlideObject[];
   readonly diagnostics: readonly PresentationDiagnostic[];
