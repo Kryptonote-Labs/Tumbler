@@ -53,6 +53,9 @@ export interface SlideParagraph {
   readonly bulletSize?: number;
 }
 export interface SlideText {
+  readonly autoFit?: "none" | "normal" | "shape";
+  readonly horizontalOverflow?: "overflow" | "clip";
+  readonly verticalOverflow?: "overflow" | "clip" | "ellipsis";
   readonly editable?: boolean;
   readonly paragraphs: readonly SlideParagraph[];
   readonly inset: readonly [number, number, number, number];

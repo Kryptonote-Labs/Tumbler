@@ -12,6 +12,7 @@
     type PresentationFormatChange,
     type PresentationShapeChange,
     type PresentationShapeStyle,
+    type SlideText,
   } from "@tumblerjs/slides";
   import type { FormattingPatch } from "@tumblerjs/core";
   import { onDestroy, onMount, tick } from "svelte";
@@ -247,6 +248,7 @@
   onMount(() => {
     mounted = true;
   });
+  let fittedHeights = $state<Record<string, {text: SlideText; height: number}>>({});
   const images = new Map<Uint8Array, string>();
   function imageUrl(object: SlideObject) {
     if (!mounted || !object.image) return "";
@@ -524,7 +526,8 @@
           {@const change =
             preview?.objectKey === object.key ? preview : undefined}
           {@const w = change?.width ?? object.transform.width}
-          {@const h = change?.height ?? object.transform.height}
+          {@const fitted = fittedHeights[object.key]}
+          {@const h = change?.height ?? (fitted && fitted.text === object.text ? Math.max(object.transform.height, fitted.height) : object.transform.height)}
           {@const matrix = change
             ? shapeMatrix({ ...object.transform, ...change })
             : object.matrix}
@@ -657,6 +660,7 @@
                 ? h / object.transform.height
                 : 1}
               <foreignObject
+                style:overflow="visible"
                 x={rect[0] * sx}
                 y={rect[1] * sy}
                 width={Math.max(0, (rect[2] - rect[0]) * sx)}
@@ -664,6 +668,7 @@
               >
                 <PresentationText
                   text={object.text}
+                  onheight={(height) => { if (object.text?.autoFit === "shape") fittedHeights[object.key] = {text: object.text, height}; }}
                   {onslide}
                   editor={{
                     active: editing === object.key,

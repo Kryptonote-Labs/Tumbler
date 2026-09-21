@@ -16,3 +16,10 @@ test('layout theme overrides replace supplied schemes while retaining other them
  expect(doc.slides[0]!.objects.flatMap(o => o.text?.paragraphs.flatMap(p=>p.runs) ?? []).some(r=>r.fontFamily==='Georgia')).toBe(true);
  expect(doc.slides[0]!.background).toBe(openPresentationDocument(await fixture()).slides[0]!.background);
 });
+test('normal autofit applies saved line spacing reduction and preserves overflow modes', async () => {
+ const pkg = openOpcPackage(await fixture()), tx = beginPackageTransaction(pkg);
+ tx.replacePart('/ppt/slides/slide1.xml', encoder.encode(contents(pkg,'/ppt/slides/slide1.xml').replace(/<a:bodyPr[^>]*(?:\/>|>[\s\S]*?<\/a:bodyPr>)/g, '<a:bodyPr horzOverflow="clip" vertOverflow="ellipsis"><a:normAutofit fontScale="80000" lnSpcReduction="20000"/></a:bodyPr>')));
+ const text = openPresentationDocument(tx.commit()).slides[0]!.objects.find(o=>o.layer==='slide' && o.text)!.text!;
+ expect(text.autoFit).toBe('normal'); expect(text.verticalOverflow).toBe('ellipsis'); expect(text.horizontalOverflow).toBe('clip');
+ expect(text.paragraphs[0]!.lineHeight).toBe(0.8);
+});

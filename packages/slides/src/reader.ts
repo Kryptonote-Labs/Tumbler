@@ -1329,11 +1329,13 @@ class Reader {
         .map((item) => attr(item, name))
         .find((value) => value !== undefined);
     const own = this.child(body, "bodyPr");
-    const auto = this.child(own, "normAutofit");
+    const fitting = bodyProperties.flatMap(properties => this.children(properties).filter(child => ["normAutofit", "spAutoFit", "noAutofit"].includes(child.localName)))[0];
+    const auto = fitting?.localName === "normAutofit" ? fitting : undefined;
+    const reduction = Math.max(0, Math.min(1, number(auto, "lnSpcReduction") / 100000));
     const fontScale = number(auto, "fontScale", 100000) / 100000;
-    if (this.child(own, "spAutoFit"))
+    if (fitting?.localName === "spAutoFit")
       diagnostics.push(
-        "Shape autofit is displayed at its saved size and is read-only.",
+        "Shape autofit is read-only.",
       );
     if (
       bodyAttr("vert") &&
@@ -1486,8 +1488,8 @@ class Reader {
         .find((value) => value !== undefined);
       const points = this.child(lineSpacing, "spcPts");
       const lineHeight = points
-        ? `${((number(points, "val") / 100) * 4) / 3}px`
-        : number(this.child(lineSpacing, "spcPct"), "val", 100000) / 100000;
+        ? `${((number(points, "val") / 100) * 4) / 3 * (1 - reduction)}px`
+        : number(this.child(lineSpacing, "spcPct"), "val", 100000) / 100000 * (1 - reduction);
       const autoNum = this.child(bulletOwner, "buAutoNum");
       let bullet = this.child(bulletOwner, "buNone")
         ? ""
@@ -1581,6 +1583,9 @@ class Reader {
       numeric(bodyAttr("rot"), 0) === 0;
     return {
       paragraphs,
+      autoFit: fitting?.localName === "normAutofit" ? "normal" : fitting?.localName === "spAutoFit" ? "shape" : "none",
+      horizontalOverflow: bodyAttr("horzOverflow") === "clip" ? "clip" : "overflow",
+      verticalOverflow: bodyAttr("vertOverflow") === "clip" ? "clip" : bodyAttr("vertOverflow") === "ellipsis" ? "ellipsis" : "overflow",
       editable: safe,
       inset: [
         numeric(bodyAttr("tIns"), 45720) / EMUS_PER_PIXEL,

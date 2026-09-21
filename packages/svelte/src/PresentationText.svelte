@@ -3,13 +3,16 @@
     presentationTextEdit,
     type SlideTextEditorOptions,
   } from "./presentation-text-edit.ts";
+  import { presentationTextLayout } from "./presentation-text-layout.ts";
   import type { SlideText } from "@tumblerjs/slides";
   let {
     text,
     onslide,
     editor,
+    onheight,
   }: {
     text: SlideText;
+    onheight?: (height: number) => void;
     onslide?: (part: string) => void;
     editor?: Omit<SlideTextEditorOptions, "paragraphs">;
   } = $props();
@@ -18,12 +21,15 @@
 
 <div
   class="slide-text"
+  use:presentationTextLayout={{text, onheight}}
   style:justify-content={text.anchor === "center"
     ? "center"
     : text.anchor === "bottom"
       ? "flex-end"
       : "flex-start"}
   style:padding={text.inset.map((value) => `${value}px`).join(" ")}
+  style:overflow-x={text.horizontalOverflow === "clip" ? "clip" : "visible"}
+  style:overflow-y={text.verticalOverflow === "clip" || text.verticalOverflow === "ellipsis" ? "clip" : "visible"}
   style:white-space={text.wrap ? "pre-wrap" : "pre"}
   style:transform={`rotate(${(text.rotation ?? 0) + (text.direction === "vert270" ? 180 : 0)}deg)`}
 >
@@ -107,7 +113,7 @@
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
-    overflow: hidden;
+    overflow: visible;
     color: #222;
     font:
       24px Arial,
