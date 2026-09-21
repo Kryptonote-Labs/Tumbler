@@ -139,3 +139,10 @@ function model(): SupportedChartModel {
     }],
   };
 }
+test('stacked domains include positive and negative totals and percent stacks normalize categories', async()=>{
+ const {cartesianStack}=await import('../src/layout.ts');
+ const base=model();const stack={...base,grouping:'stacked' as const,series:[base.series[0]!,{...base.series[0]!,index:1}]};
+ expect(layoutCartesianChart(stack,600,400)).toMatchObject({minimum:-10,maximum:40});
+ expect(cartesianStack(stack,1,2)).toEqual({start:20,end:40});
+ expect(cartesianStack({...stack,grouping:'percent-stacked'},1,2)).toEqual({start:0.5,end:1});
+});

@@ -101,7 +101,7 @@ describe("DrawingML chart parser", () => {
     const profile = profiles[1]!;
     const result = parseOoxmlChart(xml(profile, '<c:plotArea><c:lineChart/><c:barChart/></c:plotArea>'), "transitional");
     expect(result).toMatchObject({ status: "unsupported", reason: expect.stringContaining("Combination") });
-    expect(type("barChart", '<c:grouping val="stacked"/>')).toMatchObject({ status: "unsupported", reason: expect.stringContaining("stacked") });
+    expect(type("barChart", '<c:grouping val="stacked"/>')).toMatchObject({ status: "supported", grouping: "stacked" });
   });
 
   test("rejects hostile cache shapes", () => {

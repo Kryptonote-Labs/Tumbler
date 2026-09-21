@@ -76,9 +76,10 @@ export function layoutCartesianChart(model: SupportedChartModel, width: number, 
   });
   const categories = categoryLabels(model);
   const axis = model.axes.find((candidate) => candidate.kind === "value" && !candidate.deleted);
-  const values = model.series.flatMap((series) => series.values?.points.flatMap((point) =>
-    typeof point.value === "number" ? [point.value] : []
-  ) ?? []);
+  const values = model.series.flatMap((_, series) => categories.flatMap((_, index) => {
+    const point = cartesianStack(model,series,index);
+    return point ? [point.start,point.end] : [];
+  }));
   let minimum = axis?.minimum ?? Math.min(0, ...values);
   let maximum = axis?.maximum ?? Math.max(0, ...values);
   if (!Number.isFinite(minimum)) minimum = 0;
@@ -336,4 +337,16 @@ function numericSequence(
 
 function finiteSize(value: number, context: string): void {
   if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${context} must be a positive finite number.`);
+}
+
+/** Positive and negative values form separate stacks; percent stacks normalize each category. */
+export function cartesianStack(model: SupportedChartModel, seriesIndex: number, category: number) {
+ const series=model.series[seriesIndex]; if(!series)return;
+ const raw=chartSequenceValue(series.values,category); if(typeof raw!=="number")return;
+ if(model.grouping!=="stacked" && model.grouping!=="percent-stacked")return {start:0,end:raw};
+ const values=model.series.map(s=>chartSequenceValue(s.values,category)).map(v=>typeof v==="number"?v:0);
+ const total=values.reduce((n,v)=>n+Math.abs(v),0);
+ const scale=model.grouping==="percent-stacked" ? total ? 1/total : 0 : 1;
+ const start=values.slice(0,seriesIndex).filter(v=>(v>=0)===(raw>=0)).reduce((n,v)=>n+v,0)*scale;
+ return {start,end:start+raw*scale};
 }

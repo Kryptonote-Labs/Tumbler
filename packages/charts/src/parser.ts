@@ -69,9 +69,6 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
     : rawGrouping === "percentStacked" ? "percent-stacked" as const
     : rawGrouping === "clustered" ? "clustered" as const
     : "standard" as const;
-  if (grouping === "stacked" || grouping === "percent-stacked") {
-    return unsupported(chartType.localName, `${rawGrouping} charts are not supported in this milestone.`, title, titleFormula, legend);
-  }
   if ((kind === "pie" || kind === "doughnut") && series.length > 1) {
     return unsupported(chartType.localName, "Multiple-series pie-family charts are not supported in this milestone.", title, titleFormula, legend);
   }
