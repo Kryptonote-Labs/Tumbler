@@ -679,13 +679,12 @@
                     width={w}
                     height={h}
                   />
-                  <clipPath id={`${viewId}-clip-${object.elementId}`}
-                    ><g
-                      transform={`scale(${w / object.transform.width} ${h / object.transform.height})`}
-                      >{#each object.drawingGeometry?.paths ?? [] as path}<path
-                          d={path.d}
-                        />{/each}</g
-                    ></clipPath
+                  <clipPath
+                    id={`${viewId}-clip-${object.elementId}`}
+                    transform={`scale(${w / object.transform.width} ${h / object.transform.height})`}
+                    >{#each object.drawingGeometry?.paths ?? [] as path}<path
+                        d={path.d}
+                      />{/each}</clipPath
                   ></defs
                 >
                 <rect

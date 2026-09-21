@@ -404,3 +404,46 @@ test("example video contains visible motion and uses a matching poster", async (
   ).toBeGreaterThan(30);
   await page.screenshot({ path: "/tmp/tumbler-motion-video.png" });
 });
+
+test("picture clipping preserves visible image pixels", async ({ page }) => {
+  const pkg = openOpcPackage(new Uint8Array(await readFile(fixture))),
+    tx = beginPackageTransaction(pkg);
+  const part = pkg.getPart("/ppt/slides/slide1.xml")!;
+  tx.addPart(
+    "/ppt/media/pixel-test.svg",
+    "image/svg+xml",
+    new TextEncoder().encode(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="60"><rect width="100" height="60" fill="#355f46"/><circle cx="50" cy="30" r="20" fill="#f4c95d"/></svg>',
+    ),
+  );
+  tx.addRelationship(part.name, {
+    id: "pixeltest",
+    type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+    target: "/ppt/media/pixel-test.svg",
+  });
+  const picture =
+    '<p:pic><p:nvPicPr><p:cNvPr id="1000" name="Picture pixels"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="pixeltest"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="2743200" cy="1645920"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom></p:spPr></p:pic>';
+  tx.replacePart(
+    part.name,
+    new TextEncoder().encode(
+      new TextDecoder()
+        .decode(pkg.readPart(part))
+        .replace("</p:spTree>", picture + "</p:spTree>"),
+    ),
+  );
+  await page.goto("/playground/slides-brief");
+  await expect(page.locator(".slide-stage svg")).toBeVisible();
+  await page
+    .locator("input[type=file]")
+    .setInputFiles({
+      name: "picture-pixels.pptx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      buffer: Buffer.from(tx.commit()),
+    });
+  const object = page.locator(
+    '.slide-stage [data-slide-object][aria-label="Picture pixels"]',
+  );
+  await expect(object.locator("image")).toHaveAttribute("href", /^blob:/);
+  await expect(object).toHaveScreenshot("rounded-picture.png");
+});
