@@ -114,6 +114,7 @@ export function openPresentationDocument(
   return new Reader(openOpcPackage(bytes), options).open();
 }
 class Reader {
+  readonly imageBytes = new Map<string, Uint8Array>();
   readonly sources = new Map<string, LosslessXmlDocument>();
   readonly owners = new WeakMap<Element, PartSource>();
   readonly views = new WeakMap<Element, MarkupCompatibilityView>();
@@ -707,8 +708,13 @@ class Reader {
     const crop = rect(this.child(element, "srcRect"));
     if (crop[0] + crop[2] >= 1 || crop[1] + crop[3] >= 1) return;
     const tile = this.child(element, "tile");
+    let bytes = this.imageBytes.get(part.name.value);
+    if (!bytes) {
+      bytes = this.pkg.readPart(part);
+      this.imageBytes.set(part.name.value, bytes);
+    }
     return {
-      bytes: this.pkg.readPart(part),
+      bytes,
       contentType: part.contentType,
       crop,
       stretch: rect(this.child(this.child(element, "stretch"), "fillRect")),

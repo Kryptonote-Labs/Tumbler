@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { presentationImageUrl } from "./presentation-image-url.ts";
   import { metafileSvg } from "./presentation-metafiles.ts";
   import type { SlideObject } from "@tumblerjs/slides";
   let {
@@ -18,14 +19,20 @@
     const current = picture;
     let disposed = false,
       src = "";
-    const image = new Image();
+    const image = current.tile ? new Image() : undefined;
+    let release: (() => void) | undefined;
     const show = (blob: Blob) => {
       if (disposed) return;
       src = URL.createObjectURL(blob);
       url = src;
-      image.onload = () =>
-        (natural = { width: image.naturalWidth, height: image.naturalHeight });
-      image.src = src;
+      if (image) {
+        image.onload = () =>
+          (natural = {
+            width: image.naturalWidth,
+            height: image.naturalHeight,
+          });
+        image.src = src;
+      }
     };
     if (/(?:emf|wmf)$/.test(current.contentType))
       void metafileSvg(current.bytes, current.contentType)
@@ -33,15 +40,23 @@
         .catch(() => {
           if (!disposed) url = "";
         });
-    else
-      show(
-        new Blob([Uint8Array.from(current.bytes).buffer], {
-          type: current.contentType,
-        }),
-      );
+    else {
+      const resource = presentationImageUrl(current.bytes, current.contentType);
+      release = resource.release;
+      url = resource.url;
+      if (image) {
+        image.onload = () =>
+          (natural = {
+            width: image.naturalWidth,
+            height: image.naturalHeight,
+          });
+        image.src = url;
+      }
+    }
     return () => {
       disposed = true;
-      image.onload = null;
+      if (image) image.onload = null;
+      release?.();
       if (src) URL.revokeObjectURL(src);
     };
   });
