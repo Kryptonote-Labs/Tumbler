@@ -261,7 +261,7 @@ test("click and after-effect timing retains ordered delays and transition metada
     `<p:par><p:cTn id="${id}" nodeType="${type}"><p:childTnLst><p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="${id + 10}" dur="${duration}"/><p:tgtEl><p:spTgt spid="2"/></p:tgtEl></p:cBhvr></p:animEffect></p:childTnLst></p:cTn></p:par>`;
   const xml = parseLosslessXml(
     encoder.encode(
-      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:transition spd="fast" advTm="2000"><p:fade/></p:transition><p:timing><p:tnLst>${effect(1, "clickEffect", 300)}${effect(2, "afterEffect", 200)}${effect(3, "clickEffect", 500)}</p:tnLst></p:timing></p:sld>`,
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:transition spd="fast" advTm="2000"><p:fade/></p:transition><p:timing><p:tnLst><p:par><p:cTn id="100" nodeType="tmRoot"><p:childTnLst>${effect(1, "clickEffect", 300)}${effect(2, "afterEffect", 200)}${effect(3, "clickEffect", 500)}</p:childTnLst></p:cTn></p:par></p:tnLst></p:timing></p:sld>`,
     ),
   );
   const timing = readSlideTiming(xml.root);

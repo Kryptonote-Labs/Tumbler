@@ -285,7 +285,7 @@ for (const part of pkg.parts.filter((p) => p.name.value.endsWith(".xml"))) {
       `<p:par><p:cTn id="${index}" nodeType="clickEffect"><p:childTnLst><p:animEffect transition="in" filter="${filter}"><p:cBhvr><p:cTn id="${index + 10}" dur="500"/><p:tgtEl><p:spTgt spid="${target}"/></p:tgtEl></p:cBhvr></p:animEffect></p:childTnLst></p:cTn></p:par>`;
     xml = xml.replace(
       "</p:sld>",
-      `<p:transition spd="fast"><p:fade/></p:transition><p:timing><p:tnLst>${effect(id("Fade in"), 1, "fade")}${effect(id("Wipe in"), 2, "wipe(left)")}</p:tnLst></p:timing></p:sld>`,
+      `<p:transition spd="fast"><p:fade/></p:transition><p:timing><p:tnLst><p:par><p:cTn id="100" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" nextAc="seek"><p:cTn id="101" dur="indefinite" nodeType="mainSeq"><p:childTnLst>${effect(id("Fade in"), 1, "fade")}${effect(id("Wipe in"), 2, "wipe(left)")}</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing></p:sld>`,
     );
   }
   tx.replacePart(part.name, encoder.encode(xml));
