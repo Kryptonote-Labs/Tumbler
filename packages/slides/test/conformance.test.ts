@@ -69,3 +69,15 @@ test('drawing patterns and supported effects retain authored parameters',async()
  const shape=openPresentationDocument(tx.commit()).slides[0]!.objects.find(o=>o.pattern)!;
  expect(shape.pattern?.preset).toBe('diagCross');expect(shape.effects?.map(e=>[e.kind,e.radius])).toEqual([['glow',5],['softEdge',1]]);
 });
+test('SmartArt saved drawing parts render at the graphic frame scale and remain read-only',async()=>{
+ const pkg=openOpcPackage(await fixture()),tx=beginPackageTransaction(pkg);
+ const diagram='http://schemas.microsoft.com/office/drawing/2008/diagram',drawing='http://schemas.openxmlformats.org/drawingml/2006/main';
+ tx.addPart('/ppt/diagrams/data1.xml','application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml',encoder.encode(`<dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" xmlns:dsp="${diagram}"><dgm:extLst><a:ext xmlns:a="${drawing}" uri="${diagram}"><dsp:dataModelExt relId="cached"/></a:ext></dgm:extLst></dgm:dataModel>`));
+ tx.addPart('/ppt/diagrams/drawing1.xml','application/vnd.ms-office.drawingml.diagramDrawing+xml',encoder.encode(`<dsp:drawing xmlns:dsp="${diagram}" xmlns:a="${drawing}"><dsp:spTree><dsp:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="952500" cy="952500"/><a:chOff x="0" y="0"/><a:chExt cx="952500" cy="952500"/></a:xfrm></dsp:grpSpPr><dsp:sp><dsp:nvSpPr><dsp:cNvPr id="2" name="Cached node"/><dsp:cNvSpPr/><dsp:nvPr/></dsp:nvSpPr><dsp:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="952500" cy="952500"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="008800"/></a:solidFill></dsp:spPr></dsp:sp></dsp:spTree></dsp:drawing>`));
+ tx.addRelationship('/ppt/diagrams/data1.xml',{id:'cached',type:'http://schemas.microsoft.com/office/2007/relationships/diagramDrawing',target:'/ppt/diagrams/drawing1.xml'});
+ tx.addRelationship('/ppt/slides/slide1.xml',{id:'diagram',type:'http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData',target:'/ppt/diagrams/data1.xml'});
+ const frame='<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="90" name="Diagram"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="952500" y="952500"/><a:ext cx="1905000" cy="952500"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram"><dgm:relIds xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" r:dm="diagram"/></a:graphicData></a:graphic></p:graphicFrame>';
+ tx.replacePart('/ppt/slides/slide1.xml',encoder.encode(contents(pkg,'/ppt/slides/slide1.xml').replace('</p:spTree>',frame+'</p:spTree>')));
+ const node=openPresentationDocument(tx.commit()).slides[0]!.objects.find(o=>o.name==='Cached node')!;
+ expect(node).toBeDefined();expect(node.matrix).toEqual([2,0,0,1,100,100]);expect(node.movable).toBe(false);expect(node.drawingGeometry?.paths.length).toBeGreaterThan(0);
+});

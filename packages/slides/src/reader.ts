@@ -41,6 +41,7 @@ import {
   type SlideTransform,
 } from "./model.ts";
 
+const DIAGRAM_DRAWING="http://schemas.microsoft.com/office/drawing/2008/diagram";
 const TYPE =
   "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml";
 const attr = (element: Element | undefined, name: string) =>
@@ -172,6 +173,7 @@ class Reader {
     const view = createMarkupCompatibilityView(xml, {
       understoodNamespaces: new Set([
         this.ns.presentation,
+        DIAGRAM_DRAWING,
         this.ns.drawing,
         this.ns.chart,
         this.rel,
@@ -219,7 +221,7 @@ class Reader {
     );
   }
   p(element: Element | undefined, name: string) {
-    return this.child(element, name, this.ns.presentation);
+    return this.child(element, name, element?.namespaceUri === DIAGRAM_DRAWING ? DIAGRAM_DRAWING : this.ns.presentation);
   }
   descendants(element: Element | undefined): Element[] {
     return this.children(element).flatMap((child) => [
@@ -705,7 +707,7 @@ class Reader {
       if (layer !== "slide" && this.placeholder(element)) continue;
       const metadata = this.descendants(element).find(
         (item) =>
-          item.namespaceUri === this.ns.presentation &&
+          [this.ns.presentation,DIAGRAM_DRAWING].includes(item.namespaceUri) &&
           item.localName === "cNvPr",
       );
       const shapeId = attr(metadata, "id") ?? `unknown-${element.id}`;
@@ -780,6 +782,32 @@ class Reader {
         continue;
       }
       const transform = this.transform(xfrm);
+      if(element.localName === "graphicFrame") {
+        const rels=this.descendants(element).find(e=>e.localName==="relIds" && e.namespaceUri.endsWith("/diagram"));
+        const dataId=this.rid(rels,"dm");
+        const dataPart=dataId ? this.related(source,"diagramData",dataId) : undefined;
+        if(dataPart) {
+          const data=this.load(dataPart);
+          const extension=this.descendants(data.xml.root).find(e=>e.localName==="dataModelExt" && e.namespaceUri===DIAGRAM_DRAWING);
+          const id=attr(extension,"relId") ?? this.rid(extension,"relId");
+          const relation=id ? this.pkg.relationships(dataPart.name).get(id) : undefined;
+          const drawingPart=relation?.targetMode==="Internal" && relation.type.endsWith("/diagramDrawing") ? this.pkg.getPart(relation.targetPartName) : undefined;
+          if(drawingPart) {
+            const drawing=this.load(drawingPart),tree=this.child(drawing.xml.root,"spTree",DIAGRAM_DRAWING);
+            const group=this.child(this.p(tree,"grpSpPr"),"xfrm");
+            const extent=this.child(group,"chExt") ?? this.child(group,"ext"),offset=this.child(group,"chOff") ?? this.child(group,"off");
+            const cw=px(extent,"cx",transform.width),ch=px(extent,"cy",transform.height);
+            if(tree && cw>0 && ch>0) {
+              const sx=transform.width/cw,sy=transform.height/ch;
+              const matrix=multiply(multiply(parent,shapeMatrix(transform)),[sx,0,0,sy,-px(offset,"x")*sx,-px(offset,"y")*sy]);
+              const children=this.shapes(tree,drawing,layer,context,matrix,depth+1);
+              result.push(...children.map(object=>({...object,key:`${source.part.name.value}#${shapeId}/${object.key}`,restriction:"SmartArt cached layouts are read-only.",movable:false,textEditable:false})));
+              context.diagnostics.push({part:source.part.name.value,shapeId,message:"SmartArt uses its saved drawing; diagram relayout and semantic text-style resolution are not supported yet."});
+              continue;
+            }
+          }
+        }
+      }
       const localTransform =
         xfrm !== undefined &&
         source.xml.element(xfrm.id) === xfrm &&
