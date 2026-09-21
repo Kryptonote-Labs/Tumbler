@@ -72,6 +72,71 @@
       : 38 + index * 18;
   }
 
+  function pieLayout(model: SupportedChartModel, count: number) {
+    const padding = 16;
+    const titleHeight = model.title === undefined ? padding : 36;
+    const position = model.legend?.position;
+    const horizontal = position === "top" || position === "bottom";
+    const columns = Math.max(1, Math.min(count, Math.floor((width - padding * 2) / 110)));
+    const rows = Math.ceil(count / columns);
+    const legendHeight = horizontal ? rows * 20 + 8 : 0;
+    const sideWidth = Math.min(120, width * 0.25);
+    const reserve = model.legend !== undefined && !model.legend.overlay;
+    const left = padding + (reserve && position === "left" ? sideWidth : 0);
+    const right = width - padding - (reserve && (position === "right" || position === "top-right") ? sideWidth : 0);
+    const top = titleHeight + (reserve && position === "top" ? legendHeight : 0);
+    const bottom = height - padding - (reserve && position === "bottom" ? legendHeight : 0);
+    return {
+      centerX: (left + right) / 2,
+      centerY: (top + bottom) / 2,
+      radius: Math.max(1, Math.min(right - left, bottom - top) / 2),
+      legend: Array.from({ length: count }, (_, index) => {
+        if (horizontal) {
+          const row = Math.floor(index / columns);
+          const rowCount = Math.min(columns, count - row * columns);
+          return {
+            x: (width - rowCount * 110) / 2 + (index % columns) * 110,
+            y: (position === "bottom" ? height - padding - legendHeight : titleHeight) + 16 + row * 20,
+          };
+        }
+        return { x: position === "left" ? padding : width - sideWidth, y: titleHeight + 16 + index * 20 };
+      }),
+    };
+  }
+
+  /** Centre each legend row using its rendered swatches and labels, not its spacing slots. */
+  function centerPieLegend(node: SVGGElement, options: { width: number; layout: ReturnType<typeof pieLayout>; horizontal: boolean }) {
+    let frame = 0;
+    function measure() {
+      const items = [...node.children].filter((child): child is SVGGElement => child instanceof SVGGElement);
+      const rows = new Map<number, { left: number; right: number }>();
+      items.forEach((item, index) => {
+        const position = options.layout.legend[index];
+        if (position === undefined) return;
+        const bounds = item.getBBox();
+        const row = rows.get(position.y);
+        rows.set(position.y, {
+          left: Math.min(row?.left ?? Infinity, position.x + bounds.x),
+          right: Math.max(row?.right ?? -Infinity, position.x + bounds.x + bounds.width),
+        });
+      });
+      items.forEach((item, index) => {
+        const position = options.layout.legend[index];
+        if (position === undefined) return;
+        const row = rows.get(position.y)!;
+        const shift = options.horizontal ? options.width / 2 - (row.left + row.right) / 2 : 0;
+        item.setAttribute("transform", `translate(${position.x + shift} ${position.y})`);
+      });
+    }
+    function schedule() { cancelAnimationFrame(frame); frame = requestAnimationFrame(measure); }
+    schedule();
+    document.fonts.addEventListener("loadingdone", schedule);
+    return {
+      update(next: typeof options) { options = next; schedule(); },
+      destroy() { cancelAnimationFrame(frame); document.fonts.removeEventListener("loadingdone", schedule); },
+    };
+  }
+
   function scatterAxis(model: SupportedChartModel, index: number): ChartAxis | undefined {
     const id = model.axisIds?.[index];
     if (id !== undefined) return model.axes.find((axis) => axis.id === id && !axis.deleted);
@@ -101,9 +166,8 @@
   </div>
 {:else if model.kind === "pie" || model.kind === "doughnut"}
   {@const slices = layoutPieSlices(model)}
-  {@const centerX = width * 0.44}
-  {@const centerY = height * 0.53}
-  {@const radius = Math.max(1, Math.min(width * 0.3, height * 0.34))}
+  {@const layout = pieLayout(model, slices.length)}
+  {@const { centerX, centerY, radius } = layout}
   <svg class="chart" role="img" aria-label={accessibleName} viewBox={`0 0 ${width} ${height}`}>
     <title>{accessibleName}</title>
     <rect width={width} height={height} fill="#fff" />
@@ -117,12 +181,14 @@
       />
     {/each}
     {#if model.legend !== undefined}
+      <g class="pie-legend" use:centerPieLegend={{ width, layout, horizontal: model.legend.position === "top" || model.legend.position === "bottom" }}>
       {#each slices as slice, index (slice.index)}
-        <g transform={`translate(${width * 0.76} ${40 + index * 20})`}>
+        <g transform={`translate(${layout.legend[index]!.x} ${layout.legend[index]!.y})`}>
           <rect width="10" height="10" y="-8" fill={color(model.series[0]!, index)} />
           <text x="15">{chartSequenceValue(model.series[0]?.categories, slice.index) ?? slice.index + 1}</text>
         </g>
       {/each}
+      </g>
     {/if}
   </svg>
 {:else if model.kind === "scatter"}
