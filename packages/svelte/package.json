@@ -26,7 +26,8 @@
     "@tumblerjs/charts": "0.1.0-alpha.18",
     "@tumblerjs/core": "0.1.0-alpha.18",
     "@tumblerjs/sheets": "0.1.0-alpha.18",
-    "@tumblerjs/word": "0.1.0-alpha.18"
+    "@tumblerjs/word": "0.1.0-alpha.18",
+    "rtf.js": "3.0.9"
   },
   "peerDependencies": {
     "svelte": "^5.0.0",
