@@ -184,6 +184,21 @@ function parseBubbleSizeRepresentation(raw: string): ChartBubbleSizeRepresentati
 
 function parseData(container: LosslessXmlElement | undefined, namespace: string): ChartDataSequence | undefined {
   if (container === undefined) return undefined;
+  const multi = children(container, namespace, "multiLvlStrRef")[0];
+  if (multi !== undefined) {
+    const cache = children(multi, namespace, "multiLvlStrCache")[0];
+    const levelElements = cache === undefined ? [] : children(cache, namespace, "lvl");
+    if (levelElements.length > 32) throw new ChartParseError("Chart categories exceed 32 levels.");
+    const rawCount = cache === undefined ? undefined : val(children(cache, namespace, "ptCount")[0]);
+    const count = rawCount === undefined ? undefined : unsigned(rawCount, "category point count");
+    if (count !== undefined && count > MAX_CACHE_POINTS) throw new ChartParseError(`Chart cache exceeds ${MAX_CACHE_POINTS} points.`);
+    const levels = levelElements.map(level => parseSequenceContainer(level, namespace, "string").points);
+    if (levels.some(level => level.some(point => point.index >= (count ?? MAX_CACHE_POINTS)))) {
+      throw new ChartParseError("Category point is outside its declared cache.");
+    }
+    return Object.freeze({ kind: "string", formula: formula(multi, namespace), formatCode: undefined,
+      points: levels[0] ?? Object.freeze([]), levels: Object.freeze(levels) });
+  }
   const reference = children(container, namespace, "numRef")[0] ?? children(container, namespace, "strRef")[0];
   if (reference !== undefined) return parseSequenceContainer(reference, namespace, reference.localName === "strRef" ? "string" : "number");
   const literal = children(container, namespace, "numLit")[0] ?? children(container, namespace, "strLit")[0];
