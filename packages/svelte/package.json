@@ -3,7 +3,10 @@
   "version": "0.1.0-alpha.18",
   "description": "Replaceable Svelte components for Tumbler document models.",
   "type": "module",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./slides": "./src/slides.ts"
+  },
   "files": [
     "src",
     "README.md",
@@ -26,9 +29,16 @@
     "@tumblerjs/word": "0.1.0-alpha.18"
   },
   "peerDependencies": {
-    "svelte": "^5.0.0"
+    "svelte": "^5.0.0",
+    "@tumblerjs/slides": "*"
   },
   "devDependencies": {
-    "svelte": "^5.0.0"
+    "svelte": "^5.0.0",
+    "@tumblerjs/slides": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@tumblerjs/slides": {
+      "optional": true
+    }
   }
 }

@@ -6,6 +6,8 @@
   "exports": "./src/index.ts",
   "dependencies": {
     "@tumblerjs/core": "workspace:*",
-    "@tumblerjs/ooxml": "workspace:*"
+    "@tumblerjs/ooxml": "workspace:*",
+    "@tumblerjs/opc": "workspace:*",
+    "@tumblerjs/charts": "workspace:*"
   }
 }
