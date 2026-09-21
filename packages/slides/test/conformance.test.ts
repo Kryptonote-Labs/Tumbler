@@ -30,3 +30,9 @@ test('mixed-script runs use their authored Latin, East Asian and complex-script 
  expect(runs.map(r=>r.fontFamily)).toEqual(['Arial','Yu Gothic','Amiri']);
  expect(runs.map(r=>r.text).join('')).toBe('Hello 日本語 مرحبا');
 });
+test('paragraphs retain custom tabs and distributed alignment', async()=>{
+ const pkg=openOpcPackage(await fixture()),tx=beginPackageTransaction(pkg);
+ tx.replacePart('/ppt/slides/slide1.xml',encoder.encode(contents(pkg,'/ppt/slides/slide1.xml').replace(/<a:pPr[^>]*(?:\/>|>[\s\S]*?<\/a:pPr>)/g,'<a:pPr algn="dist" marR="95250"><a:tabLst><a:tab pos="1905000" algn="dec"/><a:tab pos="952500" algn="r"/></a:tabLst></a:pPr>')));
+ const p=openPresentationDocument(tx.commit()).slides[0]!.objects.find(o=>o.layer==='slide'&&o.text)!.text!.paragraphs[0]!;
+ expect(p.tabs).toEqual([{position:100,alignment:'r'},{position:200,alignment:'dec'}]); expect(p.distributed).toBe(true);expect(p.marginRight).toBe(10);
+});

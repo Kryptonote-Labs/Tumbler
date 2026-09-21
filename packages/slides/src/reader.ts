@@ -1527,7 +1527,12 @@ class Reader {
         cascade
           .map((item) => this.child(item, name))
           .find((item) => item !== undefined);
+      const tabs = cascade.map(entry => this.child(entry, "tabLst")).find(Boolean);
       paragraphs.push({
+        tabs: this.children(tabs).filter(tab => tab.localName === "tab").map(tab => ({position:px(tab,"pos"),alignment:attr(tab,"algn") ?? "l"})).sort((a,b)=>a.position-b.position),
+        defaultTabSize: Math.max(1,numeric(prop("defTabSz") ?? bodyAttr("defTabSz"),914400)/EMUS_PER_PIXEL),
+        distributed: ["dist", "thaiDist", "justLow"].includes(alignment ?? ""),
+        marginRight: numeric(prop("marR"),0)/EMUS_PER_PIXEL,
         runs,
         fontSize: largest,
         align:
@@ -1535,7 +1540,7 @@ class Reader {
             ? "center"
             : alignment === "r"
               ? "right"
-              : alignment === "just"
+              : ["just", "dist", "thaiDist", "justLow"].includes(alignment ?? "")
                 ? "justify"
                 : "left",
         bullet,

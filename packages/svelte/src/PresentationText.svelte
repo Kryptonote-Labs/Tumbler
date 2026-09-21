@@ -3,6 +3,7 @@
     presentationTextEdit,
     type SlideTextEditorOptions,
   } from "./presentation-text-edit.ts";
+  import { presentationTabs } from "./presentation-tabs.ts";
   import { presentationTextLayout } from "./presentation-text-layout.ts";
   import type { SlideText } from "@tumblerjs/slides";
   let {
@@ -56,10 +57,14 @@
   >
     {#each text.paragraphs as paragraph}
       <p
+        use:presentationTabs={paragraph}
         data-text-paragraph
         dir={paragraph.rtl ? "rtl" : "ltr"}
         style:font-size={`${paragraph.fontSize ?? Math.max(1, ...paragraph.runs.map((run) => run.fontSize))}px`}
         style:text-align={paragraph.align}
+        style:text-align-last={paragraph.distributed ? "justify" : undefined}
+        style:text-justify={paragraph.distributed ? "inter-character" : undefined}
+        style:margin-right={`${paragraph.marginRight ?? 0}px`}
         style:margin-left={`${paragraph.marginLeft}px`}
         style:text-indent={`${paragraph.indent}px`}
         style:margin-top={`${paragraph.before}px`}
@@ -99,7 +104,7 @@
                   }
                 }}
                 onkeydown={(event) => event.stopPropagation()}>{run.text}</a
-              >{:else}{run.text}{/if}</span
+              >{:else}{#each run.text.split(/(\t)/) as piece}{#if piece === "\t"}<span data-tab style="display:inline-block;white-space:pre">{piece}</span>{:else}{piece}{/if}{/each}{/if}</span
           >{/each}{#if paragraph.runs.length === 0}<br />{/if}
       </p>
     {/each}
