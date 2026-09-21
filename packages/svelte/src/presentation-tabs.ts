@@ -1,6 +1,25 @@
 import type { SlideParagraph } from "@tumblerjs/slides";
 /** Position tab runs against authored stops; keep the tab character in the DOM for caret offsets. */
 export function presentationTabs(node: HTMLElement, initial: SlideParagraph) {
+  let active: ReturnType<typeof attachTabs> | undefined;
+  function update(paragraph: SlideParagraph) {
+    if (paragraph.runs.some((run) => run.text.includes("\t"))) {
+      if (active) active.update(paragraph);
+      else active = attachTabs(node, paragraph);
+    } else {
+      active?.destroy();
+      active = undefined;
+    }
+  }
+  update(initial);
+  return {
+    update,
+    destroy() {
+      active?.destroy();
+    },
+  };
+}
+function attachTabs(node: HTMLElement, initial: SlideParagraph) {
   let paragraph = initial,
     frame = 0;
   const canvas = document.createElement("canvas"),
