@@ -13,7 +13,12 @@ foreach (var path in args)
 {
     try
     {
-        using var document = SpreadsheetDocument.Open(path, false);
+        using OpenXmlPackage document = Path.GetExtension(path).ToLowerInvariant() switch
+        {
+            ".pptx" => PresentationDocument.Open(path, false),
+            ".docx" => WordprocessingDocument.Open(path, false),
+            _ => SpreadsheetDocument.Open(path, false),
+        };
         var errors = validator.Validate(document).ToArray();
         if (errors.Length == 0)
         {
