@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { SlideObject } from "@tumblerjs/slides";
+  import PresentationEffects from "./PresentationEffects.svelte";
+  import PresentationPattern from "./PresentationPattern.svelte";
   import PresentationPictureFill from "./PresentationPictureFill.svelte";
   import PresentationGradient from "./PresentationGradient.svelte";
   let {
@@ -9,7 +11,7 @@
     id,
   }: { object: SlideObject; width: number; height: number; id: string } =
     $props();
-  let fill = $derived(object.pictureFill ? `url(#${id}-picture)` : object.gradient ? `url(#${id}-fill)` : object.fill);
+  let fill = $derived(object.pattern ? `url(#${id}-pattern)` : object.pictureFill ? `url(#${id}-picture)` : object.gradient ? `url(#${id}-fill)` : object.fill);
 </script>
 
 <defs>
@@ -20,20 +22,8 @@
       width={object.transform.width}
       height={object.transform.height}
     />{/if}
-  {#if object.shadow}<filter
-      id={`${id}-shadow`}
-      x="-100%"
-      y="-100%"
-      width="300%"
-      height="300%"
-      color-interpolation-filters="sRGB"
-      ><feDropShadow
-        dx={object.shadow.x}
-        dy={object.shadow.y}
-        stdDeviation={object.shadow.blur}
-        flood-color={object.shadow.color}
-      /></filter
-    >{/if}
+  {#if object.pattern}<PresentationPattern pattern={object.pattern} id={`${id}-pattern`}/>{/if}
+  {#if object.shadow || object.effects?.length}<PresentationEffects {object} id={`${id}-shadow`}/>{/if}
   {#each [{ end: object.head, suffix: "head" }, { end: object.tail, suffix: "tail" }] as { end, suffix }}
     {#if end}<marker
         id={`${id}-${suffix}`}
@@ -72,7 +62,7 @@
 </defs>
 <g
   transform={`scale(${object.transform.width === 0 ? 1 : width / object.transform.width} ${object.transform.height === 0 ? 1 : height / object.transform.height})`}
-  filter={object.shadow ? `url(#${id}-shadow)` : undefined}
+  filter={object.shadow || object.effects?.length ? `url(#${id}-shadow)` : undefined}
 >
   {#each object.drawingGeometry?.paths ?? [] as path}
     <path

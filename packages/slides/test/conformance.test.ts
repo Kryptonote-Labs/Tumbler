@@ -63,3 +63,9 @@ test('SVG picture fills retain crop and tile placement for shapes and background
  const slide=openPresentationDocument(tx.commit()).slides[0]!;const picture=slide.objects.find(o=>o.pictureFill)!.pictureFill!;
  expect(picture.contentType).toBe('image/svg+xml');expect(picture.crop[0]).toBe(0.1);expect(picture.tile).toMatchObject({x:10,scaleX:0.5,flip:'xy',align:'ctr'});
 });
+test('drawing patterns and supported effects retain authored parameters',async()=>{
+ const pkg=openOpcPackage(await fixture()),tx=beginPackageTransaction(pkg);
+ tx.replacePart('/ppt/slides/slide1.xml',encoder.encode(contents(pkg,'/ppt/slides/slide1.xml').replace('<p:spPr>','<p:spPr><a:pattFill prst="diagCross"><a:fgClr><a:srgbClr val="FF0000"/></a:fgClr><a:bgClr><a:srgbClr val="FFFFFF"/></a:bgClr></a:pattFill><a:effectLst><a:glow rad="95250"><a:srgbClr val="00FF00"/></a:glow><a:softEdge rad="19050"/></a:effectLst>')));
+ const shape=openPresentationDocument(tx.commit()).slides[0]!.objects.find(o=>o.pattern)!;
+ expect(shape.pattern?.preset).toBe('diagCross');expect(shape.effects?.map(e=>[e.kind,e.radius])).toEqual([['glow',5],['softEdge',1]]);
+});

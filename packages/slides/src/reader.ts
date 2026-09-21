@@ -427,7 +427,7 @@ class Reader {
     if (
       bgProperties &&
       this.children(bgProperties).some((item) =>
-        ["pattFill", "effectDag"].includes(item.localName),
+        ["effectDag"].includes(item.localName),
       )
     )
       context.diagnostics.push({
@@ -458,6 +458,7 @@ class Reader {
       hidden: ["0", "false"].includes(attr(slide.xml.root, "show") ?? ""),
       notes: this.slideNotes(slide),
       background: backgroundColor,
+      backgroundPattern: this.pattern(bgProperties ?? bgStyle,context),
       backgroundPicture: this.pictureFill(this.child(bgProperties ?? bgStyle,"blipFill")),
       backgroundGradient: this.gradient(
         bgProperties ?? bgStyle,
@@ -535,6 +536,22 @@ class Reader {
     }
   }
 
+  pattern(element:Element|undefined,context:Context): import("./appearance.ts").DrawingPattern | undefined {
+    const pattern=this.child(element,"pattFill"); if(!pattern)return;
+    const preset=attr(pattern,"prst")??"pct5";
+    if (!/^(pct(5|10|20|25|30|40|50|60|70|75|80|90)|horz|vert|cross|diagCross|(?:lt|dk|wd)(?:DnDiag|UpDiag)|(?:lt|nar|dk)(?:Horz|Vert)|(?:sm|lg)Check|dotGrid)$/.test(preset)) {
+      context.diagnostics.push({part:context.slide.part.name.value,message:`Pattern ${preset} is not rendered yet.`}); return;
+    }
+    return {preset,foreground:this.color(this.child(pattern,"fgClr"),context)??"#000",background:this.color(this.child(pattern,"bgClr"),context)??"#fff"};
+  }
+  effects(element:Element|undefined,context:Context): import("./appearance.ts").DrawingEffect[] {
+    return this.children(this.child(element,"effectLst")).flatMap(effect=>{
+      const kind=effect.localName==="glow"?"glow":effect.localName==="innerShdw"?"innerShadow":effect.localName==="softEdge"?"softEdge":effect.localName==="blur"?"blur":undefined;
+      if(!kind)return [];
+      const angle=number(effect,"dir")/60000*Math.PI/180,distance=px(effect,"dist");
+      return [{kind,radius:Math.max(0,px(effect,kind==="glow"||kind==="softEdge"?"rad":"blurRad")/2),color:this.color(effect,context)??"#000",x:Math.cos(angle)*distance,y:Math.sin(angle)*distance}];
+    });
+  }
   pictureFill(element: Element | undefined): import("./appearance.ts").DrawingPictureFill | undefined {
     if (!element) return;
     const owner=this.owners.get(element), blip=this.child(element,"blip"), id=this.rid(blip,"embed");
@@ -871,9 +888,8 @@ class Reader {
       if (
         properties.some(
           (item) =>
-            this.child(item, "pattFill") ||
             this.children(this.child(item, "effectLst")).some(
-              (effect) => effect.localName !== "outerShdw",
+              (effect) => !["outerShdw","glow","innerShdw","softEdge","blur"].includes(effect.localName),
             ),
         )
       )
@@ -983,6 +999,8 @@ class Reader {
         shadow,
         media,
         pictureFill,
+        pattern: this.pattern(fillSource,context),
+        effects: this.effects(effects,context),
         strokeDash,
         strokeCap:
           attr(line, "cap") === "rnd"

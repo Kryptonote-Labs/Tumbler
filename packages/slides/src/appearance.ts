@@ -26,3 +26,5 @@ export interface DrawingPictureFill {
  readonly stretch?: readonly [number,number,number,number];
  readonly tile?: {readonly x:number;readonly y:number;readonly scaleX:number;readonly scaleY:number;readonly align:string;readonly flip:string};
 }
+export interface DrawingEffect {readonly kind:'glow'|'innerShadow'|'softEdge'|'blur';readonly radius:number;readonly color:string;readonly x:number;readonly y:number;}
+export interface DrawingPattern {readonly preset:string;readonly foreground:string;readonly background:string;}

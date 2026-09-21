@@ -25,6 +25,7 @@
   import PresentationShape from "./PresentationShape.svelte";
   import PresentationGradient from "./PresentationGradient.svelte";
   import {loadPresentationFonts, presentationFontContext, type PresentationFontContext} from "./presentation-fonts.ts";
+  import PresentationPattern from "./PresentationPattern.svelte";
   import PresentationPictureFill from "./PresentationPictureFill.svelte";
   import PresentationMedia from "./PresentationMedia.svelte";
   import PresentationText from "./PresentationText.svelte";
@@ -511,6 +512,7 @@
         onkeydown={keydown}
       >
         <title>{slide.title}</title>
+        {#if slide.backgroundPattern}<defs><PresentationPattern pattern={slide.backgroundPattern} id={`${viewId}-background-pattern`}/></defs>{/if}
         {#if slide.backgroundPicture}<defs><PresentationPictureFill picture={slide.backgroundPicture} id={`${viewId}-background-picture`} width={presentation.width} height={presentation.height}/></defs>{/if}
         {#if slide.backgroundGradient}<defs
             ><PresentationGradient
@@ -523,7 +525,7 @@
         <rect
           width={presentation.width}
           height={presentation.height}
-          fill={slide.backgroundPicture ? `url(#${viewId}-background-picture)` : slide.backgroundGradient
+          fill={slide.backgroundPattern ? `url(#${viewId}-background-pattern)` : slide.backgroundPicture ? `url(#${viewId}-background-picture)` : slide.backgroundGradient
             ? `url(#${viewId}-background)`
             : slide.background}
           role="presentation"
