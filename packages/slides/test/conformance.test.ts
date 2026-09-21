@@ -81,3 +81,9 @@ test('SmartArt saved drawing parts render at the graphic frame scale and remain 
  const node=openPresentationDocument(tx.commit()).slides[0]!.objects.find(o=>o.name==='Cached node')!;
  expect(node).toBeDefined();expect(node.matrix).toEqual([2,0,0,1,100,100]);expect(node.movable).toBe(false);expect(node.drawingGeometry?.paths.length).toBeGreaterThan(0);
 });
+test('click and after-effect timing retains ordered delays and transition metadata',async()=>{
+ const {readSlideTiming}=await import('../src/timing.ts');const {parseLosslessXml}=await import('@tumblerjs/ooxml');
+ const effect=(id:number,type:string,duration:number)=>`<p:par><p:cTn id="${id}" nodeType="${type}"><p:childTnLst><p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="${id+10}" dur="${duration}"/><p:tgtEl><p:spTgt spid="2"/></p:tgtEl></p:cBhvr></p:animEffect></p:childTnLst></p:cTn></p:par>`;
+ const xml=parseLosslessXml(encoder.encode(`<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:transition spd="fast" advTm="2000"><p:fade/></p:transition><p:timing><p:tnLst>${effect(1,'clickEffect',300)}${effect(2,'afterEffect',200)}${effect(3,'clickEffect',500)}</p:tnLst></p:timing></p:sld>`));
+ const timing=readSlideTiming(xml.root);expect(timing.animations.map(e=>[e.step,e.delay,e.duration])).toEqual([[1,0,300],[1,300,200],[2,0,500]]);expect(timing.transition).toMatchObject({kind:'fade',duration:500,advanceAfter:2000});
+});

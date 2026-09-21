@@ -25,6 +25,7 @@
   import PresentationShape from "./PresentationShape.svelte";
   import PresentationGradient from "./PresentationGradient.svelte";
   import {loadPresentationFonts, presentationFontContext, type PresentationFontContext} from "./presentation-fonts.ts";
+  import {presentationPlayback} from "./presentation-playback.ts";
   import PresentationPattern from "./PresentationPattern.svelte";
   import PresentationPictureFill from "./PresentationPictureFill.svelte";
   import PresentationMedia from "./PresentationMedia.svelte";
@@ -255,6 +256,9 @@
     loadedFonts = loaded;
     return loaded.destroy;
   });
+  let playing=$state(false), playbackStep=$state(0);
+  let playbackSteps=$derived(Math.max(0,...(slide.animations??[]).map(effect=>effect.step)));
+  $effect(()=>{slide.part;playing=false;playbackStep=0;});
   let mounted = $state(false);
   onMount(() => {
     mounted = true;
@@ -482,6 +486,12 @@
       onformat={format}
       onshape={shapeStyle}
     />{/if}
+  {#if !thumbnail && !editable && slide.animations?.length}
+    <div class="playback-controls">
+      <button onclick={()=>{playing=!playing;playbackStep=0;}}>{playing ? "Stop playback" : "Play animations"}</button>
+      {#if playing}<button disabled={playbackStep>=playbackSteps} onclick={()=>playbackStep++}>Next animation</button>{/if}
+    </div>
+  {/if}
   <div
     class="presentation-view"
     bind:this={host}
@@ -497,6 +507,7 @@
       <!-- The slide surface handles keyboard manipulation only in Edit mode. -->
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <svg
+        use:presentationPlayback={{slide,playing:playing && !thumbnail,step:playbackStep,editable:editable || thumbnail}}
         bind:this={svg}
         class="slide"
         role="group"
@@ -552,6 +563,7 @@
             tabindex={editable ? 0 : undefined}
             aria-label={object.name}
             data-slide-object={object.key}
+            data-animation-target={object.layer === "slide" && object.sourcePart === slide.part ? object.shapeId : undefined}
             class:movable={editable && object.movable}
             onfocus={() => {
               if (editable) selectedKey = object.key;
@@ -798,6 +810,8 @@
 </div>
 
 <style>
+  .playback-controls {display:flex;gap:8px;padding:8px;border-bottom:1px solid #333;}
+  .playback-controls button {font:inherit;color:inherit;background:transparent;border:1px solid #555;border-radius:4px;padding:5px 10px;}
   .presentation-surface {
     height: 100%;
     width: 100%;

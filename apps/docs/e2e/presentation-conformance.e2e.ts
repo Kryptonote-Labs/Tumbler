@@ -29,3 +29,14 @@ test('embedded video exposes browser playback controls and loads its metadata', 
  await video.evaluate(v=>(v as HTMLVideoElement).play());
  await expect.poll(()=>video.evaluate(v=>(v as HTMLVideoElement).currentTime)).toBeGreaterThan(0);
 });
+test('animation playback hides entrance targets until their click step, then restores the editing view',async({page})=>{
+ const pkg=openOpcPackage(new Uint8Array(await readFile(fixture))),tx=beginPackageTransaction(pkg),part=pkg.getPart('/ppt/slides/slide1.xml')!;
+ const timing='<p:timing><p:tnLst><p:par><p:cTn id="1" nodeType="clickEffect"><p:childTnLst><p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="2" dur="80"/><p:tgtEl><p:spTgt spid="2"/></p:tgtEl></p:cBhvr></p:animEffect></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>';
+ tx.replacePart(part.name,new TextEncoder().encode(new TextDecoder().decode(pkg.readPart(part)).replace('</p:sld>',timing+'</p:sld>')));
+ await page.goto('/playground/slides-brief');await expect(page.locator('.slide-stage').getByText('A quieter workspace',{exact:true}).last()).toBeVisible();
+ await page.locator('input[type=file]').setInputFiles({name:'animated.pptx',mimeType:'application/vnd.openxmlformats-officedocument.presentationml.presentation',buffer:Buffer.from(tx.commit())});
+ await page.getByRole('button',{name:'Play animations',exact:true}).click();
+ const target=page.locator('.slide-stage [data-animation-target="2"]');await expect(target).toHaveCSS('opacity','0');
+ await page.getByRole('button',{name:'Next animation',exact:true}).click();await expect(target).toHaveCSS('opacity','1');
+ await page.getByRole('button',{name:'Stop playback',exact:true}).click();await expect(target).toHaveCSS('opacity','1');
+});

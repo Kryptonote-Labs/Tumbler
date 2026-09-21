@@ -133,6 +133,8 @@ export interface SlideObject {
   readonly transformElementId: number | undefined;
 }
 export interface PresentationSlide {
+  readonly animations?: readonly import("./timing.ts").SlideAnimation[];
+  readonly transition?: import("./timing.ts").SlideTransition | undefined;
   readonly id: string;
   readonly part: string;
   readonly title: string;

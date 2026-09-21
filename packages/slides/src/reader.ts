@@ -1,3 +1,4 @@
+import { readSlideTiming } from "./timing.ts";
 import { readPresentationMedia } from "./media.ts";
 import { embeddedFontBytes } from "./embedded-fonts.ts";
 import { scriptSegments } from "./text-fonts.ts";
@@ -402,8 +403,10 @@ class Reader {
       context.diagnostics.push({
         part: slide.part.name.value,
         message:
-          "Animations are preserved but not played. Objects on this slide are read-only.",
+          "Animated objects are read-only. Use playback controls to preview supported effects.",
       });
+    const playback=readSlideTiming(slide.xml.root);
+    for (const message of playback.warnings) context.diagnostics.push({part:slide.part.name.value,message});
     const layers: [PartSource | undefined, SlideObject["layer"]][] = [];
     if (
       attr(slide.xml.root, "showMasterSp") !== "0" &&
@@ -455,6 +458,8 @@ class Reader {
         .join(" ") || `Slide ${index + 1}`;
     return {
       id,
+      animations: playback.animations,
+      transition: playback.transition,
       part: slide.part.name.value,
       title,
       hidden: ["0", "false"].includes(attr(slide.xml.root, "show") ?? ""),
