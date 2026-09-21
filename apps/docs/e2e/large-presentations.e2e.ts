@@ -138,3 +138,91 @@ test("imported placeholders and Office pictures edit, move and survive export", 
   await expect(picture).toHaveAttribute("transform", imageTransform!);
   expect(errors).toEqual([]);
 });
+
+test("repeated moves keep embedded resources and do not block the next frame", async ({
+  page,
+}) => {
+  test.skip(
+    !file,
+    "Set TUMBLER_PRESENTATION_FILE to exercise a private large deck.",
+  );
+  await page.goto("/playground/slides-brief");
+  await expect(page.locator(".slide-stage svg")).toBeVisible();
+  await page.locator("input[type=file]").setInputFiles(file!);
+  const slides = page.getByLabel("Slide", { exact: true });
+  await expect.poll(() => slides.locator("option").count()).toBe(36);
+  await slides.selectOption("33");
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const title = page
+    .locator(".slide-stage")
+    .getByRole("button", { name: "Title 1", exact: true });
+  await title.click();
+  await page.evaluate(() => document.fonts.ready);
+  const faces = await page.evaluateHandle(() => Array.from(document.fonts));
+  const images = await page
+    .locator(".slide-stage pattern image")
+    .evaluateAll((nodes) => nodes.map((n) => n.getAttribute("href")));
+  const before = await title.evaluate(
+    (n) =>
+      (n as unknown as SVGGElement).transform.baseVal.consolidate()!.matrix.e,
+  );
+  const elapsed = await page
+    .locator(".slide-stage svg.slide")
+    .evaluate(async (node) => {
+      const times: number[] = [];
+      for (let i = 0; i < 8; i++) {
+        const start = performance.now();
+        node.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "ArrowRight",
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        await new Promise(requestAnimationFrame);
+        times.push(performance.now() - start);
+      }
+      return times;
+    });
+  expect(Math.max(...elapsed)).toBeLessThan(250);
+  await expect
+    .poll(() =>
+      title.evaluate(
+        (n) =>
+          (n as unknown as SVGGElement).transform.baseVal.consolidate()!.matrix
+            .e,
+      ),
+    )
+    .toBeCloseTo(before + 8, 3);
+  expect(
+    await page.evaluate(
+      (fonts) => fonts.every((font) => document.fonts.has(font)),
+      faces,
+    ),
+  ).toBe(true);
+  expect(
+    await page
+      .locator(".slide-stage pattern image")
+      .evaluateAll((nodes) => nodes.map((n) => n.getAttribute("href"))),
+  ).toEqual(images);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect
+    .poll(() =>
+      title.evaluate(
+        (n) =>
+          (n as unknown as SVGGElement).transform.baseVal.consolidate()!.matrix
+            .e,
+      ),
+    )
+    .toBeCloseTo(before + 7, 3);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect
+    .poll(() =>
+      title.evaluate(
+        (n) =>
+          (n as unknown as SVGGElement).transform.baseVal.consolidate()!.matrix
+            .e,
+      ),
+    )
+    .toBeCloseTo(before + 8, 3);
+});

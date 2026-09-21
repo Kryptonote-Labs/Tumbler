@@ -18,7 +18,7 @@
     session: PresentationEditingSession;
     editable: boolean;
     scale?: number;
-    onchange: (bytes: Uint8Array, dirty: boolean) => void;
+    onchange: (bytes: () => Uint8Array, dirty: boolean) => void;
     onerror: (message: string) => void;
   } = $props();
   let artifact = $state(untrack(() => session.artifact));
@@ -35,7 +35,8 @@
       artifact = operation();
       canUndo = session.canUndo;
       canRedo = session.canRedo;
-      onchange(artifact.bytes(), session.dirty);
+      const committed = artifact;
+      onchange(() => committed.bytes(), session.dirty);
       onerror("");
     } catch (cause) {
       onerror(

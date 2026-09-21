@@ -12,7 +12,7 @@
   type OpenDocument = { kind: 'slides'; session: PresentationEditingSession } | { kind: 'word'; session: WordEditingSession } | { kind: 'sheets'; artifact: SpreadsheetArtifact };
   let document = $state<OpenDocument>();
   let original = $state<Uint8Array>();
-  let output = $state<Uint8Array>();
+  let output = $state<Uint8Array | (() => Uint8Array)>();
   let filename = $state('');
   let dirty = $state(false);
   let revision = $state(0);
@@ -71,10 +71,10 @@
     try { const bytes = new Uint8Array(await file.arrayBuffer()); if (request === id) open(bytes, file.name); }
     catch { if (request === id) error = 'Could not read this file.'; }
   }
-  function changed(bytes: Uint8Array, modified: boolean) { output = bytes; dirty = modified; }
+  function changed(bytes: Uint8Array | (() => Uint8Array), modified: boolean) { output = bytes; dirty = modified; }
   function download() {
     if (!output) return;
-    const blob = new Blob([Uint8Array.from(output).buffer], { type: document?.kind === 'word' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : document?.kind === 'slides' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const blob = new Blob([Uint8Array.from(typeof output === 'function' ? output() : output).buffer], { type: document?.kind === 'word' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : document?.kind === 'slides' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const link = window.document.createElement('a');
     link.href = url; link.download = filename; link.click();
