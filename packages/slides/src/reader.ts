@@ -1,3 +1,4 @@
+import { scriptSegments } from "./text-fonts.ts";
 import { isModificationIdList } from "./modification-id.ts";
 import { formatAutoNumber } from "./text-numbering.ts";
 import { builtinTableStyles } from "./builtin-table-styles.ts";
@@ -1411,15 +1412,13 @@ class Reader {
           defaults
             .map((item) => attr(item, name))
             .find((value) => value !== undefined);
-        let family =
-          defaults
-            .map((item) => attr(this.child(item, "latin"), "typeface"))
-            .find((value) => value !== undefined) ??
-          (["title", "ctrTitle"].includes(role) ? "+mj-lt" : "+mn-lt");
-        if (family.startsWith("+mj"))
-          family = context.fonts?.typeface("major", "latin") ?? "Arial";
-        else if (family.startsWith("+mn"))
-          family = context.fonts?.typeface("minor", "latin") ?? "Arial";
+        const font = (kind: "latin" | "eastAsian" | "complexScript", script: string) => {
+          const tag = kind === "eastAsian" ? "ea" : kind === "complexScript" ? "cs" : "latin";
+          const authored = defaults.map(item => attr(this.child(item, tag), "typeface")).find(value => !!value);
+          const role = authored?.startsWith("+mj") || (!authored && ["title", "ctrTitle"].includes(roleName)) ? "major" : "minor";
+          return authored && !authored.startsWith("+") ? authored : context.fonts?.typeface(role, kind, script) ?? context.fonts?.typeface(role, "latin") ?? "Arial";
+        };
+        const roleName = role;
         const value =
           run.localName === "fld" && attr(run, "type") === "slidenum"
             ? String(context.slideNumber)
@@ -1430,9 +1429,9 @@ class Reader {
             "limit_exceeded",
             "Too much presentation text.",
           );
-        runs.push({
-          text: value,
-          fontFamily: family,
+        for (const segment of scriptSegments(value, runAttr("lang"))) runs.push({
+          text: segment.text,
+          fontFamily: font(segment.kind, segment.script),
           fontSize:
             (((numeric(runAttr("sz"), 1800) / 100) * 4) / 3) * fontScale,
           color:

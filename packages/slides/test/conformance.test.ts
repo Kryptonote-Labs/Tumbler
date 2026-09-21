@@ -23,3 +23,10 @@ test('normal autofit applies saved line spacing reduction and preserves overflow
  expect(text.autoFit).toBe('normal'); expect(text.verticalOverflow).toBe('ellipsis'); expect(text.horizontalOverflow).toBe('clip');
  expect(text.paragraphs[0]!.lineHeight).toBe(0.8);
 });
+test('mixed-script runs use their authored Latin, East Asian and complex-script fonts', async () => {
+ const pkg=openOpcPackage(await fixture()),tx=beginPackageTransaction(pkg);
+ tx.replacePart('/ppt/slides/slide1.xml',encoder.encode(contents(pkg,'/ppt/slides/slide1.xml').replace(/<a:r>[\s\S]*?<\/a:r>/, '<a:r><a:rPr lang="ja-JP"><a:latin typeface="Arial"/><a:ea typeface="Yu Gothic"/><a:cs typeface="Amiri"/></a:rPr><a:t>Hello 日本語 مرحبا</a:t></a:r>')));
+ const runs=openPresentationDocument(tx.commit()).slides[0]!.objects.find(o=>o.layer==='slide'&&o.text)!.text!.paragraphs[0]!.runs;
+ expect(runs.map(r=>r.fontFamily)).toEqual(['Arial','Yu Gothic','Amiri']);
+ expect(runs.map(r=>r.text).join('')).toBe('Hello 日本語 مرحبا');
+});

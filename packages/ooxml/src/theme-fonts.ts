@@ -6,6 +6,7 @@ export type ThemeFontRole = "major" | "minor";
 export type ThemeFontScript = "latin" | "eastAsian" | "complexScript";
 
 export interface ThemeTypefaceSet {
+  readonly supplemental?: Readonly<Record<string, string>>;
   readonly latin: string;
   readonly eastAsian: string;
   readonly complexScript: string;
@@ -23,9 +24,9 @@ export class ThemeFontScheme {
     this.minor = Object.freeze({ ...minor });
   }
 
-  typeface(role: ThemeFontRole, script: ThemeFontScript = "latin"): string | undefined {
-    const value = this[role][script];
-    return value === "" ? undefined : value;
+  typeface(role: ThemeFontRole, script: ThemeFontScript = "latin", languageScript?: string): string | undefined {
+    const value = this[role][script] || (languageScript ? this[role].supplemental?.[languageScript] : undefined);
+    return value || undefined;
   }
 }
 
@@ -54,7 +55,12 @@ export function parseThemeFontScheme(bytes: Uint8Array): ThemeFontScheme {
 }
 
 function parseTypefaceSet(parent: LosslessXmlElement, namespace: string): ThemeTypefaceSet {
+  const supplemental: Record<string, string> = {};
+  for (const child of parent.children) if (child.kind === "element" && child.namespaceUri === namespace && child.localName === "font") {
+    supplemental[requiredAttribute(child, "script")] = requiredAttribute(child, "typeface");
+  }
   return Object.freeze({
+    supplemental: Object.freeze(supplemental),
     latin: requiredAttribute(onlyChild(parent, namespace, "latin"), "typeface"),
     eastAsian: requiredAttribute(onlyChild(parent, namespace, "ea"), "typeface"),
     complexScript: requiredAttribute(onlyChild(parent, namespace, "cs"), "typeface"),
