@@ -13,7 +13,10 @@ import {
 } from "@tumblerjs/ooxml";
 import { beginPackageTransaction } from "@tumblerjs/opc";
 import { EMUS_PER_PIXEL, shapeMatrix, transformPoint } from "./geometry.ts";
-import { openPresentationDocument } from "./reader.ts";
+import {
+  openPresentationDocument,
+  reopenEditedPresentation,
+} from "./reader.ts";
 import {
   PresentationError,
   type OpenPresentationOptions,
@@ -94,7 +97,15 @@ export class PresentationArtifact {
       return this;
     const transaction = beginPackageTransaction(this.document.package);
     transaction.replacePart(part, refreshModificationId(bytes, shapeId));
-    return openPresentationArtifact(transaction.commit(), this.options);
+    return new PresentationArtifact(
+      reopenEditedPresentation(
+        transaction.commit(),
+        this.document,
+        part,
+        this.options,
+      ),
+      this.options,
+    );
   }
   updateObject(change: PresentationObjectChange): PresentationArtifact {
     const { object, source } = this.target(change.slideId, change.objectKey);

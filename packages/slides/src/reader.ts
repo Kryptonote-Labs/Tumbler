@@ -105,6 +105,37 @@ interface Context {
   timed: boolean;
 }
 
+interface ReadCache {
+  readonly images: Map<string, Uint8Array>;
+  readonly themes: Map<
+    string,
+    { colors: ThemeColorScheme; fonts: ThemeFontScheme }
+  >;
+}
+const readCaches = new WeakMap<PresentationDocument, ReadCache>();
+const slideCosts = new WeakMap<
+  PresentationSlide,
+  { objects: number; characters: number }
+>();
+
+/** Internal edit path: only slide XML changes; relationships and assets are unchanged. */
+export function reopenEditedPresentation(
+  bytes: Uint8Array,
+  previous: PresentationDocument,
+  part: string,
+  options: OpenPresentationOptions,
+): PresentationDocument {
+  const cache = readCaches.get(previous);
+  if (!cache || !previous.slides.some((slide) => slide.part === part))
+    return openPresentationDocument(bytes, options);
+  const reader = new Reader(openOpcPackage(bytes), options, {
+    previous,
+    part,
+    cache,
+  });
+  return reader.reopen(previous, part);
+}
+
 /** Read a bounded PresentationML view while retaining all source parts and unknown markup. */
 export function openPresentationDocument(
   bytes: Uint8Array,
@@ -113,8 +144,8 @@ export function openPresentationDocument(
   return new Reader(openOpcPackage(bytes), options).open();
 }
 class Reader {
-  readonly imageBytes = new Map<string, Uint8Array>();
-  readonly sources = new Map<string, LosslessXmlDocument>();
+  readonly imageBytes: Map<string, Uint8Array>;
+  readonly sources: Map<string, LosslessXmlDocument>;
   readonly owners = new WeakMap<Element, PartSource>();
   readonly views = new WeakMap<Element, MarkupCompatibilityView>();
   readonly parts = new Map<string, PartSource>();
@@ -136,7 +167,15 @@ class Reader {
   constructor(
     readonly pkg: OpcPackage,
     options: OpenPresentationOptions,
+    reuse?: { previous: PresentationDocument; part: string; cache: ReadCache },
   ) {
+    this.imageBytes = new Map(reuse?.cache.images);
+    this.sources = new Map(reuse?.previous.sources);
+    if (reuse) {
+      this.sources.delete(reuse.part);
+      for (const [key, value] of reuse.cache.themes)
+        this.themes.set(key, value);
+    }
     this.limits = {
       maxSlides: options.maxSlides ?? 2000,
       maxObjects: options.maxObjects ?? 50000,
@@ -152,7 +191,8 @@ class Reader {
         "unsupported_document",
         "Open an unencrypted PPTX presentation. Other presentation file types are not editable yet.",
       );
-    const xml = parseLosslessXml(pkg.readPart(part));
+    const xml =
+      this.sources.get(part.name.value) ?? parseLosslessXml(pkg.readPart(part));
     if (
       xml.root.localName !== "presentation" ||
       ![
@@ -212,7 +252,11 @@ class Reader {
   load(part: OpcPart): PartSource {
     return (
       this.parts.get(part.name.value) ??
-      this.register(part, parseLosslessXml(this.pkg.readPart(part)))
+      this.register(
+        part,
+        this.sources.get(part.name.value) ??
+          parseLosslessXml(this.pkg.readPart(part)),
+      )
     );
   }
   children(element: Element | undefined): readonly Element[] {
@@ -311,7 +355,7 @@ class Reader {
       seenParts.add(part.name.value);
       return this.slide(id, this.load(part), index);
     });
-    return {
+    const document: PresentationDocument = {
       embeddedFonts: this.children(
         this.p(this.main.xml.root, "embeddedFontLst"),
       ).flatMap((entry) => {
@@ -348,6 +392,55 @@ class Reader {
       sources: this.sources,
       signed: this.signed,
     };
+    this.remember(document);
+    return document;
+  }
+  remember(document: PresentationDocument) {
+    readCaches.set(document, { images: this.imageBytes, themes: this.themes });
+  }
+  reopen(previous: PresentationDocument, part: string): PresentationDocument {
+    for (const slide of previous.slides) {
+      if (slide.part === part) continue;
+      const cost = slideCosts.get(slide)!;
+      this.objects += cost.objects;
+      this.characters += cost.characters;
+    }
+    const slides = previous.slides.map((slide, index) => {
+      if (slide.part !== part) return slide;
+      const next = this.slide(
+        slide.id,
+        this.load(this.pkg.getPart(part)!),
+        index,
+      );
+      // Font diagnostics belong to the whole document and aren't reread on edits.
+      const fontDiagnostics = slide.diagnostics.filter((d) =>
+        d.message.startsWith("Embedded font "),
+      );
+      if (!fontDiagnostics.length) return next;
+      const result = {
+        ...next,
+        diagnostics: [...next.diagnostics, ...fontDiagnostics],
+      };
+      slideCosts.set(result, slideCosts.get(next)!);
+      return result;
+    });
+    if (
+      this.objects > this.limits.maxObjects ||
+      this.characters > this.limits.maxTextCharacters ||
+      slides.length > this.limits.maxSlides
+    )
+      throw new PresentationError(
+        "limit_exceeded",
+        "The edited presentation exceeds its configured limits.",
+      );
+    const document = {
+      ...previous,
+      package: this.pkg,
+      slides,
+      sources: this.sources,
+    };
+    this.remember(document);
+    return document;
   }
   tree(source: PartSource | undefined) {
     return this.p(this.p(source?.xml.root, "cSld"), "spTree");
@@ -361,6 +454,16 @@ class Reader {
     return this.p(this.p(nonVisual, "nvPr"), "ph");
   }
   slide(id: string, slide: PartSource, index: number): PresentationSlide {
+    const objects = this.objects,
+      characters = this.characters;
+    const result = this.readSlide(id, slide, index);
+    slideCosts.set(result, {
+      objects: this.objects - objects,
+      characters: this.characters - characters,
+    });
+    return result;
+  }
+  readSlide(id: string, slide: PartSource, index: number): PresentationSlide {
     if (
       slide.xml.root.namespaceUri !== this.ns.presentation ||
       slide.xml.root.localName !== "sld"
