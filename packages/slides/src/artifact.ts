@@ -11,11 +11,11 @@ import {
   beginLosslessXmlEdit,
   type LosslessXmlElement,
 } from "@tumblerjs/ooxml";
-import { beginPackageTransaction } from "@tumblerjs/opc";
 import { EMUS_PER_PIXEL, shapeMatrix, transformPoint } from "./geometry.ts";
 import {
   openPresentationDocument,
-  reopenEditedPresentation,
+  editPresentationPart,
+  readPresentationPart,
 } from "./reader.ts";
 import {
   PresentationError,
@@ -87,26 +87,23 @@ export class PresentationArtifact {
     bytes: Uint8Array,
     shapeId: string,
   ): PresentationArtifact {
-    const original = this.document.package.readPart(
-      this.document.package.getPart(part)!,
-    );
+    const original = readPresentationPart(this.document, part);
     if (
       original.length === bytes.length &&
       original.every((byte, index) => byte === bytes[index])
     )
       return this;
-    const transaction = beginPackageTransaction(this.document.package);
-    transaction.replacePart(part, refreshModificationId(bytes, shapeId));
     return new PresentationArtifact(
-      reopenEditedPresentation(
-        transaction.commit(),
+      editPresentationPart(
         this.document,
         part,
+        refreshModificationId(bytes, shapeId),
         this.options,
       ),
       this.options,
     );
   }
+
   updateObject(change: PresentationObjectChange): PresentationArtifact {
     const { object, source } = this.target(change.slideId, change.objectKey);
     if (!object.movable)

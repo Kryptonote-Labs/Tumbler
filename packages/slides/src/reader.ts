@@ -1,3 +1,4 @@
+import { PresentationPackageState } from "./package-state.ts";
 import { readSlideTiming } from "./timing.ts";
 import { readPresentationMedia } from "./media.ts";
 import { embeddedFontBytes } from "./embedded-fonts.ts";
@@ -25,7 +26,7 @@ import {
   type ThemeColorScheme,
   type ThemeFontScheme,
 } from "@tumblerjs/ooxml";
-import { openOpcPackage, type OpcPackage, type OpcPart } from "@tumblerjs/opc";
+import { openOpcPackage, type OpcPart } from "@tumblerjs/opc";
 import { EMUS_PER_PIXEL, IDENTITY, multiply, shapeMatrix } from "./geometry.ts";
 import {
   PresentationError,
@@ -106,6 +107,7 @@ interface Context {
 }
 
 interface ReadCache {
+  readonly package: PresentationPackageState;
   readonly images: Map<string, Uint8Array>;
   readonly themes: Map<
     string,
@@ -119,20 +121,26 @@ const slideCosts = new WeakMap<
 >();
 
 /** Internal edit path: only slide XML changes; relationships and assets are unchanged. */
-export function reopenEditedPresentation(
-  bytes: Uint8Array,
+export function readPresentationPart(
+  document: PresentationDocument,
+  part: string,
+): Uint8Array {
+  const pkg = readCaches.get(document)?.package ?? document.package;
+  return pkg.readPart(pkg.getPart(part)!);
+}
+export function editPresentationPart(
   previous: PresentationDocument,
   part: string,
+  bytes: Uint8Array,
   options: OpenPresentationOptions,
 ): PresentationDocument {
   const cache = readCaches.get(previous);
+  const state = (
+    cache?.package ?? new PresentationPackageState(previous.package)
+  ).replace(part, bytes);
   if (!cache || !previous.slides.some((slide) => slide.part === part))
-    return openPresentationDocument(bytes, options);
-  const reader = new Reader(openOpcPackage(bytes), options, {
-    previous,
-    part,
-    cache,
-  });
+    return new Reader(state, options).open();
+  const reader = new Reader(state, options, { previous, part, cache });
   return reader.reopen(previous, part);
 }
 
@@ -141,7 +149,10 @@ export function openPresentationDocument(
   bytes: Uint8Array,
   options: OpenPresentationOptions = {},
 ): PresentationDocument {
-  return new Reader(openOpcPackage(bytes), options).open();
+  return new Reader(
+    new PresentationPackageState(openOpcPackage(bytes)),
+    options,
+  ).open();
 }
 class Reader {
   readonly imageBytes: Map<string, Uint8Array>;
@@ -165,7 +176,7 @@ class Reader {
   objects = 0;
   characters = 0;
   constructor(
-    readonly pkg: OpcPackage,
+    readonly pkg: PresentationPackageState,
     options: OpenPresentationOptions,
     reuse?: { previous: PresentationDocument; part: string; cache: ReadCache },
   ) {
@@ -355,6 +366,7 @@ class Reader {
       seenParts.add(part.name.value);
       return this.slide(id, this.load(part), index);
     });
+    const packageState = this.pkg;
     const document: PresentationDocument = {
       embeddedFonts: this.children(
         this.p(this.main.xml.root, "embeddedFontLst"),
@@ -384,7 +396,9 @@ class Reader {
           ];
         });
       }),
-      package: this.pkg,
+      get package() {
+        return packageState.materialize();
+      },
       conformance: this.conformance,
       width,
       height,
@@ -396,7 +410,11 @@ class Reader {
     return document;
   }
   remember(document: PresentationDocument) {
-    readCaches.set(document, { images: this.imageBytes, themes: this.themes });
+    readCaches.set(document, {
+      package: this.pkg,
+      images: this.imageBytes,
+      themes: this.themes,
+    });
   }
   reopen(previous: PresentationDocument, part: string): PresentationDocument {
     for (const slide of previous.slides) {
@@ -433,9 +451,18 @@ class Reader {
         "limit_exceeded",
         "The edited presentation exceeds its configured limits.",
       );
-    const document = {
-      ...previous,
-      package: this.pkg,
+    const packageState = this.pkg;
+    const document: PresentationDocument = {
+      get package() {
+        return packageState.materialize();
+      },
+      ...(previous.embeddedFonts
+        ? { embeddedFonts: previous.embeddedFonts }
+        : {}),
+      conformance: previous.conformance,
+      width: previous.width,
+      height: previous.height,
+      signed: previous.signed,
       slides,
       sources: this.sources,
     };
