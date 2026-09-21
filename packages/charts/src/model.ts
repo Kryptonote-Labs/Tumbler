@@ -74,6 +74,7 @@ interface ChartModelBase {
 }
 
 export interface SupportedChartModel extends ChartModelBase {
+  readonly plots?: readonly SupportedChartModel[];
   readonly status: "supported";
   readonly kind: ChartKind;
   readonly grouping: "clustered" | "stacked" | "percent-stacked" | "standard";

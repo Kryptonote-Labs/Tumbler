@@ -100,7 +100,7 @@ describe("DrawingML chart parser", () => {
     expect(type("radarChart")).toMatchObject({ status: "unsupported", chartType: "radarChart" });
     const profile = profiles[1]!;
     const result = parseOoxmlChart(xml(profile, '<c:plotArea><c:lineChart/><c:barChart/></c:plotArea>'), "transitional");
-    expect(result).toMatchObject({ status: "unsupported", reason: expect.stringContaining("Combination") });
+    expect(result).toMatchObject({ status: "supported", plots: expect.any(Array) });
     expect(type("barChart", '<c:grouping val="stacked"/>')).toMatchObject({ status: "supported", grouping: "stacked" });
   });
 

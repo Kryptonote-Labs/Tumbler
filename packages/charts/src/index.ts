@@ -20,3 +20,5 @@ export type {
   SupportedChartModel,
   UnsupportedChartModel,
 } from "./model.ts";
+
+export {layoutCombinationChart} from "./combination.ts";

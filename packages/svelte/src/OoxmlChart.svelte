@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CombinationChart from "./CombinationChart.svelte";
   import {
     cartesianStack,
     chartSequenceValue,
@@ -165,6 +166,8 @@
   <div class="chart-fallback" role="img" aria-label={accessibleName} title={model.reason}>
     <span>Chart preview unavailable</span>
   </div>
+{:else if model.plots}
+  <CombinationChart {model} {width} {height} {color}/>
 {:else if model.kind === "pie" || model.kind === "doughnut"}
   {@const slices = layoutPieSlices(model)}
   {@const layout = pieLayout(model, slices.length)}
