@@ -162,3 +162,60 @@ test("ordinary typing preserves a single run and explicit formatting on inserted
     italic: true,
   });
 });
+
+test("hyperlinks, soft breaks, autofit and Office extensions survive text edits", async () => {
+  const { beginPackageTransaction } = await import("@tumblerjs/opc");
+  const base = openPresentationArtifact(await bytes());
+  const slide = base.document.slides[0]!;
+  const source = base.document.sources.get(slide.part)!;
+  const object = slide.objects.find((o) => o.textEditable)!;
+  const shape = source.element(object.elementId)!;
+  const markup = source.source
+    .slice(shape.span.start, shape.span.end)
+    .replace(/<a:noAutofit\s*\/>/, '<a:normAutofit fontScale="80000"/>')
+    .replace(
+      /<a:p>[\s\S]*?<\/a:p>/,
+      '<a:p><a:r><a:rPr><a:hlinkClick action="ppaction://hlinkshowjump?jump=nextslide"/></a:rPr><a:t>Before</a:t></a:r><a:br/><a:r><a:t>After</a:t></a:r></a:p>',
+    );
+  const tx = beginPackageTransaction(base.document.package);
+  tx.replacePart(
+    slide.part,
+    new TextEncoder().encode(
+      source.source.slice(0, shape.span.start) +
+        markup +
+        source.source.slice(shape.span.end),
+    ),
+  );
+  const artifact = openPresentationArtifact(tx.commit());
+  const target = { slideId: slide.id, objectKey: object.key };
+  expect(
+    artifact.document.slides[0]!.objects.find((o) => o.key === object.key)!
+      .textEditable,
+  ).toBe(true);
+  const formatted = artifact.formatText({
+    ...target,
+    start: 0,
+    end: 12,
+    patch: { text: { bold: { set: true } } },
+  });
+  expect(
+    slideTextValue(
+      formatted.document.slides[0]!.objects.find((o) => o.key === object.key)!,
+    ),
+  ).toBe("Before\nAfter");
+  const edited = formatted.editText({
+    ...target,
+    start: 7,
+    end: 12,
+    value: "Changed",
+  });
+  const result = openPresentationArtifact(edited.bytes());
+  expect(
+    slideTextValue(
+      result.document.slides[0]!.objects.find((o) => o.key === object.key)!,
+    ),
+  ).toBe("Before\nChanged");
+  const xml = result.document.sources.get(slide.part)!.source;
+  expect(xml).toContain("ppaction://hlinkshowjump?jump=nextslide");
+  expect(xml).toContain("<a:br");
+});

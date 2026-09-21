@@ -2,7 +2,6 @@ import { readSlideTiming } from "./timing.ts";
 import { readPresentationMedia } from "./media.ts";
 import { embeddedFontBytes } from "./embedded-fonts.ts";
 import { scriptSegments } from "./text-fonts.ts";
-import { isModificationIdList } from "./modification-id.ts";
 import { formatAutoNumber } from "./text-numbering.ts";
 import { builtinTableStyles } from "./builtin-table-styles.ts";
 import type {
@@ -438,12 +437,6 @@ class Reader {
         part: slide.part.name.value,
         message:
           "The slide is missing a layout, master, or theme; defaults are used.",
-      });
-    if (context.timed)
-      context.diagnostics.push({
-        part: slide.part.name.value,
-        message:
-          "Animated objects are read-only. Use playback controls to preview supported effects.",
       });
     const playback = readSlideTiming(slide.xml.root);
     for (const message of playback.warnings)
@@ -1214,35 +1207,48 @@ class Reader {
         body === undefined
           ? undefined
           : this.parseText(body, inherited, role, context, diagnostics);
-      const unsafe =
-        this.descendants(element).some(
+      // AlternateContent may have an equivalent fallback that also needs updating.
+      // Ordinary extension metadata is retained by our lossless edits.
+      const alternate = source.xml
+        .elements(OOXML_NAMESPACES.markupCompatibility, "AlternateContent")
+        .find(
           (item) =>
-            item.localName === "extLst" &&
-            this.children(item).length > 0 &&
-            !isModificationIdList(item),
-        ) ||
-        source.xml
-          .elements(OOXML_NAMESPACES.markupCompatibility, "AlternateContent")
-          .some(
-            (item) =>
-              item.span.start < element.span.start &&
-              item.span.end > element.span.end,
-          );
+            item.span.start < element.span.start &&
+            item.span.end > element.span.end,
+        );
+      const choices =
+        alternate?.children.filter(
+          (item) => item.kind === "element" && item.localName === "Choice",
+        ) ?? [];
+      const inkTransforms = choices.flatMap((choice) => {
+        if (choice.kind !== "element") return [];
+        const children = choice.children.filter(
+          (item) => item.kind === "element",
+        );
+        const content = children[0];
+        if (children.length !== 1 || content?.localName !== "contentPart")
+          return [];
+        return content.children.filter(
+          (item) =>
+            item.kind === "element" &&
+            item.localName === "xfrm" &&
+            item.namespaceUri ===
+              "http://schemas.microsoft.com/office/powerpoint/2010/main",
+        );
+      });
+      const editableInk =
+        element.localName === "pic" &&
+        choices.length > 0 &&
+        inkTransforms.length === choices.length;
       const restriction = this.signed
         ? "Signed presentations are read-only."
         : layer !== "slide"
-          ? "Inherited objects are read-only."
-          : depth > 0
-            ? "Grouped objects are read-only."
-            : !localTransform
-              ? "Inherited geometry is read-only."
-              : context.timed
-                ? "Animated slides are read-only."
-                : unsafe
-                  ? "Objects with extension data are read-only."
-                  : diagnostics.length
-                    ? diagnostics[0]
-                    : undefined;
+          ? "Master and layout objects must be edited in their source layout."
+          : alternate && !editableInk
+            ? "Objects with alternate representations are read-only."
+            : kind === "unsupported"
+              ? "This object type is not editable yet."
+              : undefined;
       for (const message of diagnostics)
         context.diagnostics.push({
           part: source.part.name.value,
@@ -1263,6 +1269,7 @@ class Reader {
         geometry,
         drawingGeometry,
         transform,
+        parentMatrix: parent,
         matrix: multiply(parent, shapeMatrix(transform)),
         fill,
         gradient,
@@ -1298,7 +1305,10 @@ class Reader {
         textEditable:
           restriction === undefined && parsedText?.editable === true,
         restriction,
-        transformElementId: xfrm?.id,
+        transformElementId: localTransform ? xfrm?.id : undefined,
+        alternateTransformIds: editableInk
+          ? inkTransforms.map((item) => item.id)
+          : [],
       });
     }
     return result;
@@ -1627,8 +1637,6 @@ class Reader {
       Math.min(1, percentage(attr(auto, "lnSpcReduction"))),
     );
     const fontScale = percentage(attr(auto, "fontScale"), 1);
-    if (fitting?.localName === "spAutoFit")
-      diagnostics.push("Shape autofit is read-only.");
     if (
       bodyAttr("vert") &&
       !["horz", "vert", "vert270", "eaVert"].includes(bodyAttr("vert")!)
@@ -1897,7 +1905,7 @@ class Reader {
         .every((paragraph) =>
           this.children(paragraph).every(
             (item) =>
-              ["pPr", "endParaRPr"].includes(item.localName) ||
+              ["pPr", "endParaRPr", "br"].includes(item.localName) ||
               (item.localName === "r" &&
                 this.children(item).every((runChild) =>
                   ["rPr", "t"].includes(runChild.localName),
@@ -1905,9 +1913,8 @@ class Reader {
           ),
         ) &&
       !this.descendants(body).some((item) =>
-        ["fld", "br", "hlinkClick", "hlinkMouseOver"].includes(item.localName),
+        ["fld"].includes(item.localName),
       ) &&
-      !auto &&
       numeric(bodyAttr("numCol"), 1) === 1 &&
       [undefined, "horz"].includes(bodyAttr("vert")) &&
       numeric(bodyAttr("rot"), 0) === 0;

@@ -106,8 +106,8 @@ describe("PresentationML opening and preservation", () => {
     const grouped = compatibility.slides[1]!.objects.find(
       (object) => object.name === "Grouped rectangle",
     )!;
-    expect(grouped.movable).toBe(false);
-    expect(grouped.restriction).toContain("Grouped");
+    expect(grouped.movable).toBe(true);
+    expect(grouped.restriction).toBeUndefined();
     expect(transformPoint(grouped.matrix, 0, 0)).toEqual({ x: 576, y: 403.2 });
     expect(grouped.matrix[3]).toBe(1.5);
   });
@@ -284,8 +284,22 @@ describe("PresentationML opening and preservation", () => {
     expect(title.transform.x).toBeCloseTo(57.6);
     expect(title.transform.width).toBeCloseTo(844.8);
     expect(title.text!.paragraphs[0]!.runs[0]!.fontSize).toBe(48);
-    expect(title.movable).toBe(false);
-    expect(title.restriction).toBe("Inherited geometry is read-only.");
+    expect(title.movable).toBe(true);
+    expect(title.textEditable).toBe(true);
+    const slide = artifact.document.slides[0]!;
+    const moved = artifact.updateObject({
+      slideId: slide.id,
+      objectKey: title.key,
+      ...title.transform,
+      x: title.transform.x + 25,
+    });
+    const reopened = openPresentationArtifact(
+      moved.bytes(),
+    ).document.slides[0]!.objects.find((o) => o.key === title.key)!;
+    expect(reopened.transform.x).toBeCloseTo(title.transform.x + 25);
+    expect(reopened.transform.width).toBe(title.transform.width);
+    expect(reopened.text!.paragraphs[0]!.runs[0]!.fontSize).toBe(48);
+    unchangedParts(bytes, moved.bytes(), slide.part);
   });
   test("MCE fallback selection preserves the unselected branch during another edit", async () => {
     const bytes = rewrite(await fixture(), "/ppt/slides/slide1.xml", (xml) =>

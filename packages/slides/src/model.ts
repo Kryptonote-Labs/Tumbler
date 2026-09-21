@@ -110,6 +110,8 @@ export interface SlideObject {
   readonly drawingGeometry: DrawingGeometry | undefined;
   readonly transform: SlideTransform;
   readonly matrix: Matrix;
+  /** Maps the containing group coordinate space into slide coordinates. */
+  readonly parentMatrix?: Matrix;
   readonly fill: string;
   readonly gradient: DrawingGradient | undefined;
   readonly shadow: DrawingShadow | undefined;
@@ -134,6 +136,8 @@ export interface SlideObject {
   readonly textEditable: boolean;
   readonly restriction: string | undefined;
   readonly transformElementId: number | undefined;
+  /** Native ink transforms paired with the rendered picture fallback. */
+  readonly alternateTransformIds?: readonly number[];
 }
 export interface PresentationSlide {
   readonly animations?: readonly import("./timing.ts").SlideAnimation[];

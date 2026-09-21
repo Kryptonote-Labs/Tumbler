@@ -177,9 +177,7 @@ function markup(
     .slice(e.startTagSpan.start, e.startTagSpan.end)
     .replace(/\s*\/?>$/, ">");
   for (const [name, value] of Object.entries(attributes)) {
-    const old = e.attributes.find(
-      (a) => a.namespaceUri === "" && a.localName === name,
-    );
+    const old = e.attributes.find((a) => a.qualified === name);
     if (old) {
       const original = source.source.slice(old.span.start, old.span.end);
       open = open.replace(
@@ -339,12 +337,17 @@ export function editPresentationText(
     const start = offset;
     let local = 0;
     const runs = elements(p)
-      .filter((e) => e.localName === "r")
+      .filter((e) => e.localName === "r" || e.localName === "br")
       .map((r) => {
         const t = child(r, "t")!;
-        const text = t.children
-          .map((n) => (n.kind === "text" || n.kind === "cdata" ? n.value : ""))
-          .join("");
+        const text =
+          r.localName === "br"
+            ? "\n"
+            : t.children
+                .map((n) =>
+                  n.kind === "text" || n.kind === "cdata" ? n.value : "",
+                )
+                .join("");
         const run = { element: r, text, start: local };
         local += text.length;
         return run;
@@ -363,8 +366,10 @@ export function editPresentationText(
     const props = format
       ? properties(source, p, pr, "rPr", format)
       : raw(source, pr);
+    if (r?.element.localName === "br" && text === "\n")
+      return markup(source, r.element, {}, props);
     const content = `${props}<${q("t")}>${escape(text)}</${q("t")}>`;
-    return r
+    return r && r.element.localName !== "br"
       ? markup(source, r.element, {}, content)
       : `<${q("r")}>${content}</${q("r")}>`;
   };
@@ -454,6 +459,7 @@ export function editPresentationText(
     if (
       first === last &&
       donor &&
+      donor.element.localName === "r" &&
       !normalized &&
       !value.includes("\n") &&
       range.start >= first.start + donor.start &&
@@ -514,7 +520,16 @@ export function editPresentationShape(
     throw new RangeError("Outline width must be between 0 and 100 points.");
   const shape = source.element(object.elementId)!;
   const props = elements(shape).find((e) => e.localName === "spPr")!;
-  const q = (n: string) => tag(elements(props)[0] ?? props, n);
+  const drawing =
+    source
+      .elements()
+      .find(
+        (element) =>
+          element.namespaceUri.endsWith("/drawingml/main") ||
+          element.namespaceUri.endsWith("/drawingml/2006/main"),
+      )?.namespaceUri ??
+    "http://schemas.openxmlformats.org/drawingml/2006/main";
+  const q = (n: string) => `a:${n}`;
   const fillNames = [
     "noFill",
     "solidFill",
@@ -579,7 +594,12 @@ export function editPresentationShape(
   const editor = beginLosslessXmlEdit(source);
   editor.replaceElementMarkup(
     props,
-    markup(source, props, {}, nodes.map((n) => n.xml).join("")),
+    markup(
+      source,
+      props,
+      { "xmlns:a": drawing },
+      nodes.map((n) => n.xml).join(""),
+    ),
   );
   return editor.commit().bytes;
 }

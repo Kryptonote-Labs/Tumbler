@@ -12,7 +12,7 @@ import {
   type LosslessXmlElement,
 } from "@tumblerjs/ooxml";
 import { beginPackageTransaction } from "@tumblerjs/opc";
-import { EMUS_PER_PIXEL } from "./geometry.ts";
+import { EMUS_PER_PIXEL, shapeMatrix, transformPoint } from "./geometry.ts";
 import { openPresentationDocument } from "./reader.ts";
 import {
   PresentationError,
@@ -98,7 +98,7 @@ export class PresentationArtifact {
   }
   updateObject(change: PresentationObjectChange): PresentationArtifact {
     const { object, source } = this.target(change.slideId, change.objectKey);
-    if (!object.movable || object.transformElementId === undefined)
+    if (!object.movable)
       throw new PresentationError(
         "unsupported_edit",
         object.restriction ?? "This object cannot be moved.",
@@ -145,17 +145,45 @@ export class PresentationArtifact {
       )
     )
       return this;
-    const transform = source.element(object.transformElementId)!;
-    // Inherited transforms need a local override; this first edit family requires a local transform.
-    if (
-      transform.span.start < source.element(object.elementId)!.span.start ||
-      transform.span.end > source.element(object.elementId)!.span.end
-    )
-      throw new PresentationError(
-        "unsupported_edit",
-        "Inherited geometry is read-only.",
-      );
     const editor = beginLosslessXmlEdit(source);
+    const transform =
+      object.transformElementId === undefined
+        ? undefined
+        : source.element(object.transformElementId);
+    if (!transform) {
+      const shape = source.element(object.elementId)!;
+      const props = shape.children.find(
+        (item) => item.kind === "element" && item.localName === "spPr",
+      );
+      if (!props || props.kind !== "element")
+        throw new PresentationError(
+          "unsupported_edit",
+          "Missing shape properties.",
+        );
+      const drawing =
+        this.document.conformance === "strict"
+          ? "http://purl.oclc.org/ooxml/drawingml/main"
+          : "http://schemas.openxmlformats.org/drawingml/2006/main";
+      const emu = (value: number) => Math.round(value * EMUS_PER_PIXEL);
+      const xml = `<a:xfrm xmlns:a="${drawing}" rot="${angle}" flipH="${object.transform.flipH ? 1 : 0}" flipV="${object.transform.flipV ? 1 : 0}"><a:off x="${emu(change.x)}" y="${emu(change.y)}"/><a:ext cx="${emu(change.width)}" cy="${emu(change.height)}"/></a:xfrm>`;
+      const first = props.children.find((item) => item.kind === "element");
+      if (props.selfClosing) {
+        const open = source.source
+          .slice(props.startTagSpan.start, props.startTagSpan.end)
+          .replace(/\/\s*>$/, ">");
+        editor.replaceElementMarkup(
+          props,
+          `${open}${xml}</${props.qualified}>`,
+        );
+      } else if (first?.kind === "element")
+        editor.insertMarkupBefore(first, xml);
+      else editor.appendMarkup(props, xml);
+      return this.commitPart(
+        object.sourcePart,
+        editor.commit().bytes,
+        object.shapeId,
+      );
+    }
     if (angle !== previousAngle) {
       const attribute = transform.attributes.find(
         (item) => item.namespaceUri === "" && item.localName === "rot",
@@ -189,6 +217,51 @@ export class PresentationArtifact {
           String(Math.round(value * EMUS_PER_PIXEL)),
         );
       }
+    }
+    // Ink pictures include padding absent from their native contentPart. Apply
+    // the same affine change to both bounds instead of copying the fallback box.
+    for (const id of object.alternateTransformIds ?? []) {
+      const ink = source.element(id)!;
+      const children = ink.children.filter((node) => node.kind === "element");
+      const off = children.find((node) => node.localName === "off")!;
+      const ext = children.find((node) => node.localName === "ext")!;
+      const read = (node: LosslessXmlElement, name: string) =>
+        Number(node.attributes.find((a) => a.localName === name)?.value ?? 0);
+      const old = object.transform;
+      const sx = change.width / old.width,
+        sy = change.height / old.height;
+      const cx = (read(off, "x") + read(ext, "cx") / 2) / EMUS_PER_PIXEL;
+      const cy = (read(off, "y") + read(ext, "cy") / 2) / EMUS_PER_PIXEL;
+      const matrix = shapeMatrix(old);
+      const dx = cx - matrix[4],
+        dy = cy - matrix[5];
+      const localX = matrix[0] * dx + matrix[1] * dy;
+      const localY = matrix[2] * dx + matrix[3] * dy;
+      const center = transformPoint(
+        shapeMatrix({ ...old, ...change, rotation }),
+        localX * sx,
+        localY * sy,
+      );
+      const width = read(ext, "cx") * sx,
+        height = read(ext, "cy") * sy;
+      for (const [node, name, value] of [
+        [off, "x", center.x * EMUS_PER_PIXEL - width / 2],
+        [off, "y", center.y * EMUS_PER_PIXEL - height / 2],
+        [ext, "cx", width],
+        [ext, "cy", height],
+      ] as const)
+        editor.setAttribute(
+          node.attributes.find((a) => a.localName === name)!,
+          String(Math.round(value)),
+        );
+      const rot = ink.attributes.find((a) => a.localName === "rot");
+      const value = String(
+        (((read(ink, "rot") + angle - previousAngle) % 21600000) + 21600000) %
+          21600000,
+      );
+      if (rot) editor.setAttribute(rot, value);
+      else if (angle !== previousAngle)
+        editor.insertAttribute(ink, "rot", value);
     }
     if (
       object.table &&

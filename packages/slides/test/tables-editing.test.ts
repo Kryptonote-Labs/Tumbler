@@ -159,7 +159,7 @@ test("merged cell anchors edit without changing merge flags; covered cells rejec
     updated.document.slides[0]!.objects.find((o) => o.key === table.key)!.table,
   );
 });
-test("table edits refresh Office modification IDs and unknown extensions stay read-only", async () => {
+test("table edits refresh Office modification IDs and unknown extensions are preserved", async () => {
   const bytes = await fixture();
   const artifact = openPresentationArtifact(bytes);
   const slide = artifact.document.slides[2]!;
@@ -195,8 +195,8 @@ test("table edits refresh Office modification IDs and unknown extensions stay re
   const restricted = openPresentationArtifact(
     tx.commit(),
   ).document.slides[2]!.objects.find((o) => o.table)!;
-  expect(restricted.movable).toBe(false);
+  expect(restricted.movable).toBe(true);
   expect(
     presentationTextTarget(restricted, { row: 1, column: 1 }).textEditable,
-  ).toBe(false);
+  ).toBe(true);
 });
