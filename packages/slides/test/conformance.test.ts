@@ -307,3 +307,26 @@ test("reflection preserves authored transforms, fading and percentage syntax", a
   });
   expect(object.reflection!.x).toBeCloseTo(0);
 });
+
+test("DrawingML text percentage spellings produce the same scene", async () => {
+  const pkg = openOpcPackage(await fixture());
+  const part = "/ppt/slides/slide1.xml";
+  function scene(suffix: boolean) {
+    const tx = beginPackageTransaction(pkg);
+    const percent = (n: number) => (suffix ? `${n}%` : `${n * 1000}`);
+    let xml = contents(pkg, part).replace(
+      /<a:bodyPr[^>]*(?:\/>|>[\s\S]*?<\/a:bodyPr>)/g,
+      `<a:bodyPr><a:normAutofit fontScale="${percent(80)}" lnSpcReduction="${percent(10)}"/></a:bodyPr>`,
+    );
+    xml = xml.replace(
+      /<a:pPr[^>]*(?:\/>|>[\s\S]*?<\/a:pPr>)/g,
+      `<a:pPr><a:lnSpc><a:spcPct val="${percent(120)}"/></a:lnSpc><a:buSzPct val="${percent(75)}"/><a:buChar char="•"/></a:pPr>`,
+    );
+    xml = xml.replace(/<a:rPr /g, `<a:rPr baseline="${percent(20)}" `);
+    tx.replacePart(part, encoder.encode(xml));
+    return openPresentationDocument(tx.commit())
+      .slides[0]!.objects.filter((o) => o.layer === "slide")
+      .map((o) => o.text);
+  }
+  expect(scene(true)).toEqual(scene(false));
+});

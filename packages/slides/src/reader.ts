@@ -73,6 +73,13 @@ function numeric(value: string | undefined, fallback: number): number {
     );
   return parsed;
 }
+/** DrawingML percentages permit both thousandths-of-a-percent and a % suffix. */
+function percentage(value: string | undefined, fallback = 0): number {
+  if (value === undefined) return fallback;
+  return value.endsWith("%")
+    ? numeric(value.slice(0, -1), 0) / 100
+    : numeric(value, 0) / 100000;
+}
 const truth = (element: Element | undefined, name: string) =>
   ["1", "true"].includes(attr(element, name) ?? "");
 const text = (element: Element | undefined): string =>
@@ -608,10 +615,7 @@ class Reader {
     const effect = this.child(this.child(element, "effectLst"), "reflection");
     if (!effect) return;
     const ratio = (name: string, fallback: number) => {
-      const value = attr(effect, name);
-      return value?.endsWith("%")
-        ? numeric(value.slice(0, -1), fallback * 100) / 100
-        : number(effect, name, fallback * 100000) / 100000;
+      return percentage(attr(effect, name), fallback);
     };
     const angle = ((number(effect, "dir") / 60000) * Math.PI) / 180;
     const distance = px(effect, "dist");
@@ -694,7 +698,7 @@ class Reader {
     const rect = (
       element: Element | undefined,
     ): [number, number, number, number] =>
-      ["l", "t", "r", "b"].map((key) => number(element, key) / 100000) as [
+      ["l", "t", "r", "b"].map((key) => percentage(attr(element, key))) as [
         number,
         number,
         number,
@@ -713,8 +717,8 @@ class Reader {
             tile: {
               x: px(tile, "tx"),
               y: px(tile, "ty"),
-              scaleX: number(tile, "sx", 100000) / 100000,
-              scaleY: number(tile, "sy", 100000) / 100000,
+              scaleX: percentage(attr(tile, "sx"), 1),
+              scaleY: percentage(attr(tile, "sy"), 1),
               align: attr(tile, "algn") ?? "tl",
               flip: attr(tile, "flip") ?? "none",
             },
@@ -748,7 +752,7 @@ class Reader {
     if (!gradient) return;
     const stops = this.children(this.child(gradient, "gsLst"))
       .map((stop) => ({
-        offset: Math.max(0, Math.min(1, number(stop, "pos") / 100000)),
+        offset: Math.max(0, Math.min(1, percentage(attr(stop, "pos")))),
         color: this.color(stop, context, placeholder) ?? "transparent",
       }))
       .sort((a, b) => a.offset - b.offset);
@@ -774,8 +778,8 @@ class Reader {
       angle: number(linear, "ang") / 60000,
       scaled: !["0", "false"].includes(attr(linear, "scaled") ?? "1"),
       center: [
-        (number(rect, "l") + 100000 - number(rect, "r")) / 200000,
-        (number(rect, "t") + 100000 - number(rect, "b")) / 200000,
+        (percentage(attr(rect, "l")) + 1 - percentage(attr(rect, "r"))) / 2,
+        (percentage(attr(rect, "t")) + 1 - percentage(attr(rect, "b"))) / 2,
       ],
       stops,
     };
@@ -1614,9 +1618,9 @@ class Reader {
     const auto = fitting?.localName === "normAutofit" ? fitting : undefined;
     const reduction = Math.max(
       0,
-      Math.min(1, number(auto, "lnSpcReduction") / 100000),
+      Math.min(1, percentage(attr(auto, "lnSpcReduction"))),
     );
-    const fontScale = number(auto, "fontScale", 100000) / 100000;
+    const fontScale = percentage(attr(auto, "fontScale"), 1);
     if (fitting?.localName === "spAutoFit")
       diagnostics.push("Shape autofit is read-only.");
     if (
@@ -1745,7 +1749,7 @@ class Reader {
             italic: ["1", "true", "on"].includes(runAttr("i") ?? ""),
             underline: !!runAttr("u") && runAttr("u") !== "none",
             strike: !!runAttr("strike") && runAttr("strike") !== "noStrike",
-            baseline: numeric(runAttr("baseline"), 0) / 100000,
+            baseline: percentage(runAttr("baseline")),
             spacing: ((numeric(runAttr("spc"), 0) / 100) * 4) / 3,
             capitals: runAttr("cap") ?? "none",
             ...(this.hyperlink(this.child(rpr, "hlinkClick"))
@@ -1781,7 +1785,7 @@ class Reader {
         const points = this.child(item, "spcPts");
         return points
           ? ((number(points, "val") / 100) * 4) / 3
-          : (number(this.child(item, "spcPct"), "val") / 100000) * largest;
+          : percentage(attr(this.child(item, "spcPct"), "val")) * largest;
       };
       const lineSpacing = cascade
         .map((entry) => this.child(entry, "lnSpc"))
@@ -1789,7 +1793,7 @@ class Reader {
       const points = this.child(lineSpacing, "spcPts");
       const lineHeight = points
         ? `${(((number(points, "val") / 100) * 4) / 3) * (1 - reduction)}px`
-        : (number(this.child(lineSpacing, "spcPct"), "val", 100000) / 100000) *
+        : percentage(attr(this.child(lineSpacing, "spcPct"), "val"), 1) *
           (1 - reduction);
       const autoNum = this.child(bulletOwner, "buAutoNum");
       let bullet = this.child(bulletOwner, "buNone")
@@ -1869,7 +1873,7 @@ class Reader {
           this.color(bulletProp("buClr"), context) ?? runs[0]?.color ?? "#222",
         bulletSize: bulletProp("buSzPts")
           ? ((number(bulletProp("buSzPts"), "val") / 100) * 4) / 3
-          : (largest * number(bulletProp("buSzPct"), "val", 100000)) / 100000,
+          : largest * percentage(attr(bulletProp("buSzPct"), "val"), 1),
         marginLeft: numeric(prop("marL"), 0) / EMUS_PER_PIXEL,
         indent: numeric(prop("indent"), 0) / EMUS_PER_PIXEL,
         before: spacing("spcBef"),
