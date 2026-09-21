@@ -1,8 +1,16 @@
 <script lang="ts">
+ import {metafileSvg} from "./presentation-metafiles.ts";
  import type {SlideObject} from '@tumblerjs/slides';
  let {picture,id,width,height}:{picture:NonNullable<SlideObject['pictureFill']>;id:string;width:number;height:number}=$props();
  let url=$state(''),natural=$state({width:1,height:1});
- $effect(()=>{const src=URL.createObjectURL(new Blob([Uint8Array.from(picture.bytes).buffer],{type:picture.contentType}));url=src;const image=new Image();image.onload=()=>natural={width:image.naturalWidth,height:image.naturalHeight};image.src=src;return()=>{image.onload=null;URL.revokeObjectURL(src);};});
+ $effect(()=>{
+   const current=picture;let disposed=false,src="";const image=new Image();
+   const show=(blob:Blob)=>{if(disposed)return;src=URL.createObjectURL(blob);url=src;image.onload=()=>natural={width:image.naturalWidth,height:image.naturalHeight};image.src=src;};
+   if(/(?:emf|wmf)$/.test(current.contentType))void metafileSvg(current.bytes,current.contentType).then(svg=>show(new Blob([svg],{type:"image/svg+xml"}))).catch(()=>{if(!disposed)url="";});
+   else show(new Blob([Uint8Array.from(current.bytes).buffer],{type:current.contentType}));
+   return()=>{disposed=true;image.onload=null;if(src)URL.revokeObjectURL(src);};
+ });
+
  let tile=$derived(picture.tile);
  let w=$derived(tile?Math.max(1,natural.width*tile.scaleX):Math.max(1,width));
  let h=$derived(tile?Math.max(1,natural.height*tile.scaleY):Math.max(1,height));

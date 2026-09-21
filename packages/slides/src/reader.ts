@@ -563,7 +563,7 @@ class Reader {
     if (!element) return;
     const owner=this.owners.get(element), blip=this.child(element,"blip"), id=this.rid(blip,"embed");
     const part=owner && id ? this.related(owner,"image",id) : undefined;
-    if(!part || !["image/png","image/jpeg","image/gif","image/webp","image/bmp","image/x-ms-bmp","image/svg+xml"].includes(part.contentType))return;
+    if(!part || !["image/png","image/jpeg","image/gif","image/webp","image/bmp","image/x-ms-bmp","image/svg+xml","image/x-emf","image/emf","image/x-wmf","image/wmf"].includes(part.contentType))return;
     const rect=(element:Element|undefined): [number,number,number,number] => ["l","t","r","b"].map(key=>number(element,key)/100000) as [number,number,number,number];
     const crop=rect(this.child(element,"srcRect"));
     if(crop[0]+crop[2]>=1 || crop[1]+crop[3]>=1)return;
