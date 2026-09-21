@@ -37,14 +37,14 @@ export function parseThemeFontScheme(bytes: Uint8Array): ThemeFontScheme {
     throw new OoxmlThemeError("The Theme part is not valid XML.", { cause });
   }
   if (
-    root.localName !== "theme" ||
+    !["theme", "themeOverride"].includes(root.localName) ||
     (root.namespaceUri !== OOXML_NAMESPACES.strict.drawing &&
       root.namespaceUri !== OOXML_NAMESPACES.transitional.drawing)
   ) {
     throw new OoxmlThemeError("The Theme part must have a DrawingML theme root.");
   }
   const namespace = root.namespaceUri;
-  const elements = onlyChild(root, namespace, "themeElements");
+  const elements = root.localName === "themeOverride" ? root : onlyChild(root, namespace, "themeElements");
   const scheme = onlyChild(elements, namespace, "fontScheme");
   return new ThemeFontScheme(
     attribute(scheme, "name"),

@@ -85,6 +85,7 @@ interface Context {
   layout: PartSource | undefined;
   master: PartSource | undefined;
   theme: PartSource | undefined;
+  themeOverrides: readonly PartSource[];
   colors: ThemeColorScheme | undefined;
   fonts: ThemeFontScheme | undefined;
   colorMap: Map<string, string>;
@@ -331,6 +332,18 @@ class Reader {
       };
       this.themes.set(theme.part.name.value, themeValue);
     }
+    const themeOverrides = [layout, slide].flatMap(owner => {
+      const override = owner && this.relatedXml(owner, "themeOverride");
+      if (!override) return [];
+      if (override.xml.root.localName !== "themeOverride" || override.xml.root.namespaceUri !== this.ns.drawing)
+        throw new PresentationError("invalid_document", "Invalid theme override root.");
+      return [override];
+    });
+    let colors = themeValue?.colors, fonts = themeValue?.fonts;
+    for (const override of themeOverrides) {
+      if (this.child(override.xml.root, "clrScheme")) colors = parseThemeColorScheme(this.pkg.readPart(override.part));
+      if (this.child(override.xml.root, "fontScheme")) fonts = parseThemeFontScheme(this.pkg.readPart(override.part));
+    }
     const colorMap = new Map<string, string>([
       ["bg1", "lt1"],
       ["tx1", "dk1"],
@@ -355,8 +368,9 @@ class Reader {
       layout,
       master,
       theme,
-      colors: themeValue?.colors,
-      fonts: themeValue?.fonts,
+      themeOverrides,
+      colors,
+      fonts,
       colorMap,
       diagnostics: [],
       timed: this.p(slide.xml.root, "timing") !== undefined,
@@ -586,9 +600,8 @@ class Reader {
     return { type, width: size("w"), length: size("len") };
   }
   themeStyle(context: Context, list: string, index: number) {
-    const scheme = this.child(
-      this.child(context.theme?.xml.root, "themeElements"),
-      "fmtScheme",
+    const scheme = [...context.themeOverrides].reverse().map(source => this.child(source.xml.root, "fmtScheme")).find(Boolean) ?? this.child(
+      this.child(context.theme?.xml.root, "themeElements"), "fmtScheme",
     );
     const target =
       index >= 1001 && list === "fillStyleLst" ? "bgFillStyleLst" : list;

@@ -51,11 +51,11 @@ export function parseThemeColorScheme(bytes: Uint8Array): ThemeColorScheme {
   const drawingNamespace =
     root.namespaceUri === OOXML_NAMESPACES.strict.drawing ||
     root.namespaceUri === OOXML_NAMESPACES.transitional.drawing;
-  if (!drawingNamespace || root.localName !== "theme") {
+  if (!drawingNamespace || !["theme", "themeOverride"].includes(root.localName)) {
     throw new OoxmlThemeError("The Theme part must have a DrawingML theme root.");
   }
   const namespace = root.namespaceUri;
-  const elements = onlyChild(root, namespace, "themeElements");
+  const elements = root.localName === "themeOverride" ? root : onlyChild(root, namespace, "themeElements");
   const scheme = onlyChild(elements, namespace, "clrScheme");
   const colors = new Map<ThemeColorSlot, string | undefined>();
   for (const slot of THEME_COLOR_SLOTS) {
