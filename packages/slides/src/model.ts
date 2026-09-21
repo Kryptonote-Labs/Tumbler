@@ -38,7 +38,7 @@ export interface SlideTextRun {
   readonly hyperlink?: { readonly href?: string; readonly slidePart?: string };
 }
 export interface SlideParagraph {
-  readonly tabs?: readonly {position:number;alignment:string}[];
+  readonly tabs?: readonly { position: number; alignment: string }[];
   readonly defaultTabSize?: number;
   readonly distributed?: boolean;
   readonly marginRight?: number;
@@ -123,7 +123,9 @@ export interface SlideObject {
   readonly text: SlideText | undefined;
   readonly effects?: readonly import("./appearance.ts").DrawingEffect[];
   readonly pattern?: import("./appearance.ts").DrawingPattern | undefined;
-  readonly pictureFill?: import("./appearance.ts").DrawingPictureFill | undefined;
+  readonly pictureFill?:
+    | import("./appearance.ts").DrawingPictureFill
+    | undefined;
   readonly image: import("./appearance.ts").DrawingPictureFill | undefined;
   readonly chart: ChartModel | undefined;
   readonly table: SlideTable | undefined;
@@ -141,8 +143,12 @@ export interface PresentationSlide {
   readonly hidden: boolean;
   readonly notes: string;
   readonly background: string;
-  readonly backgroundPattern?: import("./appearance.ts").DrawingPattern | undefined;
-  readonly backgroundPicture?: import("./appearance.ts").DrawingPictureFill | undefined;
+  readonly backgroundPattern?:
+    | import("./appearance.ts").DrawingPattern
+    | undefined;
+  readonly backgroundPicture?:
+    | import("./appearance.ts").DrawingPictureFill
+    | undefined;
   readonly backgroundGradient: DrawingGradient | undefined;
   readonly objects: readonly SlideObject[];
   readonly diagnostics: readonly PresentationDiagnostic[];

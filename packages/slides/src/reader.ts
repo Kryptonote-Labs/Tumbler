@@ -42,7 +42,8 @@ import {
   type SlideTransform,
 } from "./model.ts";
 
-const DIAGRAM_DRAWING="http://schemas.microsoft.com/office/drawing/2008/diagram";
+const DIAGRAM_DRAWING =
+  "http://schemas.microsoft.com/office/drawing/2008/diagram";
 const TYPE =
   "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml";
 const attr = (element: Element | undefined, name: string) =>
@@ -222,7 +223,13 @@ class Reader {
     );
   }
   p(element: Element | undefined, name: string) {
-    return this.child(element, name, element?.namespaceUri === DIAGRAM_DRAWING ? DIAGRAM_DRAWING : this.ns.presentation);
+    return this.child(
+      element,
+      name,
+      element?.namespaceUri === DIAGRAM_DRAWING
+        ? DIAGRAM_DRAWING
+        : this.ns.presentation,
+    );
   }
   descendants(element: Element | undefined): Element[] {
     return this.children(element).flatMap((child) => [
@@ -298,16 +305,32 @@ class Reader {
       return this.slide(id, this.load(part), index);
     });
     return {
-      embeddedFonts: this.children(this.p(this.main.xml.root, "embeddedFontLst")).flatMap(entry => {
+      embeddedFonts: this.children(
+        this.p(this.main.xml.root, "embeddedFontLst"),
+      ).flatMap((entry) => {
         const family = attr(this.p(entry, "font"), "typeface");
         if (!family) return [];
-        return ["regular", "bold", "italic", "boldItalic"].flatMap(style => {
+        return ["regular", "bold", "italic", "boldItalic"].flatMap((style) => {
           const id = this.rid(this.p(entry, style));
           const part = id ? this.related(this.main, "font", id) : undefined;
           if (!part) return [];
           const bytes = embeddedFontBytes(this.pkg.readPart(part));
-          if (!bytes) { for (const slide of slides) (slide.diagnostics as PresentationDiagnostic[]).push({part:part.name.value,message:`Embedded font ${family} has an unsupported encoding; an installed font is used.`}); return []; }
-          return [{family,bytes,bold:style === "bold" || style === "boldItalic",italic:style === "italic" || style === "boldItalic"}];
+          if (!bytes) {
+            for (const slide of slides)
+              (slide.diagnostics as PresentationDiagnostic[]).push({
+                part: part.name.value,
+                message: `Embedded font ${family} has an unsupported encoding; an installed font is used.`,
+              });
+            return [];
+          }
+          return [
+            {
+              family,
+              bytes,
+              bold: style === "bold" || style === "boldItalic",
+              italic: style === "italic" || style === "boldItalic",
+            },
+          ];
         });
       }),
       package: this.pkg,
@@ -350,17 +373,26 @@ class Reader {
       };
       this.themes.set(theme.part.name.value, themeValue);
     }
-    const themeOverrides = [layout, slide].flatMap(owner => {
+    const themeOverrides = [layout, slide].flatMap((owner) => {
       const override = owner && this.relatedXml(owner, "themeOverride");
       if (!override) return [];
-      if (override.xml.root.localName !== "themeOverride" || override.xml.root.namespaceUri !== this.ns.drawing)
-        throw new PresentationError("invalid_document", "Invalid theme override root.");
+      if (
+        override.xml.root.localName !== "themeOverride" ||
+        override.xml.root.namespaceUri !== this.ns.drawing
+      )
+        throw new PresentationError(
+          "invalid_document",
+          "Invalid theme override root.",
+        );
       return [override];
     });
-    let colors = themeValue?.colors, fonts = themeValue?.fonts;
+    let colors = themeValue?.colors,
+      fonts = themeValue?.fonts;
     for (const override of themeOverrides) {
-      if (this.child(override.xml.root, "clrScheme")) colors = parseThemeColorScheme(this.pkg.readPart(override.part));
-      if (this.child(override.xml.root, "fontScheme")) fonts = parseThemeFontScheme(this.pkg.readPart(override.part));
+      if (this.child(override.xml.root, "clrScheme"))
+        colors = parseThemeColorScheme(this.pkg.readPart(override.part));
+      if (this.child(override.xml.root, "fontScheme"))
+        fonts = parseThemeFontScheme(this.pkg.readPart(override.part));
     }
     const colorMap = new Map<string, string>([
       ["bg1", "lt1"],
@@ -405,8 +437,9 @@ class Reader {
         message:
           "Animated objects are read-only. Use playback controls to preview supported effects.",
       });
-    const playback=readSlideTiming(slide.xml.root);
-    for (const message of playback.warnings) context.diagnostics.push({part:slide.part.name.value,message});
+    const playback = readSlideTiming(slide.xml.root);
+    for (const message of playback.warnings)
+      context.diagnostics.push({ part: slide.part.name.value, message });
     const layers: [PartSource | undefined, SlideObject["layer"]][] = [];
     if (
       attr(slide.xml.root, "showMasterSp") !== "0" &&
@@ -465,8 +498,10 @@ class Reader {
       hidden: ["0", "false"].includes(attr(slide.xml.root, "show") ?? ""),
       notes: this.slideNotes(slide),
       background: backgroundColor,
-      backgroundPattern: this.pattern(bgProperties ?? bgStyle,context),
-      backgroundPicture: this.pictureFill(this.child(bgProperties ?? bgStyle,"blipFill")),
+      backgroundPattern: this.pattern(bgProperties ?? bgStyle, context),
+      backgroundPicture: this.pictureFill(
+        this.child(bgProperties ?? bgStyle, "blipFill"),
+      ),
       backgroundGradient: this.gradient(
         bgProperties ?? bgStyle,
         context,
@@ -543,33 +578,120 @@ class Reader {
     }
   }
 
-  pattern(element:Element|undefined,context:Context): import("./appearance.ts").DrawingPattern | undefined {
-    const pattern=this.child(element,"pattFill"); if(!pattern)return;
-    const preset=attr(pattern,"prst")??"pct5";
-    if (!/^(pct(5|10|20|25|30|40|50|60|70|75|80|90)|horz|vert|cross|diagCross|(?:lt|dk|wd)(?:DnDiag|UpDiag)|(?:lt|nar|dk)(?:Horz|Vert)|(?:sm|lg)Check|dotGrid)$/.test(preset)) {
-      context.diagnostics.push({part:context.slide.part.name.value,message:`Pattern ${preset} is not rendered yet.`}); return;
+  pattern(
+    element: Element | undefined,
+    context: Context,
+  ): import("./appearance.ts").DrawingPattern | undefined {
+    const pattern = this.child(element, "pattFill");
+    if (!pattern) return;
+    const preset = attr(pattern, "prst") ?? "pct5";
+    if (
+      !/^(pct(5|10|20|25|30|40|50|60|70|75|80|90)|horz|vert|cross|diagCross|(?:lt|dk|wd)(?:DnDiag|UpDiag)|(?:lt|nar|dk)(?:Horz|Vert)|(?:sm|lg)Check|dotGrid)$/.test(
+        preset,
+      )
+    ) {
+      context.diagnostics.push({
+        part: context.slide.part.name.value,
+        message: `Pattern ${preset} is not rendered yet.`,
+      });
+      return;
     }
-    return {preset,foreground:this.color(this.child(pattern,"fgClr"),context)??"#000",background:this.color(this.child(pattern,"bgClr"),context)??"#fff"};
+    return {
+      preset,
+      foreground: this.color(this.child(pattern, "fgClr"), context) ?? "#000",
+      background: this.color(this.child(pattern, "bgClr"), context) ?? "#fff",
+    };
   }
-  effects(element:Element|undefined,context:Context): import("./appearance.ts").DrawingEffect[] {
-    return this.children(this.child(element,"effectLst")).flatMap(effect=>{
-      const kind=effect.localName==="glow"?"glow":effect.localName==="innerShdw"?"innerShadow":effect.localName==="softEdge"?"softEdge":effect.localName==="blur"?"blur":undefined;
-      if(!kind)return [];
-      const angle=number(effect,"dir")/60000*Math.PI/180,distance=px(effect,"dist");
-      return [{kind,radius:Math.max(0,px(effect,kind==="glow"||kind==="softEdge"?"rad":"blurRad")/2),color:this.color(effect,context)??"#000",x:Math.cos(angle)*distance,y:Math.sin(angle)*distance}];
+  effects(
+    element: Element | undefined,
+    context: Context,
+  ): import("./appearance.ts").DrawingEffect[] {
+    return this.children(this.child(element, "effectLst")).flatMap((effect) => {
+      const kind =
+        effect.localName === "glow"
+          ? "glow"
+          : effect.localName === "innerShdw"
+            ? "innerShadow"
+            : effect.localName === "softEdge"
+              ? "softEdge"
+              : effect.localName === "blur"
+                ? "blur"
+                : undefined;
+      if (!kind) return [];
+      const angle = ((number(effect, "dir") / 60000) * Math.PI) / 180,
+        distance = px(effect, "dist");
+      return [
+        {
+          kind,
+          radius: Math.max(
+            0,
+            px(
+              effect,
+              kind === "glow" || kind === "softEdge" ? "rad" : "blurRad",
+            ) / 2,
+          ),
+          color: this.color(effect, context) ?? "#000",
+          x: Math.cos(angle) * distance,
+          y: Math.sin(angle) * distance,
+        },
+      ];
     });
   }
-  pictureFill(element: Element | undefined): import("./appearance.ts").DrawingPictureFill | undefined {
+  pictureFill(
+    element: Element | undefined,
+  ): import("./appearance.ts").DrawingPictureFill | undefined {
     if (!element) return;
-    const owner=this.owners.get(element), blip=this.child(element,"blip"), id=this.rid(blip,"embed");
-    const part=owner && id ? this.related(owner,"image",id) : undefined;
-    if(!part || !["image/png","image/jpeg","image/gif","image/webp","image/bmp","image/x-ms-bmp","image/svg+xml","image/x-emf","image/emf","image/x-wmf","image/wmf"].includes(part.contentType))return;
-    const rect=(element:Element|undefined): [number,number,number,number] => ["l","t","r","b"].map(key=>number(element,key)/100000) as [number,number,number,number];
-    const crop=rect(this.child(element,"srcRect"));
-    if(crop[0]+crop[2]>=1 || crop[1]+crop[3]>=1)return;
-    const tile=this.child(element,"tile");
-    return {bytes:this.pkg.readPart(part),contentType:part.contentType,crop,stretch:rect(this.child(this.child(element,"stretch"),"fillRect")),
-      ...(tile?{tile:{x:px(tile,"tx"),y:px(tile,"ty"),scaleX:number(tile,"sx",100000)/100000,scaleY:number(tile,"sy",100000)/100000,align:attr(tile,"algn")??"tl",flip:attr(tile,"flip")??"none"}}:{})};
+    const owner = this.owners.get(element),
+      blip = this.child(element, "blip"),
+      id = this.rid(blip, "embed");
+    const part = owner && id ? this.related(owner, "image", id) : undefined;
+    if (
+      !part ||
+      ![
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/webp",
+        "image/bmp",
+        "image/x-ms-bmp",
+        "image/svg+xml",
+        "image/x-emf",
+        "image/emf",
+        "image/x-wmf",
+        "image/wmf",
+      ].includes(part.contentType)
+    )
+      return;
+    const rect = (
+      element: Element | undefined,
+    ): [number, number, number, number] =>
+      ["l", "t", "r", "b"].map((key) => number(element, key) / 100000) as [
+        number,
+        number,
+        number,
+        number,
+      ];
+    const crop = rect(this.child(element, "srcRect"));
+    if (crop[0] + crop[2] >= 1 || crop[1] + crop[3] >= 1) return;
+    const tile = this.child(element, "tile");
+    return {
+      bytes: this.pkg.readPart(part),
+      contentType: part.contentType,
+      crop,
+      stretch: rect(this.child(this.child(element, "stretch"), "fillRect")),
+      ...(tile
+        ? {
+            tile: {
+              x: px(tile, "tx"),
+              y: px(tile, "ty"),
+              scaleX: number(tile, "sx", 100000) / 100000,
+              scaleY: number(tile, "sy", 100000) / 100000,
+              align: attr(tile, "algn") ?? "tl",
+              flip: attr(tile, "flip") ?? "none",
+            },
+          }
+        : {}),
+    };
   }
   fill(
     element: Element | undefined,
@@ -652,9 +774,15 @@ class Reader {
     return { type, width: size("w"), length: size("len") };
   }
   themeStyle(context: Context, list: string, index: number) {
-    const scheme = [...context.themeOverrides].reverse().map(source => this.child(source.xml.root, "fmtScheme")).find(Boolean) ?? this.child(
-      this.child(context.theme?.xml.root, "themeElements"), "fmtScheme",
-    );
+    const scheme =
+      [...context.themeOverrides]
+        .reverse()
+        .map((source) => this.child(source.xml.root, "fmtScheme"))
+        .find(Boolean) ??
+      this.child(
+        this.child(context.theme?.xml.root, "themeElements"),
+        "fmtScheme",
+      );
     const target =
       index >= 1001 && list === "fillStyleLst" ? "bgFillStyleLst" : list;
     return this.children(this.child(scheme, target))[
@@ -712,7 +840,7 @@ class Reader {
       if (layer !== "slide" && this.placeholder(element)) continue;
       const metadata = this.descendants(element).find(
         (item) =>
-          [this.ns.presentation,DIAGRAM_DRAWING].includes(item.namespaceUri) &&
+          [this.ns.presentation, DIAGRAM_DRAWING].includes(item.namespaceUri) &&
           item.localName === "cNvPr",
       );
       const shapeId = attr(metadata, "id") ?? `unknown-${element.id}`;
@@ -787,27 +915,70 @@ class Reader {
         continue;
       }
       const transform = this.transform(xfrm);
-      if(element.localName === "graphicFrame") {
-        const rels=this.descendants(element).find(e=>e.localName==="relIds" && e.namespaceUri.endsWith("/diagram"));
-        const dataId=this.rid(rels,"dm");
-        const dataPart=dataId ? this.related(source,"diagramData",dataId) : undefined;
-        if(dataPart) {
-          const data=this.load(dataPart);
-          const extension=this.descendants(data.xml.root).find(e=>e.localName==="dataModelExt" && e.namespaceUri===DIAGRAM_DRAWING);
-          const id=attr(extension,"relId") ?? this.rid(extension,"relId");
-          const relation=id ? this.pkg.relationships(dataPart.name).get(id) : undefined;
-          const drawingPart=relation?.targetMode==="Internal" && relation.type.endsWith("/diagramDrawing") ? this.pkg.getPart(relation.targetPartName) : undefined;
-          if(drawingPart) {
-            const drawing=this.load(drawingPart),tree=this.child(drawing.xml.root,"spTree",DIAGRAM_DRAWING);
-            const group=this.child(this.p(tree,"grpSpPr"),"xfrm");
-            const extent=this.child(group,"chExt") ?? this.child(group,"ext"),offset=this.child(group,"chOff") ?? this.child(group,"off");
-            const cw=px(extent,"cx",transform.width),ch=px(extent,"cy",transform.height);
-            if(tree && cw>0 && ch>0) {
-              const sx=transform.width/cw,sy=transform.height/ch;
-              const matrix=multiply(multiply(parent,shapeMatrix(transform)),[sx,0,0,sy,-px(offset,"x")*sx,-px(offset,"y")*sy]);
-              const children=this.shapes(tree,drawing,layer,context,matrix,depth+1);
-              result.push(...children.map(object=>({...object,key:`${source.part.name.value}#${shapeId}/${object.key}`,restriction:"SmartArt cached layouts are read-only.",movable:false,textEditable:false})));
-              context.diagnostics.push({part:source.part.name.value,shapeId,message:"SmartArt uses its saved drawing; diagram relayout and semantic text-style resolution are not supported yet."});
+      if (element.localName === "graphicFrame") {
+        const rels = this.descendants(element).find(
+          (e) =>
+            e.localName === "relIds" && e.namespaceUri.endsWith("/diagram"),
+        );
+        const dataId = this.rid(rels, "dm");
+        const dataPart = dataId
+          ? this.related(source, "diagramData", dataId)
+          : undefined;
+        if (dataPart) {
+          const data = this.load(dataPart);
+          const extension = this.descendants(data.xml.root).find(
+            (e) =>
+              e.localName === "dataModelExt" &&
+              e.namespaceUri === DIAGRAM_DRAWING,
+          );
+          const id = attr(extension, "relId") ?? this.rid(extension, "relId");
+          const relation = id
+            ? this.pkg.relationships(dataPart.name).get(id)
+            : undefined;
+          const drawingPart =
+            relation?.targetMode === "Internal" &&
+            relation.type.endsWith("/diagramDrawing")
+              ? this.pkg.getPart(relation.targetPartName)
+              : undefined;
+          if (drawingPart) {
+            const drawing = this.load(drawingPart),
+              tree = this.child(drawing.xml.root, "spTree", DIAGRAM_DRAWING);
+            const group = this.child(this.p(tree, "grpSpPr"), "xfrm");
+            const extent =
+                this.child(group, "chExt") ?? this.child(group, "ext"),
+              offset = this.child(group, "chOff") ?? this.child(group, "off");
+            const cw = px(extent, "cx", transform.width),
+              ch = px(extent, "cy", transform.height);
+            if (tree && cw > 0 && ch > 0) {
+              const sx = transform.width / cw,
+                sy = transform.height / ch;
+              const matrix = multiply(
+                multiply(parent, shapeMatrix(transform)),
+                [sx, 0, 0, sy, -px(offset, "x") * sx, -px(offset, "y") * sy],
+              );
+              const children = this.shapes(
+                tree,
+                drawing,
+                layer,
+                context,
+                matrix,
+                depth + 1,
+              );
+              result.push(
+                ...children.map((object) => ({
+                  ...object,
+                  key: `${source.part.name.value}#${shapeId}/${object.key}`,
+                  restriction: "SmartArt cached layouts are read-only.",
+                  movable: false,
+                  textEditable: false,
+                })),
+              );
+              context.diagnostics.push({
+                part: source.part.name.value,
+                shapeId,
+                message:
+                  "SmartArt uses its saved drawing; diagram relayout and semantic text-style resolution are not supported yet.",
+              });
               continue;
             }
           }
@@ -919,11 +1090,13 @@ class Reader {
       const stroke =
         this.fill(line, context, this.color(lineRef, context)) ?? "none";
       if (
-        properties.some(
-          (item) =>
-            this.children(this.child(item, "effectLst")).some(
-              (effect) => !["outerShdw","glow","innerShdw","softEdge","blur"].includes(effect.localName),
-            ),
+        properties.some((item) =>
+          this.children(this.child(item, "effectLst")).some(
+            (effect) =>
+              !["outerShdw", "glow", "innerShdw", "softEdge", "blur"].includes(
+                effect.localName,
+              ),
+          ),
         )
       )
         diagnostics.push("Some fills or effects are not rendered.");
@@ -937,13 +1110,22 @@ class Reader {
         )
       )
         diagnostics.push("Some advanced drawing properties are not rendered.");
-      const media = readPresentationMedia(this.pkg,source.part.name.value,this.descendants(element));
+      const media = readPresentationMedia(
+        this.pkg,
+        source.part.name.value,
+        this.descendants(element),
+      );
       let image: SlideObject["image"];
       if (kind === "picture") {
-        image = this.pictureFill(this.p(element,"blipFill"));
-        if (!image && !media) {kind="unsupported";diagnostics.push("Linked or unsupported image format is preserved without loading it.");}
+        image = this.pictureFill(this.p(element, "blipFill"));
+        if (!image && !media) {
+          kind = "unsupported";
+          diagnostics.push(
+            "Linked or unsupported image format is preserved without loading it.",
+          );
+        }
       }
-      const pictureFill=this.pictureFill(this.child(fillSource,"blipFill"));
+      const pictureFill = this.pictureFill(this.child(fillSource, "blipFill"));
       let table: SlideObject["table"];
       const tableElement = this.child(
         this.child(this.child(element, "graphic"), "graphicData"),
@@ -1032,8 +1214,8 @@ class Reader {
         shadow,
         media,
         pictureFill,
-        pattern: this.pattern(fillSource,context),
-        effects: this.effects(effects,context),
+        pattern: this.pattern(fillSource, context),
+        effects: this.effects(effects, context),
         strokeDash,
         strokeCap:
           attr(line, "cap") === "rnd"
@@ -1378,14 +1560,19 @@ class Reader {
         .map((item) => attr(item, name))
         .find((value) => value !== undefined);
     const own = this.child(body, "bodyPr");
-    const fitting = bodyProperties.flatMap(properties => this.children(properties).filter(child => ["normAutofit", "spAutoFit", "noAutofit"].includes(child.localName)))[0];
+    const fitting = bodyProperties.flatMap((properties) =>
+      this.children(properties).filter((child) =>
+        ["normAutofit", "spAutoFit", "noAutofit"].includes(child.localName),
+      ),
+    )[0];
     const auto = fitting?.localName === "normAutofit" ? fitting : undefined;
-    const reduction = Math.max(0, Math.min(1, number(auto, "lnSpcReduction") / 100000));
+    const reduction = Math.max(
+      0,
+      Math.min(1, number(auto, "lnSpcReduction") / 100000),
+    );
     const fontScale = number(auto, "fontScale", 100000) / 100000;
     if (fitting?.localName === "spAutoFit")
-      diagnostics.push(
-        "Shape autofit is read-only.",
-      );
+      diagnostics.push("Shape autofit is read-only.");
     if (
       bodyAttr("vert") &&
       !["horz", "vert", "vert270", "eaVert"].includes(bodyAttr("vert")!)
@@ -1460,11 +1647,29 @@ class Reader {
           defaults
             .map((item) => attr(item, name))
             .find((value) => value !== undefined);
-        const font = (kind: "latin" | "eastAsian" | "complexScript", script: string) => {
-          const tag = kind === "eastAsian" ? "ea" : kind === "complexScript" ? "cs" : "latin";
-          const authored = defaults.map(item => attr(this.child(item, tag), "typeface")).find(value => !!value);
-          const role = authored?.startsWith("+mj") || (!authored && ["title", "ctrTitle"].includes(roleName)) ? "major" : "minor";
-          return authored && !authored.startsWith("+") ? authored : context.fonts?.typeface(role, kind, script) ?? context.fonts?.typeface(role, "latin") ?? "Arial";
+        const font = (
+          kind: "latin" | "eastAsian" | "complexScript",
+          script: string,
+        ) => {
+          const tag =
+            kind === "eastAsian"
+              ? "ea"
+              : kind === "complexScript"
+                ? "cs"
+                : "latin";
+          const authored = defaults
+            .map((item) => attr(this.child(item, tag), "typeface"))
+            .find((value) => !!value);
+          const role =
+            authored?.startsWith("+mj") ||
+            (!authored && ["title", "ctrTitle"].includes(roleName))
+              ? "major"
+              : "minor";
+          return authored && !authored.startsWith("+")
+            ? authored
+            : (context.fonts?.typeface(role, kind, script) ??
+                context.fonts?.typeface(role, "latin") ??
+                "Arial");
         };
         const roleName = role;
         const value =
@@ -1477,28 +1682,30 @@ class Reader {
             "limit_exceeded",
             "Too much presentation text.",
           );
-        for (const segment of scriptSegments(value, runAttr("lang"))) runs.push({
-          text: segment.text,
-          fontFamily: font(segment.kind, segment.script),
-          fontSize:
-            (((numeric(runAttr("sz"), 1800) / 100) * 4) / 3) * fontScale,
-          color:
-            defaults
-              .map(
-                (item) => this.fill(item, context) ?? this.color(item, context),
-              )
-              .find((value) => value !== undefined) ?? "#222222",
-          bold: ["1", "true", "on"].includes(runAttr("b") ?? ""),
-          italic: ["1", "true", "on"].includes(runAttr("i") ?? ""),
-          underline: !!runAttr("u") && runAttr("u") !== "none",
-          strike: !!runAttr("strike") && runAttr("strike") !== "noStrike",
-          baseline: numeric(runAttr("baseline"), 0) / 100000,
-          spacing: ((numeric(runAttr("spc"), 0) / 100) * 4) / 3,
-          capitals: runAttr("cap") ?? "none",
-          ...(this.hyperlink(this.child(rpr, "hlinkClick"))
-            ? { hyperlink: this.hyperlink(this.child(rpr, "hlinkClick"))! }
-            : {}),
-        });
+        for (const segment of scriptSegments(value, runAttr("lang")))
+          runs.push({
+            text: segment.text,
+            fontFamily: font(segment.kind, segment.script),
+            fontSize:
+              (((numeric(runAttr("sz"), 1800) / 100) * 4) / 3) * fontScale,
+            color:
+              defaults
+                .map(
+                  (item) =>
+                    this.fill(item, context) ?? this.color(item, context),
+                )
+                .find((value) => value !== undefined) ?? "#222222",
+            bold: ["1", "true", "on"].includes(runAttr("b") ?? ""),
+            italic: ["1", "true", "on"].includes(runAttr("i") ?? ""),
+            underline: !!runAttr("u") && runAttr("u") !== "none",
+            strike: !!runAttr("strike") && runAttr("strike") !== "noStrike",
+            baseline: numeric(runAttr("baseline"), 0) / 100000,
+            spacing: ((numeric(runAttr("spc"), 0) / 100) * 4) / 3,
+            capitals: runAttr("cap") ?? "none",
+            ...(this.hyperlink(this.child(rpr, "hlinkClick"))
+              ? { hyperlink: this.hyperlink(this.child(rpr, "hlinkClick"))! }
+              : {}),
+          });
       }
       const bulletOwner = cascade.find(
         (item) =>
@@ -1535,8 +1742,9 @@ class Reader {
         .find((value) => value !== undefined);
       const points = this.child(lineSpacing, "spcPts");
       const lineHeight = points
-        ? `${((number(points, "val") / 100) * 4) / 3 * (1 - reduction)}px`
-        : number(this.child(lineSpacing, "spcPct"), "val", 100000) / 100000 * (1 - reduction);
+        ? `${(((number(points, "val") / 100) * 4) / 3) * (1 - reduction)}px`
+        : (number(this.child(lineSpacing, "spcPct"), "val", 100000) / 100000) *
+          (1 - reduction);
       const autoNum = this.child(bulletOwner, "buAutoNum");
       let bullet = this.child(bulletOwner, "buNone")
         ? ""
@@ -1575,12 +1783,24 @@ class Reader {
         cascade
           .map((item) => this.child(item, name))
           .find((item) => item !== undefined);
-      const tabs = cascade.map(entry => this.child(entry, "tabLst")).find(Boolean);
+      const tabs = cascade
+        .map((entry) => this.child(entry, "tabLst"))
+        .find(Boolean);
       paragraphs.push({
-        tabs: this.children(tabs).filter(tab => tab.localName === "tab").map(tab => ({position:px(tab,"pos"),alignment:attr(tab,"algn") ?? "l"})).sort((a,b)=>a.position-b.position),
-        defaultTabSize: Math.max(1,numeric(prop("defTabSz") ?? bodyAttr("defTabSz"),914400)/EMUS_PER_PIXEL),
+        tabs: this.children(tabs)
+          .filter((tab) => tab.localName === "tab")
+          .map((tab) => ({
+            position: px(tab, "pos"),
+            alignment: attr(tab, "algn") ?? "l",
+          }))
+          .sort((a, b) => a.position - b.position),
+        defaultTabSize: Math.max(
+          1,
+          numeric(prop("defTabSz") ?? bodyAttr("defTabSz"), 914400) /
+            EMUS_PER_PIXEL,
+        ),
         distributed: ["dist", "thaiDist", "justLow"].includes(alignment ?? ""),
-        marginRight: numeric(prop("marR"),0)/EMUS_PER_PIXEL,
+        marginRight: numeric(prop("marR"), 0) / EMUS_PER_PIXEL,
         runs,
         fontSize: largest,
         align:
@@ -1588,7 +1808,9 @@ class Reader {
             ? "center"
             : alignment === "r"
               ? "right"
-              : ["just", "dist", "thaiDist", "justLow"].includes(alignment ?? "")
+              : ["just", "dist", "thaiDist", "justLow"].includes(
+                    alignment ?? "",
+                  )
                 ? "justify"
                 : "left",
         bullet,
@@ -1635,9 +1857,20 @@ class Reader {
       numeric(bodyAttr("rot"), 0) === 0;
     return {
       paragraphs,
-      autoFit: fitting?.localName === "normAutofit" ? "normal" : fitting?.localName === "spAutoFit" ? "shape" : "none",
-      horizontalOverflow: bodyAttr("horzOverflow") === "clip" ? "clip" : "overflow",
-      verticalOverflow: bodyAttr("vertOverflow") === "clip" ? "clip" : bodyAttr("vertOverflow") === "ellipsis" ? "ellipsis" : "overflow",
+      autoFit:
+        fitting?.localName === "normAutofit"
+          ? "normal"
+          : fitting?.localName === "spAutoFit"
+            ? "shape"
+            : "none",
+      horizontalOverflow:
+        bodyAttr("horzOverflow") === "clip" ? "clip" : "overflow",
+      verticalOverflow:
+        bodyAttr("vertOverflow") === "clip"
+          ? "clip"
+          : bodyAttr("vertOverflow") === "ellipsis"
+            ? "ellipsis"
+            : "overflow",
       editable: safe,
       inset: [
         numeric(bodyAttr("tIns"), 45720) / EMUS_PER_PIXEL,

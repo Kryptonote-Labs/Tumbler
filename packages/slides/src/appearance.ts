@@ -20,11 +20,28 @@ export interface DrawingLineEnd {
   readonly length: number;
 }
 export interface DrawingPictureFill {
- readonly bytes: Uint8Array;
- readonly contentType: string;
- readonly crop: readonly [number,number,number,number];
- readonly stretch?: readonly [number,number,number,number];
- readonly tile?: {readonly x:number;readonly y:number;readonly scaleX:number;readonly scaleY:number;readonly align:string;readonly flip:string};
+  readonly bytes: Uint8Array;
+  readonly contentType: string;
+  readonly crop: readonly [number, number, number, number];
+  readonly stretch?: readonly [number, number, number, number];
+  readonly tile?: {
+    readonly x: number;
+    readonly y: number;
+    readonly scaleX: number;
+    readonly scaleY: number;
+    readonly align: string;
+    readonly flip: string;
+  };
 }
-export interface DrawingEffect {readonly kind:'glow'|'innerShadow'|'softEdge'|'blur';readonly radius:number;readonly color:string;readonly x:number;readonly y:number;}
-export interface DrawingPattern {readonly preset:string;readonly foreground:string;readonly background:string;}
+export interface DrawingEffect {
+  readonly kind: "glow" | "innerShadow" | "softEdge" | "blur";
+  readonly radius: number;
+  readonly color: string;
+  readonly x: number;
+  readonly y: number;
+}
+export interface DrawingPattern {
+  readonly preset: string;
+  readonly foreground: string;
+  readonly background: string;
+}
