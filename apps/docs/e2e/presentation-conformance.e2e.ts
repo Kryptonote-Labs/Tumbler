@@ -32,14 +32,12 @@ test("normal autofit fits dense text and explicit overflow remains visible", asy
       .getByText("A quieter workspace", { exact: true })
       .last(),
   ).toBeVisible();
-  await page
-    .locator("input[type=file]")
-    .setInputFiles({
-      name: "autofit.pptx",
-      mimeType:
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      buffer: Buffer.from(tx.commit()),
-    });
+  await page.locator("input[type=file]").setInputFiles({
+    name: "autofit.pptx",
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    buffer: Buffer.from(tx.commit()),
+  });
   const text = page
     .locator(".slide-stage .slide-text")
     .filter({ hasText: "A very long title" });
@@ -95,14 +93,12 @@ test("embedded video exposes browser playback controls and loads its metadata", 
       .getByText("A quieter workspace", { exact: true })
       .last(),
   ).toBeVisible();
-  await page
-    .locator("input[type=file]")
-    .setInputFiles({
-      name: "media.pptx",
-      mimeType:
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      buffer: Buffer.from(tx.commit()),
-    });
+  await page.locator("input[type=file]").setInputFiles({
+    name: "media.pptx",
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    buffer: Buffer.from(tx.commit()),
+  });
   const video = page.locator(".slide-stage video");
   await expect(video).toBeVisible();
   await expect
@@ -136,14 +132,12 @@ test("animation playback hides entrance targets until their click step, then res
       .getByText("A quieter workspace", { exact: true })
       .last(),
   ).toBeVisible();
-  await page
-    .locator("input[type=file]")
-    .setInputFiles({
-      name: "animated.pptx",
-      mimeType:
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      buffer: Buffer.from(tx.commit()),
-    });
+  await page.locator("input[type=file]").setInputFiles({
+    name: "animated.pptx",
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    buffer: Buffer.from(tx.commit()),
+  });
   await page
     .getByRole("button", { name: "Play animations", exact: true })
     .click();
@@ -191,14 +185,12 @@ test("Windows metafiles decode lazily into SVG pictures", async ({ page }) => {
       .getByText("A quieter workspace", { exact: true })
       .last(),
   ).toBeVisible();
-  await page
-    .locator("input[type=file]")
-    .setInputFiles({
-      name: "metafile.pptx",
-      mimeType:
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      buffer: Buffer.from(tx.commit()),
-    });
+  await page.locator("input[type=file]").setInputFiles({
+    name: "metafile.pptx",
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    buffer: Buffer.from(tx.commit()),
+  });
   const image = page.locator(".slide-stage pattern image");
   await expect(image).toHaveAttribute("href", /^blob:/);
   const svg = await image.evaluate(async (e) =>
@@ -206,4 +198,55 @@ test("Windows metafiles decode lazily into SVG pictures", async ({ page }) => {
   );
   expect(svg).toContain("<svg");
   expect(svg).toContain("rect");
+});
+test("rendering example shows decimal tabs, drawings, charts and playback together", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/playground/slides-rendering");
+  const stage = page.locator(".slide-stage");
+  await expect(
+    stage.getByText("Text fitting and tab stops", { exact: true }).last(),
+  ).toBeVisible();
+  const decimals = await stage
+    .locator("[data-slide-object]")
+    .filter({ hasText: "Research" })
+    .locator("p")
+    .evaluateAll((ps) =>
+      ps.map((p) => {
+        const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+          const t = walker.currentNode.textContent ?? "",
+            i = t.indexOf(".");
+          if (i >= 0) {
+            const r = document.createRange();
+            r.setStart(walker.currentNode, i);
+            r.setEnd(walker.currentNode, i + 1);
+            return r.getBoundingClientRect().x;
+          }
+        }
+        return 0;
+      }),
+    );
+  expect(Math.max(...decimals) - Math.min(...decimals)).toBeLessThan(2);
+  await page.getByLabel("Slide", { exact: true }).selectOption("1");
+  await expect(stage.locator("pattern image")).toHaveAttribute(
+    "href",
+    /^blob:/,
+  );
+  await expect(stage.locator("feGaussianBlur").first()).toBeAttached();
+  await page.screenshot({ path: "/tmp/tumbler-rendering-effects.png" });
+  await page.getByLabel("Slide", { exact: true }).selectOption("2");
+  await expect(stage.locator(".chart-frame svg")).toBeVisible();
+  await page.getByLabel("Slide", { exact: true }).selectOption("3");
+  await expect(stage.locator(".chart-frame path")).toBeAttached();
+  await page.screenshot({ path: "/tmp/tumbler-rendering-combination.png" });
+  await page.getByLabel("Slide", { exact: true }).selectOption("4");
+  await expect(stage.locator("video")).toBeVisible();
+  await page.getByLabel("Slide", { exact: true }).selectOption("5");
+  await expect(
+    page.getByRole("button", { name: "Play animations", exact: true }),
+  ).toBeVisible();
+  expect(errors).toEqual([]);
 });
