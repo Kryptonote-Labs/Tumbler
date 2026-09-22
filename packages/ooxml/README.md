@@ -7,7 +7,7 @@ primitives.
 > original copies of important documents.
 
 ```sh
-bun add @tumblerjs/ooxml@alpha
+bun add @tumblerjs/ooxml
 ```
 
 ```ts

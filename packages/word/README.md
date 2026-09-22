@@ -8,7 +8,7 @@ browser-owned document experiences.
 > notice. Keep original copies of important files.
 
 ```sh
-bun add @tumblerjs/word@alpha
+bun add @tumblerjs/word
 ```
 
 Open a DOCX and inspect its semantic document:

@@ -8,7 +8,7 @@ subset of spreadsheet formulas.
 > and tested behavior.
 
 ```sh
-bun add @tumblerjs/formulas@alpha
+bun add @tumblerjs/formulas
 ```
 
 ```ts

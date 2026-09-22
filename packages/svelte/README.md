@@ -7,7 +7,7 @@ complete ownership of their surrounding interface and styling.
 > and Office-format coverage remains incomplete.
 
 ```sh
-bun add @tumblerjs/svelte@alpha @tumblerjs/sheets@alpha @tumblerjs/core@alpha
+bun add @tumblerjs/svelte @tumblerjs/sheets @tumblerjs/core
 ```
 
 ```svelte
@@ -32,7 +32,7 @@ bun add @tumblerjs/svelte@alpha @tumblerjs/sheets@alpha @tumblerjs/core@alpha
 />
 ```
 
-`FormattingToolbar` is format-neutral. Word and Sheets supply the same state
+`FormattingToolbar` is format-neutral. Word, Sheets, and Slides supply the same state
 and capability contract without replacing application UI. Its
 font-family field writes arbitrary Office font names rather than limiting files
 to a browser-dependent preset list.
@@ -76,6 +76,27 @@ exposed. Hosts needing only the bottom-right resize handle can still use
 Applications own history and persistence, or can use `WordEditingSession` from
 `@tumblerjs/word`. Internal bookmark links scroll inside the owned page surface;
 external targets are passed to the host for its security policy.
+
+## PowerPoint
+
+Use the dedicated Slides entry point:
+
+```ts
+import {
+  PresentationSlideView,
+  PresentationSlideRail,
+  PresentationFormattingToolbar,
+} from "@tumblerjs/svelte/slides";
+```
+
+Pass a presentation document and its active slide to `PresentationSlideView`.
+Bind `PresentationSlideRail` to the active slide index for thumbnail navigation.
+In edit mode, connect object, text, formatting, and shape callbacks to a
+`PresentationEditingSession`, then pass the updated document back to the view.
+
+The [PowerPoint guide](https://tumbler.alexco.dev/docs/powerpoint) provides complete
+examples, including undo, redo, and downloading edits. The same guide describes
+text editing, table-cell navigation, resize handles, and rotation controls.
 
 Tumbler is developed at
 [Kryptonote-Labs/Tumbler](https://github.com/Kryptonote-Labs/Tumbler).
