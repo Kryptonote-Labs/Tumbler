@@ -2,6 +2,7 @@ export type Block =
   | { kind: 'text' | 'note'; text: string }
   | { kind: 'code'; code: string; language?: string }
   | { kind: 'list'; items: string[] }
+  | { kind: 'link'; href: string; label: string }
   | { kind: 'table'; headers: string[]; rows: string[][] };
 export interface Doc {
   title: string;
@@ -13,67 +14,141 @@ export interface Doc {
 export const docs: Record<string, Doc> = {
   powerpoint: {
     title: 'PowerPoint',
-    description: 'Open PPTX presentations, view slides, and make small, targeted edits. Available in the local workspace preview; not yet published.',
+    description: 'Build a PPTX viewer or editor with Svelte 5. Open a file, add slide navigation, connect edits, and download the result.',
     sections: [
-      { id: 'coverage', title: 'What works', blocks: [
-        { kind: 'text', text: 'The reader follows presentation relationships in slide order and resolves slide, layout, master, and theme sources. The viewer draws 186 preset shapes and custom paths, formatted text, embedded raster pictures, tables, and supported OOXML charts. It resolves built-in table styles, theme colours, gradients, ordinary outer shadows, dashed lines, and arrow ends. Group transforms are rendered, with group contents kept read-only. Layout and slide theme overrides are resolved. Picture fills support cropping and tiling; SVG, BMP, and supported EMF/WMF images render alongside raster images. Common hatch patterns, glow, inner shadows, blur, soft edges, and reflections are rendered. Stacked and combination charts are supported.' },
-        { kind: 'text', text: 'Text supports saved autofit, custom tab stops, distributed alignment, script-specific and embedded fonts, common numbered bullets, character spacing, capitals, baseline offsets, strike-through, and hyperlinks. Slide links navigate within the deck; speaker notes appear below the active slide.' },
-        { kind: 'text', text: 'In Edit mode, drag an eligible slide object to move it and use its edge or corner handles to resize it. Drag the handle above the selection to rotate; hold Shift to snap to 15-degree increments. Rotated objects remain editable. Arrow keys nudge a selection. Double-click a text box or press Enter to edit in place. Select words to format them with the shared text toolbar. Enter adds a paragraph; Ctrl+Enter or Escape finishes editing. Changes apply as you type and support undo/redo. Select a shape to change its fill, outline colour, or outline width. Double-click a table cell to edit it and use Tab or Shift+Tab to move between cells. Drag the table border to move it or its handles to resize it; text keeps its font size.' },
-        { kind: 'note', text: 'This is a first implementation, not full PowerPoint fidelity. Table cells support text and formatting edits; inserting or deleting rows and columns is not supported yet. Saved SmartArt drawings can be displayed, but diagram relayout is not implemented. Embedded audio and video use browser playback. Fade, appear, and wipe effects have preview controls; more complex timing and 3D effects remain unsupported. Preset/custom geometry, gradients, theme colours, and built-in table styles are supported; exact Office text layout remains incomplete. Browser font availability affects text wrapping. The viewer reports unsupported content on each slide.' }
+      { id: 'setup', title: 'Set up', blocks: [
+        { kind: 'text', text: 'PowerPoint support currently runs from the Tumbler repository workspace. The slides package has not been published to the registry yet.' },
+        { kind: 'link', href: '/docs/development#run', label: 'Run the workspace locally' },
+        { kind: 'text', text: 'Read your PPTX file into a Uint8Array. The examples below accept these bytes as a component prop.' },
+        { kind: 'code', code: `const bytes = new Uint8Array(await file.arrayBuffer());` }
       ] },
       { id: 'viewer', title: 'Render a slide', blocks: [
-        { kind: 'text', text: 'These imports currently require the Tumbler workspace. The presentation package remains private until release qualification. Give the viewer a constrained height. A scale of 1 fits the slide into its available space.' },
+        { kind: 'text', text: 'Open the bytes with openPresentationArtifact and pass its document and a slide to PresentationSlideView. Give the viewer a fixed height so it can size the slide.' },
         { kind: 'code', language: 'Svelte', code: `<script lang="ts">
   import { untrack } from 'svelte';
   import { openPresentationArtifact } from '@tumblerjs/slides';
   import { PresentationSlideView } from '@tumblerjs/svelte/slides';
+
   let { bytes }: { bytes: Uint8Array } = $props();
   const artifact = untrack(() => openPresentationArtifact(bytes));
   let scale = $state(1);
 </script>
-<div style="height: 480px; min-width: 0">
+
+<div style="height: 540px; min-width: 0">
   {#if artifact.document.slides[0]}
-    <PresentationSlideView presentation={artifact.document}
-      slide={artifact.document.slides[0]} bind:scale />
+    <PresentationSlideView
+      presentation={artifact.document}
+      slide={artifact.document.slides[0]}
+      bind:scale
+    />
   {/if}
-</div>` }
+</div>` },
+        { kind: 'text', text: 'A scale of 1 fits the slide to the viewer. Bind scale to keep zoom controls in sync with pinch gestures. These examples open one file per component instance; remount the component when loading another file.' }
       ] },
-      { id: 'navigation', title: 'Add slide previews', blocks: [
-        { kind: 'text', text: 'PresentationSlideRail shows selectable thumbnails and supports arrow keys, Home, and End. Bind its index to the active slide. Nearby thumbnails render lazily and update when the presentation changes.' },
+      { id: 'navigation', title: 'Add slide navigation', blocks: [
+        { kind: 'text', text: 'Bind PresentationSlideRail to an index and use that index for the main view. Handle onslide so links inside the presentation can switch slides too.' },
         { kind: 'code', language: 'Svelte', code: `<script lang="ts">
-  import { PresentationSlideRail, PresentationSlideView } from '@tumblerjs/svelte/slides';
   import type { PresentationDocument } from '@tumblerjs/slides';
+  import { PresentationSlideRail, PresentationSlideView } from '@tumblerjs/svelte/slides';
+
   let { presentation }: { presentation: PresentationDocument } = $props();
   let index = $state(0);
 </script>
+
 <div style="display: flex; height: 540px; min-width: 0">
   <aside style="width: 150px; flex-shrink: 0">
     <PresentationSlideRail {presentation} bind:index />
   </aside>
-  <main style="flex: 1; min-width: 0">
+  <div style="flex: 1; min-width: 0">
     {#if presentation.slides[index]}
-      <PresentationSlideView {presentation} slide={presentation.slides[index]!} />
+      <PresentationSlideView
+        {presentation}
+        slide={presentation.slides[index]!}
+        onslide={(part) => {
+          const next = presentation.slides.findIndex(slide => slide.part === part);
+          if (next >= 0) index = next;
+        }}
+      />
     {/if}
-  </main>
+  </div>
 </div>` }
       ] },
-      { id: 'edits', title: 'Apply and export edits', blocks: [
-        { kind: 'code', code: `import { openPresentationEditingSession } from '@tumblerjs/slides';
+      { id: 'edits', title: 'Connect editing', blocks: [
+        { kind: 'text', text: 'Use an editing session instead of a read-only artifact. Set editable on the view and connect its callbacks to the session. Reassign the returned artifact after each edit so the view updates.' },
+        { kind: 'code', language: 'Svelte', code: `<script lang="ts">
+  import { untrack } from 'svelte';
+  import { openPresentationEditingSession, type PresentationArtifact } from '@tumblerjs/slides';
+  import { PresentationSlideView } from '@tumblerjs/svelte/slides';
 
-const session = openPresentationEditingSession(bytes);
-// Connect onobjectchange to session.updateObject(change).
-// Connect ontextchange to session.replaceText(slideId, objectKey, value).
-// Reassign your view's artifact after each operation.
-const output = session.artifact.bytes();
-// session.undo(); session.redo();` },
-        { kind: 'text', text: 'Edits replace only the owning slide XML part. Unchanged part payloads, relationships, notes, chart data, and embedded files are retained. Opening and exporting without edits returns the original bytes. ZIP directory records may be removed when writing an edited package.' },
-        { kind: 'text', text: 'Move, resize, rotate, and edit slide objects, including grouped objects and placeholders with inherited positions. Edits preserve hyperlinks, line breaks, autofit settings, animation timing, and Office metadata. Shared master/layout objects, fields, signed files, SmartArt cached drawings, and unknown alternate representations remain read-only.' }
+  let { bytes }: { bytes: Uint8Array } = $props();
+  const session = untrack(() => openPresentationEditingSession(bytes));
+  let artifact = $state(session.artifact);
+  let index = $state(0);
+  let canUndo = $state(false);
+  let canRedo = $state(false);
+  let error = $state('');
+
+  function apply(operation: () => PresentationArtifact) {
+    try {
+      artifact = operation();
+      canUndo = session.canUndo;
+      canRedo = session.canRedo;
+      error = '';
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'Could not apply this edit.';
+    }
+  }
+</script>
+
+<button disabled={!canUndo} onclick={() => apply(() => session.undo())}>Undo</button>
+<button disabled={!canRedo} onclick={() => apply(() => session.redo())}>Redo</button>
+{#if error}<p role="alert">{error}</p>{/if}
+
+<div style="height: 540px; min-width: 0">
+  {#if artifact.document.slides[index]}
+    <PresentationSlideView
+      presentation={artifact.document}
+      slide={artifact.document.slides[index]!}
+      editable
+      onobjectchange={(change) => apply(() => session.updateObject(change))}
+      ontextedit={(change) => apply(() => session.editText(change))}
+      onformat={(change) => apply(() => session.formatText(change))}
+      onshapechange={(change) => apply(() => session.styleShape(change))}
+      onundo={(redo) => apply(() => redo ? session.redo() : session.undo())}
+    />
+  {/if}
+</div>` },
+        { kind: 'text', text: 'The text and shape formatting controls appear when their callbacks are connected. To add the thumbnail rail, pass artifact.document as its presentation and bind the same index used by the view.' }
       ] },
-      { id: 'examples', title: 'Example decks', blocks: [
-        { kind: 'list', items: ['Rendering checks: autofit, decimal tabs, picture fills, drawing effects, stacked and combination charts, embedded video, and animation playback.', 'Workspace presentation: three slides with text, shapes, and a chart.', 'Shapes and pictures: a 4:3 deck with rotation, transparency, rich text, and an embedded image.', 'Compatibility checks: grouped objects, a table, and notes.', 'Everyday PowerPoint features: preset shapes, a gradient, rich text, hyperlinks, speaker notes, and a theme-styled table.'] },
-        { kind: 'text', text: 'Choose these decks in the playground, or download their PPTX files from there. They are original MIT-licensed fixtures generated by scripts/generate-presentation-fixtures.ts using PptxGenJS. They do not establish full compatibility with Microsoft PowerPoint.' }
+      { id: 'controls', title: 'Use the editor', blocks: [
+        { kind: 'table', headers: ['Action', 'Control'], rows: [
+          ['Move an object', 'Drag it, or select it and use the arrow keys.'],
+          ['Resize or rotate', 'Drag an edge or corner handle to resize. Use the handle above the object to rotate; hold Shift to snap to 15° increments.'],
+          ['Edit text', 'Double-click a text box, or select it and press Enter. Select words to apply formatting with the toolbar.'],
+          ['Edit a table', 'Double-click a cell. Tab and Shift+Tab move between cells.'],
+          ['Finish editing', 'Press Escape or Ctrl+Enter. Click blank slide space to clear the selection.'],
+          ['Change shape colours', 'Select the shape, then use the fill and outline controls.']
+        ] }
+      ] },
+      { id: 'export', title: 'Download the edited file', blocks: [
+        { kind: 'text', text: 'Add this function to the editor script and call it from your Download button. Call bytes() when saving, not after every edit: it builds the PPTX archive on demand.' },
+        { kind: 'code', code: `function download() {
+  const bytes = session.artifact.bytes();
+  const blob = new Blob([Uint8Array.from(bytes).buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'presentation.pptx';
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}` },
+        { kind: 'code', language: 'Svelte', code: `<button onclick={download}>Download</button>` },
+        { kind: 'text', text: 'For server storage, send the returned Uint8Array through your upload flow instead. Edits remain in memory until you save them.' },
+        { kind: 'link', href: '/docs/compatibility#powerpoint', label: 'PowerPoint format support and limitations' }
       ] }
-    ], next: { href: '/playground/slides-brief', label: 'Try PowerPoint' }
+    ], next: { href: '/playground/slides-brief', label: 'Try the editor with an example deck' }
   },
   installation: {
     title: 'Installation',
@@ -263,7 +338,21 @@ const output = artifact.bytes();` },
     description: 'Tumbler is early alpha. Use the examples to inspect specific behavior, and test your own files before depending on a feature.',
     sections: [
       { id: 'formats', title: 'Current scope', blocks: [
-        { kind: 'table', headers: ['Format', 'Available today', 'Limits'], rows: [['DOCX', 'Paginated rendering, text edits, formatting, tables, embedded images, and supported charts.', 'Incomplete Word layout and feature coverage. Font availability affects pagination.'], ['XLSX', 'Virtualized grid, cell and ordinary formula edits, formatting, tables, and supported charts.', 'Formula and workbook feature coverage remains incomplete.'], ['DOC / XLS', 'Not supported.', 'Convert legacy binary files to DOCX or XLSX first.'], ['PPTX', 'Local workspace preview with slide navigation, tables, shapes, images, charts, and bounded edits.', 'Not published yet. Table row/column operations, SmartArt relayout, 3D effects, and full animation/layout fidelity remain unsupported.'], ['PDF', 'No viewer in this playground.', 'PDF rendering is outside the current format packages.']] }
+        { kind: 'table', headers: ['Format', 'Available today', 'Limits'], rows: [['DOCX', 'Paginated rendering, text edits, formatting, tables, embedded images, and supported charts.', 'Incomplete Word layout and feature coverage. Font availability affects pagination.'], ['XLSX', 'Virtualized grid, cell and ordinary formula edits, formatting, tables, and supported charts.', 'Formula and workbook feature coverage remains incomplete.'], ['DOC / XLS', 'Not supported.', 'Convert legacy binary files to DOCX or XLSX first.'], ['PPTX', 'Slide viewing, thumbnail navigation, text and table-cell editing, formatting, and object movement, resizing, and rotation.', 'Not published yet. Table row/column operations, SmartArt relayout, 3D effects, and full animation/layout fidelity remain unsupported.'], ['PDF', 'No viewer in this playground.', 'PDF rendering is outside the current format packages.']] }
+      ] },
+      { id: 'powerpoint', title: 'PowerPoint support', blocks: [
+        { kind: 'table', headers: ['Content', 'Support and limits'], rows: [
+          ['Text and fonts', 'Rich text, bullets, hyperlinks, tab stops, autofit, and embedded fonts. Browser text layout can differ from Office, especially with missing fonts.'],
+          ['Shapes and pictures', 'Preset and custom shapes, grouped transforms, theme colours, gradients, cropping, tiling, common drawing effects, and supported raster, SVG, EMF, and WMF images. 3D effects are not supported.'],
+          ['Tables', 'Built-in Office styles, merged cells, cell text and formatting edits, and table resizing. Inserting or deleting rows and columns is not supported.'],
+          ['Charts', 'Supported OOXML chart types include stacked, percentage-stacked, and combination charts. Chart-data editing is not provided by the slide editor.'],
+          ['Navigation and media', 'Slide links, speaker notes, and browser playback for embedded audio and video. Media playback depends on browser codec support.'],
+          ['Animations', 'Preview controls for fade, appear, and wipe. Complex timing and full PowerPoint playback are not supported.'],
+          ['Editing', 'Move, resize, rotate, and edit supported slide objects, including grouped objects and placeholders with inherited geometry. Native ink and its picture fallback move together.'],
+          ['Read-only content', 'Shared master/layout objects, fields, signed presentations, SmartArt cached drawings, and unknown alternate representations. Saved SmartArt drawings can render, but diagram relayout is not implemented.'],
+          ['Saving', 'Edits retain unrelated package parts, relationships, notes, and embedded files. Export without edits returns the original bytes. Edited ZIPs may omit directory records.']
+        ] },
+        { kind: 'link', href: '/docs/powerpoint', label: 'Build a PowerPoint viewer or editor' }
       ] },
       { id: 'checking', title: 'Check a real document', blocks: [
         { kind: 'list', items: ['Keep an unchanged original.', 'Open the file in the playground and inspect the content, page edges, and fonts.', 'Make a small edit and download the result.', 'Reopen the exported file in the application that will consume it.', 'Report a minimal, non-confidential example when something differs.'] },
@@ -271,7 +360,7 @@ const output = artifact.bytes();` },
       ] },
       { id: 'privacy', title: 'Local files', blocks: [
         { kind: 'text', text: 'The playground reads selected files into browser memory. It does not upload them or save them to a server. Downloads are generated from the current in-memory artifact. Refreshing the page discards edits.' },
-        { kind: 'text', text: 'The playground accepts DOCX and XLSX files up to 20 MB. External document links are not opened by this playground.' }
+        { kind: 'text', text: 'The playground accepts DOCX, XLSX, and PPTX files up to 20 MB. External links in presentations can open in a new tab in View mode; clicking linked text in Edit mode edits the text.' }
       ] }
     ], next: { href: '/docs/development', label: 'Local development' }
   },
