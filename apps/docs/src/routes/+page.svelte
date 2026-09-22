@@ -7,7 +7,7 @@
 <div class="doc-layout">
   <article>
     <h1>Office documents, in your app.</h1>
-    <p class="lead">Tumbler gives you TypeScript models and Svelte components for reading, rendering, and editing Word documents and spreadsheets.</p>
+    <p class="lead">Tumbler gives you TypeScript models and Svelte components for reading, rendering, and editing Word documents, spreadsheets, and PowerPoint presentations.</p>
     <p>Open a file, render its contents, and export your edits. Your application owns the interface and persistence. Tumbler handles the document underneath.</p>
     <div class="note"><p>Early alpha. APIs are still changing and Office compatibility is incomplete. Keep original copies of important documents.</p></div>
     <h2 id="start">Start with a document</h2>
@@ -18,6 +18,7 @@
     <div class="format-list">
       <a href="/docs/word"><strong>Word</strong><span>Paginated documents, text selection, editing, and formatting.</span><span class="arrow" aria-hidden="true">→</span></a>
       <a href="/docs/spreadsheets"><strong>Spreadsheets</strong><span>Virtualized worksheets, formulas, cell edits, and formatting.</span><span class="arrow" aria-hidden="true">→</span></a>
+      <a href="/docs/powerpoint"><strong>PowerPoint</strong><span>Slide navigation, text and table editing, formatting, and object transforms.</span><span class="arrow" aria-hidden="true">→</span></a>
     </div>
     <h2 id="model">Keep control of your application</h2>
     <p>The format packages work without Svelte. The components render those models and emit edit events, leaving file storage, permissions, and the surrounding UI to you.</p>
