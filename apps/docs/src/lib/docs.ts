@@ -16,9 +16,7 @@ export const docs: Record<string, Doc> = {
     title: 'PowerPoint',
     description: 'Build a PPTX viewer or editor with Svelte 5. Open a file, add slide navigation, connect edits, and download the result.',
     sections: [
-      { id: 'setup', title: 'Set up', blocks: [
-        { kind: 'text', text: 'PowerPoint support currently runs from the Tumbler repository workspace. The slides package has not been published to the registry yet.' },
-        { kind: 'link', href: '/docs/development#run', label: 'Run the workspace locally' },
+      { id: 'setup', title: 'Open a file', blocks: [
         { kind: 'text', text: 'Read your PPTX file into a Uint8Array. The examples below accept these bytes as a component prop.' },
         { kind: 'code', code: `const bytes = new Uint8Array(await file.arrayBuffer());` }
       ] },
@@ -338,7 +336,7 @@ const output = artifact.bytes();` },
     description: 'Tumbler is early alpha. Use the examples to inspect specific behavior, and test your own files before depending on a feature.',
     sections: [
       { id: 'formats', title: 'Current scope', blocks: [
-        { kind: 'table', headers: ['Format', 'Available today', 'Limits'], rows: [['DOCX', 'Paginated rendering, text edits, formatting, tables, embedded images, and supported charts.', 'Incomplete Word layout and feature coverage. Font availability affects pagination.'], ['XLSX', 'Virtualized grid, cell and ordinary formula edits, formatting, tables, and supported charts.', 'Formula and workbook feature coverage remains incomplete.'], ['DOC / XLS', 'Not supported.', 'Convert legacy binary files to DOCX or XLSX first.'], ['PPTX', 'Slide viewing, thumbnail navigation, text and table-cell editing, formatting, and object movement, resizing, and rotation.', 'Not published yet. Table row/column operations, SmartArt relayout, 3D effects, and full animation/layout fidelity remain unsupported.'], ['PDF', 'No viewer in this playground.', 'PDF rendering is outside the current format packages.']] }
+        { kind: 'table', headers: ['Format', 'Available today', 'Limits'], rows: [['DOCX', 'Paginated rendering, text edits, formatting, tables, embedded images, and supported charts.', 'Incomplete Word layout and feature coverage. Font availability affects pagination.'], ['XLSX', 'Virtualized grid, cell and ordinary formula edits, formatting, tables, and supported charts.', 'Formula and workbook feature coverage remains incomplete.'], ['DOC / XLS', 'Not supported.', 'Convert legacy binary files to DOCX or XLSX first.'], ['PPTX', 'Slide viewing, thumbnail navigation, text and table-cell editing, formatting, and object movement, resizing, and rotation.', 'Table row/column operations, SmartArt relayout, 3D effects, and full animation/layout fidelity remain unsupported.'], ['PDF', 'No viewer in this playground.', 'PDF rendering is outside the current format packages.']] }
       ] },
       { id: 'powerpoint', title: 'PowerPoint support', blocks: [
         { kind: 'table', headers: ['Content', 'Support and limits'], rows: [
