@@ -51,11 +51,11 @@ Client-side work is bounded to 100,000 cells per formatting command. Structural
 whole-row and whole-column style operations should eventually use their native
 SpreadsheetML representations rather than materializing every cell.
 
-## Future adapters
+## Word and Slides adapters
 
-Word will map text properties to run properties and block alignment to paragraph
-properties. Slides will map them to DrawingML character and paragraph
-properties. They must implement the same state, capability, and patch contract,
+Word maps text properties to run properties and block alignment to paragraph
+properties. Slides maps them to DrawingML character and paragraph
+properties. Both implement the same state, capability, and patch contract,
 but remain responsible for their own inheritance and package-preservation rules.
 
 Format-specific features such as cell fills, paragraph spacing, and shape fills

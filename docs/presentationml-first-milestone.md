@@ -1,12 +1,10 @@
-# PowerPoint: standards baseline and first implementation milestone
+# PowerPoint standards baseline and original implementation plan
 
-Research date: 2026-09-21. Status: first local implementation is available; this is not a full compatibility claim.
-
-## Local implementation status
-
-The workspace now has a bounded reader, inherited slide scene, artifact/editing session, and a reusable Svelte view at `@tumblerjs/svelte/slides`. The docs playground opens PPTX files and includes four generated examples. Supported slide-local objects can be moved/resized; ordinary rich text can be edited and formatted in place, undone, redone, and exported. Shape fill and outline controls are available. All code remains local and Slides remains private.
-
-Focused tests cover relationship ordering, placeholder geometry/defaults, group transforms, MCE branch preservation, Strict namespace handling, no-op byte identity, edit restrictions, and unchanged package parts. Generated decks are checked against ECMA PresentationML schemas. The Open XML SDK runner now accepts PPTX as well as spreadsheets. Live thumbnail navigation and directly formatted tables, including merged cells, are implemented. Application-level PowerPoint/Impress qualification, full placeholder/text inheritance, and table row/column operations remain future work.
+Research date: 2026-09-21. This document records the original scope and sequencing.
+Its proposed restrictions and deferred features are historical, not the current
+capability list. See [PresentationML implementation](presentationml-implementation.md)
+for current support and [the PowerPoint guide](https://tumbler.alexco.dev/docs/powerpoint)
+for integration examples.
 
 ## Recommendation
 
@@ -171,8 +169,9 @@ Text includes common Arabic/alphabetic/Roman numbering, bullet colour/size, base
 The `standards-features.pptx` fixture and the corresponding playground example exercise these additions. This is rendering coverage, not a declaration of complete ECMA conformance. Browser layout is approximate for vertical/multi-column text, shape fill lightening/darkening, transformed shadows, and complex typography. Pattern fills, 3D effects, SmartArt, media playback, animations, and table row/column operations remain outside the supported slice. PowerPoint and Impress application validation is still outstanding.
 
 
-## In-place text and shape editing
+## Current editing coverage
 
-Ordinary rich-text paragraphs now support range replacement, paragraph splitting/joining, and font, size, emphasis, colour, and alignment edits. The browser caret stays in the preview text layout. The shared Word formatting toolbar drives PresentationML edits, including mixed selection state and formatting for newly typed text. Shape controls set solid fill, outline colour, and width. Edits have undo/redo and preserve other package parts. This does not enable editing of inherited/grouped objects, fields, hyperlinks, body-level vertical/rotated text, or animated content. Object transforms support rotation and resizing on rotated or flipped slide-local objects.
-
-Table cells now support in-place text and formatting edits, Tab navigation, undo/redo, and export. Table movement and resizing update native frame, column, and row geometry without scaling text. Cell styles and merge flags are preserved; covered merged cells cannot be edited independently. Row/column insertion, deletion, and merge controls remain future work.
+The initial scope has expanded to rich-text and table-cell editing, formatting,
+rotation, grouped children, inherited placeholder geometry, and preserved Office
+extension data. The [implementation notes](presentationml-implementation.md)
+describe remaining restrictions and validation commands.

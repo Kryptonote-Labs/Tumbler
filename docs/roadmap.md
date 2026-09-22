@@ -1,7 +1,9 @@
 # Roadmap
 
 This roadmap defines order and exit criteria, not dates. Tumbler deliberately
-builds one format at a time while keeping the family architecture intact.
+develops the three formats through bounded, independently tested features.
+Current coverage lives in the [compatibility guide](https://tumbler.alexco.dev/docs/compatibility);
+the phases below retain the original sequencing and remaining exit criteria.
 
 ## Phase 0: foundations and experiments
 
@@ -145,6 +147,17 @@ The second-format architecture checkpoint is implemented as a bounded alpha:
 
 The exact capability claims and safety policy live in
 [wordprocessingml-implementation.md](wordprocessingml-implementation.md).
+
+## PresentationML checkpoint
+
+The third format now includes a reader, slide scenes, Svelte viewing and editing,
+thumbnail navigation, text and table-cell formatting, object transforms, and
+undo/redo. Imported grouped objects and inherited placeholder geometry support
+local edits. Edits reparse one slide and defer ZIP serialization until export.
+
+Remaining work includes table structure commands, SmartArt relayout, advanced
+animation timing, 3D effects, and broader Office visual and round-trip qualification.
+See [PresentationML implementation](presentationml-implementation.md).
 
 ## Phase 7: second and third formats
 

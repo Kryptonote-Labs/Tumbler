@@ -90,7 +90,9 @@ Remaining boundaries:
   elements need more Part 3 work.
 - Schema-derived validation is intentionally focused. It does not replace the
   official schemas or Open XML SDK validation.
-- The first bounded SpreadsheetML model exists. WordprocessingML,
-  PresentationML, DrawingML, styles, and formula semantics do not yet.
-- Real Microsoft Office, LibreOffice, Open XML SDK, and Apache POI qualification
-  remains blocked on local tools and licensed/provenanced fixtures.
+- SpreadsheetML, WordprocessingML, and PresentationML models live in their format
+  packages. Shared DrawingML, theme, and style support is used by those adapters;
+  the formulas package handles spreadsheet calculation.
+- Open XML SDK validation is available through `bun run compatibility:openxml`.
+  Passing schema and semantic checks does not establish visual fidelity in
+  Microsoft Office or LibreOffice. See [testing.md](testing.md) for qualification.
