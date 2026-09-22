@@ -8,7 +8,7 @@ export const navigation = [
 ];
 export const samples = [
   { id: 'slides-rendering', label: 'Rendering checks', format: 'slides', file: 'rendering-checks.pptx', description: 'Autofit, decimal tabs, picture and pattern fills, stacked and combination charts, embedded video, and click-by-click playback.' },
-  { id: 'slides-brief', label: 'Workspace presentation', format: 'slides', file: 'workspace-brief.pptx', description: 'Three slides with text, shapes, inherited decorations, and a chart. Switch to Edit to move objects or change simple text.' },
+  { id: 'slides-brief', label: 'Workspace presentation', format: 'slides', file: 'workspace-brief.pptx', description: 'Three slides with text, shapes, inherited decorations, and a chart. Switch to Edit to move, resize, or rotate objects and format text.' },
   { id: 'slides-visuals', label: 'Shapes and pictures', format: 'slides', file: 'shapes-and-pictures.pptx', description: 'A 4:3 deck with rotation, transparency, mixed text, and an embedded picture.' },
   { id: 'slides-standards', label: 'Everyday PowerPoint features', format: 'slides', file: 'standards-features.pptx', description: 'Preset shapes, gradients, formatted text, hyperlinks, speaker notes, and theme-styled tables.' },
   { id: 'slides-compatibility', label: 'Compatibility checks', format: 'slides', file: 'compatibility-deck.pptx', description: 'Groups, tables, and notes. Unsupported objects remain in exported files.' },

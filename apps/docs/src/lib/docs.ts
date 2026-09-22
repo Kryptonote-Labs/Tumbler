@@ -154,7 +154,7 @@ export const docs: Record<string, Doc> = {
     sections: [
       { id: 'packages', title: 'Install the packages', blocks: [
         { kind: 'text', text: 'Install the Svelte components and the format packages you need. All public Tumbler packages share one version. Keep them on the same release.' },
-        { kind: 'code', language: 'Terminal', code: 'bun add @tumblerjs/svelte @tumblerjs/word @tumblerjs/sheets @tumblerjs/core' },
+        { kind: 'code', language: 'Terminal', code: 'bun add @tumblerjs/svelte @tumblerjs/word @tumblerjs/sheets @tumblerjs/slides @tumblerjs/core' },
         { kind: 'note', text: 'Tumbler is early alpha. The latest distribution tag points to the current alpha release. APIs and format coverage are still changing.' }
       ] },
       { id: 'first-document', title: 'Render a Word document', blocks: [
@@ -188,7 +188,7 @@ export const docs: Record<string, Doc> = {
 {/if}` }
       ] },
       { id: 'headless', title: 'Use the model without Svelte', blocks: [
-        { kind: 'text', text: 'The document models do not depend on a UI framework. Use the Word or Sheets package directly when building another renderer, inspecting documents, or applying edits.' },
+        { kind: 'text', text: 'The document models do not depend on a UI framework. Use the Word, Sheets, or Slides package directly when building another renderer, inspecting documents, or applying edits.' },
         { kind: 'code', code: `import { openSpreadsheetArtifact } from '@tumblerjs/sheets';
 
 const artifact = openSpreadsheetArtifact(bytes);
