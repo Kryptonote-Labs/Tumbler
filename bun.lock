@@ -36,33 +36,33 @@
     },
     "packages/charts": {
       "name": "@tumblerjs/charts",
-      "version": "0.1.0-alpha.18",
+      "version": "0.1.0-alpha.19",
       "dependencies": {
-        "@tumblerjs/ooxml": "0.1.0-alpha.18",
+        "@tumblerjs/ooxml": "0.1.0-alpha.19",
       },
     },
     "packages/core": {
       "name": "@tumblerjs/core",
-      "version": "0.1.0-alpha.18",
+      "version": "0.1.0-alpha.19",
       "dependencies": {
-        "@tumblerjs/ooxml": "0.1.0-alpha.18",
+        "@tumblerjs/ooxml": "0.1.0-alpha.19",
       },
     },
     "packages/formulas": {
       "name": "@tumblerjs/formulas",
-      "version": "0.1.0-alpha.18",
+      "version": "0.1.0-alpha.19",
     },
     "packages/ooxml": {
       "name": "@tumblerjs/ooxml",
-      "version": "0.1.0-alpha.18",
+      "version": "0.1.0-alpha.19",
       "dependencies": {
-        "@tumblerjs/opc": "0.1.0-alpha.18",
+        "@tumblerjs/opc": "0.1.0-alpha.19",
         "saxes": "6.0.0",
       },
     },
     "packages/opc": {
       "name": "@tumblerjs/opc",
-      "version": "0.1.0-alpha.18",
+      "version": "0.1.0-alpha.19",
       "dependencies": {
         "fflate": "^0.8.3",
         "saxes": "^6.0.0",
@@ -70,34 +70,34 @@
     },
     "packages/sheets": {
       "name": "@tumblerjs/sheets",
-      "version": "0.1.0-alpha.18",
+      "version": "0.1.0-alpha.19",
       "dependencies": {
-        "@tumblerjs/charts": "0.1.0-alpha.18",
-        "@tumblerjs/core": "0.1.0-alpha.18",
-        "@tumblerjs/formulas": "0.1.0-alpha.18",
-        "@tumblerjs/ooxml": "0.1.0-alpha.18",
-        "@tumblerjs/opc": "0.1.0-alpha.18",
+        "@tumblerjs/charts": "0.1.0-alpha.19",
+        "@tumblerjs/core": "0.1.0-alpha.19",
+        "@tumblerjs/formulas": "0.1.0-alpha.19",
+        "@tumblerjs/ooxml": "0.1.0-alpha.19",
+        "@tumblerjs/opc": "0.1.0-alpha.19",
       },
     },
     "packages/slides": {
       "name": "@tumblerjs/slides",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.19",
       "dependencies": {
-        "@tumblerjs/charts": "workspace:*",
-        "@tumblerjs/core": "workspace:*",
-        "@tumblerjs/ooxml": "workspace:*",
-        "@tumblerjs/opc": "workspace:*",
+        "@tumblerjs/charts": "0.1.0-alpha.19",
+        "@tumblerjs/core": "0.1.0-alpha.19",
+        "@tumblerjs/ooxml": "0.1.0-alpha.19",
+        "@tumblerjs/opc": "0.1.0-alpha.19",
         "mtx-decompressor": "1.6.0",
       },
     },
     "packages/svelte": {
       "name": "@tumblerjs/svelte",
-      "version": "0.1.0-alpha.18",
+      "version": "0.1.0-alpha.19",
       "dependencies": {
-        "@tumblerjs/charts": "0.1.0-alpha.18",
-        "@tumblerjs/core": "0.1.0-alpha.18",
-        "@tumblerjs/sheets": "0.1.0-alpha.18",
-        "@tumblerjs/word": "0.1.0-alpha.18",
+        "@tumblerjs/charts": "0.1.0-alpha.19",
+        "@tumblerjs/core": "0.1.0-alpha.19",
+        "@tumblerjs/sheets": "0.1.0-alpha.19",
+        "@tumblerjs/word": "0.1.0-alpha.19",
         "rtf.js": "3.0.9",
       },
       "devDependencies": {
@@ -105,7 +105,7 @@
         "svelte": "^5.0.0",
       },
       "peerDependencies": {
-        "@tumblerjs/slides": "*",
+        "@tumblerjs/slides": "0.1.0-alpha.19",
         "svelte": "^5.0.0",
       },
       "optionalPeers": [
@@ -126,12 +126,12 @@
     },
     "packages/word": {
       "name": "@tumblerjs/word",
-      "version": "0.1.0-alpha.18",
+      "version": "0.1.0-alpha.19",
       "dependencies": {
-        "@tumblerjs/charts": "0.1.0-alpha.18",
-        "@tumblerjs/core": "0.1.0-alpha.18",
-        "@tumblerjs/ooxml": "0.1.0-alpha.18",
-        "@tumblerjs/opc": "0.1.0-alpha.18",
+        "@tumblerjs/charts": "0.1.0-alpha.19",
+        "@tumblerjs/core": "0.1.0-alpha.19",
+        "@tumblerjs/ooxml": "0.1.0-alpha.19",
+        "@tumblerjs/opc": "0.1.0-alpha.19",
       },
     },
   },

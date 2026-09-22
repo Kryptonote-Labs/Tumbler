@@ -1,14 +1,32 @@
 {
   "name": "@tumblerjs/slides",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0-alpha.19",
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@tumblerjs/charts": "workspace:*",
-    "@tumblerjs/core": "workspace:*",
-    "@tumblerjs/ooxml": "workspace:*",
-    "@tumblerjs/opc": "workspace:*",
+    "@tumblerjs/charts": "0.1.0-alpha.19",
+    "@tumblerjs/core": "0.1.0-alpha.19",
+    "@tumblerjs/ooxml": "0.1.0-alpha.19",
+    "@tumblerjs/opc": "0.1.0-alpha.19",
     "mtx-decompressor": "1.6.0"
+  },
+  "description": "Headless PresentationML reading, rendering models, preservation, and editing for Tumbler.",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "ECMA-NOTICE.md",
+    "MS-NOTICE.md",
+    "THIRD-PARTY-NOTICES.md"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kryptonote-Labs/Tumbler.git",
+    "directory": "packages/slides"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "latest"
   }
 }
