@@ -291,8 +291,15 @@ export function presentationTextEdit(
   node.addEventListener("compositionend", compositionEnd);
   node.addEventListener("pointerdown", pointer);
   node.addEventListener("drop", drop);
+  function clearSelection() {
+    const selection = window.getSelection();
+    if (selection?.anchorNode && node.contains(selection.anchorNode))
+      selection.removeAllRanges();
+    if (document.activeElement === node) node.blur();
+  }
   async function update(next: SlideTextEditorOptions) {
     const entering = next.active && !active;
+    const leaving = active && !next.active;
     const revised = next.revision !== options.revision;
     const refocus = next.focusToken !== options.focusToken;
     const focused = document.activeElement === node;
@@ -300,8 +307,10 @@ export function presentationTextEdit(
       options.paragraphs.join("\n") !== next.paragraphs.join("\n");
     options = next;
     active = next.active;
+    if (leaving) clearSelection();
     if (entering) {
       await tick();
+      if (!active) return;
       node.focus({ preventScroll: true });
       const point = options.point;
       const caret = point
@@ -336,6 +345,8 @@ export function presentationTextEdit(
   return {
     update,
     destroy() {
+      active = false;
+      clearSelection();
       document.removeEventListener("selectionchange", capture);
       node.removeEventListener("beforeinput", before);
       node.removeEventListener("paste", paste);

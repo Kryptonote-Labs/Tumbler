@@ -491,6 +491,33 @@
       y: selected.transform.y + delta.y,
     });
   }
+  function blankSelection(node: HTMLElement) {
+    const pointerdown = (event: PointerEvent) => {
+      if (
+        !editable ||
+        event.button !== 0 ||
+        !(event.target instanceof Element) ||
+        event.target.closest("[data-slide-object]")
+      )
+        return;
+      cancel();
+      editing = undefined;
+      activeCell = undefined;
+      pendingFormat = undefined;
+      textRange = { start: 0, end: 0 };
+      selectedKey = undefined;
+      const selection = window.getSelection();
+      if (selection?.anchorNode && node.contains(selection.anchorNode))
+        selection.removeAllRanges();
+      svg?.focus({ preventScroll: true });
+    };
+    node.addEventListener("pointerdown", pointerdown);
+    return {
+      destroy() {
+        node.removeEventListener("pointerdown", pointerdown);
+      },
+    };
+  }
   function gestures(node: HTMLElement) {
     return thumbnail ? {} : zoomGesture(node, zoom);
   }
@@ -544,6 +571,7 @@
     bind:clientWidth={width}
     bind:clientHeight={height}
     use:gestures
+    use:blankSelection
     class:thumbnail
   >
     <div
@@ -607,11 +635,6 @@
                 ? `url(#${viewId}-background)`
                 : slide.background}
           role="presentation"
-          onpointerdown={() => {
-            editing = undefined;
-            pendingFormat = undefined;
-            selectedKey = undefined;
-          }}
         />
         {#each slide.objects as object (object.key)}
           {@const change =

@@ -585,3 +585,42 @@ test("grouped shapes follow the pointer without losing their group scale", async
     .poll(async () => (await object.locator("rect.hit").boundingBox())!.x)
     .toBeCloseTo(bounds!.x, 0);
 });
+
+test("blank slide and surrounding canvas clear text selection without breaking toolbar formatting", async ({
+  page,
+}) => {
+  await page.goto("/playground/slides-brief");
+  const stage = page.locator(".slide-stage");
+  const title = stage
+    .locator("[data-slide-object]")
+    .filter({ hasText: "A quieter workspace" });
+  await expect(title).toBeVisible();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const editor = page.getByRole("textbox", { name: "Edit slide text" });
+  const bold = page.getByRole("button", { name: "Bold", exact: true });
+  for (const target of [
+    stage.locator("svg.slide > rect").first(),
+    stage.locator(".slide-space"),
+  ]) {
+    await title.dblclick();
+    await editor.press("Control+Home");
+    await editor.press("Control+Shift+ArrowRight");
+    await expect
+      .poll(() => page.evaluate(() => window.getSelection()?.toString()))
+      .not.toBe("");
+    await bold.click();
+    await expect(editor).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => window.getSelection()?.toString()))
+      .not.toBe("");
+    await target.click({ position: { x: 4, y: 4 } });
+    await expect(editor).toHaveCount(0);
+    await expect
+      .poll(() => page.evaluate(() => window.getSelection()?.toString()))
+      .toBe("");
+    await expect(bold).toBeDisabled();
+    await expect(stage.getByRole("button", { name: /^Resize / })).toHaveCount(
+      0,
+    );
+  }
+});
