@@ -100,8 +100,8 @@ describe("DrawingML chart parser", () => {
     expect(type("radarChart")).toMatchObject({ status: "unsupported", chartType: "radarChart" });
     const profile = profiles[1]!;
     const result = parseOoxmlChart(xml(profile, '<c:plotArea><c:lineChart/><c:barChart/></c:plotArea>'), "transitional");
-    expect(result).toMatchObject({ status: "unsupported", reason: expect.stringContaining("Combination") });
-    expect(type("barChart", '<c:grouping val="stacked"/>')).toMatchObject({ status: "unsupported", reason: expect.stringContaining("stacked") });
+    expect(result).toMatchObject({ status: "supported", plots: expect.any(Array) });
+    expect(type("barChart", '<c:grouping val="stacked"/>')).toMatchObject({ status: "supported", grouping: "stacked" });
   });
 
   test("rejects hostile cache shapes", () => {
@@ -135,3 +135,15 @@ function type(name: string, body = "") {
 function xml(profile: typeof profiles[number], body: string): Uint8Array {
   return new TextEncoder().encode(`<c:chartSpace xmlns:c="${profile.chart}" xmlns:a="${profile.drawing}"><c:chart>${body}</c:chart></c:chartSpace>`);
 }
+
+test("reads flat and hierarchical category caches without replacing labels with indices", () => {
+  const chart = parseOoxmlChart(xml(profiles[1]!, `<c:plotArea><c:barChart><c:barDir val="col"/>
+    <c:ser><c:idx val="0"/><c:order val="0"/><c:cat><c:multiLvlStrRef><c:f>Sheet1!$A$2:$B$3</c:f>
+    <c:multiLvlStrCache><c:ptCount val="2"/><c:lvl><c:pt idx="0"><c:v>Q1</c:v></c:pt><c:pt idx="1"><c:v>Q2</c:v></c:pt></c:lvl>
+    <c:lvl><c:pt idx="0"><c:v>2026</c:v></c:pt></c:lvl></c:multiLvlStrCache></c:multiLvlStrRef></c:cat>
+    <c:val><c:numLit><c:ptCount val="2"/><c:pt idx="0"><c:v>4</c:v></c:pt><c:pt idx="1"><c:v>8</c:v></c:pt></c:numLit></c:val>
+    </c:ser></c:barChart></c:plotArea>`), "transitional");
+  expect(chart.status).toBe("supported");
+  if (chart.status !== "supported") throw new Error("Expected chart");
+  expect(chart.series[0]?.categories).toMatchObject({ formula: "Sheet1!$A$2:$B$3", points: [{index:0,value:"Q1"},{index:1,value:"Q2"}], levels: [[{index:0,value:"Q1"},{index:1,value:"Q2"}],[{index:0,value:"2026"}]] });
+});

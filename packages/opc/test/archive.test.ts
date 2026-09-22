@@ -129,7 +129,7 @@ describe("ZIP inventory", () => {
 });
 
 describe("ZIP rejection and limits", () => {
-  test.each(["../secret", "a/../secret", "/absolute", "a\\b", "folder/"])(
+  test.each(["../secret", "a/../secret", "/absolute", "a\\b", "../folder/", "folder//"])(
     "rejects unsafe item name %s",
     (name) => {
       expectZipError(() => openZipArchive(buildStoredZip([{ name }])), "invalid_entry_name");

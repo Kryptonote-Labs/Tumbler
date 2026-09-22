@@ -7,7 +7,7 @@ document formats and UI heads.
 > and APIs can change without notice.
 
 ```sh
-bun add @tumblerjs/charts@alpha
+bun add @tumblerjs/charts
 ```
 
 ```ts

@@ -263,6 +263,9 @@ export function openZipArchive(
       (flags & UTF8_NAME_FLAG) !== 0,
     );
     validateEntryName(name);
+    if (name.endsWith("/") && uncompressedSize !== 0) {
+      throw new ZipArchiveError("invalid_entry_name", "A directory entry cannot contain part data.", { entryName: name });
+    }
 
     if (names.has(name)) {
       throw new ZipArchiveError(
@@ -484,11 +487,10 @@ function validateNonOverlappingEntries(
 }
 
 function validateEntryName(name: string): void {
-  const segments = name.split("/");
+  const segments = (name.endsWith("/") ? name.slice(0, -1) : name).split("/");
   if (
     name.length === 0 ||
     name.startsWith("/") ||
-    name.endsWith("/") ||
     name.includes("\\") ||
     name.includes("\0") ||
     segments.some((segment) => segment === "" || segment === "." || segment === "..")

@@ -8,7 +8,7 @@ models for browser-based spreadsheet experiences.
 > survive every edit. Keep original copies of important files.
 
 ```sh
-bun add @tumblerjs/sheets@alpha
+bun add @tumblerjs/sheets
 ```
 
 ```ts

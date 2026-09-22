@@ -1,6 +1,6 @@
 {
   "name": "@tumblerjs/charts",
-  "version": "0.1.0-alpha.18",
+  "version": "0.1.0-alpha.19",
   "description": "Headless OOXML chart semantics and deterministic layout for Tumbler.",
   "type": "module",
   "exports": "./src/index.ts",
@@ -20,6 +20,6 @@
     "tag": "latest"
   },
   "dependencies": {
-    "@tumblerjs/ooxml": "0.1.0-alpha.18"
+    "@tumblerjs/ooxml": "0.1.0-alpha.19"
   }
 }

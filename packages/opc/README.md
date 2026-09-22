@@ -7,7 +7,7 @@ Packaging Convention packages.
 > original copies of important documents.
 
 ```sh
-bun add @tumblerjs/opc@alpha
+bun add @tumblerjs/opc
 ```
 
 ```ts

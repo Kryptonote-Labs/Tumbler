@@ -44,8 +44,10 @@ jobs:
         run: bun run docs:check
       - name: Build docs
         run: bun run docs:build
-      - name: Install Chromium
+      - name: Install Chrome for H.264 playback
         working-directory: apps/docs
-        run: bunx playwright install --with-deps chromium
-      - name: Test playground in Chromium
+        run: bunx playwright install --with-deps chrome
+      - name: Test playground in Chrome
+        env:
+          CHROMIUM_PATH: /usr/bin/google-chrome
         run: bun run docs:test

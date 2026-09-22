@@ -32,6 +32,12 @@ jobs:
       - name: Generate fixtures
         run: bun run compatibility:fixtures -- "$RUNNER_TEMP/tumbler-fixtures"
 
+      - name: Generate presentation fixtures
+        run: bun run compatibility:presentations -- "$RUNNER_TEMP/tumbler-presentations" --with-edits
+
+      - name: Validate presentations with Open XML SDK
+        run: bun run compatibility:openxml -- "$RUNNER_TEMP/tumbler-presentations"/*.pptx
+
       - name: Validate with Open XML SDK
         run: bun run compatibility:openxml -- "$RUNNER_TEMP/tumbler-fixtures"/*.xlsx
 

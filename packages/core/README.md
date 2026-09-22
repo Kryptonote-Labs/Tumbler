@@ -6,7 +6,7 @@ primitives for document editors.
 > **Extremely early alpha.** APIs and behavior can change without notice.
 
 ```sh
-bun add @tumblerjs/core@alpha
+bun add @tumblerjs/core
 ```
 
 ```ts

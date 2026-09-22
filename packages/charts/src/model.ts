@@ -28,6 +28,8 @@ export interface ChartDataSequence {
   readonly formula: string | undefined;
   readonly formatCode: string | undefined;
   readonly points: readonly ChartDataPoint[];
+  /** Hierarchical category caches, with the innermost labels first. */
+  readonly levels?: readonly (readonly ChartDataPoint[])[];
 }
 
 export interface ChartSeries {
@@ -74,6 +76,7 @@ interface ChartModelBase {
 }
 
 export interface SupportedChartModel extends ChartModelBase {
+  readonly plots?: readonly SupportedChartModel[];
   readonly status: "supported";
   readonly kind: ChartKind;
   readonly grouping: "clustered" | "stacked" | "percent-stacked" | "standard";

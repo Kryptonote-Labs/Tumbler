@@ -4,7 +4,7 @@ set -euo pipefail
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 consumer_root=${1:-${TUMBLER_CONSUMER_ROOT:-"$repository_root/../../Kryptonote/Kn-Frontend"}}
-packages=(opc ooxml formulas charts core sheets word svelte)
+packages=(opc ooxml formulas charts core sheets word slides svelte)
 archive_root=$(mktemp -d)
 consumer_modules="$consumer_root/node_modules/@tumblerjs"
 consumer_modules_backup="$archive_root/consumer-registry-packages"

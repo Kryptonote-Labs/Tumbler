@@ -1,6 +1,7 @@
-import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
+import { beginLosslessXmlEdit, OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { BUBBLE_CHART_POINT_LIMIT } from "./model.ts";
 import type {
+  SupportedChartModel,
   ChartAxis,
   ChartColor,
   ChartDataPoint,
@@ -50,8 +51,22 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
   const candidates = plotArea.children.filter((child): child is LosslessXmlElement =>
     child.kind === "element" && child.namespaceUri === chartNamespace && child.localName.endsWith("Chart")
   );
-  if (candidates.length !== 1) {
-    return unsupported(candidates[0]?.localName, candidates.length === 0 ? "The plot area has no chart type." : "Combination charts are not supported in this milestone.", title, titleFormula, legend);
+  if (candidates.length === 0) return unsupported(undefined, "The plot area has no chart type.", title, titleFormula, legend);
+  if (candidates.length > 1) {
+    if (candidates.length > 32) throw new ChartParseError("Too many chart plots.");
+    const plots: SupportedChartModel[] = [];
+    for (const candidate of candidates) {
+      const edit = beginLosslessXmlEdit(document);
+      for (const other of candidates) if (candidate !== other) edit.removeElement(other);
+      const parsed = parseOoxmlChart(edit.commit().bytes, conformance);
+      if (parsed.status !== "supported" || !["column", "bar", "line"].includes(parsed.kind))
+        return unsupported(candidate.localName, "This combination contains an unsupported plot type.", title, titleFormula, legend);
+      plots.push(parsed);
+    }
+    if (plots.some(p=>p.kind === "bar") && plots.some(p=>p.kind !== "bar")) return unsupported("combination", "Mixed horizontal and vertical plots are unsupported.", title, titleFormula, legend);
+    const series = plots.flatMap(p=>p.series);
+    if (series.length > MAX_SERIES) throw new ChartParseError("Too many combination series.");
+    return {...plots[0]!, plots, series};
   }
   const chartType = candidates[0]!;
   const kind = chartKind(chartType, chartNamespace);
@@ -69,9 +84,6 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
     : rawGrouping === "percentStacked" ? "percent-stacked" as const
     : rawGrouping === "clustered" ? "clustered" as const
     : "standard" as const;
-  if (grouping === "stacked" || grouping === "percent-stacked") {
-    return unsupported(chartType.localName, `${rawGrouping} charts are not supported in this milestone.`, title, titleFormula, legend);
-  }
   if ((kind === "pie" || kind === "doughnut") && series.length > 1) {
     return unsupported(chartType.localName, "Multiple-series pie-family charts are not supported in this milestone.", title, titleFormula, legend);
   }
@@ -172,6 +184,21 @@ function parseBubbleSizeRepresentation(raw: string): ChartBubbleSizeRepresentati
 
 function parseData(container: LosslessXmlElement | undefined, namespace: string): ChartDataSequence | undefined {
   if (container === undefined) return undefined;
+  const multi = children(container, namespace, "multiLvlStrRef")[0];
+  if (multi !== undefined) {
+    const cache = children(multi, namespace, "multiLvlStrCache")[0];
+    const levelElements = cache === undefined ? [] : children(cache, namespace, "lvl");
+    if (levelElements.length > 32) throw new ChartParseError("Chart categories exceed 32 levels.");
+    const rawCount = cache === undefined ? undefined : val(children(cache, namespace, "ptCount")[0]);
+    const count = rawCount === undefined ? undefined : unsigned(rawCount, "category point count");
+    if (count !== undefined && count > MAX_CACHE_POINTS) throw new ChartParseError(`Chart cache exceeds ${MAX_CACHE_POINTS} points.`);
+    const levels = levelElements.map(level => parseSequenceContainer(level, namespace, "string").points);
+    if (levels.some(level => level.some(point => point.index >= (count ?? MAX_CACHE_POINTS)))) {
+      throw new ChartParseError("Category point is outside its declared cache.");
+    }
+    return Object.freeze({ kind: "string", formula: formula(multi, namespace), formatCode: undefined,
+      points: levels[0] ?? Object.freeze([]), levels: Object.freeze(levels) });
+  }
   const reference = children(container, namespace, "numRef")[0] ?? children(container, namespace, "strRef")[0];
   if (reference !== undefined) return parseSequenceContainer(reference, namespace, reference.localName === "strRef" ? "string" : "number");
   const literal = children(container, namespace, "numLit")[0] ?? children(container, namespace, "strLit")[0];

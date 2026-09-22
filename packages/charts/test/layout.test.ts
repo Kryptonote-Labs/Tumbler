@@ -139,3 +139,20 @@ function model(): SupportedChartModel {
     }],
   };
 }
+test('stacked domains include positive and negative totals and percent stacks normalize categories', async()=>{
+ const {cartesianStack}=await import('../src/layout.ts');
+ const base=model();const stack={...base,grouping:'stacked' as const,series:[base.series[0]!,{...base.series[0]!,index:1}]};
+ expect(layoutCartesianChart(stack,600,400)).toMatchObject({minimum:-10,maximum:40});
+ expect(cartesianStack(stack,1,2)).toEqual({start:20,end:40});
+ expect(cartesianStack({...stack,grouping:'percent-stacked'},1,2)).toEqual({start:0.5,end:1});
+});
+test('combination plots share a frame but retain independent authored value axes', async()=>{
+ const {layoutCombinationChart}=await import('../src/combination.ts');const base=model();
+ const left={id:1,kind:'value' as const,position:'left' as const,title:undefined,majorGridlines:true,minimum:0,maximum:100,deleted:false};
+ const right={...left,id:2,position:'right' as const,maximum:1};
+ const a={...base,kind:'column' as const,axisIds:[0,1],axes:[left,right]};
+ const b={...base,kind:'line' as const,axisIds:[0,2],axes:[left,right],series:base.series.map(s=>({...s,index:s.index+10}))};
+ const plots=layoutCombinationChart({...a,plots:[a,b],series:[...a.series,...b.series]},600,400);
+ expect(plots[0]!.plot).toEqual(plots[1]!.plot);expect(plots.map(p=>p.maximum)).toEqual([100,1]);
+ expect(plots[0]!.coordinate(50)).toBe(plots[1]!.coordinate(0.5));
+});
