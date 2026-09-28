@@ -6,7 +6,11 @@ repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 consumer_root=${1:-${TUMBLER_CONSUMER_ROOT:-"$repository_root/../../Kryptonote/Kn-Frontend"}}
 packages=(opc ooxml formulas charts core sheets word slides svelte)
 archive_root=$(mktemp -d)
-consumer_modules="$consumer_root/node_modules/@tumblerjs"
+consumer_workspace="$consumer_root"
+if [[ -f "$consumer_root/apps/web/package.json" ]]; then
+  consumer_workspace="$consumer_root/apps/web"
+fi
+consumer_modules="$consumer_workspace/node_modules/@tumblerjs"
 consumer_modules_backup="$archive_root/consumer-registry-packages"
 consumer_modules_mounted=false
 
@@ -81,13 +85,13 @@ for index in "${!packages[@]}"; do
       dependency_source=$dependency
       # Resolve peers from the consumer, as a normal package installation does.
       if bun -e 'const manifest = await Bun.file(process.argv[1]).json(); process.exit(Object.hasOwn(manifest.peerDependencies ?? {}, process.argv[2]) ? 0 : 1)' "$mounted_package/package.json" "$dependency_name"; then
-        dependency_source="$consumer_root/node_modules/$dependency_name"
+        dependency_source="$consumer_workspace/node_modules/$dependency_name"
       fi
       ln -s -- "$(readlink -f -- "$dependency_source")" "$mounted_package/node_modules/$dependency_name"
     done
   fi
 done
 
-bun run --cwd "$consumer_root" check
+bun run --cwd "$consumer_workspace" check
 git -C "$repository_root" config --local tumbler.release-qualified "$(git -C "$repository_root" rev-parse HEAD)"
 printf 'All public package tarballs passed Tumbler and consumer qualification.\n'
