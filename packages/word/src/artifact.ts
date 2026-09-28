@@ -26,20 +26,28 @@ export class WordArtifact implements FormattingAdapter<WordFormattingTarget, Wor
   }
 
   replaceText(selection: WordTextSelection, value: string, typingFormatting?: FormattingPatch): WordArtifact {
-    const paragraphIndex = selection.anchor.paragraphElementId === selection.focus.paragraphElementId && !value.includes("\n")
-      ? documentParagraphs(this.document).findIndex((paragraph) => paragraph.elementId === selection.anchor.paragraphElementId)
-      : -1;
-    const insertedStart = Math.min(selection.anchor.offset, selection.focus.offset);
+    const paragraphs = documentParagraphs(this.document);
+    const anchorIndex = paragraphs.findIndex((paragraph) => paragraph.elementId === selection.anchor.paragraphElementId);
+    const focusIndex = paragraphs.findIndex((paragraph) => paragraph.elementId === selection.focus.paragraphElementId);
+    const forward = anchorIndex < focusIndex || anchorIndex === focusIndex && selection.anchor.offset <= selection.focus.offset;
+    const paragraphIndex = forward ? anchorIndex : focusIndex;
+    const insertedStart = forward ? selection.anchor.offset : selection.focus.offset;
     const bytes = replaceWordText(this.document, selection, value);
     if (bytes === this.bytes()) return this;
     let next = openWordArtifact(bytes);
     const textFormatting = typingFormatting?.text;
-    if (paragraphIndex < 0 || value.length === 0 || textFormatting === undefined || Object.keys(textFormatting).length === 0) return next;
-    const paragraph = documentParagraphs(next.document)[paragraphIndex];
-    if (paragraph === undefined) return next;
+    if (value.length === 0 || textFormatting === undefined || Object.keys(textFormatting).length === 0) return next;
+    const lines = value.split("\n");
+    // Exclude empty boundary lines: a collapsed formatting range would change adjacent text.
+    const first = lines.findIndex((line) => line.length > 0);
+    const last = lines.findLastIndex((line) => line.length > 0);
+    if (first < 0) return next;
+    const updatedParagraphs = documentParagraphs(next.document);
+    const startParagraph = updatedParagraphs[paragraphIndex + first]!;
+    const endParagraph = updatedParagraphs[paragraphIndex + last]!;
     const inserted = {
-      anchor: { paragraphElementId: paragraph.elementId, offset: insertedStart },
-      focus: { paragraphElementId: paragraph.elementId, offset: insertedStart + value.length },
+      anchor: { paragraphElementId: startParagraph.elementId, offset: first === 0 ? insertedStart : 0 },
+      focus: { paragraphElementId: endParagraph.elementId, offset: (last === 0 ? insertedStart : 0) + lines[last]!.length },
     };
     if (!textFormattingMatches(next.formattingState(inserted), textFormatting)) {
       next = next.applyFormatting(inserted, { text: textFormatting });
