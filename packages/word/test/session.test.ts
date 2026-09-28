@@ -41,10 +41,16 @@ describe("Word editing sessions", () => {
     expect(session.dirty).toBe(false);
   });
 
-  test("commits typing text and its formatting as one history operation", () => {
+  test("commits multiline typing text and its formatting as one history operation", () => {
     const session = openWordEditingSession(fixture(`<w:p/>`));
     const paragraph = session.artifact.document.blocks[0] as WordParagraph;
-    session.replaceText(selection(paragraph.elementId, 0), "A", { text: { italic: { set: true } } });
+    session.replaceText(selection(paragraph.elementId, 0), "A\nB", { text: { italic: { set: true } } });
+    const paragraphs = session.artifact.document.blocks.filter((block) => block.kind === "paragraph");
+    expect(paragraphs.map((p) => wordParagraphText(session.artifact.document, p))).toEqual(["A", "B"]);
+    expect(session.artifact.formattingState({
+      anchor: { paragraphElementId: paragraphs[0]!.elementId, offset: 0 },
+      focus: { paragraphElementId: paragraphs[1]!.elementId, offset: 1 },
+    }).text.italic).toEqual({ state: "value", value: true });
     expect(text(session)).toBe("A");
     expect(session.canUndo).toBe(true);
 
