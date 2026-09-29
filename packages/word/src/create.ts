@@ -53,6 +53,6 @@ export function createWordArtifact(options: CreateWordOptions = {}): WordArtifac
   const encode = new TextEncoder();
   return openWordArtifact(writeZipArchiveChanges(openZipArchive(empty), {
     additions: [...parts.map(([name, content]) => ({ name: name!, data: encode.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>${content}`) })), ...authored.parts],
-  }));
+  }), { maxBlocks: Number.MAX_SAFE_INTEGER, maxInlineItems: Number.MAX_SAFE_INTEGER, maxTextCharacters: Number.MAX_SAFE_INTEGER });
 }
 
