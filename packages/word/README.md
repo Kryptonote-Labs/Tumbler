@@ -99,3 +99,17 @@ See the repository's
 for the exact capability matrix and known limitations.
 
 MIT licensed. See [LICENSE](LICENSE).
+
+### Structured authoring
+
+`createWordArtifact({ blocks })` accepts paragraph, table and image blocks. A paragraph has
+formatted `runs`, optional alignment and optional `list: { id, kind, level, start }` metadata.
+Reuse a list ID to continue numbering; use a new ID to restart it. Levels range from zero to eight.
+Tables have rectangular `rows` of cells, each containing `blocks`, and optional column widths in
+points. Image blocks contain PNG or JPEG bytes, dimensions in points and optional alt text.
+Images are embedded in the DOCX, with relationships created automatically. `blocks` and the
+older `paragraphs` option are mutually exclusive.
+
+Authoring limits include 10,000 blocks, 10,000 cells, eight nested table levels and 100 MB of
+image data per document. Applications should enforce their own smaller limits where appropriate.
+The structured input is an authoring format, not a lossless conversion of arbitrary existing DOCX files.
