@@ -34,7 +34,7 @@ export function wordInputEdit(
   if (inputType === "insertParagraph" || inputType === "insertLineBreak") {
     return edit(ordered, "\n", caretAfterInsertion(ordered, "\n"));
   }
-  if (inputType === "deleteByCut" || inputType === "deleteByDrag") return collapsed(selection) ? undefined : edit(ordered, "", ordered.anchor);
+  if (inputType === "deleteByCut") return collapsed(selection) ? undefined : edit(ordered, "", ordered.anchor);
   if (inputType === "deleteWordBackward" || inputType === "deleteWordForward") {
     if (!collapsed(selection)) return edit(ordered, "", ordered.anchor);
     const expanded = wordDeletionSelection(document, ordered.anchor, inputType === "deleteWordBackward");

@@ -26,7 +26,8 @@ export function createWordArtifact(options: CreateWordOptions = {}): WordArtifac
   const relationships = 'http://schemas.openxmlformats.org/package/2006/relationships';
   const office = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/';
   const page = options.page ?? { width: 595.3, height: 841.9, margin: 72 };
-  for (const value of [page.width, page.height, page.margin, options.lineSpacing ?? 1]) if (!Number.isFinite(value) || value <= 0) throw new RangeError('Document dimensions and line spacing must be positive.');
+  for (const value of [page.width, page.height, options.lineSpacing ?? 1]) if (!Number.isFinite(value) || value <= 0) throw new RangeError('Document dimensions and line spacing must be positive.');
+  if (!Number.isFinite(page.margin) || page.margin < 0) throw new RangeError('Page margins must be nonnegative.');
   if (page.margin * 2 >= Math.min(page.width, page.height)) throw new RangeError('Page margins leave no content area.');
   const lineSpacing = Math.round((options.lineSpacing ?? 1) * 240);
   if (lineSpacing < 1 || lineSpacing > 2147483647) throw new RangeError('Line spacing is outside the WordprocessingML range.');
@@ -53,6 +54,7 @@ export function createWordArtifact(options: CreateWordOptions = {}): WordArtifac
 }
 
 function xml(value: string) {
+  if (!value.isWellFormed()) throw new TypeError('Text contains unpaired UTF-16 surrogates.');
   if (/[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]/.test(value)) throw new TypeError('Text contains characters not supported by XML.');
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;');
 }

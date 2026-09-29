@@ -37,6 +37,8 @@ describe('headless Word creation', () => {
   test('rejects malformed authored content instead of silently changing its meaning', () => {
     expect(() => createWordArtifact({ paragraphs: [{ runs: [{ text: 'one\ntwo' }] }] })).toThrow('paragraph');
     expect(() => createWordArtifact({ paragraphs: [{ runs: [{ text: '\u0000' }] }] })).toThrow('XML');
+    expect(() => createWordArtifact({ paragraphs: [{ runs: [{ text: '\uD800' }] }] })).toThrow('surrogates');
+    expect(createWordArtifact({ page: { width: 612, height: 792, margin: 0 } }).document.finalSection.marginLeftTwips).toBe(0);
     expect(() => createWordArtifact({ lineSpacing: 9_000_000 })).toThrow('spacing');
     expect(() => createWordArtifact({ lineSpacing: 0.00001 })).toThrow('spacing');
     expect(() => createWordArtifact({ defaultFormat: { color: 'red' } })).toThrow('RGB');
