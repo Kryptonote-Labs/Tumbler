@@ -28,7 +28,7 @@ export function wordInputEdit(
 ): WordInputEdit | undefined {
   const ordered = orderSelection(document, selection);
   if (inputType === "insertText" || inputType === "insertCompositionText" || inputType === "insertFromPaste") {
-    const value = data ?? "";
+    const value = (data ?? "").replace(/\r\n?/g, "\n");
     return edit(ordered, value, caretAfterInsertion(ordered, value));
   }
   if (inputType === "insertParagraph" || inputType === "insertLineBreak") {
@@ -145,11 +145,27 @@ function wordDeletionSelection(document: WordDocument, position: WordTextPositio
   const text = wordParagraphText(document, paragraph);
   if (backward && position.offset === 0) return previousGraphemeSelection(document, position);
   if (!backward && position.offset === text.length) return nextGraphemeSelection(document, position);
-  const words = [...new Intl.Segmenter(undefined, { granularity: "word" }).segment(text)];
-  const word = backward
-    ? words.findLast(word => word.index < position.offset && word.isWordLike)
-    : words.find(word => word.index + word.segment.length > position.offset && word.isWordLike);
+  // Consume only as far as the caret, avoiding an array for every word in a long paragraph.
+  const words = Intl.Segmenter === undefined
+    ? fallbackWords(text)
+    : new Intl.Segmenter(undefined, { granularity: "word" }).segment(text);
+  let word: { index: number; segment: string } | undefined;
+  for (const candidate of words) {
+    if (backward && candidate.index >= position.offset) break;
+    if (!candidate.isWordLike) continue;
+    if (backward) word = candidate;
+    else if (candidate.index + candidate.segment.length > position.offset) {
+      word = candidate;
+      break;
+    }
+  }
   return backward
     ? { anchor: { ...position, offset: word?.index ?? 0 }, focus: position }
     : { anchor: position, focus: { ...position, offset: word === undefined ? text.length : word.index + word.segment.length } };
+}
+
+function* fallbackWords(text: string) {
+  for (const match of text.matchAll(/\S+/gu)) {
+    yield { index: match.index, segment: match[0], isWordLike: true };
+  }
 }
