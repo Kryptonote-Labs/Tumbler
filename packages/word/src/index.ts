@@ -106,3 +106,5 @@ export { positionWordDrawing, resizeWordDrawing, type WordDrawingChange, type Wo
 
 export { createWordArtifact } from './create.ts';
 export type { CreateWordOptions, WordTextFormat, WordTextRun, WordTextParagraph } from './create.ts';
+
+export type { WordContentBlock, WordContentCell } from './create-content.ts';
