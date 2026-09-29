@@ -113,3 +113,7 @@ older `paragraphs` option are mutually exclusive.
 Authoring limits include 10,000 blocks, 10,000 cells, eight nested table levels and 100 MB of
 image data per document. Applications should enforce their own smaller limits where appropriate.
 The structured input is an authoring format, not a lossless conversion of arbitrary existing DOCX files.
+
+Images can also appear inside a paragraph or table cell alongside text. An image run uses
+`{ text: '\uFFFC', image: { bytes, contentType, width, height, alt } }`. Its logical text length is
+one, matching the drawing offsets returned by Word layout and text APIs.

@@ -49,3 +49,13 @@ test('an image is already the final paragraph of a cell', () => {
   if (table.kind !== 'table') throw new Error('Missing table');
   expect(table.rows[0]!.cells[0]!.blocks).toHaveLength(1);
 });
+
+test('inline images retain surrounding text and logical offsets through packaging', () => {
+  const artifact = createWordArtifact({ paragraphs: [{ runs: [{ text: 'Before ' }, { text: '\uFFFC', image: { bytes: png, contentType: 'image/png', width: 20, height: 10, alt: 'inline' } }, { text: ' after' }] }] });
+  const paragraph = artifact.document.blocks[0]!;
+  if (paragraph.kind !== 'paragraph') throw new Error('Missing paragraph');
+  expect(wordParagraphText(artifact.document, paragraph)).toBe('Before \uFFFC after');
+  const layout = layoutWordDocument(artifact.document, { measure: text => ({ width: text.length * 6, ascent: 9, descent: 3 }) });
+  const image = layout.pages[0]!.columns[0]!.lines.flatMap(line => line.fragments).find(fragment => fragment.kind === 'drawing');
+  expect(image).toMatchObject({ startOffset: 7, endOffset: 8, width: 20, height: 10 });
+});

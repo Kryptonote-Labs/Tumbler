@@ -2,11 +2,11 @@ import { openZipArchive, writeZipArchiveChanges } from '@tumblerjs/opc';
 import { openWordArtifact, type WordArtifact } from './artifact.ts';
 import type { ComputedWordTextFormat } from './styles.ts';
 import { xml, runProperties } from './create-xml.ts';
-import { authoredContent, type WordContentBlock } from './create-content.ts';
+import { authoredContent, type WordContentBlock, type WordAuthoredImage } from './create-content.ts';
 
 /** Supported authored text properties. Omitted properties inherit the document defaults. */
 export type WordTextFormat = Partial<Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'underline' | 'color'>>;
-export interface WordTextRun { readonly text: string; readonly format?: WordTextFormat; }
+export interface WordTextRun { readonly text: string; readonly format?: WordTextFormat; readonly image?: WordAuthoredImage; }
 export interface WordTextParagraph {
   readonly runs: readonly WordTextRun[];
   readonly alignment?: 'start' | 'center' | 'end' | 'justify';
