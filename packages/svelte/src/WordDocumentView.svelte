@@ -211,11 +211,16 @@
 
   function handleBeforeInput(event: InputEvent) {
     if (!editable) return;
+    // A native drag is a two-part move. Until moves have a paired model operation, cancel both halves.
+    if (event.inputType === "deleteByDrag" || event.inputType === "insertFromDrop") {
+      event.preventDefault();
+      return;
+    }
     // Keyboard navigation changes the DOM selection before Svelte can publish controlled state.
     const activeSelection = inputSelectionOverride ?? browserTextSelection() ?? selection;
     inputSelectionOverride = undefined;
     if (activeSelection === undefined) return;
-    const edit = wordInputEdit(wordDocument, activeSelection, event.inputType, event.data);
+    const edit = wordInputEdit(wordDocument, activeSelection, event.inputType, event.dataTransfer?.getData("text/plain") ?? event.data);
     if (edit === undefined) return;
     event.preventDefault();
     onedit?.(edit);

@@ -103,3 +103,6 @@ export type {
 } from "./styles.ts";
 
 export { positionWordDrawing, resizeWordDrawing, type WordDrawingChange, type WordDrawingResize } from "./drawings.ts";
+
+export { createWordArtifact } from './create.ts';
+export type { CreateWordOptions, WordTextFormat, WordTextRun, WordTextParagraph } from './create.ts';

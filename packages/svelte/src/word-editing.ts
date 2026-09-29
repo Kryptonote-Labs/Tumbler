@@ -28,19 +28,25 @@ export function wordInputEdit(
 ): WordInputEdit | undefined {
   const ordered = orderSelection(document, selection);
   if (inputType === "insertText" || inputType === "insertCompositionText" || inputType === "insertFromPaste") {
-    const value = data ?? "";
+    const value = (data ?? "").replace(/\r\n?/g, "\n");
     return edit(ordered, value, caretAfterInsertion(ordered, value));
   }
   if (inputType === "insertParagraph" || inputType === "insertLineBreak") {
     return edit(ordered, "\n", caretAfterInsertion(ordered, "\n"));
   }
-  if (inputType === "deleteContentBackward" || inputType === "deleteWordBackward") {
+  if (inputType === "deleteByCut") return collapsed(selection) ? undefined : edit(ordered, "", ordered.anchor);
+  if (inputType === "deleteWordBackward" || inputType === "deleteWordForward") {
+    if (!collapsed(selection)) return edit(ordered, "", ordered.anchor);
+    const expanded = wordDeletionSelection(document, ordered.anchor, inputType === "deleteWordBackward");
+    return expanded === undefined ? undefined : edit(expanded, "", expanded.anchor);
+  }
+  if (inputType === "deleteContentBackward") {
     const expanded = collapsed(selection)
       ? previousGraphemeSelection(document, ordered.anchor)
       : ordered;
     return expanded === undefined ? undefined : edit(expanded, "", expanded.anchor);
   }
-  if (inputType === "deleteContentForward" || inputType === "deleteWordForward") {
+  if (inputType === "deleteContentForward") {
     const expanded = collapsed(selection)
       ? nextGraphemeSelection(document, ordered.focus)
       : ordered;
@@ -131,4 +137,35 @@ function boundaries(value: string): number[] {
     }
   }
   return [...result].sort((left, right) => left - right);
+}
+
+function wordDeletionSelection(document: WordDocument, position: WordTextPosition, backward: boolean): WordTextSelection | undefined {
+  const paragraph = wordDocumentParagraphs(document).find(paragraph => paragraph.elementId === position.paragraphElementId);
+  if (paragraph === undefined) return;
+  const text = wordParagraphText(document, paragraph);
+  if (backward && position.offset === 0) return previousGraphemeSelection(document, position);
+  if (!backward && position.offset === text.length) return nextGraphemeSelection(document, position);
+  // Consume only as far as the caret, avoiding an array for every word in a long paragraph.
+  const words = Intl.Segmenter === undefined
+    ? fallbackWords(text)
+    : new Intl.Segmenter(undefined, { granularity: "word" }).segment(text);
+  let word: { index: number; segment: string } | undefined;
+  for (const candidate of words) {
+    if (backward && candidate.index >= position.offset) break;
+    if (!candidate.isWordLike) continue;
+    if (backward) word = candidate;
+    else if (candidate.index + candidate.segment.length > position.offset) {
+      word = candidate;
+      break;
+    }
+  }
+  return backward
+    ? { anchor: { ...position, offset: word?.index ?? 0 }, focus: position }
+    : { anchor: position, focus: { ...position, offset: word === undefined ? text.length : word.index + word.segment.length } };
+}
+
+function* fallbackWords(text: string) {
+  for (const match of text.matchAll(/\S+/gu)) {
+    yield { index: match.index, segment: match[0], isWordLike: true };
+  }
 }

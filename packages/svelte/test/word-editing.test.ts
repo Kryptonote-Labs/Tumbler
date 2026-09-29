@@ -37,6 +37,37 @@ describe("Word browser input translation", () => {
     expect(result?.selection.focus.offset).toBe(6);
   });
 
+  test("normalizes platform clipboard line endings before a native Word edit", () => {
+    const document = fixture("<w:p><w:r><w:t>Hello</w:t></w:r></w:p>");
+    const paragraph = wordDocumentParagraphs(document)[0]!;
+    expect(wordInputEdit(document, selection(paragraph.elementId, 0, 0), "insertFromPaste", "one\r\ntwo\rthree")?.value).toBe("one\ntwo\nthree");
+  });
+
+  test("word deletion removes a word and cut produces a controlled edit", () => {
+    const document = fixture("<w:p><w:r><w:t>Hello world</w:t></w:r></w:p>");
+    const paragraph = wordDocumentParagraphs(document)[0]!;
+    const backward = wordInputEdit(document, selection(paragraph.elementId, 11, 11), "deleteWordBackward", null);
+    expect(backward?.selection).toEqual(selection(paragraph.elementId, 6, 11));
+    const forward = wordInputEdit(document, selection(paragraph.elementId, 6, 6), "deleteWordForward", null);
+    expect(forward?.selection).toEqual(selection(paragraph.elementId, 6, 11));
+    const cut = wordInputEdit(document, selection(paragraph.elementId, 0, 5), "deleteByCut", null);
+    expect(cut?.value).toBe("");
+    expect(cut?.selection).toEqual(selection(paragraph.elementId, 0, 5));
+    expect(wordInputEdit(document, selection(paragraph.elementId, 0, 0), "deleteByCut", null)).toBeUndefined();
+  });
+
+  test("word deletion works without Intl.Segmenter", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(Intl, "Segmenter")!;
+    try {
+      Object.defineProperty(Intl, "Segmenter", { value: undefined, configurable: true });
+      const document = fixture("<w:p><w:r><w:t>Hello world</w:t></w:r></w:p>");
+      const paragraph = wordDocumentParagraphs(document)[0]!;
+      expect(wordInputEdit(document, selection(paragraph.elementId, 11, 11), "deleteWordBackward", null)?.selection).toEqual(selection(paragraph.elementId, 6, 11));
+    } finally {
+      Object.defineProperty(Intl, "Segmenter", descriptor);
+    }
+  });
+
   test("turns boundary deletion into a cross-paragraph join", () => {
     const document = fixture("<w:p><w:r><w:t>One</w:t></w:r></w:p><w:p><w:r><w:t>Two</w:t></w:r></w:p>");
     const [first, second] = wordDocumentParagraphs(document);

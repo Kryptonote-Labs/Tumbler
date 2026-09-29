@@ -11,6 +11,26 @@ browser-owned document experiences.
 bun add @tumblerjs/word
 ```
 
+Create a blank or formatted document without a template:
+
+```ts
+import { createWordArtifact } from "@tumblerjs/word";
+
+const artifact = createWordArtifact({
+  defaultFormat: { fontFamily: "Arial", fontSizePoints: 13 },
+  paragraphs: [{
+    alignment: "center",
+    runs: [{ text: "Project brief", format: { bold: true } }],
+  }],
+  author: "Alex",
+});
+const bytes = artifact.bytes();
+```
+
+Creation defaults to A4 with one-inch margins and modern Word compatibility.
+Paragraphs are explicit; tabs can appear inside runs. Fonts are named, not embedded.
+This API authors a new file and does not import or flatten existing documents.
+
 Open a DOCX and inspect its semantic document:
 
 ```ts
