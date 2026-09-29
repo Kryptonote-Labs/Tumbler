@@ -10,7 +10,7 @@ export interface WordImagePosition {
 export function imagePlacement(position: WordImagePosition, width: number, availableWidth: number) {
   const { layout = 'inline', alignment = 'left', moveWithText = true, x, y = 0 } = position;
   if (!['inline', 'front', 'behind'].includes(layout) || !['left', 'center', 'right'].includes(alignment)) throw new TypeError('Invalid image placement.');
-  if (typeof moveWithText !== 'boolean' || [x ?? 0, y].some(value => !Number.isFinite(value) || Math.abs(value) > 1584)) throw new RangeError('Invalid image position.');
+  if (typeof moveWithText !== 'boolean' || [x ?? 0, y].some(value => !Number.isFinite(value) || !Number.isSafeInteger(Math.round(value * 12700)))) throw new RangeError('Invalid image position.');
   if (layout === 'inline') return { open: '<wp:inline>', close: '</wp:inline>', wrap: '' };
   const horizontal = x ?? (alignment === 'center' ? (availableWidth - width) / 2 : alignment === 'right' ? availableWidth - width : 0);
   return {

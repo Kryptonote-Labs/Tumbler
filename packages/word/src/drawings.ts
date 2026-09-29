@@ -3,7 +3,6 @@ import { beginLosslessXmlEdit, OOXML_NAMESPACES, type LosslessXmlDocument, type 
 import { beginPackageTransaction, RelationshipsError, type OpcPackage, type OpcPart, type PartName, type Relationships } from "@tumblerjs/opc";
 import { WordError, type WordDocument, type WordConformance } from "./document.ts";
 
-const MAX_DRAWINGS = 10_000;
 const EMUS_PER_POINT = 12_700;
 const CHART_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
 
@@ -62,7 +61,6 @@ export function readWordDrawings(input: {
 }): ReadonlyMap<number, WordDrawing> {
   const word = OOXML_NAMESPACES[input.conformance].wordprocessing;
   const elements = input.source.elements(word, "drawing");
-  if (elements.length > MAX_DRAWINGS) throw new WordError("limit_exceeded", `Document exceeds ${MAX_DRAWINGS} drawings.`);
   let relationships: Relationships | undefined;
   try { relationships = input.package.relationships(input.part.name); }
   catch (cause) { if (!(cause instanceof RelationshipsError) || cause.code !== "missing_item") throw cause; }

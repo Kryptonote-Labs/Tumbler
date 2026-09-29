@@ -38,9 +38,10 @@ test('rejects contradictory lists, malformed tables and invalid dimensions', () 
 });
 
 
-test('bounds aggregate cells before expanding repeated table content', () => {
-  const table: WordContentBlock = { kind: 'table', rows: Array.from({ length: 1000 }, () => Array.from({ length: 10 }, () => ({ blocks: [] }))) };
-  expect(() => createWordArtifact({ blocks: [table, table] })).toThrow('10000 table cells');
+test('authors tables beyond the former row and aggregate cell caps', () => {
+  const table: WordContentBlock = { kind: 'table', rows: Array.from({ length: 1001 }, () => Array.from({ length: 10 }, () => ({ blocks: [] }))) };
+  const artifact = createWordArtifact({ blocks: [table, table] });
+  expect(artifact.document.blocks.filter(block => block.kind === 'table').map(block => block.rows.length)).toEqual([1001, 1001]);
 });
 
 test('an image is already the final paragraph of a cell', () => {
@@ -92,4 +93,23 @@ test('floating drawings at the line edge do not cause a line break', () => {
   const lines = layoutWordDocument(artifact.document, { measure: text => ({ width: text.length * 6, ascent: 9, descent: 3 }) }).pages[0]!.columns[0]!.lines;
   expect(lines).toHaveLength(1);
   expect(lines[0]!.width).toBe(96);
+});
+
+test('preserves authored image sizes and offsets beyond the page', () => {
+  const artifact = createWordArtifact({blocks: [{kind: 'image', bytes: png, contentType: 'image/png', width: 2000, height: 1700, layout: 'front', x: 1900, y: -1800}]});
+  const drawing = [...artifact.document.drawings.values()][0]!;
+  expect(drawing.widthPoints).toBe(2000);
+  expect(drawing.anchor?.horizontalOffsetPoints).toBe(1900);
+  expect(drawing.anchor?.verticalOffsetPoints).toBe(-1800);
+});
+
+test('rejects dimensions that cannot be represented in EMU coordinates', () => {
+  expect(() => createWordArtifact({blocks: [{kind: 'image', bytes: png, contentType: 'image/png', width: Number.MAX_VALUE, height: 1}]})).toThrow('EMU');
+});
+
+test('repeated placements of one asset share its media part', () => {
+  const image: WordContentBlock = {kind: 'image', bytes: png, contentType: 'image/png', width: 80, height: 40};
+  const artifact = createWordArtifact({blocks: [image, image]});
+  expect(artifact.document.drawings.size).toBe(2);
+  expect(artifact.document.package.parts.filter(part => part.name.value.startsWith('/word/media/'))).toHaveLength(1);
 });
