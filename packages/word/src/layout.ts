@@ -775,7 +775,7 @@ function placeLine(
         contentElementId: atom.contentElementId,
         text: atom.kind === "glyph" || atom.kind === "note" ? atom.text : atom.kind === "tab" ? "\t" : "\uFFFC",
         x: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? (atom.drawing.anchor?.horizontalRelativeTo === "page" ? 0 : column.x) + (atom.drawing.anchor?.horizontalOffsetPoints ?? cursorX - column.x) : cursorX,
-        y: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? (atom.drawing.anchor?.verticalRelativeTo === "page" ? 0 : y) + (atom.drawing.anchor?.verticalOffsetPoints ?? 0) : y + line.ascent - ascent,
+        y: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? (atom.drawing.anchor?.verticalRelativeTo === "page" ? 0 : atom.drawing.anchor?.verticalRelativeTo === "paragraph" ? column.lines.find(item => item.paragraphElementId === paragraph.elementId)?.y ?? y : y) + (atom.drawing.anchor?.verticalOffsetPoints ?? 0) : y + line.ascent - ascent,
         width: atom.kind === "drawing" ? atom.width : atomWidth,
         height: atom.kind === "drawing" ? atom.drawing?.heightPoints ?? ascent + descent : ascent + descent,
         baseline: y + line.ascent,

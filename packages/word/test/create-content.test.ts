@@ -59,3 +59,30 @@ test('inline images retain surrounding text and logical offsets through packagin
   const image = layout.pages[0]!.columns[0]!.lines.flatMap(line => line.fragments).find(fragment => fragment.kind === 'drawing');
   expect(image).toMatchObject({ startOffset: 7, endOffset: 8, width: 20, height: 10 });
 });
+
+test('authored floating images retain positioning and do not displace text', async () => {
+  const image = { bytes: png, contentType: 'image/png' as const, width: 80, height: 40 };
+  const make = (moveWithText: boolean) => createWordArtifact({ blocks: [paragraph('Before'), { kind: 'paragraph', runs: [{ text: '\uFFFC', image: { ...image, layout: 'front', alignment: 'right', moveWithText, y: 30 } }, { text: 'Alongside' }] }] });
+  const measure = { measure: (text: string) => ({ width: text.length * 6, ascent: 9, descent: 3 }) };
+  for (const move of [true, false]) {
+    const artifact = openWordArtifact(make(move).bytes());
+    const column = layoutWordDocument(artifact.document, measure).pages[0]!.columns[0]!;
+    const line = column.lines[1]!;
+    const drawing = line.fragments[0]!;
+    expect(drawing.drawing?.anchor?.verticalRelativeTo).toBe(move ? 'paragraph' : 'page');
+    expect(drawing.x).toBeCloseTo(column.x + column.width - 80);
+    expect(drawing.y).toBeCloseTo(move ? line.y + 30 : 30);
+    expect(line.fragments[1]!.x).toBe(line.x);
+    expect(line.height).toBeLessThan(40);
+    await Bun.write(`/tmp/tumbler-position-${move}.docx`, artifact.bytes());
+  }
+});
+
+test('a floating image late in a wrapped paragraph remains anchored to its first line', () => {
+  const artifact = createWordArtifact({ blocks: [{ kind: 'paragraph', runs: [{ text: 'word '.repeat(100) }, { text: '\uFFFC', image: { bytes: png, contentType: 'image/png', width: 80, height: 40, layout: 'behind', y: 12 } }] }] });
+  const lines = layoutWordDocument(artifact.document, { measure: text => ({ width: text.length * 6, ascent: 9, descent: 3 }) }).pages[0]!.columns[0]!.lines;
+  expect(lines.length).toBeGreaterThan(1);
+  const fragment = lines.flatMap(line => line.fragments).find(fragment => fragment.kind === 'drawing')!;
+  expect(fragment.y).toBe(lines[0]!.y + 12);
+  expect(fragment.drawing?.anchor?.behindDocument).toBe(true);
+});
