@@ -17,6 +17,13 @@ describe("WordprocessingML logical text editing", () => {
     expect(edited.document.source.elements(word, "rPr")).toHaveLength(1);
   });
 
+  test("rejects paragraph splits that would flatten a positional tab", () => {
+    const artifact = open(`<w:p><w:r><w:t>A</w:t><w:ptab w:relativeTo="margin" w:alignment="center"/><w:t>B</w:t></w:r></w:p>`);
+    const paragraph = firstParagraph(artifact);
+    expect(() => artifact.replaceText(selection(paragraph.elementId, 1, 1), "\n")).toThrow(WordError);
+    expect(artifact.document.source.elements(word, "ptab")).toHaveLength(1);
+  });
+
   test("deletes atomic tabs and breaks while retaining adjacent text", () => {
     const artifact = open(`<w:p><w:r><w:t>A</w:t><w:tab/><w:t>B</w:t><w:br/><w:t>C</w:t></w:r></w:p>`);
     const paragraph = firstParagraph(artifact);

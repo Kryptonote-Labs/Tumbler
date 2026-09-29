@@ -254,7 +254,7 @@ function paragraphMarkup(document: WordDocument, template: LosslessXmlElement, c
 
 function assertStructuralEditSafe(document: WordDocument, paragraph: WordParagraph): void {
   const runs = paragraph.inlines.filter((inline) => inline.kind === "run");
-  if (runs.length !== paragraph.inlines.length || runs.some((run) => run.contents.some((content) => content.kind !== "text" && content.kind !== "tab"))) {
+  if (runs.length !== paragraph.inlines.length || runs.some((run) => run.contents.some((content) => content.kind !== "text" && (content.kind !== "tab" || requiredElement(document, content.elementId).localName !== "tab")))) {
     throw new WordError("unsupported_document", "Paragraph boundaries cannot be edited through fields, links, revisions, drawings, or structural markers.");
   }
 }
