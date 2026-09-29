@@ -254,7 +254,7 @@ function paragraphMarkup(document: WordDocument, template: LosslessXmlElement, c
 
 function assertStructuralEditSafe(document: WordDocument, paragraph: WordParagraph): void {
   const runs = paragraph.inlines.filter((inline) => inline.kind === "run");
-  if (runs.length !== paragraph.inlines.length || runs.some((run) => run.contents.some((content) => content.kind !== "text"))) {
+  if (runs.length !== paragraph.inlines.length || runs.some((run) => run.contents.some((content) => content.kind !== "text" && content.kind !== "tab"))) {
     throw new WordError("unsupported_document", "Paragraph boundaries cannot be edited through fields, links, revisions, drawings, or structural markers.");
   }
 }
@@ -371,6 +371,11 @@ function replaceTextElement(
   value: string,
 ): void {
   const element = requiredElement(document, segment.elementId);
+  if (value.includes("\t")) {
+    const run = requiredElement(document, segment.runElementId);
+    editor.replaceElementMarkup(element, textContentMarkup(run.prefix, value));
+    return;
+  }
   if (element.selfClosing) {
     const spaceAttribute = /^\s|\s$/u.test(value) ? ' xml:space="preserve"' : "";
     editor.replaceElementMarkup(element, `<${element.qualified}${spaceAttribute}>${escapeText(value)}</${element.qualified}>`);
@@ -442,7 +447,11 @@ function requiredElement(document: WordDocument, id: number): LosslessXmlElement
 }
 
 function textRunMarkup(prefix: string, value: string, properties = ""): string {
-  return `<${qualified(prefix, "r")}>${properties}<${qualified(prefix, "t")} xml:space="preserve">${escapeText(value)}</${qualified(prefix, "t")}></${qualified(prefix, "r")}>`;
+  return `<${qualified(prefix, "r")}>${properties}${textContentMarkup(prefix, value)}</${qualified(prefix, "r")}>`;
+}
+
+function textContentMarkup(prefix: string, value: string): string {
+  return value.split("\t").map(text => `<${qualified(prefix, "t")} xml:space="preserve">${escapeText(text)}</${qualified(prefix, "t")}>`).join(`<${qualified(prefix, "tab")}/>`);
 }
 
 function openSelfClosing(document: WordDocument, element: LosslessXmlElement, content: string): string {

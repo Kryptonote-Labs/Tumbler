@@ -95,12 +95,12 @@ function formatRun(
   patch: NonNullable<FormattingPatch["text"]>,
 ): void {
   const runSegments = wordParagraphTextSegments(document, paragraph).filter((segment) => segment.runElementId === run.elementId);
-  if (runSegments.length === 0 || runSegments.some((segment) => segment.kind !== "text")) {
-    throw new WordError("unsupported_document", "Direct text formatting currently requires ordinary text runs.");
+  if (runSegments.length === 0 || runSegments.some((segment) => segment.kind !== "text" && segment.kind !== "tab")) {
+    throw new WordError("unsupported_document", "Direct text formatting currently requires text or tab runs.");
   }
   const element = requiredElement(document, run.elementId);
   const directChildren = element.children.filter((child): child is LosslessXmlElement => child.kind === "element");
-  if (directChildren.some((child) => child.namespaceUri !== namespace(document) || child.localName !== "rPr" && child.localName !== "t")) {
+  if (directChildren.some((child) => child.namespaceUri !== namespace(document) || child.localName !== "rPr" && child.localName !== "t" && child.localName !== "tab")) {
     throw new WordError("unsupported_document", "Direct text formatting would cross unsupported run content.");
   }
   const runStart = runSegments[0]!.start;
@@ -277,7 +277,11 @@ function namespace(document: WordDocument): string { return OOXML_NAMESPACES[doc
 function requiredElement(document: WordDocument, id: number): LosslessXmlElement { const element = document.source.element(id); if (element === undefined) throw new WordError("invalid_document", `Source element ${id} is missing.`); return element; }
 function sourceMarkup(document: WordDocument, element: LosslessXmlElement): string { return document.source.source.slice(element.span.start, element.span.end); }
 function qualified(prefix: string, local: string): string { return prefix.length === 0 ? local : `${prefix}:${local}`; }
-function runMarkup(prefix: string, value: string, properties: string): string { return value.length === 0 ? "" : `<${qualified(prefix, "r")}>${properties}<${qualified(prefix, "t")} xml:space="preserve">${escapeText(value)}</${qualified(prefix, "t")}></${qualified(prefix, "r")}>`; }
+function runMarkup(prefix: string, value: string, properties: string): string {
+  if (value.length === 0) return "";
+  const content = value.split("\t").map(text => `<${qualified(prefix, "t")} xml:space="preserve">${escapeText(text)}</${qualified(prefix, "t")}>`).join(`<${qualified(prefix, "tab")}/>`);
+  return `<${qualified(prefix, "r")}>${properties}${content}</${qualified(prefix, "r")}>`;
+}
 function escapeText(value: string): string { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll("]]>", "]]&gt;"); }
 function escapeAttribute(value: string): string { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;"); }
 function validateRange(text: string, start: number, end: number): void { if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > text.length) throw new RangeError("A Word formatting range is outside its paragraph."); }

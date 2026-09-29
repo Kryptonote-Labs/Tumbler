@@ -34,6 +34,27 @@ describe('headless Word creation', () => {
     expect(readCoreProperties(reopened.document.package)?.values.creator).toBe('Alex & <Team>');
   });
 
+  test('authored tabs remain editable through formatting, insertion and paragraph splits', () => {
+    let artifact = createWordArtifact({ paragraphs: [{ runs: [{ text: 'one\ttwo' }] }] });
+    const range = (start: number, end = start) => {
+      const paragraph = artifact.document.blocks[0]!;
+      return { anchor: { paragraphElementId: paragraph.elementId, offset: start }, focus: { paragraphElementId: paragraph.elementId, offset: end } };
+    };
+    artifact = artifact.applyFormatting(range(2, 5), { text: { bold: { set: true } } });
+    expect(artifact.formattingState(range(2, 5)).text.bold).toMatchObject({ value: true });
+    expect(artifact.document.source.elements('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'tab')).toHaveLength(1);
+    artifact = artifact.replaceText(range(1), '\t');
+    artifact = artifact.replaceText(range(3), '\n');
+    let paragraphs = artifact.document.blocks.filter(block => block.kind === 'paragraph');
+    expect(paragraphs.map(p => wordParagraphText(artifact.document, p))).toEqual(['o\tn', 'e\ttwo']);
+    artifact = artifact.replaceText({ anchor: { paragraphElementId: paragraphs[0]!.elementId, offset: 3 }, focus: { paragraphElementId: paragraphs[1]!.elementId, offset: 0 } }, '');
+    paragraphs = artifact.document.blocks.filter(block => block.kind === 'paragraph');
+    expect(paragraphs.map(p => wordParagraphText(artifact.document, p))).toEqual(['o\tne\ttwo']);
+    expect(artifact.document.source.elements('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'tab')).toHaveLength(2);
+    artifact = artifact.replaceText(range(1, 2), '');
+    expect(wordParagraphText(artifact.document, artifact.document.blocks[0]! as typeof paragraphs[number])).toBe('one\ttwo');
+  });
+
   test('rejects malformed authored content instead of silently changing its meaning', () => {
     expect(() => createWordArtifact({ paragraphs: [{ runs: [{ text: 'one\ntwo' }] }] })).toThrow('paragraph');
     expect(() => createWordArtifact({ paragraphs: [{ runs: [{ text: '\u0000' }] }] })).toThrow('XML');
