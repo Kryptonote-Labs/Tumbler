@@ -714,7 +714,7 @@ function breakLines(atoms: readonly ParagraphAtom[], width: number, format: Comp
     }
     const atomWidth = atom.kind === "tab" ? tabWidth(lineWidth, format.tabs) : atom.width;
     const materialized = atom.kind === "tab" ? Object.freeze({ ...atom, width: atomWidth }) : atom;
-    if (line.length > 0 && lineWidth + atomWidth > width) {
+    if (line.length > 0 && lineWidth + atomWidthValue(materialized) > width) {
       if (lastBreak >= 0) {
         const carry = line.splice(lastBreak + 1);
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);

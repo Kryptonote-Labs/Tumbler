@@ -86,3 +86,10 @@ test('a floating image late in a wrapped paragraph remains anchored to its first
   expect(fragment.y).toBe(lines[0]!.y + 12);
   expect(fragment.drawing?.anchor?.behindDocument).toBe(true);
 });
+
+test('floating drawings at the line edge do not cause a line break', () => {
+  const artifact = createWordArtifact({ page: { width: 120, height: 200, margin: 10 }, blocks: [{ kind: 'paragraph', runs: [{ text: 'abcdefghijklmno' }, { text: '\uFFFC', image: { bytes: png, contentType: 'image/png', width: 80, height: 40, layout: 'front' } }, { text: 'X' }] }] });
+  const lines = layoutWordDocument(artifact.document, { measure: text => ({ width: text.length * 6, ascent: 9, descent: 3 }) }).pages[0]!.columns[0]!.lines;
+  expect(lines).toHaveLength(1);
+  expect(lines[0]!.width).toBe(96);
+});

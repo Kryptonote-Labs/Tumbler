@@ -122,6 +122,7 @@ Authored images also accept `layout: 'inline' | 'front' | 'behind'`, horizontal
 `alignment: 'left' | 'center' | 'right'`, and optional `x`/`y` offsets in points.
 Floating images do not reserve text space. `x` overrides alignment within the
 containing column; `y` is relative to the paragraph when `moveWithText` is true
-(the default), or to the page when false. These settings serialize to native
+(the default), or to the page when false. Horizontal alignment and `x` remain relative to the
+column in both modes, including inside table cells. These settings serialize to native
 Word drawing anchors and use the same geometry in headless layout. Inline image
 alignment is controlled by the containing paragraph.
