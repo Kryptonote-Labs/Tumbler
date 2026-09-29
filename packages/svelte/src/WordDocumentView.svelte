@@ -215,7 +215,7 @@
     const activeSelection = inputSelectionOverride ?? browserTextSelection() ?? selection;
     inputSelectionOverride = undefined;
     if (activeSelection === undefined) return;
-    const edit = wordInputEdit(wordDocument, activeSelection, event.inputType, event.data);
+    const edit = wordInputEdit(wordDocument, activeSelection, event.inputType, event.dataTransfer?.getData("text/plain") ?? event.data);
     if (edit === undefined) return;
     event.preventDefault();
     onedit?.(edit);

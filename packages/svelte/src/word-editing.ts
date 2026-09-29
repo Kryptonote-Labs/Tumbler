@@ -34,13 +34,19 @@ export function wordInputEdit(
   if (inputType === "insertParagraph" || inputType === "insertLineBreak") {
     return edit(ordered, "\n", caretAfterInsertion(ordered, "\n"));
   }
-  if (inputType === "deleteContentBackward" || inputType === "deleteWordBackward") {
+  if (inputType === "deleteByCut" || inputType === "deleteByDrag") return collapsed(selection) ? undefined : edit(ordered, "", ordered.anchor);
+  if (inputType === "deleteWordBackward" || inputType === "deleteWordForward") {
+    if (!collapsed(selection)) return edit(ordered, "", ordered.anchor);
+    const expanded = wordDeletionSelection(document, ordered.anchor, inputType === "deleteWordBackward");
+    return expanded === undefined ? undefined : edit(expanded, "", expanded.anchor);
+  }
+  if (inputType === "deleteContentBackward") {
     const expanded = collapsed(selection)
       ? previousGraphemeSelection(document, ordered.anchor)
       : ordered;
     return expanded === undefined ? undefined : edit(expanded, "", expanded.anchor);
   }
-  if (inputType === "deleteContentForward" || inputType === "deleteWordForward") {
+  if (inputType === "deleteContentForward") {
     const expanded = collapsed(selection)
       ? nextGraphemeSelection(document, ordered.focus)
       : ordered;
@@ -131,4 +137,19 @@ function boundaries(value: string): number[] {
     }
   }
   return [...result].sort((left, right) => left - right);
+}
+
+function wordDeletionSelection(document: WordDocument, position: WordTextPosition, backward: boolean): WordTextSelection | undefined {
+  const paragraph = wordDocumentParagraphs(document).find(paragraph => paragraph.elementId === position.paragraphElementId);
+  if (paragraph === undefined) return;
+  const text = wordParagraphText(document, paragraph);
+  if (backward && position.offset === 0) return previousGraphemeSelection(document, position);
+  if (!backward && position.offset === text.length) return nextGraphemeSelection(document, position);
+  const words = [...new Intl.Segmenter(undefined, { granularity: "word" }).segment(text)];
+  const word = backward
+    ? words.findLast(word => word.index < position.offset && word.isWordLike)
+    : words.find(word => word.index + word.segment.length > position.offset && word.isWordLike);
+  return backward
+    ? { anchor: { ...position, offset: word?.index ?? 0 }, focus: position }
+    : { anchor: position, focus: { ...position, offset: word === undefined ? text.length : word.index + word.segment.length } };
 }
