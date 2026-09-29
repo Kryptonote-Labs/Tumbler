@@ -714,7 +714,7 @@ function breakLines(atoms: readonly ParagraphAtom[], width: number, format: Comp
     }
     const atomWidth = atom.kind === "tab" ? tabWidth(lineWidth, format.tabs) : atom.width;
     const materialized = atom.kind === "tab" ? Object.freeze({ ...atom, width: atomWidth }) : atom;
-    if (line.length > 0 && lineWidth + atomWidth > width) {
+    if (line.length > 0 && lineWidth + atomWidthValue(materialized) > width) {
       if (lastBreak >= 0) {
         const carry = line.splice(lastBreak + 1);
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);
@@ -775,7 +775,7 @@ function placeLine(
         contentElementId: atom.contentElementId,
         text: atom.kind === "glyph" || atom.kind === "note" ? atom.text : atom.kind === "tab" ? "\t" : "\uFFFC",
         x: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? (atom.drawing.anchor?.horizontalRelativeTo === "page" ? 0 : column.x) + (atom.drawing.anchor?.horizontalOffsetPoints ?? cursorX - column.x) : cursorX,
-        y: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? (atom.drawing.anchor?.verticalRelativeTo === "page" ? 0 : y) + (atom.drawing.anchor?.verticalOffsetPoints ?? 0) : y + line.ascent - ascent,
+        y: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? (atom.drawing.anchor?.verticalRelativeTo === "page" ? 0 : atom.drawing.anchor?.verticalRelativeTo === "paragraph" ? column.lines.find(item => item.paragraphElementId === paragraph.elementId)?.y ?? y : y) + (atom.drawing.anchor?.verticalOffsetPoints ?? 0) : y + line.ascent - ascent,
         width: atom.kind === "drawing" ? atom.width : atomWidth,
         height: atom.kind === "drawing" ? atom.drawing?.heightPoints ?? ascent + descent : ascent + descent,
         baseline: y + line.ascent,

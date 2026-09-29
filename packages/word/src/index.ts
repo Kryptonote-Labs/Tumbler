@@ -108,3 +108,5 @@ export { createWordArtifact } from './create.ts';
 export type { CreateWordOptions, WordTextFormat, WordTextRun, WordTextParagraph } from './create.ts';
 
 export type { WordContentBlock, WordContentCell, WordAuthoredImage } from './create-content.ts';
+
+export type { WordImagePosition } from './image-placement.ts';
