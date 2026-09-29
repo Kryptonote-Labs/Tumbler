@@ -36,3 +36,16 @@ test('rejects contradictory lists, malformed tables and invalid dimensions', () 
   expect(() => createWordArtifact({ blocks: [{ kind: 'image', bytes: png, contentType: 'image/png', width: NaN, height: 10 }] })).toThrow('dimensions');
   expect(() => createWordArtifact({ blocks, paragraphs: [] })).toThrow('both');
 });
+
+
+test('bounds aggregate cells before expanding repeated table content', () => {
+  const table: WordContentBlock = { kind: 'table', rows: Array.from({ length: 1000 }, () => Array.from({ length: 10 }, () => ({ blocks: [] }))) };
+  expect(() => createWordArtifact({ blocks: [table, table] })).toThrow('10000 table cells');
+});
+
+test('an image is already the final paragraph of a cell', () => {
+  const artifact = createWordArtifact({ blocks: [{ kind: 'table', rows: [[{ blocks: [blocks[4]!] }]] }] });
+  const table = artifact.document.blocks[0]!;
+  if (table.kind !== 'table') throw new Error('Missing table');
+  expect(table.rows[0]!.cells[0]!.blocks).toHaveLength(1);
+});
