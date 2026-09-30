@@ -1,6 +1,6 @@
 <script lang="ts">
   import { flushSync, onDestroy, onMount, untrack } from "svelte";
-  import { layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
+  import { wordLineAtPoint, layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import { zoomGesture } from "./zoom-gesture.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
   import WordDrawingView from "./WordDrawingView.svelte";
@@ -352,7 +352,7 @@
     scrollFrame = 0;
   }
 
-  /** Hit-test the nearest laid-out line, rather than letting whitespace select arbitrary DOM nodes. */
+  /** Resolve the cell and line in layout space, then use native text geometry for the caret. */
   function pointerPosition(clientX: number, clientY: number): WordTextPosition | undefined {
     if (scroller === undefined || layout === undefined) return;
     const pages = [...scroller.querySelectorAll<HTMLElement>(".word-page-content")];
@@ -362,16 +362,11 @@
     }, undefined);
     const page = layout.pages.find(item => item.index === Number(pageElement?.dataset.page));
     if (pageElement === undefined || page === undefined) return;
-    const lines = bodyLines(page);
-    if (lines.length === 0) return;
     const rect = pageElement.getBoundingClientRect();
     const x = (clientX - rect.left) / scale;
     const y = (clientY - rect.top) / scale;
-    const horizontalDistance = (line: typeof lines[number]) => Math.max(wordPointsToCssPixels(line.x) - x, x - wordPointsToCssPixels(line.x + line.width), 0);
-    const line = lines.reduce((closest, candidate) => {
-      const vertical = lineDistance(candidate, y) - lineDistance(closest, y);
-      return vertical < 0 || vertical === 0 && horizontalDistance(candidate) < horizontalDistance(closest) ? candidate : closest;
-    });
+    const line = wordLineAtPoint(page, x / wordPointsToCssPixels(1), y / wordPointsToCssPixels(1));
+    if (line === undefined) return;
     const position = (offset: number): WordTextPosition => ({ paragraphElementId: line.paragraphElementId, offset });
     if (x <= wordPointsToCssPixels(line.x)) return position(line.startOffset);
     if (x >= wordPointsToCssPixels(line.x + line.width)) return position(line.endOffset);
@@ -417,12 +412,6 @@
       ...cell.lines,
       ...tableLines(cell.tables),
     ]));
-  }
-
-  function lineDistance(line: WordLayout["pages"][number]["columns"][number]["lines"][number], y: number): number {
-    const top = wordPointsToCssPixels(line.y);
-    const bottom = wordPointsToCssPixels(line.y + line.height);
-    return y < top ? top - y : y > bottom ? y - bottom : 0;
   }
 
   function fragmentStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0) {

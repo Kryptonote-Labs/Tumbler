@@ -110,3 +110,5 @@ export type { CreateWordOptions, WordTextFormat, WordTextRun, WordTextParagraph 
 export type { WordContentBlock, WordContentCell, WordAuthoredImage } from './create-content.ts';
 
 export type { WordImagePosition } from './image-placement.ts';
+
+export { wordLineAtPoint } from "./hit-testing.ts";

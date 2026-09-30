@@ -126,3 +126,15 @@ containing column; `y` is relative to the paragraph when `moveWithText` is true
 column in both modes, including inside table cells. These settings serialize to native
 Word drawing anchors and use the same geometry in headless layout. Inline image
 alignment is controlled by the containing paragraph.
+
+### Pointer hit testing
+
+`wordLineAtPoint(page, x, y)` selects a body text line from a `WordLayoutPage`.
+Coordinates are relative to the page origin in points, before zoom. Convert browser
+CSS pixels by removing the page offset and zoom, then dividing by `wordPointsToCssPixels(1)`.
+
+Clicks inside a table cell stay within its content, including padding and merged
+cells. Nested cells take priority. Outside cells, the helper chooses the nearest
+line vertically, then horizontally. Pages without body text return `undefined`;
+headers, footers and notes are excluded. Renderers resolve the character offset
+within the returned line using their text geometry.
