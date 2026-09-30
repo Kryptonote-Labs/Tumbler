@@ -1,6 +1,6 @@
 {
   "name": "@tumblerjs/svelte",
-  "version": "0.1.0-alpha.21",
+  "version": "0.1.0-alpha.22",
   "description": "Replaceable Svelte components for Tumbler document models.",
   "type": "module",
   "exports": {
@@ -23,15 +23,15 @@
     "tag": "latest"
   },
   "dependencies": {
-    "@tumblerjs/charts": "0.1.0-alpha.21",
-    "@tumblerjs/core": "0.1.0-alpha.21",
-    "@tumblerjs/sheets": "0.1.0-alpha.21",
-    "@tumblerjs/word": "0.1.0-alpha.21",
+    "@tumblerjs/charts": "0.1.0-alpha.22",
+    "@tumblerjs/core": "0.1.0-alpha.22",
+    "@tumblerjs/sheets": "0.1.0-alpha.22",
+    "@tumblerjs/word": "0.1.0-alpha.22",
     "rtf.js": "3.0.9"
   },
   "peerDependencies": {
     "svelte": "^5.0.0",
-    "@tumblerjs/slides": "0.1.0-alpha.21"
+    "@tumblerjs/slides": "0.1.0-alpha.22"
   },
   "devDependencies": {
     "svelte": "^5.0.0",
