@@ -130,3 +130,39 @@ test('empty cells remain selectable and editable at 25% without mounting thousan
   await expect(page.getByRole('gridcell', { name: 'Previously empty', exact: true })).toBeVisible();
   await expect(page.getByText('Modified locally', { exact: true })).toBeVisible();
 });
+
+for (const sample of ['word-pages', 'sheet-budget']) test(`Safari gesture events zoom ${sample} once per cumulative scale`, async ({ page }) => {
+  await page.goto(`/playground/${sample}?width=360`);
+  const scroller = page.locator(sample === 'word-pages' ? '.word-scroller' : '.grid-scroller');
+  await expect(scroller).toBeVisible();
+  const prevented = await scroller.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const send = (type: string, scale: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, { scale: { value: scale }, clientX: { value: rect.left + 180 }, clientY: { value: rect.top + 220 } });
+      element.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    const results = [send('gesturestart', 1), send('gesturechange', 1.2)];
+    // Some browsers also emit wheel/touch events during the same gesture.
+    element.dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: -30, bubbles: true, cancelable: true }));
+    const touch = new Event('touchmove', { bubbles: true, cancelable: true });
+    Object.defineProperty(touch, 'touches', { value: [{ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 100 }] });
+    element.dispatchEvent(touch);
+    results.push(send('gesturechange', 1.5), send('gestureend', 1.5));
+    return results;
+  });
+  expect(prevented).toEqual([true, true, true, true]);
+  const zoom = page.getByLabel('Zoom', { exact: true });
+  await expect.poll(async () => Number(await zoom.inputValue())).toBeCloseTo(1.5, 5);
+  await scroller.evaluate(element => {
+    element.dispatchEvent(new Event('gesturestart', { bubbles: true, cancelable: true }));
+    const event = new Event('gesturechange', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'scale', { value: 0.5 });
+    element.dispatchEvent(event);
+    element.dispatchEvent(new Event('gestureend', { bubbles: true, cancelable: true }));
+  });
+  await expect.poll(async () => Number(await zoom.inputValue())).toBeCloseTo(0.75, 5);
+  await scroller.evaluate(element => element.dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: -10, bubbles: true, cancelable: true })));
+  await expect.poll(async () => Number(await zoom.inputValue())).toBeCloseTo(0.75 * Math.exp(0.1), 5);
+});
