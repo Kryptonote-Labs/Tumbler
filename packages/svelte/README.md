@@ -68,10 +68,14 @@ In edit mode, `ondrawingchange` enables dragging, eight resize handles, and inli
 in-front-of-text, or behind-text placement. Corners preserve proportions; edges
 resize one dimension. Dragging an inline drawing moves it within the text flow without changing its layout.
 Arrow keys nudge a focused floating drawing, Shift increases the step, and Escape cancels
-a drag. `session.updateDrawing(change)` records the position and dimensions as one
+a drag. Changing the document zoom also cancels an active drawing drag or resize.
+`session.updateDrawing(change)` records the position and dimensions as one
 undoable revision and saves them in the DOCX. Square and tight wrapping are not
 exposed. Hosts needing only the bottom-right resize handle can still use
 `ondrawingresize` with `session.resizeDrawing(size)`.
+
+Word and Sheets support Ctrl+wheel, two-finger touch, and Safari trackpad pinch zoom
+inside the document viewport without magnifying the surrounding application.
 
 Drawing previews and handles remain inside the rendered page. Clipping does not
 change document geometry: floating drawings can have negative page offsets or

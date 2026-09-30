@@ -25,12 +25,16 @@
     { x: 1, y: 1, label: 'Resize drawing', cursor: 'nwse-resize' },
   ];
   let preview = $state<WordDrawingBox>();
-  let drag: { pointer: number; clientX: number; clientY: number; box: WordDrawingBox; handle?: Handle } | undefined;
+  let drag: { pointer: number; scale: number; target: HTMLElement | undefined; clientX: number; clientY: number; box: WordDrawingBox; handle?: Handle } | undefined;
   let currentLayout: NonNullable<WordDrawingChange['layout']> = $derived(drawing.placement === 'inline' ? 'inline' : drawing.anchor?.behindDocument ? 'behind' : 'front');
   const label = $derived(drawing.altText ?? drawing.name ?? (drawing.kind === 'chart' ? 'Chart' : 'Image'));
   let displayWidth = $derived(wordPointsToCssPixels(preview?.width ?? width));
   let displayHeight = $derived(wordPointsToCssPixels(preview?.height ?? height));
   const box = (): WordDrawingBox => ({ x: pageX, y: pageY, width, height });
+
+  // Pointer deltas belong to the scale at which the drag started.
+  $effect(() => { scale; cancel(); });
+
   function resized(original: WordDrawingBox, handle: Handle, dx: number, dy: number) {
     return resizeWordDrawingBox(original, handle, dx, dy, currentLayout === 'inline');
   }
@@ -46,7 +50,7 @@
     onselect(drawing.elementId);
     if (handle === undefined && onchange === undefined) return;
     event.preventDefault(); event.stopPropagation();
-    drag = { pointer: event.pointerId, clientX: event.clientX, clientY: event.clientY, box: box(), handle };
+    drag = { pointer: event.pointerId, scale, target: event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined, clientX: event.clientX, clientY: event.clientY, box: box(), handle };
     if (event.currentTarget instanceof HTMLElement) {
       event.currentTarget.focus({ preventScroll: true });
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -55,6 +59,7 @@
 
   function move(event: PointerEvent) {
     if (drag?.pointer !== event.pointerId) return;
+    if (drag.scale !== scale) { cancel(); return; }
     const dx = (event.clientX - drag.clientX) / scale * 0.75;
     const dy = (event.clientY - drag.clientY) / scale * 0.75;
     if (Math.hypot(event.clientX - drag.clientX, event.clientY - drag.clientY) < 3) return;
@@ -65,6 +70,7 @@
 
   function finish(event: PointerEvent) {
     if (drag?.pointer !== event.pointerId) return;
+    if (drag.scale !== scale) { cancel(); return; }
     const next = preview;
     const inlineMove = drag.handle === undefined && currentLayout === 'inline';
     cancel();
@@ -78,7 +84,12 @@
     } else commit(next);
   }
 
-  function cancel() { drag = undefined; preview = undefined; }
+  function cancel() {
+    const current = drag;
+    drag = undefined;
+    preview = undefined;
+    if (current?.target?.hasPointerCapture(current.pointer)) current.target.releasePointerCapture(current.pointer);
+  }
 
   function keydown(event: KeyboardEvent, handle?: Handle) {
     if (event.key === 'Escape') { event.stopPropagation(); cancel(); onselect(undefined); return; }

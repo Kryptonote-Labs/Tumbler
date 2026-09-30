@@ -201,3 +201,43 @@ test('inline dragging moves into text without changing layout and can be undone'
   await expect(page.getByLabel('Drawing layout', { exact: true })).toHaveValue('inline');
   expect((await drawing.boundingBox())!.width).toBeLessThan(original.width);
 });
+
+for (const action of ['resize', 'move']) test(`zoom cancels an active drawing ${action} without an edit`, async ({ page }) => {
+  await page.goto('/playground/word-brief');
+  await expect(page.getByText('A quieter workspace', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByLabel('Zoom', { exact: true }).selectOption('0.75');
+  const drawing = page.getByRole('button', { name: 'Select A rising progress line across six milestones', exact: true });
+  await drawing.click();
+  const before = (await drawing.boundingBox())!;
+  const target = action === 'resize' ? page.getByRole('button', { name: 'Resize drawing', exact: true }) : drawing;
+  const box = (await target.boundingBox())!;
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x - 60, y - 20, { steps: 5 });
+  await expect(page.locator('[data-word-drawing].moving')).toHaveCount(1);
+  await page.locator('.word-scroller').evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    element.dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: -20, clientX: rect.left + 200, clientY: rect.top + 200, bubbles: true, cancelable: true }));
+  });
+  await expect(page.locator('[data-word-drawing].moving')).toHaveCount(0);
+  await expect.poll(() => target.evaluate(element => {
+    // The active mouse pointer uses id 1 in Chromium.
+    return element.hasPointerCapture(1);
+  })).toBe(false);
+  await page.mouse.move(x - 80, y - 30);
+  await page.mouse.up();
+  await expect(page.getByText('Local preview', { exact: true })).toBeVisible();
+  const scale = Number(await page.getByLabel('Zoom', { exact: true }).inputValue());
+  expect((await drawing.boundingBox())!.width / scale).toBeCloseTo(before.width / 0.75, 0);
+  await page.getByLabel('Zoom', { exact: true }).selectOption('0.75');
+  await drawing.click();
+  const handle = page.getByRole('button', { name: 'Resize drawing', exact: true });
+  const next = (await handle.boundingBox())!;
+  await page.mouse.move(next.x + next.width / 2, next.y + next.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(next.x - 50, next.y - 10, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.getByText('Modified locally', { exact: true })).toBeVisible();
+});
