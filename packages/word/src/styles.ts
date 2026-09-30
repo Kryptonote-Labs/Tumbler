@@ -198,7 +198,8 @@ export class WordStyles {
     return computedParagraph(mergeParagraph(cascade, direct), styleId);
   }
 
-  runFormat(document: WordDocumentLike, paragraph: WordParagraph, run: WordRun): ComputedWordTextFormat {
+  // Without a run, resolve inherited text formatting for an empty paragraph.
+  runFormat(document: WordDocumentLike, paragraph: WordParagraph, run?: WordRun): ComputedWordTextFormat {
     const namespace = wordNamespace(document.conformance);
     const paragraphDirect = paragraph.propertiesElementId === undefined
       ? {}
@@ -208,10 +209,10 @@ export class WordStyles {
       (result, style) => mergeRun(result, style.run),
       this.documentRunDefaults,
     );
-    const runDirect = run.propertiesElementId === undefined
+    const runDirect = run?.propertiesElementId === undefined
       ? {}
       : parseRunProperties(requiredElement(document, run.propertiesElementId), namespace);
-    const runElement = run.propertiesElementId === undefined ? undefined : requiredElement(document, run.propertiesElementId);
+    const runElement = run?.propertiesElementId === undefined ? undefined : requiredElement(document, run.propertiesElementId);
     const characterStyleId = runElement === undefined ? this.#defaultCharacterStyleId : valueChild(runElement, namespace, "rStyle") ?? this.#defaultCharacterStyleId;
     const characterRun = this.styleChain(characterStyleId, "character").reduce(
       (result, style) => mergeRun(result, style.run),
