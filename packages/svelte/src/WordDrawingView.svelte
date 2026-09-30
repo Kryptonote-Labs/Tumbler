@@ -1,19 +1,19 @@
 <script lang="ts">
   import { wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing } from '@tumblerjs/word';
   import OoxmlChart from './OoxmlChart.svelte';
+  import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
 
-  let { drawing, width, height, position, scale, editable, selected, maxWidth, pageX, pageY, pageWidth, pageHeight, imageurl, inlinePosition, onselect, onresize, onchange }: {
+  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, inlinePosition, onselect, onresize, onchange }: {
     drawing: WordDrawing; width: number; height: number; position: string; scale: number;
-    editable: boolean; selected: boolean; maxWidth: number;
-    pageX: number; pageY: number; pageWidth: number; pageHeight: number;
+    editable: boolean; selected: boolean;
+    pageX: number; pageY: number;
     imageurl: (image: WordImageDrawing) => string;
     inlinePosition: (x: number, y: number) => WordTextPosition | undefined;
     onselect: (id: number | undefined) => void;
     onresize?: (size: WordDrawingResize) => void;
     onchange?: (change: WordDrawingChange) => void;
   } = $props();
-  type Box = { x: number; y: number; width: number; height: number };
-  type Handle = { x: number; y: number; label: string; cursor: string };
+  type Handle = WordDrawingHandle & { label: string; cursor: string };
   const handles: readonly Handle[] = [
     { x: -1, y: -1, label: 'Resize drawing top left', cursor: 'nwse-resize' },
     { x: 0, y: -1, label: 'Resize drawing top', cursor: 'ns-resize' },
@@ -24,32 +24,18 @@
     { x: 0, y: 1, label: 'Resize drawing bottom', cursor: 'ns-resize' },
     { x: 1, y: 1, label: 'Resize drawing', cursor: 'nwse-resize' },
   ];
-  let preview = $state<Box>();
-  let drag: { pointer: number; clientX: number; clientY: number; box: Box; handle?: Handle } | undefined;
+  let preview = $state<WordDrawingBox>();
+  let drag: { pointer: number; clientX: number; clientY: number; box: WordDrawingBox; handle?: Handle } | undefined;
   let currentLayout: NonNullable<WordDrawingChange['layout']> = $derived(drawing.placement === 'inline' ? 'inline' : drawing.anchor?.behindDocument ? 'behind' : 'front');
   const label = $derived(drawing.altText ?? drawing.name ?? (drawing.kind === 'chart' ? 'Chart' : 'Image'));
   let displayWidth = $derived(wordPointsToCssPixels(preview?.width ?? width));
   let displayHeight = $derived(wordPointsToCssPixels(preview?.height ?? height));
-  const box = (): Box => ({ x: pageX, y: pageY, width, height });
-  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(Math.max(min, max), value));
-
-  function resized(original: Box, handle: Handle, dx: number, dy: number): Box {
-    const maxW = handle.x < 0 ? original.x + original.width : pageWidth - original.x;
-    const maxH = handle.y < 0 ? original.y + original.height : pageHeight - original.y;
-    let w = original.width;
-    let h = original.height;
-    if (handle.x !== 0 && handle.y !== 0) {
-      const factor = 1 + (dx * handle.x * w + dy * handle.y * h) / (w * w + h * h);
-      const ratio = clamp(factor, Math.min(1, Math.max(12 / w, 12 / h)), Math.min(maxW / w, maxH / h, currentLayout === 'inline' && handle.x > 0 ? maxWidth / w : Infinity));
-      w *= ratio; h *= ratio;
-    } else {
-      if (handle.x !== 0) w = clamp(w + dx * handle.x, 12, maxW);
-      if (handle.y !== 0) h = clamp(h + dy * handle.y, 12, maxH);
-    }
-    return { x: currentLayout !== 'inline' && handle.x < 0 ? original.x + original.width - w : original.x, y: currentLayout !== 'inline' && handle.y < 0 ? original.y + original.height - h : original.y, width: w, height: h };
+  const box = (): WordDrawingBox => ({ x: pageX, y: pageY, width, height });
+  function resized(original: WordDrawingBox, handle: Handle, dx: number, dy: number) {
+    return resizeWordDrawingBox(original, handle, dx, dy, currentLayout === 'inline');
   }
 
-  function commit(next: Box, layout?: WordDrawingChange['layout']) {
+  function commit(next: WordDrawingBox, layout?: WordDrawingChange['layout']) {
     const moved = Math.abs(next.x - pageX) > 0.001 || Math.abs(next.y - pageY) > 0.001;
     if (onchange !== undefined) onchange({ elementId: drawing.elementId, widthPoints: next.width, heightPoints: next.height, layout: layout ?? (moved && currentLayout !== 'inline' ? currentLayout : undefined), xPoints: next.x, yPoints: next.y });
     else onresize?.({ elementId: drawing.elementId, widthPoints: next.width, heightPoints: next.height });
@@ -73,7 +59,7 @@
     const dy = (event.clientY - drag.clientY) / scale * 0.75;
     if (Math.hypot(event.clientX - drag.clientX, event.clientY - drag.clientY) < 3) return;
     preview = drag.handle === undefined
-      ? { ...drag.box, x: clamp(drag.box.x + dx, 0, pageWidth - drag.box.width), y: clamp(drag.box.y + dy, 0, pageHeight - drag.box.height) }
+      ? { ...drag.box, x: drag.box.x + dx, y: drag.box.y + dy }
       : resized(drag.box, drag.handle, dx, dy);
   }
 
@@ -103,7 +89,7 @@
     const dx = event.key === 'ArrowLeft' ? -amount : event.key === 'ArrowRight' ? amount : 0;
     const dy = event.key === 'ArrowUp' ? -amount : event.key === 'ArrowDown' ? amount : 0;
     if (handle === undefined && currentLayout === 'inline') return;
-    if (handle === undefined) commit({ ...box(), x: clamp(pageX + dx, 0, pageWidth - width), y: clamp(pageY + dy, 0, pageHeight - height) });
+    if (handle === undefined) commit({ ...box(), x: pageX + dx, y: pageY + dy });
     else {
       // A corner's keyboard adjustment preserves its aspect ratio.
       const delta = dx || dy;
