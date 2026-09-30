@@ -224,7 +224,8 @@ export function positionWordDrawing(document: WordDocument, change: WordDrawingC
   } else {
     const x = Math.round((change.xPoints ?? 0) * EMUS_PER_POINT);
     const y = Math.round((change.yPoints ?? 0) * EMUS_PER_POINT);
-    if (![x, y].every(value => Number.isSafeInteger(value) && value >= 0 && value <= 2147483647)) throw new RangeError('Drawing position must be a non-negative page coordinate.');
+    // OOXML ST_PositionOffset is a signed 32-bit EMU value, independent of page bounds.
+    if (![x, y].every(value => Number.isSafeInteger(value) && value >= -2147483648 && value <= 2147483647)) throw new RangeError('Drawing position must fit a signed 32-bit EMU offset.');
     const positionH = `<${prefix}positionH relativeFrom="page"><${prefix}posOffset>${x}</${prefix}posOffset></${prefix}positionH>`;
     const positionV = `<${prefix}positionV relativeFrom="page"><${prefix}posOffset>${y}</${prefix}posOffset></${prefix}positionV>`;
     if (drawing.placement === 'anchor' && change.layout === (drawing.anchor?.behindDocument ? 'behind' : 'front')) {

@@ -2,6 +2,63 @@ import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { openWordArtifact, wordParagraphText } from '@tumblerjs/word';
 
+test('off-page dragging and resizing stay visually clipped without restricting saved geometry', async ({ page }) => {
+  await page.goto('/playground/word-brief');
+  await expect(page.getByText('A quieter workspace', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByLabel('Zoom', { exact: true }).selectOption('0.75');
+  const drawing = page.getByRole('button', { name: 'Select A rising progress line across six milestones', exact: true });
+  await drawing.click();
+  await page.getByLabel('Drawing layout', { exact: true }).selectOption('front');
+  const paper = page.locator('.word-page').first();
+  const bounds = (await paper.boundingBox())!;
+  const before = (await drawing.boundingBox())!;
+  const center = { x: before.x + before.width / 2, y: before.y + before.height / 2 };
+
+  // At 75% zoom a screen pixel equals one document point.
+  const dx = bounds.x - before.x - 20;
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.down();
+  await page.mouse.move(center.x + dx, center.y, { steps: 8 });
+  await expect.poll(async () => (await drawing.boundingBox())!.x).toBeCloseTo(bounds.x - 20, 0);
+  const left = page.getByRole('button', { name: 'Resize drawing left', exact: true });
+  expect(await left.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return document.elementsFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2).includes(element);
+  })).toBe(false);
+  await page.mouse.up();
+  await expect.poll(async () => (await drawing.boundingBox())!.x).toBeCloseTo(bounds.x - 20, 0);
+
+  // Keyboard movement uses the same unrestricted coordinates as pointer movement.
+  await drawing.focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(async () => (await drawing.boundingBox())!.x).toBeCloseTo(bounds.x - 21, 0);
+  const right = page.getByRole('button', { name: 'Resize drawing right', exact: true });
+  const handle = (await right.boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + bounds.width + 40, handle.y + handle.height / 2, { steps: 8 });
+  expect(await right.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return document.elementsFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2).includes(element);
+  })).toBe(false);
+  await page.mouse.up();
+  const resized = (await drawing.boundingBox())!;
+  expect(resized.width).toBeGreaterThan(bounds.width);
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download', exact: false }).click();
+  const download = await downloadPromise;
+  const artifact = openWordArtifact(new Uint8Array(await readFile((await download.path())!)));
+  const exported = [...artifact.document.drawings.values()][0]!;
+  expect(exported.anchor!.horizontalOffsetPoints).toBeCloseTo(-21, 0);
+  expect(exported.widthPoints).toBeCloseTo(resized.width, 0);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect.poll(async () => (await drawing.boundingBox())!.width).toBeCloseTo(before.width, 0);
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  await expect.poll(async () => (await drawing.boundingBox())!.width).toBeCloseTo(resized.width, 0);
+});
+
 test('resize an embedded drawing at reduced zoom, undo, redo, and export its dimensions', async ({ page }) => {
   await page.goto('/playground/word-brief');
   await expect(page.getByText('A quieter workspace', { exact: true })).toBeVisible();

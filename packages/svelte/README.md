@@ -77,6 +77,24 @@ exposed. Hosts needing only the bottom-right resize handle can still use
 Word and Sheets support Ctrl+wheel, two-finger touch, and Safari trackpad pinch zoom
 inside the document viewport without magnifying the surrounding application.
 
+Drawing previews and handles remain inside the rendered page. Clipping does not
+change document geometry: floating drawings can have negative page offsets or
+extend beyond the page, and resizing does not impose page or column size limits.
+The headless engine validates serialized dimensions and signed OOXML position offsets.
+
+Custom document renderers can import `WordDrawingView` from `@tumblerjs/svelte`
+to reuse the same image/chart rendering, selection, dragging, resize handles, and
+keyboard controls. Pass the layout fragment's `drawing`, `width`, `height`,
+`pageX`, and `pageY` in points, plus `position` as CSS positioning within your
+page. The host applies CSS zoom or a transform to the page and passes that factor
+as `scale` for gesture coordinates and handle sizing. The host supplies `editable`,
+`selected`, `imageurl`, `inlinePosition` for text hit-testing, `onselect`, and
+`onchange` or `onresize` for committing edits. The component renders in place;
+it never attaches controls to `document.body`. Put it inside a positioned,
+clipped page container, such as `position: relative; overflow: hidden`, to keep
+previews and handles out of surrounding UI. `WordDocumentView` already provides
+that container.
+
 Applications own history and persistence, or can use `WordEditingSession` from
 `@tumblerjs/word`. Internal bookmark links scroll inside the owned page surface;
 external targets are passed to the host for its security policy.

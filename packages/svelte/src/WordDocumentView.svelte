@@ -1,6 +1,6 @@
 <script lang="ts">
   import { flushSync, onDestroy, onMount, untrack } from "svelte";
-  import { layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
+  import { wordLineAtPoint, layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import { zoomGesture } from "./zoom-gesture.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
   import WordDrawingView from "./WordDrawingView.svelte";
@@ -352,7 +352,7 @@
     scrollFrame = 0;
   }
 
-  /** Hit-test the nearest laid-out line, rather than letting whitespace select arbitrary DOM nodes. */
+  /** Resolve the cell and line in layout space, then use native text geometry for the caret. */
   function pointerPosition(clientX: number, clientY: number): WordTextPosition | undefined {
     if (scroller === undefined || layout === undefined) return;
     const pages = [...scroller.querySelectorAll<HTMLElement>(".word-page-content")];
@@ -362,16 +362,11 @@
     }, undefined);
     const page = layout.pages.find(item => item.index === Number(pageElement?.dataset.page));
     if (pageElement === undefined || page === undefined) return;
-    const lines = bodyLines(page);
-    if (lines.length === 0) return;
     const rect = pageElement.getBoundingClientRect();
     const x = (clientX - rect.left) / scale;
     const y = (clientY - rect.top) / scale;
-    const horizontalDistance = (line: typeof lines[number]) => Math.max(wordPointsToCssPixels(line.x) - x, x - wordPointsToCssPixels(line.x + line.width), 0);
-    const line = lines.reduce((closest, candidate) => {
-      const vertical = lineDistance(candidate, y) - lineDistance(closest, y);
-      return vertical < 0 || vertical === 0 && horizontalDistance(candidate) < horizontalDistance(closest) ? candidate : closest;
-    });
+    const line = wordLineAtPoint(page, x / wordPointsToCssPixels(1), y / wordPointsToCssPixels(1));
+    if (line === undefined) return;
     const position = (offset: number): WordTextPosition => ({ paragraphElementId: line.paragraphElementId, offset });
     if (x <= wordPointsToCssPixels(line.x)) return position(line.startOffset);
     if (x >= wordPointsToCssPixels(line.x + line.width)) return position(line.endOffset);
@@ -417,12 +412,6 @@
       ...cell.lines,
       ...tableLines(cell.tables),
     ]));
-  }
-
-  function lineDistance(line: WordLayout["pages"][number]["columns"][number]["lines"][number], y: number): number {
-    const top = wordPointsToCssPixels(line.y);
-    const bottom = wordPointsToCssPixels(line.y + line.height);
-    return y < top ? top - y : y > bottom ? y - bottom : 0;
   }
 
   function fragmentStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0) {
@@ -534,7 +523,7 @@
               <div class="text-line" style={`left:${wordPointsToCssPixels(line.x)}px;top:${wordPointsToCssPixels(line.y)}px;height:${wordPointsToCssPixels(line.height)}px`}>
                 {#each line.fragments as fragment, fragmentIndex}
                   {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
-                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y)} pageX={fragment.x} pageY={fragment.y} pageWidth={page.width} pageHeight={page.height} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} maxWidth={Math.max(fragment.width, page.width - fragment.x - page.section.marginRightTwips / 20)} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} />
+                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y)} pageX={fragment.x} pageY={fragment.y} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} />
                   {:else if fragment.hyperlink === undefined}
                     <span
                       data-paragraph={line.paragraphElementId}
@@ -580,7 +569,7 @@
   .word-page-content { position: absolute; inset: 0 auto auto 0; overflow: hidden; }
   .word-page-content.editable { outline: 0; caret-color: var(--tumbler-document-accent, #25a735); }
   .caret-anchor { overflow: visible; }
-  .document-drawing { position: absolute; display: block; object-fit: contain; overflow: hidden; }
+  .document-drawing { position: absolute; display: block; object-fit: fill; overflow: hidden; }
   .drawing-fallback { background: repeating-linear-gradient(135deg, #f3f3f3, #f3f3f3 8px, #fafafa 8px, #fafafa 16px); border: 1px solid #d0d0d0; }
   .note-separator { position: absolute; width: 96px; border-top: 1px solid #777; }
   .text-line { position: absolute; white-space: pre; font-size: 0; line-height: 0; }
