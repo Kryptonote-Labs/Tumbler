@@ -534,7 +534,7 @@
               <div class="text-line" style={`left:${wordPointsToCssPixels(line.x)}px;top:${wordPointsToCssPixels(line.y)}px;height:${wordPointsToCssPixels(line.height)}px`}>
                 {#each line.fragments as fragment, fragmentIndex}
                   {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
-                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y)} pageX={fragment.x} pageY={fragment.y} pageWidth={page.width} pageHeight={page.height} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} maxWidth={Math.max(fragment.width, page.width - fragment.x - page.section.marginRightTwips / 20)} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} />
+                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y)} pageX={fragment.x} pageY={fragment.y} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} />
                   {:else if fragment.hyperlink === undefined}
                     <span
                       data-paragraph={line.paragraphElementId}
