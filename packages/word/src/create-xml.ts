@@ -22,7 +22,7 @@ export function runProperties(format: WordTextFormat) {
     output.push(`<w:color w:val="${format.color.slice(1).toUpperCase()}"/>`);
   }
   if (format.fontSizePoints !== undefined) {
-    if (!Number.isFinite(format.fontSizePoints) || format.fontSizePoints < 1 || format.fontSizePoints > 409) throw new RangeError('Font size must be between 1 and 409 points.');
+    if (!Number.isFinite(format.fontSizePoints) || format.fontSizePoints < 1 || format.fontSizePoints > 1638) throw new RangeError('Font size must be between 1 and 1638 points.');
     output.push(`<w:sz w:val="${Math.round(format.fontSizePoints * 2)}"/>`);
   }
   if (format.underline !== undefined) {
