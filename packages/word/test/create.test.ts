@@ -55,6 +55,23 @@ describe('headless Word creation', () => {
     expect(wordParagraphText(artifact.document, artifact.document.blocks[0]! as typeof paragraphs[number])).toBe('one\ttwo');
   });
 
+  test('round-trips Word font sizes above 409 points in runs and document defaults', () => {
+    for (const fontSizePoints of [1, 409.5, 1637.5, 1638]) {
+      for (const direct of [false, true]) {
+        const artifact = createWordArtifact({
+          ...(direct ? {} : { defaultFormat: { fontSizePoints } }),
+          paragraphs: [{ runs: [{ text: 'Large', ...(direct ? { format: { fontSizePoints } } : {}) }] }],
+        });
+        const reopened = openWordArtifact(artifact.bytes());
+        const at = { paragraphElementId: reopened.document.blocks[0]!.elementId, offset: 0 };
+        expect(reopened.formattingState({ anchor: at, focus: { ...at, offset: 5 } }).text.fontSize).toMatchObject({ value: fontSizePoints });
+      }
+    }
+    for (const fontSizePoints of [0, 1638.5, Infinity]) {
+      expect(() => createWordArtifact({ defaultFormat: { fontSizePoints } })).toThrow('Font size must be between 1 and 1638 points.');
+    }
+  });
+
   test('rejects malformed authored content instead of silently changing its meaning', () => {
     expect(() => createWordArtifact({ paragraphs: [{ runs: [{ text: 'one\ntwo' }] }] })).toThrow('paragraph');
     expect(() => createWordArtifact({ paragraphs: [{ runs: [{ text: '\u0000' }] }] })).toThrow('XML');
