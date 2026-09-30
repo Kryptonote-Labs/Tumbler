@@ -580,7 +580,7 @@ function prepareParagraph(
 
 function prepareMarker(document: WordLayoutDocumentContext, paragraph: WordParagraph, source: WordListMarker, measurer: WordTextMeasurer): PreparedMarker {
   const firstRun = paragraph.inlines.flatMap((inline) => inline.kind === "run" ? [inline] : inline.kind === "hyperlink" || inline.kind === "insertion" ? inline.runs : [])[0];
-  const format = firstRun === undefined ? DEFAULT_MARKER_FORMAT : document.styles.runFormat(document, paragraph, firstRun);
+  const format = document.styles.runFormat(document, paragraph, firstRun);
   const text = source.text + (source.suffix === "space" ? " " : source.suffix === "tab" ? "\t" : "");
   const measurement = validMeasurement(measurer.measure(source.text, format));
   return Object.freeze({ source, text, width: measurement.width, ascent: measurement.ascent, descent: measurement.descent, format });

@@ -1,11 +1,27 @@
 import { describe, expect, test } from "bun:test";
-import { layoutWordDocument, openWordArtifact } from "../src/index.ts";
+import { createWordArtifact, layoutWordDocument, openWordArtifact } from "../src/index.ts";
 import { buildWordDocumentFixture } from "./document-fixture.ts";
 
 const word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const relationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
 describe("WordprocessingML numbering", () => {
+  test.each(["decimal", "bullet"] as const)("keeps %s marker formatting and geometry stable when an empty item receives text", (format) => {
+    const marker = (text: string) => {
+      const artifact = createWordArtifact({
+        defaultFormat: { fontFamily: "Arial", fontSizePoints: 13, color: "#272b28" },
+        lineSpacing: 1.8,
+        blocks: [{ kind: "paragraph", runs: text ? [{ text }] : [], list: { id: "items", kind: format } }],
+      });
+      return layoutWordDocument(artifact.document, {
+        measure: (value, style) => ({ width: value.length * style.fontSizePoints / 2, ascent: style.fontSizePoints * 0.8, descent: style.fontSizePoints * 0.2 }),
+      }).pages[0]!.columns[0]!.lines[0]!.marker!;
+    };
+    const empty = marker("");
+    expect(empty.format).toMatchObject({ fontFamily: "Arial", fontSizePoints: 13, color: "#272B28" });
+    expect(empty).toEqual(marker("Text"));
+  });
+
   test("resolves instances, levels, overrides, patterns, and list layout markers", () => {
     const paragraphs = [
       paragraph(0, "First"),

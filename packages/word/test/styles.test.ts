@@ -71,6 +71,21 @@ describe("WordprocessingML style cascade", () => {
     });
   });
 
+  test("resolves inherited text formatting for a paragraph without runs", () => {
+    const document = openWordDocument(openOpcPackage(fixtureWithStyles(`
+      <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial"/><w:sz w:val="26"/></w:rPr></w:rPrDefault></w:docDefaults>
+      <w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:rPr><w:color w:val="272B28"/></w:rPr></w:style>
+      <w:style w:type="paragraph" w:styleId="List"><w:basedOn w:val="Normal"/><w:rPr><w:b/></w:rPr></w:style>
+      <w:style w:type="character" w:styleId="DefaultChar" w:default="1"><w:rPr><w:i/></w:rPr></w:style>
+    `, "List")));
+    const paragraph = document.blocks[0];
+    if (paragraph?.kind !== "paragraph") throw new Error("Expected paragraph.");
+    expect(paragraph.inlines).toHaveLength(0);
+    expect(document.styles.runFormat(document, paragraph)).toMatchObject({
+      fontFamily: "Arial", fontSizePoints: 13, color: "#272B28", bold: true, italic: true,
+    });
+  });
+
   test("rejects duplicate ids and basedOn cycles when the cycle is resolved", () => {
     const duplicate = fixtureWithStyles(`<w:style w:type="paragraph" w:styleId="A"/><w:style w:type="paragraph" w:styleId="A"/>`);
     expect(() => openWordDocument(openOpcPackage(duplicate))).toThrow(WordError);
