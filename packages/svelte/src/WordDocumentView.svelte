@@ -580,7 +580,7 @@
   .word-page-content { position: absolute; inset: 0 auto auto 0; overflow: hidden; }
   .word-page-content.editable { outline: 0; caret-color: var(--tumbler-document-accent, #25a735); }
   .caret-anchor { overflow: visible; }
-  .document-drawing { position: absolute; display: block; object-fit: contain; overflow: hidden; }
+  .document-drawing { position: absolute; display: block; object-fit: fill; overflow: hidden; }
   .drawing-fallback { background: repeating-linear-gradient(135deg, #f3f3f3, #f3f3f3 8px, #fafafa 8px, #fafafa 16px); border: 1px solid #d0d0d0; }
   .note-separator { position: absolute; width: 96px; border-top: 1px solid #777; }
   .text-line { position: absolute; white-space: pre; font-size: 0; line-height: 0; }

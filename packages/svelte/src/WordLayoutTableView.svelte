@@ -84,7 +84,7 @@
   .document-table, .document-cell, .document-drawing, span, button { position: absolute; box-sizing: border-box; }
   .document-table { user-select: none; pointer-events: none; }
   .document-cell { border: 1px solid #b7b7b7; overflow: hidden; }
-  .document-drawing { display: block; object-fit: contain; overflow: hidden; }
+  .document-drawing { display: block; object-fit: fill; overflow: hidden; }
   .drawing-fallback { border: 1px solid #d0d0d0; background: repeating-linear-gradient(135deg, #f3f3f3, #f3f3f3 8px, #fafafa 8px, #fafafa 16px); }
   span, button { display: block; white-space: pre; user-select: text; -webkit-user-select: text; }
   .caret-anchor { overflow: visible; }
