@@ -99,7 +99,40 @@ describe("WordprocessingML drawings", () => {
     session.redo();
     expect([...session.updateDrawing({ ...change, layout: "behind" }).document.drawings.values()][0]!.anchor?.behindDocument).toBe(true);
     expect([...session.updateDrawing({ ...change, layout: "inline" }).document.drawings.values()][0]).toMatchObject({ placement: "inline", widthPoints: 90, heightPoints: 45 });
-    expect(() => artifact.updateDrawing({ ...change, layout: "front", xPoints: -1 })).toThrow();
+  });
+
+  test("off-page drawing geometry survives export, layout, undo, and redo", () => {
+    const artifact = open(drawing("image", `<pic:pic><pic:blipFill><a:blip r:embed="image"/></pic:blipFill></pic:pic>`, "Off-page image"), [
+      { id: "image", type: `${r}/image`, target: "media/image.png" },
+    ], [{ itemName: "word/media/image.png", contentType: "image/png", xml: "image-bytes" }]);
+    const image = [...artifact.document.drawings.values()][0]!;
+    const session = new WordEditingSession(artifact);
+    const change = { elementId: image.elementId, widthPoints: 900, heightPoints: 1200, layout: "front" as const, xPoints: -18, yPoints: -36 };
+    session.updateDrawing(change);
+    const reopened = openWordArtifact(session.artifact.bytes());
+    expect([...reopened.document.drawings.values()][0]).toMatchObject({
+      widthPoints: 900, heightPoints: 1200,
+      bytes: new TextEncoder().encode("image-bytes"),
+      anchor: { horizontalOffsetPoints: -18, verticalOffsetPoints: -36 },
+    });
+    const layout = layoutWordDocument(reopened.document, { measure: () => ({ width: 5, ascent: 8, descent: 2 }) });
+    expect(layout.pages[0]!.columns[0]!.lines[0]!.fragments[0]).toMatchObject({ x: -18, y: -36, width: 900, height: 1200 });
+    const moved = session.artifact;
+    expect(session.undo()).toBe(artifact);
+    expect(session.redo()).toBe(moved);
+    session.updateDrawing({ ...change, xPoints: -24, yPoints: 900 });
+    expect([...openWordArtifact(session.artifact.bytes()).document.drawings.values()][0]!.anchor)
+      .toMatchObject({ horizontalOffsetPoints: -24, verticalOffsetPoints: 900 });
+
+    for (const offset of [-2147483648, 2147483647]) {
+      const result = artifact.updateDrawing({ ...change, xPoints: offset / 12700, yPoints: offset / 12700 });
+      expect([...openWordArtifact(result.bytes()).document.drawings.values()][0]!.anchor)
+        .toMatchObject({ horizontalOffsetPoints: offset / 12700, verticalOffsetPoints: offset / 12700 });
+    }
+    for (const offset of [-2147483649, 2147483648, NaN, Infinity]) {
+      expect(() => artifact.updateDrawing({ ...change, xPoints: offset / 12700 })).toThrow();
+      expect(() => artifact.updateDrawing({ ...change, yPoints: offset / 12700 })).toThrow();
+    }
   });
 
 });
