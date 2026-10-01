@@ -1,3 +1,4 @@
+import { authoredTableGrid } from './authored-table.ts';
 import { imagePlacement, type WordImagePosition } from './image-placement.ts';
 import type { WordTextParagraph } from './create.ts';
 import { runProperties, textContent, xml } from './create-xml.ts';
@@ -5,10 +6,10 @@ import { runProperties, textContent, xml } from './create-xml.ts';
 /** Authored blocks are independent of package-local XML element identifiers. */
 export type WordContentBlock =
   | ({ readonly kind: 'paragraph' } & WordTextParagraph)
-  | { readonly id?: string; readonly kind: 'table'; readonly rows: readonly (readonly WordContentCell[])[]; readonly columnWidths?: readonly number[] }
+  | { readonly id?: string; readonly source?: number; readonly rowSources?: readonly (number | undefined)[]; readonly rowGrids?: readonly { before: number; after: number }[]; readonly kind: 'table'; readonly rows: readonly (readonly WordContentCell[])[]; readonly columnWidths?: readonly number[] }
   | ({ readonly kind: 'image' } & WordAuthoredImage);
 export interface WordAuthoredImage extends WordImagePosition { readonly bytes: Uint8Array; readonly contentType: 'image/png' | 'image/jpeg'; readonly width: number; readonly height: number; readonly alt?: string }
-export interface WordContentCell { readonly blocks: readonly WordContentBlock[]; }
+export interface WordContentCell { readonly source?: number; readonly gridSpan?: number; readonly verticalMerge?: "restart" | "continue"; readonly blocks: readonly WordContentBlock[]; }
 
 const namespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const office = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/';
@@ -60,11 +61,9 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
           return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${textContent(run.text)}</w:r>`).join('')}</w:p>`;
         }
         case 'table': {
-          const columns = block.rows[0]?.length ?? 0;
-          if (!columns || columns > 63 || block.rows.some(row => row.length !== columns)) throw new RangeError('Word tables need one to 63 cells per row.');
-          const widths = block.columnWidths ?? Array.from({ length: columns }, () => availableWidth / columns);
-          if (widths.length !== columns || widths.some(value => !Number.isFinite(value) || value <= 0) || widths.reduce((sum, value) => sum + value, 0) > availableWidth + 0.01) throw new RangeError('Column widths must fit the available page width.');
-          return `<w:tbl><w:tblPr><w:tblW w:w="${Math.round(widths.reduce((sum, value) => sum + value, 0) * 20)}" w:type="dxa"/><w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(side => `<w:${side} w:val="single" w:sz="4" w:color="B8B8B0"/>`).join('')}</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>${widths.map(value => `<w:gridCol w:w="${Math.round(value * 20)}"/>`).join('')}</w:tblGrid>${block.rows.map(row => `<w:tr>${row.map((cell, index) => `<w:tc><w:tcPr><w:tcW w:w="${Math.round(widths[index]! * 20)}" w:type="dxa"/></w:tcPr>${visit(cell.blocks, widths[index]!, depth + 1)}${cell.blocks.length && cell.blocks.at(-1)?.kind !== 'table' ? '' : '<w:p/>'}</w:tc>`).join('')}</w:tr>`).join('')}</w:tbl>`;
+          const grid = authoredTableGrid(block.rows, block.columnWidths, availableWidth, block.rowGrids);
+          const widths = grid.widths;
+          return `<w:tbl><w:tblPr><w:tblW w:w="${Math.round(widths.reduce((sum, value) => sum + value, 0) * 20)}" w:type="dxa"/><w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(side => `<w:${side} w:val="single" w:sz="4" w:color="B8B8B0"/>`).join('')}</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>${widths.map(value => `<w:gridCol w:w="${Math.round(value * 20)}"/>`).join('')}</w:tblGrid>${grid.rows.map((row, rowIndex) => `<w:tr><w:trPr><w:gridBefore w:val="${grid.rowGrids[rowIndex]!.before}"/><w:gridAfter w:val="${grid.rowGrids[rowIndex]!.after}"/></w:trPr>${row.map(({ cell, width, span }) => `<w:tc><w:tcPr><w:tcW w:w="${Math.round(width * 20)}" w:type="dxa"/>${span > 1 ? `<w:gridSpan w:val="${span}"/>` : ''}${cell.verticalMerge ? `<w:vMerge w:val="${cell.verticalMerge}"/>` : ''}</w:tcPr>${visit(cell.blocks, width, depth + 1)}${cell.blocks.length && cell.blocks.at(-1)?.kind !== 'table' ? '' : '<w:p/>'}</w:tc>`).join('')}</w:tr>`).join('')}</w:tbl>`;
         }
         case 'image': return `<w:p>${imageMarkup(block, availableWidth)}</w:p>`;
         default: throw new TypeError('Unsupported document block.');

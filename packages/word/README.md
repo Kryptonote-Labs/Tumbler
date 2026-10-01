@@ -183,3 +183,33 @@ pagination. `docx(options)` packages the current plain text when exporting.
 
 The docs site’s **Native Word model** guide includes API examples, cache invalidation, text
 positions, and integration boundaries (`apps/docs/src/lib/native-word-docs.ts`).
+
+
+## Shared editable content from DOCX
+
+`importWordContent(artifact)` projects paragraphs, runs and nested tables into editable content.
+Source references retain Word properties and wrappers that an editing interface does not expose.
+Keep the original artifact immutable alongside the shared content. Character identities, presence,
+permissions and synchronization belong to the host application.
+
+`WordPackageDocument` renders and exports that shared content against the original package:
+
+```ts
+const model = new WordPackageDocument(openWordArtifact(bytes));
+const content = model.original;
+// Store content in the host's collaborative model, then apply its current content:
+model.update(content);
+const layout = model.layout(measurer);
+const docx = model.artifact().bytes();
+```
+
+`reconcileWordContent(original, content)` provides the same materialization without retaining a
+model instance. Both APIs preserve untouched package parts, section properties, styles and opaque
+XML. Source identifiers refer to the original package, never to a later exported revision.
+Table content includes cell spans, vertical merges, column widths and source row/cell identities.
+The existing `NativeWordDocument` remains the incremental layout path for content authored without
+an original Office package. Hosts can use the same editing operations and synchronization for both.
+
+For independent copies of source paragraphs or run fragments, give the copied content a new
+`sourceCopy` identity. Reusing `source` without a copy identity means continuation, as when
+splitting a paragraph. Repeated source tables and rows are detected as copies automatically.

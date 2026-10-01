@@ -1,3 +1,4 @@
+import { authoredTableGrid } from './authored-table.ts';
 import { PartName } from '@tumblerjs/opc';
 import type { WordContentBlock, WordAuthoredImage } from './create-content.ts';
 import { createWordArtifact, type CreateWordOptions, type WordTextParagraph } from './create.ts';
@@ -175,35 +176,26 @@ export class NativeWordDocument implements WordLayoutSource {
         const fingerprint = signature(source, width);
         let result: RecordBlock;
         if (source.kind === 'table') {
-          const columns = source.rows[0]?.length ?? 0;
-          if (!columns || columns > 63 || source.rows.some((row) => row.length !== columns))
-            throw new RangeError('Word tables need one to 63 cells per row.');
-          const widths =
-            source.columnWidths ?? Array.from({ length: columns }, () => width / columns);
-          if (
-            widths.length !== columns ||
-            widths.some((value) => !Number.isFinite(value) || value <= 0) ||
-            widths.reduce((a, b) => a + b, 0) > width + 0.01
-          )
-            throw new RangeError('Invalid table column widths.');
-          const rows = source.rows.map((row, rowIndex) => ({
+          const grid = authoredTableGrid(source.rows, source.columnWidths, width, source.rowGrids);
+          const widths = grid.widths;
+          const rows = grid.rows.map((row, rowIndex) => ({
             elementId: allocate(),
-            gridBefore: 0,
-            gridAfter: 0,
+            gridBefore: grid.rowGrids[rowIndex]!.before,
+            gridAfter: grid.rowGrids[rowIndex]!.after,
             cantSplit: false,
             repeatHeader: false,
             heightTwips: undefined,
             heightRule: 'auto' as const,
-            cells: row.map((cell, column) => ({
+            cells: row.map(({ cell, column, span, width: cellWidth }) => ({
               elementId: allocate(),
-              gridSpan: 1,
-              verticalMerge: undefined,
-              width: { type: 'dxa' as const, value: Math.round(widths[column]! * 20) },
+              gridSpan: span,
+              verticalMerge: cell.verticalMerge,
+              width: { type: 'dxa' as const, value: Math.round(cellWidth * 20) },
               verticalAlignment: 'top' as const,
               margins: undefined,
               blocks: visit(
                 cell.blocks.length ? cell.blocks : [{ kind: 'paragraph', runs: [] }],
-                widths[column]!,
+                cellWidth,
                 `${key}/${rowIndex}/${column}`,
               ),
             })),
