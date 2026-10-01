@@ -117,3 +117,8 @@ export { NativeWordText, NativeWordTextLayout } from './native-text.ts';
 export type { NativeWordParagraph, NativeWordTextEdit } from './native-text.ts';
 
 export { NativeWordDocument } from './native-document.ts';
+
+export { DEFAULT_WORD_BORDER, DEFAULT_WORD_TABLE_BORDERS, NO_WORD_BORDER, WORD_BORDER_SIDES, isWordBorder, normalizeWordBorders, resolveWordCellBorders, editWordTableBorders, wordCellBorderCss, wordTableCellCss } from './table-borders.ts';
+export type { WordBorder, WordBorderSide, WordCellBorders, WordTableBorders, WordBorderEdges, WordBorderCell } from './table-borders.ts';
+
+export { formatWordTableBorders, type WordTableBorderChange } from './edit-table-borders.ts';

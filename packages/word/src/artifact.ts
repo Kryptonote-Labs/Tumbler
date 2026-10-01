@@ -1,3 +1,4 @@
+import { formatWordTableBorders, type WordTableBorderChange } from './edit-table-borders.ts';
 import { openOpcPackage } from "@tumblerjs/opc";
 import type { FormattingAdapter, FormattingCapabilities, FormattingPatch, FormattingState, FormattingValue, OfficeColor } from "@tumblerjs/core";
 import { openWordDocument, type OpenWordDocumentOptions, type WordBlock, type WordDocument, type WordParagraph } from "./document.ts";
@@ -53,6 +54,10 @@ export class WordArtifact implements FormattingAdapter<WordFormattingTarget, Wor
       next = next.applyFormatting(inserted, { text: textFormatting });
     }
     return next;
+  }
+
+  formatTableBorders(change: WordTableBorderChange): WordArtifact {
+    return this.replace(formatWordTableBorders(this.document, change));
   }
 
   updateDrawing(change: WordDrawingChange): WordArtifact {

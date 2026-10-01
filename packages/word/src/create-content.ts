@@ -1,3 +1,5 @@
+import { DEFAULT_WORD_TABLE_BORDERS, type WordTableBorders, type WordCellBorders } from './table-borders.ts';
+import { wordBordersMarkup } from './table-border-xml.ts';
 import { imagePlacement, type WordImagePosition } from './image-placement.ts';
 import type { WordTextParagraph } from './create.ts';
 import { runProperties, textContent, xml } from './create-xml.ts';
@@ -5,10 +7,10 @@ import { runProperties, textContent, xml } from './create-xml.ts';
 /** Authored blocks are independent of package-local XML element identifiers. */
 export type WordContentBlock =
   | ({ readonly kind: 'paragraph' } & WordTextParagraph)
-  | { readonly id?: string; readonly kind: 'table'; readonly rows: readonly (readonly WordContentCell[])[]; readonly columnWidths?: readonly number[] }
+  | { readonly id?: string; readonly kind: 'table'; readonly rows: readonly (readonly WordContentCell[])[]; readonly columnWidths?: readonly number[]; readonly borders?: WordTableBorders }
   | ({ readonly kind: 'image' } & WordAuthoredImage);
 export interface WordAuthoredImage extends WordImagePosition { readonly bytes: Uint8Array; readonly contentType: 'image/png' | 'image/jpeg'; readonly width: number; readonly height: number; readonly alt?: string }
-export interface WordContentCell { readonly blocks: readonly WordContentBlock[]; }
+export interface WordContentCell { readonly blocks: readonly WordContentBlock[]; readonly borders?: WordCellBorders; }
 
 const namespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const office = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/';
@@ -64,7 +66,7 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
           if (!columns || columns > 63 || block.rows.some(row => row.length !== columns)) throw new RangeError('Word tables need one to 63 cells per row.');
           const widths = block.columnWidths ?? Array.from({ length: columns }, () => availableWidth / columns);
           if (widths.length !== columns || widths.some(value => !Number.isFinite(value) || value <= 0) || widths.reduce((sum, value) => sum + value, 0) > availableWidth + 0.01) throw new RangeError('Column widths must fit the available page width.');
-          return `<w:tbl><w:tblPr><w:tblW w:w="${Math.round(widths.reduce((sum, value) => sum + value, 0) * 20)}" w:type="dxa"/><w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(side => `<w:${side} w:val="single" w:sz="4" w:color="B8B8B0"/>`).join('')}</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>${widths.map(value => `<w:gridCol w:w="${Math.round(value * 20)}"/>`).join('')}</w:tblGrid>${block.rows.map(row => `<w:tr>${row.map((cell, index) => `<w:tc><w:tcPr><w:tcW w:w="${Math.round(widths[index]! * 20)}" w:type="dxa"/></w:tcPr>${visit(cell.blocks, widths[index]!, depth + 1)}${cell.blocks.length && cell.blocks.at(-1)?.kind !== 'table' ? '' : '<w:p/>'}</w:tc>`).join('')}</w:tr>`).join('')}</w:tbl>`;
+          return `<w:tbl><w:tblPr><w:tblW w:w="${Math.round(widths.reduce((sum, value) => sum + value, 0) * 20)}" w:type="dxa"/>${wordBordersMarkup({ ...DEFAULT_WORD_TABLE_BORDERS, ...block.borders }, 'tblBorders')}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>${widths.map(value => `<w:gridCol w:w="${Math.round(value * 20)}"/>`).join('')}</w:tblGrid>${block.rows.map(row => `<w:tr>${row.map((cell, index) => `<w:tc><w:tcPr><w:tcW w:w="${Math.round(widths[index]! * 20)}" w:type="dxa"/>${cell.borders ? wordBordersMarkup(cell.borders, 'tcBorders') : ''}</w:tcPr>${visit(cell.blocks, widths[index]!, depth + 1)}${cell.blocks.length && cell.blocks.at(-1)?.kind !== 'table' ? '' : '<w:p/>'}</w:tc>`).join('')}</w:tr>`).join('')}</w:tbl>`;
         }
         case 'image': return `<w:p>${imageMarkup(block, availableWidth)}</w:p>`;
         default: throw new TypeError('Unsupported document block.');

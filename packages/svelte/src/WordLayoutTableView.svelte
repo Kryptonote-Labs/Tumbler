@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { wordPointsToCssPixels, type WordImageDrawing, type WordLayoutFragment, type WordLayoutTable } from "@tumblerjs/word";
+  import { wordTableCellCss, wordPointsToCssPixels, type WordImageDrawing, type WordLayoutFragment, type WordLayoutTable } from "@tumblerjs/word";
   import OoxmlChart from "./OoxmlChart.svelte";
   import { wordTextCss } from "./word-font-metrics.ts";
 
@@ -36,7 +36,7 @@
       <div
         class="document-cell"
         data-cell={cell.cellElementId}
-        style={`left:${wordPointsToCssPixels(cell.x - current.x)}px;top:${wordPointsToCssPixels(cell.y - current.y)}px;width:${wordPointsToCssPixels(cell.width)}px;height:${wordPointsToCssPixels(cell.height)}px`}
+        style={wordTableCellCss(cell, current)}
       ></div>
     {/each}
   </div>
@@ -83,7 +83,7 @@
 <style>
   .document-table, .document-cell, .document-drawing, span, button { position: absolute; box-sizing: border-box; }
   .document-table { user-select: none; pointer-events: none; }
-  .document-cell { border: 1px solid #b7b7b7; overflow: hidden; }
+  .document-cell { overflow: hidden; }
   .document-drawing { display: block; object-fit: fill; overflow: hidden; }
   .drawing-fallback { border: 1px solid #d0d0d0; background: repeating-linear-gradient(135deg, #f3f3f3, #f3f3f3 8px, #fafafa 8px, #fafafa 16px); }
   span, button { display: block; white-space: pre; user-select: text; -webkit-user-select: text; }
