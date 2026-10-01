@@ -773,13 +773,9 @@ function breakLines(atoms: readonly ParagraphAtom[], width: number, format: Comp
         const carry = line.splice(lastBreak + 1);
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);
         push();
-        line = carry.filter((item) => item.kind !== "glyph" || !item.whitespace);
+        line = carry;
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);
       } else push();
-    }
-    if (line.length === 0 && materialized.kind === "glyph" && materialized.whitespace) {
-      offset = materialized.endOffset;
-      continue;
     }
     line.push(materialized);
     lineWidth += atomWidthValue(materialized);
