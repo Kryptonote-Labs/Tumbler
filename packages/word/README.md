@@ -138,3 +138,14 @@ cells. Nested cells take priority. Outside cells, the helper chooses the nearest
 line vertically, then horizontally. Pages without body text return `undefined`;
 headers, footers and notes are excluded. Renderers resolve the character offset
 within the returned line using their text geometry.
+
+### Experimental native text transactions
+
+`NativeWordText` is a plain-text editing experiment independent of XML, OPC, and synchronization.
+`transact([{ start, deleteCount, insert }])` applies sequential UTF-16 edits atomically and preserves
+unchanged paragraph identities. `NativeWordTextLayout` reuses the Word line-breaking implementation
+and caches unchanged paragraph geometry. `docx(options)` packages the current text only when exporting.
+
+This API does not import rich documents or preserve unsupported DOCX structures. Rich transactions,
+pagination, and preservation-aware import remain future work. Kryptonote's `/document-lab` exercises
+the native model with Yjs collaboration and small Convex updates.

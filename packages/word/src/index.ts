@@ -112,3 +112,8 @@ export type { WordContentBlock, WordContentCell, WordAuthoredImage } from './cre
 export type { WordImagePosition } from './image-placement.ts';
 
 export { wordLineAtPoint } from "./hit-testing.ts";
+
+export { NativeWordText, NativeWordTextLayout } from './native-text.ts';
+export type { NativeWordParagraph, NativeWordTextEdit } from './native-text.ts';
+
+export { NativeWordDocument } from './native-document.ts';

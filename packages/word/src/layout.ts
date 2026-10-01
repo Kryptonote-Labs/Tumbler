@@ -134,6 +134,7 @@ export interface WordLayoutFragment {
 }
 
 interface LayoutBudget {
+  readonly cache?: WordLayoutCache | undefined;
   readonly maxPages: number;
   readonly maxFragments: number;
   fragments: number;
@@ -165,7 +166,25 @@ interface MutablePage {
   noteSeparatorY: number | undefined;
 }
 
-type WordLayoutDocumentContext = Pick<WordDocument, "package" | "part" | "source" | "conformance" | "styles" | "numbering" | "drawings" | "blocks">;
+export interface WordLayoutSource {
+  readonly blocks: readonly WordBlock[];
+  readonly drawings: ReadonlyMap<number, WordDrawing>;
+  readonly finalSection: WordSectionProperties;
+  readonly listMarkers: ReadonlyMap<number, WordListMarker>;
+  paragraphFormat(paragraph: WordParagraph): ComputedWordParagraphFormat;
+  runFormat(paragraph: WordParagraph, run: WordRun | undefined): ComputedWordTextFormat;
+  readonly cache?: WordLayoutCache | undefined;
+}
+type WordLayoutDocumentContext = Pick<WordLayoutSource, "blocks" | "drawings" | "paragraphFormat" | "runFormat" | "cache" | "listMarkers">;
+
+/** Prepared geometry belongs to immutable paragraphs and the font measurer that produced it. */
+export class WordLayoutCache {
+  pages: readonly WordLayoutPage[] = [];
+  readonly translated = new WeakMap<WordLayoutLine, { dx: number; dy: number; value: WordLayoutLine }>();
+  readonly lines = new WeakMap<PreparedLine, { marker: PreparedMarker | undefined; value: WordLayoutLine }>();
+  readonly paragraphs = new WeakMap<WordParagraph, { width: number; marker: string; measurer: WordTextMeasurer; value: PreparedParagraph }>();
+  measuredParagraphs = 0;
+}
 
 type ParagraphAtom = GlyphAtom | TabAtom | DrawingAtom | NoteAtom | BreakAtom;
 
@@ -267,14 +286,30 @@ export function layoutWordDocument(
   measurer: WordTextMeasurer,
   options: WordLayoutOptions = {},
 ): WordLayout {
+  return layoutWordSource({
+    blocks: document.blocks, drawings: document.drawings, finalSection: document.finalSection,
+    listMarkers: document.numbering.markers(document),
+    paragraphFormat: paragraph => document.styles.paragraphFormat(document, paragraph),
+    runFormat: (paragraph, run) => document.styles.runFormat(document, paragraph, run),
+  }, measurer, options, document);
+}
+
+/** Shared pagination for package-backed and native document models. */
+export function layoutWordSource(
+  document: WordLayoutSource,
+  measurer: WordTextMeasurer,
+  options: WordLayoutOptions = {},
+  packageDocument?: WordDocument,
+): WordLayout {
   const budget: LayoutBudget = {
+    cache: document.cache,
     maxPages: limit(options.maxPages, 10_000, "page"),
     maxFragments: limit(options.maxFragments, 1_000_000, "fragment"),
     fragments: 0,
   };
   const pages: MutablePage[] = [];
   const sections = documentSections(document.blocks, document.finalSection);
-  const listMarkers = document.numbering.markers(document);
+  const listMarkers = document.listMarkers;
   let page: MutablePage | undefined;
   let columnIndex = 0;
   let cursorY = 0;
@@ -373,7 +408,7 @@ export function layoutWordDocument(
             advanceColumn(section.properties);
             column = page!.columns[columnIndex]!;
             if (moved !== undefined) {
-              const translated = translateLine(moved, column.x - moved.x, cursorY - moved.y);
+              const translated = translateLine(moved, column.x - moved.x, cursorY - moved.y, budget.cache);
               column.lines.push(translated);
               cursorY += translated.height;
             }
@@ -391,10 +426,14 @@ export function layoutWordDocument(
       cursorY += points(prepared.format.spacingAfterTwips);
     }
   }
-  decorateNotes(document, pages, measurer, budget);
-  decorateHeaderFooters(document, pages, measurer, budget, sections);
+  if (packageDocument) {
+    decorateNotes(packageDocument, pages, measurer, budget);
+    decorateHeaderFooters(packageDocument, pages, measurer, budget, sections);
+  }
+  const frozenPages = Object.freeze(pages.map((page, index) => freezePage(page, document.cache?.pages[index])));
+  if (document.cache) document.cache.pages = frozenPages;
   return Object.freeze({
-    pages: Object.freeze(pages.map(freezePage)),
+    pages: frozenPages,
     fragmentCount: budget.fragments,
   });
 }
@@ -565,7 +604,11 @@ function prepareParagraph(
   measurer: WordTextMeasurer,
   markerSource?: WordListMarker,
 ): PreparedParagraph {
-  const computed = document.styles.paragraphFormat(document, paragraph);
+  const markerKey = JSON.stringify(markerSource);
+  const cached = document.cache?.paragraphs.get(paragraph);
+  if (cached && cached.width === columnWidth && cached.marker === markerKey && cached.measurer === measurer) return cached.value;
+  if (document.cache) document.cache.measuredParagraphs++;
+  const computed = document.paragraphFormat(paragraph);
   const format = markerSource === undefined ? computed : Object.freeze({
     ...computed,
     indentStartTwips: computed.indentStartTwips !== 0 ? computed.indentStartTwips : markerSource.indentStartTwips ?? 720,
@@ -575,24 +618,35 @@ function prepareParagraph(
   const atoms = paragraphAtoms(document, paragraph, measurer);
   const lines = breakLines(atoms, width, format);
   const marker = markerSource === undefined ? undefined : prepareMarker(document, paragraph, markerSource, measurer);
-  return Object.freeze({ paragraph, format, lines: Object.freeze(lines), marker });
+  const value = Object.freeze({ paragraph, format, lines: Object.freeze(lines), marker });
+  document.cache?.paragraphs.set(paragraph, { width: columnWidth, marker: markerKey, measurer, value });
+  return value;
 }
 
 function prepareMarker(document: WordLayoutDocumentContext, paragraph: WordParagraph, source: WordListMarker, measurer: WordTextMeasurer): PreparedMarker {
   const firstRun = paragraph.inlines.flatMap((inline) => inline.kind === "run" ? [inline] : inline.kind === "hyperlink" || inline.kind === "insertion" ? inline.runs : [])[0];
-  const format = document.styles.runFormat(document, paragraph, firstRun);
+  const format = document.runFormat(paragraph, firstRun);
   const text = source.text + (source.suffix === "space" ? " " : source.suffix === "tab" ? "\t" : "");
   const measurement = validMeasurement(measurer.measure(source.text, format));
   return Object.freeze({ source, text, width: measurement.width, ascent: measurement.ascent, descent: measurement.descent, format });
 }
 
 function paragraphAtoms(document: WordLayoutDocumentContext, paragraph: WordParagraph, measurer: WordTextMeasurer): ParagraphAtom[] {
+  return resolvedParagraphAtoms(paragraph, measurer, (run) => document.runFormat(paragraph, run), document.drawings);
+}
+
+function resolvedParagraphAtoms(
+  paragraph: WordParagraph,
+  measurer: WordTextMeasurer,
+  resolveFormat: (run: WordRun) => ComputedWordTextFormat,
+  drawings: ReadonlyMap<number, WordDrawing>,
+): ParagraphAtom[] {
   const atoms: ParagraphAtom[] = [];
   let logicalOffset = 0;
   let fieldDepth = 0;
   let resultDepth = 0;
   const addRun = (run: WordRun, hyperlink: string | undefined): void => {
-    const format = document.styles.runFormat(document, paragraph, run);
+    const format = resolveFormat(run);
     for (const content of run.contents) {
       if (content.kind === "field-character") {
         if (content.fieldType === "begin") fieldDepth += 1;
@@ -635,7 +689,7 @@ function paragraphAtoms(document: WordLayoutDocumentContext, paragraph: WordPara
         }));
         logicalOffset += 1;
       } else if (content.kind === "drawing") {
-        const drawing = document.drawings.get(content.elementId);
+        const drawing = drawings.get(content.elementId);
         const width = drawing?.widthPoints ?? format.fontSizePoints;
         const height = drawing?.heightPoints ?? format.fontSizePoints;
         const anchored = drawing?.placement === "anchor";
@@ -749,6 +803,14 @@ function placeLine(
   const adjustment = format.alignment === "center" ? (available - line.width) / 2
     : format.alignment === "end" ? available - line.width : 0;
   const x = column.x + startIndent + Math.max(0, adjustment);
+  const cached = budget.cache?.lines.get(line);
+  if (cached && cached.marker === marker) {
+    budget.fragments += cached.value.fragments.length;
+    if (budget.fragments > budget.maxFragments) throw new WordError("limit_exceeded", `Layout exceeds ${budget.maxFragments} fragments.`);
+    const value = cached.value.x === x && cached.value.y === y ? cached.value : translateLine(cached.value, x - cached.value.x, y - cached.value.y);
+    budget.cache!.lines.set(line, { marker, value });
+    return value;
+  }
   const fragments: WordLayoutFragment[] = [];
   let cursorX = x;
   for (const atom of line.atoms) {
@@ -789,7 +851,7 @@ function placeLine(
     }
     cursorX += atomWidth;
   }
-  return Object.freeze({
+  const value = Object.freeze({
     paragraphElementId: paragraph.elementId,
     x,
     y,
@@ -809,6 +871,11 @@ function placeLine(
       format: marker.format,
     }),
   });
+  // Anchors may depend on page/paragraph origins rather than this line's translation.
+  if (budget.cache && !line.atoms.some(atom => atom.kind === "drawing" && atom.drawing?.placement === "anchor")) {
+    budget.cache.lines.set(line, { marker, value });
+  }
+  return value;
 }
 
 function decorateHeaderFooters(
@@ -852,15 +919,11 @@ function decorateHeaderFooters(
 }
 
 function storyContext(document: WordDocument, story: WordHeaderFooterStory | WordNoteStory): WordLayoutDocumentContext {
+  const context = { package: document.package, part: story.part, source: story.source, conformance: document.conformance };
   return {
-    package: document.package,
-    part: story.part,
-    source: story.source,
-    conformance: document.conformance,
-    styles: document.styles,
-    numbering: document.numbering,
-    drawings: story.drawings,
-    blocks: story.blocks,
+    drawings: story.drawings, blocks: story.blocks, listMarkers: document.numbering.markers({ ...context, blocks: story.blocks }),
+    paragraphFormat: paragraph => document.styles.paragraphFormat(context, paragraph),
+    runFormat: (paragraph, run) => document.styles.runFormat(context, paragraph, run),
   };
 }
 
@@ -919,7 +982,7 @@ function layoutStory(
   budget: LayoutBudget,
 ): { readonly lines: readonly WordLayoutLine[]; readonly tables: readonly WordLayoutTable[]; readonly height: number } {
   const column: MutableColumn = { index: 0, x, y: 0, width, height: Number.MAX_SAFE_INTEGER, lines: [], tables: [], unsupportedBlocks: [] };
-  const markers = context.numbering.markers(context);
+  const markers = context.listMarkers;
   let cursor = 0;
   for (const block of context.blocks) {
     if (block.kind === "paragraph") {
@@ -997,7 +1060,25 @@ function documentSections(
   return Object.freeze(sections);
 }
 
-function freezePage(page: MutablePage): WordLayoutPage {
+function sameItems<T>(left: readonly T[], right: readonly T[]) {
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+function freezePage(page: MutablePage, previous?: WordLayoutPage): WordLayoutPage {
+  const columns = page.columns.map((column, index): WordLayoutColumn => {
+    const old = previous?.columns[index];
+    if (old && old.index === column.index && old.x === column.x && old.y === column.y &&
+      old.width === column.width && old.height === column.height &&
+      sameItems(old.lines, column.lines) && sameItems(old.tables, column.tables) &&
+      sameItems(old.unsupportedBlocks, column.unsupportedBlocks)) return old;
+    return Object.freeze({ ...column, lines: Object.freeze(column.lines), tables: Object.freeze(column.tables), unsupportedBlocks: Object.freeze(column.unsupportedBlocks) });
+  });
+  if (previous && previous.index === page.index && previous.width === page.width &&
+    previous.height === page.height && previous.section === page.section &&
+    previous.noteSeparatorY === page.noteSeparatorY && sameItems(previous.columns, columns) &&
+    sameItems(previous.headerLines, page.headerLines) && sameItems(previous.footerLines, page.footerLines) &&
+    sameItems(previous.headerTables, page.headerTables) && sameItems(previous.footerTables, page.footerTables) &&
+    sameItems(previous.noteLines, page.noteLines) && sameItems(previous.noteTables, page.noteTables)) return previous;
   return Object.freeze({
     index: page.index,
     width: page.width,
@@ -1010,21 +1091,15 @@ function freezePage(page: MutablePage): WordLayoutPage {
     noteLines: Object.freeze(page.noteLines),
     noteTables: Object.freeze(page.noteTables),
     noteSeparatorY: page.noteSeparatorY,
-    columns: Object.freeze(page.columns.map((column): WordLayoutColumn => Object.freeze({
-      index: column.index,
-      x: column.x,
-      y: column.y,
-      width: column.width,
-      height: column.height,
-      lines: Object.freeze(column.lines),
-      tables: Object.freeze(column.tables),
-      unsupportedBlocks: Object.freeze(column.unsupportedBlocks),
-    }))),
+    columns: Object.freeze(columns),
   });
 }
 
-function translateLine(line: WordLayoutLine, dx: number, dy: number): WordLayoutLine {
-  return Object.freeze({
+function translateLine(line: WordLayoutLine, dx: number, dy: number, cache?: WordLayoutCache): WordLayoutLine {
+  if (dx === 0 && dy === 0) return line;
+  const cached = cache?.translated.get(line);
+  if (cached && cached.dx === dx && cached.dy === dy) return cached.value;
+  const value = Object.freeze({
     ...line,
     x: line.x + dx,
     y: line.y + dy,
@@ -1037,6 +1112,8 @@ function translateLine(line: WordLayoutLine, dx: number, dy: number): WordLayout
     }))),
     marker: line.marker === undefined ? undefined : Object.freeze({ ...line.marker, x: line.marker.x + dx, y: line.marker.y + dy, baseline: line.marker.baseline + dy }),
   });
+  cache?.translated.set(line, { dx, dy, value });
+  return value;
 }
 
 function paragraphHeight(paragraph: PreparedParagraph): number {
@@ -1142,3 +1219,24 @@ const DEFAULT_MARKER_FORMAT: ComputedWordTextFormat = Object.freeze({
   verticalAlign: "baseline",
   rightToLeft: false,
 });
+
+/** Layout native paragraphs with already resolved styles, without an OPC package or XML. */
+export function layoutWordResolvedParagraph(
+  paragraph: WordParagraph,
+  width: number,
+  measurer: WordTextMeasurer,
+  textFormat: ComputedWordTextFormat,
+  format: ComputedWordParagraphFormat,
+): readonly WordLayoutLine[] {
+  if (!Number.isFinite(width) || width <= 0) throw new RangeError("Paragraph width must be positive.");
+  const atoms = resolvedParagraphAtoms(paragraph, measurer, () => textFormat, new Map());
+  const lines = breakLines(atoms, Math.max(1, width - points(format.indentStartTwips + format.indentEndTwips)), format);
+  const column: MutableColumn = { index: 0, x: 0, y: 0, width, height: Infinity, lines: [], tables: [], unsupportedBlocks: [] };
+  const budget = { maxPages: Infinity, maxFragments: Infinity, fragments: 0 };
+  let y = points(format.spacingBeforeTwips);
+  return lines.map((line) => {
+    const placed = placeLine(paragraph, format, line, column, y, budget, undefined);
+    y += placed.height;
+    return placed;
+  });
+}
