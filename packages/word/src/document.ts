@@ -1,3 +1,5 @@
+import type { WordTableBorders, WordCellBorders } from './table-borders.ts';
+import { readWordBorders } from './table-border-xml.ts';
 import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { RelationshipsError, type OpcPackage, type OpcPart, type Relationships } from "@tumblerjs/opc";
 import { readWordStyles, type WordStyles } from "./styles.ts";
@@ -54,6 +56,7 @@ export interface WordTable {
 }
 
 export interface WordTableProperties {
+  readonly borders?: WordTableBorders;
   readonly width: WordTableWidth | undefined;
   readonly alignment: "start" | "center" | "end";
   readonly indentTwips: number;
@@ -85,6 +88,7 @@ export interface WordTableRow {
 }
 
 export interface WordTableCell {
+  readonly borders?: WordCellBorders;
   readonly elementId: number;
   readonly gridSpan: number;
   readonly verticalMerge: "restart" | "continue" | undefined;
@@ -480,6 +484,7 @@ function parseTable(
   const grid = onlyChild(element, namespace, "tblGrid", "A table must not repeat tblGrid.");
   const margins = properties === undefined ? undefined : onlyChild(properties, namespace, "tblCellMar", "Table properties must not repeat tblCellMar.");
   const tableProperties: WordTableProperties = Object.freeze({
+    borders: readWordBorders(properties, "tblBorders", namespace),
     width: properties === undefined ? undefined : parseTableWidth(onlyChild(properties, namespace, "tblW", "Table properties must not repeat tblW."), namespace),
     alignment: properties === undefined ? "start" : tableAlignment(valueChild(properties, namespace, "jc")),
     indentTwips: properties === undefined ? 0 : tableIndent(onlyChild(properties, namespace, "tblInd", "Table properties must not repeat tblInd."), namespace),
@@ -495,6 +500,7 @@ function parseTable(
       const mergeValue = rawMerge === undefined ? undefined : attr(rawMerge, namespace, "val");
       return Object.freeze({
       elementId: cell.id,
+      borders: readWordBorders(cellProperties, "tcBorders", namespace),
       gridSpan: cellProperties === undefined ? 1 : integerAttr(onlyChild(cellProperties, namespace, "gridSpan", "Cell properties must not repeat gridSpan."), namespace, "val", 1, 1, 32_767),
       verticalMerge: rawMerge === undefined ? undefined : mergeValue === "restart" ? "restart" : "continue",
       width: cellProperties === undefined ? undefined : parseTableWidth(onlyChild(cellProperties, namespace, "tcW", "Cell properties must not repeat tcW."), namespace),

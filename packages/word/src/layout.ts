@@ -1,3 +1,4 @@
+import { resolveWordCellBorders, type WordCellBorders } from './table-borders.ts';
 import type {
   WordBlock,
   WordBreakType,
@@ -78,6 +79,7 @@ export interface WordLayoutTable {
 }
 
 export interface WordLayoutTableCell {
+  readonly borders: WordCellBorders;
   readonly cellElementId: number;
   readonly continuationElementIds: readonly number[];
   readonly row: number;
@@ -261,6 +263,7 @@ interface PreparedTable {
 }
 
 interface PreparedTableCell {
+  readonly borders: WordCellBorders;
   readonly resolved: ResolvedWordTableCell;
   readonly width: number;
   readonly contentHeight: number;
@@ -476,7 +479,7 @@ function prepareTable(
       .map((nested) => prepareTable(document, nested, innerWidth, measurer, listMarkers));
     const contentHeight = paragraphs.reduce((sum, paragraph) => sum + paragraphHeight(paragraph), 0) +
       nestedTables.reduce((sum, nested) => sum + nested.rowHeights.reduce((height, row) => height + row, 0), 0) + margins.top + margins.bottom;
-    preparedCells.push(Object.freeze({ resolved: cell, width: cellWidth, contentHeight, paragraphs: Object.freeze(paragraphs), nestedTables: Object.freeze(nestedTables), margins, verticalAlignment: cell.source.verticalAlignment }));
+    preparedCells.push(Object.freeze({ resolved: cell, borders: resolveWordCellBorders({ ...cell, borders: cell.source.borders ?? {} }, grid.rows.length, grid.columnCount, table.properties.borders), width: cellWidth, contentHeight, paragraphs: Object.freeze(paragraphs), nestedTables: Object.freeze(nestedTables), margins, verticalAlignment: cell.source.verticalAlignment }));
     if (cell.rowSpan === 1) rowHeights[cell.row] = Math.max(rowHeights[cell.row] ?? 0, contentHeight);
   }
   for (const cell of preparedCells.filter((item) => item.resolved.rowSpan > 1)) {
@@ -581,6 +584,7 @@ function placeTable(prepared: PreparedTable, columnX: number, y: number, budget:
     }
     return Object.freeze({
       cellElementId: cell.resolved.source.elementId,
+      borders: cell.borders,
       continuationElementIds: cell.resolved.continuationElementIds,
       row: cell.resolved.row,
       column: cell.resolved.column,

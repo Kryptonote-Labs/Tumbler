@@ -183,3 +183,46 @@ pagination. `docx(options)` packages the current plain text when exporting.
 
 The docs site’s **Native Word model** guide includes API examples, cache invalidation, text
 positions, and integration boundaries (`apps/docs/src/lib/native-word-docs.ts`).
+
+### Table borders
+
+Authored tables default to black, 0.75 pt solid borders. Set `borders` on a table
+for `top`, `right`, `bottom`, `left`, `insideH`, and `insideV`, or on an authored
+cell for its four edges. Each border has an RGB `color`, a `width` in points,
+and a `style` of `single`, `double`, `dotted`, `dashed`, or `none`.
+Native layout and DOCX export use the same settings, rounded to eighth-points.
+
+```ts
+const red = { color: '#CC1122', width: 1.5, style: 'single' } as const;
+const document = createWordArtifact({
+  blocks: [{ kind: 'table', borders: { top: red }, rows: [
+    [{ blocks: [{ kind: 'paragraph', runs: [{ text: 'Example' }] }] }],
+  ] }],
+});
+const table = document.document.blocks[0];
+if (table?.kind === 'table') {
+  const next = document.formatTableBorders({
+    tableElementId: table.elementId,
+    edges: 'outside',
+    border: { color: '#245BC4' },
+  });
+}
+```
+
+`formatTableBorders` accepts optional `cellElementIds` and patches only the
+supplied border fields. `edges` accepts `all`, `outside`, `inside`, or one side.
+The operation updates matching neighbour edges as well. The immutable artifact
+can be retained for undo. Unchanged XML, media, and package parts are preserved.
+
+For native hosts, `editWordTableBorders` applies the same operation to cells
+identified by row and column, returning the updated cell borders. Pass resolved
+borders from `resolveWordCellBorders` to preserve inherited settings, then update
+`NativeWordDocument` with the resulting authored cells. `WordLayoutTableCell.borders`
+exposes resolved formatting; `wordTableCellCss` draws centered borders in DOM
+renderers without changing text geometry.
+
+Imported direct table and cell borders are read without assigning borders to
+borderless tables. Existing table-style/theme border inheritance and decorative
+Word line styles are not fully rendered: unsupported styles have a solid-line
+preview, while untouched source XML remains preserved. Editing a supported edge
+writes direct RGB formatting. See Microsoft's [border properties](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.bordertype).

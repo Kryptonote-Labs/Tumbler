@@ -1,3 +1,4 @@
+import { DEFAULT_WORD_TABLE_BORDERS, normalizeWordBorders } from './table-borders.ts';
 import { PartName } from '@tumblerjs/opc';
 import type { WordContentBlock, WordAuthoredImage } from './create-content.ts';
 import { createWordArtifact, type CreateWordOptions, type WordTextParagraph } from './create.ts';
@@ -201,6 +202,7 @@ export class NativeWordDocument implements WordLayoutSource {
               width: { type: 'dxa' as const, value: Math.round(widths[column]! * 20) },
               verticalAlignment: 'top' as const,
               margins: undefined,
+              borders: normalizeWordBorders(cell.borders ?? {}),
               blocks: visit(
                 cell.blocks.length ? cell.blocks : [{ kind: 'paragraph', runs: [] }],
                 widths[column]!,
@@ -214,6 +216,7 @@ export class NativeWordDocument implements WordLayoutSource {
             gridColumnWidthsTwips: widths.map((value) => Math.round(value * 20)),
             properties: {
               width: { type: 'dxa', value: Math.round(widths.reduce((a, b) => a + b, 0) * 20) },
+              borders: normalizeWordBorders({ ...DEFAULT_WORD_TABLE_BORDERS, ...source.borders }),
               alignment: 'start',
               indentTwips: 0,
               layout: 'fixed',
