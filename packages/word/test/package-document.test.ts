@@ -365,3 +365,67 @@ test('resizing a source table reconciles preferred table and merged cell widths'
         ?.attributes.find((a) => a.localName === 'w' && a.namespaceUri === ns)?.value,
     ).toBe('8000');
 });
+
+test('independent paragraph copies and copied rows do not extend original bookmarks', () => {
+  const source = fixture();
+  const blocks = importWordContent(source);
+  const p = blocks[0]!;
+  if (p.kind !== 'paragraph') throw new Error('Expected paragraph');
+  const output = reconcileWordContent(source, [
+    p,
+    { ...p, sourceCopy: 'paste-1' },
+    ...blocks.slice(1),
+  ]);
+  const starts = output.document.source.elements(ns, 'bookmarkStart');
+  const ends = output.document.source.elements(ns, 'bookmarkEnd');
+  expect(starts).toHaveLength(2);
+  expect(ends).toHaveLength(2);
+  expect(ends[0]!.span.start).toBeLessThan(starts[1]!.span.start);
+  expect(starts[0]!.attributes.find((a) => a.localName === 'id')?.value).not.toBe(
+    starts[1]!.attributes.find((a) => a.localName === 'id')?.value,
+  );
+
+  const rowSource = openWordArtifact(
+    buildWordDocumentFixture({
+      documentXml: `<w:document xmlns:w="${ns}"><w:body><w:tbl><w:tr><w:tc><w:p><w:bookmarkStart w:id="1" w:name="Row"/><w:r><w:t>Cell</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p></w:tc></w:tr></w:tbl></w:body></w:document>`,
+    }),
+  );
+  const [table] = importWordContent(rowSource);
+  if (table?.kind !== 'table') throw new Error('Expected table');
+  const copied = reconcileWordContent(rowSource, [
+    {
+      ...table,
+      rows: [table.rows[0]!, table.rows[0]!],
+      rowSources: [table.rowSources![0], table.rowSources![0]],
+    },
+  ]);
+  const rowStarts = copied.document.source.elements(ns, 'bookmarkStart');
+  const rowEnds = copied.document.source.elements(ns, 'bookmarkEnd');
+  expect(rowStarts).toHaveLength(2);
+  expect(rowEnds[0]!.span.start).toBeLessThan(rowStarts[1]!.span.start);
+});
+
+test('multiple copies keep bookmark ranges local and generated names unique', () => {
+  const prefix = 'A'.repeat(24);
+  const source = openWordArtifact(
+    buildWordDocumentFixture({
+      documentXml: `<w:document xmlns:w="${ns}"><w:body><w:tbl><w:tr><w:tc><w:p><w:bookmarkStart w:id="1" w:name="${prefix}X"/><w:r><w:t>One</w:t></w:r><w:bookmarkEnd w:id="1"/><w:bookmarkStart w:id="2" w:name="${prefix}Y"/><w:r><w:t>Two</w:t></w:r><w:bookmarkEnd w:id="2"/></w:p></w:tc></w:tr></w:tbl></w:body></w:document>`,
+    }),
+  );
+  const [table] = importWordContent(source);
+  const output = reconcileWordContent(source, [table!, table!, table!]);
+  const starts = output.document.source.elements(ns, 'bookmarkStart');
+  const names = starts.map((e) => e.attributes.find((a) => a.localName === 'name')?.value);
+  expect(new Set(names).size).toBe(6);
+  for (const p of output.document.source.elements(ns, 'p')) {
+    const markers = p.children.filter(
+      (n) => n.kind === 'element' && n.localName.startsWith('bookmark'),
+    );
+    expect(markers.map((n) => n.kind === 'element' && n.localName)).toEqual([
+      'bookmarkStart',
+      'bookmarkEnd',
+      'bookmarkStart',
+      'bookmarkEnd',
+    ]);
+  }
+});

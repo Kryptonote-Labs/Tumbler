@@ -127,7 +127,7 @@ export function reconcileWordContent(
                 })),
               ),
             }
-          : { ...block },
+          : { ...block, runs: block.runs.map((run) => ({ ...run })) },
     );
   blocks = normalize(blocks);
   const document = source.document;

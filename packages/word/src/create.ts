@@ -6,10 +6,12 @@ import { authoredContent, type WordContentBlock, type WordAuthoredImage } from '
 
 /** Supported authored text properties. Omitted properties inherit the document defaults. */
 export type WordTextFormat = Partial<Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'underline' | 'color'>>;
-export interface WordTextRun { readonly source?: number; readonly text: string; readonly format?: WordTextFormat; readonly image?: WordAuthoredImage; }
+export interface WordTextRun { readonly source?: number; readonly sourceCopy?: string; readonly text: string; readonly format?: WordTextFormat; readonly image?: WordAuthoredImage; }
 export interface WordTextParagraph {
   /** Reference into an immutable source package, used by WordPackageDocument. */
   readonly source?: number;
+  /** Independent copy identity. Omit for continuations, including paragraph splits. */
+  readonly sourceCopy?: string;
   /** Optional stable identity for native editing; not serialized into Word content. */
   readonly id?: string;
   readonly runs: readonly WordTextRun[];

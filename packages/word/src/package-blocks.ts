@@ -129,7 +129,7 @@ export function renderWordBlocks(
           .join('');
         output = output.replace(
           /^(<[^>]+>)/,
-          `$1${markup.word(`<w:tblPr><w:tblBorders>${borders}</w:tblBorders></w:tblPr>`)}`,
+          `$1${markup.word(`<w:tblPr>${block.columnWidths?.length ? `<w:tblW w:w="${Math.round(block.columnWidths.reduce((a, b) => a + b, 0) * 20)}" w:type="dxa"/>` : ''}<w:tblBorders>${borders}</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr>`)}`,
         );
       }
       if (widthsChanged) {

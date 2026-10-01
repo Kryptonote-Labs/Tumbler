@@ -209,3 +209,7 @@ XML. Source identifiers refer to the original package, never to a later exported
 Table content includes cell spans, vertical merges, column widths and source row/cell identities.
 The existing `NativeWordDocument` remains the incremental layout path for content authored without
 an original Office package. Hosts can use the same editing operations and synchronization for both.
+
+For independent copies of source paragraphs or run fragments, give the copied content a new
+`sourceCopy` identity. Reusing `source` without a copy identity means continuation, as when
+splitting a paragraph. Repeated source tables and rows are detected as copies automatically.

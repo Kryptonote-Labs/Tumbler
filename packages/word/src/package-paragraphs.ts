@@ -27,16 +27,21 @@ export function wordParagraphRenderer(
   );
   const indexByParagraph = new Map(paragraphs.map((p, index) => [p, index]));
   const states = new Map<number, { emitted: Set<number>; remaining: Map<number, number> }>();
-  for (const p of paragraphs) {
-    const scope = copies.scopes.get(p) ?? 0;
+  const stateFor = (scope: number) => {
     let state = states.get(scope);
     if (!state) {
       state = { emitted: new Set(), remaining: new Map() };
       states.set(scope, state);
     }
-    for (const run of p.runs)
+    return state;
+  };
+  for (const p of paragraphs) {
+    stateFor(copies.scopes.get(p) ?? 0);
+    for (const run of p.runs) {
+      const state = stateFor(copies.scopes.get(run) ?? 0);
       if (run.source !== undefined)
         state.remaining.set(run.source, (state.remaining.get(run.source) ?? 0) + 1);
+    }
   }
   let emitted = new Set<number>();
   let remaining = new Map<number, number>();
@@ -107,6 +112,8 @@ export function wordParagraphRenderer(
     return result;
   };
   const runMarkup = (run: WordTextRun, generatedRun: string | undefined) => {
+    const scope = copies.scopes.get(run) ?? 0;
+    ({ emitted, remaining } = stateFor(scope));
     if (run.image && !document.drawings.has(run.source!)) return remap(generatedRun ?? '');
     const original = run.source === undefined ? undefined : originalRuns.get(run.source);
     if (run.source !== undefined && !original) throw new Error('Invalid run source reference.');
@@ -157,12 +164,17 @@ export function wordParagraphRenderer(
       const owner = owners.get(run.source);
       if (owner) content += finishSource(owner);
     }
-    return content;
+    return copies.markers(content, scope);
   };
-  const paragraphCopies = new Map<number, number>();
+  const paragraphCopies = new Map<string, number>();
+  const paragraphKey = (paragraph: WordTextParagraph) =>
+    `${copies.scopes.get(paragraph) ?? 0}:${paragraph.source}`;
   for (const paragraph of paragraphs)
     if (paragraph.source !== undefined)
-      paragraphCopies.set(paragraph.source, (paragraphCopies.get(paragraph.source) ?? 0) + 1);
+      paragraphCopies.set(
+        paragraphKey(paragraph),
+        (paragraphCopies.get(paragraphKey(paragraph)) ?? 0) + 1,
+      );
   const renderParagraph = (paragraph: WordTextParagraph) => {
     const scope = copies.scopes.get(paragraph) ?? 0;
     ({ emitted, remaining } = states.get(scope)!);
@@ -172,8 +184,8 @@ export function wordParagraphRenderer(
     const properties = markup.children(element, 'pPr')[0];
     const replacements = new Map<string, string>();
     if (paragraph.source !== undefined) {
-      const left = paragraphCopies.get(paragraph.source)! - 1;
-      paragraphCopies.set(paragraph.source, left);
+      const left = paragraphCopies.get(paragraphKey(paragraph))! - 1;
+      paragraphCopies.set(paragraphKey(paragraph), left);
       if (left > 0) replacements.set('sectPr', '');
     }
     if (paragraph.alignment !== undefined && paragraph.alignment !== original?.alignment)
@@ -202,10 +214,12 @@ export function wordParagraphRenderer(
         ),
       )
       .join('');
-    if (original) content += finishSource(original);
-    return copies.markers(
-      markup.wrap(element, 'p', markup.properties(properties, 'pPr', replacements) + content),
-      scope,
+    ({ emitted, remaining } = stateFor(scope));
+    if (original) content += copies.markers(finishSource(original), scope);
+    return markup.wrap(
+      element,
+      'p',
+      markup.properties(properties, 'pPr', replacements) + content,
     );
   };
   return renderParagraph;
