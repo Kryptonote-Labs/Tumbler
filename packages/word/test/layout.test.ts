@@ -37,6 +37,20 @@ describe("WordprocessingML page layout", () => {
     expect(line.fragments.at(-1)?.endOffset).toBe("Hello".length);
   });
 
+  test("preserves leading spaces and contiguous offsets across wrapped lines", () => {
+    for (const text of [" Oh. OH. OH. ", "   ", "   Hello world and friends", "Hello     world and friends"]) {
+      const document = open(`<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`, section({ width: 2_400, height: 3_000, margin: 200 }));
+      const lines = layoutWordDocument(document, measurer).pages.flatMap(page => page.columns.flatMap(column => column.lines));
+      expect(lines[0]!.startOffset).toBe(0);
+      expect(lines.at(-1)!.endOffset).toBe(text.length);
+      for (const [index, line] of lines.entries()) {
+        if (index > 0) expect(line.startOffset).toBe(lines[index - 1]!.endOffset);
+        expect(line.fragments.map(fragment => fragment.text).join("")).toBe(text.slice(line.startOffset, line.endOffset).trimEnd());
+      }
+      if (text.trim().length > 0) expect(lines[0]!.fragments[0]!.startOffset).toBe(0);
+    }
+  });
+
   test("honours page, column, and section breaks with explicit page geometry", () => {
     const body = `
       <w:p><w:r><w:t>First</w:t><w:br w:type="column"/><w:t>Second</w:t><w:br w:type="page"/><w:t>Third</w:t></w:r></w:p>
