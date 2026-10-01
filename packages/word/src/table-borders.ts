@@ -18,8 +18,8 @@ export const NO_WORD_BORDER: WordBorder = Object.freeze({ color: '#000000', widt
 export function isWordBorder(value: unknown): value is WordBorder {
   return !!value && typeof value === 'object' && !Array.isArray(value) &&
     'color' in value && typeof value.color === 'string' && /^#[\da-f]{6}$/i.test(value.color) &&
-    'width' in value && typeof value.width === 'number' && Number.isFinite(value.width) && value.width >= 0 &&
-    'style' in value && ['single', 'double', 'dotted', 'dashed', 'none'].includes(String(value.style)) &&
+    'width' in value && typeof value.width === 'number' && Number.isFinite(value.width) && Number.isSafeInteger(Math.round(value.width * 8)) && value.width >= 0 &&
+    'style' in value && typeof value.style === 'string' && ['single', 'double', 'dotted', 'dashed', 'none'].includes(String(value.style)) &&
     (value.style === 'none' || value.width > 0) &&
     Object.keys(value).every(key => ['color', 'width', 'style'].includes(key));
 }

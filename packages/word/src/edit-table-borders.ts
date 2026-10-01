@@ -3,7 +3,7 @@ import { beginPackageTransaction } from '@tumblerjs/opc';
 import type { WordDocument, WordBlock, WordTable } from './document.ts';
 import { resolveWordTableGrid } from './table-grid.ts';
 import { editWordTableBorders, resolveWordCellBorders, WORD_BORDER_SIDES, type WordBorderEdges, type WordBorder } from './table-borders.ts';
-import { wordBordersMarkup } from './table-border-xml.ts';
+import { wordBorderMarkup, wordBordersMarkup } from './table-border-xml.ts';
 
 export interface WordTableBorderChange {
   readonly tableElementId: number;
@@ -46,18 +46,21 @@ export function formatWordTableBorders(document: WordDocument, change: WordTable
       const prefix = cell.prefix;
       const tag = (name: string) => prefix ? `${prefix}:${name}` : name;
       const patch = Object.fromEntries(changed.map(side => [side, after.borders[side]!]));
-      const markup = wordBordersMarkup(patch, 'tcBorders', prefix);
+      const markup = wordBordersMarkup(patch, 'tcBorders', prefix, namespace);
       if (borders) {
         // Preserve untouched edges, extension attributes, and unsupported border styles.
         if (borders.selfClosing) editor.replaceElementMarkup(borders, markup);
         else for (const side of changed) {
           const old = elements(borders).filter(child => child.localName === side || child.localName === (side === 'left' ? 'start' : side === 'right' ? 'end' : side));
           for (const element of old) editor.removeElement(element);
-          const edge = wordBordersMarkup({ [side]: after.borders[side]! }, 'tcBorders', prefix).replace(/^<[^>]+>|<\/[^>]+>$/g, '');
+          const edge = wordBorderMarkup(side, after.borders[side]!, prefix, namespace);
           editor.appendMarkup(borders, edge);
         }
       } else if (properties) {
-        if (properties.selfClosing) editor.replaceElementMarkup(properties, `<${tag('tcPr')}>${markup}</${tag('tcPr')}>`);
+        if (properties.selfClosing) {
+          const start = document.source.source.slice(properties.startTagSpan.start, properties.startTagSpan.end).replace(/\/\s*>$/, '>');
+          editor.replaceElementMarkup(properties, `${start}${markup}</${properties.qualified}>`);
+        }
         else {
           const next = elements(properties).find(child => ['shd', 'noWrap', 'tcMar', 'textDirection', 'tcFitText', 'vAlign', 'hideMark', 'headers', 'cellIns', 'cellDel', 'cellMerge', 'tcPrChange'].includes(child.localName));
           if (next) editor.insertMarkupBefore(next, markup);

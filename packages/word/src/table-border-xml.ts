@@ -18,8 +18,14 @@ export function readWordBorders(properties: LosslessXmlElement | undefined, name
   return Object.freeze(result);
 }
 
-export function wordBordersMarkup(borders: WordTableBorders, name: string, prefix = 'w'): string {
+export function wordBorderMarkup(side: string, border: WordBorder, prefix = 'w', namespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'): string {
+  const tag = (name: string) => `${prefix || 'w'}:${name}`;
+  const declaration = prefix ? '' : ` xmlns:w="${namespace}"`;
+  return `<${tag(side)}${declaration} ${tag('val')}="${border.style}" ${tag('sz')}="${Math.round(border.width * 8)}" ${tag('color')}="${border.color.slice(1)}"/>`;
+}
+
+export function wordBordersMarkup(borders: WordTableBorders, name: string, prefix = 'w', namespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'): string {
   const normalized = normalizeWordBorders(borders);
-  const tag = (name: string) => prefix ? `${prefix}:${name}` : name;
-  return `<${tag(name)}>${Object.entries(normalized).map(([side, border]) => `<${tag(side)} ${tag('val')}="${border.style}" ${tag('sz')}="${Math.round(border.width * 8)}" ${tag('color')}="${border.color.slice(1)}"/>`).join('')}</${tag(name)}>`;
+  const tag = prefix ? `${prefix}:${name}` : name;
+  return `<${tag}>${Object.entries(normalized).map(([side, border]) => wordBorderMarkup(side, border, prefix, namespace)).join('')}</${tag}>`;
 }

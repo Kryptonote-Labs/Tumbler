@@ -60,3 +60,45 @@ test('invalid border updates are rejected before native state changes', () => {
   expect(document.blocks).toBe(before);
   expect(() => editWordTableBorders([{ row: 0, column: 0 }], [1], 'all', red)).toThrow();
 });
+
+test('changing colour preserves width and style, including hidden edges', () => {
+  const cells = [{ row: 0, column: 0, borders: { top: red, right: { ...red, width: 0, style: 'none' as const } } }];
+  const changed = editWordTableBorders(cells, [0], 'all', { color: '#112233' });
+  expect(changed[0]!.borders.top).toEqual({ ...red, color: '#112233' });
+  expect(changed[0]!.borders.right!.style).toBe('none');
+  const visible = editWordTableBorders(changed, [0], 'right', { style: 'single' });
+  expect(visible[0]!.borders.right!.width).toBe(0.75);
+});
+
+test('inside borders exclude the selection outline', () => {
+  const cells = Array.from({ length: 4 }, (_, index) => ({ row: Math.floor(index / 2), column: index % 2 }));
+  const changed = editWordTableBorders(cells, [0, 1, 2, 3], 'inside', red);
+  expect(changed[0]!.borders.top).toBeUndefined();
+  expect(changed[0]!.borders.left).toBeUndefined();
+  expect(changed[0]!.borders.right).toEqual(red);
+  expect(changed[0]!.borders.bottom).toEqual(red);
+  expect(changed[3]!.borders.bottom).toBeUndefined();
+});
+
+test('borderless imported tables stay borderless and default namespaces remain editable', async () => {
+  const { beginPackageTransaction, openOpcPackage } = await import('@tumblerjs/opc');
+  const { openWordArtifact } = await import('../src/index.ts');
+  const artifact = createWordArtifact({ blocks });
+  const source = artifact.document.source.source
+    .replace(/<w:tblBorders>.*?<\/w:tblBorders>/s, '')
+    .replace('xmlns:w=', 'xmlns=')
+    .replace(/<(\/?)(?:w:)/g, '<$1');
+  // Attributes keep a bound w prefix because XML default namespaces do not apply to them.
+  const xml = source.replace('<document ', '<document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ');
+  const transaction = beginPackageTransaction(openOpcPackage(artifact.bytes()));
+  transaction.replacePart(artifact.document.part.name, new TextEncoder().encode(xml));
+  const imported = openWordArtifact(transaction.commit());
+  const table = imported.document.blocks[0]!;
+  if (table.kind !== 'table') throw new Error();
+  const layout = layoutWordDocument(imported.document, measurer);
+  expect(layout.pages[0]!.columns[0]!.tables[0]!.cells[0]!.borders.top!.style).toBe('none');
+  const updated = imported.formatTableBorders({ tableElementId: table.elementId, edges: 'all', border: red });
+  const next = updated.document.blocks[0]!;
+  if (next.kind !== 'table') throw new Error();
+  expect(next.rows[0]!.cells[0]!.borders!.top).toEqual(red);
+});
