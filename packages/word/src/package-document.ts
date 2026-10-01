@@ -7,12 +7,15 @@ import { importWordContent } from './import-content.ts';
 import { mergeContentNumbering } from './package-numbering.ts';
 import { PackageXml } from './package-xml.ts';
 import { wordParagraphRenderer } from './package-paragraphs.ts';
+import { contentCopyScopes } from './package-copies.ts';
 import { renderWordBlocks } from './package-blocks.ts';
 import { layoutWordSource, WordLayoutCache, type WordTextMeasurer } from './layout.ts';
 import { wordParagraphText, wordParagraphTextSegments } from './text.ts';
 import type { WordBlock } from './document.ts';
 
-export function wordContentParagraphs(blocks: readonly WordContentBlock[]): WordTextParagraph[] {
+export function wordContentParagraphs(
+  blocks: readonly WordContentBlock[],
+): WordTextParagraph[] {
   return blocks.flatMap((block) =>
     block.kind === 'table'
       ? block.rows.flatMap((row) => row.flatMap((cell) => wordContentParagraphs(cell.blocks)))
@@ -69,7 +72,10 @@ export class WordPackageDocument {
         runFormat: (p, run) => document.styles.runFormat(document, p, run),
       },
       measurer,
-      { maxPages: Number.MAX_SAFE_INTEGER, maxFragments: Number.MAX_SAFE_INTEGER },
+      {
+        maxPages: Number.MAX_SAFE_INTEGER,
+        maxFragments: Number.MAX_SAFE_INTEGER,
+      },
       document,
     );
   }
@@ -83,7 +89,12 @@ export class WordPackageDocument {
           return block.rows.flatMap((row) => row.cells.flatMap((cell) => visit(cell.blocks)));
         if (block.kind !== 'paragraph') return [];
         const text = wordParagraphText(this.current.document, block).replaceAll('\n', '\u2028');
-        const result = { id: block.elementId, start, end: start + text.length, text };
+        const result = {
+          id: block.elementId,
+          start,
+          end: start + text.length,
+          text,
+        };
         start += text.length + 1;
         return [result];
       });
@@ -110,10 +121,13 @@ export function reconcileWordContent(
           ? {
               ...block,
               rows: block.rows.map((row) =>
-                row.map((cell) => ({ ...cell, blocks: normalize(cell.blocks) })),
+                row.map((cell) => ({
+                  ...cell,
+                  blocks: normalize(cell.blocks),
+                })),
               ),
             }
-          : block,
+          : { ...block },
     );
   blocks = normalize(blocks);
   const document = source.document;
@@ -121,12 +135,28 @@ export function reconcileWordContent(
   const originals = wordContentParagraphs(importWordContent(source));
   const originalParagraphs = new Map(originals.map((p) => [p.source!, p]));
   const paragraphs = wordContentParagraphs(blocks);
+  const copies = contentCopyScopes(blocks, markup);
+  const replacedImages = new Set(
+    paragraphs.flatMap((p) =>
+      p.runs.filter((run) => {
+        const drawing = document.drawings.get(run.source!);
+        if (!run.image || drawing?.kind !== 'image') return false;
+        return (
+          run.image.contentType !== drawing.contentType ||
+          run.image.bytes.length !== drawing.bytes.length ||
+          run.image.bytes.some((byte, index) => byte !== drawing.bytes[index])
+        );
+      }),
+    ),
+  );
   // A generated package supplies new media and numbering, with its own relationship namespace.
   const generated = createWordArtifact({
     paragraphs: paragraphs.map((p) => ({
       runs: p.runs.map((run) => ({
         text: run.text.replaceAll('\u2028', ''),
-        ...(run.image && !document.drawings.has(run.source!) ? { image: run.image } : {}),
+        ...(run.image && (!document.drawings.has(run.source!) || replacedImages.has(run))
+          ? { image: run.image }
+          : {}),
       })),
       ...(p.list &&
       JSON.stringify(p.list) !== JSON.stringify(originalParagraphs.get(p.source!)?.list)
@@ -169,7 +199,9 @@ export function reconcileWordContent(
   const bindings = {
     w: document.source.root.namespaceUri,
     r: conformanceMarkup('http://schemas.openxmlformats.org/officeDocument/2006/relationships'),
-    wp: conformanceMarkup('http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'),
+    wp: conformanceMarkup(
+      'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+    ),
     a: conformanceMarkup('http://schemas.openxmlformats.org/drawingml/2006/main'),
     pic: conformanceMarkup('http://schemas.openxmlformats.org/drawingml/2006/picture'),
   };
@@ -205,7 +237,12 @@ export function reconcileWordContent(
       target: name,
     });
   }
-  const numberingMarkup = mergeContentNumbering(document, generated.document, transaction, prefix);
+  const numberingMarkup = mergeContentNumbering(
+    document,
+    generated.document,
+    transaction,
+    prefix,
+  );
   const renderParagraph = wordParagraphRenderer(
     markup,
     originals,
@@ -213,6 +250,8 @@ export function reconcileWordContent(
     generated,
     numberingMarkup,
     remap,
+    copies,
+    replacedImages,
   );
   const body = document.source.elements(document.source.root.namespaceUri, 'body')[0]!;
   const edit = beginLosslessXmlEdit(document.source);
@@ -245,9 +284,14 @@ export function reconcileWordContent(
               : 'front';
         const moved =
           (image.layout !== undefined && image.layout !== layout) ||
-          (image.x !== undefined && image.x !== (drawing.anchor?.horizontalOffsetPoints ?? 0)) ||
+          (image.x !== undefined &&
+            image.x !== (drawing.anchor?.horizontalOffsetPoints ?? 0)) ||
           (image.y !== undefined && image.y !== (drawing.anchor?.verticalOffsetPoints ?? 0));
-        if (drawing.widthPoints !== image.width || drawing.heightPoints !== image.height || moved) {
+        if (
+          drawing.widthPoints !== image.width ||
+          drawing.heightPoints !== image.height ||
+          moved
+        ) {
           const all: import('./document.ts').WordParagraph[] = [];
           const visit = (blocks: readonly WordBlock[]) => {
             for (const block of blocks) {
@@ -260,13 +304,18 @@ export function reconcileWordContent(
           const segment = wordParagraphTextSegments(result.document, all[paragraphIndex]!).find(
             (segment) => segment.start === offset && segment.kind === 'drawing',
           );
-          if (!segment) throw new Error('The drawing position was lost during materialization.');
+          if (!segment)
+            throw new Error('The drawing position was lost during materialization.');
           result = result.updateDrawing({
             elementId: segment.elementId,
             widthPoints: image.width,
             heightPoints: image.height,
             ...(moved
-              ? { layout: image.layout ?? layout, xPoints: image.x ?? 0, yPoints: image.y ?? 0 }
+              ? {
+                  layout: image.layout ?? layout,
+                  xPoints: image.x ?? 0,
+                  yPoints: image.y ?? 0,
+                }
               : {}),
           });
         }

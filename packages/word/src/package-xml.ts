@@ -61,14 +61,17 @@ export class PackageXml {
     content: string | readonly { source?: number; markup: string }[],
   ) {
     if (typeof content === 'string') content = [{ markup: content }];
-    if (!element) return this.wrap(undefined, name, content.map((item) => item.markup).join(''));
+    if (!element)
+      return this.wrap(undefined, name, content.map((item) => item.markup).join(''));
     const children = element.children;
     const isContent = (node: LosslessXmlNode) =>
       node.kind === 'element' &&
       node.namespaceUri === element.namespaceUri &&
       names.includes(node.localName);
     const anchors = new Map<number | undefined, string[]>();
-    const present = new Set(content.map((item) => item.source).filter((id) => id !== undefined));
+    const present = new Set(
+      content.map((item) => item.source).filter((id) => id !== undefined),
+    );
     const firstContent = children.findIndex(isContent);
     let leading = '';
     for (const [index, node] of children.entries()) {
@@ -88,7 +91,8 @@ export class PackageXml {
     const joined =
       content
         .map((item) => {
-          const prefix = item.source === undefined ? '' : (anchors.get(item.source) ?? []).join('');
+          const prefix =
+            item.source === undefined ? '' : (anchors.get(item.source) ?? []).join('');
           if (item.source !== undefined) anchors.delete(item.source);
           return prefix + item.markup;
         })
@@ -124,7 +128,10 @@ export class PackageXml {
       if (!value) continue;
       const rank = order.indexOf(key);
       const next = rank < 0 ? -1 : parts.findIndex((part) => order.indexOf(part.name) > rank);
-      parts.splice(next < 0 ? parts.length : next, 0, { name: key, markup: this.word(value) });
+      parts.splice(next < 0 ? parts.length : next, 0, {
+        name: key,
+        markup: this.word(value),
+      });
     }
     const content = parts.map((part) => part.markup).join('');
     return content ? this.wrap(element, name, content) : '';
@@ -133,6 +140,13 @@ export class PackageXml {
 
 // CT_RPr, CT_PPr and CT_TcPr child order in WordprocessingML.
 const propertyOrder: Record<string, readonly string[]> = {
+  tblPr:
+    'tblStyle tblpPr tblOverlap bidiVisual tblStyleRowBandSize tblStyleColBandSize tblW jc tblCellSpacing tblInd tblBorders shd tblLayout tblCellMar tblLook tblCaption tblDescription tblPrChange'.split(
+      ' ',
+    ),
+  trPr: 'cnfStyle divId gridBefore gridAfter wBefore wAfter cantSplit trHeight tblHeader tblCellSpacing jc hidden ins del trPrChange'.split(
+    ' ',
+  ),
   rPr: 'rStyle rFonts b bCs i iCs caps smallCaps strike dstrike outline shadow emboss imprint noProof snapToGrid vanish webHidden color spacing w kern position sz szCs highlight u effect bdr shd fitText vertAlign rtl cs em lang eastAsianLayout specVanish oMath rPrChange'.split(
     ' ',
   ),

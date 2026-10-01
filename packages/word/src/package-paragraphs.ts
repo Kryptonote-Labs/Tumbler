@@ -2,6 +2,7 @@ import type { WordTextParagraph, WordTextRun } from './create.ts';
 import type { LosslessXmlElement } from '@tumblerjs/ooxml';
 import type { WordArtifact } from './artifact.ts';
 import { PackageXml } from './package-xml.ts';
+import type { contentCopyScopes } from './package-copies.ts';
 import { xml, runProperties } from './create-xml.ts';
 
 /** Rebuild paragraph text while retaining source wrappers and zero-width Word markup. */
@@ -12,6 +13,8 @@ export function wordParagraphRenderer(
   generated: WordArtifact,
   numberingMarkup: (value: string) => string,
   remap: (value: string) => string,
+  copies: ReturnType<typeof contentCopyScopes>,
+  replacedImages: ReadonlySet<WordTextRun>,
 ) {
   const document = markup.document;
   const generatedXml = new PackageXml(generated.document);
@@ -23,11 +26,20 @@ export function wordParagraphRenderer(
     (block) => block.kind === 'paragraph',
   );
   const indexByParagraph = new Map(paragraphs.map((p, index) => [p, index]));
-  const emitted = new Set<number>();
-  const remaining = new Map<number, number>();
-  for (const p of paragraphs)
+  const states = new Map<number, { emitted: Set<number>; remaining: Map<number, number> }>();
+  for (const p of paragraphs) {
+    const scope = copies.scopes.get(p) ?? 0;
+    let state = states.get(scope);
+    if (!state) {
+      state = { emitted: new Set(), remaining: new Map() };
+      states.set(scope, state);
+    }
     for (const run of p.runs)
-      if (run.source !== undefined) remaining.set(run.source, (remaining.get(run.source) ?? 0) + 1);
+      if (run.source !== undefined)
+        state.remaining.set(run.source, (state.remaining.get(run.source) ?? 0) + 1);
+  }
+  let emitted = new Set<number>();
+  let remaining = new Map<number, number>();
   const visible = new Set(originalRuns.keys());
   const before = new Map<number, string[]>();
   const trailing = new Map<number, string[]>();
@@ -73,7 +85,9 @@ export function wordParagraphRenderer(
         )
         .join(''),
     );
-  const owners = new Map(originals.flatMap((p) => p.runs.map((run) => [run.source!, p] as const)));
+  const owners = new Map(
+    originals.flatMap((p) => p.runs.map((run) => [run.source!, p] as const)),
+  );
   const finishSource = (paragraph: WordTextParagraph) => {
     if (
       paragraph.source === undefined ||
@@ -112,11 +126,17 @@ export function wordParagraphRenderer(
     for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[])
       if (run.format?.[key] !== undefined && run.format[key] !== original?.format?.[key])
         replacements.set(propertyNames[key], runProperties({ [key]: run.format[key] }));
+    let sourceMarkup = element ? markup.raw(element) : '';
+    if (replacedImages.has(run)) {
+      const relationship = remap(generatedRun ?? '').match(/r:embed="([^"]+)"/)?.[1];
+      if (!relationship) throw new Error('The replacement image relationship is missing.');
+      sourceMarkup = sourceMarkup.replace(/([\w]+:embed=)(['"])(.*?)\2/, `$1"${relationship}"`);
+    }
     let content =
       element && original?.text === run.text && element.localName !== 't'
-        ? markup.raw(element)
+        ? sourceMarkup
         : element && original?.text === '\uFFFC'
-          ? run.text.split('\uFFFC').map(text).join(markup.raw(element))
+          ? run.text.split('\uFFFC').map(text).join(sourceMarkup)
           : text(run.text);
     content = markup.wrap(
       runElement,
@@ -144,6 +164,8 @@ export function wordParagraphRenderer(
     if (paragraph.source !== undefined)
       paragraphCopies.set(paragraph.source, (paragraphCopies.get(paragraph.source) ?? 0) + 1);
   const renderParagraph = (paragraph: WordTextParagraph) => {
+    const scope = copies.scopes.get(paragraph) ?? 0;
+    ({ emitted, remaining } = states.get(scope)!);
     const element = markup.element(paragraph.source, 'p');
     const original =
       paragraph.source === undefined ? undefined : originalParagraphs.get(paragraph.source);
@@ -181,7 +203,10 @@ export function wordParagraphRenderer(
       )
       .join('');
     if (original) content += finishSource(original);
-    return markup.wrap(element, 'p', markup.properties(properties, 'pPr', replacements) + content);
+    return copies.markers(
+      markup.wrap(element, 'p', markup.properties(properties, 'pPr', replacements) + content),
+      scope,
+    );
   };
   return renderParagraph;
 }

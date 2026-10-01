@@ -40,13 +40,19 @@ test('imports merged and nested tables and preserves unexposed properties while 
     {
       ...first,
       runs: [
-        { ...first.runs[0]!, text: 'Edited', format: { ...first.runs[0]!.format, italic: true } },
+        {
+          ...first.runs[0]!,
+          text: 'Edited',
+          format: { ...first.runs[0]!.format, italic: true },
+        },
       ],
     },
     ...blocks.slice(1),
   ]);
   expect(
-    wordContentParagraphs(importWordContent(output)).map((p) => p.runs.map((r) => r.text).join('')),
+    wordContentParagraphs(importWordContent(output)).map((p) =>
+      p.runs.map((r) => r.text).join(''),
+    ),
   ).toEqual(['Edited', 'Merged', 'Nested', '']);
   const p = output.document.blocks[0]!;
   if (p.kind !== 'paragraph') throw new Error('Expected paragraph');
@@ -101,16 +107,26 @@ test('plain files do not require an existing main-document relationships part', 
   );
   const original = wordContentParagraphs(importWordContent(source))[0]!;
   const output = reconcileWordContent(source, [
-    { ...original, kind: 'paragraph', runs: [{ ...original.runs[0]!, text: 'B' }] },
+    {
+      ...original,
+      kind: 'paragraph',
+      runs: [{ ...original.runs[0]!, text: 'B' }],
+    },
   ]);
   expect(wordContentParagraphs(importWordContent(output))[0]!.runs[0]!.text).toBe('B');
 });
 
 test('adds and removes list formatting using the same editable content', () => {
-  const source = createWordArtifact({ paragraphs: [{ runs: [{ text: 'One' }] }] });
+  const source = createWordArtifact({
+    paragraphs: [{ runs: [{ text: 'One' }] }],
+  });
   const p = wordContentParagraphs(importWordContent(source))[0]!;
   const output = reconcileWordContent(source, [
-    { ...p, kind: 'paragraph', list: { id: 'list', kind: 'decimal', level: 0 } },
+    {
+      ...p,
+      kind: 'paragraph',
+      list: { id: 'list', kind: 'decimal', level: 0 },
+    },
   ]);
   expect(
     [...output.document.numbering.markers(output.document).values()].map((m) => m.text),
@@ -131,7 +147,15 @@ test('inserts an image into Strict DOCX with matching relationship and drawing n
       ...p,
       kind: 'paragraph',
       runs: [
-        { text: '\uFFFC', image: { bytes: png, contentType: 'image/png', width: 30, height: 20 } },
+        {
+          text: '\uFFFC',
+          image: {
+            bytes: png,
+            contentType: 'image/png',
+            width: 30,
+            height: 20,
+          },
+        },
       ],
     },
   ]);
@@ -143,15 +167,32 @@ test('inserts an image into Strict DOCX with matching relationship and drawing n
 
 test('editing an imported image preserves its image bytes and updates geometry', () => {
   const source = createWordArtifact({
-    blocks: [{ kind: 'image', bytes: png, contentType: 'image/png', width: 30, height: 20 }],
+    blocks: [
+      {
+        kind: 'image',
+        bytes: png,
+        contentType: 'image/png',
+        width: 30,
+        height: 20,
+      },
+    ],
   });
   const p = wordContentParagraphs(importWordContent(source))[0]!;
-  const image = { bytes: png, contentType: 'image/png' as const, width: 60, height: 40 };
+  const image = {
+    bytes: png,
+    contentType: 'image/png' as const,
+    width: 60,
+    height: 40,
+  };
   const output = reconcileWordContent(source, [
     { ...p, kind: 'paragraph', runs: [{ ...p.runs[0]!, image }] },
   ]);
   const drawing = [...output.document.drawings.values()][0]!;
-  expect(drawing).toMatchObject({ kind: 'image', widthPoints: 60, heightPoints: 40 });
+  expect(drawing).toMatchObject({
+    kind: 'image',
+    widthPoints: 60,
+    heightPoints: 40,
+  });
   expect(drawing.kind === 'image' && drawing.bytes).toEqual(png);
   expect(
     output.document.package.parts.filter((part) => part.contentType === 'image/png'),
@@ -174,10 +215,9 @@ test('opaque blocks keep their reading order and formatting properties keep sche
   expect(xml.indexOf('Opaque')).toBeGreaterThan(xml.indexOf('>A<'));
   expect(xml.indexOf('Opaque')).toBeLessThan(xml.indexOf('>B<'));
   const properties = output.document.source.elements(ns, 'rPr')[0]!;
-  expect(properties.children.filter((n) => n.kind === 'element').map((n) => n.localName)).toEqual([
-    'i',
-    'strike',
-  ]);
+  expect(
+    properties.children.filter((n) => n.kind === 'element').map((n) => n.localName),
+  ).toEqual(['i', 'strike']);
 });
 
 test('table grid and merge edits materialize instead of reverting to source properties', () => {
@@ -213,7 +253,12 @@ test('merged content can also be authored without an original package', () => {
     kind: 'table' as const,
     columnWidths: [100, 100],
     rows: [
-      [{ gridSpan: 2, blocks: [{ kind: 'paragraph' as const, runs: [{ text: 'Merged' }] }] }],
+      [
+        {
+          gridSpan: 2,
+          blocks: [{ kind: 'paragraph' as const, runs: [{ text: 'Merged' }] }],
+        },
+      ],
       [
         { blocks: [{ kind: 'paragraph' as const, runs: [{ text: 'Left' }] }] },
         { blocks: [{ kind: 'paragraph' as const, runs: [{ text: 'Right' }] }] },
@@ -223,4 +268,100 @@ test('merged content can also be authored without an original package', () => {
   const artifact = createWordArtifact({ blocks: [table] });
   const block = artifact.document.blocks[0]!;
   expect(block.kind === 'table' && block.rows[0]!.cells[0]!.gridSpan).toBe(2);
+});
+
+test('copied source tables keep independent bookmark ranges', () => {
+  const source = openWordArtifact(
+    buildWordDocumentFixture({
+      documentXml: `<w:document xmlns:w="${ns}"><w:body><w:tbl><w:tr><w:tc><w:p><w:bookmarkStart w:id="1" w:name="Cell"/><w:r><w:t>Cell</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p></w:tc></w:tr></w:tbl></w:body></w:document>`,
+    }),
+  );
+  const [table] = importWordContent(source);
+  const output = reconcileWordContent(source, [table!, table!]);
+  const paragraphs = output.document.source.elements(ns, 'p');
+  expect(paragraphs).toHaveLength(2);
+  const ids = paragraphs.map((p) => {
+    const markers = p.children.filter(
+      (node) => node.kind === 'element' && node.localName.startsWith('bookmark'),
+    );
+    expect(markers).toHaveLength(2);
+    const values = markers.map(
+      (node) =>
+        node.kind === 'element' && node.attributes.find((a) => a.localName === 'id')?.value,
+    );
+    expect(values[0]).toBe(values[1]);
+    return values[0];
+  });
+  expect(ids[0]).not.toBe(ids[1]);
+});
+
+test('row grid edits survive package materialization', () => {
+  const source = openWordArtifact(
+    buildWordDocumentFixture({
+      documentXml: `<w:document xmlns:w="${ns}"><w:body><w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:trPr><w:gridAfter w:val="1"/></w:trPr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>`,
+    }),
+  );
+  const [table] = importWordContent(source);
+  if (table?.kind !== 'table') throw new Error('Expected table');
+  const output = reconcileWordContent(source, [
+    { ...table, rowGrids: [{ before: 1, after: 0 }] },
+  ]);
+  const result = output.document.blocks[0]!;
+  if (result.kind !== 'table') throw new Error('Expected table');
+  expect(result.rows[0]).toMatchObject({ gridBefore: 1, gridAfter: 0 });
+});
+
+test('replacing one source image leaves other uses of its media unchanged', () => {
+  const source = createWordArtifact({
+    blocks: [
+      {
+        kind: 'image',
+        bytes: png,
+        contentType: 'image/png',
+        width: 30,
+        height: 20,
+      },
+    ],
+  });
+  const p = wordContentParagraphs(importWordContent(source))[0]!;
+  const replacement = new Uint8Array([...png, 0]);
+  const output = reconcileWordContent(source, [
+    { ...p, kind: 'paragraph' },
+    {
+      ...p,
+      kind: 'paragraph',
+      runs: [
+        {
+          ...p.runs[0]!,
+          image: {
+            bytes: replacement,
+            contentType: 'image/png',
+            width: 30,
+            height: 20,
+          },
+        },
+      ],
+    },
+  ]);
+  const images = [...output.document.drawings.values()];
+  expect(images).toHaveLength(2);
+  expect(images[0]?.kind === 'image' && images[0].bytes).toEqual(png);
+  expect(images[1]?.kind === 'image' && images[1].bytes).toEqual(replacement);
+});
+
+test('resizing a source table reconciles preferred table and merged cell widths', () => {
+  const source = openWordArtifact(
+    buildWordDocumentFixture({
+      documentXml: `<w:document xmlns:w="${ns}"><w:body><w:tbl><w:tblPr><w:tblW w:w="4000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/><w:gridSpan w:val="2"/></w:tcPr><w:p/></w:tc></w:tr></w:tbl></w:body></w:document>`,
+    }),
+  );
+  const [table] = importWordContent(source);
+  if (table?.kind !== 'table') throw new Error('Expected table');
+  const output = reconcileWordContent(source, [{ ...table, columnWidths: [150, 250] }]);
+  for (const name of ['tcW', 'tblW'])
+    expect(
+      output.document.source
+        .elements(ns, name)[0]
+        ?.attributes.find((a) => a.localName === 'w' && a.namespaceUri === ns)?.value,
+    ).toBe('8000');
 });
