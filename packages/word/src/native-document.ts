@@ -81,7 +81,7 @@ export class NativeWordDocument implements WordLayoutSource {
     return this.paragraphFormats.get(paragraph) ?? DEFAULT_PARAGRAPH;
   }
   runFormat(_paragraph: WordParagraph, run: WordRun | undefined) {
-    return (run && this.runFormats.get(run)) ?? { ...DEFAULT_TEXT, ...this.options.defaultFormat };
+    return (run && this.runFormats.get(run)) ?? { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }) };
   }
   layout(measurer: WordTextMeasurer, options: WordLayoutOptions = {}) {
     return layoutWordSource(this, measurer, {
@@ -102,7 +102,7 @@ export class NativeWordDocument implements WordLayoutSource {
     const counters = new Map<string, { kind: string; start: number; values: number[] }>();
     const allocate = () => this.nextId++;
     const format = (patch: WordTextParagraph['runs'][number]['format']): ComputedWordTextFormat => {
-      const value = { ...DEFAULT_TEXT, ...this.options.defaultFormat, ...patch };
+      const value = { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }), ...patch };
       if (
         !Number.isFinite(value.fontSizePoints) ||
         value.fontSizePoints < 1 ||
@@ -171,7 +171,7 @@ export class NativeWordDocument implements WordLayoutSource {
         const key = 'id' in source && source.id ? source.id : `${path}/${index}`;
         if (keys.has(key)) throw new Error('Native document block identities must be unique.');
         keys.add(key);
-      const previous = this.records.get(key);
+        const previous = this.records.get(key);
         const fingerprint = signature(source, width);
         let result: RecordBlock;
         if (source.kind === 'table') {
