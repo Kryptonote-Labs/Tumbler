@@ -117,3 +117,5 @@ export { NativeWordText, NativeWordTextLayout } from './native-text.ts';
 export type { NativeWordParagraph, NativeWordTextEdit } from './native-text.ts';
 
 export { NativeWordDocument } from './native-document.ts';
+export { importWordContent } from './import-content.ts';
+export { WordPackageDocument, reconcileWordContent, wordContentParagraphs } from './package-document.ts';
