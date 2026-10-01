@@ -1,3 +1,4 @@
+import { nativeWordDoc } from './native-word-docs';
 export type Block =
   | { kind: 'text' | 'note'; text: string }
   | { kind: 'code'; code: string; language?: string }
@@ -12,6 +13,7 @@ export interface Doc {
 }
 
 export const docs: Record<string, Doc> = {
+  'native-word': nativeWordDoc,
   powerpoint: {
     title: 'PowerPoint',
     description: 'Build a PPTX viewer or editor with Svelte 5. Open a file, add slide navigation, connect edits, and download the result.',
@@ -205,6 +207,10 @@ const output = edited.bytes();` }
         { kind: 'code', language: 'Data flow', code: 'DOCX / XLSX / PPTX bytes\n  → OPC package and XML\n  → Word / Sheets / Slides artifact\n  → Svelte components\n  → edit operations\n  → updated artifact and file bytes' },
         { kind: 'text', text: 'An artifact is the application boundary. It contains the document model and exposes operations for editing, formatting, and exporting. Svelte components display that model and report user actions back to your application.' }
       ] },
+      { id: 'native-word', title: 'Word without a package', blocks: [
+        { kind: 'text', text: 'NativeWordDocument also accepts an authored block tree directly. Reconciliation preserves unchanged paragraph identities; the shared Word layout engine caches geometry. DOCX packaging occurs when the application requests an artifact for export. Persistence and collaboration remain application responsibilities.' },
+        { kind: 'link', href: '/docs/native-word', label: 'Build with the native Word model' },
+      ] },
       { id: 'packages', title: 'Package responsibilities', blocks: [
         { kind: 'table', headers: ['Package', 'Responsibility'], rows: [['@tumblerjs/opc', 'ZIP archives, package parts, relationships, and transactions.'], ['@tumblerjs/ooxml', 'Shared Office XML infrastructure.'], ['@tumblerjs/core', 'Selection, formatting contracts, sparse geometry, and editing history.'], ['@tumblerjs/formulas', 'Bounded spreadsheet formula parsing and evaluation.'], ['@tumblerjs/charts', 'DrawingML chart models shared by document formats.'], ['@tumblerjs/word', 'Word parsing, page layout, text editing, and formatting.'], ['@tumblerjs/sheets', 'Workbook models, calculations, cell edits, and formatting.'], ['@tumblerjs/slides', 'Presentation models, slide layouts, text and table-cell edits, and object transforms.'], ['@tumblerjs/svelte', 'Word, spreadsheet, presentation, chart, and formatting components.']] }
       ] },
@@ -222,6 +228,10 @@ const output = edited.bytes();` }
     title: 'Word documents',
     description: 'Render paginated DOCX files, track text selection, and apply edits through a Word editing session.',
     sections: [
+      { id: 'native', title: 'Application-owned content', blocks: [
+        { kind: 'text', text: 'For an editor that owns its authored content, NativeWordDocument updates rich blocks and reuses Word page geometry without rebuilding a DOCX. The package-backed APIs below remain the path for opening and preserving existing files.' },
+        { kind: 'link', href: '/docs/native-word', label: 'Native Word model, layout caching, and export' },
+      ] },
       { id: 'open', title: 'Open and render', blocks: [
         { kind: 'code', code: `import { openWordEditingSession } from '@tumblerjs/word';
 

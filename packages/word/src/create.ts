@@ -8,6 +8,8 @@ import { authoredContent, type WordContentBlock, type WordAuthoredImage } from '
 export type WordTextFormat = Partial<Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'underline' | 'color'>>;
 export interface WordTextRun { readonly text: string; readonly format?: WordTextFormat; readonly image?: WordAuthoredImage; }
 export interface WordTextParagraph {
+  /** Optional stable identity for native editing; not serialized into Word content. */
+  readonly id?: string;
   readonly runs: readonly WordTextRun[];
   readonly alignment?: 'start' | 'center' | 'end' | 'justify';
   readonly list?: { readonly id: string; readonly kind: 'bullet' | 'decimal'; readonly level?: number; readonly start?: number };

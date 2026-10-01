@@ -138,3 +138,48 @@ cells. Nested cells take priority. Outside cells, the helper chooses the nearest
 line vertically, then horizontally. Pages without body text return `undefined`;
 headers, footers and notes are excluded. Renderers resolve the character offset
 within the returned line using their text geometry.
+
+### Native authored documents
+
+`NativeWordDocument` reconciles rich authored blocks in memory and uses the same pagination
+engine as package-backed Word documents. Updates and layout do not rebuild XML or ZIP files.
+
+```ts
+import { NativeWordDocument } from '@tumblerjs/word';
+
+const document = new NativeWordDocument({
+  defaultFormat: { fontFamily: 'Arial', fontSizePoints: 13 },
+});
+document.update([
+  { kind: 'paragraph', id: 'intro', runs: [{ text: 'Hello', format: { bold: true } }] },
+]);
+const layout = document.layout(measurer); // WordTextMeasurer, with measurements in points
+const bytes = document.artifact().bytes(); // Package only at the export boundary
+```
+
+`update` takes the complete current `WordContentBlock` tree, including lists, tables, and
+images. Validation failure leaves the published content unchanged. Stable paragraph and table
+IDs preserve identity across insertions; IDs must be unique throughout the tree and are ignored
+by DOCX serialization. Without IDs, reconciliation uses structural paths. Treat blocks, options,
+and image bytes as immutable after supplying them; replace changed values before updating.
+
+Unchanged paragraphs reuse measurements, and unchanged positioned lines and pages retain object
+identity. Keep the same measurer while font metrics remain valid; replace it when metrics change.
+`cache.measuredParagraphs` counts measured paragraphs. Reconciliation and pagination still walk
+content, so this is not a constant-time or viewport-only layout API.
+
+`paragraphs()` returns current UTF-16 text ranges, separated by one code unit, including table
+cells. Images occupy U+FFFC. The application owns rendering, input, selection mapping, history,
+persistence, and collaboration. `WordDocumentView` currently expects a package-backed document.
+The native model does not import arbitrary DOCX or preserve unknown package structures; use
+`openWordEditingSession` for that workflow.
+
+### Plain-text transactions
+
+`NativeWordText.transact([{ start, deleteCount, insert }])` applies sequential UTF-16 edits
+atomically and preserves unchanged paragraph identities. `revision` advances once per nonempty
+transaction. `NativeWordTextLayout` caches continuous paragraph line geometry, without rich page
+pagination. `docx(options)` packages the current plain text when exporting.
+
+The docs site’s **Native Word model** guide includes API examples, cache invalidation, text
+positions, and integration boundaries (`apps/docs/src/lib/native-word-docs.ts`).

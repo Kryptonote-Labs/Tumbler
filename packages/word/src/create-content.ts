@@ -5,7 +5,7 @@ import { runProperties, textContent, xml } from './create-xml.ts';
 /** Authored blocks are independent of package-local XML element identifiers. */
 export type WordContentBlock =
   | ({ readonly kind: 'paragraph' } & WordTextParagraph)
-  | { readonly kind: 'table'; readonly rows: readonly (readonly WordContentCell[])[]; readonly columnWidths?: readonly number[] }
+  | { readonly id?: string; readonly kind: 'table'; readonly rows: readonly (readonly WordContentCell[])[]; readonly columnWidths?: readonly number[] }
   | ({ readonly kind: 'image' } & WordAuthoredImage);
 export interface WordAuthoredImage extends WordImagePosition { readonly bytes: Uint8Array; readonly contentType: 'image/png' | 'image/jpeg'; readonly width: number; readonly height: number; readonly alt?: string }
 export interface WordContentCell { readonly blocks: readonly WordContentBlock[]; }

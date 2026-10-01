@@ -120,7 +120,7 @@ interface WordDocumentLike {
   readonly conformance: WordConformance;
 }
 
-const DEFAULT_TEXT: ComputedWordTextFormat = Object.freeze({
+export const DEFAULT_TEXT: ComputedWordTextFormat = Object.freeze({
   fontFamily: "Calibri",
   fontSizePoints: 11,
   bold: false,
@@ -133,7 +133,7 @@ const DEFAULT_TEXT: ComputedWordTextFormat = Object.freeze({
   rightToLeft: false,
 });
 
-const DEFAULT_PARAGRAPH: ComputedWordParagraphFormat = Object.freeze({
+export const DEFAULT_PARAGRAPH: ComputedWordParagraphFormat = Object.freeze({
   styleId: undefined,
   alignment: "start",
   spacingBeforeTwips: 0,
