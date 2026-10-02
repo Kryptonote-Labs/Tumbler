@@ -44,7 +44,8 @@ export function isDocumentImage(value: unknown): value is DocumentImage {
     'alt' in value &&
     typeof value.alt === 'string' &&
     value.alt.isWellFormed() &&
-    !/[\x00-\x1f\ufffe\uffff]/.test(value.alt) &&
+    // Match XML text rules: tabs, line feeds and carriage returns are valid alt text.
+    !/[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]/.test(value.alt) &&
     (!('layout' in value) || ['inline', 'front', 'behind'].includes(String(value.layout))) &&
     (!('alignment' in value) || ['left', 'center', 'right'].includes(String(value.alignment))) &&
     (!('moveWithText' in value) || typeof value.moveWithText === 'boolean') &&

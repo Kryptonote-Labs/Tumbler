@@ -1,7 +1,7 @@
 import { authoredTableGrid } from './authored-table.ts';
 import { imagePlacement, type WordImagePosition } from './image-placement.ts';
 import type { WordTextParagraph } from './create.ts';
-import { runProperties, textContent, xml } from './create-xml.ts';
+import { runProperties, textContent, xmlAttribute } from './create-xml.ts';
 
 /** Authored blocks are independent of package-local XML element identifiers. */
 export type WordContentBlock =
@@ -39,7 +39,7 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
             relationships += `<Relationship Id="image${mediaId}" Type="${office}image" Target="media/${name.split('/').at(-1)}"/>`;
             contentTypes += `<Override PartName="/${name}" ContentType="${image.contentType}"/>`;
           }
-          return `<w:r><w:drawing>${placement.open}<wp:extent cx="${cx}" cy="${cy}"/>${placement.wrap}<wp:docPr id="${id}" name="Image ${id}" descr="${xml(image.alt ?? '')}"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name="Image ${id}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="image${mediaId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic>${placement.close}</w:drawing></w:r>`;
+          return `<w:r><w:drawing>${placement.open}<wp:extent cx="${cx}" cy="${cy}"/>${placement.wrap}<wp:docPr id="${id}" name="Image ${id}" descr="${xmlAttribute(image.alt ?? '')}"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name="Image ${id}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="image${mediaId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic>${placement.close}</w:drawing></w:r>`;
   };
   const visit = (blocks: readonly WordContentBlock[], availableWidth: number, depth = 0): string => {
     return blocks.map(block => {
