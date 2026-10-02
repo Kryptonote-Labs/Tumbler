@@ -1,3 +1,5 @@
+import { wordDocumentDefaults } from './document-defaults.ts';
+import type { ComputedWordTextFormat } from './styles.ts';
 import type { WordArtifact } from './artifact.ts';
 import type { WordBlock } from './document.ts';
 import { wordParagraphTextSegments } from './text.ts';
@@ -5,6 +7,7 @@ import { wordParagraphTextSegments } from './text.ts';
 /** Immutable import metadata for validating remote edits without reopening the source package. */
 export interface WordSourceManifest {
   readonly version: 1;
+  readonly defaultTextFormat?: ComputedWordTextFormat;
   readonly paragraphs: readonly number[];
   readonly runs: readonly number[];
   readonly tables: readonly number[];
@@ -30,5 +33,5 @@ export function createWordSourceManifest(artifact: WordArtifact): WordSourceMani
     }
   };
   visit(artifact.document.blocks);
-  return { version: 1, paragraphs, runs, tables, rows, cells, images: [...artifact.document.drawings.values()].flatMap(drawing => drawing.kind === 'image' ? [{ id: drawing.elementId, contentType: drawing.contentType }] : []) };
+  return { version: 1, defaultTextFormat: wordDocumentDefaults(artifact.document).text, paragraphs, runs, tables, rows, cells, images: [...artifact.document.drawings.values()].flatMap(drawing => drawing.kind === 'image' ? [{ id: drawing.elementId, contentType: drawing.contentType }] : []) };
 }

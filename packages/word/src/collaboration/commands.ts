@@ -44,8 +44,9 @@ export type WordChange =
 export type WordDelta = Parameters<Y.Text['applyDelta']>[0];
 
 /** The same anchored operations drive human input and headless agents. Hosts own storage validation. */
-export function createWordCommands({ defaultFontSize = 12, validateAttributes = validateWordAttributes, validateUpdate }: {
+export function createWordCommands({ defaultFontSize = 12, defaultAttributes, validateAttributes = validateWordAttributes, validateUpdate }: {
   defaultFontSize?: number;
+  defaultAttributes?: (text: Y.Text) => TextAttributes;
   validateAttributes?: (attributes: Record<string, unknown> | undefined) => void;
   validateUpdate?: (state: Uint8Array, update: Uint8Array) => void;
 } = {}) {
@@ -95,6 +96,7 @@ function checkRange(text: Y.Text, range: WordRange) {
 }
 
 function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
+  const defaults = defaultAttributes?.(text) ?? {};
   const formats: TextAttributes[] = [];
   const sizes: number[] = [];
   let offset = 0;
@@ -108,20 +110,20 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
   for (const part of text.toDelta()) {
     if (typeof part.insert !== 'string') continue;
     const end = offset + part.insert.length;
-    if (end > at && offset < (collapsed ? at + 1 : range.end)) formats.push(part.attributes ?? {});
+    if (end > at && offset < (collapsed ? at + 1 : range.end)) formats.push({ ...defaults, ...part.attributes });
     if (end > at && offset < (collapsed ? at + 1 : range.end)) {
       const selected = part.insert.slice(
         Math.max(0, at - offset),
         collapsed ? at + 1 - offset : range.end - offset,
       );
       if (collapsed || selected.replace(/\n/g, '').length)
-        sizes.push(part.attributes?.fontSize ?? defaultFontSize);
+        sizes.push(part.attributes?.fontSize ?? defaults.fontSize ?? defaultFontSize);
     }
     offset = end;
   }
-  const first = formats[0] ?? {};
+  const first = formats[0] ?? defaults;
   const result: TextAttributes = {};
-  const size = sizes[0] ?? defaultFontSize;
+  const size = sizes[0] ?? defaults.fontSize ?? defaultFontSize;
   if (sizes.every((value) => value === size)) result.fontSize = size;
   for (const key of [
     'bold',

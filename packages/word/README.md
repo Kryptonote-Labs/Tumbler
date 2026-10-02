@@ -213,7 +213,8 @@ Table content includes cell spans, vertical merges, column widths and source row
 Created and imported documents share reconciliation, measurement caching and pagination.
 Keep original package bytes outside frequently rewritten collaboration snapshots.
 `createWordSourceManifest(source)` supplies immutable reference IDs for validating remote updates
-without reparsing source XML. Hosts must validate this manifest at import and prevent clients replacing it.
+without reparsing source XML. It also includes resolved default text formatting for headless consumers.
+Hosts must validate this manifest at import and prevent clients replacing it.
 
 For independent copies of source paragraphs or run fragments, give the copied content a new
 `sourceCopy` identity. Reusing `source` without a copy identity means continuation, as when
@@ -241,7 +242,8 @@ replace, format, image and table operations. Batch preflight is atomic and rejec
 text. Yjs supplies synchronization and selective undo. The adapter validates text, grapheme boundaries,
 formatting and table structure. Hosts provide optional `validateAttributes` and `validateUpdate` hooks
 for their schema, immutable import provenance and asset references, and enforce permissions when
-accepting updates. The adapter does not provide authenticated networking or persistence.
+accepting updates. A `defaultAttributes(body)` callback supplies document-specific formatting defaults
+for selection inspection and inserted text. The adapter does not provide authenticated networking or persistence.
 
 `wordParagraphIdentity(body, newlineOffset)` follows paragraph terminators through edits and remote
 updates. It avoids a repeated scan from the start of the CRDT when projecting stable native block IDs.

@@ -59,3 +59,17 @@ test('paragraph identities follow retained terminators across inserts, deletes a
   expect(wordParagraphIdentity(body,13)).toBe(ids[2]!);
   doc.destroy();
 });
+
+
+test('document defaults resolve for editing and mixed selections', () => {
+  const commands = createWordCommands({defaultAttributes: () => ({fontSize:16, bold:true, fontFamily:'Courier New', wordUnderline:'double', underline:true})});
+  const doc = new Y.Doc(); const body = doc.getText('body');
+  body.applyDelta([{insert:'A'}, {insert:'B',attributes:{fontSize:13,bold:false,wordUnderline:'single'}}, {insert:'\n'}]);
+  expect(commands.wordFormats(body,{start:0,end:1})).toMatchObject({fontSize:16,bold:true,wordUnderline:'double'});
+  expect(commands.wordFormats(body,{start:1,end:2})).toMatchObject({fontSize:13,bold:false,wordUnderline:'single'});
+  const mixed=commands.wordFormats(body,{start:0,end:2});
+  expect(mixed.fontSize).toBeUndefined(); expect(mixed.bold).toBeUndefined(); expect(mixed.wordUnderline).toBeUndefined();
+  body.applyDelta(commands.replaceWordDelta(body,{start:1,end:1},'new'));
+  expect(commands.wordFormats(body,{start:1,end:4})).toMatchObject({fontSize:16,bold:true,fontFamily:'Courier New'});
+  doc.destroy();
+});

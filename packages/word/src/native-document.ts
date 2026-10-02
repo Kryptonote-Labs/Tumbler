@@ -99,7 +99,7 @@ export class NativeWordDocument implements WordLayoutSource {
     return this.paragraphFormats.get(paragraph) ?? DEFAULT_PARAGRAPH;
   }
   runFormat(paragraph: WordParagraph, run: WordRun | undefined) {
-    return (run && this.runFormats.get(run)) ?? this.paragraphTextFormats.get(paragraph) ?? { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }) };
+    return (run && this.runFormats.get(run)) ?? this.paragraphTextFormats.get(paragraph) ?? this.compiled?.defaults.text ?? { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }) };
   }
   layout(measurer: WordTextMeasurer, options: WordLayoutOptions = {}) {
     return layoutWordSource(this, measurer, {
@@ -135,7 +135,7 @@ export class NativeWordDocument implements WordLayoutSource {
     };
     collectSections(input);
     const format = (patch: WordTextParagraph['runs'][number]['format'], inherited?: ComputedWordTextFormat): ComputedWordTextFormat => {
-      const value = { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }), ...inherited, ...patch };
+      const value = { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }), ...this.compiled?.defaults.text, ...inherited, ...patch };
       if (
         !Number.isFinite(value.fontSizePoints) ||
         value.fontSizePoints < 1 ||
@@ -287,9 +287,10 @@ export class NativeWordDocument implements WordLayoutSource {
               block,
               Object.freeze({
                 ...DEFAULT_PARAGRAPH,
+                ...compiled?.defaults.paragraph,
                 ...original?.format,
-                alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? original?.format.alignment ?? 'start',
-                lineSpacing: original?.format.lineSpacing ?? {
+                alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? original?.format.alignment ?? compiled?.defaults.paragraph.alignment ?? 'start',
+                lineSpacing: original?.format.lineSpacing ?? compiled?.defaults.paragraph.lineSpacing ?? {
                   rule: 'auto' as const,
                   value: Math.round((this.options.lineSpacing ?? 1) * 240),
                 },

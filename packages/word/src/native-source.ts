@@ -1,3 +1,4 @@
+import { wordDocumentDefaults } from './document-defaults.ts';
 import { resolveWordTableGrid } from './table-grid.ts';
 import type { WordArtifact } from './artifact.ts';
 import type { WordBlock, WordParagraph, WordRun, WordRunContent, WordInline, WordTable, WordTableRow, WordTableCell } from './document.ts';
@@ -26,9 +27,11 @@ export class NativeWordSource {
   readonly cells = new Map<number, WordTableCell>();
   readonly lists = new Map<number, WordTextParagraph['list']>();
   readonly original;
+  readonly defaults;
 
   constructor(readonly artifact: WordArtifact) {
     const document = artifact.document;
+    this.defaults = wordDocumentDefaults(document);
     this.original = importWordContent(artifact);
     const visit = (blocks: readonly WordBlock[]) => {
       for (const block of blocks) {

@@ -112,3 +112,10 @@ test('automatic and omitted source table grids retain native and exported geomet
     expect(geometry(model.layout(measurer))).toEqual(geometry(layoutWordDocument(model.artifact().document,measurer)));
   }
 });
+
+test('new content in imported documents inherits the source document defaults', () => {
+  const source=createWordArtifact({defaultFormat:{fontFamily:'Courier New',fontSizePoints:16,color:'#882244'},lineSpacing:1.4,paragraphs:[{runs:[{text:'Existing'}]}]});
+  const model=new NativeWordDocument({source,defaultFormat:{fontFamily:'Arial',fontSizePoints:13},lineSpacing:1.8});
+  model.update([...importWordContent(source),{kind:'paragraph',id:'new',runs:[{text:'New content'}]}]);
+  expect(geometry(model.layout(measurer))).toEqual(geometry(layoutWordDocument(model.artifact().document,measurer)));
+});

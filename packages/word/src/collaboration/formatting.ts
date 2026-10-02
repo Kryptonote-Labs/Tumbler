@@ -9,7 +9,7 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   wordParagraph?: number;
   wordCopy?: string;
   fontFamily?: string;
-  wordUnderline?: 'double';
+  wordUnderline?: 'single' | 'double';
   align?: Alignment;
   color?: string;
   font?: string;
@@ -47,7 +47,7 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
     )
       continue;
     if (key === 'wordCopy' && typeof value === 'string') continue;
-    if (key === 'wordUnderline' && value === 'double') continue;
+    if (key === 'wordUnderline' && (value === 'single' || value === 'double')) continue;
     if (key === 'image' && isDocumentImage(value)) continue;
     if (key === 'table' && isTableCell(value)) continue;
     if (key === 'list' && isList(value)) continue;
