@@ -21,12 +21,12 @@ export interface WordParagraphTextSegment {
   readonly value: string;
 }
 
-export function wordParagraphText(document: WordDocument, paragraph: WordParagraph): string {
+export function wordParagraphText(document: WordDocument | undefined, paragraph: WordParagraph): string {
   return wordParagraphTextSegments(document, paragraph).map((segment) => segment.value).join("");
 }
 
 /** Maps logical text offsets back to exact run-content source elements. */
-export function wordParagraphTextSegments(_document: WordDocument, paragraph: WordParagraph): readonly WordParagraphTextSegment[] {
+export function wordParagraphTextSegments(_document: WordDocument | undefined, paragraph: WordParagraph): readonly WordParagraphTextSegment[] {
   const segments: WordParagraphTextSegment[] = [];
   let offset = 0;
   let fieldDepth = 0;

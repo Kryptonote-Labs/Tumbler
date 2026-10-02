@@ -175,7 +175,25 @@ export interface WordLayoutSource {
   runFormat(paragraph: WordParagraph, run: WordRun | undefined): ComputedWordTextFormat;
   readonly cache?: WordLayoutCache | undefined;
 }
-type WordLayoutDocumentContext = Pick<WordLayoutSource, "blocks" | "drawings" | "paragraphFormat" | "runFormat" | "cache" | "listMarkers">;
+export type WordLayoutDocumentContext = Pick<WordLayoutSource, "blocks" | "drawings" | "paragraphFormat" | "runFormat" | "cache" | "listMarkers">;
+
+export interface WordLayoutStories {
+  readonly headerFooters: readonly (Pick<WordHeaderFooterStory, 'kind' | 'type' | 'relationshipId'> & { readonly context: WordLayoutDocumentContext })[];
+  readonly notes: readonly (Pick<WordNoteStory, 'kind' | 'id' | 'type'> & { readonly context: WordLayoutDocumentContext })[];
+}
+
+const storySources = new WeakMap<WordDocument, WordLayoutStories>();
+/** Compile story styles once. Repeated page layout reads only semantic nodes and computed formats. */
+export function wordLayoutStories(document: WordDocument): WordLayoutStories {
+  const cached = storySources.get(document);
+  if (cached) return cached;
+  const result = {
+    headerFooters: document.headerFooters.map(story => ({ kind: story.kind, type: story.type, relationshipId: story.relationshipId, context: compileStory(document, story) })),
+    notes: document.notes.map(story => ({ kind: story.kind, type: story.type, id: story.id, context: compileStory(document, story) })),
+  };
+  storySources.set(document, result);
+  return result;
+}
 
 /** Prepared geometry belongs to immutable paragraphs and the font measurer that produced it. */
 export class WordLayoutCache {
@@ -291,7 +309,7 @@ export function layoutWordDocument(
     listMarkers: document.numbering.markers(document),
     paragraphFormat: paragraph => document.styles.paragraphFormat(document, paragraph),
     runFormat: (paragraph, run) => document.styles.runFormat(document, paragraph, run),
-  }, measurer, options, document);
+  }, measurer, options, wordLayoutStories(document));
 }
 
 /** Shared pagination for package-backed and native document models. */
@@ -299,7 +317,7 @@ export function layoutWordSource(
   document: WordLayoutSource,
   measurer: WordTextMeasurer,
   options: WordLayoutOptions = {},
-  packageDocument?: WordDocument,
+  stories?: WordLayoutStories,
 ): WordLayout {
   const budget: LayoutBudget = {
     cache: document.cache,
@@ -426,9 +444,9 @@ export function layoutWordSource(
       cursorY += points(prepared.format.spacingAfterTwips);
     }
   }
-  if (packageDocument) {
-    decorateNotes(packageDocument, pages, measurer, budget);
-    decorateHeaderFooters(packageDocument, pages, measurer, budget, sections);
+  if (stories) {
+    decorateNotes(stories, pages, measurer, budget);
+    decorateHeaderFooters(stories, pages, measurer, budget, sections);
   }
   const frozenPages = Object.freeze(pages.map((page, index) => freezePage(page, document.cache?.pages[index])));
   if (document.cache) document.cache.pages = frozenPages;
@@ -875,7 +893,7 @@ function placeLine(
 }
 
 function decorateHeaderFooters(
-  document: WordDocument,
+  document: WordLayoutStories,
   pages: MutablePage[],
   measurer: WordTextMeasurer,
   budget: LayoutBudget,
@@ -901,7 +919,7 @@ function decorateHeaderFooters(
       if (relationshipId === undefined) continue;
       const story = document.headerFooters.find((item) => item.kind === kind && item.relationshipId === relationshipId);
       if (story === undefined) continue;
-      const context = storyContext(document, story);
+      const context = story.context;
       const left = points(page.section.marginLeftTwips + page.section.gutterTwips);
       const width = Math.max(1, page.width - left - points(page.section.marginRightTwips));
       const flow = layoutStory(context, left, width, measurer, budget);
@@ -914,16 +932,34 @@ function decorateHeaderFooters(
   }
 }
 
-function storyContext(document: WordDocument, story: WordHeaderFooterStory | WordNoteStory): WordLayoutDocumentContext {
+function compileStory(document: WordDocument, story: WordHeaderFooterStory | WordNoteStory): WordLayoutDocumentContext {
   const context = { package: document.package, part: story.part, source: story.source, conformance: document.conformance };
+  const paragraphs = new Map<WordParagraph, ComputedWordParagraphFormat>();
+  const defaults = new Map<WordParagraph, ComputedWordTextFormat>();
+  const runs = new Map<WordRun, ComputedWordTextFormat>();
+  const visit = (blocks: readonly WordBlock[]) => {
+    for (const block of blocks) {
+      if (block.kind === 'table') for (const row of block.rows) for (const cell of row.cells) visit(cell.blocks);
+      else if (block.kind === 'paragraph') {
+        paragraphs.set(block, document.styles.paragraphFormat(context, block));
+        defaults.set(block, document.styles.runFormat(context, block));
+        for (const inline of block.inlines) {
+          for (const run of inline.kind === 'run' ? [inline] : inline.kind === 'hyperlink' || inline.kind === 'insertion' ? inline.runs : [])
+            runs.set(run, document.styles.runFormat(context, block, run));
+        }
+      }
+    }
+  };
+  visit(story.blocks);
   return {
     drawings: story.drawings, blocks: story.blocks, listMarkers: document.numbering.markers({ ...context, blocks: story.blocks }),
-    paragraphFormat: paragraph => document.styles.paragraphFormat(context, paragraph),
-    runFormat: (paragraph, run) => document.styles.runFormat(context, paragraph, run),
+    cache: new WordLayoutCache(),
+    paragraphFormat: paragraph => paragraphs.get(paragraph)!,
+    runFormat: (paragraph, run) => (run && runs.get(run)) || defaults.get(paragraph)!,
   };
 }
 
-function decorateNotes(document: WordDocument, pages: MutablePage[], measurer: WordTextMeasurer, budget: LayoutBudget): void {
+function decorateNotes(document: WordLayoutStories, pages: MutablePage[], measurer: WordTextMeasurer, budget: LayoutBudget): void {
   const endnotes = new Set<number>();
   for (const page of pages) {
     const footnotes = new Set<number>();
@@ -931,20 +967,20 @@ function decorateNotes(document: WordDocument, pages: MutablePage[], measurer: W
       if (fragment.note?.kind === "footnote") footnotes.add(fragment.note.id);
       else if (fragment.note?.kind === "endnote") endnotes.add(fragment.note.id);
     }
-    layoutPageNotes(document, page, [...footnotes].map((id) => document.notes.find((note) => note.kind === "footnote" && note.id === id)).filter((note): note is WordNoteStory => note !== undefined), measurer, budget);
+    layoutPageNotes(document, page, [...footnotes].map((id) => document.notes.find((note) => note.kind === "footnote" && note.id === id)).filter((note): note is WordLayoutStories['notes'][number] => note !== undefined), measurer, budget);
   }
   const last = pages.at(-1);
   if (last !== undefined && endnotes.size > 0) {
-    const stories = [...endnotes].map((id) => document.notes.find((note) => note.kind === "endnote" && note.id === id)).filter((note): note is WordNoteStory => note !== undefined);
+    const stories = [...endnotes].map((id) => document.notes.find((note) => note.kind === "endnote" && note.id === id)).filter((note): note is WordLayoutStories['notes'][number] => note !== undefined);
     layoutPageNotes(document, last, stories, measurer, budget, true);
   }
 }
 
-function layoutPageNotes(document: WordDocument, page: MutablePage, stories: readonly WordNoteStory[], measurer: WordTextMeasurer, budget: LayoutBudget, append = false): void {
+function layoutPageNotes(document: WordLayoutStories, page: MutablePage, stories: WordLayoutStories['notes'], measurer: WordTextMeasurer, budget: LayoutBudget, append = false): void {
   if (stories.length === 0) return;
   const left = points(page.section.marginLeftTwips + page.section.gutterTwips);
   const width = Math.max(1, page.width - left - points(page.section.marginRightTwips));
-  const flows = stories.map((story) => ({ story, flow: layoutStory(storyContext(document, story), left + 18, Math.max(1, width - 18), measurer, budget) }));
+  const flows = stories.map((story) => ({ story, flow: layoutStory(story.context, left + 18, Math.max(1, width - 18), measurer, budget) }));
   const total = flows.reduce((sum, item) => sum + item.flow.height, 0) + 6;
   let cursor = Math.max(0, page.height - points(page.section.marginBottomTwips) - total);
   if (append && page.noteLines.length > 0) cursor = Math.max(cursor, page.noteLines.at(-1)!.y + page.noteLines.at(-1)!.height + 4);

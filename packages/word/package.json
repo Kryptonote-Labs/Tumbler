@@ -3,7 +3,10 @@
   "version": "0.1.0-alpha.24",
   "description": "Headless WordprocessingML reading, layout, preservation, and editing for Tumbler.",
   "type": "module",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./collaboration": "./src/collaboration/index.ts"
+  },
   "files": [
     "src",
     "README.md",
@@ -24,5 +27,16 @@
     "@tumblerjs/core": "0.1.0-alpha.24",
     "@tumblerjs/ooxml": "0.1.0-alpha.24",
     "@tumblerjs/opc": "0.1.0-alpha.24"
+  },
+  "peerDependencies": {
+    "yjs": "^13.6.0"
+  },
+  "peerDependenciesMeta": {
+    "yjs": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "yjs": "^13.6.0"
   }
 }

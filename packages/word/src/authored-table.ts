@@ -28,11 +28,10 @@ export function authoredTableGrid(
     )
   )
     throw new RangeError('Word table cells need a consistent grid of one to 63 columns.');
-  const widths = columnWidths ?? Array.from({ length: columns }, () => width / columns);
+  const widths = columnWidths?.length ? columnWidths : Array.from({ length: columns }, () => width / columns);
   if (
     widths.length !== columns ||
-    widths.some((value) => !Number.isFinite(value) || value <= 0) ||
-    widths.reduce((a, b) => a + b, 0) > width + 0.01
+    widths.some((value) => !Number.isFinite(value) || value <= 0)
   )
     throw new RangeError('Invalid table column widths.');
   return {

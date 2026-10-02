@@ -7,12 +7,12 @@ export const nativeWordDoc: Doc = {
     { id: 'model', title: 'Choose a document model', blocks: [
       { kind: 'text', text: 'NativeWordDocument accepts authored paragraphs, rich text, lists, tables, and images. Updates and layout do not create an OPC package or parse XML. It shares the Word pagination engine with package-backed documents.' },
       { kind: 'table', headers: ['Task', 'API'], rows: [
-        ['Edit an existing DOCX while retaining its package structures', 'openWordEditingSession'],
+        ['Edit an existing DOCX while retaining its package structures', 'NativeWordDocument({ source })'],
         ['Maintain application-owned rich content and export DOCX', 'NativeWordDocument'],
         ['Apply sequential plain-text edits with paragraph identity', 'NativeWordText'],
         ['Create a DOCX once from authored content', 'createWordArtifact'],
       ] },
-      { kind: 'note', text: 'The native APIs are headless. They do not import arbitrary DOCX, provide collaboration or undo history, or plug directly into WordDocumentView. Keep the package-backed editing path for imported files whose unsupported structures must be retained.' },
+      { kind: 'note', text: 'The native APIs are headless. Pass source: openWordArtifact(bytes) to use the same native engine for imports. The optional @tumblerjs/word/collaboration adapter supplies anchored Yjs operations for people and agents. WordDocumentView still expects a package-backed document.' },
     ] },
     { id: 'author', title: 'Create and update rich content', blocks: [
       { kind: 'code', code: `import {
@@ -72,8 +72,8 @@ const plainDocx = text.docx();` },
       { kind: 'text', text: 'Edits within transact use sequential positions: each edit sees the result of the previous one. An invalid edit rejects the entire transaction. Unchanged paragraph identities survive; a split retains the first paragraph ID and allocates IDs for the new paragraphs. NativeWordTextLayout measures continuous plain-text paragraph lines, without rich document pagination.' },
     ] },
     { id: 'integration', title: 'Persistence, collaboration, and export', blocks: [
-      { kind: 'text', text: 'Keep the authored content or your own operation model as persistent state. Apply local edits immediately, reconcile into NativeWordDocument, and send application-level changes through your chosen transport. Tumbler does not resolve concurrent edits or authenticate peers. The application owns conflict resolution, revisions, retry behavior, durable storage, undo, and selection mapping.' },
-      { kind: 'text', text: 'Call artifact() when an artifact is needed, and bytes() at the download or file-storage boundary. Export constructs a fresh DOCX from supported authored content. It cannot preserve unknown parts from a previously imported document. Avoid exporting and reopening the DOCX on every keystroke, which discards the native model’s identity and caching benefits.' },
+      { kind: 'text', text: 'Keep the authored content or your own operation model as persistent state. Apply local edits immediately, reconcile into NativeWordDocument, and send application-level changes through your chosen transport. The optional collaboration adapter uses Yjs for concurrent character identities and supplies shared text, formatting, image and table operations. The application owns authenticated transport, revisions, retries, durable storage and selection mapping.' },
+      { kind: 'text', text: 'Call artifact() when an artifact is needed, and bytes() at the download or file-storage boundary. Export constructs DOCX from current content and preserves source properties and unknown package parts when a source artifact was supplied. Keep that immutable artifact outside the frequently rewritten collaboration head. Avoid exporting and reopening the DOCX on every keystroke, which discards the native model’s identity and caching benefits.' },
     ] },
   ],
   next: { href: '/docs/word', label: 'Package-backed Word editing' },

@@ -36,33 +36,33 @@
     },
     "packages/charts": {
       "name": "@tumblerjs/charts",
-      "version": "0.1.0-alpha.23",
+      "version": "0.1.0-alpha.24",
       "dependencies": {
-        "@tumblerjs/ooxml": "0.1.0-alpha.23",
+        "@tumblerjs/ooxml": "0.1.0-alpha.24",
       },
     },
     "packages/core": {
       "name": "@tumblerjs/core",
-      "version": "0.1.0-alpha.23",
+      "version": "0.1.0-alpha.24",
       "dependencies": {
-        "@tumblerjs/ooxml": "0.1.0-alpha.23",
+        "@tumblerjs/ooxml": "0.1.0-alpha.24",
       },
     },
     "packages/formulas": {
       "name": "@tumblerjs/formulas",
-      "version": "0.1.0-alpha.23",
+      "version": "0.1.0-alpha.24",
     },
     "packages/ooxml": {
       "name": "@tumblerjs/ooxml",
-      "version": "0.1.0-alpha.23",
+      "version": "0.1.0-alpha.24",
       "dependencies": {
-        "@tumblerjs/opc": "0.1.0-alpha.23",
+        "@tumblerjs/opc": "0.1.0-alpha.24",
         "saxes": "6.0.0",
       },
     },
     "packages/opc": {
       "name": "@tumblerjs/opc",
-      "version": "0.1.0-alpha.23",
+      "version": "0.1.0-alpha.24",
       "dependencies": {
         "fflate": "^0.8.3",
         "saxes": "^6.0.0",
@@ -70,7 +70,7 @@
     },
     "packages/sheets": {
       "name": "@tumblerjs/sheets",
-      "version": "0.1.0-alpha.23",
+      "version": "0.1.0-alpha.24",
       "dependencies": {
         "@tumblerjs/charts": "0.1.0-alpha.23",
         "@tumblerjs/core": "0.1.0-alpha.23",
@@ -81,7 +81,7 @@
     },
     "packages/slides": {
       "name": "@tumblerjs/slides",
-      "version": "0.1.0-alpha.23",
+      "version": "0.1.0-alpha.24",
       "dependencies": {
         "@tumblerjs/charts": "0.1.0-alpha.23",
         "@tumblerjs/core": "0.1.0-alpha.23",
@@ -92,7 +92,7 @@
     },
     "packages/svelte": {
       "name": "@tumblerjs/svelte",
-      "version": "0.1.0-alpha.23",
+      "version": "0.1.0-alpha.24",
       "dependencies": {
         "@tumblerjs/charts": "0.1.0-alpha.23",
         "@tumblerjs/core": "0.1.0-alpha.23",
@@ -126,13 +126,22 @@
     },
     "packages/word": {
       "name": "@tumblerjs/word",
-      "version": "0.1.0-alpha.23",
+      "version": "0.1.0-alpha.24",
       "dependencies": {
-        "@tumblerjs/charts": "0.1.0-alpha.23",
-        "@tumblerjs/core": "0.1.0-alpha.23",
-        "@tumblerjs/ooxml": "0.1.0-alpha.23",
-        "@tumblerjs/opc": "0.1.0-alpha.23",
+        "@tumblerjs/charts": "0.1.0-alpha.24",
+        "@tumblerjs/core": "0.1.0-alpha.24",
+        "@tumblerjs/ooxml": "0.1.0-alpha.24",
+        "@tumblerjs/opc": "0.1.0-alpha.24",
       },
+      "devDependencies": {
+        "yjs": "^13.6.0",
+      },
+      "peerDependencies": {
+        "yjs": "^13.6.0",
+      },
+      "optionalPeers": [
+        "yjs",
+      ],
     },
   },
   "packages": {
@@ -408,9 +417,13 @@
 
     "isarray": ["isarray@1.0.0", "", {}, "sha512-VLghIWNM6ELQzo7zwmcg0NmTVyWKYjvIeM83yjp0wRDTmUnrM678fQbcKBo6n2CJEF0szoG//ytg+TKla89ALQ=="],
 
+    "isomorphic.js": ["isomorphic.js@0.2.5", "", {}, "sha512-PIeMbHqMt4DnUP3MA/Flc0HElYjMXArsw1qwJZcm9sqR8mq3l8NYizFMty0pWwE/tzIGH3EKK5+jes5mAr85yw=="],
+
     "jszip": ["jszip@3.10.2", "", { "dependencies": { "lie": "~3.3.0", "pako": "~1.0.2", "readable-stream": "~2.3.6", "setimmediate": "^1.0.5" } }, "sha512-3l+rb15IOWtUhU0H5MFqES/T6Kh7abYwjosBey/vD6hDt8zoEffkSC5Ws5SGtgVw3gBx2NEbhTeSW1+kWkpyTQ=="],
 
     "kleur": ["kleur@4.1.5", "", {}, "sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ=="],
+
+    "lib0": ["lib0@0.2.119", "", { "dependencies": { "isomorphic.js": "^0.2.4" }, "bin": { "0serve": "bin/0serve.js", "0gentesthtml": "bin/gentesthtml.js", "0ecdsa-generate-keypair": "bin/0ecdsa-generate-keypair.js" } }, "sha512-vh+TiejVy8Xm+hCdnRfn9BthGNvNUZdEXltNjVZL3TzRIKP3s1lnQh8pWd/Q0wCgY0FPAGVVjFF4ZiHUV3LFgA=="],
 
     "lie": ["lie@3.3.0", "", { "dependencies": { "immediate": "~3.0.5" } }, "sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ=="],
 
@@ -593,6 +606,8 @@
     "xmlchars": ["xmlchars@2.2.0", "", {}, "sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw=="],
 
     "yallist": ["yallist@5.0.0", "", {}, "sha512-YgvUTfwqyc7UXVMrB+SImsVYSmTS8X/tSrtdNZMImM+n7+QTriRXyXim0mBrTXNeqzVF0KWGgHPeiyViFFrNDw=="],
+
+    "yjs": ["yjs@13.6.33", "", { "dependencies": { "lib0": "^0.2.99" } }, "sha512-q/UYvr1gOk4XII+Cu1CW2dINjYqJJFifTzogEaIARznrvX7uOlHsdTEXcnOBMuIsrCGEEKdNxi74kyMLZlKVfw=="],
 
     "zimmerframe": ["zimmerframe@1.1.4", "", {}, "sha512-B58NGBEoc8Y9MWWCQGl/gq9xBCe4IiKM0a2x7GZdQKOW5Exr8S1W24J6OgM1njK8xCRGvAJIL/MxXHf6SkmQKQ=="],
 

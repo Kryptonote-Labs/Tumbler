@@ -139,7 +139,7 @@ line vertically, then horizontally. Pages without body text return `undefined`;
 headers, footers and notes are excluded. Renderers resolve the character offset
 within the returned line using their text geometry.
 
-### Native authored documents
+### Native documents
 
 `NativeWordDocument` reconciles rich authored blocks in memory and uses the same pagination
 engine as package-backed Word documents. Updates and layout do not rebuild XML or ZIP files.
@@ -171,8 +171,10 @@ content, so this is not a constant-time or viewport-only layout API.
 `paragraphs()` returns current UTF-16 text ranges, separated by one code unit, including table
 cells. Images occupy U+FFFC. The application owns rendering, input, selection mapping, history,
 persistence, and collaboration. `WordDocumentView` currently expects a package-backed document.
-The native model does not import arbitrary DOCX or preserve unknown package structures; use
-`openWordEditingSession` for that workflow.
+Pass `source: openWordArtifact(bytes)` to import an existing DOCX into this same engine.
+Source styles, sections, hyperlinks, numbering, table properties, drawings and stories are compiled
+once. Editing uses semantic nodes and cached geometry; retained XML and package parts are consulted
+only at import and export. `WordPackageDocument` is a compatibility name for this native engine.
 
 ### Plain-text transactions
 
@@ -192,11 +194,12 @@ Source references retain Word properties and wrappers that an editing interface 
 Keep the original artifact immutable alongside the shared content. Character identities, presence,
 permissions and synchronization belong to the host application.
 
-`WordPackageDocument` renders and exports that shared content against the original package:
+`NativeWordDocument` renders and exports the shared content, retaining the original package for export:
 
 ```ts
-const model = new WordPackageDocument(openWordArtifact(bytes));
-const content = model.original;
+const source = openWordArtifact(bytes);
+const model = new NativeWordDocument({ source });
+const content = importWordContent(source);
 // Store content in the host's collaborative model, then apply its current content:
 model.update(content);
 const layout = model.layout(measurer);
@@ -207,9 +210,40 @@ const docx = model.artifact().bytes();
 model instance. Both APIs preserve untouched package parts, section properties, styles and opaque
 XML. Source identifiers refer to the original package, never to a later exported revision.
 Table content includes cell spans, vertical merges, column widths and source row/cell identities.
-The existing `NativeWordDocument` remains the incremental layout path for content authored without
-an original Office package. Hosts can use the same editing operations and synchronization for both.
+Created and imported documents share reconciliation, measurement caching and pagination.
+Keep original package bytes outside frequently rewritten collaboration snapshots.
+`createWordSourceManifest(source)` supplies immutable reference IDs for validating remote updates
+without reparsing source XML. It also includes resolved default text formatting for headless consumers.
+Hosts must validate this manifest at import and prevent clients replacing it.
 
 For independent copies of source paragraphs or run fragments, give the copied content a new
 `sourceCopy` identity. Reusing `source` without a copy identity means continuation, as when
 splitting a paragraph. Repeated source tables and rows are detected as copies automatically.
+
+
+### Collaborative operations
+
+The optional `@tumblerjs/word/collaboration` entry point uses Yjs. Install `yjs` only when using this
+adapter; the native engine and package APIs do not depend on it.
+
+```ts
+import { createWordCommands } from '@tumblerjs/word/collaboration';
+
+const commands = createWordCommands({ defaultFontSize: 12 });
+const target = commands.anchorWordRange(body, { start: 0, end: 5 });
+const delta = commands.wordTransaction(body, [
+  { kind: 'replace', target, expected: 'Hello', value: 'Welcome' },
+]);
+body.applyDelta(delta);
+```
+
+`body` is the Y.Text named `body` on an attached Y.Doc. People and agents use the same anchored
+replace, format, image and table operations. Batch preflight is atomic and rejects stale expected
+text. Yjs supplies synchronization and selective undo. The adapter validates text, grapheme boundaries,
+formatting and table structure. Hosts provide optional `validateAttributes` and `validateUpdate` hooks
+for their schema, immutable import provenance and asset references, and enforce permissions when
+accepting updates. A `defaultAttributes(body)` callback supplies document-specific formatting defaults
+for selection inspection and inserted text. The adapter does not provide authenticated networking or persistence.
+
+`wordParagraphIdentity(body, newlineOffset)` follows paragraph terminators through edits and remote
+updates. It avoids a repeated scan from the start of the CRDT when projecting stable native block IDs.
