@@ -67,3 +67,21 @@ export class NativeWordSource {
     lists(this.original);
   }
 }
+
+/** Opaque blocks keep their source reading order while supported neighbours are edited or removed. */
+export function retainOpaqueBlocks(input: readonly { source?: number }[], output: WordBlock[], original: readonly WordBlock[]): WordBlock[] {
+  if (!original.some(block => block.kind === 'unsupported')) return output;
+  const result: WordBlock[] = [];
+  let cursor = 0;
+  const positions = new Map(original.map((block, index) => [block.elementId, index]));
+  for (const [index, block] of output.entries()) {
+    const at = positions.get(input[index]?.source!);
+    if (at !== undefined && at >= cursor) {
+      for (; cursor < at; cursor++) if (original[cursor]!.kind === 'unsupported') result.push(original[cursor]!);
+      cursor = at + 1;
+    }
+    result.push(block);
+  }
+  for (; cursor < original.length; cursor++) if (original[cursor]!.kind === 'unsupported') result.push(original[cursor]!);
+  return result;
+}

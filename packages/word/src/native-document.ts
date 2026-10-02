@@ -1,4 +1,4 @@
-import { NativeWordSource } from './native-source.ts';
+import { NativeWordSource, retainOpaqueBlocks } from './native-source.ts';
 import type { WordArtifact } from './artifact.ts';
 import { reconcileWordContent } from './content-export.ts';
 import { wordParagraphText } from './text.ts';
@@ -157,8 +157,8 @@ export class NativeWordDocument implements WordLayoutSource {
         }
         return { nativeImage: id };
       })}`;
-    const visit = (blocks: readonly WordContentBlock[], width: number, path: string): WordBlock[] =>
-      blocks.map((source, index) => {
+    const visit = (blocks: readonly WordContentBlock[], width: number, path: string, originalBlocks: readonly WordBlock[] = []): WordBlock[] => {
+      const output = blocks.map((source, index) => {
         const key = 'id' in source && source.id ? source.id : `${path}/${index}`;
         if (keys.has(key)) throw new Error('Native document block identities must be unique.');
         keys.add(key);
@@ -192,6 +192,7 @@ export class NativeWordDocument implements WordLayoutSource {
                 cell.blocks.length ? cell.blocks : [{ kind: 'paragraph', runs: [] }],
                 cellWidth,
                 `${key}/${rowIndex}/${column}`,
+                compiled?.cells.get(cell.source!)?.blocks,
               ),
             })),
           }));
@@ -324,6 +325,8 @@ export class NativeWordDocument implements WordLayoutSource {
         for (const drawing of result.drawings) drawings.set(drawing.elementId, drawing);
         return result.block;
       });
+      return retainOpaqueBlocks(blocks.map(block => 'source' in block && block.source !== undefined ? {source:block.source} : {}), output, originalBlocks);
+    };
     const blocks = visit(
       input.length ? input : [{ kind: 'paragraph', runs: [] }],
       (this.finalSection.pageWidthTwips -
@@ -331,6 +334,7 @@ export class NativeWordDocument implements WordLayoutSource {
         this.finalSection.marginRightTwips) /
         20,
       'body',
+      compiled?.artifact.document.blocks,
     );
     if (compiled) for (const [id, marker] of compiled.artifact.document.numbering.markersFor(numbering)) markers.set(id, marker);
     if (blocks.length !== this.blocks.length || blocks.some((block, index) => block !== this.blocks[index])) this.exported = undefined;

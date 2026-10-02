@@ -78,3 +78,12 @@ test('export and reimport use the same incremental editing and layout path', () 
   expect(native.cache.measuredParagraphs-counts[0]!).toBe(1);
   expect(imported.cache.measuredParagraphs-counts[1]!).toBe(1);
 });
+
+test('opaque blocks remain in native reading order when a neighbouring paragraph is removed', () => {
+  const source=openWordArtifact(buildWordDocumentFixture({documentXml:`<w:document xmlns:w="${ns}"><w:body><w:p><w:r><w:t>A</w:t></w:r></w:p><w:altChunk/><w:p><w:r><w:t>B</w:t></w:r></w:p><w:p><w:r><w:t>C</w:t></w:r></w:p></w:body></w:document>`}));
+  const model=new NativeWordDocument({source});
+  const content=importWordContent(source);
+  model.update(content.slice(1));
+  expect(model.blocks.map(block => block.kind)).toEqual(['unsupported','paragraph','paragraph']);
+  expect(geometry(model.layout(measurer))).toEqual(geometry(layoutWordDocument(model.artifact().document,measurer)));
+});
