@@ -38,3 +38,10 @@ test('headless structural edits retain concurrent cell content and validate batc
   expect(body.toString()).toContain('three\nfour');
   expect(new Set(tableParagraphs(body).flatMap(p => p.table ? [p.table.row] : [])).size).toBe(3);
 });
+
+test('range checks reject the middle of graphemes and accept their boundaries', () => {
+  const doc=new Y.Doc();const body=doc.getText('body');body.insert(0,'A👩🏽‍💻e\u0301Z\n');
+  for(const index of [2,3,4,5,6,7,9]) expect(()=>commands.replaceWordDelta(body,{start:index,end:index},'x')).toThrow('split');
+  for(const index of [0,1,8,10,11]) expect(()=>commands.replaceWordDelta(body,{start:index,end:index},'x')).not.toThrow();
+  doc.destroy();
+});

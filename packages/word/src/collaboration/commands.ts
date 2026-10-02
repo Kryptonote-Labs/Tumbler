@@ -84,14 +84,13 @@ function checkRange(text: Y.Text, range: WordRange) {
   )
     throw new Error('The edit range is outside the document.');
   const value = text.toString();
-  const boundaries = new Set([
-    0,
-    ...Array.from(
-      new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value),
-      (part) => part.index + part.segment.length,
-    ),
-  ]);
-  if (!boundaries.has(range.start) || !boundaries.has(range.end))
+  const segments = new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value);
+  const boundary = (at: number) => {
+    if (at === 0 || at === value.length) return true;
+    const previous = segments.containing(at - 1);
+    return previous !== undefined && previous.index + previous.segment.length === at;
+  };
+  if (!boundary(range.start) || !boundary(range.end))
     throw new Error('The edit would split a character.');
 }
 
