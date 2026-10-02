@@ -8,7 +8,7 @@ import { authoredContent, type WordContentBlock, type WordAuthoredImage } from '
 export type WordTextFormat = Partial<Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'underline' | 'color'>>;
 export interface WordTextRun { readonly source?: number; readonly sourceCopy?: string; readonly text: string; readonly format?: WordTextFormat; readonly image?: WordAuthoredImage; }
 export interface WordTextParagraph {
-  /** Reference into an immutable source package, used by WordPackageDocument. */
+  /** Reference into an immutable source package, retained by NativeWordDocument at import and export. */
   readonly source?: number;
   /** Independent copy identity. Omit for continuations, including paragraph splits. */
   readonly sourceCopy?: string;
