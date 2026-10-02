@@ -19,7 +19,7 @@ export function createWordSourceManifest(artifact: WordArtifact): WordSourceMani
     for (const block of blocks) {
       if (block.kind === 'paragraph') {
         paragraphs.push(block.elementId);
-        runs.push(...wordParagraphTextSegments(artifact.document, block).map(segment => segment.elementId));
+        for (const segment of wordParagraphTextSegments(artifact.document, block)) runs.push(segment.elementId);
       } else if (block.kind === 'table') {
         tables.push(block.elementId);
         for (const row of block.rows) {
