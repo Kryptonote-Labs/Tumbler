@@ -45,3 +45,17 @@ test('range checks reject the middle of graphemes and accept their boundaries', 
   for(const index of [0,1,8,10,11]) expect(()=>commands.replaceWordDelta(body,{start:index,end:index},'x')).not.toThrow();
   doc.destroy();
 });
+
+test('paragraph identities follow retained terminators across inserts, deletes and formatting', async () => {
+  const {wordParagraphIdentity}=await import('../src/collaboration/index.ts');
+  const doc=new Y.Doc();const body=doc.getText('body');body.insert(0,'One\nTwo\nThree\n');
+  const ids=[3,7,13].map(at=>wordParagraphIdentity(body,at));
+  body.applyDelta([{retain:2},{insert:'new\n'},{retain:2},{delete:4}]);
+  expect(body.toString()).toBe('Onnew\ne\nThree\n');
+  expect(wordParagraphIdentity(body,7)).toBe(ids[0]!);
+  expect(wordParagraphIdentity(body,13)).toBe(ids[2]!);
+  expect(wordParagraphIdentity(body,5)).not.toBe(ids[0]!);
+  body.format(0,body.length,{bold:true});
+  expect(wordParagraphIdentity(body,13)).toBe(ids[2]!);
+  doc.destroy();
+});
