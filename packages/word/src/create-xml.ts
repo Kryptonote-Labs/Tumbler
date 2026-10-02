@@ -6,6 +6,11 @@ export function xml(value: string) {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;');
 }
 
+// Literal whitespace in XML attributes is normalized to spaces by readers.
+export function xmlAttribute(value: string) {
+  return xml(value).replaceAll('\t', '&#9;').replaceAll('\n', '&#10;').replaceAll('\r', '&#13;');
+}
+
 export function textContent(value: string) {
   if (/[\r\n]/.test(value)) throw new TypeError('Use separate paragraphs for line-feed text.');
   return value.split('\t').map(part => `<w:t xml:space="preserve">${xml(part)}</w:t>`).join('<w:tab/>');

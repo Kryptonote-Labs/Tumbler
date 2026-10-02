@@ -113,3 +113,11 @@ test('repeated placements of one asset share its media part', () => {
   expect(artifact.document.drawings.size).toBe(2);
   expect(artifact.document.package.parts.filter(part => part.name.value.startsWith('/word/media/'))).toHaveLength(1);
 });
+
+test('image descriptions retain XML whitespace and special characters through DOCX export', () => {
+  const alt = 'A screenshot\n\nDescription automatically generated\r\nDetails\t<image> & "caption" 📷';
+  const artifact = createWordArtifact({ blocks: [{ kind: 'image', bytes: png, contentType: 'image/png', width: 80, height: 40, alt }] });
+  const reopened = openWordArtifact(artifact.bytes());
+  const image = [...reopened.document.drawings.values()].find(drawing => drawing.kind === 'image');
+  expect(image?.altText).toBe(alt);
+});
