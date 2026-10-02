@@ -81,13 +81,24 @@ export class WordNumbering {
   }
 
   markers(document: WordDocumentLike & { readonly blocks: readonly WordBlock[] }): ReadonlyMap<number, WordListMarker> {
-    const markers = new Map<number, WordListMarker>();
-    const counters = new Map<number, number[]>();
+    const paragraphs: { elementId: number; reference: WordParagraphNumbering }[] = [];
     const visit = (blocks: readonly WordBlock[]): void => {
       for (const block of blocks) {
         if (block.kind === "paragraph") {
           const reference = this.paragraphReference(document, block);
-          if (reference === undefined) continue;
+          if (reference) paragraphs.push({ elementId: block.elementId, reference });
+        } else if (block.kind === "table") for (const row of block.rows) for (const cell of row.cells) visit(cell.blocks);
+      }
+    };
+    visit(document.blocks);
+    return this.markersFor(paragraphs);
+  }
+
+  /** Number a semantic sequence without consulting XML or opening a package. */
+  markersFor(paragraphs: Iterable<{ elementId: number; reference: WordParagraphNumbering }>): ReadonlyMap<number, WordListMarker> {
+    const markers = new Map<number, WordListMarker>();
+    const counters = new Map<number, number[]>();
+    for (const { elementId, reference } of paragraphs) {
           const instance = this.#instances.get(reference.numId);
           const abstract = instance === undefined ? undefined : this.#abstracts.get(instance.abstractId);
           const level = instance?.levelOverrides.get(reference.level) ?? abstract?.levels.find((item) => item.level === reference.level);
@@ -107,11 +118,8 @@ export class WordNumbering {
             const definition = instance.levelOverrides.get(index) ?? abstract.levels.find((item) => item.level === index);
             return formatNumber(state[index] ?? definition?.start ?? 1, definition?.format ?? "decimal");
           });
-          markers.set(block.elementId, Object.freeze({ text, suffix: level.suffix, level: reference.level, indentStartTwips: level.indentStartTwips, hangingTwips: level.hangingTwips }));
-        } else if (block.kind === "table") for (const row of block.rows) for (const cell of row.cells) visit(cell.blocks);
-      }
-    };
-    visit(document.blocks);
+          markers.set(elementId, Object.freeze({ text, suffix: level.suffix, level: reference.level, indentStartTwips: level.indentStartTwips, hangingTwips: level.hangingTwips }));
+    }
     return markers;
   }
 }

@@ -53,6 +53,7 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
     const alignment = document.styles.paragraphFormat(document, block).alignment;
     return {
       kind: 'paragraph',
+      id: `source-${block.elementId}`,
       source: block.elementId,
       runs: projected,
       alignment: alignment === 'distribute' ? 'justify' : alignment,
