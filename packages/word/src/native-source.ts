@@ -1,3 +1,4 @@
+import { resolveWordTableGrid } from './table-grid.ts';
 import type { WordArtifact } from './artifact.ts';
 import type { WordBlock, WordParagraph, WordRun, WordRunContent, WordInline, WordTable, WordTableRow, WordTableCell } from './document.ts';
 import { importWordContent } from './import-content.ts';
@@ -20,6 +21,7 @@ export class NativeWordSource {
     format: ComputedWordTextFormat;
   }>();
   readonly tables = new Map<number, WordTable>();
+  readonly tableWidths = new Map<number, readonly number[]>();
   readonly rows = new Map<number, WordTableRow>();
   readonly cells = new Map<number, WordTableCell>();
   readonly lists = new Map<number, WordTextParagraph['list']>();
@@ -32,6 +34,7 @@ export class NativeWordSource {
       for (const block of blocks) {
         if (block.kind === 'table') {
           this.tables.set(block.elementId, block);
+          this.tableWidths.set(block.elementId, resolveWordTableGrid(block).columnWidthsTwips.map(width => width / 20));
           for (const row of block.rows) {
             this.rows.set(row.elementId, row);
             for (const cell of row.cells) {

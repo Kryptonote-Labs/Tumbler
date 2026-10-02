@@ -178,7 +178,8 @@ export class NativeWordDocument implements WordLayoutSource {
         if (source.kind === 'table') {
           const originalTable = compiled?.tables.get(source.source!);
           const widthsChanged = source.columnWidths !== undefined && JSON.stringify(source.columnWidths.map(w => Math.round(w * 20))) !== JSON.stringify(originalTable?.gridColumnWidthsTwips);
-          const grid = authoredTableGrid(source.rows, source.columnWidths, width, source.rowGrids);
+          const layoutWidths = originalTable && !widthsChanged ? compiled?.tableWidths.get(originalTable.elementId) : source.columnWidths;
+          const grid = authoredTableGrid(source.rows, layoutWidths, width, source.rowGrids);
           const widths = grid.widths;
           const rows = grid.rows.map((row, rowIndex) => ({
             ...compiled?.rows.get(source.rowSources?.[rowIndex]!),
@@ -193,7 +194,7 @@ export class NativeWordDocument implements WordLayoutSource {
               elementId: allocate(),
               gridSpan: span,
               verticalMerge: cell.verticalMerge,
-              width: !widthsChanged && compiled?.cells.get(cell.source!)?.width || { type: 'dxa' as const, value: Math.round(cellWidth * 20) },
+              width: !widthsChanged && compiled?.cells.has(cell.source!) ? compiled.cells.get(cell.source!)!.width : { type: 'dxa' as const, value: Math.round(cellWidth * 20) },
               verticalAlignment: compiled?.cells.get(cell.source!)?.verticalAlignment ?? 'top' as const,
               margins: compiled?.cells.get(cell.source!)?.margins,
               blocks: visit(
@@ -207,7 +208,7 @@ export class NativeWordDocument implements WordLayoutSource {
           const block: WordTable = {
             kind: 'table',
             elementId: previous?.block.elementId ?? allocate(),
-            gridColumnWidthsTwips: widths.map((value) => Math.round(value * 20)),
+            gridColumnWidthsTwips: originalTable && !widthsChanged ? originalTable.gridColumnWidthsTwips : widths.map((value) => Math.round(value * 20)),
             properties: originalTable && !widthsChanged ? originalTable.properties : {
               ...(originalTable?.properties),
               width: { type: 'dxa', value: Math.round(widths.reduce((a, b) => a + b, 0) * 20) },

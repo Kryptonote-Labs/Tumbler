@@ -100,3 +100,15 @@ test('imported paragraph continuations and independent copies retain the compati
   expect(model.blocks.filter(block=>block.kind==='table')).toHaveLength(2);
   expect(geometry(model.layout(measurer))).toEqual(geometry(layoutWordDocument(model.artifact().document,measurer)));
 });
+
+test('automatic and omitted source table grids retain native and exported geometry', () => {
+  for (const grid of ['', '<w:tblGrid><w:gridCol w:w="0"/><w:gridCol w:w="0"/></w:tblGrid>']) {
+    const source=openWordArtifact(buildWordDocumentFixture({documentXml:`<w:document xmlns:w="${ns}"><w:body><w:tbl><w:tblPr><w:tblW w:w="2500" w:type="pct"/></w:tblPr>${grid}<w:tr><w:tc><w:p><w:r><w:t>A</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>B</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>`}));
+    const model=new NativeWordDocument({source});
+    expect(geometry(model.layout(measurer))).toEqual(geometry(layoutWordDocument(source.document,measurer)));
+    const content=importWordContent(source);const table=content[0]!;
+    if(table.kind!=='table') throw Error('table');
+    model.update([{...table,rows:table.rows.map(row=>row.map(cell=>({...cell,blocks:cell.blocks.map(block=>block.kind==='paragraph'?{...block,runs:block.runs.map(run=>({...run,text:run.text+' changed'}))}:block)})))}]);
+    expect(geometry(model.layout(measurer))).toEqual(geometry(layoutWordDocument(model.artifact().document,measurer)));
+  }
+});
