@@ -73,3 +73,15 @@ test('document defaults resolve for editing and mixed selections', () => {
   expect(commands.wordFormats(body,{start:1,end:4})).toMatchObject({fontSize:16,bold:true,fontFamily:'Courier New'});
   doc.destroy();
 });
+
+
+test('replacing a whole table with several paragraphs removes its cell structure', () => {
+  const doc = new Y.Doc(); const body = doc.getText('body'); body.insert(0,'Intro\n');
+  body.applyDelta(insertTableDelta(body,0,[['one','two'],['three','four']]).delta);
+  const cells=tableParagraphs(body).filter(paragraph=>paragraph.table);
+  const range={start:cells[0]!.start,end:cells.at(-1)!.end};
+  body.applyDelta(commands.wordTransaction(body,[{kind:'replace',target:commands.anchorWordRange(body,range),value:'plain\nmulti\nline'}]));
+  expect(body.toString()).toBe('Intro\nplain\nmulti\nline\n');
+  expect(tableParagraphs(body).every(paragraph=>!paragraph.table)).toBe(true);
+  doc.destroy();
+});

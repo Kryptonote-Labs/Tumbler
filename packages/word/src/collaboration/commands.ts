@@ -1,6 +1,6 @@
 import { editTableDelta, type TableAction } from './table-edits.ts';
 import { isDocumentImage, normalizeImage, imagePositions, type DocumentImage } from './images.ts';
-import { insertTableDelta, protectTableBoundaries } from './tables.ts';
+import { insertTableDelta, protectTableBoundaries, tableParagraphs } from './tables.ts';
 import * as Y from 'yjs';
 import { validateText, validateWordText } from './validation.ts';
 import { validateAttributes as validateWordAttributes, type TextAttributes } from './formatting.ts';
@@ -167,7 +167,20 @@ function replaceWordDelta(
   value = value.replace(/\r\n?/g, '\n');
   validateText(text.toString().slice(0, range.start) + value + text.toString().slice(range.end));
   validateAttributes(attributes);
-  const { align, list, table, wordParagraph, image: _image, ...inline } = attributes;
+  const { align, list, table: inheritedTable, wordParagraph, image: _image, ...inline } = attributes;
+  let table = inheritedTable;
+  if (table && range.end > range.start) {
+    const paragraphs = tableParagraphs(text);
+    // Replacing a whole table must not recreate its first cell on every inserted paragraph.
+    while (table) {
+      const id = table.id;
+      const members = paragraphs.filter(paragraph => paragraph.table?.id === id || paragraph.table?.parents?.some(parent => parent.id === id));
+      if (!members.length || range.start > members[0]!.start || range.end < members.at(-1)!.end) break;
+      const parents = table.parents ?? [];
+      const parent = parents.at(-1);
+      table = parent ? {...parent, ...(parents.length > 1 ? {parents: parents.slice(0,-1)} : {})} : undefined;
+    }
+  }
   const inserts: WordDelta = [];
   const lines = value.split('\n');
   for (let index = 0; index < lines.length; index++) {
