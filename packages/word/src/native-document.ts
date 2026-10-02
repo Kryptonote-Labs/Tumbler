@@ -117,6 +117,7 @@ export class NativeWordDocument implements WordLayoutSource {
   update(input: readonly WordContentBlock[]) {
     const records = new Map<string, RecordBlock>();
     const keys = new Set<string>();
+    const sourceOccurrences = new Map<string, number>();
     const drawings = new Map<number, WordDrawing>();
     const markers = new Map<number, WordListMarker>();
     const counters = new Map<string, { kind: string; start: number; values: number[] }>();
@@ -159,7 +160,14 @@ export class NativeWordDocument implements WordLayoutSource {
       })}`;
     const visit = (blocks: readonly WordContentBlock[], width: number, path: string, originalBlocks: readonly WordBlock[] = []): WordBlock[] => {
       const output = blocks.map((source, index) => {
-        const key = 'id' in source && source.id ? source.id : `${path}/${index}`;
+        const declared = 'id' in source ? source.id : undefined;
+        const sourceId = 'source' in source ? source.source : undefined;
+        const importedIdentity = sourceId !== undefined && (!declared || declared === `source-${sourceId}`);
+        const scope = source.kind === 'paragraph' ? source.sourceCopy ?? '' : '';
+        const origin = `${scope}:${sourceId}`;
+        const occurrence = sourceOccurrences.get(origin) ?? 0;
+        if (importedIdentity) sourceOccurrences.set(origin, occurrence + 1);
+        const key = importedIdentity ? `import:${origin}:${occurrence}` : declared ?? `${path}/${index}`;
         if (keys.has(key)) throw new Error('Native document block identities must be unique.');
         keys.add(key);
         const previous = this.records.get(key);

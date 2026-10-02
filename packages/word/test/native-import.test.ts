@@ -87,3 +87,16 @@ test('opaque blocks remain in native reading order when a neighbouring paragraph
   expect(model.blocks.map(block => block.kind)).toEqual(['unsupported','paragraph','paragraph']);
   expect(geometry(model.layout(measurer))).toEqual(geometry(layoutWordDocument(model.artifact().document,measurer)));
 });
+
+test('imported paragraph continuations and independent copies retain the compatibility API', () => {
+  const source=richSource();const content=importWordContent(source);const first=content[0]!;
+  if(first.kind!=='paragraph') throw Error('paragraph');
+  const model=new NativeWordDocument({source});
+  model.update([first,{...first,sourceCopy:'copy'},...content.slice(1)]);
+  expect(model.paragraphs().slice(0,2).map(p=>p.text)).toEqual(['Heading\tLink','Heading\tLink']);
+  expect(geometry(model.layout(measurer))).toEqual(geometry(layoutWordDocument(model.artifact().document,measurer)));
+  const table=content.find(block=>block.kind==='table')!;
+  model.update([...content,table]);
+  expect(model.blocks.filter(block=>block.kind==='table')).toHaveLength(2);
+  expect(geometry(model.layout(measurer))).toEqual(geometry(layoutWordDocument(model.artifact().document,measurer)));
+});
