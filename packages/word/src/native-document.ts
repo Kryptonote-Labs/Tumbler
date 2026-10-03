@@ -41,6 +41,7 @@ interface RecordBlock {
   signature: string;
   block: WordBlock;
   drawings: readonly WordDrawing[];
+  tableGrid?: readonly (readonly { column: number; width: number }[])[];
 }
 
 /** Shared in-memory Word engine. Imports compile source properties once; only export writes a package. */
@@ -149,7 +150,9 @@ export class NativeWordDocument implements WordLayoutSource {
       });
     };
     const signature = (block: WordContentBlock, width: number) =>
-      `${width}:${JSON.stringify(block, (_key, value: unknown) => {
+      `${width}:${JSON.stringify(block, (key, value: unknown) => {
+        // Child records detect cell edits. Grid signatures only need table/cell properties.
+        if (block.kind === 'table' && key === 'blocks') return undefined;
         if (!(value instanceof Uint8Array)) return value;
         let id = this.imageIds.get(value);
         if (id === undefined) {
@@ -175,7 +178,28 @@ export class NativeWordDocument implements WordLayoutSource {
         const hasSection = source.kind === 'paragraph' && sectionOwners.get(`${source.sourceCopy ?? ''}:${source.source}`) === source;
         const fingerprint = `${hasSection}:${signature(source, width)}`;
         let result: RecordBlock;
-        if (source.kind === 'table') {
+        if (source.kind === 'table' && previous?.signature === fingerprint && previous.block.kind === 'table' && previous.tableGrid) {
+          // Visit semantic children for numbering, identities and section ownership, but keep
+          // the unchanged grid and cells instead of constructing a throwaway table.
+          const previousTable = previous.block;
+          const rows = previousTable.rows.map((row, rowIndex) => {
+            const cells = row.cells.map((cell, cellIndex) => {
+              const authored = source.rows[rowIndex]![cellIndex]!;
+              const geometry = previous.tableGrid![rowIndex]![cellIndex]!;
+              const blocks = visit(
+                authored.blocks.length ? authored.blocks : [{ kind: 'paragraph', runs: [] }],
+                geometry.width,
+                `${key}/${rowIndex}/${geometry.column}`,
+                compiled?.cells.get(authored.source!)?.blocks,
+              );
+              return blocks.length === cell.blocks.length && blocks.every((block, index) => block === cell.blocks[index])
+                ? cell : { ...cell, blocks };
+            });
+            return cells.every((cell, index) => cell === row.cells[index]) ? row : { ...row, cells };
+          });
+          result = rows.every((row, index) => row === previousTable.rows[index])
+            ? previous : { ...previous, block: { ...previous.block, rows } };
+        } else if (source.kind === 'table') {
           const originalTable = compiled?.tables.get(source.source!);
           const widthsChanged = source.columnWidths !== undefined && JSON.stringify(source.columnWidths.map(w => Math.round(w * 20))) !== JSON.stringify(originalTable?.gridColumnWidthsTwips);
           const layoutWidths = originalTable && !widthsChanged ? compiled?.tableWidths.get(originalTable.elementId) : source.columnWidths;
@@ -219,10 +243,7 @@ export class NativeWordDocument implements WordLayoutSource {
             },
             rows,
           };
-          result =
-            previous?.signature === fingerprint
-              ? previous
-              : { signature: fingerprint, block, drawings: [] };
+          result = { signature: fingerprint, block, drawings: [], tableGrid: grid.rows.map(row => row.map(({ column, width }) => ({ column, width }))) };
         } else {
           const authored: WordTextParagraph =
             source.kind === 'image' ? { runs: [{ text: '\uFFFC', image: source }] } : source;

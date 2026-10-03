@@ -85,3 +85,32 @@ test('replacing a whole table with several paragraphs removes its cell structure
   expect(tableParagraphs(body).every(paragraph=>!paragraph.table)).toBe(true);
   doc.destroy();
 });
+
+test('host validation reads staged documents and rejects edits atomically without a second replica', () => {
+  const doc = new Y.Doc();
+  const body = doc.getText('body');
+  body.insert(0, 'Original\n');
+  let inspected = 0;
+  let legacy = 0;
+  const commands = createWordCommands({
+    validateDocument(staged, original) {
+      expect(original).toBe(doc);
+      expect(original.getText('body').toString()).toBe('Original\n');
+      expect(staged.getText('body').toString()).toBe('Edited\n');
+      inspected += 1;
+    },
+    validateUpdate() { legacy += 1; },
+  });
+  const changes = [{ kind: 'replace' as const, target: commands.anchorWordRange(body, { start: 0, end: 8 }), value: 'Edited' }];
+  const delta = commands.wordTransaction(body, changes);
+  commands.validateWordDelta(body, delta);
+  expect(inspected).toBe(2);
+  expect(legacy).toBe(2);
+  const rejecting = createWordCommands({ validateDocument() { throw new Error('Host rejected'); } });
+  expect(() => rejecting.wordTransaction(body, changes)).toThrow('Host rejected');
+  expect(() => rejecting.validateWordDelta(body, delta)).toThrow('Host rejected');
+  expect(body.toString()).toBe('Original\n');
+  body.applyDelta(delta);
+  expect(body.toString()).toBe('Edited\n');
+  doc.destroy();
+});

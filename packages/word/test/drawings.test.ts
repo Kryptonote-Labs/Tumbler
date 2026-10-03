@@ -52,6 +52,25 @@ describe("WordprocessingML drawings", () => {
     expect([...artifact.document.drawings.values()][0]).toMatchObject({ kind: "chart", model: { status: "supported", kind: "pie" } });
   });
 
+  test.each(["<c:pieChart/>", "<c:barChart/><c:lineChart/>"])("repeated chart frames share an immutable model: %s", (plot) => {
+    const frame = drawing("chart", `<c:chart r:id="chart"/>`, "Sales chart", c);
+    const artifact = open(frame + frame, [
+      { id: "chart", type: `${r}/chart`, target: "charts/chart1.xml" },
+    ], [{ itemName: "word/charts/chart1.xml", contentType: "application/vnd.openxmlformats-officedocument.drawingml.chart+xml", xml: `<c:chartSpace xmlns:c="${c}" xmlns:a="${a}"><c:chart><c:plotArea>${plot}</c:plotArea></c:chart></c:chartSpace>` }]);
+    const [first, second] = [...artifact.document.drawings.values()];
+    if (first?.kind !== "chart" || second?.kind !== "chart") throw new Error("Expected chart frames");
+    expect(first.model).toBe(second.model);
+    expect(Object.isFrozen(first.model)).toBe(true);
+    if (first.model.status === "supported") {
+      expect(Object.isFrozen(first.model.series)).toBe(true);
+      if (first.model.plots) {
+        expect(first.model.plots).toHaveLength(2);
+        expect(Object.isFrozen(first.model.plots)).toBe(true);
+        expect(first.model.plots.every(Object.isFrozen)).toBe(true);
+      }
+    }
+  });
+
   test("models anchored placement without fetching external images", () => {
     const body = `<w:p><w:r><w:drawing><wp:anchor behindDoc="1" allowOverlap="1" distT="12700"><wp:extent cx="127000" cy="127000"/><wp:positionH relativeFrom="margin"><wp:posOffset>25400</wp:posOffset></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>38100</wp:posOffset></wp:positionV><wp:wrapNone/><wp:docPr id="1" name="Remote"/><a:graphic><a:graphicData uri="${pic}"><pic:pic><pic:blipFill><a:blip r:embed="remote"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>`;
     const artifact = open(body, [{ id: "remote", type: `${r}/image`, target: "https://example.test/image.png", targetMode: "External" }]);

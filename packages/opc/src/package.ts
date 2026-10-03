@@ -9,6 +9,7 @@ import {
 } from "./relationships.ts";
 import { openZipArchive, type OpenZipArchiveOptions, type ZipArchive, type ZipEntry } from "./zip/archive.ts";
 import { writeZipArchive } from "./zip/writer.ts";
+import { PartCache } from "./part-cache.ts";
 
 const CONTENT_TYPES_ITEM_NAME = "[Content_Types].xml";
 const RELATIONSHIPS_CONTENT_TYPE =
@@ -19,6 +20,11 @@ const OFFICE_DOCUMENT_RELATIONSHIP_TYPES = new Set([
 ]);
 
 export type OfficeDocumentFamily = "word" | "spreadsheet" | "presentation";
+
+export interface OpenOpcPackageOptions extends OpenZipArchiveOptions {
+  /** Maximum retained decompressed part bytes. Defaults to 8 MiB; zero disables caching. */
+  readonly maximumCachedPartBytes?: number;
+}
 
 export type OpcPackageErrorCode =
   | "duplicate_part"
@@ -62,12 +68,15 @@ export class OpcPackage {
   readonly contentTypes: ContentTypes;
   readonly parts: readonly OpcPart[];
   readonly #partsByName: ReadonlyMap<string, OpcPart>;
+  readonly #partCache: PartCache;
+  readonly #relationships = new Map<string, Relationships>();
 
-  constructor(archive: ZipArchive, contentTypes: ContentTypes, parts: readonly OpcPart[]) {
+  constructor(archive: ZipArchive, contentTypes: ContentTypes, parts: readonly OpcPart[], options: OpenOpcPackageOptions = {}) {
     this.archive = archive;
     this.contentTypes = contentTypes;
     this.parts = Object.freeze([...parts]);
     this.#partsByName = new Map(parts.map((part) => [part.name.equivalenceKey, part]));
+    this.#partCache = new PartCache(options.maximumCachedPartBytes ?? 8 * 1024 * 1024);
   }
 
   getPart(name: PartName | string): OpcPart | undefined {
@@ -79,7 +88,13 @@ export class OpcPackage {
     if (this.#partsByName.get(part.name.equivalenceKey)?.entry !== part.entry) {
       throw new TypeError("The part does not belong to this package.");
     }
-    return this.archive.read(part.entry);
+    return this.#partCache.read(part.name.equivalenceKey, () => this.archive.read(part.entry));
+  }
+
+  /** Releases cached decompressed bytes and parsed relationships without changing the package. */
+  clearReadCache(): void {
+    this.#partCache.clear();
+    this.#relationships.clear();
   }
 
   relationships(source: PartName | null): Relationships {
@@ -90,6 +105,9 @@ export class OpcPackage {
         { partName: source.value },
       );
     }
+    const key = source?.equivalenceKey ?? "/";
+    const cached = this.#relationships.get(key);
+    if (cached !== undefined) return cached;
     const relationships = parseRelationships(this.archive, source);
     for (const relationship of relationships.items) {
       if (
@@ -113,6 +131,8 @@ export class OpcPackage {
         );
       }
     }
+    Object.freeze(relationships);
+    this.#relationships.set(key, relationships);
     return relationships;
   }
 
@@ -161,7 +181,7 @@ export class OpcPackage {
 
 export function openOpcPackage(
   source: Uint8Array,
-  options: OpenZipArchiveOptions = {},
+  options: OpenOpcPackageOptions = {},
 ): OpcPackage {
   const archive = openZipArchive(source, options);
   const contentTypes = parseContentTypes(archive);
@@ -225,7 +245,7 @@ export function openOpcPackage(
       );
     }
   }
-  return new OpcPackage(archive, contentTypes, parts);
+  return new OpcPackage(archive, contentTypes, parts, options);
 }
 
 export function saveOpcPackage(

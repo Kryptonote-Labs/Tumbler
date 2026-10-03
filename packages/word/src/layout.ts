@@ -195,13 +195,30 @@ export function wordLayoutStories(document: WordDocument): WordLayoutStories {
   return result;
 }
 
-/** Prepared geometry belongs to immutable paragraphs and the font measurer that produced it. */
+/** Prepared geometry belongs to immutable blocks and the font measurer that produced it. */
 export class WordLayoutCache {
   pages: readonly WordLayoutPage[] = [];
   readonly translated = new WeakMap<WordLayoutLine, { dx: number; dy: number; value: WordLayoutLine }>();
   readonly lines = new WeakMap<PreparedLine, { marker: PreparedMarker | undefined; value: WordLayoutLine }>();
   readonly paragraphs = new WeakMap<WordParagraph, { width: number; marker: string; measurer: WordTextMeasurer; value: PreparedParagraph }>();
+  readonly tables = new WeakMap<WordTable, {
+    width: number;
+    measurer: WordTextMeasurer;
+    markers: readonly (readonly [number, string])[];
+    value: PreparedTable;
+  }>();
+  // Keep slices from only the current and preceding layout, including very long tables.
+  layoutRevision = 0;
+  readonly tableSlices = new WeakMap<PreparedTable, {
+    revision: number;
+    previous: Map<string, PreparedTable>;
+    current: Map<string, PreparedTable>;
+  }>();
+  readonly tablePlacements = new WeakMap<PreparedTable, {
+    x: number; y: number; fragments: number; value: WordLayoutTable;
+  }>();
   measuredParagraphs = 0;
+  preparedTables = 0;
 }
 
 type ParagraphAtom = GlyphAtom | TabAtom | DrawingAtom | NoteAtom | BreakAtom;
@@ -276,6 +293,7 @@ interface PreparedTable {
   readonly columnOffsets: readonly number[];
   readonly rowHeights: readonly number[];
   readonly cells: readonly PreparedTableCell[];
+  readonly cellsByRow: readonly (readonly PreparedTableCell[])[];
 }
 
 interface PreparedTableCell {
@@ -319,6 +337,7 @@ export function layoutWordSource(
   options: WordLayoutOptions = {},
   stories?: WordLayoutStories,
 ): WordLayout {
+  if (document.cache) document.cache.layoutRevision += 1;
   const budget: LayoutBudget = {
     cache: document.cache,
     maxPages: limit(options.maxPages, 10_000, "page"),
@@ -390,7 +409,7 @@ export function layoutWordSource(
             advanceColumn(section.properties);
             continue;
           }
-          const slice = slicePreparedTable(preparedTable, selected);
+          const slice = slicePreparedTable(preparedTable, selected, document.cache);
           target.tables.push(placeTable(slice, target.x, cursorY, budget));
           cursorY += used;
           if (groupIndex < groups.length) advanceColumn(section.properties);
@@ -468,6 +487,10 @@ function prepareTable(
   measurer: WordTextMeasurer,
   listMarkers: ReadonlyMap<number, WordListMarker>,
 ): PreparedTable {
+  const cached = document.cache?.tables.get(table);
+  if (cached && cached.width === availableWidth && cached.measurer === measurer &&
+    cached.markers.every(([id, marker]) => marker === JSON.stringify(listMarkers.get(id) ?? null))) return cached.value;
+  if (document.cache) document.cache.preparedTables += 1;
   const grid = resolveWordTableGrid(table);
   const gridTotal = Math.max(1, grid.columnWidthsTwips.reduce((sum, value) => sum + value, 0));
   const requested = table.properties.width?.type === "dxa" ? points(table.properties.width.value)
@@ -508,7 +531,21 @@ function prepareTable(
       ? Math.max(1, points(source.heightTwips))
       : Math.max(rowHeights[index] ?? 0, 12);
   }
-  return Object.freeze({ table, xOffset, width, columnOffsets: Object.freeze(columnOffsets), rowHeights: Object.freeze(rowHeights), cells: Object.freeze(preparedCells) });
+  const cellsByRow = rowHeights.map((): PreparedTableCell[] => []);
+  for (const cell of preparedCells) cellsByRow[cell.resolved.row]!.push(cell);
+  const value = Object.freeze({ table, xOffset, width, columnOffsets: Object.freeze(columnOffsets), rowHeights: Object.freeze(rowHeights), cells: Object.freeze(preparedCells), cellsByRow: Object.freeze(cellsByRow.map(row => Object.freeze(row))) });
+  if (document.cache) {
+    const markers: [number, string][] = [];
+    const collect = (blocks: readonly WordBlock[]) => {
+      for (const block of blocks) {
+        if (block.kind === "paragraph") markers.push([block.elementId, JSON.stringify(listMarkers.get(block.elementId) ?? null)]);
+        else if (block.kind === "table") for (const row of block.rows) for (const cell of row.cells) collect(cell.blocks);
+      }
+    };
+    for (const row of table.rows) for (const cell of row.cells) collect(cell.blocks);
+    document.cache.tables.set(table, { width: availableWidth, measurer, markers, value });
+  }
+  return value;
 }
 
 function leadingHeaderRows(prepared: PreparedTable): readonly number[] {
@@ -520,16 +557,15 @@ function leadingHeaderRows(prepared: PreparedTable): readonly number[] {
 /** Groups rows which cannot be separated because of cantSplit or a vertical merge. */
 function tableRowGroups(prepared: PreparedTable): readonly (readonly number[])[] {
   const groups: number[][] = [];
+  const rowEnds = prepared.rowHeights.map((_, row) => row + 1);
+  for (const cell of prepared.cells) {
+    const { row, rowSpan } = cell.resolved;
+    rowEnds[row] = Math.max(rowEnds[row]!, Math.min(rowEnds.length, row + rowSpan));
+  }
   let start = 0;
-  while (start < prepared.rowHeights.length) {
+  while (start < rowEnds.length) {
     let end = start + 1;
-    for (;;) {
-      const spanningEnd = prepared.cells
-        .filter((cell) => cell.resolved.row < end && cell.resolved.row + cell.resolved.rowSpan > end)
-        .reduce((maximum, cell) => Math.max(maximum, cell.resolved.row + cell.resolved.rowSpan), end);
-      if (spanningEnd === end) break;
-      end = Math.min(prepared.rowHeights.length, spanningEnd);
-    }
+    for (let row = start; row < end; row += 1) end = Math.max(end, rowEnds[row]!);
     // cantSplit prevents splitting the row itself; rows are already the minimum pagination unit.
     groups.push(Array.from({ length: end - start }, (_, index) => start + index));
     start = end;
@@ -541,9 +577,20 @@ function rowSetHeight(prepared: PreparedTable, rows: readonly number[]): number 
   return rows.reduce((sum, row) => sum + prepared.rowHeights[row]!, 0);
 }
 
-function slicePreparedTable(prepared: PreparedTable, rows: readonly number[]): PreparedTable {
+function slicePreparedTable(prepared: PreparedTable, rows: readonly number[], cache?: WordLayoutCache): PreparedTable {
+  let slices = cache?.tableSlices.get(prepared);
+  if (cache && (!slices || slices.revision !== cache.layoutRevision)) {
+    slices = { revision: cache.layoutRevision, previous: slices?.current ?? new Map(), current: new Map() };
+    cache.tableSlices.set(prepared, slices);
+  }
+  const key = rows.join(',');
+  const cached = slices?.current.get(key) ?? slices?.previous.get(key);
+  if (cached) {
+    slices!.current.set(key, cached);
+    return cached;
+  }
   const rowMap = new Map(rows.map((row, index) => [row, index]));
-  const cells = prepared.cells.flatMap((cell): PreparedTableCell[] => {
+  const cells = rows.flatMap(row => prepared.cellsByRow[row]!).flatMap((cell): PreparedTableCell[] => {
     const row = rowMap.get(cell.resolved.row);
     if (row === undefined) return [];
     const covered = Array.from({ length: cell.resolved.rowSpan }, (_, index) => cell.resolved.row + index);
@@ -553,14 +600,26 @@ function slicePreparedTable(prepared: PreparedTable, rows: readonly number[]): P
       resolved: Object.freeze({ ...cell.resolved, row, rowSpan: covered.length }),
     })];
   });
-  return Object.freeze({
+  const cellsByRow = rows.map((): PreparedTableCell[] => []);
+  for (const cell of cells) cellsByRow[cell.resolved.row]!.push(cell);
+  const value = Object.freeze({
     ...prepared,
     rowHeights: Object.freeze(rows.map((row) => prepared.rowHeights[row]!)),
     cells: Object.freeze(cells),
+    cellsByRow: Object.freeze(cellsByRow.map(row => Object.freeze(row))),
   });
+  slices?.current.set(key, value);
+  return value;
 }
 
 function placeTable(prepared: PreparedTable, columnX: number, y: number, budget: LayoutBudget): WordLayoutTable {
+  const cached = budget.cache?.tablePlacements.get(prepared);
+  if (cached && cached.x === columnX && cached.y === y) {
+    budget.fragments += cached.fragments;
+    if (budget.fragments > budget.maxFragments) throw new WordError("limit_exceeded", `Layout exceeds ${budget.maxFragments} fragments.`);
+    return cached.value;
+  }
+  const before = budget.fragments;
   const rowOffsets = [0];
   for (const height of prepared.rowHeights) rowOffsets.push(rowOffsets.at(-1)! + height);
   const x = columnX + prepared.xOffset;
@@ -612,7 +671,9 @@ function placeTable(prepared: PreparedTable, columnX: number, y: number, budget:
       tables: Object.freeze(fake.tables),
     });
   });
-  return Object.freeze({ tableElementId: prepared.table.elementId, x, y, width: prepared.width, height: rowOffsets.at(-1)!, cells: Object.freeze(cells) });
+  const value = Object.freeze({ tableElementId: prepared.table.elementId, x, y, width: prepared.width, height: rowOffsets.at(-1)!, cells: Object.freeze(cells) });
+  budget.cache?.tablePlacements.set(prepared, { x: columnX, y, fragments: budget.fragments - before, value });
+  return value;
 }
 
 function prepareParagraph(
