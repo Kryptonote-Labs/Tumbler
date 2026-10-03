@@ -5,7 +5,10 @@ import { WordParagraphProjection, WordTableProjection, groupTableParagraphs, ins
 function equivalent(text: Y.Text, paragraphs: readonly WordParagraphSlice[]) {
   const copy = new Y.Doc();
   copy.getText('body').applyDelta(paragraphs.flatMap(paragraph => paragraph.parts.map(part => ({ ...part }))));
-  const characters = (body: Y.Text) => body.toDelta().flatMap(part => [...String(part.insert)].map(character => ({ character, attributes: part.attributes ?? {} })));
+  const characters = (body: Y.Text) => {
+    const parts: readonly { insert: unknown; attributes?: unknown }[] = body.toDelta();
+    return parts.flatMap(part => [...String(part.insert)].map(character => ({ character, attributes: part.attributes ?? {} })));
+  };
   expect(characters(copy.getText('body'))).toEqual(characters(text));
   let offset = 0;
   for (const paragraph of paragraphs) {
