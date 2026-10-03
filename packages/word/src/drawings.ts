@@ -64,13 +64,16 @@ export function readWordDrawings(input: {
   let relationships: Relationships | undefined;
   try { relationships = input.package.relationships(input.part.name); }
   catch (cause) { if (!(cause instanceof RelationshipsError) || cause.code !== "missing_item") throw cause; }
-  return new Map(elements.map((element) => [element.id, parseDrawing(input, element, relationships)]));
+  // Parsed models are immutable; repeated chart frames can share them for this import.
+  const charts = new Map<string, ChartModel>();
+  return new Map(elements.map((element) => [element.id, parseDrawing(input, element, relationships, charts)]));
 }
 
 function parseDrawing(
   input: { readonly package: OpcPackage; readonly source: LosslessXmlDocument; readonly conformance: WordConformance },
   drawing: LosslessXmlElement,
   relationships: Relationships | undefined,
+  charts: Map<string, ChartModel>,
 ): WordDrawing {
   const wp = wordDrawingNamespace(input.conformance);
   const placements = drawing.children.filter((child): child is LosslessXmlElement => child.kind === "element" && child.namespaceUri === wp && (child.localName === "inline" || child.localName === "anchor"));
@@ -98,7 +101,12 @@ function parseDrawing(
     const part = input.package.getPart(relationship.targetPartName);
     if (part?.contentType !== CHART_CONTENT_TYPE) return unsupported(drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, "Chart relationship target has the wrong content type.");
     try {
-      return Object.freeze({ kind: "chart", elementId: drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, relationshipId: id, partName: part.name, model: parseOoxmlChart(input.package.readPart(part), input.conformance) });
+      let model = charts.get(part.name.equivalenceKey);
+      if (model === undefined) {
+        model = parseOoxmlChart(input.package.readPart(part), input.conformance);
+        charts.set(part.name.equivalenceKey, model);
+      }
+      return Object.freeze({ kind: "chart", elementId: drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, relationshipId: id, partName: part.name, model });
     } catch (cause) {
       if (!(cause instanceof ChartParseError)) throw cause;
       return unsupported(drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, cause.message);

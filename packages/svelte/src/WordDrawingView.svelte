@@ -111,7 +111,7 @@
 
 {#snippet content()}
   {#if drawing.kind === 'image'}
-    <img src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" />
+    <img src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading="lazy" decoding="async" />
   {:else if drawing.kind === 'chart'}
     <OoxmlChart model={drawing.model} width={displayWidth} height={displayHeight} clipId={`word-drawing-${drawing.elementId}`} />
   {:else}

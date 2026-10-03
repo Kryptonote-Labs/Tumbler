@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import {
   ContentTypesError,
   openOpcPackage,
@@ -39,6 +39,25 @@ const formats = [
 ] as const;
 
 describe("OPC package", () => {
+  test("reuses validated reads and relationships until explicitly released", () => {
+    const pkg = openOpcPackage(buildOfficePackage(formats[0].main, formats[0].contentType));
+    const main = pkg.mainOfficeDocumentPart();
+    const read = spyOn(pkg.archive, "read");
+    try {
+      const first = pkg.readPart(main);
+      first.fill(0);
+      expect(pkg.readPart(main)).toEqual(new TextEncoder().encode("<main/>"));
+      expect(read).toHaveBeenCalledTimes(1);
+      const relationships = pkg.relationships(null);
+      expect(pkg.relationships(null)).toBe(relationships);
+      expect(read).toHaveBeenCalledTimes(1);
+      pkg.clearReadCache();
+      expect(pkg.relationships(null)).not.toBe(relationships);
+      expect(pkg.readPart(main)).toEqual(new TextEncoder().encode("<main/>"));
+      expect(read).toHaveBeenCalledTimes(3);
+    } finally { read.mockRestore(); }
+  });
+
   for (const format of formats) {
     test(`discovers a ${format.family} main part from relationships`, () => {
       const pkg = openOpcPackage(buildOfficePackage(format.main, format.contentType));
