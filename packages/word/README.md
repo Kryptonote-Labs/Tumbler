@@ -255,3 +255,19 @@ for selection inspection and inserted text. The adapter does not provide authent
 
 `wordParagraphIdentity(body, newlineOffset)` follows paragraph terminators through edits and remote
 updates. It avoids a repeated scan from the start of the CRDT when projecting stable native block IDs.
+
+`WordParagraphProjection(body, project)` consumes Yjs transaction deltas and retains unchanged
+paragraph slices. A slice contains its stable terminator identity, UTF-16 length and formatted parts,
+including the newline when present. The `paragraphs` getter invokes `project(slice)` only for changed
+slices. Treat slices and projected values as immutable, and call `destroy()` when finished.
+`WordTableProjection.update(paragraphs)` reuses table trees whose projected paragraphs are unchanged,
+while checking table contiguity across the entire result. These projections keep conversion work near
+the edited paragraphs; updating offset arrays and semantic traversal still depends on document size.
+
+Hosts that retain immutable authored objects can construct `NativeWordDocument` with
+`immutableContent: true` to cache their signatures by identity. This is an explicit promise that
+blocks and all descendants will not be mutated after being supplied. The default continues to detect
+in-place authored-content changes. Paragraph text extraction is cached by immutable native-node
+identity in both modes. Unchanged immutable tables without numbering or source-continuation
+dependencies replay their retained descendants instead of rebuilding them; duplicate identity checks
+and drawing registration still run. Tables with those dependencies retain semantic traversal.

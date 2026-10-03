@@ -125,3 +125,38 @@ test('cached table slices retain merged rows across changed page breaks and enfo
   document.update([paragraph('before', 'Before'), table]);
   compare(document);
 });
+
+test('immutable subtree reuse preserves drawings, identity checks and parent-width dependencies', () => {
+  const document = new NativeWordDocument({ immutableContent: true });
+  const png = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=', 'base64'));
+  const nested: WordContentBlock = { kind: 'table', id: 'nested', rows: [[{ blocks: [
+    paragraph('text', 'Words that wrap when the parent gets narrower. '.repeat(4)),
+    { kind: 'paragraph', id: 'picture', runs: [{ text: '\uFFFC', image: { bytes: png, contentType: 'image/png', width: 20, height: 20 } }] },
+  ] }]] };
+  const outer = (width: number): WordContentBlock => ({ kind: 'table', id: 'outer', columnWidths: [width], rows: [[{
+    blocks: [nested, paragraph('trailing', '')],
+  }]] });
+  const original = outer(300);
+  document.update([paragraph('before', 'Before'), original]);
+  compare(document);
+  const native = document.blocks[1];
+  const drawing = [...document.drawings.values()][0];
+  document.update([paragraph('before', 'Edited'), original]);
+  expect(document.blocks[1]).toBe(native);
+  expect([...document.drawings.values()][0]).toBe(drawing);
+  compare(document);
+  expect(() => document.update([paragraph('text', 'Duplicate'), original])).toThrow('unique');
+  document.update([outer(150)]);
+  compare(document);
+});
+
+test('default authored updates still detect in-place changes after paragraph text was cached', () => {
+  const document = new NativeWordDocument();
+  const run = { text: 'First' };
+  const block: WordContentBlock = { kind: 'paragraph', id: 'mutable', runs: [run] };
+  document.update([block]);
+  expect(document.paragraphs()[0]!.text).toBe('First');
+  run.text = 'Changed';
+  document.update([block]);
+  expect(document.paragraphs()[0]!.text).toBe('Changed');
+});
