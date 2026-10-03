@@ -66,7 +66,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
     if (plots.some(p=>p.kind === "bar") && plots.some(p=>p.kind !== "bar")) return unsupported("combination", "Mixed horizontal and vertical plots are unsupported.", title, titleFormula, legend);
     const series = plots.flatMap(p=>p.series);
     if (series.length > MAX_SERIES) throw new ChartParseError("Too many combination series.");
-    return {...plots[0]!, plots, series};
+    return Object.freeze({ ...plots[0]!, plots: Object.freeze(plots), series: Object.freeze(series) });
   }
   const chartType = candidates[0]!;
   const kind = chartKind(chartType, chartNamespace);
