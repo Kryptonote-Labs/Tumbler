@@ -211,6 +211,11 @@ model instance. Both APIs preserve untouched package parts, section properties, 
 XML. Source identifiers refer to the original package, never to a later exported revision.
 Table content includes cell spans, vertical merges, column widths and source row/cell identities.
 Created and imported documents share reconciliation, measurement caching and pagination.
+Unchanged table grids, prepared cells and matching page slices reuse geometry. Width, font measurer,
+cell content and list-marker changes invalidate the relevant cache. Page slices are retained for the
+current and preceding layout; cached placements still count towards fragment limits. Native updates
+continue to visit semantic children so list numbering, source continuations and identity checks stay
+current.
 Keep original package bytes outside frequently rewritten collaboration snapshots.
 `createWordSourceManifest(source)` supplies immutable reference IDs for validating remote updates
 without reparsing source XML. It also includes resolved default text formatting for headless consumers.
@@ -242,7 +247,10 @@ replace, format, image and table operations. Batch preflight is atomic and rejec
 text. Yjs supplies synchronization and selective undo. The adapter validates text, grapheme boundaries,
 formatting and table structure. Hosts provide optional `validateAttributes` and `validateUpdate` hooks
 for their schema, immutable import provenance and asset references, and enforce permissions when
-accepting updates. A `defaultAttributes(body)` callback supplies document-specific formatting defaults
+accepting updates. Hosts can instead use `validateDocument(staged, original)` to inspect the existing
+preflight replica without decoding another copy. This synchronous hook runs after built-in validation;
+it must not mutate either document and can throw to reject the edit atomically. If both document and
+encoded-update hooks are supplied, both run. A `defaultAttributes(body)` callback supplies document-specific formatting defaults
 for selection inspection and inserted text. The adapter does not provide authenticated networking or persistence.
 
 `wordParagraphIdentity(body, newlineOffset)` follows paragraph terminators through edits and remote

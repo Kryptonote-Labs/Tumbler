@@ -43,6 +43,7 @@ export {
 export type {
   MainOfficeDocumentPart,
   OfficeDocumentFamily,
+  OpenOpcPackageOptions,
   OpcPackageErrorCode,
   OpcPart,
 } from "./package.ts";

@@ -42,8 +42,7 @@
     return typeof point === "number" ? cartesianStack(model, model.series.indexOf(series), index)?.end : undefined;
   }
 
-  function linePath(model: SupportedChartModel, series: ChartSeries): string {
-    const layout = layoutCartesianChart(model, width, height);
+  function linePath(model: SupportedChartModel, series: ChartSeries, layout: ReturnType<typeof layoutCartesianChart>): string {
     const count = Math.max(1, layout.categories.length);
     let path = "";
     let previous = -2;
@@ -351,7 +350,7 @@
       {/each}
     {:else}
       {#each model.series as series, seriesIndex (series.index)}
-        <path d={linePath(model, series)} fill="none" stroke={color(series, seriesIndex, true)} stroke-width="2" />
+        <path d={linePath(model, series, layout)} fill="none" stroke={color(series, seriesIndex, true)} stroke-width="2" />
         {#each layout.categories as _category, index (index)}
           {@const current = value(model, series, index)}
           {#if current !== undefined}
