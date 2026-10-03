@@ -5,3 +5,5 @@ export * from './tables.ts';
 export * from './table-edits.ts';
 export { validateText, validateWordText } from './validation.ts';
 export { wordParagraphIdentity } from './paragraph-identity.ts';
+export { WordParagraphProjection, type WordParagraphSlice, type WordParagraphPart } from './paragraph-projection.ts';
+export { WordTableProjection } from './table-projection.ts';

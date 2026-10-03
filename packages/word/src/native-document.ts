@@ -35,6 +35,8 @@ import {
 
 export interface NativeWordOptions extends Omit<CreateWordOptions, 'blocks' | 'paragraphs'> {
   readonly source?: WordArtifact;
+  /** Reuse signatures by authored object identity. All supplied blocks and descendants must remain immutable. */
+  readonly immutableContent?: boolean;
 }
 
 interface RecordBlock {
@@ -42,6 +44,7 @@ interface RecordBlock {
   block: WordBlock;
   drawings: readonly WordDrawing[];
   tableGrid?: readonly (readonly { column: number; width: number }[])[];
+  subtree?: { input: WordContentBlock; records: readonly (readonly [string, RecordBlock])[] } | undefined;
 }
 
 /** Shared in-memory Word engine. Imports compile source properties once; only export writes a package. */
@@ -56,6 +59,19 @@ export class NativeWordDocument implements WordLayoutSource {
   private runFormats = new WeakMap<WordRun, ComputedWordTextFormat>();
   private imageIds = new WeakMap<Uint8Array, number>();
   private nextImageId = 0;
+  private readonly signatures = new WeakMap<WordContentBlock, string>();
+  private readonly paragraphTexts = new WeakMap<WordParagraph, string>();
+  private readonly independentBlocks = new WeakMap<WordContentBlock, boolean>();
+  // Source continuations and numbering depend on preceding content and must still be visited.
+  private independent(block: WordContentBlock): boolean {
+    const cached = this.independentBlocks.get(block);
+    if (cached !== undefined) return cached;
+    const value = (!('source' in block) || block.source === undefined) &&
+      (block.kind !== 'paragraph' || !block.list) &&
+      (block.kind !== 'table' || block.rows.every(row => row.every(cell => cell.blocks.every(child => this.independent(child)))));
+    this.independentBlocks.set(block, value);
+    return value;
+  }
   blocks: readonly WordBlock[] = [];
   drawings: ReadonlyMap<number, WordDrawing> = new Map();
   listMarkers: ReadonlyMap<number, WordListMarker> = new Map();
@@ -117,6 +133,7 @@ export class NativeWordDocument implements WordLayoutSource {
 
   update(input: readonly WordContentBlock[]) {
     const records = new Map<string, RecordBlock>();
+    const visited: (readonly [string, RecordBlock])[] = [];
     const keys = new Set<string>();
     const sourceOccurrences = new Map<string, number>();
     const drawings = new Map<number, WordDrawing>();
@@ -149,8 +166,9 @@ export class NativeWordDocument implements WordLayoutSource {
         fontSizePoints: Math.round(value.fontSizePoints * 2) / 2,
       });
     };
-    const signature = (block: WordContentBlock, width: number) =>
-      `${width}:${JSON.stringify(block, (key, value: unknown) => {
+    const signature = (block: WordContentBlock, width: number) => {
+      let serialized = this.options.immutableContent ? this.signatures.get(block) : undefined;
+      serialized ??= JSON.stringify(block, (key, value: unknown) => {
         // Child records detect cell edits. Grid signatures only need table/cell properties.
         if (block.kind === 'table' && key === 'blocks') return undefined;
         if (!(value instanceof Uint8Array)) return value;
@@ -160,7 +178,10 @@ export class NativeWordDocument implements WordLayoutSource {
           this.imageIds.set(value, id);
         }
         return { nativeImage: id };
-      })}`;
+      });
+      if (this.options.immutableContent) this.signatures.set(block, serialized);
+      return `${width}:${serialized}`;
+    };
     const visit = (blocks: readonly WordContentBlock[], width: number, path: string, originalBlocks: readonly WordBlock[] = []): WordBlock[] => {
       const output = blocks.map((source, index) => {
         const declared = 'id' in source ? source.id : undefined;
@@ -177,8 +198,18 @@ export class NativeWordDocument implements WordLayoutSource {
         const original = source.kind === 'paragraph' ? compiled?.paragraphs.get(source.source!) : undefined;
         const hasSection = source.kind === 'paragraph' && sectionOwners.get(`${source.sourceCopy ?? ''}:${source.source}`) === source;
         const fingerprint = `${hasSection}:${signature(source, width)}`;
+        const descendantsStart = visited.length;
         let result: RecordBlock;
-        if (source.kind === 'table' && previous?.signature === fingerprint && previous.block.kind === 'table' && previous.tableGrid) {
+        if (this.options.immutableContent && previous?.signature === fingerprint && previous.subtree?.input === source) {
+          for (const [childKey, child] of previous.subtree.records) {
+            if (keys.has(childKey)) throw new Error('Native document block identities must be unique.');
+            keys.add(childKey);
+            records.set(childKey, child);
+            visited.push([childKey, child]);
+            for (const drawing of child.drawings) drawings.set(drawing.elementId, drawing);
+          }
+          result = previous;
+        } else if (source.kind === 'table' && previous?.signature === fingerprint && previous.block.kind === 'table' && previous.tableGrid) {
           // Visit semantic children for numbering, identities and section ownership, but keep
           // the unchanged grid and cells instead of constructing a throwaway table.
           const previousTable = previous.block;
@@ -352,7 +383,12 @@ export class NativeWordDocument implements WordLayoutSource {
             });
           }
         }
+        if (this.options.immutableContent && source.kind === 'table' && result.subtree?.input !== source) {
+          result = { ...result, subtree: this.independent(source)
+            ? { input: source, records: visited.slice(descendantsStart) } : undefined };
+        }
         records.set(key, result);
+        if (this.options.immutableContent) visited.push([key, result]);
         for (const drawing of result.drawings) drawings.set(drawing.elementId, drawing);
         return result.block;
       });
@@ -385,7 +421,11 @@ export class NativeWordDocument implements WordLayoutSource {
         if (block.kind === 'table')
           return block.rows.flatMap((row) => row.cells.flatMap((cell) => visit(cell.blocks)));
         if (block.kind !== 'paragraph') return [];
-        const text = wordParagraphText(undefined, block).replaceAll('\n', '\u2028');
+        let text = this.paragraphTexts.get(block);
+        if (text === undefined) {
+          text = wordParagraphText(undefined, block).replaceAll('\n', '\u2028');
+          this.paragraphTexts.set(block, text);
+        }
         const value = { id: block.elementId, start, end: start + text.length, text };
         start += text.length + 1;
         return [value];
