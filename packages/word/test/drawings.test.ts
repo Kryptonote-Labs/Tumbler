@@ -52,15 +52,23 @@ describe("WordprocessingML drawings", () => {
     expect([...artifact.document.drawings.values()][0]).toMatchObject({ kind: "chart", model: { status: "supported", kind: "pie" } });
   });
 
-  test("repeated chart frames share an immutable model", () => {
+  test.each(["<c:pieChart/>", "<c:barChart/><c:lineChart/>"])("repeated chart frames share an immutable model: %s", (plot) => {
     const frame = drawing("chart", `<c:chart r:id="chart"/>`, "Sales chart", c);
     const artifact = open(frame + frame, [
       { id: "chart", type: `${r}/chart`, target: "charts/chart1.xml" },
-    ], [{ itemName: "word/charts/chart1.xml", contentType: "application/vnd.openxmlformats-officedocument.drawingml.chart+xml", xml: `<c:chartSpace xmlns:c="${c}" xmlns:a="${a}"><c:chart><c:plotArea><c:pieChart/></c:plotArea></c:chart></c:chartSpace>` }]);
+    ], [{ itemName: "word/charts/chart1.xml", contentType: "application/vnd.openxmlformats-officedocument.drawingml.chart+xml", xml: `<c:chartSpace xmlns:c="${c}" xmlns:a="${a}"><c:chart><c:plotArea>${plot}</c:plotArea></c:chart></c:chartSpace>` }]);
     const [first, second] = [...artifact.document.drawings.values()];
     if (first?.kind !== "chart" || second?.kind !== "chart") throw new Error("Expected chart frames");
     expect(first.model).toBe(second.model);
     expect(Object.isFrozen(first.model)).toBe(true);
+    if (first.model.status === "supported") {
+      expect(Object.isFrozen(first.model.series)).toBe(true);
+      if (first.model.plots) {
+        expect(first.model.plots).toHaveLength(2);
+        expect(Object.isFrozen(first.model.plots)).toBe(true);
+        expect(first.model.plots.every(Object.isFrozen)).toBe(true);
+      }
+    }
   });
 
   test("models anchored placement without fetching external images", () => {
