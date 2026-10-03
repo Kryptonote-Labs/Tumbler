@@ -73,3 +73,55 @@ test('invalid updates leave content and exported document unchanged', () => {
   expect(document.paragraphs()[0]?.text).toBe('Preserve');
   compare(document);
 });
+
+test('unchanged nested tables reuse prepared geometry while numbering, fonts and cell edits invalidate it', () => {
+  const document = new NativeWordDocument();
+  const item = (id: string, text: string): WordContentBlock => ({
+    kind: 'paragraph', id, runs: [{ text }], list: { id: 'shared', kind: 'decimal' },
+  });
+  const table = (text = 'Inside'): WordContentBlock => ({ kind: 'table', id: 'table', rows: [[{
+    blocks: [item('cell', text), { kind: 'table', id: 'nested', rows: [[{ blocks: [paragraph('nested-cell', 'Nested')] }]] }, paragraph('cell-end', '')],
+  }]] });
+  document.update([paragraph('before', 'Before'), table()]);
+  compare(document);
+  const before = document.blocks[1];
+  const prepared = document.cache.preparedTables;
+  // Fresh authored objects mirror hosts that reconstruct semantic input after a CRDT edit.
+  document.update([paragraph('before', 'Changed before'), table()]);
+  compare(document);
+  expect(document.blocks[1]).toBe(before);
+  expect(document.cache.preparedTables).toBe(prepared);
+  expect(document.paragraphs().map(p => p.text)).toEqual(['Changed before', 'Inside', 'Nested', '']);
+
+  document.update([item('before', 'Numbered before'), table()]);
+  compare(document);
+  expect(document.blocks[1]).toBe(before);
+  expect(document.cache.preparedTables).toBe(prepared + 1);
+
+  document.update([item('before', 'Numbered before'), table('Changed inside')]);
+  compare(document);
+  expect(document.blocks[1]).not.toBe(before);
+  const changed = document.cache.preparedTables;
+  compare(document, { measure: (text) => ({ width: text.length * 10, ascent: 14, descent: 4 }) });
+  expect(document.cache.preparedTables).toBe(changed + 2);
+});
+
+test('cached table slices retain merged rows across changed page breaks and enforce layout limits', () => {
+  const document = new NativeWordDocument({ page: { width: 300, height: 160, margin: 20 } });
+  const table: WordContentBlock = { kind: 'table', id: 'long-table', columnWidths: [100, 100], rows:
+    Array.from({ length: 24 }, (_, row) => [
+      { verticalMerge: row % 2 === 0 ? 'restart' : 'continue', blocks: [paragraph(`left-${row}`, row % 2 === 0 ? `Merged ${row}` : '')] },
+      { blocks: [paragraph(`right-${row}`, `Row ${row}`)] },
+    ]),
+  };
+  document.update([paragraph('before', 'Before'), table]);
+  compare(document);
+  const layout = document.layout(measurer);
+  expect(layout.pages.length).toBeGreaterThan(1);
+  expect(document.layout(measurer).pages[0]!.columns[0]!.tables[0]).toBe(layout.pages[0]!.columns[0]!.tables[0]);
+  expect(() => document.layout(measurer, { maxFragments: 1 })).toThrow('fragments');
+  document.update([paragraph('before', 'Before '.repeat(15)), table]);
+  compare(document);
+  document.update([paragraph('before', 'Before'), table]);
+  compare(document);
+});

@@ -44,11 +44,13 @@ export type WordChange =
 export type WordDelta = Parameters<Y.Text['applyDelta']>[0];
 
 /** The same anchored operations drive human input and headless agents. Hosts own storage validation. */
-export function createWordCommands({ defaultFontSize = 12, defaultAttributes, validateAttributes = validateWordAttributes, validateUpdate }: {
+export function createWordCommands({ defaultFontSize = 12, defaultAttributes, validateAttributes = validateWordAttributes, validateUpdate, validateDocument }: {
   defaultFontSize?: number;
   defaultAttributes?: (text: Y.Text) => TextAttributes;
   validateAttributes?: (attributes: Record<string, unknown> | undefined) => void;
   validateUpdate?: (state: Uint8Array, update: Uint8Array) => void;
+  /** Inspect the staged edit synchronously without mutating either document. Throw to reject it. */
+  validateDocument?: (staged: Y.Doc, original: Y.Doc) => void;
 } = {}) {
 function bodyLength(text: Y.Text) {
   return Math.max(0, text.length - (text.toString().endsWith('\n') ? 1 : 0));
@@ -256,9 +258,10 @@ function formatWordDelta(
 // Agents submit anchored changes as one transaction. Preflight on a replica makes failures atomic.
 function wordTransaction(text: Y.Text, changes: readonly WordChange[]): WordDelta {
   if (!text.doc) throw new Error('The document is not attached.');
+  const state = Y.encodeStateAsUpdate(text.doc);
   const replica = new Y.Doc();
   try {
-    Y.applyUpdate(replica, Y.encodeStateAsUpdate(text.doc));
+    Y.applyUpdate(replica, state);
     const staged = replica.getText('body');
     let result: WordDelta = [];
     staged.observe((event) => {
@@ -339,7 +342,8 @@ function wordTransaction(text: Y.Text, changes: readonly WordChange[]): WordDelt
       }
     });
     validateWordText(staged);
-    validateUpdate?.(Y.encodeStateAsUpdate(text.doc), Y.encodeStateAsUpdate(replica, Y.encodeStateVector(text.doc)));
+    validateDocument?.(replica, text.doc);
+    validateUpdate?.(state, Y.encodeStateAsUpdate(replica, Y.encodeStateVector(text.doc)));
     return result;
   } finally {
     replica.destroy();
@@ -355,6 +359,7 @@ function validateWordDelta(text: Y.Text, delta: WordDelta) {
     const vector = Y.encodeStateVector(staged);
     staged.getText('body').applyDelta(delta);
     validateWordText(staged.getText('body'));
+    validateDocument?.(staged, text.doc);
     validateUpdate?.(state, Y.encodeStateAsUpdate(staged, vector));
   } finally {
     staged.destroy();
