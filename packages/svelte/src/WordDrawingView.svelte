@@ -3,11 +3,12 @@
   import OoxmlChart from './OoxmlChart.svelte';
   import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
 
-  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, inlinePosition, onselect, onresize, onchange }: {
+  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", inlinePosition, onselect, onresize, onchange }: {
     drawing: WordDrawing; width: number; height: number; position: string; scale: number;
     editable: boolean; selected: boolean;
     pageX: number; pageY: number;
     imageurl: (image: WordImageDrawing) => string;
+    imageLoading?: "eager" | "lazy";
     inlinePosition: (x: number, y: number) => WordTextPosition | undefined;
     onselect: (id: number | undefined) => void;
     onresize?: (size: WordDrawingResize) => void;
@@ -111,7 +112,7 @@
 
 {#snippet content()}
   {#if drawing.kind === 'image'}
-    <img src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading="lazy" decoding="async" />
+    <img src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading={imageLoading} decoding="async" />
   {:else if drawing.kind === 'chart'}
     <OoxmlChart model={drawing.model} width={displayWidth} height={displayHeight} clipId={`word-drawing-${drawing.elementId}`} />
   {:else}
