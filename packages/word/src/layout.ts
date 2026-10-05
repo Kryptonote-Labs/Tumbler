@@ -17,6 +17,8 @@ import type { WordListMarker } from "./numbering.ts";
 import { resolveWordTableGrid, type ResolvedWordTableCell } from "./table-grid.ts";
 import type { WordDrawing } from "./drawings.ts";
 
+import { hasPageFields, type WordPageField } from './page-fields.ts';
+
 const TWIPS_PER_POINT = 20;
 const CSS_PIXELS_PER_POINT = 4 / 3;
 const DEFAULT_TAB_POINTS = 36;
@@ -126,6 +128,7 @@ export interface WordLayoutMarker {
 
 export interface WordLayoutFragment {
   readonly kind: "text" | "tab" | "drawing" | "note";
+  readonly field?: WordPageField;
   readonly runElementId: number;
   readonly contentElementId: number;
   readonly text: string;
@@ -187,7 +190,7 @@ export interface WordLayoutSource {
   runFormat(paragraph: WordParagraph, run: WordRun | undefined): ComputedWordTextFormat;
   readonly cache?: WordLayoutCache | undefined;
 }
-export type WordLayoutDocumentContext = Pick<WordLayoutSource, "blocks" | "drawings" | "paragraphFormat" | "runFormat" | "cache" | "listMarkers">;
+export type WordLayoutDocumentContext = Pick<WordLayoutSource, "blocks" | "drawings" | "paragraphFormat" | "runFormat" | "cache" | "listMarkers"> & { readonly pageFields?: Readonly<Record<WordPageField, number>> };
 
 export interface WordLayoutStories {
   readonly evenAndOddHeaders?: boolean;
@@ -248,6 +251,7 @@ interface AtomBase {
 }
 
 interface GlyphAtom extends AtomBase {
+  readonly field?: WordPageField;
   readonly kind: "glyph";
   readonly text: string;
   readonly width: number;
@@ -352,6 +356,19 @@ export function layoutWordSource(
   options: WordLayoutOptions = {},
   stories?: WordLayoutStories,
 ): WordLayout {
+  const needsTotal = stories?.headerFooters.some(story => hasPageFields(story.context.blocks, 'NUMPAGES'));
+  let total = 1;
+  const seen = new Set<number>();
+  while (true) {
+    const layout = layoutWordSourcePass(document, measurer, options, stories, total);
+    if (!needsTotal || layout.pages.length === total) return layout;
+    if (seen.has(layout.pages.length)) throw new WordError('invalid_document', 'Page count fields did not reach a stable layout.');
+    seen.add(total);
+    total = layout.pages.length;
+  }
+}
+
+function layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeasurer, options: WordLayoutOptions, stories: WordLayoutStories | undefined, totalPages: number): WordLayout {
   if (document.cache) document.cache.layoutRevision += 1;
   const budget: LayoutBudget = {
     cache: document.cache,
@@ -372,7 +389,7 @@ export function layoutWordSource(
     const index = sectionPageCounts.get(section) ?? 0;
     sectionPageCounts.set(section, index + 1);
     if (stories) {
-      decorateHeaderFooters(stories, [created], measurer, budget, sections, new Map([[section, index]]));
+      decorateHeaderFooters(stories, [created], measurer, budget, sections, new Map([[section, index]]), totalPages);
       const headerBottom = Math.max(points(section.marginTopTwips), ...created.headerLines.map(line => line.y + line.height), ...created.headerTables.map(table => table.y + table.height));
       const footerTop = Math.min(created.height - points(section.marginBottomTwips), ...created.footerLines.map(line => line.y), ...created.footerTables.map(table => table.y));
       // A repeated story that fills the page cannot be resolved by adding identical pages.
@@ -742,7 +759,7 @@ function prepareMarker(document: WordLayoutDocumentContext, paragraph: WordParag
 }
 
 function paragraphAtoms(document: WordLayoutDocumentContext, paragraph: WordParagraph, measurer: WordTextMeasurer): ParagraphAtom[] {
-  return resolvedParagraphAtoms(paragraph, measurer, (run) => document.runFormat(paragraph, run), document.drawings);
+  return resolvedParagraphAtoms(paragraph, measurer, (run) => document.runFormat(paragraph, run), document.drawings, document.pageFields);
 }
 
 function resolvedParagraphAtoms(
@@ -750,6 +767,7 @@ function resolvedParagraphAtoms(
   measurer: WordTextMeasurer,
   resolveFormat: (run: WordRun) => ComputedWordTextFormat,
   drawings: ReadonlyMap<number, WordDrawing>,
+  pageFields?: Readonly<Record<WordPageField, number>>,
 ): ParagraphAtom[] {
   const atoms: ParagraphAtom[] = [];
   let logicalOffset = 0;
@@ -768,7 +786,13 @@ function resolvedParagraphAtoms(
         continue;
       }
       if (content.kind === "field-instruction" || content.kind === "deleted-text" || fieldDepth > 0 && resultDepth !== fieldDepth) continue;
-      if (content.kind === "text") {
+      if (content.kind === 'page-field') {
+        const text = String(pageFields?.[content.field] ?? 1);
+        const measurement = validMeasurement(measurer.measure(text, format));
+        atoms.push(Object.freeze({ kind: 'glyph', field: content.field, runElementId: run.elementId,
+          contentElementId: content.elementId, text, ...measurement, breakAfter: false, whitespace: false,
+          startOffset: logicalOffset, endOffset: ++logicalOffset, format, hyperlink }));
+      } else if (content.kind === "text") {
         for (const grapheme of graphemes(content.value)) {
           const measurement = validMeasurement(measurer.measure(grapheme, format));
           const startOffset = logicalOffset;
@@ -939,6 +963,7 @@ function placeLine(
       const descent = atomDescent(atom);
       fragments.push(Object.freeze({
         kind: atom.kind === "glyph" ? "text" : atom.kind,
+        ...(atom.kind === "glyph" && atom.field ? { field: atom.field } : {}),
         runElementId: atom.runElementId,
         contentElementId: atom.contentElementId,
         text: atom.kind === "glyph" || atom.kind === "note" ? atom.text : atom.kind === "tab" ? "\t" : "\uFFFC",
@@ -991,6 +1016,7 @@ function decorateHeaderFooters(
   budget: LayoutBudget,
   sections: readonly { readonly properties: WordSectionProperties; readonly blocks: readonly WordBlock[] }[],
   sectionPageCounts = new Map<WordSectionProperties, number>(),
+  totalPages = pages.length,
 ): void {
   const effective = new Map<WordSectionProperties, ReadonlyMap<string, { relationshipId: string; section: number }>>();
   const inherited = new Map<string, { relationshipId: string; section: number }>();
@@ -1016,7 +1042,12 @@ function decorateHeaderFooters(
       if (relationshipId === undefined) continue;
       const story = document.headerFooters.find((item) => item.kind === kind && item.relationshipId === relationshipId);
       if (story === undefined) continue;
-      const context = story.context;
+      const source = story.context;
+      const context: WordLayoutDocumentContext = hasPageFields(source.blocks)
+        ? { blocks: source.blocks, drawings: source.drawings, listMarkers: source.listMarkers,
+            paragraphFormat: paragraph => source.paragraphFormat(paragraph), runFormat: (paragraph, run) => source.runFormat(paragraph, run),
+            pageFields: { PAGE: page.index + 1, NUMPAGES: totalPages } }
+        : source;
       const left = points(page.section.marginLeftTwips + page.section.gutterTwips);
       const width = Math.max(1, page.width - left - points(page.section.marginRightTwips));
       const flow = layoutStory(context, left, width, measurer, budget);

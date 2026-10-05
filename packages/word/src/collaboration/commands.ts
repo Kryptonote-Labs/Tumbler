@@ -169,7 +169,7 @@ function replaceWordDelta(
   value = value.replace(/\r\n?/g, '\n');
   validateText(text.toString().slice(0, range.start) + value + text.toString().slice(range.end));
   validateAttributes(attributes);
-  const { align, list, table: inheritedTable, wordParagraph, image: _image, ...inline } = attributes;
+  const { align, list, table: inheritedTable, wordParagraph, image: _image, field: _field, ...inline } = attributes;
   let table = inheritedTable;
   if (table && range.end > range.start) {
     const paragraphs = tableParagraphs(text);
@@ -221,11 +221,12 @@ function formatWordDelta(
     attributes.wordCopy !== undefined
   )
     throw new Error('Source identities cannot be formatted.');
+  if (attributes.field !== undefined) throw new Error('Insert or delete page fields as content.');
   if (attributes.image !== undefined) throw new Error('Use image operations to change images.');
   if (attributes.table !== undefined)
     throw new Error('Use table operations to change cell structure.');
   const value = text.toString();
-  const { align, list, table: _table, image: _image, ...inline } = attributes;
+  const { align, list, table: _table, image: _image, field: _field, ...inline } = attributes;
   const delta: WordDelta = [];
   let cursor = 0;
   const append = (start: number, length: number, attributes: WordFormatPatch) => {

@@ -303,3 +303,24 @@ in-place authored-content changes. Paragraph text extraction is cached by immuta
 identity in both modes. Unchanged immutable tables without numbering or source-continuation
 dependencies replay their retained descendants instead of rebuilding them; duplicate identity checks
 and drawing registration still run. Tables with those dependencies retain semantic traversal.
+
+### Header and footer page numbers
+
+`wordPageNumberRuns` creates editable text and live `PAGE` / `NUMPAGES` fields.
+Use it with `NativeWordDocument.updateStory` for a header or footer:
+
+```ts
+model.updateStory({ section: 0, kind: 'footer', type: 'default' }, [{
+  kind: 'paragraph',
+  alignment: 'end',
+  runs: wordPageNumberRuns('bold-x-of-y'),
+}]);
+```
+
+Presets are `plain`, `page`, `x-of-y`, `bold-x-of-y`, and `page-x-of-y`.
+Fields occupy one `\uFFFC` character in authored content, with `field: 'PAGE'`
+or `field: 'NUMPAGES'`. Header/footer layout resolves each field before measuring
+and repeats pagination when the total changes. Formatting and ordinary surrounding
+text remain editable. DOCX export writes standard simple fields; supported simple
+fields import as the same editable content. Section numbering restarts and numeral
+formats are not yet evaluated by this API.

@@ -13,7 +13,8 @@ export interface WordTextSelection {
 }
 
 export interface WordParagraphTextSegment {
-  readonly kind: "text" | "tab" | "break" | "drawing" | "note";
+  readonly kind: "text" | "tab" | "break" | "drawing" | "note" | "page-field";
+  readonly field?: import("./page-fields.ts").WordPageField;
   readonly elementId: number;
   readonly runElementId: number;
   readonly start: number;
@@ -43,7 +44,8 @@ export function wordParagraphTextSegments(_document: WordDocument | undefined, p
         continue;
       }
       if (content.kind === "field-instruction" || content.kind === "deleted-text" || fieldDepth > 0 && resultDepth !== fieldDepth) continue;
-      const projected = content.kind === "text" ? { kind: "text" as const, value: content.value }
+      const projected = content.kind === "page-field" ? { kind: "page-field" as const, value: "\uFFFC" }
+        : content.kind === "text" ? { kind: "text" as const, value: content.value }
         : content.kind === "tab" ? { kind: "tab" as const, value: "\t" }
         : content.kind === "break" ? { kind: "break" as const, value: "\n" }
         : content.kind === "drawing" ? { kind: "drawing" as const, value: "\uFFFC" }
@@ -54,6 +56,7 @@ export function wordParagraphTextSegments(_document: WordDocument | undefined, p
       offset += projected.value.length;
       segments.push(Object.freeze({
         kind: projected.kind,
+        ...(content.kind === "page-field" ? { field: content.field } : {}),
         elementId: content.elementId,
         runElementId: run.elementId,
         start,

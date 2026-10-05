@@ -1,3 +1,4 @@
+import { pageFieldXml } from './page-fields.ts';
 import type { WordTextParagraph, WordTextRun } from './create.ts';
 import type { LosslessXmlElement } from '@tumblerjs/ooxml';
 import type { WordArtifact } from './artifact.ts';
@@ -118,6 +119,17 @@ export function wordParagraphRenderer(
     const original = run.source === undefined ? undefined : originalRuns.get(run.source);
     if (run.source !== undefined && !original) throw new Error('Invalid run source reference.');
     const element = markup.element(run.source);
+    if (run.field || original?.field) {
+      let content = run.field ? markup.word(pageFieldXml(run)) : markup.word(`<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}</w:r>`);
+      if (!run.field) content = markup.word(`<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}`) + text(run.text) + markup.word('</w:r>');
+      if (run.source !== undefined) {
+        if (!emitted.has(run.source)) { content = (before.get(run.source) ?? []).join('') + content; emitted.add(run.source); }
+        remaining.set(run.source, remaining.get(run.source)! - 1);
+        const owner = owners.get(run.source);
+        if (owner) content += finishSource(owner);
+      }
+      return copies.markers(content, scope);
+    }
     let parent = element && markup.parents.get(element.id);
     const runElement = parent;
     const properties = runElement && markup.children(runElement, 'rPr')[0];
