@@ -121,6 +121,10 @@ export class NativeWordDocument implements WordLayoutSource {
   runFormat(paragraph: WordParagraph, run: WordRun | undefined) {
     return (run && this.runFormats.get(run)) ?? this.paragraphTextFormats.get(paragraph) ?? this.compiled?.defaults.text ?? { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }) };
   }
+  removeStory(target: string | WordStoryTarget) {
+    const key = typeof target === 'string' ? target : `${target.section}:${target.kind}:${target.type}`;
+    if (this.editedStories.delete(key)) this.exported = undefined;
+  }
   /** Update a shared header/footer once; every page referencing it uses this same native model. */
   updateStory(target: string | WordStoryTarget, blocks: readonly WordContentBlock[]) {
     const key = typeof target === 'string' ? target : `${target.section}:${target.kind}:${target.type}`;
