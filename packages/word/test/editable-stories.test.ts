@@ -107,3 +107,22 @@ test('growing headers and footers reserve body space before pagination', () => {
     }
   }
 });
+
+test('story images and numbering round-trip through their own relationships', () => {
+  const created = createWordStory(createWordArtifact(), { section: 0, kind: 'header', type: 'default' });
+  const image = { bytes: new Uint8Array([137, 80, 78, 71]), contentType: 'image/png' as const, width: 30, height: 20 };
+  const first = reconcileWordContent(wordStoryArtifact(created.artifact, created.partName), [
+    { kind: 'paragraph', list: { id: 'header-list', kind: 'decimal' }, runs: [{ text: 'Numbered' }] },
+    { kind: 'paragraph', runs: [{ text: '\uFFFC', image }] },
+  ]);
+  const blocks = importWordContent(first);
+  const edited = reconcileWordContent(first, blocks.map(block => block.kind === 'paragraph' ? { ...block, runs: block.runs.map(run => first.document.drawings.has(run.source!) ? { ...run, image: { ...image, width: 60, height: 40 } } : run) } : block));
+  expect(edited.document.part.name.value).toBe(created.partName);
+  const drawing = [...edited.document.drawings.values()][0]!;
+  expect(drawing.widthPoints).toBe(60);
+  expect(drawing.heightPoints).toBe(40);
+  const reopened = openWordArtifact(edited.bytes());
+  expect(reopened.document.drawings.size).toBe(0);
+  expect(reopened.document.headerFooters[0]!.drawings.size).toBe(1);
+  expect(importWordContent(wordStoryArtifact(reopened, created.partName))[0]).toMatchObject({ list: { kind: 'decimal' } });
+});
