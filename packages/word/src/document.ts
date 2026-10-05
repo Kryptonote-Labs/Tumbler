@@ -255,6 +255,7 @@ export class WordDocument {
   readonly finalSection: WordSectionProperties;
   readonly styles: WordStyles;
   readonly numbering: WordNumbering;
+  readonly evenAndOddHeaders: boolean;
   readonly headerFooters: readonly WordHeaderFooterStory[];
   readonly drawings: ReadonlyMap<number, WordDrawing>;
   readonly notes: readonly WordNoteStory[];
@@ -268,6 +269,7 @@ export class WordDocument {
     finalSection: WordSectionProperties;
     styles: WordStyles;
     numbering: WordNumbering;
+    evenAndOddHeaders?: boolean;
     headerFooters: readonly WordHeaderFooterStory[];
     drawings: ReadonlyMap<number, WordDrawing>;
     notes: readonly WordNoteStory[];
@@ -280,6 +282,7 @@ export class WordDocument {
     this.finalSection = input.finalSection;
     this.styles = input.styles;
     this.numbering = input.numbering;
+    this.evenAndOddHeaders = input.evenAndOddHeaders ?? false;
     this.headerFooters = Object.freeze([...input.headerFooters]);
     this.drawings = input.drawings;
     this.notes = Object.freeze([...input.notes]);
@@ -340,7 +343,17 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
   const drawings = readWordDrawings({ package: pkg, part: main, source, conformance: profile });
   const notes = readNoteStories(pkg, main, profile, budget);
   const headerFooters = readHeaderFooterStories(pkg, main, profile, [...blocks.flatMap(sectionReferences), ...finalSection.headerReferences, ...finalSection.footerReferences], budget);
-  return new WordDocument({ pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes });
+  let evenAndOddHeaders = false;
+  const settingsRel = relationships?.items.find(item => item.type.endsWith('/settings') && item.targetMode === 'Internal');
+  if (settingsRel?.targetMode === 'Internal') {
+    const settingsPart = pkg.getPart(settingsRel.targetPartName);
+    if (settingsPart) {
+      const settings = parseLosslessXml(pkg.readPart(settingsPart));
+      const value = settings.elements(namespace, 'evenAndOddHeaders')[0];
+      evenAndOddHeaders = value !== undefined && !['0', 'false', 'off'].includes(attr(value, namespace, 'val') ?? 'true');
+    }
+  }
+  return new WordDocument({ pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes, evenAndOddHeaders });
 }
 
 function readNoteStories(pkg: OpcPackage, main: OpcPart, conformance: WordConformance, budget: ParseBudget): readonly WordNoteStory[] {
@@ -713,7 +726,7 @@ function parseSection(element: LosslessXmlElement | undefined, namespace: string
     breakType: rawBreakType === "continuous" || rawBreakType === "nextColumn" || rawBreakType === "evenPage" || rawBreakType === "oddPage"
       ? rawBreakType
       : "nextPage",
-    titlePage: element !== undefined && children(element, namespace, "titlePg").length > 0,
+    titlePage: element !== undefined && children(element, namespace, "titlePg").some(item => !["0", "false", "off"].includes(attr(item, namespace, "val") ?? "true")),
     headerReferences: Object.freeze(headerReferences),
     footerReferences: Object.freeze(footerReferences),
   });

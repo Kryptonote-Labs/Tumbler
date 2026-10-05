@@ -12,12 +12,14 @@ describe("WordprocessingML headers and footers", () => {
     const artifact = openWordArtifact(buildWordDocumentFixture({
       documentXml: `<w:document xmlns:w="${word}" xmlns:r="${rels}"><w:body>${body}</w:body></w:document>`,
       relationships: [
+        { id: 'settings', type: `${rels}/settings`, target: 'settings.xml' },
         { id: "first", type: `${rels}/header`, target: "header-first.xml" },
         { id: "even", type: `${rels}/header`, target: "header-even.xml" },
         { id: "default", type: `${rels}/header`, target: "header-default.xml" },
         { id: "footer", type: `${rels}/footer`, target: "footer.xml" },
       ],
       parts: [
+        { itemName: 'word/settings.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml', xml: `<w:settings xmlns:w="${word}"><w:evenAndOddHeaders/></w:settings>` },
         story("word/header-first.xml", "header", "First"),
         story("word/header-even.xml", "header", "Even"),
         story("word/header-default.xml", "header", "Default"),
@@ -28,9 +30,9 @@ describe("WordprocessingML headers and footers", () => {
     const layout = layoutWordDocument(artifact.document, { measure: (text) => ({ width: text.length * 5, ascent: 8, descent: 2 }) });
     expect(layout.pages).toHaveLength(3);
     expect(layout.pages.map((page) => page.headerLines[0]?.fragments[0]?.text)).toEqual(["First", "Even", "Default"]);
-    expect(layout.pages.map((page) => page.footerLines[0]?.fragments[0]?.text)).toEqual(["Footer", "Footer", "Footer"]);
+    expect(layout.pages.map((page) => page.footerLines[0]?.fragments[0]?.text)).toEqual([undefined, undefined, "Footer"]);
     expect(layout.pages[0]?.headerLines[0]?.y).toBeLessThan(layout.pages[0]?.columns[0]?.y ?? 0);
-    expect(layout.pages[0]?.footerLines[0]?.y).toBeGreaterThan(layout.pages[0]?.columns[0]?.y ?? 0);
+    expect(layout.pages[2]?.footerLines[0]?.y).toBeGreaterThan(layout.pages[0]?.columns[0]?.y ?? 0);
   });
 
   test("rejects external story references", () => {

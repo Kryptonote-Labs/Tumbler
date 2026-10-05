@@ -37,3 +37,73 @@ describe('editable header/footer stories', () => {
     expect(importWordContent(result)[0]).toMatchObject({ alignment: 'center', runs: [{ text: 'After', format: { italic: true } }] });
   });
 });
+
+import { buildWordDocumentFixture } from './document-fixture.ts';
+const w = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const r = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+test('creates a story when an imported document omits section properties and relationships', () => {
+  const source = openWordArtifact(buildWordDocumentFixture());
+  const created = createWordStory(source, { section: 0, kind: 'header', type: 'default' });
+  expect(created.artifact.document.headerFooters).toHaveLength(1);
+  expect(created.artifact.document.source.root.localName).toBe('document');
+});
+
+test('editing a shared story preserves page fields, tables and inherited section references', () => {
+  const source = openWordArtifact(buildWordDocumentFixture({
+    documentXml: `<w:document xmlns:w="${w}" xmlns:r="${r}"><w:body><w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="header"/></w:sectPr></w:pPr><w:r><w:t>First section</w:t></w:r></w:p><w:p><w:r><w:t>Second section</w:t></w:r></w:p><w:sectPr/></w:body></w:document>`,
+    relationships: [{ id: 'header', type: `${r}/header`, target: 'header.xml' }],
+    parts: [{ itemName: 'word/header.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml', xml: `<w:hdr xmlns:w="${w}"><w:tbl><w:tblGrid><w:gridCol w:w="5000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>Heading</w:t></w:r><w:fldSimple w:instr="PAGE"><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p></w:tc></w:tr></w:tbl></w:hdr>` }],
+  }));
+  const view = wordStoryArtifact(source, '/word/header.xml');
+  const content = importWordContent(view);
+  const table = content[0]!;
+  if (table.kind !== 'table') throw new Error('Expected table');
+  const cell = table.rows[0]![0]!;
+  const paragraph = cell.blocks[0]!;
+  if (paragraph.kind !== 'paragraph') throw new Error('Expected paragraph');
+  const blocks = [{ ...table, rows: [[{ ...cell, blocks: [{ ...paragraph, runs: paragraph.runs.map(run => ({ ...run, text: run.text.replace('Heading', 'Changed') })) }] }]] }];
+  const model = new NativeWordDocument({ source });
+  model.updateStory('/word/header.xml', blocks);
+  const layout = model.layout(measure);
+  expect(layout.pages).toHaveLength(2);
+  expect(layout.pages.map(page => page.headerStory?.relationshipId)).toEqual(['header', 'header']);
+  expect(layout.pages[1]!.headerTables[0]!.cells[0]!.lines[0]!.fragments[0]!.text).toBe('Changed');
+  const exported = model.artifact();
+  const xml = wordStoryArtifact(exported, '/word/header.xml').document.source.source;
+  expect(xml).toContain('w:instr="PAGE"');
+  expect(xml).toContain('Changed');
+  expect(exported.document.finalSection.headerReferences).toHaveLength(0);
+});
+
+test('story text and formatting operations keep their part scope', () => {
+  const created = createWordStory(createWordArtifact(), { section: 0, kind: 'header', type: 'default' });
+  const source = reconcileWordContent(wordStoryArtifact(created.artifact, created.partName), [{ kind: 'paragraph', runs: [{ text: 'Heading' }] }]);
+  const p = source.document.blocks[0]!;
+  if (p.kind !== 'paragraph') throw new Error('Expected paragraph');
+  const edited = source.replaceText({ anchor: { paragraphElementId: p.elementId, offset: 0 }, focus: { paragraphElementId: p.elementId, offset: 7 } }, 'Revised');
+  expect(edited.document.part.name.value).toBe(created.partName);
+  expect(importWordContent(edited)[0]).toMatchObject({ runs: [{ text: 'Revised' }] });
+});
+
+test('growing headers and footers reserve body space before pagination', () => {
+  const model = new NativeWordDocument();
+  model.update(Array.from({ length: 100 }, () => ({ kind: 'paragraph' as const, runs: [{ text: 'Body paragraph' }] })));
+  const story = Array.from({ length: 12 }, () => ({ kind: 'paragraph' as const, runs: [{ text: 'Story paragraph' }] }));
+  model.updateStory({ section: 0, kind: 'header', type: 'default' }, story);
+  model.updateStory({ section: 0, kind: 'footer', type: 'default' }, story);
+  const layout = model.layout(measure);
+  expect(layout.pages.length).toBeGreaterThan(1);
+  for (const page of layout.pages) {
+    const headerBottom = Math.max(...page.headerLines.map(line => line.y + line.height));
+    const footerTop = Math.min(...page.footerLines.map(line => line.y));
+    for (const column of page.columns) {
+      expect(column.y).toBeGreaterThanOrEqual(headerBottom);
+      expect(column.y + column.height).toBeLessThanOrEqual(footerTop);
+      for (const line of column.lines) {
+        expect(line.y).toBeGreaterThanOrEqual(headerBottom);
+        expect(line.y + line.height).toBeLessThanOrEqual(footerTop);
+      }
+    }
+  }
+});

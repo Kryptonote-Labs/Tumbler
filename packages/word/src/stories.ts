@@ -1,5 +1,5 @@
 import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
-import { beginPackageTransaction, PartName } from '@tumblerjs/opc';
+import { beginPackageTransaction, PartName, RelationshipsError } from '@tumblerjs/opc';
 import { WordArtifact, openWordArtifact } from './artifact.ts';
 import { WordDocument, type WordHeaderFooterStory, type WordSectionProperties, type WordBlock } from './document.ts';
 
@@ -21,7 +21,7 @@ export function wordStoryArtifact(artifact: WordArtifact, partName: string): Wor
     pkg: document.package, part: story.part, source: story.source,
     blocks: story.blocks, drawings: story.drawings,
     conformance: document.conformance, styles: document.styles, numbering: document.numbering,
-    finalSection: document.finalSection, headerFooters: [], notes: [],
+    finalSection: document.finalSection, headerFooters: [], notes: [], evenAndOddHeaders: document.evenAndOddHeaders,
   }));
 }
 
@@ -50,7 +50,9 @@ export function createWordStory(artifact: WordArtifact, target: WordStoryTarget)
     return { artifact, partName: story.part.name.value };
   }
   const transaction = beginPackageTransaction(document.package);
-  const ids = new Set(document.package.relationships(document.part.name).items.map(item => item.id));
+  const ids = new Set<string>();
+  try { for (const item of document.package.relationships(document.part.name).items) ids.add(item.id); }
+  catch (error) { if (!(error instanceof RelationshipsError) || error.code !== 'missing_item') throw error; }
   let index = 1;
   while (document.package.getPart(`/word/tumbler-${target.kind}-${index}.xml`) || ids.has(`tumbler-${target.kind}-${index}`)) index++;
   const partName = `/word/tumbler-${target.kind}-${index}.xml`;
@@ -64,14 +66,25 @@ export function createWordStory(artifact: WordArtifact, target: WordStoryTarget)
     new TextEncoder().encode(`<w:${root} xmlns:w="${namespace}"><w:p/></w:${root}>`));
   transaction.addRelationship(document.part.name, { id: relationshipId, type: `${office}/${target.kind}`, target: PartName.parse(partName) });
   const element = document.source.element(section.elementId);
-  if (!element) throw new Error('Missing section properties.');
   const edit = beginLosslessXmlEdit(document.source);
   const reference = `<w:${target.kind}Reference xmlns:w="${namespace}" xmlns:r="${office}" w:type="${target.type}" r:id="${relationshipId}"/>`;
-  const raw = document.source.source.slice(element.span.start, element.span.end);
-  const markup = element.selfClosing
-    ? raw.replace(/\s*\/>$/, `>${reference}</${element.qualified}>`)
-    : raw.replace(/^(<[^>]+>)/, `$1${reference}`);
-  edit.replaceElementMarkup(element, markup);
+  if (!element || element.localName !== 'sectPr') {
+    const body = document.source.elements(namespace, 'body')[0]!;
+    const markup = `<w:sectPr xmlns:w="${namespace}">${reference}</w:sectPr>`;
+    if (body.selfClosing) {
+      const raw = document.source.source.slice(body.span.start, body.span.end);
+      edit.replaceElementMarkup(body, raw.replace(/\s*\/>$/, `>${markup}</${body.qualified}>`));
+    } else edit.appendMarkup(body, markup);
+  } else {
+    const raw = document.source.source.slice(element.span.start, element.span.end);
+    const preceding = element.children.filter(child => child.kind === 'element' &&
+      (child.localName === 'headerReference' || target.kind === 'footer' && child.localName === 'footerReference')).at(-1);
+    const at = (preceding?.span.end ?? element.startTagSpan.end) - element.span.start;
+    const markup = element.selfClosing
+      ? raw.replace(/\s*\/>$/, `>${reference}</${element.qualified}>`)
+      : raw.slice(0, at) + reference + raw.slice(at);
+    edit.replaceElementMarkup(element, markup);
+  }
   transaction.replacePart(document.part.name, edit.commit().bytes);
   return { artifact: openWordArtifact(transaction.commit(), { maxBlocks: Number.MAX_SAFE_INTEGER, maxInlineItems: Number.MAX_SAFE_INTEGER, maxTextCharacters: Number.MAX_SAFE_INTEGER }), partName };
 }

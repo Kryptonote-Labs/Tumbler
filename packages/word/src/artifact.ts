@@ -1,3 +1,4 @@
+import { wordStoryArtifact } from './stories.ts';
 import { openOpcPackage } from "@tumblerjs/opc";
 import type { FormattingAdapter, FormattingCapabilities, FormattingPatch, FormattingState, FormattingValue, OfficeColor } from "@tumblerjs/core";
 import { openWordDocument, type OpenWordDocumentOptions, type WordBlock, type WordDocument, type WordParagraph } from "./document.ts";
@@ -16,13 +17,18 @@ export class WordArtifact implements FormattingAdapter<WordFormattingTarget, Wor
     this.document = document;
   }
 
+  private reopen(bytes: Uint8Array, options: OpenWordArtifactOptions = {}) {
+    const artifact = openWordArtifact(bytes, options);
+    return this.document.source.root.localName === 'document' ? artifact : wordStoryArtifact(artifact, this.document.part.name.value);
+  }
+
   bytes(): Uint8Array {
     return this.document.bytes();
   }
 
   replace(bytes: Uint8Array, options: OpenWordArtifactOptions = {}): WordArtifact {
     if (bytes === this.bytes()) return this;
-    return openWordArtifact(bytes, options);
+    return this.reopen(bytes, options);
   }
 
   replaceText(selection: WordTextSelection, value: string, typingFormatting?: FormattingPatch): WordArtifact {
@@ -34,7 +40,7 @@ export class WordArtifact implements FormattingAdapter<WordFormattingTarget, Wor
     const insertedStart = forward ? selection.anchor.offset : selection.focus.offset;
     const bytes = replaceWordText(this.document, selection, value);
     if (bytes === this.bytes()) return this;
-    let next = openWordArtifact(bytes);
+    let next = this.reopen(bytes);
     const textFormatting = typingFormatting?.text;
     if (value.length === 0 || textFormatting === undefined || Object.keys(textFormatting).length === 0) return next;
     const lines = value.split("\n");
@@ -60,12 +66,12 @@ export class WordArtifact implements FormattingAdapter<WordFormattingTarget, Wor
     const bytes = change.inlinePosition === undefined
       ? positionWordDrawing(resized.document, change)
       : moveInlineWordDrawing(resized.document, change.elementId, change.inlinePosition);
-    return bytes === resized.bytes() ? resized : openWordArtifact(bytes);
+    return bytes === resized.bytes() ? resized : this.reopen(bytes);
   }
 
   resizeDrawing(size: WordDrawingResize): WordArtifact {
     const bytes = resizeWordDrawing(this.document, size);
-    return bytes === this.bytes() ? this : openWordArtifact(bytes);
+    return bytes === this.bytes() ? this : this.reopen(bytes);
   }
 
   formattingCapabilities(_target: WordFormattingTarget): FormattingCapabilities {
@@ -78,7 +84,7 @@ export class WordArtifact implements FormattingAdapter<WordFormattingTarget, Wor
 
   applyFormatting(target: WordFormattingTarget, patch: FormattingPatch): WordArtifact {
     const bytes = formatWordSelection(this.document, target, patch);
-    return bytes === this.bytes() ? this : openWordArtifact(bytes);
+    return bytes === this.bytes() ? this : this.reopen(bytes);
   }
 }
 
