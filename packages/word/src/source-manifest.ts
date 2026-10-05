@@ -1,3 +1,4 @@
+import { wordStoryArtifact, wordSections } from './stories.ts';
 import { wordDocumentDefaults } from './document-defaults.ts';
 import type { ComputedWordTextFormat } from './styles.ts';
 import type { WordArtifact } from './artifact.ts';
@@ -7,6 +8,10 @@ import { wordParagraphTextSegments } from './text.ts';
 /** Immutable import metadata for validating remote edits without reopening the source package. */
 export interface WordSourceManifest {
   readonly version: 1;
+  readonly sectionCount?: number;
+  readonly storyBindings?: readonly { readonly section: number; readonly kind: 'header' | 'footer'; readonly type: 'default' | 'first' | 'even'; readonly partName: string }[];
+  readonly storyTypes?: readonly (readonly ('default' | 'first' | 'even')[])[];
+  readonly stories?: Readonly<Record<string, WordSourceManifest>>;
   readonly defaultTextFormat?: ComputedWordTextFormat;
   readonly paragraphs: readonly number[];
   readonly runs: readonly number[];
@@ -33,5 +38,14 @@ export function createWordSourceManifest(artifact: WordArtifact): WordSourceMani
     }
   };
   visit(artifact.document.blocks);
-  return { version: 1, defaultTextFormat: wordDocumentDefaults(artifact.document).text, paragraphs, runs, tables, rows, cells, images: [...artifact.document.drawings.values()].flatMap(drawing => drawing.kind === 'image' ? [{ id: drawing.elementId, contentType: drawing.contentType }] : []) };
+  const storyBindings: NonNullable<WordSourceManifest['storyBindings']>[number][] = [];
+  const inherited = new Map<string, { kind: 'header' | 'footer'; type: 'default' | 'first' | 'even'; partName: string }>();
+  for (const [section, properties] of wordSections(artifact.document).entries()) {
+    for (const reference of [...properties.headerReferences, ...properties.footerReferences]) {
+      const story = artifact.document.headerFooters.find(item => item.relationshipId === reference.relationshipId);
+      if (story) inherited.set(`${reference.kind}:${reference.type}`, { kind: reference.kind, type: reference.type, partName: story.part.name.value });
+    }
+    for (const binding of inherited.values()) storyBindings.push({ section, ...binding });
+  }
+  return { version: 1, storyBindings, sectionCount: wordSections(artifact.document).length, storyTypes: wordSections(artifact.document).map(section => ['default' as const, ...(section.titlePage ? ['first' as const] : []), ...(artifact.document.evenAndOddHeaders ? ['even' as const] : [])]), ...(artifact.document.headerFooters.length ? { stories: Object.fromEntries(artifact.document.headerFooters.map(story => [story.part.name.value, createWordSourceManifest(wordStoryArtifact(artifact, story.part.name.value))])) } : {}), defaultTextFormat: wordDocumentDefaults(artifact.document).text, paragraphs, runs, tables, rows, cells, images: [...artifact.document.drawings.values()].flatMap(drawing => drawing.kind === 'image' ? [{ id: drawing.elementId, contentType: drawing.contentType }] : []) };
 }

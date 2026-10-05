@@ -42,11 +42,20 @@ export interface WordLayout {
   readonly fragmentCount: number;
 }
 
+export interface WordPageStory {
+  readonly section: number;
+  readonly type: 'default' | 'first' | 'even';
+  readonly relationshipId?: string;
+}
+
 export interface WordLayoutPage {
   readonly index: number;
   readonly width: number;
   readonly height: number;
   readonly section: WordSectionProperties;
+  readonly storyOverflow?: boolean;
+  readonly headerStory?: WordPageStory;
+  readonly footerStory?: WordPageStory;
   readonly columns: readonly WordLayoutColumn[];
   readonly headerLines: readonly WordLayoutLine[];
   readonly footerLines: readonly WordLayoutLine[];
@@ -157,6 +166,9 @@ interface MutablePage {
   readonly height: number;
   readonly section: WordSectionProperties;
   readonly columns: MutableColumn[];
+  storyOverflow?: boolean;
+  headerStory?: WordPageStory;
+  footerStory?: WordPageStory;
   headerLines: WordLayoutLine[];
   footerLines: WordLayoutLine[];
   headerTables: WordLayoutTable[];
@@ -178,6 +190,8 @@ export interface WordLayoutSource {
 export type WordLayoutDocumentContext = Pick<WordLayoutSource, "blocks" | "drawings" | "paragraphFormat" | "runFormat" | "cache" | "listMarkers">;
 
 export interface WordLayoutStories {
+  readonly evenAndOddHeaders?: boolean;
+  readonly bindings?: readonly { section: number; kind: "header" | "footer"; type: "default" | "first" | "even"; relationshipId: string }[];
   readonly headerFooters: readonly (Pick<WordHeaderFooterStory, 'kind' | 'type' | 'relationshipId'> & { readonly context: WordLayoutDocumentContext })[];
   readonly notes: readonly (Pick<WordNoteStory, 'kind' | 'id' | 'type'> & { readonly context: WordLayoutDocumentContext })[];
 }
@@ -188,6 +202,7 @@ export function wordLayoutStories(document: WordDocument): WordLayoutStories {
   const cached = storySources.get(document);
   if (cached) return cached;
   const result = {
+    evenAndOddHeaders: document.evenAndOddHeaders,
     headerFooters: document.headerFooters.map(story => ({ kind: story.kind, type: story.type, relationshipId: story.relationshipId, context: compileStory(document, story) })),
     notes: document.notes.map(story => ({ kind: story.kind, type: story.type, id: story.id, context: compileStory(document, story) })),
   };
@@ -351,11 +366,28 @@ export function layoutWordSource(
   let columnIndex = 0;
   let cursorY = 0;
 
+  const sectionPageCounts = new Map<WordSectionProperties, number>();
+  const appendPage = (section: WordSectionProperties) => {
+    const created = createPage(section, pages, budget);
+    const index = sectionPageCounts.get(section) ?? 0;
+    sectionPageCounts.set(section, index + 1);
+    if (stories) {
+      decorateHeaderFooters(stories, [created], measurer, budget, sections, new Map([[section, index]]));
+      const headerBottom = Math.max(points(section.marginTopTwips), ...created.headerLines.map(line => line.y + line.height), ...created.headerTables.map(table => table.y + table.height));
+      const footerTop = Math.min(created.height - points(section.marginBottomTwips), ...created.footerLines.map(line => line.y), ...created.footerTables.map(table => table.y));
+      // A repeated story that fills the page cannot be resolved by adding identical pages.
+      // Keep body content within its section margins and expose the collision to the host.
+      // This is a layout fallback, not an authoring limit: all story content remains in the model/export.
+      if (footerTop <= headerBottom) created.storyOverflow = true;
+      else for (const [columnIndex, column] of created.columns.entries()) created.columns[columnIndex] = { ...column, y: headerBottom, height: footerTop - headerBottom };
+    }
+    return created;
+  };
   const addPage = (section: WordSectionProperties, parity?: "even" | "odd"): MutablePage => {
     if (parity !== undefined && pages.length > 0 && ((pages.length + 1) % 2 === 0 ? "even" : "odd") !== parity) {
-      createPage(section, pages, budget);
+      appendPage(section);
     }
-    const created = createPage(section, pages, budget);
+    const created = appendPage(section);
     page = created;
     columnIndex = 0;
     cursorY = created.columns[0]!.y;
@@ -465,7 +497,6 @@ export function layoutWordSource(
   }
   if (stories) {
     decorateNotes(stories, pages, measurer, budget);
-    decorateHeaderFooters(stories, pages, measurer, budget, sections);
   }
   const frozenPages = Object.freeze(pages.map((page, index) => freezePage(page, document.cache?.pages[index])));
   if (document.cache) document.cache.pages = frozenPages;
@@ -959,24 +990,29 @@ function decorateHeaderFooters(
   measurer: WordTextMeasurer,
   budget: LayoutBudget,
   sections: readonly { readonly properties: WordSectionProperties; readonly blocks: readonly WordBlock[] }[],
+  sectionPageCounts = new Map<WordSectionProperties, number>(),
 ): void {
-  const effective = new Map<WordSectionProperties, ReadonlyMap<string, string>>();
-  const inherited = new Map<string, string>();
-  for (const section of sections) {
+  const effective = new Map<WordSectionProperties, ReadonlyMap<string, { relationshipId: string; section: number }>>();
+  const inherited = new Map<string, { relationshipId: string; section: number }>();
+  for (const [sectionIndex, section] of sections.entries()) {
     for (const reference of [...section.properties.headerReferences, ...section.properties.footerReferences]) {
-      inherited.set(`${reference.kind}:${reference.type}`, reference.relationshipId);
+      inherited.set(`${reference.kind}:${reference.type}`, { relationshipId: reference.relationshipId, section: sectionIndex });
     }
+    for (const binding of document.bindings ?? []) if (binding.section === sectionIndex) inherited.set(`${binding.kind}:${binding.type}`, { relationshipId: binding.relationshipId, section: sectionIndex });
     effective.set(section.properties, new Map(inherited));
   }
-  const sectionPageCounts = new Map<WordSectionProperties, number>();
   for (const page of pages) {
     const sectionPageIndex = sectionPageCounts.get(page.section) ?? 0;
     sectionPageCounts.set(page.section, sectionPageIndex + 1);
-    const references = effective.get(page.section) ?? new Map();
+    const references = effective.get(page.section);
     for (const kind of ["header", "footer"] as const) {
-      const preferredType = page.section.titlePage && sectionPageIndex === 0 && references.has(`${kind}:first`) ? "first"
-        : (page.index + 1) % 2 === 0 && references.has(`${kind}:even`) ? "even" : "default";
-      const relationshipId = references.get(`${kind}:${preferredType}`);
+      const preferredType = page.section.titlePage && sectionPageIndex === 0 ? "first"
+        : document.evenAndOddHeaders && (page.index + 1) % 2 === 0 ? "even" : "default";
+      const reference = references?.get(`${kind}:${preferredType}`);
+      const relationshipId = reference?.relationshipId;
+      const pageStory: WordPageStory = { section: reference?.section ?? sections.findIndex(item => item.properties === page.section), type: preferredType, ...(relationshipId === undefined ? {} : { relationshipId }) };
+      if (kind === 'header') page.headerStory = pageStory;
+      else page.footerStory = pageStory;
       if (relationshipId === undefined) continue;
       const story = document.headerFooters.find((item) => item.kind === kind && item.relationshipId === relationshipId);
       if (story === undefined) continue;
@@ -1169,6 +1205,8 @@ function freezePage(page: MutablePage, previous?: WordLayoutPage): WordLayoutPag
   if (previous && previous.index === page.index && previous.width === page.width &&
     previous.height === page.height && previous.section === page.section &&
     previous.noteSeparatorY === page.noteSeparatorY && sameItems(previous.columns, columns) &&
+    previous.storyOverflow === page.storyOverflow &&
+    JSON.stringify(previous.headerStory) === JSON.stringify(page.headerStory) && JSON.stringify(previous.footerStory) === JSON.stringify(page.footerStory) &&
     sameItems(previous.headerLines, page.headerLines) && sameItems(previous.footerLines, page.footerLines) &&
     sameItems(previous.headerTables, page.headerTables) && sameItems(previous.footerTables, page.footerTables) &&
     sameItems(previous.noteLines, page.noteLines) && sameItems(previous.noteTables, page.noteTables)) return previous;
@@ -1177,6 +1215,9 @@ function freezePage(page: MutablePage, previous?: WordLayoutPage): WordLayoutPag
     width: page.width,
     height: page.height,
     section: page.section,
+    ...(page.storyOverflow ? { storyOverflow: true } : {}),
+    ...(page.headerStory ? { headerStory: page.headerStory } : {}),
+    ...(page.footerStory ? { footerStory: page.footerStory } : {}),
     headerLines: Object.freeze(page.headerLines),
     footerLines: Object.freeze(page.footerLines),
     headerTables: Object.freeze(page.headerTables),

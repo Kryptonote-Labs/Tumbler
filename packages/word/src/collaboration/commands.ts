@@ -262,7 +262,7 @@ function wordTransaction(text: Y.Text, changes: readonly WordChange[]): WordDelt
   const replica = new Y.Doc();
   try {
     Y.applyUpdate(replica, state);
-    const staged = replica.getText('body');
+    const staged = replica.getText(wordTextName(text));
     let result: WordDelta = [];
     staged.observe((event) => {
       result = event.delta;
@@ -357,8 +357,8 @@ function validateWordDelta(text: Y.Text, delta: WordDelta) {
   try {
     Y.applyUpdate(staged, state);
     const vector = Y.encodeStateVector(staged);
-    staged.getText('body').applyDelta(delta);
-    validateWordText(staged.getText('body'));
+    staged.getText(wordTextName(text)).applyDelta(delta);
+    validateWordText(staged.getText(wordTextName(text)));
     validateDocument?.(staged, text.doc);
     validateUpdate?.(state, Y.encodeStateAsUpdate(staged, vector));
   } finally {
@@ -367,4 +367,11 @@ function validateWordDelta(text: Y.Text, delta: WordDelta) {
 }
 
 return { bodyLength, anchorWordRange, resolveWordRange, wordFormats, replaceWordDelta, formatWordDelta, wordTransaction, validateWordDelta };
+}
+
+/** Resolve the text scope before staging operations; positions never cross document stories. */
+function wordTextName(text: Y.Text) {
+  const name = Y.createRelativePositionFromTypeIndex(text, 0).tname;
+  if (!name) throw new Error('Word text must be a named document region.');
+  return name;
 }

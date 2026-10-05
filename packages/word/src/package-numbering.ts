@@ -81,7 +81,7 @@ export function mergeContentNumbering(
       source.conformance === 'strict'
         ? 'http://purl.oclc.org/ooxml/officeDocument/relationships'
         : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-    transaction.addRelationship(source.part.name, {
+    transaction.addRelationship(source.package.mainOfficeDocumentPart().name, {
       id: `${prefix}numbering`,
       type: `${office}/numbering`,
       target: name,
