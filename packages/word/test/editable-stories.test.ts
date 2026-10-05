@@ -68,6 +68,7 @@ test('editing a shared story preserves page fields, tables and inherited section
   const layout = model.layout(measure);
   expect(layout.pages).toHaveLength(2);
   expect(layout.pages.map(page => page.headerStory?.relationshipId)).toEqual(['header', 'header']);
+  expect(layout.pages.map(page => page.headerStory?.section)).toEqual([0, 0]);
   expect(layout.pages[1]!.headerTables[0]!.cells[0]!.lines[0]!.fragments[0]!.text).toBe('Changed');
   const exported = model.artifact();
   const xml = wordStoryArtifact(exported, '/word/header.xml').document.source.source;
@@ -125,4 +126,15 @@ test('story images and numbering round-trip through their own relationships', ()
   expect(reopened.document.drawings.size).toBe(0);
   expect(reopened.document.headerFooters[0]!.drawings.size).toBe(1);
   expect(importWordContent(wordStoryArtifact(reopened, created.partName))[0]).toMatchObject({ list: { kind: 'decimal' } });
+});
+
+
+test('new inherited stories keep the defining section as their editing target', () => {
+  const source = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${w}"><w:body><w:p><w:pPr><w:sectPr/></w:pPr><w:r><w:t>First</w:t></w:r></w:p><w:p><w:r><w:t>Second</w:t></w:r></w:p><w:sectPr/></w:body></w:document>` }));
+  const model = new NativeWordDocument({ source });
+  model.updateStory({ section: 0, kind: 'header', type: 'default' }, [{ kind: 'paragraph', runs: [{ text: 'Shared new header' }] }]);
+  const pages = model.layout(measure).pages;
+  expect(pages).toHaveLength(2);
+  expect(pages[1]!.headerStory).toEqual(pages[0]!.headerStory);
+  expect(pages[1]!.headerLines[0]!.fragments[0]!.text).toBe('Shared new header');
 });

@@ -986,24 +986,25 @@ function decorateHeaderFooters(
   sections: readonly { readonly properties: WordSectionProperties; readonly blocks: readonly WordBlock[] }[],
   sectionPageCounts = new Map<WordSectionProperties, number>(),
 ): void {
-  const effective = new Map<WordSectionProperties, ReadonlyMap<string, string>>();
-  const inherited = new Map<string, string>();
+  const effective = new Map<WordSectionProperties, ReadonlyMap<string, { relationshipId: string; section: number }>>();
+  const inherited = new Map<string, { relationshipId: string; section: number }>();
   for (const [sectionIndex, section] of sections.entries()) {
     for (const reference of [...section.properties.headerReferences, ...section.properties.footerReferences]) {
-      inherited.set(`${reference.kind}:${reference.type}`, reference.relationshipId);
+      inherited.set(`${reference.kind}:${reference.type}`, { relationshipId: reference.relationshipId, section: sectionIndex });
     }
-    for (const binding of document.bindings ?? []) if (binding.section === sectionIndex) inherited.set(`${binding.kind}:${binding.type}`, binding.relationshipId);
+    for (const binding of document.bindings ?? []) if (binding.section === sectionIndex) inherited.set(`${binding.kind}:${binding.type}`, { relationshipId: binding.relationshipId, section: sectionIndex });
     effective.set(section.properties, new Map(inherited));
   }
   for (const page of pages) {
     const sectionPageIndex = sectionPageCounts.get(page.section) ?? 0;
     sectionPageCounts.set(page.section, sectionPageIndex + 1);
-    const references = effective.get(page.section) ?? new Map<string, string>();
+    const references = effective.get(page.section);
     for (const kind of ["header", "footer"] as const) {
       const preferredType = page.section.titlePage && sectionPageIndex === 0 ? "first"
         : document.evenAndOddHeaders && (page.index + 1) % 2 === 0 ? "even" : "default";
-      const relationshipId = references.get(`${kind}:${preferredType}`);
-      const pageStory: WordPageStory = { section: sections.findIndex(item => item.properties === page.section), type: preferredType, ...(relationshipId === undefined ? {} : { relationshipId }) };
+      const reference = references?.get(`${kind}:${preferredType}`);
+      const relationshipId = reference?.relationshipId;
+      const pageStory: WordPageStory = { section: reference?.section ?? sections.findIndex(item => item.properties === page.section), type: preferredType, ...(relationshipId === undefined ? {} : { relationshipId }) };
       if (kind === 'header') page.headerStory = pageStory;
       else page.footerStory = pageStory;
       if (relationshipId === undefined) continue;
