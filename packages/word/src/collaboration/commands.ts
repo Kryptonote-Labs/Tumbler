@@ -371,7 +371,7 @@ return { bodyLength, anchorWordRange, resolveWordRange, wordFormats, replaceWord
 
 /** Resolve the text scope before staging operations; positions never cross document stories. */
 function wordTextName(text: Y.Text) {
-  const name = [...text.doc!.share].find(([, value]) => value === text)?.[0];
+  const name = Y.createRelativePositionFromTypeIndex(text, 0).tname;
   if (!name) throw new Error('Word text must be a named document region.');
   return name;
 }
