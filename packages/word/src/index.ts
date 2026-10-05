@@ -122,3 +122,7 @@ export { WordPackageDocument, reconcileWordContent, wordContentParagraphs } from
 
 export { createWordSourceManifest, type WordSourceManifest } from './source-manifest.ts';
 export type { NativeWordOptions } from './native-document.ts';
+
+export { wordStoryArtifact, createWordStory, wordSections, type WordStoryTarget, type WordStoryKind, type WordStoryType } from './stories.ts';
+
+export type { WordPageStory } from "./layout.ts";

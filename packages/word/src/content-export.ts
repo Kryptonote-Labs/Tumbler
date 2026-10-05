@@ -1,3 +1,4 @@
+import { wordStoryArtifact } from './stories.ts';
 import type { WordBlock } from './document.ts';
 import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
 import { beginPackageTransaction, PartName, RelationshipsError } from '@tumblerjs/opc';
@@ -168,11 +169,12 @@ export function reconcileWordContent(
     copies,
     replacedImages,
   );
-  const body = document.source.elements(document.source.root.namespaceUri, 'body')[0]!;
+  const isStory = document.source.root.localName !== 'document';
+  const body = isStory ? document.source.root : document.source.elements(document.source.root.namespaceUri, 'body')[0]!;
   const edit = beginLosslessXmlEdit(document.source);
   const content = markup.container(
     body,
-    'body',
+    body.localName,
     ['p', 'tbl'],
     renderWordBlocks(markup, blocks, renderParagraph),
   );
@@ -185,6 +187,7 @@ export function reconcileWordContent(
     maxInlineItems: Number.MAX_SAFE_INTEGER,
     maxTextCharacters: Number.MAX_SAFE_INTEGER,
   });
+  if (isStory) result = wordStoryArtifact(result, document.part.name.value);
   for (const [paragraphIndex, paragraph] of paragraphs.entries()) {
     let offset = 0;
     for (const run of paragraph.runs) {

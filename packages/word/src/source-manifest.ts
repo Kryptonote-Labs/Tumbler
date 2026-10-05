@@ -1,3 +1,4 @@
+import { wordStoryArtifact } from './stories.ts';
 import { wordDocumentDefaults } from './document-defaults.ts';
 import type { ComputedWordTextFormat } from './styles.ts';
 import type { WordArtifact } from './artifact.ts';
@@ -7,6 +8,7 @@ import { wordParagraphTextSegments } from './text.ts';
 /** Immutable import metadata for validating remote edits without reopening the source package. */
 export interface WordSourceManifest {
   readonly version: 1;
+  readonly stories?: Readonly<Record<string, WordSourceManifest>>;
   readonly defaultTextFormat?: ComputedWordTextFormat;
   readonly paragraphs: readonly number[];
   readonly runs: readonly number[];
@@ -33,5 +35,5 @@ export function createWordSourceManifest(artifact: WordArtifact): WordSourceMani
     }
   };
   visit(artifact.document.blocks);
-  return { version: 1, defaultTextFormat: wordDocumentDefaults(artifact.document).text, paragraphs, runs, tables, rows, cells, images: [...artifact.document.drawings.values()].flatMap(drawing => drawing.kind === 'image' ? [{ id: drawing.elementId, contentType: drawing.contentType }] : []) };
+  return { version: 1, ...(artifact.document.headerFooters.length ? { stories: Object.fromEntries(artifact.document.headerFooters.map(story => [story.part.name.value, createWordSourceManifest(wordStoryArtifact(artifact, story.part.name.value))])) } : {}), defaultTextFormat: wordDocumentDefaults(artifact.document).text, paragraphs, runs, tables, rows, cells, images: [...artifact.document.drawings.values()].flatMap(drawing => drawing.kind === 'image' ? [{ id: drawing.elementId, contentType: drawing.contentType }] : []) };
 }

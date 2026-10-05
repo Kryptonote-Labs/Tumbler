@@ -1,3 +1,5 @@
+import { createWordStory, wordStoryArtifact, type WordStoryTarget } from './stories.ts';
+import { openWordArtifact } from './artifact.ts';
 import { NativeWordSource, retainOpaqueBlocks } from './native-source.ts';
 import type { WordArtifact } from './artifact.ts';
 import { reconcileWordContent } from './content-export.ts';
@@ -76,6 +78,7 @@ export class NativeWordDocument implements WordLayoutSource {
   drawings: ReadonlyMap<number, WordDrawing> = new Map();
   listMarkers: ReadonlyMap<number, WordListMarker> = new Map();
   readonly cache = new WordLayoutCache();
+  private readonly editedStories = new Map<string, { target: string | WordStoryTarget; model: NativeWordDocument; blocks: readonly WordContentBlock[] }>();
   readonly finalSection: WordSectionProperties;
 
   constructor(private readonly options: NativeWordOptions = {}) {
@@ -118,17 +121,60 @@ export class NativeWordDocument implements WordLayoutSource {
   runFormat(paragraph: WordParagraph, run: WordRun | undefined) {
     return (run && this.runFormats.get(run)) ?? this.paragraphTextFormats.get(paragraph) ?? this.compiled?.defaults.text ?? { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }) };
   }
+  /** Update a shared header/footer once; every page referencing it uses this same native model. */
+  updateStory(target: string | WordStoryTarget, blocks: readonly WordContentBlock[]) {
+    const key = typeof target === 'string' ? target : `${target.section}:${target.kind}:${target.type}`;
+    let entry = this.editedStories.get(key);
+    if (!entry) {
+      const source = typeof target === 'string' && this.options.source ? wordStoryArtifact(this.options.source, target) : undefined;
+      const { source: _bodySource, ...options } = this.options;
+      entry = { target, blocks, model: new NativeWordDocument({ ...options, ...(source ? { source } : {}) }) };
+      this.editedStories.set(key, entry);
+    }
+    entry.blocks = blocks;
+    entry.model.update(blocks);
+    this.exported = undefined;
+    return entry.model;
+  }
   layout(measurer: WordTextMeasurer, options: WordLayoutOptions = {}) {
     return layoutWordSource(this, measurer, {
       maxPages: Number.MAX_SAFE_INTEGER,
       maxFragments: Number.MAX_SAFE_INTEGER,
       ...options,
-    }, this.compiled ? wordLayoutStories(this.compiled.artifact.document) : undefined);
+    }, this.layoutStories());
+  }
+  private layoutStories() {
+    const original = this.compiled ? wordLayoutStories(this.compiled.artifact.document) : { headerFooters: [], notes: [] };
+    const headerFooters = original.headerFooters.map(story => {
+      const part = this.options.source?.document.headerFooters.find(item => item.relationshipId === story.relationshipId)?.part.name.value;
+      const edited = part && this.editedStories.get(part);
+      return edited ? { ...story, context: edited.model } : story;
+    });
+    const bindings: { section: number; kind: 'header' | 'footer'; type: 'default' | 'first' | 'even'; relationshipId: string }[] = [];
+    for (const [key, entry] of this.editedStories) {
+      if (typeof entry.target === 'string') continue;
+      bindings.push({ ...entry.target, relationshipId: key });
+      headerFooters.push({ ...entry.target, relationshipId: key, context: entry.model });
+    }
+    return { ...original, headerFooters, bindings };
   }
   artifact() {
-    return this.exported ??= this.compiled
+    if (this.exported) return this.exported;
+    let result = this.compiled
       ? reconcileWordContent(this.compiled.artifact, this.authored)
       : createWordArtifact({ ...this.options, blocks: this.authored });
+    for (const entry of this.editedStories.values()) {
+      let partName: string;
+      if (typeof entry.target === 'string') partName = entry.target;
+      else {
+        const created = createWordStory(result, entry.target);
+        result = created.artifact;
+        partName = created.partName;
+      }
+      const edited = reconcileWordContent(wordStoryArtifact(result, partName), entry.blocks);
+      result = openWordArtifact(edited.bytes(), { maxBlocks: Number.MAX_SAFE_INTEGER, maxInlineItems: Number.MAX_SAFE_INTEGER, maxTextCharacters: Number.MAX_SAFE_INTEGER });
+    }
+    return this.exported = result;
   }
 
   update(input: readonly WordContentBlock[]) {
