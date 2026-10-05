@@ -176,6 +176,36 @@ Source styles, sections, hyperlinks, numbering, table properties, drawings and s
 once. Editing uses semantic nodes and cached geometry; retained XML and package parts are consulted
 only at import and export. `WordPackageDocument` is a compatibility name for this native engine.
 
+### Editing headers and footers
+
+`wordStoryArtifact(source, partName)` exposes a header or footer through the same content and
+formatting operations as the main document. Source element identifiers are local to that part.
+Its bytes still contain the complete DOCX package; reopen them normally to return to the body.
+
+```ts
+const model = new NativeWordDocument({ source });
+model.updateStory('/word/header1.xml', [
+  { kind: 'paragraph', alignment: 'center', runs: [{ text: 'Revised header' }] },
+]);
+model.updateStory({ section: 0, kind: 'footer', type: 'default' }, [
+  { kind: 'paragraph', runs: [{ text: 'New footer' }] },
+]);
+const layout = model.layout(measurer);
+const edited = model.artifact();
+```
+
+Pass a part name to edit an existing shared story. All sections referencing or inheriting it
+see the edit. Pass a zero-based section and `default`, `first` or `even` variant to create or
+update that section's reference. `createWordStory` also creates a package-backed empty story
+and returns its part name. `removeStory` discards a native model override and restores the source
+behavior; it does not delete source parts.
+
+Page `headerStory` and `footerStory` metadata identify the effective section, variant and
+relationship, including empty regions. Layout follows first-page and even-page settings and
+reserves body space for story content. `updateStory` returns the child model for region-local
+paragraph positions. Collaborative commands accept any named top-level `Y.Text`, so hosts can
+use separate text streams and undo histories for the body and each shared story.
+
 ### Plain-text transactions
 
 `NativeWordText.transact([{ start, deleteCount, insert }])` applies sequential UTF-16 edits
