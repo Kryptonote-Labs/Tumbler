@@ -53,6 +53,7 @@ export interface WordLayoutPage {
   readonly width: number;
   readonly height: number;
   readonly section: WordSectionProperties;
+  readonly storyOverflow?: boolean;
   readonly headerStory?: WordPageStory;
   readonly footerStory?: WordPageStory;
   readonly columns: readonly WordLayoutColumn[];
@@ -165,6 +166,7 @@ interface MutablePage {
   readonly height: number;
   readonly section: WordSectionProperties;
   readonly columns: MutableColumn[];
+  storyOverflow?: boolean;
   headerStory?: WordPageStory;
   footerStory?: WordPageStory;
   headerLines: WordLayoutLine[];
@@ -373,7 +375,11 @@ export function layoutWordSource(
       decorateHeaderFooters(stories, [created], measurer, budget, sections, new Map([[section, index]]));
       const headerBottom = Math.max(points(section.marginTopTwips), ...created.headerLines.map(line => line.y + line.height), ...created.headerTables.map(table => table.y + table.height));
       const footerTop = Math.min(created.height - points(section.marginBottomTwips), ...created.footerLines.map(line => line.y), ...created.footerTables.map(table => table.y));
-      for (const [columnIndex, column] of created.columns.entries()) created.columns[columnIndex] = { ...column, y: headerBottom, height: Math.max(1, footerTop - headerBottom) };
+      // A repeated story that fills the page cannot be resolved by adding identical pages.
+      // Keep body content within its section margins and expose the collision to the host.
+      // This is a layout fallback, not an authoring limit: all story content remains in the model/export.
+      if (footerTop <= headerBottom) created.storyOverflow = true;
+      else for (const [columnIndex, column] of created.columns.entries()) created.columns[columnIndex] = { ...column, y: headerBottom, height: footerTop - headerBottom };
     }
     return created;
   };
@@ -1199,6 +1205,7 @@ function freezePage(page: MutablePage, previous?: WordLayoutPage): WordLayoutPag
   if (previous && previous.index === page.index && previous.width === page.width &&
     previous.height === page.height && previous.section === page.section &&
     previous.noteSeparatorY === page.noteSeparatorY && sameItems(previous.columns, columns) &&
+    previous.storyOverflow === page.storyOverflow &&
     JSON.stringify(previous.headerStory) === JSON.stringify(page.headerStory) && JSON.stringify(previous.footerStory) === JSON.stringify(page.footerStory) &&
     sameItems(previous.headerLines, page.headerLines) && sameItems(previous.footerLines, page.footerLines) &&
     sameItems(previous.headerTables, page.headerTables) && sameItems(previous.footerTables, page.footerTables) &&
@@ -1208,6 +1215,7 @@ function freezePage(page: MutablePage, previous?: WordLayoutPage): WordLayoutPag
     width: page.width,
     height: page.height,
     section: page.section,
+    ...(page.storyOverflow ? { storyOverflow: true } : {}),
     ...(page.headerStory ? { headerStory: page.headerStory } : {}),
     ...(page.footerStory ? { footerStory: page.footerStory } : {}),
     headerLines: Object.freeze(page.headerLines),

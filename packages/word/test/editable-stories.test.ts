@@ -138,3 +138,15 @@ test('new inherited stories keep the defining section as their editing target', 
   expect(pages[1]!.headerStory).toEqual(pages[0]!.headerStory);
   expect(pages[1]!.headerLines[0]!.fragments[0]!.text).toBe('Shared new header');
 });
+
+
+test('an oversized repeated story reports overlap without displacing body text off-page', () => {
+  const model = new NativeWordDocument();
+  model.update([{ kind: 'paragraph', runs: [{ text: 'Body remains on-page' }] }]);
+  model.updateStory({ section: 0, kind: 'header', type: 'default' }, Array.from({ length: 100 }, () => ({ kind: 'paragraph' as const, runs: [{ text: 'Oversized header' }] })));
+  const page = model.layout(measure).pages[0]!;
+  expect(page.storyOverflow).toBe(true);
+  expect(page.columns[0]!.lines[0]!.y + page.columns[0]!.lines[0]!.height).toBeLessThan(page.height);
+  expect(page.headerLines).toHaveLength(100);
+  expect(importWordContent(wordStoryArtifact(model.artifact(), model.artifact().document.headerFooters[0]!.part.name.value))).toHaveLength(100);
+});

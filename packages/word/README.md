@@ -202,7 +202,9 @@ behavior; it does not delete source parts.
 
 Page `headerStory` and `footerStory` metadata identify the effective section, variant and
 relationship, including empty regions. Layout follows first-page and even-page settings and
-reserves body space for story content. `updateStory` returns the child model for region-local
+reserves body space for story content. If repeated stories consume the whole page,
+`storyOverflow` reports the collision and the body falls back to its section margins rather than
+being placed outside the page. Story content is retained without an authoring limit. `updateStory` returns the child model for region-local
 paragraph positions. Collaborative commands accept any named top-level `Y.Text`, so hosts can
 use separate text streams and undo histories for the body and each shared story.
 
