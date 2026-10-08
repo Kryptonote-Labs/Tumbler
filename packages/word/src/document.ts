@@ -1,3 +1,4 @@
+import { pageFieldInstruction } from './page-fields.ts';
 import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { RelationshipsError, type OpcPackage, type OpcPart, type Relationships } from "@tumblerjs/opc";
 import { readWordStyles, type WordStyles } from "./styles.ts";
@@ -182,7 +183,14 @@ export interface WordUnsupportedRunContent {
   readonly localName: string;
 }
 
+export interface WordPageFieldContent {
+  readonly kind: "page-field";
+  readonly elementId: number;
+  readonly field: import("./page-fields.ts").WordPageField;
+}
+
 export type WordRunContent =
+  | WordPageFieldContent
   | WordText
   | WordTab
   | WordBreak
@@ -590,6 +598,15 @@ function parseInline(
   takeInline(budget);
   if (element.namespaceUri !== namespace) return unsupportedInline(element);
   if (element.localName === "r") return parseRun(element, source, namespace, budget);
+  if (element.localName === 'fldSimple') {
+    const field = pageFieldInstruction(attr(element, namespace, 'instr') ?? '');
+    if (field) {
+      const result = children(element, namespace, 'r')[0];
+      const properties = result && onlyChild(result, namespace, 'rPr', 'A run must not repeat rPr.');
+      return Object.freeze({ kind: 'run', elementId: element.id, propertiesElementId: properties?.id,
+        contents: Object.freeze([{ kind: 'page-field', elementId: element.id, field } as const]) });
+    }
+  }
   if (element.localName === "hyperlink") {
     const relationshipId = qualifiedAttr(element, relationshipsNamespace(namespace), "id");
     const relationship = relationshipId === undefined ? undefined : relationships?.get(relationshipId);

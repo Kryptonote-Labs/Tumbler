@@ -336,7 +336,10 @@ export class NativeWordDocument implements WordLayoutSource {
             const inlines: WordInline[] = authored.runs.map((authoredRun) => {
               const inherited = compiled?.leaves.get(authoredRun.source!);
               const contents: WordRunContent[] = [];
-              if (authoredRun.image) {
+              if (authoredRun.field) {
+                if (authoredRun.text !== '\uFFFC' || authoredRun.image) throw new TypeError('Page fields use one object replacement character.');
+                contents.push({ kind: 'page-field', elementId: allocate(), field: authoredRun.field });
+              } else if (authoredRun.image) {
                 const id = allocate();
                 contents.push({ kind: 'drawing', elementId: id });
                 const originalDrawing = compiled?.artifact.document.drawings.get(authoredRun.source!);

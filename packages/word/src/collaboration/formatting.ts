@@ -16,6 +16,7 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   fontSize?: number;
   table?: TableCell;
   image?: DocumentImage;
+  field?: import('../page-fields.ts').WordPageField;
   list?: { id: string; kind: 'bullet' | 'decimal'; level: number };
 };
 
@@ -48,6 +49,7 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
       continue;
     if (key === 'wordCopy' && typeof value === 'string') continue;
     if (key === 'wordUnderline' && (value === 'single' || value === 'double')) continue;
+    if (key === 'field' && (value === 'PAGE' || value === 'NUMPAGES')) continue;
     if (key === 'image' && isDocumentImage(value)) continue;
     if (key === 'table' && isTableCell(value)) continue;
     if (key === 'list' && isList(value)) continue;

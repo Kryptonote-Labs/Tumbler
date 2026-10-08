@@ -14,6 +14,7 @@ export function validateWordText(text: Y.Text) {
   for (const part of text.toDelta()) {
     if (typeof part.insert !== 'string') throw new Error('Only text is supported.');
     validateAttributes(part.attributes);
+    if (part.attributes?.field && (part.attributes.image || !/^\uFFFC+$/.test(part.insert))) throw new Error('Invalid page field content.');
     const list = part.attributes?.list;
     if (list) {
       if (lists.has(list.id) && lists.get(list.id) !== list.kind) throw new Error('A list must use consistent numbering.');

@@ -126,3 +126,6 @@ export type { NativeWordOptions } from './native-document.ts';
 export { wordStoryArtifact, createWordStory, wordSections, type WordStoryTarget, type WordStoryKind, type WordStoryType } from './stories.ts';
 
 export type { WordPageStory } from "./layout.ts";
+
+export { isWordPageField, WORD_FIELD_CHARACTER, type WordPageField } from './page-fields.ts';
+export { WORD_PAGE_NUMBER_PRESETS, wordPageNumberRuns, type WordPageNumberPreset } from './page-fields.ts';
