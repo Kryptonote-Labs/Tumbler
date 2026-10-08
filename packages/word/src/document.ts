@@ -147,7 +147,14 @@ export interface WordText {
   readonly preserveSpace: boolean;
 }
 
+export interface WordPositionalTab {
+  readonly alignment: "left" | "center" | "right";
+  readonly relativeTo: "margin" | "indent";
+  readonly leader: "none" | "dot" | "hyphen" | "underscore" | "middleDot";
+}
+
 export interface WordTab {
+  readonly position?: WordPositionalTab;
   readonly kind: "tab";
   readonly elementId: number;
 }
@@ -679,7 +686,15 @@ function parseRunContent(
     });
   }
   if (element.localName === "tab" || element.localName === "ptab") {
-    return Object.freeze({ kind: "tab", elementId: element.id });
+    const alignment = attr(element, namespace, "alignment");
+    const relativeTo = attr(element, namespace, "relativeTo");
+    const leader = attr(element, namespace, "leader");
+    const position: WordPositionalTab | undefined = element.localName === "ptab" ? {
+      alignment: alignment === "center" || alignment === "right" ? alignment : "left",
+      relativeTo: relativeTo === "indent" ? "indent" : "margin",
+      leader: leader === "dot" || leader === "hyphen" || leader === "underscore" || leader === "middleDot" ? leader : "none",
+    } : undefined;
+    return Object.freeze({ kind: "tab", elementId: element.id, ...(position ? { position: Object.freeze(position) } : {}) });
   }
   if (element.localName === "br" || element.localName === "cr") {
     const rawType = element.localName === "cr" ? "textWrapping" : attr(element, namespace, "type") ?? "textWrapping";

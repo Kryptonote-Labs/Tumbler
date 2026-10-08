@@ -77,6 +77,24 @@ describe("WordprocessingML page layout", () => {
     expect(fragments[3]!.width).toBeGreaterThan(0);
   });
 
+  test("aligns tab-delimited text across formatted runs", () => {
+    for (const [alignment, expected] of [["left", 110], ["center", 99], ["right", 88], ["decimal", 88]] as const) {
+      const document = open(`<w:p><w:pPr><w:tabs><w:tab w:val="${alignment}" w:pos="2000"/></w:tabs></w:pPr><w:r><w:tab/><w:t>AB</w:t></w:r><w:r><w:t>CD</w:t></w:r></w:p>`, section({ width: 6000, height: 5000, margin: 200 }));
+      const fragments = layoutWordDocument(document, measurer).pages[0]!.columns[0]!.lines[0]!.fragments;
+      expect(fragments.find(f => f.text === "AB")!.x).toBeCloseTo(expected);
+    }
+  });
+
+  test("positions alignment tabs relative to margins and wraps occupied targets", () => {
+    const document = open(`<w:p><w:r><w:t>Left</w:t><w:ptab w:alignment="center" w:relativeTo="margin" w:leader="none"/><w:t>Center</w:t><w:ptab w:alignment="right" w:relativeTo="margin" w:leader="none"/><w:t>Right</w:t><w:ptab w:alignment="left" w:relativeTo="margin" w:leader="none"/><w:t>Next</w:t></w:r></w:p>`, section({ width: 6000, height: 5000, margin: 200 }));
+    const lines = layoutWordDocument(document, measurer).pages[0]!.columns[0]!.lines;
+    expect(lines).toHaveLength(2);
+    const fragments = lines[0]!.fragments;
+    expect(fragments.find(f => f.text === "Center")!.x).toBeCloseTo(133.5);
+    expect(fragments.find(f => f.text === "Right")!.x).toBeCloseTo(262.5);
+    expect(lines[1]!.fragments.find(f => f.text === "Next")!.x).toBeCloseTo(10);
+  });
+
   test("keeps field instructions and deleted revision text out of the visible result", () => {
     const document = open(`<w:p>
       <w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> DATE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>August 9</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>

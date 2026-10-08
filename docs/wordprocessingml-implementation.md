@@ -122,3 +122,10 @@ run-property children and do not flatten computed style values into every run.
 Microsoft Word, LibreOffice, Open XML SDK, real-producer visual corpus, pinned
 font screenshot, memory, and large-document performance gates remain open. The
 package stays explicitly early alpha until those external gates are reproducible.
+
+## Aligned tabs
+
+Tab-delimited segments honor left, center, right and decimal stops across run
+boundaries. Positional tabs retain their alignment and margin/indent reference;
+occupied positional targets continue on the next line. Tab leaders remain a
+rendering follow-up. Layout tests assert segment positions, not just parsed styles.
