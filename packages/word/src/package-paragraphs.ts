@@ -1,3 +1,4 @@
+import { paragraphPositioningXml, positionalTabXml } from './positioning.ts';
 import { pageFieldXml } from './page-fields.ts';
 import type { WordTextParagraph, WordTextRun } from './create.ts';
 import type { LosslessXmlElement } from '@tumblerjs/ooxml';
@@ -152,6 +153,7 @@ export function wordParagraphRenderer(
       sourceMarkup = sourceMarkup.replace(/([\w]+:embed=)(['"])(.*?)\2/, `$1"${relationship}"`);
     }
     let content =
+      run.tab ? markup.word(positionalTabXml(run.tab, run.text)) :
       element && original?.text === run.text && element.localName !== 't'
         ? sourceMarkup
         : element && original?.text === '\uFFFC'
@@ -202,6 +204,11 @@ export function wordParagraphRenderer(
     }
     if (paragraph.alignment !== undefined && paragraph.alignment !== original?.alignment)
       replacements.set('jc', `<w:jc w:val="${paragraph.alignment}"/>`);
+    if (paragraph.positioning && JSON.stringify(paragraph.positioning) !== JSON.stringify(original?.positioning)) {
+      const positioning = paragraphPositioningXml({ ...original?.positioning, ...paragraph.positioning });
+      if (positioning.tabs !== undefined) replacements.set('tabs', positioning.tabs);
+      if (positioning.ind !== undefined) replacements.set('ind', positioning.ind);
+    }
     const generatedP = generatedParagraphs[indexByParagraph.get(paragraph)!]!;
     if (JSON.stringify(paragraph.list) !== JSON.stringify(original?.list)) {
       const generatedProperties = generatedXml.children(
