@@ -7,7 +7,7 @@ export interface WordClickAndTypeTarget {
   readonly positionTwips: number;
   readonly alignment: 'left' | 'center' | 'right';
   /** Snapped caret geometry in document points, shared by previews and editing intent. */
-  readonly caret: { readonly x: number; readonly y: number; readonly height: number };
+  readonly caret: { readonly x: number; readonly y: number; readonly height: number; readonly baseline: number };
 }
 
 export interface WordClickAndTypeBounds {
@@ -54,6 +54,6 @@ export function wordClickAndTypeTarget(
     paragraphs,
     positionTwips: Math.round((x - bounds.left) * 20),
     alignment,
-    caret: { x, y: (reference?.y ?? line.y) + paragraphs * line.height, height: reference?.height ?? line.height },
+    caret: { x, y: (reference?.y ?? line.y) + paragraphs * line.height, height: reference?.height ?? line.height, baseline: line.baseline + paragraphs * line.height },
   };
 }
