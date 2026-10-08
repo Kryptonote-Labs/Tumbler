@@ -44,3 +44,8 @@ test('ordinary typing does not inherit positional tab metadata', () => {
   expect(()=>validateWordText(text)).not.toThrow();
   expect(text.toString()).toBe('\tText\n');doc.destroy();
 });
+
+ test('plain imports do not materialize redundant paragraph positioning', () => {
+  const content=importWordContent(createWordArtifact({paragraphs:[{runs:[{text:'Plain'}]}]}));
+  expect(content[0]).not.toHaveProperty('positioning');
+ });

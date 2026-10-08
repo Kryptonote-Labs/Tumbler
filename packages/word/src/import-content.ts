@@ -55,7 +55,8 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
     const { alignment, tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips } = document.styles.paragraphFormat(document, block);
     return {
       kind: 'paragraph',
-      positioning: { tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips },
+      ...(tabs.length || indentStartTwips || indentEndTwips || firstLineTwips || hangingTwips
+        ? { positioning: { tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips } } : {}),
       id: `source-${block.elementId}`,
       source: block.elementId,
       runs: projected,

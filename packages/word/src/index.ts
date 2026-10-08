@@ -133,3 +133,4 @@ export { WORD_PAGE_NUMBER_PRESETS, wordPageNumberRuns, type WordPageNumberPreset
 
 export { isWordParagraphPositioning, isWordPositionalTab, type WordParagraphPositioning } from './positioning.ts';
 export type { WordPositionalTab } from './document.ts';
+export { wordClickAndTypeTarget, type WordClickAndTypeTarget } from './click-and-type.ts';

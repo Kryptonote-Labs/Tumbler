@@ -135,3 +135,13 @@ Authored runs can contain one positional `tab`. The native engine, DOCX importer
 and exporter share these properties. In collaborative text, paragraph positioning
 lives on the terminating newline and positional-tab metadata on the tab character;
 ordinary typing does not inherit the tab metadata.
+
+The collaboration adapter exposes `wordPageNumberRange`, `pageNumberEdit`,
+`wordItemAlignment`, and `alignWordItem`. Hosts distinguish explicit insertion
+from updating a selected recipe. Placement preserves neighboring character
+identities and returns a selection with one validated delta for undo grouping.
+
+`wordClickAndTypeTarget` resolves blank-space intent from layout coordinates.
+`clickAndTypeEdit` turns the target into editable paragraphs and tabs in one delta.
+It leaves clicks on existing ink to ordinary text selection. Hosts constrain the
+layout lines and bounds to the active story or table cell before calling it.
