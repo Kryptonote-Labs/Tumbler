@@ -130,3 +130,6 @@ export type { WordPageStory } from "./layout.ts";
 
 export { isWordPageField, WORD_FIELD_CHARACTER, type WordPageField } from './page-fields.ts';
 export { WORD_PAGE_NUMBER_PRESETS, wordPageNumberRuns, type WordPageNumberPreset } from './page-fields.ts';
+
+export { isWordParagraphPositioning, isWordPositionalTab, type WordParagraphPositioning } from './positioning.ts';
+export type { WordPositionalTab } from './document.ts';

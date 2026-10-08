@@ -149,6 +149,7 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
     if (typeof part.insert !== 'string') continue;
     if (last >= offset && last < offset + part.insert.length) {
       if (part.attributes?.wordParagraph) result.wordParagraph = part.attributes.wordParagraph;
+      if (part.attributes?.positioning) result.positioning = part.attributes.positioning;
       if (part.attributes?.align) result.align = part.attributes.align;
       if (part.attributes?.list) result.list = part.attributes.list;
       if (part.attributes?.table) result.table = part.attributes.table;
@@ -169,7 +170,7 @@ function replaceWordDelta(
   value = value.replace(/\r\n?/g, '\n');
   validateText(text.toString().slice(0, range.start) + value + text.toString().slice(range.end));
   validateAttributes(attributes);
-  const { align, list, table: inheritedTable, wordParagraph, image: _image, field: _field, ...inline } = attributes;
+  const { align, positioning, tab: _tab, list, table: inheritedTable, wordParagraph, image: _image, field: _field, ...inline } = attributes;
   let table = inheritedTable;
   if (table && range.end > range.start) {
     const paragraphs = tableParagraphs(text);
@@ -194,6 +195,7 @@ function replaceWordDelta(
           ...(wordParagraph ? { wordParagraph } : {}),
           ...(attributes.wordCopy ? { wordCopy: attributes.wordCopy } : {}),
           ...(align ? { align } : {}),
+          ...(positioning ? { positioning } : {}),
           ...(list ? { list } : {}),
           ...(table ? { table } : {}),
         },
@@ -221,12 +223,13 @@ function formatWordDelta(
     attributes.wordCopy !== undefined
   )
     throw new Error('Source identities cannot be formatted.');
+  if (attributes.tab !== undefined) throw new Error('Insert or delete positional tabs as content.');
   if (attributes.field !== undefined) throw new Error('Insert or delete page fields as content.');
   if (attributes.image !== undefined) throw new Error('Use image operations to change images.');
   if (attributes.table !== undefined)
     throw new Error('Use table operations to change cell structure.');
   const value = text.toString();
-  const { align, list, table: _table, image: _image, field: _field, ...inline } = attributes;
+  const { align, positioning, tab: _tab, list, table: _table, image: _image, field: _field, ...inline } = attributes;
   const delta: WordDelta = [];
   let cursor = 0;
   const append = (start: number, length: number, attributes: WordFormatPatch) => {
@@ -245,10 +248,11 @@ function formatWordDelta(
       const to = Math.min(end, range.end);
       if (to > from) append(from, to - from, inline);
     }
-    if (align !== undefined || list !== undefined)
+    if (align !== undefined || list !== undefined || positioning !== undefined)
       append(end, 1, {
         ...(align !== undefined ? { align: align === 'left' ? null : align } : {}),
         ...(list !== undefined ? { list } : {}),
+        ...(positioning !== undefined ? { positioning } : {}),
       });
     if (end >= Math.max(range.start, range.end - 1)) break;
     start = end + 1;

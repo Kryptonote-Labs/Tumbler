@@ -1,3 +1,4 @@
+import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
 import { createWordStory, wordStoryArtifact, type WordStoryTarget } from './stories.ts';
 import { openWordArtifact } from './artifact.ts';
 import { NativeWordSource, retainOpaqueBlocks } from './native-source.ts';
@@ -332,11 +333,15 @@ export class NativeWordDocument implements WordLayoutSource {
             source.kind === 'image' ? { runs: [{ text: '\uFFFC', image: source }] } : source;
           if (previous?.signature === fingerprint) result = previous;
           else {
+            if (authored.positioning && !isWordParagraphPositioning(authored.positioning)) throw new TypeError("Invalid paragraph positioning.");
             const media: WordDrawing[] = [];
             const inlines: WordInline[] = authored.runs.map((authoredRun) => {
               const inherited = compiled?.leaves.get(authoredRun.source!);
               const contents: WordRunContent[] = [];
-              if (authoredRun.field) {
+              if (authoredRun.tab) {
+                positionalTabXml(authoredRun.tab, authoredRun.text);
+                contents.push({ kind: 'tab', elementId: allocate(), position: authoredRun.tab });
+              } else if (authoredRun.field) {
                 if (authoredRun.text !== '\uFFFC' || authoredRun.image) throw new TypeError('Page fields use one object replacement character.');
                 contents.push({ kind: 'page-field', elementId: allocate(), field: authoredRun.field });
               } else if (authoredRun.image) {
@@ -368,7 +373,7 @@ export class NativeWordDocument implements WordLayoutSource {
                   const elementId = allocate();
                   contents.push(
                     part === '\t'
-                      ? { kind: 'tab', elementId }
+                      ? { kind: 'tab', elementId, ...(inherited?.content.kind === 'tab' && inherited.content.position ? { position: inherited.content.position } : {}) }
                       : part === '\n' || part === '\u2028'
                         ? { kind: 'break', elementId, breakType: inherited?.content.kind === 'break' ? inherited.content.breakType : 'line' }
                         : { kind: 'text', elementId, value: part, preserveSpace: true },
@@ -399,6 +404,7 @@ export class NativeWordDocument implements WordLayoutSource {
                 ...DEFAULT_PARAGRAPH,
                 ...compiled?.defaults.paragraph,
                 ...original?.format,
+                ...authored.positioning,
                 alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? original?.format.alignment ?? compiled?.defaults.paragraph.alignment ?? 'start',
                 lineSpacing: original?.format.lineSpacing ?? compiled?.defaults.paragraph.lineSpacing ?? {
                   rule: 'auto' as const,

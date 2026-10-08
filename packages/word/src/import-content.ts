@@ -19,6 +19,7 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
       const computed = document.styles.runFormat(document, block, runs.get(segment.runElementId));
       return {
         source: segment.elementId,
+        ...(segment.tab ? { tab: segment.tab } : {}),
         ...(segment.field ? { field: segment.field } : {}),
         // Soft line breaks are distinct from paragraph boundaries in a collaborative text stream.
         text: segment.kind === 'break' ? '\u2028' : segment.value,
@@ -51,9 +52,10 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
             level: reference.level,
           }
         : undefined;
-    const alignment = document.styles.paragraphFormat(document, block).alignment;
+    const { alignment, tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips } = document.styles.paragraphFormat(document, block);
     return {
       kind: 'paragraph',
+      positioning: { tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips },
       id: `source-${block.elementId}`,
       source: block.elementId,
       runs: projected,

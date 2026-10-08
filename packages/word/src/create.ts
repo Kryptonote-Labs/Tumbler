@@ -1,3 +1,5 @@
+import type { WordParagraphPositioning } from './positioning.ts';
+import type { WordPositionalTab } from './document.ts';
 import type { WordPageField } from './page-fields.ts';
 import { openZipArchive, writeZipArchiveChanges } from '@tumblerjs/opc';
 import { openWordArtifact, type WordArtifact } from './artifact.ts';
@@ -7,8 +9,9 @@ import { authoredContent, type WordContentBlock, type WordAuthoredImage } from '
 
 /** Supported authored text properties. Omitted properties inherit the document defaults. */
 export type WordTextFormat = Partial<Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'underline' | 'color'>>;
-export interface WordTextRun { readonly source?: number; readonly sourceCopy?: string; readonly text: string; readonly format?: WordTextFormat; readonly image?: WordAuthoredImage; readonly field?: WordPageField; }
+export interface WordTextRun { readonly tab?: WordPositionalTab; readonly source?: number; readonly sourceCopy?: string; readonly text: string; readonly format?: WordTextFormat; readonly image?: WordAuthoredImage; readonly field?: WordPageField; }
 export interface WordTextParagraph {
+  readonly positioning?: WordParagraphPositioning;
   /** Reference into an immutable source package, retained by NativeWordDocument at import and export. */
   readonly source?: number;
   /** Independent copy identity. Omit for continuations, including paragraph splits. */

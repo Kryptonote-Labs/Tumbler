@@ -129,3 +129,9 @@ Tab-delimited segments honor left, center, right and decimal stops across run
 boundaries. Positional tabs retain their alignment and margin/indent reference;
 occupied positional targets continue on the next line. Tab leaders remain a
 rendering follow-up. Layout tests assert segment positions, not just parsed styles.
+
+Authored paragraphs expose `positioning` with tab stops and indents in twips.
+Authored runs can contain one positional `tab`. The native engine, DOCX importer
+and exporter share these properties. In collaborative text, paragraph positioning
+lives on the terminating newline and positional-tab metadata on the tab character;
+ordinary typing does not inherit the tab metadata.

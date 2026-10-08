@@ -13,6 +13,7 @@ export interface WordTextSelection {
 }
 
 export interface WordParagraphTextSegment {
+  readonly tab?: import("./document.ts").WordPositionalTab;
   readonly kind: "text" | "tab" | "break" | "drawing" | "note" | "page-field";
   readonly field?: import("./page-fields.ts").WordPageField;
   readonly elementId: number;
@@ -56,6 +57,7 @@ export function wordParagraphTextSegments(_document: WordDocument | undefined, p
       offset += projected.value.length;
       segments.push(Object.freeze({
         kind: projected.kind,
+        ...(content.kind === "tab" && content.position ? { tab: content.position } : {}),
         ...(content.kind === "page-field" ? { field: content.field } : {}),
         elementId: content.elementId,
         runElementId: run.elementId,

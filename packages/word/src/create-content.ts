@@ -1,3 +1,4 @@
+import { paragraphPositioningXml, positionalTabXml } from './positioning.ts';
 import { pageFieldXml } from './page-fields.ts';
 import { authoredTableGrid } from './authored-table.ts';
 import { imagePlacement, type WordImagePosition } from './image-placement.ts';
@@ -58,8 +59,9 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
             lists.set(id, list);
             numbering = `<w:numPr><w:ilvl w:val="${level}"/><w:numId w:val="${list.id}"/></w:numPr>`;
           }
-          const properties = numbering + (block.alignment ? `<w:jc w:val="${block.alignment}"/>` : '');
-          return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${textContent(run.text)}</w:r>`).join('')}</w:p>`;
+          const positioning = block.positioning ? paragraphPositioningXml(block.positioning) : {};
+          const properties = numbering + (positioning.tabs ?? '') + (positioning.ind ?? '') + (block.alignment ? `<w:jc w:val="${block.alignment}"/>` : '');
+          return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${run.tab ? positionalTabXml(run.tab, run.text) : textContent(run.text)}</w:r>`).join('')}</w:p>`;
         }
         case 'table': {
           const grid = authoredTableGrid(block.rows, block.columnWidths, availableWidth, block.rowGrids);
