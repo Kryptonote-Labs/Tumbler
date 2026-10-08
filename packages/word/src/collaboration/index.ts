@@ -7,3 +7,4 @@ export { validateText, validateWordText } from './validation.ts';
 export { wordParagraphIdentity } from './paragraph-identity.ts';
 export { WordParagraphProjection, type WordParagraphSlice, type WordParagraphPart } from './paragraph-projection.ts';
 export { WordTableProjection } from './table-projection.ts';
+export { wordPageNumberRange, wordItemAlignment, pageNumberEdit, alignWordItem, type WordPositionedEdit, type WordItemAlignment } from './page-number.ts';
