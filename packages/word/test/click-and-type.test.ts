@@ -2,7 +2,7 @@ import {expect,test} from 'bun:test';
 import * as Y from 'yjs';
 import {NativeWordDocument,wordClickAndTypeTarget} from '../src/index.ts';
 import {clickAndTypeEdit} from '../src/collaboration/click-and-type.ts';
-import {createWordCommands} from '../src/collaboration/commands.ts';
+import {createWordCommands, type WordDelta} from '../src/collaboration/commands.ts';
 const measure={measure:(text:string)=>({width:text.length*6,ascent:8,descent:2})};
 test('blank-space targets preserve ordinary text hit testing and use document coordinates',()=>{
  const model=new NativeWordDocument();model.update([{kind:'paragraph',runs:[{text:'Hello'}]}]);
@@ -81,7 +81,8 @@ test('adding left content preserves a natively centred neighbour on the same row
  text.applyDelta(edit.delta);
  text.applyDelta(createWordCommands().replaceWordDelta(text,edit.selection,'Left'));
  expect(text.toString()).toBe('Left\tCentre\n');
- expect(text.toDelta().find(part=>part.insert==='\t')?.attributes?.tab).toMatchObject({alignment:'center'});
+ const delta: WordDelta = text.toDelta();
+ expect(delta.find(part=>part.insert==='\t')?.attributes?.tab).toMatchObject({alignment:'center'});
  expect(text.toDelta().at(-1)?.attributes?.align).toBeUndefined();
  doc.destroy();
 });
