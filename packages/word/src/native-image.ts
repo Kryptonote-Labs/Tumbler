@@ -1,8 +1,8 @@
 import { PartName } from '@tumblerjs/opc';
 import type { WordAuthoredImage } from './create-content.ts';
-import type { WordDrawing } from './drawings.ts';
+import type { WordImageDrawing } from './drawings.ts';
 
-export const nativeImageDrawing = (id: number, image: WordAuthoredImage, width: number): WordDrawing => {
+export const nativeImageDrawing = (id: number, image: WordAuthoredImage, width: number, partName?: WordImageDrawing['partName']): WordImageDrawing => {
       if (![image.width, image.height].every((value) => Number.isFinite(value) && value > 0))
         throw new RangeError('Invalid image dimensions.');
       const floating = image.layout && image.layout !== 'inline';
@@ -15,7 +15,7 @@ export const nativeImageDrawing = (id: number, image: WordAuthoredImage, width: 
         name: `Image ${id}`,
         altText: image.alt ?? '',
         relationshipId: `native-${id}`,
-        partName: PartName.parse(
+        partName: partName ?? PartName.parse(
           `/word/media/native-${id}.${image.contentType === 'image/png' ? 'png' : 'jpg'}`,
         ),
         contentType: image.contentType,
