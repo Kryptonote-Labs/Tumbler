@@ -7,7 +7,7 @@ import type {
 
 interface LinePlacement {
   readonly line: WordLayoutLine;
-  readonly cell?: WordLayoutTableCell;
+  readonly cell: WordLayoutTableCell | undefined;
 }
 
 export interface WordLineLocation {
