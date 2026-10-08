@@ -112,6 +112,7 @@ export type { WordContentBlock, WordContentCell, WordAuthoredImage } from './cre
 export type { WordImagePosition } from './image-placement.ts';
 
 export { wordLineAtPoint } from "./hit-testing.ts";
+export { wordAdjacentLine, type WordLineLocation, type WordLineNavigationTarget } from "./navigation.ts";
 
 export { NativeWordText, NativeWordTextLayout } from './native-text.ts';
 export type { NativeWordParagraph, NativeWordTextEdit } from './native-text.ts';

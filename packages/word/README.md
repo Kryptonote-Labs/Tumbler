@@ -139,6 +139,18 @@ line vertically, then horizontally. Pages without body text return `undefined`;
 headers, footers and notes are excluded. Renderers resolve the character offset
 within the returned line using their text geometry.
 
+### Vertical caret navigation
+
+`wordAdjacentLine(layout, current, direction, x)` chooses one visual line above or
+below a caret. `current` identifies the page, paragraph and line start offset;
+`x` is a page-relative coordinate in points. The result contains the destination
+page, line and horizontal coordinate. Body text continues across columns and
+pages, and table movement follows the current cell before the next row. Pass
+`story: 'header'` or `story: 'footer'` in `current` to stay within that page's story.
+At the beginning or end of the flow the result is `undefined`. Renderers retain
+the preferred horizontal coordinate across short lines, mount the destination,
+and resolve its character offset using their text geometry.
+
 ### Native documents
 
 `NativeWordDocument` reconciles rich authored blocks in memory and uses the same pagination
