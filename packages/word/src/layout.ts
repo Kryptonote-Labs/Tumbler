@@ -1,5 +1,6 @@
 import type {
   WordBlock,
+  WordPositionalTab,
   WordBreakType,
   WordDocument,
   WordHyperlink,
@@ -262,6 +263,7 @@ interface GlyphAtom extends AtomBase {
 }
 
 interface TabAtom extends AtomBase {
+  readonly position?: WordPositionalTab;
   readonly kind: "tab";
 }
 
@@ -814,7 +816,7 @@ function resolvedParagraphAtoms(
           }));
         }
       } else if (content.kind === "tab") {
-        atoms.push(controlAtom("tab", run, content.elementId, logicalOffset, format, hyperlink));
+        atoms.push({ ...controlAtom("tab", run, content.elementId, logicalOffset, format, hyperlink), ...(content.position ? { position: content.position } : {}) });
         logicalOffset += 1;
       } else if (content.kind === "break") {
         atoms.push(Object.freeze({
@@ -894,14 +896,19 @@ function breakLines(atoms: readonly ParagraphAtom[], width: number, format: Comp
     lineWidth = 0;
     lastBreak = -1;
   };
-  for (const atom of atoms) {
+  for (const [index, atom] of atoms.entries()) {
     if (atom.kind === "break") {
       push(atom.breakType);
       offset = atom.endOffset;
       continue;
     }
-    const atomWidth = atom.kind === "tab" ? tabWidth(lineWidth, format.tabs) : atom.width;
-    const materialized = atom.kind === "tab" ? Object.freeze({ ...atom, width: atomWidth }) : atom;
+    let atomWidth = atom.kind === "tab" ? tabAdvance(atom, atoms, index, lineWidth, width, format, result.length === 0) : atom.width;
+    if (atom.kind === "tab" && atom.position && atomWidth < 0 && line.length) {
+      push();
+      atomWidth = tabAdvance(atom, atoms, index, 0, width, format, false);
+    }
+    atomWidth = Math.max(0, atomWidth);
+    let materialized = atom.kind === "tab" ? Object.freeze({ ...atom, width: atomWidth }) : atom;
     if (line.length > 0 && lineWidth + atomWidthValue(materialized) > width) {
       if (lastBreak >= 0) {
         const carry = line.splice(lastBreak + 1);
@@ -910,6 +917,7 @@ function breakLines(atoms: readonly ParagraphAtom[], width: number, format: Comp
         line = carry;
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);
       } else push();
+      if (atom.kind === "tab") materialized = Object.freeze({ ...atom, width: Math.max(0, tabAdvance(atom, atoms, index, lineWidth, width, format, result.length === 0)) });
     }
     line.push(materialized);
     lineWidth += atomWidthValue(materialized);
@@ -1296,11 +1304,30 @@ function formatLineHeight(format: ComputedWordParagraphFormat): number {
   return Math.max(1, points(format.lineSpacing.value));
 }
 
-function tabWidth(currentX: number, stops: readonly WordTabStop[]): number {
-  const currentTwips = currentX * TWIPS_PER_POINT;
-  const next = stops.find((stop) => stop.alignment !== "clear" && stop.positionTwips > currentTwips)?.positionTwips;
-  if (next !== undefined) return Math.max(1, points(next) - currentX);
-  return Math.max(1, Math.ceil((currentX + 0.001) / DEFAULT_TAB_POINTS) * DEFAULT_TAB_POINTS - currentX);
+/** Measure each tab-delimited segment once. Aligned tabs position its content, not its start. */
+function tabAdvance(tab: TabAtom, atoms: readonly ParagraphAtom[], index: number, currentX: number, width: number, format: ComputedWordParagraphFormat, first: boolean): number {
+  const indent = points(format.indentStartTwips + (first ? format.firstLineTwips - format.hangingTwips : 0));
+  const absoluteX = currentX + indent;
+  const stop = tab.position ? undefined : format.tabs.find(stop => stop.alignment !== "clear" && stop.alignment !== "bar" && points(stop.positionTwips) > absoluteX);
+  const alignment = tab.position?.alignment ?? stop?.alignment ?? "start";
+  let target: number;
+  if (tab.position) {
+    const marginWidth = width + points(format.indentStartTwips + format.indentEndTwips);
+    const left = tab.position.relativeTo === "margin" ? 0 : points(format.indentStartTwips);
+    const right = tab.position.relativeTo === "margin" ? marginWidth : marginWidth - points(format.indentEndTwips);
+    target = alignment === "center" ? (left + right) / 2 : alignment === "right" ? right : left;
+  } else target = stop ? points(stop.positionTwips) : Math.ceil((absoluteX + 0.001) / DEFAULT_TAB_POINTS) * DEFAULT_TAB_POINTS;
+  let following = 0;
+  if (alignment !== "start" && alignment !== "left") {
+    for (let next = index + 1; next < atoms.length; next++) {
+      const atom = atoms[next]!;
+      if (atom.kind === "tab" || atom.kind === "break") break;
+      if (alignment === "decimal" && atom.kind === "glyph" && atom.text === ".") break;
+      following += atomWidthValue(atom);
+    }
+  }
+  const shift = alignment === "center" ? following / 2 : following;
+  return target - absoluteX - shift;
 }
 
 function controlAtom<K extends "tab" | "drawing" | "break" | "note">(
