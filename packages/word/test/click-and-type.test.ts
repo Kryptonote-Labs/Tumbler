@@ -24,3 +24,22 @@ test('positioning and subsequent typing survive undo and redo',()=>{
  undo.redo();undo.redo();expect(text.toString()).toBe('Hello\n\n\tThere\n');
  undo.destroy();doc.destroy();
 });
+
+
+test('placement and first content compose without publishing empty paragraphs', async () => {
+ const {positionedWordEdit} = await import('../src/collaboration/index.ts');
+ const doc=new Y.Doc();const text=doc.getText('body');text.insert(0,'Hello\n');
+ const undo=new Y.UndoManager(text);let updates=0;doc.on('update',()=>updates++);
+ const edit=positionedWordEdit(text,staged=>{
+  const placement=clickAndTypeEdit(staged,5,{paragraphs:2,positionTwips:2000,alignment:'left'});
+  staged.applyDelta(placement.delta);
+  staged.applyDelta(createWordCommands().replaceWordDelta(staged,placement.selection,'There'));
+  return {start:placement.selection.start+5,end:placement.selection.start+5};
+ });
+ expect(text.toString()).toBe('Hello\n');expect(updates).toBe(0);
+ text.applyDelta(edit.delta);expect(updates).toBe(1);
+ expect(text.toString()).toBe('Hello\n\n\tThere\n');
+ undo.undo();expect(text.toString()).toBe('Hello\n');
+ undo.redo();expect(text.toString()).toBe('Hello\n\n\tThere\n');
+ undo.destroy();doc.destroy();
+});
