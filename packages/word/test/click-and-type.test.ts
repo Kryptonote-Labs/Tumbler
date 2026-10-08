@@ -74,3 +74,14 @@ test('snapped empty lines use native paragraph alignment without inserting tabs'
   doc.destroy();
  }
 });
+
+test('adding left content preserves a natively centred neighbour on the same row', () => {
+ const doc=new Y.Doc();const text=doc.getText('body');text.insert(0,'Centre\n');text.format(6,1,{align:'center'});
+ const edit=clickAndTypeEdit(text,0,{paragraphs:0,positionTwips:0,alignment:'left'});
+ text.applyDelta(edit.delta);
+ text.applyDelta(createWordCommands().replaceWordDelta(text,edit.selection,'Left'));
+ expect(text.toString()).toBe('Left\tCentre\n');
+ expect(text.toDelta().find(part=>part.insert==='\t')?.attributes?.tab).toMatchObject({alignment:'center'});
+ expect(text.toDelta().at(-1)?.attributes?.align).toBeUndefined();
+ doc.destroy();
+});
