@@ -2,7 +2,7 @@ import {expect,test} from 'bun:test';
 import * as Y from 'yjs';
 import {NativeWordDocument,wordClickAndTypeTarget} from '../src/index.ts';
 import {clickAndTypeEdit} from '../src/collaboration/click-and-type.ts';
-import {createWordCommands} from '../src/collaboration/commands.ts';
+import {createWordCommands, type WordDelta} from '../src/collaboration/commands.ts';
 const measure={measure:(text:string)=>({width:text.length*6,ascent:8,descent:2})};
 test('blank-space targets preserve ordinary text hit testing and use document coordinates',()=>{
  const model=new NativeWordDocument();model.update([{kind:'paragraph',runs:[{text:'Hello'}]}]);
@@ -42,4 +42,47 @@ test('placement and first content compose without publishing empty paragraphs', 
  undo.undo();expect(text.toString()).toBe('Hello\n');
  undo.redo();expect(text.toString()).toBe('Hello\n\n\tThere\n');
  undo.destroy();doc.destroy();
+});
+
+test('blank-space targets snap to rows and forgiving left, centre and right zones', () => {
+ const model=new NativeWordDocument();model.update([{kind:'paragraph',runs:[{text:'Hello'}]}]);
+ const page=model.layout(measure).pages[0]!;const line=page.columns[0]!.lines[0]!;
+ const bounds={left:72,right:page.width-72,top:72,bottom:page.height-72};
+ const y=line.y+line.height*3.6;
+ const left=wordClickAndTypeTarget([line],{x:bounds.left+18,y},bounds)!;
+ const center=wordClickAndTypeTarget([line],{x:page.width/2+18,y:y+line.height*.1},bounds)!;
+ const right=wordClickAndTypeTarget([line],{x:bounds.right-18,y},bounds)!;
+ expect(left.positionTwips).toBe(0);expect(left.caret.x).toBe(bounds.left);
+ expect(center.alignment).toBe('center');expect(center.caret.x).toBe(page.width/2);
+ expect(right.alignment).toBe('right');expect(right.caret.x).toBe(bounds.right);
+ expect(left.caret.y).toBe(center.caret.y);expect(center.caret.y).toBe(right.caret.y);
+ const precise=wordClickAndTypeTarget([line],{x:bounds.left+60,y},bounds)!;
+ expect(precise.positionTwips).toBe(1200);expect(precise.caret.x).toBe(bounds.left+60);
+ const footer=wordClickAndTypeTarget([line],{x:page.width/2,y},{...bounds,verticalAnchor:'bottom'})!;
+ expect(footer.paragraphs).toBe(0);expect(footer.caret.y).toBe(line.fragments[0]!.y);
+});
+
+test('snapped empty lines use native paragraph alignment without inserting tabs', () => {
+ for(const alignment of ['left','center','right'] as const){
+  const doc=new Y.Doc();const text=doc.getText('body');text.insert(0,'\n');
+  const edit=clickAndTypeEdit(text,0,{paragraphs:0,positionTwips:alignment==='left'?0:2000,alignment});
+  text.applyDelta(edit.delta);
+  text.applyDelta(createWordCommands().replaceWordDelta(text,edit.selection,'Typed'));
+  expect(text.toString()).toBe('Typed\n');
+  const paragraph=text.toDelta().at(-1)!;
+  expect(paragraph.attributes?.align ?? 'left').toBe(alignment);
+  doc.destroy();
+ }
+});
+
+test('adding left content preserves a natively centred neighbour on the same row', () => {
+ const doc=new Y.Doc();const text=doc.getText('body');text.insert(0,'Centre\n');text.format(6,1,{align:'center'});
+ const edit=clickAndTypeEdit(text,0,{paragraphs:0,positionTwips:0,alignment:'left'});
+ text.applyDelta(edit.delta);
+ text.applyDelta(createWordCommands().replaceWordDelta(text,edit.selection,'Left'));
+ expect(text.toString()).toBe('Left\tCentre\n');
+ const delta: WordDelta = text.toDelta();
+ expect(delta.find(part=>part.insert==='\t')?.attributes?.tab).toMatchObject({alignment:'center'});
+ expect(text.toDelta().at(-1)?.attributes?.align).toBeUndefined();
+ doc.destroy();
 });
