@@ -18,7 +18,7 @@ import type {
   WordSectionProperties,
   WordTable,
 } from './document.ts';
-import type { WordDrawing } from './drawings.ts';
+import type { WordDrawing, WordImageDrawing } from './drawings.ts';
 import {
   layoutWordSource,
   wordLayoutStories,
@@ -60,6 +60,8 @@ export class NativeWordDocument implements WordLayoutSource {
   private paragraphTextFormats = new WeakMap<WordParagraph, ComputedWordTextFormat>();
   private runFormats = new WeakMap<WordRun, ComputedWordTextFormat>();
   private imageIds = new WeakMap<Uint8Array, number>();
+  // Media identity follows immutable image bytes, independent of drawing geometry.
+  private readonly imagePartNames = new WeakMap<Uint8Array, WordImageDrawing['partName']>();
   private nextImageId = 0;
   private readonly signatures = new WeakMap<WordContentBlock, string>();
   private readonly paragraphTexts = new WeakMap<WordParagraph, string>();
@@ -337,12 +339,15 @@ export class NativeWordDocument implements WordLayoutSource {
               if (authoredRun.image) {
                 const id = allocate();
                 contents.push({ kind: 'drawing', elementId: id });
-                const drawing = nativeImageDrawing(id, authoredRun.image, width);
                 const originalDrawing = compiled?.artifact.document.drawings.get(authoredRun.source!);
+                const image = authoredRun.image;
+                const partName = this.imagePartNames.get(image.bytes) ??
+                  (originalDrawing?.kind === 'image' && originalDrawing.bytes === image.bytes ? originalDrawing.partName : undefined);
+                const drawing = nativeImageDrawing(id, image, width, partName);
+                this.imagePartNames.set(image.bytes, drawing.partName);
                 // Retain crop/rotation/wrapping and positioning semantics on unchanged images.
                 if (originalDrawing?.kind === 'image') {
                   const anchor = originalDrawing.anchor;
-                  const image = authoredRun.image;
                   const placementUnchanged = image.layout === (originalDrawing.placement === 'inline' ? 'inline' : anchor?.behindDocument ? 'behind' : 'front') &&
                     (image.x ?? 0) === (anchor?.horizontalOffsetPoints ?? 0) && (image.y ?? 0) === (anchor?.verticalOffsetPoints ?? 0) &&
                     (image.moveWithText !== false) === (anchor?.verticalRelativeTo !== 'page');
