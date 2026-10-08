@@ -125,7 +125,7 @@ export function renderWordBlocks(
       let output = markup.container(element, 'tbl', ['tr'], rows);
       if (!element) {
         const borders = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
-          .map((side) => `<w:${side} w:val="single" w:sz="4" w:color="B8B8B0"/>`)
+          .map((side) => `<w:${side} w:val="single" w:sz="4" w:color="000000"/>`)
           .join('');
         output = output.replace(
           /^(<[^>]+>)/,
