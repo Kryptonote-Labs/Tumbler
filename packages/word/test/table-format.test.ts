@@ -70,3 +70,13 @@ test('shared borders split beside merged cells without double painting', () => {
   expect(shared.map(edge => edge.length)).toEqual([60, 60]);
   expect(shared[0]!.x + shared[0]!.length).toBe(shared[1]!.x);
 });
+
+test('explicit column widths are not silently scaled back to the page margin', () => {
+  const artifact = createWordArtifact({ blocks: [{ kind: 'table', columnWidths: [350, 350], rows: [[
+    { blocks: [{ kind: 'paragraph', runs: [{ text: 'A' }] }] },
+    { blocks: [{ kind: 'paragraph', runs: [{ text: 'B' }] }] },
+  ]] }] });
+  const t = table(layoutWordDocument(artifact.document, measure));
+  expect(t.width).toBe(700);
+  expect(t.cells.map(cell => cell.width)).toEqual([350,350]);
+});
