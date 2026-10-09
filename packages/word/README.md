@@ -333,6 +333,8 @@ Presets are `plain`, `page`, `x-of-y`, `bold-x-of-y`, and `page-x-of-y`.
 Fields occupy one `\uFFFC` character in authored content, with `field: 'PAGE'`
 or `field: 'NUMPAGES'`. Header/footer layout resolves each field before measuring
 and repeats pagination when the total changes. Formatting and ordinary surrounding
-text remain editable. DOCX export writes standard simple fields; supported simple
-fields import as the same editable content. Section numbering restarts and numeral
+text remain editable. DOCX export writes standard simple fields. Supported simple
+fields and complete complex `PAGE` / `NUMPAGES` fields split across runs import as
+the same editable content. Editing or deleting a complex field also replaces its
+source instructions and cached result on export. Section numbering restarts and numeral
 formats are not yet evaluated by this API.

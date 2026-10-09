@@ -48,18 +48,34 @@ export function wordParagraphRenderer(
   let emitted = new Set<number>();
   let remaining = new Map<number, number>();
   const visible = new Set(originalRuns.keys());
+  const replaced = new Set<number>();
+  const collectFields = (blocks: typeof document.blocks) => {
+    for (const block of blocks) {
+      if (block.kind === 'table') {
+        for (const row of block.rows) for (const cell of row.cells) collectFields(cell.blocks);
+      } else if (block.kind === 'paragraph') {
+        for (const inline of block.inlines) {
+          const runs = inline.kind === 'run' ? [inline] : inline.kind === 'hyperlink' || inline.kind === 'insertion' ? inline.runs : [];
+          for (const run of runs) for (const content of run.contents)
+            if (content.kind === 'page-field') for (const id of content.replacedElementIds ?? []) replaced.add(id);
+        }
+      }
+    }
+  };
+  collectFields(document.blocks);
   const before = new Map<number, string[]>();
   const trailing = new Map<number, string[]>();
   for (const paragraph of originals) {
     let pending: string[] = [];
     const walk = (element: LosslessXmlElement, wrappers: LosslessXmlElement[]) => {
+      if (replaced.has(element.id)) return;
       if (visible.has(element.id)) {
         before.set(element.id, pending);
         pending = [];
         return;
       }
       const contains = (node: LosslessXmlElement): boolean =>
-        visible.has(node.id) || markup.children(node).some(contains);
+        visible.has(node.id) || replaced.has(node.id) || markup.children(node).some(contains);
       if (!contains(element)) {
         if (['pPr', 'rPr'].includes(element.localName)) return;
         let raw = markup.raw(element);
