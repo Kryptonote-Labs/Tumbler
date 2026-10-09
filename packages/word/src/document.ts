@@ -1,3 +1,4 @@
+import { readTableBorders, readTableShading, tableChild, type WordTableBorders, type WordCellBorders } from './table-format.ts';
 import { pageFieldInstruction } from './page-fields.ts';
 import { resolveComplexPageFields } from './complex-page-fields.ts';
 import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
@@ -56,6 +57,8 @@ export interface WordTable {
 }
 
 export interface WordTableProperties {
+  readonly borders?: WordTableBorders;
+  readonly shading?: string;
   readonly width: WordTableWidth | undefined;
   readonly alignment: "start" | "center" | "end";
   readonly indentTwips: number;
@@ -87,6 +90,8 @@ export interface WordTableRow {
 }
 
 export interface WordTableCell {
+  readonly borders?: WordCellBorders;
+  readonly shading?: string;
   readonly elementId: number;
   readonly gridSpan: number;
   readonly verticalMerge: "restart" | "continue" | undefined;
@@ -511,6 +516,8 @@ function parseTable(
   const grid = onlyChild(element, namespace, "tblGrid", "A table must not repeat tblGrid.");
   const margins = properties === undefined ? undefined : onlyChild(properties, namespace, "tblCellMar", "Table properties must not repeat tblCellMar.");
   const tableProperties: WordTableProperties = Object.freeze({
+    borders: readTableBorders(tableChild(properties, namespace, "tblBorders"), namespace),
+    ...(readTableShading(tableChild(properties, namespace, "shd"), namespace) === undefined ? {} : { shading: readTableShading(tableChild(properties, namespace, "shd"), namespace)! }),
     width: properties === undefined ? undefined : parseTableWidth(onlyChild(properties, namespace, "tblW", "Table properties must not repeat tblW."), namespace),
     alignment: properties === undefined ? "start" : tableAlignment(valueChild(properties, namespace, "jc")),
     indentTwips: properties === undefined ? 0 : tableIndent(onlyChild(properties, namespace, "tblInd", "Table properties must not repeat tblInd."), namespace),
@@ -526,6 +533,8 @@ function parseTable(
       const mergeValue = rawMerge === undefined ? undefined : attr(rawMerge, namespace, "val");
       return Object.freeze({
       elementId: cell.id,
+      borders: readTableBorders(tableChild(cellProperties, namespace, "tcBorders"), namespace),
+      ...(readTableShading(tableChild(cellProperties, namespace, "shd"), namespace) === undefined ? {} : { shading: readTableShading(tableChild(cellProperties, namespace, "shd"), namespace)! }),
       gridSpan: cellProperties === undefined ? 1 : integerAttr(onlyChild(cellProperties, namespace, "gridSpan", "Cell properties must not repeat gridSpan."), namespace, "val", 1, 1, 32_767),
       verticalMerge: rawMerge === undefined ? undefined : mergeValue === "restart" ? "restart" : "continue",
       width: cellProperties === undefined ? undefined : parseTableWidth(onlyChild(cellProperties, namespace, "tcW", "Cell properties must not repeat tcW."), namespace),
@@ -551,7 +560,7 @@ function parseRowProperties(element: LosslessXmlElement | undefined, namespace: 
     cantSplit: element !== undefined && children(element, namespace, "cantSplit").length > 0,
     repeatHeader: element !== undefined && children(element, namespace, "tblHeader").length > 0,
     heightTwips: rawHeight === undefined ? undefined : unsignedInteger(rawHeight, "row height", 0, 2_147_483_647),
-    heightRule: rule === "exact" || rule === "atLeast" ? rule : "auto",
+    heightRule: rule === "exact" || rule === "auto" ? rule : "atLeast",
   };
 }
 

@@ -1,3 +1,4 @@
+import { formatTableDelta, type WordTableFormatPatch } from './table-format.ts';
 import { editTableDelta, type TableAction } from './table-edits.ts';
 import { isDocumentImage, normalizeImage, imagePositions, type DocumentImage } from './images.ts';
 import { insertTableDelta, protectTableBoundaries, tableParagraphs, type TableCell } from './tables.ts';
@@ -9,6 +10,7 @@ export type WordFormatPatch = { [Key in keyof TextAttributes]: TextAttributes[Ke
 export type WordRange = { start: number; end: number };
 export type WordAnchor = { start: Y.RelativePosition; end: Y.RelativePosition };
 export type WordChange =
+  | { kind: 'table-format'; target: WordAnchor; expected?: string; tableId: string; cellId: string; patch: WordTableFormatPatch }
   | {
       kind: 'table-edit';
       target: WordAnchor;
@@ -280,7 +282,9 @@ function wordTransaction(text: Y.Text, changes: readonly WordChange[]): WordDelt
           staged.toString().slice(range.start, range.end) !== change.expected
         )
           throw new Error('The document changed since this edit was prepared.');
-        if (change.kind === 'table-edit') {
+        if (change.kind === 'table-format') {
+          staged.applyDelta(formatTableDelta(staged, range.start, change.tableId, change.cellId, change.patch));
+        } else if (change.kind === 'table-edit') {
           staged.applyDelta(
             editTableDelta(staged, range.start, change.action, change.tableId, change.cellId),
           );

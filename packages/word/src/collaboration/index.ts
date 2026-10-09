@@ -9,3 +9,5 @@ export { WordParagraphProjection, type WordParagraphSlice, type WordParagraphPar
 export { WordTableProjection } from './table-projection.ts';
 export { positionedWordEdit, wordPageNumberRange, wordItemAlignment, pageNumberEdit, alignWordItem, type WordPositionedEdit, type WordItemAlignment } from './page-number.ts';
 export { clickAndTypeEdit } from './click-and-type.ts';
+
+export { formatTableDelta, type WordTableFormatPatch } from './table-format.ts';

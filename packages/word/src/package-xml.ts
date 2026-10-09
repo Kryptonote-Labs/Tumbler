@@ -101,7 +101,7 @@ export class PackageXml {
   }
   word(content: string) {
     return content.replace(
-      /<w:([\w]+)(?=[\s/>])/g,
+      /<w:([\w]+)(?=[\s/>])(?![^>]*\bxmlns:w=)/g,
       `$& xmlns:w="${this.document.source.root.namespaceUri}"`,
     );
   }
@@ -144,6 +144,7 @@ const propertyOrder: Record<string, readonly string[]> = {
     'tblStyle tblpPr tblOverlap bidiVisual tblStyleRowBandSize tblStyleColBandSize tblW jc tblCellSpacing tblInd tblBorders shd tblLayout tblCellMar tblLook tblCaption tblDescription tblPrChange'.split(
       ' ',
     ),
+  tcBorders: 'top left bottom right insideH insideV tl2br tr2bl'.split(' '),
   trPr: 'cnfStyle divId gridBefore gridAfter wBefore wAfter cantSplit trHeight tblHeader tblCellSpacing jc hidden ins del trPrChange'.split(
     ' ',
   ),

@@ -1,3 +1,5 @@
+import { resolveTableBorders, type WordLayoutTableBorder } from './table-borders.ts';
+import type { WordCellBorders } from './table-format.ts';
 import type {
   WordBlock,
   WordPositionalTab,
@@ -81,6 +83,7 @@ export interface WordLayoutColumn {
 }
 
 export interface WordLayoutTable {
+  readonly borders?: readonly WordLayoutTableBorder[];
   readonly tableElementId: number;
   readonly x: number;
   readonly y: number;
@@ -90,6 +93,8 @@ export interface WordLayoutTable {
 }
 
 export interface WordLayoutTableCell {
+  readonly borders?: WordCellBorders;
+  readonly shading?: string;
   readonly cellElementId: number;
   readonly continuationElementIds: readonly number[];
   readonly row: number;
@@ -555,7 +560,7 @@ function prepareTable(
   const columnOffsets = [0];
   for (const value of columnWidths) columnOffsets.push(columnOffsets.at(-1)! + value);
   const preparedCells: PreparedTableCell[] = [];
-  const rowHeights = grid.rows.map((row) => row.source.heightTwips === undefined ? 0 : points(row.source.heightTwips));
+  const rowHeights = grid.rows.map((row) => row.source.heightRule === "auto" || row.source.heightTwips === undefined ? 0 : points(row.source.heightTwips));
   for (const row of grid.rows) for (const cell of row.cells) {
     const cellWidth = columnOffsets[cell.column + cell.columnSpan]! - columnOffsets[cell.column]!;
     const sourceMargins = cell.source.margins ?? table.properties.cellMargins;
@@ -707,6 +712,8 @@ function placeTable(prepared: PreparedTable, columnX: number, y: number, budget:
       cursor += table.height;
     }
     return Object.freeze({
+      borders: cell.resolved.source.borders ?? {},
+      ...(cell.resolved.source.shading ?? prepared.table.properties.shading ? { shading: cell.resolved.source.shading ?? prepared.table.properties.shading! } : {}),
       cellElementId: cell.resolved.source.elementId,
       continuationElementIds: cell.resolved.continuationElementIds,
       row: cell.resolved.row,
@@ -721,7 +728,8 @@ function placeTable(prepared: PreparedTable, columnX: number, y: number, budget:
       tables: Object.freeze(fake.tables),
     });
   });
-  const value = Object.freeze({ tableElementId: prepared.table.elementId, x, y, width: prepared.width, height: rowOffsets.at(-1)!, cells: Object.freeze(cells) });
+  const frame = { x, y, width: prepared.width, height: rowOffsets.at(-1)! };
+  const value = Object.freeze({ tableElementId: prepared.table.elementId, ...frame, cells: Object.freeze(cells), borders: Object.freeze(resolveTableBorders(cells, frame, prepared.table.properties.borders)) });
   budget.cache?.tablePlacements.set(prepared, { x: columnX, y, fragments: budget.fragments - before, value });
   return value;
 }
@@ -1187,6 +1195,7 @@ function translateTable(table: WordLayoutTable, dx: number, dy: number): WordLay
     ...table,
     x: table.x + dx,
     y: table.y + dy,
+    ...(table.borders ? { borders: table.borders.map(edge => ({ ...edge, x: edge.x + dx, y: edge.y + dy })) } : {}),
     cells: Object.freeze(table.cells.map((cell) => Object.freeze({
       ...cell,
       x: cell.x + dx,

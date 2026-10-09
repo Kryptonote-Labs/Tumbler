@@ -1,3 +1,4 @@
+import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
 import { createWordStory, wordStoryArtifact, type WordStoryTarget } from './stories.ts';
 import { openWordArtifact } from './artifact.ts';
@@ -284,6 +285,8 @@ export class NativeWordDocument implements WordLayoutSource {
           result = rows.every((row, index) => row === previousTable.rows[index])
             ? previous : { ...previous, block: { ...previous.block, rows } };
         } else if (source.kind === 'table') {
+          for (const format of source.rowFormats ?? []) if (format && !isWordRowFormat(format)) throw new TypeError('Invalid row formatting.');
+          for (const row of source.rows) for (const cell of row) if (cell.format && !isWordCellFormat(cell.format)) throw new TypeError('Invalid cell formatting.');
           const originalTable = compiled?.tables.get(source.source!);
           const widthsChanged = source.columnWidths !== undefined && JSON.stringify(source.columnWidths.map(w => Math.round(w * 20))) !== JSON.stringify(originalTable?.gridColumnWidthsTwips);
           const layoutWidths = originalTable && !widthsChanged ? compiled?.tableWidths.get(originalTable.elementId) : source.columnWidths;
@@ -296,15 +299,18 @@ export class NativeWordDocument implements WordLayoutSource {
             gridAfter: grid.rowGrids[rowIndex]!.after,
             cantSplit: compiled?.rows.get(source.rowSources?.[rowIndex]!)?.cantSplit ?? false,
             repeatHeader: compiled?.rows.get(source.rowSources?.[rowIndex]!)?.repeatHeader ?? false,
-            heightTwips: compiled?.rows.get(source.rowSources?.[rowIndex]!)?.heightTwips,
-            heightRule: compiled?.rows.get(source.rowSources?.[rowIndex]!)?.heightRule ?? 'auto' as const,
+            heightTwips: source.rowFormats?.[rowIndex]?.heightTwips ?? compiled?.rows.get(source.rowSources?.[rowIndex]!)?.heightTwips,
+            heightRule: source.rowFormats?.[rowIndex]?.heightRule ?? compiled?.rows.get(source.rowSources?.[rowIndex]!)?.heightRule ?? 'auto' as const,
             cells: row.map(({ cell, column, span, width: cellWidth }) => ({
+              ...compiled?.cells.get(cell.source!),
+              ...cell.format,
+              borders: { ...compiled?.cells.get(cell.source!)?.borders, ...cell.format?.borders },
               elementId: allocate(),
               gridSpan: span,
               verticalMerge: cell.verticalMerge,
               width: !widthsChanged && compiled?.cells.has(cell.source!) ? compiled.cells.get(cell.source!)!.width : { type: 'dxa' as const, value: Math.round(cellWidth * 20) },
-              verticalAlignment: compiled?.cells.get(cell.source!)?.verticalAlignment ?? 'top' as const,
-              margins: compiled?.cells.get(cell.source!)?.margins,
+              verticalAlignment: cell.format?.verticalAlignment ?? compiled?.cells.get(cell.source!)?.verticalAlignment ?? 'top' as const,
+              margins: cell.format?.margins ?? compiled?.cells.get(cell.source!)?.margins,
               blocks: visit(
                 cell.blocks.length ? cell.blocks : [{ kind: 'paragraph', runs: [] }],
                 cellWidth,
@@ -323,6 +329,7 @@ export class NativeWordDocument implements WordLayoutSource {
               alignment: originalTable?.properties.alignment ?? 'start',
               indentTwips: originalTable?.properties.indentTwips ?? 0,
               layout: originalTable?.properties.layout ?? 'fixed',
+              borders: originalTable?.properties.borders ?? Object.fromEntries(['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(side => [side, { style: 'single' as const, widthPoints: 0.5, color: '#000000' }])),
               cellMargins: originalTable?.properties.cellMargins ?? { topTwips: 0, endTwips: 108, bottomTwips: 0, startTwips: 108 },
             },
             rows,

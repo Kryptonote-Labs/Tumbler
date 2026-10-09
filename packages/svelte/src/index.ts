@@ -53,3 +53,5 @@ export {
   toggleBooleanFormatting,
   toggleUnderlineFormatting,
 } from "./formatting-controls.ts";
+
+export { wordTableBorderCss } from './word-table-style.ts';

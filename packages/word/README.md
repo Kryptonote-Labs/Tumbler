@@ -343,3 +343,34 @@ fields and complete complex `PAGE` / `NUMPAGES` fields split across runs import 
 the same editable content. Editing or deleting a complex field also replaces its
 source instructions and cached result on export. Section numbering restarts and numeral
 formats are not yet evaluated by this API.
+
+### Editable table formatting
+
+Authored table cells accept `format` with `shading` (`#RRGGBB` or `transparent`),
+`borders` (`top`, `right`, `bottom`, `left`), `verticalAlignment` and `margins` in
+Twips. Tables accept `rowFormats`, parallel to `rows`, with `heightTwips` and
+`heightRule` (`auto`, `atLeast`, `exact`). Column widths remain in points.
+
+```ts
+const cell = {
+  format: { shading: '#F3F3F3', verticalAlignment: 'center' as const },
+  blocks: [{ kind: 'paragraph' as const, runs: [{ text: 'Heading' }] }],
+};
+```
+
+Native updates and DOCX export preserve these edits. Partial border edits retain
+other source border edges and unrelated cell properties. Layout includes cell
+shading and resolved `table.borders` segments, shared edges appear once even beside
+merged cells. The Svelte renderer consumes those segments; custom renderers can
+use `wordTableBorderCss` from `@tumblerjs/svelte`.
+
+For collaborative documents, use a `table-format` change through
+`createWordCommands().wordTransaction`, with the same anchored target, table ID
+and cell ID as structural table edits. Its `patch` selects `cell`, `row`, `column`
+or `table` scope, and accepts `cell`, `row`, and `columnWidths` changes. Row height
+always applies to the target row, or all rows for table scope. The operation changes
+paragraph metadata without replacing cell text, preserving collaboration and undo.
+
+This supports direct table/cell border and solid fill properties. Conditional table
+styles, theme-based table colours, patterned fills and the full OOXML border-style
+set are not yet resolved. Source XML outside edited properties remains preserved.
