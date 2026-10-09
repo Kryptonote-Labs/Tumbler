@@ -747,7 +747,9 @@ function prepareParagraph(
   const atoms = paragraphAtoms(document, paragraph, measurer);
   const emptyRun = atoms.length === 0 ? paragraph.inlines.find(inline => inline.kind === 'run') : undefined;
   const mark = validMeasurement(measurer.measure(' ', document.runFormat(paragraph, emptyRun)));
-  const lines = breakLines(atoms, width, format, mark);
+  // List hanging indents position the marker, not the first line of text.
+  const textFormat = markerSource ? { ...format, firstLineTwips: 0, hangingTwips: 0 } : format;
+  const lines = breakLines(atoms, width, textFormat, mark);
   const marker = markerSource === undefined ? undefined : prepareMarker(document, paragraph, markerSource, measurer);
   const value = Object.freeze({ paragraph, format, lines: Object.freeze(lines), marker });
   document.cache?.paragraphs.set(paragraph, { width: columnWidth, marker: markerKey, measurer, value });
@@ -920,7 +922,7 @@ function breakLines(atoms: readonly ParagraphAtom[], width: number, format: Comp
     }
     atomWidth = Math.max(0, atomWidth);
     let materialized = atom.kind === "tab" ? Object.freeze({ ...atom, width: atomWidth }) : atom;
-    if (line.length > 0 && lineWidth + atomWidthValue(materialized) > width) {
+    if (line.length > 0 && lineWidth + atomWidthValue(materialized) > Math.max(1, width - (result.length === 0 ? points(format.firstLineTwips - format.hangingTwips) : 0))) {
       if (lastBreak >= 0) {
         const carry = line.splice(lastBreak + 1);
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);
@@ -947,7 +949,7 @@ function placeLine(
   budget: LayoutBudget,
   marker: PreparedMarker | undefined,
 ): WordLayoutLine {
-  const startIndent = points(format.indentStartTwips + (line.startOffset === 0 ? format.firstLineTwips - format.hangingTwips : 0));
+  const startIndent = points(format.indentStartTwips + (line.startOffset === 0 && !marker ? format.firstLineTwips - format.hangingTwips : 0));
   const available = Math.max(0, column.width - startIndent - points(format.indentEndTwips));
   const adjustment = format.alignment === "center" ? (available - line.width) / 2
     : format.alignment === "end" ? available - line.width : 0;
