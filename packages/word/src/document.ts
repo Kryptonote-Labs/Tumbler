@@ -569,7 +569,14 @@ function parseTableWidth(element: LosslessXmlElement | undefined, namespace: str
 function tableIndent(element: LosslessXmlElement | undefined, namespace: string): number {
   if (element === undefined || attr(element, namespace, "type") !== "dxa") return 0;
   const raw = attr(element, namespace, "w");
-  return raw === undefined ? 0 : unsignedInteger(raw, "table indentation", 0, 2_147_483_647);
+  if (raw === undefined) return 0;
+  // CT_TblWidth uses a signed 32-bit value; negative indents extend into the leading margin.
+  if (!/^[+-]?[0-9]+$/.test(raw)) throw new WordError("invalid_document", "table indentation must be a signed integer.");
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < -2_147_483_648 || value > 2_147_483_647) {
+    throw new WordError("invalid_document", "table indentation must be between -2147483648 and 2147483647.");
+  }
+  return value;
 }
 
 function parseOptionalCellMargins(element: LosslessXmlElement | undefined, namespace: string): WordTableCellMargins | undefined {
