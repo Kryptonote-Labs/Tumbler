@@ -94,6 +94,11 @@ headers and footers, footnotes and endnotes, hyperlinks and bookmarks, embedded
 images, and the shared native chart subset. Stored field results render, but
 Tumbler does not recalculate general Word fields.
 
+Paragraph-mark formatting determines empty-line metrics. Automatic line spacing
+scales the measured font line box; exact and at-least spacing use the authored
+point height. Browser measurers should include the font's line gap and avoid
+rounding vertical metrics at each text size, since small errors accumulate across pages.
+
 See the repository's
 [WordprocessingML implementation status](../../docs/wordprocessingml-implementation.md)
 for the exact capability matrix and known limitations.

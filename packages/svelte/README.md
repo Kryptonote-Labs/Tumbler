@@ -47,6 +47,11 @@ applying the edit and replacing the artifact.
 Unwrapped left-aligned text paints across consecutive empty cells, matching the
 worksheet convention without widening those cells' interactive hit areas.
 
+`browserWordLineMetrics` measures and caches normal font line boxes, including
+leading, at a large reference size to avoid cumulative pixel rounding. Custom
+renderers can supply their CSS font stack and clear this cache when fonts load.
+`browserWordTextMeasurer` uses these metrics automatically in the browser.
+
 The Word head exposes controlled selection and editing without making the DOM
 canonical state:
 
