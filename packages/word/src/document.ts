@@ -1,4 +1,5 @@
 import { pageFieldInstruction } from './page-fields.ts';
+import { resolveComplexPageFields } from './complex-page-fields.ts';
 import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { RelationshipsError, type OpcPackage, type OpcPart, type Relationships } from "@tumblerjs/opc";
 import { readWordStyles, type WordStyles } from "./styles.ts";
@@ -194,6 +195,8 @@ export interface WordPageFieldContent {
   readonly kind: "page-field";
   readonly elementId: number;
   readonly field: import("./page-fields.ts").WordPageField;
+  /** Source instructions and cached result leaves replaced by this live field on export. */
+  readonly replacedElementIds?: readonly number[];
 }
 
 export type WordRunContent =
@@ -492,7 +495,7 @@ function parseParagraph(
     kind: "paragraph",
     elementId: element.id,
     propertiesElementId: properties?.id,
-    inlines: Object.freeze(inlines),
+    inlines: Object.freeze(resolveComplexPageFields(inlines)),
     section: sectionElement === undefined ? undefined : parseSection(sectionElement, namespace),
   });
 }

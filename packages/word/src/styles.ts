@@ -218,7 +218,11 @@ export class WordStyles {
       (result, style) => mergeRun(result, style.run),
       paragraphRun,
     );
-    return this.computedRun(mergeRun(characterRun, runDirect));
+    // Paragraph-mark formatting controls blank lines, but does not format ordinary runs.
+    const paragraphProperties = paragraph.propertiesElementId === undefined ? undefined : requiredElement(document, paragraph.propertiesElementId);
+    const mark = run === undefined && paragraphProperties
+      ? onlyChild(paragraphProperties, namespace, 'rPr', 'Paragraph properties must not repeat rPr.') : undefined;
+    return this.computedRun(mergeRun(characterRun, mark ? parseRunProperties(mark, namespace) : runDirect));
   }
 
   private styleChain(styleId: string | undefined, expectedType: "paragraph" | "character"): readonly WordStyle[] {

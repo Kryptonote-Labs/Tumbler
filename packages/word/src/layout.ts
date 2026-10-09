@@ -745,7 +745,9 @@ function prepareParagraph(
   });
   const width = Math.max(1, columnWidth - points(format.indentStartTwips + format.indentEndTwips));
   const atoms = paragraphAtoms(document, paragraph, measurer);
-  const lines = breakLines(atoms, width, format);
+  const emptyRun = atoms.length === 0 ? paragraph.inlines.find(inline => inline.kind === 'run') : undefined;
+  const mark = validMeasurement(measurer.measure(' ', document.runFormat(paragraph, emptyRun)));
+  const lines = breakLines(atoms, width, format, mark);
   const marker = markerSource === undefined ? undefined : prepareMarker(document, paragraph, markerSource, measurer);
   const value = Object.freeze({ paragraph, format, lines: Object.freeze(lines), marker });
   document.cache?.paragraphs.set(paragraph, { width: columnWidth, marker: markerKey, measurer, value });
@@ -865,7 +867,7 @@ function resolvedParagraphAtoms(
   return atoms;
 }
 
-function breakLines(atoms: readonly ParagraphAtom[], width: number, format: ComputedWordParagraphFormat): PreparedLine[] {
+function breakLines(atoms: readonly ParagraphAtom[], width: number, format: ComputedWordParagraphFormat, mark: WordTextMeasurement): PreparedLine[] {
   const result: PreparedLine[] = [];
   let line: Exclude<ParagraphAtom, BreakAtom>[] = [];
   let lineWidth = 0;
@@ -874,14 +876,23 @@ function breakLines(atoms: readonly ParagraphAtom[], width: number, format: Comp
   const push = (breakAfter?: WordBreakType): void => {
     const logicalStart = line[0]?.startOffset ?? offset;
     const logicalEnd = line.at(-1)?.endOffset ?? offset;
+    // Include trailing whitespace and the paragraph mark in vertical metrics even when unpainted.
+    const naturalAscent = Math.max(mark.ascent, ...line.map(atomAscent));
+    const naturalDescent = Math.max(mark.descent, ...line.map(atomDescent));
+    const naturalHeight = naturalAscent + naturalDescent;
+    const height = format.lineSpacing.rule === 'auto'
+      ? Math.max(1, naturalHeight * format.lineSpacing.value / 240)
+      : format.lineSpacing.rule === 'exact' ? Math.max(1, points(format.lineSpacing.value))
+        : Math.max(1, naturalHeight, points(format.lineSpacing.value));
+    const leading = height - naturalHeight;
+    const ascent = naturalAscent + leading / 2;
+    const descent = naturalDescent + leading / 2;
     let last = line.at(-1);
     while (last?.kind === "glyph" && last.whitespace) {
       lineWidth -= last.width;
       line.pop();
       last = line.at(-1);
     }
-    const ascent = Math.max(formatLineHeight(format) * 0.8, ...line.map(atomAscent));
-    const descent = Math.max(formatLineHeight(format) * 0.2, ...line.map(atomDescent));
     result.push(Object.freeze({
       atoms: Object.freeze(line),
       startOffset: logicalStart,
@@ -1299,11 +1310,6 @@ function firstLineHeight(paragraph: PreparedParagraph): number {
   return first === undefined ? 0 : points(paragraph.format.spacingBeforeTwips) + first.ascent + first.descent;
 }
 
-function formatLineHeight(format: ComputedWordParagraphFormat): number {
-  if (format.lineSpacing.rule === "auto") return Math.max(1, 11 * format.lineSpacing.value / 240 * 1.2);
-  return Math.max(1, points(format.lineSpacing.value));
-}
-
 /** Measure each tab-delimited segment once. Aligned tabs position its content, not its start. */
 function tabAdvance(tab: TabAtom, atoms: readonly ParagraphAtom[], index: number, currentX: number, width: number, format: ComputedWordParagraphFormat, first: boolean): number {
   const indent = points(format.indentStartTwips + (first ? format.firstLineTwips - format.hangingTwips : 0));
@@ -1422,7 +1428,8 @@ export function layoutWordResolvedParagraph(
 ): readonly WordLayoutLine[] {
   if (!Number.isFinite(width) || width <= 0) throw new RangeError("Paragraph width must be positive.");
   const atoms = resolvedParagraphAtoms(paragraph, measurer, () => textFormat, new Map());
-  const lines = breakLines(atoms, Math.max(1, width - points(format.indentStartTwips + format.indentEndTwips)), format);
+  const lines = breakLines(atoms, Math.max(1, width - points(format.indentStartTwips + format.indentEndTwips)), format,
+    validMeasurement(measurer.measure(' ', textFormat)));
   const column: MutableColumn = { index: 0, x: 0, y: 0, width, height: Infinity, lines: [], tables: [], unsupportedBlocks: [] };
   const budget = { maxPages: Infinity, maxFragments: Infinity, fragments: 0 };
   let y = points(format.spacingBeforeTwips);

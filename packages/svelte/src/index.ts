@@ -7,6 +7,7 @@ export { default as OoxmlChart } from "./OoxmlChart.svelte";
 export { default as WordDrawingView } from "./WordDrawingView.svelte";
 export { default as WordDocumentView } from "./WordDocumentView.svelte";
 export { browserWordTextMeasurer, wordTextCss } from "./word-font-metrics.ts";
+export { browserWordLineMetrics } from './word-line-metrics.ts';
 export { calculateWordPageViewport } from "./word-page-viewport.ts";
 export type { WordPageViewport } from "./word-page-viewport.ts";
 export { wordDocumentParagraphs, wordInputEdit } from "./word-editing.ts";
