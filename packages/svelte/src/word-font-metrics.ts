@@ -1,3 +1,4 @@
+import { wordHighlightColor } from './word-highlight.ts';
 import { wordPointsToCssPixels, type ComputedWordTextFormat, type WordTextMeasurer } from "@tumblerjs/word";
 import { browserWordLineMetrics } from './word-line-metrics.ts';
 
@@ -39,7 +40,7 @@ export function wordTextCss(format: ComputedWordTextFormat): string {
     `font-style:${format.italic ? "italic" : "normal"}`,
     `text-decoration-line:${decoration}`,
     `color:${format.color}`,
-    `background:${format.highlight ?? "transparent"}`,
+    `background:${wordHighlightColor(format.highlight)}`,
     `direction:${format.rightToLeft ? "rtl" : "ltr"}`,
     `vertical-align:${format.verticalAlign === "superscript" ? "super" : format.verticalAlign === "subscript" ? "sub" : "baseline"}`,
   ].join(";");

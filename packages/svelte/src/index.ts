@@ -55,3 +55,5 @@ export {
 } from "./formatting-controls.ts";
 
 export { wordTableBorderCss } from './word-table-style.ts';
+
+export { wordHighlightColor } from './word-highlight.ts';
