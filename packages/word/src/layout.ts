@@ -551,7 +551,8 @@ function prepareTable(
   const requested = table.properties.width?.type === "dxa" ? points(table.properties.width.value)
     : table.properties.width?.type === "pct" ? availableWidth * table.properties.width.value / 5_000
     : points(gridTotal);
-  const width = Math.max(1, requested || availableWidth);
+  const explicitWidth = table.properties.width?.type === "dxa" || table.properties.width?.type === "pct";
+  const width = Math.max(1, explicitWidth ? requested || availableWidth : Math.min(availableWidth, requested || availableWidth));
   const xOffset = table.properties.alignment === "center" ? Math.max(0, (availableWidth - width) / 2)
     : table.properties.alignment === "end" ? Math.max(0, availableWidth - width)
     : Math.min(availableWidth - 1, points(table.properties.indentTwips));
