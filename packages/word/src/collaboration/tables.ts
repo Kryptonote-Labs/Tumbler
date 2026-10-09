@@ -1,9 +1,12 @@
+import { isWordCellFormat, isWordRowFormat, type WordCellFormat, type WordRowFormat } from '../table-format.ts';
 import type * as Y from 'yjs';
 
 // Word rejects DOCX rows with more than 63 cells (MS-OI29500 §17.4.78).
 export const MAX_TABLE_COLUMNS = 63;
 
 export type TableCell = {
+  format?: WordCellFormat;
+  rowFormat?: WordRowFormat;
   id: string;
   row: string;
   cell: string;
@@ -48,6 +51,8 @@ export function isTableCell(value: unknown): value is TableCell {
         'source',
         'parents',
         'widths',
+        'format',
+        'rowFormat',
         'span',
         'merge',
         'before',
@@ -61,6 +66,8 @@ export function isTableCell(value: unknown): value is TableCell {
           Reflect.get(value, key) >= 0 &&
           Reflect.get(value, key) <= Number(value.columns)),
     ) &&
+    (!('format' in value) || isWordCellFormat(value.format)) &&
+    (!('rowFormat' in value) || isWordRowFormat(value.rowFormat)) &&
     (!('widths' in value) ||
       (Array.isArray(value.widths) &&
         value.widths.every(
@@ -109,6 +116,7 @@ function isTableSource(value: unknown): value is NonNullable<TableCell['source']
 
 export type GroupedTable<T> = {
   kind: 'table';
+  rowFormats?: (WordRowFormat | undefined)[];
   id: string;
   source?: number;
   rowSources?: (number | undefined)[];
@@ -118,6 +126,7 @@ export type GroupedTable<T> = {
     source?: number;
     gridSpan?: number;
     verticalMerge?: 'restart' | 'continue';
+    format?: WordCellFormat;
     blocks: (T | GroupedTable<T>)[];
   }[][];
 };
@@ -142,6 +151,7 @@ export function groupTableParagraphs<T extends { table?: TableCell }>(
         kind: 'table',
         id: cell.id,
         rows: [],
+        rowFormats: [],
         ...(cell.before !== undefined || cell.after !== undefined ? { rowGrids: [] } : {}),
         ...(cell.widths?.length ? { columnWidths: cell.widths } : {}),
         ...(cell.source ? { source: cell.source.table, rowSources: [] } : {}),
@@ -158,6 +168,7 @@ export function groupTableParagraphs<T extends { table?: TableCell }>(
           )
             throw new Error('A table row is incomplete.');
           table.rows.push([]);
+          table.rowFormats!.push(current.rowFormat);
           table.rowSources?.push(current.source?.row);
           table.rowGrids?.push({ before: current.before ?? 0, after: current.after ?? 0 });
           rowId = current.row;
@@ -183,6 +194,7 @@ export function groupTableParagraphs<T extends { table?: TableCell }>(
         }
         table.rows.at(-1)!.push({
           blocks: visit(input.slice(start, i), depth + 1),
+          ...(current.format ? { format: current.format } : {}),
           ...(current.span ? { gridSpan: current.span } : {}),
           ...(current.merge ? { verticalMerge: current.merge } : {}),
           ...(current.source

@@ -1,3 +1,4 @@
+import { borderXml, cellFormatXml, rowFormatXml } from './table-format.ts';
 import type { WordContentBlock } from './create-content.ts';
 import type { WordTextParagraph } from './create.ts';
 import { PackageXml } from './package-xml.ts';
@@ -61,12 +62,17 @@ export function renderWordBlocks(
                 'continue')
               : undefined;
             if (
-              widthsChanged ||
+              cell.format || widthsChanged ||
               (cell.gridSpan !== undefined && cell.gridSpan !== Number(oldSpan ?? 1)) ||
               cell.verticalMerge !== oldMerge
             ) {
               const properties = markup.children(cellElement, 'tcPr')[0];
-              const replacements = new Map<string, string>();
+              const replacements = cell.format ? cellFormatXml(cell.format) : new Map<string, string>();
+              if (cell.format?.borders) {
+                const borders = markup.children(properties, 'tcBorders')[0];
+                const changes = new Map(Object.entries(cell.format.borders).map(([side, border]) => [side, borderXml({ [side]: border })]));
+                replacements.set('tcBorders', markup.properties(borders, 'tcBorders', changes));
+              }
               if (widthsChanged) {
                 const width = block
                   .columnWidths!.slice(column, column + (cell.gridSpan ?? 1))
@@ -98,12 +104,13 @@ export function renderWordBlocks(
           }),
         );
         const rowGrid = block.rowGrids?.[index];
-        if (rowGrid) {
+        if (rowGrid || block.rowFormats?.[index]) {
           const props = markup.children(rowElement, 'trPr')[0];
           const replacements = new Map<string, string>();
+          if (block.rowFormats?.[index]) replacements.set('trHeight', rowFormatXml(block.rowFormats[index]!));
           for (const [name, value] of [
-            ['gridBefore', rowGrid.before],
-            ['gridAfter', rowGrid.after],
+            ['gridBefore', rowGrid?.before ?? 0],
+            ['gridAfter', rowGrid?.after ?? 0],
           ] as const) {
             const old = markup
               .children(props, name)[0]
