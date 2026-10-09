@@ -5,6 +5,28 @@ import { buildWordDocumentFixture } from "./document-fixture.ts";
 const word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
 describe("WordprocessingML tables", () => {
+  test("imports, lays out, and preserves negative table indentation", () => {
+    const artifact = open(indentedTable("-15"));
+    const table = artifact.document.blocks[0];
+    expect(table?.kind === "table" && table.properties.indentTwips).toBe(-15);
+
+    const layout = layoutWordDocument(artifact.document, { measure: (text) => ({ width: text.length * 5, ascent: 8, descent: 2 }) });
+    const column = layout.pages[0]!.columns[0]!;
+    expect(column.tables[0]?.x).toBe(column.x - 0.75);
+    expect(column.tables[0]?.cells[0]?.lines[0]?.fragments[0]?.text).toBe("Indented table");
+
+    const reopened = openWordArtifact(artifact.bytes()).document.blocks[0];
+    expect(reopened?.kind === "table" && reopened.properties.indentTwips).toBe(-15);
+  });
+
+  test.each(["-2147483648", "0", "150", "+150", "2147483647"])("accepts signed table indentation %s", (value) => {
+    expect(openTable(indentedTable(value)).properties.indentTwips).toBe(Number(value));
+  });
+
+  test.each(["-2147483649", "2147483648", "-1.5", "1e2", "--15", "", "invalid"])("rejects invalid table indentation %s", (value) => {
+    expect(() => openTable(indentedTable(value))).toThrow("table indentation");
+  });
+
   test("resolves omitted columns, horizontal spans, and vertical merges without losing source identity", () => {
     const table = openTable(`<w:tbl><w:tblPr><w:tblW w:type="pct" w:w="5000"/><w:jc w:val="center"/><w:tblCellMar><w:left w:type="dxa" w:w="100"/><w:right w:type="dxa" w:w="100"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="3000"/><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:trPr><w:gridBefore w:val="1"/><w:tblHeader/></w:trPr><w:tc><w:tcPr><w:gridSpan w:val="2"/><w:vMerge w:val="restart"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:r><w:t>Header</w:t></w:r></w:p></w:tc></w:tr><w:tr><w:trPr><w:gridBefore w:val="1"/></w:trPr><w:tc><w:tcPr><w:gridSpan w:val="2"/><w:vMerge/></w:tcPr><w:p/></w:tc></w:tr></w:tbl>`);
     expect(table.gridColumnWidthsTwips).toEqual([2000, 3000, 1000]);
@@ -72,4 +94,8 @@ function openTable(markup: string) {
   const table = open(markup).document.blocks[0];
   if (table?.kind !== "table") throw new Error("Expected table.");
   return table;
+}
+
+function indentedTable(value: string) {
+  return `<w:tbl><w:tblPr><w:tblInd w:type="dxa" w:w="${value}"/></w:tblPr><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>Indented table</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
 }
