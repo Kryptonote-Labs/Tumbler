@@ -4,7 +4,7 @@ import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 const manifest = JSON.parse(readFileSync(new URL('../../packages/svelte/package.json', import.meta.url), 'utf8')) as { version: string };
-let commit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local';
+let commit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || 'local';
 if (commit === 'local') {
   try { commit = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim(); } catch { /* Source archives have no git metadata. */ }
 }
