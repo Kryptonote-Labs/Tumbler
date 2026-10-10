@@ -127,3 +127,62 @@ test('cell padding stays with content on the final continuation page', () => {
   expect(texts(result)).toEqual(Array.from({ length: 10 }, (_, i) => `Cell${i}`));
   withinPages(result);
 });
+
+const padding = '<w:tcMar><w:top w:type="dxa" w:w="100"/><w:bottom w:type="dxa" w:w="100"/></w:tcMar>';
+function borderedTable(rows: string, columns = 1) {
+  const borders = ['top', 'bottom', 'left', 'right', 'insideH', 'insideV']
+    .map(side => `<w:${side} w:val="single" w:sz="8"/>`).join('');
+  return table(rows, columns).replace('<w:tblPr>', `<w:tblPr><w:tblBorders>${borders}</w:tblBorders>`);
+}
+
+test('border thickness contributes to row height and pagination', () => {
+  const result = layout(borderedTable(Array.from({ length: 5 }, (_, i) => row(cell(paragraph(`Row${i}`), padding))).join('')));
+  expect(result.pages).toHaveLength(2);
+  const first = result.pages[0]!.columns[0]!.tables[0]!;
+  expect(first.cells).toHaveLength(4);
+  for (const cell of first.cells) {
+    expect(cell.height).toBe(21); // 10pt line + 10pt padding + two half-point strokes.
+    expect(cell.lines[0]!.y - cell.y).toBe(5.5);
+  }
+  expect(texts(result)).toEqual(['Row0', 'Row1', 'Row2', 'Row3', 'Row4']);
+  withinPages(result);
+});
+
+test('a shared cell border reserves the winning stroke on both adjacent rows', () => {
+  const override = '<w:tcBorders><w:bottom w:val="single" w:sz="32"/></w:tcBorders>';
+  const result = layout(borderedTable(row(cell(paragraph('A'), padding + override)) + row(cell(paragraph('B'), padding))));
+  const cells = result.pages[0]!.columns[0]!.tables[0]!.cells;
+  expect(cells.map(cell => cell.height)).toEqual([22.5, 22.5]);
+  expect(cells.map(cell => cell.lines[0]!.y - cell.y)).toEqual([5.5, 7]);
+});
+
+test('merged cells use their perimeter rather than interior row borders', () => {
+  const result = layout(borderedTable(
+    row(cell(paragraph('Merged'), padding + '<w:vMerge w:val="restart"/>') + cell(paragraph('A'), padding)) +
+    row(cell(paragraph(''), '<w:vMerge/>') + cell(paragraph('B'), padding)), 2));
+  const table = result.pages[0]!.columns[0]!.tables[0]!;
+  expect(table.height).toBe(42);
+  expect(table.cells.find(cell => cell.column === 0)!.height).toBe(42);
+  expect(table.cells.filter(cell => cell.column === 1).map(cell => cell.height)).toEqual([21, 21]);
+});
+
+test('continued rows retain top and bottom padding and border space on every page', () => {
+  const result = layout(borderedTable(row(cell(lines('Cell', 24), padding))));
+  expect(result.pages).toHaveLength(3);
+  for (const page of result.pages) {
+    const cell = page.columns[0]!.tables[0]!.cells[0]!;
+    expect(cell.lines).toHaveLength(8);
+    expect(cell.lines[0]!.y - cell.y).toBe(5.5);
+    const last = cell.lines.at(-1)!;
+    expect(cell.y + cell.height - last.y - last.height).toBeGreaterThanOrEqual(5.5);
+  }
+  expect(texts(result)).toEqual(Array.from({ length: 24 }, (_, i) => `Cell${i}`));
+  withinPages(result);
+});
+
+test('tables without borders do not acquire stroke spacing', () => {
+  const result = layout(table(row(cell(paragraph('A'), padding)) + row(cell(paragraph('B'), padding))));
+  const cells = result.pages[0]!.columns[0]!.tables[0]!.cells;
+  expect(cells.map(cell => cell.height)).toEqual([20, 20]);
+  expect(cells.map(cell => cell.lines[0]!.y - cell.y)).toEqual([5, 5]);
+});

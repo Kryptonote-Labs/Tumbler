@@ -49,15 +49,12 @@ function splitTable(table: PreparedTable, available: number, force: boolean): Sp
       madeProgress = true;
       continue;
     }
-    const capacity = Math.max(0, cut - start - cell.margins.top);
-    let split = splitBlocks(cell.blocks, capacity, force && start === 0);
-    // Keep the final line with its bottom cell padding, rather than producing a
-    // continuation page containing only padding.
-    if (!split.tail.length && cell.margins.bottom > 0)
-      split = splitBlocks(cell.blocks, Math.max(0, capacity - cell.margins.bottom), force && start === 0);
+    // Every visible fragment keeps the cell's padding and border insets.
+    const capacity = Math.max(0, cut - start - cell.margins.top - cell.margins.bottom);
+    const split = splitBlocks(cell.blocks, capacity, force && start === 0);
     if (split.head.length) madeProgress = true;
-    const head = withBlocks(cell, split.head, { ...cell.margins, bottom: 0 });
-    const tail = withBlocks(cell, split.tail, { ...cell.margins, top: 0 });
+    const head = withBlocks(cell, split.head, cell.margins);
+    const tail = withBlocks(cell, split.tail, cell.margins);
     headCells.push({ ...head, verticalAlignment: 'top' });
     tailCells.push({ ...tail, verticalAlignment: 'top' });
     // Only the forced, indivisible first item can exceed the available height.

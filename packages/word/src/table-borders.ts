@@ -43,3 +43,16 @@ export function resolveTableBorders(cells: readonly Cell[], table: { x: number; 
   }
   return result;
 }
+
+/** Reserve half of each resolved horizontal stroke on either side of its grid line.
+ * Use logical grid coordinates so shared and merged edges resolve before row sizing.
+ */
+export function tableBorderInsets(cells: readonly Cell[], table: { x: number; y: number; width: number; height: number }, defaults: WordTableBorders = {}) {
+  const edges = resolveTableBorders(cells, table, defaults).filter(edge => edge.orientation === 'horizontal');
+  return cells.map(cell => {
+    const widthAt = (y: number) => edges.reduce((width, edge) =>
+      Math.abs(edge.y - y) < 1e-6 && edge.x < cell.x + cell.width && edge.x + edge.length > cell.x
+        ? Math.max(width, edge.border.widthPoints / 2) : width, 0);
+    return { top: widthAt(cell.y), bottom: widthAt(cell.y + cell.height) };
+  });
+}
