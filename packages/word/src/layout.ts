@@ -1,3 +1,4 @@
+import { splitPreparedTable, joinPreparedTables, preparedBlockHeight } from './table-pagination.ts';
 import { resolveTableBorders, type WordLayoutTableBorder } from './table-borders.ts';
 import type { WordCellBorders } from './table-format.ts';
 import type {
@@ -299,7 +300,7 @@ interface BreakAtom extends AtomBase {
   readonly breakType: WordBreakType;
 }
 
-interface PreparedParagraph {
+export interface PreparedParagraph {
   readonly paragraph: WordParagraph;
   readonly format: ComputedWordParagraphFormat;
   readonly lines: readonly PreparedLine[];
@@ -315,7 +316,7 @@ interface PreparedMarker {
   readonly format: ComputedWordTextFormat;
 }
 
-interface PreparedTable {
+export interface PreparedTable {
   readonly table: WordTable;
   readonly xOffset: number;
   readonly width: number;
@@ -325,12 +326,11 @@ interface PreparedTable {
   readonly cellsByRow: readonly (readonly PreparedTableCell[])[];
 }
 
-interface PreparedTableCell {
+export interface PreparedTableCell {
   readonly resolved: ResolvedWordTableCell;
   readonly width: number;
   readonly contentHeight: number;
-  readonly paragraphs: readonly PreparedParagraph[];
-  readonly nestedTables: readonly PreparedTable[];
+  readonly blocks: readonly (PreparedParagraph | PreparedTable)[];
   readonly margins: { readonly top: number; readonly end: number; readonly bottom: number; readonly start: number };
   readonly verticalAlignment: "top" | "center" | "bottom";
 }
@@ -447,30 +447,50 @@ function layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeas
         const groups = tableRowGroups(preparedTable);
         const headerRows = leadingHeaderRows(preparedTable);
         let groupIndex = 0;
+        let continuation: PreparedTable | undefined;
         while (groupIndex < groups.length) {
           target = page!.columns[columnIndex]!;
           const atTop = cursorY === target.y;
-          const repeated = groupIndex > 0 ? headerRows : [];
-          const repeatedHeight = rowSetHeight(preparedTable, repeated);
-          const selected = [...repeated];
-          let used = repeatedHeight;
+          const repeated = groupIndex > 0 || continuation ? headerRows : [];
+          const parts: PreparedTable[] = [];
+          let used = 0;
+          // An oversized header must not consume every continuation page.
+          const headerHeight = rowSetHeight(preparedTable, repeated);
+          if (repeated.length && headerHeight < target.height) {
+            parts.push(slicePreparedTable(preparedTable, repeated, document.cache));
+            used = headerHeight;
+          }
+          const headerParts = parts.length;
           while (groupIndex < groups.length) {
             const group = groups[groupIndex]!;
-            const groupHeight = rowSetHeight(preparedTable, group);
-            if (selected.length > repeated.length && cursorY + used + groupHeight > target.y + target.height) break;
-            if (selected.length === repeated.length && cursorY + used + groupHeight > target.y + target.height && !atTop) break;
-            selected.push(...group);
-            used += groupHeight;
-            groupIndex += 1;
-            if (cursorY + used >= target.y + target.height) break;
+            const remaining = continuation ?? slicePreparedTable(preparedTable, group, document.cache);
+            const height = preparedBlockHeight(remaining);
+            const available = target.y + target.height - cursorY - used;
+            if (height <= available) {
+              parts.push(remaining);
+              used += height;
+              continuation = undefined;
+              groupIndex += 1;
+              continue;
+            }
+            // ISO/IEC 29500-1 §17.4.6: cantSplit moves a row to a fresh page,
+            // but even that row must flow across pages when it exceeds a full page.
+            const keepRow = !continuation && group.some(row => block.rows[row]!.cantSplit || block.rows[row]!.heightRule === "exact");
+            const fresh = atTop && parts.length === headerParts;
+            if (keepRow && !fresh) break;
+            const split = splitPreparedTable(remaining, available, fresh);
+            if (!split) break;
+            parts.push(split.head);
+            used += preparedBlockHeight(split.head);
+            continuation = split.tail;
+            if (!continuation) groupIndex += 1;
+            break;
           }
-          if (selected.length === repeated.length) {
-            advanceColumn(section.properties);
-            continue;
+          if (parts.length > headerParts) {
+            const slice = joinPreparedTables(parts);
+            target.tables.push(placeTable(slice, target.x, cursorY, budget));
+            cursorY += used;
           }
-          const slice = slicePreparedTable(preparedTable, selected, document.cache);
-          target.tables.push(placeTable(slice, target.x, cursorY, budget));
-          cursorY += used;
           if (groupIndex < groups.length) advanceColumn(section.properties);
         }
         continue;
@@ -571,13 +591,11 @@ function prepareTable(
     const sourceMargins = cell.source.margins ?? table.properties.cellMargins;
     const margins = Object.freeze({ top: points(sourceMargins.topTwips), end: points(sourceMargins.endTwips), bottom: points(sourceMargins.bottomTwips), start: points(sourceMargins.startTwips) });
     const innerWidth = Math.max(1, cellWidth - margins.start - margins.end);
-    const paragraphs = cell.source.blocks.filter((block): block is WordParagraph => block.kind === "paragraph")
-      .map((paragraph) => prepareParagraph(document, paragraph, innerWidth, measurer, listMarkers.get(paragraph.elementId)));
-    const nestedTables = cell.source.blocks.filter((block): block is WordTable => block.kind === "table")
-      .map((nested) => prepareTable(document, nested, innerWidth, measurer, listMarkers));
-    const contentHeight = paragraphs.reduce((sum, paragraph) => sum + paragraphHeight(paragraph), 0) +
-      nestedTables.reduce((sum, nested) => sum + nested.rowHeights.reduce((height, row) => height + row, 0), 0) + margins.top + margins.bottom;
-    preparedCells.push(Object.freeze({ resolved: cell, width: cellWidth, contentHeight, paragraphs: Object.freeze(paragraphs), nestedTables: Object.freeze(nestedTables), margins, verticalAlignment: cell.source.verticalAlignment }));
+    const blocks = cell.source.blocks.flatMap((block): (PreparedParagraph | PreparedTable)[] =>
+      block.kind === "paragraph" ? [prepareParagraph(document, block, innerWidth, measurer, listMarkers.get(block.elementId))]
+        : block.kind === "table" ? [prepareTable(document, block, innerWidth, measurer, listMarkers)] : []);
+    const contentHeight = blocks.reduce((sum, block) => sum + preparedBlockHeight(block), 0) + margins.top + margins.bottom;
+    preparedCells.push(Object.freeze({ resolved: cell, width: cellWidth, contentHeight, blocks: Object.freeze(blocks), margins, verticalAlignment: cell.source.verticalAlignment }));
     if (cell.rowSpan === 1) rowHeights[cell.row] = Math.max(rowHeights[cell.row] ?? 0, contentHeight);
   }
   for (const cell of preparedCells.filter((item) => item.resolved.rowSpan > 1)) {
@@ -614,7 +632,7 @@ function leadingHeaderRows(prepared: PreparedTable): readonly number[] {
   return Object.freeze(rows);
 }
 
-/** Groups rows which cannot be separated because of cantSplit or a vertical merge. */
+/** Keep vertically merged cells together while preparing row groups for pagination. */
 function tableRowGroups(prepared: PreparedTable): readonly (readonly number[])[] {
   const groups: number[][] = [];
   const rowEnds = prepared.rowHeights.map((_, row) => row + 1);
@@ -626,7 +644,6 @@ function tableRowGroups(prepared: PreparedTable): readonly (readonly number[])[]
   while (start < rowEnds.length) {
     let end = start + 1;
     for (let row = start; row < end; row += 1) end = Math.max(end, rowEnds[row]!);
-    // cantSplit prevents splitting the row itself; rows are already the minimum pagination unit.
     groups.push(Array.from({ length: end - start }, (_, index) => start + index));
     start = end;
   }
@@ -687,7 +704,7 @@ function placeTable(prepared: PreparedTable, columnX: number, y: number, budget:
     const cellY = y + rowOffsets[cell.resolved.row]!;
     const cellHeight = rowOffsets[Math.min(rowOffsets.length - 1, cell.resolved.row + cell.resolved.rowSpan)]! - rowOffsets[cell.resolved.row]!;
     const bodyHeight = Math.max(0, cellHeight - cell.margins.top - cell.margins.bottom);
-    const textHeight = cell.paragraphs.reduce((sum, paragraph) => sum + paragraphHeight(paragraph), 0);
+    const textHeight = cell.blocks.reduce((sum, block) => sum + preparedBlockHeight(block), 0);
     const vertical = cell.verticalAlignment === "center" ? Math.max(0, (bodyHeight - textHeight) / 2)
       : cell.verticalAlignment === "bottom" ? Math.max(0, bodyHeight - textHeight) : 0;
     const fake: MutableColumn = {
@@ -701,20 +718,20 @@ function placeTable(prepared: PreparedTable, columnX: number, y: number, budget:
       unsupportedBlocks: [],
     };
     let cursor = fake.y;
-    for (const paragraph of cell.paragraphs) {
-      cursor += points(paragraph.format.spacingBeforeTwips);
-      for (let index = 0; index < paragraph.lines.length; index += 1) {
-        const line = paragraph.lines[index]!;
-        const laidOut = placeLine(paragraph.paragraph, paragraph.format, line, fake, cursor, budget, index === 0 ? paragraph.marker : undefined);
-        fake.lines.push(laidOut);
-        cursor += laidOut.height;
+    for (const block of cell.blocks) {
+      if ('paragraph' in block) {
+        cursor += points(block.format.spacingBeforeTwips);
+        for (let index = 0; index < block.lines.length; index += 1) {
+          const laidOut = placeLine(block.paragraph, block.format, block.lines[index]!, fake, cursor, budget, index === 0 ? block.marker : undefined);
+          fake.lines.push(laidOut);
+          cursor += laidOut.height;
+        }
+        cursor += points(block.format.spacingAfterTwips);
+      } else {
+        const table = placeTable(block, fake.x, cursor, budget);
+        fake.tables.push(table);
+        cursor += table.height;
       }
-      cursor += points(paragraph.format.spacingAfterTwips);
-    }
-    for (const nested of cell.nestedTables) {
-      const table = placeTable(nested, fake.x, cursor, budget);
-      fake.tables.push(table);
-      cursor += table.height;
     }
     return Object.freeze({
       borders: cell.resolved.source.borders ?? {},

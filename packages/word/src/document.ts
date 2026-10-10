@@ -557,6 +557,15 @@ function parseTable(
   return Object.freeze({ kind: "table", elementId: element.id, gridColumnWidthsTwips: Object.freeze(gridColumnWidthsTwips), properties: tableProperties, rows: Object.freeze(rows) });
 }
 
+function rowOnOff(element: LosslessXmlElement | undefined, namespace: string, name: string): boolean {
+  const child = element === undefined ? undefined : onlyChild(element, namespace, name, `Row properties must not repeat ${name}.`);
+  if (!child) return false;
+  const value = attr(child, namespace, "val");
+  if (value === undefined || value === "1" || value === "true" || value === "on") return true;
+  if (value === "0" || value === "false" || value === "off") return false;
+  throw new WordError("invalid_document", `Invalid ${name} on/off value ${JSON.stringify(value)}.`);
+}
+
 function parseRowProperties(element: LosslessXmlElement | undefined, namespace: string): Pick<WordTableRow, "gridBefore" | "gridAfter" | "cantSplit" | "repeatHeader" | "heightTwips" | "heightRule"> {
   const height = element === undefined ? undefined : onlyChild(element, namespace, "trHeight", "Row properties must not repeat trHeight.");
   const rawHeight = height === undefined ? undefined : attr(height, namespace, "val");
@@ -564,7 +573,7 @@ function parseRowProperties(element: LosslessXmlElement | undefined, namespace: 
   return {
     gridBefore: element === undefined ? 0 : valueIntegerChild(element, namespace, "gridBefore", 0, 32_767),
     gridAfter: element === undefined ? 0 : valueIntegerChild(element, namespace, "gridAfter", 0, 32_767),
-    cantSplit: element !== undefined && children(element, namespace, "cantSplit").length > 0,
+    cantSplit: rowOnOff(element, namespace, "cantSplit"),
     repeatHeader: element !== undefined && children(element, namespace, "tblHeader").length > 0,
     heightTwips: rawHeight === undefined ? undefined : unsignedInteger(rawHeight, "row height", 0, 2_147_483_647),
     heightRule: rule === "exact" || rule === "auto" ? rule : "atLeast",

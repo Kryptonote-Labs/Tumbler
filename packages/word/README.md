@@ -381,3 +381,15 @@ paragraph metadata without replacing cell text, preserving collaboration and und
 This supports direct table/cell border and solid fill properties. Conditional table
 styles, theme-based table colours, patterned fills and the full OOXML border-style
 set are not yet resolved. Source XML outside edited properties remains preserved.
+
+### Table pagination
+
+Rows can continue across pages at cell line boundaries. Each cell retains its paragraph
+IDs and text offsets, and leading header rows repeat on continuation pages. An empty
+paragraph before a tall row does not force the whole row onto another page. Nested table
+content keeps its order relative to the surrounding paragraphs.
+
+`cantSplit` moves a row to a fresh page when needed; if it is taller than a full page,
+its contents still continue across pages, as required by ISO/IEC 29500-1 §17.4.6.
+An indivisible line or drawing taller than the page follows the paragraph layout fallback:
+it is placed once to make progress, without discarding its source content.
