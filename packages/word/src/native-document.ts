@@ -84,9 +84,11 @@ export class NativeWordDocument implements WordLayoutSource {
   readonly cache = new WordLayoutCache();
   private readonly editedStories = new Map<string, { target: string | WordStoryTarget; model: NativeWordDocument; blocks: readonly WordContentBlock[] }>();
   readonly finalSection: WordSectionProperties;
+  readonly wrapTrailSpaces: boolean;
 
   constructor(private readonly options: NativeWordOptions = {}) {
     this.compiled = options.source ? new NativeWordSource(options.source) : undefined;
+    this.wrapTrailSpaces = options.source?.document.wrapTrailSpaces ?? false;
     const { width = 595.3, height = 841.9, margin = 72 } = options.page ?? {};
     if (
       ![width, height, margin].every(Number.isFinite) ||
