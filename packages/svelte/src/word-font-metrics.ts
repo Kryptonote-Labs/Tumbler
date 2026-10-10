@@ -1,6 +1,7 @@
 import { wordHighlightColor } from './word-highlight.ts';
-import { wordPointsToCssPixels, type ComputedWordTextFormat, type WordTextMeasurer } from "@tumblerjs/word";
+import { wordPointsToCssPixels, type ComputedWordTextFormat, type WordTextMeasurer, type WordLayoutFragment } from "@tumblerjs/word";
 import { browserWordLineMetrics } from './word-line-metrics.ts';
+import { browserWordBaselineOffset } from './word-baseline.ts';
 
 export interface CanvasTextMetricSource {
   font: string;
@@ -44,6 +45,15 @@ export function wordTextCss(format: ComputedWordTextFormat): string {
     `direction:${format.rightToLeft ? "rtl" : "ltr"}`,
     `vertical-align:${format.verticalAlign === "superscript" ? "super" : format.verticalAlign === "subscript" ? "sub" : "baseline"}`,
   ].join(";");
+}
+
+/** Top of a CSS line box whose painted baseline matches the engine's point geometry. */
+export function wordTextTop(
+  fragment: Pick<WordLayoutFragment, 'format' | 'baseline' | 'height' | 'y'>,
+  family = `${cssString(fragment.format.fontFamily)}, sans-serif`,
+): number {
+  const offset = browserWordBaselineOffset(fragment.format, family, fragment.height);
+  return offset === undefined ? fragment.y : fragment.baseline - offset;
 }
 
 function wordFontShorthand(format: ComputedWordTextFormat): string {

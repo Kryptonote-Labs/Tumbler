@@ -27,10 +27,15 @@ export function browserWordLineMetrics(context: CanvasTextMetricSource) {
         const ascent = measured.fontBoundingBoxAscent || measured.emHeightAscent || 800;
         const descent = measured.fontBoundingBoxDescent || measured.emHeightDescent || 200;
         const leading = Math.max(0, height - ascent - descent);
-        metrics = { ascent: (ascent + leading / 2) / 1000, descent: (descent + leading / 2) / 1000 };
+        // Word puts the font's external leading above its baseline. Paragraph line
+        // spacing is separate and belongs below the line in the layout engine.
+        metrics = { ascent: (ascent + leading) / 1000, descent: descent / 1000 };
         cache.set(font, metrics);
       }
-      return { ascent: metrics.ascent * format.fontSizePoints, descent: metrics.descent * format.fontSizePoints };
+      return {
+        ascent: Math.round(metrics.ascent * format.fontSizePoints * 20) / 20,
+        descent: Math.round(metrics.descent * format.fontSizePoints * 20) / 20,
+      };
     },
   };
 }
