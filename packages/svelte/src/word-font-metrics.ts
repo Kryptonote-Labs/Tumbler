@@ -6,6 +6,7 @@ import { browserWordBaselineOffset } from './word-baseline.ts';
 export interface CanvasTextMetricSource {
   font: string;
   direction: CanvasDirection;
+  fontKerning?: CanvasFontKerning;
   measureText(text: string): TextMetrics;
 }
 
@@ -15,6 +16,7 @@ export function browserWordTextMeasurer(context: CanvasTextMetricSource): WordTe
   return Object.freeze({
     measure(text: string, format: ComputedWordTextFormat) {
       context.font = wordFontShorthand(format);
+      context.fontKerning = "none";
       context.direction = format.rightToLeft ? "rtl" : "ltr";
       const metrics = context.measureText(text);
       const line = lineMetrics.measure(format, `${cssString(format.fontFamily)}, sans-serif`);
@@ -39,6 +41,8 @@ export function wordTextCss(format: ComputedWordTextFormat): string {
     `font-size:${wordPointsToCssPixels(format.fontSizePoints)}px`,
     `font-weight:${format.bold ? 700 : 400}`,
     `font-style:${format.italic ? "italic" : "normal"}`,
+    // Word defaults to unkerned text; inherited browser typography must not change advances.
+    "font-kerning:none",
     `text-decoration-line:${decoration}`,
     `color:${format.color}`,
     `background:${wordHighlightColor(format.highlight)}`,

@@ -60,6 +60,12 @@ This aligns the painted baseline with `fragment.baseline` despite browser font
 rounding. The optional font stack must match the one used to measure and paint
 the text. Font loading invalidates the cached CSS baseline measurements.
 
+`wordTextCss` and `browserWordTextMeasurer` explicitly disable font kerning to
+match the engine's unkerned advances and Word's default when `w:kern` is absent.
+Custom renderers must also set `font-kerning:none`; inherited
+`text-rendering:optimizeLegibility` can otherwise change painted positions.
+Explicit `w:kern` thresholds are not yet interpreted by the layout engine.
+
 The Word head exposes controlled selection and editing without making the DOM
 canonical state:
 
