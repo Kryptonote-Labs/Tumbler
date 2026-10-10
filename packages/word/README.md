@@ -393,3 +393,5 @@ content keeps its order relative to the surrounding paragraphs.
 its contents still continue across pages, as required by ISO/IEC 29500-1 §17.4.6.
 An indivisible line or drawing taller than the page follows the paragraph layout fallback:
 it is placed once to make progress, without discarding its source content.
+
+Table row sizing includes resolved horizontal border thickness as well as cell margins. Rows split across pages retain their top and bottom insets on each fragment.

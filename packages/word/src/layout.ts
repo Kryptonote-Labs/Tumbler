@@ -1,5 +1,5 @@
 import { splitPreparedTable, joinPreparedTables, preparedBlockHeight } from './table-pagination.ts';
-import { resolveTableBorders, type WordLayoutTableBorder } from './table-borders.ts';
+import { tableBorderInsets, resolveTableBorders, type WordLayoutTableBorder } from './table-borders.ts';
 import type { WordCellBorders } from './table-format.ts';
 import type {
   WordBlock,
@@ -586,10 +586,16 @@ function prepareTable(
   for (const value of columnWidths) columnOffsets.push(columnOffsets.at(-1)! + value);
   const preparedCells: PreparedTableCell[] = [];
   const rowHeights = grid.rows.map((row) => row.source.heightRule === "auto" || row.source.heightTwips === undefined ? 0 : points(row.source.heightTwips));
-  for (const row of grid.rows) for (const cell of row.cells) {
+  const gridCells = grid.rows.flatMap(row => row.cells);
+  const borderInsets = tableBorderInsets(gridCells.map(cell => ({
+    x: cell.column, y: cell.row, width: cell.columnSpan, height: cell.rowSpan,
+    borders: cell.source.borders ?? {},
+  })), { x: 0, y: 0, width: grid.columnCount, height: grid.rows.length }, table.properties.borders);
+  for (const [index, cell] of gridCells.entries()) {
+    const inset = borderInsets[index]!;
     const cellWidth = columnOffsets[cell.column + cell.columnSpan]! - columnOffsets[cell.column]!;
     const sourceMargins = cell.source.margins ?? table.properties.cellMargins;
-    const margins = Object.freeze({ top: points(sourceMargins.topTwips), end: points(sourceMargins.endTwips), bottom: points(sourceMargins.bottomTwips), start: points(sourceMargins.startTwips) });
+    const margins = Object.freeze({ top: points(sourceMargins.topTwips) + inset.top, end: points(sourceMargins.endTwips), bottom: points(sourceMargins.bottomTwips) + inset.bottom, start: points(sourceMargins.startTwips) });
     const innerWidth = Math.max(1, cellWidth - margins.start - margins.end);
     const blocks = cell.source.blocks.flatMap((block): (PreparedParagraph | PreparedTable)[] =>
       block.kind === "paragraph" ? [prepareParagraph(document, block, innerWidth, measurer, listMarkers.get(block.elementId))]
