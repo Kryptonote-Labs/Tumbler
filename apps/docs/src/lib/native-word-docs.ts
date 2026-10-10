@@ -48,7 +48,19 @@ const paragraphs = document.paragraphs();
 const bytes = document.artifact().bytes();` },
       { kind: 'text', text: 'update receives the complete current block tree and publishes the new model after validation. It is reconciliation, not an operation log. IDs must be unique across the tree, including table descendants. Give paragraphs and tables stable IDs when inserting or moving content; omitted IDs use structural paths. IDs are application identity and are not serialized into DOCX.' },
       { kind: 'text', text: 'Use the same WordContentBlock structures as createWordArtifact for lists, nested tables, and inline or floating images. Treat supplied blocks, constructor options, and image bytes as immutable after passing them in. Replace changed values before calling update; image cache identity depends on its Uint8Array object.' },
-      { kind: 'link', href: '/docs/word', label: 'Word authoring and image examples' },
+      { kind: 'link', href: '/docs/word-authoring', label: 'Word authoring and image examples' },
+    ] },
+    { id: 'imports', title: 'Import an existing DOCX', blocks: [
+      { kind: 'code', code: `import { openWordArtifact, importWordContent, NativeWordDocument } from '@tumblerjs/word';
+
+const source = openWordArtifact(bytes);
+const model = new NativeWordDocument({ source });
+const content = importWordContent(source);
+model.update(content);
+const output = model.artifact().bytes();` },
+      { kind: 'text', text: 'Keep the original artifact immutable. Source identifiers in imported content always refer to that artifact, not a later export. The constructor already imports source content; use importWordContent when your application needs its editable block tree. WordPackageDocument is a compatibility name for this engine.' },
+      { kind: 'link', href: '/docs/word-authoring#stories', label: 'Edit shared headers and footers' },
+      { kind: 'link', href: '/docs/word-collaboration', label: 'Anchored operations, source manifests, and incremental projections' },
     ] },
     { id: 'layout', title: 'Reuse layout work', blocks: [
       { kind: 'text', text: 'Unchanged paragraphs retain their objects. Layout caches prepared paragraph geometry and reuses positioned lines and pages when their geometry and content remain unchanged. Wrapping, list markers, available width, and measurer identity participate in invalidation. Keep one measurer object while its font metrics remain valid; replace it when fonts or measurement behavior change.' },

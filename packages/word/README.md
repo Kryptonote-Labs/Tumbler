@@ -122,8 +122,9 @@ points. Image blocks contain PNG or JPEG bytes, dimensions in points and optiona
 Images are embedded in the DOCX, with relationships created automatically. `blocks` and the
 older `paragraphs` option are mutually exclusive.
 
-Authoring limits include 10,000 blocks, 10,000 cells, eight nested table levels and 100 MB of
-image data per document. Applications should enforce their own smaller limits where appropriate.
+The authoring API does not impose fixed block, cell, nesting, or image-data caps.
+Inputs must satisfy format and structural validation. Parsing protections and caller-selected
+layout work budgets are separate from document authoring capabilities.
 The structured input is an authoring format, not a lossless conversion of arbitrary existing DOCX files.
 
 Images can also appear inside a paragraph or table cell alongside text. An image run uses

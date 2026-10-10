@@ -1,6 +1,6 @@
 # WordprocessingML implementation status
 
-This document defines Tumbler's bounded Word milestone 4. It is a capability
+This document describes Tumbler's Word package and native editing APIs. It is a capability
 statement, not a claim of complete ECMA-376 or Microsoft Word compatibility.
 
 The implementation follows ECMA-376 Part 1 sections 11 and 17, the package and
@@ -27,7 +27,7 @@ assumed. Strict and Transitional namespaces are tested separately.
   letter, Roman, and bullet markers without inserting marker text into content.
 - Resolve table grids, omitted columns, spans, vertical merges, margins,
   preferred widths, row heights, and cell alignment while retaining source IDs.
-- Render nested tables and paginate tables at inseparable row bands.
+- Render nested tables and continue rows across pages at cell line boundaries.
 - Repeat leading `tblHeader` rows and honor exact row heights.
 
 ### Milestone 3 — document stories and drawings
@@ -66,15 +66,16 @@ assumed. Strict and Transitional namespaces are tested separately.
 | Main document, paragraphs, ordinary runs | Yes | Yes | Yes | Bounded text | Generated validation |
 | Styles, themes, direct text properties | Yes | Yes | Yes | Basic direct properties | Generated validation |
 | Sections, pages, columns, explicit breaks | Yes | Yes | Bounded | No | Not qualified |
-| Numbering | Yes | Yes | Common formats | No | Not qualified |
-| Tables, spans, vertical merges, nested tables | Yes | Yes | Bounded | Text in simple cells | Not qualified |
-| Headers and footers | Yes | Yes | Paragraphs/tables | No | Not qualified |
+| Numbering | Yes | Yes | Common formats | Authored bullet/decimal lists | Not qualified |
+| Tables, spans, vertical merges, nested tables | Yes | Yes | Row continuation and repeated headers | Native structure and direct cell/row formatting | Not qualified |
+| Headers and footers | Yes | Yes | Paragraphs/tables and page fields | Shared stories and section variants | Not qualified |
 | Footnotes and endnotes | Yes | Yes | Paragraphs/tables | No | Not qualified |
 | Hyperlinks and bookmarks | Yes | Yes | Yes | Text only when safe | Not qualified |
-| Stored field results | Yes | Yes | Yes | Result text only when safe | No recalculation |
-| Embedded images | Yes | Yes | Common raster formats | No | Not qualified |
-| DrawingML charts | Shared subset | Yes | Shared native subset | No | Not qualified |
-| Floating drawings and wrap | Basic placement | Yes | Approximate | No | Not qualified |
+| PAGE and NUMPAGES fields | Simple and complete complex forms | Yes | Live in header/footer layout | Native fields and presets | No section numbering evaluation |
+| General fields | Partial | Yes | Some stored results | Limited | No general recalculation |
+| Embedded images | Yes | Yes | Common raster formats | PNG/JPEG authoring, movement and resizing | Not qualified |
+| DrawingML charts | Shared subset | Yes | Shared native subset | Drawing movement and resizing | Not qualified |
+| Floating drawings and wrap | Basic placement | Yes | Approximate | Inline/front/behind placement | Not qualified |
 | Tracked revisions | Insert/delete wrappers | Yes | Inserted result | No structural edits | Not qualified |
 | Comments and content controls | Unsupported node | Yes | No | No | Not qualified |
 | Macros, signatures, custom XML, embeddings | OPC inventory | Untouched on focused edits | No | No | Not qualified |
@@ -88,15 +89,22 @@ structural region can retain unknown descendants; those commands are blocked.
 Tumbler owns an explicit layout model because HTML flow is not a Word pagination
 engine. Current geometry deliberately remains approximate where Word depends on
 proprietary font substitution, language line-breaking, floating wrap polygons,
-table-cell pagination, and iterative footnote continuation. Notes are positioned
+complex table interactions, and iterative footnote continuation. Notes are positioned
 at page bottoms but do not yet trigger a full iterative body repagination pass.
 Anchored drawing wrap uses a bounded rectangular approximation.
 
-Bi-directional shaping depends on the browser canvas and available fonts. Page
-numbers and other general fields use stored producer results. Exact parity with
+Bi-directional shaping depends on the browser canvas and available fonts. Supported
+PAGE/NUMPAGES fields resolve during header/footer layout. General fields are not
+recalculated; some stored results render. Section page-number restarts and numeral
+formats are not evaluated. Exact parity with
 Word therefore requires visual qualification, not just schema validity.
 
 ## Editing safety policy
+
+The following restrictions describe package-backed text replacement. Native rich-content
+editing and the optional collaboration adapter additionally support imported source
+references, structural table operations, images, story updates, and page fields.
+See the Word package README and public authoring/collaboration guides for those APIs.
 
 Ordinary text edits surgically change the Main Document part and reopen the
 package before bytes escape. Paragraph boundary changes are accepted only when

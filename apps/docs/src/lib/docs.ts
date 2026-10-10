@@ -1,3 +1,5 @@
+import { wordAuthoringDoc } from './word-authoring-docs';
+import { wordCollaborationDoc } from './word-collaboration-docs';
 import { nativeWordDoc } from './native-word-docs';
 export type Block =
   | { kind: 'text' | 'note'; text: string }
@@ -14,6 +16,8 @@ export interface Doc {
 
 export const docs: Record<string, Doc> = {
   'native-word': nativeWordDoc,
+  'word-authoring': wordAuthoringDoc,
+  'word-collaboration': wordCollaborationDoc,
   powerpoint: {
     title: 'PowerPoint',
     description: 'Build a PPTX viewer or editor with Svelte 5. Open a file, add slide navigation, connect edits, and download the result.',
@@ -228,9 +232,11 @@ const output = edited.bytes();` }
     title: 'Word documents',
     description: 'Render paginated DOCX files, track text selection, and apply edits through a Word editing session.',
     sections: [
-      { id: 'native', title: 'Application-owned content', blocks: [
-        { kind: 'text', text: 'For an editor that owns its authored content, NativeWordDocument updates rich blocks and reuses Word page geometry without rebuilding a DOCX. The package-backed APIs below remain the path for opening and preserving existing files.' },
-        { kind: 'link', href: '/docs/native-word', label: 'Native Word model, layout caching, and export' },
+      { id: 'models', title: 'Choose an integration', blocks: [
+        { kind: 'text', text: 'This guide connects the package-backed WordDocumentView and editing session. For application-owned editing, imported rich content, or shared human/agent operations, use the native document engine and optional collaboration adapter.' },
+        { kind: 'link', href: '/docs/native-word', label: 'Native Word model and imports' },
+        { kind: 'link', href: '/docs/word-authoring', label: 'Tables, images, headers, footers, and page numbers' },
+        { kind: 'link', href: '/docs/word-collaboration', label: 'Collaborative editing APIs' },
       ] },
       { id: 'open', title: 'Open and render', blocks: [
         { kind: 'code', code: `import { openWordEditingSession } from '@tumblerjs/word';
@@ -347,6 +353,19 @@ const output = artifact.bytes();` },
     sections: [
       { id: 'formats', title: 'Current scope', blocks: [
         { kind: 'table', headers: ['Format', 'Available today', 'Limits'], rows: [['DOCX', 'Paginated rendering, text edits, formatting, tables, embedded images, and supported charts.', 'Incomplete Word layout and feature coverage. Font availability affects pagination.'], ['XLSX', 'Virtualized grid, cell and ordinary formula edits, formatting, tables, and supported charts.', 'Formula and workbook feature coverage remains incomplete.'], ['DOC / XLS / PPT', 'Not supported.', 'Convert legacy binary files to DOCX, XLSX, or PPTX first.'], ['PPTX', 'Slide viewing, thumbnail navigation, text and table-cell editing, formatting, and object movement, resizing, and rotation.', 'Table row/column operations, SmartArt relayout, 3D effects, and full animation/layout fidelity remain unsupported.'], ['PDF', 'No viewer in this playground.', 'PDF rendering is outside the current format packages.']] }
+      ] },
+      { id: 'word', title: 'Word support', blocks: [
+        { kind: 'table', headers: ['Content', 'Support and limits'], rows: [
+          ['Native editing', 'Create or import rich content, retain source properties, and export DOCX. Optional anchored Yjs operations cover text, formatting, images, and tables.'],
+          ['Tables', 'Nested tables, spans, vertical merges, direct cell formatting, row continuation, and repeated header rows. Conditional table styles are incomplete.'],
+          ['Headers and footers', 'Edit shared stories and section variants. Live PAGE/NUMPAGES fields work in header/footer layout. Section numbering restarts and numeral formats are not evaluated.'],
+          ['Fields', 'Supported simple and complex page fields are editable. General field recalculation, including contents pages and cross-references, is not implemented. Other cached results have partial rendering support.'],
+          ['Images and placement', 'Inline, front, and behind authoring; image and chart movement/resizing. Polygon wrapping and general shape/text-box support are incomplete.'],
+          ['Review and structured content', 'Basic inserted/deleted text wrappers are recognized. Comments, full revision review, content controls, and native equations are not supported for editing or full rendering. Retained XML does not guarantee visible content.'],
+          ['Notes and pagination', 'Footnotes/endnotes render, but note numbering and body repagination remain incomplete. Fonts, paragraph keep rules, and complex layouts can differ from Word.'],
+        ] },
+        { kind: 'link', href: '/docs/word-authoring', label: 'Headless Word authoring APIs' },
+        { kind: 'link', href: '/docs/word-collaboration', label: 'Collaborative operations and validation' },
       ] },
       { id: 'powerpoint', title: 'PowerPoint support', blocks: [
         { kind: 'table', headers: ['Content', 'Support and limits'], rows: [
