@@ -188,6 +188,8 @@ interface MutablePage {
 }
 
 export interface WordLayoutSource {
+  /** OOXML compatibility setting; absent/false lets trailing spaces hang past the margin. */
+  readonly wrapTrailSpaces?: boolean;
   readonly blocks: readonly WordBlock[];
   readonly drawings: ReadonlyMap<number, WordDrawing>;
   readonly finalSection: WordSectionProperties;
@@ -196,7 +198,7 @@ export interface WordLayoutSource {
   runFormat(paragraph: WordParagraph, run: WordRun | undefined): ComputedWordTextFormat;
   readonly cache?: WordLayoutCache | undefined;
 }
-export type WordLayoutDocumentContext = Pick<WordLayoutSource, "blocks" | "drawings" | "paragraphFormat" | "runFormat" | "cache" | "listMarkers"> & { readonly pageFields?: Readonly<Record<WordPageField, number>> };
+export type WordLayoutDocumentContext = Pick<WordLayoutSource, "blocks" | "drawings" | "paragraphFormat" | "runFormat" | "cache" | "listMarkers" | "wrapTrailSpaces"> & { readonly pageFields?: Readonly<Record<WordPageField, number>> };
 
 export interface WordLayoutStories {
   readonly evenAndOddHeaders?: boolean;
@@ -224,9 +226,10 @@ export class WordLayoutCache {
   pages: readonly WordLayoutPage[] = [];
   readonly translated = new WeakMap<WordLayoutLine, { dx: number; dy: number; value: WordLayoutLine }>();
   readonly lines = new WeakMap<PreparedLine, { marker: PreparedMarker | undefined; value: WordLayoutLine }>();
-  readonly paragraphs = new WeakMap<WordParagraph, { width: number; marker: string; measurer: WordTextMeasurer; value: PreparedParagraph }>();
+  readonly paragraphs = new WeakMap<WordParagraph, { width: number; marker: string; measurer: WordTextMeasurer; wrapTrailSpaces: boolean; value: PreparedParagraph }>();
   readonly tables = new WeakMap<WordTable, {
     width: number;
+    wrapTrailSpaces: boolean;
     measurer: WordTextMeasurer;
     markers: readonly (readonly [number, string])[];
     value: PreparedTable;
@@ -349,7 +352,7 @@ export function layoutWordDocument(
   options: WordLayoutOptions = {},
 ): WordLayout {
   return layoutWordSource({
-    blocks: document.blocks, drawings: document.drawings, finalSection: document.finalSection,
+    blocks: document.blocks, drawings: document.drawings, finalSection: document.finalSection, wrapTrailSpaces: document.wrapTrailSpaces,
     listMarkers: document.numbering.markers(document),
     paragraphFormat: paragraph => document.styles.paragraphFormat(document, paragraph),
     runFormat: (paragraph, run) => document.styles.runFormat(document, paragraph, run),
@@ -542,8 +545,9 @@ function prepareTable(
   measurer: WordTextMeasurer,
   listMarkers: ReadonlyMap<number, WordListMarker>,
 ): PreparedTable {
+  const wrapTrailSpaces = document.wrapTrailSpaces ?? false;
   const cached = document.cache?.tables.get(table);
-  if (cached && cached.width === availableWidth && cached.measurer === measurer &&
+  if (cached && cached.width === availableWidth && cached.measurer === measurer && cached.wrapTrailSpaces === wrapTrailSpaces &&
     cached.markers.every(([id, marker]) => marker === JSON.stringify(listMarkers.get(id) ?? null))) return cached.value;
   if (document.cache) document.cache.preparedTables += 1;
   const grid = resolveWordTableGrid(table);
@@ -599,7 +603,7 @@ function prepareTable(
       }
     };
     for (const row of table.rows) for (const cell of row.cells) collect(cell.blocks);
-    document.cache.tables.set(table, { width: availableWidth, measurer, markers, value });
+    document.cache.tables.set(table, { width: availableWidth, measurer, markers, wrapTrailSpaces, value });
   }
   return value;
 }
@@ -742,9 +746,10 @@ function prepareParagraph(
   measurer: WordTextMeasurer,
   markerSource?: WordListMarker,
 ): PreparedParagraph {
+  const wrapTrailSpaces = document.wrapTrailSpaces ?? false;
   const markerKey = JSON.stringify(markerSource);
   const cached = document.cache?.paragraphs.get(paragraph);
-  if (cached && cached.width === columnWidth && cached.marker === markerKey && cached.measurer === measurer) return cached.value;
+  if (cached && cached.width === columnWidth && cached.marker === markerKey && cached.measurer === measurer && cached.wrapTrailSpaces === wrapTrailSpaces) return cached.value;
   if (document.cache) document.cache.measuredParagraphs++;
   const computed = document.paragraphFormat(paragraph);
   const format = markerSource === undefined ? computed : Object.freeze({
@@ -758,10 +763,10 @@ function prepareParagraph(
   const mark = validMeasurement(measurer.measure(' ', document.runFormat(paragraph, emptyRun)));
   // List hanging indents position the marker, not the first line of text.
   const textFormat = markerSource ? { ...format, firstLineTwips: 0, hangingTwips: 0 } : format;
-  const lines = breakLines(atoms, width, textFormat, mark);
+  const lines = breakLines(atoms, width, textFormat, mark, wrapTrailSpaces);
   const marker = markerSource === undefined ? undefined : prepareMarker(document, paragraph, markerSource, measurer);
   const value = Object.freeze({ paragraph, format, lines: Object.freeze(lines), marker });
-  document.cache?.paragraphs.set(paragraph, { width: columnWidth, marker: markerKey, measurer, value });
+  document.cache?.paragraphs.set(paragraph, { width: columnWidth, marker: markerKey, measurer, wrapTrailSpaces, value });
   return value;
 }
 
@@ -878,7 +883,7 @@ function resolvedParagraphAtoms(
   return atoms;
 }
 
-function breakLines(atoms: readonly ParagraphAtom[], width: number, format: ComputedWordParagraphFormat, mark: WordTextMeasurement): PreparedLine[] {
+function breakLines(atoms: readonly ParagraphAtom[], width: number, format: ComputedWordParagraphFormat, mark: WordTextMeasurement, wrapTrailSpaces: boolean): PreparedLine[] {
   const result: PreparedLine[] = [];
   let line: Exclude<ParagraphAtom, BreakAtom>[] = [];
   let lineWidth = 0;
@@ -933,7 +938,10 @@ function breakLines(atoms: readonly ParagraphAtom[], width: number, format: Comp
     }
     atomWidth = Math.max(0, atomWidth);
     let materialized = atom.kind === "tab" ? Object.freeze({ ...atom, width: atomWidth }) : atom;
-    if (line.length > 0 && lineWidth + atomWidthValue(materialized) > Math.max(1, width - (result.length === 0 ? points(format.firstLineTwips - format.hangingTwips) : 0))) {
+    // ISO/IEC 29500 wrapTrailSpaces: ordinary trailing spaces hang by default.
+    // Keep their logical offsets; push() removes only their painted advance.
+    const hangingSpace = !wrapTrailSpaces && materialized.kind === "glyph" && materialized.text === " ";
+    if (!hangingSpace && line.length > 0 && lineWidth + atomWidthValue(materialized) > Math.max(1, width - (result.length === 0 ? points(format.firstLineTwips - format.hangingTwips) : 0))) {
       if (lastBreak >= 0) {
         const carry = line.splice(lastBreak + 1);
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);
@@ -1112,6 +1120,7 @@ function compileStory(document: WordDocument, story: WordHeaderFooterStory | Wor
   };
   visit(story.blocks);
   return {
+    wrapTrailSpaces: document.wrapTrailSpaces,
     drawings: story.drawings, blocks: story.blocks, listMarkers: document.numbering.markers({ ...context, blocks: story.blocks }),
     cache: new WordLayoutCache(),
     paragraphFormat: paragraph => paragraphs.get(paragraph)!,
@@ -1443,7 +1452,7 @@ export function layoutWordResolvedParagraph(
   if (!Number.isFinite(width) || width <= 0) throw new RangeError("Paragraph width must be positive.");
   const atoms = resolvedParagraphAtoms(paragraph, measurer, () => textFormat, new Map());
   const lines = breakLines(atoms, Math.max(1, width - points(format.indentStartTwips + format.indentEndTwips)), format,
-    validMeasurement(measurer.measure(' ', textFormat)));
+    validMeasurement(measurer.measure(' ', textFormat)), false);
   const column: MutableColumn = { index: 0, x: 0, y: 0, width, height: Infinity, lines: [], tables: [], unsupportedBlocks: [] };
   const budget = { maxPages: Infinity, maxFragments: Infinity, fragments: 0 };
   let y = points(format.spacingBeforeTwips);

@@ -279,6 +279,7 @@ export class WordDocument {
   readonly styles: WordStyles;
   readonly numbering: WordNumbering;
   readonly evenAndOddHeaders: boolean;
+  readonly wrapTrailSpaces: boolean;
   readonly headerFooters: readonly WordHeaderFooterStory[];
   readonly drawings: ReadonlyMap<number, WordDrawing>;
   readonly notes: readonly WordNoteStory[];
@@ -293,6 +294,7 @@ export class WordDocument {
     styles: WordStyles;
     numbering: WordNumbering;
     evenAndOddHeaders?: boolean;
+    wrapTrailSpaces?: boolean;
     headerFooters: readonly WordHeaderFooterStory[];
     drawings: ReadonlyMap<number, WordDrawing>;
     notes: readonly WordNoteStory[];
@@ -306,6 +308,7 @@ export class WordDocument {
     this.styles = input.styles;
     this.numbering = input.numbering;
     this.evenAndOddHeaders = input.evenAndOddHeaders ?? false;
+    this.wrapTrailSpaces = input.wrapTrailSpaces ?? false;
     this.headerFooters = Object.freeze([...input.headerFooters]);
     this.drawings = input.drawings;
     this.notes = Object.freeze([...input.notes]);
@@ -367,6 +370,7 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
   const notes = readNoteStories(pkg, main, profile, budget);
   const headerFooters = readHeaderFooterStories(pkg, main, profile, [...blocks.flatMap(sectionReferences), ...finalSection.headerReferences, ...finalSection.footerReferences], budget);
   let evenAndOddHeaders = false;
+  let wrapTrailSpaces = false;
   const settingsRel = relationships?.items.find(item => item.type.endsWith('/settings') && item.targetMode === 'Internal');
   if (settingsRel?.targetMode === 'Internal') {
     const settingsPart = pkg.getPart(settingsRel.targetPartName);
@@ -374,9 +378,12 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
       const settings = parseLosslessXml(pkg.readPart(settingsPart));
       const value = settings.elements(namespace, 'evenAndOddHeaders')[0];
       evenAndOddHeaders = value !== undefined && !['0', 'false', 'off'].includes(attr(value, namespace, 'val') ?? 'true');
+      const compatibility = settings.elements(namespace, 'compat')[0];
+      const trailingSpaces = compatibility && children(compatibility, namespace, 'wrapTrailSpaces')[0];
+      wrapTrailSpaces = trailingSpaces !== undefined && !['0', 'false', 'off'].includes(attr(trailingSpaces, namespace, 'val') ?? 'true');
     }
   }
-  return new WordDocument({ pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes, evenAndOddHeaders });
+  return new WordDocument({ pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes, evenAndOddHeaders, wrapTrailSpaces });
 }
 
 function readNoteStories(pkg: OpcPackage, main: OpcPart, conformance: WordConformance, budget: ParseBudget): readonly WordNoteStory[] {

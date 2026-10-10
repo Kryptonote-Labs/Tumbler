@@ -28,6 +28,13 @@ const bytes = artifact.bytes();
 ```
 
 Creation defaults to A4 with one-inch margins and modern Word compatibility.
+
+Line layout lets ordinary trailing spaces extend past the margin without moving
+a fitting word or adding space-only lines. Their logical offsets are retained
+even though they have no painted width. The document compatibility setting
+`w:compat/w:wrapTrailSpaces` enables normal wrapping of spaces when true; absent
+or false uses the default hanging behavior. Package and native layout both honor
+this setting. See [OOXML wrapTrailSpaces](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.wraptrailspaces).
 Paragraphs are explicit; tabs can appear inside runs. Fonts are named, not embedded.
 This API authors a new file and does not import or flatten existing documents.
 
