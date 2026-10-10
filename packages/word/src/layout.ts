@@ -892,12 +892,14 @@ function breakLines(atoms: readonly ParagraphAtom[], width: number, format: Comp
     const naturalDescent = Math.max(mark.descent, ...line.map(atomDescent));
     const naturalHeight = naturalAscent + naturalDescent;
     const height = format.lineSpacing.rule === 'auto'
-      ? Math.max(1, naturalHeight * format.lineSpacing.value / 240)
+      ? Math.max(1, Math.floor(Math.round(naturalHeight * TWIPS_PER_POINT) * format.lineSpacing.value / 240) / TWIPS_PER_POINT)
       : format.lineSpacing.rule === 'exact' ? Math.max(1, points(format.lineSpacing.value))
         : Math.max(1, naturalHeight, points(format.lineSpacing.value));
     const leading = height - naturalHeight;
-    const ascent = naturalAscent + leading / 2;
-    const descent = naturalDescent + leading / 2;
+    // Automatic spacing advances the next line without moving this line's baseline.
+    // Resolve it in whole twips, as with authored exact/at-least spacing.
+    const ascent = format.lineSpacing.rule === 'auto' ? naturalAscent : naturalAscent + leading / 2;
+    const descent = height - ascent;
     let last = line.at(-1);
     while (last?.kind === "glyph" && last.whitespace) {
       lineWidth -= last.width;

@@ -52,6 +52,14 @@ leading, at a large reference size to avoid cumulative pixel rounding. Custom
 renderers can supply their CSS font stack and clear this cache when fonts load.
 `browserWordTextMeasurer` uses these metrics automatically in the browser.
 
+Word font leading is placed above the baseline, and automatic paragraph spacing
+advances below it in whole twips. Custom HTML renderers should use
+`wordTextTop(fragment, cssFontStack)` for a text span's top position, with
+`fragment.height` as its CSS line height, converting both from points to pixels.
+This aligns the painted baseline with `fragment.baseline` despite browser font
+rounding. The optional font stack must match the one used to measure and paint
+the text. Font loading invalidates the cached CSS baseline measurements.
+
 The Word head exposes controlled selection and editing without making the DOM
 canonical state:
 

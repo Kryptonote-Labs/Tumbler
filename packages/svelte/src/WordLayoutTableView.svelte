@@ -2,7 +2,7 @@
   import { wordPointsToCssPixels, type WordImageDrawing, type WordLayoutFragment, type WordLayoutTable } from "@tumblerjs/word";
   import { wordTableBorderCss } from './word-table-style.ts';
   import OoxmlChart from "./OoxmlChart.svelte";
-  import { wordTextCss } from "./word-font-metrics.ts";
+  import { wordTextCss, wordTextTop } from "./word-font-metrics.ts";
 
   interface Props {
     readonly table: WordLayoutTable;
@@ -16,7 +16,7 @@
   let { table, pageIndex, imageurl, onactivate, story, decorationsOnly = false }: Props = $props();
 
   function fragmentStyle(fragment: WordLayoutFragment) {
-    return `${wordTextCss(fragment.format)};left:${wordPointsToCssPixels(fragment.x)}px;top:${wordPointsToCssPixels(fragment.y)}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
+    return `${wordTextCss(fragment.format)};left:${wordPointsToCssPixels(fragment.x)}px;top:${wordPointsToCssPixels(wordTextTop(fragment))}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 
   function drawingStyle(fragment: WordLayoutFragment) {
@@ -48,7 +48,7 @@
     {#if !decorationsOnly}
       {#each cell.lines as line}
         {#if line.marker !== undefined}
-          <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(line.marker.y)}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
+          <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
         {/if}
         {#if line.fragments.length === 0 || line.fragments.at(-1)?.endOffset !== line.endOffset}
           <span
