@@ -10,6 +10,8 @@ export const TABLE_ACTIONS = [
   'delete-column',
   'delete-table',
   'clear-cell',
+  'merge-right',
+  'split-cell',
 ] as const;
 export type TableAction = (typeof TABLE_ACTIONS)[number];
 type Delta = Parameters<Y.Text['applyDelta']>[0];
@@ -58,7 +60,22 @@ export function editTableDelta(
   const remove = (start: number, end: number) => {
     if (end > start) changes.push({ start, end, delta: [{ delete: end - start }] });
   };
-  if (removesTable) remove(cells[0]!.start, cells.at(-1)!.end);
+  if (action === 'merge-right') {
+    const next = cells[cells.indexOf(current) + 1];
+    if (!next || next.table.row !== target.row || next.table.column !== target.column + (target.span ?? 1))
+      throw new Error('Select a cell with an adjacent cell on its right.');
+    if (target.merge || next.table.merge) throw new Error('Unmerge vertically merged cells before merging horizontally.');
+    const merged = { ...target, span: (target.span ?? 1) + (next.table.span ?? 1) };
+    for (const p of table.filter(p => p.table.cell === target.cell || p.table.cell === next.table.cell))
+      changes.push({ start: p.end - 1, end: p.end, delta: [{ retain: 1, attributes: { table: replaceCell(p.start, merged) } }] });
+  } else if (action === 'split-cell') {
+    const span = target.span ?? 1;
+    if (span === 1 || target.merge) throw new Error('Select a horizontally merged cell to split.');
+    for (const p of table.filter(p => p.table.cell === target.cell))
+      changes.push({ start: p.end - 1, end: p.end, delta: [{ retain: 1, attributes: { table: replaceCell(p.start, { ...target, span: 1 }) } }] });
+    const { source: _source, ...split } = target;
+    changes.push({ start: current.end, end: current.end, delta: Array.from({ length: span - 1 }, (_, index) => ({ insert: '\n', attributes: { table: { ...split, cell: crypto.randomUUID(), column: target.column + index + 1, span: 1 } } })) });
+  } else if (removesTable) remove(cells[0]!.start, cells.at(-1)!.end);
   else if (action === 'clear-cell') remove(current.start, current.end - 1);
   else if (action === 'delete-row') {
     for (const cell of cells.filter((c) => c.table.row === target.row)) {

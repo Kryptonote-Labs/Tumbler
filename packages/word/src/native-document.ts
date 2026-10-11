@@ -1,5 +1,6 @@
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
+import { wordGeometryAt } from './geometry.ts';
 import { createWordStory, wordStoryArtifact, type WordStoryTarget } from './stories.ts';
 import { openWordArtifact } from './artifact.ts';
 import { NativeWordSource, retainOpaqueBlocks } from './native-source.ts';
@@ -485,6 +486,13 @@ export class NativeWordDocument implements WordLayoutSource {
     this.authored = input;
   }
 
+  /** Inspect section and table-grid dimensions without guessing fonts or claiming rendered bounds. */
+  geometryAt(offset: number, tableDepth = 0) {
+    const paragraphs = this.paragraphs();
+    const paragraph = paragraphs.find(p => p.start <= offset && offset <= p.end);
+    if (!paragraph) throw new Error('Document location unavailable.');
+    return wordGeometryAt(this.blocks, this.finalSection, paragraph.id, tableDepth);
+  }
   paragraphs() {
     let start = 0;
     const visit = (
