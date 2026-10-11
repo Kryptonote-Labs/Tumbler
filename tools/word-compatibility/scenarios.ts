@@ -1,3 +1,6 @@
+import { tableInteropScenarios } from './tables/interoperability.ts';
+import { tablePreservationScenarios } from './tables/preservation.ts';
+import { tableScenarios } from './tables/scenarios.ts';
 import { preservationScenarios } from './preservation/scenarios.ts';
 import assert from 'node:assert/strict';
 import { openZipArchive } from '../../packages/opc/src/index.ts';
@@ -26,6 +29,9 @@ const values = [
 
 export const scenarios: readonly Scenario[] = [
   ...preservationScenarios,
+  ...tableScenarios,
+  ...tablePreservationScenarios,
+  ...tableInteropScenarios,
   ...profiles.flatMap(profile => values.map(([name, value]): Scenario => ({
     id: `${profile}-text-${name}`,
     title: `Read, no-op save and replace ${name} text in ${profile} markup`,

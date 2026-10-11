@@ -1,3 +1,4 @@
+import { tablePlans } from './tables/contract.ts';
 import { preservationPlans } from './preservation/contract.ts';
 import { count, hashDefinition } from './evaluate.ts';
 import { dimensions, type Dimension, type RequirementResult, type Status, type Topic } from './model.ts';
@@ -20,7 +21,7 @@ export interface CoverageTarget {
   readonly gap: string | null;
 }
 
-export const coveragePlans: readonly CoveragePlan[] = preservationPlans;
+export const coveragePlans: readonly CoveragePlan[] = [...preservationPlans, ...tablePlans];
 
 /** Every topic stays in every dimension. No exclusions or credit for merely linking a fixture. */
 export function coverage(topics: readonly Topic[], requirements: readonly RequirementResult[], plans: readonly CoveragePlan[] = coveragePlans) {

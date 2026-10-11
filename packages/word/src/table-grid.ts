@@ -33,15 +33,19 @@ interface MutableCell {
 
 /** Resolves the visual table grid while retaining every source cell identity. */
 export function resolveWordTableGrid(table: WordTable): ResolvedWordTable {
-  const estimated = table.rows.reduce((maximum, row) => Math.max(maximum, row.gridBefore + row.gridAfter + row.cells.reduce((sum, cell) => sum + cell.gridSpan, 0)), table.gridColumnWidthsTwips.length);
+  const declaredColumns = table.gridColumnWidthsTwips.length;
+  // §17.4.15 ignores a leading offset beyond the declared grid. §17.4.14
+  // does not let a conflicting trailing count enlarge it; cell spans can (§17.4.17).
+  const leadingColumns = (row: WordTableRow) => row.gridBefore > declaredColumns ? 0 : row.gridBefore;
+  const estimated = table.rows.reduce((maximum, row) => Math.max(maximum, leadingColumns(row) + row.cells.reduce((sum, cell) => sum + cell.gridSpan, 0)), declaredColumns);
   if (estimated > 32_767) throw new WordError("limit_exceeded", "A resolved table exceeds 32767 grid columns.");
-  const active = new Map<number, MutableCell>();
+  let active = new Map<number, MutableCell>();
   const rows: Array<{ readonly source: WordTableRow; readonly rowIndex: number; readonly cells: MutableCell[] }> = [];
   for (let rowIndex = 0; rowIndex < table.rows.length; rowIndex += 1) {
     const row = table.rows[rowIndex]!;
     const cells: MutableCell[] = [];
-    let column = row.gridBefore;
-    const continued = new Set<MutableCell>();
+    let column = leadingColumns(row);
+    const nextActive = new Map<number, MutableCell>();
     for (const cell of row.cells) {
       if (cell.verticalMerge === "continue") {
         const origin = active.get(column);
@@ -50,17 +54,17 @@ export function resolveWordTableGrid(table: WordTable): ResolvedWordTable {
         }
         origin.rowSpan += 1;
         origin.continuationElementIds.push(cell.elementId);
-        continued.add(origin);
+        nextActive.set(column, origin);
       } else {
         const resolved: MutableCell = { source: cell, continuationElementIds: [], row: rowIndex, column, columnSpan: cell.gridSpan, rowSpan: 1 };
         cells.push(resolved);
-        if (cell.verticalMerge === "restart") for (let index = 0; index < cell.gridSpan; index += 1) active.set(column + index, resolved);
+        if (cell.verticalMerge === "restart") nextActive.set(column, resolved);
       }
       column += cell.gridSpan;
     }
-    for (const [gridColumn, origin] of [...active]) {
-      if (!continued.has(origin) && origin.row < rowIndex && gridColumn >= row.gridBefore && gridColumn < column) active.delete(gridColumn);
-    }
+    // A merge only continues from the immediately preceding row, at the
+    // same starting column and span. Omitted columns close prior groups too.
+    active = nextActive;
     rows.push({ source: row, rowIndex, cells });
   }
   const defaultWidth = estimated === 0 ? 0 : 9_000 / estimated;

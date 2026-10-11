@@ -538,11 +538,14 @@ function parseTable(
       const cellProperties = onlyChild(cell, namespace, "tcPr", "A table cell must not repeat tcPr.");
       const rawMerge = cellProperties === undefined ? undefined : onlyChild(cellProperties, namespace, "vMerge", "Cell properties must not repeat vMerge.");
       const mergeValue = rawMerge === undefined ? undefined : attr(rawMerge, namespace, "val");
+      if (mergeValue !== undefined && mergeValue !== "restart" && mergeValue !== "continue") {
+        throw new WordError("invalid_document", `Invalid vertical merge value ${JSON.stringify(mergeValue)}.`);
+      }
       return Object.freeze({
       elementId: cell.id,
       borders: readTableBorders(tableChild(cellProperties, namespace, "tcBorders"), namespace),
       ...(readTableShading(tableChild(cellProperties, namespace, "shd"), namespace) === undefined ? {} : { shading: readTableShading(tableChild(cellProperties, namespace, "shd"), namespace)! }),
-      gridSpan: cellProperties === undefined ? 1 : integerAttr(onlyChild(cellProperties, namespace, "gridSpan", "Cell properties must not repeat gridSpan."), namespace, "val", 1, 1, 32_767),
+      gridSpan: cellProperties === undefined ? 1 : valueIntegerChild(cellProperties, namespace, "gridSpan", 1, 32_767),
       verticalMerge: rawMerge === undefined ? undefined : mergeValue === "restart" ? "restart" : "continue",
       width: cellProperties === undefined ? undefined : parseTableWidth(onlyChild(cellProperties, namespace, "tcW", "Cell properties must not repeat tcW."), namespace),
       verticalAlignment: cellVerticalAlignment(cellProperties === undefined ? undefined : valueChild(cellProperties, namespace, "vAlign")),
@@ -582,8 +585,17 @@ function parseRowProperties(element: LosslessXmlElement | undefined, namespace: 
 
 function valueIntegerChild(element: LosslessXmlElement, namespace: string, name: string, minimum: number, maximum: number): number {
   const child = onlyChild(element, namespace, name, `${element.localName} must not repeat ${name}.`);
-  const raw = child === undefined ? undefined : attr(child, namespace, "val");
-  return raw === undefined ? minimum : unsignedInteger(raw, name, minimum, maximum);
+  if (child === undefined) return minimum;
+  const raw = attr(child, namespace, "val");
+  if (raw === undefined) throw new WordError("invalid_document", `${name} requires a val attribute.`);
+  // ST_DecimalNumber uses the XML Schema integer lexical space, including signs
+  // and collapsed XML whitespace. The property's semantic range is checked below.
+  const token = raw.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "");
+  const value = Number(token);
+  if (!/^[+-]?[0-9]+$/.test(token) || !Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new WordError("invalid_document", `${name} must be an integer between ${minimum} and ${maximum}.`);
+  }
+  return value;
 }
 
 function parseTableWidth(element: LosslessXmlElement | undefined, namespace: string): WordTableWidth | undefined {
