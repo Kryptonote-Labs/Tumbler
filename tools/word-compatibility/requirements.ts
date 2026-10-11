@@ -1,3 +1,4 @@
+import { everydayRequirements } from './everyday/scenarios.ts';
 import { renderRequirements } from './render/contract.ts';
 import { tableRequirements } from './tables/contract.ts';
 import { preservationRequirements } from './preservation/contract.ts';
@@ -36,4 +37,5 @@ export const requirements: readonly Requirement[] = [
   ...preservationRequirements,
   ...tableRequirements,
   ...renderRequirements,
+  ...everydayRequirements,
 ];
