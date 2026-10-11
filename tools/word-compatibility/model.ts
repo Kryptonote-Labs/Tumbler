@@ -48,6 +48,7 @@ export interface Counts {
   readonly percent: number | null;
 }
 export interface CompatibilityReport {
+  readonly everyday?: import('./everyday/evaluate.ts').EverydayReport;
   readonly schemaVersion: 3;
   readonly scope: string;
   readonly inventorySha256: string;

@@ -1,7 +1,9 @@
+import { everydaySummary, parseEverydaySummary, everydayTable, type EverydaySummary } from './everyday/summary.ts';
 import { count } from './evaluate.ts';
 import { dimensions, type CompatibilityReport, type Dimension, type Status } from './model.ts';
 
 export interface CommentData {
+  readonly everyday?: EverydaySummary;
   readonly schemaVersion: 3;
   readonly commit: string;
   readonly contractHash: string;
@@ -9,7 +11,7 @@ export interface CommentData {
   readonly targets: readonly { readonly id: string; readonly dimension: Dimension; readonly status: Status; readonly definitionHash: string }[];
 }
 export function commentData(report: CompatibilityReport): CommentData {
-  return { schemaVersion: 3, commit: report.provenance.commit, contractHash: report.contractHash, inventory: report.inventory,
+  return { ...(report.everyday ? { everyday: everydaySummary(report.everyday) } : {}), schemaVersion: 3, commit: report.provenance.commit, contractHash: report.contractHash, inventory: report.inventory,
     targets: report.coverageTargets.map(({ id, dimension, status, definitionHash }) => ({ id, dimension, status, definitionHash })) };
 }
 
@@ -32,7 +34,7 @@ export function parseCommentData(input: unknown): CommentData {
     return { id: item.id, dimension: item.dimension, status: item.status, definitionHash: item.definitionHash };
   });
   if (topicDimensions.size !== total || [...topicDimensions.values()].some(items => items.size !== dimensions.length) || targets.length !== total * dimensions.length || dimensions.some(d => targets.filter(item => item.dimension === d).length !== total)) throw new Error('Incomplete standards matrix');
-  return { schemaVersion: 3, commit: input.commit, contractHash: input.contractHash, inventory: { total, mapped, withoutRequirements }, targets };
+  return { ...(input.everyday === undefined ? {} : { everyday: parseEverydaySummary(input.everyday) }), schemaVersion: 3, commit: input.commit, contractHash: input.contractHash, inventory: { total, mapped, withoutRequirements }, targets };
 }
 
 export const commentMarker = '<!-- tumbler-word-compatibility -->';
@@ -63,6 +65,7 @@ export function formatComment(head: CommentData, base?: CommentData, runUrl?: st
     const changed = head.targets.filter(item => old.has(item.id) && old.get(item.id)?.definitionHash !== item.definitionHash).length;
     lines.push('', `Unchanged targets: ${gained} newly verified, ${lost} lost verification. Target definition changes: ${added} added, ${removed} removed, ${changed} changed.`);
   } else lines.push('', 'Base comparison is unavailable because the base has no compatible report.');
+  if (head.everyday) lines.push(...everydayTable(head.everyday, base?.everyday));
   if (runUrl) lines.push('', `[Full report and evidence artifacts](${runUrl}) · tested head \`${head.commit.slice(0, 12)}\``);
   lines.push('', 'Written on behalf of Alex by GPT-6 Astra');
   return lines.join('\n');

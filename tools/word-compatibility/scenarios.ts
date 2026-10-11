@@ -1,3 +1,4 @@
+import { everydayScenarios } from './everyday/scenarios.ts';
 import { renderScenarios } from './render/scenarios.ts';
 import { tableInteropScenarios } from './tables/interoperability.ts';
 import { tablePreservationScenarios } from './tables/preservation.ts';
@@ -32,6 +33,7 @@ export const scenarios: readonly Scenario[] = [
   ...preservationScenarios,
   ...tableScenarios,
   ...renderScenarios,
+  ...everydayScenarios,
   ...tablePreservationScenarios,
   ...tableInteropScenarios,
   ...profiles.flatMap(profile => values.map(([name, value]): Scenario => ({

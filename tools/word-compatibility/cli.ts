@@ -1,3 +1,4 @@
+import { evaluateEveryday } from './everyday/evaluate.ts';
 import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
@@ -43,6 +44,7 @@ const report: CompatibilityReport = {
     dotnet: await versionLog('dotnet-version.log'), libreoffice: await versionLog('libreoffice-version.log'),
     openXmlSdk: (await readFile(join(root, 'tools/openxml-validator/OpenXmlValidator.csproj'), 'utf8')).match(/Include="DocumentFormat.OpenXml" Version="([^"]+)"/)?.[1] ?? 'unknown',
   },
+  everyday: evaluateEveryday(results),
   overall: standards.overall, dimensions: standards.dimensions, coverageTargets: standards.targets,
   requirementCounts: count(results.map(requirement => requirement.status)),
   inventory: { total: topics.length, mapped: mapped.size, withoutRequirements: topics.length - mapped.size },
@@ -56,6 +58,7 @@ await Bun.write(join(output, 'report.md'), markdown(report));
 await Bun.write(join(output, 'report.html'), html(report));
 console.log(`${percentage(report.overall)}: ${report.overall.verified}/${report.overall.total} standards topic/dimension targets verified.`);
 console.log(`${evidence.filter(item => item.outcome === 'passed').length} evidence checks passed; ${evidence.filter(item => item.outcome === 'failed').length} failed; ${evidence.filter(item => item.outcome === 'blocked').length} blocked.`);
+console.log(`Everyday benchmark: ${report.everyday!.overall.verified}/${report.everyday!.overall.total} tasks verified (${percentage(report.everyday!.overall)}).`);
 console.log(`Reports and artifacts: ${output}`);
 for (const item of evidence.filter(item => item.outcome === 'failed')) console.error(`${item.scenario}/${item.oracle}: ${item.detail}`);
 const required = [values['require-openxml'] ? 'openxml' : undefined, values['require-libreoffice'] ? 'libreoffice' : undefined].filter(Boolean);

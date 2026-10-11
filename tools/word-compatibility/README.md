@@ -188,3 +188,11 @@ Use the exact ignored reference archive identified by the source manifest.
 Omit `--check` only for deliberate regeneration. A new inventory revision also
 requires updating the importer's version/scope. The catalog redistributes section
 metadata only, not standards prose or schema archives.
+
+## Everyday document benchmark
+
+Reports also include the separate [everyday benchmark](everyday/README.md):
+42 equally weighted document tasks across seven categories, with explicit criteria,
+evidence mappings and headless/browser labels. Untested tasks stay in the denominator.
+This is demonstrated task coverage, not measured prevalence in Word documents.
+It does not replace or alter the standards score. Both scores run in the same CI job.
