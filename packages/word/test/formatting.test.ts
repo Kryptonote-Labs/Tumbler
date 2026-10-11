@@ -23,6 +23,15 @@ describe("WordprocessingML direct formatting", () => {
     expect(edited.document.source.elements(word, "lang")).toHaveLength(2);
   });
 
+  test("keeps added run properties before retained later properties", () => {
+    const artifact = open('<w:p><w:r><w:rPr><w:rtl/><w:lang w:val="ar-SA"/><w:specVanish/></w:rPr><w:t>123 456</w:t></w:r></w:p>');
+    const edited = artifact.applyFormatting(selection(first(artifact).elementId, 4, 7), { text: {
+      bold: { set: true }, fontSize: { set: 14 }, color: { set: { type: "rgb", value: "#123456" } }, underline: { set: "single" },
+    } });
+    expect(edited.document.source.source).toContain('<w:b w:val="1"/><w:color w:val="123456"/><w:sz w:val="28"/><w:u w:val="single"/><w:rtl/><w:lang w:val="ar-SA"/><w:specVanish/>');
+    expect(wordParagraphText(edited.document, first(edited))).toBe('123 456');
+  });
+
   test("reports mixed and inherited state and removes direct properties", () => {
     const artifact = open(`<w:p><w:r><w:t>A</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>B</w:t></w:r></w:p>`);
     const paragraph = first(artifact);
