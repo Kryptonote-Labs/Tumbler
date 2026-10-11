@@ -110,3 +110,8 @@ and [CONTRIBUTING.md](CONTRIBUTING.md) for release qualification and publishing.
 
 Report security issues according to [SECURITY.md](SECURITY.md).
 Tumbler is available under the [MIT License](LICENSE).
+
+Word compatibility evidence is reported by `bun run compatibility:word`. The
+[qualification contract](tools/word-compatibility/README.md) keeps unreviewed
+standards topics in the denominator and separates narrow test passes from
+whole-topic qualification.

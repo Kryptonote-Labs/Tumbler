@@ -71,6 +71,24 @@ font/fill/border precedence, priority and `stopIfTrue`, unsupported semantic
 diagnostics, malformed input, whole-grid ranges without materialization, no-op
 package preservation, and the Svelte CSS projection contract.
 
+
+## Executable Word qualification
+
+`bun run compatibility:word` produces JSON, Markdown and a searchable HTML report
+against a versioned inventory of 4,482 Word/shared standards topics. Missing
+qualification plans and unavailable oracles earn no credit. Passing a narrow
+fixture does not qualify an entire clause. The initial standards-qualification
+score is zero; scenario results are reported separately.
+
+The PR workflow runs Strict and Transitional DOCX scenarios, compares untouched
+package payloads, requires Open XML SDK validation, and round-trips through
+LibreOffice Writer. Microsoft Word, reference-layout and full clause review
+remain unqualified. The inventory itself is a source-topic index, not a claim
+that every normative requirement has been extracted.
+
+See the [Word qualification contract](../tools/word-compatibility/README.md) for
+scoring, provenance, scope-change rules and the remaining qualification work.
+
 ## Testkit structure
 
 The planned shape of `@tumblerjs/testkit` is:
