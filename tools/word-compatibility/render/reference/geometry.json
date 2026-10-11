@@ -1,0 +1,838 @@
+{
+  "producer": "LibreOffice 25.2.3.2 520(Build:2)",
+  "extractor": "pdftotext version 25.03.0\nCopyright 2005-2025 The Poppler Developers - http://poppler.freedesktop.org\nCopyright 1996-2011, 2022 Glyph & Cog, LLC",
+  "font": {
+    "name": "LiberationSerif-Regular.ttf",
+    "sha256": "9caef765d2e891c10dd73658894f01e660fe0c1c83e0bda7d6edf561d8f623d4"
+  },
+  "records": [
+    {
+      "id": "explicit-line-breaks-strict",
+      "inputSha256": "269742353dfc8b21742170bad2e59eafe917f2065c230dd6d4d83029bea978dc",
+      "pdfSha256": "ed4efea451ba81dee5ae133b0b927d3f73ba4facb79f345e2062c6c5795f2f75",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     11  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            },
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 85.099
+            },
+            {
+              "text": "Charlie",
+              "x": 72.1,
+              "y": 97.749
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "explicit-line-breaks-transitional",
+      "inputSha256": "9aadba41131904bb1edca0b3ca2ddea3d16e94b1611bfc89a2d90a1d3685bf28",
+      "pdfSha256": "a6a8f9183eefee30cfad9099f6fe6f6fa8e7d5cdbed6e3a00d398f0072437e51",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     11  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            },
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 85.099
+            },
+            {
+              "text": "Charlie",
+              "x": 72.1,
+              "y": 97.749
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "explicit-page-breaks-strict",
+      "inputSha256": "d4b57065a2c9205a7ff9905c08a12e34309fed8241023f7bd1ab28533e199594",
+      "pdfSha256": "15e2cc41a509057b3337c0b53a8f288e0f76a36ae801c478d9ee62863c2705fa",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        },
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "explicit-page-breaks-transitional",
+      "inputSha256": "6b700334ab998b17d21e51c8948c3d4355a2d9aa6b91093490412462409cc172",
+      "pdfSha256": "61cf3d46e86ed7f32e4e9897ee0e325700b5ad3bdfba8d749c0fde4aca955bcd",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        },
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "size-custom-paper-strict",
+      "inputSha256": "bd642099f6abb93f090c91d6f96ac06364ebf3e523bb7c88e068649abaedbc01",
+      "pdfSha256": "b4691b0624c8995067c5be46b17ea38444c51e8bab3ff376e2df6635e6ea1e50",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 450.0,
+          "height": 550.006299,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449299
+            }
+          ]
+        },
+        {
+          "width": 450.0,
+          "height": 550.006299,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449299
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "size-custom-paper-transitional",
+      "inputSha256": "536bce781d3560373e2c8ec5fdbd72b1905e62ed6b837133deb72a10fb435844",
+      "pdfSha256": "02706ef4a63a0ca1642daaf09f25ab9d2723114e9cd4d60f0bb86f8935db34f3",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 450.0,
+          "height": 550.006299,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449299
+            }
+          ]
+        },
+        {
+          "width": 450.0,
+          "height": 550.006299,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449299
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "size-landscape-strict",
+      "inputSha256": "4e5b1fb4897bf8ebad524528b2da5dc2e8d323e4725b5801c010cc525f097a4c",
+      "pdfSha256": "279684ce08dabc0c4fdcbbf22dbc4c36fbda466c13920d41fa87f56d20bdc8fd",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 792.0,
+          "height": 612.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        },
+        {
+          "width": 792.0,
+          "height": 612.0,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "size-landscape-transitional",
+      "inputSha256": "12b740981bf837b5333ee62bf6b2323336c5ff4a37d4984b1780c79afe9dab13",
+      "pdfSha256": "2ad66763ba911a4e074fea25a2e09524f794d598ea05b2d23234931d5985ef15",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 792.0,
+          "height": 612.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        },
+        {
+          "width": 792.0,
+          "height": 612.0,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "size-paper-code-strict",
+      "inputSha256": "128beb63ed804dee213d376aa5f0d2c232600cd696c487e25ede5903046b8439",
+      "pdfSha256": "0f9e1e6191387cc534312398d0e3a5d52306df59479b2799b4e4fae63c0b3e92",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 450.0,
+          "height": 550.006299,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449299
+            }
+          ]
+        },
+        {
+          "width": 450.0,
+          "height": 550.006299,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449299
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "size-paper-code-transitional",
+      "inputSha256": "22ca9a5b9912afd516b4dedbaa1fe4baeb52753293e457cb28986569b5ff2088",
+      "pdfSha256": "8e8d8b9b1b6794a26b2b86c21286f1a59aa4214c5fdb0c4889283575e2715b2a",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 450.0,
+          "height": 550.006299,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449299
+            }
+          ]
+        },
+        {
+          "width": 450.0,
+          "height": 550.006299,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449299
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "size-portrait-default-strict",
+      "inputSha256": "d4b57065a2c9205a7ff9905c08a12e34309fed8241023f7bd1ab28533e199594",
+      "pdfSha256": "7ee1020cf7c2b18967be77559a56809c927a3f45d56b6c17280e4553833307ee",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        },
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "size-portrait-default-transitional",
+      "inputSha256": "6b700334ab998b17d21e51c8948c3d4355a2d9aa6b91093490412462409cc172",
+      "pdfSha256": "b7fb6305b63c217b094b7b8d7730b1d1ed8f6daa1f4449b778c670be08248b27",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        },
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "size-portrait-explicit-strict",
+      "inputSha256": "eb4919df4c0ac968e10419be430060885b3a9cbc23a9ecf4df61631b690cafca",
+      "pdfSha256": "9e2321b2e72e4b2852f4a089667390ef599446525a83ce463937e845c08906a8",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        },
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "size-portrait-explicit-transitional",
+      "inputSha256": "94b799b4f7261f33cc74736fbac012c90b94b7f538fedafec5a0716d6baac91e",
+      "pdfSha256": "eccd25e63d3b1ed6d5e4ad116652d1cd26052acdc66753e817d2e45789cf0f5f",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        },
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "size-section-change-strict",
+      "inputSha256": "01e3453b230e05fe6e6fe23d11aac2799da9acc0cc5d8bbe9bd7575b922bfe62",
+      "pdfSha256": "ad74206730dbcc1ab9667d72d3ea309267e38c6f7cd41a9f1d4683e8af0cd1d1",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        },
+        {
+          "width": 792.0,
+          "height": 612.0,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "size-section-change-transitional",
+      "inputSha256": "a96150660d2cfe0f16daad769e33047752a97df87b16a7c34f8d74080904d957",
+      "pdfSha256": "953319d197b1022030b7d83a9aede4b932ded96712f79c27fc5879aa7c40ba85",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        },
+        {
+          "width": 792.0,
+          "height": 612.0,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "size-wide-portrait-strict",
+      "inputSha256": "16611ce83aa114b14d7ce11284b1b91c68d567ef3c1db6b076a76e257c9edde8",
+      "pdfSha256": "5614cdd46beb8b925e3111362aa045934d88a2c5557057cdff5ff328219c2533",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 792.0,
+          "height": 612.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        },
+        {
+          "width": 792.0,
+          "height": 612.0,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "size-wide-portrait-transitional",
+      "inputSha256": "787bb9bf37bf353077bd4bf10f0f6fbf1dcd04103bec2993c3811eb9dbf4e0e0",
+      "pdfSha256": "e8ad42af0d791eb6bb22a49c1397d81be744eba667b88cec1982781ab8b95e08",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     15  0",
+      "pages": [
+        {
+          "width": 792.0,
+          "height": 612.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        },
+        {
+          "width": 792.0,
+          "height": 612.0,
+          "words": [
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 72.449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "spacing-double-strict",
+      "inputSha256": "ff0c895c952054e52169d7f26ead8b78b4a2555134eaa1d88c6d2025e609d279",
+      "pdfSha256": "1e834be0959aeee2c74176a14b91af7dacd3375e73d347655b90cf02e74797a9",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     13  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            },
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 97.749
+            },
+            {
+              "text": "Charlie",
+              "x": 72.1,
+              "y": 123.049
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "spacing-double-transitional",
+      "inputSha256": "0b885b9087df453beeea54f7fa1cad7f7f75f6a12757552ce34664195eb0c500",
+      "pdfSha256": "5cdf668f5807516c13cb2c5ad760653efbd2476e9bfeea49f91ec4464f2188dc",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     13  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            },
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 97.749
+            },
+            {
+              "text": "Charlie",
+              "x": 72.1,
+              "y": 123.049
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "spacing-exact-strict",
+      "inputSha256": "34bfffeb770d6a8f5a706e2c216bffb8c2f68f90cf185a4cbf4c6b7edbf76dbf",
+      "pdfSha256": "6a0bbc9453e1246fe147a310076bd550994cd86696647012da146b63e4e13b7a",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     13  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 78.199
+            },
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 98.199
+            },
+            {
+              "text": "Charlie",
+              "x": 72.1,
+              "y": 118.199
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "spacing-exact-transitional",
+      "inputSha256": "3bc300ad94fcae211f8a49e9ccb86178a51f331ac6dda314b1bf603606877c6d",
+      "pdfSha256": "1f23c3a6ea0ec63ecf68a4b5f1fd632e1cc0598e17107942ba1dc8156f8a78f0",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     13  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 78.199
+            },
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 98.199
+            },
+            {
+              "text": "Charlie",
+              "x": 72.1,
+              "y": 118.199
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "spacing-minimum-strict",
+      "inputSha256": "9f01fc03222097884447a067c2fe8cf64c7775c0836fabc2659448a18ae7a2a9",
+      "pdfSha256": "3f42a52c45cd5785605e33ce3bab62186228cb0efdf72d931bdcdbda509f6773",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     13  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 79.799
+            },
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 99.799
+            },
+            {
+              "text": "Charlie",
+              "x": 72.1,
+              "y": 119.799
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "spacing-minimum-transitional",
+      "inputSha256": "e4e5400533391ca1836db21dfc5a56a01fdd840694be9bddf225210f433d3b08",
+      "pdfSha256": "54b2c7bebf11b91f0551fdafdea2f98ce312b9a201081bb6ee7655031ee9bb54",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     13  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 79.799
+            },
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 99.799
+            },
+            {
+              "text": "Charlie",
+              "x": 72.1,
+              "y": 119.799
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "spacing-multiple-strict",
+      "inputSha256": "d4e37839ee78e0e6f6fb760918d9776f48a470d01f71a191f5c76d4aea50fe18",
+      "pdfSha256": "6e63f07253cba96c92101a030674ee3019a13feca8f3f91f910535eed8338730",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     13  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            },
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 86.949
+            },
+            {
+              "text": "Charlie",
+              "x": 72.1,
+              "y": 101.449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "spacing-multiple-transitional",
+      "inputSha256": "1ede1a3cfed8b4cc23c5aae1d19e1ac023dc741ba3c40c12ab0afa284c726b0e",
+      "pdfSha256": "c619b229a01c8149c6848b1db2545a7c53369f08053a58b68ce55656cefa1b26",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     13  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            },
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 86.949
+            },
+            {
+              "text": "Charlie",
+              "x": 72.1,
+              "y": 101.449
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "spacing-single-strict",
+      "inputSha256": "6df081ba1e9906896c117983af7317fe198fb07fe147820066052148fb190c3b",
+      "pdfSha256": "6ff0a83bf02f219d5117e4903ec6cd5437cc2d13aec09ce0b3e15ea1e66b6934",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     13  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            },
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 85.099
+            },
+            {
+              "text": "Charlie",
+              "x": 72.1,
+              "y": 97.749
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "spacing-single-transitional",
+      "inputSha256": "3ed2a1131ef5ac98a87c168ac2109b82a650dc9a72e6cd183d0bc9e441e56713",
+      "pdfSha256": "3ac012e784da043e6ae8899a13846e78e8c67c3044012b7bed069dffa716ec4a",
+      "fonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nBAAAAA+LiberationSerif               TrueType          WinAnsi          yes yes yes     13  0",
+      "pages": [
+        {
+          "width": 612.0,
+          "height": 792.0,
+          "words": [
+            {
+              "text": "Alpha",
+              "x": 72.1,
+              "y": 72.449
+            },
+            {
+              "text": "Bravo",
+              "x": 72.1,
+              "y": 85.099
+            },
+            {
+              "text": "Charlie",
+              "x": 72.1,
+              "y": 97.749
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

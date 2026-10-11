@@ -1,3 +1,4 @@
+import { renderScenarios } from './render/scenarios.ts';
 import { tableInteropScenarios } from './tables/interoperability.ts';
 import { tablePreservationScenarios } from './tables/preservation.ts';
 import { tableScenarios } from './tables/scenarios.ts';
@@ -15,7 +16,7 @@ export interface Fixture {
   readonly verify: (artifact: WordArtifact) => void;
 }
 export interface Scenario extends ScenarioDefinition {
-  readonly run: () => { readonly fixtures: readonly Fixture[]; readonly comparePackages?: () => void };
+  readonly run: () => { readonly fixtures: readonly Fixture[]; readonly referenceLayout?: () => readonly { readonly name: string; readonly bytes: Uint8Array }[]; readonly comparePackages?: () => void };
 }
 
 const textTopic = 'ecma-1:17.3.3.31';
@@ -30,6 +31,7 @@ const values = [
 export const scenarios: readonly Scenario[] = [
   ...preservationScenarios,
   ...tableScenarios,
+  ...renderScenarios,
   ...tablePreservationScenarios,
   ...tableInteropScenarios,
   ...profiles.flatMap(profile => values.map(([name, value]): Scenario => ({

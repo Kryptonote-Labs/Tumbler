@@ -75,7 +75,20 @@ export async function runScenarios(scenarios: readonly Scenario[], options: Runn
         } catch (error) { record('libreoffice', 'failed', message(error)); }
       }
     }
-    if (scenario.oracles.includes('reference-layout')) record('reference-layout', 'blocked', 'No pinned reference layout oracle is configured.');
+    if (scenario.oracles.includes('reference-layout')) {
+      if (!produced.referenceLayout) record('reference-layout', 'blocked', 'No pinned reference layout oracle is configured.');
+      else try {
+        const references = produced.referenceLayout();
+        if (!references.length) throw new Error('Reference layout checks must retain reference artifacts.');
+        for (const reference of references) {
+          if (!/^[a-zA-Z0-9_.-]+$/.test(reference.name) || reference.name === '.' || reference.name === '..') throw new Error('Invalid reference artifact name');
+          const path = join(directory, reference.name);
+          await Bun.write(path, reference.bytes);
+          artifacts.push({ path: relative(options.output, path), sha256: sha256(reference.bytes) });
+        }
+        record('reference-layout', 'passed', 'Explicit geometry assertions matched pinned LibreOffice PDFs within 0.1pt; text and page assignments matched exactly.');
+      } catch (error) { record('reference-layout', 'failed', message(error)); }
+    }
   }
   return results;
 }
