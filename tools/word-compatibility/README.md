@@ -11,9 +11,9 @@ overall compatibility = verified topic/dimension targets / 26,892 × 100
 each dimension = verified topics in that dimension / 4,482 × 100
 ```
 
-The first qualification suite targets preservation of 29 boolean formatting
-properties. With all required evidence passing, the headline is 29/26,892, or
-0.1078%. See [the preservation contract](preservation/README.md) for the exact
+The first qualification suite targets preservation of 26 boolean formatting
+properties. With all required evidence passing, the headline is 26/26,892, or
+0.0966%. See [the preservation contract](preservation/README.md) for the exact
 operations and limits. Separately, the original 16 narrow requirements still run.
 Passing those checks does not establish complete coverage of their source topics.
 The full report makes all 26,892 targets searchable by source, section, title
@@ -77,7 +77,7 @@ dimension, names its requirements, and every linked requirement passes. Plans
 must cover relevant defaults, boundaries, errors and feature interactions.
 Narrow checks alone cannot close a target. Any linked failure defeats coverage,
 even if omitted from the plan. Missing decomposition is untested, not excluded.
-Preservation plans cover the 29 boolean-property targets. There are no N/A exclusions.
+Preservation plans cover the 26 boolean-property targets. There are no N/A exclusions.
 
 Applicability still needs standards review. Conservatively retaining every
 pair is not an assertion that each topic has six independent normative duties.

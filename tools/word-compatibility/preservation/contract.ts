@@ -1,13 +1,17 @@
 import type { CoveragePlan } from '../coverage.ts';
 import type { Requirement } from '../model.ts';
-import { profiles, properties, requirementId, scenarioId } from './properties.ts';
+import { profiles, properties, deferredProperties, requirementId, scenarioId } from './properties.ts';
 
-export const preservationRequirements: readonly Requirement[] = properties.map(property => ({
+export const preservationRequirements: readonly Requirement[] = [...properties.map(property => ({
   id: requirementId(property), dimension: 'preserve', title: `Preserve ${property.kind} ${property.name}`,
   topics: [property.topic],
   criteria: 'Preserve absent, implicit-true and every legal boolean lexical form in Strict and Transitional body/table paragraphs, including paragraph-mark properties. No-op ZIP bytes, untouched part payloads and undo bytes must match exactly. Text replacement, substring colour formatting and paragraph alignment changes must retain each property XML and its original location; style/default/basedOn markup must remain byte-identical. Validate before and after packages with Open XML SDK.',
   checks: profiles.flatMap(profile => (['assertion', 'package-diff', 'openxml'] as const).map(oracle => ({ scenario: scenarioId(property, profile), oracle }))),
-}));
+} satisfies Requirement)), ...deferredProperties.map(property => ({
+  id: requirementId(property), dimension: 'preserve', title: `Resolve and verify ${property.name} preservation`, topics: [property.topic],
+  criteria: 'Resolve the disagreement between the proposed source-based fixture and SDK 3.5.1 acceptance before qualifying all relevant locations and boolean forms. Original cs/rtl style fixtures and ordinary-run oMath fixtures are rejected, so they provide no qualification evidence.',
+  checks: [],
+} satisfies Requirement))];
 
 export const preservationPlans: readonly CoveragePlan[] = properties.map(property => ({
   topic: property.topic, dimension: 'preserve', requirements: [requirementId(property)],

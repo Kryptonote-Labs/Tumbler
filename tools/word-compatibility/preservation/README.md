@@ -1,7 +1,7 @@
 # Boolean formatting preservation
 
-This suite qualifies the **preserve** dimension of 29 ECMA-376 Part 1 topics:
-20 run properties and nine paragraph properties. `properties.ts` lists the exact
+This suite qualifies the **preserve** dimension of 26 ECMA-376 Part 1 topics:
+17 run properties and nine paragraph properties. `properties.ts` lists the exact
 section IDs. It does not qualify their read, write, edit, render or interoperability
 dimensions. For example, retaining `keepNext` does not prove correct pagination.
 
@@ -63,3 +63,12 @@ A finite suite cannot exhaust arbitrary OOXML combinations. Coverage means the
 reviewed obligations in the stated dimension and operation contract have passing
 evidence. The report retains the precise criteria so the percentage cannot be
 read as universal Word compatibility.
+
+## Deferred targets
+
+`cs`, `rtl` and `oMath` remain explicit untested requirements and earn no credit.
+The proposed `cs`/`rtl` style/default fixtures are rejected by SDK 3.5.1;
+ordinary-run `oMath` is rejected too, although the Part 1 prose and common
+content model discuss these properties broadly. Qualifying them requires
+resolving the source/SDK discrepancy and testing the appropriate storage
+locations. We do not suppress validator errors or delete their standards targets.
