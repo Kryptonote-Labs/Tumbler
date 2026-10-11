@@ -42,7 +42,7 @@ export const tableScenarios: readonly Scenario[] = profiles.flatMap(profile => O
   },
 })));
 
-export function verifyTable(artifact: WordArtifact, expected: TableCase) {
+export function verifyTable(artifact: WordArtifact, expected: TableCase, retainDeclarations = true) {
   const table = artifact.document.blocks[0];
   assert.ok(table?.kind === 'table');
   const result = resolveWordTableGrid(table);
@@ -50,7 +50,7 @@ export function verifyTable(artifact: WordArtifact, expected: TableCase) {
   assert.deepEqual(result.rows.map(row => row.cells.map(cell => [cell.column, cell.columnSpan, cell.rowSpan,
     cell.source.blocks.filter(block => block.kind === 'paragraph').map(block => wordParagraphText(artifact.document, block)).join('\n'),
   ])), expected.expected, 'anchors, spans and text');
-  assert.deepEqual(table.rows.map(row => [row.gridBefore, row.gridAfter]), expected.rows.map(row => [row.before ?? 0, row.after ?? 0]), 'source declarations retained independently of effective grid');
+  if (retainDeclarations) assert.deepEqual(table.rows.map(row => [row.gridBefore, row.gridAfter]), expected.rows.map(row => [row.before ?? 0, row.after ?? 0]), 'source declarations retained independently of effective grid');
   const sourceIds = table.rows.flatMap(row => row.cells.map(cell => cell.elementId)).sort((a,b) => a-b);
   const resolvedIds = result.rows.flatMap(row => row.cells.flatMap(cell => [cell.source.elementId, ...cell.continuationElementIds])).sort((a,b) => a-b);
   assert.deepEqual(resolvedIds, sourceIds, 'every source cell belongs to exactly one anchor');

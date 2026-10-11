@@ -1,4 +1,4 @@
-# Reading table structure
+# Reading and preserving table structure
 
 Four read targets use the pinned ECMA-376-1:2016 source:
 
@@ -26,8 +26,7 @@ Mutation checks confirm the assertions reject altered spans and lost merges.
 All valid input fixtures must pass Open XML SDK. Tests concern imported
 `WordTable` data and `resolveWordTableGrid`, not pagination or column-width
 algorithms. No read test earns rendering, authoring, editing or interoperability
-credit. LibreOffice remains covered by the existing independent scenarios; it
-is not used as an oracle for these four read targets.
+credit. LibreOffice is not used as an oracle for these four read targets.
 
 The suite exercises the documented structural rules, not every integer or every
 possible combination of table features. The existing parser/resolver's 32,767
@@ -35,3 +34,38 @@ column guard remains an implementation constraint requiring separate work; this
 PR neither adds that limit nor claims it is a Microsoft Word constraint. Native
 editor import/export, nested-table interactions, tracked table changes and
 legacy horizontal merging are outside these qualification criteria.
+
+## Preservation
+
+Four additional targets exercise every valid read fixture in both profiles through
+neighbouring text replacement, undo/redo, run formatting and paragraph formatting.
+The saved package must retain the entire table XML exactly, its expected grid,
+anchor text, raw omission declarations and continuation ownership. No-op and undo
+must reproduce the original package bytes. Entry names and all other part payloads
+must remain unchanged. Both before and after packages require SDK validation.
+These targets cover unrelated edits, not inserting/deleting table rows or columns.
+
+## LibreOffice evidence and remaining gaps
+
+A narrower interoperability requirement checks two independent vertical merges,
+a restart and a closed group before and after neighbouring edits. Strict and
+Transitional inputs require SDK validation and LibreOffice round-trips. No full
+interoperability coverage plan is attached: the existing `interoperate.merged-tables`
+requirement remains pending and earns no overall compatibility credit.
+
+The broader probe failed its exact-grid assertion: LibreOffice rewrote the
+`implicit-and-explicit-continuations` fixture from two grid columns to one.
+All cells span both columns in that input. This may be equivalent normalisation;
+it is not evidence of content loss, and the current oracle cannot qualify it.
+The leading-omission case also remains unqualified. Do not infer that passing the
+independent-column fixture proves either case.
+
+The broader cases remain reproducible outside the qualifying registry:
+
+```bash
+bun -e 'import { runScenarios } from "./tools/word-compatibility/runner.ts"; import { tableInteropProbeScenarios } from "./tools/word-compatibility/tables/interoperability.ts"; console.log(await runScenarios(tableInteropProbeScenarios, { root: process.cwd(), output: "/tmp/table-interop-probe-fresh", libreoffice: true }));'
+```
+
+Use a fresh output directory and set `DOTNET` if .NET is not on PATH. The runner
+returns evidence records; inspect their outcomes. The normal compatibility CLI
+continues to fail on any failing registered check. It has no new failure exemptions.
