@@ -23,7 +23,9 @@
     "docs:build": "bun run --cwd apps/docs build",
     "docs:test": "bun run --cwd apps/docs test:e2e",
     "compatibility:presentations": "bun scripts/generate-presentation-fixtures.ts",
-    "compatibility:presentation-rendering": "bun scripts/generate-presentation-conformance.ts"
+    "compatibility:presentation-rendering": "bun scripts/generate-presentation-conformance.ts",
+    "compatibility:word": "bun tools/word-compatibility/cli.ts",
+    "compatibility:word:check": "tsc --noEmit -p tools/word-compatibility/tsconfig.json"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",

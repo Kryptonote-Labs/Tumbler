@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "scope": "word-standards-v1",
+  "topics": 4482,
+  "files": {
+    "topics.json": "08daee92031e23a6da5598d17da4735b773f955c6d32b6487ee4f7c8dce8cdf6",
+    "sources.json": "91ca092e6ff28bfa657e730e724e50a5838fffd1dc97fd2443ee0bf89b17e632"
+  }
+}
