@@ -23,6 +23,15 @@ describe("WordprocessingML direct formatting", () => {
     expect(edited.document.source.elements(word, "lang")).toHaveLength(2);
   });
 
+  test("keeps added run properties before retained later properties", () => {
+    const artifact = open('<w:p><w:r><w:rPr><w:rtl/><w:lang w:val="ar-SA"/><w:specVanish/></w:rPr><w:t>123 456</w:t></w:r></w:p>');
+    const edited = artifact.applyFormatting(selection(first(artifact).elementId, 4, 7), { text: {
+      bold: { set: true }, fontSize: { set: 14 }, color: { set: { type: "rgb", value: "#123456" } }, underline: { set: "single" },
+    } });
+    expect(edited.document.source.source).toContain('<w:b w:val="1"/><w:color w:val="123456"/><w:sz w:val="28"/><w:u w:val="single"/><w:rtl/><w:lang w:val="ar-SA"/><w:specVanish/>');
+    expect(wordParagraphText(edited.document, first(edited))).toBe('123 456');
+  });
+
   test("reports mixed and inherited state and removes direct properties", () => {
     const artifact = open(`<w:p><w:r><w:t>A</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>B</w:t></w:r></w:p>`);
     const paragraph = first(artifact);
@@ -40,6 +49,22 @@ describe("WordprocessingML direct formatting", () => {
     expect(centered.document.source.elements(word, "pStyle")).toHaveLength(1);
     const inherited = centered.applyFormatting(selection(centeredParagraph.elementId, 0, 4), { block: { horizontalAlignment: { inherit: true } } });
     expect(inherited.document.styles.paragraphFormat(inherited.document, first(inherited)).alignment).toBe("start");
+  });
+
+  test("inserts and replaces alignment before later paragraph properties", () => {
+    for (const trailing of [
+      '<w:rPr><w:b/></w:rPr>',
+      '<w:textDirection w:val="lrTb"/><w:outlineLvl w:val="1"/>',
+      '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>',
+    ]) {
+      const artifact = open(`<w:p><w:pPr><w:keepNext/>${trailing}</w:pPr><w:r><w:t>Text</w:t></w:r></w:p>`);
+      const centered = artifact.applyFormatting(selection(first(artifact).elementId, 0, 4), { block: { horizontalAlignment: { set: "center" } } });
+      expect(centered.document.source.source).toContain(`<w:keepNext/><w:jc w:val="center"/>${trailing}`);
+      const right = centered.applyFormatting(selection(first(centered).elementId, 0, 4), { block: { horizontalAlignment: { set: "end" } } });
+      expect(right.document.source.source).toContain(`<w:keepNext/><w:jc w:val="right"/>${trailing}`);
+      const inherited = right.applyFormatting(selection(first(right).elementId, 0, 4), { block: { horizontalAlignment: { inherit: true } } });
+      expect(inherited.document.source.source).toContain(`<w:keepNext/>${trailing}`);
+    }
   });
 
   test("handles self-closing properties and empty formatting patches", () => {

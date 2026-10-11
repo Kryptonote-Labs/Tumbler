@@ -1,3 +1,4 @@
+import { preservationPlans } from './preservation/contract.ts';
 import { count, hashDefinition } from './evaluate.ts';
 import { dimensions, type Dimension, type RequirementResult, type Status, type Topic } from './model.ts';
 
@@ -19,8 +20,7 @@ export interface CoverageTarget {
   readonly gap: string | null;
 }
 
-// Narrow fixtures do not yet exhaust any standards topic in any dimension.
-export const coveragePlans: readonly CoveragePlan[] = [];
+export const coveragePlans: readonly CoveragePlan[] = preservationPlans;
 
 /** Every topic stays in every dimension. No exclusions or credit for merely linking a fixture. */
 export function coverage(topics: readonly Topic[], requirements: readonly RequirementResult[], plans: readonly CoveragePlan[] = coveragePlans) {

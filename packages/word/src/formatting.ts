@@ -141,8 +141,22 @@ function formatParagraph(
       }
       return;
     }
-    if (child !== undefined) editor.removeElement(child);
-    if ("set" in change) editor.appendMarkup(properties, `<${qualified(properties.prefix, "jc")} ${qualified(properties.prefix, "val")}="${alignmentValue(change.set)}"/>`);
+    if (!("set" in change)) {
+      if (child !== undefined) editor.removeElement(child);
+      return;
+    }
+    const markup = `<${qualified(properties.prefix, "jc")} ${qualified(properties.prefix, "val")}="${alignmentValue(change.set)}"/>`;
+    if (child !== undefined) editor.replaceElementMarkup(child, markup);
+    else {
+      // ECMA-376-1 Annex A: CT_PPrBase places jc before these properties;
+      // CT_PPr then appends paragraph-mark formatting, section settings and history.
+      const afterAlignment = new Set(["textDirection", "textAlignment", "textboxTightWrap", "outlineLvl", "divId", "cnfStyle", "rPr", "sectPr", "pPrChange"]);
+      const next = properties.children.find((candidate): candidate is LosslessXmlElement =>
+        candidate.kind === "element" && candidate.namespaceUri === namespace(document) && afterAlignment.has(candidate.localName)
+      );
+      if (next === undefined) editor.appendMarkup(properties, markup);
+      else editor.insertMarkupBefore(next, markup);
+    }
     return;
   }
   if (!("set" in change)) return;
@@ -170,20 +184,28 @@ function runPropertiesMarkup(
   if (patch.color !== undefined) names.add("color");
   const retained = properties?.children.filter((child): child is LosslessXmlElement => child.kind === "element")
     .filter((child) => child.namespaceUri !== namespace(document) || !names.has(child.localName))
-    .map((child) => sourceMarkup(document, child)).join("") ?? "";
+    .map((child) => ({ name: child.namespaceUri === namespace(document) ? child.localName : undefined, markup: sourceMarkup(document, child) })) ?? [];
   const additions = [
-    property(prefix, "rFonts", patch.fontFamily, (value) => `${qualified(prefix, "ascii")}="${escapeAttribute(value)}" ${qualified(prefix, "hAnsi")}="${escapeAttribute(value)}"`),
-    property(prefix, "sz", patch.fontSize, (value) => `${qualified(prefix, "val")}="${Math.round(value * 2)}"`),
-    property(prefix, "b", patch.bold, (value) => `${qualified(prefix, "val")}="${value ? "1" : "0"}"`),
-    property(prefix, "i", patch.italic, (value) => `${qualified(prefix, "val")}="${value ? "1" : "0"}"`),
-    property(prefix, "u", patch.underline, (value) => `${qualified(prefix, "val")}="${value}"`),
-    property(prefix, "color", patch.color, (value) => `${qualified(prefix, "val")}="${value.type === "automatic" ? "auto" : value.value.slice(1)}"`),
-  ].join("");
-  if (retained.length === 0 && additions.length === 0) return "";
+    ["rFonts", property(prefix, "rFonts", patch.fontFamily, (value) => `${qualified(prefix, "ascii")}="${escapeAttribute(value)}" ${qualified(prefix, "hAnsi")}="${escapeAttribute(value)}"`)],
+    ["sz", property(prefix, "sz", patch.fontSize, (value) => `${qualified(prefix, "val")}="${Math.round(value * 2)}"`)],
+    ["b", property(prefix, "b", patch.bold, (value) => `${qualified(prefix, "val")}="${value ? "1" : "0"}"`)],
+    ["i", property(prefix, "i", patch.italic, (value) => `${qualified(prefix, "val")}="${value ? "1" : "0"}"`)],
+    ["u", property(prefix, "u", patch.underline, (value) => `${qualified(prefix, "val")}="${value}"`)],
+    ["color", property(prefix, "color", patch.color, (value) => `${qualified(prefix, "val")}="${value.type === "automatic" ? "auto" : value.value.slice(1)}"`)],
+  ] as const;
+  // Use the ordered Transitional/SDK representation, also valid in Strict.
+  // Insert new properties without reordering or rewriting retained property XML.
+  const order = ["rStyle", "rFonts", "b", "bCs", "i", "iCs", "caps", "smallCaps", "strike", "dstrike", "outline", "shadow", "emboss", "imprint", "noProof", "snapToGrid", "vanish", "webHidden", "color", "spacing", "w", "kern", "position", "sz", "szCs", "highlight", "u", "effect", "bdr", "shd", "fitText", "vertAlign", "rtl", "cs", "em", "lang", "eastAsianLayout", "specVanish", "oMath", "rPrChange"];
+  for (const [name, markup] of additions) {
+    if (!markup) continue;
+    const next = retained.findIndex(item => item.name !== undefined && order.indexOf(item.name) > order.indexOf(name));
+    retained.splice(next < 0 ? retained.length : next, 0, { name, markup });
+  }
+  if (retained.length === 0) return "";
   const start = properties === undefined
     ? `<${qualified(prefix, "rPr")}>`
     : document.source.source.slice(properties.startTagSpan.start, properties.startTagSpan.end).replace(/\/\s*>$/, ">");
-  return `${start}${retained}${additions}</${qualified(prefix, "rPr")}>`;
+  return `${start}${retained.map(item => item.markup).join("")}</${qualified(prefix, "rPr")}>`;
 }
 
 function property<T>(prefix: string, name: string, change: { readonly set: T } | { readonly inherit: true } | undefined, attrs: (value: T) => string): string {
