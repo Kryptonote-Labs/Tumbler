@@ -1,3 +1,4 @@
+import { preservationScenarios } from './preservation/scenarios.ts';
 import assert from 'node:assert/strict';
 import { openZipArchive } from '../../packages/opc/src/index.ts';
 import { createWordArtifact, openWordArtifact, wordParagraphText, WordEditingSession, type WordArtifact } from '../../packages/word/src/index.ts';
@@ -24,6 +25,7 @@ const values = [
 ] as const;
 
 export const scenarios: readonly Scenario[] = [
+  ...preservationScenarios,
   ...profiles.flatMap(profile => values.map(([name, value]): Scenario => ({
     id: `${profile}-text-${name}`,
     title: `Read, no-op save and replace ${name} text in ${profile} markup`,
