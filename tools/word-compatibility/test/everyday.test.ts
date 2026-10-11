@@ -35,3 +35,16 @@ test('comment artifact rejects missing, duplicate or injected tasks and distingu
   expect(everydayTable(summary, { ...summary, inventoryHash: 'b'.repeat(64) }).join('\n')).toContain('scope changed');
   expect(everydayTable(summary, summary).join('\n')).toContain('0.0000 pp');
 });
+
+test('task probes qualify only complete passes and retain failures over other passing evidence', () => {
+  const task = everydayTasks.find(task => task.id === 'content.images')!;
+  const probe = { id: task.id, status: 'verified' as const, detail: 'Executed', definitionHash: 'a'.repeat(64), artifacts: [] };
+  expect(evaluateEveryday(empty, [task], [probe]).overall.verified).toBe(1);
+  expect(evaluateEveryday(empty, [task], [{ ...probe, status: 'blocked' }]).overall.blocked).toBe(1);
+  expect(evaluateEveryday(empty, [task], [{ ...probe, status: 'failed' }]).overall.failed).toBe(1);
+  expect(() => evaluateEveryday(empty, [task], [probe, probe])).toThrow();
+  expect(() => evaluateEveryday(empty, [task], [{ ...probe, id: 'missing' }])).toThrow();
+  const mapped = everydayTasks.find(task => task.id === 'editing.history')!;
+  const passed = empty.map(requirement => ({ ...requirement, status: 'verified' as const }));
+  expect(evaluateEveryday(passed, [mapped], [{ ...probe, id: mapped.id, status: 'failed' }]).overall.failed).toBe(1);
+});

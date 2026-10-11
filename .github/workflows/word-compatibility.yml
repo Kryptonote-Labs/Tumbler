@@ -10,6 +10,8 @@ on:
       - 'packages/charts/**'
       - 'packages/svelte/**'
       - 'tools/word-compatibility/**'
+      - 'apps/docs/benchmark/**'
+      - 'apps/docs/everyday.config.ts'
       - 'tools/openxml-validator/**'
       - '.github/workflows/word-compatibility*.yml'
       - 'bun.lock'
@@ -61,6 +63,13 @@ jobs:
           bun install --frozen-lockfile
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends libreoffice-writer
+      - name: Install browser for everyday capability measurements
+        if: steps.available.outputs.present == 'true'
+        run: |
+          if [[ -f apps/docs/everyday.config.ts ]]; then
+            cd apps/docs
+            bunx playwright install --with-deps chromium
+          fi
       - name: Check tooling and scenarios
         if: steps.available.outputs.present == 'true'
         run: |

@@ -1,3 +1,5 @@
+import { requiredProbesPass } from './everyday/required-probes.ts';
+import { runEverydayProbes } from './everyday/run-probes.ts';
 import { evaluateEveryday } from './everyday/evaluate.ts';
 import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile } from 'node:fs/promises';
@@ -18,13 +20,13 @@ import { scenarios } from './scenarios.ts';
 const { values } = parseArgs({ options: {
   output: { type: 'string' }, 'inventory-only': { type: 'boolean' },
   'require-openxml': { type: 'boolean' }, libreoffice: { type: 'boolean' },
-  'require-libreoffice': { type: 'boolean' }, help: { type: 'boolean' },
+  'require-libreoffice': { type: 'boolean' }, 'require-everyday': { type: 'boolean' }, help: { type: 'boolean' },
 }, strict: true });
 if (values.help) {
-  console.log('bun run compatibility:word -- [--output EMPTY_DIRECTORY] [--inventory-only] [--require-openxml] [--libreoffice] [--require-libreoffice]');
+  console.log('bun run compatibility:word -- [--output EMPTY_DIRECTORY] [--inventory-only] [--require-openxml] [--libreoffice] [--require-libreoffice] [--require-everyday]');
   process.exit(0);
 }
-if (values['inventory-only'] && (values['require-openxml'] || values['require-libreoffice'] || values.libreoffice)) throw new Error('Inventory-only mode cannot require or run external oracles.');
+if (values['inventory-only'] && (values['require-openxml'] || values['require-libreoffice'] || values.libreoffice || values['require-everyday'])) throw new Error('Inventory-only mode cannot require or run external oracles.');
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const output = resolve(values.output ?? join(root, 'compatibility-results', `word-${Date.now()}`));
 await mkdir(output, { recursive: true });
@@ -34,6 +36,7 @@ const fingerprint = await treeFingerprint();
 const commit = await command(['git', '-C', root, 'rev-parse', 'HEAD']);
 if (commit.code !== 0) throw new Error(commit.output);
 const evidence = values['inventory-only'] ? [] : await runScenarios(scenarios, { root, output, libreoffice: !!(values.libreoffice || values['require-libreoffice']) });
+const taskProbes = values['inventory-only'] ? [] : await runEverydayProbes(root, output);
 if (await treeFingerprint() !== fingerprint) throw new Error('Source files changed during qualification. Rerun against one stable tree.');
 const results = evaluate(topics, requirements, scenarios, evidence);
 const standards = coverage(topics, results);
@@ -44,7 +47,7 @@ const report: CompatibilityReport = {
     dotnet: await versionLog('dotnet-version.log'), libreoffice: await versionLog('libreoffice-version.log'),
     openXmlSdk: (await readFile(join(root, 'tools/openxml-validator/OpenXmlValidator.csproj'), 'utf8')).match(/Include="DocumentFormat.OpenXml" Version="([^"]+)"/)?.[1] ?? 'unknown',
   },
-  everyday: evaluateEveryday(results),
+  everyday: evaluateEveryday(results, undefined, taskProbes),
   overall: standards.overall, dimensions: standards.dimensions, coverageTargets: standards.targets,
   requirementCounts: count(results.map(requirement => requirement.status)),
   inventory: { total: topics.length, mapped: mapped.size, withoutRequirements: topics.length - mapped.size },
@@ -59,11 +62,12 @@ await Bun.write(join(output, 'report.html'), html(report));
 console.log(`${percentage(report.overall)}: ${report.overall.verified}/${report.overall.total} standards topic/dimension targets verified.`);
 console.log(`${evidence.filter(item => item.outcome === 'passed').length} evidence checks passed; ${evidence.filter(item => item.outcome === 'failed').length} failed; ${evidence.filter(item => item.outcome === 'blocked').length} blocked.`);
 console.log(`Everyday benchmark: ${report.everyday!.overall.verified}/${report.everyday!.overall.total} tasks verified (${percentage(report.everyday!.overall)}).`);
+console.log(`Everyday outcomes: ${report.everyday!.overall.failed} failed; ${report.everyday!.overall.blocked} blocked; ${report.everyday!.overall.untested} untested.`);
 console.log(`Reports and artifacts: ${output}`);
 for (const item of evidence.filter(item => item.outcome === 'failed')) console.error(`${item.scenario}/${item.oracle}: ${item.detail}`);
 const required = [values['require-openxml'] ? 'openxml' : undefined, values['require-libreoffice'] ? 'libreoffice' : undefined].filter(Boolean);
 const unavailable = evidence.filter(item => required.includes(item.oracle) && item.outcome !== 'passed');
-process.exitCode = evidence.some(item => item.outcome === 'failed') || unavailable.length ? 1 : 0;
+process.exitCode = evidence.some(item => item.outcome === 'failed') || unavailable.length || (!values['inventory-only'] && !requiredProbesPass(taskProbes)) || (values['require-everyday'] && report.everyday!.overall.verified !== report.everyday!.overall.total) ? 1 : 0;
 
 /** Include uncommitted source, excluding ignored artifacts/dependencies; commit alone is insufficient. */
 async function treeFingerprint(): Promise<string> {

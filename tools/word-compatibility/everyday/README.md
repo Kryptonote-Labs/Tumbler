@@ -29,7 +29,7 @@ The two additional journeys exercise public headless APIs:
 - Meeting notes: split and rejoin paragraphs, preserve adjacent Unicode text,
   undo exactly, redo and validate saved intermediate/final packages with the SDK.
 
-Browser tasks remain untested until browser evidence exists. No headless task
+Browser tasks receive credit only from executed browser evidence. No headless task
 claims keyboard, clipboard, painting or Kryptonote integration coverage. Render
 references currently use synthetic glyph widths and qualify only the stated page
 geometry and vertical advances. See ../render/README.md for their boundaries.
@@ -53,3 +53,34 @@ usage or a reviewed representative corpus to improve task selection and weightin
 The current score is a lower bound on demonstrated tasks within this inventory.
 The most useful next additions are browser editing/selection, lists, headers and
 footers, images, and the multi-page report journey, all already in the denominator.
+
+## Direct capability measurements
+
+The CLI also attempts the remaining 26 task contracts. Five headless probes cover
+list operations, table changes, header/footer editing, image insertion/resizing,
+and the full font/colour/highlight task. Saved passing headless fixtures require
+SDK validation. Seven Playwright probes exercise the local playground: typing,
+clipboard, find/replace, scrolling, zoom, selection and outline navigation.
+Browser JSON, logs, screenshots and failure traces are kept under the report's
+`everyday/` directory. This uses the repository's documented Chromium test workflow.
+
+The remaining fourteen tasks have explicit audited blockers in `blockers.ts`.
+Their records include the missing prerequisite and hashes of the inspected source
+files. These are **not executed feature passes**: they require a supported edit
+adapter, an independent rendering reference, a combined report fixture, or an
+isolated Kryptonote runner. They remain in the denominator with zero credit. A
+blocked adapter is not proof that every lower-level path is impossible.
+
+Task failures are measured capability gaps, not expected-test passes. In particular,
+UI absence and lost rich clipboard formatting are reported as failed. New UI
+availability alone cannot turn a discovery probe green: replacement/navigation
+behaviour assertions must be implemented first. The ordinary docs regression suite
+is separate from this capability suite (`apps/docs/everyday.config.ts`).
+
+The default CLI records capability failures without treating pre-existing missing
+product capabilities as build failures. The eight newly verified probes are required
+by `required-probes.ts`; missing, blocked or failing results for those probes fail CI.
+Existing standards failure gates are unchanged. Use `--require-everyday` to require all 42 tasks to pass and exit nonzero
+for any failed, blocked or untested task. CI installs Chromium and runs the
+measurements, and the comment/report tables display all outcomes. The required-probe list can grow as additional task contracts are verified; it does
+not alter task outcomes or award credit to the known failures.
