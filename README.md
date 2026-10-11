@@ -110,3 +110,8 @@ and [CONTRIBUTING.md](CONTRIBUTING.md) for release qualification and publishing.
 
 Report security issues according to [SECURITY.md](SECURITY.md).
 Tumbler is available under the [MIT License](LICENSE).
+
+Word compatibility evidence is reported by `bun run compatibility:word`. The
+[compatibility contract](tools/word-compatibility/README.md) scores all 4,482 standards topics across six dimensions, including an overall
+compatibility percentage. Semantic checks, package comparisons, Open XML SDK
+and LibreOffice supply evidence; unresolved coverage stays in the denominator.

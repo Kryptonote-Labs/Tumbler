@@ -71,6 +71,24 @@ font/fill/border precedence, priority and `stopIfTrue`, unsupported semantic
 diagnostics, malformed input, whole-grid ranges without materialization, no-op
 package preservation, and the Svelte CSS projection contract.
 
+
+## Executable Word compatibility
+
+`bun run compatibility:word -- --require-openxml --require-libreoffice` produces
+JSON, Markdown and searchable HTML covering 4,482 standards topics in six
+dimensions. The overall denominator is 26,892 topic/dimension targets. Missing
+checks and unresolved topic decomposition remain untested. Narrow requirements
+and evidence are reported separately and cannot qualify an entire topic alone.
+
+PR CI checks Strict and Transitional DOCX scenarios, untouched package payloads,
+Open XML SDK validity, and semantic assertions after LibreOffice Writer round
+trips. LibreOffice satisfies the current interoperability reference. Reference
+layout remains untested. A separate trusted workflow updates a compact PR table
+with base deltas, and reports contract changes separately from behaviour changes.
+
+See the [Word compatibility contract](../tools/word-compatibility/README.md) for
+scoring, provenance, scope rules and the remaining work.
+
 ## Testkit structure
 
 The planned shape of `@tumblerjs/testkit` is:

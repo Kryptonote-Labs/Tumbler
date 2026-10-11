@@ -1,0 +1,82 @@
+[
+  {
+    "id": "ecma-1",
+    "edition": "2016, fifth edition",
+    "url": "https://ecma-international.org/publications-and-standards/standards/ecma-376/",
+    "archivePath": "ecma/Ecma Office Open XML Part 1 - Fundamentals And Markup Language Reference.pdf",
+    "pdfSha256": "7cccfd0ad0e2ef89316acece15e44a8a088d0603ce4bba4e7b0361b50d13a37d",
+    "textSha256": "8288adfa1bdb42e8ee648eafb68166543c1e0dcc4f4f5b4cd81dfeb6ac39e92e",
+    "extractedHeadings": 3548,
+    "selectedLeafTopics": 2151
+  },
+  {
+    "id": "ecma-2",
+    "edition": "2021, fifth edition",
+    "url": "https://ecma-international.org/publications-and-standards/standards/ecma-376/",
+    "archivePath": "ecma/Ecma Office Open XML Part 2 - Open Packaging Conventions.pdf",
+    "pdfSha256": "18701071fe15f39389761f82512c70d2effbf22bd16dd034f2939797ff5f6147",
+    "textSha256": "36b0c52d89f25de050a5a0b011a7b745cdaa678977aa3634ff20e36f74c842de",
+    "extractedHeadings": 85,
+    "selectedLeafTopics": 68
+  },
+  {
+    "id": "ecma-3",
+    "edition": "2015, fifth edition",
+    "url": "https://ecma-international.org/publications-and-standards/standards/ecma-376/",
+    "archivePath": "ecma/Ecma Office Open XML Part 3 - Markup Compatibility and Extensibility.pdf",
+    "pdfSha256": "3742ae2573fcf2eec6878ee345bf540541b77df47f09a57603851ca2d02dfa13",
+    "textSha256": "90f0374f6e144399583d1bd819e7b4816470732cc2ba9625aee6e76e8f2d5e72",
+    "extractedHeadings": 20,
+    "selectedLeafTopics": 12
+  },
+  {
+    "id": "ecma-4",
+    "edition": "2016, fifth edition",
+    "url": "https://ecma-international.org/publications-and-standards/standards/ecma-376/",
+    "archivePath": "ecma/Ecma Office Open XML Part 4 - Transitional Migration Features.pdf",
+    "pdfSha256": "753990eae4920e5c75ffca700be7ea73390cd9725530b756a3e68d33757354ee",
+    "textSha256": "eebca81b6cfecf4c1920010cb71e7a4959627c91e20db899f11e92be34d7b4b2",
+    "extractedHeadings": 679,
+    "selectedLeafTopics": 392
+  },
+  {
+    "id": "ms-docx",
+    "edition": "local archive, 2026-08-02; exact PDF SHA-256 pinned",
+    "url": "https://learn.microsoft.com/en-us/openspecs/office_standards/ms-docx/",
+    "archivePath": "microsoft/[MS-DOCX].pdf",
+    "pdfSha256": "194df007933d0cb1c5b7c8f59a693710d8c55381c4d46943dc347511bfd4b9e3",
+    "textSha256": "912223fbdb3020c040b65d618c6be99e677ff00687ab374edc083144d51263bf",
+    "extractedHeadings": 227,
+    "selectedLeafTopics": 166
+  },
+  {
+    "id": "ms-odrawxml",
+    "edition": "local archive, 2026-08-02; exact PDF SHA-256 pinned",
+    "url": "https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/",
+    "archivePath": "microsoft/[MS-ODRAWXML].pdf",
+    "pdfSha256": "c989832cf0ce3aa2bececca8aa1090bcb86c91257acb22b8287d40203c60aa78",
+    "textSha256": "c6f8b7c232b86f08b3aceb1049699a4469d024b32065b9a1571270232fe4f5ce",
+    "extractedHeadings": 820,
+    "selectedLeafTopics": 559
+  },
+  {
+    "id": "ms-oextxml",
+    "edition": "local archive, 2026-08-02; exact PDF SHA-256 pinned",
+    "url": "https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oextxml/",
+    "archivePath": "microsoft/[MS-OEXTXML].pdf",
+    "pdfSha256": "048af9e21c873ad3a1984db9adfd0fbbab49b37fd50d5e7c452a90a9b1ae0ae6",
+    "textSha256": "a1cf8649b59b8df2d825cf09832359e71750bf986fbca9e63cdf5fd8f9472168",
+    "extractedHeadings": 29,
+    "selectedLeafTopics": 5
+  },
+  {
+    "id": "ms-oi29500",
+    "edition": "local archive, 2026-08-02; exact PDF SHA-256 pinned",
+    "url": "https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/",
+    "archivePath": "microsoft/[MS-OI29500].pdf",
+    "pdfSha256": "e55146bb9568ed6f1e421cf45221f9413a3551b42ff1bda651e29312ab5abf86",
+    "textSha256": "d2b6e64af7e39b4156c982863a5b2820be1f5b924a4925592b58e60d3d4b5460",
+    "extractedHeadings": 2082,
+    "selectedLeafTopics": 1129
+  }
+]

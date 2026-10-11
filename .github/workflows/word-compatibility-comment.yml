@@ -1,0 +1,41 @@
+name: Word compatibility comment
+
+on:
+  workflow_run:
+    workflows: [Word compatibility]
+    types: [completed]
+
+concurrency:
+  group: word-comment-${{ github.event.workflow_run.head_repository.id }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      # Only trusted default-branch code runs with the commenting token.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          pattern: word-compatibility-*
+          path: ${{ runner.temp }}/word-artifacts
+      - name: Update compatibility table
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORD_ARTIFACTS: ${{ runner.temp }}/word-artifacts
+        run: bun tools/word-compatibility/comment.ts

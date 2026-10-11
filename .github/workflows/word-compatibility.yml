@@ -1,0 +1,92 @@
+name: Word compatibility
+
+on:
+  pull_request:
+    paths: &word-paths
+      - 'packages/word/**'
+      - 'packages/opc/**'
+      - 'packages/ooxml/**'
+      - 'packages/core/**'
+      - 'packages/charts/**'
+      - 'packages/svelte/**'
+      - 'tools/word-compatibility/**'
+      - 'tools/openxml-validator/**'
+      - '.github/workflows/word-compatibility*.yml'
+      - 'bun.lock'
+      - 'package.json'
+      - 'tsconfig.json'
+  push:
+    branches: [main]
+    paths: *word-paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: ${{ fromJSON(github.event_name == 'pull_request' && '["head","base"]' || '["head"]') }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ matrix.revision == 'base' && github.event.pull_request.base.sha || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect compatible report producer
+        id: available
+        shell: bash
+        run: |
+          if [[ -f tools/word-compatibility/summary.ts ]]; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          elif [[ '${{ matrix.revision }}' == 'head' ]]; then
+            echo 'Head is missing the compatibility report producer' >&2
+            exit 1
+          fi
+      - uses: oven-sh/setup-bun@v2
+        if: steps.available.outputs.present == 'true'
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-dotnet@v5
+        if: steps.available.outputs.present == 'true'
+        with:
+          dotnet-version: 8.0.425
+      - name: Install dependencies and LibreOffice
+        if: steps.available.outputs.present == 'true'
+        run: |
+          bun install --frozen-lockfile
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libreoffice-writer
+      - name: Check tooling and scenarios
+        if: steps.available.outputs.present == 'true'
+        run: |
+          bun run compatibility:word:check
+          bun test tools/word-compatibility/test
+      - name: Verify standards inventory scope
+        if: matrix.revision == 'head' && github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bun tools/word-compatibility/check-scope.ts "$BASE_SHA"
+      - name: Collect evidence
+        if: steps.available.outputs.present == 'true'
+        continue-on-error: ${{ matrix.revision == 'base' }}
+        env:
+          LANG: C.UTF-8
+          TZ: UTC
+        run: bun run compatibility:word -- --output "$RUNNER_TEMP/word-report" --require-openxml --require-libreoffice
+      - name: Publish job summary
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/word-report/report.md" ]]; then
+            cat "$RUNNER_TEMP/word-report/report.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: word-compatibility-${{ matrix.revision }}
+          if-no-files-found: ignore
+          path: ${{ runner.temp }}/word-report/
