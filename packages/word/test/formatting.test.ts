@@ -42,6 +42,22 @@ describe("WordprocessingML direct formatting", () => {
     expect(inherited.document.styles.paragraphFormat(inherited.document, first(inherited)).alignment).toBe("start");
   });
 
+  test("inserts and replaces alignment before later paragraph properties", () => {
+    for (const trailing of [
+      '<w:rPr><w:b/></w:rPr>',
+      '<w:textDirection w:val="lrTb"/><w:outlineLvl w:val="1"/>',
+      '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>',
+    ]) {
+      const artifact = open(`<w:p><w:pPr><w:keepNext/>${trailing}</w:pPr><w:r><w:t>Text</w:t></w:r></w:p>`);
+      const centered = artifact.applyFormatting(selection(first(artifact).elementId, 0, 4), { block: { horizontalAlignment: { set: "center" } } });
+      expect(centered.document.source.source).toContain(`<w:keepNext/><w:jc w:val="center"/>${trailing}`);
+      const right = centered.applyFormatting(selection(first(centered).elementId, 0, 4), { block: { horizontalAlignment: { set: "end" } } });
+      expect(right.document.source.source).toContain(`<w:keepNext/><w:jc w:val="right"/>${trailing}`);
+      const inherited = right.applyFormatting(selection(first(right).elementId, 0, 4), { block: { horizontalAlignment: { inherit: true } } });
+      expect(inherited.document.source.source).toContain(`<w:keepNext/>${trailing}`);
+    }
+  });
+
   test("handles self-closing properties and empty formatting patches", () => {
     const artifact = open(`<w:p><w:pPr/><w:r><w:rPr w:rsidRPr="1"/><w:t>Text</w:t></w:r></w:p>`);
     const paragraph = first(artifact);

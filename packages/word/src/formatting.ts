@@ -141,8 +141,22 @@ function formatParagraph(
       }
       return;
     }
-    if (child !== undefined) editor.removeElement(child);
-    if ("set" in change) editor.appendMarkup(properties, `<${qualified(properties.prefix, "jc")} ${qualified(properties.prefix, "val")}="${alignmentValue(change.set)}"/>`);
+    if (!("set" in change)) {
+      if (child !== undefined) editor.removeElement(child);
+      return;
+    }
+    const markup = `<${qualified(properties.prefix, "jc")} ${qualified(properties.prefix, "val")}="${alignmentValue(change.set)}"/>`;
+    if (child !== undefined) editor.replaceElementMarkup(child, markup);
+    else {
+      // ECMA-376-1 Annex A: CT_PPrBase places jc before these properties;
+      // CT_PPr then appends paragraph-mark formatting, section settings and history.
+      const afterAlignment = new Set(["textDirection", "textAlignment", "textboxTightWrap", "outlineLvl", "divId", "cnfStyle", "rPr", "sectPr", "pPrChange"]);
+      const next = properties.children.find((candidate): candidate is LosslessXmlElement =>
+        candidate.kind === "element" && candidate.namespaceUri === namespace(document) && afterAlignment.has(candidate.localName)
+      );
+      if (next === undefined) editor.appendMarkup(properties, markup);
+      else editor.insertMarkupBefore(next, markup);
+    }
     return;
   }
   if (!("set" in change)) return;
