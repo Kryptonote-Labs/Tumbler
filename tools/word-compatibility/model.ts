@@ -48,7 +48,7 @@ export interface Counts {
   readonly percent: number | null;
 }
 export interface CompatibilityReport {
-  readonly schemaVersion: 2;
+  readonly schemaVersion: 3;
   readonly scope: string;
   readonly inventorySha256: string;
   readonly contractHash: string;
@@ -57,11 +57,13 @@ export interface CompatibilityReport {
     readonly platform: string; readonly arch: string; readonly dotnet: string | null;
     readonly libreoffice: string | null; readonly openXmlSdk: string;
   };
+  readonly coverageTargets: readonly import('./coverage.ts').CoverageTarget[];
+  readonly requirementCounts: Counts;
   readonly overall: Counts;
   readonly dimensions: Readonly<Record<Dimension, Counts>>;
   /** Mapping is traceability only; it does not establish complete decomposition of these topics. */
   readonly inventory: { readonly total: number; readonly mapped: number; readonly withoutRequirements: number };
-  readonly sources: readonly { readonly id: string; readonly total: number; readonly mapped: number }[];
+  readonly sources: readonly { readonly id: string; readonly total: number; readonly mapped: number; readonly coverage: Counts }[];
   readonly requirements: readonly RequirementResult[];
   readonly scenarios: readonly ScenarioDefinition[];
   readonly evidence: readonly Evidence[];

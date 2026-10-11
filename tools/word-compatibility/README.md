@@ -1,21 +1,26 @@
 # Word compatibility contract
 
-The score is the fraction of explicit requirements verified by executable checks.
-LibreOffice Writer is our current interoperability reference. A successful
-LibreOffice round trip earns interoperability credit when the stated semantic
-assertions also pass. Microsoft Word is not required and does not block CI.
-Open XML SDK remains an independent validity check for writing and editing.
+The headline measures verified coverage of the full 4,482-topic standards inventory.
+Every topic remains in all six dimensions, giving **26,892 targets** overall.
+No unknown, unimplemented or unresolved target disappears from the denominator.
+The table includes an overall row and one row per dimension, with four decimal
+places so small improvements remain visible.
 
-The initial contract has 80 requirements. Sixteen have executable checks;
-64 broader requirements remain untested, including layout, tables, styles,
-notes, fields, tracked revisions and equations. Untested means evidence is
-missing, not necessarily that the library lacks the feature.
+```text
+overall compatibility = verified topic/dimension targets / 26,892 × 100
+each dimension = verified topics in that dimension / 4,482 × 100
+```
 
-A separate inventory contains 4,482 standards topics. It remains the expansion
-backlog, with counts for topics linked to requirements and topics with no
-requirements yet. A topic link is traceability, not complete clause coverage.
-The requirement percentage must never be presented as a percentage of all Word
-features or complete OOXML conformance.
+Currently no complete topic/dimension target is verified, so the headline is
+0.0000%. Separately, 16 of 80 narrow requirements have executable evidence.
+Passing those checks does not establish complete coverage of their source topics.
+The full report makes all 26,892 targets searchable by source, section, title
+and dimension, with remaining work and separate requirement/evidence details.
+
+LibreOffice Writer is the accepted interoperability reference. Microsoft Word
+is not required. Open XML SDK independently checks writing and editing validity.
+This percentage measures coverage of the pinned inventory, not the probability
+that an arbitrary file works or every rule in all OOXML standards.
 
 ## Run
 
@@ -35,7 +40,7 @@ Use `--output /absolute/empty/directory` for a known destination. Otherwise,
 results go into a new ignored `compatibility-results/word-*` directory. Nonempty
 destinations are rejected so stale conversions cannot count as new evidence.
 
-Every run writes JSON, Markdown, searchable offline HTML, a small `comment.json`,
+Every run writes JSON, Markdown, searchable offline HTML, a validated `comment.json`,
 DOCX fixtures, consumer outputs, validator logs, artifact hashes and tool
 versions. JSON also retains the full standards inventory.
 
@@ -61,8 +66,21 @@ credit. Duplicate, unknown or mismatched evidence is rejected. A renderer cannot
 earn credit from schema validation or a consumer merely opening the file.
 
 Each dimension reports `verified / total`. Empty denominators display `n/a`.
-The overall score counts every requirement equally; complexity is not weighted.
+The overall score counts every standards topic/dimension target equally; complexity is not weighted.
 Acceptance criteria and fixture scope define what a pass actually establishes.
+
+`coverage.ts` creates the full matrix from the inventory. A target earns credit
+only when a coverage plan describes the topic's complete obligations in that
+dimension, names its requirements, and every linked requirement passes. Plans
+must cover relevant defaults, boundaries, errors and feature interactions.
+Narrow checks alone cannot close a target. Any linked failure defeats coverage,
+even if omitted from the plan. Missing decomposition is untested, not excluded.
+There are currently no complete coverage plans and no N/A exclusions.
+
+Applicability still needs standards review. Conservatively retaining every
+pair is not an assertion that each topic has six independent normative duties.
+Any future exclusion must cite a standards-based reason, be reviewed as a scope
+change, and remain visible. Unsupported features are never an exclusion reason.
 
 To add evidence, inspect the relevant standard, define the observable behaviour,
 add scenarios and link all mandatory checks. Keep untested obligations visible.
@@ -144,14 +162,14 @@ Word documents, not the complete XLSX/PPTX standards or Word's entire app UI.
 A table-of-contents entry is **not an atomic normative requirement**. A leaf can
 contain multiple MUSTs, defaults, schema constraints and interactions. Some
 headings are descriptive rather than normative. The importer cannot decide
-those questions. These topics are therefore a coverage backlog, separate from
-the executable requirement denominator. Neither count predicts whether an
+those questions. These topics define the broad coverage denominator; they still need
+decomposition into executable obligations. Neither count predicts whether an
 arbitrary user document will work.
 
 The extraction does not establish complete coverage of annexes, XSD facets,
 embedded format specifications, every Microsoft extension, all prose, or all
 feature combinations. These are explicit inventory gaps, not passed work.
-The inventory must never be advertised as complete OOXML conformance coverage.
+The inventory must never be advertised as an exhaustive extraction of all OOXML rules.
 Topics differ in complexity and importance. Contract count and scope must
 accompany a requirement percentage.
 

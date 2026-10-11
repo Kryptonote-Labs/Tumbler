@@ -75,9 +75,10 @@ package preservation, and the Svelte CSS projection contract.
 ## Executable Word compatibility
 
 `bun run compatibility:word -- --require-openxml --require-libreoffice` produces
-JSON, Markdown and searchable HTML for an explicit behaviour contract. Missing
-checks remain untested. A separate inventory tracks 4,482 standards topics;
-linking a topic to a requirement does not claim complete clause coverage.
+JSON, Markdown and searchable HTML covering 4,482 standards topics in six
+dimensions. The overall denominator is 26,892 topic/dimension targets. Missing
+checks and unresolved topic decomposition remain untested. Narrow requirements
+and evidence are reported separately and cannot qualify an entire topic alone.
 
 PR CI checks Strict and Transitional DOCX scenarios, untouched package payloads,
 Open XML SDK validity, and semantic assertions after LibreOffice Writer round

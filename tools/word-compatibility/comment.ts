@@ -39,8 +39,10 @@ async function main() {
   async function artifact(revision: string): Promise<CommentData | undefined> {
     const file = Bun.file(join(directory!, `word-compatibility-${revision}`, 'comment.json'));
     if (!await file.exists()) return undefined;
-    if (file.size > 2_000_000) throw new Error('Compatibility artifact exceeds size limit');
-    return parseCommentData(await file.json());
+    if (file.size > 20_000_000) throw new Error('Compatibility artifact exceeds size limit');
+    const data: unknown = await file.json();
+    if (revision === 'base' && data !== null && typeof data === 'object' && 'schemaVersion' in data && data.schemaVersion !== 3) return undefined;
+    return parseCommentData(data);
   }
   const head = await artifact('head');
   const base = await artifact('base');
