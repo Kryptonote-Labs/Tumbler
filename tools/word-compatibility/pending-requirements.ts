@@ -4,8 +4,6 @@ import type { Dimension, Requirement } from './model.ts';
 const rows: readonly (readonly [Dimension, string, string, string])[] = [
   ['read', 'style-inheritance', 'ecma-1:17.7.4.3', 'Resolve a three-level basedOn style chain, direct overrides and missing-parent fallback without flattening source properties.'],
   ['read', 'character-style', 'ecma-1:17.3.2.29', 'Resolve a character style over paragraph defaults while retaining explicit false toggle properties.'],
-  ['read', 'table-grid-span', 'ecma-1:17.4.17', 'Resolve gridSpan cells and omitted leading/trailing grid columns into the correct logical columns.'],
-  ['read', 'table-vertical-merge', 'ecma-1:17.4.84', 'Associate continuation cells with their restart cell without duplicating the merged content.'],
   ['read', 'numbering-overrides', 'ecma-1:17.9.1', 'Resolve list instances, level overrides and restarts independently when two lists share an abstract definition.'],
   ['read', 'section-stories', 'ecma-1:17.10.5', 'Resolve default, even and first-page header references and inherited references across section boundaries.'],
   ['read', 'footnote-reference', 'ecma-1:17.11.10', 'Resolve a body footnote reference to its note content and distinguish separator notes from ordinary notes.'],

@@ -11,10 +11,11 @@ overall compatibility = verified topic/dimension targets / 26,892 × 100
 each dimension = verified topics in that dimension / 4,482 × 100
 ```
 
-The first qualification suite targets preservation of 26 boolean formatting
-properties. With all required evidence passing, the headline is 26/26,892, or
-0.0966%. See [the preservation contract](preservation/README.md) for the exact
-operations and limits. Separately, the original 16 narrow requirements still run.
+Qualification covers preservation of 26 boolean formatting properties and
+reading four table-structure topics. With all required evidence passing, the
+headline is 30/26,892, or 0.1115%. See the [preservation contract](preservation/README.md)
+and [table reading contract](tables/README.md) for the exact operations and limits.
+Separately, the original 16 narrow requirements still run.
 Passing those checks does not establish complete coverage of their source topics.
 The full report makes all 26,892 targets searchable by source, section, title
 and dimension, with remaining work and separate requirement/evidence details.

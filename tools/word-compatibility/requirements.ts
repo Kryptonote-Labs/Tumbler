@@ -1,3 +1,4 @@
+import { tableRequirements } from './tables/contract.ts';
 import { preservationRequirements } from './preservation/contract.ts';
 import { pending } from './pending-requirements.ts';
 import type { Check, Dimension, Oracle, Requirement } from './model.ts';
@@ -31,4 +32,5 @@ export const requirements: readonly Requirement[] = [
   covered('interoperate.authored', 'interoperate', 'LibreOffice retains authored mixed runs', 'After LibreOffice open/save, both paragraphs, Unicode, and the asserted bold/italic ranges remain correct.', [text], ['authored-mixed-runs'], ['libreoffice']),
   ...pending,
   ...preservationRequirements,
+  ...tableRequirements,
 ];
