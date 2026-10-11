@@ -8,5 +8,6 @@ for (const scenario of scenarios) {
     expect(result.fixtures.length).toBeGreaterThan(0);
     for (const fixture of result.fixtures) fixture.verify(openWordArtifact(fixture.bytes));
     result.comparePackages?.();
+    result.referenceLayout?.();
   });
 }

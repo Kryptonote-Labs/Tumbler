@@ -1,3 +1,4 @@
+import { renderRequirements } from './render/contract.ts';
 import { tableRequirements } from './tables/contract.ts';
 import { preservationRequirements } from './preservation/contract.ts';
 import { pending } from './pending-requirements.ts';
@@ -34,4 +35,5 @@ export const requirements: readonly Requirement[] = [
   ...pending,
   ...preservationRequirements,
   ...tableRequirements,
+  ...renderRequirements,
 ];

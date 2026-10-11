@@ -122,8 +122,10 @@ CI pins Bun, .NET and Open XML SDK; Ubuntu supplies LibreOffice and its actual
 version is recorded. External consumer behaviour can change between environments.
 
 LibreOffice is an accepted reference, not proof that Microsoft Word behaves
-identically. Rendering has no reference checks yet. Future work includes controlled
-layout comparisons, real-producer fixtures, interactions between features, and
+identically. Rendering compares selected headless page geometry and line advances
+with pinned LibreOffice PDF references; see [reference layout evidence](render/README.md).
+Glyph shaping, browser painting and full break/spacing topic coverage remain unqualified.
+Future work includes real-producer fixtures, interactions between features, and
 Kryptonote's human and agent editing paths. None of these gaps impose authoring
 limits on users.
 
