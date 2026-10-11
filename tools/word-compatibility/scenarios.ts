@@ -28,7 +28,7 @@ export const scenarios: readonly Scenario[] = [
     id: `${profile}-text-${name}`,
     title: `Read, no-op save and replace ${name} text in ${profile} markup`,
     topics: [textTopic], dimensions: ['read', 'preserve', 'write', 'edit', 'interoperate'],
-    oracles: ['assertion', 'package-diff', 'openxml', 'libreoffice', 'word'],
+    oracles: ['assertion', 'package-diff', 'openxml', 'libreoffice'],
     run() {
       const bytes = fixture(profile, `<w:p><w:r><w:t xml:space="preserve">${xml(value)}</w:t></w:r></w:p>`);
       const original = openWordArtifact(bytes);
@@ -51,7 +51,7 @@ export const scenarios: readonly Scenario[] = [
   ...profiles.map((profile): Scenario => ({
     id: `${profile}-relocated-main`, title: `Find a relocated ${profile} main part through relationships`,
     topics: ['ecma-1:9.2', documentTopic], dimensions: ['read', 'preserve', 'write', 'interoperate'],
-    oracles: ['assertion', 'package-diff', 'openxml', 'libreoffice', 'word'],
+    oracles: ['assertion', 'package-diff', 'openxml', 'libreoffice'],
     run() {
       const bytes = buildWordDocumentFixture({ conformance: profile, documentItemName: 'content/report.xml', documentXml: documentXml(profile, '<w:p><w:r><w:t>Relocated</w:t></w:r></w:p>') });
       const artifact = openWordArtifact(bytes);
@@ -62,7 +62,7 @@ export const scenarios: readonly Scenario[] = [
   ...profiles.map((profile): Scenario => ({
     id: `${profile}-opaque-part`, title: `Preserve unrelated custom XML bytes while editing ${profile} body text`,
     topics: [textTopic, 'ecma-1:9.2'], dimensions: ['preserve', 'edit', 'write', 'interoperate'],
-    oracles: ['assertion', 'package-diff', 'openxml', 'libreoffice', 'word'],
+    oracles: ['assertion', 'package-diff', 'openxml', 'libreoffice'],
     run() {
       const bytes = buildWordDocumentFixture({ conformance: profile, documentXml: documentXml(profile, '<w:p><w:r><w:t>Original</w:t></w:r></w:p>'),
         parts: [{ itemName: 'customXml/item1.xml', contentType: 'application/xml', xml: '<customer xmlns="urn:tumbler:fixture" untouched="yes">opaque &amp; data</customer>' }] });
@@ -75,7 +75,7 @@ export const scenarios: readonly Scenario[] = [
   ...profiles.map((profile): Scenario => ({
     id: `${profile}-bold-range`, title: `Apply explicit bold to a substring in ${profile} text`,
     topics: [boldTopic, textTopic], dimensions: ['read', 'preserve', 'write', 'edit', 'interoperate'],
-    oracles: ['assertion', 'package-diff', 'openxml', 'libreoffice', 'word'],
+    oracles: ['assertion', 'package-diff', 'openxml', 'libreoffice'],
     run() {
       const original = openWordArtifact(fixture(profile, '<w:p><w:r><w:t>left bold right</w:t></w:r></w:p>'));
       const edited = original.applyFormatting(range(original, 5, 9), { text: { bold: { set: true } } });
@@ -93,7 +93,7 @@ export const scenarios: readonly Scenario[] = [
   {
     id: 'authored-mixed-runs', title: 'Author paragraphs with explicit mixed formatting and Unicode',
     topics: [textTopic, boldTopic, documentTopic], dimensions: ['write', 'read', 'interoperate'],
-    oracles: ['assertion', 'openxml', 'libreoffice', 'word'],
+    oracles: ['assertion', 'openxml', 'libreoffice'],
     run() {
       const artifact = createWordArtifact({ paragraphs: [
         { runs: [{ text: 'Report ', format: { bold: true } }, { text: '中文 😀', format: { italic: true } }] },

@@ -1,44 +1,110 @@
-# Word standards qualification
+# Word compatibility contract
 
-This tool reports how much of Tumbler's versioned Word standards inventory has
-been qualified with reviewed, executable evidence. Unsupported and unreviewed
-areas remain in the denominator. The initial score is deliberately **0%**.
+The score is the fraction of explicit requirements verified by executable checks.
+LibreOffice Writer is our current interoperability reference. A successful
+LibreOffice round trip earns interoperability credit when the stated semantic
+assertions also pass. Microsoft Word is not required and does not block CI.
+Open XML SDK remains an independent validity check for writing and editing.
 
-That does not mean Tumbler implements nothing. It means none of the indexed
-standards topics has yet received a complete qualification plan covering all
-applicable dimensions. Fifteen executable scenarios already check narrower
-behaviour, with separate semantic, preservation, SDK and consumer results.
-Those passes must not turn into an invented feature-support percentage.
+The initial contract has 80 requirements. Sixteen have executable checks;
+64 broader requirements remain untested, including layout, tables, styles,
+notes, fields, tracked revisions and equations. Untested means evidence is
+missing, not necessarily that the library lacks the feature.
+
+A separate inventory contains 4,482 standards topics. It remains the expansion
+backlog, with counts for topics linked to requirements and topics with no
+requirements yet. A topic link is traceability, not complete clause coverage.
+The requirement percentage must never be presented as a percentage of all Word
+features or complete OOXML conformance.
 
 ## Run
 
 ```sh
-bun run compatibility:word
 bun run compatibility:word -- --require-openxml --require-libreoffice
 bun run compatibility:word -- --inventory-only
 bun run compatibility:word:check
 bun test tools/word-compatibility/test
 ```
 
-Normal runs use the Open XML SDK when `dotnet` is available. Set `DOTNET` to an
+Normal runs use Open XML SDK when `dotnet` is available. Set `DOTNET` to an
 absolute executable path if necessary. LibreOffice is opt-in with `--libreoffice`
-or mandatory with `--require-libreoffice`. `--require-openxml` requires SDK
-success. Microsoft Word and reference layout remain explicitly blocked.
+or mandatory with `--require-libreoffice`, as in CI. Missing tools produce
+blocked evidence; required tool failures fail the command.
 
-Use `--output /absolute/empty/directory` for a known destination. Without it,
-results go into a new ignored `compatibility-results/word-*` directory. Existing
-nonempty destinations are rejected: a stale consumer-produced file must never
-be mistaken for a new successful conversion.
+Use `--output /absolute/empty/directory` for a known destination. Otherwise,
+results go into a new ignored `compatibility-results/word-*` directory. Nonempty
+destinations are rejected so stale conversions cannot count as new evidence.
 
-Every run writes:
+Every run writes JSON, Markdown, searchable offline HTML, a small `comment.json`,
+DOCX fixtures, consumer outputs, validator logs, artifact hashes and tool
+versions. JSON also retains the full standards inventory.
 
-- `report.json`: every topic, dimension, scenario, result and artifact hash;
-- `report.md`: CI summary, counts, limits and evidence diagnostics;
-- `report.html`: offline searchable inventory and results;
-- before/after DOCX fixtures, consumer-saved DOCX files and validator logs;
-- actual SDK/runtime/consumer version information.
+## Scoring
 
-No production dependency or document-authoring limit is introduced.
+`requirements.ts` maps concrete acceptance criteria to mandatory scenario and
+oracle pairs. `pending-requirements.ts` defines unresolved requirements with
+empty checks. Each requirement belongs to one dimension and counts once:
+
+| Dimension | Required evidence |
+| --- | --- |
+| Read | Semantic assertions |
+| Preserve | Byte/payload and package-entry comparisons |
+| Write | Open XML SDK validation |
+| Edit | Semantic assertions and Open XML SDK validation |
+| Render | Reference-layout comparison |
+| Interoperate | LibreOffice conversion and semantic assertions on its output |
+
+Every listed check must pass. Failure takes precedence over missing evidence,
+then blocked evidence, then verification. Missing checks or results are untested.
+No manual review gate prevents passing executable requirements from earning
+credit. Duplicate, unknown or mismatched evidence is rejected. A renderer cannot
+earn credit from schema validation or a consumer merely opening the file.
+
+Each dimension reports `verified / total`. Empty denominators display `n/a`.
+The overall score counts every requirement equally; complexity is not weighted.
+Acceptance criteria and fixture scope define what a pass actually establishes.
+
+To add evidence, inspect the relevant standard, define the observable behaviour,
+add scenarios and link all mandatory checks. Keep untested obligations visible.
+Add boundary, negative and cross-feature cases where the criteria require them.
+The existing fixtures are synthetic and contain no customer files or Office assets.
+
+## CI and PR comments
+
+`word-compatibility.yml` runs when Word, shared document infrastructure, the UI,
+validation tools or their configuration changes. It runs head and base in separate
+Ubuntu jobs with the same Bun and .NET versions, requires SDK and LibreOffice,
+and retains reports even when evidence fails. A low score alone does not fail CI.
+
+`word-compatibility-comment.yml` updates one compact table on the PR after the
+run finishes. It reads validated numeric/status data from artifacts and executes
+only default-branch code with the comment token. Fork code never executes with
+that token. Stale heads and older runs do not replace newer results. Failed runs
+without reports replace stale success with an unavailable-result notice.
+
+The commenting workflow becomes active after it reaches the default branch.
+The first base without this report schema has no comparison. Later runs compare
+unchanged requirement definitions, show gained/lost verification, and list added,
+removed or changed requirements. A changed denominator or acceptance criterion
+shows `scope changed` instead of a misleading percentage delta.
+
+Requirement definitions have individual SHA-256 hashes and the whole contract
+has a hash. The standards lock separately verifies inventory hashes and counts;
+changing inventory content requires a higher version and new scope ID.
+
+## Determinism and limits
+
+Scoring is a pure function of the contract and collected evidence. The CLI
+fingerprints tracked and nonignored source bytes and rejects source changes
+during a run. Tool versions and input/output hashes make results traceable.
+CI pins Bun, .NET and Open XML SDK; Ubuntu supplies LibreOffice and its actual
+version is recorded. External consumer behaviour can change between environments.
+
+LibreOffice is an accepted reference, not proof that Microsoft Word behaves
+identically. Rendering has no reference checks yet. Future work includes controlled
+layout comparisons, real-producer fixtures, interactions between features, and
+Kryptonote's human and agent editing paths. None of these gaps impose authoring
+limits on users.
 
 ## Scope v1
 
@@ -78,141 +144,24 @@ Word documents, not the complete XLSX/PPTX standards or Word's entire app UI.
 A table-of-contents entry is **not an atomic normative requirement**. A leaf can
 contain multiple MUSTs, defaults, schema constraints and interactions. Some
 headings are descriptive rather than normative. The importer cannot decide
-those questions. The denominator therefore measures qualification of indexed
-topics, not a count of all normative rules and not a probability that a user's
-file works.
+those questions. These topics are therefore a coverage backlog, separate from
+the executable requirement denominator. Neither count predicts whether an
+arbitrary user document will work.
 
 The extraction does not establish complete coverage of annexes, XSD facets,
 embedded format specifications, every Microsoft extension, all prose, or all
 feature combinations. These are explicit inventory gaps, not passed work.
-Qualified coverage of this inventory must never be advertised as full OOXML
-conformance. Equal topic weights are reproducible, but the topics differ in
-complexity and importance. Count and scope version must accompany a percentage.
+The inventory must never be advertised as complete OOXML conformance coverage.
+Topics differ in complexity and importance. Contract count and scope must
+accompany a requirement percentage.
 
-## Qualification and scoring
-
-Each topic starts `unreviewed`. A reviewed entry in `qualifications.ts` must
-supply applicability and acceptance criteria for all six dimensions:
-
-| Dimension | Minimum required independent evidence |
-| --- | --- |
-| Read | Explicit semantic assertions against stated expectations |
-| Preserve | Byte/payload and package-entry comparisons |
-| Write | Open XML SDK validation |
-| Edit | Semantic assertions and Open XML SDK validation |
-| Render | Reference-layout comparison |
-| Interoperate | Microsoft Word consumer evidence |
-
-These are minimum evidence kinds, not sufficient test coverage by themselves.
-Reviewers must evaluate whether the stated criteria exhaust the topic's relevant
-obligations. LibreOffice evidence is useful but cannot stand in for Word.
-
-An applicable dimension lists mandatory `(scenario, oracle)` evidence IDs.
-Every listed result must pass. A known failing scenario defeats qualification
-even if the plan forgot to list that counterexample. Evidence must be declared,
-unique, belong to the same topic and claim the relevant dimension. Existing test
-names or registered methods alone earn no credit.
-
-A dimension can be `not-applicable` only with a documented standards-based
-reason. "Unsupported", "hard", and "our model cannot represent it" are not
-reasons. A plan cannot mark an entire topic not applicable; removing a topic
-requires a reviewed, versioned inventory change instead.
-
-The headline is:
-
-```text
-fully qualified topics / all indexed topics × 100
-```
-
-There are no guessed weights or partial-credit estimates. A topic earns one
-unit only when every applicable dimension is verified. The dimension reports
-exclude only explicitly justified N/A dimensions. Missing plans remain in every
-dimension denominator until reviewed. Empty denominators display `n/a`, never
-100%. Display percentages truncate to four decimal places so incomplete work
-cannot round up to 100%.
-
-Status precedence is failed, unreviewed, untested, blocked, verified. The full
-report retains dimension and oracle results, so the headline status cannot hide
-which checks passed or why others did not run. Missing evidence is `untested`;
-unavailable tools are `blocked`. Neither earns credit.
-
-## Adding real evidence
-
-1. Locate the exact source topic and inspect its normative prose and schema.
-2. Define explicit outcomes, negative cases, defaults, boundary values and
-   interactions. Keep broad unresolved obligations visible.
-3. Add a scenario with typed parameters and assertions in the test runner.
-   New scenario modules can be added as this grows; avoid a single giant file.
-4. Generate or import a licensed, sanitized fixture with known provenance.
-   Use an independent validator or consumer where the dimension requires it.
-5. Preserve fixture bytes, oracle logs, input/output hashes and environment.
-6. Add a qualification plan only after the complete topic and all dimension
-   applicability decisions have been reviewed. Link every mandatory check.
-7. Run the evaluator and review the complete report, including new failures.
-
-The initial fixtures are synthetic documents authored in repository code from
-public format knowledge. They contain no customer files or copied Office
-assets. Existing library tests remain valuable without being automatically
-promoted into whole-clause qualification.
-
-## Determinism and provenance
-
-Scoring is a pure function of a fixed inventory, qualification plans and evidence.
-Tests exercise missing, duplicate, mismatched, blocked and failing evidence,
-invalid exclusions, empty denominators and inappropriate validation shortcuts.
-
-The CLI generates evidence in-process; it does not accept hand-authored pass
-records. It fingerprints tracked and nonignored untracked source bytes, records
-the commit, and refuses a run if source files change during execution. Evidence
-artifacts have SHA-256 hashes. Timestamps do not participate in scoring.
-
-Consumer outcomes can vary with the environment. CI pins Bun, .NET SDK and the
-Open XML SDK package. It records the installed LibreOffice version; Ubuntu's
-LibreOffice package can change. Layout is not qualified by this environment.
-Future visual qualification must pin fonts, Office/browser versions, locale,
-device scale and reference geometry. Capturing versions makes differences
-traceable; it does not make different environments equivalent.
-
-## CI and scope changes
-
-The Word job runs on PRs and pushes, requires SDK and LibreOffice execution,
-and uploads reports and artifacts even on failure. Known scenario failures or
-missing required tools fail the job. An honest zero score does not fail CI.
-Missing Word evidence remains visible and prevents interoperability credit.
-
-The inventory lock verifies file hashes and counts. PR CI compares it with the
-base commit. Any inventory-content change requires a higher version and a new
-scope ID; explain additions and removals in the PR. Scores from different scopes
-are not directly comparable. Qualification plans and criteria changes also need
-review, even when the inventory itself remains unchanged.
-
-Regenerate against the exact ignored reference archive:
+## Regenerate the inventory
 
 ```sh
 python3 tools/word-compatibility/import-inventory.py docs/reference/vendor --check
 ```
 
-Omit `--check` only when deliberately regenerating. The importer currently emits
-v1; update the version/scope in the importer as part of a new inventory revision.
-Official standards prose and schema archives are not redistributed here; the
-committed catalog contains section-reference metadata only.
-
-## Outstanding qualification work
-
-These gaps are not reasons to restrict what users can author:
-
-- Review every indexed topic into actual normative obligations and applicability.
-- Audit extraction coverage against schema declarations, annexes and prose.
-- Add cross-feature cases: tracked edits in nested tables, content controls in
-  headers, floating drawings beside notes, style/numbering inheritance across
-  sections, bidi mixed with fields, and MCE branches around edited content.
-- Add real-producer documents from Word, LibreOffice, Google Docs and Pages.
-- Run controlled Microsoft Word open/save and rendering on a dedicated runner.
-- Compare pagination, text geometry, font substitution, object placement and
-  reference field values as well as screenshots.
-- Exercise Kryptonote's actual agent and human editing paths, durable state,
-  concurrent edits, undo/redo and export against the same Tumbler contract.
-- Establish hostile-input, cancellation and resource-behaviour qualification.
-
-These require further implementations and evidence. This PR makes their absence
-visible rather than claiming they have already been solved.
+Use the exact ignored reference archive identified by the source manifest.
+Omit `--check` only for deliberate regeneration. A new inventory revision also
+requires updating the importer's version/scope. The catalog redistributes section
+metadata only, not standards prose or schema archives.

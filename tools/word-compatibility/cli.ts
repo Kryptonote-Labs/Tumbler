@@ -3,10 +3,11 @@ import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { count, evaluate } from './evaluate.ts';
+import { count, evaluate, hashDefinition } from './evaluate.ts';
 import { topics, sources, scope, verifyInventory } from './inventory.ts';
 import { dimensions, type CompatibilityReport, type Counts } from './model.ts';
-import { qualifications } from './qualifications.ts';
+import { requirements } from './requirements.ts';
+import { commentData } from './summary.ts';
 import { command } from './process.ts';
 import { html, markdown, percentage } from './report.ts';
 import { runScenarios } from './runner.ts';
@@ -32,22 +33,26 @@ const commit = await command(['git', '-C', root, 'rev-parse', 'HEAD']);
 if (commit.code !== 0) throw new Error(commit.output);
 const evidence = values['inventory-only'] ? [] : await runScenarios(scenarios, { root, output, libreoffice: !!(values.libreoffice || values['require-libreoffice']) });
 if (await treeFingerprint() !== fingerprint) throw new Error('Source files changed during qualification. Rerun against one stable tree.');
-const results = evaluate(topics, qualifications, scenarios, evidence);
+const results = evaluate(topics, requirements, scenarios, evidence);
+const mapped = new Set(requirements.flatMap(requirement => requirement.topics));
 const report: CompatibilityReport = {
-  scope, inventorySha256, provenance: {
+  schemaVersion: 2, scope: `${scope}/requirements-v1/libreoffice`, inventorySha256, contractHash: hashDefinition(requirements), provenance: {
     commit: commit.output.trim(), treeSha256: fingerprint, bun: Bun.version, platform: process.platform, arch: process.arch,
     dotnet: await versionLog('dotnet-version.log'), libreoffice: await versionLog('libreoffice-version.log'),
     openXmlSdk: (await readFile(join(root, 'tools/openxml-validator/OpenXmlValidator.csproj'), 'utf8')).match(/Include="DocumentFormat.OpenXml" Version="([^"]+)"/)?.[1] ?? 'unknown',
   },
-  overall: count(results.map(topic => topic.status)),
-  dimensions: Object.fromEntries(dimensions.map(dimension => [dimension, count(results.map(topic => topic.dimensions[dimension]))])) as Record<typeof dimensions[number], Counts>,
-  sources: Object.fromEntries(sources.map(source => [source.id, count(results.filter(topic => topic.source === source.id).map(topic => topic.status))])),
-  scenarios: scenarios.map(({ run: _, ...definition }) => definition), evidence, topics: results,
+  overall: count(results.map(requirement => requirement.status)),
+  dimensions: Object.fromEntries(dimensions.map(dimension => [dimension, count(results.filter(requirement => requirement.dimension === dimension).map(requirement => requirement.status))])) as Record<typeof dimensions[number], Counts>,
+  inventory: { total: topics.length, mapped: mapped.size, withoutRequirements: topics.length - mapped.size },
+  sources: sources.map(source => ({ id: source.id, total: source.selectedLeafTopics, mapped: topics.filter(topic => topic.source === source.id && mapped.has(topic.id)).length })),
+  requirements: results,
+  scenarios: scenarios.map(({ run: _, ...definition }) => definition), evidence, topics,
 };
 await Bun.write(join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+await Bun.write(join(output, 'comment.json'), JSON.stringify(commentData(report), null, 2) + '\n');
 await Bun.write(join(output, 'report.md'), markdown(report));
 await Bun.write(join(output, 'report.html'), html(report));
-console.log(`${percentage(report.overall)}: ${report.overall.verified}/${report.overall.total} standards topics qualified.`);
+console.log(`${percentage(report.overall)}: ${report.overall.verified}/${report.overall.total} explicit requirements verified against the current contract.`);
 console.log(`${evidence.filter(item => item.outcome === 'passed').length} evidence checks passed; ${evidence.filter(item => item.outcome === 'failed').length} failed; ${evidence.filter(item => item.outcome === 'blocked').length} blocked.`);
 console.log(`Reports and artifacts: ${output}`);
 for (const item of evidence.filter(item => item.outcome === 'failed')) console.error(`${item.scenario}/${item.oracle}: ${item.detail}`);

@@ -72,22 +72,21 @@ diagnostics, malformed input, whole-grid ranges without materialization, no-op
 package preservation, and the Svelte CSS projection contract.
 
 
-## Executable Word qualification
+## Executable Word compatibility
 
-`bun run compatibility:word` produces JSON, Markdown and a searchable HTML report
-against a versioned inventory of 4,482 Word/shared standards topics. Missing
-qualification plans and unavailable oracles earn no credit. Passing a narrow
-fixture does not qualify an entire clause. The initial standards-qualification
-score is zero; scenario results are reported separately.
+`bun run compatibility:word -- --require-openxml --require-libreoffice` produces
+JSON, Markdown and searchable HTML for an explicit behaviour contract. Missing
+checks remain untested. A separate inventory tracks 4,482 standards topics;
+linking a topic to a requirement does not claim complete clause coverage.
 
-The PR workflow runs Strict and Transitional DOCX scenarios, compares untouched
-package payloads, requires Open XML SDK validation, and round-trips through
-LibreOffice Writer. Microsoft Word, reference-layout and full clause review
-remain unqualified. The inventory itself is a source-topic index, not a claim
-that every normative requirement has been extracted.
+PR CI checks Strict and Transitional DOCX scenarios, untouched package payloads,
+Open XML SDK validity, and semantic assertions after LibreOffice Writer round
+trips. LibreOffice satisfies the current interoperability reference. Reference
+layout remains untested. A separate trusted workflow updates a compact PR table
+with base deltas, and reports contract changes separately from behaviour changes.
 
-See the [Word qualification contract](../tools/word-compatibility/README.md) for
-scoring, provenance, scope-change rules and the remaining qualification work.
+See the [Word compatibility contract](../tools/word-compatibility/README.md) for
+scoring, provenance, scope rules and the remaining work.
 
 ## Testkit structure
 

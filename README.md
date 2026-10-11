@@ -112,6 +112,6 @@ Report security issues according to [SECURITY.md](SECURITY.md).
 Tumbler is available under the [MIT License](LICENSE).
 
 Word compatibility evidence is reported by `bun run compatibility:word`. The
-[qualification contract](tools/word-compatibility/README.md) keeps unreviewed
-standards topics in the denominator and separates narrow test passes from
-whole-topic qualification.
+[compatibility contract](tools/word-compatibility/README.md) scores explicit
+requirements using semantic checks, package comparisons, Open XML SDK and
+LibreOffice. Untested requirements and the broader standards backlog stay visible.
