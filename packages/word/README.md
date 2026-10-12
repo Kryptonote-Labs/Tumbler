@@ -244,6 +244,21 @@ The docs site’s **Native Word model** guide includes API examples, cache inval
 positions, and integration boundaries (`apps/docs/src/lib/native-word-docs.ts`).
 
 
+## Table geometry and cell merging
+
+`NativeWordDocument.geometryAt(offset, tableDepth = 0)` reports page, margin and column
+widths in points for the section containing that text offset. For tables it also reports
+`columnWidthsPoints`, `widthPoints`, `widthCm`, `availableWidthPoints` and
+`fitsAvailableWidth`. Increase `tableDepth` to inspect a nested table against its parent
+cell's content width. These are authored horizontal dimensions, not text wrapping or
+pagination measurements. Table `columnWidths` values are points, 72 per inch; fields
+whose names end in `Twips` use twentieths of a point.
+
+The collaborative `table-edit` actions `merge-right` and `split-cell` operate on horizontal
+cell spans. Merging preserves both cells' paragraphs under the first cell identity.
+Splitting keeps existing content in the first cell and adds empty cells for the remaining
+columns. Both reject cells participating in vertical merges and support undo.
+
 ## Shared editable content from DOCX
 
 `importWordContent(artifact)` projects paragraphs, runs and nested tables into editable content.
