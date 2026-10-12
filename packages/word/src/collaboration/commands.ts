@@ -41,6 +41,8 @@ export type WordChange =
       value: string;
       expected?: string;
       attributes?: TextAttributes;
+      /** Patch the resulting text, preserving replacement inheritance and paragraph semantics. */
+      format?: WordFormatPatch;
     }
   | { kind: 'format'; target: WordAnchor; attributes: WordFormatPatch; expected?: string };
 export type WordDelta = Parameters<Y.Text['applyDelta']>[0];
@@ -347,7 +349,14 @@ function wordTransaction(text: Y.Text, changes: readonly WordChange[]): WordDelt
           validateText(staged.toString());
         } else if (change.kind === 'format')
           staged.applyDelta(formatWordDelta(staged, range, change.attributes));
-        else staged.applyDelta(replaceWordDelta(staged, range, change.value, change.attributes));
+        else {
+          const value = change.value.replace(/\r\n?/g, '\n');
+          staged.applyDelta(replaceWordDelta(staged, range, value, change.attributes));
+          if (change.format) {
+            if (!value.length) throw new Error('Cannot format an empty replacement. Use a separate paragraph format operation.');
+            staged.applyDelta(formatWordDelta(staged, { start: range.start, end: range.start + value.length }, change.format));
+          }
+        }
       }
     });
     validateWordText(staged);

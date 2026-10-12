@@ -325,6 +325,16 @@ it must not mutate either document and can throw to reject the edit atomically. 
 encoded-update hooks are supplied, both run. A `defaultAttributes(body)` callback supplies document-specific formatting defaults
 for selection inspection and inserted text. The adapter does not provide authenticated networking or persistence.
 
+Replacement changes accept an optional `format` patch, for example
+`{ kind: 'replace', target, value: 'Welcome', format: { bold: true, italic: null } }`.
+The replacement inherits formatting as usual, then patches the resulting text in the same staged
+transaction. Unspecified properties survive; null removes a property. This differs from the existing
+`attributes` option, which supplies the full replacement attributes. Paragraph properties such as
+`align` affect every paragraph touched by the resulting text, including its retained terminator.
+CRLF input is normalized before determining the resulting range. Empty replacements cannot carry
+`format`; use a format operation on an explicit paragraph range when deleting and restyling are
+separate intentions.
+
 `wordParagraphIdentity(body, newlineOffset)` follows paragraph terminators through edits and remote
 updates. It avoids a repeated scan from the start of the CRDT when projecting stable native block IDs.
 
