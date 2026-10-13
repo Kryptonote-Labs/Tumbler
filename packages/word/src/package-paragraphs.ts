@@ -134,7 +134,7 @@ export function wordParagraphRenderer(
   const runMarkup = (run: WordTextRun, generatedRun: string | undefined, resetStyle = false) => {
     const scope = copies.scopes.get(run) ?? 0;
     ({ emitted, remaining } = stateFor(scope));
-    if (run.shape) return remap(generatedRun ?? '');
+    if (run.shape && run.source === undefined) return remap(generatedRun ?? '');
     if (run.image && !document.drawings.has(run.source!)) return remap(generatedRun ?? '');
     const original = run.source === undefined ? undefined : originalRuns.get(run.source);
     if (run.source !== undefined && !original) throw new Error('Invalid run source reference.');
@@ -171,6 +171,11 @@ export function wordParagraphRenderer(
         replacements.set(propertyNames[key], runProperties({ [key]: run.format[key] }));
     if (resetStyle) for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[]) if (run.format?.[key] === undefined) replacements.set(propertyNames[key], '');
     let sourceMarkup = element ? markup.raw(element) : '';
+    if (run.shape && JSON.stringify(run.shape) !== JSON.stringify(original?.shape)) {
+      const drawing = remap(generatedRun ?? '').match(/<w:drawing\b[\s\S]*<\/w:drawing>/)?.[0];
+      if (!drawing) throw new Error('Generated shape drawing is missing.');
+      sourceMarkup = drawing;
+    }
     if (replacedImages.has(run)) {
       const relationship = remap(generatedRun ?? '').match(/r:embed="([^"]+)"/)?.[1];
       if (!relationship) throw new Error('The replacement image relationship is missing.');
