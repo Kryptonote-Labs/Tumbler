@@ -4,12 +4,14 @@
   import OoxmlChart from './OoxmlChart.svelte';
   import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
 
-  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", inlinePosition, onselect, onresize, onchange }: {
+  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange }: {
     drawing: WordDrawing; width: number; height: number; position: string; scale: number;
     editable: boolean; selected: boolean;
     pageX: number; pageY: number;
     imageurl: (image: WordImageDrawing) => string;
     imageLoading?: "eager" | "lazy";
+    /** Hosts that offer placement in their own UI can omit the built-in layout select. */
+    layoutControl?: boolean;
     inlinePosition: (x: number, y: number) => WordTextPosition | undefined;
     onselect: (id: number | undefined) => void;
     onresize?: (size: WordDrawingResize) => void;
@@ -130,9 +132,11 @@
       {#if onchange !== undefined}
         <div class="controls" role="toolbar" aria-label="Drawing controls">
           <button aria-label="Move drawing" title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)}>✥</button>
-          <select aria-label="Drawing layout" value={currentLayout} onchange={(event) => { const layout = event.currentTarget.value; if (layout === 'inline' || layout === 'front' || layout === 'behind') commit(box(), layout); }}>
-            <option value="inline">In line with text</option><option value="front">In front of text</option><option value="behind">Behind text</option>
-          </select>
+          {#if layoutControl}
+            <select aria-label="Drawing layout" value={currentLayout} onchange={(event) => { const layout = event.currentTarget.value; if (layout === 'inline' || layout === 'front' || layout === 'behind') commit(box(), layout); }}>
+              <option value="inline">In line with text</option><option value="front">In front of text</option><option value="behind">Behind text</option>
+            </select>
+          {/if}
         </div>
       {/if}
       {#each handles as handle}
