@@ -116,7 +116,7 @@ export class WordNumbering {
           const text = level.format === "bullet" ? level.text : level.text.replace(/%([1-9])/g, (_match, digit: string) => {
             const index = Number(digit) - 1;
             const definition = instance.levelOverrides.get(index) ?? abstract.levels.find((item) => item.level === index);
-            return formatNumber(state[index] ?? definition?.start ?? 1, definition?.format ?? "decimal");
+            return formatWordNumber(state[index] ?? definition?.start ?? 1, definition?.format ?? "decimal");
           });
           markers.set(elementId, Object.freeze({ text, suffix: level.suffix, level: reference.level, indentStartTwips: level.indentStartTwips, hangingTwips: level.hangingTwips }));
     }
@@ -196,7 +196,7 @@ function parseLevel(element: LosslessXmlElement, ns: string, forcedLevel?: numbe
   });
 }
 
-function formatNumber(value: number, format: WordNumberFormat): string {
+export function formatWordNumber(value: number, format: WordNumberFormat): string {
   if (format === "none") return "";
   if (format === "lowerLetter" || format === "upperLetter") {
     let current = Math.max(1, value); let result = "";

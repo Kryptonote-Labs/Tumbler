@@ -161,3 +161,5 @@ Native authored content and collaborative commands support strike, the Word high
 Native paragraph authoring now includes before/after spacing, automatic/exact/minimum line spacing, keep-with-next, keep-lines, page-break-before, widow control, contextual spacing, shading and basic borders. Collaborative paragraph patches preserve other properties on each selected paragraph. Paragraph decorations render in body, story and table views. Border artwork and automatic border joining across adjacent paragraphs remain unqualified.
 
 The collaborative API provides literal find/replace with case and whole-word options. Search returns UTF-16 ranges at grapheme boundaries. Replace-all anchors matches before mutation and uses one ordinary transaction, preserving each match's inherited formatting and undo behavior.
+
+Authored lists support decimal, lower/upper letters, lower/upper Roman numbering, custom bullet markers, nine levels, compound multilevel labels and explicit starting numbers. Restart by assigning a new list identity; continue with an existing identity. Native and exported markers share number formatting.

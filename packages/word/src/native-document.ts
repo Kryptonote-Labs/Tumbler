@@ -1,3 +1,4 @@
+import { isWordAuthoredList, wordListMarker } from './authored-list.ts';
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
 import { wordGeometryAt } from './geometry.ts';
@@ -436,7 +437,7 @@ export class NativeWordDocument implements WordLayoutSource {
               level < 0 ||
               level > 8 ||
               !Number.isInteger(start) ||
-              start < 1
+              start < 0 || !isWordAuthoredList(list)
             )
               throw new RangeError('Invalid list level or start.');
             const counter = counters.get(list.id) ?? { kind: list.kind, start, values: [] };
@@ -450,7 +451,7 @@ export class NativeWordDocument implements WordLayoutSource {
                   : counter.values[i]! + (i === level ? 1 : 0);
             counters.set(list.id, counter);
             markers.set(result.block.elementId, {
-              text: list.kind === 'bullet' ? '•' : `${counter.values[level]}.`,
+              text: wordListMarker(list, counter.values, level),
               suffix: 'tab',
               level,
               indentStartTwips: (level + 1) * 720,
