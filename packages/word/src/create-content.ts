@@ -1,7 +1,7 @@
 import { isWordAuthoredList, wordListPattern, type WordAuthoredList } from './authored-list.ts';
 import { isWordHyperlink } from './hyperlinks.ts';
 import { wordBreakXml } from './breaks.ts';
-import { wordShapeXml } from './shapes.ts';
+import { wordShapeXml, validateShapeRun } from './shapes.ts';
 import { paragraphFormatXml } from './paragraph-format.ts';
 import { cellFormatXml, rowFormatXml, type WordCellFormat, type WordRowFormat } from './table-format.ts';
 import { paragraphPositioningXml, positionalTabXml } from './positioning.ts';
@@ -74,6 +74,7 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
             lists.set(id, list);
             numbering = `<w:numPr><w:ilvl w:val="${level}"/><w:numId w:val="${list.id}"/></w:numPr>`;
           }
+          for (const run of block.runs) validateShapeRun(run);
           const positioning = block.positioning ? paragraphPositioningXml(block.positioning) : {};
           const paragraph = block.paragraph ? paragraphFormatXml(block.paragraph) : new Map<string, string>();
           const early = ['keepNext', 'keepLines', 'pageBreakBefore', 'widowControl'];

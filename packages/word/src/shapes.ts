@@ -1,3 +1,4 @@
+import type { WordTextRun } from './create.ts';
 import type { WordImagePosition } from './image-placement.ts';
 import { imagePlacement } from './image-placement.ts';
 import { xml, xmlAttribute } from './create-xml.ts';
@@ -30,7 +31,7 @@ export function wordShapeXml(shape: WordAuthoredShape, id: number, availableWidt
   const placement = imagePlacement(shape, shape.width, availableWidth);
   const cx = Math.round(shape.width * 12700), cy = Math.round(shape.height * 12700);
   const fill = (color: string) => color === 'none' ? '<a:noFill/>' : `<a:solidFill><a:srgbClr val="${color.slice(1)}"/></a:solidFill>`;
-  return `<w:r><w:drawing xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">${placement.open}<wp:extent cx="${cx}" cy="${cy}"/>${placement.wrap}<wp:docPr id="${id}" name="Shape ${id}" descr="${xmlAttribute(shape.alt ?? '')}"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="${shape.preset}"><a:avLst/></a:prstGeom>${fill(shape.fill)}<a:ln w="${Math.round(shape.outlineWidth * 12700)}">${fill(shape.outline)}</a:ln></wps:spPr>${shape.text === undefined ? '' : `<wps:txbx><w:txbxContent>${shape.text.split(/\r?\n/).map(line => `<w:p><w:r><w:t xml:space="preserve">${xml(line)}</w:t></w:r></w:p>`).join('')}</w:txbxContent></wps:txbx>`}<wps:bodyPr anchor="ctr"/></wps:wsp></a:graphicData></a:graphic>${placement.close}</w:drawing></w:r>`;
+  return `<w:r><w:drawing xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">${placement.open}<wp:extent cx="${cx}" cy="${cy}"/>${placement.wrap}<wp:docPr id="${id}" name="Shape ${id}" descr="${xmlAttribute(shape.alt ?? '')}"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="${shape.preset}"><a:avLst/></a:prstGeom>${fill(shape.fill)}<a:ln w="${Math.round(shape.outlineWidth * 12700)}">${fill(shape.outline)}</a:ln></wps:spPr>${shape.text === undefined ? '' : `<wps:txbx><w:txbxContent>${shape.text.split(/\r\n?|\n/).map(line => `<w:p><w:r><w:t xml:space="preserve">${xml(line)}</w:t></w:r></w:p>`).join('')}</w:txbxContent></wps:txbx>`}<wps:bodyPr anchor="ctr"/></wps:wsp></a:graphicData></a:graphic>${placement.close}</w:drawing></w:r>`;
 }
 export function nativeShapeDrawing(elementId: number, shape: WordAuthoredShape, availableWidth: number): WordShapeDrawing {
   if (!isWordAuthoredShape(shape)) throw new TypeError('Invalid shape.');
@@ -40,4 +41,8 @@ export function nativeShapeDrawing(elementId: number, shape: WordAuthoredShape, 
     horizontalOffsetPoints: shape.x ?? (shape.alignment === 'center' ? (availableWidth - shape.width) / 2 : shape.alignment === 'right' ? availableWidth - shape.width : 0), verticalOffsetPoints: shape.y ?? 0,
     wrap: 'none', behindDocument: shape.layout === 'behind', allowOverlap: true, distanceTopPoints: 0, distanceEndPoints: 0, distanceBottomPoints: 0, distanceStartPoints: 0,
   } : undefined };
+}
+
+export function validateShapeRun(run: WordTextRun): void {
+  if (run.shape && (run.image || run.field || run.breakType || run.tab || run.text !== '\uFFFC')) throw new TypeError('A shape must occupy one object character without another run type.');
 }

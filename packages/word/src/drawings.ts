@@ -94,12 +94,19 @@ function parseDrawing(
   const chartNs = OOXML_NAMESPACES[input.conformance].chart;
   const graphicData = descendants(placementElement).find((element) => element.namespaceUri === drawingNs && element.localName === "graphicData");
   if (graphicData === undefined) return unsupported(drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, "Drawing graphicData is missing.");
-  const shapeNode = descendants(graphicData).find(element => element.localName === 'wsp' && element.namespaceUri === 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape');
+  const shapeNode = graphicData.children.find((element): element is LosslessXmlElement => element.kind === 'element' && element.localName === 'wsp' && element.namespaceUri === 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape');
   if (shapeNode) {
     const nodes = descendants(shapeNode);
     const props = nodes.find(element => element.localName === 'spPr');
     const geometry = props && descendants(props).find(element => element.localName === 'prstGeom');
     const preset = attribute(geometry, 'prst');
+    // Keep complex imported drawings opaque until their complete appearance is modeled.
+    const transform = props && descendants(props).find(element => element.localName === 'xfrm');
+    if (nodes.some(node => ['schemeClr', 'gradFill', 'pattFill', 'blipFill', 'alpha', 'style', 'effectLst', 'effectDag'].includes(node.localName)) ||
+      ['rot', 'flipH', 'flipV'].some(name => attribute(transform, name) !== undefined) ||
+      geometry && descendants(geometry).some(node => node.localName === 'gd') ||
+      anchor && anchor.wrap !== 'none')
+      return unsupported(drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, 'This shape uses appearance or wrapping properties that are retained in the source document.');
     const color = (parent: LosslessXmlElement | undefined) => {
       if (!parent) return 'none';
       const fill = parent.children.find((n): n is LosslessXmlElement => n.kind === 'element' && n.localName === 'solidFill');

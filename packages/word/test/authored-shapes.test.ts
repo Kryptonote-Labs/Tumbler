@@ -31,3 +31,25 @@ test('editing neighbouring text preserves unchanged shape markup and source anch
   expect(result.match(/w:bookmarkEnd/g)).toHaveLength(1);
   expect(result).toContain(' after');
 });
+
+test('complex imported shape appearance remains opaque and survives neighbouring edits', async () => {
+  const { buildWordDocumentFixture } = await import('./document-fixture.ts');
+  const { openWordArtifact } = await import('../src/index.ts');
+  const created = createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', shape: { preset: 'rect', width: 100, height: 50, fill: '#ABCDEF', outline: '#000000', outlineWidth: 1 } }, { text: ' before' }] }] });
+  for (const transform of [
+    (xml: string) => xml.replace('<a:srgbClr val="ABCDEF"/>', '<a:schemeClr val="accent1"/>'),
+    (xml: string) => xml.replace('<a:xfrm>', '<a:xfrm rot="5400000">'),
+    (xml: string) => xml.replace('<wps:wsp>', '<wpg:wgp xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"><wps:wsp>').replace('</wps:wsp>', '</wps:wsp></wpg:wgp>'),
+  ]) {
+    const xml = transform(created.document.source.source);
+    const source = openWordArtifact(buildWordDocumentFixture({ documentXml: xml }));
+    expect([...source.document.drawings.values()][0]!.kind).toBe('unsupported');
+    const paragraph = importWordContent(source)[0]!;
+    if (paragraph.kind !== 'paragraph') throw new Error('Expected paragraph');
+    const model = new NativeWordDocument({ source });
+    model.update([{ ...paragraph, runs: [paragraph.runs[0]!, { ...paragraph.runs[1]!, text: ' after' }] }]);
+    const original = source.document.source.elements().find(element => element.localName === 'drawing')!;
+    const markup = xml.slice(original.span.start, original.span.end);
+    expect(model.artifact().document.source.source).toContain(markup);
+  }
+});

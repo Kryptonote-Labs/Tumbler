@@ -171,3 +171,8 @@ Native and collaborative paragraph styles include Normal, Title, Subtitle and He
 Authored line, page and column breaks occupy one line-separator character in collaborative text and serialize as explicit w:br elements. Break type survives import, native pagination and source-aware export.
 
 Native shapes support rectangles, rounded rectangles, ellipses, triangles, diamonds, right arrows and lines, with dimensions, fill, outline and text. They serialize as editable DrawingML wordprocessing shapes and can use inline or floating placement. The Svelte shape view renders the same model. Full preset geometry, rich text-box formatting and shape effects remain unqualified.
+
+The editable shape authoring API currently models seven preset geometries with solid RGB fills,
+inline/front/behind placement and plain text. Imported groups, theme/effect fills, transformed
+shapes and text-wrapped shapes remain opaque source drawings. Neighbouring edits preserve their
+original markup; they are not flattened into the simpler editable shape model.
