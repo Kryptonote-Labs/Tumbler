@@ -70,6 +70,7 @@ export function reconcileWordContent(
     paragraphs: paragraphs.map((p) => ({
       runs: p.runs.map((run) => ({
         text: run.text.replaceAll('\u2028', ''),
+        ...(run.link === undefined ? {} : { link: run.link }),
         ...(run.image && (!document.drawings.has(run.source!) || replacedImages.has(run))
           ? { image: run.image }
           : {}),
@@ -135,10 +136,14 @@ export function reconcileWordContent(
   const remap = (value: string) =>
     bind(
       conformanceMarkup(
-        value.replace(/r:embed="([^"]+)"/g, (_, id: string) => `r:embed="${prefix}${id}"`),
+        value.replace(/r:(embed|id)="([^"]+)"/g, (_, key: string, id: string) => `r:${key}="${prefix}${id}"`),
       ),
     );
   for (const rel of relationships) {
+    if (rel.targetMode === 'External' && /\/hyperlink$/.test(rel.type)) {
+      transaction.addRelationship(document.part.name, { id: prefix + rel.id, type: conformanceMarkup(rel.type), target: rel.target, targetMode: 'External' });
+      continue;
+    }
     if (rel.targetMode !== 'Internal' || !/\/(image|numbering)$/.test(rel.type)) continue;
     const part = generated.document.package.getPart(rel.targetPartName)!;
     const name = PartName.parse(`/word/${prefix}${part.name.value.split('/').at(-1)}`);

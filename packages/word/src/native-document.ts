@@ -1,4 +1,5 @@
 import { isWordAuthoredList, wordListMarker } from './authored-list.ts';
+import { isWordHyperlink } from './hyperlinks.ts';
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
 import { wordGeometryAt } from './geometry.ts';
@@ -398,6 +399,11 @@ export class NativeWordDocument implements WordLayoutSource {
                 contents,
               };
               this.runFormats.set(run, format(authoredRun.format, inherited?.format ?? original?.textFormat));
+              if (authoredRun.link !== undefined) {
+                if (!isWordHyperlink(authoredRun.link)) throw new TypeError('Invalid hyperlink target.');
+                if (authoredRun.link) return { kind: 'hyperlink' as const, elementId: allocate(), relationshipId: undefined, anchor: authoredRun.link.startsWith('#') ? authoredRun.link.slice(1) : undefined, target: authoredRun.link.startsWith('#') ? undefined : authoredRun.link, runs: [run] };
+                return run;
+              }
               return inherited?.owner.kind === 'hyperlink' || inherited?.owner.kind === 'insertion'
                 ? { ...inherited.owner, elementId: allocate(), runs: [run] } : run;
             });

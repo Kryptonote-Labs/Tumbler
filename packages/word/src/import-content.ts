@@ -11,6 +11,8 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
   const document = artifact.document;
   const paragraph = (block: WordParagraph): WordContentBlock => {
     const runs = new Map<number, WordRun>();
+    const links = new Map<number, string>();
+    for (const inline of block.inlines) if (inline.kind === 'hyperlink') for (const run of inline.runs) links.set(run.elementId, inline.target ?? (inline.anchor ? `#${inline.anchor}` : ''));
     for (const inline of block.inlines) {
       if (inline.kind === 'run') runs.set(inline.elementId, inline);
       else if (inline.kind === 'hyperlink' || inline.kind === 'insertion')
@@ -20,6 +22,7 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
       const computed = document.styles.runFormat(document, block, runs.get(segment.runElementId));
       return {
         source: segment.elementId,
+        ...(links.has(segment.runElementId) ? { link: links.get(segment.runElementId)! } : {}),
         ...(segment.tab ? { tab: segment.tab } : {}),
         ...(segment.field ? { field: segment.field } : {}),
         // Soft line breaks are distinct from paragraph boundaries in a collaborative text stream.

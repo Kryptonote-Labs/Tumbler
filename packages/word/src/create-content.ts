@@ -1,4 +1,5 @@
 import { isWordAuthoredList, wordListPattern, type WordAuthoredList } from './authored-list.ts';
+import { isWordHyperlink } from './hyperlinks.ts';
 import { paragraphFormatXml } from './paragraph-format.ts';
 import { cellFormatXml, rowFormatXml, type WordCellFormat, type WordRowFormat } from './table-format.ts';
 import { paragraphPositioningXml, positionalTabXml } from './positioning.ts';
@@ -26,6 +27,15 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
   let relationships = '';
   let contentTypes = '';
   let imageId = 0;
+  let linkId = 0;
+  const linked = (link: string | undefined, content: string) => {
+    if (link === undefined || link === '') return content;
+    if (!isWordHyperlink(link)) throw new TypeError('Invalid hyperlink target.');
+    if (link.startsWith('#')) return `<w:hyperlink w:anchor="${xmlAttribute(link.slice(1))}">${content}</w:hyperlink>`;
+    const id = `link${++linkId}`;
+    relationships += `<Relationship Id="${id}" Type="${office}hyperlink" Target="${xmlAttribute(link)}" TargetMode="External"/>`;
+    return `<w:hyperlink r:id="${id}">${content}</w:hyperlink>`;
+  };
   const media = new Map<Uint8Array, Map<string, number>>();
   const imageMarkup = (image: WordAuthoredImage, availableWidth: number) => {
           const placement = imagePlacement(image, image.width, availableWidth);
@@ -66,7 +76,7 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
           const paragraph = block.paragraph ? paragraphFormatXml(block.paragraph) : new Map<string, string>();
           const early = ['keepNext', 'keepLines', 'pageBreakBefore', 'widowControl'];
           const properties = early.map(key => paragraph.get(key) ?? '').join('') + numbering + (paragraph.get('pBdr') ?? '') + (paragraph.get('shd') ?? '') + (positioning.tabs ?? '') + (paragraph.get('spacing') ?? '') + (positioning.ind ?? '') + (paragraph.get('contextualSpacing') ?? '') + (block.alignment ? `<w:jc w:val="${block.alignment}"/>` : '');
-          return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${run.tab ? positionalTabXml(run.tab, run.text) : textContent(run.text)}</w:r>`).join('')}</w:p>`;
+          return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => linked(run.link, run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${run.tab ? positionalTabXml(run.tab, run.text) : textContent(run.text)}</w:r>`)).join('')}</w:p>`;
         }
         case 'table': {
           const grid = authoredTableGrid(block.rows, block.columnWidths, availableWidth, block.rowGrids);

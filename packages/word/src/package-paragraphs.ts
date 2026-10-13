@@ -185,9 +185,14 @@ export function wordParagraphRenderer(
       'r',
       markup.properties(properties, 'rPr', replacements) + content,
     );
+    if (run.link && run.link !== original?.link) {
+      const opening = remap(generatedRun ?? '').match(/<w:hyperlink\b[^>]*>/)?.[0];
+      if (!opening) throw new Error('Generated hyperlink is missing.');
+      content = opening + content + '</w:hyperlink>';
+    }
     if (parent) parent = markup.parents.get(parent.id);
     while (parent && parent.localName !== 'p') {
-      content = markup.wrap(parent, parent.localName, content);
+      if (parent.localName !== 'hyperlink' || run.link === undefined || run.link === original?.link) content = markup.wrap(parent, parent.localName, content);
       parent = markup.parents.get(parent.id);
     }
     if (run.source !== undefined) {
@@ -248,7 +253,7 @@ export function wordParagraphRenderer(
           : '<w:numPr><w:numId w:val="0"/></w:numPr>',
       );
     }
-    const generatedRuns = generatedP.inlines.filter((inline) => inline.kind === 'run');
+    const generatedRuns = generatedP.inlines.filter((inline) => inline.kind === 'run' || inline.kind === 'hyperlink');
     let content = paragraph.runs
       .map((run, index) =>
         runMarkup(

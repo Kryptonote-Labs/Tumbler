@@ -3,6 +3,7 @@ import type { WordPositionalTab } from '../document.ts';
 import { WORD_HIGHLIGHTS } from '../text-properties.ts';
 import { isWordParagraphFormat, type WordParagraphFormat } from '../paragraph-format.ts';
 import { isWordAuthoredList, type WordAuthoredList } from '../authored-list.ts';
+import { isWordHyperlink } from '../hyperlinks.ts';
 import { isDocumentImage, type DocumentImage } from './images.ts';
 import { isTableCell, type TableCell } from './tables.ts';
 export const TEXT_FORMATS = ['bold', 'italic', 'underline', 'strike'] as const;
@@ -22,6 +23,7 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   highlight?: string;
   verticalAlign?: 'baseline' | 'superscript' | 'subscript';
   characterSpacingPoints?: number;
+  link?: string;
   color?: string;
   font?: string;
   fontSize?: number;
@@ -72,6 +74,7 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
     if (key === 'highlight' && typeof value === 'string' && WORD_HIGHLIGHTS.includes(value)) continue;
     if (key === 'verticalAlign' && typeof value === 'string' && ['baseline', 'superscript', 'subscript'].includes(value)) continue;
     if (key === 'characterSpacingPoints' && typeof value === 'number' && Number.isInteger(value * 20) && value * 20 >= -2147483648 && value * 20 <= 2147483647) continue;
+    if (key === 'link' && isWordHyperlink(value)) continue;
     if (key === 'color' && isTextColor(value)) continue;
     if (key === 'align' && ALIGNMENTS.some((alignment) => alignment === value)) continue;
     throw new Error('Unsupported document formatting.');
