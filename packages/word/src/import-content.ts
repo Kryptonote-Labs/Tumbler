@@ -22,6 +22,7 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
       const computed = document.styles.runFormat(document, block, runs.get(segment.runElementId));
       return {
         source: segment.elementId,
+        ...(segment.breakType ? { breakType: segment.breakType } : {}),
         ...(links.has(segment.runElementId) ? { link: links.get(segment.runElementId)! } : {}),
         ...(segment.tab ? { tab: segment.tab } : {}),
         ...(segment.field ? { field: segment.field } : {}),

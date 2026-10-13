@@ -167,3 +167,5 @@ Authored lists support decimal, lower/upper letters, lower/upper Roman numbering
 Authored runs can create or change HTTP(S), mail, telephone and bookmark hyperlinks. An empty link explicitly removes a source hyperlink while preserving its text and formatting. Imported exports remap new external relationships and retain unchanged source hyperlink wrappers.
 
 Native and collaborative paragraph styles include Normal, Title, Subtitle and Heading 1–9. Headings serialize pStyle references and outline levels. Existing imported definitions take precedence over built-ins; missing requested built-ins are added at export. Named-style resolution works without XML reads during editing.
+
+Authored line, page and column breaks occupy one line-separator character in collaborative text and serialize as explicit w:br elements. Break type survives import, native pagination and source-aware export.

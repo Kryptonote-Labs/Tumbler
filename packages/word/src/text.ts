@@ -14,6 +14,7 @@ export interface WordTextSelection {
 
 export interface WordParagraphTextSegment {
   readonly tab?: import("./document.ts").WordPositionalTab;
+  readonly breakType?: import('./breaks.ts').WordBreakType;
   readonly kind: "text" | "tab" | "break" | "drawing" | "note" | "page-field";
   readonly field?: import("./page-fields.ts").WordPageField;
   readonly elementId: number;
@@ -48,7 +49,7 @@ export function wordParagraphTextSegments(_document: WordDocument | undefined, p
       const projected = content.kind === "page-field" ? { kind: "page-field" as const, value: "\uFFFC" }
         : content.kind === "text" ? { kind: "text" as const, value: content.value }
         : content.kind === "tab" ? { kind: "tab" as const, value: "\t" }
-        : content.kind === "break" ? { kind: "break" as const, value: "\n" }
+        : content.kind === "break" ? { kind: "break" as const, value: "\n", breakType: content.breakType }
         : content.kind === "drawing" ? { kind: "drawing" as const, value: "\uFFFC" }
         : content.kind === "footnote-reference" || content.kind === "endnote-reference" ? { kind: "note" as const, value: "\uFFFC" }
         : undefined;
@@ -57,6 +58,7 @@ export function wordParagraphTextSegments(_document: WordDocument | undefined, p
       offset += projected.value.length;
       segments.push(Object.freeze({
         kind: projected.kind,
+        ...(content.kind === "break" ? { breakType: content.breakType } : {}),
         ...(content.kind === "tab" && content.position ? { tab: content.position } : {}),
         ...(content.kind === "page-field" ? { field: content.field } : {}),
         elementId: content.elementId,

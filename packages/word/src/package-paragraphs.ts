@@ -1,3 +1,4 @@
+import { wordBreakXml } from './breaks.ts';
 import { paragraphFormatXml } from './paragraph-format.ts';
 import { paragraphPositioningXml, positionalTabXml } from './positioning.ts';
 import { pageFieldXml } from './page-fields.ts';
@@ -175,6 +176,7 @@ export function wordParagraphRenderer(
       sourceMarkup = sourceMarkup.replace(/([\w]+:embed=)(['"])(.*?)\2/, `$1"${relationship}"`);
     }
     let content =
+      run.breakType ? markup.word(wordBreakXml(run.breakType, run.text)) :
       run.tab ? markup.word(positionalTabXml(run.tab, run.text)) :
       element && original?.text === run.text && element.localName !== 't'
         ? sourceMarkup

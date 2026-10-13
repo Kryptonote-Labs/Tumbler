@@ -24,6 +24,7 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   highlight?: string;
   verticalAlign?: 'baseline' | 'superscript' | 'subscript';
   characterSpacingPoints?: number;
+  breakType?: import('../breaks.ts').WordBreakType;
   link?: string;
   color?: string;
   font?: string;
@@ -76,6 +77,7 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
     if (key === 'highlight' && typeof value === 'string' && WORD_HIGHLIGHTS.includes(value)) continue;
     if (key === 'verticalAlign' && typeof value === 'string' && ['baseline', 'superscript', 'subscript'].includes(value)) continue;
     if (key === 'characterSpacingPoints' && typeof value === 'number' && Number.isInteger(value * 20) && value * 20 >= -2147483648 && value * 20 <= 2147483647) continue;
+    if (key === 'breakType' && typeof value === 'string' && ['line', 'page', 'column'].includes(value)) continue;
     if (key === 'link' && isWordHyperlink(value)) continue;
     if (key === 'color' && isTextColor(value)) continue;
     if (key === 'align' && ALIGNMENTS.some((alignment) => alignment === value)) continue;

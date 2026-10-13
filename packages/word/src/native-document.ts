@@ -1,6 +1,7 @@
 import { isWordAuthoredList, wordListMarker } from './authored-list.ts';
 import { isWordHyperlink } from './hyperlinks.ts';
 import { wordAuthoringStyles } from './authored-styles.ts';
+import { wordBreakXml } from './breaks.ts';
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
 import { wordGeometryAt } from './geometry.ts';
@@ -354,7 +355,10 @@ export class NativeWordDocument implements WordLayoutSource {
               const inherited = compiled?.leaves.get(authoredRun.source!);
               const named = authored.styleId ? this.namedStyles.resolveParagraphStyle(authored.styleId) : undefined;
               const contents: WordRunContent[] = [];
-              if (authoredRun.tab) {
+              if (authoredRun.breakType) {
+                wordBreakXml(authoredRun.breakType, authoredRun.text);
+                contents.push({ kind: 'break', elementId: allocate(), breakType: authoredRun.breakType });
+              } else if (authoredRun.tab) {
                 positionalTabXml(authoredRun.tab, authoredRun.text);
                 contents.push({ kind: 'tab', elementId: allocate(), position: authoredRun.tab });
               } else if (authoredRun.field) {
