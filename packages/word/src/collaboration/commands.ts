@@ -50,7 +50,7 @@ export type WordDelta = Parameters<Y.Text['applyDelta']>[0];
 /** The same anchored operations drive human input and headless agents. Hosts own storage validation. */
 export function createWordCommands({ defaultFontSize = 12, defaultAttributes, validateAttributes = validateWordAttributes, validateUpdate, validateDocument }: {
   defaultFontSize?: number;
-  defaultAttributes?: (text: Y.Text) => TextAttributes;
+  defaultAttributes?: (text: Y.Text, range: WordRange) => TextAttributes;
   validateAttributes?: (attributes: Record<string, unknown> | undefined) => void;
   validateUpdate?: (state: Uint8Array, update: Uint8Array) => void;
   /** Inspect the staged edit synchronously without mutating either document. Throw to reject it. */
@@ -102,7 +102,7 @@ function checkRange(text: Y.Text, range: WordRange) {
 }
 
 function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
-  const defaults = defaultAttributes?.(text) ?? {};
+  const defaults = defaultAttributes?.(text, range) ?? {};
   const formats: TextAttributes[] = [];
   const sizes: number[] = [];
   let offset = 0;
@@ -116,14 +116,17 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
   for (const part of text.toDelta()) {
     if (typeof part.insert !== 'string') continue;
     const end = offset + part.insert.length;
-    if (end > at && offset < (collapsed ? at + 1 : range.end)) formats.push({ ...defaults, ...part.attributes });
     if (end > at && offset < (collapsed ? at + 1 : range.end)) {
-      const selected = part.insert.slice(
-        Math.max(0, at - offset),
-        collapsed ? at + 1 - offset : range.end - offset,
-      );
-      if (collapsed || selected.replace(/\n/g, '').length)
-        sizes.push(part.attributes?.fontSize ?? defaults.fontSize ?? defaultFontSize);
+      const from = Math.max(0, at - offset);
+      const to = Math.min(part.insert.length, collapsed ? at + 1 - offset : range.end - offset);
+      let position = offset + from;
+      for (const segment of part.insert.slice(from, to).match(/[^\n]*\n|[^\n]+/g) ?? []) {
+        const inherited = defaultAttributes?.(text, { start: position, end: position }) ?? defaults;
+        formats.push({ ...inherited, ...part.attributes });
+        if (collapsed || segment.replace(/\n/g, '').length)
+          sizes.push(part.attributes?.fontSize ?? inherited.fontSize ?? defaultFontSize);
+        position += segment.length;
+      }
     }
     offset = end;
   }
