@@ -30,6 +30,10 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
           italic: computed.italic,
           underline: computed.underline,
           color: computed.color,
+          strike: computed.strike,
+          highlight: computed.highlight,
+          verticalAlign: computed.verticalAlign,
+          ...(computed.characterSpacingPoints === undefined ? {} : { characterSpacingPoints: computed.characterSpacingPoints }),
         },
       };
     });

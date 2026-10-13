@@ -132,6 +132,10 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
   const size = sizes[0] ?? defaults.fontSize ?? defaultFontSize;
   if (sizes.every((value) => value === size)) result.fontSize = size;
   for (const key of [
+    'strike',
+    'highlight',
+    'verticalAlign',
+    'characterSpacingPoints',
     'bold',
     'italic',
     'underline',

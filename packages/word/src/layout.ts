@@ -34,7 +34,7 @@ export interface WordTextMeasurement {
 }
 
 export interface WordTextMeasurer {
-  /** Measures shaped text in points using the computed Word appearance. */
+  /** Measures shaped text in points, including characterSpacingPoints per grapheme in the advance width. */
   measure(text: string, format: ComputedWordTextFormat): WordTextMeasurement;
 }
 
@@ -252,6 +252,7 @@ export class WordLayoutCache {
 type ParagraphAtom = GlyphAtom | TabAtom | DrawingAtom | NoteAtom | BreakAtom;
 
 interface AtomBase {
+  readonly baselineShift?: number;
   readonly runElementId: number;
   readonly contentElementId: number;
   readonly startOffset: number;
@@ -817,7 +818,15 @@ function resolvedParagraphAtoms(
   let fieldDepth = 0;
   let resultDepth = 0;
   const addRun = (run: WordRun, hyperlink: string | undefined): void => {
-    const format = resolveFormat(run);
+    const sourceFormat = resolveFormat(run);
+    const shifted = sourceFormat.verticalAlign === "superscript" || sourceFormat.verticalAlign === "subscript";
+    const baselineShift = sourceFormat.verticalAlign === "superscript" ? -sourceFormat.fontSizePoints * 0.3
+      : sourceFormat.verticalAlign === "subscript" ? sourceFormat.fontSizePoints * 0.15 : 0;
+    const format = shifted ? Object.freeze({ ...sourceFormat, fontSizePoints: sourceFormat.fontSizePoints * 0.65 }) : sourceFormat;
+    const measure = (text: string) => {
+      const value = validMeasurement(measurer.measure(text, format));
+      return { ...value, ascent: value.ascent - baselineShift, descent: value.descent + baselineShift };
+    };
     for (const content of run.contents) {
       if (content.kind === "field-character") {
         if (content.fieldType === "begin") fieldDepth += 1;
@@ -831,13 +840,13 @@ function resolvedParagraphAtoms(
       if (content.kind === "field-instruction" || content.kind === "deleted-text" || fieldDepth > 0 && resultDepth !== fieldDepth) continue;
       if (content.kind === 'page-field') {
         const text = String(pageFields?.[content.field] ?? 1);
-        const measurement = validMeasurement(measurer.measure(text, format));
+        const measurement = measure(text);
         atoms.push(Object.freeze({ kind: 'glyph', field: content.field, runElementId: run.elementId,
-          contentElementId: content.elementId, text, ...measurement, breakAfter: false, whitespace: false,
+          contentElementId: content.elementId, text, ...measurement, baselineShift, breakAfter: false, whitespace: false,
           startOffset: logicalOffset, endOffset: ++logicalOffset, format, hyperlink }));
       } else if (content.kind === "text") {
         for (const grapheme of graphemes(content.value)) {
-          const measurement = validMeasurement(measurer.measure(grapheme, format));
+          const measurement = measure(grapheme);
           const startOffset = logicalOffset;
           logicalOffset += grapheme.length;
           atoms.push(Object.freeze({
@@ -848,6 +857,7 @@ function resolvedParagraphAtoms(
             width: measurement.width,
             ascent: measurement.ascent,
             descent: measurement.descent,
+            baselineShift,
             breakAfter: isBreakOpportunity(grapheme),
             whitespace: /^\s+$/u.test(grapheme),
             startOffset,
@@ -881,15 +891,17 @@ function resolvedParagraphAtoms(
         }));
         logicalOffset += 1;
       } else if (content.kind === "footnote-reference" || content.kind === "endnote-reference") {
-        const noteFormat = Object.freeze({ ...format, fontSizePoints: Math.max(1, format.fontSizePoints * 0.7), verticalAlign: "superscript" as const });
+        const noteFormat = Object.freeze({ ...sourceFormat, fontSizePoints: sourceFormat.fontSizePoints * 0.65, verticalAlign: "superscript" as const });
+        const noteShift = -sourceFormat.fontSizePoints * 0.3;
         const text = String(Math.max(1, content.id));
         const measurement = validMeasurement(measurer.measure(text, noteFormat));
         atoms.push(Object.freeze({
           ...controlAtom("note", run, content.elementId, logicalOffset, noteFormat, hyperlink),
           text,
           width: measurement.width,
-          ascent: measurement.ascent + noteFormat.fontSizePoints * 0.3,
-          descent: measurement.descent,
+          ascent: measurement.ascent - noteShift,
+          descent: measurement.descent + noteShift,
+          baselineShift: noteShift,
           noteKind: content.kind === "footnote-reference" ? "footnote" : "endnote",
           noteId: content.id,
         }));
@@ -1034,7 +1046,7 @@ function placeLine(
         y: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? (atom.drawing.anchor?.verticalRelativeTo === "page" ? 0 : atom.drawing.anchor?.verticalRelativeTo === "paragraph" ? column.lines.find(item => item.paragraphElementId === paragraph.elementId)?.y ?? y : y) + (atom.drawing.anchor?.verticalOffsetPoints ?? 0) : y + line.ascent - ascent,
         width: atom.kind === "drawing" ? atom.width : atomWidth,
         height: atom.kind === "drawing" ? atom.drawing?.heightPoints ?? ascent + descent : ascent + descent,
-        baseline: y + line.ascent,
+        baseline: y + line.ascent + (atom.baselineShift ?? 0),
         startOffset: atom.startOffset,
         endOffset: atom.endOffset,
         format: atom.format,

@@ -139,3 +139,5 @@ export { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 export type { WordCellFormat, WordRowFormat, WordTableBorder, WordCellBorders, WordTableBorders } from './table-format.ts';
 
 export type { WordLayoutTableBorder } from './table-borders.ts';
+
+export { WORD_HIGHLIGHTS } from './text-properties.ts';

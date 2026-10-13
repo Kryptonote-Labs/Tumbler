@@ -1,3 +1,4 @@
+import { characterFormattingRequirements } from './character-formatting.ts';
 import { everydayRequirements } from './everyday/scenarios.ts';
 import { renderRequirements } from './render/contract.ts';
 import { tableRequirements } from './tables/contract.ts';
@@ -38,4 +39,5 @@ export const requirements: readonly Requirement[] = [
   ...tableRequirements,
   ...renderRequirements,
   ...everydayRequirements,
+  ...characterFormattingRequirements,
 ];
