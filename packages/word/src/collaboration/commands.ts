@@ -50,7 +50,7 @@ export type WordDelta = Parameters<Y.Text['applyDelta']>[0];
 /** The same anchored operations drive human input and headless agents. Hosts own storage validation. */
 export function createWordCommands({ defaultFontSize = 12, defaultAttributes, validateAttributes = validateWordAttributes, validateUpdate, validateDocument }: {
   defaultFontSize?: number;
-  defaultAttributes?: (text: Y.Text) => TextAttributes;
+  defaultAttributes?: (text: Y.Text, range: WordRange) => TextAttributes;
   validateAttributes?: (attributes: Record<string, unknown> | undefined) => void;
   validateUpdate?: (state: Uint8Array, update: Uint8Array) => void;
   /** Inspect the staged edit synchronously without mutating either document. Throw to reject it. */
@@ -102,7 +102,7 @@ function checkRange(text: Y.Text, range: WordRange) {
 }
 
 function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
-  const defaults = defaultAttributes?.(text) ?? {};
+  const defaults = defaultAttributes?.(text, range) ?? {};
   const formats: TextAttributes[] = [];
   const sizes: number[] = [];
   let offset = 0;
@@ -116,14 +116,17 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
   for (const part of text.toDelta()) {
     if (typeof part.insert !== 'string') continue;
     const end = offset + part.insert.length;
-    if (end > at && offset < (collapsed ? at + 1 : range.end)) formats.push({ ...defaults, ...part.attributes });
     if (end > at && offset < (collapsed ? at + 1 : range.end)) {
-      const selected = part.insert.slice(
-        Math.max(0, at - offset),
-        collapsed ? at + 1 - offset : range.end - offset,
-      );
-      if (collapsed || selected.replace(/\n/g, '').length)
-        sizes.push(part.attributes?.fontSize ?? defaults.fontSize ?? defaultFontSize);
+      const from = Math.max(0, at - offset);
+      const to = Math.min(part.insert.length, collapsed ? at + 1 - offset : range.end - offset);
+      let position = offset + from;
+      for (const segment of part.insert.slice(from, to).match(/[^\n]*\n|[^\n]+/g) ?? []) {
+        const inherited = defaultAttributes?.(text, { start: position, end: position }) ?? defaults;
+        formats.push({ ...inherited, ...part.attributes });
+        if (collapsed || segment.replace(/\n/g, '').length)
+          sizes.push(part.attributes?.fontSize ?? inherited.fontSize ?? defaultFontSize);
+        position += segment.length;
+      }
     }
     offset = end;
   }
@@ -158,6 +161,7 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
     if (typeof part.insert !== 'string') continue;
     if (last >= offset && last < offset + part.insert.length) {
       if (part.attributes?.wordParagraph) result.wordParagraph = part.attributes.wordParagraph;
+      if (part.attributes?.styleId) result.styleId = part.attributes.styleId;
       if (part.attributes?.paragraph) result.paragraph = part.attributes.paragraph;
       if (part.attributes?.positioning) result.positioning = part.attributes.positioning;
       if (part.attributes?.align) result.align = part.attributes.align;
@@ -180,7 +184,7 @@ function replaceWordDelta(
   value = value.replace(/\r\n?/g, '\n');
   validateText(text.toString().slice(0, range.start) + value + text.toString().slice(range.end));
   validateAttributes(attributes);
-  const { align, paragraph, positioning, tab: _tab, list, table: inheritedTable, wordParagraph, image: _image, field: _field, ...inline } = attributes;
+  const { align, styleId, paragraph, positioning, tab: _tab, list, table: inheritedTable, wordParagraph, image: _image, field: _field, ...inline } = attributes;
   let table = inheritedTable;
   if (table && range.end > range.start) {
     const paragraphs = tableParagraphs(text);
@@ -207,6 +211,7 @@ function replaceWordDelta(
           ...(align ? { align } : {}),
           ...(positioning ? { positioning } : {}),
           ...(paragraph ? { paragraph } : {}),
+          ...(styleId ? { styleId } : {}),
           ...(list ? { list } : {}),
           ...(table ? { table } : {}),
         },
@@ -240,7 +245,7 @@ function formatWordDelta(
   if (attributes.table !== undefined)
     throw new Error('Use table operations to change cell structure.');
   const value = text.toString();
-  const { align, paragraph, positioning, tab: _tab, list, table: _table, image: _image, field: _field, ...inline } = attributes;
+  const { align, styleId, paragraph, positioning, tab: _tab, list, table: _table, image: _image, field: _field, ...inline } = attributes;
   const delta: WordDelta = [];
   let cursor = 0;
   const append = (start: number, length: number, attributes: WordFormatPatch) => {
@@ -259,11 +264,12 @@ function formatWordDelta(
       const to = Math.min(end, range.end);
       if (to > from) append(from, to - from, inline);
     }
-    if (align !== undefined || list !== undefined || positioning !== undefined || paragraph !== undefined)
+    if (align !== undefined || list !== undefined || positioning !== undefined || paragraph !== undefined || styleId !== undefined)
       append(end, 1, {
         ...(align !== undefined ? { align: align === 'left' ? null : align } : {}),
         ...(list !== undefined ? { list } : {}),
         ...(positioning !== undefined ? { positioning } : {}),
+        ...(styleId !== undefined ? { styleId } : {}),
         ...(paragraph !== undefined ? { paragraph: paragraph === null ? null : { ...wordFormats(text, { start, end: start }).paragraph, ...paragraph } } : {}),
       });
     if (end >= Math.max(range.start, range.end - 1)) break;

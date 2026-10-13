@@ -17,6 +17,7 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   fontFamily?: string;
   wordUnderline?: 'single' | 'double';
   align?: Alignment;
+  styleId?: string;
   paragraph?: WordParagraphFormat;
   positioning?: WordParagraphPositioning;
   tab?: WordPositionalTab;
@@ -62,6 +63,7 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
       continue;
     if (key === 'wordCopy' && typeof value === 'string') continue;
     if (key === 'wordUnderline' && (value === 'single' || value === 'double')) continue;
+    if (key === 'styleId' && typeof value === 'string' && value.length > 0 && !/[\x00-\x1f]/.test(value)) continue;
     if (key === 'paragraph' && isWordParagraphFormat(value)) continue;
     if (key === 'positioning' && isWordParagraphPositioning(value)) continue;
     if (key === 'tab' && isWordPositionalTab(value)) continue;

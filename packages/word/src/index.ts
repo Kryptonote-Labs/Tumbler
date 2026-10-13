@@ -144,3 +144,4 @@ export { WORD_HIGHLIGHTS } from './text-properties.ts';
 export { paragraphFormatXml, isWordParagraphFormat, type WordParagraphFormat } from './paragraph-format.ts';
 export { WORD_LIST_KINDS, isWordAuthoredList, type WordAuthoredList, type WordListKind } from './authored-list.ts';
 export { isWordHyperlink } from './hyperlinks.ts';
+export { WORD_BUILTIN_STYLES, wordAuthoringStyles } from './authored-styles.ts';

@@ -62,10 +62,11 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
             level: reference.level,
           }
         : undefined;
-    const { alignment, tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips } = document.styles.paragraphFormat(document, block);
+    const { styleId, alignment, tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips } = document.styles.paragraphFormat(document, block);
     const { spacingBeforeTwips, spacingAfterTwips, lineSpacing, keepNext, keepLines, pageBreakBefore, widowControl, contextualSpacing, shading, borders } = document.styles.paragraphFormat(document, block);
     return {
       kind: 'paragraph',
+      ...(styleId === undefined ? {} : { styleId }),
       paragraph: { spacingBeforeTwips, spacingAfterTwips, lineSpacing, keepNext, keepLines, pageBreakBefore, widowControl, contextualSpacing, ...(shading === undefined ? {} : { shading }), ...(borders === undefined ? {} : { borders }) },
       ...(tabs.length || indentStartTwips || indentEndTwips || firstLineTwips || hangingTwips
         ? { positioning: { tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips } } : {}),
