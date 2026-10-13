@@ -50,3 +50,12 @@ test('changing paragraph shading leaves imported automatic spacing and borders i
   expect(changed).toContain('w:afterLines="300"');
   expect(changed).toContain('w:line="360"');
 });
+
+test('justified paragraphs use the Word both token when created and edited', () => {
+  const source = createWordArtifact({ paragraphs: [{ alignment: 'justify', runs: [{ text: 'Justified' }] }, { runs: [{ text: 'Change me' }] }] });
+  expect(importWordContent(source)[0]).toMatchObject({ alignment: 'justify' });
+  expect(source.document.source.source).toContain('w:val="both"');
+  const model = new NativeWordDocument({ source });
+  model.update(importWordContent(source).map(block => block.kind === 'paragraph' ? { ...block, alignment: 'justify' } : block));
+  expect(importWordContent(model.artifact()).map(block => block.kind === 'paragraph' && block.alignment)).toEqual(['justify', 'justify']);
+});
