@@ -108,7 +108,9 @@ keyboard controls. Pass the layout fragment's `drawing`, `width`, `height`,
 page. The host applies CSS zoom or a transform to the page and passes that factor
 as `scale` for gesture coordinates and handle sizing. The host supplies `editable`,
 `selected`, `imageurl`, `inlinePosition` for text hit-testing, `onselect`, and
-`onchange` or `onresize` for committing edits. The component renders in place;
+`onchange` or `onresize` for committing edits. Pass `layoutControl={false}` to omit
+the built-in layout select when the host offers placement in its own UI.
+The component renders in place;
 it never attaches controls to `document.body`. Put it inside a positioned,
 clipped page container, such as `position: relative; overflow: hidden`, to keep
 previews and handles out of surrounding UI. `WordDocumentView` already provides
