@@ -1,3 +1,4 @@
+import { ribbonRequirements } from './ribbon-authoring.ts';
 import { characterFormattingRequirements } from './character-formatting.ts';
 import { everydayRequirements } from './everyday/scenarios.ts';
 import { renderRequirements } from './render/contract.ts';
@@ -40,4 +41,5 @@ export const requirements: readonly Requirement[] = [
   ...renderRequirements,
   ...everydayRequirements,
   ...characterFormattingRequirements,
+  ...ribbonRequirements,
 ];

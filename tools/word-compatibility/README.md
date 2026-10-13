@@ -196,3 +196,9 @@ Reports also include the separate [everyday benchmark](everyday/README.md):
 evidence mappings and headless/browser labels. Untested tasks stay in the denominator.
 This is demonstrated task coverage, not measured prevalence in Word documents.
 It does not replace or alter the standards score. Both scores run in the same CI job.
+
+Ribbon authoring adds bounded SDK and LibreOffice evidence for named styles, paragraph
+spacing and shading, list formats, hyperlinks, page breaks and editable shapes. The highlight
+serialization plan covers the complete ST_HighlightColor palette in Strict and Transitional
+packages, explicit `none`, omitted direct formatting, invalid input and coexisting shading.
+It grants write coverage only. It does not claim complete inherited formatting or rendering.

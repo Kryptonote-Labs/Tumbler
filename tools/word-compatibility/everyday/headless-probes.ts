@@ -22,8 +22,61 @@ export const headlessProbes: Readonly<Record<string, () => readonly Fixture[]>> 
     const colour = edited.formattingState(selection).text.color;
     assert.ok('value' in size && size.value === 18);
     assert.ok('value' in colour && colour.value?.type === 'rgb' && colour.value.value === '#123456');
-    assert.ok('highlight' in artifact.formattingCapabilities(selection).text, 'Task requires applying highlight; public formatting capabilities do not expose it. Font, size and colour changes worked, but the full task cannot pass.');
-    throw new Error('A highlight capability now exists; implement its edit/save assertion before qualifying the task.');
+    const model = new NativeWordDocument({ source: edited });
+    model.update(importWordContent(edited).map(block => block.kind === 'paragraph' ? { ...block, runs: block.runs.map(run => run.text === 'target' ? { ...run, format: { ...run.format, highlight: 'yellow' } } : run) } : block));
+    return [output('selected-highlight', model.artifact(), actual => {
+      const block = importWordContent(actual)[0];
+      assert.ok(block?.kind === 'paragraph');
+      assert.deepEqual(block.runs.map(run => run.text), ['left ', 'target', ' right']);
+      const selected = block.runs[1]!.format;
+      assert.equal(selected?.fontFamily, 'Arial'); assert.equal(selected?.fontSizePoints, 18);
+      assert.equal(selected?.color, '#123456'); assert.equal(selected?.highlight, 'yellow');
+      assert.ok(block.runs.filter(run => run.text !== 'target').every(run => !run.format?.highlight || run.format.highlight === 'none'));
+    })];
+  },
+  'formatting.paragraphs'() {
+    const source = createWordArtifact({ paragraphs: [{ runs: [{ text: 'Edit me' }] }, { runs: [{ text: 'Untouched' }] }] });
+    const model = new NativeWordDocument({ source });
+    const original = importWordContent(source);
+    const first = original[0]; assert.ok(first?.kind === 'paragraph');
+    return (['start', 'center', 'end', 'justify'] as const).map(alignment => {
+      model.update([{ ...first, alignment, positioning: { indentStartTwips: 360, indentEndTwips: 180 }, paragraph: { spacingBeforeTwips: 120, spacingAfterTwips: 240 } }, original[1]!]);
+      return output(alignment, model.artifact(), actual => {
+        const blocks = actual.document.blocks;
+        const edited = blocks[0], untouched = blocks[1];
+        assert.ok(edited?.kind === 'paragraph' && untouched?.kind === 'paragraph');
+        const format = actual.document.styles.paragraphFormat(actual.document, edited);
+        assert.equal(format.alignment, alignment); assert.equal(format.indentStartTwips, 360); assert.equal(format.indentEndTwips, 180);
+        assert.equal(format.spacingBeforeTwips, 120); assert.equal(format.spacingAfterTwips, 240);
+        const unchanged = source.document.blocks[1]; assert.ok(unchanged?.kind === 'paragraph');
+        assert.equal(wordParagraphText(actual.document, untouched), 'Untouched');
+        assert.deepEqual(actual.document.styles.paragraphFormat(actual.document, untouched), source.document.styles.paragraphFormat(source.document, unchanged));
+      });
+    });
+  },
+  'formatting.styles'() {
+    const source = createWordArtifact({ paragraphs: [{ runs: [{ text: 'Heading' }] }, { runs: [{ text: 'Body' }] }] });
+    const model = new NativeWordDocument({ source });
+    const blocks = importWordContent(source);
+    model.update(blocks.map((block, index) => block.kind === 'paragraph' ? { ...block, styleId: index ? 'Normal' : 'Heading1', runs: block.runs.map(({ format, ...run }) => ({ ...run, ...(index ? { format: { italic: true } } : {}) })) } : block));
+    return [output('named-styles', model.artifact(), actual => {
+      const paragraphs = actual.document.blocks.filter(block => block.kind === 'paragraph');
+      assert.deepEqual(paragraphs.map(block => actual.document.styles.paragraphFormat(actual.document, block).styleId), ['Heading1', 'Normal']);
+      const formats = paragraphs.map(block => actual.document.styles.runFormat(actual.document, block, block.inlines[0]?.kind === 'run' ? block.inlines[0] : undefined));
+      assert.equal(formats[0]?.fontSizePoints, 20); assert.equal(formats[0]?.bold, true);
+      assert.equal(formats[1]?.fontSizePoints, 12); assert.equal(formats[1]?.italic, true);
+    })];
+  },
+  'content.links'() {
+    const source = createWordArtifact({ paragraphs: [{ runs: [{ text: 'External', link: 'https://example.com/old' }, { text: 'Internal', link: '#old' }] }] });
+    const model = new NativeWordDocument({ source });
+    model.update(importWordContent(source).map(block => block.kind === 'paragraph' ? { ...block, runs: block.runs.map(run => ({ ...run, link: run.text === 'External' ? 'https://example.com/new' : '#new' })) } : block));
+    const verify = (actual: WordArtifact, targets: readonly string[]) => {
+      const block = importWordContent(actual)[0]; assert.ok(block?.kind === 'paragraph');
+      assert.deepEqual(block.runs.map(run => run.text), ['External', 'Internal']);
+      assert.deepEqual(block.runs.map(run => run.link), targets);
+    };
+    return [output('created', source, actual => verify(actual, ['https://example.com/old', '#old'])), output('edited', model.artifact(), actual => verify(actual, ['https://example.com/new', '#new']))];
   },
   'formatting.lists'() {
     const paragraph = (text: string, id: string, kind: 'bullet' | 'decimal', level = 0, start = 1): WordContentBlock => ({ kind: 'paragraph', runs: [{ text }], list: { id, kind, level, start } });

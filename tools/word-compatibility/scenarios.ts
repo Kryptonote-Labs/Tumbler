@@ -1,3 +1,4 @@
+import { ribbonScenarios } from './ribbon-authoring.ts';
 import { characterFormattingScenarios } from './character-formatting.ts';
 import { everydayScenarios } from './everyday/scenarios.ts';
 import { renderScenarios } from './render/scenarios.ts';
@@ -36,6 +37,7 @@ export const scenarios: readonly Scenario[] = [
   ...renderScenarios,
   ...everydayScenarios,
   ...characterFormattingScenarios,
+  ...ribbonScenarios,
   ...tablePreservationScenarios,
   ...tableInteropScenarios,
   ...profiles.flatMap(profile => values.map(([name, value]): Scenario => ({
