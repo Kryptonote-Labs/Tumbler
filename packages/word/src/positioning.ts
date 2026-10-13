@@ -41,9 +41,9 @@ export function positionalTabXml(tab: WordPositionalTab, text: string): string {
   return `<w:ptab w:alignment="${tab.alignment}" w:relativeTo="${tab.relativeTo}" w:leader="${tab.leader}"/>`;
 }
 
-export function paragraphPositioningXml(value: WordParagraphPositioning): { tabs?: string; ind?: string } {
+export function paragraphPositioningXml(value: WordParagraphPositioning, conformance: 'strict' | 'transitional' = 'transitional'): { tabs?: string; ind?: string } {
   if (!isWordParagraphPositioning(value)) throw new TypeError('Invalid paragraph positioning.');
-  const names = { indentStartTwips: 'start', indentEndTwips: 'end', firstLineTwips: 'firstLine', hangingTwips: 'hanging' } as const;
+  const names = { indentStartTwips: conformance === 'strict' ? 'start' : 'left', indentEndTwips: conformance === 'strict' ? 'end' : 'right', firstLineTwips: 'firstLine', hangingTwips: 'hanging' } as const;
   const indents = Object.entries(names).flatMap(([key, name]) => {
     const amount = value[key as keyof typeof names];
     return amount === undefined ? [] : [`w:${name}="${amount}"`];
