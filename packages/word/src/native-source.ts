@@ -19,6 +19,7 @@ export class NativeWordSource {
     run: WordRun;
     content: WordRunContent;
     owner: WordInline;
+    characterStyleId: string | undefined;
     format: ComputedWordTextFormat;
   }>();
   readonly tables = new Map<number, WordTable>();
@@ -56,8 +57,9 @@ export class NativeWordSource {
             const runs = owner.kind === 'run' ? [owner] : owner.kind === 'hyperlink' || owner.kind === 'insertion' ? owner.runs : [];
             for (const run of runs) {
               const format = document.styles.runFormat(document, block, run);
+              const characterStyleId = document.styles.runCharacterStyle(document, run);
               for (const content of run.contents)
-                this.leaves.set(content.elementId, { run, content, owner, format });
+                this.leaves.set(content.elementId, { run, content, owner, format, characterStyleId });
             }
           }
         }

@@ -243,7 +243,11 @@ export function wordParagraphRenderer(
       if (left > 0) replacements.set('sectPr', '');
     }
     const styleChanged = paragraph.styleId !== undefined && paragraph.styleId !== original?.styleId;
-    if (styleChanged && paragraph.paragraph === undefined) for (const key of ['spacing', 'keepNext', 'keepLines', 'pageBreakBefore', 'widowControl', 'contextualSpacing']) replacements.set(key, '');
+    if (paragraph.styleId !== undefined && (styleChanged || paragraph.paragraph === undefined)) {
+      if (paragraph.paragraph === undefined) for (const key of ['spacing', 'keepNext', 'keepLines', 'pageBreakBefore', 'widowControl', 'contextualSpacing', 'pBdr', 'shd']) replacements.set(key, '');
+      if (paragraph.positioning === undefined) for (const key of ['ind', 'tabs']) replacements.set(key, '');
+      if (paragraph.alignment === undefined) replacements.set('jc', '');
+    }
     if (styleChanged) replacements.set('pStyle', `<w:pStyle w:val="${xml(paragraph.styleId!)}"/>`);
     if (paragraph.alignment !== undefined && paragraph.alignment !== original?.alignment)
       replacements.set('jc', `<w:jc w:val="${paragraph.alignment === 'justify' ? 'both' : paragraph.alignment}"/>`);
@@ -295,7 +299,7 @@ export function wordParagraphRenderer(
           run,
           generatedRuns[index] &&
             generatedXml.raw(generatedXml.element(generatedRuns[index]!.elementId)!),
-          styleChanged,
+          paragraph.styleId !== undefined,
         ),
       )
       .join('');
