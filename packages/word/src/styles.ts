@@ -201,6 +201,16 @@ export class WordStyles {
     };
   }
 
+  /** Resolve inherited run formatting while retaining an imported character style. */
+  resolveStyledRun(paragraphStyleId: string, characterStyleId?: string): ComputedWordTextFormat {
+    const paragraph = this.styleChain(paragraphStyleId, 'paragraph').reduce((value, style) => mergeRun(value, style.run), this.documentRunDefaults);
+    return this.computedRun(this.styleChain(characterStyleId ?? this.#defaultCharacterStyleId, 'character').reduce((value, style) => mergeRun(value, style.run), paragraph));
+  }
+
+  runCharacterStyle(document: WordDocumentLike, run: WordRun): string | undefined {
+    return run.propertiesElementId === undefined ? undefined : valueChild(requiredElement(document, run.propertiesElementId), wordNamespace(document.conformance), 'rStyle');
+  }
+
   paragraphFormat(document: WordDocumentLike, paragraph: WordParagraph): ComputedWordParagraphFormat {
     const direct = paragraph.propertiesElementId === undefined
       ? {}

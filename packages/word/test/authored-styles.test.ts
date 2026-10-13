@@ -51,3 +51,34 @@ test('reapplying an imported style resets omitted direct overrides without chang
   expect(fragments[0]!.format).toMatchObject({ fontSizePoints: 20, bold: true });
   expect(importWordContent(native.artifact())[0]).toMatchObject({ styleId: 'Heading1', paragraph: { spacingBeforeTwips: 240 }, runs: [{ format: { fontSizePoints: 20, bold: true } }] });
 });
+
+test('style reapplication clears paragraph overrides and keeps character-style inheritance', async () => {
+  const { buildWordDocumentFixture } = await import('./document-fixture.ts');
+  const { openWordArtifact } = await import('../src/index.ts');
+  const namespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const source = openWordArtifact(buildWordDocumentFixture({
+    documentXml: `<w:document xmlns:w="${namespace}"><w:body><w:p><w:pPr><w:pStyle w:val="Heading1"/><w:pBdr><w:bottom w:val="single" w:sz="8"/></w:pBdr><w:shd w:fill="FFFF00"/><w:tabs><w:tab w:val="left" w:pos="720"/></w:tabs><w:ind w:left="720"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:rStyle w:val="Hyperlink"/><w:sz w:val="68"/><w:color w:val="FF0000"/></w:rPr><w:t>Linked heading</w:t></w:r></w:p></w:body></w:document>`,
+    relationships: [{ id: 'styles', type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles', target: 'styles.xml' }],
+    parts: [{ itemName: 'word/styles.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml', xml: `<w:styles xmlns:w="${namespace}"><w:style w:type="character" w:styleId="Hyperlink"><w:rPr><w:color w:val="0000FF"/><w:u w:val="single"/></w:rPr></w:style></w:styles>` }],
+  }));
+  const first = importWordContent(source)[0]!;
+  if (first.kind !== 'paragraph') throw Error('paragraph');
+  const native = new NativeWordDocument({ source });
+  native.update([{ kind: 'paragraph', source: first.source!, styleId: 'Heading1', runs: first.runs.map(({ format, ...run }) => run) }]);
+  const output = native.artifact();
+  expect(output.document.source.source).not.toMatch(/<w:(pBdr|shd|tabs|ind|jc)\b/);
+  const p = output.document.blocks[0]!;
+  if (p.kind !== 'paragraph' || p.inlines[0]?.kind !== 'run') throw Error('paragraph');
+  const exported = output.document.styles.runFormat(output.document, p, p.inlines[0]);
+  expect(exported).toMatchObject({ fontSizePoints: 20, color: '#0000FF', underline: 'single' });
+  const fragment = native.layout({ measure: () => ({ width: 20, ascent: 9, descent: 3 }) }).pages[0]!.columns[0]!.lines[0]!.fragments[0]!;
+  expect(fragment.format).toEqual(exported);
+});
+
+test('authoring rejects empty or control-character style identifiers', () => {
+  for (const styleId of ['', 'Heading\u0000', 'Heading\n']) {
+    const paragraphs = [{ styleId, runs: [{ text: 'Heading' }] }];
+    expect(() => createWordArtifact({ paragraphs })).toThrow('Invalid paragraph style id.');
+    expect(() => new NativeWordDocument().update(paragraphs.map(p => ({ kind: 'paragraph' as const, ...p })))).toThrow('Invalid paragraph style id.');
+  }
+});

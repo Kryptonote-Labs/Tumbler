@@ -27,3 +27,7 @@ export function wordAuthoringStyles(source?: WordStyles, defaults: import('./cre
     ...(source?.themeFonts ? { themeFonts: source.themeFonts } : {}),
   });
 }
+
+export function validateWordStyleId(styleId: string | undefined): void {
+  if (styleId !== undefined && (typeof styleId !== 'string' || styleId.length === 0 || /[\u0000-\u001f\u007f]/.test(styleId))) throw new TypeError('Invalid paragraph style id.');
+}

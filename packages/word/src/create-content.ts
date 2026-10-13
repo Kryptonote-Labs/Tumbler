@@ -1,3 +1,4 @@
+import { validateWordStyleId } from './authored-styles.ts';
 import { isWordAuthoredList, registerWordListLevel, wordListPattern, type WordAuthoredList } from './authored-list.ts';
 import { isWordHyperlink } from './hyperlinks.ts';
 import { wordBreakXml, validateBreakRun } from './breaks.ts';
@@ -62,6 +63,7 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
     return blocks.map(block => {
       switch (block.kind) {
         case 'paragraph': {
+          validateWordStyleId(block.styleId);
           if (block.alignment !== undefined && !['start', 'center', 'end', 'justify'].includes(block.alignment)) throw new TypeError('Unsupported paragraph alignment.');
           let numbering = '';
           if (block.list) {
