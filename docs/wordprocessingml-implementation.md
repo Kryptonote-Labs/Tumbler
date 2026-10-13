@@ -163,3 +163,5 @@ Native paragraph authoring now includes before/after spacing, automatic/exact/mi
 The collaborative API provides literal find/replace with case and whole-word options. Search returns UTF-16 ranges at grapheme boundaries. Replace-all anchors matches before mutation and uses one ordinary transaction, preserving each match's inherited formatting and undo behavior.
 
 Authored lists support decimal, lower/upper letters, lower/upper Roman numbering, custom bullet markers, nine levels, compound multilevel labels and explicit starting numbers. Restart by assigning a new list identity; continue with an existing identity. Native and exported markers share number formatting.
+
+Authored runs can create or change HTTP(S), mail, telephone and bookmark hyperlinks. An empty link explicitly removes a source hyperlink while preserving its text and formatting. Imported exports remap new external relationships and retain unchanged source hyperlink wrappers.
