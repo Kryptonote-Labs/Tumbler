@@ -13,6 +13,7 @@ export interface CanvasTextMetricSource {
 /** Browser-backed shaping measurements converted into the point geometry used by Word layout. */
 export function browserWordTextMeasurer(context: CanvasTextMetricSource): WordTextMeasurer {
   const lineMetrics = browserWordLineMetrics(context);
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
   return Object.freeze({
     measure(text: string, format: ComputedWordTextFormat) {
       context.font = wordFontShorthand(format);
@@ -24,7 +25,7 @@ export function browserWordTextMeasurer(context: CanvasTextMetricSource): WordTe
       const fallbackAscent = wordPointsToCssPixels(format.fontSizePoints * 0.8);
       const fallbackDescent = wordPointsToCssPixels(format.fontSizePoints * 0.2);
       return Object.freeze({
-        width: Math.max(0, metrics.width * scale + [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)].length * (format.characterSpacingPoints ?? 0)),
+        width: Math.max(0, metrics.width * scale + [...segmenter.segment(text)].length * (format.characterSpacingPoints ?? 0)),
         // Font boxes stay constant for every glyph in a run. Painted glyph boxes do not:
         // an uppercase T and a lowercase letter can otherwise acquire different baselines.
         ascent: line?.ascent ?? (metrics.fontBoundingBoxAscent || metrics.emHeightAscent || fallbackAscent) * scale,
@@ -35,7 +36,8 @@ export function browserWordTextMeasurer(context: CanvasTextMetricSource): WordTe
 }
 
 export function wordTextCss(format: ComputedWordTextFormat): string {
-  const decoration = [format.underline === "none" ? "" : "underline", format.strike ? "line-through" : ""].filter(Boolean).join(" ") || "none";
+  const separateStrike = format.strike && format.underline === "double";
+  const decoration = [format.underline === "none" ? "" : "underline", format.strike && !separateStrike ? "line-through" : ""].filter(Boolean).join(" ") || "none";
   return [
     `font-family:${cssString(format.fontFamily)},sans-serif`,
     `font-size:${wordPointsToCssPixels(format.fontSizePoints)}px`,
@@ -47,9 +49,10 @@ export function wordTextCss(format: ComputedWordTextFormat): string {
     `text-decoration-style:${format.underline === "double" ? "double" : "solid"}`,
     `letter-spacing:${wordPointsToCssPixels(format.characterSpacingPoints ?? 0)}px`,
     `color:${format.color}`,
-    `background:${wordHighlightColor(format.highlight)}`,
+    `background-color:${wordHighlightColor(format.highlight)}`,
+    ...(separateStrike ? ["background-image:linear-gradient(currentColor,currentColor)", "background-size:100% 1px", "background-position:center", "background-repeat:no-repeat"] : []),
     `direction:${format.rightToLeft ? "rtl" : "ltr"}`,
-    `vertical-align:${format.verticalAlign === "superscript" ? "super" : format.verticalAlign === "subscript" ? "sub" : "baseline"}`,
+
   ].join(";");
 }
 

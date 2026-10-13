@@ -30,3 +30,32 @@ test('formatting multiple paragraphs retains each existing property and excludes
   expect(() => validateWordText(text)).not.toThrow();
   doc.destroy();
 });
+
+test('changing paragraph shading leaves imported automatic spacing and borders intact', async () => {
+  const { buildWordDocumentFixture } = await import('./document-fixture.ts');
+  const { openWordArtifact } = await import('../src/index.ts');
+  const source = openWordArtifact(buildWordDocumentFixture({ documentXml: '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pBdr><w:top w:val="double" w:sz="12" w:space="7"/></w:pBdr><w:spacing w:beforeAutospacing="1" w:beforeLines="200" w:afterLines="300" w:line="360" w:lineRule="auto"/></w:pPr><w:r><w:t>Text</w:t></w:r></w:p></w:body></w:document>' }));
+  const blocks = importWordContent(source);
+  const first = blocks[0]!;
+  if (first.kind !== 'paragraph') throw new Error('Expected paragraph');
+  const model = new NativeWordDocument({ source });
+  model.update([{ ...first, paragraph: { ...first.paragraph, shading: '#FFFF00' } }]);
+  expect(model.artifact().document.source.source).toContain('<w:spacing w:beforeAutospacing="1" w:beforeLines="200" w:afterLines="300" w:line="360" w:lineRule="auto"/>');
+  expect(model.artifact().document.source.source).toContain('<w:top w:val="double" w:sz="12" w:space="7"/>');
+  model.update([{ ...first, paragraph: { ...first.paragraph, spacingBeforeTwips: 120 } }]);
+  const changed = model.artifact().document.source.source;
+  expect(changed).toContain('w:before="120"');
+  expect(changed).not.toContain('w:beforeAutospacing');
+  expect(changed).not.toContain('w:beforeLines');
+  expect(changed).toContain('w:afterLines="300"');
+  expect(changed).toContain('w:line="360"');
+});
+
+test('justified paragraphs use the Word both token when created and edited', () => {
+  const source = createWordArtifact({ paragraphs: [{ alignment: 'justify', runs: [{ text: 'Justified' }] }, { runs: [{ text: 'Change me' }] }] });
+  expect(importWordContent(source)[0]).toMatchObject({ alignment: 'justify' });
+  expect(source.document.source.source).toContain('w:val="both"');
+  const model = new NativeWordDocument({ source });
+  model.update(importWordContent(source).map(block => block.kind === 'paragraph' ? { ...block, alignment: 'justify' } : block));
+  expect(importWordContent(model.artifact()).map(block => block.kind === 'paragraph' && block.alignment)).toEqual(['justify', 'justify']);
+});
