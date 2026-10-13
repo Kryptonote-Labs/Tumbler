@@ -36,7 +36,7 @@ export const ribbonScenarios: readonly Scenario[] = [
   })),
   {
     id: 'ribbon-authoring-roundtrip', title: 'Open authored styles, lists, paragraphs, links, page breaks and editable shapes',
-    topics: ['ecma-1:17.3.1.26', 'ecma-1:17.3.1.33', 'ecma-1:17.9', 'ecma-1:17.16.22', 'ecma-1:17.3.3.1', 'ecma-1:20.4'],
+    topics: ['ecma-1:17.3.1.26', 'ecma-1:17.3.1.33', 'ecma-1:17.9.17', 'ecma-1:17.16.22', 'ecma-1:17.3.3.1', 'ecma-1:20.4.2.8'],
     dimensions: ['write', 'interoperate'], oracles: ['assertion', 'openxml', 'libreoffice'],
     run() {
       const artifact = createWordArtifact({ paragraphs: [
