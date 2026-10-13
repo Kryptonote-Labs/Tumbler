@@ -1,3 +1,4 @@
+import { registerWordListLevel, type WordAuthoredList } from '../authored-list.ts';
 import type * as Y from 'yjs';
 import { validateAttributes } from './formatting.ts';
 import { groupTableParagraphs, tableParagraphs } from './tables.ts';
@@ -10,7 +11,7 @@ export function validateText(text: string) {
 
 /** Structural invariants apply equally to local, remote and headless operations. */
 export function validateWordText(text: Y.Text) {
-  const lists = new Map<string, string>();
+  const lists = new Map<string, Map<number, WordAuthoredList>>();
   for (const part of text.toDelta()) {
     if (typeof part.insert !== 'string') throw new Error('Only text is supported.');
     validateAttributes(part.attributes);
@@ -23,8 +24,9 @@ export function validateWordText(text: Y.Text) {
     if (part.attributes?.positioning && !/^\n+$/.test(part.insert)) throw new Error('Paragraph positioning belongs on paragraph boundaries.');
     const list = part.attributes?.list;
     if (list) {
-      if (lists.has(list.id) && lists.get(list.id) !== list.kind) throw new Error('A list must use consistent numbering.');
-      lists.set(list.id, list.kind);
+      const levels = lists.get(list.id) ?? new Map<number, WordAuthoredList>();
+      registerWordListLevel(levels, list);
+      lists.set(list.id, levels);
     }
   }
   validateText(text.toString());
