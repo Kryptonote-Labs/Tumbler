@@ -77,8 +77,9 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
           const positioning = block.positioning ? paragraphPositioningXml(block.positioning) : {};
           const paragraph = block.paragraph ? paragraphFormatXml(block.paragraph) : new Map<string, string>();
           const early = ['keepNext', 'keepLines', 'pageBreakBefore', 'widowControl'];
-          const properties = (block.styleId ? `<w:pStyle w:val="${xmlAttribute(block.styleId)}"/>` : '') + early.map(key => paragraph.get(key) ?? '').join('') + numbering + (paragraph.get('pBdr') ?? '') + (paragraph.get('shd') ?? '') + (positioning.tabs ?? '') + (paragraph.get('spacing') ?? '') + (positioning.ind ?? '') + (paragraph.get('contextualSpacing') ?? '') + (block.alignment ? `<w:jc w:val="${block.alignment}"/>` : '');
+          const properties = (block.styleId ? `<w:pStyle w:val="${xmlAttribute(block.styleId)}"/>` : '') + early.map(key => paragraph.get(key) ?? '').join('') + numbering + (paragraph.get('pBdr') ?? '') + (paragraph.get('shd') ?? '') + (positioning.tabs ?? '') + (paragraph.get('spacing') ?? '') + (positioning.ind ?? '') + (paragraph.get('contextualSpacing') ?? '') + (block.alignment ? `<w:jc w:val="${block.alignment === 'justify' ? 'both' : block.alignment}"/>` : '');
           return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => linked(run.link, run.shape ? (run.text === '\uFFFC' ? wordShapeXml(run.shape, ++imageId, availableWidth) : (() => { throw new TypeError('Shape runs occupy one object character.'); })()) : run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${run.breakType ? wordBreakXml(run.breakType, run.text) : run.tab ? positionalTabXml(run.tab, run.text) : textContent(run.text)}</w:r>`)).join('')}</w:p>`;
+
         }
         case 'table': {
           const grid = authoredTableGrid(block.rows, block.columnWidths, availableWidth, block.rowGrids);

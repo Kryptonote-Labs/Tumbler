@@ -145,6 +145,7 @@ const propertyOrder: Record<string, readonly string[]> = {
       ' ',
     ),
   tcBorders: 'top left bottom right insideH insideV tl2br tr2bl'.split(' '),
+  pBdr: 'top left bottom right between bar'.split(' '),
   trPr: 'cnfStyle divId gridBefore gridAfter wBefore wAfter cantSplit trHeight tblHeader tblCellSpacing jc hidden ins del trPrChange'.split(
     ' ',
   ),
