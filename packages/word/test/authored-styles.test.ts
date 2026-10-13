@@ -38,3 +38,16 @@ test('style resets remove complex-script direct overrides from imported runs', a
   expect(output.document.source.source).not.toMatch(/<w:(szCs|bCs|iCs)\b/);
   expect(importWordContent(output)[0]).toMatchObject({ paragraph: { keepNext: true, spacingBeforeTwips: 240 }, runs: [{ format: { fontSizePoints: 20, bold: true } }] });
 });
+
+
+test('reapplying an imported style resets omitted direct overrides without changing the style id', () => {
+  const source = createWordArtifact({ paragraphs: [{ styleId: 'Heading1', paragraph: { spacingBeforeTwips: 0 }, runs: [{ text: 'Heading', format: { fontSizePoints: 34, bold: false } }] }] });
+  const first = importWordContent(source)[0]!;
+  if (first.kind !== 'paragraph') throw Error('paragraph');
+  const native = new NativeWordDocument({ source });
+  native.update([{ kind: 'paragraph', source: first.source!, styleId: 'Heading1', runs: first.runs.map(({ format, ...run }) => run) }]);
+  const measure = { measure: (_: string, format: { fontSizePoints: number }) => ({ width: format.fontSizePoints, ascent: 9, descent: 3 }) };
+  const fragments = native.layout(measure).pages[0]!.columns[0]!.lines[0]!.fragments;
+  expect(fragments[0]!.format).toMatchObject({ fontSizePoints: 20, bold: true });
+  expect(importWordContent(native.artifact())[0]).toMatchObject({ styleId: 'Heading1', paragraph: { spacingBeforeTwips: 240 }, runs: [{ format: { fontSizePoints: 20, bold: true } }] });
+});

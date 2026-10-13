@@ -414,7 +414,7 @@ export class NativeWordDocument implements WordLayoutSource {
                 propertiesElementId: undefined,
                 contents,
               };
-              this.runFormats.set(run, format(authoredRun.format, authored.styleId && authored.styleId !== original?.format.styleId ? named?.text : inherited?.format ?? original?.textFormat ?? named?.text));
+              this.runFormats.set(run, format(authoredRun.format, authored.styleId ? named?.text : inherited?.format ?? original?.textFormat ?? named?.text));
               if (authoredRun.link !== undefined) {
                 if (!isWordHyperlink(authoredRun.link)) throw new TypeError('Invalid hyperlink target.');
                 if (authoredRun.link) return { kind: 'hyperlink' as const, elementId: allocate(), relationshipId: undefined, anchor: authoredRun.link.startsWith('#') ? authoredRun.link.slice(1) : undefined, target: authoredRun.link.startsWith('#') ? undefined : authoredRun.link, runs: [run] };
@@ -430,18 +430,18 @@ export class NativeWordDocument implements WordLayoutSource {
               section: hasSection ? original?.block.section : undefined,
               inlines,
             };
-            const styleChanged = authored.styleId !== undefined && authored.styleId !== original?.format.styleId;
-            this.paragraphTextFormats.set(block, format(undefined, styleChanged ? named?.text : original?.textFormat ?? named?.text));
+            const resetParagraph = authored.styleId !== undefined && (authored.styleId !== original?.format.styleId || authored.paragraph === undefined);
+            this.paragraphTextFormats.set(block, format(undefined, resetParagraph ? named?.text : original?.textFormat ?? named?.text));
             this.paragraphFormats.set(
               block,
               Object.freeze({
                 ...DEFAULT_PARAGRAPH,
                 ...compiled?.defaults.paragraph,
-                ...(styleChanged ? named?.paragraph : original?.format),
+                ...(resetParagraph ? named?.paragraph : original?.format),
                 ...authored.positioning,
                 ...authored.paragraph,
                 alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? original?.format.alignment ?? compiled?.defaults.paragraph.alignment ?? 'start',
-                lineSpacing: authored.paragraph?.lineSpacing ?? (styleChanged ? named?.paragraph.lineSpacing : original?.format.lineSpacing) ?? compiled?.defaults.paragraph.lineSpacing ?? {
+                lineSpacing: authored.paragraph?.lineSpacing ?? (resetParagraph ? named?.paragraph.lineSpacing : original?.format.lineSpacing) ?? compiled?.defaults.paragraph.lineSpacing ?? {
                   rule: 'auto' as const,
                   value: Math.round((this.options.lineSpacing ?? 1) * 240),
                 },
