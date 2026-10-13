@@ -34,7 +34,7 @@ export interface WordTextMeasurement {
 }
 
 export interface WordTextMeasurer {
-  /** Measures shaped text in points using the computed Word appearance. */
+  /** Measures shaped text in points, including characterSpacingPoints per grapheme in the advance width. */
   measure(text: string, format: ComputedWordTextFormat): WordTextMeasurement;
 }
 

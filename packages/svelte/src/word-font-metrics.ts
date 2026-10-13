@@ -36,7 +36,8 @@ export function browserWordTextMeasurer(context: CanvasTextMetricSource): WordTe
 }
 
 export function wordTextCss(format: ComputedWordTextFormat): string {
-  const decoration = [format.underline === "none" ? "" : "underline", format.strike ? "line-through" : ""].filter(Boolean).join(" ") || "none";
+  const separateStrike = format.strike && format.underline === "double";
+  const decoration = [format.underline === "none" ? "" : "underline", format.strike && !separateStrike ? "line-through" : ""].filter(Boolean).join(" ") || "none";
   return [
     `font-family:${cssString(format.fontFamily)},sans-serif`,
     `font-size:${wordPointsToCssPixels(format.fontSizePoints)}px`,
@@ -48,7 +49,8 @@ export function wordTextCss(format: ComputedWordTextFormat): string {
     `text-decoration-style:${format.underline === "double" ? "double" : "solid"}`,
     `letter-spacing:${wordPointsToCssPixels(format.characterSpacingPoints ?? 0)}px`,
     `color:${format.color}`,
-    `background:${wordHighlightColor(format.highlight)}`,
+    `background-color:${wordHighlightColor(format.highlight)}`,
+    ...(separateStrike ? ["background-image:linear-gradient(currentColor,currentColor)", "background-size:100% 1px", "background-position:center", "background-repeat:no-repeat"] : []),
     `direction:${format.rightToLeft ? "rtl" : "ltr"}`,
 
   ].join(";");
