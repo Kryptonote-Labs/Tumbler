@@ -153,3 +153,7 @@ identities and returns a selection with one validated delta for undo grouping.
 `clickAndTypeEdit` turns the target into editable paragraphs and tabs in one delta.
 It leaves clicks on existing ink to ordinary text selection. Hosts constrain the
 layout lines and bounds to the active story or table cell before calling it.
+
+## Native character authoring
+
+Native authored content and collaborative commands support strike, the Word highlight palette, superscript/subscript and signed twip character spacing. Imported edits retain surrounding runs and can explicitly clear these properties. Character-formatting compatibility fixtures require semantic assertions, Open XML SDK validation and LibreOffice round trips. These bounded checks do not claim full topic coverage.

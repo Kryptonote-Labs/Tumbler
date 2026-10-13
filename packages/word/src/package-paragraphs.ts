@@ -158,6 +158,10 @@ export function wordParagraphRenderer(
       italic: 'i',
       underline: 'u',
       color: 'color',
+      strike: 'strike',
+      highlight: 'highlight',
+      verticalAlign: 'vertAlign',
+      characterSpacingPoints: 'spacing',
     } as const;
     for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[])
       if (run.format?.[key] !== undefined && run.format[key] !== original?.format?.[key])

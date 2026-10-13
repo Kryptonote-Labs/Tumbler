@@ -32,6 +32,7 @@ export interface WordRunProperties {
   readonly bold?: boolean;
   readonly italic?: boolean;
   readonly underline?: "none" | "single" | "double";
+  readonly characterSpacingPoints?: number;
   readonly strike?: boolean;
   readonly color?: WordColor;
   readonly highlight?: string;
@@ -76,6 +77,7 @@ export interface ComputedWordTextFormat {
   readonly bold: boolean;
   readonly italic: boolean;
   readonly underline: "none" | "single" | "double";
+  readonly characterSpacingPoints?: number;
   readonly strike: boolean;
   readonly color: string;
   readonly highlight: string | undefined;
@@ -256,6 +258,7 @@ export class WordStyles {
       strike: properties.strike ?? DEFAULT_TEXT.strike,
       color: this.resolveColor(properties.color) ?? DEFAULT_TEXT.color,
       highlight: properties.highlight,
+      ...(properties.characterSpacingPoints === undefined ? {} : { characterSpacingPoints: properties.characterSpacingPoints }),
       verticalAlign: properties.verticalAlign ?? DEFAULT_TEXT.verticalAlign,
       rightToLeft: properties.rightToLeft ?? DEFAULT_TEXT.rightToLeft,
     });
@@ -350,6 +353,7 @@ export function parseRunProperties(element: LosslessXmlElement, namespace: strin
   const underline = onlyChild(element, namespace, "u", "Run properties must not repeat underline.");
   const vertical = valueChild(element, namespace, "vertAlign");
   const highlight = valueChild(element, namespace, "highlight");
+  const spacing = valueChild(element, namespace, "spacing");
   return Object.freeze({
     ...(literalFont === undefined ? {} : { fontFamily: literalFont }),
     ...(themeValue === undefined ? {} : { themeFont: themeValue.startsWith("major") ? "major" as const : "minor" as const }),
@@ -361,6 +365,7 @@ export function parseRunProperties(element: LosslessXmlElement, namespace: strin
     ...(underline === undefined ? {} : { underline: underlineValue(attr(underline, namespace, "val")) }),
     ...(color === undefined ? {} : { color: parseColor(color, namespace) }),
     ...(highlight === undefined ? {} : { highlight }),
+    ...(spacing === undefined ? {} : { characterSpacingPoints: integer(spacing, "character spacing", -2147483648, 2147483647) / 20 }),
     ...(vertical === "superscript" || vertical === "subscript" || vertical === "baseline" ? { verticalAlign: vertical } : {}),
   });
 }

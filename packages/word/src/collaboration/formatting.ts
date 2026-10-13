@@ -1,8 +1,9 @@
 import { isWordParagraphPositioning, isWordPositionalTab, type WordParagraphPositioning } from '../positioning.ts';
 import type { WordPositionalTab } from '../document.ts';
+import { WORD_HIGHLIGHTS } from '../text-properties.ts';
 import { isDocumentImage, type DocumentImage } from './images.ts';
 import { isTableCell, type TableCell } from './tables.ts';
-export const TEXT_FORMATS = ['bold', 'italic', 'underline'] as const;
+export const TEXT_FORMATS = ['bold', 'italic', 'underline', 'strike'] as const;
 export const ALIGNMENTS = ['left', 'center', 'right', 'justify'] as const;
 export type TextFormat = (typeof TEXT_FORMATS)[number];
 export type Alignment = (typeof ALIGNMENTS)[number];
@@ -15,6 +16,9 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   align?: Alignment;
   positioning?: WordParagraphPositioning;
   tab?: WordPositionalTab;
+  highlight?: string;
+  verticalAlign?: 'baseline' | 'superscript' | 'subscript';
+  characterSpacingPoints?: number;
   color?: string;
   font?: string;
   fontSize?: number;
@@ -61,6 +65,9 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
     if (key === 'list' && isList(value)) continue;
     if (key === 'fontSize' && isFontSize(value)) continue;
     if (key === 'font' && typeof value === 'string' && value.length > 0) continue;
+    if (key === 'highlight' && typeof value === 'string' && WORD_HIGHLIGHTS.includes(value)) continue;
+    if (key === 'verticalAlign' && typeof value === 'string' && ['baseline', 'superscript', 'subscript'].includes(value)) continue;
+    if (key === 'characterSpacingPoints' && typeof value === 'number' && Number.isInteger(value * 20) && value * 20 >= -2147483648 && value * 20 <= 2147483647) continue;
     if (key === 'color' && isTextColor(value)) continue;
     if (key === 'align' && ALIGNMENTS.some((alignment) => alignment === value)) continue;
     throw new Error('Unsupported document formatting.');

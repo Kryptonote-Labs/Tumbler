@@ -24,7 +24,7 @@ export function browserWordTextMeasurer(context: CanvasTextMetricSource): WordTe
       const fallbackAscent = wordPointsToCssPixels(format.fontSizePoints * 0.8);
       const fallbackDescent = wordPointsToCssPixels(format.fontSizePoints * 0.2);
       return Object.freeze({
-        width: metrics.width * scale,
+        width: Math.max(0, metrics.width * scale + [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)].length * (format.characterSpacingPoints ?? 0)),
         // Font boxes stay constant for every glyph in a run. Painted glyph boxes do not:
         // an uppercase T and a lowercase letter can otherwise acquire different baselines.
         ascent: line?.ascent ?? (metrics.fontBoundingBoxAscent || metrics.emHeightAscent || fallbackAscent) * scale,
@@ -44,6 +44,8 @@ export function wordTextCss(format: ComputedWordTextFormat): string {
     // Word defaults to unkerned text; inherited browser typography must not change advances.
     "font-kerning:none",
     `text-decoration-line:${decoration}`,
+    `text-decoration-style:${format.underline === "double" ? "double" : "solid"}`,
+    `letter-spacing:${wordPointsToCssPixels(format.characterSpacingPoints ?? 0)}px`,
     `color:${format.color}`,
     `background:${wordHighlightColor(format.highlight)}`,
     `direction:${format.rightToLeft ? "rtl" : "ltr"}`,

@@ -8,7 +8,7 @@ import { xml, runProperties } from './create-xml.ts';
 import { authoredContent, type WordContentBlock, type WordAuthoredImage } from './create-content.ts';
 
 /** Supported authored text properties. Omitted properties inherit the document defaults. */
-export type WordTextFormat = Partial<Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'underline' | 'color'>>;
+export type WordTextFormat = Partial<Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'underline' | 'color' | 'strike' | 'highlight' | 'verticalAlign' | 'characterSpacingPoints'>>;
 export interface WordTextRun { readonly tab?: WordPositionalTab; readonly source?: number; readonly sourceCopy?: string; readonly text: string; readonly format?: WordTextFormat; readonly image?: WordAuthoredImage; readonly field?: WordPageField; }
 export interface WordTextParagraph {
   readonly positioning?: WordParagraphPositioning;
