@@ -157,3 +157,5 @@ layout lines and bounds to the active story or table cell before calling it.
 ## Native character authoring
 
 Native authored content and collaborative commands support strike, the Word highlight palette, superscript/subscript and signed twip character spacing. Imported edits retain surrounding runs and can explicitly clear these properties. Character-formatting compatibility fixtures require semantic assertions, Open XML SDK validation and LibreOffice round trips. These bounded checks do not claim full topic coverage.
+
+Native paragraph authoring now includes before/after spacing, automatic/exact/minimum line spacing, keep-with-next, keep-lines, page-break-before, widow control, contextual spacing, shading and basic borders. Collaborative paragraph patches preserve other properties on each selected paragraph. Paragraph decorations render in body, story and table views. Border artwork and automatic border joining across adjacent paragraphs remain unqualified.

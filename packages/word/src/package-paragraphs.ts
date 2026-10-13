@@ -1,3 +1,4 @@
+import { paragraphFormatXml } from './paragraph-format.ts';
 import { paragraphPositioningXml, positionalTabXml } from './positioning.ts';
 import { pageFieldXml } from './page-fields.ts';
 import type { WordTextParagraph, WordTextRun } from './create.ts';
@@ -224,6 +225,10 @@ export function wordParagraphRenderer(
     }
     if (paragraph.alignment !== undefined && paragraph.alignment !== original?.alignment)
       replacements.set('jc', `<w:jc w:val="${paragraph.alignment}"/>`);
+    if (paragraph.paragraph && JSON.stringify(paragraph.paragraph) !== JSON.stringify(original?.paragraph)) {
+      const combined = { ...original?.paragraph, ...paragraph.paragraph };
+      for (const [key, value] of paragraphFormatXml(combined)) replacements.set(key, value);
+    }
     if (paragraph.positioning && JSON.stringify(paragraph.positioning) !== JSON.stringify(original?.positioning)) {
       const positioning = paragraphPositioningXml({ ...original?.positioning, ...paragraph.positioning });
       if (positioning.tabs !== undefined) replacements.set('tabs', positioning.tabs);

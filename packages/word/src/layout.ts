@@ -111,6 +111,7 @@ export interface WordLayoutTableCell {
 }
 
 export interface WordLayoutLine {
+  readonly paragraphDecoration?: { readonly x: number; readonly width: number; readonly shading?: string; readonly borders?: import('./table-format.ts').WordCellBorders };
   readonly paragraphElementId: number;
   readonly x: number;
   readonly y: number;
@@ -1047,6 +1048,7 @@ function placeLine(
   }
   const value = Object.freeze({
     paragraphElementId: paragraph.elementId,
+    ...((format.shading || format.borders) ? { paragraphDecoration: { x: column.x + points(format.indentStartTwips), width: Math.max(0, column.width - points(format.indentStartTwips + format.indentEndTwips)), ...(format.shading ? { shading: format.shading } : {}), ...(format.borders ? { borders: format.borders } : {}) } } : {}),
     x,
     y,
     width: line.width,
@@ -1331,6 +1333,7 @@ function translateLine(line: WordLayoutLine, dx: number, dy: number, cache?: Wor
   if (cached && cached.dx === dx && cached.dy === dy) return cached.value;
   const value = Object.freeze({
     ...line,
+    ...(line.paragraphDecoration ? { paragraphDecoration: { ...line.paragraphDecoration, x: line.paragraphDecoration.x + dx } } : {}),
     x: line.x + dx,
     y: line.y + dy,
     baseline: line.baseline + dy,

@@ -415,8 +415,9 @@ export class NativeWordDocument implements WordLayoutSource {
                 ...compiled?.defaults.paragraph,
                 ...original?.format,
                 ...authored.positioning,
+                ...authored.paragraph,
                 alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? original?.format.alignment ?? compiled?.defaults.paragraph.alignment ?? 'start',
-                lineSpacing: original?.format.lineSpacing ?? compiled?.defaults.paragraph.lineSpacing ?? {
+                lineSpacing: authored.paragraph?.lineSpacing ?? original?.format.lineSpacing ?? compiled?.defaults.paragraph.lineSpacing ?? {
                   rule: 'auto' as const,
                   value: Math.round((this.options.lineSpacing ?? 1) * 240),
                 },
