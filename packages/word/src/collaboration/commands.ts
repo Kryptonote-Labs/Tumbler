@@ -240,6 +240,7 @@ function formatWordDelta(
   )
     throw new Error('Source identities cannot be formatted.');
   if (attributes.tab !== undefined) throw new Error('Insert or delete positional tabs as content.');
+  if (attributes.breakType !== undefined) throw new Error('Insert or delete breaks as content.');
   if (attributes.field !== undefined) throw new Error('Insert or delete page fields as content.');
   if (attributes.image !== undefined) throw new Error('Use image operations to change images.');
   if (attributes.table !== undefined)
