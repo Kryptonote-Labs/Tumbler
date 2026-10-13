@@ -16,6 +16,7 @@ export function validateWordText(text: Y.Text) {
     if (typeof part.insert !== 'string') throw new Error('Only text is supported.');
     validateAttributes(part.attributes);
     if (part.attributes?.breakType && (part.attributes.image || part.attributes.field || !/^\u2028+$/.test(part.insert))) throw new Error('Break formatting belongs on line-separator characters.');
+    if (part.attributes?.shape && (part.attributes.image || part.attributes.field || !/^\uFFFC+$/.test(part.insert))) throw new Error('Shape attributes require object characters.');
     if (part.attributes?.field && (part.attributes.image || !/^\uFFFC+$/.test(part.insert))) throw new Error('Invalid page field content.');
     if (part.attributes?.tab && (part.attributes.field || part.attributes.image || !/^\t+$/.test(part.insert))) throw new Error('Invalid positional tab content.');
     if (part.attributes?.styleId && !/^\n+$/.test(part.insert)) throw new Error('Paragraph styles belong on paragraph boundaries.');

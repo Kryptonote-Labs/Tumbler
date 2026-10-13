@@ -71,6 +71,7 @@ export function reconcileWordContent(
     paragraphs: paragraphs.map((p) => ({
       runs: p.runs.map((run) => ({
         text: run.text.replaceAll('\u2028', ''),
+        ...(run.shape ? { shape: run.shape } : {}),
         ...(run.link === undefined ? {} : { link: run.link }),
         ...(run.image && (!document.drawings.has(run.source!) || replacedImages.has(run))
           ? { image: run.image }
