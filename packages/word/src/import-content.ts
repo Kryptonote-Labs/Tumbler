@@ -1,3 +1,4 @@
+import { WORD_LIST_KINDS } from './authored-list.ts';
 import type { WordArtifact } from './artifact.ts';
 import type { WordBlock, WordParagraph, WordRun } from './document.ts';
 import type { WordContentBlock } from './create-content.ts';
@@ -52,7 +53,9 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
       reference && level
         ? {
             id: `source-list-${reference.numId}`,
-            kind: level.format === 'bullet' ? ('bullet' as const) : ('decimal' as const),
+            kind: WORD_LIST_KINDS.find(kind => kind === level.format) ?? 'decimal',
+            ...(level.format === 'bullet' ? { marker: level.text } : {}),
+            ...(level.start !== 1 ? { start: level.start } : {}),
             level: reference.level,
           }
         : undefined;

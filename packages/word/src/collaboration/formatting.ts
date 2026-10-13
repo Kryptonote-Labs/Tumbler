@@ -2,6 +2,7 @@ import { isWordParagraphPositioning, isWordPositionalTab, type WordParagraphPosi
 import type { WordPositionalTab } from '../document.ts';
 import { WORD_HIGHLIGHTS } from '../text-properties.ts';
 import { isWordParagraphFormat, type WordParagraphFormat } from '../paragraph-format.ts';
+import { isWordAuthoredList, type WordAuthoredList } from '../authored-list.ts';
 import { isDocumentImage, type DocumentImage } from './images.ts';
 import { isTableCell, type TableCell } from './tables.ts';
 export const TEXT_FORMATS = ['bold', 'italic', 'underline', 'strike'] as const;
@@ -27,7 +28,7 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   table?: TableCell;
   image?: DocumentImage;
   field?: import('../page-fields.ts').WordPageField;
-  list?: { id: string; kind: 'bullet' | 'decimal'; level: number };
+  list?: WordAuthoredList & { level: number };
 };
 
 
@@ -78,19 +79,5 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
 }
 
 export function isList(value: unknown): value is NonNullable<TextAttributes['list']> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  return (
-    'id' in value &&
-    typeof value.id === 'string' &&
-    value.id.length > 0 &&
-    value.id.length <= 128 &&
-    'kind' in value &&
-    (value.kind === 'bullet' || value.kind === 'decimal') &&
-    'level' in value &&
-    Number.isInteger(value.level) &&
-    typeof value.level === 'number' &&
-    value.level >= 0 &&
-    value.level <= 8 &&
-    Object.keys(value).every((key) => ['id', 'kind', 'level'].includes(key))
-  );
+  return isWordAuthoredList(value) && value.level !== undefined;
 }

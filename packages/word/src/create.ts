@@ -21,7 +21,7 @@ export interface WordTextParagraph {
   readonly id?: string;
   readonly runs: readonly WordTextRun[];
   readonly alignment?: 'start' | 'center' | 'end' | 'justify';
-  readonly list?: { readonly id: string; readonly kind: 'bullet' | 'decimal'; readonly level?: number; readonly start?: number };
+  readonly list?: import('./authored-list.ts').WordAuthoredList;
 }
 export interface CreateWordOptions {
   readonly paragraphs?: readonly WordTextParagraph[];

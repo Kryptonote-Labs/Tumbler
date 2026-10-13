@@ -1,3 +1,4 @@
+import { isWordAuthoredList, registerWordListLevel, wordListPattern, type WordAuthoredList } from './authored-list.ts';
 import { paragraphFormatXml } from './paragraph-format.ts';
 import { cellFormatXml, rowFormatXml, type WordCellFormat, type WordRowFormat } from './table-format.ts';
 import { paragraphPositioningXml, positionalTabXml } from './positioning.ts';
@@ -21,7 +22,7 @@ const office = 'http://schemas.openxmlformats.org/officeDocument/2006/relationsh
 /** One traversal writes structure, numbering and media relationships together. */
 export function authoredContent(blocks: readonly WordContentBlock[], width: number) {
   const parts: { name: string; data: Uint8Array }[] = [];
-  const lists = new Map<string, { id: number; kind: 'bullet' | 'decimal'; start: number }>();
+  const lists = new Map<string, { id: number; defaults: WordAuthoredList; levels: Map<number, WordAuthoredList> }>();
   let relationships = '';
   let contentTypes = '';
   let imageId = 0;
@@ -53,11 +54,11 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
           let numbering = '';
           if (block.list) {
             const { id, kind, level = 0, start = 1 } = block.list;
-            if (!id || !['bullet', 'decimal'].includes(kind)) throw new TypeError('Invalid list.');
-            if (!Number.isInteger(level) || level < 0 || level > 8 || !Number.isInteger(start) || start < 1 || start > 2147483647) throw new RangeError('Invalid list level or start.');
+            if (!isWordAuthoredList(block.list)) throw new TypeError('Invalid list.');
+            if (!Number.isInteger(level) || level < 0 || level > 8 || !Number.isInteger(start) || start < 0 || start > 2147483647) throw new RangeError('Invalid list level or start.');
             const existing = lists.get(id);
-            if (existing && (existing.kind !== kind || existing.start !== start)) throw new TypeError('A list must use consistent numbering.');
-            const list = existing ?? { id: lists.size + 1, kind, start };
+            const list = existing ?? { id: lists.size + 1, defaults: block.list, levels: new Map<number, WordAuthoredList>() };
+            registerWordListLevel(list.levels, block.list);
             lists.set(id, list);
             numbering = `<w:numPr><w:ilvl w:val="${level}"/><w:numId w:val="${list.id}"/></w:numPr>`;
           }
@@ -79,7 +80,7 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
   };
   const content = visit(blocks.length ? blocks : [{ kind: 'paragraph', runs: [] }], width);
   if (lists.size) {
-    const numbering = [...lists.values()].map(list => `<w:abstractNum w:abstractNumId="${list.id}"><w:multiLevelType w:val="multilevel"/>${Array.from({ length: 9 }, (_, level) => `<w:lvl w:ilvl="${level}"><w:start w:val="${list.start}"/><w:numFmt w:val="${list.kind}"/><w:lvlText w:val="${list.kind === 'bullet' ? '•' : `%${level + 1}.`}"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="${(level + 1) * 720}" w:hanging="360"/></w:pPr></w:lvl>`).join('')}</w:abstractNum>`).join('') + [...lists.values()].map(list => `<w:num w:numId="${list.id}"><w:abstractNumId w:val="${list.id}"/></w:num>`).join('');
+    const numbering = [...lists.values()].map(list => `<w:abstractNum w:abstractNumId="${list.id}"><w:multiLevelType w:val="multilevel"/>${Array.from({ length: 9 }, (_, level) => { const definition = list.levels.get(level) ?? list.defaults; return `<w:lvl w:ilvl="${level}"><w:start w:val="${definition.start ?? 1}"/><w:numFmt w:val="${definition.kind}"/><w:lvlText w:val="${xmlAttribute(wordListPattern(definition, level))}"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="${(level + 1) * 720}" w:hanging="360"/></w:pPr></w:lvl>`; }).join('')}</w:abstractNum>`).join('') + [...lists.values()].map(list => `<w:num w:numId="${list.id}"><w:abstractNumId w:val="${list.id}"/></w:num>`).join('');
     parts.push({ name: 'word/numbering.xml', data: new TextEncoder().encode(`<w:numbering xmlns:w="${namespace}">${numbering}</w:numbering>`) });
     relationships += `<Relationship Id="numbering" Type="${office}numbering" Target="numbering.xml"/>`;
     contentTypes += '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>';
