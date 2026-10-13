@@ -1,3 +1,4 @@
+import { WORD_BUILTIN_STYLES, builtinStyleXml } from './authored-styles.ts';
 import type { WordParagraphPositioning } from './positioning.ts';
 import type { WordPositionalTab } from './document.ts';
 import type { WordPageField } from './page-fields.ts';
@@ -11,6 +12,7 @@ import { authoredContent, type WordContentBlock, type WordAuthoredImage } from '
 export type WordTextFormat = Partial<Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'underline' | 'color' | 'strike' | 'highlight' | 'verticalAlign' | 'characterSpacingPoints'>>;
 export interface WordTextRun { readonly link?: string; readonly tab?: WordPositionalTab; readonly source?: number; readonly sourceCopy?: string; readonly text: string; readonly format?: WordTextFormat; readonly image?: WordAuthoredImage; readonly field?: WordPageField; }
 export interface WordTextParagraph {
+  readonly styleId?: string;
   readonly paragraph?: import('./paragraph-format.ts').WordParagraphFormat;
   readonly positioning?: WordParagraphPositioning;
   /** Reference into an immutable source package, retained by NativeWordDocument at import and export. */
@@ -55,7 +57,7 @@ export function createWordArtifact(options: CreateWordOptions = {}): WordArtifac
     ['_rels/.rels', `<Relationships xmlns="${relationships}"><Relationship Id="document" Type="${office}officeDocument" Target="word/document.xml"/><Relationship Id="properties" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>`],
     ['word/_rels/document.xml.rels', `<Relationships xmlns="${relationships}"><Relationship Id="styles" Type="${office}styles" Target="styles.xml"/><Relationship Id="settings" Type="${office}settings" Target="settings.xml"/>${authored.relationships}</Relationships>`],
     ['word/document.xml', `<w:document xmlns:w="${namespace}" xmlns:r="${office.slice(0, -1)}" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${content}<w:sectPr><w:pgSz w:w="${Math.round(page.width * 20)}" w:h="${Math.round(page.height * 20)}"/><w:pgMar w:top="${Math.round(page.margin * 20)}" w:right="${Math.round(page.margin * 20)}" w:bottom="${Math.round(page.margin * 20)}" w:left="${Math.round(page.margin * 20)}" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr></w:body></w:document>`],
-    ['word/styles.xml', `<w:styles xmlns:w="${namespace}"><w:docDefaults><w:rPrDefault><w:rPr>${runProperties(options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 })}</w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="0" w:line="${lineSpacing}" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults></w:styles>`],
+    ['word/styles.xml', `<w:styles xmlns:w="${namespace}"><w:docDefaults><w:rPrDefault><w:rPr>${runProperties(options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 })}</w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="0" w:line="${lineSpacing}" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>${WORD_BUILTIN_STYLES.map(builtinStyleXml).join('')}</w:styles>`],
     ['word/settings.xml', `<w:settings xmlns:w="${namespace}"><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`],
     ['docProps/core.xml', `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">${options.author === undefined ? '' : `<dc:creator>${xml(options.author)}</dc:creator>`}${options.lastModifiedBy === undefined ? '' : `<cp:lastModifiedBy>${xml(options.lastModifiedBy)}</cp:lastModifiedBy>`}</cp:coreProperties>`],
   ];

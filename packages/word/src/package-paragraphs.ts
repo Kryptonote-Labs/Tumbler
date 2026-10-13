@@ -130,7 +130,7 @@ export function wordParagraphRenderer(
     }
     return result;
   };
-  const runMarkup = (run: WordTextRun, generatedRun: string | undefined) => {
+  const runMarkup = (run: WordTextRun, generatedRun: string | undefined, resetStyle = false) => {
     const scope = copies.scopes.get(run) ?? 0;
     ({ emitted, remaining } = stateFor(scope));
     if (run.image && !document.drawings.has(run.source!)) return remap(generatedRun ?? '');
@@ -167,6 +167,7 @@ export function wordParagraphRenderer(
     for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[])
       if (run.format?.[key] !== undefined && run.format[key] !== original?.format?.[key])
         replacements.set(propertyNames[key], runProperties({ [key]: run.format[key] }));
+    if (resetStyle) for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[]) if (run.format?.[key] === undefined) replacements.set(propertyNames[key], '');
     let sourceMarkup = element ? markup.raw(element) : '';
     if (replacedImages.has(run)) {
       const relationship = remap(generatedRun ?? '').match(/r:embed="([^"]+)"/)?.[1];
@@ -228,6 +229,9 @@ export function wordParagraphRenderer(
       paragraphCopies.set(paragraphKey(paragraph), left);
       if (left > 0) replacements.set('sectPr', '');
     }
+    const styleChanged = paragraph.styleId !== undefined && paragraph.styleId !== original?.styleId;
+    if (styleChanged && paragraph.paragraph === undefined) for (const key of ['spacing', 'keepNext', 'keepLines', 'pageBreakBefore', 'widowControl', 'contextualSpacing']) replacements.set(key, '');
+    if (styleChanged) replacements.set('pStyle', `<w:pStyle w:val="${xml(paragraph.styleId!)}"/>`);
     if (paragraph.alignment !== undefined && paragraph.alignment !== original?.alignment)
       replacements.set('jc', `<w:jc w:val="${paragraph.alignment}"/>`);
     if (paragraph.paragraph && JSON.stringify(paragraph.paragraph) !== JSON.stringify(original?.paragraph)) {
@@ -260,6 +264,7 @@ export function wordParagraphRenderer(
           run,
           generatedRuns[index] &&
             generatedXml.raw(generatedXml.element(generatedRuns[index]!.elementId)!),
+          styleChanged,
         ),
       )
       .join('');

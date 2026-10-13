@@ -1,3 +1,4 @@
+import { mergeAuthoredStyles } from './package-styles.ts';
 import { wordStoryArtifact } from './stories.ts';
 import type { WordBlock } from './document.ts';
 import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
@@ -82,6 +83,7 @@ export function reconcileWordContent(
     })),
   });
   const transaction = beginPackageTransaction(document.package);
+  mergeAuthoredStyles(document, paragraphs.flatMap(p => p.styleId ? [p.styleId] : []), transaction);
   const relationships = generated.document.package.relationships(
     generated.document.part.name,
   ).items;

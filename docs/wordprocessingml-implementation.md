@@ -165,3 +165,5 @@ The collaborative API provides literal find/replace with case and whole-word opt
 Authored lists support decimal, lower/upper letters, lower/upper Roman numbering, custom bullet markers, nine levels, compound multilevel labels and explicit starting numbers. Restart by assigning a new list identity; continue with an existing identity. Native and exported markers share number formatting.
 
 Authored runs can create or change HTTP(S), mail, telephone and bookmark hyperlinks. An empty link explicitly removes a source hyperlink while preserving its text and formatting. Imported exports remap new external relationships and retain unchanged source hyperlink wrappers.
+
+Native and collaborative paragraph styles include Normal, Title, Subtitle and Heading 1–9. Headings serialize pStyle references and outline levels. Existing imported definitions take precedence over built-ins; missing requested built-ins are added at export. Named-style resolution works without XML reads during editing.

@@ -1,5 +1,6 @@
 import { isWordAuthoredList, wordListMarker } from './authored-list.ts';
 import { isWordHyperlink } from './hyperlinks.ts';
+import { wordAuthoringStyles } from './authored-styles.ts';
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
 import { wordGeometryAt } from './geometry.ts';
@@ -56,6 +57,7 @@ interface RecordBlock {
 
 /** Shared in-memory Word engine. Imports compile source properties once; only export writes a package. */
 export class NativeWordDocument implements WordLayoutSource {
+  private readonly namedStyles: ReturnType<typeof wordAuthoringStyles>;
   private nextId = -1;
   private readonly compiled: NativeWordSource | undefined;
   private exported: WordArtifact | undefined;
@@ -90,6 +92,7 @@ export class NativeWordDocument implements WordLayoutSource {
   readonly wrapTrailSpaces: boolean;
 
   constructor(private readonly options: NativeWordOptions = {}) {
+    this.namedStyles = wordAuthoringStyles(options.source?.document.styles, options.defaultFormat);
     this.compiled = options.source ? new NativeWordSource(options.source) : undefined;
     this.wrapTrailSpaces = options.source?.document.wrapTrailSpaces ?? false;
     const { width = 595.3, height = 841.9, margin = 72 } = options.page ?? {};
@@ -349,6 +352,7 @@ export class NativeWordDocument implements WordLayoutSource {
             const media: WordDrawing[] = [];
             const inlines: WordInline[] = authored.runs.map((authoredRun) => {
               const inherited = compiled?.leaves.get(authoredRun.source!);
+              const named = authored.styleId ? this.namedStyles.resolveParagraphStyle(authored.styleId) : undefined;
               const contents: WordRunContent[] = [];
               if (authoredRun.tab) {
                 positionalTabXml(authoredRun.tab, authoredRun.text);
@@ -398,7 +402,7 @@ export class NativeWordDocument implements WordLayoutSource {
                 propertiesElementId: undefined,
                 contents,
               };
-              this.runFormats.set(run, format(authoredRun.format, inherited?.format ?? original?.textFormat));
+              this.runFormats.set(run, format(authoredRun.format, authored.styleId && authored.styleId !== original?.format.styleId ? named?.text : inherited?.format ?? original?.textFormat ?? named?.text));
               if (authoredRun.link !== undefined) {
                 if (!isWordHyperlink(authoredRun.link)) throw new TypeError('Invalid hyperlink target.');
                 if (authoredRun.link) return { kind: 'hyperlink' as const, elementId: allocate(), relationshipId: undefined, anchor: authoredRun.link.startsWith('#') ? authoredRun.link.slice(1) : undefined, target: authoredRun.link.startsWith('#') ? undefined : authoredRun.link, runs: [run] };
@@ -414,17 +418,19 @@ export class NativeWordDocument implements WordLayoutSource {
               section: hasSection ? original?.block.section : undefined,
               inlines,
             };
-            this.paragraphTextFormats.set(block, format(undefined, original?.textFormat));
+            const named = authored.styleId ? this.namedStyles.resolveParagraphStyle(authored.styleId) : undefined;
+            const styleChanged = authored.styleId !== undefined && authored.styleId !== original?.format.styleId;
+            this.paragraphTextFormats.set(block, format(undefined, styleChanged ? named?.text : original?.textFormat ?? named?.text));
             this.paragraphFormats.set(
               block,
               Object.freeze({
                 ...DEFAULT_PARAGRAPH,
                 ...compiled?.defaults.paragraph,
-                ...original?.format,
+                ...(styleChanged ? named?.paragraph : original?.format),
                 ...authored.positioning,
                 ...authored.paragraph,
                 alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? original?.format.alignment ?? compiled?.defaults.paragraph.alignment ?? 'start',
-                lineSpacing: authored.paragraph?.lineSpacing ?? original?.format.lineSpacing ?? compiled?.defaults.paragraph.lineSpacing ?? {
+                lineSpacing: authored.paragraph?.lineSpacing ?? (styleChanged ? named?.paragraph.lineSpacing : original?.format.lineSpacing) ?? compiled?.defaults.paragraph.lineSpacing ?? {
                   rule: 'auto' as const,
                   value: Math.round((this.options.lineSpacing ?? 1) * 240),
                 },

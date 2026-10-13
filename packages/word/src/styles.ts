@@ -192,6 +192,15 @@ export class WordStyles {
     return this.#byId.get(id);
   }
 
+  /** Resolve a named paragraph style without reading document XML. */
+  resolveParagraphStyle(styleId: string) {
+    const chain = this.styleChain(styleId, 'paragraph');
+    return {
+      paragraph: computedParagraph(chain.reduce((value, style) => mergeParagraph(value, style.paragraph), this.documentParagraphDefaults), styleId),
+      text: this.computedRun(chain.reduce((value, style) => mergeRun(value, style.run), this.documentRunDefaults)),
+    };
+  }
+
   paragraphFormat(document: WordDocumentLike, paragraph: WordParagraph): ComputedWordParagraphFormat {
     const direct = paragraph.propertiesElementId === undefined
       ? {}
