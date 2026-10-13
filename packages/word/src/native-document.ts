@@ -349,10 +349,10 @@ export class NativeWordDocument implements WordLayoutSource {
           if (previous?.signature === fingerprint) result = previous;
           else {
             if (authored.positioning && !isWordParagraphPositioning(authored.positioning)) throw new TypeError("Invalid paragraph positioning.");
+            const named = authored.styleId ? this.namedStyles.resolveParagraphStyle(authored.styleId) : undefined;
             const media: WordDrawing[] = [];
             const inlines: WordInline[] = authored.runs.map((authoredRun) => {
               const inherited = compiled?.leaves.get(authoredRun.source!);
-              const named = authored.styleId ? this.namedStyles.resolveParagraphStyle(authored.styleId) : undefined;
               const contents: WordRunContent[] = [];
               if (authoredRun.tab) {
                 positionalTabXml(authoredRun.tab, authoredRun.text);
@@ -418,7 +418,6 @@ export class NativeWordDocument implements WordLayoutSource {
               section: hasSection ? original?.block.section : undefined,
               inlines,
             };
-            const named = authored.styleId ? this.namedStyles.resolveParagraphStyle(authored.styleId) : undefined;
             const styleChanged = authored.styleId !== undefined && authored.styleId !== original?.format.styleId;
             this.paragraphTextFormats.set(block, format(undefined, styleChanged ? named?.text : original?.textFormat ?? named?.text));
             this.paragraphFormats.set(
