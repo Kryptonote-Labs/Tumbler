@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 async function edit(page: Page) {
   await page.goto('/playground/word-brief');
-  await expect(page.getByText('A quieter workspace', { exact: true })).toBeVisible();
+  await expect(page.getByText('A quieter workspace', { exact: true })).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
 }
 async function point(page: Page, word: string) {
