@@ -1,3 +1,4 @@
+import { isWordAuthoredShape, type WordAuthoredShape } from '../shapes.ts';
 import { isWordParagraphPositioning, isWordPositionalTab, type WordParagraphPositioning } from '../positioning.ts';
 import type { WordPositionalTab } from '../document.ts';
 import { WORD_HIGHLIGHTS } from '../text-properties.ts';
@@ -25,6 +26,7 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   verticalAlign?: 'baseline' | 'superscript' | 'subscript';
   characterSpacingPoints?: number;
   breakType?: import('../breaks.ts').WordBreakType;
+  shape?: WordAuthoredShape;
   link?: string;
   color?: string;
   font?: string;
@@ -78,6 +80,7 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
     if (key === 'verticalAlign' && typeof value === 'string' && ['baseline', 'superscript', 'subscript'].includes(value)) continue;
     if (key === 'characterSpacingPoints' && typeof value === 'number' && Number.isInteger(value * 20) && value * 20 >= -2147483648 && value * 20 <= 2147483647) continue;
     if (key === 'breakType' && typeof value === 'string' && ['line', 'page', 'column'].includes(value)) continue;
+    if (key === 'shape' && isWordAuthoredShape(value)) continue;
     if (key === 'link' && isWordHyperlink(value)) continue;
     if (key === 'color' && isTextColor(value)) continue;
     if (key === 'align' && ALIGNMENTS.some((alignment) => alignment === value)) continue;

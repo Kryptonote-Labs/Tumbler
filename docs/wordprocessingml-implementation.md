@@ -169,3 +169,5 @@ Authored runs can create or change HTTP(S), mail, telephone and bookmark hyperli
 Native and collaborative paragraph styles include Normal, Title, Subtitle and Heading 1–9. Headings serialize pStyle references and outline levels. Existing imported definitions take precedence over built-ins; missing requested built-ins are added at export. Named-style resolution works without XML reads during editing.
 
 Authored line, page and column breaks occupy one line-separator character in collaborative text and serialize as explicit w:br elements. Break type survives import, native pagination and source-aware export.
+
+Native shapes support rectangles, rounded rectangles, ellipses, triangles, diamonds, right arrows and lines, with dimensions, fill, outline and text. They serialize as editable DrawingML wordprocessing shapes and can use inline or floating placement. The Svelte shape view renders the same model. Full preset geometry, rich text-box formatting and shape effects remain unqualified.

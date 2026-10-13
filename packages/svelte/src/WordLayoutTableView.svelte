@@ -1,4 +1,5 @@
 <script lang="ts">
+  import WordShapeView from "./WordShapeView.svelte";
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
   import { wordPointsToCssPixels, type WordImageDrawing, type WordLayoutFragment, type WordLayoutTable } from "@tumblerjs/word";
   import { wordTableBorderCss } from './word-table-style.ts';
@@ -66,7 +67,9 @@
         {#each line.fragments as fragment}
           {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
             <img class="document-drawing" src={imageurl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
-          {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
+          {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "shape"}
+                  <div class="document-drawing" style={drawingStyle(fragment)}><WordShapeView shape={fragment.drawing.shape} /></div>
+                {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
             <div class="document-drawing" style={drawingStyle(fragment)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-table-chart-${pageIndex}-${fragment.contentElementId}`} /></div>
           {:else if fragment.kind === "drawing"}
             <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment)}></div>

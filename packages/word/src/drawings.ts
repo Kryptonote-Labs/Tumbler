@@ -1,3 +1,4 @@
+import { isWordAuthoredShape } from './shapes.ts';
 import { ChartParseError, parseOoxmlChart, type ChartModel } from "@tumblerjs/charts";
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { beginPackageTransaction, RelationshipsError, type OpcPackage, type OpcPart, type PartName, type Relationships } from "@tumblerjs/opc";
@@ -20,7 +21,7 @@ export interface WordDrawingAnchor {
   readonly distanceStartPoints: number;
 }
 
-export type WordDrawing = WordImageDrawing | WordChartDrawing | WordUnsupportedDrawing;
+export type WordDrawing = WordImageDrawing | WordChartDrawing | WordShapeDrawing | WordUnsupportedDrawing;
 
 interface WordDrawingBase {
   readonly elementId: number;
@@ -31,6 +32,8 @@ interface WordDrawingBase {
   readonly altText: string | undefined;
   readonly anchor: WordDrawingAnchor | undefined;
 }
+
+export interface WordShapeDrawing extends WordDrawingBase { readonly kind: 'shape'; readonly shape: import('./shapes.ts').WordAuthoredShape; }
 
 export interface WordImageDrawing extends WordDrawingBase {
   readonly kind: "image";
@@ -91,6 +94,23 @@ function parseDrawing(
   const chartNs = OOXML_NAMESPACES[input.conformance].chart;
   const graphicData = descendants(placementElement).find((element) => element.namespaceUri === drawingNs && element.localName === "graphicData");
   if (graphicData === undefined) return unsupported(drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, "Drawing graphicData is missing.");
+  const shapeNode = descendants(graphicData).find(element => element.localName === 'wsp' && element.namespaceUri === 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape');
+  if (shapeNode) {
+    const nodes = descendants(shapeNode);
+    const props = nodes.find(element => element.localName === 'spPr');
+    const geometry = props && descendants(props).find(element => element.localName === 'prstGeom');
+    const preset = attribute(geometry, 'prst');
+    const color = (parent: LosslessXmlElement | undefined) => {
+      if (!parent) return 'none';
+      const fill = parent.children.find((n): n is LosslessXmlElement => n.kind === 'element' && n.localName === 'solidFill');
+      const rgb = fill && descendants(fill).find(n => n.localName === 'srgbClr');
+      return rgb ? `#${attribute(rgb, 'val')}` : 'none';
+    };
+    const line = props && child(props, drawingNs, 'ln');
+    const text = nodes.filter(n => n.namespaceUri === OOXML_NAMESPACES[input.conformance].wordprocessing && n.localName === 'p').map(p => descendants(p).filter(n => n.localName === 't').map(n => n.children.filter(c => c.kind === 'text').map(c => c.kind === 'text' ? c.value : '').join('')).join('')).join('\n');
+    const shape = { preset, width: widthPoints, height: heightPoints, fill: color(props), outline: color(line), outlineWidth: Number(attribute(line, 'w') ?? 0) / EMUS_PER_POINT, ...(text ? { text } : {}), ...(altText ? { alt: altText } : {}), layout: placement === 'inline' ? 'inline' : anchor?.behindDocument ? 'behind' : 'front', ...(anchor ? { x: anchor.horizontalOffsetPoints ?? 0, y: anchor.verticalOffsetPoints ?? 0, moveWithText: anchor.verticalRelativeTo !== 'page' } : {}) };
+    if (isWordAuthoredShape(shape)) return { kind: 'shape', elementId: drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, shape };
+  }
   const relationshipNs = input.conformance === "strict" ? "http://purl.oclc.org/ooxml/officeDocument/relationships" : "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
   const chart = descendants(graphicData).find((element) => element.namespaceUri === chartNs && element.localName === "chart");
   if (chart !== undefined) {

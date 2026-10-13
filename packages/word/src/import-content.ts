@@ -20,7 +20,9 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
     }
     const projected: WordTextRun[] = wordParagraphTextSegments(document, block).map((segment) => {
       const computed = document.styles.runFormat(document, block, runs.get(segment.runElementId));
+      const drawing = document.drawings.get(segment.elementId);
       return {
+        ...(drawing?.kind === 'shape' ? { shape: drawing.shape } : {}),
         source: segment.elementId,
         ...(segment.breakType ? { breakType: segment.breakType } : {}),
         ...(links.has(segment.runElementId) ? { link: links.get(segment.runElementId)! } : {}),

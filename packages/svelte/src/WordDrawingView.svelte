@@ -1,4 +1,5 @@
 <script lang="ts">
+  import WordShapeView from "./WordShapeView.svelte";
   import { wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing } from '@tumblerjs/word';
   import OoxmlChart from './OoxmlChart.svelte';
   import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
@@ -111,7 +112,9 @@
 </script>
 
 {#snippet content()}
-  {#if drawing.kind === 'image'}
+  {#if drawing.kind === 'shape'}
+    <WordShapeView shape={drawing.shape} />
+  {:else if drawing.kind === 'image'}
     <img src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading={imageLoading} decoding="async" />
   {:else if drawing.kind === 'chart'}
     <OoxmlChart model={drawing.model} width={displayWidth} height={displayHeight} clipId={`word-drawing-${drawing.elementId}`} />
