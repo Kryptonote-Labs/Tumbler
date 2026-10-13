@@ -11,6 +11,7 @@ import { authoredContent, type WordContentBlock, type WordAuthoredImage } from '
 export type WordTextFormat = Partial<Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'underline' | 'color' | 'strike' | 'highlight' | 'verticalAlign' | 'characterSpacingPoints'>>;
 export interface WordTextRun { readonly tab?: WordPositionalTab; readonly source?: number; readonly sourceCopy?: string; readonly text: string; readonly format?: WordTextFormat; readonly image?: WordAuthoredImage; readonly field?: WordPageField; }
 export interface WordTextParagraph {
+  readonly paragraph?: import('./paragraph-format.ts').WordParagraphFormat;
   readonly positioning?: WordParagraphPositioning;
   /** Reference into an immutable source package, retained by NativeWordDocument at import and export. */
   readonly source?: number;

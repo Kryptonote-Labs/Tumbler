@@ -157,6 +157,7 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
     if (typeof part.insert !== 'string') continue;
     if (last >= offset && last < offset + part.insert.length) {
       if (part.attributes?.wordParagraph) result.wordParagraph = part.attributes.wordParagraph;
+      if (part.attributes?.paragraph) result.paragraph = part.attributes.paragraph;
       if (part.attributes?.positioning) result.positioning = part.attributes.positioning;
       if (part.attributes?.align) result.align = part.attributes.align;
       if (part.attributes?.list) result.list = part.attributes.list;
@@ -178,7 +179,7 @@ function replaceWordDelta(
   value = value.replace(/\r\n?/g, '\n');
   validateText(text.toString().slice(0, range.start) + value + text.toString().slice(range.end));
   validateAttributes(attributes);
-  const { align, positioning, tab: _tab, list, table: inheritedTable, wordParagraph, image: _image, field: _field, ...inline } = attributes;
+  const { align, paragraph, positioning, tab: _tab, list, table: inheritedTable, wordParagraph, image: _image, field: _field, ...inline } = attributes;
   let table = inheritedTable;
   if (table && range.end > range.start) {
     const paragraphs = tableParagraphs(text);
@@ -204,6 +205,7 @@ function replaceWordDelta(
           ...(attributes.wordCopy ? { wordCopy: attributes.wordCopy } : {}),
           ...(align ? { align } : {}),
           ...(positioning ? { positioning } : {}),
+          ...(paragraph ? { paragraph } : {}),
           ...(list ? { list } : {}),
           ...(table ? { table } : {}),
         },
@@ -237,7 +239,7 @@ function formatWordDelta(
   if (attributes.table !== undefined)
     throw new Error('Use table operations to change cell structure.');
   const value = text.toString();
-  const { align, positioning, tab: _tab, list, table: _table, image: _image, field: _field, ...inline } = attributes;
+  const { align, paragraph, positioning, tab: _tab, list, table: _table, image: _image, field: _field, ...inline } = attributes;
   const delta: WordDelta = [];
   let cursor = 0;
   const append = (start: number, length: number, attributes: WordFormatPatch) => {
@@ -256,11 +258,12 @@ function formatWordDelta(
       const to = Math.min(end, range.end);
       if (to > from) append(from, to - from, inline);
     }
-    if (align !== undefined || list !== undefined || positioning !== undefined)
+    if (align !== undefined || list !== undefined || positioning !== undefined || paragraph !== undefined)
       append(end, 1, {
         ...(align !== undefined ? { align: align === 'left' ? null : align } : {}),
         ...(list !== undefined ? { list } : {}),
         ...(positioning !== undefined ? { positioning } : {}),
+        ...(paragraph !== undefined ? { paragraph: paragraph === null ? null : { ...wordFormats(text, { start, end: start }).paragraph, ...paragraph } } : {}),
       });
     if (end >= Math.max(range.start, range.end - 1)) break;
     start = end + 1;

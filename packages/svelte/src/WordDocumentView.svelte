@@ -1,4 +1,5 @@
 <script lang="ts">
+  import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
   import { flushSync, onDestroy, onMount, untrack } from "svelte";
   import { wordLineAtPoint, layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import { zoomGesture } from "./zoom-gesture.ts";
@@ -482,6 +483,7 @@
             onkeydown={handleKeydown}
             style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
           >
+            <WordParagraphDecorations lines={[...bodyLines(page), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
             {#if page.noteSeparatorY !== undefined}
               <div class="note-separator" style={`left:${wordPointsToCssPixels(page.section.marginLeftTwips / 20)}px;top:${wordPointsToCssPixels(page.noteSeparatorY)}px`}></div>
             {/if}

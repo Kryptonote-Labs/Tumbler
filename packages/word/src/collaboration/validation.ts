@@ -16,6 +16,7 @@ export function validateWordText(text: Y.Text) {
     validateAttributes(part.attributes);
     if (part.attributes?.field && (part.attributes.image || !/^\uFFFC+$/.test(part.insert))) throw new Error('Invalid page field content.');
     if (part.attributes?.tab && (part.attributes.field || part.attributes.image || !/^\t+$/.test(part.insert))) throw new Error('Invalid positional tab content.');
+    if (part.attributes?.paragraph && !/^\n+$/.test(part.insert)) throw new Error('Paragraph formatting belongs on paragraph boundaries.');
     if (part.attributes?.positioning && !/^\n+$/.test(part.insert)) throw new Error('Paragraph positioning belongs on paragraph boundaries.');
     const list = part.attributes?.list;
     if (list) {

@@ -141,3 +141,4 @@ export type { WordCellFormat, WordRowFormat, WordTableBorder, WordCellBorders, W
 export type { WordLayoutTableBorder } from './table-borders.ts';
 
 export { WORD_HIGHLIGHTS } from './text-properties.ts';
+export { paragraphFormatXml, isWordParagraphFormat, type WordParagraphFormat } from './paragraph-format.ts';

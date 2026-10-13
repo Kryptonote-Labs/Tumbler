@@ -1,6 +1,7 @@
 import { isWordParagraphPositioning, isWordPositionalTab, type WordParagraphPositioning } from '../positioning.ts';
 import type { WordPositionalTab } from '../document.ts';
 import { WORD_HIGHLIGHTS } from '../text-properties.ts';
+import { isWordParagraphFormat, type WordParagraphFormat } from '../paragraph-format.ts';
 import { isDocumentImage, type DocumentImage } from './images.ts';
 import { isTableCell, type TableCell } from './tables.ts';
 export const TEXT_FORMATS = ['bold', 'italic', 'underline', 'strike'] as const;
@@ -14,6 +15,7 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   fontFamily?: string;
   wordUnderline?: 'single' | 'double';
   align?: Alignment;
+  paragraph?: WordParagraphFormat;
   positioning?: WordParagraphPositioning;
   tab?: WordPositionalTab;
   highlight?: string;
@@ -57,6 +59,7 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
       continue;
     if (key === 'wordCopy' && typeof value === 'string') continue;
     if (key === 'wordUnderline' && (value === 'single' || value === 'double')) continue;
+    if (key === 'paragraph' && isWordParagraphFormat(value)) continue;
     if (key === 'positioning' && isWordParagraphPositioning(value)) continue;
     if (key === 'tab' && isWordPositionalTab(value)) continue;
     if (key === 'field' && (value === 'PAGE' || value === 'NUMPAGES')) continue;

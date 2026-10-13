@@ -1,3 +1,4 @@
+import { paragraphFormatXml } from './paragraph-format.ts';
 import { cellFormatXml, rowFormatXml, type WordCellFormat, type WordRowFormat } from './table-format.ts';
 import { paragraphPositioningXml, positionalTabXml } from './positioning.ts';
 import { pageFieldXml } from './page-fields.ts';
@@ -61,7 +62,9 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
             numbering = `<w:numPr><w:ilvl w:val="${level}"/><w:numId w:val="${list.id}"/></w:numPr>`;
           }
           const positioning = block.positioning ? paragraphPositioningXml(block.positioning) : {};
-          const properties = numbering + (positioning.tabs ?? '') + (positioning.ind ?? '') + (block.alignment ? `<w:jc w:val="${block.alignment}"/>` : '');
+          const paragraph = block.paragraph ? paragraphFormatXml(block.paragraph) : new Map<string, string>();
+          const early = ['keepNext', 'keepLines', 'pageBreakBefore', 'widowControl'];
+          const properties = early.map(key => paragraph.get(key) ?? '').join('') + numbering + (paragraph.get('pBdr') ?? '') + (paragraph.get('shd') ?? '') + (positioning.tabs ?? '') + (paragraph.get('spacing') ?? '') + (positioning.ind ?? '') + (paragraph.get('contextualSpacing') ?? '') + (block.alignment ? `<w:jc w:val="${block.alignment === 'justify' ? 'both' : block.alignment}"/>` : '');
           return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${run.tab ? positionalTabXml(run.tab, run.text) : textContent(run.text)}</w:r>`).join('')}</w:p>`;
         }
         case 'table': {

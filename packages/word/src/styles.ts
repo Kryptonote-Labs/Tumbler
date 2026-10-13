@@ -53,6 +53,8 @@ export interface WordLineSpacing {
 }
 
 export interface WordParagraphProperties {
+  readonly shading?: string;
+  readonly borders?: import('./table-format.ts').WordCellBorders;
   readonly styleId?: string;
   readonly alignment?: "start" | "center" | "end" | "justify" | "distribute";
   readonly spacingBeforeTwips?: number;
@@ -86,6 +88,8 @@ export interface ComputedWordTextFormat {
 }
 
 export interface ComputedWordParagraphFormat {
+  readonly shading?: string;
+  readonly borders?: import('./table-format.ts').WordCellBorders;
   readonly styleId: string | undefined;
   readonly alignment: "start" | "center" | "end" | "justify" | "distribute";
   readonly spacingBeforeTwips: number;
@@ -370,6 +374,8 @@ export function parseRunProperties(element: LosslessXmlElement, namespace: strin
   });
 }
 
+import { readTableShading, readTableBorders } from './table-format.ts';
+
 export function parseParagraphProperties(element: LosslessXmlElement, namespace: string): WordParagraphProperties {
   const spacing = onlyChild(element, namespace, "spacing", "Paragraph properties must not repeat spacing.");
   const indentation = onlyChild(element, namespace, "ind", "Paragraph properties must not repeat ind.");
@@ -385,6 +391,8 @@ export function parseParagraphProperties(element: LosslessXmlElement, namespace:
     value: integer(rawLine, "line spacing", 0, 2_147_483_647),
   });
   return freezeParagraph({
+    ...(onlyChild(element, namespace, 'shd', 'Duplicate shading') === undefined ? {} : { shading: readTableShading(onlyChild(element, namespace, 'shd', 'Duplicate shading'), namespace)! }),
+    ...(onlyChild(element, namespace, 'pBdr', 'Duplicate borders') === undefined ? {} : { borders: readTableBorders(onlyChild(element, namespace, 'pBdr', 'Duplicate borders'), namespace) }),
     ...(styleId === undefined ? {} : { styleId }),
     ...(alignment === undefined ? {} : { alignment }),
     ...(spacing === undefined || attr(spacing, namespace, "before") === undefined ? {} : { spacingBeforeTwips: twips(attr(spacing, namespace, "before")!, "spacing before") }),
@@ -427,6 +435,8 @@ function parseTabStops(element: LosslessXmlElement, namespace: string): readonly
 function computedParagraph(properties: WordParagraphProperties, styleId: string | undefined): ComputedWordParagraphFormat {
   return Object.freeze({
     styleId,
+    ...(properties.shading === undefined ? {} : { shading: properties.shading }),
+    ...(properties.borders === undefined ? {} : { borders: properties.borders }),
     alignment: properties.alignment ?? DEFAULT_PARAGRAPH.alignment,
     spacingBeforeTwips: properties.spacingBeforeTwips ?? DEFAULT_PARAGRAPH.spacingBeforeTwips,
     spacingAfterTwips: properties.spacingAfterTwips ?? DEFAULT_PARAGRAPH.spacingAfterTwips,

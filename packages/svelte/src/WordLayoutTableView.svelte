@@ -1,4 +1,5 @@
 <script lang="ts">
+  import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
   import { wordPointsToCssPixels, type WordImageDrawing, type WordLayoutFragment, type WordLayoutTable } from "@tumblerjs/word";
   import { wordTableBorderCss } from './word-table-style.ts';
   import OoxmlChart from "./OoxmlChart.svelte";
@@ -45,6 +46,7 @@
     {/each}
   </div>
   {#each current.cells as cell}
+    <WordParagraphDecorations lines={cell.lines} />
     {#if !decorationsOnly}
       {#each cell.lines as line}
         {#if line.marker !== undefined}
