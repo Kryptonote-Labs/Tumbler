@@ -25,3 +25,16 @@ test('applying heading then normal clears the old direct formatting in imported 
     expect(reopened).toMatchObject({ styleId, runs: [{ format: { fontSizePoints: styleId === 'Heading1' ? 20 : 12 } }] });
   }
 });
+
+test('style resets remove complex-script direct overrides from imported runs', async () => {
+  const { buildWordDocumentFixture } = await import('./document-fixture.ts');
+  const { openWordArtifact } = await import('../src/index.ts');
+  const source = openWordArtifact(buildWordDocumentFixture({ documentXml: '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:rPr><w:bCs w:val="0"/><w:iCs/><w:szCs w:val="20"/></w:rPr><w:t>مرحبا</w:t></w:r></w:p></w:body></w:document>' }));
+  const first = importWordContent(source)[0]!;
+  if (first.kind !== 'paragraph') throw Error('paragraph');
+  const native = new NativeWordDocument({ source });
+  native.update([{ kind: 'paragraph', source: first.source!, styleId: 'Heading1', runs: first.runs.map(({ format, ...run }) => run) }]);
+  const output = native.artifact();
+  expect(output.document.source.source).not.toMatch(/<w:(szCs|bCs|iCs)\b/);
+  expect(importWordContent(output)[0]).toMatchObject({ paragraph: { keepNext: true, spacingBeforeTwips: 240 }, runs: [{ format: { fontSizePoints: 20, bold: true } }] });
+});
