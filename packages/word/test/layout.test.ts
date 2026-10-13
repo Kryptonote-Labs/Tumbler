@@ -17,6 +17,18 @@ const measurer: WordTextMeasurer = {
 };
 
 describe("WordprocessingML page layout", () => {
+  test("positions superscript and subscript with smaller glyphs and shifted baselines", () => {
+    const document = open(`<w:p><w:r><w:t>A</w:t></w:r><w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:t>2</w:t></w:r><w:r><w:rPr><w:vertAlign w:val="subscript"/></w:rPr><w:t>3</w:t></w:r></w:p>`, section({ width: 6000, height: 7000, margin: 300 }));
+    const line = layoutWordDocument(document, measurer).pages[0]!.columns[0]!.lines[0]!;
+    const [normal, superscript, subscript] = line.fragments;
+    expect(superscript!.format.fontSizePoints).toBeCloseTo(normal!.format.fontSizePoints * 0.65);
+    expect(subscript!.width).toBeCloseTo(normal!.width * 0.65);
+    expect(superscript!.baseline).toBeLessThan(normal!.baseline);
+    expect(subscript!.baseline).toBeGreaterThan(normal!.baseline);
+    expect(superscript!.y + superscript!.height).toBeCloseTo(superscript!.baseline + superscript!.format.fontSizePoints * 0.2);
+    expect(line.fragments.map(fragment => [fragment.startOffset, fragment.endOffset])).toEqual([[0, 1], [1, 2], [2, 3]]);
+  });
+
   test("wraps logical text across arbitrarily split runs with stable source offsets", () => {
     const document = open(`<w:p><w:r><w:t>Hello </w:t></w:r><w:r><w:t>world and </w:t></w:r><w:r><w:t>friends</w:t></w:r></w:p>`, section({ width: 2_400, height: 3_000, margin: 200 }));
     const layout = layoutWordDocument(document, measurer);
