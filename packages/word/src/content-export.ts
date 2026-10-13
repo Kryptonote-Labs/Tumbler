@@ -133,15 +133,15 @@ export function reconcileWordContent(
           .join('') +
         '>',
     );
+  const usedHyperlinks = new Set<string>();
   const remap = (value: string) =>
     bind(
       conformanceMarkup(
-        value.replace(/r:(embed|id)="([^"]+)"/g, (_, key: string, id: string) => `r:${key}="${prefix}${id}"`),
+        value.replace(/r:(embed|id)="([^"]+)"/g, (_, key: string, id: string) => { if (key === 'id') usedHyperlinks.add(id); return `r:${key}="${prefix}${id}"`; }),
       ),
     );
   for (const rel of relationships) {
     if (rel.targetMode === 'External' && /\/hyperlink$/.test(rel.type)) {
-      transaction.addRelationship(document.part.name, { id: prefix + rel.id, type: conformanceMarkup(rel.type), target: rel.target, targetMode: 'External' });
       continue;
     }
     if (rel.targetMode !== 'Internal' || !/\/(image|numbering)$/.test(rel.type)) continue;
@@ -187,6 +187,8 @@ export function reconcileWordContent(
   const output = bind(content);
   edit.replaceElementMarkup(body, output);
   transaction.replacePart(document.part.name, edit.commit().bytes);
+  for (const rel of relationships) if (usedHyperlinks.has(rel.id) && rel.targetMode === 'External' && /\/hyperlink$/.test(rel.type))
+    transaction.addRelationship(document.part.name, { id: prefix + rel.id, type: conformanceMarkup(rel.type), target: rel.target, targetMode: 'External' });
   let result = openWordArtifact(transaction.commit(), {
     maxBlocks: Number.MAX_SAFE_INTEGER,
     maxInlineItems: Number.MAX_SAFE_INTEGER,
