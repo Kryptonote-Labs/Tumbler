@@ -2,8 +2,7 @@ import { isWordAuthoredList, wordListMarker } from './authored-list.ts';
 import { isWordHyperlink } from './hyperlinks.ts';
 import { wordAuthoringStyles } from './authored-styles.ts';
 import { wordBreakXml, validateBreakRun } from './breaks.ts';
-import { nativeShapeDrawing } from './shapes.ts';
-
+import { nativeShapeDrawing, validateShapeRun } from './shapes.ts';
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
 import { wordGeometryAt } from './geometry.ts';
@@ -355,6 +354,7 @@ export class NativeWordDocument implements WordLayoutSource {
             const media: WordDrawing[] = [];
             const inlines: WordInline[] = authored.runs.map((authoredRun) => {
               validateBreakRun(authoredRun);
+              validateShapeRun(authoredRun);
               const inherited = compiled?.leaves.get(authoredRun.source!);
               const named = authored.styleId ? this.namedStyles.resolveParagraphStyle(authored.styleId) : undefined;
               const contents: WordRunContent[] = [];
