@@ -1,5 +1,5 @@
 import { formatWordNumber } from './numbering.ts';
-export const WORD_LIST_KINDS = ['bullet', 'decimal', 'lowerLetter', 'upperLetter', 'lowerRoman', 'upperRoman'] as const;
+export const WORD_LIST_KINDS = ['none', 'bullet', 'decimal', 'lowerLetter', 'upperLetter', 'lowerRoman', 'upperRoman'] as const;
 export type WordListKind = typeof WORD_LIST_KINDS[number];
 export interface WordAuthoredList { readonly id: string; readonly kind: WordListKind; readonly level?: number; readonly start?: number; readonly marker?: string; readonly multilevel?: boolean; }
 export function isWordAuthoredList(value: unknown): value is WordAuthoredList {
@@ -13,8 +13,16 @@ export function isWordAuthoredList(value: unknown): value is WordAuthoredList {
     (list.multilevel === undefined || typeof list.multilevel === 'boolean');
 }
 export function wordListPattern(list: WordAuthoredList, level: number): string {
-  return list.kind === 'bullet' ? list.marker ?? '•' : list.multilevel ? Array.from({ length: level + 1 }, (_, i) => `%${i + 1}`).join('.') + '.' : `%${level + 1}.`;
+  return list.kind === 'none' ? '' : list.kind === 'bullet' ? list.marker ?? '•' : list.multilevel ? Array.from({ length: level + 1 }, (_, i) => `%${i + 1}`).join('.') + '.' : `%${level + 1}.`;
 }
-export function wordListMarker(list: WordAuthoredList, values: readonly number[], level: number): string {
-  return wordListPattern(list, level).replace(/%([1-9])/g, (_, index: string) => formatWordNumber(values[Number(index) - 1] ?? list.start ?? 1, list.kind));
+export function wordListMarker(list: WordAuthoredList, values: readonly number[], level: number, levels?: ReadonlyMap<number, WordAuthoredList>): string {
+  return wordListPattern(list, level).replace(/%([1-9])/g, (_, index: string) => formatWordNumber(values[Number(index) - 1] ?? list.start ?? 1, levels?.get(Number(index) - 1)?.kind ?? list.kind));
+}
+
+/** A numbering definition may use a different format at each of its nine levels. */
+export function registerWordListLevel(levels: Map<number, WordAuthoredList>, list: WordAuthoredList): void {
+  const level = list.level ?? 0;
+  const previous = levels.get(level);
+  if (previous && (previous.kind !== list.kind || (previous.start ?? 1) !== (list.start ?? 1) || previous.marker !== list.marker || Boolean(previous.multilevel) !== Boolean(list.multilevel))) throw new TypeError('A list level must use consistent numbering.');
+  levels.set(level, list);
 }

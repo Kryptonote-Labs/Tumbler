@@ -169,6 +169,11 @@ export function wordParagraphRenderer(
       if (run.format?.[key] !== undefined && run.format[key] !== original?.format?.[key])
         replacements.set(propertyNames[key], runProperties({ [key]: run.format[key] }));
     if (resetStyle) for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[]) if (run.format?.[key] === undefined) replacements.set(propertyNames[key], '');
+    if (resetStyle) {
+      if (run.format?.fontSizePoints === undefined) replacements.set('szCs', '');
+      if (run.format?.bold === undefined) replacements.set('bCs', '');
+      if (run.format?.italic === undefined) replacements.set('iCs', '');
+    }
     let sourceMarkup = element ? markup.raw(element) : '';
     if (replacedImages.has(run)) {
       const relationship = remap(generatedRun ?? '').match(/r:embed="([^"]+)"/)?.[1];
@@ -235,10 +240,28 @@ export function wordParagraphRenderer(
     if (styleChanged && paragraph.paragraph === undefined) for (const key of ['spacing', 'keepNext', 'keepLines', 'pageBreakBefore', 'widowControl', 'contextualSpacing']) replacements.set(key, '');
     if (styleChanged) replacements.set('pStyle', `<w:pStyle w:val="${xml(paragraph.styleId!)}"/>`);
     if (paragraph.alignment !== undefined && paragraph.alignment !== original?.alignment)
-      replacements.set('jc', `<w:jc w:val="${paragraph.alignment}"/>`);
+      replacements.set('jc', `<w:jc w:val="${paragraph.alignment === 'justify' ? 'both' : paragraph.alignment}"/>`);
     if (paragraph.paragraph && JSON.stringify(paragraph.paragraph) !== JSON.stringify(original?.paragraph)) {
-      const combined = { ...original?.paragraph, ...paragraph.paragraph };
-      for (const [key, value] of paragraphFormatXml(combined)) replacements.set(key, value);
+      const changed = Object.fromEntries(Object.entries(paragraph.paragraph).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(original?.paragraph?.[key as keyof NonNullable<WordTextParagraph['paragraph']>])));
+      for (const [key, value] of paragraphFormatXml(changed)) replacements.set(key, value);
+      const spacing = markup.children(properties, 'spacing')[0];
+      if (spacing && replacements.has('spacing')) {
+        const names = new Set<string>();
+        if ('spacingBeforeTwips' in changed) for (const key of ['before', 'beforeLines', 'beforeAutospacing']) names.add(key);
+        if ('spacingAfterTwips' in changed) for (const key of ['after', 'afterLines', 'afterAutospacing']) names.add(key);
+        if ('lineSpacing' in changed) for (const key of ['line', 'lineRule']) names.add(key);
+        const kept = spacing.attributes.filter(attribute => attribute.namespaceUri !== spacing.namespaceUri || !names.has(attribute.localName));
+        const fresh = replacements.get('spacing')!.match(/ w:[^>]+(?=\/>)/)?.[0] ?? '';
+        replacements.set('spacing', `<w:spacing${kept.map(attribute => ` ${attribute.qualified}="${xml(attribute.value)}"`).join('')}${fresh}/>`);
+      }
+      const borders = markup.children(properties, 'pBdr')[0];
+      if (borders && changed.borders) {
+        const edges = new Map<string, string>();
+        const borderChanges = Object.fromEntries(Object.entries(paragraph.paragraph.borders ?? {}).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(original?.paragraph?.borders?.[key as keyof NonNullable<NonNullable<WordTextParagraph['paragraph']>['borders']>])));
+        const generated = paragraphFormatXml({ borders: borderChanges }).get('pBdr') ?? '';
+        for (const match of generated.matchAll(/<w:([a-zA-Z]+)\b[^>]*\/>/g)) edges.set(match[1]!, match[0]);
+        replacements.set('pBdr', markup.properties(borders, 'pBdr', edges));
+      }
     }
     if (paragraph.positioning && JSON.stringify(paragraph.positioning) !== JSON.stringify(original?.positioning)) {
       const positioning = paragraphPositioningXml({ ...original?.positioning, ...paragraph.positioning });

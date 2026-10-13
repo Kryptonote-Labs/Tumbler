@@ -23,3 +23,19 @@ test('replace all preserves unaffected formatting and is one undo operation', ()
   undo.redo(); expect(text.toString()).toBe('kitten kitten\n');
   doc.destroy();
 });
+
+
+test('canonical Unicode matches preserve original document offsets', () => {
+  expect(findWordMatches('Cafe\u0301 café', 'café')).toEqual([{ start: 0, end: 5 }, { start: 6, end: 10 }]);
+  expect(findWordMatches('é', 'e\u0301')).toEqual([{ start: 0, end: 1 }]);
+  const doc = new Y.Doc(); const text = doc.getText('body');
+  text.insert(0, 'e\u0301e\u0301\n');
+  const commands = createWordCommands();
+  text.applyDelta(commands.wordTransaction(text, replaceWordMatches(text, 'é', 'x\ny')));
+  expect(text.toString()).toBe('x\nyx\ny\n');
+  const before = text.toDelta();
+  for (const replacement of ['\uFFFC', '\uD800'])
+    expect(() => commands.wordTransaction(text, replaceWordMatches(text, 'x', replacement))).toThrow();
+  expect(text.toDelta()).toEqual(before);
+  doc.destroy();
+});

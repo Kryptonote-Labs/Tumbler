@@ -1,5 +1,5 @@
 import { beginLosslessXmlEdit, parseLosslessXml } from '@tumblerjs/ooxml';
-import { PartName, type PackageTransaction } from '@tumblerjs/opc';
+import { PartName, RelationshipsError, type PackageTransaction } from '@tumblerjs/opc';
 import { WORD_BUILTIN_STYLES, builtinStyleXml } from './authored-styles.ts';
 import type { WordDocument } from './document.ts';
 
@@ -23,8 +23,10 @@ export function mergeAuthoredStyles(document: WordDocument, ids: readonly string
     transaction.addPart(path, 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml', new TextEncoder().encode(`<w:styles xmlns:w="${namespace}">${content}</w:styles>`));
     const office = document.conformance === 'strict' ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
     let id = 'tumbler-styles';
-    const existing = document.package.relationships(document.part.name).items;
-    while (existing.some(rel => rel.id === id)) id += '-new';
+    let existingIds = new Set<string>();
+    try { existingIds = new Set(document.package.relationships(document.part.name).items.map(rel => rel.id)); }
+    catch (error) { if (!(error instanceof RelationshipsError) || error.code !== 'missing_item') throw error; }
+    while (existingIds.has(id)) id += '-new';
     transaction.addRelationship(document.part.name, { id, type: `${office}/styles`, target: path });
   }
 }
