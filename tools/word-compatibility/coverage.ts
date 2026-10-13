@@ -1,3 +1,4 @@
+import { ribbonPlans } from './ribbon-authoring.ts';
 import { renderPlans } from './render/contract.ts';
 import { tablePlans } from './tables/contract.ts';
 import { preservationPlans } from './preservation/contract.ts';
@@ -22,7 +23,7 @@ export interface CoverageTarget {
   readonly gap: string | null;
 }
 
-export const coveragePlans: readonly CoveragePlan[] = [...preservationPlans, ...tablePlans, ...renderPlans];
+export const coveragePlans: readonly CoveragePlan[] = [...preservationPlans, ...tablePlans, ...renderPlans, ...ribbonPlans];
 
 /** Every topic stays in every dimension. No exclusions or credit for merely linking a fixture. */
 export function coverage(topics: readonly Topic[], requirements: readonly RequirementResult[], plans: readonly CoveragePlan[] = coveragePlans) {
