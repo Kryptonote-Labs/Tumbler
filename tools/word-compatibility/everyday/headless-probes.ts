@@ -58,7 +58,7 @@ export const headlessProbes: Readonly<Record<string, () => readonly Fixture[]>> 
     const source = createWordArtifact({ paragraphs: [{ runs: [{ text: 'Heading' }] }, { runs: [{ text: 'Body' }] }] });
     const model = new NativeWordDocument({ source });
     const blocks = importWordContent(source);
-    model.update(blocks.map((block, index) => block.kind === 'paragraph' ? { ...block, styleId: index ? 'Normal' : 'Heading1', runs: block.runs.map(run => ({ ...run, format: index ? { italic: true } : undefined })) } : block));
+    model.update(blocks.map((block, index) => block.kind === 'paragraph' ? { ...block, styleId: index ? 'Normal' : 'Heading1', runs: block.runs.map(({ format, ...run }) => ({ ...run, ...(index ? { format: { italic: true } } : {}) })) } : block));
     return [output('named-styles', model.artifact(), actual => {
       const paragraphs = actual.document.blocks.filter(block => block.kind === 'paragraph');
       assert.deepEqual(paragraphs.map(block => actual.document.styles.paragraphFormat(actual.document, block).styleId), ['Heading1', 'Normal']);
