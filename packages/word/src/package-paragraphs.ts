@@ -224,7 +224,7 @@ export function wordParagraphRenderer(
       if (left > 0) replacements.set('sectPr', '');
     }
     if (paragraph.alignment !== undefined && paragraph.alignment !== original?.alignment)
-      replacements.set('jc', `<w:jc w:val="${paragraph.alignment}"/>`);
+      replacements.set('jc', `<w:jc w:val="${paragraph.alignment === 'justify' ? 'both' : paragraph.alignment}"/>`);
     if (paragraph.paragraph && JSON.stringify(paragraph.paragraph) !== JSON.stringify(original?.paragraph)) {
       const changed = Object.fromEntries(Object.entries(paragraph.paragraph).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(original?.paragraph?.[key as keyof NonNullable<WordTextParagraph['paragraph']>])));
       for (const [key, value] of paragraphFormatXml(changed)) replacements.set(key, value);
