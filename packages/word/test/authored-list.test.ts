@@ -1,3 +1,5 @@
+import * as Y from 'yjs';
+import { validateWordText } from '../src/collaboration/index.ts';
 import { expect, test } from 'bun:test';
 import { createWordArtifact, NativeWordDocument, WORD_LIST_KINDS, type WordContentBlock } from '../src/index.ts';
 
@@ -24,4 +26,13 @@ test('conflicting definitions at the same list level reject in both authoring pa
     expect(() => new NativeWordDocument().update(blocks)).toThrow('A list level must use consistent numbering.');
     expect(() => createWordArtifact({ blocks })).toThrow('A list level must use consistent numbering.');
   }
+});
+
+
+test('collaborative lists allow mixed levels and reject conflicts within a level', () => {
+  const text = new Y.Doc().getText('body');
+  text.applyDelta([{ insert: 'Number' }, { insert: '\n', attributes: { list: { id: 'outline', kind: 'decimal', level: 0 } } }, { insert: 'Letter' }, { insert: '\n', attributes: { list: { id: 'outline', kind: 'lowerLetter', level: 1 } } }]);
+  expect(() => validateWordText(text)).not.toThrow();
+  text.format(text.length - 1, 1, { list: { id: 'outline', kind: 'lowerLetter', level: 0 } });
+  expect(() => validateWordText(text)).toThrow('A list level must use consistent numbering.');
 });
