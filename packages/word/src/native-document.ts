@@ -1,4 +1,4 @@
-import { isWordAuthoredList, wordListMarker } from './authored-list.ts';
+import { isWordAuthoredList, registerWordListLevel, wordListMarker, type WordAuthoredList } from './authored-list.ts';
 import { isWordHyperlink } from './hyperlinks.ts';
 import { wordAuthoringStyles } from './authored-styles.ts';
 import { wordBreakXml, validateBreakRun } from './breaks.ts';
@@ -202,7 +202,7 @@ export class NativeWordDocument implements WordLayoutSource {
     const sourceOccurrences = new Map<string, number>();
     const drawings = new Map<number, WordDrawing>();
     const markers = new Map<number, WordListMarker>();
-    const counters = new Map<string, { kind: string; start: number; values: number[] }>();
+    const counters = new Map<string, { levels: Map<number, WordAuthoredList>; values: number[] }>();
     const allocate = () => this.nextId--;
     const compiled = this.compiled;
     const numbering: { elementId: number; reference: WordParagraphNumbering }[] = [];
@@ -354,8 +354,9 @@ export class NativeWordDocument implements WordLayoutSource {
             const named = authored.styleId ? this.namedStyles.resolveParagraphStyle(authored.styleId) : undefined;
             const media: WordDrawing[] = [];
             const inlines: WordInline[] = authored.runs.map((authoredRun) => {
-              validateBreakRun(authoredRun);
               validateShapeRun(authoredRun);
+
+              validateBreakRun(authoredRun);
               const inherited = compiled?.leaves.get(authoredRun.source!);
               const contents: WordRunContent[] = [];
               if (authoredRun.shape) {
@@ -452,6 +453,7 @@ export class NativeWordDocument implements WordLayoutSource {
           if (list && original?.numbering && JSON.stringify(list) === JSON.stringify(compiled?.lists.get(authored.source!))) {
             numbering.push({ elementId: result.block.elementId, reference: original.numbering });
           } else if (list) {
+            if (!isWordAuthoredList(list)) throw new TypeError('Invalid list.');
             const level = list.level ?? 0,
               start = list.start ?? 1;
             if (
@@ -459,21 +461,20 @@ export class NativeWordDocument implements WordLayoutSource {
               level < 0 ||
               level > 8 ||
               !Number.isInteger(start) ||
-              start < 0 || !isWordAuthoredList(list)
+              start < 0
             )
               throw new RangeError('Invalid list level or start.');
-            const counter = counters.get(list.id) ?? { kind: list.kind, start, values: [] };
-            if (counter.kind !== list.kind || counter.start !== start)
-              throw new Error('A list must use consistent numbering.');
+            const counter = counters.get(list.id) ?? { levels: new Map<number, WordAuthoredList>(), values: [] };
+            registerWordListLevel(counter.levels, list);
             counter.values.length = level + 1;
             for (let i = 0; i <= level; i++)
               counter.values[i] =
                 counter.values[i] === undefined
-                  ? start
+                  ? counter.levels.get(i)?.start ?? start
                   : counter.values[i]! + (i === level ? 1 : 0);
             counters.set(list.id, counter);
             markers.set(result.block.elementId, {
-              text: wordListMarker(list, counter.values, level),
+              text: wordListMarker(list, counter.values, level, counter.levels),
               suffix: 'tab',
               level,
               indentStartTwips: (level + 1) * 720,

@@ -176,4 +176,5 @@ The editable shape authoring API currently models seven preset geometries with s
 inline/front/behind placement and plain text. Imported groups, theme/effect fills, transformed
 shapes and text-wrapped shapes remain opaque source drawings. Neighbouring edits preserve their
 original markup; they are not flattened into the simpler editable shape model.
+
 When assigning a style through `NativeWordDocument.update`, omit `paragraph` and each run's `format` to reset direct formatting to the style. Properties explicitly retained in the update remain overrides, including the effective formatting returned by `importWordContent`. Kryptonote's style action clears those overrides. Unknown imported style references retain Word's default-style fallback.
