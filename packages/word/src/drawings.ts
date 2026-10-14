@@ -235,6 +235,13 @@ export interface WordDrawingChange extends WordDrawingResize {
   readonly yPoints?: number;
 }
 
+/** New text for a shape edited in place. `escape` means the user left text editing but kept the shape selected. */
+export interface WordShapeTextChange {
+  readonly elementId: number;
+  readonly text: string;
+  readonly reason: 'blur' | 'escape';
+}
+
 /** Change wrapping and page-relative placement, preserving the embedded graphic. */
 export function positionWordDrawing(document: WordDocument, change: WordDrawingChange): Uint8Array {
   if (change.layout === undefined) return document.bytes();
