@@ -43,7 +43,7 @@ export const navigation: NavigationGroup[] = [
   { title: 'Resources', links: [
     { href: '/docs/compatibility', label: 'Format support' },
     { href: '/docs/compatibility-reports', label: 'Compatibility reports' },
-    { href: '/docs/releases', label: 'Latest release' },
+    { href: '/changelog', label: 'Changelog' },
     { href: '/components', label: 'Components' },
     { href: '/playground/word-brief', label: 'Playground' },
     { href: '/docs/development', label: 'Local development' },

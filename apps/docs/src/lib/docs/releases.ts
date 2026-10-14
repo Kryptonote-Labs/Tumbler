@@ -19,6 +19,7 @@ export const releasesDoc: Doc = {
           'Style reapplication resets omitted direct overrides while retaining inherited character styles. Table grid and geometry handling have also improved.',
         ] },
         { kind: 'link', href: '/docs/word', label: 'Authoring examples and limitations' },
+        { kind: 'link', href: '/changelog', label: 'Browse the full changelog' },
         { kind: 'link', href: '/docs/word-search#search', label: 'Find and replace with anchored transactions' },
         { kind: 'note', text: 'These APIs need host integration. The Word playground demonstrates package-backed text editing, basic formatting, and drawing movement/resizing. It does not currently provide native list/style/table insertion controls, rich clipboard paste, find/replace, heading navigation, or shape text editing.' },
     ] },

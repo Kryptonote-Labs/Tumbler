@@ -22,6 +22,11 @@ Keep pages focused on one task. Use short paragraphs, lists for parallel steps,
 and tables for properties. When moving an existing section, add its old URL to
 `src/lib/docs/legacy-links.ts` so saved bookmarks reach the new guide.
 
+Published release history lives in `src/lib/releases`, grouped by month. Add each
+new release with its first registry publication date in UTC, a short summary,
+and source references. The changelog index links to a separate page per version.
+Mark partial publications and omit version numbers absent from the registry.
+
 ## Checks
 
 ```sh

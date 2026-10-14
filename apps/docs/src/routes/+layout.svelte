@@ -12,7 +12,7 @@
     const destination = legacyDocLinks[page.url.pathname + page.url.hash];
     if (destination) void goto(destination, { replaceState: true });
   });
-  const active = (href: string) => href.startsWith('/playground') ? page.url.pathname.startsWith('/playground') : page.url.pathname === href;
+  const active = (href: string) => href.startsWith('/playground') ? page.url.pathname.startsWith('/playground') : page.url.pathname === href || href === '/changelog' && page.url.pathname.startsWith('/changelog/');
 </script>
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="site-header">
