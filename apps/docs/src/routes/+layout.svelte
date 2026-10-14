@@ -3,6 +3,7 @@
   import { afterNavigate, goto } from '$app/navigation';
   import { navigation, version, commit, repository } from '$lib/site';
   import { legacyDocLinks } from '$lib/docs/legacy-links';
+  import SidebarGroup from '$lib/components/SidebarGroup.svelte';
   import '../app.css';
   let { children } = $props();
   let menuOpen = $state(false);
@@ -29,11 +30,8 @@
   <aside class="sidebar" class:open={menuOpen}>
     <nav id="site-nav" aria-label="Documentation">
       {#each navigation as group}
-        {#if group.collapsible}
-          <details class="nav-group format-group" open={group.links.some(link => active(link.href))}>
-            <summary class:current={group.links.some(link => active(link.href))}>{group.title}</summary>
-            <div class="format-links">{@render groupLinks(group.links)}</div>
-          </details>
+        {#if group.overview}
+          <SidebarGroup title={group.title} overview={group.overview} links={group.links} pathname={page.url.pathname} />
         {:else}
           <div class="nav-group"><p>{group.title}</p>{@render groupLinks(group.links)}</div>
         {/if}

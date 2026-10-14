@@ -1,3 +1,5 @@
+import { spreadsheetViewerDoc } from './docs/spreadsheet-viewer';
+import { powerpointViewerDoc } from './docs/powerpoint-viewer';
 import { installationDoc } from './docs/installation';
 import { architectureDoc } from './docs/architecture';
 import { developmentDoc } from './docs/development';
@@ -45,9 +47,11 @@ export const docs: Record<string, Doc> = {
   "word-performance": wordPerformanceDoc,
   "word-support": wordSupportDoc,
   "spreadsheets": spreadsheetsDoc,
+  "spreadsheet-viewer": spreadsheetViewerDoc,
   "spreadsheet-editing": spreadsheetEditingDoc,
   "spreadsheet-support": spreadsheetSupportDoc,
   "powerpoint": powerpointDoc,
+  "powerpoint-viewer": powerpointViewerDoc,
   "powerpoint-navigation": powerpointNavigationDoc,
   "powerpoint-editing": powerpointEditingDoc,
   "powerpoint-export": powerpointExportDoc,

@@ -29,5 +29,9 @@ export const legacyDocLinks: Readonly<Record<string, string>> = {
   "/docs/compatibility#word": "/docs/word-support#word",
   "/docs/compatibility#powerpoint": "/docs/powerpoint-support#powerpoint",
   "/docs/compatibility#evidence": "/docs/compatibility-reports#evidence",
+  "/docs/spreadsheets#render": "/docs/spreadsheet-viewer#render",
+  "/docs/spreadsheets#sheets": "/docs/spreadsheet-viewer#sheets",
+  "/docs/powerpoint#setup": "/docs/powerpoint-viewer#setup",
+  "/docs/powerpoint#viewer": "/docs/powerpoint-viewer#viewer",
   "/docs/word-authoring": "/docs/word"
 };

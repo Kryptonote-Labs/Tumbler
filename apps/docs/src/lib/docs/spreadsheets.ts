@@ -1,41 +1,22 @@
 import type { Doc } from './types';
 
 export const spreadsheetsDoc: Doc = {
-  title: 'Open a spreadsheet',
-  description: 'Render an XLSX worksheet and switch sheets without discarding edits.',
+  title: 'Spreadsheets',
+  description: 'Read, render, and edit XLSX workbooks with a headless model or a Svelte grid.',
   sections: [
-    { id: 'render', title: 'Render a worksheet', blocks: [
-        { kind: 'code', language: 'Svelte', code: `<script lang="ts">
-  import { createGridSelection } from '@tumblerjs/core';
-  import { openSpreadsheetArtifact } from '@tumblerjs/sheets';
-  import { SpreadsheetGrid } from '@tumblerjs/svelte';
-
-  let { bytes }: { bytes: Uint8Array } = $props();
-  let artifact = $state(openSpreadsheetArtifact(bytes));
-  let selection = $state(createGridSelection({ row: 1, column: 1 }));
-</script>
-
-<div class="sheet" style="height: 560px; min-width: 0">
-  <SpreadsheetGrid
-    worksheet={artifact.worksheet}
-    calculation={artifact.calculation}
-    {selection}
-    onselectionchange={(next) => selection = next}
-    onedit={(edit) => artifact = artifact.editCell(edit.reference, edit.value)}
-  />
-</div>
-
-<style>
-  .sheet :global(.tumbler-grid) { height: 100%; }
-</style>` },
-        { kind: 'text', text: 'SpreadsheetGrid supports trackpad pinch, Ctrl+wheel, and two-finger touch zoom from 25% to 300%. Bind its scale prop with bind:scale to synchronise your zoom controls. The grid, row and column headers, frozen panes, and cell editor scale together.' },
+    { id: 'start', title: 'Open a workbook', blocks: [
+      { kind: 'text', text: 'Open XLSX bytes with openSpreadsheetArtifact. Use the worksheet model directly, or render it with SpreadsheetGrid.' },
+      { kind: 'link', href: '/docs/spreadsheet-viewer', label: 'Render a worksheet and switch sheets' },
     ] },
-    { id: 'sheets', title: 'Switch worksheets', blocks: [
-        { kind: 'text', text: 'Selecting a sheet returns an artifact for that sheet without throwing away workbook edits. Use the sheet name or numeric identifier.' },
-        { kind: 'code', code: `const sheets = artifact.workbook.sheets;
-artifact = artifact.selectSheet(sheets[1]!.name);` },
+    { id: 'edit', title: 'Edit and save', blocks: [
+      { kind: 'text', text: 'Write cell values and supported ordinary formulas, format ranges, and export the edited workbook. Formula calculation is bounded; unsupported workbook features remain incomplete.' },
+      { kind: 'link', href: '/docs/spreadsheet-editing', label: 'Cell edits, formulas, formatting, and export' },
+      { kind: 'link', href: '/docs/spreadsheet-support', label: 'Spreadsheet support and limitations' },
+    ] },
+    { id: 'try', title: 'Try a workbook', blocks: [
+      { kind: 'link', href: '/playground/sheet-budget', label: 'Open the spreadsheet playground' },
     ] },
   ],
   source: 'apps/docs/src/lib/docs/spreadsheets.ts',
-  next: { href: '/docs/spreadsheet-editing', label: 'Cells and formulas' },
+  next: { href: '/docs/spreadsheet-viewer', label: 'Open a workbook' },
 };

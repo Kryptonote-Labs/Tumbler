@@ -1,10 +1,11 @@
 export const version = __TUMBLER_VERSION__;
 export const commit = __TUMBLER_COMMIT__;
 export const repository = 'https://github.com/Kryptonote-Labs/Tumbler';
+export interface NavigationLink { href: string; label: string; }
 interface NavigationGroup {
   title: string;
-  collapsible?: boolean;
-  links: { href: string; label: string }[];
+  overview?: string;
+  links: NavigationLink[];
 }
 
 export const navigation: NavigationGroup[] = [
@@ -13,8 +14,7 @@ export const navigation: NavigationGroup[] = [
     { href: '/docs/installation', label: 'Installation' },
     { href: '/docs/architecture', label: 'How it works' },
   ] },
-  { title: 'Word', collapsible: true, links: [
-    { href: '/docs/word', label: 'Overview' },
+  { title: 'Word', overview: '/docs/word', links: [
     { href: '/docs/word-editing', label: 'Open and edit' },
     { href: '/docs/native-word', label: 'Native content model' },
     { href: '/docs/word-formatting', label: 'Text and styles' },
@@ -28,13 +28,13 @@ export const navigation: NavigationGroup[] = [
     { href: '/docs/word-performance', label: 'Caching and projections' },
     { href: '/docs/word-support', label: 'Compatibility' },
   ] },
-  { title: 'Spreadsheets', collapsible: true, links: [
-    { href: '/docs/spreadsheets', label: 'Open a workbook' },
+  { title: 'Spreadsheets', overview: '/docs/spreadsheets', links: [
+    { href: '/docs/spreadsheet-viewer', label: 'Open a workbook' },
     { href: '/docs/spreadsheet-editing', label: 'Cells and formulas' },
     { href: '/docs/spreadsheet-support', label: 'Compatibility' },
   ] },
-  { title: 'PowerPoint', collapsible: true, links: [
-    { href: '/docs/powerpoint', label: 'Render a presentation' },
+  { title: 'PowerPoint', overview: '/docs/powerpoint', links: [
+    { href: '/docs/powerpoint-viewer', label: 'Render a presentation' },
     { href: '/docs/powerpoint-navigation', label: 'Slide navigation' },
     { href: '/docs/powerpoint-editing', label: 'Edit slides' },
     { href: '/docs/powerpoint-export', label: 'Export' },

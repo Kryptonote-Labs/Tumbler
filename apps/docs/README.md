@@ -16,6 +16,7 @@ Or from this directory, `bun run dev`. The app's dev command is `vite --host 0.0
 Topic pages live in `src/lib/docs`, with one file per page and a shared block type.
 `src/lib/docs.ts` registers routes; `src/lib/site.ts` groups them in the sidebar.
 Word, spreadsheets, and PowerPoint each have an expandable group.
+Format headings open overview pages; their chevron buttons toggle the topic links.
 
 Keep pages focused on one task. Use short paragraphs, lists for parallel steps,
 and tables for properties. When moving an existing section, add its old URL to
