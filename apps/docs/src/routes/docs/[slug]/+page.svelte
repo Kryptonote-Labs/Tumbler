@@ -21,7 +21,7 @@
       </section>
     {/each}
     {#if data.doc.next}<a class="doc-next" href={data.doc.next.href}><span>Next <strong>{data.doc.next.label}</strong></span><span aria-hidden="true">→</span></a>{/if}
-    <footer class="page-footer"><span>MIT licensed</span><a href={`${repository}/blob/main/apps/docs/src/lib/docs.ts`}>Edit this page ↗</a></footer>
+    <footer class="page-footer"><span>MIT licensed</span><a href={`${repository}/blob/main/${data.doc.source}`}>Edit this page ↗</a></footer>
   </article>
   <nav class="contents" aria-label="On this page"><p>On this page</p>{#each data.doc.sections as section}<a href={`#${section.id}`}>{section.title}</a>{/each}</nav>
 </div>

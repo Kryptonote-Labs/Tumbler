@@ -11,6 +11,22 @@ bun run dev
 
 Or from this directory, `bun run dev`. The app's dev command is `vite --host 0.0.0.0`, making Vite's network URL accessible on the LAN. Add `--port 5174 --strictPort` to choose a port explicitly.
 
+## Documentation pages
+
+Topic pages live in `src/lib/docs`, with one file per page and a shared block type.
+`src/lib/docs.ts` registers routes; `src/lib/site.ts` groups them in the sidebar.
+Word, spreadsheets, and PowerPoint each have an expandable group.
+Format headings open overview pages; their chevron buttons toggle the topic links.
+
+Keep pages focused on one task. Use short paragraphs, lists for parallel steps,
+and tables for properties. When moving an existing section, add its old URL to
+`src/lib/docs/legacy-links.ts` so saved bookmarks reach the new guide.
+
+Published release history lives in `src/lib/releases`, grouped by month. Add each
+new release with its first registry publication date in UTC, a short summary,
+and source references. The changelog index links to a separate page per version.
+Mark partial publications and omit version numbers absent from the registry.
+
 ## Checks
 
 ```sh
