@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { WordAuthoredShape } from '@tumblerjs/word';
+  import { resolveWordColour, type WordAuthoredShape } from '@tumblerjs/word';
   let { shape, editing = false, initialText, oncommit }: {
     shape: WordAuthoredShape;
     /** Edits the shape's text in place, as Word does after a double-click. */
@@ -36,7 +36,7 @@
 </script>
 <div class="shape" role="img" aria-label={shape.alt ?? shape.text ?? shape.preset}>
   <svg viewBox={`0 0 ${shape.width} ${shape.height}`} preserveAspectRatio="none" aria-hidden="true">
-    <g fill={shape.fill} stroke={shape.outline} stroke-width={shape.outlineWidth}>
+    <g fill={resolveWordColour(shape.fill)} stroke={resolveWordColour(shape.outline)} stroke-width={shape.outlineWidth}>
       {#if shape.preset === 'ellipse'}<ellipse cx={shape.width / 2} cy={shape.height / 2} rx={Math.max(0, shape.width / 2 - 1)} ry={Math.max(0, shape.height / 2 - 1)} />
       {:else if shape.preset === 'rect' || shape.preset === 'roundRect'}<rect x="1" y="1" width={Math.max(0, shape.width - 2)} height={Math.max(0, shape.height - 2)} rx={shape.preset === 'roundRect' ? Math.min(shape.width, shape.height) * .12 : 0} />
       {:else}<path d={paths[shape.preset]} />{/if}

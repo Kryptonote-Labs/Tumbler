@@ -1,3 +1,5 @@
+import { wordColourAttributes } from './theme-colour-xml.ts';
+import { isWordColour, type WordColour } from './theme-colours.ts';
 import type { WordLineSpacing } from './styles.ts';
 import { isWordCellFormat, borderXml, type WordCellBorders } from './table-format.ts';
 
@@ -11,7 +13,7 @@ export interface WordParagraphFormat {
   readonly pageBreakBefore?: boolean;
   readonly widowControl?: boolean;
   readonly contextualSpacing?: boolean;
-  readonly shading?: string;
+  readonly shading?: WordColour;
   readonly borders?: WordCellBorders;
 }
 const toggles = ['keepNext', 'keepLines', 'pageBreakBefore', 'widowControl', 'contextualSpacing'] as const;
@@ -36,7 +38,7 @@ export function paragraphFormatXml(format: WordParagraphFormat): Map<string, str
   const output = new Map<string, string>();
   for (const key of toggles.filter(key => key !== 'contextualSpacing')) if (format[key] !== undefined) output.set(key, `<w:${key} w:val="${format[key] ? 1 : 0}"/>`);
   if (format.borders) output.set('pBdr', `<w:pBdr>${borderXml(format.borders)}</w:pBdr>`);
-  if (format.shading !== undefined) output.set('shd', `<w:shd w:val="clear" w:fill="${format.shading === 'transparent' ? 'auto' : format.shading.slice(1)}"/>`);
+  if (format.shading !== undefined) output.set('shd', `<w:shd w:val="clear" ${format.shading === 'transparent' ? 'w:fill="auto"' : wordColourAttributes(format.shading, true)}/>`);
   const spacing = [format.spacingBeforeTwips === undefined ? '' : `w:before="${format.spacingBeforeTwips}"`, format.spacingAfterTwips === undefined ? '' : `w:after="${format.spacingAfterTwips}"`, format.lineSpacing ? `w:line="${format.lineSpacing.value}" w:lineRule="${format.lineSpacing.rule}"` : ''].filter(Boolean);
   if (spacing.length) output.set('spacing', `<w:spacing ${spacing.join(' ')}/>`);
   if (format.contextualSpacing !== undefined) output.set('contextualSpacing', `<w:contextualSpacing w:val="${format.contextualSpacing ? 1 : 0}"/>`);

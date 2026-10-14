@@ -36,7 +36,7 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
           bold: computed.bold,
           italic: computed.italic,
           underline: computed.underline,
-          color: computed.color,
+          color: computed.themeColour ?? computed.color,
           strike: computed.strike,
           highlight: computed.highlight,
           verticalAlign: computed.verticalAlign,
@@ -70,7 +70,7 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
     return {
       kind: 'paragraph',
       ...(styleId === undefined ? {} : { styleId }),
-      paragraph: { spacingBeforeTwips, spacingAfterTwips, lineSpacing, keepNext, keepLines, pageBreakBefore, widowControl, contextualSpacing, ...(shading === undefined ? {} : { shading }), ...(borders === undefined ? {} : { borders }) },
+      paragraph: { spacingBeforeTwips, spacingAfterTwips, lineSpacing, keepNext, keepLines, pageBreakBefore, widowControl, contextualSpacing, ...(shading === undefined ? {} : { shading: document.styles.paragraphFormat(document, block).shadingColour ?? shading }), ...(borders === undefined ? {} : { borders: document.styles.paragraphFormat(document, block).borderColours ?? borders }) },
       ...(tabs.length || indentStartTwips || indentEndTwips || firstLineTwips || hangingTwips
         ? { positioning: { tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips } } : {}),
       id: `source-${block.elementId}`,

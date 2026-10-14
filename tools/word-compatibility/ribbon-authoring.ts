@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createWordArtifact, openWordArtifact, importWordContent, NativeWordDocument, WORD_HIGHLIGHTS, WORD_SHAPE_PRESETS, WORD_LIST_KINDS, type WordArtifact } from '../../packages/word/src/index.ts';
+import { resolveWordColour, createWordArtifact, openWordArtifact, importWordContent, NativeWordDocument, WORD_HIGHLIGHTS, WORD_SHAPE_PRESETS, WORD_LIST_KINDS, type WordArtifact } from '../../packages/word/src/index.ts';
 import { buildWordDocumentFixture } from '../../packages/word/test/document-fixture.ts';
 import type { Scenario } from './scenarios.ts';
 import type { Requirement } from './model.ts';
@@ -67,7 +67,9 @@ export const ribbonScenarios: readonly Scenario[] = [
         assert.equal(spaced.paragraph?.spacingBeforeTwips, 120);
         assert.equal(spaced.paragraph?.spacingAfterTwips, 180);
         assert.deepEqual(spaced.paragraph?.lineSpacing, { rule: 'auto', value: 360 });
-        assert.equal(spaced.paragraph?.shading?.toUpperCase(), '#FFFF00');
+        const shading = spaced.paragraph?.shading;
+        assert.ok(shading);
+        assert.equal(resolveWordColour(shading, output.document.styles.themeColors).toUpperCase(), '#FFFF00');
         assert.deepEqual(paragraphs.flatMap(block => block.list ? [block.list.kind] : []), WORD_LIST_KINDS);
         assert.ok(paragraphs.some(block => block.runs.some(run => run.breakType === 'page') || block.paragraph?.pageBreakBefore));
         assert.ok(blocks.some(block => block.kind === 'paragraph' && block.runs.some(run => run.link === 'https://example.com/ribbon')));

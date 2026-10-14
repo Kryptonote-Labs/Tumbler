@@ -1,3 +1,4 @@
+import { resolveWordColour } from './theme-colours.ts';
 import type { WordCellBorders, WordTableBorder, WordTableBorders } from './table-format.ts';
 
 export interface WordLayoutTableBorder {
@@ -37,8 +38,8 @@ export function resolveTableBorders(cells: readonly Cell[], table: { x: number; 
       const candidates = edges.filter(e => e.start <= start + 1e-6 && e.end >= end - 1e-6);
       const direct = candidates.filter(e => e.direct);
       const selected = (direct.length ? direct : candidates).filter(e => e.border.style !== 'none' && e.border.widthPoints > 0).sort((a,b) =>
-        b.border.widthPoints * rank[b.border.style] - a.border.widthPoints * rank[a.border.style] || rank[b.border.style] - rank[a.border.style] || a.border.color.localeCompare(b.border.color))[0];
-      if (selected) result.push({ x: orientation === 'horizontal' ? start : position, y: orientation === 'horizontal' ? position : start, length: end-start, orientation, border: selected.border });
+        b.border.widthPoints * rank[b.border.style] - a.border.widthPoints * rank[a.border.style] || rank[b.border.style] - rank[a.border.style] || resolveWordColour(a.border.color).localeCompare(resolveWordColour(b.border.color)))[0];
+      if (selected) result.push({ x: orientation === 'horizontal' ? start : position, y: orientation === 'horizontal' ? position : start, length: end-start, orientation, border: { ...selected.border, color: resolveWordColour(selected.border.color) } });
     }
   }
   return result;

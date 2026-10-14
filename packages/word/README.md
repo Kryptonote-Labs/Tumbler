@@ -421,3 +421,18 @@ An indivisible line or drawing taller than the page follows the paragraph layout
 it is placed once to make progress, without discarding its source content.
 
 Table row sizing includes resolved horizontal border thickness as well as cell margins. Rows split across pages retain their top and bottom insets on each fragment.
+
+### Document theme colours
+
+`NativeWordDocument.themeColours` exposes the imported theme or the Office default for new
+content. `wordThemePalette(theme)` builds the ten theme columns and their five shade rows.
+`WordColour` accepts either a six-digit RGB string or `{ theme, fallback, tint?, shade? }`.
+Tint and shade use WordprocessingML byte values from 0 to 255. `resolveWordColour` applies
+Word's HSL luminance rules, and `wordColoursEqual` compares the selection's theme identity.
+
+Text, shape fills/outlines, paragraph shading/borders and table cell shading/borders accept
+these references. Native rendering resolves them against the document theme; DOCX export
+writes theme references and their transforms. New packages embed a theme; pass
+`themeColours` to `createWordArtifact` or `NativeWordDocument` to choose a custom scheme.
+Complex DrawingML colour effects beyond the supported luminance transforms remain opaque
+and retain their original XML.

@@ -1,3 +1,4 @@
+import { isWordColour, type WordColour } from '../theme-colours.ts';
 import { isWordAuthoredShape, type WordAuthoredShape } from '../shapes.ts';
 import { isWordParagraphPositioning, isWordPositionalTab, type WordParagraphPositioning } from '../positioning.ts';
 import type { WordPositionalTab } from '../document.ts';
@@ -28,7 +29,7 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   breakType?: import('../breaks.ts').WordBreakType;
   shape?: WordAuthoredShape;
   link?: string;
-  color?: string;
+  color?: WordColour;
   font?: string;
   fontSize?: number;
   table?: TableCell;
@@ -44,9 +45,7 @@ export function isFontSize(value: unknown): value is number {
   return typeof value === 'number' && value >= 1 && value <= 1638 && Number.isInteger(value * 2);
 }
 
-export function isTextColor(value: unknown): value is string {
-  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
-}
+export const isTextColor = isWordColour;
 
 export function validateAttributes(attributes: Record<string, unknown> | undefined) {
   for (const [key, value] of Object.entries(attributes ?? {})) {

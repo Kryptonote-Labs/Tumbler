@@ -65,6 +65,7 @@ describe("WordprocessingML style cascade", () => {
       underline: "double",
       strike: false,
       color: "#4472C4",
+      themeColour: { theme: "accent1", fallback: "#4472C4" },
       highlight: undefined,
       verticalAlign: "baseline",
       rightToLeft: false,

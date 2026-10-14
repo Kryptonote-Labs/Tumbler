@@ -37,7 +37,7 @@ test('complex imported shape appearance remains opaque and survives neighbouring
   const { openWordArtifact } = await import('../src/index.ts');
   const created = createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', shape: { preset: 'rect', width: 100, height: 50, fill: '#ABCDEF', outline: '#000000', outlineWidth: 1 } }, { text: ' before' }] }] });
   for (const transform of [
-    (xml: string) => xml.replace('<a:srgbClr val="ABCDEF"/>', '<a:schemeClr val="accent1"/>'),
+    (xml: string) => xml.replace('<a:srgbClr val="ABCDEF"/>', '<a:schemeClr val="accent1"><a:alpha val="50000"/></a:schemeClr>'),
     (xml: string) => xml.replace('<a:xfrm>', '<a:xfrm rot="5400000">'),
     (xml: string) => xml.replace('<wps:wsp>', '<wpg:wgp xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"><wps:wsp>').replace('</wps:wsp>', '</wps:wsp></wpg:wgp>'),
   ]) {

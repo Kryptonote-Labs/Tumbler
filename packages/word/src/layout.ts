@@ -1,3 +1,4 @@
+import { resolveWordColour } from './theme-colours.ts';
 import { splitPreparedTable, joinPreparedTables, preparedBlockHeight } from './table-pagination.ts';
 import { tableBorderInsets, resolveTableBorders, type WordLayoutTableBorder } from './table-borders.ts';
 import type { WordCellBorders } from './table-format.ts';
@@ -743,7 +744,7 @@ function placeTable(prepared: PreparedTable, columnX: number, y: number, budget:
     }
     return Object.freeze({
       borders: cell.resolved.source.borders ?? {},
-      ...(cell.resolved.source.shading ?? prepared.table.properties.shading ? { shading: cell.resolved.source.shading ?? prepared.table.properties.shading! } : {}),
+      ...(cell.resolved.source.shading ?? prepared.table.properties.shading ? { shading: resolveWordColour(cell.resolved.source.shading ?? prepared.table.properties.shading!) } : {}),
       cellElementId: cell.resolved.source.elementId,
       continuationElementIds: cell.resolved.continuationElementIds,
       row: cell.resolved.row,
