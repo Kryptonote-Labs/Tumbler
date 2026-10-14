@@ -2,7 +2,7 @@ export const version = __TUMBLER_VERSION__;
 export const commit = __TUMBLER_COMMIT__;
 export const repository = 'https://github.com/Kryptonote-Labs/Tumbler';
 export const navigation = [
-  { title: 'Start here', links: [{ href: '/', label: 'Introduction' }, { href: '/docs/installation', label: 'Installation' }, { href: '/docs/architecture', label: 'How it works' }] },
+  { title: 'Start here', links: [{ href: '/', label: 'Introduction' }, { href: '/docs/installation', label: 'Installation' }, { href: '/docs/releases', label: 'Latest release' }, { href: '/docs/architecture', label: 'How it works' }] },
   { title: 'Working with documents', links: [{ href: '/docs/word', label: 'Word documents' }, { href: '/docs/native-word', label: 'Native Word model' }, { href: '/docs/word-authoring', label: 'Word authoring' }, { href: '/docs/word-collaboration', label: 'Word collaboration' }, { href: '/docs/spreadsheets', label: 'Spreadsheets' }, { href: '/docs/powerpoint', label: 'PowerPoint' }, { href: '/docs/compatibility', label: 'Compatibility' }] },
   { title: 'Explore', links: [{ href: '/components', label: 'Components' }, { href: '/playground/word-brief', label: 'Playground' }, { href: '/docs/development', label: 'Local development' }] }
 ];

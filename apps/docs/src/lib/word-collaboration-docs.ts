@@ -30,6 +30,17 @@ shared.transact(() => body.applyDelta(delta), 'local-edit');` },
       ] },
       { kind: 'text', text: 'Table changes identify tableId and cellId as well as the anchored target. A table-format patch selects its scope and can carry cell, row, and columnWidths changes. Images use the adapter DocumentImage metadata; hosts own asset bytes and validate their references.' },
     ] },
+    { id: 'search', title: 'Find and replace', blocks: [
+      { kind: 'code', code: `import { findWordMatches, replaceWordMatches } from '@tumblerjs/word/collaboration';
+
+const options = { matchCase: false, wholeWord: true };
+const matches = findWordMatches(body.toString(), 'draft', options);
+const replacements = replaceWordMatches(body, 'draft', 'final', options);
+const replacementDelta = commands.wordTransaction(body, replacements);
+shared.transact(() => body.applyDelta(replacementDelta), 'replace-all');` },
+      { kind: 'text', text: 'Search is literal, Unicode-aware, and returns UTF-16 ranges at grapheme boundaries. Options include matchCase, wholeWord, and locale for word segmentation. Queries cannot span paragraph separators or embedded object placeholders. replaceWordMatches anchors all matches before mutation; pass the full change list to one wordTransaction for an atomic replace-all that preserves inherited formatting. The host owns undo grouping.' },
+      { kind: 'text', text: 'For one replacement, select one returned change before creating the transaction. These are headless operations; the docs playground does not currently provide a find/replace interface.' },
+    ] },
     { id: 'imports', title: 'Retain imported document structure', blocks: [
       { kind: 'code', code: `import {
   openWordArtifact, importWordContent,
@@ -47,7 +58,7 @@ const exported = model.artifact().bytes();` },
     ] },
     { id: 'validation', title: 'Validate host-owned data', blocks: [
       { kind: 'text', text: 'createWordCommands accepts validateAttributes and validateUpdate hooks for host schemas and immutable asset/source references. validateDocument(staged, original) inspects the preflight replica without decoding another update. It runs synchronously, must not mutate either document, and can throw to reject the batch. If both document and encoded-update hooks exist, both run.' },
-      { kind: 'text', text: 'defaultAttributes(text) supplies document-specific formatting defaults. Built-in operation validation is not an authorization system: enforce permissions and validate incoming remote updates at the host boundary.' },
+      { kind: 'text', text: 'defaultAttributes(text, range) supplies formatting defaults for the selected document range, including paragraph-style inheritance. A replace change can include a format patch so replacement text and its formatting commit together. Built-in operation validation is not an authorization system: enforce permissions and validate incoming remote updates at the host boundary.' },
     ] },
     { id: 'projection', title: 'Reuse unchanged paragraphs and tables', blocks: [
       { kind: 'text', text: 'WordParagraphProjection(body, project) consumes transaction deltas and calls project only for changed slices when paragraphs is read. Slices include stable terminator identity, UTF-16 length, formatted parts, and the terminating newline when present. Call destroy when finished. wordParagraphIdentity exposes the underlying terminator identity.' },

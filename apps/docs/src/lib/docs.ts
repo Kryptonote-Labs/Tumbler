@@ -1,6 +1,8 @@
 import { wordAuthoringDoc } from './word-authoring-docs';
 import { wordCollaborationDoc } from './word-collaboration-docs';
 import { nativeWordDoc } from './native-word-docs';
+import { releaseDoc } from './release-docs';
+import { repository, version } from './site';
 export type Block =
   | { kind: 'text' | 'note'; text: string }
   | { kind: 'code'; code: string; language?: string }
@@ -15,6 +17,7 @@ export interface Doc {
 }
 
 export const docs: Record<string, Doc> = {
+  releases: releaseDoc,
   'native-word': nativeWordDoc,
   'word-authoring': wordAuthoringDoc,
   'word-collaboration': wordCollaborationDoc,
@@ -159,7 +162,7 @@ export const docs: Record<string, Doc> = {
     description: 'Add Tumbler to a Svelte 5 application. Parsing and editing run in the browser; your application owns loading and saving files.',
     sections: [
       { id: 'packages', title: 'Install the packages', blocks: [
-        { kind: 'text', text: 'Install the Svelte components and the format packages you need. All public Tumbler packages share one version. Keep them on the same release.' },
+        { kind: 'text', text: `Install the Svelte components and the format packages you need. The current release is ${version}. All public Tumbler packages share one version. Keep them on the same release.` },
         { kind: 'code', language: 'Terminal', code: 'bun add @tumblerjs/svelte @tumblerjs/word @tumblerjs/sheets @tumblerjs/slides @tumblerjs/core' },
         { kind: 'note', text: 'Tumbler is early alpha. The latest distribution tag points to the current alpha release. APIs and format coverage are still changing.' }
       ] },
@@ -235,7 +238,7 @@ const output = edited.bytes();` }
       { id: 'models', title: 'Choose an integration', blocks: [
         { kind: 'text', text: 'This guide connects the package-backed WordDocumentView and editing session. For application-owned editing, imported rich content, or shared human/agent operations, use the native document engine and optional collaboration adapter.' },
         { kind: 'link', href: '/docs/native-word', label: 'Native Word model and imports' },
-        { kind: 'link', href: '/docs/word-authoring', label: 'Tables, images, headers, footers, and page numbers' },
+        { kind: 'link', href: '/docs/word-authoring', label: 'Styles, lists, links, shapes, tables, and page fields' },
         { kind: 'link', href: '/docs/word-collaboration', label: 'Collaborative editing APIs' },
       ] },
       { id: 'open', title: 'Open and render', blocks: [
@@ -356,16 +359,20 @@ const output = artifact.bytes();` },
       ] },
       { id: 'word', title: 'Word support', blocks: [
         { kind: 'table', headers: ['Content', 'Support and limits'], rows: [
-          ['Native editing', 'Create or import rich content, retain source properties, and export DOCX. Optional anchored Yjs operations cover text, formatting, images, and tables.'],
+          ['Native editing', 'Create or import rich content, retain source properties, and export DOCX. Optional anchored Yjs operations cover text, formatting, images, tables, and literal find/replace. Host controls must connect these APIs.'],
+          ['Text and paragraphs', 'Character emphasis, highlight, superscript/subscript, spacing, paragraph pagination rules, shading, and basic borders. Built-in Normal, Title, Subtitle, and Heading 1–9 styles; imported definitions take precedence.'],
+          ['Lists, links, and breaks', 'Nine list levels, letter/Roman numbering, custom bullets, compound labels, and explicit starts. Hyperlink authoring and explicit line/page/column breaks.'],
           ['Tables', 'Nested tables, spans, vertical merges, direct cell formatting, row continuation, and repeated header rows. Conditional table styles are incomplete.'],
           ['Headers and footers', 'Edit shared stories and section variants. Live PAGE/NUMPAGES fields work in header/footer layout. Section numbering restarts and numeral formats are not evaluated.'],
           ['Fields', 'Supported simple and complex page fields are editable. General field recalculation, including contents pages and cross-references, is not implemented. Other cached results have partial rendering support.'],
-          ['Images and placement', 'Inline, front, and behind authoring; image and chart movement/resizing. Polygon wrapping and general shape/text-box support are incomplete.'],
+          ['Images and placement', 'Inline, front, and behind authoring; image and chart movement/resizing. Polygon wrapping remains incomplete.'],
+          ['Editable shapes', 'Seven presets with solid fills, outlines, placement, and plain text. WordDrawingView offers in-place text editing through a host callback. Imported groups, transformed shapes, and unsupported fills/wrapping remain opaque. Rich text boxes and shape effects are incomplete.'],
           ['Review and structured content', 'Basic inserted/deleted text wrappers are recognized. Comments, full revision review, content controls, and native equations are not supported for editing or full rendering. Retained XML does not guarantee visible content.'],
           ['Notes and pagination', 'Footnotes/endnotes render, but note numbering and body repagination remain incomplete. Fonts, paragraph keep rules, and complex layouts can differ from Word.'],
         ] },
         { kind: 'link', href: '/docs/word-authoring', label: 'Headless Word authoring APIs' },
         { kind: 'link', href: '/docs/word-collaboration', label: 'Collaborative operations and validation' },
+        { kind: 'note', text: 'The Word playground connects package-backed text editing, basic formatting, and image/chart movement and resizing. It does not expose every native or collaborative API. Rich clipboard paste, find/replace controls, and heading navigation remain gaps in its everyday browser benchmark.' },
       ] },
       { id: 'powerpoint', title: 'PowerPoint support', blocks: [
         { kind: 'table', headers: ['Content', 'Support and limits'], rows: [
@@ -380,6 +387,12 @@ const output = artifact.bytes();` },
           ['Saving', 'Edits retain unrelated package parts, relationships, notes, and embedded files. Export without edits returns the original bytes. Edited ZIPs may omit directory records.']
         ] },
         { kind: 'link', href: '/docs/powerpoint', label: 'Build a PowerPoint viewer or editor' }
+      ] },
+      { id: 'evidence', title: 'Read the compatibility reports', blocks: [
+        { kind: 'text', text: 'Word reports distinguish full standards topic coverage from narrow executable requirements and everyday tasks. Each standards topic has read, preserve, write, edit, render, and interoperability targets; untested obligations remain in the denominator. Everyday tasks measure specific headless and browser behavior, with failed and blocked results visible even when the workflow passes its configured gates.' },
+        { kind: 'link', href: `${repository}/actions/workflows/word-compatibility.yml`, label: 'Download report.md, report.json, and evidence from a Word compatibility run' },
+        { kind: 'link', href: `${repository}/blob/main/tools/word-compatibility/README.md`, label: 'Coverage definitions and report interpretation' },
+        { kind: 'text', text: 'Open XML SDK and LibreOffice checks qualify the exercised cases. Full Microsoft Office visual fidelity, general floating wrap, note repagination, comments, tracked-change review, and general field recalculation remain incomplete.' },
       ] },
       { id: 'checking', title: 'Check a real document', blocks: [
         { kind: 'list', items: ['Keep an unchanged original.', 'Open the file in the playground and inspect the content, page edges, and fonts.', 'Make a small edit and download the result.', 'Reopen the exported file in the application that will consume it.', 'Report a minimal, non-confidential example when something differs.'] },

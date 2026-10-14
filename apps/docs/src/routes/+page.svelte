@@ -1,6 +1,6 @@
 <script lang="ts">
   import Code from '$lib/components/Code.svelte';
-  import { repository } from '$lib/site';
+  import { repository, version } from '$lib/site';
   let { data } = $props();
 </script>
 <svelte:head><title>Tumbler docs</title><meta name="description" content="Read, render, and edit Office documents with TypeScript and Svelte. Tumbler documentation and a live document playground." /></svelte:head>
@@ -10,13 +10,14 @@
     <p class="lead">Tumbler gives you TypeScript models and Svelte components for reading, rendering, and editing Word documents, spreadsheets, and PowerPoint presentations.</p>
     <p>Open a file, render its contents, and export your edits. Your application owns the interface and persistence. Tumbler handles the document underneath.</p>
     <div class="note"><p>Early alpha. APIs are still changing and Office compatibility is incomplete. Keep original copies of important documents.</p></div>
+    <p><a href="/docs/releases">Release {version}</a> adds Word styles, lists, links, paragraph formatting, explicit breaks, and editable shapes. The <a href="/docs/word-authoring">authoring guide</a> covers the headless APIs and their limits.</p>
     <h2 id="start">Start with a document</h2>
     <p>Install the components alongside the document formats you need.</p>
     <Code {...data.install} />
     <p>The <a href="/docs/installation">installation guide</a> walks through a complete file viewer. To inspect rendering first, open a sample in the <a href="/playground/word-brief">playground</a>.</p>
     <h2 id="formats">Choose a format</h2>
     <div class="format-list">
-      <a href="/docs/word"><strong>Word</strong><span>Paginated documents, text selection, editing, and formatting.</span><span class="arrow" aria-hidden="true">→</span></a>
+      <a href="/docs/word"><strong>Word</strong><span>Paginated documents, rich authoring, tables, drawings, and optional collaboration.</span><span class="arrow" aria-hidden="true">→</span></a>
       <a href="/docs/spreadsheets"><strong>Spreadsheets</strong><span>Virtualized worksheets, formulas, cell edits, and formatting.</span><span class="arrow" aria-hidden="true">→</span></a>
       <a href="/docs/powerpoint"><strong>PowerPoint</strong><span>Slide navigation, text and table editing, formatting, and object transforms.</span><span class="arrow" aria-hidden="true">→</span></a>
     </div>
