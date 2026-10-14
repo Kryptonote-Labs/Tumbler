@@ -8,7 +8,6 @@
   <article>
     <h1>Office documents, in your app.</h1>
     <p class="lead">Tumbler gives you TypeScript models and Svelte components for reading, rendering, and editing Word documents, spreadsheets, and PowerPoint presentations.</p>
-    <p>Open a file, render its contents, and export your edits. Your application owns the interface and persistence. Tumbler handles the document underneath.</p>
     <div class="note"><p>Early alpha. APIs are still changing and Office compatibility is incomplete. Keep original copies of important documents.</p></div>
     <p><a href="/docs/releases">Release {version}</a> adds Word styles, lists, links, paragraph formatting, explicit breaks, and editable shapes. Explore the <a href="/docs/word">Word guides</a> for examples.</p>
     <h2 id="start">Start with a document</h2>

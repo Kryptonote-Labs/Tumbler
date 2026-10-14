@@ -7,7 +7,6 @@
   <article>
     <h1>Changelog</h1>
     <p class="lead">What changed in each published release.</p>
-    <p>Dates use the first package publication in UTC. Partial publications are marked. Earlier entries are backfilled from registry metadata and source history.</p>
     {#each data.groups as group}
       <section aria-labelledby={group.id}>
         <h2 id={group.id}>{group.label}</h2>
