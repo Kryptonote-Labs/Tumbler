@@ -72,6 +72,7 @@ export function wordColourLuminance(
   hex: string,
   multiplier: number,
   offset = 0,
+  roundChannel: (channel: number) => number = Math.round,
 ): string {
   const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
   const hi = Math.max(...rgb),
@@ -85,7 +86,7 @@ export function wordColourLuminance(
     "#" +
     rgb
       .map((c) =>
-        Math.round(
+        roundChannel(
           255 *
             (delta === 0
               ? next

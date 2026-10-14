@@ -57,6 +57,51 @@ describe("document theme colours", () => {
       fallback: "#156082",
     });
   });
+  test("matches Office's variation grid within one RGB level", () => {
+    // Column-major RGB samples from the Office screenshot supplied with the bug.
+    const columns = [
+      "f2f2f2 d8d8d8 bfbfbf a5a5a5 7f7f7f",
+      "7f7f7f 595959 3f3f3f 262626 0c0c0c",
+      "d0d0d0 aeaeae 747474 3a3a3a 171717",
+      "dbe9f7 a6c9eb 4d94d8 215e99 153d64",
+      "c1e4f5 83caeb 45b0e1 0f4861 0a3041",
+      "fae2d6 f6c6ac f1a984 bf4f14 7f340d",
+      "c1f0c8 84e291 47d45a 12501b 0c3512",
+      "caedfb 95dcf7 60cbf3 0b769f 074f6a",
+      "f1ceee e49edd d76dcc 78206e 501549",
+      "d9f2d0 b3e5a1 8ed873 3a7d22 265316",
+    ];
+    const { variations } = wordThemePalette();
+    columns.forEach((column, x) => {
+      column.split(" ").forEach((expected, y) => {
+        const actual = variations[y * 10 + x]!.displayColour!;
+        for (const i of [0, 2, 4]) {
+          expect(
+            Math.abs(
+              parseInt(actual.slice(i + 1, i + 3), 16) -
+                parseInt(expected.slice(i, i + 2), 16),
+            ),
+          ).toBeLessThanOrEqual(1);
+        }
+        if (x === 3) expect(actual).toBe("#" + expected);
+      });
+    });
+  });
+  test("chooses variation steps by luminance even when theme slots change", () => {
+    const custom = new ThemeColorScheme(
+      "Reordered",
+      new Map([
+        ["accent1", "0E2841"],
+        ["accent2", "E8E8E8"],
+        ["lt2", "156082"],
+      ]),
+    );
+    const { variations } = wordThemePalette(custom);
+    expect(variations[4]!.name).toBe("Accent 1, lighter 90%");
+    expect(variations[44]!.name).toBe("Accent 1, lighter 10%");
+    expect(variations[5]!.name).toBe("Accent 2, darker 10%");
+    expect(variations[2]!.name).toBe("Background 2, lighter 80%");
+  });
   test("preserves themed text, shapes, shading and borders through export and reopen", () => {
     const border = { style: "single" as const, widthPoints: 1, color: colour };
     const model = new NativeWordDocument({ themeColours: theme });
