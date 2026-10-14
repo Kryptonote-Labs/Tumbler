@@ -147,3 +147,8 @@ export { isWordHyperlink } from './hyperlinks.ts';
 export { WORD_BUILTIN_STYLES, wordAuthoringStyles } from './authored-styles.ts';
 export { WORD_SHAPE_PRESETS, isWordAuthoredShape, type WordAuthoredShape } from './shapes.ts';
 export type { WordShapeDrawing } from './drawings.ts';
+
+export { DEFAULT_WORD_THEME, isWordColour, resolveWordColour, wordColourLuminance, type WordColour, type WordThemeColour } from './theme-colours.ts';
+export { wordThemePalette, type WordColourSwatch } from './theme-palette.ts';
+export { ThemeColorScheme } from '@tumblerjs/ooxml';
+export { wordColoursEqual } from './theme-colours.ts';

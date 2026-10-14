@@ -1,3 +1,6 @@
+import { wordThemeSlot } from './theme-colour-xml.ts';
+import { DEFAULT_WORD_THEME, resolveWordColour, type WordColour, type WordThemeColour } from './theme-colours.ts';
+import { parseThemeColorScheme, type ThemeColorScheme } from '@tumblerjs/ooxml';
 import { isWordAuthoredShape } from './shapes.ts';
 import { ChartParseError, parseOoxmlChart, type ChartModel } from "@tumblerjs/charts";
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
@@ -57,6 +60,7 @@ export interface WordUnsupportedDrawing extends WordDrawingBase {
 
 /** Discovers Word drawing placement and resolves only internal image/chart relationships. */
 export function readWordDrawings(input: {
+  readonly themeColours?: ThemeColorScheme | undefined;
   readonly package: OpcPackage;
   readonly part: OpcPart;
   readonly source: LosslessXmlDocument;
@@ -68,8 +72,10 @@ export function readWordDrawings(input: {
   try { relationships = input.package.relationships(input.part.name); }
   catch (cause) { if (!(cause instanceof RelationshipsError) || cause.code !== "missing_item") throw cause; }
   // Parsed models are immutable; repeated chart frames can share them for this import.
+  const themeRel = relationships?.items.find(rel => /\/theme$/.test(rel.type) && rel.targetMode === 'Internal');
+  const theme = input.themeColours ?? (themeRel?.targetMode === 'Internal' ? parseThemeColorScheme(input.package.readPart(input.package.getPart(themeRel.targetPartName)!)) : DEFAULT_WORD_THEME);
   const charts = new Map<string, ChartModel>();
-  return new Map(elements.map((element) => [element.id, parseDrawing(input, element, relationships, charts)]));
+  return new Map(elements.map((element) => [element.id, parseDrawing(input, element, relationships, charts, theme)]));
 }
 
 function parseDrawing(
@@ -77,6 +83,7 @@ function parseDrawing(
   drawing: LosslessXmlElement,
   relationships: Relationships | undefined,
   charts: Map<string, ChartModel>,
+  theme: ThemeColorScheme,
 ): WordDrawing {
   const wp = wordDrawingNamespace(input.conformance);
   const placements = drawing.children.filter((child): child is LosslessXmlElement => child.kind === "element" && child.namespaceUri === wp && (child.localName === "inline" || child.localName === "anchor"));
@@ -102,15 +109,34 @@ function parseDrawing(
     const preset = attribute(geometry, 'prst');
     // Keep complex imported drawings opaque until their complete appearance is modeled.
     const transform = props && descendants(props).find(element => element.localName === 'xfrm');
-    if (nodes.some(node => ['schemeClr', 'gradFill', 'pattFill', 'blipFill', 'alpha', 'style', 'effectLst', 'effectDag'].includes(node.localName)) ||
+    const unsupportedLuminance = nodes.some(node => {
+      if (node.localName !== 'schemeClr') return false;
+      const transforms = node.children.filter((n): n is LosslessXmlElement => n.kind === 'element');
+      const mod = Number(attribute(transforms.find(n => n.localName === 'lumMod'), 'val') ?? 100000);
+      const off = Number(attribute(transforms.find(n => n.localName === 'lumOff'), 'val') ?? 0);
+      return !Number.isFinite(mod) || !Number.isFinite(off) || mod < 0 || off < 0 || mod > 100000 || off > 100000 || off !== 0 && Math.abs(mod + off - 100000) > 1 || transforms.length > new Set(transforms.map(n => n.localName)).size;
+    });
+    if (unsupportedLuminance || nodes.some(node => node.localName === 'schemeClr' && (!wordThemeSlot(attribute(node, 'val') ?? '') || node.children.some(c => c.kind === 'element' && !['lumMod', 'lumOff'].includes(c.localName)))) || nodes.some(node => ['gradFill', 'pattFill', 'blipFill', 'alpha', 'style', 'effectLst', 'effectDag'].includes(node.localName)) ||
       ['rot', 'flipH', 'flipV'].some(name => attribute(transform, name) !== undefined) ||
       geometry && descendants(geometry).some(node => node.localName === 'gd') ||
       anchor && anchor.wrap !== 'none')
       return unsupported(drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, 'This shape uses appearance or wrapping properties that are retained in the source document.');
-    const color = (parent: LosslessXmlElement | undefined) => {
+    const color = (parent: LosslessXmlElement | undefined): WordColour => {
       if (!parent) return 'none';
       const fill = parent.children.find((n): n is LosslessXmlElement => n.kind === 'element' && n.localName === 'solidFill');
       const rgb = fill && descendants(fill).find(n => n.localName === 'srgbClr');
+      const scheme = fill && descendants(fill).find(n => n.localName === 'schemeClr');
+      if (scheme) {
+        const slot = wordThemeSlot(attribute(scheme, 'val') ?? '');
+        if (!slot) throw new WordError('invalid_document', 'Unsupported shape theme colour.');
+        const transforms = scheme.children.filter((n): n is LosslessXmlElement => n.kind === 'element');
+        const mod = Number(attribute(transforms.find(n => n.localName === 'lumMod'), 'val') ?? 100000) / 100000;
+        const off = Number(attribute(transforms.find(n => n.localName === 'lumOff'), 'val') ?? 0) / 100000;
+        const tint = Math.round((1 - off) * 255);
+        const shade = Math.round((1 - off === 0 ? 1 : mod / (1 - off)) * 255);
+        const reference: WordThemeColour = { theme: slot, fallback: '#' + (theme.color(slot) ?? '000000'), ...(off === 0 ? {} : { tint }), ...(shade === 255 ? {} : { shade }) };
+        return { ...reference, fallback: resolveWordColour(reference, theme) };
+      }
       return rgb ? `#${attribute(rgb, 'val')}` : 'none';
     };
     const line = props && child(props, drawingNs, 'ln');

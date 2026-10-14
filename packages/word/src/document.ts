@@ -58,7 +58,7 @@ export interface WordTable {
 
 export interface WordTableProperties {
   readonly borders?: WordTableBorders;
-  readonly shading?: string;
+  readonly shading?: import('./theme-colours.ts').WordColour;
   readonly width: WordTableWidth | undefined;
   readonly alignment: "start" | "center" | "end";
   readonly indentTwips: number;
@@ -91,7 +91,7 @@ export interface WordTableRow {
 
 export interface WordTableCell {
   readonly borders?: WordCellBorders;
-  readonly shading?: string;
+  readonly shading?: import('./theme-colours.ts').WordColour;
   readonly elementId: number;
   readonly gridSpan: number;
   readonly verticalMerge: "restart" | "continue" | undefined;
@@ -261,6 +261,7 @@ export interface WordNoteStory {
 }
 
 interface ParseBudget {
+  themeColours: import('@tumblerjs/ooxml').ThemeColorScheme | undefined;
   readonly maxBlocks: number;
   readonly maxInlineItems: number;
   readonly maxTextCharacters: number;
@@ -341,6 +342,7 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
   const bodies = children(source.root, namespace, "body");
   if (bodies.length !== 1) throw new WordError("invalid_document", "A document must contain exactly one body.");
   const budget: ParseBudget = {
+    themeColours: undefined,
     maxBlocks: boundedLimit(options.maxBlocks, DEFAULT_MAX_BLOCKS, "block"),
     maxInlineItems: boundedLimit(options.maxInlineItems, DEFAULT_MAX_INLINE_ITEMS, "inline item"),
     maxTextCharacters: boundedLimit(options.maxTextCharacters, DEFAULT_MAX_TEXT_CHARACTERS, "text character"),
@@ -356,6 +358,8 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
       throw new WordError("invalid_document", "The Main Document relationships are invalid.", { cause });
     }
   }
+  const styles = readWordStyles({ package: pkg, part: main, source, conformance: profile });
+  budget.themeColours = styles.themeColors;
   const body = bodies[0]!;
   const blocks = body.children
     .filter((node): node is LosslessXmlElement => node.kind === "element")
@@ -364,7 +368,6 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
   const sectionElements = children(body, namespace, "sectPr");
   if (sectionElements.length > 1) throw new WordError("invalid_document", "A document body must not repeat final section properties.");
   const finalSection = parseSection(sectionElements[0], namespace);
-  const styles = readWordStyles({ package: pkg, part: main, source, conformance: profile });
   const numbering = readWordNumbering({ package: pkg, part: main, source, conformance: profile });
   const drawings = readWordDrawings({ package: pkg, part: main, source, conformance: profile });
   const notes = readNoteStories(pkg, main, profile, budget);
@@ -410,7 +413,7 @@ function readNoteStories(pkg: OpcPackage, main: OpcPart, conformance: WordConfor
     let noteRelationships: Relationships | undefined;
     try { noteRelationships = pkg.relationships(part.name); }
     catch (cause) { if (!(cause instanceof RelationshipsError) || cause.code !== "missing_item") throw cause; }
-    const drawings = readWordDrawings({ package: pkg, part, source, conformance });
+    const drawings = readWordDrawings({ package: pkg, part, source, conformance, themeColours: budget.themeColours });
     for (const element of children(source.root, namespace, kind)) {
       const rawId = attr(element, namespace, "id");
       if (rawId === undefined || !/^-?[0-9]+$/.test(rawId)) throw new WordError("invalid_document", `${kind} is missing a signed integer id.`);
@@ -468,7 +471,7 @@ function readHeaderFooterStories(
     catch (cause) { if (!(cause instanceof RelationshipsError) || cause.code !== "missing_item") throw cause; }
     const blocks = source.root.children.filter((node): node is LosslessXmlElement => node.kind === "element")
       .map((element) => parseBlock(element, source, namespace, storyRelationships, budget));
-    const drawings = readWordDrawings({ package: pkg, part, source, conformance });
+    const drawings = readWordDrawings({ package: pkg, part, source, conformance, themeColours: budget.themeColours });
     stories.push(Object.freeze({ ...reference, part, source, blocks: Object.freeze(blocks), drawings }));
   }
   return Object.freeze(stories);
@@ -523,8 +526,8 @@ function parseTable(
   const grid = onlyChild(element, namespace, "tblGrid", "A table must not repeat tblGrid.");
   const margins = properties === undefined ? undefined : onlyChild(properties, namespace, "tblCellMar", "Table properties must not repeat tblCellMar.");
   const tableProperties: WordTableProperties = Object.freeze({
-    borders: readTableBorders(tableChild(properties, namespace, "tblBorders"), namespace),
-    ...(readTableShading(tableChild(properties, namespace, "shd"), namespace) === undefined ? {} : { shading: readTableShading(tableChild(properties, namespace, "shd"), namespace)! }),
+    borders: readTableBorders(tableChild(properties, namespace, "tblBorders"), namespace, budget.themeColours),
+    ...(readTableShading(tableChild(properties, namespace, "shd"), namespace, budget.themeColours) === undefined ? {} : { shading: readTableShading(tableChild(properties, namespace, "shd"), namespace, budget.themeColours)! }),
     width: properties === undefined ? undefined : parseTableWidth(onlyChild(properties, namespace, "tblW", "Table properties must not repeat tblW."), namespace),
     alignment: properties === undefined ? "start" : tableAlignment(valueChild(properties, namespace, "jc")),
     indentTwips: properties === undefined ? 0 : tableIndent(onlyChild(properties, namespace, "tblInd", "Table properties must not repeat tblInd."), namespace),
@@ -543,8 +546,8 @@ function parseTable(
       }
       return Object.freeze({
       elementId: cell.id,
-      borders: readTableBorders(tableChild(cellProperties, namespace, "tcBorders"), namespace),
-      ...(readTableShading(tableChild(cellProperties, namespace, "shd"), namespace) === undefined ? {} : { shading: readTableShading(tableChild(cellProperties, namespace, "shd"), namespace)! }),
+      borders: readTableBorders(tableChild(cellProperties, namespace, "tcBorders"), namespace, budget.themeColours),
+      ...(readTableShading(tableChild(cellProperties, namespace, "shd"), namespace, budget.themeColours) === undefined ? {} : { shading: readTableShading(tableChild(cellProperties, namespace, "shd"), namespace, budget.themeColours)! }),
       gridSpan: cellProperties === undefined ? 1 : valueIntegerChild(cellProperties, namespace, "gridSpan", 1, 32_767),
       verticalMerge: rawMerge === undefined ? undefined : mergeValue === "restart" ? "restart" : "continue",
       width: cellProperties === undefined ? undefined : parseTableWidth(onlyChild(cellProperties, namespace, "tcW", "Cell properties must not repeat tcW."), namespace),

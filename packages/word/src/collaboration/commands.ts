@@ -1,3 +1,4 @@
+import { wordColoursEqual } from '../theme-colours.ts';
 import { formatTableDelta, type WordTableFormatPatch } from './table-format.ts';
 import { editTableDelta, type TableAction } from './table-edits.ts';
 import { isDocumentImage, normalizeImage, imagePositions, type DocumentImage } from './images.ts';
@@ -151,7 +152,7 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
     'wordUnderline',
   ] as const) {
     const value = first[key];
-    if (value !== undefined && formats.every((format) => format[key] === value))
+    if (value !== undefined && formats.every((format) => key === 'color' ? wordColoursEqual(format.color, first.color) : format[key] === value))
       Object.assign(result, { [key]: value });
   }
   const value = text.toString();

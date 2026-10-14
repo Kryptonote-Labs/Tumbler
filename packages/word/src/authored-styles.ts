@@ -1,3 +1,4 @@
+import { resolveWordColour, DEFAULT_WORD_THEME } from './theme-colours.ts';
 import { WordStyles, type WordStyle } from './styles.ts';
 import { xml, runProperties } from './create-xml.ts';
 import { paragraphFormatXml } from './paragraph-format.ts';
@@ -21,7 +22,7 @@ export function wordAuthoringStyles(source?: WordStyles, defaults: import('./cre
   const { color, highlight, ...run } = defaults;
   return new WordStyles({
     styles: [...(source?.styles ?? []), ...WORD_BUILTIN_STYLES.filter(style => !source?.style(style.styleId))],
-    documentRunDefaults: source?.documentRunDefaults ?? { ...run, ...(highlight === undefined ? {} : { highlight }), ...(color ? { color: { type: 'rgb' as const, value: color.slice(1) } } : {}) },
+    documentRunDefaults: source?.documentRunDefaults ?? { ...run, ...(highlight === undefined ? {} : { highlight }), ...(color ? { color: { type: 'rgb' as const, value: resolveWordColour(color, source?.themeColors ?? DEFAULT_WORD_THEME).slice(1) } } : {}) },
     documentParagraphDefaults: source?.documentParagraphDefaults ?? {},
     ...(source?.themeColors ? { themeColors: source.themeColors } : {}),
     ...(source?.themeFonts ? { themeFonts: source.themeFonts } : {}),

@@ -1,4 +1,5 @@
 import { WORD_HIGHLIGHTS } from './text-properties.ts';
+import { wordColourAttributes } from './theme-colour-xml.ts';
 import type { WordTextFormat } from './create.ts';
 
 export function xml(value: string) {
@@ -25,8 +26,7 @@ export function runProperties(format: WordTextFormat) {
   if (format.italic !== undefined) output.push(`<w:i w:val="${format.italic ? 1 : 0}"/>`);
   if (format.strike !== undefined) output.push(`<w:strike w:val="${format.strike ? 1 : 0}"/>`);
   if (format.color !== undefined) {
-    if (!/^#[0-9a-f]{6}$/i.test(format.color)) throw new TypeError('Text color must be a six-digit RGB value.');
-    output.push(`<w:color w:val="${format.color.slice(1).toUpperCase()}"/>`);
+    output.push(`<w:color ${wordColourAttributes(format.color)}/>`);
   }
   if (format.characterSpacingPoints !== undefined) {
     if (!Number.isFinite(format.characterSpacingPoints) || !Number.isInteger(format.characterSpacingPoints * 20) || format.characterSpacingPoints * 20 < -2147483648 || format.characterSpacingPoints * 20 > 2147483647) throw new RangeError('Character spacing must be an OOXML signed twip value.');

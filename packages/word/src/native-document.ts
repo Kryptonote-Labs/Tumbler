@@ -1,3 +1,4 @@
+import { DEFAULT_WORD_THEME, resolveWordColour, resolveWordPaintProperties } from './theme-colours.ts';
 import { isWordAuthoredList, registerWordListLevel, wordListMarker, type WordAuthoredList } from './authored-list.ts';
 import { isWordHyperlink } from './hyperlinks.ts';
 import { wordAuthoringStyles, validateWordStyleId } from './authored-styles.ts';
@@ -129,11 +130,12 @@ export class NativeWordDocument implements WordLayoutSource {
       this.exported = this.compiled.artifact;
     }
   }
+  get themeColours() { return this.namedStyles.themeColors ?? this.options.themeColours ?? DEFAULT_WORD_THEME; }
   paragraphFormat(paragraph: WordParagraph) {
     return this.paragraphFormats.get(paragraph) ?? DEFAULT_PARAGRAPH;
   }
   runFormat(paragraph: WordParagraph, run: WordRun | undefined) {
-    return (run && this.runFormats.get(run)) ?? this.paragraphTextFormats.get(paragraph) ?? this.compiled?.defaults.text ?? { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }) };
+    return (run && this.runFormats.get(run)) ?? this.paragraphTextFormats.get(paragraph) ?? this.compiled?.defaults.text ?? { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }), color: resolveWordColour(this.options.defaultFormat?.color ?? DEFAULT_TEXT.color, this.themeColours) };
   }
   removeStory(target: string | WordStoryTarget) {
     const key = typeof target === 'string' ? target : `${target.section}:${target.kind}:${target.type}`;
@@ -224,9 +226,12 @@ export class NativeWordDocument implements WordLayoutSource {
         value.fontSizePoints > 1638
       )
         throw new RangeError('Font size must be between 1 and 1638 points.');
+      const { themeColour: inheritedTheme, ...resolved } = value;
+      const selectedTheme = patch?.color === undefined ? inheritedTheme : typeof patch.color === 'string' ? undefined : patch.color;
       return Object.freeze({
-        ...value,
-        color: value.color.toUpperCase(),
+        ...resolved,
+        ...(selectedTheme === undefined ? {} : { themeColour: selectedTheme }),
+        color: resolveWordColour(value.color, this.themeColours).toUpperCase(),
         fontSizePoints: Math.round(value.fontSizePoints * 2) / 2,
       });
     };
@@ -312,9 +317,9 @@ export class NativeWordDocument implements WordLayoutSource {
             heightTwips: source.rowFormats?.[rowIndex]?.heightTwips ?? compiled?.rows.get(source.rowSources?.[rowIndex]!)?.heightTwips,
             heightRule: source.rowFormats?.[rowIndex]?.heightRule ?? compiled?.rows.get(source.rowSources?.[rowIndex]!)?.heightRule ?? 'auto' as const,
             cells: row.map(({ cell, column, span, width: cellWidth }) => ({
-              ...compiled?.cells.get(cell.source!),
-              ...cell.format,
-              borders: { ...compiled?.cells.get(cell.source!)?.borders, ...cell.format?.borders },
+              ...resolveWordPaintProperties(compiled?.cells.get(cell.source!) ?? {}, this.themeColours),
+              ...resolveWordPaintProperties(cell.format ?? {}, this.themeColours),
+              borders: { ...compiled?.cells.get(cell.source!)?.borders, ...resolveWordPaintProperties(cell.format ?? {}, this.themeColours).borders },
               elementId: allocate(),
               gridSpan: span,
               verticalMerge: cell.verticalMerge,
@@ -363,7 +368,7 @@ export class NativeWordDocument implements WordLayoutSource {
               if (authoredRun.shape) {
                 if (authoredRun.text !== '\uFFFC') throw new TypeError('Shape runs occupy one object character.');
                 const id = allocate(); contents.push({ kind: 'drawing', elementId: id });
-                media.push(nativeShapeDrawing(id, authoredRun.shape, width));
+                media.push(nativeShapeDrawing(id, { ...authoredRun.shape, fill: resolveWordColour(authoredRun.shape.fill, this.themeColours), outline: resolveWordColour(authoredRun.shape.outline, this.themeColours) }, width));
               } else if (authoredRun.breakType) {
                 wordBreakXml(authoredRun.breakType, authoredRun.text);
                 contents.push({ kind: 'break', elementId: allocate(), breakType: authoredRun.breakType });
@@ -440,7 +445,7 @@ export class NativeWordDocument implements WordLayoutSource {
                 ...compiled?.defaults.paragraph,
                 ...(resetParagraph ? named?.paragraph : original?.format),
                 ...authored.positioning,
-                ...authored.paragraph,
+                ...resolveWordPaintProperties(authored.paragraph ?? {}, this.themeColours),
                 alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? (resetParagraph ? named?.paragraph.alignment : original?.format.alignment) ?? compiled?.defaults.paragraph.alignment ?? 'start',
                 lineSpacing: authored.paragraph?.lineSpacing ?? (resetParagraph ? named?.paragraph.lineSpacing : original?.format.lineSpacing) ?? compiled?.defaults.paragraph.lineSpacing ?? {
                   rule: 'auto' as const,

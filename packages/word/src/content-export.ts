@@ -147,7 +147,8 @@ export function reconcileWordContent(
     if (rel.targetMode === 'External' && /\/hyperlink$/.test(rel.type)) {
       continue;
     }
-    if (rel.targetMode !== 'Internal' || !/\/(image|numbering)$/.test(rel.type)) continue;
+    if (rel.targetMode !== 'Internal' || !/\/(image|numbering|theme)$/.test(rel.type)) continue;
+    if (/\/theme$/.test(rel.type) && document.styles.themeColors) continue;
     const part = generated.document.package.getPart(rel.targetPartName)!;
     const name = PartName.parse(`/word/${prefix}${part.name.value.split('/').at(-1)}`);
     if (/\/numbering$/.test(rel.type)) {

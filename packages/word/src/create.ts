@@ -1,3 +1,4 @@
+import { wordThemeXml } from './theme-colour-xml.ts';
 import { WORD_BUILTIN_STYLES, builtinStyleXml } from './authored-styles.ts';
 import type { WordParagraphPositioning } from './positioning.ts';
 import type { WordPositionalTab } from './document.ts';
@@ -9,7 +10,7 @@ import { xml, runProperties } from './create-xml.ts';
 import { authoredContent, type WordContentBlock, type WordAuthoredImage } from './create-content.ts';
 
 /** Supported authored text properties. Omitted properties inherit the document defaults. */
-export type WordTextFormat = Partial<Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'underline' | 'color' | 'strike' | 'highlight' | 'verticalAlign' | 'characterSpacingPoints'>>;
+export type WordTextFormat = Partial<Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'underline' | 'strike' | 'highlight' | 'verticalAlign' | 'characterSpacingPoints'>> & { readonly color?: import('./theme-colours.ts').WordColour };
 export interface WordTextRun { readonly shape?: import('./shapes.ts').WordAuthoredShape; readonly breakType?: import('./breaks.ts').WordBreakType; readonly link?: string; readonly tab?: WordPositionalTab; readonly source?: number; readonly sourceCopy?: string; readonly text: string; readonly format?: WordTextFormat; readonly image?: WordAuthoredImage; readonly field?: WordPageField; }
 export interface WordTextParagraph {
   readonly styleId?: string;
@@ -26,6 +27,7 @@ export interface WordTextParagraph {
   readonly list?: import('./authored-list.ts').WordAuthoredList;
 }
 export interface CreateWordOptions {
+  readonly themeColours?: import('@tumblerjs/ooxml').ThemeColorScheme;
   readonly paragraphs?: readonly WordTextParagraph[];
   /** Structured content. Mutually exclusive with paragraphs. */
   readonly blocks?: readonly WordContentBlock[];
@@ -53,9 +55,10 @@ export function createWordArtifact(options: CreateWordOptions = {}): WordArtifac
   const authored = authoredContent(options.blocks ?? (options.paragraphs ?? [{ runs: [] }]).map(paragraph => ({ kind: 'paragraph', ...paragraph })), page.width - page.margin * 2);
   const content = authored.content;
   const parts = [
-    ['[Content_Types].xml', `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>${authored.contentTypes}</Types>`],
+    ['word/theme/theme1.xml', wordThemeXml(options.themeColours)],
+    ['[Content_Types].xml', `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/word/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>${authored.contentTypes}</Types>`],
     ['_rels/.rels', `<Relationships xmlns="${relationships}"><Relationship Id="document" Type="${office}officeDocument" Target="word/document.xml"/><Relationship Id="properties" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>`],
-    ['word/_rels/document.xml.rels', `<Relationships xmlns="${relationships}"><Relationship Id="styles" Type="${office}styles" Target="styles.xml"/><Relationship Id="settings" Type="${office}settings" Target="settings.xml"/>${authored.relationships}</Relationships>`],
+    ['word/_rels/document.xml.rels', `<Relationships xmlns="${relationships}"><Relationship Id="styles" Type="${office}styles" Target="styles.xml"/><Relationship Id="settings" Type="${office}settings" Target="settings.xml"/><Relationship Id="theme" Type="${office}theme" Target="theme/theme1.xml"/>${authored.relationships}</Relationships>`],
     ['word/document.xml', `<w:document xmlns:w="${namespace}" xmlns:r="${office.slice(0, -1)}" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${content}<w:sectPr><w:pgSz w:w="${Math.round(page.width * 20)}" w:h="${Math.round(page.height * 20)}"/><w:pgMar w:top="${Math.round(page.margin * 20)}" w:right="${Math.round(page.margin * 20)}" w:bottom="${Math.round(page.margin * 20)}" w:left="${Math.round(page.margin * 20)}" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr></w:body></w:document>`],
     ['word/styles.xml', `<w:styles xmlns:w="${namespace}"><w:docDefaults><w:rPrDefault><w:rPr>${runProperties(options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 })}</w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="0" w:line="${lineSpacing}" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>${WORD_BUILTIN_STYLES.map(builtinStyleXml).join('')}</w:styles>`],
     ['word/settings.xml', `<w:settings xmlns:w="${namespace}"><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`],

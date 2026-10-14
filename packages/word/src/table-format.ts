@@ -1,3 +1,5 @@
+import { readWordColour, wordColourAttributes } from './theme-colour-xml.ts';
+import { isWordColour, type WordColour } from './theme-colours.ts';
 import type { LosslessXmlElement } from '@tumblerjs/ooxml';
 import type { WordTableCellMargins } from './document.ts';
 
@@ -6,12 +8,12 @@ export type WordBorderSide = typeof WORD_BORDER_SIDES[number];
 export interface WordTableBorder {
   readonly style: 'none' | 'single' | 'double' | 'dotted' | 'dashed';
   readonly widthPoints: number;
-  readonly color: string;
+  readonly color: WordColour;
 }
 export type WordCellBorders = Partial<Record<WordBorderSide, WordTableBorder>>;
 export type WordTableBorders = WordCellBorders & { insideH?: WordTableBorder; insideV?: WordTableBorder };
 export interface WordCellFormat {
-  readonly shading?: string;
+  readonly shading?: WordColour;
   readonly borders?: WordCellBorders;
   readonly verticalAlignment?: 'top' | 'center' | 'bottom';
   readonly margins?: WordTableCellMargins;
@@ -20,7 +22,7 @@ export interface WordRowFormat {
   readonly heightTwips?: number;
   readonly heightRule?: 'auto' | 'atLeast' | 'exact';
 }
-const color = (value: unknown): value is string => typeof value === 'string' && /^#[\da-f]{6}$/i.test(value);
+const color = isWordColour;
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 export function isWordCellFormat(value: unknown): value is WordCellFormat {
   if (!record(value) || Object.keys(value).some(key => !['shading', 'borders', 'verticalAlignment', 'margins'].includes(key))) return false;
@@ -42,7 +44,7 @@ export function isWordRowFormat(value: unknown): value is WordRowFormat {
 }
 const attr = (e: LosslessXmlElement, ns: string, name: string) => e.attributes.find(a => a.namespaceUri === ns && a.localName === name)?.value;
 export const tableChild = (e: LosslessXmlElement | undefined, ns: string, name: string) => e?.children.find((n): n is LosslessXmlElement => n.kind === 'element' && n.namespaceUri === ns && n.localName === name);
-export function readTableBorders(e: LosslessXmlElement | undefined, ns: string): WordTableBorders {
+export function readTableBorders(e: LosslessXmlElement | undefined, ns: string, scheme?: import('@tumblerjs/ooxml').ThemeColorScheme): WordTableBorders {
   const result: WordTableBorders = {};
   for (const side of [...WORD_BORDER_SIDES, 'insideH', 'insideV'] as const) {
     const border = tableChild(e, ns, side) ?? (side === 'left' ? tableChild(e, ns, 'start') : side === 'right' ? tableChild(e, ns, 'end') : undefined);
@@ -50,27 +52,25 @@ export function readTableBorders(e: LosslessXmlElement | undefined, ns: string):
     const raw = attr(border, ns, 'val');
     const style = raw === 'nil' || raw === 'none' ? 'none' : raw === 'double' || raw === 'dotted' || raw === 'dashed' ? raw : 'single';
     const size = Number(attr(border, ns, 'sz') ?? 4) / 8;
-    const rawColor = attr(border, ns, 'color');
-    result[side] = { style, widthPoints: Number.isFinite(size) ? Math.max(0, size) : 0.5, color: rawColor && /^[\da-f]{6}$/i.test(rawColor) ? `#${rawColor.toUpperCase()}` : '#000000' };
+    result[side] = { style, widthPoints: Number.isFinite(size) ? Math.max(0, size) : 0.5, color: readWordColour(border, ns, 'color', scheme) ?? '#000000' };
   }
   return result;
 }
-export function readTableShading(e: LosslessXmlElement | undefined, ns: string): string | undefined {
+export function readTableShading(e: LosslessXmlElement | undefined, ns: string, scheme?: import('@tumblerjs/ooxml').ThemeColorScheme): WordColour | undefined {
   if (!e) return undefined;
-  const fill = attr(e, ns, 'fill');
-  return fill && /^[\da-f]{6}$/i.test(fill) ? `#${fill.toUpperCase()}` : 'transparent';
+  return readWordColour(e, ns, 'fill', scheme) ?? 'transparent';
 }
 export function cellFormatXml(format: WordCellFormat): Map<string, string> {
   if (!isWordCellFormat(format)) throw new TypeError('Invalid cell formatting.');
   const values = new Map<string, string>();
-  if (format.shading !== undefined) values.set('shd', `<w:shd w:val="clear" w:fill="${format.shading === 'transparent' ? 'auto' : format.shading.slice(1)}"/>`);
+  if (format.shading !== undefined) values.set('shd', `<w:shd w:val="clear" ${format.shading === 'transparent' ? 'w:fill="auto"' : wordColourAttributes(format.shading, true)}/>`);
   if (format.verticalAlignment) values.set('vAlign', `<w:vAlign w:val="${format.verticalAlignment}"/>`);
   if (format.margins) values.set('tcMar', `<w:tcMar>${[['top', format.margins.topTwips], ['left', format.margins.startTwips], ['bottom', format.margins.bottomTwips], ['right', format.margins.endTwips]].map(([k,v]) => `<w:${k} w:w="${v}" w:type="dxa"/>`).join('')}</w:tcMar>`);
   if (format.borders) values.set('tcBorders', `<w:tcBorders>${borderXml(format.borders)}</w:tcBorders>`);
   return values;
 }
 export function borderXml(borders: WordTableBorders): string {
-  return Object.entries(borders).map(([side,b]) => `<w:${side} w:val="${b.style}" w:sz="${Math.round(b.widthPoints * 8)}" w:color="${b.color.slice(1)}"/>`).join('');
+  return Object.entries(borders).map(([side,b]) => `<w:${side} w:val="${b.style}" w:sz="${Math.round(b.widthPoints * 8)}" ${wordColourAttributes(b.color).replace('w:val=', 'w:color=')}/>`).join('');
 }
 export function rowFormatXml(format: WordRowFormat): string {
   if (!isWordRowFormat(format)) throw new TypeError('Invalid row formatting.');

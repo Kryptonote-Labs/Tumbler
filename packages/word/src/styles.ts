@@ -1,3 +1,5 @@
+import { wordThemeSlot } from './theme-colour-xml.ts';
+import { resolveWordColour, resolveWordPaintProperties, DEFAULT_WORD_THEME, type WordThemeColour } from './theme-colours.ts';
 import {
   OOXML_NAMESPACES,
   parseLosslessXml,
@@ -23,7 +25,7 @@ export type WordVerticalAlign = "baseline" | "superscript" | "subscript";
 export type WordColor =
   | { readonly type: "automatic" }
   | { readonly type: "rgb"; readonly value: string }
-  | { readonly type: "theme"; readonly slot: ThemeColorSlot };
+  | { readonly type: "theme"; readonly slot: ThemeColorSlot; readonly tint?: number; readonly shade?: number; readonly fallback?: string };
 
 export interface WordRunProperties {
   readonly fontFamily?: string;
@@ -53,7 +55,7 @@ export interface WordLineSpacing {
 }
 
 export interface WordParagraphProperties {
-  readonly shading?: string;
+  readonly shading?: import('./theme-colours.ts').WordColour;
   readonly borders?: import('./table-format.ts').WordCellBorders;
   readonly styleId?: string;
   readonly alignment?: "start" | "center" | "end" | "justify" | "distribute";
@@ -82,12 +84,15 @@ export interface ComputedWordTextFormat {
   readonly characterSpacingPoints?: number;
   readonly strike: boolean;
   readonly color: string;
+  readonly themeColour?: WordThemeColour;
   readonly highlight: string | undefined;
   readonly verticalAlign: WordVerticalAlign;
   readonly rightToLeft: boolean;
 }
 
 export interface ComputedWordParagraphFormat {
+  readonly borderColours?: import('./table-format.ts').WordCellBorders;
+  readonly shadingColour?: import('./theme-colours.ts').WordColour;
   readonly shading?: string;
   readonly borders?: import('./table-format.ts').WordCellBorders;
   readonly styleId: string | undefined;
@@ -196,7 +201,7 @@ export class WordStyles {
   resolveParagraphStyle(styleId: string) {
     const chain = this.styleChain(styleId, 'paragraph');
     return {
-      paragraph: computedParagraph(chain.reduce((value, style) => mergeParagraph(value, style.paragraph), this.documentParagraphDefaults), styleId),
+      paragraph: computedParagraph(chain.reduce((value, style) => mergeParagraph(value, style.paragraph), this.documentParagraphDefaults), styleId, this.themeColors),
       text: this.computedRun(chain.reduce((value, style) => mergeRun(value, style.run), this.documentRunDefaults)),
     };
   }
@@ -220,7 +225,7 @@ export class WordStyles {
       (result, style) => mergeParagraph(result, style.paragraph),
       this.documentParagraphDefaults,
     );
-    return computedParagraph(mergeParagraph(cascade, direct), styleId);
+    return computedParagraph(mergeParagraph(cascade, direct), styleId, this.themeColors);
   }
 
   // Without a run, resolve inherited text formatting for an empty paragraph.
@@ -280,6 +285,7 @@ export class WordStyles {
       underline: properties.underline ?? DEFAULT_TEXT.underline,
       strike: properties.strike ?? DEFAULT_TEXT.strike,
       color: this.resolveColor(properties.color) ?? DEFAULT_TEXT.color,
+      ...(properties.color?.type === 'theme' ? { themeColour: { theme: properties.color.slot, fallback: this.resolveColor(properties.color) ?? DEFAULT_TEXT.color, ...(properties.color.tint === undefined ? {} : { tint: properties.color.tint }), ...(properties.color.shade === undefined ? {} : { shade: properties.color.shade }) } } : {}),
       highlight: properties.highlight,
       ...(properties.characterSpacingPoints === undefined ? {} : { characterSpacingPoints: properties.characterSpacingPoints }),
       verticalAlign: properties.verticalAlign ?? DEFAULT_TEXT.verticalAlign,
@@ -290,8 +296,7 @@ export class WordStyles {
   private resolveColor(color: WordColor | undefined): string | undefined {
     if (color === undefined || color.type === "automatic") return undefined;
     if (color.type === "rgb") return `#${color.value}`;
-    const resolved = this.themeColors?.color(color.slot);
-    return resolved === undefined ? undefined : `#${resolved}`;
+    return resolveWordColour({ theme: color.slot, fallback: color.fallback ?? '#000000', ...(color.tint === undefined ? {} : { tint: color.tint }), ...(color.shade === undefined ? {} : { shade: color.shade }) }, this.themeColors);
   }
 }
 
@@ -451,11 +456,11 @@ function parseTabStops(element: LosslessXmlElement, namespace: string): readonly
   return Object.freeze(result.sort((left, right) => left.positionTwips - right.positionTwips));
 }
 
-function computedParagraph(properties: WordParagraphProperties, styleId: string | undefined): ComputedWordParagraphFormat {
+function computedParagraph(properties: WordParagraphProperties, styleId: string | undefined, theme?: ThemeColorScheme): ComputedWordParagraphFormat {
   return Object.freeze({
     styleId,
-    ...(properties.shading === undefined ? {} : { shading: properties.shading }),
-    ...(properties.borders === undefined ? {} : { borders: properties.borders }),
+    ...(properties.shading === undefined ? {} : { shading: resolveWordColour(properties.shading, theme), shadingColour: properties.shading }),
+    ...(properties.borders === undefined ? {} : { borders: resolveWordPaintProperties({ borders: properties.borders }, theme ?? DEFAULT_WORD_THEME).borders, borderColours: properties.borders }),
     alignment: properties.alignment ?? DEFAULT_PARAGRAPH.alignment,
     spacingBeforeTwips: properties.spacingBeforeTwips ?? DEFAULT_PARAGRAPH.spacingBeforeTwips,
     spacingAfterTwips: properties.spacingAfterTwips ?? DEFAULT_PARAGRAPH.spacingAfterTwips,
@@ -609,18 +614,23 @@ function underlineValue(raw: string | undefined): "none" | "single" | "double" {
 
 function parseColor(element: LosslessXmlElement, namespace: string): WordColor {
   const theme = attr(element, namespace, "themeColor");
-  if (theme !== undefined && isThemeColor(theme)) return Object.freeze({ type: "theme", slot: theme });
+  const slot = theme === undefined ? undefined : wordThemeSlot(theme);
+  if (slot) {
+    const byte = (name: string) => {
+      const raw = attr(element, namespace, name);
+      if (raw === undefined) return undefined;
+      if (!/^[0-9a-f]{2}$/i.test(raw)) throw new WordError('invalid_document', 'Theme tint/shade must be a hexadecimal byte.');
+      return parseInt(raw, 16);
+    };
+    const tint = byte('themeTint'), shade = byte('themeShade'), fallback = attr(element, namespace, 'val');
+    return Object.freeze({ type: 'theme', slot, ...(tint === undefined ? {} : { tint }), ...(shade === undefined ? {} : { shade }), ...(fallback && /^[0-9a-f]{6}$/i.test(fallback) ? { fallback: '#' + fallback } : {}) });
+  }
   const value = attr(element, namespace, "val");
   if (value === undefined || value === "auto") return Object.freeze({ type: "automatic" });
   if (!/^[0-9A-Fa-f]{6}$/.test(value)) throw new WordError("invalid_document", "Text color must be auto or six hexadecimal digits.");
   return Object.freeze({ type: "rgb", value: value.toUpperCase() });
 }
 
-function isThemeColor(value: string): value is ThemeColorSlot {
-  return value === "lt1" || value === "dk1" || value === "lt2" || value === "dk2" ||
-    value === "accent1" || value === "accent2" || value === "accent3" || value === "accent4" ||
-    value === "accent5" || value === "accent6" || value === "hlink" || value === "folHlink";
-}
 
 function paragraphAlignment(value: string | undefined): WordParagraphProperties["alignment"] {
   if (value === "center") return "center";
