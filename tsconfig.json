@@ -15,6 +15,7 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "ES2024",
+    "types": ["bun"],
     "verbatimModuleSyntax": true
   },
   "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts"]

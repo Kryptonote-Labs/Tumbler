@@ -81,7 +81,7 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
     };
   };
   const visit = (blocks: readonly WordBlock[]): WordContentBlock[] =>
-    blocks.flatMap((block) => {
+    blocks.flatMap<WordContentBlock>((block) => {
       if (block.kind === 'paragraph') return [paragraph(block)];
       if (block.kind === 'unsupported') return [];
       return [

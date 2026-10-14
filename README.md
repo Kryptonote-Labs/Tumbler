@@ -97,6 +97,10 @@ bun run docs:test
 See [the docs app guide](apps/docs/README.md) for browser tests and sample generation,
 and [CONTRIBUTING.md](CONTRIBUTING.md) for release qualification and publishing.
 
+Compiler checks use TypeScript 7 through the `@typescript/native` dependency alias.
+The `typescript` dependency aliases `@typescript/typescript6` because Svelte tooling
+still needs its JavaScript compiler API. Keep both aliases when updating dependencies.
+
 ## Engineering references
 
 - [Architecture](docs/architecture.md)
