@@ -102,6 +102,16 @@ function checkRange(text: Y.Text, range: WordRange) {
     throw new Error('The edit would split a character.');
 }
 
+function linkAt(text: Y.Text, index: number): string | undefined {
+  let offset = 0;
+  for (const part of text.toDelta()) {
+    const length = typeof part.insert === 'string' ? part.insert.length : 1;
+    if (index >= offset && index < offset + length) return part.attributes?.link || undefined;
+    offset += length;
+  }
+  return undefined;
+}
+
 function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
   const defaults = defaultAttributes?.(text, range) ?? {};
   const formats: TextAttributes[] = [];
@@ -155,6 +165,10 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
     if (value !== undefined && formats.every((format) => key === 'color' ? wordColoursEqual(format.color, first.color) : format[key] === value))
       Object.assign(result, { [key]: value });
   }
+  // Typing extends a link only inside it. At either end the caret leaves the link, its
+  // appearance and its source run (which may sit inside an imported hyperlink) behind.
+  if (collapsed && result.link && (linkAt(text, range.start - 1) !== result.link || linkAt(text, range.start) !== result.link))
+    for (const key of ['link', 'underline', 'wordUnderline', 'color', 'wordSource', 'wordCopy'] as const) delete result[key];
   const value = text.toString();
   const last = value.indexOf('\n', range.start);
   offset = 0;

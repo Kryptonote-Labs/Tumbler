@@ -75,6 +75,17 @@ test('document defaults resolve for editing and mixed selections', () => {
 });
 
 
+test('typing at either end of a link writes plain text, and inside it extends the link', () => {
+  const doc = new Y.Doc(); const body = doc.getText('body');
+  const link = {link:'https://example.com', underline:true, color:'#0563C1', bold:true, wordSource:7};
+  body.applyDelta([{insert:'Go ', attributes:{bold:true}}, {insert:'here', attributes:link}, {insert:'\n'}, {insert:'Next', attributes:link}, {insert:'\n'}]);
+  const typed = (at: number) => { body.applyDelta(commands.replaceWordDelta(body,{start:at,end:at},'x')); return commands.wordFormats(body,{start:at,end:at+1}); };
+  expect(typed(7)).toEqual({fontSize:12, bold:true});
+  expect(typed(5)).toMatchObject(link);
+  expect(typed(10)).toEqual({fontSize:12, bold:true});
+  doc.destroy();
+});
+
 test('replacing a whole table with several paragraphs removes its cell structure', () => {
   const doc = new Y.Doc(); const body = doc.getText('body'); body.insert(0,'Intro\n');
   body.applyDelta(insertTableDelta(body,0,[['one','two'],['three','four']]).delta);
