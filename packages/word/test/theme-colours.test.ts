@@ -57,7 +57,7 @@ describe("document theme colours", () => {
       fallback: "#156082",
     });
   });
-  test("matches Office's variation grid within one RGB level", () => {
+  test("matches all 50 Office variation swatches exactly", () => {
     // Column-major RGB samples from the Office screenshot supplied with the bug.
     const columns = [
       "f2f2f2 d8d8d8 bfbfbf a5a5a5 7f7f7f",
@@ -75,15 +75,7 @@ describe("document theme colours", () => {
     columns.forEach((column, x) => {
       column.split(" ").forEach((expected, y) => {
         const actual = variations[y * 10 + x]!.displayColour!;
-        for (const i of [0, 2, 4]) {
-          expect(
-            Math.abs(
-              parseInt(actual.slice(i + 1, i + 3), 16) -
-                parseInt(expected.slice(i, i + 2), 16),
-            ),
-          ).toBeLessThanOrEqual(1);
-        }
-        if (x === 3) expect(actual).toBe("#" + expected);
+        expect(actual).toBe("#" + expected);
       });
     });
   });

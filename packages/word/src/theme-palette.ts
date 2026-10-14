@@ -1,8 +1,8 @@
+import { wordPaletteColour } from "./theme-palette-colour.ts";
 import { ThemeColorScheme } from "@tumblerjs/ooxml";
 import {
   DEFAULT_WORD_THEME,
   resolveWordColour,
-  wordColourLuminance,
   type WordColour,
 } from "./theme-colours.ts";
 export type WordColourSwatch = {
@@ -80,12 +80,7 @@ export function wordThemePalette(scheme = DEFAULT_WORD_THEME) {
         name: `${base.name}, ${step > 0 ? "lighter" : "darker"} ${Math.round(Math.abs(step) * 100)}%`,
         // Office displays exact percentage steps with truncated RGB channels.
         // WordprocessingML stores a quantized byte, which can differ by one level.
-        displayColour: wordColourLuminance(
-          hex,
-          1 - Math.abs(step),
-          Math.max(0, step),
-          Math.floor,
-        ),
+        displayColour: wordPaletteColour(hex, step),
         value: {
           ...reference,
           fallback: resolveWordColour(reference, resolvedScheme),
