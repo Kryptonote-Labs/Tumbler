@@ -1,10 +1,10 @@
 <script lang="ts">
   import WordShapeView from "./WordShapeView.svelte";
-  import { wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing } from '@tumblerjs/word';
+  import { wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing, type WordShapeTextChange } from '@tumblerjs/word';
   import OoxmlChart from './OoxmlChart.svelte';
   import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
 
-  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange }: {
+  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange }: {
     drawing: WordDrawing; width: number; height: number; position: string; scale: number;
     editable: boolean; selected: boolean;
     pageX: number; pageY: number;
@@ -16,6 +16,8 @@
     onselect: (id: number | undefined) => void;
     onresize?: (size: WordDrawingResize) => void;
     onchange?: (change: WordDrawingChange) => void;
+    /** Enables in-place shape text editing: double-click a shape, or type while it is selected. */
+    ontextchange?: (change: WordShapeTextChange) => void;
   } = $props();
   type Handle = WordDrawingHandle & { label: string; cursor: string };
   const handles: readonly Handle[] = [
@@ -34,6 +36,9 @@
   const label = $derived(drawing.altText ?? drawing.name ?? (drawing.kind === 'chart' ? 'Chart' : 'Image'));
   let displayWidth = $derived(wordPointsToCssPixels(preview?.width ?? width));
   let displayHeight = $derived(wordPointsToCssPixels(preview?.height ?? height));
+  // Undefined while not editing; otherwise the text editing starts with.
+  let editingText = $state<string>();
+  const textEditable = $derived(editable && drawing.kind === 'shape' && ontextchange !== undefined);
   const box = (): WordDrawingBox => ({ x: pageX, y: pageY, width, height });
 
   // Pointer deltas belong to the scale at which the drag started.
@@ -95,7 +100,26 @@
     if (current?.target?.hasPointerCapture(current.pointer)) current.target.releasePointerCapture(current.pointer);
   }
 
+  function editText(initial: string) {
+    if (!textEditable || drawing.kind !== 'shape') return;
+    cancel();
+    onselect(drawing.elementId);
+    editingText = initial;
+  }
+
+  function finishText(text: string, reason: 'blur' | 'escape') {
+    editingText = undefined;
+    if (drawing.kind === 'shape' && text !== (drawing.shape.text ?? '')) ontextchange?.({ elementId: drawing.elementId, text, reason });
+    else if (reason === 'escape') onselect(drawing.elementId);
+  }
+
   function keydown(event: KeyboardEvent, handle?: Handle) {
+    // As in Word, typing while a shape is selected adds to its text.
+    if (handle === undefined && textEditable && drawing.kind === 'shape' && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
+      event.preventDefault(); event.stopPropagation();
+      editText((drawing.shape.text ?? '') + event.key);
+      return;
+    }
     if (event.key === 'Escape') { event.stopPropagation(); cancel(); onselect(undefined); return; }
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
     if (handle === undefined && onchange === undefined) return;
@@ -115,7 +139,7 @@
 
 {#snippet content()}
   {#if drawing.kind === 'shape'}
-    <WordShapeView shape={drawing.shape} />
+    <WordShapeView shape={drawing.shape} editing={editingText !== undefined} initialText={editingText} oncommit={finishText} />
   {:else if drawing.kind === 'image'}
     <img src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading={imageLoading} decoding="async" />
   {:else if drawing.kind === 'chart'}
@@ -127,7 +151,11 @@
 
 <div class="drawing" class:moving={preview !== undefined} class:behind={currentLayout === 'behind'} class:selected={editable && selected} data-word-drawing={drawing.elementId} contenteditable="false" style={`${position};width:${displayWidth}px;height:${displayHeight}px;translate:${preview === undefined ? 'none' : `${wordPointsToCssPixels(preview.x - pageX)}px ${wordPointsToCssPixels(preview.y - pageY)}px`};--handle-size:${10 / scale}px;--outline-size:${1 / scale}px;--inverse-scale:${1 / scale}`}>
   {#if editable && drawing.kind !== 'unsupported' && (onresize !== undefined || onchange !== undefined)}
-    <button class="content" class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)}>{@render content()}</button>
+    {#if editingText !== undefined}
+      <div class="content editing">{@render content()}</div>
+    {:else}
+    <button class="content" class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)} ondblclick={(event) => { if (!textEditable || drawing.kind !== 'shape') return; event.preventDefault(); editText(drawing.shape.text ?? ''); }}>{@render content()}</button>
+    {/if}
     {#if selected}
       {#if onchange !== undefined}
         <div class="controls" role="toolbar" aria-label="Drawing controls">
@@ -158,6 +186,7 @@
   .content { position: relative; z-index: 2; display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; touch-action: none; }
   .content.movable { cursor: grab; }
   .content.movable:active { cursor: grabbing; }
+  .content.editing { cursor: text; outline: var(--outline-size) dashed var(--tumbler-document-accent, #25a735); }
   .content:focus-visible { outline: var(--outline-size) solid var(--tumbler-document-accent, #25a735); }
   img { display: block; width: 100%; height: 100%; }
   .resize { position: absolute; z-index: 4; translate: -50% -50%; width: var(--handle-size); height: var(--handle-size); min-width: 0; min-height: 0; box-sizing: border-box; line-height: 0; padding: 0; border: var(--outline-size) solid var(--tumbler-document-accent, #25a735); border-radius: 50%; background: white; touch-action: none; }
