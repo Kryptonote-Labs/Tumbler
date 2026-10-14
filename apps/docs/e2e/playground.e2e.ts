@@ -4,16 +4,32 @@ import { openWordArtifact, wordParagraphText } from '@tumblerjs/word';
 import { openSpreadsheetArtifact } from '@tumblerjs/sheets';
 
 // These exercise the real browser layout and exported files, not source markup.
-test('docs navigation works on desktop and a narrow screen', async ({ page }) => {
+test('docs topics are reachable on desktop and a narrow screen', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Office documents, in your app.' })).toBeVisible();
   await page.getByRole('navigation', { name: 'Documentation', exact: true }).getByRole('link', { name: 'Installation', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Installation', exact: true })).toBeVisible();
+  const navigation = page.getByRole('navigation', { name: 'Documentation', exact: true });
+  await navigation.locator('summary').filter({ hasText: /^Word$/ }).click();
+  await navigation.getByRole('link', { name: 'Text and styles', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Text and styles', exact: true })).toBeVisible();
+  await expect(navigation.getByRole('link', { name: 'Text and styles', exact: true })).toHaveAttribute('aria-current', 'page');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await page.getByRole('navigation', { name: 'Documentation', exact: true }).getByRole('link', { name: 'Compatibility', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Compatibility', exact: true })).toBeVisible();
+  await navigation.locator('summary').filter({ hasText: /^Spreadsheets$/ }).click();
+  await navigation.getByRole('link', { name: 'Cells and formulas', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Cells and formulas', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Menu', exact: true })).toHaveAttribute('aria-expanded', 'false');
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigation.getByRole('link', { name: 'Format support', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Format support', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('bookmarks to moved Word sections open the focused guide', async ({ page }) => {
+  await page.goto('/docs/word-authoring#shapes');
+  await expect(page).toHaveURL(/\/docs\/word-drawings#shapes$/);
+  await expect(page.getByRole('heading', { name: 'Editable shapes', exact: true })).toBeInViewport();
 });
 
 test('both page edges are reachable in a narrow viewer at different zoom levels', async ({ page }) => {

@@ -1,10 +1,53 @@
 export const version = __TUMBLER_VERSION__;
 export const commit = __TUMBLER_COMMIT__;
 export const repository = 'https://github.com/Kryptonote-Labs/Tumbler';
-export const navigation = [
-  { title: 'Start here', links: [{ href: '/', label: 'Introduction' }, { href: '/docs/installation', label: 'Installation' }, { href: '/docs/releases', label: 'Latest release' }, { href: '/docs/architecture', label: 'How it works' }] },
-  { title: 'Working with documents', links: [{ href: '/docs/word', label: 'Word documents' }, { href: '/docs/native-word', label: 'Native Word model' }, { href: '/docs/word-authoring', label: 'Word authoring' }, { href: '/docs/word-collaboration', label: 'Word collaboration' }, { href: '/docs/spreadsheets', label: 'Spreadsheets' }, { href: '/docs/powerpoint', label: 'PowerPoint' }, { href: '/docs/compatibility', label: 'Compatibility' }] },
-  { title: 'Explore', links: [{ href: '/components', label: 'Components' }, { href: '/playground/word-brief', label: 'Playground' }, { href: '/docs/development', label: 'Local development' }] }
+interface NavigationGroup {
+  title: string;
+  collapsible?: boolean;
+  links: { href: string; label: string }[];
+}
+
+export const navigation: NavigationGroup[] = [
+  { title: 'Start here', links: [
+    { href: '/', label: 'Introduction' },
+    { href: '/docs/installation', label: 'Installation' },
+    { href: '/docs/architecture', label: 'How it works' },
+  ] },
+  { title: 'Word', collapsible: true, links: [
+    { href: '/docs/word', label: 'Overview' },
+    { href: '/docs/word-editing', label: 'Open and edit' },
+    { href: '/docs/native-word', label: 'Native content model' },
+    { href: '/docs/word-formatting', label: 'Text and styles' },
+    { href: '/docs/word-lists', label: 'Lists and links' },
+    { href: '/docs/word-tables', label: 'Tables' },
+    { href: '/docs/word-drawings', label: 'Images and shapes' },
+    { href: '/docs/word-layout', label: 'Page layout and positions' },
+    { href: '/docs/word-stories', label: 'Headers and page numbers' },
+    { href: '/docs/word-collaboration', label: 'Collaborative editing' },
+    { href: '/docs/word-search', label: 'Find and replace' },
+    { href: '/docs/word-performance', label: 'Caching and projections' },
+    { href: '/docs/word-support', label: 'Compatibility' },
+  ] },
+  { title: 'Spreadsheets', collapsible: true, links: [
+    { href: '/docs/spreadsheets', label: 'Open a workbook' },
+    { href: '/docs/spreadsheet-editing', label: 'Cells and formulas' },
+    { href: '/docs/spreadsheet-support', label: 'Compatibility' },
+  ] },
+  { title: 'PowerPoint', collapsible: true, links: [
+    { href: '/docs/powerpoint', label: 'Render a presentation' },
+    { href: '/docs/powerpoint-navigation', label: 'Slide navigation' },
+    { href: '/docs/powerpoint-editing', label: 'Edit slides' },
+    { href: '/docs/powerpoint-export', label: 'Export' },
+    { href: '/docs/powerpoint-support', label: 'Compatibility' },
+  ] },
+  { title: 'Resources', links: [
+    { href: '/docs/compatibility', label: 'Format support' },
+    { href: '/docs/compatibility-reports', label: 'Compatibility reports' },
+    { href: '/docs/releases', label: 'Latest release' },
+    { href: '/components', label: 'Components' },
+    { href: '/playground/word-brief', label: 'Playground' },
+    { href: '/docs/development', label: 'Local development' },
+  ] },
 ];
 export const samples = [
   { id: 'slides-rendering', label: 'Rendering checks', format: 'slides', file: 'rendering-checks.pptx', description: 'Autofit, decimal tabs, picture and pattern fills, stacked and combination charts, embedded video, and click-by-click playback.' },

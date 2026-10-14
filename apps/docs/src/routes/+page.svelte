@@ -10,7 +10,7 @@
     <p class="lead">Tumbler gives you TypeScript models and Svelte components for reading, rendering, and editing Word documents, spreadsheets, and PowerPoint presentations.</p>
     <p>Open a file, render its contents, and export your edits. Your application owns the interface and persistence. Tumbler handles the document underneath.</p>
     <div class="note"><p>Early alpha. APIs are still changing and Office compatibility is incomplete. Keep original copies of important documents.</p></div>
-    <p><a href="/docs/releases">Release {version}</a> adds Word styles, lists, links, paragraph formatting, explicit breaks, and editable shapes. The <a href="/docs/word-authoring">authoring guide</a> covers the headless APIs and their limits.</p>
+    <p><a href="/docs/releases">Release {version}</a> adds Word styles, lists, links, paragraph formatting, explicit breaks, and editable shapes. Explore the <a href="/docs/word">Word guides</a> for examples.</p>
     <h2 id="start">Start with a document</h2>
     <p>Install the components alongside the document formats you need.</p>
     <Code {...data.install} />
