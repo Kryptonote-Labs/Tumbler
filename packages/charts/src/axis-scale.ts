@@ -11,8 +11,8 @@ function automaticIntervals(space?: ChartAxisSpace): number {
   if (!space) return 5;
   if (!Number.isFinite(space.length) || space.length <= 0 || !Number.isFinite(space.labelSize) || space.labelSize <= 0)
     throw new RangeError('Axis length and label size must be positive and finite.');
-  // Keep a label-sized gap between labels, with the usual five-interval target on larger charts.
-  return Math.max(1, Math.min(5, Math.floor(space.length / (space.labelSize * 2))));
+  // Office retains three intervals in compact plots; larger plots target five.
+  return Math.max(3, Math.min(5, Math.round(space.length / (space.labelSize * 2))));
 }
 
 /** Automatic headroom and density follow Word reference cases; ECMA does not mandate an auto algorithm. */

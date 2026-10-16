@@ -1,4 +1,4 @@
-import { chartFont } from './scene-style.ts';
+import { chartFont, chartLegendPositions, type ChartFont } from './scene-style.ts';
 import { cartesianAxisScale, chartAxisTicks } from "./axis-scale.ts";
 import { BUBBLE_CHART_POINT_LIMIT, type ChartDataSequence, type SupportedChartModel } from "./model.ts";
 
@@ -12,6 +12,7 @@ export interface ChartRect {
 export interface CartesianChartLayout {
   readonly plot: ChartRect;
   readonly categories: readonly string[];
+  readonly categoryRotation: number;
   readonly minimum: number;
   readonly maximum: number;
   readonly ticks: readonly number[];
@@ -60,23 +61,27 @@ export interface BubbleChartLayout {
   readonly series: readonly (readonly BubblePoint[])[];
 }
 
-export function layoutCartesianChart(model: SupportedChartModel, width: number, height: number): CartesianChartLayout {
+export function layoutCartesianChart(model: SupportedChartModel, width: number, height: number, measure: (text: string, font: ChartFont) => number = (text, font) => text.length * font.size * 0.55): CartesianChartLayout {
   finiteSize(width, "chart width");
   finiteSize(height, "chart height");
-  const titleHeight = model.title === undefined ? 10 : Math.min(34, Math.max(20, height * 0.12));
-  const legend = model.legend?.overlay === false ? model.legend.position : undefined;
-  const leftLegend = legend === "left" ? Math.min(100, width * 0.22) : 0;
-  const rightLegend = legend === "right" || legend === "top-right" ? Math.min(100, width * 0.22) : 0;
-  const topLegend = legend === "top" ? 24 : 0;
-  const bottomLegend = legend === "bottom" ? 28 : 0;
-  const horizontal = model.kind === "bar";
-  const plot = Object.freeze({
-    x: leftLegend + (horizontal ? 76 : 48),
-    y: titleHeight + topLegend + 8,
-    width: Math.max(1, width - leftLegend - rightLegend - (horizontal ? 88 : 62)),
-    height: Math.max(1, height - titleHeight - topLegend - bottomLegend - (horizontal ? 28 : 42)),
-  });
   const categories = categoryLabels(model);
+  const horizontal = model.kind === "bar";
+  const categoryAxis = model.axes.find(axis => axis.kind === "category" && !axis.deleted);
+  const categoryFont = chartFont("category", categoryAxis?.textStyle, model);
+  const labelWidth = Math.max(0, ...categories.map(label => measure(label, categoryFont)));
+  const legend = model.legend?.overlay === false ? model.legend.position : undefined;
+  const legendFont = chartFont("legend", model.legend?.textStyle, model);
+  const legendWidths = model.series.map((series, index) => 12 + measure(series.title ?? `Series ${index + 1}`, legendFont));
+  const legendPoints = chartLegendPositions(legendWidths, { model, width, height });
+  const bottomLegend = legend === "bottom" ? height - Math.min(height, ...legendPoints.map(point => point.y)) + legendFont.size + 10 : 8;
+  const sideLegend = legend === "left" || legend === "right" || legend === "top-right" ? Math.max(0, ...legendWidths) + 16 : 0;
+  const left = (legend === "left" ? sideLegend : 0) + (horizontal ? labelWidth + 16 : 30);
+  const plotWidth = Math.max(1, width - left - 16 - (legend === "left" ? 0 : sideLegend));
+  const categoryRotation = horizontal ? 0 : categoryAxis?.labelRotation ?? (labelWidth + 8 > plotWidth / Math.max(1, categories.length) ? -45 : 0);
+  const radians = Math.abs(categoryRotation) * Math.PI / 180;
+  const categoryHeight = horizontal ? 20 : Math.abs(Math.sin(radians)) * labelWidth + Math.abs(Math.cos(radians)) * categoryFont.size + 14;
+  const top = (model.title === undefined ? 16 : chartFont("title", model.titleStyle, model).size + 28) + (legend === "top" ? 28 : 0);
+  const plot = Object.freeze({ x: left, y: top, width: plotWidth, height: Math.max(1, height - top - bottomLegend - categoryHeight) });
   const axis = model.axes.find((candidate) => candidate.kind === "value" && !candidate.deleted);
   const values = model.series.flatMap((_, series) => categories.flatMap((_, index) => {
     const point = cartesianStack(model,series,index);
@@ -88,7 +93,7 @@ export function layoutCartesianChart(model: SupportedChartModel, width: number, 
     length: horizontal ? plot.width : plot.height,
     labelSize: chartFont("tick", axis?.textStyle, model).size * (horizontal ? 2 : 1),
   });
-  return Object.freeze({ plot, categories, ...scale });
+  return Object.freeze({ plot, categories, categoryRotation, ...scale });
 }
 
 /** Lays out paired numeric X/Y values without converting them to category positions. */

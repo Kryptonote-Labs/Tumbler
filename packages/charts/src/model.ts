@@ -80,6 +80,8 @@ export interface ChartLegend {
 }
 
 export interface ChartAxis {
+  /** Degrees clockwise; omitted means automatic label layout. */
+  readonly labelRotation?: number;
   readonly textStyle?: ChartTextStyle;
   readonly lineStyle?: ChartLineStyle;
   readonly gridlineStyle?: ChartLineStyle;

@@ -73,3 +73,11 @@ layout algorithm. Our density policy is checked against the supplied Word sample
 the 0–5 data displays 0–6 with unit gridlines at full height and 0, 2, 4, 6 when
 compressed. This is reference-case compatibility, not a claim that every Word
 version's automatic switching thresholds have been reproduced.
+
+Cartesian category labels use measured text widths: crowded automatic labels rotate
+45 degrees instead of dropping alternate categories. Authored `a:bodyPr/@rot`
+values (including an explicit zero) override this choice; Word's `-60000000`
+automatic sentinel is not rendered as a literal angle. Plot height is allocated
+after title, category labels, and wrapped legend rows, so these areas affect automatic
+value ticks together. The Word sample chart XML is retained as a focused fixture;
+its 9pt labels are tested at original, short, and narrow dimensions.
