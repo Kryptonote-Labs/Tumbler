@@ -79,7 +79,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
       const parsed = parseOoxmlChart(edit.commit().bytes, conformance, options);
       if (parsed.status !== "supported" || !["column", "bar", "line"].includes(parsed.kind))
         return unsupported(candidate.localName, "This combination contains an unsupported plot type.", title, titleFormula, legend);
-      plots.push(parsed);
+      plots.push(Object.freeze({ ...parsed, title }));
     }
     if (plots.some(p=>p.kind === "bar") && plots.some(p=>p.kind !== "bar")) return unsupported("combination", "Mixed horizontal and vertical plots are unsupported.", title, titleFormula, legend);
     const series = plots.flatMap(p=>p.series);
