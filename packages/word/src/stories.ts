@@ -11,18 +11,34 @@ export interface WordStoryTarget {
   readonly section: number;
 }
 
+// Story views share a parsed package revision with their main-document view.
+// Weak keys let both views be collected when a caller releases the story.
+const mainArtifacts = new WeakMap<WordArtifact, WordArtifact>();
+
+/** Recover the main view without parsing the same immutable package revision again. */
+export function storyMainArtifact(artifact: WordArtifact): WordArtifact {
+  if (artifact.document.source.root.localName === 'document') return artifact;
+  return mainArtifacts.get(artifact) ?? openWordArtifact(artifact.bytes(), {
+    maxBlocks: Number.MAX_SAFE_INTEGER,
+    maxInlineItems: Number.MAX_SAFE_INTEGER,
+    maxTextCharacters: Number.MAX_SAFE_INTEGER,
+  });
+}
+
 /** A story uses the same content, formatting and native editing APIs as the main body.
  * Element IDs are local to this part, so callers must retain the story identity with positions. */
 export function wordStoryArtifact(artifact: WordArtifact, partName: string): WordArtifact {
   const document = artifact.document;
   const story = document.headerFooters.find(item => item.part.name.value === partName);
   if (!story) throw new Error('Unknown header or footer part.');
-  return new WordArtifact(new WordDocument({
+  const view = new WordArtifact(new WordDocument({
     pkg: document.package, part: story.part, source: story.source,
     blocks: story.blocks, drawings: story.drawings,
     conformance: document.conformance, styles: document.styles, numbering: document.numbering,
     finalSection: document.finalSection, headerFooters: [], notes: [], evenAndOddHeaders: document.evenAndOddHeaders, wrapTrailSpaces: document.wrapTrailSpaces,
   }));
+  mainArtifacts.set(view, artifact);
+  return view;
 }
 
 export function wordSections(document: Pick<WordDocument, 'blocks' | 'finalSection'>): readonly WordSectionProperties[] {
