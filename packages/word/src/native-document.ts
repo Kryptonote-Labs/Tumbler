@@ -7,8 +7,7 @@ import { nativeShapeDrawing, validateShapeRun } from './shapes.ts';
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
 import { wordGeometryAt } from './geometry.ts';
-import { createWordStory, wordStoryArtifact, type WordStoryTarget } from './stories.ts';
-import { openWordArtifact } from './artifact.ts';
+import { createWordStory, wordStoryArtifact, storyMainArtifact, type WordStoryTarget } from './stories.ts';
 import { NativeWordSource, retainOpaqueBlocks } from './native-source.ts';
 import type { WordArtifact } from './artifact.ts';
 import { reconcileWordContent } from './content-export.ts';
@@ -192,7 +191,7 @@ export class NativeWordDocument implements WordLayoutSource {
         partName = created.partName;
       }
       const edited = reconcileWordContent(wordStoryArtifact(result, partName), entry.blocks);
-      result = openWordArtifact(edited.bytes(), { maxBlocks: Number.MAX_SAFE_INTEGER, maxInlineItems: Number.MAX_SAFE_INTEGER, maxTextCharacters: Number.MAX_SAFE_INTEGER });
+      result = storyMainArtifact(edited);
     }
     return this.exported = result;
   }
