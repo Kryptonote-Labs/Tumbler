@@ -40,6 +40,11 @@ name of its single series. Pass `{ defaultTitle: "…" }` as the parser's third
 argument to localize the fallback. An existing title takes precedence over
 `autoTitleDeleted`, following MS-OI29500 §2.1.1431 and §2.1.1561.
 
+Automatic Cartesian axes add headroom and round bounds to readable intervals.
+This is a Word-parity policy, not an ECMA-prescribed automatic scale. Explicit
+axis bounds and `majorUnit` take precedence; percentage stacks retain their
+normalized bounds. Very dense grids sample whole major units for rendering.
+
 Three-dimensional effects, per-point bubble formatting, data labels,
 trendlines, error bars, and exact Office bubble-size normalization remain
 explicitly unsupported. Unknown source XML is preserved by the owning OOXML

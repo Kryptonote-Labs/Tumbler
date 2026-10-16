@@ -1,3 +1,4 @@
+export { cartesianAxisScale, chartAxisTicks } from "./axis-scale.ts";
 export { layoutBarBand } from "./bar-layout.ts";
 export { resolveChartColor } from "./colors.ts";
 

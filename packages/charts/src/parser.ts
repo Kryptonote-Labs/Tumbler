@@ -269,6 +269,7 @@ function parseAxis(element: LosslessXmlElement, namespace: string, drawingNamesp
     kind: element.localName === "catAx" ? "category" : "value",
     position: axisPosition(val(children(element, namespace, "axPos")[0]) ?? "l"),
     title: parseText(children(element, namespace, "title")[0], namespace, drawingNamespace),
+    ...majorUnitProperty(children(element, namespace, "majorUnit")[0]),
     majorGridlines: children(element, namespace, "majorGridlines").length > 0,
     minimum: optionalFiniteVal(scaling === undefined ? undefined : children(scaling, namespace, "min")[0], "axis minimum"),
     maximum: optionalFiniteVal(scaling === undefined ? undefined : children(scaling, namespace, "max")[0], "axis maximum"),
@@ -304,6 +305,13 @@ function booleanAttribute(element: LosslessXmlElement, name: string, fallback: b
   if (raw === "1" || raw === "true") return true;
   if (raw === "0" || raw === "false") return false;
   throw new ChartParseError(`Boolean chart attribute ${JSON.stringify(raw)} is invalid.`);
+}
+
+function majorUnitProperty(element: LosslessXmlElement | undefined) {
+  if (element === undefined) return {};
+  const majorUnit = Number(val(element));
+  if (!Number.isFinite(majorUnit) || majorUnit <= 0) throw new ChartParseError("Axis major unit must be positive and finite.");
+  return { majorUnit };
 }
 
 function textStyleProperties(element: LosslessXmlElement | undefined, ns: string, drawing: string) {

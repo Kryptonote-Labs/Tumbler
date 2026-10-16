@@ -1,3 +1,4 @@
+import { cartesianAxisScale, chartAxisTicks } from "./axis-scale.ts";
 import { BUBBLE_CHART_POINT_LIMIT, type ChartDataSequence, type SupportedChartModel } from "./model.ts";
 
 export interface ChartRect {
@@ -80,17 +81,10 @@ export function layoutCartesianChart(model: SupportedChartModel, width: number, 
     const point = cartesianStack(model,series,index);
     return point ? [point.start,point.end] : [];
   }));
-  let minimum = axis?.minimum ?? Math.min(0, ...values);
-  let maximum = axis?.maximum ?? Math.max(0, ...values);
-  if (!Number.isFinite(minimum)) minimum = 0;
-  if (!Number.isFinite(maximum)) maximum = 1;
-  if (minimum === maximum) {
-    const expansion = Math.max(1, Math.abs(minimum) * 0.1);
-    minimum -= expansion;
-    maximum += expansion;
-  }
-  if (minimum > maximum) [minimum, maximum] = [maximum, minimum];
-  return Object.freeze({ plot, categories, minimum, maximum, ticks: linearTicks(minimum, maximum, 5) });
+  const minimum = axis?.minimum ?? Math.min(0, ...values);
+  const maximum = axis?.maximum ?? Math.max(0, ...values);
+  const scale = cartesianAxisScale(minimum, maximum, axis, model.grouping === "percent-stacked");
+  return Object.freeze({ plot, categories, ...scale });
 }
 
 /** Lays out paired numeric X/Y values without converting them to category positions. */
@@ -138,8 +132,8 @@ export function layoutScatterChart(model: SupportedChartModel, width: number, he
     xMaximum: xDomain.maximum,
     yMinimum: yDomain.minimum,
     yMaximum: yDomain.maximum,
-    xTicks: linearTicks(xDomain.minimum, xDomain.maximum, 5),
-    yTicks: linearTicks(yDomain.minimum, yDomain.maximum, 5),
+    xTicks: xAxis?.majorUnit === undefined ? linearTicks(xDomain.minimum, xDomain.maximum, 5) : chartAxisTicks(xDomain.minimum, xDomain.maximum, xAxis.majorUnit),
+    yTicks: yAxis?.majorUnit === undefined ? linearTicks(yDomain.minimum, yDomain.maximum, 5) : chartAxisTicks(yDomain.minimum, yDomain.maximum, yAxis.majorUnit),
     series: Object.freeze(series),
   });
 }
