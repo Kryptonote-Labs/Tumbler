@@ -146,15 +146,17 @@ alignment is controlled by the containing paragraph.
 context: browser, `OffscreenCanvas`, or a server canvas such as `@napi-rs/canvas`.
 It draws the layout's geometry directly, so thumbnails and previews match the
 editor without a DOM. Text, list markers, highlights, underline, strikethrough,
-paragraph and table shading and borders, and images are painted. Shapes and charts
-paint as placeholders. Images paint only when `options.image` returns a decoded
-source for the drawing; `wordPageImages(page)` lists them so hosts with
-asynchronous decoding can prepare them first.
+paragraph and table shading and borders, images, shapes and charts are painted.
+Images paint only when `options.image` returns a decoded source for the drawing;
+`wordPageImages(page)` lists them so hosts with asynchronous decoding can prepare
+them first. Shapes and charts are vector paths, so they paint when `options.path`
+builds the host's `Path2D`; they draw the same geometry as the Svelte editor
+(`wordShapePath` and `@tumblerjs/charts` scenes).
 
 ```ts
 const measurer = canvasWordTextMeasurer(context);
 const [page] = layoutWordDocument(document, measurer, { pageLimit: 1 }).pages;
-paintWordPage(context, page!, { scale: 480 / page!.width });
+paintWordPage(context, page!, { scale: 480 / page!.width, path: d => new Path2D(d) });
 ```
 
 `pageLimit` stops layout after that many complete pages and marks the result

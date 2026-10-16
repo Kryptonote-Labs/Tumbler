@@ -27,6 +27,29 @@ export function isWordAuthoredShape(value: unknown): value is WordAuthoredShape 
   try { imagePlacement(shape as WordImagePosition, Number(shape.width), Number(shape.width)); } catch { return false; }
   return Object.keys(shape).every(k => ['preset','width','height','fill','outline','outlineWidth','text','alt','layout','alignment','moveWithText','x','y'].includes(k));
 }
+/**
+ * The shape's outline as an SVG path in its own point space, inset by one point so strokes stay
+ * inside the frame. SVG and canvas heads both draw this path.
+ */
+export function wordShapePath(shape: Pick<WordAuthoredShape, 'preset' | 'width' | 'height'>): string {
+  const { width: w, height: h } = shape;
+  const right = Math.max(1, w - 1), bottom = Math.max(1, h - 1);
+  switch (shape.preset) {
+    case 'rect': return `M1 1 H${right} V${bottom} H1 Z`;
+    case 'roundRect': {
+      const r = Math.min(Math.min(w, h) * .12, (right - 1) / 2, (bottom - 1) / 2);
+      return `M${1 + r} 1 H${right - r} A${r} ${r} 0 0 1 ${right} ${1 + r} V${bottom - r} A${r} ${r} 0 0 1 ${right - r} ${bottom} H${1 + r} A${r} ${r} 0 0 1 1 ${bottom - r} V${1 + r} A${r} ${r} 0 0 1 ${1 + r} 1 Z`;
+    }
+    case 'ellipse': {
+      const rx = Math.max(0, w / 2 - 1), ry = Math.max(0, h / 2 - 1);
+      return `M${w / 2 - rx} ${h / 2} A${rx} ${ry} 0 1 0 ${w / 2 + rx} ${h / 2} A${rx} ${ry} 0 1 0 ${w / 2 - rx} ${h / 2} Z`;
+    }
+    case 'triangle': return `M${w / 2} 1 L${right} ${bottom} L1 ${bottom} Z`;
+    case 'diamond': return `M${w / 2} 1 L${right} ${h / 2} L${w / 2} ${bottom} L1 ${h / 2} Z`;
+    case 'rightArrow': return `M1 ${h * .3} H${w * .6} V1 L${right} ${h / 2} L${w * .6} ${bottom} V${h * .7} H1 Z`;
+    case 'line': return `M1 ${bottom} L${right} 1`;
+  }
+}
 /** Editable DrawingML shape with an ordinary Word text box. No raster fallback. */
 export function wordShapeXml(shape: WordAuthoredShape, id: number, availableWidth: number): string {
   if (!isWordAuthoredShape(shape)) throw new TypeError('Invalid shape.');
