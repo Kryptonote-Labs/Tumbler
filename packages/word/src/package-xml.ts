@@ -5,9 +5,29 @@ import { xml } from './create-xml.ts';
 /** Source-aware XML construction. Original namespace bindings travel with moved fragments. */
 export class PackageXml {
   readonly parents = new Map<number, LosslessXmlElement>();
+  private readonly rootBindings = new Map<string, string>();
   constructor(readonly document: WordDocument) {
-    for (const parent of document.source.elements())
+    for (const attribute of document.source.root.attributes)
+      if (attribute.prefix === 'xmlns' || attribute.qualified === 'xmlns')
+        this.rootBindings.set(attribute.qualified, attribute.value);
+    for (const parent of document.source.elements()) {
       for (const child of parent.children) this.parents.set(child.id, parent);
+      for (const attribute of parent.attributes)
+        if ((attribute.prefix === 'xmlns' || attribute.qualified === 'xmlns') &&
+            this.rootBindings.get(attribute.qualified) !== attribute.value)
+          this.rootBindings.delete(attribute.qualified);
+    }
+    // Generated fragments may bind these prefixes independently of the source.
+    const strict = document.conformance === 'strict';
+    const generated = new Map([
+      ['xmlns:w', document.source.root.namespaceUri],
+      ['xmlns:r', strict ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'],
+      ['xmlns:wp', strict ? 'http://purl.oclc.org/ooxml/drawingml/wordprocessingDrawing' : 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'],
+      ['xmlns:a', strict ? 'http://purl.oclc.org/ooxml/drawingml/main' : 'http://schemas.openxmlformats.org/drawingml/2006/main'],
+      ['xmlns:pic', strict ? 'http://purl.oclc.org/ooxml/drawingml/picture' : 'http://schemas.openxmlformats.org/drawingml/2006/picture'],
+    ]);
+    for (const [prefix, value] of generated)
+      if (this.rootBindings.get(prefix) !== value) this.rootBindings.delete(prefix);
   }
   element(id: number | undefined, name?: string) {
     const element = id === undefined ? undefined : this.document.source.element(id);
@@ -42,8 +62,14 @@ export class PackageXml {
           bindings.set(attribute.qualified, attribute.value);
       parent = this.parents.get(parent.id);
     }
+    // The body is validated as a standalone replacement fragment. Keep its inherited
+    // bindings, but descendants can inherit globally unambiguous bindings from it.
+    // Locally rebound prefixes still travel with moved fragments as before.
+    const boundary = element.localName === 'body' &&
+      this.parents.get(element.id) === this.document.source.root;
     const missing = [...bindings].filter(
-      ([name]) => !element.attributes.some((attr) => attr.qualified === name),
+      ([name, value]) => (boundary || this.rootBindings.get(name) !== value) &&
+        !element.attributes.some((attr) => attr.qualified === name),
     );
     const opening = this.document.source.source
       .slice(element.startTagSpan.start, element.startTagSpan.end)
@@ -100,6 +126,7 @@ export class PackageXml {
     return this.wrap(element, name, leading + joined);
   }
   word(content: string) {
+    if (this.rootBindings.get('xmlns:w') === this.document.source.root.namespaceUri) return content;
     return content.replace(
       /<w:([\w]+)(?=[\s/>])(?![^>]*\bxmlns:w=)/g,
       `$& xmlns:w="${this.document.source.root.namespaceUri}"`,
