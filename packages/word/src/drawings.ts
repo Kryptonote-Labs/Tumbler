@@ -1,6 +1,6 @@
 import { wordThemeSlot } from './theme-colour-xml.ts';
 import { DEFAULT_WORD_THEME, resolveWordColour, type WordColour, type WordThemeColour } from './theme-colours.ts';
-import { parseThemeColorScheme, type ThemeColorScheme } from '@tumblerjs/ooxml';
+import { THEME_COLOR_SLOTS, parseThemeColorScheme, type ThemeColorScheme } from '@tumblerjs/ooxml';
 import { isWordAuthoredShape } from './shapes.ts';
 import { ChartParseError, parseOoxmlChart, type ChartModel } from "@tumblerjs/charts";
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
@@ -156,7 +156,15 @@ function parseDrawing(
     try {
       let model = charts.get(part.name.equivalenceKey);
       if (model === undefined) {
-        model = parseOoxmlChart(input.package.readPart(part), input.conformance);
+        const parsed = parseOoxmlChart(input.package.readPart(part), input.conformance);
+        const themeColors = Object.fromEntries(THEME_COLOR_SLOTS.flatMap(slot => {
+          const value = theme.color(slot);
+          return value === undefined ? [] : [[slot, `#${value}`]];
+        }));
+        for (const [alias, slot] of Object.entries({ bg1: "lt1", tx1: "dk1", bg2: "lt2", tx2: "dk2" })) {
+          if (themeColors[slot] !== undefined) themeColors[alias] = themeColors[slot]!;
+        }
+        model = Object.freeze({ ...parsed, themeColors: Object.freeze(themeColors) });
         charts.set(part.name.equivalenceKey, model);
       }
       return Object.freeze({ kind: "chart", elementId: drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, relationshipId: id, partName: part.name, model });

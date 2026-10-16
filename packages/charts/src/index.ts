@@ -1,3 +1,5 @@
+export { resolveChartColor } from "./colors.ts";
+
 /** Headless DrawingML chart semantics shared by all OOXML document families. */
 export { BUBBLE_CHART_POINT_LIMIT } from "./model.ts";
 export { ChartParseError, parseOoxmlChart } from "./parser.ts";

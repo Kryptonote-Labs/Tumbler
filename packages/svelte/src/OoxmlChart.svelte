@@ -1,6 +1,7 @@
 <script lang="ts">
   import CombinationChart from "./CombinationChart.svelte";
   import {
+    resolveChartColor,
     cartesianStack,
     chartSequenceValue,
     chartValueCoordinate,
@@ -34,7 +35,7 @@
     const authored = line ? series.line ?? series.fill : series.fill ?? series.line;
     const themed = authored ?? { kind: "scheme" as const, value: `accent${index % 6 + 1}` };
     return resolveColor?.(themed) ??
-      (authored?.kind === "rgb" ? authored.value : undefined) ?? palette[index % palette.length]!;
+      resolveChartColor(themed, model) ?? palette[index % palette.length]!;
   }
 
   function value(model: SupportedChartModel, series: ChartSeries, index: number): number | undefined {

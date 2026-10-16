@@ -22,6 +22,10 @@ X, Y, and size caches by point index and support the standard area/width size
 modes, 0–300% scaling, and opt-in negative values. Deterministic headless layout
 is available through `layoutBubbleChart`.
 
+Hosts can bind document colours through `model.themeColors`; `resolveChartColor`
+resolves these bindings while preserving authored scheme references. Word imports
+bind their document theme for all chart views.
+
 Three-dimensional effects, per-point bubble formatting, data labels,
 trendlines, error bars, and exact Office bubble-size normalization remain
 explicitly unsupported. Unknown source XML is preserved by the owning OOXML
