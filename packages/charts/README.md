@@ -35,6 +35,11 @@ Word binds theme Latin fonts. Axis and major-gridline strokes retain `noFill`,
 solid colour and width. Luminance modulation/offset transforms are resolved in
 source order. Other text effects and colour transforms remain unsupported.
 
+An existing chart title without text uses Office-compatible default text, or the
+name of its single series. Pass `{ defaultTitle: "…" }` as the parser's third
+argument to localize the fallback. An existing title takes precedence over
+`autoTitleDeleted`, following MS-OI29500 §2.1.1431 and §2.1.1561.
+
 Three-dimensional effects, per-point bubble formatting, data labels,
 trendlines, error bars, and exact Office bubble-size normalization remain
 explicitly unsupported. Unknown source XML is preserved by the owning OOXML

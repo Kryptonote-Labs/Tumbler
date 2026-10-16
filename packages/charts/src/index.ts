@@ -3,6 +3,7 @@ export { resolveChartColor, transformChartColor } from "./colors.ts";
 
 /** Headless DrawingML chart semantics shared by all OOXML document families. */
 export { BUBBLE_CHART_POINT_LIMIT } from "./model.ts";
+export type { ChartParseOptions } from "./parser.ts";
 export { ChartParseError, parseOoxmlChart } from "./parser.ts";
 export { cartesianStack, chartSequenceValue, chartValueCoordinate, layoutBubbleChart, layoutCartesianChart, layoutPieSlices, layoutScatterChart, pieArcPath, scatterLinePath } from "./layout.ts";
 export type { BubbleChartLayout, BubblePoint, CartesianChartLayout, ChartRect, PieSlice, ScatterChartLayout, ScatterPoint } from "./layout.ts";
