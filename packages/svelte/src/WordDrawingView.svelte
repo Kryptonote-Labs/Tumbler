@@ -200,11 +200,12 @@
 </div>
 
 <style>
-  .drawing { position: absolute; }
+  /* Document lines preserve whitespace and may be as tall as an inline drawing. */
+  .drawing { position: absolute; white-space: normal; line-height: normal; }
   .drawing.moving { z-index: 3; }
   .drawing.behind .content { z-index: 0; }
   .drawing.selected { outline: var(--outline-size) solid var(--tumbler-document-accent, #25a735); }
-  .content { position: relative; z-index: 2; display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; touch-action: none; }
+  .content { position: absolute; inset: 0; z-index: 2; display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; touch-action: none; }
   .content.movable { cursor: grab; }
   .content.movable:active { cursor: grabbing; }
   .content.editing { cursor: text; outline: var(--outline-size) dashed var(--tumbler-document-accent, #25a735); }
