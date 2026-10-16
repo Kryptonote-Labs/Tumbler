@@ -30,8 +30,13 @@ export class ChartParseError extends Error {
   }
 }
 
+export interface ChartParseOptions {
+  /** Localized Office-compatible text for an existing title without a text child. */
+  readonly defaultTitle?: string;
+}
+
 /** Parses the native chart subset without interpreting host-document references. */
-export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "transitional"): ChartModel {
+export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "transitional", options: ChartParseOptions = {}): ChartModel {
   let document: LosslessXmlDocument;
   try {
     document = parseLosslessXml(bytes);
@@ -44,7 +49,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
     throw new ChartParseError("A Chart part must have a c:chartSpace root element.");
   }
   const chart = exactlyOne(document.root, chartNamespace, "chart", "chartSpace");
-  const title = parseText(children(chart, chartNamespace, "title")[0], chartNamespace, drawingNamespace);
+  const titleElement = children(chart, chartNamespace, "title")[0];
   const titleFormula = parseTextFormula(children(chart, chartNamespace, "title")[0], chartNamespace);
   const legend = parseLegend(children(chart, chartNamespace, "legend")[0], chartNamespace, drawingNamespace);
   const plotAreas = children(chart, chartNamespace, "plotArea");
@@ -53,6 +58,17 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
   const candidates = plotArea.children.filter((child): child is LosslessXmlElement =>
     child.kind === "element" && child.namespaceUri === chartNamespace && child.localName.endsWith("Chart")
   );
+  const seriesTitles = candidates.flatMap(plot => children(plot, chartNamespace, "ser")).map(series =>
+    parseText(children(series, chartNamespace, "tx")[0], chartNamespace, drawingNamespace)
+  );
+  const singleSeriesTitle = seriesTitles.length === 1 ? seriesTitles[0] : undefined;
+  // MS-OI29500 §2.1.1561: an existing title without tx uses a localized default,
+  // except that a single named series supplies its own title. §2.1.1431 says an
+  // existing title takes precedence over autoTitleDeleted.
+  const title = titleElement === undefined
+    ? (booleanVal(children(chart, chartNamespace, "autoTitleDeleted")[0], false) ? undefined : singleSeriesTitle)
+    : parseText(titleElement, chartNamespace, drawingNamespace) ??
+      (children(titleElement, chartNamespace, "tx").length === 0 ? singleSeriesTitle ?? options.defaultTitle ?? "Chart Title" : undefined);
   if (candidates.length === 0) return unsupported(undefined, "The plot area has no chart type.", title, titleFormula, legend);
   if (candidates.length > 1) {
     if (candidates.length > 32) throw new ChartParseError("Too many chart plots.");
@@ -60,7 +76,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
     for (const candidate of candidates) {
       const edit = beginLosslessXmlEdit(document);
       for (const other of candidates) if (candidate !== other) edit.removeElement(other);
-      const parsed = parseOoxmlChart(edit.commit().bytes, conformance);
+      const parsed = parseOoxmlChart(edit.commit().bytes, conformance, options);
       if (parsed.status !== "supported" || !["column", "bar", "line"].includes(parsed.kind))
         return unsupported(candidate.localName, "This combination contains an unsupported plot type.", title, titleFormula, legend);
       plots.push(parsed);
@@ -68,7 +84,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
     if (plots.some(p=>p.kind === "bar") && plots.some(p=>p.kind !== "bar")) return unsupported("combination", "Mixed horizontal and vertical plots are unsupported.", title, titleFormula, legend);
     const series = plots.flatMap(p=>p.series);
     if (series.length > MAX_SERIES) throw new ChartParseError("Too many combination series.");
-    return Object.freeze({ ...plots[0]!, plots: Object.freeze(plots), series: Object.freeze(series) });
+    return Object.freeze({ ...plots[0]!, title, plots: Object.freeze(plots), series: Object.freeze(series) });
   }
   const chartType = candidates[0]!;
   const kind = chartKind(chartType, chartNamespace);
