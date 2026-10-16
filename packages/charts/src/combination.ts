@@ -1,3 +1,4 @@
+import { chartFont } from './scene-style.ts';
 import { chartAxisTicks } from "./axis-scale.ts";
 import {
   cartesianStack,
@@ -69,7 +70,10 @@ export function layoutCombinationChart(
       axis,
       minimum,
       maximum,
-      ticks: chartAxisTicks(minimum, maximum, axis?.majorUnit),
+      ticks: chartAxisTicks(minimum, maximum, axis?.majorUnit, {
+        length: plot.kind === "bar" ? rect.width : rect.height,
+        labelSize: chartFont("tick", axis?.textStyle, plot).size * (plot.kind === "bar" ? 2 : 1),
+      }),
       plot: rect,
       categories: common.categories,
       coordinate,

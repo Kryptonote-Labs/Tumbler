@@ -61,3 +61,15 @@ Tumbler is developed at
 [Kryptonote-Labs/Tumbler](https://github.com/Kryptonote-Labs/Tumbler).
 
 MIT licensed. See [LICENSE](LICENSE).
+
+Automatic value-axis intervals in column, bar, line, and combination charts respond
+to the plot's available length and the resolved tick-label font size. Resizing changes
+the automatic grid density; document zoom does not. Explicit `c:majorUnit`, `c:min`,
+and `c:max` values remain authoritative.
+
+ECMA-376 Part 1 §21.2.2.103 defines [`majorUnit`](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.charts.majorunit#remarks) as the distance between major ticks;
+§21.2.2.107–108 define the bounds. The standard does not prescribe the automatic
+layout algorithm. Our density policy is checked against the supplied Word sample:
+the 0–5 data displays 0–6 with unit gridlines at full height and 0, 2, 4, 6 when
+compressed. This is reference-case compatibility, not a claim that every Word
+version's automatic switching thresholds have been reproduced.

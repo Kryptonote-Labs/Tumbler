@@ -1,3 +1,4 @@
+import { chartFont } from './scene-style.ts';
 import { cartesianAxisScale, chartAxisTicks } from "./axis-scale.ts";
 import { BUBBLE_CHART_POINT_LIMIT, type ChartDataSequence, type SupportedChartModel } from "./model.ts";
 
@@ -83,7 +84,10 @@ export function layoutCartesianChart(model: SupportedChartModel, width: number, 
   }));
   const minimum = axis?.minimum ?? Math.min(0, ...values);
   const maximum = axis?.maximum ?? Math.max(0, ...values);
-  const scale = cartesianAxisScale(minimum, maximum, axis, model.grouping === "percent-stacked");
+  const scale = cartesianAxisScale(minimum, maximum, axis, model.grouping === "percent-stacked", {
+    length: horizontal ? plot.width : plot.height,
+    labelSize: chartFont("tick", axis?.textStyle, model).size * (horizontal ? 2 : 1),
+  });
   return Object.freeze({ plot, categories, ...scale });
 }
 
