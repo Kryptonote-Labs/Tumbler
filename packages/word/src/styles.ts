@@ -393,7 +393,7 @@ export function parseRunProperties(element: LosslessXmlElement, namespace: strin
     ...(underline === undefined ? {} : { underline: underlineValue(attr(underline, namespace, "val")) }),
     ...(color === undefined ? {} : { color: parseColor(color, namespace) }),
     ...(highlight === undefined ? {} : { highlight }),
-    ...(spacing === undefined ? {} : { characterSpacingPoints: integer(spacing, "character spacing", -2147483648, 2147483647) / 20 }),
+    ...(spacing === undefined ? {} : { characterSpacingPoints: signedTwips(spacing, "character spacing") / 20 }),
     ...(vertical === "superscript" || vertical === "subscript" || vertical === "baseline" ? { verticalAlign: vertical } : {}),
   });
 }

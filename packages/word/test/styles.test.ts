@@ -72,6 +72,32 @@ describe("WordprocessingML style cascade", () => {
     });
   });
 
+  test.each([-2147483648, -10, 0, 10, 2147483647])("preserves signed character spacing %i in styles and direct formatting", (twips) => {
+    const bytes = buildWordDocumentFixture({
+      relationships: [{ id: "styles", type: `${relationships}/styles`, target: "styles.xml" }],
+      parts: [{
+        itemName: "word/styles.xml",
+        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml",
+        xml: `<w:styles xmlns:w="${word}"><w:style w:type="paragraph" w:styleId="Title"><w:rPr><w:spacing w:val="${twips}"/></w:rPr></w:style></w:styles>`,
+      }],
+      documentXml: `<w:document xmlns:w="${word}"><w:body><w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>Inherited</w:t></w:r><w:r><w:rPr><w:spacing w:val="${twips}"/></w:rPr><w:t>Direct</w:t></w:r></w:p></w:body></w:document>`,
+    });
+    const document = openWordDocument(openOpcPackage(bytes));
+    const paragraph = document.blocks[0];
+    if (paragraph?.kind !== "paragraph") throw new Error("Expected paragraph.");
+    expect(document.styles.style("Title")?.run.characterSpacingPoints).toBe(twips / 20);
+    for (const run of paragraph.inlines) {
+      if (run.kind !== "run") throw new Error("Expected run.");
+      expect(document.styles.runFormat(document, paragraph, run).characterSpacingPoints).toBe(twips / 20);
+    }
+    expect(document.bytes()).toEqual(bytes);
+  });
+
+  test.each(["-2147483649", "2147483648", "-0.5", "--10"])("rejects invalid character spacing %s", (value) => {
+    const bytes = fixtureWithStyles(`<w:style w:type="paragraph" w:styleId="Title"><w:rPr><w:spacing w:val="${value}"/></w:rPr></w:style>`);
+    expect(() => openWordDocument(openOpcPackage(bytes))).toThrow(WordError);
+  });
+
   test("resolves inherited text formatting for a paragraph without runs", () => {
     const document = openWordDocument(openOpcPackage(fixtureWithStyles(`
       <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial"/><w:sz w:val="26"/></w:rPr></w:rPrDefault></w:docDefaults>
