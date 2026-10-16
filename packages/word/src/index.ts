@@ -38,6 +38,11 @@ export {
   layoutWordDocument,
   wordPointsToCssPixels,
 } from "./layout.ts";
+export { paintWordPage, wordPageImages } from "./canvas-paint.ts";
+export type { WordCanvasContext, WordPagePaintOptions } from "./canvas-paint.ts";
+export { canvasWordTextMeasurer, wordCanvasFont, wordFontFamily } from "./canvas-text.ts";
+export type { WordCanvasTextContext, WordLineMetrics } from "./canvas-text.ts";
+export { wordHighlightColor } from "./highlight.ts";
 export {
   openWordArtifact,
   WordArtifact,

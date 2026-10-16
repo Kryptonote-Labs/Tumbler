@@ -1,9 +1,8 @@
-import type { ComputedWordTextFormat } from '@tumblerjs/word';
-import type { CanvasTextMetricSource } from './word-font-metrics.ts';
+import type { ComputedWordTextFormat, WordCanvasTextContext, WordLineMetrics } from '@tumblerjs/word';
 
 /** Normal line boxes include font leading that Canvas TextMetrics omits. Measure at a large
  * size once per face to avoid CSS-pixel rounding accumulating across a document. */
-export function browserWordLineMetrics(context: CanvasTextMetricSource) {
+export function browserWordLineMetrics(context: WordCanvasTextContext): WordLineMetrics & { clear(): void } {
   const cache = new Map<string, { ascent: number; descent: number }>();
   return {
     clear() { cache.clear(); },

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { wordHighlightColor } from '../src/word-highlight.ts';
+import { wordHighlightColor } from '../src/highlight.ts';
 test('Word highlights map to their palette colours without admitting arbitrary CSS', () => {
   expect(wordHighlightColor('yellow')).toBe('#FFFF00');
   expect(wordHighlightColor('darkYellow')).toBe('#808000');
