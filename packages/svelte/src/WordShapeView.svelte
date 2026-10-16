@@ -1,59 +1,128 @@
 <script lang="ts">
-  import { resolveWordColour, wordShapePath, type WordAuthoredShape } from '@tumblerjs/word';
-  let { shape, editing = false, initialText, oncommit }: {
+  import { untrack } from 'svelte';
+  import {
+    shapeTextParagraphs,
+    shapePlainText,
+    resolveWordColour,
+    wordShapePath,
+    type WordTextParagraph,
+    type WordAuthoredShape,
+  } from '@tumblerjs/word';
+  import { ShapeTextEditorView, type ShapeTextEditor } from './word-shape-text-editor.ts';
+  let {
+    shape,
+    editing = false,
+    selected = false,
+    initialText,
+    oncommit,
+    oneditor,
+    onselection,
+    onundo,
+  }: {
     shape: WordAuthoredShape;
     /** Edits the shape's text in place, as Word does after a double-click. */
     editing?: boolean;
+    selected?: boolean;
+    oneditor?: (editor: ShapeTextEditor | undefined) => void;
+    onselection?: () => void;
+    onundo?: (redo: boolean) => void;
     /** Text to start editing with when it differs from the shape's, such as a typed first character. */
     initialText?: string;
-    /** Receives the text when editing ends. Escape keeps the text, as in Word, and leaves the shape selected. */
-    oncommit?: (text: string, reason: 'blur' | 'escape') => void;
+    /** Receives rich text on each edit. Escape leaves the shape selected. */
+    oncommit?: (textBody: readonly WordTextParagraph[], reason: 'input' | 'escape') => void;
   } = $props();
-  let finished = false;
-
-  function fit(area: HTMLTextAreaElement) {
-    area.style.height = '0';
-    area.style.height = `${area.scrollHeight}px`;
+  let view = $state.raw<ShapeTextEditorView>();
+  function mount(root: HTMLDivElement) {
+    const current = new ShapeTextEditorView(
+      root,
+      shape,
+      (paragraphs) => oncommit?.(paragraphs, 'input'),
+      () => onselection?.(),
+      () => oncommit?.(shapeTextParagraphs(shape), 'escape'),
+      (redo) => onundo?.(redo),
+    );
+    view = current;
+    return {
+      destroy: () => {
+        view = undefined;
+        current.destroy();
+      },
+    };
   }
-  function edit(area: HTMLTextAreaElement) {
-    finished = false;
-    area.value = initialText ?? shape.text ?? '';
-    fit(area);
-    area.focus({ preventScroll: true });
-    area.setSelectionRange(area.value.length, area.value.length);
-  }
-  function finish(area: HTMLTextAreaElement, reason: 'blur' | 'escape') {
-    if (finished) return;
-    finished = true;
-    oncommit?.(area.value, reason);
-  }
+  $effect(() => {
+    const current = view,
+      value = shape,
+      active = editing,
+      initial = initialText;
+    untrack(() => current?.update(value, active, initial));
+  });
+  $effect(() => {
+    if (!selected || !view) return;
+    untrack(() => oneditor?.(view));
+    return () => untrack(() => oneditor?.(undefined));
+  });
 </script>
-<div class="shape" role="img" aria-label={shape.alt ?? shape.text ?? shape.preset}>
+
+<div
+  class="shape"
+  role={editing ? 'group' : 'img'}
+  aria-label={shape.alt ?? (shapePlainText(shape) || shape.preset)}
+>
   <svg viewBox={`0 0 ${shape.width} ${shape.height}`} preserveAspectRatio="none" aria-hidden="true">
     <path d={wordShapePath(shape)} fill={resolveWordColour(shape.fill)} stroke={resolveWordColour(shape.outline)} stroke-width={shape.outlineWidth} />
   </svg>
-  {#if editing}
-    <div class="text">
-      <textarea
-        aria-label="Shape text"
-        spellcheck="true"
-        rows="1"
-        use:edit
-        oninput={(event) => fit(event.currentTarget)}
-        onblur={(event) => finish(event.currentTarget, 'blur')}
-        onkeydown={(event) => {
-          event.stopPropagation();
-          if (event.key === 'Escape') { event.preventDefault(); finish(event.currentTarget, 'escape'); }
-        }}
-      ></textarea>
-    </div>
-  {:else if shape.text}<div class="text"><span>{shape.text}</span></div>{/if}
+  <div
+    class="text"
+    style:justify-content={shape.textAnchor === 'top'
+      ? 'flex-start'
+      : shape.textAnchor === 'bottom'
+        ? 'flex-end'
+        : 'center'}
+  >
+    <div
+      class="story"
+      data-shape-text
+      role="textbox"
+      aria-label="Shape text"
+      aria-multiline="true"
+      aria-readonly={!editing}
+      contenteditable={editing}
+      tabindex={editing ? 0 : -1}
+      use:mount
+    ></div>
+  </div>
 </div>
+
 <style>
-  .shape { position: relative; width: 100%; height: 100%; }
-  svg { display: block; width: 100%; height: 100%; }
-  .text { position: absolute; inset: 6px; display: grid; place-content: center; overflow: hidden; }
-  span, textarea { text-align: center; white-space: pre-wrap; overflow-wrap: break-word; color: #000; font: 16px Aptos, sans-serif; }
-  textarea { box-sizing: border-box; width: 100%; max-height: 100%; min-width: 1ch; margin: 0; padding: 0; border: 0; outline: none; background: transparent; resize: none; overflow: hidden; caret-color: #000; }
-  .text:has(textarea) { place-content: center stretch; }
+  .shape {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .text {
+    position: absolute;
+    inset: 6px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .story {
+    color: #000;
+    font:
+      16px Aptos,
+      sans-serif;
+    outline: none;
+    min-height: 1em;
+    width: 100%;
+  }
+  .story[contenteditable='true'] {
+    pointer-events: auto;
+    cursor: text;
+  }
 </style>

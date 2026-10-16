@@ -31,7 +31,8 @@
   },
   "peerDependencies": {
     "svelte": "^5.0.0",
-    "@tumblerjs/slides": "0.1.0-alpha.23"
+    "@tumblerjs/slides": "0.1.0-alpha.23",
+    "yjs": "^13.6.0"
   },
   "devDependencies": {
     "svelte": "^5.0.0",
