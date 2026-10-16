@@ -163,6 +163,14 @@ export const DEFAULT_PARAGRAPH: ComputedWordParagraphFormat = Object.freeze({
   tabs: Object.freeze([]),
 });
 
+interface ParagraphStyleCache {
+  readonly direct: WordParagraphProperties;
+  readonly runs: WeakMap<WordRun, ComputedWordTextFormat>;
+  format?: ComputedWordParagraphFormat;
+  inheritedRun?: WordRunProperties;
+  emptyRun?: ComputedWordTextFormat;
+}
+
 export class WordStyles {
   readonly partName: PartName | undefined;
   readonly styles: readonly WordStyle[];
@@ -170,6 +178,8 @@ export class WordStyles {
   readonly documentParagraphDefaults: WordParagraphProperties;
   readonly themeColors: ThemeColorScheme | undefined;
   readonly themeFonts: ThemeFontScheme | undefined;
+  // Source and paragraph identities keep revisions and story parts separate, even when IDs repeat.
+  readonly #paragraphs = new WeakMap<WordDocumentLike, WeakMap<WordParagraph, ParagraphStyleCache>>();
   readonly #byId: ReadonlyMap<string, WordStyle>;
   readonly #defaultParagraphStyleId: string | undefined;
   readonly #defaultCharacterStyleId: string | undefined;
@@ -217,25 +227,26 @@ export class WordStyles {
   }
 
   paragraphFormat(document: WordDocumentLike, paragraph: WordParagraph): ComputedWordParagraphFormat {
-    const direct = paragraph.propertiesElementId === undefined
-      ? {}
-      : parseParagraphProperties(requiredElement(document, paragraph.propertiesElementId), wordNamespace(document.conformance));
+    const cached = this.paragraphProperties(document, paragraph);
+    if (cached.format) return cached.format;
+    const direct = cached.direct;
     const styleId = direct.styleId ?? this.#defaultParagraphStyleId;
     const cascade = this.styleChain(styleId, "paragraph").reduce(
       (result, style) => mergeParagraph(result, style.paragraph),
       this.documentParagraphDefaults,
     );
-    return computedParagraph(mergeParagraph(cascade, direct), styleId, this.themeColors);
+    return cached.format = computedParagraph(mergeParagraph(cascade, direct), styleId, this.themeColors);
   }
 
   // Without a run, resolve inherited text formatting for an empty paragraph.
   runFormat(document: WordDocumentLike, paragraph: WordParagraph, run?: WordRun): ComputedWordTextFormat {
+    const cached = this.paragraphProperties(document, paragraph);
+    const resolved = run ? cached.runs.get(run) : cached.emptyRun;
+    if (resolved) return resolved;
     const namespace = wordNamespace(document.conformance);
-    const paragraphDirect = paragraph.propertiesElementId === undefined
-      ? {}
-      : parseParagraphProperties(requiredElement(document, paragraph.propertiesElementId), namespace);
+    const paragraphDirect = cached.direct;
     const paragraphStyleId = paragraphDirect.styleId ?? this.#defaultParagraphStyleId;
-    const paragraphRun = this.styleChain(paragraphStyleId, "paragraph").reduce(
+    const paragraphRun = cached.inheritedRun ??= this.styleChain(paragraphStyleId, "paragraph").reduce(
       (result, style) => mergeRun(result, style.run),
       this.documentRunDefaults,
     );
@@ -252,7 +263,28 @@ export class WordStyles {
     const paragraphProperties = paragraph.propertiesElementId === undefined ? undefined : requiredElement(document, paragraph.propertiesElementId);
     const mark = run === undefined && paragraphProperties
       ? onlyChild(paragraphProperties, namespace, 'rPr', 'Paragraph properties must not repeat rPr.') : undefined;
-    return this.computedRun(mergeRun(characterRun, mark ? parseRunProperties(mark, namespace) : runDirect));
+    const result = this.computedRun(mergeRun(characterRun, mark ? parseRunProperties(mark, namespace) : runDirect));
+    if (run) cached.runs.set(run, result);
+    else cached.emptyRun = result;
+    return result;
+  }
+
+  private paragraphProperties(document: WordDocumentLike, paragraph: WordParagraph): ParagraphStyleCache {
+    let paragraphs = this.#paragraphs.get(document);
+    if (!paragraphs) {
+      paragraphs = new WeakMap();
+      this.#paragraphs.set(document, paragraphs);
+    }
+    let cached = paragraphs.get(paragraph);
+    if (!cached) {
+      cached = {
+        direct: paragraph.propertiesElementId === undefined ? {} :
+          parseParagraphProperties(requiredElement(document, paragraph.propertiesElementId), wordNamespace(document.conformance)),
+        runs: new WeakMap(),
+      };
+      paragraphs.set(paragraph, cached);
+    }
+    return cached;
   }
 
   private styleChain(styleId: string | undefined, expectedType: "paragraph" | "character"): readonly WordStyle[] {
