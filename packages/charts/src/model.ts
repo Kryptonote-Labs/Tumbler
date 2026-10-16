@@ -88,6 +88,7 @@ export interface ChartAxis {
   readonly position: "bottom" | "left" | "right" | "top";
   readonly title: string | undefined;
   readonly majorGridlines: boolean;
+  readonly majorUnit?: number;
   readonly minimum: number | undefined;
   readonly maximum: number | undefined;
   readonly deleted: boolean;

@@ -1,3 +1,4 @@
+import { chartAxisTicks } from "./axis-scale.ts";
 import {
   cartesianStack,
   chartValueCoordinate,
@@ -68,6 +69,7 @@ export function layoutCombinationChart(
       axis,
       minimum,
       maximum,
+      ticks: chartAxisTicks(minimum, maximum, axis?.majorUnit),
       plot: rect,
       categories: common.categories,
       coordinate,

@@ -21,8 +21,6 @@
     color: (series: ChartSeries, index: number, line?: boolean) => string;
   } = $props();
   let plots = $derived(layoutCombinationChart(model, width, height));
-  const ticks = (min: number, max: number) =>
-    Array.from({ length: 6 }, (_, i) => min + ((max - min) * i) / 5);
   function positionLegend(
     node: SVGGElement,
     options: { model: SupportedChartModel; width: number; height: number },
@@ -97,7 +95,7 @@
     {@const count = Math.max(1, plot.categories.length)}
     {@const band = (horizontal ? plot.plot.height : plot.plot.width) / count}
     {#if plots.findIndex((p) => p.axis?.id === plot.axis?.id) === plotIndex}
-      {#each ticks(plot.minimum, plot.maximum) as tick}
+      {#each plot.ticks as tick}
         {@const position = plot.coordinate(tick)}
         {#if horizontal}<text
             style={chartTextCss(plot.axis?.textStyle, model, resolveColor)}
