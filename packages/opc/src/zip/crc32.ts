@@ -2,7 +2,8 @@ const CRC32_TABLE = buildCrc32Table();
 
 export function crc32(bytes: Uint8Array): number {
   let crc = 0xffffffff;
-  for (const byte of bytes) {
+  for (let index = 0, length = bytes.length; index < length; index += 1) {
+    const byte = bytes[index]!;
     const tableValue = CRC32_TABLE[(crc ^ byte) & 0xff];
     if (tableValue === undefined) {
       throw new Error("CRC-32 lookup index is out of bounds.");
