@@ -70,6 +70,8 @@ export interface ChartAxis {
 }
 
 interface ChartModelBase {
+  /** Host-document scheme colours, retaining authored scheme references in the series. */
+  readonly themeColors?: Readonly<Record<string, string>>;
   readonly title: string | undefined;
   readonly titleFormula?: string;
   readonly legend: ChartLegend | undefined;

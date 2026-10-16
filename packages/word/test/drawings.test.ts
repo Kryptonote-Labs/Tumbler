@@ -1,3 +1,4 @@
+import { resolveChartColor } from "@tumblerjs/charts";
 import { describe, expect, test } from "bun:test";
 import { wordParagraphText, layoutWordDocument, openWordArtifact, WordEditingSession } from "../src/index.ts";
 import { buildWordDocumentFixture, type WordDocumentFixtureOptions } from "./document-fixture.ts";
@@ -43,6 +44,24 @@ describe("WordprocessingML drawings", () => {
     const layout = layoutWordDocument(artifact.document, { measure: () => ({ width: 5, ascent: 8, descent: 2 }) });
     const fragment = layout.pages[0]?.columns[0]?.lines[0]?.fragments[0];
     expect(fragment).toMatchObject({ kind: "drawing", width: 72, height: 36, drawing: { kind: "image" } });
+  });
+
+  test("binds chart scheme colours to the Word theme and preserves source XML", () => {
+    const chartXml = `<c:chartSpace xmlns:c="${c}" xmlns:a="${a}"><c:chart><c:plotArea><c:barChart><c:barDir val="col"/>${[1, 2, 3].map((n, i) => `<c:ser><c:idx val="${i}"/><c:order val="${i}"/><c:spPr><a:solidFill><a:schemeClr val="accent${n}"/></a:solidFill></c:spPr></c:ser>`).join("")}</c:barChart></c:plotArea></c:chart></c:chartSpace>`;
+    const artifact = open(drawing("chart", `<c:chart r:id="chart"/>`, "", c), [
+      { id: "chart", type: `${r}/chart`, target: "charts/chart1.xml" },
+      { id: "theme", type: `${r}/theme`, target: "theme/theme1.xml" },
+    ], [
+      { itemName: "word/charts/chart1.xml", contentType: "application/vnd.openxmlformats-officedocument.drawingml.chart+xml", xml: chartXml },
+      { itemName: "word/theme/theme1.xml", contentType: "application/vnd.openxmlformats-officedocument.theme+xml", xml: `<a:theme xmlns:a="${a}"><a:themeElements><a:clrScheme name="Custom"><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1><a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt2><a:srgbClr val="EEEEEE"/></a:lt2><a:dk2><a:srgbClr val="222222"/></a:dk2><a:accent4><a:srgbClr val="123456"/></a:accent4><a:accent5><a:srgbClr val="234567"/></a:accent5><a:accent6><a:srgbClr val="345678"/></a:accent6><a:hlink><a:srgbClr val="0000FF"/></a:hlink><a:folHlink><a:srgbClr val="800080"/></a:folHlink><a:accent1><a:srgbClr val="156082"/></a:accent1><a:accent2><a:srgbClr val="E97132"/></a:accent2><a:accent3><a:srgbClr val="196B24"/></a:accent3></a:clrScheme><a:fontScheme name="Custom"><a:majorFont><a:latin typeface="Aptos Display"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont><a:minorFont><a:latin typeface="Aptos"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme></a:themeElements></a:theme>` },
+    ]);
+    for (const doc of [artifact, openWordArtifact(artifact.bytes())]) {
+      const chart = [...doc.document.drawings.values()][0];
+      if (chart?.kind !== "chart" || chart.model.status !== "supported") throw new Error("Expected chart");
+      expect(chart.model.series.map(series => resolveChartColor(series.fill!, chart.model))).toEqual(["#156082", "#E97132", "#196B24"]);
+      expect(chart.model.series[0]?.fill).toEqual({ kind: "scheme", value: "accent1" });
+      expect(new TextDecoder().decode(doc.document.package.readPart(doc.document.package.getPart(chart.partName)!))).toBe(chartXml);
+    }
   });
 
   test("reuses the shared chart parser for Word chart frames", () => {
