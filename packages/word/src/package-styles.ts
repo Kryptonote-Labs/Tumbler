@@ -5,9 +5,7 @@ import type { WordDocument } from './document.ts';
 
 /** Add missing built-ins only when an authored paragraph requests one. Existing definitions win. */
 export function mergeAuthoredStyles(document: WordDocument, ids: readonly string[], transaction: PackageTransaction) {
-  const required = new Set(ids);
-  if (ids.some(id => WORD_BUILTIN_STYLES.some(style => style.styleId === id))) required.add('Normal');
-  const missing = WORD_BUILTIN_STYLES.filter(style => required.has(style.styleId) && !document.styles.style(style.styleId));
+  const missing = missingAuthoredStyles(document, ids);
   if (!missing.length) return;
   const namespace = document.source.root.namespaceUri;
   const content = missing.map(style => builtinStyleXml(style).replace('<w:style ', `<w:style xmlns:w="${namespace}" `)).join('');
@@ -29,4 +27,11 @@ export function mergeAuthoredStyles(document: WordDocument, ids: readonly string
     while (existingIds.has(id)) id += '-new';
     transaction.addRelationship(document.part.name, { id, type: `${office}/styles`, target: path });
   }
+}
+
+/** Shared resource preflight for sequential and batched content exports. */
+export function missingAuthoredStyles(document: WordDocument, ids: readonly string[]) {
+  const required = new Set(ids);
+  if (ids.some(id => WORD_BUILTIN_STYLES.some(style => style.styleId === id))) required.add('Normal');
+  return WORD_BUILTIN_STYLES.filter(style => required.has(style.styleId) && !document.styles.style(style.styleId));
 }
