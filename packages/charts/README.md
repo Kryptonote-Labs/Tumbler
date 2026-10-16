@@ -26,6 +26,10 @@ Hosts can bind document colours through `model.themeColors`; `resolveChartColor`
 resolves these bindings while preserving authored scheme references. Word imports
 bind their document theme for all chart views.
 
+Bar and column layouts honour authored `gapWidth` and `overlap`, including
+negative overlap. `layoutBarBand` shares this geometry between standalone and
+combination charts.
+
 Three-dimensional effects, per-point bubble formatting, data labels,
 trendlines, error bars, and exact Office bubble-size normalization remain
 explicitly unsupported. Unknown source XML is preserved by the owning OOXML

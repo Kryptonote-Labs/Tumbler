@@ -1,6 +1,7 @@
 <script lang="ts">
   import CombinationChart from "./CombinationChart.svelte";
   import {
+    layoutBarBand,
     resolveChartColor,
     cartesianStack,
     chartSequenceValue,
@@ -329,10 +330,10 @@
           {@const current = value(model, series, index)}
           {#if current !== undefined}
             {@const band = layout.plot.width / count}
-            {@const seriesWidth = band * 0.72 / (model.grouping === "stacked" || model.grouping === "percent-stacked" ? 1 : Math.max(1, model.series.length))}
+            {@const bars = layoutBarBand(model, band)}
             {@const baselineY = chartValueCoordinate(cartesianStack(model, seriesIndex, index)?.start ?? 0, layout.minimum, layout.maximum, layout.plot.y, layout.plot.height, true)}
             {@const y = chartValueCoordinate(current, layout.minimum, layout.maximum, layout.plot.y, layout.plot.height, true)}
-            <rect x={layout.plot.x + index * band + band * 0.14 + (model.grouping === "stacked" || model.grouping === "percent-stacked" ? 0 : seriesIndex) * seriesWidth} y={Math.min(y, baselineY)} width={Math.max(1, seriesWidth - 1)} height={Math.max(0.5, Math.abs(baselineY - y))} fill={color(series, seriesIndex)} />
+            <rect x={layout.plot.x + index * band + bars.inset + seriesIndex * bars.stride} y={Math.min(y, baselineY)} width={bars.thickness} height={Math.max(0.5, Math.abs(baselineY - y))} fill={color(series, seriesIndex)} />
           {/if}
         {/each}
       {/each}
@@ -342,10 +343,10 @@
           {@const current = value(model, series, index)}
           {#if current !== undefined}
             {@const band = layout.plot.height / count}
-            {@const seriesHeight = band * 0.72 / (model.grouping === "stacked" || model.grouping === "percent-stacked" ? 1 : Math.max(1, model.series.length))}
+            {@const bars = layoutBarBand(model, band)}
             {@const baselineX = chartValueCoordinate(cartesianStack(model, seriesIndex, index)?.start ?? 0, layout.minimum, layout.maximum, layout.plot.x, layout.plot.width)}
             {@const x = chartValueCoordinate(current, layout.minimum, layout.maximum, layout.plot.x, layout.plot.width)}
-            <rect x={Math.min(x, baselineX)} y={layout.plot.y + index * band + band * 0.14 + (model.grouping === "stacked" || model.grouping === "percent-stacked" ? 0 : seriesIndex) * seriesHeight} width={Math.max(0.5, Math.abs(baselineX - x))} height={Math.max(1, seriesHeight - 1)} fill={color(series, seriesIndex)} />
+            <rect x={Math.min(x, baselineX)} y={layout.plot.y + index * band + bars.inset + seriesIndex * bars.stride} width={Math.max(0.5, Math.abs(baselineX - x))} height={bars.thickness} fill={color(series, seriesIndex)} />
           {/if}
         {/each}
       {/each}
