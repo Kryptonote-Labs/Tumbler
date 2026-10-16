@@ -1,3 +1,4 @@
+export { layoutBarBand } from "./bar-layout.ts";
 export { resolveChartColor } from "./colors.ts";
 
 /** Headless DrawingML chart semantics shared by all OOXML document families. */

@@ -82,6 +82,9 @@ export interface SupportedChartModel extends ChartModelBase {
   readonly status: "supported";
   readonly kind: ChartKind;
   readonly grouping: "clustered" | "stacked" | "percent-stacked" | "standard";
+  /** Bar-width percentages, independent of the chart frame size. */
+  readonly gapWidth?: number;
+  readonly overlap?: number;
   readonly holeSize: number | undefined;
   readonly scatterStyle?: ChartScatterStyle;
   readonly bubbleScale?: number;

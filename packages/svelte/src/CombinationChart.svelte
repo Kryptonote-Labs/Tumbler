@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    layoutBarBand,
     layoutCombinationChart,
     type SupportedChartModel,
     type ChartSeries,
@@ -120,11 +121,7 @@
       {@const seriesIndex = model.series.findIndex(
         (item) => item.index === series.index,
       )}
-      {@const stacked =
-        plot.model.grouping === "stacked" ||
-        plot.model.grouping === "percent-stacked"}
-      {@const thickness =
-        (band * 0.72) / (stacked ? 1 : Math.max(1, plot.model.series.length))}
+      {@const bars = layoutBarBand(plot.model, band)}
       {#if plot.model.kind === "line"}
         <path
           d={points
@@ -141,7 +138,7 @@
       {:else}
         {#each points as point, c}{#if point}
             {@const offset =
-              c * band + band * 0.14 + (stacked ? 0 : s) * thickness}
+              c * band + bars.inset + s * bars.stride}
             <rect
               x={horizontal
                 ? Math.min(point.start, point.end)
@@ -151,9 +148,9 @@
                 : Math.min(point.start, point.end)}
               width={horizontal
                 ? Math.abs(point.start - point.end)
-                : Math.max(1, thickness - 1)}
+                : bars.thickness}
               height={horizontal
-                ? Math.max(1, thickness - 1)
+                ? bars.thickness
                 : Math.abs(point.start - point.end)}
               fill={color(series, seriesIndex)}
             />

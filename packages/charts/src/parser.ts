@@ -119,6 +119,10 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
   const bubbleSizeRepresentation = kind === "bubble" ? parseBubbleSizeRepresentation(val(children(chartType, chartNamespace, "sizeRepresents")[0]) ?? "area") : undefined;
   return Object.freeze({
     status: "supported", kind, grouping, holeSize,
+    ...(kind === "bar" || kind === "column" ? {
+      gapWidth: barPercent(val(children(chartType, chartNamespace, "gapWidth")[0]) ?? "150", 0, 500, "gap width"),
+      overlap: barPercent(val(children(chartType, chartNamespace, "overlap")[0]) ?? (grouping === "stacked" || grouping === "percent-stacked" ? "100" : "0"), -100, 100, "overlap"),
+    } : {}),
     ...(scatterStyle === undefined ? {} : { scatterStyle }),
     ...(bubbleScale === undefined ? {} : { bubbleScale }),
     ...(showNegativeBubbles === undefined ? {} : { showNegativeBubbles }),
@@ -376,6 +380,13 @@ function unsigned(raw: string, context: string): number {
   const number = Number(raw);
   if (!Number.isSafeInteger(number) || number < 0) throw new ChartParseError(`${context} must be a non-negative safe integer.`);
   return number;
+}
+
+function barPercent(raw: string, minimum: number, maximum: number, context: string): number {
+  // Transitional integers and Strict percentage lexical forms express the same ratio.
+  const value = /^-?\d+(?:\.\d+)?%?$/.test(raw) ? Number(raw.replace(/%$/, "")) : NaN;
+  if (!Number.isFinite(value) || value < minimum || value > maximum) throw new ChartParseError(`Invalid bar ${context}.`);
+  return value;
 }
 
 function boundedPercent(raw: string, context: string): number {
