@@ -24,6 +24,7 @@ export function chartAxisTicks(minimum: number, maximum: number, majorUnit?: num
   const step = majorUnit ?? niceStep((maximum - minimum) / 5);
   if (!Number.isFinite(step) || step <= 0) throw new RangeError("Axis major unit must be positive and finite.");
   const intervals = (maximum - minimum) / step;
+  if (!Number.isFinite(intervals)) return Object.freeze([minimum]);
   const stride = Math.max(1, Math.ceil(intervals / 1000));
   const count = Math.floor(intervals / stride + 1e-9) + 1;
   const ticks = Array.from({ length: Math.max(0, count) }, (_, i) => {

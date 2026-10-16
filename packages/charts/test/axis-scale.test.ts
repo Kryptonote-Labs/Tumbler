@@ -35,3 +35,7 @@ test("large explicit bounds retain distinct unit ticks while fractional ticks st
   expect(chartAxisTicks(1e14, 1e14 + 4, 1)).toEqual([1e14, 1e14 + 1, 1e14 + 2, 1e14 + 3, 1e14 + 4]);
   expect(chartAxisTicks(0, 0.3, 0.1)).toEqual([0, 0.1, 0.2, 0.3]);
 });
+
+test("extremely dense authored grids cannot overflow the tick allocation", () => {
+  expect(chartAxisTicks(0, 1e20, 1e-300)).toEqual([0]);
+});
