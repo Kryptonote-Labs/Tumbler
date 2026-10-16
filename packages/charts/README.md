@@ -81,3 +81,9 @@ automatic sentinel is not rendered as a literal angle. Plot height is allocated
 after title, category labels, and wrapped legend rows, so these areas affect automatic
 value ticks together. The Word sample chart XML is retained as a focused fixture;
 its 9pt labels are tested at original, short, and narrow dimensions.
+
+`updateChartTitle(bytes, title)` replaces an OOXML chart title while retaining its
+layout, title properties, series, and data. Word authored runs expose `chartTitle`
+for native projection and DOCX export. `WordDrawingView` hosts can provide
+`oncharttitlechange` to enable double-click title editing (or F2 when selected):
+Enter/blur commits, Escape cancels.

@@ -409,7 +409,14 @@ export class NativeWordDocument implements WordLayoutSource {
                 const id = allocate();
                 contents.push({ ...inherited.content, elementId: id });
                 const drawing = compiled?.artifact.document.drawings.get(inherited.content.elementId);
-                if (drawing) media.push({ ...withWordDrawingGeometry(drawing, authoredRun.drawing), elementId: id });
+                if (drawing) {
+                  let updated = withWordDrawingGeometry(drawing, authoredRun.drawing);
+                  if (updated.kind === 'chart' && authoredRun.chartTitle !== undefined) {
+                    const { titleFormula: _formula, ...model } = updated.model;
+                    updated = { ...updated, model: { ...model, title: authoredRun.chartTitle } };
+                  }
+                  media.push({ ...updated, elementId: id });
+                }
               } else {
                 if (!authoredRun.text.isWellFormed()) throw new Error('Invalid document text.');
                 for (const part of authoredRun.text.split(/([\t\n\u2028])/)) {

@@ -1,10 +1,11 @@
 <script lang="ts">
+  import ChartTitleEditor from "./ChartTitleEditor.svelte";
   import WordShapeView from "./WordShapeView.svelte";
   import { shapePlainText, wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing, type WordShapeTextChange } from '@tumblerjs/word';
   import OoxmlChart from './OoxmlChart.svelte';
   import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
 
-  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo }: {
+  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo, oncharttitlechange }: {
     drawing: WordDrawing; width: number; height: number; position: string; scale: number;
     editable: boolean; selected: boolean;
     pageX: number; pageY: number;
@@ -20,6 +21,7 @@
     ontexteditor?: (editor: import('./word-shape-text-editor.ts').ShapeTextEditor | undefined) => void;
     ontextselection?: () => void;
     ontextundo?: (redo: boolean) => void;
+    oncharttitlechange?: (title: string) => void;
     ontextchange?: (change: WordShapeTextChange) => void;
   } = $props();
   type Handle = WordDrawingHandle & { label: string; cursor: string };
@@ -40,6 +42,7 @@
   let displayWidth = $derived(wordPointsToCssPixels(preview?.width ?? width));
   let displayHeight = $derived(wordPointsToCssPixels(preview?.height ?? height));
   // Undefined while not editing; otherwise the text editing starts with.
+  let editingTitle = $state(false);
   let editingText = $state<string>();
   const textEditable = $derived(editable && drawing.kind === 'shape' && ontextchange !== undefined);
   const box = (): WordDrawingBox => ({ x: pageX, y: pageY, width, height });
@@ -117,7 +120,18 @@
   }
   $effect(() => { if (!selected) editingText = undefined; });
 
+  function editTitle() {
+    if (!editable || drawing.kind !== 'chart' || !oncharttitlechange) return;
+    cancel(); onselect(drawing.elementId); editingTitle = true;
+  }
+  function doubleClick(event: MouseEvent) {
+    if (drawing.kind === 'chart') {
+      const bounds = event.currentTarget instanceof HTMLElement ? event.currentTarget.getBoundingClientRect() : undefined;
+      if (bounds && (event.clientY - bounds.top) / scale < 44) { event.preventDefault(); editTitle(); }
+    } else if (textEditable && drawing.kind === 'shape') { event.preventDefault(); editText(shapePlainText(drawing.shape)); }
+  }
   function keydown(event: KeyboardEvent, handle?: Handle) {
+    if (event.key === 'F2' && drawing.kind === 'chart') { event.preventDefault(); event.stopPropagation(); editTitle(); return; }
     // As in Word, typing while a shape is selected adds to its text.
     if (handle === undefined && textEditable && drawing.kind === 'shape' && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
       event.preventDefault(); event.stopPropagation();
@@ -154,11 +168,14 @@
 {/snippet}
 
 <div class="drawing" class:moving={preview !== undefined} class:behind={currentLayout === 'behind'} class:selected={editable && selected} data-word-drawing={drawing.elementId} contenteditable="false" style={`${position};width:${displayWidth}px;height:${displayHeight}px;translate:${preview === undefined ? 'none' : `${wordPointsToCssPixels(preview.x - pageX)}px ${wordPointsToCssPixels(preview.y - pageY)}px`};--handle-size:${10 / scale}px;--outline-size:${1 / scale}px;--inverse-scale:${1 / scale}`}>
+  {#if editingTitle && editable && drawing.kind === 'chart'}
+    <ChartTitleEditor model={drawing.model} oncommit={(title) => { editingTitle = false; if (drawing.kind === 'chart' && title !== (drawing.model.title ?? '')) oncharttitlechange?.(title); }} oncancel={() => { editingTitle = false; }} />
+  {/if}
   {#if editable && drawing.kind !== 'unsupported' && (onresize !== undefined || onchange !== undefined)}
     {#if editingText !== undefined}
       <div class="content editing">{@render content()}</div>
     {:else}
-    <button class="content" class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)} ondblclick={(event) => { if (!textEditable || drawing.kind !== 'shape') return; event.preventDefault(); editText(shapePlainText(drawing.shape)); }}>{@render content()}</button>
+    <button class="content" class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)} ondblclick={doubleClick}>{@render content()}</button>
     {/if}
     {#if selected}
       {#if onchange !== undefined}

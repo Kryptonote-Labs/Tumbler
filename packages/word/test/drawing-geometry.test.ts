@@ -80,3 +80,17 @@ test('collaborative drawing attributes validate geometry', () => {
     expect(() => validateAttributes({ drawing })).toThrow();
   }
 });
+
+test('chart title edits agree in native layout and DOCX export and can be undone', () => {
+  const source = fixture();
+  const document = new NativeWordDocument({ source });
+  const content = importWordContent(source);
+  const title = 'Revenue <forecast> & growth';
+  document.update(content.map(block => block.kind === 'paragraph' ? { ...block, runs: block.runs.map(run => ({ ...run, chartTitle: title })) } : block));
+  expect(document.drawingAt(0)).toMatchObject({ kind: 'chart', model: { title } });
+  expect([...document.artifact().document.drawings.values()][0]).toMatchObject({ kind: 'chart', model: { title } });
+  document.update(content);
+  expect(document.drawingAt(0)).toMatchObject({ kind: 'chart', model: { title: undefined } });
+  document.update(content.map(block => block.kind === 'paragraph' ? { ...block, runs: block.runs.map(run => ({ ...run, chartTitle: '' })) } : block));
+  expect([...document.artifact().document.drawings.values()][0]).toMatchObject({ kind: 'chart', model: { title: '' } });
+});

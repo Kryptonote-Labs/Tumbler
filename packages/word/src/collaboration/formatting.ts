@@ -30,6 +30,7 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   breakType?: import('../breaks.ts').WordBreakType;
   shape?: WordAuthoredShape;
   drawing?: WordDrawingGeometry;
+  chartTitle?: string;
   link?: string;
   color?: WordColour;
   font?: string;
@@ -81,6 +82,7 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
     if (key === 'verticalAlign' && typeof value === 'string' && ['baseline', 'superscript', 'subscript'].includes(value)) continue;
     if (key === 'characterSpacingPoints' && typeof value === 'number' && Number.isInteger(value * 20) && value * 20 >= -2147483648 && value * 20 <= 2147483647) continue;
     if (key === 'breakType' && typeof value === 'string' && ['line', 'page', 'column'].includes(value)) continue;
+    if (key === 'chartTitle' && typeof value === 'string' && value.isWellFormed() && !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(value)) continue;
     if (key === 'drawing' && isWordDrawingGeometry(value)) continue;
     if (key === 'shape' && isWordAuthoredShape(value)) continue;
     if (key === 'link' && isWordHyperlink(value)) continue;
