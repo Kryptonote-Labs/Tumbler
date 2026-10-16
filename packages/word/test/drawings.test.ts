@@ -59,6 +59,7 @@ describe("WordprocessingML drawings", () => {
       const chart = [...doc.document.drawings.values()][0];
       if (chart?.kind !== "chart" || chart.model.status !== "supported") throw new Error("Expected chart");
       expect(chart.model.series.map(series => resolveChartColor(series.fill!, chart.model))).toEqual(["#156082", "#E97132", "#196B24"]);
+      expect(chart.model.themeFonts?.["+mn-lt"]).toBe("Aptos");
       expect(chart.model.series[0]?.fill).toEqual({ kind: "scheme", value: "accent1" });
       expect(new TextDecoder().decode(doc.document.package.readPart(doc.document.package.getPart(chart.partName)!))).toBe(chartXml);
     }
