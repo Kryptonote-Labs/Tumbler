@@ -140,6 +140,27 @@ column in both modes, including inside table cells. These settings serialize to 
 Word drawing anchors and use the same geometry in headless layout. Inline image
 alignment is controlled by the containing paragraph.
 
+### Painting pages
+
+`paintWordPage(context, page, options)` paints a laid-out page onto any Canvas 2D
+context: browser, `OffscreenCanvas`, or a server canvas such as `@napi-rs/canvas`.
+It draws the layout's geometry directly, so thumbnails and previews match the
+editor without a DOM. Text, list markers, highlights, underline, strikethrough,
+paragraph and table shading and borders, and images are painted. Shapes and charts
+paint as placeholders. Images paint only when `options.image` returns a decoded
+source for the drawing.
+
+```ts
+const measurer = canvasWordTextMeasurer(context);
+const [page] = layoutWordDocument(document, measurer, { maxPages: 1 }).pages;
+paintWordPage(context, page!, { scale: 480 / page!.width });
+```
+
+`canvasWordTextMeasurer` measures with the same context API and memoises each
+distinct run, so create a new measurer when fonts change. Without line metrics it
+uses the font bounding box, which omits external leading. In a browser,
+`browserWordTextMeasurer` from `@tumblerjs/svelte` adds the CSS line box.
+
 ### Pointer hit testing
 
 `wordLineAtPoint(page, x, y)` selects a body text line from a `WordLayoutPage`.
