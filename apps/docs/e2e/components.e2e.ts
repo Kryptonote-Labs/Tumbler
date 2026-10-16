@@ -61,7 +61,7 @@ test('pie and doughnut charts centre above their bottom legend at desktop and mo
       await expect.poll(async () => page.getByRole('img', { name: 'Quarterly deliveries' }).evaluate(element => {
         const center = element.getBoundingClientRect().left + element.getBoundingClientRect().width / 2;
         const rows = new Map<number, { left: number; right: number }>();
-        for (const item of element.querySelectorAll('.pie-legend > g')) {
+        for (const item of element.querySelectorAll('.chart-legend > .chart-legend-entry')) {
           const rect = item.getBoundingClientRect();
           const row = rows.get(Math.round(rect.top));
           rows.set(Math.round(rect.top), { left: Math.min(row?.left ?? Infinity, rect.left), right: Math.max(row?.right ?? -Infinity, rect.right) });
@@ -70,7 +70,7 @@ test('pie and doughnut charts centre above their bottom legend at desktop and mo
       })).toBeLessThan(1);
       const separation = await page.getByRole('img', { name: 'Quarterly deliveries' }).evaluate(element => {
         const bottom = Math.max(...[...element.querySelectorAll('path')].map(path => path.getBoundingClientRect().bottom));
-        const legendTop = Math.min(...[...element.querySelectorAll('.pie-legend > g')].map(group => group.getBoundingClientRect().top));
+        const legendTop = Math.min(...[...element.querySelectorAll('.chart-legend > .chart-legend-entry')].map(group => group.getBoundingClientRect().top));
         return legendTop - bottom;
       });
       expect(separation).toBeGreaterThan(0);

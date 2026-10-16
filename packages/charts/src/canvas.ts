@@ -86,10 +86,14 @@ function paintMarks<Path>(context: ChartCanvasContext<Path>, marks: readonly Cha
         context.fillText(mark.text, 0, 0);
         context.restore();
         break;
-      case "clip":
+      case "group":
+        if (mark.clip === undefined) {
+          paintMarks(context, mark.marks, path);
+          break;
+        }
         context.save();
         context.beginPath();
-        context.rect(mark.rect.x, mark.rect.y, mark.rect.width, mark.rect.height);
+        context.rect(mark.clip.x, mark.clip.y, mark.clip.width, mark.clip.height);
         context.clip();
         paintMarks(context, mark.marks, path);
         context.restore();

@@ -1,5 +1,5 @@
 import { chartSequenceValue, layoutPieSlices, pieArcPath } from "./layout.ts";
-import type { ChartMark, SceneContext } from "./scene-marks.ts";
+import { legendGroup, type ChartMark, type SceneContext } from "./scene-marks.ts";
 import { chartFont } from "./scene-style.ts";
 
 const PADDING = 16;
@@ -49,11 +49,13 @@ export function pieScene(context: SceneContext): ChartMark[] {
     const row = rows.get(entry.y);
     rows.set(entry.y, { left: Math.min(row?.left ?? Infinity, entry.x), right: Math.max(row?.right ?? -Infinity, entry.x + entry.extent) });
   }
-  entries.forEach((entry, index) => {
+  marks.push(legendGroup(entries.map((entry, index): ChartMark[] => {
     const row = rows.get(entry.y)!;
     const x = entry.x + (horizontal ? width / 2 - (row.left + row.right) / 2 : 0);
-    marks.push({ kind: "rect", x, y: entry.y - 8, width: 10, height: 10, fill: context.color(first, index) });
-    marks.push({ kind: "text", text: entry.label, x: x + 15, y: entry.y, anchor: "start", font });
-  });
+    return [
+      { kind: "rect", x, y: entry.y - 8, width: 10, height: 10, fill: context.color(first, index) },
+      { kind: "text", text: entry.label, x: x + 15, y: entry.y, anchor: "start", font },
+    ];
+  })));
   return marks;
 }

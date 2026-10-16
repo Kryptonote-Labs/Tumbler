@@ -48,7 +48,7 @@ export function xyScene(context: SceneContext): ChartMark[] {
     if (lineVisible(model, item)) series.push({ kind: "path", d: scatterLinePath(points, smooth(model, item)), stroke, strokeWidth: 2 });
     if (markerVisible(model, item)) for (const point of points) series.push(marker(item, point, stroke));
   });
-  marks.push({ kind: "clip", rect: plot, marks: series });
+  marks.push({ kind: "group", clip: plot, marks: series });
 
   const titleFont = chartFont("axisTitle", undefined, model, resolve);
   if (xAxis?.title !== undefined) marks.push({ kind: "text", text: xAxis.title, x: plot.x + plot.width / 2, y: height - 4, anchor: "middle", font: titleFont });

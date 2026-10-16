@@ -246,7 +246,7 @@ test("rendering example shows decimal tabs, drawings, charts and playback togeth
   ).toBeVisible();
   await expect
     .poll(() =>
-      stage.locator(".combination-legend").evaluate((legend) => {
+      stage.locator(".chart-legend").evaluate((legend) => {
         const bounds = legend.getBoundingClientRect(),
           chart = legend.closest("svg")!.getBoundingClientRect();
         return Math.abs(
