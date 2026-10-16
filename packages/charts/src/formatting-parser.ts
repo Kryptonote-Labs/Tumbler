@@ -44,12 +44,13 @@ export function parseChartTextStyle(parent: LosslessXmlElement | undefined, char
   const paragraph = child(properties ?? rich, ns, "p");
   const defaults = child(child(paragraph, ns, "pPr"), ns, "defRPr");
   const richParagraph = child(rich, ns, "p");
+  const richDefaults = child(child(richParagraph, ns, "pPr"), ns, "defRPr");
   const run = child(child(richParagraph, ns, "r"), ns, "rPr");
-  const read = (name: string) => attribute(run, name) ?? attribute(defaults, name);
+  const read = (name: string) => attribute(run, name) ?? attribute(richDefaults, name) ?? attribute(defaults, name);
   const rawSize = read("sz");
   const fontSize = rawSize === undefined ? undefined : Number(rawSize) / 100;
-  const fontFamily = attribute(child(run, ns, "latin"), "typeface") ?? attribute(child(defaults, ns, "latin"), "typeface");
-  const color = parseChartFill(run, ns) ?? parseChartFill(defaults, ns);
+  const fontFamily = attribute(child(run, ns, "latin"), "typeface") ?? attribute(child(richDefaults, ns, "latin"), "typeface") ?? attribute(child(defaults, ns, "latin"), "typeface");
+  const color = parseChartFill(run, ns) ?? parseChartFill(richDefaults, ns) ?? parseChartFill(defaults, ns);
   const boolean = (name: string) => read(name) === undefined ? undefined : read(name) === "1" || read(name) === "true";
   const bold = boolean("b"), italic = boolean("i");
   if (!properties && !rich) return undefined;

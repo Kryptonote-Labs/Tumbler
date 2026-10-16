@@ -14,6 +14,7 @@ describe("spreadsheet chart theme colors", () => {
     expect(resolveSpreadsheetChartColor(styles, { kind: "rgb", value: "#102030" })).toBe("#102030");
     expect(resolveSpreadsheetChartColor(styles, { kind: "scheme", value: "accent1" })).toBe("#4472C4");
     expect(resolveSpreadsheetChartColor(styles, { kind: "scheme", value: "tx1" })).toBe("#000000");
+    expect(resolveSpreadsheetChartColor(styles, { kind: "scheme", value: "tx1", transforms: [{ kind: "lumMod", value: 0.65 }, { kind: "lumOff", value: 0.35 }] })).toBe("#595959");
     expect(resolveSpreadsheetChartColor(styles, { kind: "scheme", value: "phClr" })).toBeUndefined();
   });
 });
