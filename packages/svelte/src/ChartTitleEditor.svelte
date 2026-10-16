@@ -19,5 +19,5 @@
   }} />
 
 <style>
-  input { position:absolute;left:8px;right:8px;top:4px;width:calc(100% - 16px);box-sizing:border-box;padding:0;text-align:center;background:white;border:1px solid currentColor;outline:none;z-index:2; }
+  input { position:absolute;left:8px;right:8px;top:4px;width:calc(100% - 16px);box-sizing:border-box;padding:0;text-align:center;background:white;border:1px solid currentColor;outline:none;z-index:3; }
 </style>
