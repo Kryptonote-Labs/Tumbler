@@ -1,9 +1,11 @@
 import { drawingColourXml } from './theme-colour-xml.ts';
 import { isWordColour, type WordColour } from './theme-colours.ts';
+import { shapeTextParagraphs, isShapeTextBody } from './shape-text.ts';
+import type { WordTextParagraph } from './create.ts';
 import type { WordTextRun } from './create.ts';
 import type { WordImagePosition } from './image-placement.ts';
 import { imagePlacement } from './image-placement.ts';
-import { xml, xmlAttribute } from './create-xml.ts';
+import { xmlAttribute } from './create-xml.ts';
 import type { WordShapeDrawing } from './drawings.ts';
 export const WORD_SHAPE_PRESETS = ['rect', 'roundRect', 'ellipse', 'triangle', 'diamond', 'rightArrow', 'line'] as const;
 export interface WordAuthoredShape extends WordImagePosition {
@@ -14,6 +16,9 @@ export interface WordAuthoredShape extends WordImagePosition {
   readonly outline: WordColour;
   readonly outlineWidth: number;
   readonly text?: string;
+  /** Rich text takes precedence over the legacy plain text value. */
+  readonly textBody?: readonly WordTextParagraph[];
+  readonly textAnchor?: 'top' | 'center' | 'bottom';
   readonly alt?: string;
 }
 export function isWordAuthoredShape(value: unknown): value is WordAuthoredShape {
@@ -24,8 +29,10 @@ export function isWordAuthoredShape(value: unknown): value is WordAuthoredShape 
   if (!['fill', 'outline'].every(k => shape[k] === 'none' || isWordColour(shape[k]))) return false;
   if (typeof shape.outlineWidth !== 'number' || !Number.isFinite(shape.outlineWidth) || shape.outlineWidth < 0 || !Number.isSafeInteger(Math.round(shape.outlineWidth * 12700))) return false;
   if (['text', 'alt'].some(k => shape[k] !== undefined && (typeof shape[k] !== 'string' || !String(shape[k]).isWellFormed() || /[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]/.test(String(shape[k]))))) return false;
+  if (shape.textBody !== undefined && !isShapeTextBody(shape.textBody)) return false;
+  if (shape.textAnchor !== undefined && !['top', 'center', 'bottom'].includes(String(shape.textAnchor))) return false;
   try { imagePlacement(shape as WordImagePosition, Number(shape.width), Number(shape.width)); } catch { return false; }
-  return Object.keys(shape).every(k => ['preset','width','height','fill','outline','outlineWidth','text','alt','layout','alignment','moveWithText','x','y'].includes(k));
+  return Object.keys(shape).every(k => ['preset','width','height','fill','outline','outlineWidth','text','textBody','textAnchor','alt','layout','alignment','moveWithText','x','y'].includes(k));
 }
 /**
  * The shape's outline as an SVG path in its own point space, inset by one point so strokes stay
@@ -51,12 +58,12 @@ export function wordShapePath(shape: Pick<WordAuthoredShape, 'preset' | 'width' 
   }
 }
 /** Editable DrawingML shape with an ordinary Word text box. No raster fallback. */
-export function wordShapeXml(shape: WordAuthoredShape, id: number, availableWidth: number): string {
+export function wordShapeXml(shape: WordAuthoredShape, id: number, availableWidth: number, renderText: (paragraphs: readonly WordTextParagraph[]) => string): string {
   if (!isWordAuthoredShape(shape)) throw new TypeError('Invalid shape.');
   const placement = imagePlacement(shape, shape.width, availableWidth);
   const cx = Math.round(shape.width * 12700), cy = Math.round(shape.height * 12700);
   const fill = (color: WordColour) => color === 'none' ? '<a:noFill/>' : `<a:solidFill>${drawingColourXml(color)}</a:solidFill>`;
-  return `<w:r><w:drawing xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">${placement.open}<wp:extent cx="${cx}" cy="${cy}"/>${placement.wrap}<wp:docPr id="${id}" name="Shape ${id}" descr="${xmlAttribute(shape.alt ?? '')}"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="${shape.preset}"><a:avLst/></a:prstGeom>${fill(shape.fill)}<a:ln w="${Math.round(shape.outlineWidth * 12700)}">${fill(shape.outline)}</a:ln></wps:spPr>${shape.text === undefined ? '' : `<wps:txbx><w:txbxContent>${shape.text.split(/\r\n?|\n/).map(line => `<w:p><w:r><w:t xml:space="preserve">${xml(line)}</w:t></w:r></w:p>`).join('')}</w:txbxContent></wps:txbx>`}<wps:bodyPr anchor="ctr"/></wps:wsp></a:graphicData></a:graphic>${placement.close}</w:drawing></w:r>`;
+  return `<w:r><w:drawing xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">${placement.open}<wp:extent cx="${cx}" cy="${cy}"/>${placement.wrap}<wp:docPr id="${id}" name="Shape ${id}" descr="${xmlAttribute(shape.alt ?? '')}"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="${shape.preset}"><a:avLst/></a:prstGeom>${fill(shape.fill)}<a:ln w="${Math.round(shape.outlineWidth * 12700)}">${fill(shape.outline)}</a:ln></wps:spPr>${shape.text === undefined && shape.textBody === undefined ? '' : `<wps:txbx><w:txbxContent>${renderText(shapeTextParagraphs(shape))}</w:txbxContent></wps:txbx>`}<wps:bodyPr anchor="${shape.textAnchor === 'top' ? 't' : shape.textAnchor === 'bottom' ? 'b' : 'ctr'}"/></wps:wsp></a:graphicData></a:graphic>${placement.close}</w:drawing></w:r>`;
 }
 export function nativeShapeDrawing(elementId: number, shape: WordAuthoredShape, availableWidth: number): WordShapeDrawing {
   if (!isWordAuthoredShape(shape)) throw new TypeError('Invalid shape.');

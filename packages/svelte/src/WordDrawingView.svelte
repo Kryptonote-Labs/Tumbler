@@ -1,10 +1,10 @@
 <script lang="ts">
   import WordShapeView from "./WordShapeView.svelte";
-  import { wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing, type WordShapeTextChange } from '@tumblerjs/word';
+  import { shapePlainText, wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing, type WordShapeTextChange } from '@tumblerjs/word';
   import OoxmlChart from './OoxmlChart.svelte';
   import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
 
-  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange }: {
+  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo }: {
     drawing: WordDrawing; width: number; height: number; position: string; scale: number;
     editable: boolean; selected: boolean;
     pageX: number; pageY: number;
@@ -17,6 +17,9 @@
     onresize?: (size: WordDrawingResize) => void;
     onchange?: (change: WordDrawingChange) => void;
     /** Enables in-place shape text editing: double-click a shape, or type while it is selected. */
+    ontexteditor?: (editor: import('./word-shape-text-editor.ts').ShapeTextEditor | undefined) => void;
+    ontextselection?: () => void;
+    ontextundo?: (redo: boolean) => void;
     ontextchange?: (change: WordShapeTextChange) => void;
   } = $props();
   type Handle = WordDrawingHandle & { label: string; cursor: string };
@@ -56,6 +59,7 @@
 
   function start(event: PointerEvent, handle?: Handle) {
     if (event.button !== 0) return;
+    editingText = undefined;
     onselect(drawing.elementId);
     if (handle === undefined && onchange === undefined) return;
     event.preventDefault(); event.stopPropagation();
@@ -107,17 +111,17 @@
     editingText = initial;
   }
 
-  function finishText(text: string, reason: 'blur' | 'escape') {
-    editingText = undefined;
-    if (drawing.kind === 'shape' && text !== (drawing.shape.text ?? '')) ontextchange?.({ elementId: drawing.elementId, text, reason });
-    else if (reason === 'escape') onselect(drawing.elementId);
+  function finishText(textBody: readonly import('@tumblerjs/word').WordTextParagraph[], reason: 'input' | 'escape') {
+    if (reason === 'escape') { editingText = undefined; onselect(drawing.elementId); }
+    else ontextchange?.({ elementId: drawing.elementId, textBody, text: textBody.map(p => p.runs.map(r => r.text).join('')).join('\n'), reason });
   }
+  $effect(() => { if (!selected) editingText = undefined; });
 
   function keydown(event: KeyboardEvent, handle?: Handle) {
     // As in Word, typing while a shape is selected adds to its text.
     if (handle === undefined && textEditable && drawing.kind === 'shape' && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
       event.preventDefault(); event.stopPropagation();
-      editText((drawing.shape.text ?? '') + event.key);
+      editText((shapePlainText(drawing.shape)) + event.key);
       return;
     }
     if (event.key === 'Escape') { event.stopPropagation(); cancel(); onselect(undefined); return; }
@@ -139,7 +143,7 @@
 
 {#snippet content()}
   {#if drawing.kind === 'shape'}
-    <WordShapeView shape={drawing.shape} editing={editingText !== undefined} initialText={editingText} oncommit={finishText} />
+    <WordShapeView shape={drawing.shape} {selected} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} editing={editingText !== undefined} initialText={editingText} oncommit={finishText} />
   {:else if drawing.kind === 'image'}
     <img src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading={imageLoading} decoding="async" />
   {:else if drawing.kind === 'chart'}
@@ -154,7 +158,7 @@
     {#if editingText !== undefined}
       <div class="content editing">{@render content()}</div>
     {:else}
-    <button class="content" class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)} ondblclick={(event) => { if (!textEditable || drawing.kind !== 'shape') return; event.preventDefault(); editText(drawing.shape.text ?? ''); }}>{@render content()}</button>
+    <button class="content" class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)} ondblclick={(event) => { if (!textEditable || drawing.kind !== 'shape') return; event.preventDefault(); editText(shapePlainText(drawing.shape)); }}>{@render content()}</button>
     {/if}
     {#if selected}
       {#if onchange !== undefined}

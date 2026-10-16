@@ -1,3 +1,4 @@
+import { readShapeText } from './shape-text-import.ts';
 import { wordThemeSlot } from './theme-colour-xml.ts';
 import { DEFAULT_WORD_THEME, resolveWordColour, type WordColour, type WordThemeColour } from './theme-colours.ts';
 import { THEME_COLOR_SLOTS, parseThemeColorScheme, type ThemeColorScheme } from '@tumblerjs/ooxml';
@@ -80,7 +81,7 @@ export function readWordDrawings(input: {
 }
 
 function parseDrawing(
-  input: { readonly package: OpcPackage; readonly source: LosslessXmlDocument; readonly conformance: WordConformance },
+  input: { readonly package: OpcPackage; readonly part: OpcPart; readonly source: LosslessXmlDocument; readonly conformance: WordConformance },
   drawing: LosslessXmlElement,
   relationships: Relationships | undefined,
   charts: Map<string, ChartModel>,
@@ -143,7 +144,12 @@ function parseDrawing(
     };
     const line = props && child(props, drawingNs, 'ln');
     const text = nodes.filter(n => n.namespaceUri === OOXML_NAMESPACES[input.conformance].wordprocessing && n.localName === 'p').map(p => descendants(p).filter(n => n.localName === 't').map(n => n.children.filter(c => c.kind === 'text').map(c => c.kind === 'text' ? c.value : '').join('')).join('')).join('\n');
-    const shape = { preset, width: widthPoints, height: heightPoints, fill: color(props), outline: color(line), outlineWidth: Number(attribute(line, 'w') ?? 0) / EMUS_PER_POINT, ...(text ? { text } : {}), ...(altText ? { alt: altText } : {}), layout: placement === 'inline' ? 'inline' : anchor?.behindDocument ? 'behind' : 'front', ...(anchor ? { x: anchor.horizontalOffsetPoints ?? 0, y: anchor.verticalOffsetPoints ?? 0, moveWithText: anchor.verticalRelativeTo !== 'page' } : {}) };
+    const box = nodes.find(n => n.localName === 'txbxContent');
+    const textBody = box ? readShapeText(input, box, OOXML_NAMESPACES[input.conformance].wordprocessing) : undefined;
+    if (box && !textBody) return unsupported(drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, 'This text box contains structures retained in the source document.');
+    const body = nodes.find(n => n.localName === 'bodyPr');
+    const textAnchor = attribute(body, 'anchor') === 'ctr' ? 'center' : attribute(body, 'anchor') === 'b' ? 'bottom' : 'top';
+    const shape = { preset, textAnchor, ...(textBody ? { textBody } : {}), width: widthPoints, height: heightPoints, fill: color(props), outline: color(line), outlineWidth: Number(attribute(line, 'w') ?? 0) / EMUS_PER_POINT, ...(text ? { text } : {}), ...(altText ? { alt: altText } : {}), layout: placement === 'inline' ? 'inline' : anchor?.behindDocument ? 'behind' : 'front', ...(anchor ? { x: anchor.horizontalOffsetPoints ?? 0, y: anchor.verticalOffsetPoints ?? 0, moveWithText: anchor.verticalRelativeTo !== 'page' } : {}) };
     if (isWordAuthoredShape(shape)) return { kind: 'shape', elementId: drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, shape };
   }
   const relationshipNs = input.conformance === "strict" ? "http://purl.oclc.org/ooxml/officeDocument/relationships" : "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -279,7 +285,8 @@ export interface WordDrawingChange extends WordDrawingResize {
 export interface WordShapeTextChange {
   readonly elementId: number;
   readonly text: string;
-  readonly reason: 'blur' | 'escape';
+  readonly reason: 'blur' | 'escape' | 'input';
+  readonly textBody?: readonly import('./create.ts').WordTextParagraph[];
 }
 
 /** Change wrapping and page-relative placement, preserving the embedded graphic. */

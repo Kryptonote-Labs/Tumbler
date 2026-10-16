@@ -157,3 +157,5 @@ export { DEFAULT_WORD_THEME, isWordColour, resolveWordColour, wordColourLuminanc
 export { wordThemePalette, type WordColourSwatch } from './theme-palette.ts';
 export { ThemeColorScheme } from '@tumblerjs/ooxml';
 export { wordColoursEqual } from './theme-colours.ts';
+
+export { shapeTextParagraphs, shapePlainText, isShapeTextBody } from './shape-text.ts';

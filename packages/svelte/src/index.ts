@@ -60,3 +60,5 @@ export { wordHighlightColor } from '@tumblerjs/word';
 
 export { default as WordParagraphDecorations } from './WordParagraphDecorations.svelte';
 export { default as WordShapeView } from './WordShapeView.svelte';
+
+export type { ShapeTextEditor } from './word-shape-text-editor.ts';

@@ -470,3 +470,17 @@ CSS colour as `WordLayout.background`; apply it to the whole page, including mar
 The Svelte Word viewer does this automatically. Missing or automatic colours use
 the viewer default. Background XML survives content edits and export. VML gradient,
 pattern and image backgrounds are preserved but are not rendered.
+
+### Shape text
+
+`WordAuthoredShape.textBody` holds paragraphs and formatted runs, using the same
+`WordTextParagraph` model as body text. It takes precedence over legacy `text`.
+`textAnchor` places the text at the top, centre or bottom of the shape. DOCX
+creation shares the body paragraph writer, including numbering resources.
+Import resolves text-box run styles and preserves paragraph formatting. Text boxes
+with unsupported nested structures remain opaque instead of losing their contents.
+
+`WordShapeText` from `@tumblerjs/word/collaboration` exposes range replacement,
+formatting, formatting state and rich clipboard fragments. Hosts persist its
+`paragraphs()` output through their document transaction system. This engine uses
+the same text operations as the collaborative body editor.

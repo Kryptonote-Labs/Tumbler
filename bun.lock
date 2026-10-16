@@ -108,6 +108,7 @@
       "peerDependencies": {
         "@tumblerjs/slides": "0.1.0-alpha.23",
         "svelte": "^5.0.0",
+        "yjs": "^13.6.0",
       },
       "optionalPeers": [
         "@tumblerjs/slides",

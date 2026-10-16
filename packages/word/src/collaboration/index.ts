@@ -12,3 +12,4 @@ export { clickAndTypeEdit } from './click-and-type.ts';
 
 export { formatTableDelta, type WordTableFormatPatch } from './table-format.ts';
 export { findWordMatches, replaceWordMatches, type WordSearchOptions } from './search.ts';
+export { WordShapeText } from './shape-text.ts';
