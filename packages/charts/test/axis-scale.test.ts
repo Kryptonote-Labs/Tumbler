@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cartesianAxisScale, parseOoxmlChart, type ChartAxis } from "../src/index.ts";
+import { cartesianAxisScale, chartAxisTicks, parseOoxmlChart, type ChartAxis } from "../src/index.ts";
 
 const axis: ChartAxis = { id: 1, kind: "value", position: "left", title: undefined, majorGridlines: true, minimum: undefined, maximum: undefined, deleted: false };
 
@@ -29,4 +29,9 @@ test("major units survive XML parsing and invalid values are rejected", () => {
   if (model.status !== "supported") throw Error("Expected chart");
   expect(model.axes[0]?.majorUnit).toBe(0.5);
   for (const value of ["0", "-1", "NaN", "Infinity"]) expect(() => parse(value)).toThrow();
+});
+
+test("large explicit bounds retain distinct unit ticks while fractional ticks stay clean", () => {
+  expect(chartAxisTicks(1e14, 1e14 + 4, 1)).toEqual([1e14, 1e14 + 1, 1e14 + 2, 1e14 + 3, 1e14 + 4]);
+  expect(chartAxisTicks(0, 0.3, 0.1)).toEqual([0, 0.1, 0.2, 0.3]);
 });
