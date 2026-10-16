@@ -93,11 +93,12 @@ export function reconcileWordContent(
   return result;
 }
 
-/** Stage a story into a shared transaction, or decline when it changes shared resources. */
+/** Stage content into a shared transaction, or decline when later edits must see its resources. */
 export function prepareWordContent(
   source: WordArtifact,
   blocks: readonly WordContentBlock[],
   batchTransaction?: PackageTransaction,
+  batchRole: 'story' | 'body' = 'story',
 ) {
   const normalize = (input: readonly WordContentBlock[]): WordContentBlock[] =>
     input.map((block) =>
@@ -155,14 +156,14 @@ export function prepareWordContent(
   const relationships = generated.document.package.relationships(
     generated.document.part.name,
   ).items;
-  // A shared transaction is safe only when edits stay within this story part
-  // and its external relationships. Global resources and drawing transforms use
-  // the existing sequential path, which resolves each new package revision.
+  // Stories must not add shared resources. The body may append media/numbering,
+  // provided story numbering already resolves. New styles/themes and drawing
+  // transforms require the sequential path so later edits see their effects.
   if (batchTransaction && (
-    generated.document.numbering.partName ||
+    (batchRole === 'story' && generated.document.numbering.partName) ||
     missingAuthoredStyles(document, paragraphs.flatMap(p => p.styleId ? [p.styleId] : [])).length ||
     relationships.some(rel => rel.targetMode === 'Internal' &&
-      (/\/(image|numbering)$/.test(rel.type) || (/\/theme$/.test(rel.type) && !document.styles.themeColors))) ||
+      ((batchRole === 'story' && /\/(image|numbering)$/.test(rel.type)) || (/\/theme$/.test(rel.type) && !document.styles.themeColors))) ||
     paragraphs.some(p => p.runs.some(run => {
       const drawing = document.drawings.get(run.source!);
       return drawing && run.image && drawingNeedsUpdate(drawing, run.image);
