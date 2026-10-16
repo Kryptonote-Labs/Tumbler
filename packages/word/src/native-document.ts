@@ -1,3 +1,4 @@
+import { reconcileWordStories } from './content-export-batch.ts';
 import { DEFAULT_WORD_THEME, resolveWordColour, resolveWordPaintProperties } from './theme-colours.ts';
 import { isWordAuthoredList, registerWordListLevel, wordListMarker, type WordAuthoredList } from './authored-list.ts';
 import { isWordHyperlink } from './hyperlinks.ts';
@@ -182,6 +183,10 @@ export class NativeWordDocument implements WordLayoutSource {
     let result = this.compiled
       ? reconcileWordContent(this.compiled.artifact, this.authored)
       : createWordArtifact({ ...this.options, blocks: this.authored });
+    const existingStories = [...this.editedStories.values()].flatMap(entry =>
+      typeof entry.target === 'string' ? [{ partName: entry.target, blocks: entry.blocks }] : []);
+    if (existingStories.length === this.editedStories.size)
+      return this.exported = reconcileWordStories(result, existingStories);
     for (const entry of this.editedStories.values()) {
       let partName: string;
       if (typeof entry.target === 'string') partName = entry.target;

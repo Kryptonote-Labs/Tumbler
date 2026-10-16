@@ -1,8 +1,8 @@
-import { mergeAuthoredStyles } from './package-styles.ts';
+import { mergeAuthoredStyles, missingAuthoredStyles } from './package-styles.ts';
 import { wordStoryArtifact } from './stories.ts';
 import type { WordBlock } from './document.ts';
 import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
-import { beginPackageTransaction, PartName, RelationshipsError } from '@tumblerjs/opc';
+import { beginPackageTransaction, PartName, RelationshipsError, type PackageTransaction } from '@tumblerjs/opc';
 import { openWordArtifact, type WordArtifact } from './artifact.ts';
 import { createWordArtifact, type WordTextParagraph } from './create.ts';
 import type { WordContentBlock } from './create-content.ts';
@@ -30,6 +30,75 @@ export function reconcileWordContent(
   source: WordArtifact,
   blocks: readonly WordContentBlock[],
 ): WordArtifact {
+  const { transaction, paragraphs, document, isStory } = prepareWordContent(source, blocks)!;
+  let result = openWordArtifact(transaction.commit(), {
+    maxBlocks: Number.MAX_SAFE_INTEGER,
+    maxInlineItems: Number.MAX_SAFE_INTEGER,
+    maxTextCharacters: Number.MAX_SAFE_INTEGER,
+  });
+  if (isStory) result = wordStoryArtifact(result, document.part.name.value);
+  for (const [paragraphIndex, paragraph] of paragraphs.entries()) {
+    let offset = 0;
+    for (const run of paragraph.runs) {
+      const drawing = document.drawings.get(run.source!);
+      const image = run.image;
+      if (drawing && image) {
+        const layout =
+          drawing.placement === 'inline'
+            ? 'inline'
+            : drawing.anchor?.behindDocument
+              ? 'behind'
+              : 'front';
+        const moved =
+          (image.layout !== undefined && image.layout !== layout) ||
+          (image.x !== undefined &&
+            image.x !== (drawing.anchor?.horizontalOffsetPoints ?? 0)) ||
+          (image.y !== undefined && image.y !== (drawing.anchor?.verticalOffsetPoints ?? 0));
+        if (
+          drawing.widthPoints !== image.width ||
+          drawing.heightPoints !== image.height ||
+          moved
+        ) {
+          const all: import('./document.ts').WordParagraph[] = [];
+          const visit = (blocks: readonly WordBlock[]) => {
+            for (const block of blocks) {
+              if (block.kind === 'paragraph') all.push(block);
+              else if (block.kind === 'table')
+                for (const row of block.rows) for (const cell of row.cells) visit(cell.blocks);
+            }
+          };
+          visit(result.document.blocks);
+          const segment = wordParagraphTextSegments(result.document, all[paragraphIndex]!).find(
+            (segment) => segment.start === offset && segment.kind === 'drawing',
+          );
+          if (!segment)
+            throw new Error('The drawing position was lost during materialization.');
+          result = result.updateDrawing({
+            elementId: segment.elementId,
+            widthPoints: image.width,
+            heightPoints: image.height,
+            ...(moved
+              ? {
+                  layout: image.layout ?? layout,
+                  xPoints: image.x ?? 0,
+                  yPoints: image.y ?? 0,
+                }
+              : {}),
+          });
+        }
+      }
+      offset += run.text.length;
+    }
+  }
+  return result;
+}
+
+/** Stage a story into a shared transaction, or decline when it changes shared resources. */
+export function prepareWordContent(
+  source: WordArtifact,
+  blocks: readonly WordContentBlock[],
+  batchTransaction?: PackageTransaction,
+) {
   const normalize = (input: readonly WordContentBlock[]): WordContentBlock[] =>
     input.map((block) =>
       block.kind === 'image'
@@ -83,11 +152,24 @@ export function reconcileWordContent(
         : {}),
     })),
   });
-  const transaction = beginPackageTransaction(document.package);
-  mergeAuthoredStyles(document, paragraphs.flatMap(p => p.styleId ? [p.styleId] : []), transaction);
   const relationships = generated.document.package.relationships(
     generated.document.part.name,
   ).items;
+  // A shared transaction is safe only when edits stay within this story part
+  // and its external relationships. Global resources and drawing transforms use
+  // the existing sequential path, which resolves each new package revision.
+  if (batchTransaction && (
+    generated.document.numbering.partName ||
+    missingAuthoredStyles(document, paragraphs.flatMap(p => p.styleId ? [p.styleId] : [])).length ||
+    relationships.some(rel => rel.targetMode === 'Internal' &&
+      (/\/(image|numbering)$/.test(rel.type) || (/\/theme$/.test(rel.type) && !document.styles.themeColors))) ||
+    paragraphs.some(p => p.runs.some(run => {
+      const drawing = document.drawings.get(run.source!);
+      return drawing && run.image && drawingNeedsUpdate(drawing, run.image);
+    }))
+  )) return undefined;
+  const transaction = batchTransaction ?? beginPackageTransaction(document.package);
+  mergeAuthoredStyles(document, paragraphs.flatMap(p => p.styleId ? [p.styleId] : []), transaction);
   let prefix = 'tumbler-content-';
   let existingIds = new Set<string>();
   try {
@@ -193,64 +275,16 @@ export function reconcileWordContent(
   transaction.replacePart(document.part.name, edit.commit().bytes);
   for (const rel of relationships) if (usedHyperlinks.has(rel.id) && rel.targetMode === 'External' && /\/hyperlink$/.test(rel.type))
     transaction.addRelationship(document.part.name, { id: prefix + rel.id, type: conformanceMarkup(rel.type), target: rel.target, targetMode: 'External' });
-  let result = openWordArtifact(transaction.commit(), {
-    maxBlocks: Number.MAX_SAFE_INTEGER,
-    maxInlineItems: Number.MAX_SAFE_INTEGER,
-    maxTextCharacters: Number.MAX_SAFE_INTEGER,
-  });
-  if (isStory) result = wordStoryArtifact(result, document.part.name.value);
-  for (const [paragraphIndex, paragraph] of paragraphs.entries()) {
-    let offset = 0;
-    for (const run of paragraph.runs) {
-      const drawing = document.drawings.get(run.source!);
-      const image = run.image;
-      if (drawing && image) {
-        const layout =
-          drawing.placement === 'inline'
-            ? 'inline'
-            : drawing.anchor?.behindDocument
-              ? 'behind'
-              : 'front';
-        const moved =
-          (image.layout !== undefined && image.layout !== layout) ||
-          (image.x !== undefined &&
-            image.x !== (drawing.anchor?.horizontalOffsetPoints ?? 0)) ||
-          (image.y !== undefined && image.y !== (drawing.anchor?.verticalOffsetPoints ?? 0));
-        if (
-          drawing.widthPoints !== image.width ||
-          drawing.heightPoints !== image.height ||
-          moved
-        ) {
-          const all: import('./document.ts').WordParagraph[] = [];
-          const visit = (blocks: readonly WordBlock[]) => {
-            for (const block of blocks) {
-              if (block.kind === 'paragraph') all.push(block);
-              else if (block.kind === 'table')
-                for (const row of block.rows) for (const cell of row.cells) visit(cell.blocks);
-            }
-          };
-          visit(result.document.blocks);
-          const segment = wordParagraphTextSegments(result.document, all[paragraphIndex]!).find(
-            (segment) => segment.start === offset && segment.kind === 'drawing',
-          );
-          if (!segment)
-            throw new Error('The drawing position was lost during materialization.');
-          result = result.updateDrawing({
-            elementId: segment.elementId,
-            widthPoints: image.width,
-            heightPoints: image.height,
-            ...(moved
-              ? {
-                  layout: image.layout ?? layout,
-                  xPoints: image.x ?? 0,
-                  yPoints: image.y ?? 0,
-                }
-              : {}),
-          });
-        }
-      }
-      offset += run.text.length;
-    }
-  }
-  return result;
+  return { transaction, paragraphs, document, isStory };
+}
+
+function drawingNeedsUpdate(
+  drawing: import('./drawings.ts').WordDrawing,
+  image: NonNullable<import('./create.ts').WordTextRun['image']>,
+) {
+  const layout = drawing.placement === 'inline' ? 'inline' : drawing.anchor?.behindDocument ? 'behind' : 'front';
+  return drawing.widthPoints !== image.width || drawing.heightPoints !== image.height ||
+    (image.layout !== undefined && image.layout !== layout) ||
+    (image.x !== undefined && image.x !== (drawing.anchor?.horizontalOffsetPoints ?? 0)) ||
+    (image.y !== undefined && image.y !== (drawing.anchor?.verticalOffsetPoints ?? 0));
 }
