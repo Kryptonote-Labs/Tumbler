@@ -27,3 +27,11 @@ test("an existing explicit or default title takes precedence over the deletion f
   expect(fixture('<c:title/>', '<c:autoTitleDeleted val="1"/>', ["Sales", "Costs"]).title).toBe("Chart Title");
   expect(fixture('<c:title><c:tx><c:strRef><c:f>Data!A1</c:f></c:strRef></c:tx></c:title>', '', ["Sales", "Costs"]).title).toBeUndefined();
 });
+
+test("combination plots share the chart title rather than inferring separate series titles", () => {
+  const xml = `<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart><c:plotArea>${["barChart", "lineChart"].map((kind, i) => `<c:${kind}><c:ser><c:idx val="${i}"/><c:order val="${i}"/><c:tx><c:v>Series ${i}</c:v></c:tx></c:ser></c:${kind}>`).join("")}</c:plotArea></c:chart></c:chartSpace>`;
+  const model = parseOoxmlChart(new TextEncoder().encode(xml), "transitional");
+  if (model.status !== "supported") throw Error("Expected supported chart");
+  expect(model.title).toBeUndefined();
+  expect(model.plots?.map(plot => plot.title)).toEqual([undefined, undefined]);
+});

@@ -26,7 +26,13 @@ export function chartAxisTicks(minimum: number, maximum: number, majorUnit?: num
   const intervals = (maximum - minimum) / step;
   const stride = Math.max(1, Math.ceil(intervals / 1000));
   const count = Math.floor(intervals / stride + 1e-9) + 1;
-  return Object.freeze(Array.from({ length: Math.max(0, count) }, (_, i) => Number((minimum + i * stride * step).toPrecision(14))));
+  const ticks = Array.from({ length: Math.max(0, count) }, (_, i) => {
+    const value = minimum + i * stride * step;
+    const rounded = Number(value.toPrecision(14));
+    // Remove decimal arithmetic noise only when it is negligible beside a major unit.
+    return Math.abs(rounded - value) < step * 1e-6 ? rounded : value;
+  });
+  return Object.freeze(ticks.filter((tick, i) => i === 0 || tick > ticks[i - 1]!));
 }
 
 function niceStep(raw: number): number {

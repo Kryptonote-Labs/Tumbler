@@ -34,3 +34,8 @@ test("text inherits chart defaults and preserves an explicit non-bold override",
   const color = { kind: "rgb" as const, value: "#000000", transforms: [{ kind: "lumOff" as const, value: 0.4 }, { kind: "lumMod" as const, value: 0.5 }] };
   expect(resolveChartColor(color, model)).toBe("#333333");
 });
+
+test("rich paragraph defaults override title defaults without losing run-level overrides", () => {
+  const model = parseOoxmlChart(new TextEncoder().encode(`<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><c:chart><c:title><c:tx><c:rich><a:p><a:pPr><a:defRPr sz="1800" b="1"><a:latin typeface="Aptos"/></a:defRPr></a:pPr><a:r><a:rPr b="0"/><a:t>Title</a:t></a:r></a:p></c:rich></c:tx><c:txPr><a:p><a:pPr><a:defRPr sz="900" i="1"/></a:pPr></a:p></c:txPr></c:title><c:plotArea><c:barChart/></c:plotArea></c:chart></c:chartSpace>`), "transitional");
+  expect(model.titleStyle).toMatchObject({ fontSize: 18, fontFamily: "Aptos", bold: false, italic: true });
+});
