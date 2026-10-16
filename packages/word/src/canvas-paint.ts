@@ -1,51 +1,48 @@
+import { layoutChartScene, paintChartScene, type ChartCanvasContext } from "@tumblerjs/charts";
 import { wordCanvasFont } from "./canvas-text.ts";
 import type { WordImageDrawing } from "./drawings.ts";
 import { wordHighlightColor } from "./highlight.ts";
 import type { WordLayoutFragment, WordLayoutLine, WordLayoutMarker, WordLayoutPage, WordLayoutTable } from "./layout.ts";
+import { wordShapePath, type WordAuthoredShape } from "./shapes.ts";
 import type { WordCellBorders, WordTableBorder } from "./table-format.ts";
+import { resolveWordColour } from "./theme-colours.ts";
 
-/** The drawing subset of a Canvas 2D context. Browser, OffscreenCanvas and server canvases satisfy it. */
-export interface WordCanvasContext<Image> {
-  font: string;
-  fillStyle: unknown;
-  strokeStyle: unknown;
-  lineWidth: number;
-  textAlign: "start" | "end" | "left" | "right" | "center";
-  textBaseline: "top" | "hanging" | "middle" | "alphabetic" | "ideographic" | "bottom";
+/**
+ * The drawing subset of a Canvas 2D context. Browser, OffscreenCanvas and server canvases satisfy
+ * it; `Path` is the host's Path2D.
+ */
+export interface WordCanvasContext<Image, Path = unknown> extends ChartCanvasContext<Path> {
   direction: "inherit" | "ltr" | "rtl";
   fontKerning?: "auto" | "none" | "normal";
   letterSpacing?: string;
-  save(): void;
-  restore(): void;
   scale(x: number, y: number): void;
-  beginPath(): void;
-  rect(x: number, y: number, width: number, height: number): void;
-  clip(): void;
-  moveTo(x: number, y: number): void;
-  lineTo(x: number, y: number): void;
-  stroke(): void;
   setLineDash(segments: number[]): void;
+  measureText(text: string): { readonly width: number };
   fillRect(x: number, y: number, width: number, height: number): void;
-  fillText(text: string, x: number, y: number): void;
   drawImage(image: Image, x: number, y: number, width: number, height: number): void;
 }
 
-export interface WordPagePaintOptions<Image> {
+export interface WordPagePaintOptions<Image, Path = unknown> {
   /** Device pixels per point. Defaults to CSS pixels (4/3). */
   readonly scale?: number;
   /** Paper colour. Defaults to white; `"transparent"` leaves the canvas untouched. */
   readonly background?: string;
   /** Decoded image for a drawing; see wordPageImages. Images without a source paint as placeholders. */
   readonly image?: (drawing: WordImageDrawing) => Image | undefined;
+  /**
+   * Builds the host's Path2D from SVG path data, such as `d => new Path2D(d)`. Shapes and charts
+   * paint only when it is supplied; otherwise they paint as placeholders.
+   */
+  readonly path?: (d: string) => Path;
 }
 
 const PLACEHOLDER = "rgba(0,0,0,0.06)";
 
 /**
  * Paints one laid-out page with the same geometry the editor uses: paragraph decorations,
- * tables, list markers, text and images. Shapes and charts paint as placeholders.
+ * tables, list markers, text, images, shapes and charts.
  */
-export function paintWordPage<Image>(context: WordCanvasContext<Image>, page: WordLayoutPage, options: WordPagePaintOptions<Image> = {}): void {
+export function paintWordPage<Image, Path>(context: WordCanvasContext<Image, Path>, page: WordLayoutPage, options: WordPagePaintOptions<Image, Path> = {}): void {
   const scale = options.scale ?? 4 / 3;
   context.save();
   context.scale(scale, scale);
@@ -89,7 +86,7 @@ export function wordPageImages(page: WordLayoutPage): WordImageDrawing[] {
   return [...images];
 }
 
-function paintTable<Image>(context: WordCanvasContext<Image>, table: WordLayoutTable, options: WordPagePaintOptions<Image>): void {
+function paintTable<Image, Path>(context: WordCanvasContext<Image, Path>, table: WordLayoutTable, options: WordPagePaintOptions<Image, Path>): void {
   for (const cell of table.cells) {
     if (cell.shading === undefined) continue;
     context.fillStyle = cell.shading;
@@ -107,7 +104,7 @@ function paintTable<Image>(context: WordCanvasContext<Image>, table: WordLayoutT
 }
 
 /** Paragraph shading and borders span every line of the paragraph that shares a decoration box. */
-function paintDecorations<Image>(context: WordCanvasContext<Image>, lines: readonly WordLayoutLine[]): void {
+function paintDecorations<Image, Path>(context: WordCanvasContext<Image, Path>, lines: readonly WordLayoutLine[]): void {
   const boxes = new Map<string, { decoration: NonNullable<WordLayoutLine["paragraphDecoration"]>; top: number; bottom: number }>();
   for (const line of lines) {
     const decoration = line.paragraphDecoration;
@@ -127,14 +124,14 @@ function paintDecorations<Image>(context: WordCanvasContext<Image>, lines: reado
   }
 }
 
-function paintBorders<Image>(context: WordCanvasContext<Image>, borders: WordCellBorders | undefined, left: number, top: number, right: number, bottom: number): void {
+function paintBorders<Image, Path>(context: WordCanvasContext<Image, Path>, borders: WordCellBorders | undefined, left: number, top: number, right: number, bottom: number): void {
   if (borders?.top) strokeLine(context, left, top + borders.top.widthPoints / 2, right, top + borders.top.widthPoints / 2, borders.top);
   if (borders?.bottom) strokeLine(context, left, bottom - borders.bottom.widthPoints / 2, right, bottom - borders.bottom.widthPoints / 2, borders.bottom);
   if (borders?.left) strokeLine(context, left + borders.left.widthPoints / 2, top, left + borders.left.widthPoints / 2, bottom, borders.left);
   if (borders?.right) strokeLine(context, right - borders.right.widthPoints / 2, top, right - borders.right.widthPoints / 2, bottom, borders.right);
 }
 
-function paintLine<Image>(context: WordCanvasContext<Image>, line: WordLayoutLine, options: WordPagePaintOptions<Image>): void {
+function paintLine<Image, Path>(context: WordCanvasContext<Image, Path>, line: WordLayoutLine, options: WordPagePaintOptions<Image, Path>): void {
   if (line.marker !== undefined) paintText(context, line.marker, line.marker.text.trimEnd());
   for (const fragment of line.fragments) {
     if (fragment.kind === "drawing") paintDrawing(context, fragment, options);
@@ -142,17 +139,95 @@ function paintLine<Image>(context: WordCanvasContext<Image>, line: WordLayoutLin
   }
 }
 
-function paintDrawing<Image>(context: WordCanvasContext<Image>, fragment: WordLayoutFragment, options: WordPagePaintOptions<Image>): void {
-  const image = fragment.drawing?.kind === "image" ? options.image?.(fragment.drawing) : undefined;
+function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, fragment: WordLayoutFragment, options: WordPagePaintOptions<Image, Path>): void {
+  const drawing = fragment.drawing;
+  const image = drawing?.kind === "image" ? options.image?.(drawing) : undefined;
   if (image !== undefined) {
     context.drawImage(image, fragment.x, fragment.y, fragment.width, fragment.height);
+    return;
+  }
+  if (options.path !== undefined && drawing?.kind === "shape") return paintShape(context, drawing.shape, fragment, options.path);
+  if (options.path !== undefined && drawing?.kind === "chart" && drawing.model.status === "supported") {
+    // Charts lay out in CSS pixels, as the editor draws them.
+    const pixels = 4 / 3;
+    const scene = layoutChartScene(drawing.model, fragment.width * pixels, fragment.height * pixels, {
+      measureText: (text, font) => {
+        context.font = font;
+        return context.measureText(text).width;
+      },
+    });
+    context.save();
+    context.translate(fragment.x, fragment.y);
+    context.scale(1 / pixels, 1 / pixels);
+    paintChartScene(context, scene, options.path);
+    context.restore();
     return;
   }
   context.fillStyle = PLACEHOLDER;
   context.fillRect(fragment.x, fragment.y, fragment.width, fragment.height);
 }
 
-function paintText<Image>(context: WordCanvasContext<Image>, item: WordLayoutFragment | WordLayoutMarker, text: string): void {
+// Shape text matches WordShapeView: 16px (12pt) Aptos, centred, inset 6px (4.5pt).
+const SHAPE_FONT_POINTS = 12;
+const SHAPE_TEXT_INSET = 4.5;
+
+function paintShape<Image, Path>(context: WordCanvasContext<Image, Path>, shape: WordAuthoredShape, fragment: WordLayoutFragment, path: (d: string) => Path): void {
+  const fill = resolveWordColour(shape.fill), outline = resolveWordColour(shape.outline);
+  context.save();
+  context.translate(fragment.x, fragment.y);
+  context.save();
+  // The outline stretches to the frame, as the editor's SVG does with preserveAspectRatio="none".
+  context.scale(fragment.width / shape.width, fragment.height / shape.height);
+  const outlinePath = path(wordShapePath(shape));
+  if (fill !== "none" && shape.preset !== "line") {
+    context.fillStyle = fill;
+    context.fill(outlinePath);
+  }
+  if (outline !== "none" && shape.outlineWidth > 0) {
+    context.strokeStyle = outline;
+    context.lineWidth = shape.outlineWidth;
+    context.stroke(outlinePath);
+  }
+  context.restore();
+  if (shape.text) {
+    const width = fragment.width - SHAPE_TEXT_INSET * 2, height = fragment.height - SHAPE_TEXT_INSET * 2;
+    context.beginPath();
+    context.rect(SHAPE_TEXT_INSET, SHAPE_TEXT_INSET, width, height);
+    context.clip();
+    context.font = `${SHAPE_FONT_POINTS}px Aptos, sans-serif`;
+    context.direction = "ltr";
+    context.textAlign = "center";
+    context.fillStyle = "#000000";
+    const lines = wrapText(context, shape.text, width);
+    const leading = SHAPE_FONT_POINTS * 1.2;
+    const top = fragment.height / 2 - lines.length * leading / 2;
+    lines.forEach((line, index) => context.fillText(line, fragment.width / 2, top + index * leading + SHAPE_FONT_POINTS));
+  }
+  context.restore();
+}
+
+/** Greedy word wrap at spaces, keeping authored line breaks; overlong words break by character. */
+function wrapText<Image, Path>(context: WordCanvasContext<Image, Path>, text: string, width: number): string[] {
+  const fits = (candidate: string) => context.measureText(candidate).width <= width;
+  return text.split(/\r\n?|\n/).flatMap(paragraph => {
+    const lines: string[] = [];
+    let line = "";
+    for (const word of paragraph.split(" ")) {
+      const candidate = line === "" ? word : `${line} ${word}`;
+      if (fits(candidate)) { line = candidate; continue; }
+      if (line !== "") lines.push(line);
+      line = "";
+      for (const character of word) {
+        if (line !== "" && !fits(line + character)) { lines.push(line); line = ""; }
+        line += character;
+      }
+    }
+    lines.push(line);
+    return lines;
+  });
+}
+
+function paintText<Image, Path>(context: WordCanvasContext<Image, Path>, item: WordLayoutFragment | WordLayoutMarker, text: string): void {
   const { format } = item;
   const highlight = wordHighlightColor(format.highlight);
   if (highlight !== "transparent") {
@@ -174,7 +249,7 @@ function paintText<Image>(context: WordCanvasContext<Image>, item: WordLayoutFra
   if (format.strike) rule(item.baseline - size * 0.3);
 }
 
-function strokeLine<Image>(context: WordCanvasContext<Image>, x1: number, y1: number, x2: number, y2: number, border: WordTableBorder): void {
+function strokeLine<Image, Path>(context: WordCanvasContext<Image, Path>, x1: number, y1: number, x2: number, y2: number, border: WordTableBorder): void {
   if (border.style === "none" || border.widthPoints <= 0) return;
   context.strokeStyle = typeof border.color === "string" ? border.color : "#000000";
   const double = border.style === "double";

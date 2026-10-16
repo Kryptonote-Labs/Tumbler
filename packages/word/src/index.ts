@@ -150,7 +150,7 @@ export { paragraphFormatXml, isWordParagraphFormat, type WordParagraphFormat } f
 export { WORD_LIST_KINDS, isWordAuthoredList, type WordAuthoredList, type WordListKind } from './authored-list.ts';
 export { isWordHyperlink } from './hyperlinks.ts';
 export { WORD_BUILTIN_STYLES, wordAuthoringStyles } from './authored-styles.ts';
-export { WORD_SHAPE_PRESETS, isWordAuthoredShape, type WordAuthoredShape } from './shapes.ts';
+export { WORD_SHAPE_PRESETS, isWordAuthoredShape, wordShapePath, type WordAuthoredShape } from './shapes.ts';
 export type { WordShapeDrawing } from './drawings.ts';
 
 export { DEFAULT_WORD_THEME, isWordColour, resolveWordColour, wordColourLuminance, type WordColour, type WordThemeColour } from './theme-colours.ts';
