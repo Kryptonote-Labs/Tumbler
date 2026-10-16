@@ -1,3 +1,4 @@
+import { isWordDrawingGeometry, type WordDrawingGeometry } from '../drawing-geometry.ts';
 import { isWordColour, type WordColour } from '../theme-colours.ts';
 import { isWordAuthoredShape, type WordAuthoredShape } from '../shapes.ts';
 import { isWordParagraphPositioning, isWordPositionalTab, type WordParagraphPositioning } from '../positioning.ts';
@@ -28,6 +29,7 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   characterSpacingPoints?: number;
   breakType?: import('../breaks.ts').WordBreakType;
   shape?: WordAuthoredShape;
+  drawing?: WordDrawingGeometry;
   link?: string;
   color?: WordColour;
   font?: string;
@@ -79,6 +81,7 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
     if (key === 'verticalAlign' && typeof value === 'string' && ['baseline', 'superscript', 'subscript'].includes(value)) continue;
     if (key === 'characterSpacingPoints' && typeof value === 'number' && Number.isInteger(value * 20) && value * 20 >= -2147483648 && value * 20 <= 2147483647) continue;
     if (key === 'breakType' && typeof value === 'string' && ['line', 'page', 'column'].includes(value)) continue;
+    if (key === 'drawing' && isWordDrawingGeometry(value)) continue;
     if (key === 'shape' && isWordAuthoredShape(value)) continue;
     if (key === 'link' && isWordHyperlink(value)) continue;
     if (key === 'color' && isTextColor(value)) continue;

@@ -487,3 +487,10 @@ with unsupported nested structures remain opaque instead of losing their content
 formatting, formatting state and rich clipboard fragments. Hosts persist its
 `paragraphs()` output through their document transaction system. This engine uses
 the same text operations as the collaborative body editor.
+
+Imported drawing runs can carry a `drawing` geometry override alongside their `source`
+reference: `{ width, height, layout?, x?, y? }`. Width and height are points; optional
+`x` and `y` are page-relative points for floating drawings. This keeps chart data in
+its original package while `NativeWordDocument` and DOCX export apply the same geometry.
+Omit position overrides to retain the original anchor and wrapping. The collaboration
+layer accepts the same `drawing` attribute for shared edits and undo history.
