@@ -148,7 +148,8 @@ It draws the layout's geometry directly, so thumbnails and previews match the
 editor without a DOM. Text, list markers, highlights, underline, strikethrough,
 paragraph and table shading and borders, and images are painted. Shapes and charts
 paint as placeholders. Images paint only when `options.image` returns a decoded
-source for the drawing.
+source for the drawing; `wordPageImages(page)` lists them so hosts with
+asynchronous decoding can prepare them first.
 
 ```ts
 const measurer = canvasWordTextMeasurer(context);

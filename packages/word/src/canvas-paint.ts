@@ -35,7 +35,7 @@ export interface WordPagePaintOptions<Image> {
   readonly scale?: number;
   /** Paper colour. Defaults to white; `"transparent"` leaves the canvas untouched. */
   readonly background?: string;
-  /** Decoded image for a drawing. Images without a source paint as placeholders. */
+  /** Decoded image for a drawing; see wordPageImages. Images without a source paint as placeholders. */
   readonly image?: (drawing: WordImageDrawing) => Image | undefined;
 }
 
@@ -69,6 +69,24 @@ export function paintWordPage<Image>(context: WordCanvasContext<Image>, page: Wo
   }
   for (const line of lines) paintLine(context, line, options);
   context.restore();
+}
+
+/** Every image drawn on a page, in paint order. Decode these before painting when decoding is asynchronous. */
+export function wordPageImages(page: WordLayoutPage): WordImageDrawing[] {
+  const images = new Set<WordImageDrawing>();
+  const visitLines = (lines: readonly WordLayoutLine[]) => {
+    for (const line of lines)
+      for (const fragment of line.fragments) if (fragment.drawing?.kind === "image") images.add(fragment.drawing);
+  };
+  const visitTable = (table: WordLayoutTable): void => {
+    for (const cell of table.cells) {
+      visitLines(cell.lines);
+      cell.tables.forEach(visitTable);
+    }
+  };
+  [...page.columns.flatMap(column => column.tables), ...page.headerTables, ...page.footerTables, ...page.noteTables].forEach(visitTable);
+  visitLines([...page.columns.flatMap(column => column.lines), ...page.headerLines, ...page.footerLines, ...page.noteLines]);
+  return [...images];
 }
 
 function paintTable<Image>(context: WordCanvasContext<Image>, table: WordLayoutTable, options: WordPagePaintOptions<Image>): void {

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createWordArtifact, layoutWordDocument, openWordArtifact, paintWordPage, type WordCanvasContext, type WordContentBlock } from "../src/index.ts";
+import { createWordArtifact, layoutWordDocument, openWordArtifact, paintWordPage, wordPageImages, type WordCanvasContext, type WordContentBlock, type WordImageDrawing } from "../src/index.ts";
 
 const png = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=", "base64"));
 const measure = { measure: (text: string) => ({ width: text.length * 6, ascent: 9, descent: 3 }) };
@@ -45,6 +45,7 @@ test("paints text, list markers and formatting at the layout's baselines", () =>
 test("paints decoded images and falls back to placeholders without a source", () => {
   const page = layout([{ kind: "image", bytes: png, contentType: "image/png", width: 80, height: 40 }]);
   const fragment = page.columns[0]!.lines.flatMap(line => line.fragments).find(item => item.kind === "drawing")!;
+  expect(wordPageImages(page)).toEqual([fragment.drawing as WordImageDrawing]);
   const decoded = recorder();
   paintWordPage(decoded.context, page, { image: drawing => drawing.contentType });
   expect(decoded.calls).toContainEqual(["drawImage", "image/png", fragment.x, fragment.y, fragment.width, fragment.height]);
