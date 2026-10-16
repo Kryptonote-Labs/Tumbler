@@ -1,8 +1,9 @@
 import { layoutChartScene, paintChartScene, type ChartCanvasContext } from "@tumblerjs/charts";
-import { wordCanvasFont } from "./canvas-text.ts";
+import { canvasWordTextMeasurer, wordCanvasFont, type WordCanvasTextContext } from "./canvas-text.ts";
 import type { WordImageDrawing } from "./drawings.ts";
 import { wordHighlightColor } from "./highlight.ts";
-import type { WordLayoutFragment, WordLayoutLine, WordLayoutMarker, WordLayoutPage, WordLayoutTable } from "./layout.ts";
+import type { WordLayoutFragment, WordLayoutLine, WordLayoutMarker, WordLayoutPage, WordLayoutTable, WordTextMeasurer } from "./layout.ts";
+import { layoutWordShapeText, WORD_SHAPE_TEXT_INSET_POINTS as INSET } from "./shape-text-layout.ts";
 import { wordShapePath, type WordAuthoredShape } from "./shapes.ts";
 import type { WordCellBorders, WordTableBorder } from "./table-format.ts";
 import { resolveWordColour } from "./theme-colours.ts";
@@ -11,13 +12,12 @@ import { resolveWordColour } from "./theme-colours.ts";
  * The drawing subset of a Canvas 2D context. Browser, OffscreenCanvas and server canvases satisfy
  * it; `Path` is the host's Path2D.
  */
-export interface WordCanvasContext<Image, Path = unknown> extends ChartCanvasContext<Path> {
+export interface WordCanvasContext<Image, Path = unknown> extends ChartCanvasContext<Path>, WordCanvasTextContext {
   direction: "inherit" | "ltr" | "rtl";
   fontKerning?: "auto" | "none" | "normal";
   letterSpacing?: string;
   scale(x: number, y: number): void;
   setLineDash(segments: number[]): void;
-  measureText(text: string): { readonly width: number };
   fillRect(x: number, y: number, width: number, height: number): void;
   drawImage(image: Image, x: number, y: number, width: number, height: number): void;
 }
@@ -34,6 +34,8 @@ export interface WordPagePaintOptions<Image, Path = unknown> {
    * paint only when it is supplied; otherwise they paint as placeholders.
    */
   readonly path?: (d: string) => Path;
+  /** Lays out shape text; pass the page's measurer so both agree. Defaults to measuring with `context`. */
+  readonly measurer?: WordTextMeasurer;
 }
 
 const PLACEHOLDER = "rgba(0,0,0,0.06)";
@@ -146,7 +148,7 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
     context.drawImage(image, fragment.x, fragment.y, fragment.width, fragment.height);
     return;
   }
-  if (options.path !== undefined && drawing?.kind === "shape") return paintShape(context, drawing.shape, fragment, options.path);
+  if (options.path !== undefined && drawing?.kind === "shape") return paintShape(context, drawing.shape, fragment, { ...options, path: options.path });
   if (options.path !== undefined && drawing?.kind === "chart" && drawing.model.status === "supported") {
     // Charts lay out in CSS pixels, as the editor draws them.
     const pixels = 4 / 3;
@@ -167,18 +169,14 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
   context.fillRect(fragment.x, fragment.y, fragment.width, fragment.height);
 }
 
-// Shape text matches WordShapeView: 16px (12pt) Aptos, centred, inset 6px (4.5pt).
-const SHAPE_FONT_POINTS = 12;
-const SHAPE_TEXT_INSET = 4.5;
-
-function paintShape<Image, Path>(context: WordCanvasContext<Image, Path>, shape: WordAuthoredShape, fragment: WordLayoutFragment, path: (d: string) => Path): void {
+function paintShape<Image, Path>(context: WordCanvasContext<Image, Path>, shape: WordAuthoredShape, fragment: WordLayoutFragment, options: WordPagePaintOptions<Image, Path> & { readonly path: (d: string) => Path }): void {
   const fill = resolveWordColour(shape.fill), outline = resolveWordColour(shape.outline);
   context.save();
   context.translate(fragment.x, fragment.y);
   context.save();
   // The outline stretches to the frame, as the editor's SVG does with preserveAspectRatio="none".
   context.scale(fragment.width / shape.width, fragment.height / shape.height);
-  const outlinePath = path(wordShapePath(shape));
+  const outlinePath = options.path(wordShapePath(shape));
   if (fill !== "none" && shape.preset !== "line") {
     context.fillStyle = fill;
     context.fill(outlinePath);
@@ -189,42 +187,18 @@ function paintShape<Image, Path>(context: WordCanvasContext<Image, Path>, shape:
     context.stroke(outlinePath);
   }
   context.restore();
-  if (shape.text) {
-    const width = fragment.width - SHAPE_TEXT_INSET * 2, height = fragment.height - SHAPE_TEXT_INSET * 2;
+  const text = layoutWordShapeText(shape, fragment.width, fragment.height, options.measurer ?? canvasWordTextMeasurer(context));
+  if (text.lines.length > 0 || text.tables.length > 0) {
+    // Overflowing text is clipped to the text box, as in the editor.
     context.beginPath();
-    context.rect(SHAPE_TEXT_INSET, SHAPE_TEXT_INSET, width, height);
+    context.rect(INSET, INSET, fragment.width - INSET * 2, fragment.height - INSET * 2);
     context.clip();
-    context.font = `${SHAPE_FONT_POINTS}px Aptos, sans-serif`;
-    context.direction = "ltr";
-    context.textAlign = "center";
-    context.fillStyle = "#000000";
-    const lines = wrapText(context, shape.text, width);
-    const leading = SHAPE_FONT_POINTS * 1.2;
-    const top = fragment.height / 2 - lines.length * leading / 2;
-    lines.forEach((line, index) => context.fillText(line, fragment.width / 2, top + index * leading + SHAPE_FONT_POINTS));
+    context.translate(text.x, text.y);
+    for (const table of text.tables) paintTable(context, table, options);
+    paintDecorations(context, text.lines);
+    for (const line of text.lines) paintLine(context, line, options);
   }
   context.restore();
-}
-
-/** Greedy word wrap at spaces, keeping authored line breaks; overlong words break by character. */
-function wrapText<Image, Path>(context: WordCanvasContext<Image, Path>, text: string, width: number): string[] {
-  const fits = (candidate: string) => context.measureText(candidate).width <= width;
-  return text.split(/\r\n?|\n/).flatMap(paragraph => {
-    const lines: string[] = [];
-    let line = "";
-    for (const word of paragraph.split(" ")) {
-      const candidate = line === "" ? word : `${line} ${word}`;
-      if (fits(candidate)) { line = candidate; continue; }
-      if (line !== "") lines.push(line);
-      line = "";
-      for (const character of word) {
-        if (line !== "" && !fits(line + character)) { lines.push(line); line = ""; }
-        line += character;
-      }
-    }
-    lines.push(line);
-    return lines;
-  });
 }
 
 function paintText<Image, Path>(context: WordCanvasContext<Image, Path>, item: WordLayoutFragment | WordLayoutMarker, text: string): void {
