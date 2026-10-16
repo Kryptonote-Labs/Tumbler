@@ -1,5 +1,6 @@
 <script lang="ts">
   import { chartTextCss, chartLineCss } from "./chart-presentation.ts";
+  import { positionChartLegend } from "./chart-legend.ts";
   import CombinationChart from "./CombinationChart.svelte";
   import {
     layoutBarBand,
@@ -253,9 +254,11 @@
     {#if xAxis?.title !== undefined}<text class="axis-title" x={layout.plot.x + layout.plot.width / 2} y={height - 4} text-anchor="middle">{xAxis.title}</text>{/if}
     {#if yAxis?.title !== undefined}<text class="axis-title" transform={`translate(12 ${layout.plot.y + layout.plot.height / 2}) rotate(-90)`} text-anchor="middle">{yAxis.title}</text>{/if}
     {#if model.legend !== undefined}
+      <g class="series-legend" use:positionChartLegend={{ model, width, height }}>
       {#each model.series as series, index (series.index)}
         <g transform={`translate(${legendX(model, index)} ${legendY(model, index)})`}><rect width="10" height="10" y="-8" fill={color(series, index)} /><text style={textCss(model.legend?.textStyle)} x="15">{series.title ?? `Series ${index + 1}`}</text></g>
       {/each}
+      </g>
     {/if}
   </svg>
 {:else if model.kind === "bubble"}
@@ -300,9 +303,11 @@
     {#if xAxis?.title !== undefined}<text class="axis-title" x={layout.plot.x + layout.plot.width / 2} y={height - 4} text-anchor="middle">{xAxis.title}</text>{/if}
     {#if yAxis?.title !== undefined}<text class="axis-title" transform={`translate(12 ${layout.plot.y + layout.plot.height / 2}) rotate(-90)`} text-anchor="middle">{yAxis.title}</text>{/if}
     {#if model.legend !== undefined}
+      <g class="series-legend" use:positionChartLegend={{ model, width, height }}>
       {#each model.series as series, index (series.index)}
         <g transform={`translate(${legendX(model, index)} ${legendY(model, index)})`}><circle cx="5" cy="-3" r="5" fill={color(series, index)} /><text style={textCss(model.legend?.textStyle)} x="15">{series.title ?? `Series ${index + 1}`}</text></g>
       {/each}
+      </g>
     {/if}
   </svg>
 {:else}
@@ -378,12 +383,14 @@
       {/if}
     {/each}
     {#if model.legend !== undefined}
+      <g class="series-legend" use:positionChartLegend={{ model, width, height }}>
       {#each model.series as series, index (series.index)}
         <g transform={`translate(${legendX(model, index)} ${legendY(model, index)})`}>
           <rect width="10" height="10" y="-8" fill={color(series, index)} />
           <text style={textCss(model.legend?.textStyle)} x="15">{series.title ?? `Series ${index + 1}`}</text>
         </g>
       {/each}
+      </g>
     {/if}
   </svg>
 {/if}

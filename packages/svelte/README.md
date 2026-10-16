@@ -145,3 +145,6 @@ Tumbler is developed at
 [Kryptonote-Labs/Tumbler](https://github.com/Kryptonote-Labs/Tumbler).
 
 MIT licensed. See [LICENSE](LICENSE).
+
+Chart legends use measured SVG swatch/label bounds for horizontal centring and
+refresh their placement when fonts load or the chart dimensions change.

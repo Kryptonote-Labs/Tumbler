@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { positionChartLegend } from "./chart-legend.ts";
   import { chartTextCss, chartLineCss } from "./chart-presentation.ts";
   import {
     layoutBarBand,
@@ -21,55 +22,6 @@
     color: (series: ChartSeries, index: number, line?: boolean) => string;
   } = $props();
   let plots = $derived(layoutCombinationChart(model, width, height));
-  function positionLegend(
-    node: SVGGElement,
-    options: { model: SupportedChartModel; width: number; height: number },
-  ) {
-    let frame = 0;
-    function update(next: typeof options) {
-      options = next;
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const items = Array.from(node.children).filter(
-          (item): item is SVGGElement => item instanceof SVGGElement,
-        );
-        const position = options.model.legend?.position ?? "right";
-        const horizontal = position === "top" || position === "bottom";
-        const widths = items.map((item) => item.getBBox().width);
-        const total =
-          widths.reduce((sum, value) => sum + value, 0) +
-          Math.max(0, items.length - 1) * 24;
-        let x = horizontal
-          ? (options.width - total) / 2
-          : position === "left"
-            ? 8
-            : options.width - Math.max(0, ...widths) - 8;
-        let y =
-          position === "bottom"
-            ? options.height - 12
-            : position === "top" || position === "top-right"
-              ? options.model.title
-                ? 42
-                : 18
-              : (options.height - items.length * 20) / 2 + 12;
-        items.forEach((item, index) => {
-          item.setAttribute("transform", `translate(${x} ${y})`);
-          if (horizontal) x += widths[index]! + 24;
-          else y += 20;
-        });
-      });
-    }
-    const fonts = () => update(options);
-    document.fonts.addEventListener("loadingdone", fonts);
-    update(options);
-    return {
-      update,
-      destroy() {
-        cancelAnimationFrame(frame);
-        document.fonts.removeEventListener("loadingdone", fonts);
-      },
-    };
-  }
 </script>
 
 <svg
@@ -180,7 +132,7 @@
       >{/each}{/if}
   {#if model.legend}<g
       class="combination-legend"
-      use:positionLegend={{ model, width, height }}
+      use:positionChartLegend={{ model, width, height }}
       >{#each model.series as series, i}<g
           transform={`translate(${16 + i * 110} ${height - 10})`}
           ><rect width="8" height="8" y="-8" fill={color(series, i)} /><text
