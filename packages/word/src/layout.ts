@@ -42,6 +42,8 @@ export interface WordTextMeasurer {
 export interface WordLayoutOptions {
   readonly maxPages?: number;
   readonly maxFragments?: number;
+  /** Stop after this many complete pages, for previews. Unlike maxPages, longer documents are not an error. */
+  readonly pageLimit?: number;
 }
 
 export interface WordLayout {
@@ -49,6 +51,8 @@ export interface WordLayout {
   readonly background?: string;
   readonly pages: readonly WordLayoutPage[];
   readonly fragmentCount: number;
+  /** Set when pageLimit stopped layout before the end of the document. */
+  readonly truncated?: true;
 }
 
 export interface WordPageStory {
@@ -378,7 +382,7 @@ export function layoutWordSource(
   const seen = new Set<number>();
   while (true) {
     const layout = layoutWordSourcePass(document, measurer, options, stories, total);
-    if (!needsTotal || layout.pages.length === total) return layout;
+    if (!needsTotal || layout.truncated || layout.pages.length === total) return layout;
     if (seen.has(layout.pages.length)) throw new WordError('invalid_document', 'Page count fields did not reach a stable layout.');
     seen.add(total);
     total = layout.pages.length;
@@ -394,6 +398,8 @@ function layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeas
     fragments: 0,
   };
   const pages: MutablePage[] = [];
+  const pageLimit = options.pageLimit === undefined ? undefined : limit(options.pageLimit, budget.maxPages, "page");
+  let truncated = false;
   const sections = documentSections(document.blocks, document.finalSection);
   const listMarkers = document.listMarkers;
   let page: MutablePage | undefined;
@@ -402,6 +408,8 @@ function layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeas
 
   const sectionPageCounts = new Map<WordSectionProperties, number>();
   const appendPage = (section: WordSectionProperties) => {
+    // Earlier pages can still change until the next one starts, so the limit allows one page more.
+    if (pageLimit !== undefined && pages.length > pageLimit) throw TRUNCATED;
     const created = createPage(section, pages, budget);
     const index = sectionPageCounts.get(section) ?? 0;
     sectionPageCounts.set(section, index + 1);
@@ -437,117 +445,126 @@ function layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeas
     cursorY = page.columns[columnIndex]!.y;
   };
 
-  for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
-    const section = sections[sectionIndex]!;
-    const isFirst = page === undefined;
-    if (isFirst) addPage(section.properties);
-    else if (section.properties.breakType === "nextColumn") advanceColumn(section.properties);
-    else if (section.properties.breakType === "continuous" && samePageGeometry(page!.section, section.properties)) {
-      // Continuous sections share the current page but can change the remaining column set only on the next page.
-    } else addPage(section.properties, section.properties.breakType === "evenPage" ? "even" : section.properties.breakType === "oddPage" ? "odd" : undefined);
+  try {
+    for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
+      const section = sections[sectionIndex]!;
+      const isFirst = page === undefined;
+      if (isFirst) addPage(section.properties);
+      else if (section.properties.breakType === "nextColumn") advanceColumn(section.properties);
+      else if (section.properties.breakType === "continuous" && samePageGeometry(page!.section, section.properties)) {
+        // Continuous sections share the current page but can change the remaining column set only on the next page.
+      } else addPage(section.properties, section.properties.breakType === "evenPage" ? "even" : section.properties.breakType === "oddPage" ? "odd" : undefined);
 
-    for (let blockIndex = 0; blockIndex < section.blocks.length; blockIndex += 1) {
-      const block = section.blocks[blockIndex]!;
-      if (block.kind === "table") {
-        let target = page!.columns[columnIndex]!;
-        const preparedTable = prepareTable(document, block, target.width, measurer, listMarkers);
-        const groups = tableRowGroups(preparedTable);
-        const headerRows = leadingHeaderRows(preparedTable);
-        let groupIndex = 0;
-        let continuation: PreparedTable | undefined;
-        while (groupIndex < groups.length) {
-          target = page!.columns[columnIndex]!;
-          const atTop = cursorY === target.y;
-          const repeated = groupIndex > 0 || continuation ? headerRows : [];
-          const parts: PreparedTable[] = [];
-          let used = 0;
-          // An oversized header must not consume every continuation page.
-          const headerHeight = rowSetHeight(preparedTable, repeated);
-          if (repeated.length && headerHeight < target.height) {
-            parts.push(slicePreparedTable(preparedTable, repeated, document.cache));
-            used = headerHeight;
-          }
-          const headerParts = parts.length;
+      for (let blockIndex = 0; blockIndex < section.blocks.length; blockIndex += 1) {
+        const block = section.blocks[blockIndex]!;
+        if (block.kind === "table") {
+          let target = page!.columns[columnIndex]!;
+          const preparedTable = prepareTable(document, block, target.width, measurer, listMarkers);
+          const groups = tableRowGroups(preparedTable);
+          const headerRows = leadingHeaderRows(preparedTable);
+          let groupIndex = 0;
+          let continuation: PreparedTable | undefined;
           while (groupIndex < groups.length) {
-            const group = groups[groupIndex]!;
-            const remaining = continuation ?? slicePreparedTable(preparedTable, group, document.cache);
-            const height = preparedBlockHeight(remaining);
-            const available = target.y + target.height - cursorY - used;
-            if (height <= available) {
-              parts.push(remaining);
-              used += height;
-              continuation = undefined;
-              groupIndex += 1;
-              continue;
+            target = page!.columns[columnIndex]!;
+            const atTop = cursorY === target.y;
+            const repeated = groupIndex > 0 || continuation ? headerRows : [];
+            const parts: PreparedTable[] = [];
+            let used = 0;
+            // An oversized header must not consume every continuation page.
+            const headerHeight = rowSetHeight(preparedTable, repeated);
+            if (repeated.length && headerHeight < target.height) {
+              parts.push(slicePreparedTable(preparedTable, repeated, document.cache));
+              used = headerHeight;
             }
-            // ISO/IEC 29500-1 §17.4.6: cantSplit moves a row to a fresh page,
-            // but even that row must flow across pages when it exceeds a full page.
-            const keepRow = !continuation && group.some(row => block.rows[row]!.cantSplit || block.rows[row]!.heightRule === "exact");
-            const fresh = atTop && parts.length === headerParts;
-            if (keepRow && !fresh) break;
-            const split = splitPreparedTable(remaining, available, fresh);
-            if (!split) break;
-            parts.push(split.head);
-            used += preparedBlockHeight(split.head);
-            continuation = split.tail;
-            if (!continuation) groupIndex += 1;
-            break;
-          }
-          if (parts.length > headerParts) {
-            const slice = joinPreparedTables(parts);
-            target.tables.push(placeTable(slice, target.x, cursorY, budget));
-            cursorY += used;
-          }
-          if (groupIndex < groups.length) advanceColumn(section.properties);
-        }
-        continue;
-      }
-      if (block.kind !== "paragraph") {
-        const column = page!.columns[columnIndex]!;
-        column.unsupportedBlocks.push(Object.freeze({ elementId: block.elementId, localName: block.localName, y: cursorY }));
-        continue;
-      }
-      let prepared = prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId));
-      const nextBlock = section.blocks[blockIndex + 1];
-      const requiredHeight = paragraphHeight(prepared) + (prepared.format.keepNext && nextBlock?.kind === "paragraph"
-        ? firstLineHeight(prepareParagraph(document, nextBlock, page!.columns[columnIndex]!.width, measurer, listMarkers.get(nextBlock.elementId)))
-        : 0);
-      const currentColumn = page!.columns[columnIndex]!;
-      if ((prepared.format.pageBreakBefore || prepared.format.keepLines && requiredHeight > currentColumn.y + currentColumn.height - cursorY) && cursorY > currentColumn.y) {
-        advanceColumn(section.properties);
-        prepared = prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId));
-      }
-      cursorY += points(prepared.format.spacingBeforeTwips);
-      for (let lineIndex = 0; lineIndex < prepared.lines.length; lineIndex += 1) {
-        const line = prepared.lines[lineIndex]!;
-        let column = page!.columns[columnIndex]!;
-        const lineHeight = line.ascent + line.descent;
-        if (cursorY + lineHeight > column.y + column.height && cursorY > column.y) {
-          // Widow control keeps at least two lines together at either side when practical.
-          const remaining = prepared.lines.length - lineIndex;
-          if (prepared.format.widowControl && lineIndex === 1 && column.lines.at(-1)?.paragraphElementId === block.elementId) {
-            const moved = column.lines.pop();
-            if (moved !== undefined) cursorY = moved.y;
-            advanceColumn(section.properties);
-            column = page!.columns[columnIndex]!;
-            if (moved !== undefined) {
-              const translated = translateLine(moved, column.x - moved.x, cursorY - moved.y, budget.cache);
-              column.lines.push(translated);
-              cursorY += translated.height;
+            const headerParts = parts.length;
+            while (groupIndex < groups.length) {
+              const group = groups[groupIndex]!;
+              const remaining = continuation ?? slicePreparedTable(preparedTable, group, document.cache);
+              const height = preparedBlockHeight(remaining);
+              const available = target.y + target.height - cursorY - used;
+              if (height <= available) {
+                parts.push(remaining);
+                used += height;
+                continuation = undefined;
+                groupIndex += 1;
+                continue;
+              }
+              // ISO/IEC 29500-1 §17.4.6: cantSplit moves a row to a fresh page,
+              // but even that row must flow across pages when it exceeds a full page.
+              const keepRow = !continuation && group.some(row => block.rows[row]!.cantSplit || block.rows[row]!.heightRule === "exact");
+              const fresh = atTop && parts.length === headerParts;
+              if (keepRow && !fresh) break;
+              const split = splitPreparedTable(remaining, available, fresh);
+              if (!split) break;
+              parts.push(split.head);
+              used += preparedBlockHeight(split.head);
+              continuation = split.tail;
+              if (!continuation) groupIndex += 1;
+              break;
             }
-          } else {
-            advanceColumn(section.properties);
-            column = page!.columns[columnIndex]!;
+            if (parts.length > headerParts) {
+              const slice = joinPreparedTables(parts);
+              target.tables.push(placeTable(slice, target.x, cursorY, budget));
+              cursorY += used;
+            }
+            if (groupIndex < groups.length) advanceColumn(section.properties);
           }
+          continue;
         }
-        const laidOut = placeLine(block, prepared.format, line, column, cursorY, budget, lineIndex === 0 ? prepared.marker : undefined);
-        column.lines.push(laidOut);
-        cursorY += laidOut.height;
-        if (line.breakAfter === "page") addPage(section.properties);
-        else if (line.breakAfter === "column") advanceColumn(section.properties);
+        if (block.kind !== "paragraph") {
+          const column = page!.columns[columnIndex]!;
+          column.unsupportedBlocks.push(Object.freeze({ elementId: block.elementId, localName: block.localName, y: cursorY }));
+          continue;
+        }
+        let prepared = prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId));
+        const nextBlock = section.blocks[blockIndex + 1];
+        const requiredHeight = paragraphHeight(prepared) + (prepared.format.keepNext && nextBlock?.kind === "paragraph"
+          ? firstLineHeight(prepareParagraph(document, nextBlock, page!.columns[columnIndex]!.width, measurer, listMarkers.get(nextBlock.elementId)))
+          : 0);
+        const currentColumn = page!.columns[columnIndex]!;
+        if ((prepared.format.pageBreakBefore || prepared.format.keepLines && requiredHeight > currentColumn.y + currentColumn.height - cursorY) && cursorY > currentColumn.y) {
+          advanceColumn(section.properties);
+          prepared = prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId));
+        }
+        cursorY += points(prepared.format.spacingBeforeTwips);
+        for (let lineIndex = 0; lineIndex < prepared.lines.length; lineIndex += 1) {
+          const line = prepared.lines[lineIndex]!;
+          let column = page!.columns[columnIndex]!;
+          const lineHeight = line.ascent + line.descent;
+          if (cursorY + lineHeight > column.y + column.height && cursorY > column.y) {
+            // Widow control keeps at least two lines together at either side when practical.
+            const remaining = prepared.lines.length - lineIndex;
+            if (prepared.format.widowControl && lineIndex === 1 && column.lines.at(-1)?.paragraphElementId === block.elementId) {
+              const moved = column.lines.pop();
+              if (moved !== undefined) cursorY = moved.y;
+              advanceColumn(section.properties);
+              column = page!.columns[columnIndex]!;
+              if (moved !== undefined) {
+                const translated = translateLine(moved, column.x - moved.x, cursorY - moved.y, budget.cache);
+                column.lines.push(translated);
+                cursorY += translated.height;
+              }
+            } else {
+              advanceColumn(section.properties);
+              column = page!.columns[columnIndex]!;
+            }
+          }
+          const laidOut = placeLine(block, prepared.format, line, column, cursorY, budget, lineIndex === 0 ? prepared.marker : undefined);
+          column.lines.push(laidOut);
+          cursorY += laidOut.height;
+          if (line.breakAfter === "page") addPage(section.properties);
+          else if (line.breakAfter === "column") advanceColumn(section.properties);
+        }
+        cursorY += points(prepared.format.spacingAfterTwips);
       }
-      cursorY += points(prepared.format.spacingAfterTwips);
     }
+  } catch (error) {
+    if (error !== TRUNCATED) throw error;
+    truncated = true;
+  }
+  if (pageLimit !== undefined && pages.length > pageLimit) {
+    pages.length = pageLimit;
+    truncated = true;
   }
   if (stories) {
     decorateNotes(stories, pages, measurer, budget);
@@ -558,8 +575,11 @@ function layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeas
     ...(document.background === undefined ? {} : { background: document.background }),
     pages: frozenPages,
     fragmentCount: budget.fragments,
+    ...(truncated ? { truncated: true as const } : {}),
   });
 }
+
+const TRUNCATED = Symbol("truncated");
 
 export function wordPointsToCssPixels(pointsValue: number): number {
   if (!Number.isFinite(pointsValue)) throw new TypeError("Word layout points must be finite.");

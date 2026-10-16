@@ -152,9 +152,12 @@ source for the drawing.
 
 ```ts
 const measurer = canvasWordTextMeasurer(context);
-const [page] = layoutWordDocument(document, measurer, { maxPages: 1 }).pages;
+const [page] = layoutWordDocument(document, measurer, { pageLimit: 1 }).pages;
 paintWordPage(context, page!, { scale: 480 / page!.width });
 ```
+
+`pageLimit` stops layout after that many complete pages and marks the result
+`truncated`; unlike `maxPages`, a longer document is not an error.
 
 `canvasWordTextMeasurer` measures with the same context API and memoises each
 distinct run, so create a new measurer when fonts change. Without line metrics it
