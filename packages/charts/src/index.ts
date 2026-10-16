@@ -1,5 +1,5 @@
 export { layoutBarBand } from "./bar-layout.ts";
-export { resolveChartColor } from "./colors.ts";
+export { resolveChartColor, transformChartColor } from "./colors.ts";
 
 /** Headless DrawingML chart semantics shared by all OOXML document families. */
 export { BUBBLE_CHART_POINT_LIMIT } from "./model.ts";
