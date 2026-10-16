@@ -22,6 +22,13 @@ X, Y, and size caches by point index and support the standard area/width size
 modes, 0–300% scaling, and opt-in negative values. Deterministic headless layout
 is available through `layoutBubbleChart`.
 
+`layoutChartScene(model, width, height, options)` lays a supported chart out as
+drawing marks (rects, circles, SVG paths, crisp lines, styled text and clip
+groups) in CSS pixels. The Svelte head renders these marks as SVG and
+`paintChartScene(context, scene, d => new Path2D(d))` paints them on any Canvas 2D
+context, so editor charts and rendered previews agree. Pass `measureText` to centre
+legends with real text widths; otherwise widths are estimated.
+
 Hosts can bind document colours through `model.themeColors`; `resolveChartColor`
 resolves these bindings while preserving authored scheme references. Word imports
 bind their document theme for all chart views.
