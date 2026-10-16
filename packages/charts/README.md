@@ -30,6 +30,11 @@ Bar and column layouts honour authored `gapWidth` and `overlap`, including
 negative overlap. `layoutBarBand` shares this geometry between standalone and
 combination charts.
 
+Chart text retains font size, Latin typeface, bold/italic flags and solid colour;
+Word binds theme Latin fonts. Axis and major-gridline strokes retain `noFill`,
+solid colour and width. Luminance modulation/offset transforms are resolved in
+source order. Other text effects and colour transforms remain unsupported.
+
 Three-dimensional effects, per-point bubble formatting, data labels,
 trendlines, error bars, and exact Office bubble-size normalization remain
 explicitly unsupported. Unknown source XML is preserved by the owning OOXML

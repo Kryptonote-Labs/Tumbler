@@ -17,6 +17,8 @@ import type {
   ChartMarkerSymbol,
 } from "./model.ts";
 
+import { parseChartFill, parseChartLine, parseChartTextStyle } from "./formatting-parser.ts";
+
 const MAX_CACHE_POINTS = 100_000;
 const MAX_SERIES = 1_024;
 const MAX_AXES = 128;
@@ -44,7 +46,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
   const chart = exactlyOne(document.root, chartNamespace, "chart", "chartSpace");
   const title = parseText(children(chart, chartNamespace, "title")[0], chartNamespace, drawingNamespace);
   const titleFormula = parseTextFormula(children(chart, chartNamespace, "title")[0], chartNamespace);
-  const legend = parseLegend(children(chart, chartNamespace, "legend")[0], chartNamespace);
+  const legend = parseLegend(children(chart, chartNamespace, "legend")[0], chartNamespace, drawingNamespace);
   const plotAreas = children(chart, chartNamespace, "plotArea");
   if (plotAreas.length !== 1) throw new ChartParseError("A chart must contain exactly one plotArea.");
   const plotArea = plotAreas[0]!;
@@ -119,6 +121,8 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
   const bubbleSizeRepresentation = kind === "bubble" ? parseBubbleSizeRepresentation(val(children(chartType, chartNamespace, "sizeRepresents")[0]) ?? "area") : undefined;
   return Object.freeze({
     status: "supported", kind, grouping, holeSize,
+    ...textStyleProperties(document.root, chartNamespace, drawingNamespace),
+    ...titleStyleProperties(children(chart, chartNamespace, "title")[0], chartNamespace, drawingNamespace),
     ...(kind === "bar" || kind === "column" ? {
       gapWidth: barPercent(val(children(chartType, chartNamespace, "gapWidth")[0]) ?? "150", 0, 500, "gap width"),
       overlap: barPercent(val(children(chartType, chartNamespace, "overlap")[0]) ?? (grouping === "stacked" || grouping === "percent-stacked" ? "100" : "0"), -100, 100, "overlap"),
@@ -243,6 +247,8 @@ function parseAxis(element: LosslessXmlElement, namespace: string, drawingNamesp
   const numberFormat = children(element, namespace, "numFmt")[0];
   const numberFormatCode = numberFormat?.attributes.find((attribute) => attribute.namespaceUri === "" && attribute.localName === "formatCode")?.value;
   return Object.freeze({
+    ...textStyleProperties(element, namespace, drawingNamespace),
+    ...lineStyleProperties(element, namespace, drawingNamespace),
     id: requiredUnsignedVal(element, namespace, "axId", "axis id"),
     kind: element.localName === "catAx" ? "category" : "value",
     position: axisPosition(val(children(element, namespace, "axPos")[0]) ?? "l"),
@@ -284,11 +290,26 @@ function booleanAttribute(element: LosslessXmlElement, name: string, fallback: b
   throw new ChartParseError(`Boolean chart attribute ${JSON.stringify(raw)} is invalid.`);
 }
 
-function parseLegend(element: LosslessXmlElement | undefined, namespace: string): ChartLegend | undefined {
+function textStyleProperties(element: LosslessXmlElement | undefined, ns: string, drawing: string) {
+  const textStyle = parseChartTextStyle(element, ns, drawing);
+  return textStyle === undefined ? {} : { textStyle };
+}
+function titleStyleProperties(element: LosslessXmlElement | undefined, ns: string, drawing: string) {
+  const titleStyle = parseChartTextStyle(element, ns, drawing);
+  return titleStyle === undefined ? {} : { titleStyle };
+}
+function lineStyleProperties(element: LosslessXmlElement, ns: string, drawing: string) {
+  const lineStyle = parseChartLine(children(element, ns, "spPr")[0], drawing);
+  const gridlines = children(element, ns, "majorGridlines")[0];
+  const gridlineStyle = parseChartLine(gridlines && children(gridlines, ns, "spPr")[0], drawing);
+  return { ...(lineStyle === undefined ? {} : { lineStyle }), ...(gridlineStyle === undefined ? {} : { gridlineStyle }) };
+}
+
+function parseLegend(element: LosslessXmlElement | undefined, namespace: string, drawingNamespace: string): ChartLegend | undefined {
   if (element === undefined) return undefined;
   const positions: Record<string, ChartLegendPosition> = { b: "bottom", l: "left", r: "right", t: "top", tr: "top-right" };
   const raw = val(children(element, namespace, "legendPos")[0]) ?? "r";
-  return Object.freeze({ position: positions[raw] ?? "right", overlay: booleanVal(children(element, namespace, "overlay")[0], false) });
+  return Object.freeze({ ...textStyleProperties(element, namespace, drawingNamespace), position: positions[raw] ?? "right", overlay: booleanVal(children(element, namespace, "overlay")[0], false) });
 }
 
 function parseText(element: LosslessXmlElement | undefined, chartNamespace: string, drawingNamespace: string): string | undefined {
@@ -313,9 +334,10 @@ function parseSolidFill(parent: LosslessXmlElement | undefined, drawingNamespace
   if (rgb !== undefined) {
     const raw = requiredAttr(rgb, "val", "sRGB chart color");
     if (!/^[0-9A-Fa-f]{6}$/.test(raw)) throw new ChartParseError("sRGB chart color must contain six hexadecimal digits.");
-    return Object.freeze({ kind: "rgb", value: `#${raw.toUpperCase()}` });
+    return parseChartFill(parent, drawingNamespace);
   }
-  return scheme === undefined ? undefined : Object.freeze({ kind: "scheme", value: requiredAttr(scheme, "val", "scheme chart color") });
+  if (scheme !== undefined) requiredAttr(scheme, "val", "scheme chart color");
+  return parseChartFill(parent, drawingNamespace);
 }
 
 function parseLine(parent: LosslessXmlElement | undefined, drawingNamespace: string): ChartColor | undefined {

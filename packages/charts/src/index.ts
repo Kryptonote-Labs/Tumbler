@@ -7,6 +7,9 @@ export { ChartParseError, parseOoxmlChart } from "./parser.ts";
 export { cartesianStack, chartSequenceValue, chartValueCoordinate, layoutBubbleChart, layoutCartesianChart, layoutPieSlices, layoutScatterChart, pieArcPath, scatterLinePath } from "./layout.ts";
 export type { BubbleChartLayout, BubblePoint, CartesianChartLayout, ChartRect, PieSlice, ScatterChartLayout, ScatterPoint } from "./layout.ts";
 export type {
+  ChartTextStyle,
+  ChartLineStyle,
+  ChartColorTransform,
   ChartAxis,
   ChartBubbleSizeRepresentation,
   ChartColor,

@@ -14,9 +14,31 @@ export interface ChartMarker {
   readonly size: number;
 }
 
-export type ChartColor =
+export interface ChartColorTransform {
+  readonly kind: "lumMod" | "lumOff";
+  readonly value: number;
+}
+
+export type ChartColor = (
   | { readonly kind: "rgb"; readonly value: string }
-  | { readonly kind: "scheme"; readonly value: string };
+  | { readonly kind: "scheme"; readonly value: string }) & {
+  readonly transforms?: readonly ChartColorTransform[];
+};
+
+export interface ChartTextStyle {
+  readonly fontSize?: number;
+  readonly fontFamily?: string;
+  readonly bold?: boolean;
+  readonly italic?: boolean;
+  readonly color?: ChartColor;
+}
+
+export interface ChartLineStyle {
+  readonly color?: ChartColor;
+  readonly noFill?: boolean;
+  /** Width in points. */
+  readonly width?: number;
+}
 
 export interface ChartDataPoint {
   readonly index: number;
@@ -52,11 +74,15 @@ export interface ChartSeries {
 export type ChartLegendPosition = "bottom" | "left" | "right" | "top" | "top-right";
 
 export interface ChartLegend {
+  readonly textStyle?: ChartTextStyle;
   readonly position: ChartLegendPosition;
   readonly overlay: boolean;
 }
 
 export interface ChartAxis {
+  readonly textStyle?: ChartTextStyle;
+  readonly lineStyle?: ChartLineStyle;
+  readonly gridlineStyle?: ChartLineStyle;
   readonly id: number;
   readonly kind: "category" | "value";
   readonly position: "bottom" | "left" | "right" | "top";
@@ -70,6 +96,9 @@ export interface ChartAxis {
 }
 
 interface ChartModelBase {
+  readonly textStyle?: ChartTextStyle;
+  readonly titleStyle?: ChartTextStyle;
+  readonly themeFonts?: Readonly<Record<string, string>>;
   /** Host-document scheme colours, retaining authored scheme references in the series. */
   readonly themeColors?: Readonly<Record<string, string>>;
   readonly title: string | undefined;

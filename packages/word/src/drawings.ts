@@ -60,6 +60,7 @@ export interface WordUnsupportedDrawing extends WordDrawingBase {
 
 /** Discovers Word drawing placement and resolves only internal image/chart relationships. */
 export function readWordDrawings(input: {
+  readonly themeFonts?: import("@tumblerjs/ooxml").ThemeFontScheme | undefined;
   readonly themeColours?: ThemeColorScheme | undefined;
   readonly package: OpcPackage;
   readonly part: OpcPart;
@@ -75,7 +76,7 @@ export function readWordDrawings(input: {
   const themeRel = relationships?.items.find(rel => /\/theme$/.test(rel.type) && rel.targetMode === 'Internal');
   const theme = input.themeColours ?? (themeRel?.targetMode === 'Internal' ? parseThemeColorScheme(input.package.readPart(input.package.getPart(themeRel.targetPartName)!)) : DEFAULT_WORD_THEME);
   const charts = new Map<string, ChartModel>();
-  return new Map(elements.map((element) => [element.id, parseDrawing(input, element, relationships, charts, theme)]));
+  return new Map(elements.map((element) => [element.id, parseDrawing(input, element, relationships, charts, theme, input.themeFonts)]));
 }
 
 function parseDrawing(
@@ -84,6 +85,7 @@ function parseDrawing(
   relationships: Relationships | undefined,
   charts: Map<string, ChartModel>,
   theme: ThemeColorScheme,
+  fonts?: import("@tumblerjs/ooxml").ThemeFontScheme,
 ): WordDrawing {
   const wp = wordDrawingNamespace(input.conformance);
   const placements = drawing.children.filter((child): child is LosslessXmlElement => child.kind === "element" && child.namespaceUri === wp && (child.localName === "inline" || child.localName === "anchor"));
@@ -164,7 +166,11 @@ function parseDrawing(
         for (const [alias, slot] of Object.entries({ bg1: "lt1", tx1: "dk1", bg2: "lt2", tx2: "dk2" })) {
           if (themeColors[slot] !== undefined) themeColors[alias] = themeColors[slot]!;
         }
-        model = Object.freeze({ ...parsed, themeColors: Object.freeze(themeColors) });
+        const themeFonts = Object.fromEntries((["major", "minor"] as const).flatMap(role => {
+          const typeface = fonts?.typeface(role, "latin");
+          return typeface ? [[role === "major" ? "+mj-lt" : "+mn-lt", typeface]] : [];
+        }));
+        model = Object.freeze({ ...parsed, themeColors: Object.freeze(themeColors), themeFonts: Object.freeze(themeFonts) });
         charts.set(part.name.equivalenceKey, model);
       }
       return Object.freeze({ kind: "chart", elementId: drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, relationshipId: id, partName: part.name, model });

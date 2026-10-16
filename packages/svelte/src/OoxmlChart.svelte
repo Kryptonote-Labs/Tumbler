@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { chartTextCss, chartLineCss } from "./chart-presentation.ts";
   import CombinationChart from "./CombinationChart.svelte";
   import {
     layoutBarBand,
@@ -14,6 +15,8 @@
     scatterLinePath,
     type ChartAxis,
     type ChartColor,
+    type ChartTextStyle,
+    type ChartLineStyle,
     type ChartModel,
     type ChartSeries,
     type SupportedChartModel,
@@ -31,6 +34,9 @@
   let { model, width, height, resolveColor, formatNumber, clipId = "tumbler-scatter-clip" }: Props = $props();
   const palette = ["#4472C4", "#ED7D31", "#A5A5A5", "#FFC000", "#5B9BD5", "#70AD47"] as const;
   let accessibleName = $derived(model.title ?? (model.status === "supported" ? `${model.kind} chart` : "Chart preview unavailable"));
+
+  function textCss(style?: ChartTextStyle) { return chartTextCss(style, model, resolveColor); }
+  function lineCss(style?: ChartLineStyle) { return chartLineCss(style, model, resolveColor); }
 
   function color(series: ChartSeries, index: number, line = false): string {
     const authored = line ? series.line ?? series.fill : series.fill ?? series.line;
@@ -168,7 +174,7 @@
     <span>Chart preview unavailable</span>
   </div>
 {:else if model.plots}
-  <CombinationChart {model} {width} {height} {color}/>
+  <CombinationChart {model} {width} {height} {color} {resolveColor}/>
 {:else if model.kind === "pie" || model.kind === "doughnut"}
   {@const slices = layoutPieSlices(model)}
   {@const layout = pieLayout(model, slices.length)}
@@ -176,7 +182,7 @@
   <svg class="chart" role="img" aria-label={accessibleName} viewBox={`0 0 ${width} ${height}`}>
     <title>{accessibleName}</title>
     <rect width={width} height={height} fill="#fff" />
-    {#if model.title !== undefined}<text class="title" x={width / 2} y="22" text-anchor="middle">{model.title}</text>{/if}
+    {#if model.title !== undefined}<text class="title" style={textCss(model.titleStyle)} x={width / 2} y="22" text-anchor="middle">{model.title}</text>{/if}
     {#each slices as slice, index (slice.index)}
       <path
         d={pieArcPath(centerX, centerY, radius, slice.startAngle, slice.endAngle, model.kind === "doughnut" ? radius * (model.holeSize ?? 50) / 100 : 0)}
@@ -190,7 +196,7 @@
       {#each slices as slice, index (slice.index)}
         <g transform={`translate(${layout.legend[index]!.x} ${layout.legend[index]!.y})`}>
           <rect width="10" height="10" y="-8" fill={color(model.series[0]!, index)} />
-          <text x="15">{chartSequenceValue(model.series[0]?.categories, slice.index) ?? slice.index + 1}</text>
+          <text style={textCss(model.legend?.textStyle)} x="15">{chartSequenceValue(model.series[0]?.categories, slice.index) ?? slice.index + 1}</text>
         </g>
       {/each}
       </g>
@@ -206,19 +212,19 @@
     <title>{accessibleName}</title>
     <rect width={width} height={height} fill="#fff" />
     <defs><clipPath id={clipId}><rect x={layout.plot.x} y={layout.plot.y} width={layout.plot.width} height={layout.plot.height} /></clipPath></defs>
-    {#if model.title !== undefined}<text class="title" x={width / 2} y="22" text-anchor="middle">{model.title}</text>{/if}
+    {#if model.title !== undefined}<text class="title" style={textCss(model.titleStyle)} x={width / 2} y="22" text-anchor="middle">{model.title}</text>{/if}
     {#each layout.yTicks as tick (tick)}
       {@const y = chartValueCoordinate(tick, layout.yMinimum, layout.yMaximum, layout.plot.y, layout.plot.height, true)}
-      {#if yAxis?.majorGridlines}<line class="gridline" x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={y} y2={y} />{/if}
-      <text class="tick" x={layout.plot.x - 6} y={y + 4} text-anchor="end">{tickLabel(tick, yFormat)}</text>
+      {#if yAxis?.majorGridlines}<line class="gridline" style={lineCss(yAxis?.gridlineStyle)} x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={y} y2={y} />{/if}
+      <text class="tick" style={textCss(yAxis?.textStyle)} x={layout.plot.x - 6} y={y + 4} text-anchor="end">{tickLabel(tick, yFormat)}</text>
     {/each}
     {#each layout.xTicks as tick (tick)}
       {@const x = chartValueCoordinate(tick, layout.xMinimum, layout.xMaximum, layout.plot.x, layout.plot.width)}
-      {#if xAxis?.majorGridlines}<line class="gridline" x1={x} x2={x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />{/if}
-      <text class="tick" x={x} y={layout.plot.y + layout.plot.height + 17} text-anchor="middle">{tickLabel(tick, xFormat)}</text>
+      {#if xAxis?.majorGridlines}<line class="gridline" style={lineCss(xAxis?.gridlineStyle)} x1={x} x2={x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />{/if}
+      <text class="tick" style={textCss(xAxis?.textStyle)} x={x} y={layout.plot.y + layout.plot.height + 17} text-anchor="middle">{tickLabel(tick, xFormat)}</text>
     {/each}
-    <line class="axis" x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={layout.plot.y + layout.plot.height} y2={layout.plot.y + layout.plot.height} />
-    <line class="axis" x1={layout.plot.x} x2={layout.plot.x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />
+    <line class="axis" style={lineCss(model.axes.find(axis => axis.position === "bottom" || axis.position === "top")?.lineStyle)} x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={layout.plot.y + layout.plot.height} y2={layout.plot.y + layout.plot.height} />
+    <line class="axis" style={lineCss(model.axes.find(axis => axis.position === "left" || axis.position === "right")?.lineStyle)} x1={layout.plot.x} x2={layout.plot.x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />
     <g clip-path={`url(#${clipId})`}>
       {#each model.series as series, seriesIndex (series.index)}
         {@const points = layout.series[seriesIndex] ?? []}
@@ -248,7 +254,7 @@
     {#if yAxis?.title !== undefined}<text class="axis-title" transform={`translate(12 ${layout.plot.y + layout.plot.height / 2}) rotate(-90)`} text-anchor="middle">{yAxis.title}</text>{/if}
     {#if model.legend !== undefined}
       {#each model.series as series, index (series.index)}
-        <g transform={`translate(${legendX(model, index)} ${legendY(model, index)})`}><rect width="10" height="10" y="-8" fill={color(series, index)} /><text x="15">{series.title ?? `Series ${index + 1}`}</text></g>
+        <g transform={`translate(${legendX(model, index)} ${legendY(model, index)})`}><rect width="10" height="10" y="-8" fill={color(series, index)} /><text style={textCss(model.legend?.textStyle)} x="15">{series.title ?? `Series ${index + 1}`}</text></g>
       {/each}
     {/if}
   </svg>
@@ -262,19 +268,19 @@
     <title>{accessibleName}</title>
     <rect width={width} height={height} fill="#fff" />
     <defs><clipPath id={clipId}><rect x={layout.plot.x} y={layout.plot.y} width={layout.plot.width} height={layout.plot.height} /></clipPath></defs>
-    {#if model.title !== undefined}<text class="title" x={width / 2} y="22" text-anchor="middle">{model.title}</text>{/if}
+    {#if model.title !== undefined}<text class="title" style={textCss(model.titleStyle)} x={width / 2} y="22" text-anchor="middle">{model.title}</text>{/if}
     {#each layout.yTicks as tick (tick)}
       {@const y = chartValueCoordinate(tick, layout.yMinimum, layout.yMaximum, layout.plot.y, layout.plot.height, true)}
-      {#if yAxis?.majorGridlines}<line class="gridline" x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={y} y2={y} />{/if}
-      <text class="tick" x={layout.plot.x - 6} y={y + 4} text-anchor="end">{tickLabel(tick, yFormat)}</text>
+      {#if yAxis?.majorGridlines}<line class="gridline" style={lineCss(yAxis?.gridlineStyle)} x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={y} y2={y} />{/if}
+      <text class="tick" style={textCss(yAxis?.textStyle)} x={layout.plot.x - 6} y={y + 4} text-anchor="end">{tickLabel(tick, yFormat)}</text>
     {/each}
     {#each layout.xTicks as tick (tick)}
       {@const x = chartValueCoordinate(tick, layout.xMinimum, layout.xMaximum, layout.plot.x, layout.plot.width)}
-      {#if xAxis?.majorGridlines}<line class="gridline" x1={x} x2={x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />{/if}
-      <text class="tick" x={x} y={layout.plot.y + layout.plot.height + 17} text-anchor="middle">{tickLabel(tick, xFormat)}</text>
+      {#if xAxis?.majorGridlines}<line class="gridline" style={lineCss(xAxis?.gridlineStyle)} x1={x} x2={x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />{/if}
+      <text class="tick" style={textCss(xAxis?.textStyle)} x={x} y={layout.plot.y + layout.plot.height + 17} text-anchor="middle">{tickLabel(tick, xFormat)}</text>
     {/each}
-    <line class="axis" x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={layout.plot.y + layout.plot.height} y2={layout.plot.y + layout.plot.height} />
-    <line class="axis" x1={layout.plot.x} x2={layout.plot.x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />
+    <line class="axis" style={lineCss(model.axes.find(axis => axis.position === "bottom" || axis.position === "top")?.lineStyle)} x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={layout.plot.y + layout.plot.height} y2={layout.plot.y + layout.plot.height} />
+    <line class="axis" style={lineCss(model.axes.find(axis => axis.position === "left" || axis.position === "right")?.lineStyle)} x1={layout.plot.x} x2={layout.plot.x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />
     <g clip-path={`url(#${clipId})`}>
       {#each model.series as series, seriesIndex (series.index)}
         {#each layout.series[seriesIndex] ?? [] as point (point.index)}
@@ -295,7 +301,7 @@
     {#if yAxis?.title !== undefined}<text class="axis-title" transform={`translate(12 ${layout.plot.y + layout.plot.height / 2}) rotate(-90)`} text-anchor="middle">{yAxis.title}</text>{/if}
     {#if model.legend !== undefined}
       {#each model.series as series, index (series.index)}
-        <g transform={`translate(${legendX(model, index)} ${legendY(model, index)})`}><circle cx="5" cy="-3" r="5" fill={color(series, index)} /><text x="15">{series.title ?? `Series ${index + 1}`}</text></g>
+        <g transform={`translate(${legendX(model, index)} ${legendY(model, index)})`}><circle cx="5" cy="-3" r="5" fill={color(series, index)} /><text style={textCss(model.legend?.textStyle)} x="15">{series.title ?? `Series ${index + 1}`}</text></g>
       {/each}
     {/if}
   </svg>
@@ -307,22 +313,22 @@
   <svg class="chart" role="img" aria-label={accessibleName} viewBox={`0 0 ${width} ${height}`}>
     <title>{accessibleName}</title>
     <rect width={width} height={height} fill="#fff" />
-    {#if model.title !== undefined}<text class="title" x={width / 2} y="22" text-anchor="middle">{model.title}</text>{/if}
+    {#if model.title !== undefined}<text class="title" style={textCss(model.titleStyle)} x={width / 2} y="22" text-anchor="middle">{model.title}</text>{/if}
     {#if model.axes.some((axis) => axis.kind === "value" && axis.majorGridlines)}
       {#each layout.ticks as tick (tick)}
         {#if model.kind === "bar"}
           {@const x = chartValueCoordinate(tick, layout.minimum, layout.maximum, layout.plot.x, layout.plot.width)}
-          <line class="gridline" x1={x} x2={x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />
-          <text class="tick" x={x} y={layout.plot.y + layout.plot.height + 16} text-anchor="middle">{tick}</text>
+          <line class="gridline" style={lineCss(model.axes.find(axis => axis.kind === "value")?.gridlineStyle)} x1={x} x2={x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />
+          <text class="tick" style={textCss(model.axes.find(axis => axis.kind === "value")?.textStyle)} x={x} y={layout.plot.y + layout.plot.height + 16} text-anchor="middle">{tick}</text>
         {:else}
           {@const y = chartValueCoordinate(tick, layout.minimum, layout.maximum, layout.plot.y, layout.plot.height, true)}
-          <line class="gridline" x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={y} y2={y} />
-          <text class="tick" x={layout.plot.x - 6} y={y + 4} text-anchor="end">{tick}</text>
+          <line class="gridline" style={lineCss(model.axes.find(axis => axis.kind === "value")?.gridlineStyle)} x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={y} y2={y} />
+          <text class="tick" style={textCss(model.axes.find(axis => axis.kind === "value")?.textStyle)} x={layout.plot.x - 6} y={y + 4} text-anchor="end">{tick}</text>
         {/if}
       {/each}
     {/if}
-    <line class="axis" x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={model.kind === "bar" ? layout.plot.y + layout.plot.height : baselineY} y2={model.kind === "bar" ? layout.plot.y + layout.plot.height : baselineY} />
-    <line class="axis" x1={model.kind === "bar" ? baselineX : layout.plot.x} x2={model.kind === "bar" ? baselineX : layout.plot.x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />
+    <line class="axis" style={lineCss(model.axes.find(axis => axis.position === "bottom" || axis.position === "top")?.lineStyle)} x1={layout.plot.x} x2={layout.plot.x + layout.plot.width} y1={model.kind === "bar" ? layout.plot.y + layout.plot.height : baselineY} y2={model.kind === "bar" ? layout.plot.y + layout.plot.height : baselineY} />
+    <line class="axis" style={lineCss(model.axes.find(axis => axis.position === "left" || axis.position === "right")?.lineStyle)} x1={model.kind === "bar" ? baselineX : layout.plot.x} x2={model.kind === "bar" ? baselineX : layout.plot.x} y1={layout.plot.y} y2={layout.plot.y + layout.plot.height} />
 
     {#if model.kind === "column"}
       {#each model.series as series, seriesIndex (series.index)}
@@ -365,9 +371,9 @@
     {#each layout.categories as category, index (index)}
       {#if index % labelStep(count, model.kind === "bar" ? layout.plot.height : layout.plot.width) === 0}
         {#if model.kind === "bar"}
-          <text class="category" x={layout.plot.x - 7} y={layout.plot.y + (index + 0.5) / count * layout.plot.height + 4} text-anchor="end">{category}</text>
+          <text class="category" style={textCss(model.axes.find(axis => axis.kind === "category")?.textStyle)} x={layout.plot.x - 7} y={layout.plot.y + (index + 0.5) / count * layout.plot.height + 4} text-anchor="end">{category}</text>
         {:else}
-          <text class="category" x={layout.plot.x + (index + 0.5) / count * layout.plot.width} y={layout.plot.y + layout.plot.height + 17} text-anchor="middle">{category}</text>
+          <text class="category" style={textCss(model.axes.find(axis => axis.kind === "category")?.textStyle)} x={layout.plot.x + (index + 0.5) / count * layout.plot.width} y={layout.plot.y + layout.plot.height + 17} text-anchor="middle">{category}</text>
         {/if}
       {/if}
     {/each}
@@ -375,7 +381,7 @@
       {#each model.series as series, index (series.index)}
         <g transform={`translate(${legendX(model, index)} ${legendY(model, index)})`}>
           <rect width="10" height="10" y="-8" fill={color(series, index)} />
-          <text x="15">{series.title ?? `Series ${index + 1}`}</text>
+          <text style={textCss(model.legend?.textStyle)} x="15">{series.title ?? `Series ${index + 1}`}</text>
         </g>
       {/each}
     {/if}

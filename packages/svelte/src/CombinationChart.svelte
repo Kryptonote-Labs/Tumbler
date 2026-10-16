@@ -1,19 +1,23 @@
 <script lang="ts">
+  import { chartTextCss, chartLineCss } from "./chart-presentation.ts";
   import {
     layoutBarBand,
     layoutCombinationChart,
     type SupportedChartModel,
     type ChartSeries,
+    type ChartColor,
   } from "@tumblerjs/charts";
   let {
     model,
     width,
     height,
     color,
+    resolveColor,
   }: {
     model: SupportedChartModel;
     width: number;
     height: number;
+    resolveColor?: (color: ChartColor) => string | undefined;
     color: (series: ChartSeries, index: number, line?: boolean) => string;
   } = $props();
   let plots = $derived(layoutCombinationChart(model, width, height));
@@ -84,6 +88,7 @@
       x={width / 2}
       y="22"
       text-anchor="middle"
+      style={chartTextCss(model.titleStyle, model, resolveColor)}
       font-size="15"
       font-weight="600">{model.title}</text
     >{/if}
@@ -95,11 +100,13 @@
       {#each ticks(plot.minimum, plot.maximum) as tick}
         {@const position = plot.coordinate(tick)}
         {#if horizontal}<text
+            style={chartTextCss(plot.axis?.textStyle, model, resolveColor)}
             x={position}
             y={plot.plot.y + plot.plot.height + 15}
             text-anchor="middle">{Number(tick.toPrecision(3))}</text
           >
         {:else}<text
+            style={chartTextCss(plot.axis?.textStyle, model, resolveColor)}
             x={plot.axis?.position === "right"
               ? plot.plot.x + plot.plot.width + 5
               : plot.plot.x - 5}
@@ -112,6 +119,7 @@
             x2={plot.plot.x + plot.plot.width}
             y1={position}
             y2={position}
+            style={chartLineCss(plot.axis?.gridlineStyle, model, resolveColor)}
             stroke="#ddd"
           />{/if}
       {/each}
@@ -160,6 +168,7 @@
   {/each}
   {#if plots[0]}{@const p = plots[0]}
     {#each p.categories as category, c}<text
+        style={chartTextCss(p.model.axes.find(axis => axis.kind === "category")?.textStyle, model, resolveColor)}
         x={p.model.kind === "bar"
           ? p.plot.x - 8
           : p.plot.x +
@@ -177,6 +186,7 @@
       >{#each model.series as series, i}<g
           transform={`translate(${16 + i * 110} ${height - 10})`}
           ><rect width="8" height="8" y="-8" fill={color(series, i)} /><text
+            style={chartTextCss(model.legend?.textStyle, model, resolveColor)}
             x="12">{series.title ?? `Series ${i + 1}`}</text
           ></g
         >{/each}</g
