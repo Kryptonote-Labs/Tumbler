@@ -15,7 +15,11 @@ export type ChartMark =
   | { readonly kind: "line"; readonly x1: number; readonly y1: number; readonly x2: number; readonly y2: number; readonly stroke: string; readonly width: number }
   /** `rotate` turns the text about its anchor point, in degrees. */
   | { readonly kind: "text"; readonly text: string; readonly x: number; readonly y: number; readonly anchor: "start" | "middle" | "end"; readonly font: ChartFont; readonly rotate?: number }
-  | { readonly kind: "clip"; readonly rect: ChartRect; readonly marks: readonly ChartMark[] };
+  /**
+   * Structure: an optional clip to `clip`, and a `role` naming the legend and each of its entries
+   * so heads can expose them (the SVG head renders `chart-legend` and `chart-legend-entry` classes).
+   */
+  | { readonly kind: "group"; readonly role?: "legend" | "legend-entry"; readonly clip?: ChartRect; readonly marks: readonly ChartMark[] };
 
 export interface ChartScene {
   readonly width: number;
@@ -57,8 +61,13 @@ export function legendMarks(context: SceneContext, entries: readonly { readonly 
   const { model, width, height, options } = context;
   const font = chartFont("legend", model.legend?.textStyle, model, options.resolveColor);
   const widths = entries.map(entry => labelX + context.measure(entry.label, font));
-  return chartLegendPositions(widths, { model, width, height }).flatMap((point, index): ChartMark[] => [
+  return [legendGroup(chartLegendPositions(widths, { model, width, height }).map((point, index) => [
     entries[index]!.swatch(point.x, point.y),
     { kind: "text", text: entries[index]!.label, x: point.x + labelX, y: point.y, anchor: "start", font },
-  ]);
+  ]))];
+}
+
+/** Wraps legend entries, each a swatch and its label, in their structural groups. */
+export function legendGroup(entries: readonly (readonly ChartMark[])[]): ChartMark {
+  return { kind: "group", role: "legend", marks: entries.map(marks => ({ kind: "group", role: "legend-entry", marks })) };
 }

@@ -12,12 +12,12 @@ function model(overrides: Partial<SupportedChartModel> = {}): SupportedChartMode
   };
 }
 
-const flat = (marks: readonly ChartMark[]): ChartMark[] => marks.flatMap(mark => mark.kind === "clip" ? flat(mark.marks) : [mark]);
+const flat = (marks: readonly ChartMark[]): ChartMark[] => marks.flatMap(mark => mark.kind === "group" ? flat(mark.marks) : [mark]);
 const texts = (marks: readonly ChartMark[]) => flat(marks).flatMap(mark => mark.kind === "text" ? [mark.text] : []);
 
 test("columns draw one bar per value, taller for larger values", () => {
   const scene = layoutChartScene(model(), 600, 400);
-  const bars = scene.marks.filter(mark => mark.kind === "rect" && mark.fill === "#112233");
+  const bars = flat(scene.marks).filter(mark => mark.kind === "rect" && mark.fill === "#112233");
   // Three columns and the legend swatch.
   expect(bars).toHaveLength(4);
   const heights = bars.slice(0, 3).map(bar => bar.kind === "rect" ? bar.height : 0);
@@ -30,9 +30,11 @@ test("columns draw one bar per value, taller for larger values", () => {
 test("pie slices take series categories as legend labels and centre measured rows", () => {
   const scene = layoutChartScene(model({ kind: "pie" }), 600, 400, { measureText: text => text.length * 10 });
   expect(scene.marks.filter(mark => mark.kind === "path")).toHaveLength(3);
-  const labels = scene.marks.filter(mark => mark.kind === "text" && mark.font.size === 11);
+  const legend = scene.marks.find(mark => mark.kind === "group" && mark.role === "legend");
+  expect(legend?.kind === "group" && legend.marks.map(entry => entry.kind === "group" && entry.role)).toEqual(["legend-entry", "legend-entry", "legend-entry"]);
+  const labels = flat(scene.marks).filter(mark => mark.kind === "text" && mark.font.size === 11);
   expect(labels.map(mark => mark.kind === "text" && mark.text)).toEqual(["Jan", "Feb", "Mar"]);
-  const swatches = scene.marks.filter(mark => mark.kind === "rect" && mark.width === 10);
+  const swatches = flat(scene.marks).filter(mark => mark.kind === "rect" && mark.width === 10);
   const left = swatches[0]!.kind === "rect" ? swatches[0]!.x : 0;
   const last = labels[2]!.kind === "text" ? labels[2]!.x + 30 : 0;
   expect((left + last) / 2).toBeCloseTo(300);
@@ -44,8 +46,8 @@ test("scatter series are clipped to the plot, with a rotated value-axis title", 
     axes: [{ id: 1, kind: "value", position: "bottom", title: "X", majorGridlines: false, minimum: undefined, maximum: undefined, deleted: false },
       { id: 2, kind: "value", position: "left", title: "Y", majorGridlines: false, minimum: undefined, maximum: undefined, deleted: false }],
   }), 600, 400);
-  const clip = scene.marks.find(mark => mark.kind === "clip");
-  expect(clip?.kind === "clip" && clip.marks.some(mark => mark.kind === "path")).toBe(true);
+  const clip = scene.marks.find(mark => mark.kind === "group" && mark.clip !== undefined);
+  expect(clip?.kind === "group" && clip.marks.some(mark => mark.kind === "path")).toBe(true);
   expect(scene.marks.find(mark => mark.kind === "text" && mark.text === "Y")).toMatchObject({ rotate: -90 });
 });
 
