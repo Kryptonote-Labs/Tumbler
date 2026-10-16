@@ -93,10 +93,13 @@ export class NativeWordDocument implements WordLayoutSource {
   private readonly editedStories = new Map<string, { target: string | WordStoryTarget; model: NativeWordDocument; blocks: readonly WordContentBlock[] }>();
   readonly finalSection: WordSectionProperties;
   readonly wrapTrailSpaces: boolean;
+  readonly background: string | undefined;
 
   constructor(private readonly options: NativeWordOptions = {}) {
     this.namedStyles = wordAuthoringStyles(options.source?.document.styles, options.defaultFormat);
     this.compiled = options.source ? new NativeWordSource(options.source) : undefined;
+    const document = options.source?.document;
+    this.background = document?.background === undefined ? undefined : resolveWordColour(document.background, document.styles.themeColors);
     this.wrapTrailSpaces = options.source?.document.wrapTrailSpaces ?? false;
     const { width = 595.3, height = 841.9, margin = 72 } = options.page ?? {};
     if (

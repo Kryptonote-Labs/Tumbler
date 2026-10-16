@@ -45,6 +45,8 @@ export interface WordLayoutOptions {
 }
 
 export interface WordLayout {
+  /** Resolved solid page colour shared by every page, including its margins. */
+  readonly background?: string;
   readonly pages: readonly WordLayoutPage[];
   readonly fragmentCount: number;
 }
@@ -191,6 +193,7 @@ interface MutablePage {
 }
 
 export interface WordLayoutSource {
+  readonly background?: string | undefined;
   /** OOXML compatibility setting; absent/false lets trailing spaces hang past the margin. */
   readonly wrapTrailSpaces?: boolean;
   readonly blocks: readonly WordBlock[];
@@ -355,6 +358,7 @@ export function layoutWordDocument(
   options: WordLayoutOptions = {},
 ): WordLayout {
   return layoutWordSource({
+    background: document.background === undefined ? undefined : resolveWordColour(document.background, document.styles.themeColors),
     blocks: document.blocks, drawings: document.drawings, finalSection: document.finalSection, wrapTrailSpaces: document.wrapTrailSpaces,
     listMarkers: document.numbering.markers(document),
     paragraphFormat: paragraph => document.styles.paragraphFormat(document, paragraph),
@@ -551,6 +555,7 @@ function layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeas
   const frozenPages = Object.freeze(pages.map((page, index) => freezePage(page, document.cache?.pages[index])));
   if (document.cache) document.cache.pages = frozenPages;
   return Object.freeze({
+    ...(document.background === undefined ? {} : { background: document.background }),
     pages: frozenPages,
     fragmentCount: budget.fragments,
   });

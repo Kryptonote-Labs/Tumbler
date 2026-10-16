@@ -1,3 +1,5 @@
+import { readWordColour } from "./theme-colour-xml.ts";
+import type { WordColour } from "./theme-colours.ts";
 import { readTableBorders, readTableShading, tableChild, type WordTableBorders, type WordCellBorders } from './table-format.ts';
 import { pageFieldInstruction } from './page-fields.ts';
 import { resolveComplexPageFields } from './complex-page-fields.ts';
@@ -271,6 +273,8 @@ interface ParseBudget {
 }
 
 export class WordDocument {
+  /** Authored solid page colour; absent or automatic uses the viewer default. */
+  readonly background: WordColour | undefined;
   readonly package: OpcPackage;
   readonly part: OpcPart;
   readonly source: LosslessXmlDocument;
@@ -286,6 +290,7 @@ export class WordDocument {
   readonly notes: readonly WordNoteStory[];
 
   constructor(input: {
+    background?: WordColour;
     pkg: OpcPackage;
     part: OpcPart;
     source: LosslessXmlDocument;
@@ -300,6 +305,7 @@ export class WordDocument {
     drawings: ReadonlyMap<number, WordDrawing>;
     notes: readonly WordNoteStory[];
   }) {
+    this.background = input.background;
     this.package = input.pkg;
     this.part = input.part;
     this.source = input.source;
@@ -359,6 +365,8 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
     }
   }
   const styles = readWordStyles({ package: pkg, part: main, source, conformance: profile });
+  const backgroundElement = children(source.root, namespace, "background")[0];
+  const background = backgroundElement && readWordColour(backgroundElement, namespace, "color", styles.themeColors);
   budget.themeColours = styles.themeColors;
   const body = bodies[0]!;
   const blocks = body.children
@@ -386,7 +394,7 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
       wrapTrailSpaces = trailingSpaces !== undefined && !['0', 'false', 'off'].includes(attr(trailingSpaces, namespace, 'val') ?? 'true');
     }
   }
-  return new WordDocument({ pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes, evenAndOddHeaders, wrapTrailSpaces });
+  return new WordDocument({ ...(background === undefined ? {} : { background }), pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes, evenAndOddHeaders, wrapTrailSpaces });
 }
 
 function readNoteStories(pkg: OpcPackage, main: OpcPart, conformance: WordConformance, budget: ParseBudget): readonly WordNoteStory[] {

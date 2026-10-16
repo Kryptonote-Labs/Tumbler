@@ -436,3 +436,10 @@ writes theme references and their transforms. New packages embed a theme; pass
 `themeColours` to `createWordArtifact` or `NativeWordDocument` to choose a custom scheme.
 Complex DrawingML colour effects beyond the supported luminance transforms remain opaque
 and retain their original XML.
+
+Document page colours from `w:background` are exposed as `WordDocument.background`,
+retaining RGB or theme references. Package and native layouts expose the resolved
+CSS colour as `WordLayout.background`; apply it to the whole page, including margins.
+The Svelte Word viewer does this automatically. Missing or automatic colours use
+the viewer default. Background XML survives content edits and export. VML gradient,
+pattern and image backgrounds are preserved but are not rendered.

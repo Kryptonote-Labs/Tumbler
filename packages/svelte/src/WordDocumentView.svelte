@@ -459,6 +459,7 @@
         {@const pageIndex = viewport.first + localIndex}
         <section
           class="word-page"
+          style:background-color={layout.background ?? "#fff"}
           aria-label={`Page ${page.index + 1}`}
           style={`left:${Math.max(24 * scale, (viewportWidth - wordPointsToCssPixels(page.width) * scale) / 2)}px;top:${viewport.offsets[pageIndex]! * scale}px;width:${wordPointsToCssPixels(page.width) * scale}px;height:${wordPointsToCssPixels(page.height) * scale}px`}
         >
