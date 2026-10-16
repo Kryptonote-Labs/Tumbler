@@ -68,7 +68,7 @@ test("paints table cell text and resolved borders", () => {
   expect(calls.filter(call => call[0] === "stroke")).toHaveLength(page.columns[0]!.tables[0]!.borders?.length ?? 0);
 });
 
-test("paints shapes from their outline path, with centred text", () => {
+test("paints shapes from their outline path, with their text", () => {
   const shape = { preset: "ellipse", width: 120, height: 60, fill: "#336699", outline: "#000000", outlineWidth: 1, text: "Hello" } as const;
   const page = layout([{ kind: "paragraph", runs: [{ text: "\uFFFC", shape }] }]);
   const fragment = drawingFragment(page);
@@ -76,11 +76,28 @@ test("paints shapes from their outline path, with centred text", () => {
   paintWordPage(context, page, { path: d => d });
   expect(calls).toContainEqual(["fill", "#336699", wordShapePath(shape)]);
   expect(calls).toContainEqual(["stroke", "#000000", wordShapePath(shape)]);
-  expect(calls).toContainEqual(["fillText", "Hello", fragment.width / 2, expect.any(Number), expect.stringContaining("Aptos"), "#000000"]);
+  expect(calls).toContainEqual(["fillText", "Hello", expect.any(Number), expect.any(Number), expect.stringContaining("Aptos"), "#000000"]);
   const placeholder = recorder();
   paintWordPage(placeholder.context, page);
   expect(placeholder.calls.some(call => call[0] === "fill")).toBe(false);
   expect(placeholder.calls).toContainEqual(["fillRect", expect.any(String), fragment.x, fragment.y, fragment.width, fragment.height]);
+});
+
+test("shape text keeps its rich run formatting and alignment", () => {
+  const paint = (alignment: "start" | "center" | "end") => {
+    const textBody = [{ alignment, runs: [{ text: "Bold", format: { bold: true, color: "#FFFFFF", fontSizePoints: 18 } }, { text: " plain" }] }];
+    const shape = { preset: "rect", width: 200, height: 80, fill: "#001F5B", outline: "none", outlineWidth: 0, textBody, textAnchor: "top" } as const;
+    const { context, calls } = recorder();
+    paintWordPage(context, layout([{ kind: "paragraph", runs: [{ text: "\uFFFC", shape }] }]), { path: d => d });
+    return calls.filter(call => call[0] === "fillText");
+  };
+  const centred = paint("center");
+  expect(centred.map(call => call[1])).toEqual(["Bold", " plain"]);
+  expect(centred[0]!.slice(4)).toEqual([expect.stringMatching(/ 700 18px .*Aptos/), "#FFFFFF"]);
+  expect(centred[1]!.slice(4)).toEqual([expect.stringMatching(/ 400 12px .*Aptos/), "#000000"]);
+  const start = paint("start")[0]![2] as number, end = paint("end")[0]![2] as number;
+  expect(end).toBeGreaterThan(start);
+  expect(centred[0]![2]).toBeCloseTo((start + end) / 2);
 });
 
 test("paints charts in CSS pixels within their frame", () => {

@@ -151,7 +151,10 @@ Images paint only when `options.image` returns a decoded source for the drawing;
 `wordPageImages(page)` lists them so hosts with asynchronous decoding can prepare
 them first. Shapes and charts are vector paths, so they paint when `options.path`
 builds the host's `Path2D`; they draw the same geometry as the Svelte editor
-(`wordShapePath` and `@tumblerjs/charts` scenes).
+(`wordShapePath` and `@tumblerjs/charts` scenes). Shape text is laid out by
+`layoutWordShapeText` with the document engine, so rich runs, paragraph
+formatting and text anchoring paint as they edit. Pass the page's measurer as
+`options.measurer` so shape text measures like the page.
 
 ```ts
 const measurer = canvasWordTextMeasurer(context);
