@@ -56,7 +56,7 @@ export {
 
 export { wordTableBorderCss } from './word-table-style.ts';
 
-export { wordHighlightColor } from './word-highlight.ts';
+export { wordHighlightColor } from '@tumblerjs/word';
 
 export { default as WordParagraphDecorations } from './WordParagraphDecorations.svelte';
 export { default as WordShapeView } from './WordShapeView.svelte';
