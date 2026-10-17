@@ -105,7 +105,12 @@ const output = session.artifact.bytes();
 
 Word 2010 ink uses `@tumblerjs/ink` to expose decoded traces and diagnostics on
 `drawing.ink`. It prefers an embedded VML bitmap, or generates an SVG for supported
-native ink without a bitmap. `inkRendering` identifies the chosen representation.
+native ink without a bitmap. `inkRendering` identifies the chosen representation. `inkSource` identifies the
+original InkML part; generated previews have no stored image `partName` or
+`relationshipId`. Strict and Transitional host namespaces are supported.
+Configure the synchronous preview budget with the `inkRendering.maxPoints`
+import option; exceeding it retains the decoded ink and reports
+`inkRenderingDiagnostics`, without rejecting the document.
 The object retains its original InkML and fallback through nearby text edits and
 export. Word ink editing and geometry changes remain guarded because both the
 source and its cached preview must change together. External relationships are

@@ -39,6 +39,7 @@ export class WordError extends Error {
 }
 
 export interface OpenWordDocumentOptions {
+  readonly inkRendering?: import('@tumblerjs/ink').InkSvgOptions;
   readonly maxBlocks?: number;
   readonly maxInlineItems?: number;
   readonly maxTextCharacters?: number;
@@ -266,6 +267,7 @@ export interface WordNoteStory {
 }
 
 interface ParseBudget {
+  readonly inkRendering: import('@tumblerjs/ink').InkSvgOptions | undefined;
   themeFonts: import("@tumblerjs/ooxml").ThemeFontScheme | undefined;
   themeColours: import('@tumblerjs/ooxml').ThemeColorScheme | undefined;
   readonly maxBlocks: number;
@@ -277,6 +279,7 @@ interface ParseBudget {
 }
 
 export class WordDocument {
+  readonly inkRendering: import('@tumblerjs/ink').InkSvgOptions;
   /** Authored solid page colour; absent or automatic uses the viewer default. */
   readonly background: WordColour | undefined;
   readonly package: OpcPackage;
@@ -294,6 +297,7 @@ export class WordDocument {
   readonly notes: readonly WordNoteStory[];
 
   constructor(input: {
+    inkRendering?: import('@tumblerjs/ink').InkSvgOptions | undefined;
     background?: WordColour;
     pkg: OpcPackage;
     part: OpcPart;
@@ -309,6 +313,7 @@ export class WordDocument {
     drawings: ReadonlyMap<number, WordDrawing>;
     notes: readonly WordNoteStory[];
   }) {
+    this.inkRendering = Object.freeze({ ...input.inkRendering });
     this.background = input.background;
     this.package = input.pkg;
     this.part = input.part;
@@ -352,6 +357,7 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
   const bodies = children(source.root, namespace, "body");
   if (bodies.length !== 1) throw new WordError("invalid_document", "A document must contain exactly one body.");
   const budget: ParseBudget = {
+    inkRendering: options.inkRendering,
     themeFonts: undefined,
     themeColours: undefined,
     maxBlocks: boundedLimit(options.maxBlocks, DEFAULT_MAX_BLOCKS, "block"),
@@ -383,7 +389,7 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
   if (sectionElements.length > 1) throw new WordError("invalid_document", "A document body must not repeat final section properties.");
   const finalSection = parseSection(sectionElements[0], namespace);
   const numbering = readWordNumbering({ package: pkg, part: main, source, conformance: profile });
-  const drawings = readWordDrawings({ package: pkg, part: main, source, conformance: profile, themeFonts: styles.themeFonts, themeColours: styles.themeColors });
+  const drawings = readWordDrawings({ inkRendering: budget.inkRendering, package: pkg, part: main, source, conformance: profile, themeFonts: styles.themeFonts, themeColours: styles.themeColors });
   const notes = readNoteStories(pkg, main, profile, budget);
   const headerFooters = readHeaderFooterStories(pkg, main, profile, [...blocks.flatMap(sectionReferences), ...finalSection.headerReferences, ...finalSection.footerReferences], budget);
   let evenAndOddHeaders = false;
@@ -400,7 +406,7 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
       wrapTrailSpaces = trailingSpaces !== undefined && !['0', 'false', 'off'].includes(attr(trailingSpaces, namespace, 'val') ?? 'true');
     }
   }
-  return new WordDocument({ ...(background === undefined ? {} : { background }), pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes, evenAndOddHeaders, wrapTrailSpaces });
+  return new WordDocument({ inkRendering: options.inkRendering, ...(background === undefined ? {} : { background }), pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes, evenAndOddHeaders, wrapTrailSpaces });
 }
 
 function readNoteStories(pkg: OpcPackage, main: OpcPart, conformance: WordConformance, budget: ParseBudget): readonly WordNoteStory[] {
@@ -427,7 +433,7 @@ function readNoteStories(pkg: OpcPackage, main: OpcPart, conformance: WordConfor
     let noteRelationships: Relationships | undefined;
     try { noteRelationships = pkg.relationships(part.name); }
     catch (cause) { if (!(cause instanceof RelationshipsError) || cause.code !== "missing_item") throw cause; }
-    const drawings = readWordDrawings({ package: pkg, part, source, conformance, themeFonts: budget.themeFonts, themeColours: budget.themeColours });
+    const drawings = readWordDrawings({ inkRendering: budget.inkRendering, package: pkg, part, source, conformance, themeFonts: budget.themeFonts, themeColours: budget.themeColours });
     for (const element of children(source.root, namespace, kind)) {
       const rawId = attr(element, namespace, "id");
       if (rawId === undefined || !/^-?[0-9]+$/.test(rawId)) throw new WordError("invalid_document", `${kind} is missing a signed integer id.`);
@@ -485,7 +491,7 @@ function readHeaderFooterStories(
     catch (cause) { if (!(cause instanceof RelationshipsError) || cause.code !== "missing_item") throw cause; }
     const blocks = source.root.children.filter((node): node is LosslessXmlElement => node.kind === "element")
       .map((element) => parseBlock(element, source, namespace, storyRelationships, budget));
-    const drawings = readWordDrawings({ package: pkg, part, source, conformance, themeFonts: budget.themeFonts, themeColours: budget.themeColours });
+    const drawings = readWordDrawings({ inkRendering: budget.inkRendering, package: pkg, part, source, conformance, themeFonts: budget.themeFonts, themeColours: budget.themeColours });
     stories.push(Object.freeze({ ...reference, part, source, blocks: Object.freeze(blocks), drawings }));
   }
   return Object.freeze(stories);

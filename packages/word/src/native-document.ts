@@ -399,7 +399,7 @@ export class NativeWordDocument implements WordLayoutSource {
                 const partName = this.imagePartNames.get(image.bytes) ??
                   (originalDrawing?.kind === 'image' && originalDrawing.bytes === image.bytes ? originalDrawing.partName : undefined);
                 const drawing = nativeImageDrawing(id, image, width, partName);
-                this.imagePartNames.set(image.bytes, drawing.partName);
+                if (drawing.partName) this.imagePartNames.set(image.bytes, drawing.partName);
                 // Retain crop/rotation/wrapping and positioning semantics on unchanged images.
                 if (originalDrawing?.kind === 'image') {
                   const anchor = originalDrawing.anchor;

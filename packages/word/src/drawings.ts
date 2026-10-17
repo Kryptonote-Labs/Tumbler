@@ -34,6 +34,8 @@ export type WordDrawing = WordImageDrawing | WordChartDrawing | WordShapeDrawing
 interface WordDrawingBase {
   /** Decoded Office ink, including diagnostics; the original package part remains authoritative. */
   readonly ink?: import('@tumblerjs/ink').OfficeInkDocument;
+  readonly inkSource?: { readonly partName: PartName; readonly relationshipId: string };
+  readonly inkRenderingDiagnostics?: readonly import('@tumblerjs/ink').InkDiagnostic[];
   readonly elementId: number;
   readonly placement: "inline" | "anchor";
   readonly widthPoints: number;
@@ -50,8 +52,9 @@ export interface WordImageDrawing extends WordDrawingBase {
   /** An ink display projection. Preserve the original part rather than editing only its preview. */
   readonly fallback?: "ink";
   readonly inkRendering?: 'bitmap' | 'vector';
-  readonly relationshipId: string;
-  readonly partName: PartName;
+  readonly relationshipId: string | undefined;
+  /** Stored image bytes, absent for generated previews. See inkSource for the native ink part. */
+  readonly partName: PartName | undefined;
   readonly contentType: string;
   readonly bytes: Uint8Array;
 }
@@ -70,6 +73,7 @@ export interface WordUnsupportedDrawing extends WordDrawingBase {
 
 /** Discovers Word drawing placement and resolves only internal image/chart relationships. */
 export function readWordDrawings(input: {
+  readonly inkRendering?: import('@tumblerjs/ink').InkSvgOptions | undefined;
   readonly themeFonts?: import("@tumblerjs/ooxml").ThemeFontScheme | undefined;
   readonly themeColours?: ThemeColorScheme | undefined;
   readonly package: OpcPackage;
@@ -92,11 +96,11 @@ export function readWordDrawings(input: {
     const original = choice && result.get(choice.id);
     if (!original || !choice) continue;
     result.delete(choice.id);
-    result.set(element.id, readWordInkDrawing(element, original, input.package, relationships));
+    result.set(element.id, readWordInkDrawing(element, original, input.package, relationships, input.inkRendering));
   }
   for (const element of elements) {
     const original = result.get(element.id);
-    if (original?.kind === 'unsupported') result.set(element.id, readWordInkDrawing(element, original, input.package, relationships));
+    if (original?.kind === 'unsupported') result.set(element.id, readWordInkDrawing(element, original, input.package, relationships, input.inkRendering));
   }
   return result;
 }

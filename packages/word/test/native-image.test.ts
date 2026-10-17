@@ -32,7 +32,9 @@ for (const imported of [false, true]) {
       expect(after.bytes).toBe(before.bytes);
     }
     const replacement = update({ bytes: before.bytes.slice() });
-    expect(replacement.partName.value).not.toBe(before.partName.value);
+    expect(before.partName).toBeDefined();
+    expect(replacement.partName).toBeDefined();
+    expect(replacement.partName?.value).not.toBe(before.partName?.value);
     const exported = [...model.artifact().document.drawings.values()][0];
     if (exported?.kind !== 'image') throw new Error('Expected exported image');
     expect(exported.bytes).toEqual(replacement.bytes);

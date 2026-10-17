@@ -19,6 +19,7 @@ const mainArtifacts = new WeakMap<WordArtifact, WordArtifact>();
 export function storyMainArtifact(artifact: WordArtifact): WordArtifact {
   if (artifact.document.source.root.localName === 'document') return artifact;
   return mainArtifacts.get(artifact) ?? openWordArtifact(artifact.bytes(), {
+    inkRendering: artifact.document.inkRendering,
     maxBlocks: Number.MAX_SAFE_INTEGER,
     maxInlineItems: Number.MAX_SAFE_INTEGER,
     maxTextCharacters: Number.MAX_SAFE_INTEGER,
@@ -32,6 +33,7 @@ export function wordStoryArtifact(artifact: WordArtifact, partName: string): Wor
   const story = document.headerFooters.find(item => item.part.name.value === partName);
   if (!story) throw new Error('Unknown header or footer part.');
   const view = new WordArtifact(new WordDocument({
+    inkRendering: document.inkRendering,
     pkg: document.package, part: story.part, source: story.source,
     blocks: story.blocks, drawings: story.drawings,
     conformance: document.conformance, styles: document.styles, numbering: document.numbering,
@@ -102,5 +104,5 @@ export function createWordStory(artifact: WordArtifact, target: WordStoryTarget)
     edit.replaceElementMarkup(element, markup);
   }
   transaction.replacePart(document.part.name, edit.commit().bytes);
-  return { artifact: openWordArtifact(transaction.commit(), { maxBlocks: Number.MAX_SAFE_INTEGER, maxInlineItems: Number.MAX_SAFE_INTEGER, maxTextCharacters: Number.MAX_SAFE_INTEGER }), partName };
+  return { artifact: openWordArtifact(transaction.commit(), { inkRendering: artifact.document.inkRendering, maxBlocks: Number.MAX_SAFE_INTEGER, maxInlineItems: Number.MAX_SAFE_INTEGER, maxTextCharacters: Number.MAX_SAFE_INTEGER }), partName };
 }

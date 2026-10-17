@@ -34,6 +34,7 @@ export function reconcileWordContent(
 ): WordArtifact {
   const { transaction, paragraphs, document, isStory } = prepareWordContent(source, blocks)!;
   let result = openWordArtifact(transaction.commit(), {
+    inkRendering: source.document.inkRendering,
     maxBlocks: Number.MAX_SAFE_INTEGER,
     maxInlineItems: Number.MAX_SAFE_INTEGER,
     maxTextCharacters: Number.MAX_SAFE_INTEGER,

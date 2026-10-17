@@ -24,6 +24,7 @@ export function reconcileWordStories(
     seen.add(update.partName);
   }
   return openWordArtifact(transaction.commit(), {
+    inkRendering: source.document.inkRendering,
     maxBlocks: Number.MAX_SAFE_INTEGER,
     maxInlineItems: Number.MAX_SAFE_INTEGER,
     maxTextCharacters: Number.MAX_SAFE_INTEGER,
@@ -53,6 +54,7 @@ export function reconcileWordContentAndStories(
     seen.add(update.partName);
   }
   return openWordArtifact(transaction.commit(), {
+    inkRendering: source.document.inkRendering,
     maxBlocks: Number.MAX_SAFE_INTEGER,
     maxInlineItems: Number.MAX_SAFE_INTEGER,
     maxTextCharacters: Number.MAX_SAFE_INTEGER,
