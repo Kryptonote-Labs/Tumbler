@@ -37,7 +37,7 @@
     {:else if mark.kind === "line"}
       <line x1={mark.x1} y1={mark.y1} x2={mark.x2} y2={mark.y2} stroke={mark.stroke} stroke-width={mark.width} shape-rendering="crispEdges" />
     {:else if mark.kind === "text"}
-      <text x={mark.x} y={mark.y} text-anchor={mark.anchor} transform={mark.rotate ? `rotate(${mark.rotate} ${mark.x} ${mark.y})` : undefined} font-family={mark.font.family} font-size={mark.font.size} font-weight={mark.font.weight} font-style={mark.font.italic ? "italic" : undefined} fill={mark.font.color}>{mark.text}</text>
+      <text style="white-space:pre" x={mark.x} y={mark.y} text-anchor={mark.anchor} transform={mark.rotate ? `rotate(${mark.rotate} ${mark.x} ${mark.y})` : undefined} font-family={mark.font.family} font-size={mark.font.size} font-weight={mark.font.weight} font-style={mark.font.italic ? "italic" : undefined} fill={mark.font.color}>{mark.text}</text>
     {:else if mark.clip}
       {@const id = `${clipId}${path}-${index}`}
       <defs><clipPath {id}><rect x={mark.clip.x} y={mark.clip.y} width={mark.clip.width} height={mark.clip.height} /></clipPath></defs>
