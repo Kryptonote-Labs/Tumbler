@@ -9,6 +9,7 @@ const directory = process.argv[2];
 if (!directory) throw Error('Usage: bun scripts/generate-ink-conformance.ts OUTPUT_DIRECTORY');
 await mkdir(directory, { recursive: true });
 const cases = [
+  officeInk().replace(/(<\/context>)(\s*)(<brush[\s\S]*?<\/brush>)/, '$3$1$2'),
   officeInk(), officeInk({ trace: '1 0,1 0' }), officeInk({ trace: `0 0,'10'20,"2"-3,**` }),
   officeInk({ channels: '<channel name="X"/><channel name="Y"/><channel name="F" type="integer" max="100"/>', trace: '0 0 100,1000 1000 50' }),
   officeInk({ channels: '<channel name="X"/><channel name="Y"/><channel name="S" type="boolean"/>', trace: '0 0 T,1000 1000 F' }),

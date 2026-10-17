@@ -28,9 +28,11 @@ if (stroke) {
 ```
 
 `readOfficeInk` implements the Office profile in MS-ODRAWXML §2.1.4. It preserves
-the complete source, including unrecognized metadata. Bad trace references or
-samples produce diagnostics; malformed XML and duplicate IDs throw. Nothing
-fetches external references. Callers can configure the shared XML parser's
+the complete source, including unrecognized metadata. Bad trace references,
+duplicate IDs and samples produce diagnostics; malformed XML throws. ID uniqueness is checked across all namespaces, and ambiguous
+references never select an arbitrary target. Declared-range violations use a
+separate `range` diagnostic and are not clamped. Nothing fetches external
+references. Callers can configure the shared XML parser's
 resource limits.
 
 `decodeInkTrace` and `encodeInkTrace` implement the W3C trace grammar independently
@@ -41,6 +43,10 @@ integer range, and decimal/double samples use finite IEEE-754 numbers.
 The SVG renderer supports explicit physical resolutions, ellipse and rectangle
 tips, linear pressure scaling, pen switches and per-stroke transparency. It
 returns diagnostics for unsupported rendering instead of omitting those strokes.
+Synchronous SVG generation defaults to a 100,000-point work budget. Override it
+with `renderOfficeInkSvg(ink, { maxPoints })`, including `Infinity` for an unlimited
+preview. Exceeding the budget produces a `resource` diagnostic before SVG
+allocation; it does not reject or truncate the source or decoded samples.
 It does not reproduce Word's proprietary curve fitting or pressure transfer.
 `applyInkRasterOperation` exposes all 16 Office RGB raster operations for raster
 consumers; destination-dependent operations cannot be represented by this SVG
