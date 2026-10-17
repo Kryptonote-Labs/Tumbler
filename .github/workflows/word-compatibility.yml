@@ -8,6 +8,7 @@ on:
       - 'packages/ooxml/**'
       - 'packages/core/**'
       - 'packages/charts/**'
+      - 'packages/ink/**'
       - 'packages/svelte/**'
       - 'tools/word-compatibility/**'
       - 'apps/docs/benchmark/**'
