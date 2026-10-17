@@ -111,3 +111,46 @@ test('mixed chart title formatting survives native projection and DOCX export', 
     ] }] } });
   }
 });
+
+test('shared placement converts a painted chart between line and page bases without changing its position', async () => {
+  const { wordDrawingPlacement } = await import('../src/index.ts');
+  const source = fixture();
+  const drawing = [...source.document.drawings.values()][0]!;
+  const floating = wordDrawingPlacement(drawing, { x: 100, y: 120 }, 80, { layout: 'front' });
+  expect(floating).toEqual({ layout: 'front', wrap: 'none', horizontalRelativeTo: 'page', verticalRelativeTo: 'line', x: 100, y: 40 });
+  const content = importWordContent(source);
+  const document = new NativeWordDocument({ source });
+  const measure = { measure: (text: string) => ({ width: text.length * 6, ascent: 9, descent: 3 }) };
+  const y = () => document.layout(measure).pages.flatMap(page => page.columns.flatMap(column => column.lines.flatMap(line => line.fragments))).find(fragment => fragment.drawing)?.y;
+  for (const verticalRelativeTo of ['line', 'page'] as const) {
+    const geometry = { width: 144, height: 72, ...floating, verticalRelativeTo };
+    const edited = content.map(block => block.kind === 'paragraph' ? { ...block, runs: block.runs.map(run => ({ ...run, drawing: geometry })) } : block);
+    document.update(edited);
+    const before = y()!;
+    document.update([{ kind: 'paragraph', runs: [{ text: 'Before chart' }] }, ...edited]);
+    expect(y()! - before).toBe(verticalRelativeTo === 'page' ? 0 : 12);
+    const native = [...document.drawings.values()][0]!;
+    expect([...document.artifact().document.drawings.values()][0]?.anchor).toEqual(native.anchor);
+    const fixed = wordDrawingPlacement(native, { x: 100, y: 120 }, 80, { moveWithText: false });
+    expect(fixed).toMatchObject({ verticalRelativeTo: 'page', x: 100, y: 120 });
+    expect(wordDrawingPlacement(native, { x: 100, y: 120 }, 80, { layout: 'inline' })).toEqual({ layout: 'inline' });
+  }
+});
+
+test('imported chart wrapping survives resize, and an explicit front placement clears it in native layout and export', async () => {
+  const { beginPackageTransaction } = await import('@tumblerjs/opc');
+  const source = fixture();
+  const drawing = [...source.document.drawings.values()][0]!;
+  const anchored = source.updateDrawing({ elementId: drawing.elementId, widthPoints: 72, heightPoints: 36, layout: 'front', xPoints: 100, yPoints: 120 });
+  const transaction = beginPackageTransaction(anchored.document.package);
+  transaction.replacePart(anchored.document.part.name, new TextEncoder().encode(anchored.document.source.source.replace('<wp:wrapNone/>', '<wp:wrapSquare wrapText="bothSides"/>')));
+  const imported = openWordArtifact(transaction.commit());
+  const document = new NativeWordDocument({ source: imported });
+  const content = importWordContent(imported);
+  for (const wrap of [undefined, 'none'] as const) {
+    const geometry: WordDrawingGeometry = { width: 144, height: 72, ...(wrap ? { layout: 'front', wrap, horizontalRelativeTo: 'page', verticalRelativeTo: 'line', x: 100, y: 40 } : {}) };
+    document.update(content.map(block => block.kind === 'paragraph' ? { ...block, runs: block.runs.map(run => ({ ...run, drawing: geometry })) } : block));
+    expect([...document.drawings.values()][0]?.anchor?.wrap).toBe(wrap ?? 'square');
+    expect([...document.artifact().document.drawings.values()][0]?.anchor).toEqual([...document.drawings.values()][0]?.anchor);
+  }
+});

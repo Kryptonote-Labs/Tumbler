@@ -1,3 +1,4 @@
+import { isWordDrawingPosition, type WordDrawingPosition } from './drawing-placement.ts';
 import { readShapeText } from './shape-text-import.ts';
 import { wordThemeSlot } from './theme-colour-xml.ts';
 import { DEFAULT_WORD_THEME, resolveWordColour, type WordColour, type WordThemeColour } from './theme-colours.ts';
@@ -149,7 +150,7 @@ function parseDrawing(
     if (box && !textBody) return unsupported(drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, 'This text box contains structures retained in the source document.');
     const body = nodes.find(n => n.localName === 'bodyPr');
     const textAnchor = attribute(body, 'anchor') === 'ctr' ? 'center' : attribute(body, 'anchor') === 'b' ? 'bottom' : 'top';
-    const shape = { preset, textAnchor, ...(textBody ? { textBody } : {}), width: widthPoints, height: heightPoints, fill: color(props), outline: color(line), outlineWidth: Number(attribute(line, 'w') ?? 0) / EMUS_PER_POINT, ...(text ? { text } : {}), ...(altText ? { alt: altText } : {}), layout: placement === 'inline' ? 'inline' : anchor?.behindDocument ? 'behind' : 'front', ...(anchor ? { x: anchor.horizontalOffsetPoints ?? 0, y: anchor.verticalOffsetPoints ?? 0, moveWithText: anchor.verticalRelativeTo !== 'page' } : {}) };
+    const shape = { preset, textAnchor, ...(textBody ? { textBody } : {}), width: widthPoints, height: heightPoints, fill: color(props), outline: color(line), outlineWidth: Number(attribute(line, 'w') ?? 0) / EMUS_PER_POINT, ...(text ? { text } : {}), ...(altText ? { alt: altText } : {}), layout: placement === 'inline' ? 'inline' : anchor?.behindDocument ? 'behind' : 'front', ...(anchor ? { x: anchor.horizontalOffsetPoints ?? 0, y: anchor.verticalOffsetPoints ?? 0, moveWithText: anchor.verticalRelativeTo !== 'page', ...(anchor.horizontalRelativeTo === 'page' || anchor.horizontalRelativeTo === 'column' ? { horizontalRelativeTo: anchor.horizontalRelativeTo } : {}), ...(['page', 'line', 'paragraph'].includes(anchor.verticalRelativeTo ?? '') ? { verticalRelativeTo: anchor.verticalRelativeTo } : {}) } : {}) };
     if (isWordAuthoredShape(shape)) return { kind: 'shape', elementId: drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, shape };
   }
   const relationshipNs = input.conformance === "strict" ? "http://purl.oclc.org/ooxml/officeDocument/relationships" : "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -272,11 +273,10 @@ export function resizeWordDrawing(document: WordDocument, size: WordDrawingResiz
   return transaction.commit();
 }
 
-export interface WordDrawingChange extends WordDrawingResize {
-  readonly layout?: 'inline' | 'front' | 'behind';
+export interface WordDrawingChange extends WordDrawingResize, Pick<WordDrawingPosition, 'layout' | 'wrap' | 'horizontalRelativeTo' | 'verticalRelativeTo'> {
   /** Destination in the text flow; does not convert the drawing to a floating object. */
   readonly inlinePosition?: import('./text.ts').WordTextPosition;
-  /** Page-relative coordinates for floating drawings. */
+  /** Coordinates in the specified bases, defaulting to the page. */
   readonly xPoints?: number;
   readonly yPoints?: number;
 }
@@ -289,9 +289,10 @@ export interface WordShapeTextChange {
   readonly textBody?: readonly import('./create.ts').WordTextParagraph[];
 }
 
-/** Change wrapping and page-relative placement, preserving the embedded graphic. */
+/** Change wrapping and coordinate bases, preserving the embedded graphic. */
 export function positionWordDrawing(document: WordDocument, change: WordDrawingChange): Uint8Array {
   if (change.layout === undefined) return document.bytes();
+  if (!isWordDrawingPosition(change)) throw new TypeError('Invalid drawing coordinate base.');
   if (!['inline', 'front', 'behind'].includes(change.layout)) throw new RangeError('Unknown drawing layout.');
   const drawing = document.drawings.get(change.elementId);
   const element = document.source.element(change.elementId);
@@ -315,8 +316,8 @@ export function positionWordDrawing(document: WordDocument, change: WordDrawingC
     const y = Math.round((change.yPoints ?? 0) * EMUS_PER_POINT);
     // OOXML ST_PositionOffset is a signed 32-bit EMU value, independent of page bounds.
     if (![x, y].every(value => Number.isSafeInteger(value) && value >= -2147483648 && value <= 2147483647)) throw new RangeError('Drawing position must fit a signed 32-bit EMU offset.');
-    const positionH = `<${prefix}positionH relativeFrom="page"><${prefix}posOffset>${x}</${prefix}posOffset></${prefix}positionH>`;
-    const positionV = `<${prefix}positionV relativeFrom="page"><${prefix}posOffset>${y}</${prefix}posOffset></${prefix}positionV>`;
+    const positionH = `<${prefix}positionH relativeFrom="${change.horizontalRelativeTo ?? 'page'}"><${prefix}posOffset>${x}</${prefix}posOffset></${prefix}positionH>`;
+    const positionV = `<${prefix}positionV relativeFrom="${change.verticalRelativeTo ?? 'page'}"><${prefix}posOffset>${y}</${prefix}posOffset></${prefix}positionV>`;
     if (drawing.placement === 'anchor' && change.layout === (drawing.anchor?.behindDocument ? 'behind' : 'front')) {
       // Movement preserves authored wrapping, overlap, distances, and stacking order.
       const editor = beginLosslessXmlEdit(document.source);
@@ -325,13 +326,17 @@ export function positionWordDrawing(document: WordDocument, change: WordDrawingC
         if (existing !== undefined) editor.replaceElementMarkup(existing, replacement);
         else editor.insertMarkupBefore(extent, replacement);
       }
+      if (change.wrap === 'none') {
+        const wrapping = children.find(item => item.namespaceUri === wp && item.localName.startsWith('wrap'));
+        if (wrapping) editor.replaceElementMarkup(wrapping, `<${prefix}wrapNone/>`);
+      }
       const simple = placement.attributes.find(attribute => attribute.localName === 'simplePos');
       if (simple !== undefined) editor.setAttribute(simple, '0');
       const transaction = beginPackageTransaction(document.package);
       transaction.replacePart(document.part.name, editor.commit().bytes);
       return transaction.commit();
     }
-    markup = `<${prefix}anchor ${namespaces} distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="0" behindDoc="${change.layout === 'behind' ? 1 : 0}" locked="0" layoutInCell="1" allowOverlap="1"><${prefix}simplePos x="0" y="0"/><${prefix}positionH relativeFrom="page"><${prefix}posOffset>${x}</${prefix}posOffset></${prefix}positionH><${prefix}positionV relativeFrom="page"><${prefix}posOffset>${y}</${prefix}posOffset></${prefix}positionV>${raw(extent)}${effect === undefined ? '' : raw(effect)}<${prefix}wrapNone/>${retained}</${prefix}anchor>`;
+    markup = `<${prefix}anchor ${namespaces} distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="0" behindDoc="${change.layout === 'behind' ? 1 : 0}" locked="0" layoutInCell="1" allowOverlap="1"><${prefix}simplePos x="0" y="0"/><${prefix}positionH relativeFrom="${change.horizontalRelativeTo ?? 'page'}"><${prefix}posOffset>${x}</${prefix}posOffset></${prefix}positionH><${prefix}positionV relativeFrom="${change.verticalRelativeTo ?? 'page'}"><${prefix}posOffset>${y}</${prefix}posOffset></${prefix}positionV>${raw(extent)}${effect === undefined ? '' : raw(effect)}<${prefix}wrapNone/>${retained}</${prefix}anchor>`;
   }
   const editor = beginLosslessXmlEdit(document.source);
   editor.replaceElementMarkup(placement, markup);

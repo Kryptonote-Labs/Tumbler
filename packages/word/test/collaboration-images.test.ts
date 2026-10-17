@@ -46,3 +46,11 @@ test('image descriptions still reject invalid XML characters and malformed Unico
     }
   }
 });
+
+test('shared image placement validates coordinate bases and removes floating attributes when made inline', async () => {
+  const { isDocumentImage, normalizeImage } = await import('../src/collaboration/index.ts');
+  const positioned: DocumentImage = { ...image, layout: 'front', wrap: 'none', horizontalRelativeTo: 'page', verticalRelativeTo: 'line', x: 100, y: 40 };
+  expect(isDocumentImage(positioned)).toBe(true);
+  for (const patch of [{ horizontalRelativeTo: 'invalid' }, { verticalRelativeTo: 'invalid' }, { wrap: 'square' }]) expect(isDocumentImage({ ...positioned, ...patch })).toBe(false);
+  expect(normalizeImage({ ...positioned, layout: 'inline' })).toEqual({ ...image, layout: 'inline' });
+});

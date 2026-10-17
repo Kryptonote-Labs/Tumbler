@@ -488,9 +488,37 @@ formatting, formatting state and rich clipboard fragments. Hosts persist its
 `paragraphs()` output through their document transaction system. This engine uses
 the same text operations as the collaborative body editor.
 
-Imported drawing runs can carry a `drawing` geometry override alongside their `source`
-reference: `{ width, height, layout?, x?, y? }`. Width and height are points; optional
-`x` and `y` are page-relative points for floating drawings. This keeps chart data in
-its original package while `NativeWordDocument` and DOCX export apply the same geometry.
-Omit position overrides to retain the original anchor and wrapping. The collaboration
-layer accepts the same `drawing` attribute for shared edits and undo history.
+### Drawing placement
+
+Pictures and retained drawings share `WordDrawingPosition`: `layout`, `wrap`,
+`horizontalRelativeTo`, `verticalRelativeTo`, `x` and `y`. Coordinates are points in
+the specified bases. `WordDrawingGeometry` adds `width` and `height` for retained
+source drawings, including charts. Omit placement overrides to preserve imported
+anchors and wrapping. An explicit `wrap: 'none'` removes imported text wrapping.
+The collaboration layer accepts these properties on image and drawing attributes.
+
+`wordDrawingPlacement(drawing, paintedBox, anchorLineY, choice)` converts painted
+page coordinates into a placement. Choices are inline/front/behind and whether to
+move with text. Newly chosen text-relative placement uses a line anchor; fixed
+placement uses the page. Switching bases retains the painted location. Fixed page
+coordinates do not pin the anchor to a permanent page number when text repaginates.
+
+The geometry of retained drawings defaults to page-relative coordinates. Legacy
+image properties retain their column-relative horizontal and paragraph/page-relative
+vertical defaults through `moveWithText`. Explicit coordinate bases take precedence.
+`WordArtifact.updateDrawing()` accepts the same bases for its `xPoints` and `yPoints`.
+Native layout and DOCX export use the same coordinate bases.
+
+Newly authored shapes with no `layout` now default to in front of text and fixed
+relative to the page. Specify `layout: 'inline'` to request the former default.
+Imported shapes have an explicit placement, which is retained during edits.
+
+The placement model follows [ECMA-376 Part 1, fifth edition](https://ecma-international.org/wp-content/uploads/ECMA-376-1_5th_edition_december_2016.zip)
+§20.4.2.3, §20.4.2.8, §20.4.2.10–15 and §20.4.3.4–5. In particular, `wrapNone`
+and `behindDoc` determine placement in front of or behind text; anchor locking is
+separate from the coordinate base. [MS-OI29500](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/1fd4a662-8623-49c0-82f0-18fa91b413b8)
+revision 25.0, §2.1.1355, documents Word's restriction on `positionV` with
+`relativeFrom="paragraph"`. New Move with text choices therefore use `line`, while
+unchanged imported paragraph anchors remain intact. Shape creation defaults are an
+authoring choice, not an ECMA restriction. Square, tight, through and top-and-bottom
+text-flow layout are not implemented by this change.

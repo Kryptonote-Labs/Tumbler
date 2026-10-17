@@ -22,8 +22,8 @@ export const nativeImageDrawing = (id: number, image: WordAuthoredImage, width: 
         bytes: image.bytes,
         anchor: floating
           ? {
-              horizontalRelativeTo: 'column',
-              verticalRelativeTo: image.moveWithText === false ? 'page' : 'paragraph',
+              horizontalRelativeTo: image.horizontalRelativeTo ?? 'column',
+              verticalRelativeTo: image.verticalRelativeTo ?? (image.moveWithText === false ? 'page' : 'paragraph'),
               horizontalOffsetPoints:
                 image.x ??
                 (image.alignment === 'center'
