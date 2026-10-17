@@ -47,6 +47,8 @@ export function withWordDrawingGeometry(
       : drawing.anchor?.behindDocument
         ? 'behind'
         : 'front');
+  const { horizontalAlignment, ...offsetAnchor } = drawing.anchor ?? {};
+  const anchor = geometry.x !== undefined || geometry.horizontalRelativeTo !== undefined ? offsetAnchor : drawing.anchor;
   return {
     ...drawing,
     widthPoints: geometry.width,
@@ -69,7 +71,7 @@ export function withWordDrawingGeometry(
             distanceStartPoints: 0,
             ...(geometry.layout === undefined ||
             geometry.layout === (drawing.anchor?.behindDocument ? 'behind' : 'front')
-              ? drawing.anchor
+              ? anchor
               : {}),
             ...(geometry.x !== undefined || geometry.y !== undefined || geometry.horizontalRelativeTo !== undefined || geometry.verticalRelativeTo !== undefined
               ? {

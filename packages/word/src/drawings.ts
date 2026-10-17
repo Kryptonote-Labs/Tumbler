@@ -13,6 +13,7 @@ const EMUS_PER_POINT = 12_700;
 const CHART_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
 
 export interface WordDrawingAnchor {
+  readonly horizontalAlignment?: "left" | "center" | "right" | "inside" | "outside";
   readonly horizontalRelativeTo: string | undefined;
   readonly verticalRelativeTo: string | undefined;
   readonly horizontalOffsetPoints: number | undefined;
@@ -205,6 +206,7 @@ function parseAnchor(element: LosslessXmlElement, wp: string): WordDrawingAnchor
     horizontalRelativeTo: attribute(horizontal, "relativeFrom"),
     verticalRelativeTo: attribute(vertical, "relativeFrom"),
     horizontalOffsetPoints: offsetChild(horizontal, wp),
+    ...horizontalAlignment(horizontal, wp),
     verticalOffsetPoints: offsetChild(vertical, wp),
     wrap,
     behindDocument: onOff(attribute(element, "behindDoc"), false),
@@ -214,6 +216,12 @@ function parseAnchor(element: LosslessXmlElement, wp: string): WordDrawingAnchor
     distanceBottomPoints: emu(attribute(element, "distB") ?? "0", "anchor bottom distance"),
     distanceStartPoints: emu(attribute(element, "distL") ?? "0", "anchor start distance"),
   });
+}
+
+function horizontalAlignment(element: LosslessXmlElement | undefined, wp: string): Pick<WordDrawingAnchor, 'horizontalAlignment'> {
+  const align = child(element, wp, 'align');
+  const value = align?.children.map(n => n.kind === 'text' ? n.value : '').join('').trim();
+  return value === 'left' || value === 'center' || value === 'right' || value === 'inside' || value === 'outside' ? { horizontalAlignment: value } : {};
 }
 
 function offsetChild(element: LosslessXmlElement | undefined, wp: string): number | undefined {

@@ -1,3 +1,4 @@
+import { alignWordPageDrawings } from './drawing-alignment.ts';
 import { resolveWordColour } from './theme-colours.ts';
 import { splitPreparedTable, joinPreparedTables, preparedBlockHeight } from './table-pagination.ts';
 import { tableBorderInsets, resolveTableBorders, type WordLayoutTableBorder } from './table-borders.ts';
@@ -569,7 +570,7 @@ function layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeas
   if (stories) {
     decorateNotes(stories, pages, measurer, budget);
   }
-  const frozenPages = Object.freeze(pages.map((page, index) => freezePage(page, document.cache?.pages[index])));
+  const frozenPages = Object.freeze(pages.map((page, index) => alignWordPageDrawings(freezePage(page, document.cache?.pages[index]))));
   if (document.cache) document.cache.pages = frozenPages;
   return Object.freeze({
     ...(document.background === undefined ? {} : { background: document.background }),
