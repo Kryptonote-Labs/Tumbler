@@ -69,16 +69,26 @@ export function chartStroke(role: keyof typeof CHART_STROKE_DEFAULTS, style: Cha
 export function chartLegendPositions(widths: readonly number[], options: { readonly model: SupportedChartModel; readonly width: number; readonly height: number }) {
   const position = options.model.legend?.position ?? "right";
   const horizontal = position === "bottom" || position === "top";
-  const gap = 12;
-  const total = widths.reduce((sum, width) => sum + width, 0) + Math.max(0, widths.length - 1) * gap;
-  let x = horizontal ? (options.width - total) / 2 : position === "left" ? 8 : options.width - Math.max(0, ...widths) - 8;
-  let y = position === "bottom" ? options.height - 16
-    : position === "top" || position === "top-right" ? (options.model.title === undefined ? 18 : 48)
-    : (options.height - widths.length * 20) / 2 + 12;
-  return widths.map(width => {
-    const point = { x, y };
-    if (horizontal) x += width + gap;
-    else y += 20;
-    return point;
+  const font = chartFont("legend", options.model.legend?.textStyle, options.model);
+  const gap = font.size * 0.4;
+  const lineHeight = font.size * 1.7;
+  const available = Math.max(1, options.width - 16);
+  const rows: number[][] = [[]];
+  let used = 0;
+  widths.forEach((width, index) => {
+    if (!horizontal || (used > 0 && used + gap + width > available)) { rows.push([]); used = 0; }
+    rows.at(-1)!.push(index);
+    used += (used > 0 ? gap : 0) + width;
   });
+  const occupied = rows.filter(row => row.length > 0);
+  const points = widths.map(() => ({ x: 0, y: 0 }));
+  occupied.forEach((row, rowIndex) => {
+    const total = row.reduce((sum, index) => sum + widths[index]!, 0) + (row.length - 1) * gap;
+    let x = horizontal ? Math.max(8, (options.width - total) / 2) : position === "left" ? 8 : options.width - Math.max(...widths) - 8;
+    const y = position === "bottom" ? options.height - 16 - (occupied.length - 1 - rowIndex) * lineHeight
+      : position === "top" || position === "top-right" ? (options.model.title === undefined ? 18 : 48) + rowIndex * lineHeight
+      : (options.height - occupied.length * lineHeight) / 2 + font.size + rowIndex * lineHeight;
+    row.forEach(index => { points[index] = { x, y }; x += widths[index]! + gap; });
+  });
+  return points;
 }

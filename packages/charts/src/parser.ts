@@ -1,3 +1,4 @@
+import { readChartTitleText } from './rich-text.ts';
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { BUBBLE_CHART_POINT_LIMIT } from "./model.ts";
 import type {
@@ -139,6 +140,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
     status: "supported", kind, grouping, holeSize,
     ...textStyleProperties(document.root, chartNamespace, drawingNamespace),
     ...titleStyleProperties(children(chart, chartNamespace, "title")[0], chartNamespace, drawingNamespace),
+    ...(readChartTitleText(titleElement, chartNamespace, drawingNamespace) ? { titleText: readChartTitleText(titleElement, chartNamespace, drawingNamespace)! } : {}),
     ...(kind === "bar" || kind === "column" ? {
       gapWidth: barPercent(val(children(chartType, chartNamespace, "gapWidth")[0]) ?? "150", 0, 500, "gap width"),
       overlap: barPercent(val(children(chartType, chartNamespace, "overlap")[0]) ?? (grouping === "stacked" || grouping === "percent-stacked" ? "100" : "0"), -100, 100, "overlap"),
@@ -269,6 +271,7 @@ function parseAxis(element: LosslessXmlElement, namespace: string, drawingNamesp
     kind: element.localName === "catAx" ? "category" : "value",
     position: axisPosition(val(children(element, namespace, "axPos")[0]) ?? "l"),
     title: parseText(children(element, namespace, "title")[0], namespace, drawingNamespace),
+    ...axisRotation(element, namespace, drawingNamespace),
     ...majorUnitProperty(children(element, namespace, "majorUnit")[0]),
     majorGridlines: children(element, namespace, "majorGridlines").length > 0,
     minimum: optionalFiniteVal(scaling === undefined ? undefined : children(scaling, namespace, "min")[0], "axis minimum"),
@@ -460,4 +463,13 @@ function booleanVal(element: LosslessXmlElement | undefined, fallback: boolean):
 
 function axisPosition(raw: string): ChartAxis["position"] {
   return raw === "b" ? "bottom" : raw === "r" ? "right" : raw === "t" ? "top" : "left";
+}
+
+function axisRotation(element: LosslessXmlElement, namespace: string, drawingNamespace: string): { labelRotation?: number } {
+  const txPr = children(element, namespace, "txPr")[0];
+  const body = txPr && children(txPr, drawingNamespace, "bodyPr")[0];
+  const raw = body?.attributes.find(attribute => attribute.localName === "rot" && attribute.namespaceUri === "")?.value;
+  if (raw === undefined || raw === "-60000000") return {};
+  const rotation = Number(raw);
+  return Number.isFinite(rotation) ? { labelRotation: rotation / 60000 } : {};
 }

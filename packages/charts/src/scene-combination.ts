@@ -7,7 +7,7 @@ import { chartFont, chartStroke } from "./scene-style.ts";
 export function combinationScene(context: SceneContext): ChartMark[] {
   const { model, width, height, options } = context;
   const resolve = options.resolveColor;
-  const plots = layoutCombinationChart(model, width, height);
+  const plots = layoutCombinationChart(model, width, height, context.measure);
   const marks: ChartMark[] = [];
   plots.forEach((plot, plotIndex) => {
     const horizontal = plot.model.kind === "bar";
@@ -54,7 +54,7 @@ export function combinationScene(context: SceneContext): ChartMark[] {
     const { plot } = first;
     first.categories.forEach((text, c) => marks.push(first.model.kind === "bar"
       ? { kind: "text", text, x: plot.x - 8, y: plot.y + (c + 0.5) * plot.height / count + 4, anchor: "end", font }
-      : { kind: "text", text, x: plot.x + (c + 0.5) * plot.width / count, y: plot.y + plot.height + 17, anchor: "middle", font }));
+      : { kind: "text", text, x: plot.x + (c + 0.5) * plot.width / count, y: plot.y + plot.height + font.size + 5, anchor: first.categoryRotation < 0 ? "end" : first.categoryRotation > 0 ? "start" : "middle", rotate: first.categoryRotation, font }));
   }
   if (model.legend) {
     marks.push(...legendMarks(context, model.series.map((series, index) => ({

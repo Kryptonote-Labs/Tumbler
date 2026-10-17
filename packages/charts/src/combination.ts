@@ -1,3 +1,4 @@
+import { chartFont, type ChartFont } from './scene-style.ts';
 import { chartAxisTicks } from "./axis-scale.ts";
 import {
   cartesianStack,
@@ -10,6 +11,7 @@ export function layoutCombinationChart(
   model: SupportedChartModel,
   width: number,
   height: number,
+  measure?: (text: string, font: ChartFont) => number,
 ) {
   const plots = (model.plots ?? [model]).map(({ plots: _nested, ...plot }) => ({
     ...plot,
@@ -27,9 +29,10 @@ export function layoutCombinationChart(
       },
       width,
       height,
+      measure,
     ),
   );
-  const common = layoutCartesianChart(model, width, height);
+  const common = layoutCartesianChart(model, width, height, measure);
   const rightAxis = plots.some((plot) =>
     plot.axes.some(
       (axis) =>
@@ -69,9 +72,13 @@ export function layoutCombinationChart(
       axis,
       minimum,
       maximum,
-      ticks: chartAxisTicks(minimum, maximum, axis?.majorUnit),
+      ticks: chartAxisTicks(minimum, maximum, axis?.majorUnit, {
+        length: plot.kind === "bar" ? rect.width : rect.height,
+        labelSize: chartFont("tick", axis?.textStyle, plot).size * (plot.kind === "bar" ? 2 : 1),
+      }),
       plot: rect,
       categories: common.categories,
+      categoryRotation: common.categoryRotation,
       coordinate,
       points: plot.series.map((_, s) =>
         common.categories.map((_, c) => {

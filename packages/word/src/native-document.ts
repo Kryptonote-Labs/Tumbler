@@ -1,3 +1,5 @@
+import { chartTitleFromWord } from './chart-title.ts';
+import { withWordDrawingGeometry } from './drawing-geometry.ts';
 import { reconcileWordStories, reconcileWordContentAndStories } from './content-export-batch.ts';
 import { DEFAULT_WORD_THEME, resolveWordColour, resolveWordPaintProperties } from './theme-colours.ts';
 import { isWordAuthoredList, registerWordListLevel, wordListMarker, type WordAuthoredList } from './authored-list.ts';
@@ -12,7 +14,7 @@ import { createWordStory, wordStoryArtifact, storyMainArtifact, type WordStoryTa
 import { NativeWordSource, retainOpaqueBlocks } from './native-source.ts';
 import type { WordArtifact } from './artifact.ts';
 import { reconcileWordContent } from './content-export.ts';
-import { wordParagraphText } from './text.ts';
+import { wordParagraphText, wordParagraphTextSegments } from './text.ts';
 import type { WordInline } from './document.ts';
 import type { WordParagraphNumbering } from './numbering.ts';
 import { authoredTableGrid } from './authored-table.ts';
@@ -408,7 +410,14 @@ export class NativeWordDocument implements WordLayoutSource {
                 const id = allocate();
                 contents.push({ ...inherited.content, elementId: id });
                 const drawing = compiled?.artifact.document.drawings.get(inherited.content.elementId);
-                if (drawing) media.push({ ...drawing, elementId: id });
+                if (drawing) {
+                  let updated = withWordDrawingGeometry(drawing, authoredRun.drawing);
+                  if (updated.kind === 'chart' && (authoredRun.chartTitle !== undefined || authoredRun.chartTitleText !== undefined)) {
+                    const { titleFormula: _formula, titleText: _text, ...model } = updated.model;
+                    updated = { ...updated, model: { ...model, title: authoredRun.chartTitleText?.map(p => p.runs.map(r => r.text).join('')).join('\n') ?? authoredRun.chartTitle, ...(authoredRun.chartTitleText ? { titleText: chartTitleFromWord(authoredRun.chartTitleText) } : {}) } };
+                  }
+                  media.push({ ...updated, elementId: id });
+                }
               } else {
                 if (!authoredRun.text.isWellFormed()) throw new Error('Invalid document text.');
                 for (const part of authoredRun.text.split(/([\t\n\u2028])/)) {
@@ -527,6 +536,28 @@ export class NativeWordDocument implements WordLayoutSource {
   }
 
   /** Inspect section and table-grid dimensions without guessing fonts or claiming rendered bounds. */
+  /** Resolve a drawing from its current logical text offset, including inside tables. */
+  drawingAt(start: number) {
+    const position = this.paragraphs().find((p) => start >= p.start && start < p.end);
+    if (!position) return undefined;
+    const find = (blocks: readonly WordBlock[]): WordParagraph | undefined => {
+      for (const block of blocks) {
+        if (block.kind === 'paragraph' && block.elementId === position.id) return block;
+        if (block.kind === 'table') {
+          const found = find(block.rows.flatMap((row) => row.cells.flatMap((cell) => cell.blocks)));
+          if (found) return found;
+        }
+      }
+      return undefined;
+    };
+    const paragraph = find(this.blocks);
+    const segment =
+      paragraph &&
+      wordParagraphTextSegments(undefined, paragraph).find(
+        (segment) => segment.kind === 'drawing' && segment.start === start - position.start,
+      );
+    return segment && this.drawings.get(segment.elementId);
+  }
   geometryAt(offset: number, tableDepth = 0) {
     const paragraphs = this.paragraphs();
     const paragraph = paragraphs.find(p => p.start <= offset && offset <= p.end);

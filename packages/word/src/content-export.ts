@@ -1,3 +1,5 @@
+import { chartTitleFromWord } from './chart-title.ts';
+import { updateChartTitle } from '@tumblerjs/charts';
 import { mergeAuthoredStyles, missingAuthoredStyles } from './package-styles.ts';
 import { wordStoryArtifact } from './stories.ts';
 import type { WordBlock } from './document.ts';
@@ -41,7 +43,7 @@ export function reconcileWordContent(
     let offset = 0;
     for (const run of paragraph.runs) {
       const drawing = document.drawings.get(run.source!);
-      const image = run.image;
+      const image = run.drawing ?? run.image;
       if (drawing && image) {
         const layout =
           drawing.placement === 'inline'
@@ -50,6 +52,8 @@ export function reconcileWordContent(
               ? 'behind'
               : 'front';
         const moved =
+          (run.drawing?.x !== undefined && drawing.anchor?.horizontalRelativeTo !== 'page') ||
+          (run.drawing?.y !== undefined && drawing.anchor?.verticalRelativeTo !== 'page') ||
           (image.layout !== undefined && image.layout !== layout) ||
           (image.x !== undefined &&
             image.x !== (drawing.anchor?.horizontalOffsetPoints ?? 0)) ||
@@ -166,10 +170,18 @@ export function prepareWordContent(
       ((batchRole === 'story' && /\/(image|numbering)$/.test(rel.type)) || (/\/theme$/.test(rel.type) && !document.styles.themeColors))) ||
     paragraphs.some(p => p.runs.some(run => {
       const drawing = document.drawings.get(run.source!);
-      return drawing && run.image && drawingNeedsUpdate(drawing, run.image);
+      const geometry = run.drawing ?? run.image;
+      if (run.chartTitle !== undefined || run.chartTitleText !== undefined) return true;
+      return drawing && geometry && drawingNeedsUpdate(drawing, geometry, run.drawing !== undefined);
     }))
   )) return undefined;
   const transaction = batchTransaction ?? beginPackageTransaction(document.package);
+  for (const paragraph of paragraphs) for (const run of paragraph.runs) {
+    const drawing = document.drawings.get(run.source!);
+    if (drawing?.kind !== 'chart' || (run.chartTitle === undefined && run.chartTitleText === undefined)) continue;
+    const part = document.package.getPart(drawing.partName)!;
+    transaction.replacePart(drawing.partName, updateChartTitle(document.package.readPart(part), run.chartTitleText ? chartTitleFromWord(run.chartTitleText) : run.chartTitle!));
+  }
   mergeAuthoredStyles(document, paragraphs.flatMap(p => p.styleId ? [p.styleId] : []), transaction);
   let prefix = 'tumbler-content-';
   let existingIds = new Set<string>();
@@ -281,10 +293,13 @@ export function prepareWordContent(
 
 function drawingNeedsUpdate(
   drawing: import('./drawings.ts').WordDrawing,
-  image: NonNullable<import('./create.ts').WordTextRun['image']>,
+  image: import('./drawing-geometry.ts').WordDrawingGeometry,
+  pageRelative = false,
 ) {
   const layout = drawing.placement === 'inline' ? 'inline' : drawing.anchor?.behindDocument ? 'behind' : 'front';
-  return drawing.widthPoints !== image.width || drawing.heightPoints !== image.height ||
+  return (pageRelative && image.x !== undefined && drawing.anchor?.horizontalRelativeTo !== 'page') ||
+    (pageRelative && image.y !== undefined && drawing.anchor?.verticalRelativeTo !== 'page') ||
+    drawing.widthPoints !== image.width || drawing.heightPoints !== image.height ||
     (image.layout !== undefined && image.layout !== layout) ||
     (image.x !== undefined && image.x !== (drawing.anchor?.horizontalOffsetPoints ?? 0)) ||
     (image.y !== undefined && image.y !== (drawing.anchor?.verticalOffsetPoints ?? 0));

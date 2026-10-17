@@ -1,4 +1,4 @@
-export { cartesianAxisScale, chartAxisTicks } from "./axis-scale.ts";
+export { cartesianAxisScale, chartAxisTicks, type ChartAxisSpace } from "./axis-scale.ts";
 export { layoutBarBand } from "./bar-layout.ts";
 export { resolveChartColor, transformChartColor } from "./colors.ts";
 
@@ -36,3 +36,7 @@ export type { ChartMark, ChartScene, ChartSceneOptions } from "./scene-marks.ts"
 export { CHART_STROKE_DEFAULTS, CHART_TEXT_DEFAULTS, chartFont, chartFontShorthand, chartLegendPositions, chartStroke } from "./scene-style.ts";
 export type { ChartColorResolver, ChartFont, ChartStroke, ChartTextRole } from "./scene-style.ts";
 export { paintChartScene, type ChartCanvasContext } from "./canvas.ts";
+
+export { updateChartTitle } from './title-edit.ts';
+
+export type { ChartTextParagraph } from './model.ts';

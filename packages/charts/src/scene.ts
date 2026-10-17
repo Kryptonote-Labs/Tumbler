@@ -1,3 +1,4 @@
+import { chartTitleMarks } from './title-scene.ts';
 import { resolveChartColor } from "./colors.ts";
 import type { SupportedChartModel } from "./model.ts";
 import { cartesianScene } from "./scene-cartesian.ts";
@@ -21,7 +22,7 @@ export function layoutChartScene(model: SupportedChartModel, width: number, heig
     measure: (text, font) => options.measureText?.(text, chartFontShorthand(font)) ?? text.length * font.size * 0.55,
   };
   const marks: ChartMark[] = [{ kind: "rect", x: 0.5, y: 0.5, width: Math.max(0, width - 1), height: Math.max(0, height - 1), fill: "#ffffff", stroke: "#d9d9d9" }];
-  if (model.title !== undefined) marks.push({ kind: "text", text: model.title, x: width / 2, y: 22, anchor: "middle", font: chartFont("title", model.titleStyle, model, options.resolveColor) });
+  marks.push(...chartTitleMarks(context));
   marks.push(...(model.plots ? combinationScene(context)
     : model.kind === "pie" || model.kind === "doughnut" ? pieScene(context)
     : model.kind === "scatter" || model.kind === "bubble" ? xyScene(context)

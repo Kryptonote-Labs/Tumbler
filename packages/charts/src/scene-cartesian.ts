@@ -8,7 +8,7 @@ import { chartFont, chartStroke } from "./scene-style.ts";
 export function cartesianScene(context: SceneContext): ChartMark[] {
   const { model, width, height, options } = context;
   const resolve = options.resolveColor;
-  const layout = layoutCartesianChart(model, width, height);
+  const layout = layoutCartesianChart(model, width, height, context.measure);
   const { plot, minimum, maximum } = layout;
   const horizontal = model.kind === "bar";
   const count = Math.max(1, layout.categories.length);
@@ -62,18 +62,18 @@ export function cartesianScene(context: SceneContext): ChartMark[] {
   });
 
   const font = chartFont("category", categoryAxis?.textStyle, model, resolve);
-  const step = Math.max(1, Math.ceil(count / Math.max(1, Math.floor((horizontal ? plot.height : plot.width) / 58))));
+  const step = horizontal ? Math.max(1, Math.ceil(count * font.size * 1.5 / plot.height)) : 1;
   layout.categories.forEach((category, index) => {
     if (index % step !== 0) return;
     marks.push(horizontal
       ? { kind: "text", text: category, x: plot.x - 7, y: plot.y + (index + 0.5) / count * plot.height + 4, anchor: "end", font }
-      : { kind: "text", text: category, x: plot.x + (index + 0.5) / count * plot.width, y: plot.y + plot.height + 17, anchor: "middle", font });
+      : { kind: "text", text: category, x: plot.x + (index + 0.5) / count * plot.width, y: plot.y + plot.height + font.size + 5, anchor: layout.categoryRotation < 0 ? "end" : layout.categoryRotation > 0 ? "start" : "middle", rotate: layout.categoryRotation, font });
   });
   if (model.legend !== undefined) {
     marks.push(...legendMarks(context, model.series.map((series, index) => ({
       label: series.title ?? `Series ${index + 1}`,
-      swatch: (x: number, y: number): ChartMark => ({ kind: "rect", x, y: y - 8, width: 10, height: 10, fill: context.color(series, index) }),
-    })), 15));
+      swatch: (x: number, y: number): ChartMark => ({ kind: "rect", x, y: y - 7, width: 8, height: 8, fill: context.color(series, index) }),
+    })), 12));
   }
   return marks;
 }
