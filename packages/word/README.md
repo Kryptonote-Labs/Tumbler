@@ -530,3 +530,8 @@ revision 25.0, §2.1.1355, documents Word's restriction on `positionV` with
 unchanged imported paragraph anchors remain intact. Shape creation defaults are an
 authoring choice, not an ECMA restriction. Square, tight, through and top-and-bottom
 text-flow layout are not implemented by this change.
+
+Floating drawings retain horizontal `wp:align` placement. Page, margin, column,
+and side-margin alignment is resolved against the final page bounds, including
+inside/outside alignment on alternating pages. Vertical alignment remains outside
+this support; numeric vertical offsets are unchanged.
