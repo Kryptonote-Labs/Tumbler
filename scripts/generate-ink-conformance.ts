@@ -42,3 +42,15 @@ await Bun.write(resolve(directory, 'direct-native.docx'), docx(direct));
 await mkdir(resolve(directory, 'invalid'), { recursive: true });
 await Bun.write(resolve(directory, 'invalid/transform.docx'), docx(direct.replace('<w14:xfrm>', '<w14:xfrm rot="bad">')));
 console.log(`Generated ${cases.length * 2} InkML files, SVG previews and native DOCX controls in ${directory}.`);
+
+// Exercise native geometry through the same public API used by host editors and exports.
+const { openWordArtifact } = await import('../packages/word/src/index.ts');
+for (const [name, xml] of [['native-only', documentXml], ['direct-native', direct]] as const) {
+  let artifact = openWordArtifact(docx(xml));
+  for (const layout of ['front', 'behind', 'inline'] as const) {
+    const drawing = [...artifact.document.drawings.values()][0]!;
+    artifact = artifact.updateDrawing({ elementId: drawing.elementId, widthPoints: 80, heightPoints: 60,
+      layout, xPoints: 100, yPoints: 120, horizontalRelativeTo: 'page', verticalRelativeTo: 'page' });
+    await Bun.write(resolve(directory, `${name}-${layout}.docx`), artifact.bytes());
+  }
+}

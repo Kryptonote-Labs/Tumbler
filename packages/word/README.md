@@ -112,9 +112,10 @@ Configure the synchronous preview budget with the `inkRendering.maxPoints`
 import option; exceeding it retains the decoded ink and reports
 `inkRenderingDiagnostics`, without rejecting the document.
 The object retains its original InkML and fallback through nearby text edits and
-export. Word ink editing and geometry changes remain guarded because both the
-source and its cached preview must change together. External relationships are
-not fetched. See [ink conformance](../../docs/ink-conformance.md) for limits.
+export. Moving and resizing ink updates the native drawing frame, its transform,
+and the VML fallback together, including inline and floating placement. The InkML
+strokes and embedded image bytes remain unchanged. Stroke editing is not yet
+exposed by the Word API. External relationships are not fetched. See [ink conformance](../../docs/ink-conformance.md) for limits.
 
 The current reader/layout slice includes Strict and Transitional main parts,
 styles and themes, numbering, sections and columns, tables and nested tables,

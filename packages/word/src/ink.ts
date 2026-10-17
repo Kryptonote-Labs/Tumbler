@@ -38,8 +38,8 @@ function projectWordInkDrawing(element: LosslessXmlElement, original: WordDrawin
     // Preview convention: fit sample-centre bounds to the frame on each axis, then
     // expand for the nib. This is an approximation, not a verified Word transform.
     const { traceBounds, bounds } = rendered;
-    const sx = traceBounds.width > 0 ? original.widthPoints / traceBounds.width : 1;
-    const sy = traceBounds.height > 0 ? original.heightPoints / traceBounds.height : 1;
+    const sx = original.widthPoints / (traceBounds.width || bounds.width);
+    const sy = original.heightPoints / (traceBounds.height || bounds.height);
     const transform = parts[0]!.children.find(child => child.kind === 'element' && child.namespaceUri === word2010 && child.localName === 'xfrm');
     if (transform?.kind === 'element' && transform.attributes.some(a => ['rot', 'flipH', 'flipV'].includes(a.localName) && !['0', 'false'].includes(a.value))) return unavailable('This ink drawing transform is not supported by the vector preview.');
     if (transform?.kind === 'element' && transform.children.some(child => child.kind === 'element' && child.localName === 'off' && child.attributes.some(a => ['x', 'y'].includes(a.localName) && Number(a.value) !== 0))) return unavailable('This ink drawing transform is not supported by the vector preview.');

@@ -25,7 +25,7 @@ The public reader is named `readOfficeInk` to make that distinction explicit.
 | Raster operations | All 16 RGB truth tables tested independently. SVG supports copyPen and noOperation; other operations require a raster consumer and return a rendering diagnostic. |
 | Geometry | Includes nib bounds, isolated dots, repeated points, variable pressure, pen switches and swept rectangle/ellipse segments. Transparency is applied once per stroke to avoid darkened joins. |
 | Preservation | No-edit original bytes, UTF-8/UTF-16 source edits, unknown annotations and namespaces. Trace edits change only sample text and refuse to erase opaque markup. |
-| Word integration | Supports Strict and Transitional host namespaces. Resolves internal customXml ink parts, retains native data with bitmap previews, generates SVG when supported without a bitmap, and preserves both representations through nearby text edits. Geometry changes remain guarded. |
+| Word integration | Supports Strict and Transitional host namespaces. Resolves internal customXml ink parts, retains native data with bitmap previews, generates SVG when supported without a bitmap, and preserves both representations through nearby text edits. Resize and placement edits update the native frame, contentPart transform and VML preview together, preserving InkML and media bytes. |
 | Invalid input | Namespace, duplicate ID, unresolved/external references, illegal trace syntax, channel counts, range overflow, DTD rejection and configurable XML resource limits. |
 
 The renderer uses straight segments and scales nib dimensions linearly across the
@@ -47,8 +47,9 @@ Preserving these constructs is not the same as interpreting them.
 The Word vector preview fits sample-centre bounds to `wp:extent` independently
 on X and Y, then expands the frame for the pen bounds. This is an approximation,
 not a verified Word extent interpretation. It can stretch the ink when aspect
-ratios differ. A zero-range axis uses the native physical scale. The supplied
-Word bitmap remains preferred; synthetic fixtures test the implementation's
+ratios differ. A zero-range axis fits its pen bounds to the native frame, so dots
+and horizontal/vertical strokes remain resizable. The supplied Word bitmap remains
+preferred; synthetic fixtures test the implementation's
 placement convention, not pixel parity with Word.
 
 Synchronous SVG previews have a configurable 100,000-point work budget. The
@@ -90,7 +91,7 @@ bash scripts/fetch-inkml-schemas.sh /tmp/ink-schemas
 python scripts/validate-inkml-schema.py \
   --schema /tmp/ink-schemas/inkml.xsd \
   --xml-schema /tmp/ink-schemas/xml.xsd /tmp/ink-fixtures/*.inkml
-bun run compatibility:openxml -- --office2010 /tmp/ink-fixtures/native-only.docx /tmp/ink-fixtures/direct-native.docx
+bun run compatibility:openxml -- --office2010 /tmp/ink-fixtures/native-only*.docx /tmp/ink-fixtures/direct-native*.docx
 # This negative control must fail:
 bun run compatibility:openxml -- --office2010 /tmp/ink-fixtures/invalid/transform.docx
 ```
@@ -117,3 +118,25 @@ the ink region. DOCX round trips discarded the InkML parts in both cases.
 LibreOffice is useful for checking the fallback but is not a native InkML oracle.
 The native-only synthetic DOCX above allows this check without a private file.
 Native SVG output was also rasterized with CairoSVG and inspected independently.
+
+## Word geometry edits
+
+`WordArtifact.resizeDrawing` and `updateDrawing`, and authored `drawing`/`image`
+geometry in `NativeWordDocument`, accept projected ink drawings. Sizes and positions
+refer to the displayed bounds, including the pen. Resizing scales the native frame
+and its inset relative to those bounds, the `w14:xfrm` offsets/extents, effect
+extents, and the VML bitmap dimensions. Position changes update both DrawingML
+and VML, including page, column, paragraph and line bases, front/behind text,
+and inline placement. The original stroke samples, bitmap bytes, relationships,
+and unrelated XML are retained. This is geometry editing, not stroke editing or
+bitmap regeneration.
+
+Tests cover Strict and Transitional documents, authored export with and without
+bitmap previews, degenerate strokes, unchanged bytes on no-op resize, invalid
+measurements, UTF-16 XML, wrapping, undo/redo, and repeated placement changes.
+The fixture generator includes front, behind and inline geometry edits for
+both wrapped and direct native ink. All eight positive DOCX controls pass
+Microsoft Open XML SDK Office 2010 validation; the malformed-transform negative
+control fails as expected. Fixtures are synthetic and MIT
+licensed. Native vector rendering retains the approximation described above;
+these tests do not establish pixel parity with Microsoft Word.
