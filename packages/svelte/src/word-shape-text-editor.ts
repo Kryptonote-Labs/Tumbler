@@ -42,6 +42,7 @@ export class ShapeTextEditorView implements ShapeTextEditor {
     private selectionChanged: () => void,
     private escape: () => void,
     private undo: (redo: boolean) => void,
+    private layout?: (root: HTMLDivElement) => void,
   ) {
     this.story = new WordShapeText(shape);
     this.signature = JSON.stringify(shapeTextParagraphs(shape));
@@ -331,6 +332,7 @@ export class ShapeTextEditorView implements ShapeTextEditor {
     const focused = this.root.ownerDocument.activeElement === this.root;
     const paragraphs = this.story.paragraphs();
     renderShapeText(this.root, paragraphs, this.model);
+    this.layout?.(this.root);
     if (focused) this.restore();
   }
   destroy() {
