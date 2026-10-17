@@ -9,6 +9,7 @@ import { RelationshipsError, type OpcPackage, type OpcPart, type Relationships }
 import { readWordStyles, type WordStyles } from "./styles.ts";
 import { readWordNumbering, type WordNumbering } from "./numbering.ts";
 import { readWordDrawings, type WordDrawing } from "./drawings.ts";
+import { readWordSymbol, type WordSymbol } from './symbols.ts';
 
 const MAIN_DOCUMENT_CONTENT_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
@@ -208,6 +209,7 @@ export interface WordPageFieldContent {
 }
 
 export type WordRunContent =
+  | WordSymbol
   | WordPageFieldContent
   | WordText
   | WordTab
@@ -747,6 +749,13 @@ function parseRunContent(
         attribute.localName === "space" && attribute.value === "preserve"
       ),
     });
+  }
+  if (element.localName === "sym") {
+    const symbol = readWordSymbol(element, namespace);
+    if (!symbol) return unsupportedRunContent(element);
+    budget.textCharacters += symbol.value.length;
+    if (budget.textCharacters > budget.maxTextCharacters) limit("text character", budget.maxTextCharacters);
+    return symbol;
   }
   if (element.localName === "tab" || element.localName === "ptab") {
     const alignment = attr(element, namespace, "alignment");

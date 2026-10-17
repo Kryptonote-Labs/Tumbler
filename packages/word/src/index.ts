@@ -165,3 +165,5 @@ export { wordDrawingPlacement, type WordDrawingPosition } from './drawing-placem
 export { isWordDrawingGeometry, withWordDrawingGeometry, type WordDrawingGeometry } from './drawing-geometry.ts';
 
 export { wordChartTitleText, chartTitleFromWord } from './chart-title.ts';
+
+export type { WordSymbol } from './symbols.ts';
