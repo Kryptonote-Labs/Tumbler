@@ -5,7 +5,7 @@
   import OoxmlChart from './OoxmlChart.svelte';
   import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
 
-  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo, oncharttitlechange }: {
+  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo, oncharttitlechange, oncharttitletextchange }: {
     drawing: WordDrawing; width: number; height: number; position: string; scale: number;
     editable: boolean; selected: boolean;
     pageX: number; pageY: number;
@@ -21,6 +21,7 @@
     ontexteditor?: (editor: import('./word-shape-text-editor.ts').ShapeTextEditor | undefined) => void;
     ontextselection?: () => void;
     ontextundo?: (redo: boolean) => void;
+    oncharttitletextchange?: (paragraphs: readonly import('@tumblerjs/word').WordTextParagraph[]) => void;
     oncharttitlechange?: (title: string) => void;
     ontextchange?: (change: WordShapeTextChange) => void;
   } = $props();
@@ -118,10 +119,10 @@
     if (reason === 'escape') { editingText = undefined; onselect(drawing.elementId); }
     else ontextchange?.({ elementId: drawing.elementId, textBody, text: textBody.map(p => p.runs.map(r => r.text).join('')).join('\n'), reason });
   }
-  $effect(() => { if (!selected) editingText = undefined; });
+  $effect(() => { if (!selected) { editingText = undefined; editingTitle = false; } });
 
   function editTitle() {
-    if (!editable || drawing.kind !== 'chart' || !oncharttitlechange) return;
+    if (!editable || drawing.kind !== 'chart' || (!oncharttitlechange && !oncharttitletextchange)) return;
     cancel(); onselect(drawing.elementId); editingTitle = true;
   }
   function doubleClick(event: MouseEvent) {
@@ -169,7 +170,7 @@
 
 <div class="drawing" class:moving={preview !== undefined} class:behind={currentLayout === 'behind'} class:selected={editable && selected} data-word-drawing={drawing.elementId} contenteditable="false" style={`${position};width:${displayWidth}px;height:${displayHeight}px;translate:${preview === undefined ? 'none' : `${wordPointsToCssPixels(preview.x - pageX)}px ${wordPointsToCssPixels(preview.y - pageY)}px`};--handle-size:${10 / scale}px;--outline-size:${1 / scale}px;--inverse-scale:${1 / scale}`}>
   {#if editingTitle && editable && drawing.kind === 'chart'}
-    <ChartTitleEditor model={drawing.model} oncommit={(title) => { editingTitle = false; if (drawing.kind === 'chart' && title !== (drawing.model.title ?? '')) oncharttitlechange?.(title); }} oncancel={() => { editingTitle = false; }} />
+    <ChartTitleEditor model={drawing.model} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} oncommit={(paragraphs) => { if (oncharttitletextchange) oncharttitletextchange(paragraphs); else oncharttitlechange?.(paragraphs.map(p => p.runs.map(r => r.text).join('')).join('\n')); }} oncancel={() => { editingTitle = false; onselect(drawing.elementId); }} />
   {/if}
   {#if editable && drawing.kind !== 'unsupported' && (onresize !== undefined || onchange !== undefined)}
     {#if editingText !== undefined}

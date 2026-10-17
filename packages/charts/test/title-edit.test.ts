@@ -14,3 +14,20 @@ for (const conformance of ['strict', 'transitional'] as const) {
     });
   }
 }
+
+test('rich title runs retain independent formatting through XML and scene layout', async () => {
+  const { layoutChartScene } = await import('../src/index.ts');
+  const ns = 'http://schemas.openxmlformats.org/drawingml/2006/chart';
+  const xml = new TextEncoder().encode(`<c:chartSpace xmlns:c="${ns}"><c:chart><c:plotArea><c:pieChart/></c:plotArea></c:chart></c:chartSpace>`);
+  const title = [{ alignment: 'center' as const, runs: [
+    { text: 'Chart', style: { bold: true, fontSize: 18, underline: 'double' as const, highlight: '#FFFF00', color: { kind: 'rgb' as const, value: '#C00000' } } },
+    { text: ' Title', style: { bold: false, italic: true, fontSize: 14 } },
+  ] }];
+  const model = parseOoxmlChart(updateChartTitle(xml, title), 'transitional');
+  expect(model.titleText).toEqual(title);
+  if (model.status !== 'supported') throw new Error('Expected chart');
+  const scene = layoutChartScene(model, 576, 336);
+  expect(scene.marks).toContainEqual(expect.objectContaining({ kind: 'text', text: 'Chart', font: expect.objectContaining({ weight: 700, size: 24, color: '#C00000' }) }));
+  expect(scene.marks).toContainEqual(expect.objectContaining({ kind: 'text', text: ' Title', font: expect.objectContaining({ weight: 400, italic: true }) }));
+  expect(scene.marks).toContainEqual(expect.objectContaining({ kind: 'rect', fill: '#FFFF00' }));
+});

@@ -162,3 +162,5 @@ export { shapeTextParagraphs, shapePlainText, isShapeTextBody } from './shape-te
 export { layoutWordShapeText, WORD_SHAPE_TEXT_INSET_POINTS, type WordShapeTextLayout } from './shape-text-layout.ts';
 
 export { isWordDrawingGeometry, withWordDrawingGeometry, type WordDrawingGeometry } from './drawing-geometry.ts';
+
+export { wordChartTitleText, chartTitleFromWord } from './chart-title.ts';

@@ -1,3 +1,4 @@
+import { chartTitleHeight } from './title-scene.ts';
 import { chartFont, chartLegendPositions, type ChartFont } from './scene-style.ts';
 import { cartesianAxisScale, chartAxisTicks } from "./axis-scale.ts";
 import { BUBBLE_CHART_POINT_LIMIT, type ChartDataSequence, type SupportedChartModel } from "./model.ts";
@@ -80,7 +81,7 @@ export function layoutCartesianChart(model: SupportedChartModel, width: number, 
   const categoryRotation = horizontal ? 0 : categoryAxis?.labelRotation ?? (labelWidth + 8 > plotWidth / Math.max(1, categories.length) ? -45 : 0);
   const radians = Math.abs(categoryRotation) * Math.PI / 180;
   const categoryHeight = horizontal ? 20 : Math.abs(Math.sin(radians)) * labelWidth + Math.abs(Math.cos(radians)) * categoryFont.size + 14;
-  const top = (model.title === undefined ? 16 : chartFont("title", model.titleStyle, model).size + 28) + (legend === "top" ? 28 : 0);
+  const top = (model.title === undefined ? 16 : chartTitleHeight(model) + 28) + (legend === "top" ? 28 : 0);
   const plot = Object.freeze({ x: left, y: top, width: plotWidth, height: Math.max(1, height - top - bottomLegend - categoryHeight) });
   const axis = model.axes.find((candidate) => candidate.kind === "value" && !candidate.deleted);
   const values = model.series.flatMap((_, series) => categories.flatMap((_, index) => {

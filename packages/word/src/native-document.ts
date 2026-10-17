@@ -1,3 +1,4 @@
+import { chartTitleFromWord } from './chart-title.ts';
 import { withWordDrawingGeometry } from './drawing-geometry.ts';
 import { reconcileWordStories, reconcileWordContentAndStories } from './content-export-batch.ts';
 import { DEFAULT_WORD_THEME, resolveWordColour, resolveWordPaintProperties } from './theme-colours.ts';
@@ -411,9 +412,9 @@ export class NativeWordDocument implements WordLayoutSource {
                 const drawing = compiled?.artifact.document.drawings.get(inherited.content.elementId);
                 if (drawing) {
                   let updated = withWordDrawingGeometry(drawing, authoredRun.drawing);
-                  if (updated.kind === 'chart' && authoredRun.chartTitle !== undefined) {
-                    const { titleFormula: _formula, ...model } = updated.model;
-                    updated = { ...updated, model: { ...model, title: authoredRun.chartTitle } };
+                  if (updated.kind === 'chart' && (authoredRun.chartTitle !== undefined || authoredRun.chartTitleText !== undefined)) {
+                    const { titleFormula: _formula, titleText: _text, ...model } = updated.model;
+                    updated = { ...updated, model: { ...model, title: authoredRun.chartTitleText?.map(p => p.runs.map(r => r.text).join('')).join('\n') ?? authoredRun.chartTitle, ...(authoredRun.chartTitleText ? { titleText: chartTitleFromWord(authoredRun.chartTitleText) } : {}) } };
                   }
                   media.push({ ...updated, elementId: id });
                 }

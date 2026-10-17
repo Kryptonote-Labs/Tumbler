@@ -38,3 +38,5 @@ export type { ChartColorResolver, ChartFont, ChartStroke, ChartTextRole } from "
 export { paintChartScene, type ChartCanvasContext } from "./canvas.ts";
 
 export { updateChartTitle } from './title-edit.ts';
+
+export type { ChartTextParagraph } from './model.ts';

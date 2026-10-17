@@ -82,8 +82,15 @@ after title, category labels, and wrapped legend rows, so these areas affect aut
 value ticks together. The Word sample chart XML is retained as a focused fixture;
 its 9pt labels are tested at original, short, and narrow dimensions.
 
-`updateChartTitle(bytes, title)` replaces an OOXML chart title while retaining its
-layout, title properties, series, and data. Word authored runs expose `chartTitle`
-for native projection and DOCX export. `WordDrawingView` hosts can provide
-`oncharttitlechange` to enable double-click title editing (or F2 when selected):
-Enter/blur commits, Escape cancels.
+`updateChartTitle(bytes, title)` accepts plain text or rich title paragraphs and
+preserves the chart's layout, series, and data. Parsed `titleText` retains separate
+runs, including their font, emphasis, colour, underline, strikethrough, highlight,
+vertical alignment, and character spacing. SVG and canvas draw those runs through
+the shared chart scene.
+
+Word authored runs expose `chartTitleText` for rich titles (`chartTitle` remains
+supported for plain-text callers). `WordDrawingView` hosts provide
+`oncharttitletextchange` and the existing text-editor/selection/undo callbacks to
+connect title editing to the same formatting controls as shape text. Double-click
+the title or press F2 while the chart is selected. Edits apply as you type; Enter
+adds a paragraph and Escape leaves text editing. Undo restores earlier changes.

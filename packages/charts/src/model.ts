@@ -26,6 +26,11 @@ export type ChartColor = (
 };
 
 export interface ChartTextStyle {
+  readonly highlight?: string;
+  readonly verticalAlign?: "baseline" | "superscript" | "subscript";
+  readonly characterSpacingPoints?: number;
+  readonly underline?: "none" | "single" | "double";
+  readonly strike?: boolean;
   readonly fontSize?: number;
   readonly fontFamily?: string;
   readonly bold?: boolean;
@@ -98,7 +103,13 @@ export interface ChartAxis {
   readonly numberFormatSourceLinked?: boolean;
 }
 
+export interface ChartTextParagraph {
+  readonly alignment?: "start" | "center" | "end" | "justify";
+  readonly runs: readonly { readonly text: string; readonly style?: ChartTextStyle }[];
+}
+
 interface ChartModelBase {
+  readonly titleText?: readonly ChartTextParagraph[];
   readonly textStyle?: ChartTextStyle;
   readonly titleStyle?: ChartTextStyle;
   readonly themeFonts?: Readonly<Record<string, string>>;

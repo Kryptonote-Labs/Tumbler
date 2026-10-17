@@ -1,23 +1,30 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { chartFont, chartFontShorthand, type ChartModel } from '@tumblerjs/charts';
-  let { model, oncommit, oncancel }: { model: ChartModel; oncommit: (title: string) => void; oncancel: () => void } = $props();
-  let value = $state(untrack(() => model.title ?? ''));
-  let finished = false;
-  const font = $derived(chartFont('title', model.titleStyle, model));
-  function focus(input: HTMLInputElement) { input.focus(); input.select(); }
-  function commit() { if (finished) return; finished = true; oncommit(value); }
+  import type { ChartModel } from '@tumblerjs/charts';
+  import { wordChartTitleText, type WordAuthoredShape, type WordTextParagraph } from '@tumblerjs/word';
+  import { ShapeTextEditorView, type ShapeTextEditor } from './word-shape-text-editor.ts';
+  let { model, oncommit, oncancel, oneditor, onselection, onundo }: {
+    model: ChartModel;
+    oncommit: (paragraphs: readonly WordTextParagraph[]) => void;
+    oncancel: () => void;
+    oneditor?: (view: ShapeTextEditor | undefined) => void;
+    onselection?: () => void;
+    onundo?: (redo: boolean) => void;
+  } = $props();
+  let view = $state.raw<ShapeTextEditorView>();
+  const text = $derived(wordChartTitleText(model));
+  const shape = $derived<WordAuthoredShape>({ preset: 'rect', width: 100, height: 30, fill: 'none', outline: 'none', outlineWidth: 0, textBody: text });
+  function mount(root: HTMLDivElement) {
+    const current = new ShapeTextEditorView(root, shape, oncommit, () => onselection?.(), oncancel, redo => onundo?.(redo));
+    view = current;
+    return { destroy() { view = undefined; current.destroy(); } };
+  }
+  $effect(() => { const current = view, value = shape; untrack(() => current?.update(value, true)); });
+  $effect(() => { const current = view; if (!current) return; untrack(() => oneditor?.(current)); return () => untrack(() => oneditor?.(undefined)); });
 </script>
 
-<input aria-label="Chart title" bind:value use:focus style={`font:${chartFontShorthand(font)};color:${font.color};height:${font.size * 1.5}px`} onblur={commit}
-  onpointerdown={(event) => event.stopPropagation()}
-  onkeydown={(event) => {
-    event.stopPropagation();
-    if (event.isComposing) return;
-    if (event.key === 'Enter') { event.preventDefault(); commit(); }
-    if (event.key === 'Escape') { event.preventDefault(); finished = true; oncancel(); }
-  }} />
+<div class="title-editor" data-shape-text role="textbox" aria-label="Chart title" aria-multiline="true" contenteditable="true" tabindex="0" use:mount></div>
 
 <style>
-  input { position:absolute;left:8px;right:8px;top:4px;width:calc(100% - 16px);box-sizing:border-box;padding:0;text-align:center;background:white;border:1px solid currentColor;outline:none;z-index:3; }
+  .title-editor { position:absolute;left:8px;right:8px;top:4px;box-sizing:border-box;padding:0;min-height:1em;text-align:center;background:white;border:1px solid #777;outline:none;z-index:3;cursor:text;white-space:pre-wrap; }
 </style>

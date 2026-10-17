@@ -1,3 +1,4 @@
+import { chartTitleFromWord } from './chart-title.ts';
 import { updateChartTitle } from '@tumblerjs/charts';
 import { mergeAuthoredStyles, missingAuthoredStyles } from './package-styles.ts';
 import { wordStoryArtifact } from './stories.ts';
@@ -170,16 +171,16 @@ export function prepareWordContent(
     paragraphs.some(p => p.runs.some(run => {
       const drawing = document.drawings.get(run.source!);
       const geometry = run.drawing ?? run.image;
-      if (run.chartTitle !== undefined) return true;
+      if (run.chartTitle !== undefined || run.chartTitleText !== undefined) return true;
       return drawing && geometry && drawingNeedsUpdate(drawing, geometry, run.drawing !== undefined);
     }))
   )) return undefined;
   const transaction = batchTransaction ?? beginPackageTransaction(document.package);
   for (const paragraph of paragraphs) for (const run of paragraph.runs) {
     const drawing = document.drawings.get(run.source!);
-    if (drawing?.kind !== 'chart' || run.chartTitle === undefined) continue;
+    if (drawing?.kind !== 'chart' || (run.chartTitle === undefined && run.chartTitleText === undefined)) continue;
     const part = document.package.getPart(drawing.partName)!;
-    transaction.replacePart(drawing.partName, updateChartTitle(document.package.readPart(part), run.chartTitle));
+    transaction.replacePart(drawing.partName, updateChartTitle(document.package.readPart(part), run.chartTitleText ? chartTitleFromWord(run.chartTitleText) : run.chartTitle!));
   }
   mergeAuthoredStyles(document, paragraphs.flatMap(p => p.styleId ? [p.styleId] : []), transaction);
   let prefix = 'tumbler-content-';

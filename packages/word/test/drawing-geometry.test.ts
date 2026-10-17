@@ -94,3 +94,20 @@ test('chart title edits agree in native layout and DOCX export and can be undone
   document.update(content.map(block => block.kind === 'paragraph' ? { ...block, runs: block.runs.map(run => ({ ...run, chartTitle: '' })) } : block));
   expect([...document.artifact().document.drawings.values()][0]).toMatchObject({ kind: 'chart', model: { title: '' } });
 });
+
+test('mixed chart title formatting survives native projection and DOCX export', () => {
+  const source = fixture();
+  const document = new NativeWordDocument({ source });
+  const content = importWordContent(source);
+  const chartTitleText = [{ alignment: 'center' as const, runs: [
+    { text: 'Chart', format: { bold: true, color: '#C00000', fontSizePoints: 18, underline: 'single' as const } },
+    { text: ' Title', format: { bold: false, italic: true, fontFamily: 'Aptos', fontSizePoints: 14 } },
+  ] }];
+  document.update(content.map(block => block.kind === 'paragraph' ? { ...block, runs: block.runs.map(run => ({ ...run, chartTitleText })) } : block));
+  for (const drawing of [document.drawingAt(0), [...document.artifact().document.drawings.values()][0]]) {
+    expect(drawing).toMatchObject({ kind: 'chart', model: { title: 'Chart Title', titleText: [{ runs: [
+      { text: 'Chart', style: { bold: true, color: { value: '#C00000' }, fontSize: 18, underline: 'single' } },
+      { text: ' Title', style: { bold: false, italic: true, fontFamily: 'Aptos', fontSize: 14 } },
+    ] }] } });
+  }
+});

@@ -1,3 +1,4 @@
+import { readChartTitleText } from './rich-text.ts';
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { BUBBLE_CHART_POINT_LIMIT } from "./model.ts";
 import type {
@@ -139,6 +140,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
     status: "supported", kind, grouping, holeSize,
     ...textStyleProperties(document.root, chartNamespace, drawingNamespace),
     ...titleStyleProperties(children(chart, chartNamespace, "title")[0], chartNamespace, drawingNamespace),
+    ...(readChartTitleText(titleElement, chartNamespace, drawingNamespace) ? { titleText: readChartTitleText(titleElement, chartNamespace, drawingNamespace)! } : {}),
     ...(kind === "bar" || kind === "column" ? {
       gapWidth: barPercent(val(children(chartType, chartNamespace, "gapWidth")[0]) ?? "150", 0, 500, "gap width"),
       overlap: barPercent(val(children(chartType, chartNamespace, "overlap")[0]) ?? (grouping === "stacked" || grouping === "percent-stacked" ? "100" : "0"), -100, 100, "overlap"),
