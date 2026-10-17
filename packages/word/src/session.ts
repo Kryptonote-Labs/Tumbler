@@ -1,3 +1,4 @@
+import type { WordInkTraceChange } from './ink-edit.ts';
 import type { WordDrawingChange, WordDrawingResize } from "./drawings.ts";
 import {
   commitEditingHistory,
@@ -53,6 +54,10 @@ export class WordEditingSession {
 
   updateDrawing(change: WordDrawingChange): WordArtifact {
     return this.#commit(this.artifact.updateDrawing(change));
+  }
+
+  replaceInkTrace(change: WordInkTraceChange): WordArtifact {
+    return this.#commit(this.artifact.replaceInkTrace(change));
   }
 
   resizeDrawing(size: WordDrawingResize): WordArtifact {

@@ -54,3 +54,20 @@ for (const [name, xml] of [['native-only', documentXml], ['direct-native', direc
     await Bun.write(resolve(directory, `${name}-${layout}.docx`), artifact.bytes());
   }
 }
+
+// Stroke edits must validate both the copied native part and regenerated legacy preview.
+for (const [name, xml] of [['native-only', documentXml], ['direct-native', direct]] as const) {
+  const artifact = openWordArtifact(docx(xml));
+  const drawing = [...artifact.document.drawings.values()][0]!;
+  const edited = artifact.replaceInkTrace({ elementId: drawing.elementId, traceElementId: drawing.ink!.traces[0]!.elementId, points: [[0, 1000], [1000, 0]] });
+  await Bun.write(resolve(directory, `${name}-stroke-edited.docx`), edited.bytes());
+}
+const fallbackXml = documentXml.replace('</mc:Choice>', '</mc:Choice><mc:Fallback><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" style="width:30pt;height:30pt"><v:imagedata r:id="bitmap"/></v:shape></w:pict></mc:Fallback>');
+const fallbackArtifact = openWordArtifact(buildWordDocumentFixture({
+  documentXml: fallbackXml,
+  relationships: [{ id: 'ink', type: `${r}/customXml`, target: 'ink/ink.xml' }, { id: 'bitmap', type: `${r}/image`, target: 'media/ink.png' }],
+  parts: [{ itemName: 'word/ink/ink.xml', contentType: 'application/inkml+xml', xml: cases[0]! }, { itemName: 'word/media/ink.png', contentType: 'image/png', xml: 'unused synthetic cache' }],
+}));
+const fallbackDrawing = [...fallbackArtifact.document.drawings.values()][0]!;
+const fallbackEdited = fallbackArtifact.replaceInkTrace({ elementId: fallbackDrawing.elementId, traceElementId: fallbackDrawing.ink!.traces[0]!.elementId, points: [[0, 1000], [1000, 0]] });
+await Bun.write(resolve(directory, 'fallback-stroke-edited.docx'), fallbackEdited.bytes());

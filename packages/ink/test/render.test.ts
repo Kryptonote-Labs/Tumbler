@@ -37,7 +37,6 @@ test('Office brush defaults and invalid-value fallback match the profile', () =>
 
 test('transparency applies once per stroke, rectangle nibs sweep a polygon, XML is not injected', () => {
   const result = render({ brush: property('tip', 'rectangle') + property('transparency', '128') + property('antiAliased', '0') + property('color', '&quot; onload=&quot;alert(1)') });
-  expect(result.svg).toContain('<rect');
   expect(result.svg).toContain('<polygon');
   expect(result.svg.match(/opacity=/g)).toHaveLength(1);
   expect(result.svg).toContain('shape-rendering="crispEdges"');
@@ -57,12 +56,9 @@ test('pressure, pen switches and ignorePressure have explicit rendering semantic
 test.each([
   { properties: '' },
   { properties: '<channelProperty channel="X" name="resolution" value="0" units="1/cm"/>' },
-  { brush: property('fitToCurve', 'true') },
   { brush: property('rasterOp', 'xOrPen') },
   { channels: '<channel name="X"/><channel name="Y"/><channel name="F"/>', trace: '0 0 1' },
-  { channels: '<channel name="X"/><channel name="Y"/><channel name="OR"/>', trace: '0 0 10' },
   { channels: '<channel name="X"/><channel name="Y"/><channel name="S"/>', trace: '0 0 1' },
-  { trace: '' },
 ])('reports unsupported rendering rather than drawing a partial result: %j', options => {
   const result = renderOfficeInkSvg(read(options));
   expect(result.supported).toBe(false);
@@ -101,4 +97,17 @@ test('empty traces do not prevent rendering of valid visible strokes', () => {
 test('Office maskNotPen and maskPenNot follow their written operands', () => {
   expect(applyInkRasterOperation('maskNotPen', 0xff0000, 0x00ff00)).toBe(0xff0000);
   expect(applyInkRasterOperation('maskPenNot', 0xff0000, 0x00ff00)).toBe(0x00ff00);
+});
+
+test('absolute length units and host-relative em/ex brush dimensions retain their meanings', () => {
+  const meter = render({ trace: '0 0', brush: property('width', '.001', 'm') + property('height', '.001', 'm') });
+  expect(meter.bounds.width).toBeCloseTo(72 / 25.4);
+  // InkML §6.4 publishes 1pc = 1/22pt, rather than the typographic pica definition.
+  const pica = render({ trace: '0 0', brush: property('width', '22', 'pc') });
+  expect(pica.bounds.width).toBeCloseTo(1);
+  const ink = read({ trace: '0 0', brush: property('width', '2', 'em') + property('height', '3', 'ex') });
+  expect(renderOfficeInkSvg(ink).supported).toBe(false);
+  const result = renderOfficeInkSvg(ink, { relativeUnits: { em: 12, ex: 5 } });
+  expect(result.supported && result.bounds.width).toBe(24);
+  expect(result.supported && result.bounds.height).toBe(15);
 });

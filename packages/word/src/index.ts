@@ -167,3 +167,5 @@ export { isWordDrawingGeometry, withWordDrawingGeometry, type WordDrawingGeometr
 export { wordChartTitleText, chartTitleFromWord } from './chart-title.ts';
 
 export type { WordSymbol } from './symbols.ts';
+
+export { replaceWordInkTrace, type WordInkTraceChange } from './ink-edit.ts';

@@ -41,6 +41,13 @@ function fallbackShape(element: LosslessXmlElement) {
   const shapes = fallback && descendants(fallback).filter(node => node.namespaceUri === vml && node.localName === 'shape');
   return shapes?.length === 1 ? shapes[0] : undefined;
 }
+function fallbackMeasurement(element: LosslessXmlElement, name: string): number | undefined {
+  const shape = fallbackShape(element), style = shape && attr(shape, 'style')?.value;
+  const raw = style?.split(';').find(entry => entry.slice(0, entry.indexOf(':')).trim().toLowerCase() === name)?.split(':').slice(1).join(':').trim();
+  const match = raw && /^(-?(?:\d+(?:\.\d*)?|\.\d+))(pt|in|cm|mm|px)?$/.exec(raw);
+  if (!match) return undefined;
+  return Number(match[1]) * ({ pt: 1, in: 72, cm: 72 / 2.54, mm: 72 / 25.4, px: .75 }[match[2] ?? 'pt'] ?? 1);
+}
 function editStyle(editor: Editor, element: LosslessXmlElement, values: Readonly<Record<string, string | undefined>>) {
   const shape = fallbackShape(element);
   if (!shape) return;
@@ -82,7 +89,14 @@ export function resizeWordInk(document: WordDocument, element: LosslessXmlElemen
       editor.setText(offset, String(value));
     }
   }
-  editStyle(editor, element, { width: `${size.widthPoints}pt`, height: `${size.heightPoints}pt` });
+  const fallbackX = fallbackMeasurement(element, 'margin-left'), fallbackY = fallbackMeasurement(element, 'margin-top');
+  const originX = drawing.anchor?.horizontalOffsetPoints ?? 0, originY = drawing.anchor?.verticalOffsetPoints ?? 0;
+  editStyle(editor, element, {
+    width: `${(fallbackMeasurement(element, 'width') ?? drawing.widthPoints) * sx}pt`,
+    height: `${(fallbackMeasurement(element, 'height') ?? drawing.heightPoints) * sy}pt`,
+    ...(fallbackX === undefined ? {} : { 'margin-left': `${originX + (fallbackX - originX) * sx}pt` }),
+    ...(fallbackY === undefined ? {} : { 'margin-top': `${originY + (fallbackY - originY) * sy}pt` }),
+  });
   const transaction = beginPackageTransaction(document.package);
   transaction.replacePart(document.part.name, editor.commit().bytes);
   return transaction.commit();
@@ -95,8 +109,8 @@ export function positionWordInk(editor: Editor, element: LosslessXmlElement, dra
   const vertical = change.verticalRelativeTo ?? 'page';
   editStyle(editor, element, {
     position: inline ? undefined : 'absolute',
-    'margin-left': inline ? undefined : `${change.xPoints ?? 0}pt`,
-    'margin-top': inline ? undefined : `${change.yPoints ?? 0}pt`,
+    'margin-left': inline ? undefined : `${(change.xPoints ?? 0) + (fallbackMeasurement(element, 'margin-left') ?? drawing.anchor?.horizontalOffsetPoints ?? 0) - (drawing.anchor?.horizontalOffsetPoints ?? 0)}pt`,
+    'margin-top': inline ? undefined : `${(change.yPoints ?? 0) + (fallbackMeasurement(element, 'margin-top') ?? drawing.anchor?.verticalOffsetPoints ?? 0) - (drawing.anchor?.verticalOffsetPoints ?? 0)}pt`,
     'mso-position-horizontal': undefined, 'mso-position-vertical': undefined,
     'mso-position-horizontal-relative': inline ? undefined : horizontal === 'column' ? 'text' : horizontal,
     'mso-position-vertical-relative': inline ? undefined : vertical === 'paragraph' ? 'text' : vertical,
@@ -117,7 +131,7 @@ export function positionWordInk(editor: Editor, element: LosslessXmlElement, dra
   }
   return {
     ...change,
-    xPoints: (change.xPoints ?? 0) + nativeOffset(element, 'H') - (drawing.anchor?.horizontalOffsetPoints ?? 0),
-    yPoints: (change.yPoints ?? 0) + nativeOffset(element, 'V') - (drawing.anchor?.verticalOffsetPoints ?? 0),
+    xPoints: (change.xPoints ?? 0) + (drawing.placement === 'inline' ? -(drawing.inkProjection?.bounds.x ?? 0) : nativeOffset(element, 'H') - (drawing.anchor?.horizontalOffsetPoints ?? 0)),
+    yPoints: (change.yPoints ?? 0) + (drawing.placement === 'inline' ? -(drawing.inkProjection?.bounds.y ?? 0) : nativeOffset(element, 'V') - (drawing.anchor?.verticalOffsetPoints ?? 0)),
   };
 }

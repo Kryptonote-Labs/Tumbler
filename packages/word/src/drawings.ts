@@ -23,6 +23,7 @@ export interface WordDrawingAnchor {
   readonly verticalOffsetPoints: number | undefined;
   readonly wrap: "none" | "square" | "tight" | "through" | "top-bottom";
   readonly behindDocument: boolean;
+  readonly zOrder?: number;
   readonly allowOverlap: boolean;
   readonly distanceTopPoints: number;
   readonly distanceEndPoints: number;
@@ -36,6 +37,8 @@ interface WordDrawingBase {
   /** Decoded Office ink, including diagnostics; the original package part remains authoritative. */
   readonly ink?: import('@tumblerjs/ink').OfficeInkDocument;
   readonly inkSource?: { readonly partName: PartName; readonly relationshipId: string };
+  /** Native ink-to-drawing transform and painted bounds, shared by vector and raster hosts. */
+  readonly inkProjection?: { readonly matrix: import('./ink-transform.ts').InkMatrix; readonly bounds: import('@tumblerjs/ink').InkBounds; readonly options?: import('@tumblerjs/ink').InkSvgOptions };
   readonly inkRenderingDiagnostics?: readonly import('@tumblerjs/ink').InkDiagnostic[];
   readonly elementId: number;
   readonly placement: "inline" | "anchor";
@@ -52,7 +55,7 @@ export interface WordImageDrawing extends WordDrawingBase {
   readonly kind: "image";
   /** An ink display projection. Preserve the original part rather than editing only its preview. */
   readonly fallback?: "ink";
-  readonly inkRendering?: 'bitmap' | 'vector';
+  readonly inkRendering?: 'bitmap' | 'vector' | 'raster';
   readonly relationshipId: string | undefined;
   /** Stored image bytes, absent for generated previews. See inkSource for the native ink part. */
   readonly partName: PartName | undefined;
@@ -234,6 +237,7 @@ function parseAnchor(element: LosslessXmlElement, wp: string): WordDrawingAnchor
     verticalOffsetPoints: offsetChild(vertical, wp),
     wrap,
     behindDocument: onOff(attribute(element, "behindDoc"), false),
+    ...(Number(attribute(element, "relativeHeight") ?? 0) ? { zOrder: Number(attribute(element, "relativeHeight")) } : {}),
     allowOverlap: onOff(attribute(element, "allowOverlap"), true),
     distanceTopPoints: emu(attribute(element, "distT") ?? "0", "anchor top distance"),
     distanceEndPoints: emu(attribute(element, "distR") ?? "0", "anchor end distance"),

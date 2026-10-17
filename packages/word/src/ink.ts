@@ -1,4 +1,5 @@
-import { InkError, readOfficeInk, renderOfficeInkSvg, type InkSvgOptions } from '@tumblerjs/ink';
+import { wordInkTransform, transformedInkBounds } from './ink-transform.ts';
+import { InkError, readOfficeInk, createOfficeInkScene, renderInkSceneSvg, type InkSvgOptions } from '@tumblerjs/ink';
 import { LosslessXmlError, type LosslessXmlElement } from '@tumblerjs/ooxml';
 import type { OpcPackage, Relationships } from '@tumblerjs/opc';
 import type { WordDrawing } from './drawings.ts';
@@ -31,29 +32,30 @@ function projectWordInkDrawing(element: LosslessXmlElement, original: WordDrawin
   try {
     const ink = readOfficeInk(pkg.readPart(part));
     const inkSource = { partName: part.name, relationshipId: id! };
-    if (fallback.kind === 'image') return { ...fallback, ink, inkSource, inkRendering: 'bitmap' };
-    const rendered = renderOfficeInkSvg(ink, options);
-    if (!rendered.supported) return { ...fallback, ink, inkSource, inkRenderingDiagnostics: rendered.diagnostics };
-    const unavailable = (message: string): WordDrawing => ({ ...fallback, ink, inkSource, inkRenderingDiagnostics: [{ elementId: element.id, code: 'rendering', message }] });
-    // Preview convention: fit sample-centre bounds to the frame on each axis, then
-    // expand for the nib. This is an approximation, not a verified Word transform.
-    const { traceBounds, bounds } = rendered;
-    const sx = original.widthPoints / (traceBounds.width || bounds.width);
-    const sy = original.heightPoints / (traceBounds.height || bounds.height);
-    const transform = parts[0]!.children.find(child => child.kind === 'element' && child.namespaceUri === word2010 && child.localName === 'xfrm');
-    if (transform?.kind === 'element' && transform.attributes.some(a => ['rot', 'flipH', 'flipV'].includes(a.localName) && !['0', 'false'].includes(a.value))) return unavailable('This ink drawing transform is not supported by the vector preview.');
-    if (transform?.kind === 'element' && transform.children.some(child => child.kind === 'element' && child.localName === 'off' && child.attributes.some(a => ['x', 'y'].includes(a.localName) && Number(a.value) !== 0))) return unavailable('This ink drawing transform is not supported by the vector preview.');
-    if (!(sx > 0) || !(sy > 0) || !Number.isFinite(sx) || !Number.isFinite(sy) || original.anchor?.horizontalAlignment) return unavailable('This ink drawing transform is not supported by the vector preview.');
+    const scene = createOfficeInkScene(ink, options);
+    if (!scene.supported) return { ...fallback, ink, inkSource, ...(fallback.kind === 'image' ? { inkRendering: 'bitmap' as const } : {}), inkRenderingDiagnostics: scene.diagnostics };
+    const unavailable = (message: string): WordDrawing => ({ ...fallback, ink, inkSource, ...(fallback.kind === 'image' ? { inkRendering: 'bitmap' as const } : {}), inkRenderingDiagnostics: [{ elementId: element.id, code: 'rendering', message }] });
+    let matrix;
+    try { matrix = wordInkTransform(parts[0]!, original, scene.traceBounds); }
+    catch (error) { if (!(error instanceof RangeError)) throw error; return unavailable(error.message); }
+    const bounds = transformedInkBounds(scene.bounds, matrix);
+    const rendered = renderInkSceneSvg(scene);
+    const content = rendered.supported ? rendered.svg.slice(rendered.svg.indexOf('>') + 1, rendered.svg.lastIndexOf('</svg>')) : '';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${bounds.width}pt" height="${bounds.height}pt" viewBox="${bounds.x} ${bounds.y} ${bounds.width || 1} ${bounds.height || 1}"><g transform="matrix(${matrix.join(' ')})">${content}</g></svg>`;
     return {
-      ...original, kind: 'image', elementId: element.id, fallback: 'ink', ink, inkSource, inkRendering: 'vector',
-      relationshipId: undefined, partName: undefined, contentType: 'image/svg+xml', bytes: new TextEncoder().encode(rendered.svg),
-      widthPoints: bounds.width * sx, heightPoints: bounds.height * sy,
+      ...original, kind: 'image', elementId: element.id, fallback: 'ink', ink, inkSource, inkRendering: rendered.supported ? 'vector' : 'raster', inkProjection: { matrix, bounds, options: options ?? {} },
+      ...(rendered.supported ? {} : { inkRenderingDiagnostics: rendered.diagnostics }),
+      relationshipId: undefined, partName: undefined, contentType: !rendered.supported && fallback.kind === 'image' ? fallback.contentType : 'image/svg+xml',
+      bytes: !rendered.supported && fallback.kind === 'image' ? fallback.bytes : new TextEncoder().encode(svg),
+      widthPoints: bounds.width, heightPoints: bounds.height,
       anchor: original.anchor && { ...original.anchor,
-        horizontalOffsetPoints: (original.anchor.horizontalOffsetPoints ?? 0) + (bounds.x - traceBounds.x) * sx,
-        verticalOffsetPoints: (original.anchor.verticalOffsetPoints ?? 0) + (bounds.y - traceBounds.y) * sy },
+        horizontalOffsetPoints: (original.anchor.horizontalOffsetPoints ?? 0) + bounds.x,
+        verticalOffsetPoints: (original.anchor.verticalOffsetPoints ?? 0) + bounds.y },
     };
   } catch (error) {
     if (!(error instanceof InkError) && !(error instanceof LosslessXmlError)) throw error;
-    return fallback;
+    return { ...fallback, inkSource: { partName: part.name, relationshipId: id! },
+      ...(fallback.kind === 'image' ? { inkRendering: 'bitmap' as const } : {}),
+      inkRenderingDiagnostics: [{ elementId: element.id, code: 'structure', message: error.message }] };
   }
 }

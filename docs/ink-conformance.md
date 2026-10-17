@@ -1,142 +1,100 @@
-# InkML conformance and compatibility
+# Word Office InkML profile and integration
 
-`@tumblerjs/ink` provides the shared trace codec and an Office-profile reader.
-Word uses it to expose native strokes and to draw supported ink when no usable
-bitmap exists. A supplied Word bitmap remains preferred because it captures
-Word's rendering choices. Slides and Sheets adapters have not been added.
+The target is Word's Office profile, not full general-purpose W3C InkML.
+The normative sources are [MS-ODRAWXML §2.1.4](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/096dacae-0d2c-4861-bc4d-c8e4c6405ad3),
+[Word contentPart](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/d2e49924-5c10-435d-9d6b-43321ef96ae3),
+and the referenced [W3C InkML 1.0](https://www.w3.org/TR/InkML/) and DrawingML transform rules.
 
-The governing specifications are [W3C InkML 1.0](https://www.w3.org/TR/InkML/)
-and [MS-ODRAWXML §2.1.4](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/096dacae-0d2c-4861-bc4d-c8e4c6405ad3).
-Office supports a narrower profile and explicitly ignores several W3C features.
-The public reader is named `readOfficeInk` to make that distinction explicit.
+## Implemented behavior and evidence
 
-## Tested behavior
+| Area | Behavior | Evidence |
+| --- | --- | --- |
+| Trace grammar | Absolute, first/second differences, independent per-channel modes, adjacent signs, hex, exponents, wildcards, defaults and intermittent values | Golden W3C example and 6,000 generated streams checked against independent arithmetic/state-machine oracles |
+| Office references | Explicit local context/brush references, forward references, namespace-aware IDs, ambiguity diagnostics | Reader tests with nested groups, definitions, duplicate/foreign IDs and external references |
+| Office ignored constructs | No context/group inheritance, traceView evaluation or definitions traces; intermittent channels are retained but do not drive Office rendering | Profile tests; preservation is separate from interpretation |
+| Calibration | Explicit physical X/Y resolutions; caller-provided device defaults when absent, without guessing hardware | Physical-unit and precedence tests |
+| Brushes | Profile defaults/invalid-value handling, ellipse/rectangle, pressure, switches, OR orientation, transparency, curve fitting and anti-aliasing | Bounds, coverage, curve-budget and pixel tests |
+| Raster operations | All sixteen Office RGB operations against destination pixels; per-stroke coverage union | Four-bit truth tables and mixed RGB destination tests including repeated samples |
+| Recognition | Office EMMA context and confidence-ordered alternatives; separate recognition diagnostics | Context-only, alternatives, malformed-confidence and edit-invalidation tests |
+| Drawing transforms | DrawingML off/ext, flips, clockwise rotation about frame centre; Strict and Transitional host namespaces | Independent corner-coordinate expectations, geometry/export tests |
+| Native display | InkML takes precedence over the cached bitmap; SVG for destination-independent pens, raster page composition for all pens | Word reader and canvas pixel tests at several scales |
+| Geometry edits | Native frame/transform/effect extents and VML placement/size updated together; inline/floating conversion | Host export tests using the failed request's dimensions and position, repeated placement tests, undo/redo |
+| Stroke edits | Shared artifact/session API; samples and existing fallback updated atomically, shared parts copied, exclusive parts reused | Shared-target isolation, no-op/failure atomicity, repeated edits, undo/redo and independent PNG decode/CRC checks |
+| Cache invalidation | Remove affected recognition and embedded `o:gfxdata` ink caches after sample changes | Ancestor/sibling recognition and package tests |
+| Preservation | Unknown metadata, namespaces, unaffected parts and source encoding; no-op original bytes | UTF-8/UTF-16 and opaque-markup tests |
+| Packaging | Internal customXml relationships, InkML content types, PNG relationships and content types | Microsoft Open XML SDK Office 2010 validation, including direct-native controls |
 
-| Requirement | Behavior and evidence |
-| --- | --- |
-| W3C §3.2.2 trace compression | Independent absolute, first-difference and second-difference state per channel; mode changes, adjacent signed numbers, hex, exponents, trailing comma and wildcard integration. Golden examples plus 6,000 seeded generated cases. |
-| Intermittent channels | Standalone codec supports defaults, omitted values, `*`, `?` and booleans. Office reader preserves them but disables native rendering because Office ignores their declaration. |
-| Numeric types and bounds | Checks decoded ranges and integer samples; range violations have a distinct `range` diagnostic identifying the channel, point and value. Samples are never silently clamped. Unsafe integers and nonfinite numbers fail explicitly; arbitrary-precision numbers are not supported. |
-| Office contexts and brushes | Explicit same-part references resolve by namespace and `xml:id`, including forward references. Duplicate IDs produce document-wide diagnostics and ambiguous references fail without discarding unrelated decoded traces. Contexts require definitions; brushes can be referenced elsewhere in the same part, including inside a context. Root-level brushes are accepted for compatibility; see the schema discrepancy below. Group inheritance is ignored as required by the Office profile. |
-| Office trace placement | Reads traces directly under ink and recursively under traceGroup. Definitions traces and traceView are ignored by the Office profile. |
-| Device channels | Retains channel order and unknown channels. Resolves channelProperties by channel name; rejects undeclared targets. Office time samples must be integer milliseconds. |
-| Physical coordinates | Positive explicit resolutions in `1/cm` or `1/in` convert sample counts to points. No guessed device resolution. Missing or unsupported resolution keeps native rendering unavailable. |
-| Brush properties | Profile defaults, invalid-value fallback, decimal dimensions, RGB color, transparency, rectangle/ellipse, antiAliased, fitToCurve and ignorePressure. |
-| Raster operations | All 16 RGB truth tables tested independently. SVG supports copyPen and noOperation; other operations require a raster consumer and return a rendering diagnostic. |
-| Geometry | Includes nib bounds, isolated dots, repeated points, variable pressure, pen switches and swept rectangle/ellipse segments. Transparency is applied once per stroke to avoid darkened joins. |
-| Preservation | No-edit original bytes, UTF-8/UTF-16 source edits, unknown annotations and namespaces. Trace edits change only sample text and refuse to erase opaque markup. |
-| Word integration | Supports Strict and Transitional host namespaces. Resolves internal customXml ink parts, retains native data with bitmap previews, generates SVG when supported without a bitmap, and preserves both representations through nearby text edits. Resize and placement edits update the native frame, contentPart transform and VML preview together, preserving InkML and media bytes. |
-| Invalid input | Namespace, duplicate ID, unresolved/external references, illegal trace syntax, channel counts, range overflow, DTD rejection and configurable XML resource limits. |
+`replaceInkTrace` uses the declared device channel coordinates and retains the
+existing native drawing frame. It changes the stroke geometry within that frame.
+Drawing resize/placement is a separate operation. Existing fallbacks are rebuilt;
+native-only documents remain native-only. Destination-dependent fallback rendering
+requires an explicit backdrop. It is not safe to replace it with an assumed white
+background. The operation fails before committing if regeneration cannot complete.
 
-The renderer uses straight segments and scales nib dimensions linearly across the
-declared pressure range. W3C leaves ink rendering algorithms to implementations;
-this choice does not establish pixel parity with Word. Curve fitting, rotating
-tips, arbitrary drawing transforms and destination-dependent raster composition
-remain unavailable in the Word vector path. The source and cached preview remain
-intact in these cases.
+## Rendering choices and remaining interoperability proof
 
-## Claims we do not make
+Office specifies curved versus linear strokes but not its fitting algorithm or
+pressure transfer function. Tumbler uses an interpolating cubic with sharp-turn
+preservation and linear pressure scaling. These choices are explicit; they are
+not evidence of Word pixel parity. Nib sweep polygons and raster coverage are
+numerical approximations controlled by curve tolerance and raster scale.
 
-The package is not a fully conforming W3C InkML processor under §8.3. It does not
-implement general streaming context transitions, context inheritance, canvas
-transforms, mappings or MathML, traceView slicing, continuation semantics outside
-the Office profile, recognition interpretation, arbitrary-precision numbers or
-all XML 1.1 handling. These remain required work before making that claim.
-Preserving these constructs is not the same as interpreting them.
+The native coordinate mapping fits the physical sample bounds into the DrawingML
+frame before applying flips, rotation and offset. A degenerate axis uses one
+HIMETRIC unit, matching the inspected Word dot frame. This minimum and the exact
+Word source-bounds rounding still need a Microsoft Word reference corpus. The
+Office profile does not itself establish those details. Synthetic matrix tests
+prove the transform math, not Word's intrinsic bounding-box convention.
+Nonuniform resizing of rotated drawings also needs additional interoperability
+work: scaling the local extents is not generally the same as scaling an arbitrary
+rotated outer bounding box.
 
-The Word vector preview fits sample-centre bounds to `wp:extent` independently
-on X and Y, then expands the frame for the pen bounds. This is an approximation,
-not a verified Word extent interpretation. It can stretch the ink when aspect
-ratios differ. A zero-range axis fits its pen bounds to the native frame, so dots
-and horizontal/vertical strokes remain resizable. The supplied Word bitmap remains
-preferred; synthetic fixtures test the implementation's
-placement convention, not pixel parity with Word.
+The canvas page painter reads the real destination pixels. Image-only consumers,
+including the current Svelte DOM view, cannot reproduce destination-dependent
+raster operations. They retain an available cached preview and expose diagnostics;
+without a cache they have no visible preview for those operations. Completing
+native display in that view requires connecting it to the page raster painter.
+Stroke mutation is exposed through the shared headless artifact/session API;
+interactive stroke-point handles are not part of this change.
 
-Synchronous SVG previews have a configurable 100,000-point work budget. The
-renderer checks it before allocating per-sample SVG shapes. It never downsamples,
-rejects the document or removes decoded samples. Use `maxPoints` in the shared
-renderer or `openWordArtifact(bytes, { inkRendering: { maxPoints } })`; `Infinity`
-disables the preview budget. Budget exhaustion produces a `resource` diagnostic,
-available on `drawing.inkRenderingDiagnostics`. A raster fallback is preferred
-before SVG generation. Large-part decoding and repeated imports still cost time
-and memory; this guard bounds SVG generation only. Empty decoded traces do not
-require a preview, but an unsupported nonempty stroke still prevents partial
-rendering of the part.
+Device-dependent files need host calibration. Em/ex dimensions need host physical
+unit sizes. The published InkML §6.4 defines `pc` as `1/22 pt`, unlike the usual
+pica; the codec follows that text, but Word interoperability for this unusual unit
+has not been established. All resource budgets are configurable and never remove
+stored samples. JavaScript numeric representation remains finite IEEE-754, with
+safe-integer checks for integer channels.
 
-Generated Word previews have no stored image `partName` or `relationshipId`.
-`drawing.inkSource` identifies the original InkML part and relationship separately,
-so generated image bytes cannot enter the media cache under an InkML part name.
+Full W3C §8.3 conformance is not claimed. General streaming contexts, inherited
+canvases, affine/table/MathML mappings, traceView slicing and continuation outside
+the Office profile remain separate work. Slides and Sheets adapters are separate.
 
-The RGB helper follows MS-ODRAWXML's written operands for `maskNotPen` and
-`maskPenNot`. Those two descriptions are reversed relative to the similarly
-named Windows ROP2 constants. The distinction is tested explicitly; neither
-operation is enabled in the Word SVG renderer, and native Word behavior for
-these operations has not been independently established.
+## Independent package validation
 
-Word stroke editing is not exposed yet. The shared sample-edit API cannot update
-an embedding document's fallback image or geometry automatically. A Word editing
-operation must update all representations atomically before it can be enabled.
-
-## Independent validation
-
-Generate reproducible synthetic fixtures, then validate them using W3C's published
-schema and libxml2 through lxml. All generated fixtures are authored for Tumbler
-under MIT; no customer files or standards documents are committed.
+Fixtures are synthetic and MIT-licensed. No customer documents or copied standards
+examples are committed.
 
 ```sh
-bun test packages/ink/test packages/word/test/ink-fallback.test.ts
+bun run check
+bun test
 bun scripts/generate-ink-conformance.ts /tmp/ink-fixtures
 bash scripts/fetch-inkml-schemas.sh /tmp/ink-schemas
-# Requires Python lxml, CI uses 6.1.3.
 python scripts/validate-inkml-schema.py \
   --schema /tmp/ink-schemas/inkml.xsd \
   --xml-schema /tmp/ink-schemas/xml.xsd /tmp/ink-fixtures/*.inkml
-bun run compatibility:openxml -- --office2010 /tmp/ink-fixtures/native-only*.docx /tmp/ink-fixtures/direct-native*.docx
-# This negative control must fail:
+bun run compatibility:openxml -- --office2010 /tmp/ink-fixtures/*.docx
+# Negative control: must fail on the malformed native transform.
 bun run compatibility:openxml -- --office2010 /tmp/ink-fixtures/invalid/transform.docx
 ```
 
-The reader accepts root-level brushes because the Office reference rule only
-requires a brush in the same part and W3C §7.2 describes top-level brush changes.
-However, W3C §2.1's root grammar and the published XSD omit brush from the root
-content model. Do not describe root-level brushes as unambiguously schema-valid.
-Their compatibility test is separate from the XSD-positive fixtures; a brush
-inside a context also proves the original definitions-only lookup was too strict.
+The generator emits 214 InkML source/edited fixtures and eleven positive DOCX
+controls, including native geometry edits, native stroke edits and a regenerated
+VML fallback. Direct-native controls avoid the SDK skipping an unrecognized
+AlternateContent choice. The malformed-transform negative control proves the
+native transform is actually validated. Schema validation cannot validate trace
+text semantics or visual output.
 
-The schema fetch checks fixed SHA-256 hashes. The validator supplies the XML
-namespace schema location omitted by W3C's InkML schema; it does not change the
-schema's constraints. It validates 214 source/edited documents. XSD validation
-does not validate the trace text grammar, so the semantic tests are separate.
-The SDK can skip an unrecognized alternate-content Choice. A second DOCX embeds
-the selected ink directly, and an invalid transform control proves that the SDK
-actually validates its native content. A successful check of the wrapper alone
-would not establish that.
-
-Local LibreOffice 24.2.7.2 testing found that a Word file displayed ink only while
-its VML bitmap fallback was present. Removing that fallback left no ink pixels in
-the ink region. DOCX round trips discarded the InkML parts in both cases.
-LibreOffice is useful for checking the fallback but is not a native InkML oracle.
-The native-only synthetic DOCX above allows this check without a private file.
-Native SVG output was also rasterized with CairoSVG and inspected independently.
-
-## Word geometry edits
-
-`WordArtifact.resizeDrawing` and `updateDrawing`, and authored `drawing`/`image`
-geometry in `NativeWordDocument`, accept projected ink drawings. Sizes and positions
-refer to the displayed bounds, including the pen. Resizing scales the native frame
-and its inset relative to those bounds, the `w14:xfrm` offsets/extents, effect
-extents, and the VML bitmap dimensions. Position changes update both DrawingML
-and VML, including page, column, paragraph and line bases, front/behind text,
-and inline placement. The original stroke samples, bitmap bytes, relationships,
-and unrelated XML are retained. This is geometry editing, not stroke editing or
-bitmap regeneration.
-
-Tests cover Strict and Transitional documents, authored export with and without
-bitmap previews, degenerate strokes, unchanged bytes on no-op resize, invalid
-measurements, UTF-16 XML, wrapping, undo/redo, and repeated placement changes.
-The fixture generator includes front, behind and inline geometry edits for
-both wrapped and direct native ink. All eight positive DOCX controls pass
-Microsoft Open XML SDK Office 2010 validation; the malformed-transform negative
-control fails as expected. Fixtures are synthetic and MIT
-licensed. Native vector rendering retains the approximation described above;
-these tests do not establish pixel parity with Microsoft Word.
+LibreOffice can check the regenerated bitmap, but is not a native InkML oracle:
+the inspected version discarded native ink during DOCX round trips. A local Word
+reference file successfully exported with the failed request's geometry while
+preserving InkML bytes; a stroke edit also reopened. That local replay does not
+establish the state of the live production document service or Word visual parity.
