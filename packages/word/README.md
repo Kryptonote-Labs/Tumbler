@@ -97,6 +97,12 @@ session.markSaved();
 const output = session.artifact.bytes();
 ```
 
+Word 2010 ink in alternate content can display its embedded VML raster fallback.
+The object retains the original ink and fallback together through nearby text edits
+and export. Ink trace editing and geometry changes are not supported; resizing a
+fallback is rejected rather than changing only one representation. External image
+relationships are not fetched. Other alternate-content representations remain opaque.
+
 The current reader/layout slice includes Strict and Transitional main parts,
 styles and themes, numbering, sections and columns, tables and nested tables,
 headers and footers, footnotes and endnotes, hyperlinks and bookmarks, embedded

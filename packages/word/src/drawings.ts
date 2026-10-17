@@ -1,3 +1,4 @@
+import { wordInkChoice, readWordInkFallback } from './ink-fallback.ts';
 import { isWordDrawingPosition, type WordDrawingPosition } from './drawing-placement.ts';
 import { readShapeText } from './shape-text-import.ts';
 import { wordThemeSlot } from './theme-colour-xml.ts';
@@ -42,6 +43,8 @@ export interface WordShapeDrawing extends WordDrawingBase { readonly kind: 'shap
 
 export interface WordImageDrawing extends WordDrawingBase {
   readonly kind: "image";
+  /** A display fallback. Preserve the original ink rather than editing its bitmap geometry. */
+  readonly fallback?: "ink";
   readonly relationshipId: string;
   readonly partName: PartName;
   readonly contentType: string;
@@ -78,7 +81,15 @@ export function readWordDrawings(input: {
   const themeRel = relationships?.items.find(rel => /\/theme$/.test(rel.type) && rel.targetMode === 'Internal');
   const theme = input.themeColours ?? (themeRel?.targetMode === 'Internal' ? parseThemeColorScheme(input.package.readPart(input.package.getPart(themeRel.targetPartName)!)) : DEFAULT_WORD_THEME);
   const charts = new Map<string, ChartModel>();
-  return new Map(elements.map((element) => [element.id, parseDrawing(input, element, relationships, charts, theme, input.themeFonts)]));
+  const result = new Map(elements.map((element) => [element.id, parseDrawing(input, element, relationships, charts, theme, input.themeFonts)]));
+  for (const element of input.source.elements('http://schemas.openxmlformats.org/markup-compatibility/2006', 'AlternateContent')) {
+    const choice = wordInkChoice(element);
+    const original = choice && result.get(choice.id);
+    if (!original || !choice) continue;
+    result.delete(choice.id);
+    result.set(element.id, readWordInkFallback(element, original, input.package, relationships));
+  }
+  return result;
 }
 
 function parseDrawing(
@@ -252,6 +263,7 @@ export function resizeWordDrawing(document: WordDocument, size: WordDrawingResiz
   const element = document.source.element(size.elementId);
   if (drawing === undefined || element === undefined || drawing.kind === "unsupported") throw new WordError("invalid_document", "Drawing cannot be resized.");
   if (cx === Math.round(drawing.widthPoints * EMUS_PER_POINT) && cy === Math.round(drawing.heightPoints * EMUS_PER_POINT)) return document.bytes();
+  if (drawing.kind === 'image' && drawing.fallback === 'ink') throw new WordError('unsupported_document', 'Editing ink fallback geometry is not supported.');
   const wp = wordDrawingNamespace(document.conformance);
   const extent = descendants(element).find(item => item.namespaceUri === wp && item.localName === "extent");
   if (extent === undefined) throw new WordError("invalid_document", "Drawing extent is missing.");
@@ -297,6 +309,7 @@ export function positionWordDrawing(document: WordDocument, change: WordDrawingC
   const drawing = document.drawings.get(change.elementId);
   const element = document.source.element(change.elementId);
   if (drawing === undefined || element === undefined || drawing.kind === 'unsupported') throw new WordError('invalid_document', 'Drawing cannot be positioned.');
+  if (drawing.kind === 'image' && drawing.fallback === 'ink') throw new WordError('unsupported_document', 'Editing ink fallback geometry is not supported.');
   const wp = wordDrawingNamespace(document.conformance);
   const placement = element.children.find((item): item is LosslessXmlElement => item.kind === 'element' && item.namespaceUri === wp && (item.localName === 'inline' || item.localName === 'anchor'));
   if (placement === undefined) throw new WordError('invalid_document', 'Drawing placement is missing.');

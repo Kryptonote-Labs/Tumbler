@@ -1,3 +1,4 @@
+import { wordInkChoice } from './ink-fallback.ts';
 import { readWordColour } from "./theme-colour-xml.ts";
 import type { WordColour } from "./theme-colours.ts";
 import { readTableBorders, readTableShading, tableChild, type WordTableBorders, type WordCellBorders } from './table-format.ts';
@@ -731,6 +732,7 @@ function parseRunContent(
   budget: ParseBudget,
 ): WordRunContent {
   takeInline(budget);
+  if (wordInkChoice(element)) return Object.freeze({ kind: "drawing", elementId: element.id });
   if (element.namespaceUri !== namespace) return unsupportedRunContent(element);
   if (element.localName === "t" || element.localName === "delText" || element.localName === "instrText") {
     const value = source.textContent(element);
