@@ -15,8 +15,9 @@ export interface WordTextSelection {
 export interface WordParagraphTextSegment {
   readonly tab?: import("./document.ts").WordPositionalTab;
   readonly breakType?: import('./breaks.ts').WordBreakType;
-  readonly kind: "text" | "tab" | "break" | "drawing" | "note" | "page-field";
+  readonly kind: "text" | "symbol" | "tab" | "break" | "drawing" | "note" | "page-field";
   readonly field?: import("./page-fields.ts").WordPageField;
+  readonly symbolFont?: string;
   readonly elementId: number;
   readonly runElementId: number;
   readonly start: number;
@@ -48,6 +49,7 @@ export function wordParagraphTextSegments(_document: WordDocument | undefined, p
       if (content.kind === "field-instruction" || content.kind === "deleted-text" || fieldDepth > 0 && resultDepth !== fieldDepth) continue;
       const projected = content.kind === "page-field" ? { kind: "page-field" as const, value: "\uFFFC" }
         : content.kind === "text" ? { kind: "text" as const, value: content.value }
+        : content.kind === "symbol" ? { kind: "symbol" as const, value: content.value }
         : content.kind === "tab" ? { kind: "tab" as const, value: "\t" }
         : content.kind === "break" ? { kind: "break" as const, value: "\n", breakType: content.breakType }
         : content.kind === "drawing" ? { kind: "drawing" as const, value: "\uFFFC" }
@@ -58,6 +60,7 @@ export function wordParagraphTextSegments(_document: WordDocument | undefined, p
       offset += projected.value.length;
       segments.push(Object.freeze({
         kind: projected.kind,
+        ...(content.kind === "symbol" && !content.unicodeFallback ? { symbolFont: content.fontFamily } : {}),
         ...(content.kind === "break" ? { breakType: content.breakType } : {}),
         ...(content.kind === "tab" && content.position ? { tab: content.position } : {}),
         ...(content.kind === "page-field" ? { field: content.field } : {}),

@@ -50,6 +50,12 @@ const paragraph = artifact.document.blocks.find((block) => block.kind === "parag
 console.log(wordParagraphText(artifact.document, paragraph));
 ```
 
+`w:sym` elements participate in text projection, layout, selection and deletion.
+The original font/code pair survives unchanged-symbol export. Wingdings barb
+arrows DF–E6 have Unicode display equivalents, so they do not require Wingdings;
+the host still needs a font covering those Unicode characters. Other symbols use
+their specified font and code. This is not a complete Wingdings/Webdings mapping.
+
 Text positions are UTF-16 offsets in a paragraph's visible logical stream. They
 do not expose producer-specific run splitting:
 

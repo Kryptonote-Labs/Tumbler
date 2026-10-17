@@ -871,6 +871,14 @@ function resolvedParagraphAtoms(
         atoms.push(Object.freeze({ kind: 'glyph', field: content.field, runElementId: run.elementId,
           contentElementId: content.elementId, text, ...measurement, baselineShift, breakAfter: false, whitespace: false,
           startOffset: logicalOffset, endOffset: ++logicalOffset, format, hyperlink }));
+      } else if (content.kind === "symbol") {
+        const symbolFormat = content.unicodeFallback ? format : Object.freeze({ ...format, fontFamily: content.fontFamily });
+        const measurement = validMeasurement(measurer.measure(content.value, symbolFormat));
+        const startOffset = logicalOffset;
+        logicalOffset += content.value.length;
+        atoms.push(Object.freeze({ kind: 'glyph', runElementId: run.elementId, contentElementId: content.elementId,
+          text: content.value, width: measurement.width, ascent: measurement.ascent - baselineShift, descent: measurement.descent + baselineShift,
+          baselineShift, breakAfter: false, whitespace: false, startOffset, endOffset: logicalOffset, format: symbolFormat, hyperlink }));
       } else if (content.kind === "text") {
         for (const grapheme of graphemes(content.value)) {
           const measurement = measure(grapheme);
