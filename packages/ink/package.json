@@ -1,0 +1,25 @@
+{
+  "name": "@tumblerjs/ink",
+  "version": "0.1.0-alpha.26",
+  "description": "Lossless InkML reading and shared Office ink semantics for Tumbler.",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kryptonote-Labs/Tumbler.git",
+    "directory": "packages/ink"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "latest"
+  },
+  "dependencies": {
+    "@tumblerjs/ooxml": "0.1.0-alpha.26"
+  }
+}

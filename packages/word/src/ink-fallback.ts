@@ -1,4 +1,4 @@
-import type { LosslessXmlElement } from '@tumblerjs/ooxml';
+import { OOXML_NAMESPACES, type LosslessXmlElement } from '@tumblerjs/ooxml';
 import type { OpcPackage, Relationships } from '@tumblerjs/opc';
 import type { WordDrawing, WordImageDrawing } from './drawings.ts';
 
@@ -6,8 +6,15 @@ const mc = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 const vml = 'urn:schemas-microsoft-com:vml';
 const ink = 'http://schemas.microsoft.com/office/word/2010/wordprocessingInk';
 const rel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const word = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const drawing = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+/** Office ink is an extension; its surrounding drawing vocabulary follows the host. */
+export function wordInkNamespaces(frame: LosslessXmlElement) {
+  const strict = frame.namespaceUri === OOXML_NAMESPACES.strict.wordprocessing;
+  return { ...OOXML_NAMESPACES[strict ? 'strict' : 'transitional'], relationships: strict ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : rel };
+}
+export function isWordInkDrawing(frame: LosslessXmlElement): boolean {
+  if (frame.localName !== 'drawing' || ![OOXML_NAMESPACES.strict.wordprocessing, OOXML_NAMESPACES.transitional.wordprocessing].some(ns => ns === frame.namespaceUri)) return false;
+  return descendants(frame).some(e => e.namespaceUri === wordInkNamespaces(frame).drawing && e.localName === 'graphicData' && attr(e, 'uri') === ink);
+}
 const children = (e: LosslessXmlElement) => e.children.filter((n): n is LosslessXmlElement => n.kind === 'element');
 const descendants = (e: LosslessXmlElement): LosslessXmlElement[] => children(e).flatMap(n => [n, ...descendants(n)]);
 const attr = (e: LosslessXmlElement, name: string, ns = '') => e.attributes.find(a => a.namespaceUri === ns && a.localName === name)?.value;
@@ -17,22 +24,24 @@ export function wordInkChoice(element: LosslessXmlElement): LosslessXmlElement |
   if (element.namespaceUri !== mc || element.localName !== 'AlternateContent') return;
   const choices = children(element).filter(e => e.namespaceUri === mc && e.localName === 'Choice');
   if (choices.length !== 1) return;
-  const frames = children(choices[0]!).filter(e => e.namespaceUri === word && e.localName === 'drawing');
+  const frames = children(choices[0]!).filter(e => isWordInkDrawing(e));
   if (frames.length !== 1 || children(choices[0]!).length !== 1) return;
-  return descendants(frames[0]!).some(e => e.namespaceUri === drawing && e.localName === 'graphicData' && attr(e, 'uri') === ink) ? frames[0] : undefined;
+  return frames[0];
 }
 
 /** Word's VML bitmap includes pen extents that differ from the ink trace's anchor bounds. */
 export function readWordInkFallback(element: LosslessXmlElement, original: WordDrawing, pkg: OpcPackage, relationships: Relationships | undefined): WordDrawing {
-  const unsupported = { ...original, elementId: element.id };
+  const unsupported = element.id === original.elementId ? original : Object.freeze({ ...original, elementId: element.id });
+  const frame = wordInkChoice(element);
+  const relationshipNamespace = frame ? wordInkNamespaces(frame).relationships : rel;
   const fallback = children(element).find(e => e.namespaceUri === mc && e.localName === 'Fallback');
   const shapes = fallback && descendants(fallback).filter(e => e.namespaceUri === vml && e.localName === 'shape');
   if (shapes?.length !== 1) return unsupported;
   const shape = shapes[0]!;
   const image = children(shape).find(e => e.namespaceUri === vml && e.localName === 'imagedata');
-  const id = image && attr(image, 'id', rel);
+  const id = image && attr(image, 'id', relationshipNamespace);
   const relationship = id && relationships?.get(id);
-  if (!relationship || relationship.targetMode !== 'Internal' || relationship.type !== `${rel}/image`) return unsupported;
+  if (!relationship || relationship.targetMode !== 'Internal' || relationship.type !== `${relationshipNamespace}/image`) return unsupported;
   const part = pkg.getPart(relationship.targetPartName);
   // Use browser-safe raster fallbacks only; never fetch an external relationship.
   if (!part || !['image/png', 'image/jpeg', 'image/gif'].includes(part.contentType)) return unsupported;

@@ -11,6 +11,7 @@ describe("public package release graph", () => {
     expect(packages.map((pkg) => pkg.name)).toEqual([
       "@tumblerjs/opc",
       "@tumblerjs/ooxml",
+      "@tumblerjs/ink",
       "@tumblerjs/formulas",
       "@tumblerjs/charts",
       "@tumblerjs/core",

@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 export const RELEASE_PACKAGE_DIRECTORIES = [
   "opc",
   "ooxml",
+  "ink",
   "formulas",
   "charts",
   "core",

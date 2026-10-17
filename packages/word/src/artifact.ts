@@ -18,7 +18,7 @@ export class WordArtifact implements FormattingAdapter<WordFormattingTarget, Wor
   }
 
   private reopen(bytes: Uint8Array, options: OpenWordArtifactOptions = {}) {
-    const artifact = openWordArtifact(bytes, options);
+    const artifact = openWordArtifact(bytes, { inkRendering: this.document.inkRendering, ...options });
     return this.document.source.root.localName === 'document' ? artifact : wordStoryArtifact(artifact, this.document.part.name.value);
   }
 

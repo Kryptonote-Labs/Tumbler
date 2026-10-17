@@ -123,6 +123,14 @@ Owns host-independent DrawingML chart semantics and deterministic geometry:
 It does not resolve SpreadsheetML cells or depend on Svelte. Format packages
 bind host-document references; rendering heads consume the resulting model.
 
+### `@tumblerjs/ink`
+
+Owns InkML trace decoding, Office ink semantics, source-preserving sample edits
+and deterministic vector previews. It depends on OOXML's XML layer and has no
+host-document or UI dependency. Word, Slides and Sheets own their relationship
+resolution, placement and cached previews. Word is the first adapter.
+See [ink conformance](ink-conformance.md) before relying on a rendering feature.
+
 ### `@tumblerjs/slides`
 
 Owns PresentationML parsing, slide ordering, masters and layouts, shapes, text,
