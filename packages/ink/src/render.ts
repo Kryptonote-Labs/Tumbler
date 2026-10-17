@@ -3,6 +3,10 @@ import type { InkDiagnostic, OfficeInkDocument, OfficeInkTrace } from './documen
 import type { InkChannel } from './trace.ts';
 
 export interface InkBounds { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+export interface InkSvgOptions {
+  /** Work budget for a synchronous preview, not a limit on stored/decoded ink. Infinity disables it. */
+  readonly maxPoints?: number;
+}
 export type InkSvgResult =
   | { readonly supported: true; readonly svg: string; readonly bounds: InkBounds; readonly traceBounds: InkBounds }
   | { readonly supported: false; readonly diagnostics: readonly InkDiagnostic[] };
@@ -15,13 +19,19 @@ function channelScale(channel: InkChannel | undefined): number | undefined {
 }
 
 /** Deterministic polyline rendering in points. Office does not prescribe a pressure transfer curve. */
-export function renderOfficeInkSvg(document: OfficeInkDocument): InkSvgResult {
+export function renderOfficeInkSvg(document: OfficeInkDocument, options: InkSvgOptions = {}): InkSvgResult {
   const diagnostics = [...document.diagnostics];
+  if (diagnostics.length) return { supported: false, diagnostics };
+  const maxPoints = options.maxPoints ?? 100_000;
+  if (!(maxPoints >= 0) || (maxPoints !== Infinity && !Number.isSafeInteger(maxPoints))) throw new RangeError('Invalid ink preview point budget.');
+  const pointCount = document.traces.reduce((count, trace) => count + trace.points.length, 0);
+  if (pointCount > maxPoints) return { supported: false, diagnostics: [{ elementId: document.source.root.id, code: 'resource', message: `Ink preview needs ${pointCount} points, exceeding the configured synchronous budget of ${maxPoints}. Source and decoded samples are retained.` }] };
   const paths: string[] = [];
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   let penMinX = Infinity, penMinY = Infinity, penMaxX = -Infinity, penMaxY = -Infinity;
   const problem = (trace: OfficeInkTrace, message: string) => diagnostics.push({ elementId: trace.elementId, code: 'rendering', message });
   for (const trace of document.traces) {
+    if (!trace.points.length) continue;
     const { brush, channels } = trace;
     const xi = channels.findIndex(c => c.name === 'X'), yi = channels.findIndex(c => c.name === 'Y');
     const sx = channelScale(channels[xi]), sy = channelScale(channels[yi]);

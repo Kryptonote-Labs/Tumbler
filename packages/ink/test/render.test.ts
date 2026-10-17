@@ -69,12 +69,36 @@ test.each([
   if (!result.supported) expect(result.diagnostics.length).toBeGreaterThan(0);
 });
 
-test('all 16 raster operations match the Windows ROP2 four-bit truth tables', () => {
+test('all 16 raster operations match the MS-ODRAWXML four-bit truth tables', () => {
   // Bits ordered P=0,D=0; P=0,D=1; P=1,D=0; P=1,D=1.
-  const tables = [0, 12, 2, 4, 8, 11, 14, 13, 10, 5, 3, 7, 1, 9, 15, 6];
+  const tables = [0, 12, 4, 2, 8, 11, 14, 13, 10, 5, 3, 7, 1, 9, 15, 6];
   for (const [index, operation] of INK_RASTER_OPERATIONS.entries()) {
     for (let p = 0; p <= 1; p++) for (let d = 0; d <= 1; d++) {
       expect(applyInkRasterOperation(operation, p ? 0xffffff : 0, d ? 0xffffff : 0)).toBe((tables[index]! >> (p * 2 + d)) & 1 ? 0xffffff : 0);
     }
   }
+});
+
+test('preview work budgets preserve samples and can be overridden', () => {
+  const ink = read();
+  const result = renderOfficeInkSvg(ink, { maxPoints: 1 });
+  expect(result).toMatchObject({ supported: false, diagnostics: [{ code: 'resource' }] });
+  expect(ink.traces[0]?.points).toHaveLength(2);
+  expect(renderOfficeInkSvg(ink, { maxPoints: Infinity }).supported).toBe(true);
+  expect(() => renderOfficeInkSvg(ink, { maxPoints: -1 })).toThrow(RangeError);
+  const points = Array.from({ length: 100_001 }, () => [0, 0] as const);
+  const large = { ...ink, traces: [{ ...ink.traces[0]!, points }] };
+  expect(renderOfficeInkSvg(large)).toMatchObject({ supported: false, diagnostics: [{ code: 'resource' }] });
+  expect(large.traces[0]?.points).toBe(points);
+});
+
+test('empty traces do not prevent rendering of valid visible strokes', () => {
+  const ink = read({ extra: '<brush xml:id="empty-pen"><brushProperty name="fitToCurve" value="true"/></brush><trace contextRef="#context" brushRef="#empty-pen"/>' });
+  expect(ink.traces).toHaveLength(2);
+  expect(renderOfficeInkSvg(ink)).toEqual(renderOfficeInkSvg(read()));
+});
+
+test('Office maskNotPen and maskPenNot follow their written operands', () => {
+  expect(applyInkRasterOperation('maskNotPen', 0xff0000, 0x00ff00)).toBe(0xff0000);
+  expect(applyInkRasterOperation('maskPenNot', 0xff0000, 0x00ff00)).toBe(0x00ff00);
 });

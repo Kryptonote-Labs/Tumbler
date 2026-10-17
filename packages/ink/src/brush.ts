@@ -49,11 +49,12 @@ export function readOfficeBrush(element: LosslessXmlElement): InkBrush {
   };
 }
 
-/** Apply the Office ROP2 truth table to RGB bytes; alpha composition is the caller's job. */
+/** Apply MS-ODRAWXML §2.1.4 operands to RGB bytes; alpha composition is the caller's job. */
 export function applyInkRasterOperation(operation: InkRasterOperation, pen: number, destination: number): number {
   const p = pen & 0xffffff, d = destination & 0xffffff;
+  // The Office profile's two mask-negation descriptions differ from Windows ROP2 names.
   const operations: Record<InkRasterOperation, number> = {
-    black: 0, copyPen: p, maskNotPen: ~p & d, maskPenNot: p & ~d, maskPen: p & d,
+    black: 0, copyPen: p, maskNotPen: p & ~d, maskPenNot: ~p & d, maskPen: p & d,
     mergeNotPen: ~p | d, mergePen: p | d, mergePenNot: p | ~d, noOperation: d,
     not: ~d, notCopyPen: ~p, notMaskPen: ~(p & d), notMergePen: ~(p | d),
     notXOrPen: ~(p ^ d), white: 0xffffff, xOrPen: p ^ d,
