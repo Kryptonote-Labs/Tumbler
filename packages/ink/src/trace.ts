@@ -14,7 +14,7 @@ export type InkValue = number | boolean | null;
 export type InkPoint = readonly InkValue[];
 
 export class InkError extends Error {
-  constructor(readonly code: 'trace' | 'structure' | 'reference', message: string) {
+  constructor(readonly code: 'trace' | 'structure' | 'reference' | 'range', message: string) {
     super(message);
     this.name = 'InkError';
   }
@@ -82,8 +82,11 @@ export function decodeInkTrace(text: string, channels: readonly InkChannel[]): r
         delta = mode === '"' ? prior.delta! + raw : raw;
         value = prior.value + delta;
       }
-      if (typeof value === 'number' && (!Number.isFinite(value) || (channel.type === 'integer' && !Number.isSafeInteger(value)) || (channel.min !== undefined && value < channel.min) || (channel.max !== undefined && value > channel.max))) {
+      if (typeof value === 'number' && (!Number.isFinite(value) || (channel.type === 'integer' && !Number.isSafeInteger(value)))) {
         throw new InkError('trace', `Sample outside ${channel.name}'s representable range.`);
+      }
+      if (typeof value === 'number' && ((channel.min !== undefined && value < channel.min) || (channel.max !== undefined && value > channel.max))) {
+        throw new InkError('range', `Sample ${pointIndex} in channel ${channel.name} is ${value}, outside declared bounds ${channel.min ?? '-Infinity'}..${channel.max ?? 'Infinity'}.`);
       }
       states[index] = { mode, value, raw, ...(delta === undefined ? {} : { delta }) };
       return value;

@@ -29,8 +29,8 @@ test.each([
   expect(renderOfficeInkSvg(document).supported).toBe(false);
 });
 
-test('rejects duplicate ids, wrong namespace, DTDs and caller-defined resource overrun', () => {
-  expect(() => readOfficeInk(bytes(officeInk().replace('xml:id="pen"', 'xml:id="context"')))).toThrow('Duplicate');
+test('reports duplicate ids and rejects malformed XML or caller-defined resource overrun', () => {
+  expect(readOfficeInk(bytes(officeInk().replace('xml:id="pen"', 'xml:id="context"'))).diagnostics[0]?.message).toContain('Duplicate');
   expect(() => readOfficeInk(bytes('<ink xmlns="urn:wrong"/>'))).toThrow();
   expect(() => readOfficeInk(bytes('<!DOCTYPE ink [<!ENTITY x "oops">]>' + officeInk()))).toThrow();
   expect(() => readOfficeInk(bytes(officeInk()), { maxElements: 2 })).toThrow();
@@ -62,4 +62,35 @@ test('editing refuses to erase opaque trace markup', () => {
   const document = readOfficeInk(bytes(officeInk({ trace: '0 0<!-- do not erase -->' })));
   expect(() => replaceOfficeInkTrace(document, document.traces[0]!.elementId, [[1, 2]])).toThrow('opaque');
   expect(() => replaceOfficeInkTrace(document, -1, [[1, 2]])).toThrow('decoded trace');
+});
+
+test('brushes at the ink root resolve while contexts still require definitions', () => {
+  const xml = officeInk();
+  const brush = xml.match(/<brush[\s\S]*?<\/brush>/)![0];
+  for (const relocated of [xml.replace(brush, '').replace('</ink>', `${brush}</ink>`), xml.replace(brush, '').replace('</context>', `${brush}</context>`)]) {
+    const document = readOfficeInk(bytes(relocated));
+    expect(document.diagnostics).toEqual([]);
+    expect(document.traces).toHaveLength(1);
+    expect(renderOfficeInkSvg(document).supported).toBe(true);
+  }
+});
+
+test('foreign duplicate IDs are diagnosed globally without discarding unaffected decoded traces', () => {
+  const xml = officeInk({ extra: '<annotationXML><custom:a xml:id="foreign"/><custom:b xml:id="foreign"/></annotationXML>' });
+  const document = readOfficeInk(bytes(xml));
+  expect(document.diagnostics[0]?.code).toBe('reference');
+  expect(document.traces).toHaveLength(1);
+  expect(document.source.originalBytes()).toEqual(bytes(xml));
+  const ambiguous = readOfficeInk(bytes(officeInk({ extra: '<annotationXML><custom:a xml:id="pen"/></annotationXML>' })));
+  expect(ambiguous.traces).toHaveLength(0);
+  expect(ambiguous.diagnostics.some(d => d.message.includes('unambiguous'))).toBe(true);
+});
+
+test('declared-range violations are distinguished from syntax errors without clamping samples', () => {
+  const xml = officeInk({ channels: '<channel name="X"/><channel name="Y"/><channel name="F" max="100"/>', trace: '0 0 101' });
+  const document = readOfficeInk(bytes(xml));
+  expect(document.diagnostics[0]).toMatchObject({ code: 'range' });
+  expect(document.diagnostics[0]?.message).toContain('channel F is 101');
+  expect(document.traces).toHaveLength(0);
+  expect(document.source.originalBytes()).toEqual(bytes(xml));
 });

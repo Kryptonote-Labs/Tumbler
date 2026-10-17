@@ -5,7 +5,7 @@ import { attribute, children, elements, INKML_NAMESPACE, XML_NAMESPACE } from '.
 
 export interface InkDiagnostic {
   readonly elementId: number;
-  readonly code: 'structure' | 'reference' | 'trace' | 'rendering';
+  readonly code: 'structure' | 'reference' | 'trace' | 'range' | 'rendering' | 'resource';
   readonly message: string;
 }
 export interface OfficeInkTrace {
@@ -27,18 +27,22 @@ export function readOfficeInk(bytes: Uint8Array, limits?: Partial<LosslessXmlLim
   if (source.root.namespaceUri !== INKML_NAMESPACE || source.root.localName !== 'ink') throw new InkError('structure', 'Expected an InkML ink root.');
   const diagnostics: InkDiagnostic[] = [];
   const ids = new Map<string, LosslessXmlElement>();
+  const ambiguousIds = new Set<string>();
   for (const element of source.elements()) {
     const id = attribute(element, 'id', XML_NAMESPACE);
     if (!id) continue;
-    if (ids.has(id)) throw new InkError('reference', `Duplicate xml:id ${id}.`);
-    ids.set(id, element);
+    if (ids.has(id) || ambiguousIds.has(id)) {
+      diagnostics.push({ elementId: element.id, code: 'reference', message: `Duplicate xml:id ${id}; references to this ID are ambiguous.` });
+      ambiguousIds.add(id);
+      ids.delete(id);
+    } else ids.set(id, element);
   }
   const definitions = new Set(children(source.root, 'definitions').flatMap(elements));
   const reference = (element: LosslessXmlElement, name: string, target: string) => {
     const ref = attribute(element, name);
     const value = ref?.startsWith('#') ? ids.get(ref.slice(1)) : undefined;
-    if (!value || value.namespaceUri !== INKML_NAMESPACE || value.localName !== target || !definitions.has(value)) {
-      throw new InkError('reference', `${name} must reference a local ${target} in definitions.`);
+    if (!value || value.namespaceUri !== INKML_NAMESPACE || value.localName !== target || (target === 'context' && !definitions.has(value))) {
+      throw new InkError('reference', `${name} must reference an unambiguous local ${target}${target === 'context' ? ' in definitions' : ''}.`);
     }
     return value;
   };

@@ -33,7 +33,7 @@ test('validates channel definitions, type, decoded range and explicit restarts',
   expect(() => decodeInkTrace('*', [{ name: 'S', type: 'boolean', intermittent: true, defaultValue: 1 }])).toThrow('default');
   expect(() => decodeInkTrace('0', [{ ...xy[0]!, min: NaN }])).toThrow('bounds');
   expect(() => decodeInkTrace(`1,'1`, [{ ...xy[0]!, intermittent: true }])).toThrow();
-  expect(() => decodeInkTrace(`9,'2`, [{ ...xy[0]!, max: 10 }])).toThrow('range');
+  expect(() => decodeInkTrace(`9,'2`, [{ ...xy[0]!, max: 10 }])).toThrow('bounds');
   expect(decodeInkTrace('-.25 1E-3', xy.map(c => ({ ...c, type: 'double' })))).toEqual([[-.25, .001]]);
   expect(decodeInkTrace('', xy)).toEqual([]);
 });
