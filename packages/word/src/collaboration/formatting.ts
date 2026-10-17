@@ -26,6 +26,7 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   positioning?: WordParagraphPositioning;
   tab?: WordPositionalTab;
   highlight?: string;
+  shading?: WordColour;
   verticalAlign?: 'baseline' | 'superscript' | 'subscript';
   characterSpacingPoints?: number;
   breakType?: import('../breaks.ts').WordBreakType;
@@ -80,6 +81,7 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
     if (key === 'list' && isList(value)) continue;
     if (key === 'fontSize' && isFontSize(value)) continue;
     if (key === 'font' && typeof value === 'string' && value.length > 0) continue;
+    if (key === 'shading' && (value === 'transparent' || isWordColour(value))) continue;
     if (key === 'highlight' && typeof value === 'string' && WORD_HIGHLIGHTS.includes(value)) continue;
     if (key === 'verticalAlign' && typeof value === 'string' && ['baseline', 'superscript', 'subscript'].includes(value)) continue;
     if (key === 'characterSpacingPoints' && typeof value === 'number' && Number.isInteger(value * 20) && value * 20 >= -2147483648 && value * 20 <= 2147483647) continue;

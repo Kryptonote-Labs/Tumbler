@@ -156,6 +156,7 @@ export class WordShapeText {
             'strike',
             'color',
             'highlight',
+            'shading',
             'verticalAlign',
             'characterSpacingPoints',
           ].map((k) => [k, null]),
@@ -227,6 +228,7 @@ function format(a: TextAttributes): WordTextFormat {
     ...(a.strike === undefined ? {} : { strike: a.strike }),
     ...(a.color === undefined ? {} : { color: a.color }),
     ...(a.highlight === undefined ? {} : { highlight: a.highlight }),
+    ...(a.shading === undefined ? {} : { shading: a.shading }),
     ...(a.verticalAlign === undefined ? {} : { verticalAlign: a.verticalAlign }),
     ...(a.characterSpacingPoints === undefined
       ? {}

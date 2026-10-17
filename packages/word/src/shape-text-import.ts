@@ -72,6 +72,7 @@ export function readShapeText(
           strike: f.strike,
           color: f.themeColour ?? f.color,
           highlight: f.highlight,
+          ...(f.shading === undefined ? {} : { shading: f.shadingColour ?? f.shading }),
           verticalAlign: f.verticalAlign,
           ...(f.characterSpacingPoints === undefined
             ? {}

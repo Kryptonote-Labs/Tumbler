@@ -39,6 +39,7 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
           color: computed.themeColour ?? computed.color,
           strike: computed.strike,
           highlight: computed.highlight,
+          ...(computed.shading === undefined ? {} : { shading: computed.shadingColour ?? computed.shading }),
           verticalAlign: computed.verticalAlign,
           ...(computed.characterSpacingPoints === undefined ? {} : { characterSpacingPoints: computed.characterSpacingPoints }),
         },

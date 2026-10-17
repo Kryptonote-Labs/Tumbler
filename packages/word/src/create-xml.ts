@@ -44,6 +44,7 @@ export function runProperties(format: WordTextFormat) {
     if (!['none', 'single', 'double'].includes(format.underline)) throw new TypeError('Unsupported underline style.');
     output.push(`<w:u w:val="${format.underline}"/>`);
   }
+  if (format.shading !== undefined) output.push(`<w:shd w:val="clear" ${format.shading === "transparent" ? 'w:fill="auto"' : wordColourAttributes(format.shading, true)}/>`);
   if (format.verticalAlign !== undefined) {
     if (!['baseline', 'superscript', 'subscript'].includes(format.verticalAlign)) throw new TypeError('Invalid vertical alignment.');
     output.push(`<w:vertAlign w:val="${format.verticalAlign}"/>`);

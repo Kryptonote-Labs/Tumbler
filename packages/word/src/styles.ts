@@ -38,6 +38,7 @@ export interface WordRunProperties {
   readonly strike?: boolean;
   readonly color?: WordColor;
   readonly highlight?: string;
+  readonly shading?: import("./theme-colours.ts").WordColour;
   readonly verticalAlign?: WordVerticalAlign;
   readonly rightToLeft?: boolean;
 }
@@ -86,6 +87,8 @@ export interface ComputedWordTextFormat {
   readonly color: string;
   readonly themeColour?: WordThemeColour;
   readonly highlight: string | undefined;
+  readonly shading?: string;
+  readonly shadingColour?: import("./theme-colours.ts").WordColour;
   readonly verticalAlign: WordVerticalAlign;
   readonly rightToLeft: boolean;
 }
@@ -319,6 +322,7 @@ export class WordStyles {
       color: this.resolveColor(properties.color) ?? DEFAULT_TEXT.color,
       ...(properties.color?.type === 'theme' ? { themeColour: { theme: properties.color.slot, fallback: this.resolveColor(properties.color) ?? DEFAULT_TEXT.color, ...(properties.color.tint === undefined ? {} : { tint: properties.color.tint }), ...(properties.color.shade === undefined ? {} : { shade: properties.color.shade }) } } : {}),
       highlight: properties.highlight,
+      ...(properties.shading === undefined ? {} : { shading: resolveWordColour(properties.shading, this.themeColors), shadingColour: properties.shading }),
       ...(properties.characterSpacingPoints === undefined ? {} : { characterSpacingPoints: properties.characterSpacingPoints }),
       verticalAlign: properties.verticalAlign ?? DEFAULT_TEXT.verticalAlign,
       rightToLeft: properties.rightToLeft ?? DEFAULT_TEXT.rightToLeft,
@@ -413,6 +417,7 @@ export function parseRunProperties(element: LosslessXmlElement, namespace: strin
   const underline = onlyChild(element, namespace, "u", "Run properties must not repeat underline.");
   const vertical = valueChild(element, namespace, "vertAlign");
   const highlight = valueChild(element, namespace, "highlight");
+  const shading = readTableShading(onlyChild(element, namespace, "shd", "Duplicate run shading"), namespace);
   const spacing = valueChild(element, namespace, "spacing");
   return Object.freeze({
     ...(literalFont === undefined ? {} : { fontFamily: literalFont }),
@@ -425,6 +430,7 @@ export function parseRunProperties(element: LosslessXmlElement, namespace: strin
     ...(underline === undefined ? {} : { underline: underlineValue(attr(underline, namespace, "val")) }),
     ...(color === undefined ? {} : { color: parseColor(color, namespace) }),
     ...(highlight === undefined ? {} : { highlight }),
+    ...(shading === undefined ? {} : { shading }),
     ...(spacing === undefined ? {} : { characterSpacingPoints: signedTwips(spacing, "character spacing") / 20 }),
     ...(vertical === "superscript" || vertical === "subscript" || vertical === "baseline" ? { verticalAlign: vertical } : {}),
   });
