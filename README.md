@@ -69,6 +69,7 @@ Office layout. Legacy binary `.doc`, `.xls`, and `.ppt` files are not supported.
 | --- | --- |
 | `@tumblerjs/opc` | ZIP package parts, content types, relationships, and atomic writes |
 | `@tumblerjs/ooxml` | Loss-aware XML, namespaces, compatibility, themes, and shared metadata |
+| `@tumblerjs/ink` | Shared InkML trace decoding, Office ink semantics and lossless preservation |
 | `@tumblerjs/formulas` | Headless spreadsheet formula parsing and bounded calculation |
 | `@tumblerjs/charts` | Headless DrawingML chart semantics and deterministic layout |
 | `@tumblerjs/core` | Format-neutral selection, formatting contracts, and sparse geometry |

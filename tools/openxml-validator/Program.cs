@@ -8,8 +8,11 @@ if (args.Length == 0)
 }
 
 var failed = false;
-var validator = new OpenXmlValidator { MaxNumberOfErrors = 100 };
-foreach (var path in args)
+var office2010 = args.Contains("--office2010");
+var paths = args.Where(arg => arg != "--office2010").ToArray();
+if (paths.Length == 0) return 2;
+var validator = new OpenXmlValidator(office2010 ? DocumentFormat.OpenXml.FileFormatVersions.Office2010 : DocumentFormat.OpenXml.FileFormatVersions.Office2007) { MaxNumberOfErrors = 100 };
+foreach (var path in paths)
 {
     try
     {

@@ -10,6 +10,20 @@ permissions:
   contents: read
 
 jobs:
+  inkml-schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: python -m pip install lxml==6.1.3
+      - run: bash scripts/fetch-inkml-schemas.sh "$RUNNER_TEMP/inkml-schemas"
+      - run: bun scripts/generate-ink-conformance.ts "$RUNNER_TEMP/inkml-fixtures"
+      - name: Validate source and edited InkML against the W3C schema
+        run: python scripts/validate-inkml-schema.py --schema "$RUNNER_TEMP/inkml-schemas/inkml.xsd" --xml-schema "$RUNNER_TEMP/inkml-schemas/xml.xsd" "$RUNNER_TEMP/inkml-fixtures"/*.inkml
+
   open-xml-sdk:
     runs-on: ubuntu-latest
     steps:
@@ -40,6 +54,15 @@ jobs:
 
       - name: Validate with Open XML SDK
         run: bun run compatibility:openxml -- "$RUNNER_TEMP/tumbler-fixtures"/*.xlsx
+
+      - name: Validate native ink embedding with Open XML SDK
+        run: |
+          bun scripts/generate-ink-conformance.ts "$RUNNER_TEMP/inkml-fixtures"
+          bun run compatibility:openxml -- --office2010 "$RUNNER_TEMP/inkml-fixtures/native-only.docx" "$RUNNER_TEMP/inkml-fixtures/direct-native.docx"
+          if bun run compatibility:openxml -- --office2010 "$RUNNER_TEMP/inkml-fixtures/invalid/transform.docx"; then
+            echo 'The invalid ink transform must fail SDK validation.' >&2
+            exit 1
+          fi
 
   libreoffice:
     runs-on: ubuntu-latest

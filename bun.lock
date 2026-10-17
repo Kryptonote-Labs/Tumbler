@@ -53,6 +53,13 @@
       "name": "@tumblerjs/formulas",
       "version": "0.1.0-alpha.26",
     },
+    "packages/ink": {
+      "name": "@tumblerjs/ink",
+      "version": "0.1.0-alpha.26",
+      "dependencies": {
+        "@tumblerjs/ooxml": "0.1.0-alpha.26",
+      },
+    },
     "packages/ooxml": {
       "name": "@tumblerjs/ooxml",
       "version": "0.1.0-alpha.26",
@@ -132,6 +139,7 @@
       "dependencies": {
         "@tumblerjs/charts": "0.1.0-alpha.26",
         "@tumblerjs/core": "0.1.0-alpha.26",
+        "@tumblerjs/ink": "0.1.0-alpha.26",
         "@tumblerjs/ooxml": "0.1.0-alpha.26",
         "@tumblerjs/opc": "0.1.0-alpha.26",
       },
@@ -288,6 +296,8 @@
     "@tumblerjs/docs": ["@tumblerjs/docs@workspace:apps/docs"],
 
     "@tumblerjs/formulas": ["@tumblerjs/formulas@workspace:packages/formulas"],
+
+    "@tumblerjs/ink": ["@tumblerjs/ink@workspace:packages/ink"],
 
     "@tumblerjs/ooxml": ["@tumblerjs/ooxml@workspace:packages/ooxml"],
 
