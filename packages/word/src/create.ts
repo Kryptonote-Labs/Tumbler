@@ -10,7 +10,7 @@ import { xml, runProperties } from './create-xml.ts';
 import { authoredContent, type WordContentBlock, type WordAuthoredImage } from './create-content.ts';
 
 /** Supported authored text properties. Omitted properties inherit the document defaults. */
-export type WordTextFormat = Partial<Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'underline' | 'strike' | 'highlight' | 'verticalAlign' | 'characterSpacingPoints'>> & { readonly color?: import('./theme-colours.ts').WordColour };
+export type WordTextFormat = Partial<Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'underline' | 'strike' | 'highlight' | 'verticalAlign' | 'characterSpacingPoints'>> & { readonly color?: import('./theme-colours.ts').WordColour; readonly shading?: import('./theme-colours.ts').WordColour };
 export interface WordTextRun { readonly chartTitle?: string; readonly chartTitleText?: readonly WordTextParagraph[]; readonly drawing?: import('./drawing-geometry.ts').WordDrawingGeometry; readonly shape?: import('./shapes.ts').WordAuthoredShape; readonly breakType?: import('./breaks.ts').WordBreakType; readonly link?: string; readonly tab?: WordPositionalTab; readonly source?: number; readonly sourceCopy?: string; readonly text: string; readonly format?: WordTextFormat; readonly image?: WordAuthoredImage; readonly field?: WordPageField; }
 export interface WordTextParagraph {
   readonly styleId?: string;

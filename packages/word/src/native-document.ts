@@ -140,7 +140,8 @@ export class NativeWordDocument implements WordLayoutSource {
     return this.paragraphFormats.get(paragraph) ?? DEFAULT_PARAGRAPH;
   }
   runFormat(paragraph: WordParagraph, run: WordRun | undefined) {
-    return (run && this.runFormats.get(run)) ?? this.paragraphTextFormats.get(paragraph) ?? this.compiled?.defaults.text ?? { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }), color: resolveWordColour(this.options.defaultFormat?.color ?? DEFAULT_TEXT.color, this.themeColours) };
+    const { shading, ...defaults } = this.options.defaultFormat ?? { fontFamily: "Aptos", fontSizePoints: 12 };
+    return (run && this.runFormats.get(run)) ?? this.paragraphTextFormats.get(paragraph) ?? this.compiled?.defaults.text ?? { ...DEFAULT_TEXT, ...defaults, color: resolveWordColour(this.options.defaultFormat?.color ?? DEFAULT_TEXT.color, this.themeColours), ...(shading === undefined ? {} : { shading: resolveWordColour(shading, this.themeColours) }) };
   }
   removeStory(target: string | WordStoryTarget) {
     const key = typeof target === 'string' ? target : `${target.section}:${target.kind}:${target.type}`;
@@ -237,12 +238,13 @@ export class NativeWordDocument implements WordLayoutSource {
         value.fontSizePoints > 1638
       )
         throw new RangeError('Font size must be between 1 and 1638 points.');
-      const { themeColour: inheritedTheme, ...resolved } = value;
+      const { themeColour: inheritedTheme, shading, ...resolved } = value;
       const selectedTheme = patch?.color === undefined ? inheritedTheme : typeof patch.color === 'string' ? undefined : patch.color;
       return Object.freeze({
         ...resolved,
         ...(selectedTheme === undefined ? {} : { themeColour: selectedTheme }),
         color: resolveWordColour(value.color, this.themeColours).toUpperCase(),
+        ...(value.shading === undefined ? {} : { shading: resolveWordColour(value.shading, this.themeColours), shadingColour: patch?.shading ?? value.shadingColour ?? value.shading }),
         fontSizePoints: Math.round(value.fontSizePoints * 2) / 2,
       });
     };

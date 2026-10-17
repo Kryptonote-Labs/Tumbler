@@ -64,6 +64,7 @@ export function isShapeTextBody(value: unknown): value is readonly WordTextParag
                   'underline',
                   'strike',
                   'highlight',
+                  'shading',
                   'verticalAlign',
                   'characterSpacingPoints',
                   'color',

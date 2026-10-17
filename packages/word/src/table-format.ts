@@ -58,7 +58,8 @@ export function readTableBorders(e: LosslessXmlElement | undefined, ns: string, 
 }
 export function readTableShading(e: LosslessXmlElement | undefined, ns: string, scheme?: import('@tumblerjs/ooxml').ThemeColorScheme): WordColour | undefined {
   if (!e) return undefined;
-  return readWordColour(e, ns, 'fill', scheme) ?? 'transparent';
+  if (attr(e, ns, 'val') === 'nil') return 'transparent';
+  return readWordColour(e, ns, attr(e, ns, 'val') === 'solid' ? 'color' : 'fill', scheme) ?? 'transparent';
 }
 export function cellFormatXml(format: WordCellFormat): Map<string, string> {
   if (!isWordCellFormat(format)) throw new TypeError('Invalid cell formatting.');

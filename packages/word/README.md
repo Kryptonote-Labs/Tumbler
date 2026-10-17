@@ -64,6 +64,8 @@ Simple paragraph splits and joins use `\n`. Tumbler refuses structural edits
 through fields, links, revisions, bookmarks, drawings, mixed direct formatting,
 or different table/story containers rather than risking invalid OOXML.
 
+Text runs support solid background shading separately from highlighting, including theme fills, inheritance, and explicit clearing. Highlighting takes precedence when both are present. Patterned shading is retained in source XML; its pattern is not painted.
+
 Apply the same format-neutral patches used by the other Tumbler formats:
 
 ```ts

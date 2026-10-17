@@ -163,6 +163,7 @@ export function wordParagraphRenderer(
       color: 'color',
       strike: 'strike',
       highlight: 'highlight',
+      shading: 'shd',
       verticalAlign: 'vertAlign',
       characterSpacingPoints: 'spacing',
     } as const;

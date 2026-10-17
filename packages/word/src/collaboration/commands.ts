@@ -149,6 +149,7 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
     'link',
     'strike',
     'highlight',
+    'shading',
     'verticalAlign',
     'characterSpacingPoints',
     'bold',

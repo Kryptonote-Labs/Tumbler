@@ -204,8 +204,9 @@ function paintShape<Image, Path>(context: WordCanvasContext<Image, Path>, shape:
 function paintText<Image, Path>(context: WordCanvasContext<Image, Path>, item: WordLayoutFragment | WordLayoutMarker, text: string): void {
   const { format } = item;
   const highlight = wordHighlightColor(format.highlight);
-  if (highlight !== "transparent") {
-    context.fillStyle = highlight;
+  const background = highlight === "transparent" ? format.shading ?? "transparent" : highlight;
+  if (background !== "transparent") {
+    context.fillStyle = background;
     context.fillRect(item.x, item.y, item.width, item.height);
   }
   if (text.trim() === "") return;

@@ -21,7 +21,7 @@ export function wordTextCss(format: ComputedWordTextFormat): string {
     `text-decoration-style:${format.underline === "double" ? "double" : "solid"}`,
     `letter-spacing:${wordPointsToCssPixels(format.characterSpacingPoints ?? 0)}px`,
     `color:${format.color}`,
-    `background-color:${wordHighlightColor(format.highlight)}`,
+    `background-color:${wordHighlightColor(format.highlight) === "transparent" ? format.shading ?? "transparent" : wordHighlightColor(format.highlight)}`,
     ...(separateStrike ? ["background-image:linear-gradient(currentColor,currentColor)", "background-size:100% 1px", "background-position:center", "background-repeat:no-repeat"] : []),
     `direction:${format.rightToLeft ? "rtl" : "ltr"}`,
 

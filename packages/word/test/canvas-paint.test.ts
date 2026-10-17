@@ -132,3 +132,15 @@ test("browser and offscreen canvases are paint targets", () => {
   const targets: [(context: CanvasRenderingContext2D) => WordCanvasContext<CanvasImageSource, Path2D>, (context: OffscreenCanvasRenderingContext2D) => WordCanvasContext<CanvasImageSource, Path2D>] = [context => context, context => context];
   expect(targets).toHaveLength(2);
 });
+
+test('paints run shading behind text and gives highlighting precedence', () => {
+  const page = layout([{ kind: 'paragraph', runs: [
+    { text: 'Shaded', format: { shading: '#4C94D8' } },
+    { text: 'Highlighted', format: { shading: '#4C94D8', highlight: 'yellow' } },
+  ] }]);
+  const { context, calls } = recorder();
+  paintWordPage(context, page);
+  const [shaded, highlighted] = page.columns[0]!.lines[0]!.fragments;
+  expect(calls).toContainEqual(['fillRect', '#4C94D8', shaded!.x, shaded!.y, shaded!.width, shaded!.height]);
+  expect(calls).toContainEqual(['fillRect', '#FFFF00', highlighted!.x, highlighted!.y, highlighted!.width, highlighted!.height]);
+});
