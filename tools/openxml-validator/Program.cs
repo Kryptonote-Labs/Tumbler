@@ -7,6 +7,12 @@ if (args.Length == 0)
     return 2;
 }
 
+var unknownOption = args.FirstOrDefault(arg => arg.StartsWith("--") && arg != "--office2010");
+if (unknownOption is not null)
+{
+    Console.Error.WriteLine($"Unknown option: {unknownOption}. Supported option: --office2010.");
+    return 2;
+}
 var failed = false;
 var office2010 = args.Contains("--office2010");
 var paths = args.Where(arg => arg != "--office2010").ToArray();
