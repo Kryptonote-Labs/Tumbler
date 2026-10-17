@@ -53,3 +53,18 @@ test('complex imported shape appearance remains opaque and survives neighbouring
     expect(model.artifact().document.source.source).toContain(markup);
   }
 });
+
+test('new shapes default to fixed/front placement while explicit imported placements survive editing', () => {
+  for (const placement of [{}, { layout: 'inline' as const }, { layout: 'behind' as const, moveWithText: true }] ) {
+    const shape: WordAuthoredShape = { preset: 'rect', width: 100, height: 60, fill: '#ABCDEF', outline: '#112233', outlineWidth: 1, x: 90, y: 120, ...placement };
+    const source = createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', shape }] }] });
+    const original = [...source.document.drawings.values()][0]!;
+    if (!shape.layout) expect(original.anchor).toMatchObject({ horizontalRelativeTo: 'page', verticalRelativeTo: 'page', behindDocument: false, horizontalOffsetPoints: 90, verticalOffsetPoints: 120 });
+    else expect(original.placement).toBe(shape.layout === 'inline' ? 'inline' : 'anchor');
+    const content = importWordContent(source);
+    const document = new NativeWordDocument({ source });
+    document.update(content.map(block => block.kind === 'paragraph' ? { ...block, runs: block.runs.map(run => run.shape ? { ...run, shape: { ...run.shape, width: 140 } } : run) } : block));
+    expect([...document.drawings.values()][0]?.anchor).toEqual(original.anchor);
+    expect([...document.artifact().document.drawings.values()][0]?.anchor).toEqual(original.anchor);
+  }
+});

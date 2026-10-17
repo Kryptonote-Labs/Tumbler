@@ -32,7 +32,7 @@ export function isWordAuthoredShape(value: unknown): value is WordAuthoredShape 
   if (shape.textBody !== undefined && !isShapeTextBody(shape.textBody)) return false;
   if (shape.textAnchor !== undefined && !['top', 'center', 'bottom'].includes(String(shape.textAnchor))) return false;
   try { imagePlacement(shape as WordImagePosition, Number(shape.width), Number(shape.width)); } catch { return false; }
-  return Object.keys(shape).every(k => ['preset','width','height','fill','outline','outlineWidth','text','textBody','textAnchor','alt','layout','alignment','moveWithText','x','y'].includes(k));
+  return Object.keys(shape).every(k => ['preset','width','height','fill','outline','outlineWidth','text','textBody','textAnchor','alt','layout','alignment','moveWithText','wrap','horizontalRelativeTo','verticalRelativeTo','x','y'].includes(k));
 }
 /**
  * The shape's outline as an SVG path in its own point space, inset by one point so strokes stay
@@ -57,9 +57,14 @@ export function wordShapePath(shape: Pick<WordAuthoredShape, 'preset' | 'width' 
     case 'line': return `M1 ${bottom} L${right} 1`;
   }
 }
+/** Missing placement means a newly authored shape. Imported shapes carry an explicit layout. */
+function defaultShapePlacement(shape: WordAuthoredShape): WordAuthoredShape {
+  return shape.layout === undefined ? { ...shape, layout: 'front', moveWithText: false, horizontalRelativeTo: 'page', verticalRelativeTo: 'page' } : shape;
+}
 /** Editable DrawingML shape with an ordinary Word text box. No raster fallback. */
 export function wordShapeXml(shape: WordAuthoredShape, id: number, availableWidth: number, renderText: (paragraphs: readonly WordTextParagraph[]) => string): string {
   if (!isWordAuthoredShape(shape)) throw new TypeError('Invalid shape.');
+  shape = defaultShapePlacement(shape);
   const placement = imagePlacement(shape, shape.width, availableWidth);
   const cx = Math.round(shape.width * 12700), cy = Math.round(shape.height * 12700);
   const fill = (color: WordColour) => color === 'none' ? '<a:noFill/>' : `<a:solidFill>${drawingColourXml(color)}</a:solidFill>`;
@@ -67,9 +72,10 @@ export function wordShapeXml(shape: WordAuthoredShape, id: number, availableWidt
 }
 export function nativeShapeDrawing(elementId: number, shape: WordAuthoredShape, availableWidth: number): WordShapeDrawing {
   if (!isWordAuthoredShape(shape)) throw new TypeError('Invalid shape.');
+  shape = defaultShapePlacement(shape);
   const floating = shape.layout && shape.layout !== 'inline';
   return { kind: 'shape', elementId, shape, placement: floating ? 'anchor' : 'inline', widthPoints: shape.width, heightPoints: shape.height, name: 'Shape', altText: shape.alt, anchor: floating ? {
-    horizontalRelativeTo: 'column', verticalRelativeTo: shape.moveWithText === false ? 'page' : 'paragraph',
+    horizontalRelativeTo: shape.horizontalRelativeTo ?? 'column', verticalRelativeTo: shape.verticalRelativeTo ?? (shape.moveWithText === false ? 'page' : 'paragraph'),
     horizontalOffsetPoints: shape.x ?? (shape.alignment === 'center' ? (availableWidth - shape.width) / 2 : shape.alignment === 'right' ? availableWidth - shape.width : 0), verticalOffsetPoints: shape.y ?? 0,
     wrap: 'none', behindDocument: shape.layout === 'behind', allowOverlap: true, distanceTopPoints: 0, distanceEndPoints: 0, distanceBottomPoints: 0, distanceStartPoints: 0,
   } : undefined };

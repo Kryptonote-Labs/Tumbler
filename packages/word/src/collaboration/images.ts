@@ -1,21 +1,19 @@
+import { isWordDrawingPosition, type WordDrawingPosition } from '../drawing-placement.ts';
 import type * as Y from 'yjs';
 
-export type DocumentImage = {
+export type DocumentImage = WordDrawingPosition & {
   id: string;
   type: 'image/png' | 'image/jpeg';
   width: number;
   height: number;
   alt: string;
-  layout?: 'inline' | 'front' | 'behind';
   alignment?: 'left' | 'center' | 'right';
   moveWithText?: boolean;
-  x?: number;
-  y?: number;
 };
 
 export function normalizeImage(image: DocumentImage): DocumentImage {
   if ((image.layout ?? 'inline') !== 'inline') return image;
-  const { x, y, moveWithText, ...inline } = image;
+  const { x, y, moveWithText, horizontalRelativeTo, verticalRelativeTo, wrap, ...inline } = image;
   return inline;
 }
 
@@ -49,6 +47,7 @@ export function isDocumentImage(value: unknown): value is DocumentImage {
     (!('layout' in value) || ['inline', 'front', 'behind'].includes(String(value.layout))) &&
     (!('alignment' in value) || ['left', 'center', 'right'].includes(String(value.alignment))) &&
     (!('moveWithText' in value) || typeof value.moveWithText === 'boolean') &&
+    isWordDrawingPosition(value as WordDrawingPosition) &&
     ['x', 'y'].every(
       (key) =>
         !(key in value) ||
@@ -66,6 +65,9 @@ export function isDocumentImage(value: unknown): value is DocumentImage {
         'layout',
         'alignment',
         'moveWithText',
+        'wrap',
+        'horizontalRelativeTo',
+        'verticalRelativeTo',
         'x',
         'y',
       ].includes(key),

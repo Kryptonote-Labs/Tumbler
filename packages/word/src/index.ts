@@ -161,6 +161,7 @@ export { wordColoursEqual } from './theme-colours.ts';
 export { shapeTextParagraphs, shapePlainText, isShapeTextBody } from './shape-text.ts';
 export { layoutWordShapeText, WORD_SHAPE_TEXT_INSET_POINTS, type WordShapeTextLayout } from './shape-text-layout.ts';
 
+export { wordDrawingPlacement, type WordDrawingPosition } from './drawing-placement.ts';
 export { isWordDrawingGeometry, withWordDrawingGeometry, type WordDrawingGeometry } from './drawing-geometry.ts';
 
 export { wordChartTitleText, chartTitleFromWord } from './chart-title.ts';

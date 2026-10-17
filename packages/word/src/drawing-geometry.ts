@@ -1,19 +1,18 @@
+import { isWordDrawingPosition, type WordDrawingPosition } from './drawing-placement.ts';
 import type { WordDrawing } from './drawings.ts';
 
-/** Geometry overrides for a drawing retained in the source package. Positions are page-relative. */
-export interface WordDrawingGeometry {
+/** Geometry overrides for a drawing retained in the source package. Coordinates default to page-relative for legacy geometry. */
+export interface WordDrawingGeometry extends WordDrawingPosition {
   readonly width: number;
   readonly height: number;
-  readonly layout?: 'inline' | 'front' | 'behind';
-  readonly x?: number;
-  readonly y?: number;
 }
 
 export function isWordDrawingGeometry(value: unknown): value is WordDrawingGeometry {
   if (!value || typeof value !== 'object') return false;
   const geometry = value as Record<string, unknown>;
   return (
-    Object.keys(geometry).every((key) => ['width', 'height', 'layout', 'x', 'y'].includes(key)) &&
+    Object.keys(geometry).every((key) => ['width', 'height', 'layout', 'x', 'y', 'horizontalRelativeTo', 'verticalRelativeTo', 'wrap'].includes(key)) &&
+    isWordDrawingPosition(value as WordDrawingPosition) &&
     ['width', 'height'].every(
       (key) =>
         typeof geometry[key] === 'number' &&
@@ -72,14 +71,15 @@ export function withWordDrawingGeometry(
             geometry.layout === (drawing.anchor?.behindDocument ? 'behind' : 'front')
               ? drawing.anchor
               : {}),
-            ...(geometry.x !== undefined || geometry.y !== undefined
+            ...(geometry.x !== undefined || geometry.y !== undefined || geometry.horizontalRelativeTo !== undefined || geometry.verticalRelativeTo !== undefined
               ? {
-                  horizontalRelativeTo: 'page',
+                  horizontalRelativeTo: geometry.horizontalRelativeTo ?? 'page',
                   horizontalOffsetPoints: geometry.x ?? 0,
-                  verticalRelativeTo: 'page',
+                  verticalRelativeTo: geometry.verticalRelativeTo ?? 'page',
                   verticalOffsetPoints: geometry.y ?? 0,
                 }
               : {}),
+            ...(geometry.wrap ? { wrap: geometry.wrap } : {}),
             ...(geometry.layout ? { behindDocument: layout === 'behind' } : {}),
           },
   };

@@ -401,10 +401,17 @@ export class NativeWordDocument implements WordLayoutSource {
                 // Retain crop/rotation/wrapping and positioning semantics on unchanged images.
                 if (originalDrawing?.kind === 'image') {
                   const anchor = originalDrawing.anchor;
-                  const placementUnchanged = image.layout === (originalDrawing.placement === 'inline' ? 'inline' : anchor?.behindDocument ? 'behind' : 'front') &&
+                  const placementUnchanged = (image.wrap === undefined || image.wrap === anchor?.wrap) && image.layout === (originalDrawing.placement === 'inline' ? 'inline' : anchor?.behindDocument ? 'behind' : 'front') &&
                     (image.x ?? 0) === (anchor?.horizontalOffsetPoints ?? 0) && (image.y ?? 0) === (anchor?.verticalOffsetPoints ?? 0) &&
-                    (image.moveWithText !== false) === (anchor?.verticalRelativeTo !== 'page');
-                  media.push({ ...originalDrawing, ...drawing, ...(placementUnchanged ? { placement: originalDrawing.placement, anchor } : {}) });
+                    (image.moveWithText !== false) === (anchor?.verticalRelativeTo !== 'page') &&
+                    (image.horizontalRelativeTo === undefined || image.horizontalRelativeTo === anchor?.horizontalRelativeTo) &&
+                    (image.verticalRelativeTo === undefined || image.verticalRelativeTo === anchor?.verticalRelativeTo);
+                  const retainedAnchor = anchor && drawing.anchor && image.wrap === undefined && image.layout === (anchor.behindDocument ? 'behind' : 'front')
+                    ? { ...anchor, ...drawing.anchor, wrap: anchor.wrap, allowOverlap: anchor.allowOverlap,
+                        distanceTopPoints: anchor.distanceTopPoints, distanceEndPoints: anchor.distanceEndPoints,
+                        distanceBottomPoints: anchor.distanceBottomPoints, distanceStartPoints: anchor.distanceStartPoints }
+                    : drawing.anchor;
+                  media.push({ ...originalDrawing, ...drawing, anchor: retainedAnchor, ...(placementUnchanged ? { placement: originalDrawing.placement, anchor } : {}) });
                 } else media.push(drawing);
               } else if (authoredRun.text === '\uFFFC' && inherited && ['drawing', 'footnote-reference', 'endnote-reference'].includes(inherited.content.kind)) {
                 const id = allocate();

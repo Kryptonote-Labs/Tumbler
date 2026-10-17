@@ -51,13 +51,7 @@ export function reconcileWordContent(
             : drawing.anchor?.behindDocument
               ? 'behind'
               : 'front';
-        const moved =
-          (run.drawing?.x !== undefined && drawing.anchor?.horizontalRelativeTo !== 'page') ||
-          (run.drawing?.y !== undefined && drawing.anchor?.verticalRelativeTo !== 'page') ||
-          (image.layout !== undefined && image.layout !== layout) ||
-          (image.x !== undefined &&
-            image.x !== (drawing.anchor?.horizontalOffsetPoints ?? 0)) ||
-          (image.y !== undefined && image.y !== (drawing.anchor?.verticalOffsetPoints ?? 0));
+        const moved = drawingNeedsUpdate(drawing, { ...image, width: drawing.widthPoints, height: drawing.heightPoints }, run.drawing !== undefined);
         if (
           drawing.widthPoints !== image.width ||
           drawing.heightPoints !== image.height ||
@@ -84,6 +78,9 @@ export function reconcileWordContent(
             ...(moved
               ? {
                   layout: image.layout ?? layout,
+                  wrap: image.wrap,
+                  horizontalRelativeTo: image.horizontalRelativeTo ?? (run.image ? 'column' : 'page'),
+                  verticalRelativeTo: image.verticalRelativeTo ?? (run.image ? (run.image.moveWithText === false ? 'page' : 'paragraph') : 'page'),
                   xPoints: image.x ?? 0,
                   yPoints: image.y ?? 0,
                 }
@@ -293,12 +290,15 @@ export function prepareWordContent(
 
 function drawingNeedsUpdate(
   drawing: import('./drawings.ts').WordDrawing,
-  image: import('./drawing-geometry.ts').WordDrawingGeometry,
+  image: import('./drawing-geometry.ts').WordDrawingGeometry & { moveWithText?: boolean },
   pageRelative = false,
 ) {
   const layout = drawing.placement === 'inline' ? 'inline' : drawing.anchor?.behindDocument ? 'behind' : 'front';
-  return (pageRelative && image.x !== undefined && drawing.anchor?.horizontalRelativeTo !== 'page') ||
-    (pageRelative && image.y !== undefined && drawing.anchor?.verticalRelativeTo !== 'page') ||
+  return (image.wrap !== undefined && image.wrap !== drawing.anchor?.wrap) || (pageRelative && image.x !== undefined && drawing.anchor?.horizontalRelativeTo !== (image.horizontalRelativeTo ?? 'page')) ||
+    (pageRelative && image.y !== undefined && drawing.anchor?.verticalRelativeTo !== (image.verticalRelativeTo ?? 'page')) ||
+    (image.horizontalRelativeTo !== undefined && image.horizontalRelativeTo !== drawing.anchor?.horizontalRelativeTo) ||
+    (image.verticalRelativeTo !== undefined && image.verticalRelativeTo !== drawing.anchor?.verticalRelativeTo) ||
+    (image.moveWithText !== undefined && image.verticalRelativeTo === undefined && image.moveWithText !== (drawing.anchor?.verticalRelativeTo !== 'page')) ||
     drawing.widthPoints !== image.width || drawing.heightPoints !== image.height ||
     (image.layout !== undefined && image.layout !== layout) ||
     (image.x !== undefined && image.x !== (drawing.anchor?.horizontalOffsetPoints ?? 0)) ||

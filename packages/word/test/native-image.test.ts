@@ -38,3 +38,19 @@ for (const imported of [false, true]) {
     expect(exported.bytes).toEqual(replacement.bytes);
   });
 }
+
+test('explicit image coordinate bases survive native layout, export, and a base-only edit', () => {
+  const source = createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', image: { bytes: png, contentType: 'image/png', width: 72, height: 36, layout: 'front', x: 100, y: 40 } }] }] });
+  const original = [...source.document.drawings.values()][0]!;
+  if (original.kind !== 'image') throw new Error('Expected image');
+  const document = new NativeWordDocument({ source });
+  for (const verticalRelativeTo of ['line', 'page', 'paragraph'] as const) {
+    document.update([{ kind: 'paragraph', runs: [{ text: '\uFFFC', source: original.elementId, image: {
+      bytes: original.bytes, contentType: 'image/png', width: 72, height: 36, layout: 'front', wrap: 'none',
+      horizontalRelativeTo: 'page', verticalRelativeTo, x: 100, y: 40,
+    } }] }]);
+    const native = [...document.drawings.values()][0]!;
+    expect(native.anchor).toMatchObject({ horizontalRelativeTo: 'page', verticalRelativeTo, horizontalOffsetPoints: 100, verticalOffsetPoints: 40 });
+    expect([...document.artifact().document.drawings.values()][0]?.anchor).toEqual(native.anchor);
+  }
+});
