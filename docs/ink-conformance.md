@@ -28,40 +28,49 @@ and the referenced [W3C InkML 1.0](https://www.w3.org/TR/InkML/) and DrawingML t
 existing native drawing frame. It changes the stroke geometry within that frame.
 Drawing resize/placement is a separate operation. Existing fallbacks are rebuilt;
 native-only documents remain native-only. Destination-dependent fallback rendering
-requires an explicit backdrop. It is not safe to replace it with an assumed white
-background. The operation fails before committing if regeneration cannot complete.
+uses an explicit backdrop when supplied. Without one, export retains the complete
+native ink and removes the stale bitmap fallback. An isolated bitmap cannot encode
+a destination-dependent operation; assuming white would change the drawing.
+Consumers without native ink support consequently have no bitmap preview for that
+edited object. Other regeneration failures leave the package unchanged.
 
 ## Rendering choices and remaining interoperability proof
 
 Office specifies curved versus linear strokes but not its fitting algorithm or
-pressure transfer function. Tumbler uses an interpolating cubic with sharp-turn
-preservation. The generic InkML profile scales pressure linearly. The Word profile
+pressure transfer function. The Word profile uses the Windows ink Bézier fitter,
+adapted from the MIT-licensed .NET WPF implementation. The generic InkML profile
+uses an interpolating cubic with sharp-turn preservation and scales pressure linearly. The Word profile
 uses a pressure multiplier of `0.25 + 1.5 * normalizedPressure`, measured against
 desktop Word LTSC 2024. These choices do not establish pixel parity. Nib sweep polygons and raster coverage are
 numerical approximations controlled by curve tolerance and raster scale.
 
-The native coordinate mapping fits the physical sample bounds into the DrawingML
-frame before applying flips, rotation and offset. Pen dimensions stay physical
+The native coordinate mapping fits the physical ink bounds into the DrawingML
+frame before applying flips, rotation and offset. Curved ink uses its fitted
+centreline bounds, including analytic extrema. Word fits the resized samples in
+the local frame before rotating them. Pen dimensions stay physical
 when that frame scales; rotation and reflection still affect the pen. Word round
 pens use a circle with the larger brush dimension. Rectangle pens retain both
 dimensions. The editing/layout frame excludes pen thickness; the rendered ink
 can extend beyond it. Resize regenerates an existing bitmap fallback with those
 same pen semantics while retaining the original InkML bytes. A degenerate axis uses one
-HIMETRIC unit, matching the inspected Word dot frame. This minimum and the exact
-Word source-bounds rounding still need comparison against the captured Word corpus. The
-Office profile does not itself establish those details. Synthetic matrix tests
-prove the transform math, not Word's intrinsic bounding-box convention.
-Rotation and nonuniform resizing operate on Word's local editing frame, not the
-painted outer box. The reference run exercises both, but exact rewritten sample
-rounding and curve-fitting parity remain unproven.
+HIMETRIC unit, matching the inspected Word dot frame. Word's rewritten samples and PDF coordinates lose precision through integer
+HIMETRIC conversion. Tumbler preserves the source samples instead of reproducing
+that lossy rewrite. Eight desktop Word curve comparisons, including 30° rotation
+and nonuniform resizing, have a maximum control-position difference of 0.109 pt;
+centreline tests require error below 0.15 pt in both directions. This establishes
+bounded agreement on the captured corpus, not universal pixel identity.
 
-The canvas page painter reads the real destination pixels. Image-only consumers,
-including the current Svelte DOM view, cannot reproduce destination-dependent
-raster operations. They retain an available cached preview and expose diagnostics;
-without a cache they have no visible preview for those operations. Completing
-native display in that view requires connecting it to the page raster painter.
-Stroke mutation is exposed through the shared headless artifact/session API;
-interactive stroke-point handles are not part of this change.
+The canvas page painter reads the real destination pixels. `WordInkPageLayer`
+connects that painter to Svelte and Kryptonote pages, composing destination-dependent
+strokes against the page's text, images and other drawings. It overlays only changed
+pixels and suppresses the isolated cached image for those strokes.
+
+Selected ink exposes an Edit points control. Pointer drags and keyboard nudges use
+the same headless sample operation, retain non-coordinate channels, and preserve
+untouched sample positions when the bounds change. The drawing's layout frame stays
+fixed. Each gesture commits one collaborative undo transaction in Kryptonote.
+Trace overrides use source trace indices so recognition-cache removal cannot change
+the identity of subsequent edits. Native DOCX and fallback updates remain atomic.
 
 Device-dependent files need host calibration. Em/ex dimensions need host physical
 unit sizes. The published InkML §6.4 defines `pc` as `1/22 pt`, unlike the usual
@@ -168,3 +177,29 @@ desktop Word. Word saved, rotated, resized and exported PDFs from both downloads
 LibreOffice on the Pi rendered the fallback download. The original private
 failed geometry request also passed a local export replay; production was not
 changed.
+
+## Curve and point-edit reference run, 2026-10-18
+
+Word LTSC 2024, build 16.0.17932, opened and saved the point-edited native DOCX,
+exported PDF, and applied a 30° rotation with 1.4× horizontal and 0.7× vertical resize.
+The unrotated saved round trip retained the moved sample at (-20, 15) pt and the
+untouched sample at (80, 60) pt, relative to the original drawing origin.
+
+Eight synthetic Word curve documents covered smooth, corner, repeated and sparse
+samples with fitToCurve enabled and disabled. Their PDF Bézier controls exposed
+the previous interpolating-curve and fit-after-rotation errors. The committed
+`word-curve-reference.json` contains only synthetic coordinates and transforms.
+`windows-curve-reference.json` contains 80 deterministic cases captured with
+`scripts/capture-windows-ink-curves.ps1`; those controls match to 1e-6 HIMETRIC.
+
+The fitter was adapted from [dotnet/wpf Bezier.cs and CuspData.cs](https://github.com/dotnet/wpf/tree/65d15adece1df9a73e3d1abc11f8bbf99e9fc7a9/src/Microsoft.DotNet.Wpf/src/PresentationCore/MS/internal/Ink).
+Its MIT notice is included in the ink package. The PDF checks test the page renderer
+rather than merely comparing two ports of the same algorithm.
+
+The Open XML SDK Office 2010 validator accepted the point-edited native and fallback
+packages, the edited destination-dependent package, and all eight curve probes.
+Word opened and saved both final fallback and destination-dependent exports and
+applied the rotation/resize control. LibreOffice 25.2.3.2 on the Pi converted both
+point-edit controls to PDF; its output retained the regenerated fallback image but
+contained no native-only ink. Native Word interoperability and LibreOffice fallback
+coverage are therefore separate results.

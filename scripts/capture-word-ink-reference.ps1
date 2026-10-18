@@ -87,6 +87,14 @@ try {
     }
     $report.status = if (@($report.cases | Where-Object { $_.status -ne 'complete' }).Count) { 'failed' } else { 'complete' }
 } catch { $report.status = 'failed'; $report.error = $_.Exception.Message }
-finally { if ($null -ne $word) { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($word) }; Save-Report }
+finally {
+    if ($null -ne $word) {
+        # Word reuses a clean blank window when opening the first test document.
+        # Leave a new blank document available for the next reference run.
+        if ($word.Documents.Count -eq 0) { [void]$word.Documents.Add() }
+        [void][Runtime.InteropServices.Marshal]::ReleaseComObject($word)
+    }
+    Save-Report
+}
 
 if ($report.status -ne 'complete') { exit 1 }
