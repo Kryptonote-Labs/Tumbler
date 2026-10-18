@@ -7,6 +7,7 @@ import { isWordAuthoredList, registerWordListLevel, wordListMarker, type WordAut
 import { isWordHyperlink } from './hyperlinks.ts';
 import { wordAuthoringStyles, validateWordStyleId } from './authored-styles.ts';
 import { wordBreakXml, validateBreakRun } from './breaks.ts';
+import { nativeAuthoredInk } from './authored-ink.ts';
 import { nativeShapeDrawing, validateShapeRun } from './shapes.ts';
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
@@ -185,6 +186,11 @@ export class NativeWordDocument implements WordLayoutSource {
     }
     return { ...original, headerFooters, bindings };
   }
+  private hasAuthoredInkEdits(blocks: readonly WordContentBlock[]): boolean {
+    return blocks.some(block => block.kind === 'table'
+      ? block.rows.some(row => row.some(cell => this.hasAuthoredInkEdits(cell.blocks)))
+      : block.kind === 'paragraph' && block.runs.some(run => run.ink && (run.drawing || run.inkTraces?.length)));
+  }
   artifact() {
     if (this.exported) return this.exported;
     const existingStories = [...this.editedStories.values()].flatMap(entry =>
@@ -193,7 +199,9 @@ export class NativeWordDocument implements WordLayoutSource {
       return this.exported = reconcileWordContentAndStories(this.compiled.artifact, this.authored, existingStories);
     let result = this.compiled
       ? reconcileWordContent(this.compiled.artifact, this.authored)
-      : createWordArtifact({ ...this.options, blocks: this.authored });
+       : this.hasAuthoredInkEdits(this.authored)
+        ? reconcileWordContent(createWordArtifact({ ...this.options, paragraphs: [] }), this.authored)
+        : createWordArtifact({ ...this.options, blocks: this.authored });
     if (existingStories.length === this.editedStories.size)
       return this.exported = reconcileWordStories(result, existingStories);
     for (const entry of this.editedStories.values()) {
@@ -379,7 +387,11 @@ export class NativeWordDocument implements WordLayoutSource {
               validateBreakRun(authoredRun);
               const inherited = compiled?.leaves.get(authoredRun.source!);
               const contents: WordRunContent[] = [];
-              if (authoredRun.shape) {
+              if (authoredRun.ink) {
+                if (authoredRun.text !== '\uFFFC' || authoredRun.shape || authoredRun.image || authoredRun.field) throw new TypeError('Ink occupies one object character.');
+                const id = allocate(); contents.push({ kind: 'drawing', elementId: id });
+                media.push(withWordInkTraces(withWordDrawingGeometry(nativeAuthoredInk(id, authoredRun.ink), authoredRun.drawing), authoredRun.inkTraces));
+              } else if (authoredRun.shape) {
                 if (authoredRun.text !== '\uFFFC') throw new TypeError('Shape runs occupy one object character.');
                 const id = allocate(); contents.push({ kind: 'drawing', elementId: id });
                 media.push(nativeShapeDrawing(id, { ...authoredRun.shape, fill: resolveWordColour(authoredRun.shape.fill, this.themeColours), outline: resolveWordColour(authoredRun.shape.outline, this.themeColours) }, width));

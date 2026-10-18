@@ -1,3 +1,4 @@
+import { authoredInkMarkup } from './authored-ink.ts';
 import { validateWordStyleId } from './authored-styles.ts';
 import { isWordAuthoredList, registerWordListLevel, wordListPattern, type WordAuthoredList } from './authored-list.ts';
 import { isWordHyperlink } from './hyperlinks.ts';
@@ -38,6 +39,15 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
     const id = `link${++linkId}`;
     relationships += `<Relationship Id="${id}" Type="${office}hyperlink" Target="${xmlAttribute(link)}" TargetMode="External"/>`;
     return `<w:hyperlink r:id="${id}">${content}</w:hyperlink>`;
+  };
+  const inkMarkup = (ink: import('./authored-ink.ts').WordAuthoredInk, availableWidth: number) => {
+    const id = ++imageId;
+    const { payload, markup } = authoredInkMarkup(ink, id, availableWidth);
+    const name = `word/ink/ink${id}.xml`;
+    parts.push({ name, data: new TextEncoder().encode(payload) });
+    relationships += `<Relationship Id="ink${id}" Type="${office}customXml" Target="ink/ink${id}.xml"/>`;
+    contentTypes += `<Override PartName="/${name}" ContentType="application/inkml+xml"/>`;
+    return markup;
   };
   const media = new Map<Uint8Array, Map<string, number>>();
   const imageMarkup = (image: WordAuthoredImage, availableWidth: number) => {
@@ -81,7 +91,7 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
           const paragraph = block.paragraph ? paragraphFormatXml(block.paragraph) : new Map<string, string>();
           const early = ['keepNext', 'keepLines', 'pageBreakBefore', 'widowControl'];
           const properties = (block.styleId ? `<w:pStyle w:val="${xmlAttribute(block.styleId)}"/>` : '') + early.map(key => paragraph.get(key) ?? '').join('') + numbering + (paragraph.get('pBdr') ?? '') + (paragraph.get('shd') ?? '') + (positioning.tabs ?? '') + (paragraph.get('spacing') ?? '') + (positioning.ind ?? '') + (paragraph.get('contextualSpacing') ?? '') + (block.alignment ? `<w:jc w:val="${block.alignment === 'justify' ? 'both' : block.alignment}"/>` : '');
-          return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => linked(run.link, run.shape ? (run.text === '\uFFFC' ? wordShapeXml(run.shape, ++imageId, availableWidth, paragraphs => visit(paragraphs.map(p => ({ kind: 'paragraph', ...p })), run.shape!.width)) : (() => { throw new TypeError('Shape runs occupy one object character.'); })()) : run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${run.breakType ? wordBreakXml(run.breakType, run.text) : run.tab ? positionalTabXml(run.tab, run.text) : textContent(run.text)}</w:r>`)).join('')}</w:p>`;
+          return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => linked(run.link, run.ink ? (run.text === '\uFFFC' && !run.shape && !run.image && !run.field ? inkMarkup(run.ink, availableWidth) : (() => { throw new TypeError('Ink occupies one object character.'); })()) : run.shape ? (run.text === '\uFFFC' ? wordShapeXml(run.shape, ++imageId, availableWidth, paragraphs => visit(paragraphs.map(p => ({ kind: 'paragraph', ...p })), run.shape!.width)) : (() => { throw new TypeError('Shape runs occupy one object character.'); })()) : run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${run.breakType ? wordBreakXml(run.breakType, run.text) : run.tab ? positionalTabXml(run.tab, run.text) : textContent(run.text)}</w:r>`)).join('')}</w:p>`;
         }
         case 'table': {
           const grid = authoredTableGrid(block.rows, block.columnWidths, availableWidth, block.rowGrids);

@@ -157,6 +157,7 @@ export function prepareWordContent(
       runs: p.runs.map((run) => ({
         text: run.text.replaceAll('\u2028', ''),
         ...(run.shape ? { shape: run.shape } : {}),
+        ...(run.ink ? { ink: { ...run.ink, ...run.drawing } } : {}),
         ...(run.link === undefined ? {} : { link: run.link }),
         ...(run.image && (!document.drawings.has(run.source!) || replacedImages.has(run))
           ? { image: run.image }
@@ -178,7 +179,7 @@ export function prepareWordContent(
     (batchRole === 'story' && generated.document.numbering.partName) ||
     missingAuthoredStyles(document, paragraphs.flatMap(p => p.styleId ? [p.styleId] : [])).length ||
     relationships.some(rel => rel.targetMode === 'Internal' &&
-      ((batchRole === 'story' && /\/(image|numbering)$/.test(rel.type)) || (/\/theme$/.test(rel.type) && !document.styles.themeColors))) ||
+      ((batchRole === 'story' && /\/(image|numbering|customXml)$/.test(rel.type)) || (/\/theme$/.test(rel.type) && !document.styles.themeColors))) ||
     paragraphs.some(p => p.runs.some(run => {
       const drawing = document.drawings.get(run.source!);
       const geometry = run.drawing ?? run.image;
@@ -253,7 +254,7 @@ export function prepareWordContent(
     if (rel.targetMode === 'External' && /\/hyperlink$/.test(rel.type)) {
       continue;
     }
-    if (rel.targetMode !== 'Internal' || !/\/(image|numbering|theme)$/.test(rel.type)) continue;
+    if (rel.targetMode !== 'Internal' || !/\/(image|numbering|theme|customXml)$/.test(rel.type)) continue;
     if (/\/theme$/.test(rel.type) && document.styles.themeColors) continue;
     const part = generated.document.package.getPart(rel.targetPartName)!;
     const name = PartName.parse(`/word/${prefix}${part.name.value.split('/').at(-1)}`);
