@@ -7,6 +7,7 @@ import { isWordAuthoredList, registerWordListLevel, wordListMarker, type WordAut
 import { isWordHyperlink } from './hyperlinks.ts';
 import { wordAuthoringStyles, validateWordStyleId } from './authored-styles.ts';
 import { wordBreakXml, validateBreakRun } from './breaks.ts';
+import { nativeAuthoredInk } from './authored-ink.ts';
 import { nativeShapeDrawing, validateShapeRun } from './shapes.ts';
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
@@ -379,7 +380,11 @@ export class NativeWordDocument implements WordLayoutSource {
               validateBreakRun(authoredRun);
               const inherited = compiled?.leaves.get(authoredRun.source!);
               const contents: WordRunContent[] = [];
-              if (authoredRun.shape) {
+              if (authoredRun.ink) {
+                if (authoredRun.text !== '\uFFFC' || authoredRun.shape || authoredRun.image || authoredRun.field) throw new TypeError('Ink occupies one object character.');
+                const id = allocate(); contents.push({ kind: 'drawing', elementId: id });
+                media.push(withWordInkTraces(withWordDrawingGeometry(nativeAuthoredInk(id, authoredRun.ink), authoredRun.drawing), authoredRun.inkTraces));
+              } else if (authoredRun.shape) {
                 if (authoredRun.text !== '\uFFFC') throw new TypeError('Shape runs occupy one object character.');
                 const id = allocate(); contents.push({ kind: 'drawing', elementId: id });
                 media.push(nativeShapeDrawing(id, { ...authoredRun.shape, fill: resolveWordColour(authoredRun.shape.fill, this.themeColours), outline: resolveWordColour(authoredRun.shape.outline, this.themeColours) }, width));
