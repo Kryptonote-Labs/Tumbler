@@ -2,7 +2,7 @@
   import WordInkPointEditor from "./WordInkPointEditor.svelte";
   import ChartTitleEditor from "./ChartTitleEditor.svelte";
   import WordShapeView from "./WordShapeView.svelte";
-  import { shapePlainText, wordImagePaintBounds, wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing, type WordShapeTextChange } from '@tumblerjs/word';
+  import { shapePlainText, wordInkSvg, wordImagePaintBounds, wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing, type WordShapeTextChange } from '@tumblerjs/word';
   import OoxmlChart from './OoxmlChart.svelte';
   import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
 
@@ -41,6 +41,7 @@
   let preview = $state<WordDrawingBox>();
   let drag: { pointer: number; scale: number; target: HTMLElement | undefined; clientX: number; clientY: number; box: WordDrawingBox; handle?: Handle } | undefined;
   let currentLayout: NonNullable<WordDrawingChange['layout']> = $derived(drawing.placement === 'inline' ? 'inline' : drawing.anchor?.behindDocument ? 'behind' : 'front');
+  const inkSvg = $derived(wordInkSvg(drawing));
   const label = $derived(drawing.altText ?? drawing.name ?? (drawing.kind === 'chart' ? 'Chart' : 'Image'));
   let displayWidth = $derived(wordPointsToCssPixels(preview?.width ?? width));
   let displayHeight = $derived(wordPointsToCssPixels(preview?.height ?? height));
@@ -164,7 +165,13 @@
     <WordShapeView shape={drawing.shape} {selected} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} editing={editingText !== undefined} initialText={editingText} oncommit={finishText} />
   {:else if drawing.kind === 'image'}
     {@const painted = wordImagePaintBounds(drawing)}
-    <img data-word-ink-rendering={drawing.inkRendering} src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading={imageLoading} decoding="async" style={`position:absolute;left:${painted.x / drawing.widthPoints * 100}%;top:${painted.y / drawing.heightPoints * 100}%;width:${painted.width / drawing.widthPoints * 100}%;height:${painted.height / drawing.heightPoints * 100}%`} />
+    {#if inkSvg !== undefined}
+      <span class="ink-vector" data-word-ink-rendering="vector" role="img" aria-label={drawing.altText ?? 'Ink'} style={`position:absolute;left:${painted.x / drawing.widthPoints * 100}%;top:${painted.y / drawing.heightPoints * 100}%;width:${painted.width / drawing.widthPoints * 100}%;height:${painted.height / drawing.heightPoints * 100}%`}>
+        {@html inkSvg}
+      </span>
+    {:else}
+      <img data-word-ink-rendering={drawing.inkRendering} src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading={imageLoading} decoding="async" style={`position:absolute;left:${painted.x / drawing.widthPoints * 100}%;top:${painted.y / drawing.heightPoints * 100}%;width:${painted.width / drawing.widthPoints * 100}%;height:${painted.height / drawing.heightPoints * 100}%`} />
+    {/if}
   {:else if drawing.kind === 'chart'}
     <OoxmlChart model={drawing.model} width={displayWidth} height={displayHeight} clipId={`word-drawing-${drawing.elementId}`} />
   {:else}
@@ -219,6 +226,7 @@
   .content.movable:active { cursor: grabbing; }
   .content.editing { cursor: text; outline: var(--outline-size) dashed var(--tumbler-document-accent, #25a735); }
   .content:focus-visible { outline: var(--outline-size) solid var(--tumbler-document-accent, #25a735); }
+  .ink-vector :global(svg) { display: block; width: 100%; height: 100%; }
   img { display: block; width: 100%; height: 100%; }
   .resize { position: absolute; z-index: 4; translate: -50% -50%; width: var(--handle-size); height: var(--handle-size); min-width: 0; min-height: 0; box-sizing: border-box; line-height: 0; padding: 0; border: var(--outline-size) solid var(--tumbler-document-accent, #25a735); border-radius: 50%; background: white; touch-action: none; }
   .controls { position: absolute; z-index: 4; right: 0; bottom: calc(100% + 10px * var(--inverse-scale)); display: flex; gap: 4px; padding: 4px; border: 1px solid #3b483e; border-radius: 6px; background: #181b18; color: #e2fee7; font: 13px/1.4 system-ui, sans-serif; transform: scale(var(--inverse-scale)); transform-origin: bottom right; }

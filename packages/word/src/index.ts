@@ -40,6 +40,7 @@ export {
 } from "./layout.ts";
 export { paintWordPage, wordPageImages, wordPageInkBounds } from "./canvas-paint.ts";
 export { wordImagePaintBounds } from './image-paint.ts';
+export { wordInkSvg } from './ink-svg.ts';
 export type { WordCanvasContext, WordPagePaintOptions } from "./canvas-paint.ts";
 export { canvasWordTextMeasurer, wordCanvasFont, wordFontFamily } from "./canvas-text.ts";
 export type { WordCanvasTextContext, WordLineMetrics } from "./canvas-text.ts";
