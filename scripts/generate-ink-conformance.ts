@@ -29,10 +29,13 @@ for (const [index, xml] of cases.entries()) {
 
 const w = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const r = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+// Word LTSC 2024 rejects a referenced brush nested in context, even though
+// that placement passes the InkML schema. Keep the DOCX controls Word-readable.
+const wordInk = officeInk();
 const documentXml = `<w:document xmlns:w="${w}" xmlns:r="${r}" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" mc:Ignorable="w14 wpi"><w:body><w:p><w:r><w:t>Native InkML fixture</w:t></w:r></w:p><w:p><w:r><mc:AlternateContent><mc:Choice Requires="wpi"><w:drawing><wp:inline><wp:extent cx="360000" cy="360000"/><wp:docPr id="1" name="Ink"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingInk"><w14:contentPart r:id="ink"><w14:nvContentPartPr><w14:cNvContentPartPr/></w14:nvContentPartPr><w14:xfrm><a:off x="0" y="0"/><a:ext cx="360000" cy="360000"/></w14:xfrm></w14:contentPart></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice></mc:AlternateContent></w:r></w:p><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>`;
-const docx = (xml: string) => buildWordDocumentFixture({
+const docx = (xml: string, ink = wordInk) => buildWordDocumentFixture({
   documentXml: xml, relationships: [{ id: 'ink', type: `${r}/customXml`, target: 'ink/ink.xml' }],
-  parts: [{ itemName: 'word/ink/ink.xml', contentType: 'application/inkml+xml', xml: cases[0]! }],
+  parts: [{ itemName: 'word/ink/ink.xml', contentType: 'application/inkml+xml', xml: ink }],
 });
 await Bun.write(resolve(directory, 'native-only.docx'), docx(documentXml));
 // SDK markup compatibility can skip an unrecognized Requires namespace. Validate
@@ -41,6 +44,7 @@ const direct = documentXml.replace('<mc:AlternateContent><mc:Choice Requires="wp
 await Bun.write(resolve(directory, 'direct-native.docx'), docx(direct));
 await mkdir(resolve(directory, 'invalid'), { recursive: true });
 await Bun.write(resolve(directory, 'invalid/transform.docx'), docx(direct.replace('<w14:xfrm>', '<w14:xfrm rot="bad">')));
+await Bun.write(resolve(directory, 'invalid/nested-brush.docx'), docx(direct, cases[0]!));
 console.log(`Generated ${cases.length * 2} InkML files, SVG previews and native DOCX controls in ${directory}.`);
 
 // Exercise native geometry through the same public API used by host editors and exports.
@@ -66,7 +70,7 @@ const fallbackXml = documentXml.replace('</mc:Choice>', '</mc:Choice><mc:Fallbac
 const fallbackArtifact = openWordArtifact(buildWordDocumentFixture({
   documentXml: fallbackXml,
   relationships: [{ id: 'ink', type: `${r}/customXml`, target: 'ink/ink.xml' }, { id: 'bitmap', type: `${r}/image`, target: 'media/ink.png' }],
-  parts: [{ itemName: 'word/ink/ink.xml', contentType: 'application/inkml+xml', xml: cases[0]! }, { itemName: 'word/media/ink.png', contentType: 'image/png', xml: 'unused synthetic cache' }],
+  parts: [{ itemName: 'word/ink/ink.xml', contentType: 'application/inkml+xml', xml: wordInk }, { itemName: 'word/media/ink.png', contentType: 'image/png', xml: 'unused synthetic cache' }],
 }));
 const fallbackDrawing = [...fallbackArtifact.document.drawings.values()][0]!;
 const fallbackEdited = fallbackArtifact.replaceInkTrace({ elementId: fallbackDrawing.elementId, traceElementId: fallbackDrawing.ink!.traces[0]!.elementId, points: [[0, 1000], [1000, 0]] });

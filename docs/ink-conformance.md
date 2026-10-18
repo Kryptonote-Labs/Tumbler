@@ -42,7 +42,7 @@ numerical approximations controlled by curve tolerance and raster scale.
 The native coordinate mapping fits the physical sample bounds into the DrawingML
 frame before applying flips, rotation and offset. A degenerate axis uses one
 HIMETRIC unit, matching the inspected Word dot frame. This minimum and the exact
-Word source-bounds rounding still need a Microsoft Word reference corpus. The
+Word source-bounds rounding still need comparison against the captured Word corpus. The
 Office profile does not itself establish those details. Synthetic matrix tests
 prove the transform math, not Word's intrinsic bounding-box convention.
 Nonuniform resizing of rotated drawings also needs additional interoperability
@@ -92,6 +92,41 @@ VML fallback. Direct-native controls avoid the SDK skipping an unrecognized
 AlternateContent choice. The malformed-transform negative control proves the
 native transform is actually validated. Schema validation cannot validate trace
 text semantics or visual output.
+
+## Desktop Word reference
+
+On 2026-10-18, Office LTSC Professional Plus 2024, version
+`16.0.17932.20910`, opened all eleven corrected DOCX controls as native ink,
+saved DOCX round trips, and exported PDFs. The same run rotated each drawing
+30 degrees, multiplied its Word width by 1.4 and height by 0.7, and saved a
+second DOCX and PDF. All eleven cases completed. The unedited native fixture's
+PDF visibly contains the expected diagonal stroke. The remaining outputs need
+comparison against Tumbler before claiming rendering or resize parity.
+
+The first desktop run found a fixture defect that both schema validators missed:
+a referenced brush inside `context` caused Word to reject the document. Moving
+that brush directly under `definitions` made the fixture open. The positive DOCX
+controls now use that placement. `invalid/nested-brush.docx` retains the rejected
+case as a Word interoperability negative control; it is not an XSD negative test.
+The standalone InkML corpus still includes the nested placement to exercise the
+reader's preservation of W3C-valid inputs.
+
+To reproduce, copy the generated positive DOCX files into an empty reference
+directory's `input` subdirectory on Windows. Open a blank document in desktop
+Word, identify its PID with `Get-Process WINWORD`, and run from that interactive
+desktop session:
+
+```powershell
+.\scripts\capture-word-ink-reference.ps1 -Root C:\InkReference -WordProcessId <pid>
+```
+
+The script requires an empty `output` directory, attaches to the selected visible
+Word instance, and closes only the test documents it opens. It writes a report,
+PDFs, round-trip DOCX files and rotated/resized DOCX files. It uses explicit COM
+argument types and the selected window's native object model: an unqualified
+`GetActiveObject` attached to a different background Word instance during setup.
+Word-generated packages can contain machine/user metadata; inspect and sanitize
+them before committing any reference artifact.
 
 LibreOffice can check the regenerated bitmap, but is not a native InkML oracle:
 the inspected version discarded native ink during DOCX round trips. A local Word
