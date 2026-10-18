@@ -27,14 +27,15 @@ export function withWordInkTraces(drawing: WordDrawing, edits?: readonly WordInk
   const rendered = renderInkSceneSvg(scene);
   return { ...drawing, ink, inkProjection: { ...drawing.inkProjection, bounds: scene.bounds },
     inkRendering: rendered.supported ? 'vector' : 'raster',
-    inkRenderingDiagnostics: rendered.supported ? undefined : rendered.diagnostics,
+    inkRenderingDiagnostics: rendered.supported ? [] : rendered.diagnostics,
     ...(rendered.supported ? { contentType: 'image/svg+xml', bytes: new TextEncoder().encode(rendered.svg) } : {}) };
 }
 
 /** Match a DrawingML frame resize while keeping physical pen size unchanged. */
 export function resizeWordInkProjection(drawing: WordDrawing, width: number, height: number): WordDrawing {
   if (drawing.kind !== 'image' || !drawing.ink || !drawing.inkProjection || width === drawing.widthPoints && height === drawing.heightPoints) return drawing;
-  const source = createOfficeInkScene(drawing.ink, { ...drawing.inkProjection.options, sampleTransform: undefined });
+  const { sampleTransform: _transform, ...sourceOptions } = drawing.inkProjection.options ?? {};
+  const source = createOfficeInkScene(drawing.ink, sourceOptions);
   if (!source.supported) throw new Error('Cannot resize unsupported ink.');
   const bounds = source.traceBounds, bw = bounds.width || 72 / 2540, bh = bounds.height || 72 / 2540;
   const cx = bounds.x + bw / 2, cy = bounds.y + bh / 2;

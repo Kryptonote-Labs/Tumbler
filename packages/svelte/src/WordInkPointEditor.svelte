@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { wordInkPoints, moveWordInkPoint, type WordDrawing, type WordInkTraceChange } from '@tumblerjs/word';
   let { drawing, scale, onchange, onfinish }: { drawing: WordDrawing; scale: number; onchange: (change: WordInkTraceChange) => void; onfinish: () => void } = $props();
   let canvas = $state<HTMLCanvasElement>();
@@ -52,7 +53,13 @@
     if (drag?.pointer !== event.pointerId) return;
     const point = points[active], next = preview, original = drag.drawing;
     cancel();
-    if (point && next) onchange(moveWordInkPoint(original, point, next.x, next.y));
+    if (point && next) void commit(moveWordInkPoint(original, point, next.x, next.y));
+  }
+  async function commit(change: WordInkTraceChange) {
+    const focused = canvas?.parentElement === document.activeElement;
+    onchange(change);
+    await tick();
+    if (focused) canvas?.parentElement?.focus({ preventScroll: true });
   }
   function keydown(event: KeyboardEvent) {
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (drag) cancel(); else onfinish(); return; }
@@ -63,7 +70,7 @@
     if (!point || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
     event.preventDefault(); event.stopPropagation();
     const amount = event.shiftKey ? 10 : 1;
-    onchange(moveWordInkPoint(drawing, point, point.x + (event.key === 'ArrowLeft' ? -amount : event.key === 'ArrowRight' ? amount : 0), point.y + (event.key === 'ArrowUp' ? -amount : event.key === 'ArrowDown' ? amount : 0)));
+    void commit(moveWordInkPoint(drawing, point, point.x + (event.key === 'ArrowLeft' ? -amount : event.key === 'ArrowRight' ? amount : 0), point.y + (event.key === 'ArrowUp' ? -amount : event.key === 'ArrowDown' ? amount : 0)));
   }
 </script>
 <button class="points" aria-label={`Ink point ${active + 1} of ${points.length}`} title="Drag a point or use arrow keys. Page Up/Down selects a point. Escape finishes." style={`left:${bounds.x * 4 / 3}px;top:${bounds.y * 4 / 3}px;width:${bounds.width * 4 / 3}px;height:${bounds.height * 4 / 3}px`} onpointerdown={start} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={keydown}>
