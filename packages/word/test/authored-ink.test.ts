@@ -11,9 +11,9 @@ test('authored pen and highlighter are native editable ink with calibrated press
   expect(drawings[0]!.anchor?.horizontalOffsetPoints).toBe(72);
   expect(drawings[0]!.inkSource!.partName.value).not.toBe(drawings[1]!.inkSource!.partName.value);
 });
-test('new collaborative ink keeps geometry and point edits through materialization', () => {
+test.each([false, true])('new collaborative ink keeps geometry and point edits through materialization, source=%s', existing => {
   const source = createWordArtifact({ paragraphs: [{ runs: [{ text: 'Hello' }] }] });
-  const model = new NativeWordDocument({ source });
+  const model = new NativeWordDocument(existing ? { source } : {});
   model.update([{ kind: 'paragraph', runs: [{ text: 'Hello' }, { text: '\uFFFC', ink, drawing: { width: 150, height: 80, x: 100, y: 120, layout: 'front', horizontalRelativeTo: 'page', verticalRelativeTo: 'page' }, inkTraces: [{ traceIndex: 0, points: [[-5, 0, .2], [40, 25, .8], [100, 60, .5]] }] }] }]);
   const preview = model.drawingAt(5)!;
   const drawing = [...model.artifact().document.drawings.values()][0]!;

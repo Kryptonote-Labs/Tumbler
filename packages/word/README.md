@@ -578,3 +578,17 @@ Floating drawings retain horizontal `wp:align` placement. Page, margin, column,
 and side-margin alignment is resolved against the final page bounds, including
 inside/outside alignment on alternating pages. Vertical alignment remains outside
 this support; numeric vertical offsets are unchanged.
+
+### Author native ink
+
+A `WordTextRun` can carry `ink: WordAuthoredInk` on one `\uFFFC` object character.
+Each object is one stroke. Samples are local point coordinates with normalized
+pressure; width and height describe the centreline frame, and size is the physical
+pen width in points. Set `highlighter: true` for a translucent rectangular pen.
+Placement uses the same page/paragraph coordinates as other drawings.
+
+`createWordArtifact` writes calibrated Office InkML and its customXml relationship.
+`NativeWordDocument` previews the same native drawing and preserves subsequent
+geometry and point overrides on export, including in a newly created document.
+Authored ink is native-only; readers such as LibreOffice that discard InkML do not
+render these strokes. No bitmap fallback or handwriting recognition is generated.

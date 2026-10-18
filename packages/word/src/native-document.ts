@@ -186,6 +186,11 @@ export class NativeWordDocument implements WordLayoutSource {
     }
     return { ...original, headerFooters, bindings };
   }
+  private hasAuthoredInkEdits(blocks: readonly WordContentBlock[]): boolean {
+    return blocks.some(block => block.kind === 'table'
+      ? block.rows.some(row => row.some(cell => this.hasAuthoredInkEdits(cell.blocks)))
+      : block.kind === 'paragraph' && block.runs.some(run => run.ink && (run.drawing || run.inkTraces?.length)));
+  }
   artifact() {
     if (this.exported) return this.exported;
     const existingStories = [...this.editedStories.values()].flatMap(entry =>
@@ -194,7 +199,9 @@ export class NativeWordDocument implements WordLayoutSource {
       return this.exported = reconcileWordContentAndStories(this.compiled.artifact, this.authored, existingStories);
     let result = this.compiled
       ? reconcileWordContent(this.compiled.artifact, this.authored)
-      : createWordArtifact({ ...this.options, blocks: this.authored });
+       : this.hasAuthoredInkEdits(this.authored)
+        ? reconcileWordContent(createWordArtifact({ ...this.options, paragraphs: [] }), this.authored)
+        : createWordArtifact({ ...this.options, blocks: this.authored });
     if (existingStories.length === this.editedStories.size)
       return this.exported = reconcileWordStories(result, existingStories);
     for (const entry of this.editedStories.values()) {
