@@ -119,7 +119,7 @@ test('destination-dependent ink remains exportable without inventing a bitmap ba
   const { source } = inkFixture(false, true, xml);
   const drawing = first(source), trace = drawing.ink!.traces[0]!;
   const edited = source.replaceInkTrace({ elementId: drawing.elementId, traceElementId: trace.elementId, points: [[-100, 0], [1000, 1000]], preserveSampleTransform: true });
-  expect(first(edited).inkRendering).toBe('raster');
+  expect(first(edited)).toMatchObject({ kind: 'image', inkRendering: 'raster' });
   expect(first(edited).ink!.traces[0]!.points[0]).toEqual([-100, 0]);
   expect(edited.document.source.source).not.toContain('mc:Fallback');
   const cached = source.replaceInkTrace({ elementId: drawing.elementId, traceElementId: trace.elementId, points: [[-100, 0], [1000, 1000]], preview: { background: [255, 255, 255] } });
@@ -127,4 +127,20 @@ test('destination-dependent ink remains exportable without inventing a bitmap ba
   const resized = source.updateDrawing({ elementId: drawing.elementId, widthPoints: 120, heightPoints: 100 });
   expect(first(resized).ink!.source.source).toBe(drawing.ink!.source.source);
   expect(resized.document.source.source).not.toContain('mc:Fallback');
+});
+
+test('point editing respects channel order and retains pressure, time and orientation', async () => {
+  const { wordInkPoints, moveWordInkPoint } = await import('../src/index.ts');
+  const { source } = inkFixture(false, false, officeInk({
+    channels: '<channel name="F" type="integer" max="100"/><channel name="Y" type="integer"/><channel name="T" type="double"/><channel name="X" type="integer"/><channel name="OR" type="double" units="deg"/>',
+    trace: '25 0 1500 0 30,75 1000 2500 1000 60',
+  }));
+  const drawing = first(source), point = wordInkPoints(drawing)[0]!;
+  const change = moveWordInkPoint(drawing, point, point.x + 1, point.y + 2);
+  expect(change.points[0]![0]).toBe(25);
+  expect(change.points[0]![2]).toBe(1500);
+  expect(change.points[0]![4]).toBe(30);
+  expect(change.points[1]).toEqual(drawing.ink!.traces[0]!.points[1]!);
+  expect(Number.isInteger(change.points[0]![1])).toBe(true);
+  expect(Number.isInteger(change.points[0]![3])).toBe(true);
 });
