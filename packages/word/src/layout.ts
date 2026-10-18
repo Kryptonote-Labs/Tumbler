@@ -378,11 +378,26 @@ export function layoutWordSource(
   options: WordLayoutOptions = {},
   stories?: WordLayoutStories,
 ): WordLayout {
+  const iterator = layoutWordSourceProgressively(document, measurer, options, stories, false);
+  let step = iterator.next();
+  while (!step.done) step = iterator.next();
+  return step.value;
+}
+
+/** Yield completed pages without restarting pagination; the return value is the final layout.
+ * Intermediate layouts are provisional, including total-page fields and notes. */
+export function* layoutWordSourceProgressively(
+  document: WordLayoutSource,
+  measurer: WordTextMeasurer,
+  options: WordLayoutOptions = {},
+  stories?: WordLayoutStories,
+  emitProgress = true,
+): Generator<WordLayout, WordLayout, void> {
   const needsTotal = stories?.headerFooters.some(story => hasPageFields(story.context.blocks, 'NUMPAGES'));
   let total = 1;
   const seen = new Set<number>();
   while (true) {
-    const layout = layoutWordSourcePass(document, measurer, options, stories, total);
+    const layout = yield* layoutWordSourcePass(document, measurer, options, stories, total, emitProgress);
     if (!needsTotal || layout.truncated || layout.pages.length === total) return layout;
     if (seen.has(layout.pages.length)) throw new WordError('invalid_document', 'Page count fields did not reach a stable layout.');
     seen.add(total);
@@ -390,7 +405,7 @@ export function layoutWordSource(
   }
 }
 
-function layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeasurer, options: WordLayoutOptions, stories: WordLayoutStories | undefined, totalPages: number): WordLayout {
+function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeasurer, options: WordLayoutOptions, stories: WordLayoutStories | undefined, totalPages: number, emitProgress: boolean): Generator<WordLayout, WordLayout, void> {
   if (document.cache) document.cache.layoutRevision += 1;
   const budget: LayoutBudget = {
     cache: document.cache,
@@ -402,6 +417,23 @@ function layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeas
   const pageLimit = options.pageLimit === undefined ? undefined : limit(options.pageLimit, budget.maxPages, "page");
   let truncated = false;
   const sections = documentSections(document.blocks, document.finalSection);
+  const completed: WordLayoutPage[] = [];
+  function* progress(): Generator<WordLayout, void, void> {
+    // Keep the current page mutable for widow control, tables and continuous sections.
+    if (!emitProgress || pages.length - 1 <= completed.length) return;
+    while (completed.length < pages.length - 1) {
+      const page = pages[completed.length]!;
+      // Notes are placed at completion and may alter these arrays. Snapshot them.
+      const copy = { ...page, columns: page.columns.map(column => ({ ...column,
+        lines: [...column.lines], tables: [...column.tables], unsupportedBlocks: [...column.unsupportedBlocks],
+      })), headerLines: [...page.headerLines], footerLines: [...page.footerLines],
+        headerTables: [...page.headerTables], footerTables: [...page.footerTables],
+        noteLines: [...page.noteLines], noteTables: [...page.noteTables] };
+      completed.push(alignWordPageDrawings(freezePage(copy)));
+    }
+    yield Object.freeze({ ...(document.background === undefined ? {} : { background: document.background }),
+      pages: Object.freeze([...completed]), fragmentCount: budget.fragments, truncated: true as const });
+  }
   const listMarkers = document.listMarkers;
   let page: MutablePage | undefined;
   let columnIndex = 0;
@@ -509,6 +541,7 @@ function layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeas
               cursorY += used;
             }
             if (groupIndex < groups.length) advanceColumn(section.properties);
+            yield* progress();
           }
           continue;
         }
@@ -555,6 +588,7 @@ function layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeas
           cursorY += laidOut.height;
           if (line.breakAfter === "page") addPage(section.properties);
           else if (line.breakAfter === "column") advanceColumn(section.properties);
+          yield* progress();
         }
         cursorY += points(prepared.format.spacingAfterTwips);
       }

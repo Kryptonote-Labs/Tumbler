@@ -34,6 +34,7 @@ import type {
 import type { WordDrawing, WordImageDrawing } from './drawings.ts';
 import {
   layoutWordSource,
+  layoutWordSourceProgressively,
   wordLayoutStories,
   WordLayoutCache,
   type WordLayoutSource,
@@ -50,6 +51,8 @@ import {
 
 export interface NativeWordOptions extends Omit<CreateWordOptions, 'blocks' | 'paragraphs'> {
   readonly source?: WordArtifact;
+  /** Initial collaborative content, avoiding a redundant build of the original source. */
+  readonly content?: readonly WordContentBlock[];
   /** Reuse signatures by authored object identity. All supplied blocks and descendants must remain immutable. */
   readonly immutableContent?: boolean;
 }
@@ -132,7 +135,8 @@ export class NativeWordDocument implements WordLayoutSource {
       headerReferences: [],
       footerReferences: [],
     };
-    if (this.compiled) {
+    if (options.content) this.update(options.content);
+    else if (this.compiled) {
       this.update(this.compiled.original);
       this.exported = this.compiled.artifact;
     }
@@ -155,17 +159,26 @@ export class NativeWordDocument implements WordLayoutSource {
     let entry = this.editedStories.get(key);
     if (!entry) {
       const source = typeof target === 'string' && this.options.source ? wordStoryArtifact(this.options.source, target) : undefined;
-      const { source: _bodySource, ...options } = this.options;
-      entry = { target, blocks, model: new NativeWordDocument({ ...options, ...(source ? { source } : {}) }) };
+      const { source: _bodySource, content: _bodyContent, ...options } = this.options;
+      entry = { target, blocks, model: new NativeWordDocument({ ...options, content: blocks, ...(source ? { source } : {}) }) };
       this.editedStories.set(key, entry);
+    } else {
+      entry.model.update(blocks);
     }
     entry.blocks = blocks;
-    entry.model.update(blocks);
     this.exported = undefined;
     return entry.model;
   }
   layout(measurer: WordTextMeasurer, options: WordLayoutOptions = {}) {
     return layoutWordSource(this, measurer, {
+      maxPages: Number.MAX_SAFE_INTEGER,
+      maxFragments: Number.MAX_SAFE_INTEGER,
+      ...options,
+    }, this.layoutStories());
+  }
+  /** Resume between completed pages. Do not mutate the model while an iterator is active. */
+  layoutProgressively(measurer: WordTextMeasurer, options: WordLayoutOptions = {}) {
+    return layoutWordSourceProgressively(this, measurer, {
       maxPages: Number.MAX_SAFE_INTEGER,
       maxFragments: Number.MAX_SAFE_INTEGER,
       ...options,

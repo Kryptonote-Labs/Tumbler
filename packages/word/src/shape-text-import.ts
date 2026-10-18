@@ -2,9 +2,11 @@ import type { LosslessXmlElement, LosslessXmlDocument } from '@tumblerjs/ooxml';
 import type { OpcPackage, OpcPart } from '@tumblerjs/opc';
 import type { WordConformance, WordParagraph, WordRun } from './document.ts';
 import type { WordTextParagraph } from './create.ts';
-import { readWordStyles } from './styles.ts';
-import { readWordNumbering } from './numbering.ts';
+import { readWordStyles, type WordStyles } from './styles.ts';
+import { readWordNumbering, type WordNumbering } from './numbering.ts';
 import { WORD_LIST_KINDS } from './authored-list.ts';
+
+export type ShapeTextFormats = { styles?: WordStyles | undefined; numbering?: WordNumbering | undefined };
 
 /** Resolve text-box runs with the same style cascade as ordinary document paragraphs. */
 export function readShapeText(
@@ -16,6 +18,7 @@ export function readShapeText(
   },
   box: LosslessXmlElement,
   namespace: string,
+  formats: ShapeTextFormats,
 ): WordTextParagraph[] | undefined {
   const children = (node: LosslessXmlElement, name?: string) =>
     node.children.filter(
@@ -26,8 +29,8 @@ export function readShapeText(
     );
   // Preserve unsupported text-box structures in their original package instead of flattening them.
   if (children(box).some((n) => n.localName !== 'p')) return undefined;
-  const styles = readWordStyles(input),
-    numbering = readWordNumbering(input);
+  const styles = formats.styles ??= readWordStyles(input);
+  const numbering = formats.numbering ??= readWordNumbering(input);
   const output: WordTextParagraph[] = [];
   for (const node of children(box, 'p')) {
     if (children(node).some((n) => !['pPr', 'r'].includes(n.localName))) return undefined;

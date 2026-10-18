@@ -2,7 +2,7 @@ import { inkFrame, resizeWordInk, positionWordInk } from './ink-geometry.ts';
 import { wordInkChoice } from './ink-fallback.ts';
 import { readWordInkDrawing } from './ink.ts';
 import { isWordDrawingPosition, type WordDrawingPosition } from './drawing-placement.ts';
-import { readShapeText } from './shape-text-import.ts';
+import { readShapeText, type ShapeTextFormats } from './shape-text-import.ts';
 import { wordThemeSlot } from './theme-colour-xml.ts';
 import { DEFAULT_WORD_THEME, resolveWordColour, type WordColour, type WordThemeColour } from './theme-colours.ts';
 import { THEME_COLOR_SLOTS, parseThemeColorScheme, type ThemeColorScheme } from '@tumblerjs/ooxml';
@@ -77,6 +77,8 @@ export interface WordUnsupportedDrawing extends WordDrawingBase {
 
 /** Discovers Word drawing placement and resolves only internal image/chart relationships. */
 export function readWordDrawings(input: {
+  readonly styles?: import('./styles.ts').WordStyles;
+  readonly numbering?: import('./numbering.ts').WordNumbering;
   readonly inkRendering?: import('@tumblerjs/ink').InkSvgOptions | undefined;
   readonly themeFonts?: import("@tumblerjs/ooxml").ThemeFontScheme | undefined;
   readonly themeColours?: ThemeColorScheme | undefined;
@@ -94,7 +96,9 @@ export function readWordDrawings(input: {
   const themeRel = relationships?.items.find(rel => /\/theme$/.test(rel.type) && rel.targetMode === 'Internal');
   const theme = input.themeColours ?? (themeRel?.targetMode === 'Internal' ? parseThemeColorScheme(input.package.readPart(input.package.getPart(themeRel.targetPartName)!)) : DEFAULT_WORD_THEME);
   const charts = new Map<string, ChartModel>();
-  const result = new Map(elements.map((element) => [element.id, parseDrawing(input, element, relationships, charts, theme, input.themeFonts)]));
+  // Reuse document formats, or resolve them lazily once for this story.
+  const shapeFormats: ShapeTextFormats = { styles: input.styles, numbering: input.numbering };
+  const result = new Map(elements.map((element) => [element.id, parseDrawing(input, element, relationships, charts, theme, shapeFormats, input.themeFonts)]));
   for (const element of input.source.elements('http://schemas.openxmlformats.org/markup-compatibility/2006', 'AlternateContent')) {
     const choice = wordInkChoice(element);
     const original = choice && result.get(choice.id);
@@ -115,6 +119,7 @@ function parseDrawing(
   relationships: Relationships | undefined,
   charts: Map<string, ChartModel>,
   theme: ThemeColorScheme,
+  shapeFormats: ShapeTextFormats,
   fonts?: import("@tumblerjs/ooxml").ThemeFontScheme,
 ): WordDrawing {
   const wp = wordDrawingNamespace(input.conformance);
@@ -174,7 +179,7 @@ function parseDrawing(
     const line = props && child(props, drawingNs, 'ln');
     const text = nodes.filter(n => n.namespaceUri === OOXML_NAMESPACES[input.conformance].wordprocessing && n.localName === 'p').map(p => descendants(p).filter(n => n.localName === 't').map(n => n.children.filter(c => c.kind === 'text').map(c => c.kind === 'text' ? c.value : '').join('')).join('')).join('\n');
     const box = nodes.find(n => n.localName === 'txbxContent');
-    const textBody = box ? readShapeText(input, box, OOXML_NAMESPACES[input.conformance].wordprocessing) : undefined;
+    const textBody = box ? readShapeText(input, box, OOXML_NAMESPACES[input.conformance].wordprocessing, shapeFormats) : undefined;
     if (box && !textBody) return unsupported(drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, 'This text box contains structures retained in the source document.');
     const body = nodes.find(n => n.localName === 'bodyPr');
     const textAnchor = attribute(body, 'anchor') === 'ctr' ? 'center' : attribute(body, 'anchor') === 'b' ? 'bottom' : 'top';
