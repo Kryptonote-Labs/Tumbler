@@ -6,7 +6,7 @@ import { attribute, children, elements, INKML_NAMESPACE, XML_NAMESPACE } from '.
 
 export interface InkDiagnostic {
   readonly elementId: number;
-  readonly code: 'structure' | 'reference' | 'trace' | 'range' | 'rendering' | 'resource';
+  readonly code: 'structure' | 'reference' | 'trace' | 'range' | 'rendering' | 'resource' | 'destination';
   readonly message: string;
 }
 export interface OfficeInkTrace {

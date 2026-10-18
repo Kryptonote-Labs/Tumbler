@@ -52,7 +52,7 @@ export function renderOfficeInkRaster(document: OfficeInkDocument, options: InkR
   if (!Number.isSafeInteger(width * height) || width * height > maxPixels) return { supported: false, diagnostics: [{ elementId: document.source.root.id, code: 'resource', message: 'Ink raster exceeds the configured pixel budget.' }] };
   if (options.destination && options.destination.length !== width * height * 4) throw new RangeError('Destination dimensions do not match ink raster.');
   const needsDestination = scene.strokes.find(s => !['copyPen', 'noOperation', 'black', 'white', 'notCopyPen'].includes(s.brush.rasterOp));
-  if (needsDestination && !options.destination && !options.background) return { supported: false, diagnostics: [{ elementId: needsDestination.elementId, code: 'rendering', message: 'This ink requires destination pixels or an explicit background colour.' }] };
+  if (needsDestination && !options.destination && !options.background) return { supported: false, diagnostics: [{ elementId: needsDestination.elementId, code: 'destination', message: 'This ink requires destination pixels or an explicit background colour.' }] };
   const data = options.destination ? new Uint8ClampedArray(options.destination) : new Uint8ClampedArray(width * height * 4);
   if (!options.destination && options.background) {
     if (options.background.some(value => !Number.isInteger(value) || value < 0 || value > 255)) throw new RangeError('Invalid background colour.');

@@ -113,3 +113,18 @@ test('collaborative stroke overrides preserve preview/export geometry through re
   model.update(blocks);
   expect(model.drawingAt(0)!.ink!.traces[0]!.points).toEqual(original.ink!.traces[0]!.points);
 });
+
+test('destination-dependent ink remains exportable without inventing a bitmap backdrop', () => {
+  const xml = officeInk({ brush: '<brushProperty name="rasterOp" value="xOrPen"/>' });
+  const { source } = inkFixture(false, true, xml);
+  const drawing = first(source), trace = drawing.ink!.traces[0]!;
+  const edited = source.replaceInkTrace({ elementId: drawing.elementId, traceElementId: trace.elementId, points: [[-100, 0], [1000, 1000]], preserveSampleTransform: true });
+  expect(first(edited).inkRendering).toBe('raster');
+  expect(first(edited).ink!.traces[0]!.points[0]).toEqual([-100, 0]);
+  expect(edited.document.source.source).not.toContain('mc:Fallback');
+  const cached = source.replaceInkTrace({ elementId: drawing.elementId, traceElementId: trace.elementId, points: [[-100, 0], [1000, 1000]], preview: { background: [255, 255, 255] } });
+  expect(cached.document.source.source).toContain('mc:Fallback');
+  const resized = source.updateDrawing({ elementId: drawing.elementId, widthPoints: 120, heightPoints: 100 });
+  expect(first(resized).ink!.source.source).toBe(drawing.ink!.source.source);
+  expect(resized.document.source.source).not.toContain('mc:Fallback');
+});

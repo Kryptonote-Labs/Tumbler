@@ -16,7 +16,8 @@ export interface WordInkTraceChange {
   readonly points: readonly InkPoint[];
   /** Keep sample positions in drawing coordinates when the edited trace changes its bounds. */
   readonly preserveSampleTransform?: boolean;
-  /** Cached fallback composition. Destination-dependent pens require an explicit backdrop. */
+  /** Cached fallback composition. Without a backdrop, destination-dependent ink
+   * keeps its native representation and omits the unrepresentable bitmap cache. */
   readonly preview?: Pick<InkRasterOptions, 'scale' | 'background' | 'destination' | 'maxPixels' | 'maxPoints' | 'curveTolerance'>;
 }
 const children = (node: LosslessXmlElement) => node.children.filter((child): child is LosslessXmlElement => child.kind === 'element');
@@ -100,33 +101,39 @@ function editWordInk(document: WordDocument, elementId: number, change?: WordInk
     const style = shape?.attributes.find(a => !a.namespaceUri && a.localName === 'style');
     if (!shape || !imageReference || !style) throw new WordError('invalid_document', 'Cannot regenerate an unrecognized ink fallback.');
     const raster = renderOfficeInkRaster(ink, { ...change?.preview, ...wordInkSceneOptions(matrix, { ...document.inkRendering, ...change?.preview }) });
-    if (!raster.supported) throw new WordError('invalid_document', raster.diagnostics.map(d => d.message).join(' '));
-    const bitmapRelation = relationships.get(imageReference.value);
-    const oldBitmap = bitmapRelation?.targetMode === 'Internal' ? document.package.getPart(bitmapRelation.targetPartName) : undefined;
-    const png = encodeInkPng(raster.width, raster.height, raster.data);
-    if (oldBitmap?.contentType === 'image/png' && exclusive(oldBitmap.name.value, imageReference.value)) transaction.replacePart(oldBitmap.name, png);
-    else {
-      const bitmapPart = freshPart('/word/media/inkEdit', 'png'), bitmapId = freshId('inkBitmap');
-      transaction.addPart(bitmapPart, 'image/png', png);
-      transaction.addRelationship(document.part.name, { id: bitmapId, type: `${namespaces.relationships}/image`, target: bitmapPart });
-      editor.setAttribute(imageReference, bitmapId);
-    }
-    const position = (axis: string) => {
-      const node = descendants(frame).find(node => node.localName === `position${axis}`);
-      const offset = node && children(node).find(node => node.localName === 'posOffset');
-      return offset ? Number(document.source.textContent(offset)) / 12700 : 0;
-    };
-    const properties = new Map(style.value.split(';').filter(Boolean).map(entry => { const colon = entry.indexOf(':'); return [entry.slice(0, colon).trim().toLowerCase(), entry.slice(colon + 1).trim()]; }));
-    properties.set('width', `${raster.bounds.width}pt`); properties.set('height', `${raster.bounds.height}pt`);
-    // Rotation/flips are baked into the generated pixels, not applied a second time by VML.
-    properties.delete('rotation'); properties.delete('flip');
-    if (drawing.placement === 'anchor') {
-      properties.set('margin-left', `${position('H') + raster.bounds.x}pt`);
-      properties.set('margin-top', `${position('V') + raster.bounds.y}pt`);
-    }
-    editor.setAttribute(style, [...properties].map(([name, value]) => `${name}:${value}`).join(';'));
-    for (const node of [shape, ...descendants(shape)]) for (const attribute of node.attributes) {
-      if (attribute.namespaceUri === office && attribute.localName === 'gfxdata') editor.removeAttribute(attribute);
+    if (!raster.supported) {
+      if (!raster.diagnostics.length || raster.diagnostics.some(d => d.code !== 'destination')) throw new WordError('invalid_document', raster.diagnostics.map(d => d.message).join(' '));
+      // An isolated PNG cannot encode a function of pixels behind it. Keep the
+      // complete native ink and omit the stale cache rather than invent a backdrop.
+      editor.removeElement(fallback);
+    } else {
+      const bitmapRelation = relationships.get(imageReference.value);
+      const oldBitmap = bitmapRelation?.targetMode === 'Internal' ? document.package.getPart(bitmapRelation.targetPartName) : undefined;
+      const png = encodeInkPng(raster.width, raster.height, raster.data);
+      if (oldBitmap?.contentType === 'image/png' && exclusive(oldBitmap.name.value, imageReference.value)) transaction.replacePart(oldBitmap.name, png);
+      else {
+        const bitmapPart = freshPart('/word/media/inkEdit', 'png'), bitmapId = freshId('inkBitmap');
+        transaction.addPart(bitmapPart, 'image/png', png);
+        transaction.addRelationship(document.part.name, { id: bitmapId, type: `${namespaces.relationships}/image`, target: bitmapPart });
+        editor.setAttribute(imageReference, bitmapId);
+      }
+      const position = (axis: string) => {
+        const node = descendants(frame).find(node => node.localName === `position${axis}`);
+        const offset = node && children(node).find(node => node.localName === 'posOffset');
+        return offset ? Number(document.source.textContent(offset)) / 12700 : 0;
+      };
+      const properties = new Map(style.value.split(';').filter(Boolean).map(entry => { const colon = entry.indexOf(':'); return [entry.slice(0, colon).trim().toLowerCase(), entry.slice(colon + 1).trim()]; }));
+      properties.set('width', `${raster.bounds.width}pt`); properties.set('height', `${raster.bounds.height}pt`);
+      // Rotation/flips are baked into the generated pixels, not applied a second time by VML.
+      properties.delete('rotation'); properties.delete('flip');
+      if (drawing.placement === 'anchor') {
+        properties.set('margin-left', `${position('H') + raster.bounds.x}pt`);
+        properties.set('margin-top', `${position('V') + raster.bounds.y}pt`);
+      }
+      editor.setAttribute(style, [...properties].map(([name, value]) => `${name}:${value}`).join(';'));
+      for (const node of [shape, ...descendants(shape)]) for (const attribute of node.attributes) {
+        if (attribute.namespaceUri === office && attribute.localName === 'gfxdata') editor.removeAttribute(attribute);
+      }
     }
   }
   const edited = editor.commit();
