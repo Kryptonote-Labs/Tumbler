@@ -588,6 +588,9 @@ pen width in points. Set `highlighter: true` for a translucent rectangular pen.
 Placement uses the same page/paragraph coordinates as other drawings.
 
 `createWordArtifact` writes calibrated Office InkML and its customXml relationship.
+Export uses integer HIMETRIC coordinates and 0–1023 pressure, because desktop Word
+rounds fractional channel values to integers. The collaborative source retains
+the original point coordinates and normalized pressure.
 `NativeWordDocument` previews the same native drawing and preserves subsequent
 geometry and point overrides on export, including in a newly created document.
 Authored ink is native-only; readers such as LibreOffice that discard InkML do not
