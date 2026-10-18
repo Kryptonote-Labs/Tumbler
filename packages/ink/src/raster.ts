@@ -40,7 +40,13 @@ export function renderOfficeInkRaster(document: OfficeInkDocument, options: InkR
   const transformed = mapBounds(scene.bounds);
   const bounds = options.bounds ?? { ...transformed, width: transformed.width || 1 / scale, height: transformed.height || 1 / scale };
   if (!(scale > 0) || !Number.isFinite(scale) || !Object.values(bounds).every(Number.isFinite) || bounds.width <= 0 || bounds.height <= 0) throw new RangeError('Invalid ink raster dimensions.');
-  const width = Math.ceil(bounds.width * scale), height = Math.ceil(bounds.height * scale);
+  // Pixel-aligned bounds can round just above an integer after dividing and
+  // multiplying by a fractional zoom. Do not allocate an extra row or column.
+  const pixels = (points: number) => {
+    const value = points * scale, nearest = Math.round(value);
+    return Math.abs(value - nearest) <= Number.EPSILON * Math.max(1, Math.abs(value)) * 4 ? nearest : Math.ceil(value);
+  };
+  const width = pixels(bounds.width), height = pixels(bounds.height);
   const maxPixels = options.maxPixels ?? 4_194_304;
   if (!(maxPixels >= 0) || (maxPixels !== Infinity && !Number.isSafeInteger(maxPixels))) throw new RangeError('Invalid ink raster budget.');
   if (!Number.isSafeInteger(width * height) || width * height > maxPixels) return { supported: false, diagnostics: [{ elementId: document.source.root.id, code: 'resource', message: 'Ink raster exceeds the configured pixel budget.' }] };

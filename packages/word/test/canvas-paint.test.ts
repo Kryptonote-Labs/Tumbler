@@ -145,7 +145,7 @@ test('paints run shading behind text and gives highlighting precedence', () => {
   expect(calls).toContainEqual(['fillRect', '#FFFF00', highlighted!.x, highlighted!.y, highlighted!.width, highlighted!.height]);
 });
 
-test.each([1, 4 / 3, 2])('native ink composes with browser and server page pixels at scale %s', async scale => {
+test.each([1, 4 / 3, 2, .55 * 4 / 3, 2.3])('native ink composes with browser and server page pixels at scale %s', async scale => {
   for (const colorSpace of ['srgb', undefined] as const) {
   const { inkFixture } = await import('./ink-fixture.ts');
   const { officeInk } = await import('../../ink/test/fixture.ts');
