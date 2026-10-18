@@ -20,12 +20,13 @@
     readonly onselectionchange?: (selection: WordTextSelection) => void;
     readonly onedit?: (edit: WordDocumentEdit) => void;
     readonly oncommand?: (command: "undo" | "redo" | "save") => void;
+    readonly oninkchange?: (change: import('@tumblerjs/word').WordInkTraceChange) => void;
     readonly ondrawingchange?: (change: WordDrawingChange) => void;
     readonly ondrawingresize?: (size: WordDrawingResize) => void;
     readonly scale?: number;
   }
 
-  let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, scale = $bindable(1) }: Props = $props();
+  let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, oninkchange, scale = $bindable(1) }: Props = $props();
   let scroller = $state<HTMLDivElement>();
   let viewportWidth = $state(0);
   let layout = $state<WordLayout>();
@@ -533,7 +534,7 @@
               <div class="text-line" style={`left:${wordPointsToCssPixels(line.x)}px;top:${wordPointsToCssPixels(line.y)}px;height:${wordPointsToCssPixels(line.height)}px`}>
                 {#each line.fragments as fragment, fragmentIndex}
                   {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
-                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y)} pageX={fragment.x} pageY={fragment.y} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} />
+                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y)} pageX={fragment.x} pageY={fragment.y} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
                   {:else if fragment.hyperlink === undefined}
                     <span
                       data-paragraph={line.paragraphElementId}
