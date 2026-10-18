@@ -29,7 +29,7 @@ export type InkSceneResult =
   | { readonly supported: true; readonly strokes: readonly InkPaint[]; readonly bounds: InkBounds; readonly traceBounds: InkBounds }
   | { readonly supported: false; readonly diagnostics: readonly InkDiagnostic[] };
 
-function channelScale(channel: InkChannel | undefined): number | undefined {
+export function inkChannelScale(channel: InkChannel | undefined): number | undefined {
   if (!channel || !channel.resolution || channel.resolution <= 0) return;
   // A resolution is counts per unit, not a multiplier of the channel's declared units.
   const unit = channel.resolutionUnits?.match(/^1\/(cm|in)$/)?.[1];
@@ -62,7 +62,7 @@ export function createOfficeInkScene(document: OfficeInkDocument, options: InkSv
     const brush = { ...trace.brush, widthPoints, heightPoints };
     const channels = trace.channels.map(channel => ({ ...options.channelDefaults?.[channel.name], ...channel }));
     const xi = channels.findIndex(c => !c.intermittent && c.name === 'X'), yi = channels.findIndex(c => !c.intermittent && c.name === 'Y');
-    const sx = channelScale(channels[xi]), sy = channelScale(channels[yi]);
+    const sx = inkChannelScale(channels[xi]), sy = inkChannelScale(channels[yi]);
     if (sx === undefined || sy === undefined) { problem(trace, 'Explicit positive X/Y resolutions in 1/cm or 1/in are required for physical rendering.'); continue; }
     const rotation = channels.findIndex(c => !c.intermittent && c.name === 'OR');
     const fi = channels.findIndex(c => !c.intermittent && c.name === 'F');

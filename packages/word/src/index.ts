@@ -170,3 +170,6 @@ export { wordChartTitleText, chartTitleFromWord } from './chart-title.ts';
 export type { WordSymbol } from './symbols.ts';
 
 export { replaceWordInkTrace, type WordInkTraceChange } from './ink-edit.ts';
+export { wordInkPoints, moveWordInkPoint, type WordInkPoint } from './ink-points.ts';
+
+export { withWordInkTraces, isWordInkTraceOverrides, type WordInkTraceOverride } from './ink-overrides.ts';

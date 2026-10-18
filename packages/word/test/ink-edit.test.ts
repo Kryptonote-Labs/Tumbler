@@ -64,3 +64,52 @@ test('repeated edits reuse exclusive parts instead of accumulating obsolete prev
     expect(source.document.package.parts).toHaveLength(partCount);
   }
 });
+
+test.each(['strict', 'transitional'] as const)('endpoint edits preserve other sample positions, rotation and copied parts in %s', conformance => {
+  let { source, alternate } = inkFixture(false, true, officeInk(), conformance);
+  const transaction = beginPackageTransaction(source.document.package);
+  const xml = source.document.source.source;
+  const drawingNamespace = conformance === 'strict' ? 'http://purl.oclc.org/ooxml/drawingml/main' : 'http://schemas.openxmlformats.org/drawingml/2006/main';
+  const part = `<w14:contentPart r:id="ink"><w14:xfrm rot="1800000" flipH="1"><a:off xmlns:a="${drawingNamespace}" x="127000" y="254000"/><a:ext xmlns:a="${drawingNamespace}" cx="1408680" cy="1384990"/></w14:xfrm></w14:contentPart>`;
+  // Both drawings share the same part; the first edit must copy it before rebasing.
+  const actualAlternate = conformance === 'strict' ? alternate.replaceAll('http://schemas.openxmlformats.org/drawingml/2006/', 'http://purl.oclc.org/ooxml/drawingml/') : alternate;
+  transaction.replacePart(source.document.part.name, new TextEncoder().encode(xml.replace(actualAlternate, actualAlternate + actualAlternate).replaceAll('<w14:contentPart r:id="ink"/>', part)));
+  source = openWordArtifact(transaction.commit());
+  const drawing = first(source), matrix = drawing.inkProjection!.matrix;
+  const edited = source.replaceInkTrace({ elementId: drawing.elementId, traceElementId: drawing.ink!.traces[0]!.elementId, points: [[-500, 0], [1000, 1000]], preserveSampleTransform: true });
+  const result = first(edited);
+  result.inkProjection!.matrix.forEach((value, i) => expect(value).toBeCloseTo(matrix[i]!, 4));
+  expect(result.widthPoints).toBe(drawing.widthPoints);
+  expect(result.heightPoints).toBe(drawing.heightPoints);
+  expect([...edited.document.drawings.values()][1]!.ink!.traces[0]!.points).toEqual([[0, 0], [1000, 1000]]);
+  expect(result.inkSource!.partName.value).not.toBe(drawing.inkSource!.partName.value);
+});
+
+test('endpoint edits create a transform for an implicit frame and retain degenerate sample axes', () => {
+  let { source } = inkFixture(false, false, officeInk());
+  const drawing = first(source), matrix = drawing.inkProjection!.matrix;
+  source = source.replaceInkTrace({ elementId: drawing.elementId, traceElementId: drawing.ink!.traces[0]!.elementId, points: [[1000, 1000], [1000, 1000]], preserveSampleTransform: true });
+  const project = (m: readonly number[]) => [m[0]! * 72 / 2.54 + m[2]! * 72 / 2.54 + m[4]!, m[1]! * 72 / 2.54 + m[3]! * 72 / 2.54 + m[5]!];
+  project(first(source).inkProjection!.matrix).forEach((value, i) => expect(value).toBeCloseTo(project(matrix)[i]!, 4));
+  expect(source.document.source.source).toContain('w14:xfrm');
+});
+
+test('collaborative stroke overrides preserve preview/export geometry through resize and undo', async () => {
+  const { NativeWordDocument, importWordContent, wordInkPoints } = await import('../src/index.ts');
+  const { source } = inkFixture(false, false, officeInk());
+  const blocks = importWordContent(source), original = first(source);
+  const edited = blocks.map(block => block.kind !== 'paragraph' ? block : { ...block, runs: block.runs.map(run => run.source !== original.elementId ? run : {
+    ...run, drawing: { width: original.widthPoints * 1.5, height: original.heightPoints * .8 }, inkTraces: [{ traceIndex: 0, points: [[-500, 250], [1000, 1000]] }],
+  }) });
+  const model = new NativeWordDocument({ source });
+  model.update(edited);
+  const preview = model.drawingAt(0)!;
+  const exported = first(model.artifact());
+  expect(exported.ink!.traces[0]!.points).toEqual([[-500, 250], [1000, 1000]]);
+  const actual = wordInkPoints(exported);
+  wordInkPoints(preview).forEach((point, index) => {
+    expect(point.x).toBeCloseTo(actual[index]!.x, 4); expect(point.y).toBeCloseTo(actual[index]!.y, 4);
+  });
+  model.update(blocks);
+  expect(model.drawingAt(0)!.ink!.traces[0]!.points).toEqual(original.ink!.traces[0]!.points);
+});

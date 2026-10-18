@@ -4,6 +4,7 @@ import { beginPackageTransaction, relationshipItemName, isRelationshipPartName, 
 import { WordError, type WordDocument } from './document.ts';
 import { inkFrame } from './ink-geometry.ts';
 import { wordInkNamespaces } from './ink-fallback.ts';
+import { preserveInkTransform } from './ink-edit-transform.ts';
 import { wordInkTransform, wordInkSceneOptions } from './ink-transform.ts';
 
 export interface WordInkTraceChange {
@@ -13,6 +14,8 @@ export interface WordInkTraceChange {
    * The edited ink occupies the existing DrawingML frame, as when Word reloads the part.
    */
   readonly points: readonly InkPoint[];
+  /** Keep sample positions in drawing coordinates when the edited trace changes its bounds. */
+  readonly preserveSampleTransform?: boolean;
   /** Cached fallback composition. Destination-dependent pens require an explicit backdrop. */
   readonly preview?: Pick<InkRasterOptions, 'scale' | 'background' | 'destination' | 'maxPixels' | 'maxPoints' | 'curveTolerance'>;
 }
@@ -50,7 +53,9 @@ function editWordInk(document: WordDocument, elementId: number, change?: WordInk
   const reference = content?.attributes.find(a => a.namespaceUri === namespaces.relationships && a.localName === 'id');
   const extent = descendants(frame).find(node => node.localName === 'extent' && node.namespaceUri?.endsWith('/wordprocessingDrawing'));
   if (!content || !reference || !extent) throw new WordError('invalid_document', 'Ink drawing placement is incomplete.');
-  const matrix = wordInkTransform(content, { ...drawing, widthPoints: Number(value(extent, 'cx')) / 12700, heightPoints: Number(value(extent, 'cy')) / 12700 }, scene.traceBounds);
+  const previousScene = change?.preserveSampleTransform ? createOfficeInkScene(drawing.ink, document.inkRendering) : undefined;
+  if (previousScene && !previousScene.supported) throw new WordError('invalid_document', 'Cannot preserve an unsupported ink transform.');
+  const matrix = wordInkTransform(content, { ...drawing, widthPoints: Number(value(extent, 'cx')) / 12700, heightPoints: Number(value(extent, 'cy')) / 12700 }, previousScene?.supported ? previousScene.traceBounds : scene.traceBounds);
   const transaction = beginPackageTransaction(document.package), editor = beginLosslessXmlEdit(document.source);
   const relationships = document.package.relationships(document.part.name);
   const freshPart = (directory: string, extension: string) => {
@@ -124,6 +129,9 @@ function editWordInk(document: WordDocument, elementId: number, change?: WordInk
       if (attribute.namespaceUri === office && attribute.localName === 'gfxdata') editor.removeAttribute(attribute);
     }
   }
-  transaction.replacePart(document.part.name, editor.commit().bytes);
+  const edited = editor.commit();
+  transaction.replacePart(document.part.name, change?.preserveSampleTransform
+    ? preserveInkTransform(edited.document, content.id, matrix, scene.traceBounds, namespaces.drawing)
+    : edited.bytes);
   return transaction.commit();
 }

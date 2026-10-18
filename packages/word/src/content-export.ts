@@ -89,6 +89,19 @@ export function reconcileWordContent(
           });
         }
       }
+      if (run.inkTraces?.length) {
+        for (const edit of run.inkTraces) {
+          const current = wordContentParagraphs(importWordContent(result))[paragraphIndex];
+          if (!current) throw new Error('The ink paragraph was lost during materialization.');
+          let at = 0;
+          const target = current.runs.find(candidate => { const match = at === offset; at += candidate.text.length; return match; });
+          if (target?.source === undefined) throw new Error('The ink drawing was lost during materialization.');
+          const ink = result.document.drawings.get(target.source)?.ink;
+          const trace = ink?.traces[edit.traceIndex];
+          if (!trace) throw new Error('The ink trace was lost during materialization.');
+          result = result.replaceInkTrace({ elementId: target.source, traceElementId: trace.elementId, points: edit.points, preserveSampleTransform: true });
+        }
+      }
       offset += run.text.length;
     }
   }
@@ -169,7 +182,7 @@ export function prepareWordContent(
     paragraphs.some(p => p.runs.some(run => {
       const drawing = document.drawings.get(run.source!);
       const geometry = run.drawing ?? run.image;
-      if (run.chartTitle !== undefined || run.chartTitleText !== undefined) return true;
+      if (run.inkTraces?.length || run.chartTitle !== undefined || run.chartTitleText !== undefined) return true;
       return drawing && geometry && drawingNeedsUpdate(drawing, geometry, run.drawing !== undefined);
     }))
   )) return undefined;
