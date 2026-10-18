@@ -4,7 +4,7 @@ import { beginPackageTransaction, relationshipItemName, isRelationshipPartName, 
 import { WordError, type WordDocument } from './document.ts';
 import { inkFrame } from './ink-geometry.ts';
 import { wordInkNamespaces } from './ink-fallback.ts';
-import { wordInkTransform } from './ink-transform.ts';
+import { wordInkTransform, wordInkSceneOptions } from './ink-transform.ts';
 
 export interface WordInkTraceChange {
   readonly elementId: number;
@@ -25,14 +25,25 @@ const value = (node: LosslessXmlElement | undefined, name: string) => node?.attr
 
 /** Copy-on-write ink and bitmap parts are committed with their drawing references in one revision. */
 export function replaceWordInkTrace(document: WordDocument, change: WordInkTraceChange): Uint8Array {
-  const drawing = document.drawings.get(change.elementId);
-  const element = document.source.element(change.elementId);
+  return editWordInk(document, change.elementId, change);
+}
+
+/** Refresh a resized drawing's bitmap without changing its native InkML samples. */
+export function refreshWordInkFallback(document: WordDocument, elementId: number): Uint8Array {
+  return editWordInk(document, elementId);
+}
+
+function editWordInk(document: WordDocument, elementId: number, change?: WordInkTraceChange): Uint8Array {
+  const drawing = document.drawings.get(elementId);
+  const element = document.source.element(elementId);
   if (!drawing?.ink || !drawing.inkSource || !element) throw new WordError('invalid_document', 'The drawing has no editable InkML source.');
-  const trace = drawing.ink.traces.find(trace => trace.elementId === change.traceElementId);
-  if (!trace) throw new WordError('invalid_document', 'The trace does not belong to this drawing.');
-  if (trace.points.length === change.points.length && trace.points.every((point, index) => point.length === change.points[index]!.length && point.every((sample, channel) => sample === change.points[index]![channel]))) return document.bytes();
-  const ink = replaceOfficeInkTrace(drawing.ink, change.traceElementId, change.points);
-  const scene = createOfficeInkScene(ink, { ...document.inkRendering, ...change.preview });
+  if (change) {
+    const trace = drawing.ink.traces.find(trace => trace.elementId === change.traceElementId);
+    if (!trace) throw new WordError('invalid_document', 'The trace does not belong to this drawing.');
+    if (trace.points.length === change.points.length && trace.points.every((point, index) => point.length === change.points[index]!.length && point.every((sample, channel) => sample === change.points[index]![channel]))) return document.bytes();
+  }
+  const ink = change ? replaceOfficeInkTrace(drawing.ink, change.traceElementId, change.points) : drawing.ink;
+  const scene = createOfficeInkScene(ink, { ...document.inkRendering, ...change?.preview });
   if (!scene.supported) throw new WordError('invalid_document', scene.diagnostics.map(d => d.message).join(' '));
   const frame = inkFrame(element), namespaces = wordInkNamespaces(frame);
   const content = descendants(frame).find(node => node.namespaceUri === 'http://schemas.microsoft.com/office/word/2010/wordml' && node.localName === 'contentPart');
@@ -61,17 +72,19 @@ export function replaceWordInkTrace(document: WordDocument, change: WordInkTrace
     const uses = [...document.source.elements()].flatMap(node => node.attributes).filter(attribute => attribute.namespaceUri === namespaces.relationships && attribute.value === id).length;
     return incoming === 1 && uses === 1;
   };
-  const originalInk = drawing.inkSource.partName;
-  if (exclusive(originalInk.value, reference.value)) transaction.replacePart(originalInk, ink.source.originalBytes());
-  else {
-    const inkPart = freshPart('/word/ink/edited', 'xml'), inkId = freshId('inkEdit');
-    transaction.addPart(inkPart, 'application/inkml+xml', ink.source.originalBytes());
-    transaction.addRelationship(document.part.name, { id: inkId, type: `${namespaces.relationships}/customXml`, target: inkPart });
-    // Preserve outgoing relationships of a copied ink part, including extension metadata.
-    for (const relationship of (document.package.archive.get(relationshipItemName(originalInk)) ? document.package.relationships(originalInk).items : [])) transaction.addRelationship(inkPart, relationship.targetMode === 'External'
-      ? { id: relationship.id, type: relationship.type, targetMode: 'External', target: relationship.target }
-      : { id: relationship.id, type: relationship.type, target: relationship.targetPartName });
-    editor.setAttribute(reference, inkId);
+  if (change) {
+    const originalInk = drawing.inkSource.partName;
+    if (exclusive(originalInk.value, reference.value)) transaction.replacePart(originalInk, ink.source.originalBytes());
+    else {
+      const inkPart = freshPart('/word/ink/edited', 'xml'), inkId = freshId('inkEdit');
+      transaction.addPart(inkPart, 'application/inkml+xml', ink.source.originalBytes());
+      transaction.addRelationship(document.part.name, { id: inkId, type: `${namespaces.relationships}/customXml`, target: inkPart });
+      // Preserve outgoing relationships of a copied ink part, including extension metadata.
+      for (const relationship of (document.package.archive.get(relationshipItemName(originalInk)) ? document.package.relationships(originalInk).items : [])) transaction.addRelationship(inkPart, relationship.targetMode === 'External'
+        ? { id: relationship.id, type: relationship.type, targetMode: 'External', target: relationship.target }
+        : { id: relationship.id, type: relationship.type, target: relationship.targetPartName });
+      editor.setAttribute(reference, inkId);
+    }
   }
   const fallback = children(element).find(node => node.namespaceUri === mc && node.localName === 'Fallback');
   if (fallback) {
@@ -81,7 +94,7 @@ export function replaceWordInkTrace(document: WordDocument, change: WordInkTrace
     const imageReference = image?.attributes.find(a => a.namespaceUri === namespaces.relationships && a.localName === 'id');
     const style = shape?.attributes.find(a => !a.namespaceUri && a.localName === 'style');
     if (!shape || !imageReference || !style) throw new WordError('invalid_document', 'Cannot regenerate an unrecognized ink fallback.');
-    const raster = renderOfficeInkRaster(ink, { ...document.inkRendering, ...change.preview, transform: matrix });
+    const raster = renderOfficeInkRaster(ink, { ...change?.preview, ...wordInkSceneOptions(matrix, { ...document.inkRendering, ...change?.preview }) });
     if (!raster.supported) throw new WordError('invalid_document', raster.diagnostics.map(d => d.message).join(' '));
     const bitmapRelation = relationships.get(imageReference.value);
     const oldBitmap = bitmapRelation?.targetMode === 'Internal' ? document.package.getPart(bitmapRelation.targetPartName) : undefined;

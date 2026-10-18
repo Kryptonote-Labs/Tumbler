@@ -1,4 +1,4 @@
-import type { InkBounds } from '@tumblerjs/ink';
+import type { InkBounds, InkSvgOptions } from '@tumblerjs/ink';
 import type { LosslessXmlElement } from '@tumblerjs/ooxml';
 import type { WordDrawing } from './drawings.ts';
 
@@ -26,7 +26,7 @@ export function wordInkTransform(contentPart: LosslessXmlElement, drawing: WordD
   if (!(width > 0 && height > 0)) throw new RangeError('Ink transform extents must be positive.');
   const x = number(child('off'), 'x', 0) / 12700, y = number(child('off'), 'y', 0) / 12700;
   // Office stores even a point stroke in a nonzero frame (one HIMETRIC unit).
-  // Its nib remains independent of that frame; scaling the frame scales the nib too.
+  // This maps sample centres only; Word keeps physical nib dimensions unchanged.
   const sourceWidth = trace.width || 72 / 2540, sourceHeight = trace.height || 72 / 2540;
   const sx = width / sourceWidth, sy = height / sourceHeight;
   const angle = number(xfrm, 'rot', 0) / 60000 * Math.PI / 180;
@@ -35,8 +35,9 @@ export function wordInkTransform(contentPart: LosslessXmlElement, drawing: WordD
   const cx = trace.x + sourceWidth / 2, cy = trace.y + sourceHeight / 2;
   return [a, b, cc, d, x + width / 2 - a * cx - cc * cy, y + height / 2 - b * cx - d * cy] as const;
 }
-export function transformedInkBounds(bounds: InkBounds, [a, b, c, d, e, f]: InkMatrix): InkBounds {
-  const corners = [bounds.x, bounds.x + bounds.width].flatMap(x => [bounds.y, bounds.y + bounds.height].map(y => ({ x: a * x + c * y + e, y: b * x + d * y + f })));
-  const x = Math.min(...corners.map(p => p.x)), y = Math.min(...corners.map(p => p.y));
-  return { x, y, width: Math.max(...corners.map(p => p.x)) - x, height: Math.max(...corners.map(p => p.y)) - y };
+/** Word scales samples, rotates/reflects the pen, and retains its physical size. */
+export function wordInkSceneOptions(matrix: InkMatrix, options: InkSvgOptions = {}): InkSvgOptions {
+  const [a, b, c, d] = matrix;
+  return { ...options, renderingProfile: 'word', sampleTransform: matrix,
+    brushRotation: Math.atan2(b, a), brushReflection: a * d - b * c < 0 };
 }

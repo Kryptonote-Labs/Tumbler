@@ -7,6 +7,7 @@ import { beginPackageTransaction } from '@tumblerjs/opc';
 const first = (artifact: ReturnType<typeof openWordArtifact>) => [...artifact.document.drawings.values()][0]!;
 function preserved(source: ReturnType<typeof openWordArtifact>, result: ReturnType<typeof openWordArtifact>, authored = false) {
   for (const part of source.document.package.parts) {
+    if (part.name.value === '/word/media/ink.png') continue; // Resizing refreshes this cached preview.
     if (part.name.value === source.document.part.name.value || (authored && !/\/(ink|media)\//.test(part.name.value))) continue;
     const retained = result.document.package.getPart(part.name)!;
     expect(retained).toBeDefined();
@@ -30,7 +31,7 @@ test.each(['strict', 'transitional'] as const)('resizes and moves both ink repre
   expect(first(result).anchor?.horizontalOffsetPoints).toBeCloseTo(298.56, 3);
   expect(first(result).anchor?.verticalOffsetPoints).toBeCloseTo(-20, 3);
   const xml = result.document.source.source;
-  // Native trace bounds and bitmap pen bounds must undergo the same affine transform.
+  // The native frame scales independently from the physical pen.
   expect(xml).toContain('cx="704340" cy="2769980"');
   preserved(source, result);
   expect(first(openWordArtifact(result.bytes()))).toEqual(first(result));
@@ -162,4 +163,18 @@ test('editor undo and redo restore both ink representations together', () => {
   expect(session.artifact.bytes()).toEqual(source.bytes());
   session.redo();
   expect(session.artifact.bytes()).toEqual(edited);
+});
+
+ test('resizing refreshes the fallback while retaining native samples and physical pen size', () => {
+  const { source } = inkFixture(false, true, officeInk());
+  const drawing = first(source);
+  const result = source.resizeDrawing({ elementId: drawing.elementId, widthPoints: 200, heightPoints: 50 });
+  const image = first(result);
+  if (image.kind !== 'image' || !image.inkProjection) throw Error('Expected native ink');
+  expect(image.inkProjection.bounds.width - image.widthPoints).toBeCloseTo(.05 * 72 / 2.54);
+  expect(image.inkProjection.bounds.height - image.heightPoints).toBeCloseTo(.05 * 72 / 2.54);
+  const bitmap = result.document.package.getPart('/word/media/ink.png')!;
+  expect([...result.document.package.readPart(bitmap).slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  expect(result.document.source.source).toContain(`width:${image.inkProjection.bounds.width}pt`);
+  preserved(source, result);
 });

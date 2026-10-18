@@ -1,4 +1,4 @@
-import { wordInkTransform, transformedInkBounds } from './ink-transform.ts';
+import { wordInkTransform, wordInkSceneOptions } from './ink-transform.ts';
 import { InkError, readOfficeInk, createOfficeInkScene, renderInkSceneSvg, type InkSvgOptions } from '@tumblerjs/ink';
 import { LosslessXmlError, type LosslessXmlElement } from '@tumblerjs/ooxml';
 import type { OpcPackage, Relationships } from '@tumblerjs/opc';
@@ -38,19 +38,21 @@ function projectWordInkDrawing(element: LosslessXmlElement, original: WordDrawin
     let matrix;
     try { matrix = wordInkTransform(parts[0]!, original, scene.traceBounds); }
     catch (error) { if (!(error instanceof RangeError)) throw error; return unavailable(error.message); }
-    const bounds = transformedInkBounds(scene.bounds, matrix);
-    const rendered = renderInkSceneSvg(scene);
+    const projectedOptions = wordInkSceneOptions(matrix, options);
+    const projected = createOfficeInkScene(ink, projectedOptions);
+    if (!projected.supported) return unavailable(projected.diagnostics.map(d => d.message).join(' '));
+    const bounds = projected.bounds;
+    const rendered = renderInkSceneSvg(projected);
     const content = rendered.supported ? rendered.svg.slice(rendered.svg.indexOf('>') + 1, rendered.svg.lastIndexOf('</svg>')) : '';
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${bounds.width}pt" height="${bounds.height}pt" viewBox="${bounds.x} ${bounds.y} ${bounds.width || 1} ${bounds.height || 1}"><g transform="matrix(${matrix.join(' ')})">${content}</g></svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${bounds.width}pt" height="${bounds.height}pt" viewBox="${bounds.x} ${bounds.y} ${bounds.width || 1} ${bounds.height || 1}">${content}</svg>`;
     return {
-      ...original, kind: 'image', elementId: element.id, fallback: 'ink', ink, inkSource, inkRendering: rendered.supported ? 'vector' : 'raster', inkProjection: { matrix, bounds, options: options ?? {} },
+      ...original, kind: 'image', elementId: element.id, fallback: 'ink', ink, inkSource, inkRendering: rendered.supported ? 'vector' : 'raster', inkProjection: { matrix, bounds, options: projectedOptions },
       ...(rendered.supported ? {} : { inkRenderingDiagnostics: rendered.diagnostics }),
       relationshipId: undefined, partName: undefined, contentType: !rendered.supported && fallback.kind === 'image' ? fallback.contentType : 'image/svg+xml',
       bytes: !rendered.supported && fallback.kind === 'image' ? fallback.bytes : new TextEncoder().encode(svg),
-      widthPoints: bounds.width, heightPoints: bounds.height,
-      anchor: original.anchor && { ...original.anchor,
-        horizontalOffsetPoints: (original.anchor.horizontalOffsetPoints ?? 0) + bounds.x,
-        verticalOffsetPoints: (original.anchor.verticalOffsetPoints ?? 0) + bounds.y },
+      // Word's layout/editing frame excludes the pen and is not the rotated
+      // painted bounds. Keep both so resizing does not scale the physical nib.
+      widthPoints: original.widthPoints, heightPoints: original.heightPoints,
     };
   } catch (error) {
     if (!(error instanceof InkError) && !(error instanceof LosslessXmlError)) throw error;

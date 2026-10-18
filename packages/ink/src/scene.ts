@@ -5,6 +5,13 @@ import type { InkChannel } from './trace.ts';
 
 export interface InkBounds { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
 export interface InkSvgOptions {
+  /** Word uses a circular round pen and its desktop pressure transfer function. */
+  readonly renderingProfile?: 'inkml' | 'word';
+  /** Transform stroke centres after fitting, without scaling physical pen dimensions. */
+  readonly sampleTransform?: readonly [number, number, number, number, number, number];
+  /** Clockwise pen rotation in radians, independent of sample scaling. */
+  readonly brushRotation?: number;
+  readonly brushReflection?: boolean;
   /** Maximum deviation in physical points when flattening fitted curves. */
   readonly curveTolerance?: number;
   /** Physical size in points of InkML's application-relative em/ex units. */
@@ -31,6 +38,8 @@ function channelScale(channel: InkChannel | undefined): number | undefined {
 
 /** Native nib geometry in physical points. Office does not prescribe a pressure transfer curve. */
 export function createOfficeInkScene(document: OfficeInkDocument, options: InkSvgOptions = {}): InkSceneResult {
+  const matrix = options.sampleTransform ?? [1, 0, 0, 1, 0, 0];
+  if (!matrix.every(Number.isFinite) || !Number.isFinite(options.brushRotation ?? 0)) throw new RangeError('Invalid ink scene transform.');
   const diagnostics = [...document.diagnostics];
   if (diagnostics.length) return { supported: false, diagnostics };
   const maxPoints = options.maxPoints ?? 100_000;
@@ -70,7 +79,8 @@ export function createOfficeInkScene(document: OfficeInkDocument, options: InkSv
       minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
       if (point[si] === false || brush.rasterOp === 'noOperation') { segments.push([]); continue; }
       const force = point[fi];
-      const r = brush.ignorePressure || !pressure ? 1 : typeof force === 'number' ? Math.max(0, Math.min(1, (force - (pressure.min ?? 0)) / (pressure.max! - (pressure.min ?? 0)))) : 0;
+      const normalized = typeof force === 'number' ? Math.max(0, Math.min(1, (force - (pressure?.min ?? 0)) / ((pressure?.max ?? 1) - (pressure?.min ?? 0)))) : 0;
+      const r = brush.ignorePressure || !pressure ? 1 : options.renderingProfile === 'word' ? .25 + 1.5 * normalized : normalized;
       const orientation = point[rotation];
       const rotationChannel = channels[rotation];
       const angleUnit = rotationChannel?.resolutionUnits?.replace(/^1\//, '') ?? rotationChannel?.units;
@@ -88,8 +98,13 @@ export function createOfficeInkScene(document: OfficeInkDocument, options: InkSv
       generatedPoints += samples.length;
       if (generatedPoints > maxPoints) return { supported: false, diagnostics: [{ elementId: trace.elementId, code: 'resource', message: 'Ink geometry exceeds the configured point budget.' }] };
       let previous: readonly { x: number; y: number }[] | undefined;
-      for (const { x, y, r, angle } of samples) {
-        const rx = brush.widthPoints * r / 2, ry = brush.heightPoints * r / 2;
+      for (const sample of samples) {
+        const [a, b, c, d, e, f] = matrix;
+        const x = a * sample.x + c * sample.y + e, y = b * sample.x + d * sample.y + f;
+        const angle = (options.brushReflection ? -sample.angle : sample.angle) + (options.brushRotation ?? 0);
+        const circular = options.renderingProfile === 'word' && brush.tip === 'ellipse';
+        const rx = (circular ? Math.max(brush.widthPoints, brush.heightPoints) : brush.widthPoints) * sample.r / 2;
+        const ry = (circular ? Math.max(brush.widthPoints, brush.heightPoints) : brush.heightPoints) * sample.r / 2;
         const cosine = Math.cos(angle), sine = Math.sin(angle);
         const vertices = brush.tip === 'rectangle' ? [-1, 1].flatMap(a => [-1, 1].map(b => ({ x: a * rx, y: b * ry })))
           : Array.from({ length: Math.max(16, Math.min(256, Math.ceil(Math.PI * Math.sqrt(Math.max(rx, ry) / tolerance)))) }, (_, i) => i).map((i, _, all) => ({ x: rx * Math.cos(i * 2 * Math.PI / all.length), y: ry * Math.sin(i * 2 * Math.PI / all.length) }));

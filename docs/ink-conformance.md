@@ -35,12 +35,18 @@ background. The operation fails before committing if regeneration cannot complet
 
 Office specifies curved versus linear strokes but not its fitting algorithm or
 pressure transfer function. Tumbler uses an interpolating cubic with sharp-turn
-preservation and linear pressure scaling. These choices are explicit; they are
-not evidence of Word pixel parity. Nib sweep polygons and raster coverage are
+preservation. The generic InkML profile scales pressure linearly. The Word profile
+uses a pressure multiplier of `0.25 + 1.5 * normalizedPressure`, measured against
+desktop Word LTSC 2024. These choices do not establish pixel parity. Nib sweep polygons and raster coverage are
 numerical approximations controlled by curve tolerance and raster scale.
 
 The native coordinate mapping fits the physical sample bounds into the DrawingML
-frame before applying flips, rotation and offset. A degenerate axis uses one
+frame before applying flips, rotation and offset. Pen dimensions stay physical
+when that frame scales; rotation and reflection still affect the pen. Word round
+pens use a circle with the larger brush dimension. Rectangle pens retain both
+dimensions. The editing/layout frame excludes pen thickness; the rendered ink
+can extend beyond it. Resize regenerates an existing bitmap fallback with those
+same pen semantics while retaining the original InkML bytes. A degenerate axis uses one
 HIMETRIC unit, matching the inspected Word dot frame. This minimum and the exact
 Word source-bounds rounding still need comparison against the captured Word corpus. The
 Office profile does not itself establish those details. Synthetic matrix tests
@@ -133,3 +139,21 @@ the inspected version discarded native ink during DOCX round trips. A local Word
 reference file successfully exported with the failed request's geometry while
 preserving InkML bytes; a stroke edit also reopened. That local replay does not
 establish the state of the live production document service or Word visual parity.
+
+## Cross-application reference results, 18 October 2026
+
+Word LTSC 2024, version 16.0.17932.20910, opened all eleven positive packages
+as native ink, exported PDF, saved DOCX, then rotated and nonuniformly resized
+them. Ten additional ellipse, rectangle, pressure and degenerate-axis probes
+completed the same run. PDF vectors and an editor screenshot established the
+physical pen and pressure behavior described above. Word rounds sample extents
+when it rewrites InkML; exact HIMETRIC rounding remains unresolved.
+
+LibreOffice 25.2.3.2 on the Raspberry Pi converted all eleven packages to PDF
+and DOCX. Native-only ink disappeared, and none of its saved DOCX files retained
+InkML. The supplied bitmap fallback remained visible. This run therefore checks
+fallback interoperability, not native ink semantics.
+
+The Kryptonote server canvas omitted ImageData colour-space metadata and rejected
+the browser-specific fifth getImageData argument. The page painter now uses the
+shared four-argument form, accepts implicit sRGB, and rejects explicit display-p3.

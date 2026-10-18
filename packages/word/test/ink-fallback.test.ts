@@ -58,8 +58,9 @@ test('renders native strokes without a bitmap and preserves ink through text edi
   const { source, alternate } = fixture(false, false, payload);
   const drawing = [...source.document.drawings.values()][0]!;
   expect(drawing).toMatchObject({ kind: 'image', inkRendering: 'vector', contentType: 'image/svg+xml' });
-  expect(drawing.widthPoints).toBeCloseTo(1408680 / 12700 * 1.05);
-  expect(drawing.anchor?.horizontalOffsetPoints).toBeCloseTo(729615 / 12700 - 1408680 / 12700 * .025);
+  expect(drawing.widthPoints).toBeCloseTo(1408680 / 12700);
+  expect(drawing.anchor?.horizontalOffsetPoints).toBeCloseTo(729615 / 12700);
+  expect(drawing.inkProjection?.bounds.width).toBeCloseTo(1408680 / 12700 + .05 * 72 / 2.54);
   const model = new NativeWordDocument({ source });
   const block = importWordContent(source)[0]!;
   if (block.kind !== 'paragraph') throw Error('Expected paragraph');
@@ -169,6 +170,18 @@ test('DrawingML rotation is clockwise about the frame centre and flips precede r
   const start = transform(0, 0), end = transform(72 / 2.54, 72 / 2.54);
   expect(start[0]).toBeCloseTo(64); expect(start[1]).toBeCloseTo(74);
   expect(end[0]).toBeCloseTo(28); expect(end[1]).toBeCloseTo(2);
-  expect(drawing.widthPoints).toBeCloseTo(37.8);
-  expect(drawing.heightPoints).toBeCloseTo(75.6);
+  expect(drawing.inkProjection!.bounds.width).toBeCloseTo(36 + .05 * 72 / 2.54);
+  expect(drawing.inkProjection!.bounds.height).toBeCloseTo(72 + .05 * 72 / 2.54);
+});
+
+test('resizing the native Word frame retains the physical pen width', () => {
+  const { source } = fixture(false, false, officeInk());
+  const before = [...source.document.drawings.values()][0]!;
+  const after = [...source.resizeDrawing({ elementId: before.elementId, widthPoints: 200, heightPoints: 50 }).document.drawings.values()][0]!;
+  const pen = .05 * 72 / 2.54;
+  expect(before.inkProjection!.bounds.width - before.widthPoints).toBeCloseTo(pen);
+  expect(after.widthPoints).toBeCloseTo(200);
+  expect(after.heightPoints).toBeCloseTo(50);
+  expect(after.inkProjection!.bounds.width - after.widthPoints).toBeCloseTo(pen);
+  expect(after.inkProjection!.bounds.height - after.heightPoints).toBeCloseTo(pen);
 });

@@ -1,3 +1,6 @@
+import { refreshWordInkFallback } from './ink-edit.ts';
+import { openWordArtifact } from './artifact.ts';
+import { wordStoryArtifact } from './stories.ts';
 import { beginLosslessXmlEdit, type LosslessXmlElement } from '@tumblerjs/ooxml';
 import { beginPackageTransaction } from '@tumblerjs/opc';
 import { WordError, type WordDocument } from './document.ts';
@@ -57,7 +60,7 @@ function editStyle(editor: Editor, element: LosslessXmlElement, values: Readonly
   editor.setAttribute(style, [...retained.filter(Boolean), ...Object.entries(values).flatMap(([key, value]) => value === undefined ? [] : [`${key}:${value}`])].join(';'));
 }
 
-/** Scale both stored representations about the displayed top-left, preserving the InkML and media parts. */
+/** Resize the native frame and regenerate its preview with the physical pen unchanged. */
 export function resizeWordInk(document: WordDocument, element: LosslessXmlElement, drawing: WordImageDrawing, size: WordDrawingResize) {
   const sx = size.widthPoints / drawing.widthPoints, sy = size.heightPoints / drawing.heightPoints;
   const frame = inkFrame(element);
@@ -99,7 +102,11 @@ export function resizeWordInk(document: WordDocument, element: LosslessXmlElemen
   });
   const transaction = beginPackageTransaction(document.package);
   transaction.replacePart(document.part.name, editor.commit().bytes);
-  return transaction.commit();
+  const bytes = transaction.commit();
+  if (!fallbackShape(element) || !drawing.inkProjection) return bytes;
+  const artifact = openWordArtifact(bytes, { inkRendering: document.inkRendering });
+  const resized = document.source.root.localName === 'document' ? artifact : wordStoryArtifact(artifact, document.part.name.value);
+  return refreshWordInkFallback(resized.document, element.id);
 }
 
 /** Translate display coordinates to native frame coordinates and stage the matching VML placement. */
@@ -131,7 +138,7 @@ export function positionWordInk(editor: Editor, element: LosslessXmlElement, dra
   }
   return {
     ...change,
-    xPoints: (change.xPoints ?? 0) + (drawing.placement === 'inline' ? -(drawing.inkProjection?.bounds.x ?? 0) : nativeOffset(element, 'H') - (drawing.anchor?.horizontalOffsetPoints ?? 0)),
-    yPoints: (change.yPoints ?? 0) + (drawing.placement === 'inline' ? -(drawing.inkProjection?.bounds.y ?? 0) : nativeOffset(element, 'V') - (drawing.anchor?.verticalOffsetPoints ?? 0)),
+    xPoints: (change.xPoints ?? 0) + (drawing.placement === 'inline' ? 0 : nativeOffset(element, 'H') - (drawing.anchor?.horizontalOffsetPoints ?? 0)),
+    yPoints: (change.yPoints ?? 0) + (drawing.placement === 'inline' ? 0 : nativeOffset(element, 'V') - (drawing.anchor?.verticalOffsetPoints ?? 0)),
   };
 }

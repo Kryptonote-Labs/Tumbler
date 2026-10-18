@@ -66,7 +66,7 @@ for (const [name, xml] of [['native-only', documentXml], ['direct-native', direc
   const edited = artifact.replaceInkTrace({ elementId: drawing.elementId, traceElementId: drawing.ink!.traces[0]!.elementId, points: [[0, 1000], [1000, 0]] });
   await Bun.write(resolve(directory, `${name}-stroke-edited.docx`), edited.bytes());
 }
-const fallbackXml = documentXml.replace('</mc:Choice>', '</mc:Choice><mc:Fallback><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" style="width:30pt;height:30pt"><v:imagedata r:id="bitmap"/></v:shape></w:pict></mc:Fallback>');
+const fallbackXml = documentXml.replace('</mc:Choice>', '</mc:Choice><mc:Fallback><w:pict><v:shape stroked="f" xmlns:v="urn:schemas-microsoft-com:vml" style="width:30pt;height:30pt"><v:imagedata r:id="bitmap"/></v:shape></w:pict></mc:Fallback>');
 const fallbackArtifact = openWordArtifact(buildWordDocumentFixture({
   documentXml: fallbackXml,
   relationships: [{ id: 'ink', type: `${r}/customXml`, target: 'ink/ink.xml' }, { id: 'bitmap', type: `${r}/image`, target: 'media/ink.png' }],

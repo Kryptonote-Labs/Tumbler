@@ -145,7 +145,8 @@ test('paints run shading behind text and gives highlighting precedence', () => {
   expect(calls).toContainEqual(['fillRect', '#FFFF00', highlighted!.x, highlighted!.y, highlighted!.width, highlighted!.height]);
 });
 
-test.each([1, 4 / 3, 2])('native ink composes with existing page pixels at scale %s', async scale => {
+test.each([1, 4 / 3, 2])('native ink composes with browser and server page pixels at scale %s', async scale => {
+  for (const colorSpace of ['srgb', undefined] as const) {
   const { inkFixture } = await import('./ink-fixture.ts');
   const { officeInk } = await import('../../ink/test/fixture.ts');
   const { source } = inkFixture(false, false, officeInk({ brush: '<brushProperty name="width" value="0.1" units="cm"/><brushProperty name="height" value="0.1" units="cm"/><brushProperty name="rasterOp" value="xOrPen"/><brushProperty name="color" value="#ffffff"/>' }));
@@ -154,7 +155,7 @@ test.each([1, 4 / 3, 2])('native ink composes with existing page pixels at scale
   let writes = 0;
   const pixelContext = {
     ...context,
-    getImageData: (_x: number, _y: number, width: number, height: number) => ({ width, height, colorSpace: 'srgb' as const, data: new Uint8ClampedArray(width * height * 4).map((_, index) => index % 4 === 3 ? 255 : 85) }),
+    getImageData: (_x: number, _y: number, width: number, height: number) => ({ width, height, ...(colorSpace === undefined ? {} : { colorSpace }), data: new Uint8ClampedArray(width * height * 4).map((_, index) => index % 4 === 3 ? 255 : 85) }),
     putImageData: (pixels: { data: Uint8ClampedArray }) => {
       writes++;
       expect(pixels.data.some((value, index) => index % 4 !== 3 && value === 170)).toBe(true);
@@ -164,6 +165,7 @@ test.each([1, 4 / 3, 2])('native ink composes with existing page pixels at scale
   paintWordPage(pixelContext, page, { scale, image: () => 'cached-bitmap' });
   expect(writes).toBe(1);
   expect(calls.some(call => call[0] === 'drawImage')).toBe(false);
+  }
 });
 
 test('floating drawings paint behind or in front of text independently of their run order', () => {
