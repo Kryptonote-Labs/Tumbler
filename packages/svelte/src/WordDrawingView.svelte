@@ -1,11 +1,12 @@
 <script lang="ts">
+  import WordInkPointEditor from "./WordInkPointEditor.svelte";
   import ChartTitleEditor from "./ChartTitleEditor.svelte";
   import WordShapeView from "./WordShapeView.svelte";
-  import { shapePlainText, wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing, type WordShapeTextChange } from '@tumblerjs/word';
+  import { shapePlainText, wordImagePaintBounds, wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing, type WordShapeTextChange } from '@tumblerjs/word';
   import OoxmlChart from './OoxmlChart.svelte';
   import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
 
-  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo, oncharttitlechange, oncharttitletextchange }: {
+  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo, oncharttitlechange, oncharttitletextchange, oninkchange }: {
     drawing: WordDrawing; width: number; height: number; position: string; scale: number;
     editable: boolean; selected: boolean;
     pageX: number; pageY: number;
@@ -15,6 +16,7 @@
     layoutControl?: boolean;
     inlinePosition: (x: number, y: number) => WordTextPosition | undefined;
     onselect: (id: number | undefined) => void;
+    oninkchange?: (change: import('@tumblerjs/word').WordInkTraceChange) => void;
     onresize?: (size: WordDrawingResize) => void;
     onchange?: (change: WordDrawingChange) => void;
     /** Enables in-place shape text editing: double-click a shape, or type while it is selected. */
@@ -44,6 +46,7 @@
   let displayHeight = $derived(wordPointsToCssPixels(preview?.height ?? height));
   // Undefined while not editing; otherwise the text editing starts with.
   let editingTitle = $state(false);
+  let editingInk = $state(false);
   let editingText = $state<string>();
   const textEditable = $derived(editable && drawing.kind === 'shape' && ontextchange !== undefined);
   const box = (): WordDrawingBox => ({ x: pageX, y: pageY, width, height });
@@ -119,7 +122,7 @@
     if (reason === 'escape') { editingText = undefined; onselect(drawing.elementId); }
     else ontextchange?.({ elementId: drawing.elementId, textBody, text: textBody.map(p => p.runs.map(r => r.text).join('')).join('\n'), reason });
   }
-  $effect(() => { if (!selected) { editingText = undefined; editingTitle = false; } });
+  $effect(() => { if (!selected) { editingText = undefined; editingTitle = false; editingInk = false; } });
 
   function editTitle() {
     if (!editable || drawing.kind !== 'chart' || (!oncharttitlechange && !oncharttitletextchange)) return;
@@ -129,7 +132,7 @@
     if (drawing.kind === 'chart') {
       const bounds = event.currentTarget instanceof HTMLElement ? event.currentTarget.getBoundingClientRect() : undefined;
       if (bounds && (event.clientY - bounds.top) / scale < 44) { event.preventDefault(); editTitle(); }
-    } else if (textEditable && drawing.kind === 'shape') { event.preventDefault(); editText(shapePlainText(drawing.shape)); }
+    } else if (drawing.kind === 'image' && drawing.inkProjection && oninkchange) { event.preventDefault(); editingInk = true; } else if (textEditable && drawing.kind === 'shape') { event.preventDefault(); editText(shapePlainText(drawing.shape)); }
   }
   function keydown(event: KeyboardEvent, handle?: Handle) {
     if (event.key === 'F2' && drawing.kind === 'chart') { event.preventDefault(); event.stopPropagation(); editTitle(); return; }
@@ -160,7 +163,8 @@
   {#if drawing.kind === 'shape'}
     <WordShapeView shape={drawing.shape} {selected} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} editing={editingText !== undefined} initialText={editingText} oncommit={finishText} />
   {:else if drawing.kind === 'image'}
-    <img src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading={imageLoading} decoding="async" />
+    {@const painted = wordImagePaintBounds(drawing)}
+    <img data-word-ink-rendering={drawing.inkRendering} src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading={imageLoading} decoding="async" style={`position:absolute;left:${painted.x / drawing.widthPoints * 100}%;top:${painted.y / drawing.heightPoints * 100}%;width:${painted.width / drawing.widthPoints * 100}%;height:${painted.height / drawing.heightPoints * 100}%`} />
   {:else if drawing.kind === 'chart'}
     <OoxmlChart model={drawing.model} width={displayWidth} height={displayHeight} clipId={`word-drawing-${drawing.elementId}`} />
   {:else}
@@ -179,6 +183,10 @@
     <button class="content" class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)} ondblclick={doubleClick}>{@render content()}</button>
     {/if}
     {#if selected}
+      {#if drawing.kind === 'image' && drawing.inkProjection && oninkchange}
+        <div class="ink-controls"><button onclick={() => editingInk = !editingInk}>{editingInk ? 'Done' : 'Edit points'}</button></div>
+        {#if editingInk}<WordInkPointEditor {drawing} {scale} onchange={oninkchange} onfinish={() => editingInk = false} />{/if}
+      {/if}
       {#if onchange !== undefined}
         <div class="controls" role="toolbar" aria-label="Drawing controls">
           <button aria-label="Move drawing" title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)}>✥</button>
@@ -215,6 +223,8 @@
   .resize { position: absolute; z-index: 4; translate: -50% -50%; width: var(--handle-size); height: var(--handle-size); min-width: 0; min-height: 0; box-sizing: border-box; line-height: 0; padding: 0; border: var(--outline-size) solid var(--tumbler-document-accent, #25a735); border-radius: 50%; background: white; touch-action: none; }
   .controls { position: absolute; z-index: 4; right: 0; bottom: calc(100% + 10px * var(--inverse-scale)); display: flex; gap: 4px; padding: 4px; border: 1px solid #3b483e; border-radius: 6px; background: #181b18; color: #e2fee7; font: 13px/1.4 system-ui, sans-serif; transform: scale(var(--inverse-scale)); transform-origin: bottom right; }
   .controls button, select { position: static; padding: 5px 8px; border: 1px solid #3b483e; border-radius: 4px; background: #202521; color: inherit; font: inherit; }
+  .ink-controls { position:absolute; z-index:6; left:0; top:calc(100% + 8px); transform:scale(var(--inverse-scale)); transform-origin:top left; }
+  .ink-controls button { padding:4px 8px; border:1px solid #3b483e; border-radius:4px; background:#202521; color:#e2fee7; font:13px/1.4 system-ui; }
   .controls button { cursor: move; touch-action: none; }
   .fallback { width: 100%; height: 100%; background: #eee; }
 </style>

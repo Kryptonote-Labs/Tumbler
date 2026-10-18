@@ -1,3 +1,4 @@
+import { resizeWordInkProjection } from './ink-overrides.ts';
 import { isWordDrawingPosition, type WordDrawingPosition } from './drawing-placement.ts';
 import type { WordDrawing } from './drawings.ts';
 
@@ -40,7 +41,7 @@ export function withWordDrawingGeometry(
 ): WordDrawing {
   if (!geometry) return drawing;
   if (!isWordDrawingGeometry(geometry)) throw new TypeError('Invalid drawing geometry.');
-  if (drawing.kind === 'image' && drawing.fallback === 'ink') throw new TypeError('Editing ink fallback geometry is not supported.');
+  drawing = resizeWordInkProjection(drawing, geometry.width, geometry.height);
   const layout =
     geometry.layout ??
     (drawing.placement === 'inline'

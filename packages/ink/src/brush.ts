@@ -4,6 +4,8 @@ import { attribute, children } from './xml.ts';
 export const INK_RASTER_OPERATIONS = ['black', 'copyPen', 'maskNotPen', 'maskPenNot', 'maskPen', 'mergeNotPen', 'mergePen', 'mergePenNot', 'noOperation', 'not', 'notCopyPen', 'notMaskPen', 'notMergePen', 'notXOrPen', 'white', 'xOrPen'] as const;
 export type InkRasterOperation = typeof INK_RASTER_OPERATIONS[number];
 export interface InkBrush {
+  readonly relativeWidth?: { readonly value: number; readonly unit: 'em' | 'ex' };
+  readonly relativeHeight?: { readonly value: number; readonly unit: 'em' | 'ex' };
   readonly widthPoints: number;
   readonly heightPoints: number;
   readonly color: string;
@@ -16,7 +18,7 @@ export interface InkBrush {
 }
 
 export function lengthInPoints(value: number, units: string): number | undefined {
-  const scale = { cm: 72 / 2.54, mm: 72 / 25.4, in: 72, pt: 1 }[units];
+  const scale = { m: 72 / .0254, pc: 1 / 22, cm: 72 / 2.54, mm: 72 / 25.4, in: 72, pt: 1 }[units];
   return scale === undefined ? undefined : value * scale;
 }
 
@@ -33,6 +35,12 @@ export function readOfficeBrush(element: LosslessXmlElement): InkBrush {
     const value = raw && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw) ? lengthInPoints(Number(raw), attribute(prop!, 'units') ?? '') : undefined;
     return value !== undefined && Number.isFinite(value) && value > 0 ? value : fallback * 72 / 2.54;
   };
+  const relative = (name: string) => {
+    const prop = props.get(name), raw = prop && attribute(prop, 'value'), unit = prop && attribute(prop, 'units');
+    if (raw && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw) && Number.isFinite(Number(raw)) && Number(raw) > 0 && (unit === 'em' || unit === 'ex')) return { value: Number(raw), unit } as const;
+    return undefined;
+  };
+  const relativeWidth = relative('width'), relativeHeight = relative('height');
   const boolean = (name: string, fallback: boolean) => {
     const value = plain(name);
     return value === 'true' || value === '1' ? true : value === 'false' || value === '0' ? false : fallback;
@@ -41,6 +49,7 @@ export function readOfficeBrush(element: LosslessXmlElement): InkBrush {
   const color = plain('color');
   const rasterOp = INK_RASTER_OPERATIONS.find(value => value === plain('rasterOp')) ?? 'copyPen';
   return {
+    ...(relativeWidth ? { relativeWidth } : {}), ...(relativeHeight ? { relativeHeight } : {}),
     widthPoints: dimension('width', .053), heightPoints: dimension('height', .001),
     color: color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#000000',
     transparency: transparency && /^[+-]?\d+$/.test(transparency) && Number(transparency) >= 0 && Number(transparency) <= 255 ? Number(transparency) : 0,

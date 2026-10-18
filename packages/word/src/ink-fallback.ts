@@ -59,18 +59,19 @@ export function readWordInkFallback(element: LosslessXmlElement, original: WordD
   };
   const width = points('width'), height = points('height');
   if (width === undefined || height === undefined || width <= 0 || height <= 0) return unsupported;
-  if (style.get('position') !== 'absolute' || !original.anchor) return unsupported;
+  const inline = original.placement === 'inline';
+  if (!inline && (style.get('position') !== 'absolute' || !original.anchor)) return unsupported;
   const horizontal = style.get('mso-position-horizontal-relative');
   const vertical = style.get('mso-position-vertical-relative');
-  if (horizontal !== 'text' && horizontal !== 'page' && horizontal !== 'margin') return unsupported;
-  if (vertical !== 'text' && vertical !== 'page' && vertical !== 'margin') return unsupported;
+  if (!inline && horizontal !== 'text' && horizontal !== 'page' && horizontal !== 'margin') return unsupported;
+  if (!inline && vertical !== 'text' && vertical !== 'line' && vertical !== 'page' && vertical !== 'margin') return unsupported;
   const x = points('margin-left'), y = points('margin-top');
-  if (x === undefined || y === undefined) return unsupported;
+  if (!inline && (x === undefined || y === undefined)) return unsupported;
   return {
     ...original, kind: 'image', elementId: element.id, fallback: 'ink', relationshipId: id!,
     partName: part.name, contentType: part.contentType, bytes: pkg.readPart(part),
     widthPoints: width, heightPoints: height,
-    anchor: { ...original.anchor, horizontalRelativeTo: horizontal === 'text' ? 'column' : horizontal,
+    anchor: inline ? undefined : { ...original.anchor!, horizontalRelativeTo: horizontal === 'text' ? 'column' : horizontal,
       verticalRelativeTo: vertical === 'text' ? 'paragraph' : vertical, horizontalOffsetPoints: x, verticalOffsetPoints: y },
   } satisfies WordImageDrawing;
 }

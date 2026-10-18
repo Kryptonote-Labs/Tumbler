@@ -1,3 +1,4 @@
+export { default as WordInkPageLayer } from "./WordInkPageLayer.svelte";
 /** Replaceable Svelte heads for Tumbler's format packages. */
 /** Owned Svelte heads for Tumbler's format-neutral document models. */
 export { default as SpreadsheetGrid } from "./SpreadsheetGrid.svelte";

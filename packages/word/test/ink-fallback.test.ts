@@ -1,34 +1,10 @@
 import { expect, test } from 'bun:test';
 import { importWordContent, layoutWordDocument, NativeWordDocument, openWordArtifact, wordPageImages } from '../src/index.ts';
-import { buildWordDocumentFixture } from './document-fixture.ts';
 import { officeInk } from '../../ink/test/fixture.ts';
 import { beginPackageTransaction } from '@tumblerjs/opc';
 import { readWordInkDrawing } from '../src/ink.ts';
 
-const w = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const r = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const inkXml = '<ink xmlns="http://www.w3.org/2003/InkML"><trace>0 0, 10 10</trace></ink>';
-// Synthetic Word-shaped markup, not a user document. The bitmap bytes need only survive package transport here.
-function fixture(external = false, fallback = true, payload = inkXml, conformance: 'strict' | 'transitional' = 'transitional') {
-  const alternate = `<mc:AlternateContent><mc:Choice Requires="wpi"><w:drawing><wp:anchor behindDoc="0"><wp:positionH relativeFrom="column"><wp:posOffset>729615</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>-277495</wp:posOffset></wp:positionV><wp:extent cx="1408680" cy="1384990"/><wp:wrapNone/><wp:docPr id="1" name="Ink"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingInk"><w14:contentPart r:id="ink"/></a:graphicData></a:graphic></wp:anchor></w:drawing></mc:Choice>${fallback ? `<mc:Fallback><w:pict><v:shape style="position:absolute;margin-left:56.75pt;margin-top:-22.55pt;width:112.3pt;height:110.45pt;mso-position-horizontal-relative:text;mso-position-vertical-relative:text"><v:imagedata r:id="bitmap"/></v:shape></w:pict></mc:Fallback>` : ''}</mc:AlternateContent>`;
-  const namespace = (value: string) => conformance === 'strict' ? value
-    .replaceAll('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'http://purl.oclc.org/ooxml/wordprocessingml/main')
-    .replaceAll('http://schemas.openxmlformats.org/drawingml/2006/', 'http://purl.oclc.org/ooxml/drawingml/')
-    .replaceAll(r, 'http://purl.oclc.org/ooxml/officeDocument/relationships') : value;
-  const source = openWordArtifact(buildWordDocumentFixture({
-    conformance,
-    documentXml: namespace(`<w:document xmlns:w="${w}" xmlns:r="${r}" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"><w:body><w:p><w:r>${alternate}</w:r><w:r><w:t>Caption</w:t></w:r></w:p></w:body></w:document>`),
-    relationships: [
-      { id: 'ink', type: namespace(`${r}/customXml`), target: 'ink/ink1.xml' },
-      { id: 'bitmap', type: namespace(`${r}/image`), target: external ? 'https://example.invalid/ink.png' : 'media/ink.png', ...(external ? { targetMode: 'External' as const } : {}) },
-    ],
-    parts: [
-      { itemName: 'word/ink/ink1.xml', contentType: 'application/inkml+xml', xml: payload },
-      { itemName: 'word/media/ink.png', contentType: 'image/png', xml: 'synthetic bitmap' },
-    ],
-  }));
-  return { source, alternate };
-}
+import { inkFixture as fixture, inkXml } from './ink-fixture.ts';
 const measure = { measure: (text: string) => ({ width: text.length * 6, ascent: 9, descent: 3 }) };
 
 test('projects exactly one ink fallback image using the bitmap pen bounds', () => {
@@ -69,18 +45,12 @@ test('does not fetch external fallbacks or discard ink without a usable fallback
   }
 });
 
-test('refuses geometry edits that would change only one ink representation', () => {
-  const { source } = fixture();
-  const image = [...source.document.drawings.values()][0]!;
-  expect(() => source.resizeDrawing({ elementId: image.elementId, widthPoints: 200, heightPoints: 100 })).toThrow('ink fallback');
-});
-
-test('uses the shared engine while retaining a supplied Word preview', () => {
+test('renders native ink even when a cached Word preview is supplied', () => {
   const { source } = fixture(false, true, officeInk());
   const drawing = [...source.document.drawings.values()][0]!;
   expect(drawing.ink?.diagnostics).toEqual([]);
   expect(drawing.ink?.traces[0]?.points).toEqual([[0, 0], [1000, 1000]]);
-  expect(drawing).toMatchObject({ inkRendering: 'bitmap', contentType: 'image/png' });
+  expect(drawing).toMatchObject({ inkRendering: 'vector', contentType: 'image/svg+xml' });
 });
 
 test('renders native strokes without a bitmap and preserves ink through text edits', () => {
@@ -88,8 +58,9 @@ test('renders native strokes without a bitmap and preserves ink through text edi
   const { source, alternate } = fixture(false, false, payload);
   const drawing = [...source.document.drawings.values()][0]!;
   expect(drawing).toMatchObject({ kind: 'image', inkRendering: 'vector', contentType: 'image/svg+xml' });
-  expect(drawing.widthPoints).toBeCloseTo(1408680 / 12700 * 1.05);
-  expect(drawing.anchor?.horizontalOffsetPoints).toBeCloseTo(729615 / 12700 - 1408680 / 12700 * .025);
+  expect(drawing.widthPoints).toBeCloseTo(1408680 / 12700);
+  expect(drawing.anchor?.horizontalOffsetPoints).toBeCloseTo(729615 / 12700);
+  expect(drawing.inkProjection?.bounds.width).toBeCloseTo(1408680 / 12700 + .05 * 72 / 2.54);
   const model = new NativeWordDocument({ source });
   const block = importWordContent(source)[0]!;
   if (block.kind !== 'paragraph') throw Error('Expected paragraph');
@@ -102,7 +73,7 @@ test('renders native strokes without a bitmap and preserves ink through text edi
 });
 
 test('malformed and unsupported native ink retain the preview without aborting document import', () => {
-  for (const payload of ['<broken>', officeInk({ brush: '<brushProperty name="fitToCurve" value="true"/>' }), officeInk({ trace: '0 bad' })]) {
+  for (const payload of ['<broken>', officeInk({ properties: '' }), officeInk({ trace: '0 bad' })]) {
     expect([...fixture(false, true, payload).source.document.drawings.values()][0]?.kind).toBe('image');
     expect([...fixture(false, false, payload).source.document.drawings.values()][0]?.kind).toBe('unsupported');
   }
@@ -118,14 +89,14 @@ test('native ink outside alternate content uses the same shared decoder', () => 
   expect([...artifact.document.drawings.values()][0]).toMatchObject({ inkRendering: 'vector' });
 });
 
-test('native ink refuses unsupported drawing transforms and keeps source bytes', () => {
+test('native ink applies drawing transforms and keeps source bytes', () => {
   const { source } = fixture(false, false, officeInk());
   for (const transform of ['<w14:xfrm rot="90000"/>', '<w14:xfrm flipH="1"/>', '<w14:xfrm><a:off x="100" y="0"/></w14:xfrm>']) {
     const xml = source.document.source.source.replace('<w14:contentPart r:id="ink"/>', `<w14:contentPart r:id="ink">${transform}</w14:contentPart>`);
     const edit = beginPackageTransaction(source.document.package);
     edit.replacePart(source.document.part.name, new TextEncoder().encode(xml));
     const artifact = openWordArtifact(edit.commit());
-    expect([...artifact.document.drawings.values()][0]?.kind).toBe('unsupported');
+    expect([...artifact.document.drawings.values()][0]?.kind).toBe('image');
     expect(artifact.document.source.source).toContain(transform);
   }
 });
@@ -134,7 +105,7 @@ test.each([true, false])('Strict drawings decode ink with bitmap=%s', fallback =
   const { source } = fixture(false, fallback, officeInk(), 'strict');
   const drawing = [...source.document.drawings.values()][0]!;
   expect(source.document.conformance).toBe('strict');
-  expect(drawing).toMatchObject({ kind: 'image', inkRendering: fallback ? 'bitmap' : 'vector' });
+  expect(drawing).toMatchObject({ kind: 'image', inkRendering: 'vector' });
   expect(drawing.ink?.traces).toHaveLength(1);
   expect(Object.isFrozen(drawing)).toBe(true);
   const model = new NativeWordDocument({ source });
@@ -142,7 +113,7 @@ test.each([true, false])('Strict drawings decode ink with bitmap=%s', fallback =
   if (block.kind !== 'paragraph') throw Error('Expected paragraph');
   model.update([{ ...block, runs: block.runs.map(run => run.text === 'Caption' ? { ...run, text: 'Edited' } : run) }]);
   expect(model.artifact().document.conformance).toBe('strict');
-  expect([...model.artifact().document.drawings.values()][0]).toMatchObject({ inkRendering: fallback ? 'bitmap' : 'vector' });
+  expect([...model.artifact().document.drawings.values()][0]).toMatchObject({ inkRendering: 'vector' });
 });
 
 test('generated preview bytes cannot alias the original ink part', () => {
@@ -185,4 +156,32 @@ test('non-ink markup leaves the existing drawing object unchanged', () => {
   const original = [...source.document.drawings.values()][0]!;
   expect(Object.isFrozen(original)).toBe(true);
   expect(readWordInkDrawing(source.document.source.root, original, source.document.package, undefined)).toBe(original);
+});
+
+test('DrawingML rotation is clockwise about the frame centre and flips precede rotation', () => {
+  const { source } = fixture(false, false, officeInk());
+  const xml = source.document.source.source.replace('<w14:contentPart r:id="ink"/>', '<w14:contentPart r:id="ink"><w14:xfrm rot="5400000" flipH="1"><a:off x="127000" y="254000"/><a:ext cx="914400" cy="457200"/></w14:xfrm></w14:contentPart>');
+  const edit = beginPackageTransaction(source.document.package);
+  edit.replacePart(source.document.part.name, new TextEncoder().encode(xml));
+  const drawing = [...openWordArtifact(edit.commit()).document.drawings.values()][0]!;
+  const [a, b, c, d, e, f] = drawing.inkProjection!.matrix;
+  const transform = (x: number, y: number) => [a * x + c * y + e, b * x + d * y + f];
+  // Source top-left flips to frame top-right (82,20), then rotates around (46,38) to (64,74).
+  const start = transform(0, 0), end = transform(72 / 2.54, 72 / 2.54);
+  expect(start[0]).toBeCloseTo(64); expect(start[1]).toBeCloseTo(74);
+  expect(end[0]).toBeCloseTo(28); expect(end[1]).toBeCloseTo(2);
+  expect(drawing.inkProjection!.bounds.width).toBeCloseTo(36 + .05 * 72 / 2.54);
+  expect(drawing.inkProjection!.bounds.height).toBeCloseTo(72 + .05 * 72 / 2.54);
+});
+
+test('resizing the native Word frame retains the physical pen width', () => {
+  const { source } = fixture(false, false, officeInk());
+  const before = [...source.document.drawings.values()][0]!;
+  const after = [...source.resizeDrawing({ elementId: before.elementId, widthPoints: 200, heightPoints: 50 }).document.drawings.values()][0]!;
+  const pen = .05 * 72 / 2.54;
+  expect(before.inkProjection!.bounds.width - before.widthPoints).toBeCloseTo(pen);
+  expect(after.widthPoints).toBeCloseTo(200);
+  expect(after.heightPoints).toBeCloseTo(50);
+  expect(after.inkProjection!.bounds.width - after.widthPoints).toBeCloseTo(pen);
+  expect(after.inkProjection!.bounds.height - after.heightPoints).toBeCloseTo(pen);
 });

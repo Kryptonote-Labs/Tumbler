@@ -1,0 +1,144 @@
+import { createOfficeInkScene, encodeInkPng, renderOfficeInkRaster, replaceOfficeInkTrace, type InkPoint, type InkRasterOptions } from '@tumblerjs/ink';
+import { beginLosslessXmlEdit, type LosslessXmlElement } from '@tumblerjs/ooxml';
+import { beginPackageTransaction, relationshipItemName, isRelationshipPartName, relationshipSource } from '@tumblerjs/opc';
+import { WordError, type WordDocument } from './document.ts';
+import { inkFrame } from './ink-geometry.ts';
+import { wordInkNamespaces } from './ink-fallback.ts';
+import { preserveInkTransform } from './ink-edit-transform.ts';
+import { wordInkTransform, wordInkSceneOptions } from './ink-transform.ts';
+
+export interface WordInkTraceChange {
+  readonly elementId: number;
+  readonly traceElementId: number;
+  /** Samples in the trace's declared channel order and device coordinate system.
+   * The edited ink occupies the existing DrawingML frame, as when Word reloads the part.
+   */
+  readonly points: readonly InkPoint[];
+  /** Keep sample positions in drawing coordinates when the edited trace changes its bounds. */
+  readonly preserveSampleTransform?: boolean;
+  /** Cached fallback composition. Without a backdrop, destination-dependent ink
+   * keeps its native representation and omits the unrepresentable bitmap cache. */
+  readonly preview?: Pick<InkRasterOptions, 'scale' | 'background' | 'destination' | 'maxPixels' | 'maxPoints' | 'curveTolerance'>;
+}
+const children = (node: LosslessXmlElement) => node.children.filter((child): child is LosslessXmlElement => child.kind === 'element');
+const descendants = (node: LosslessXmlElement): LosslessXmlElement[] => children(node).flatMap(child => [child, ...descendants(child)]);
+const vml = 'urn:schemas-microsoft-com:vml';
+const office = 'urn:schemas-microsoft-com:office:office';
+const mc = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+const value = (node: LosslessXmlElement | undefined, name: string) => node?.attributes.find(a => a.localName === name && !a.namespaceUri)?.value;
+
+/** Copy-on-write ink and bitmap parts are committed with their drawing references in one revision. */
+export function replaceWordInkTrace(document: WordDocument, change: WordInkTraceChange): Uint8Array {
+  return editWordInk(document, change.elementId, change);
+}
+
+/** Refresh a resized drawing's bitmap without changing its native InkML samples. */
+export function refreshWordInkFallback(document: WordDocument, elementId: number): Uint8Array {
+  return editWordInk(document, elementId);
+}
+
+function editWordInk(document: WordDocument, elementId: number, change?: WordInkTraceChange): Uint8Array {
+  const drawing = document.drawings.get(elementId);
+  const element = document.source.element(elementId);
+  if (!drawing?.ink || !drawing.inkSource || !element) throw new WordError('invalid_document', 'The drawing has no editable InkML source.');
+  if (change) {
+    const trace = drawing.ink.traces.find(trace => trace.elementId === change.traceElementId);
+    if (!trace) throw new WordError('invalid_document', 'The trace does not belong to this drawing.');
+    if (trace.points.length === change.points.length && trace.points.every((point, index) => point.length === change.points[index]!.length && point.every((sample, channel) => sample === change.points[index]![channel]))) return document.bytes();
+  }
+  const ink = change ? replaceOfficeInkTrace(drawing.ink, change.traceElementId, change.points) : drawing.ink;
+  const scene = createOfficeInkScene(ink, { ...document.inkRendering, ...change?.preview, renderingProfile: 'word' });
+  if (!scene.supported) throw new WordError('invalid_document', scene.diagnostics.map(d => d.message).join(' '));
+  const frame = inkFrame(element), namespaces = wordInkNamespaces(frame);
+  const content = descendants(frame).find(node => node.namespaceUri === 'http://schemas.microsoft.com/office/word/2010/wordml' && node.localName === 'contentPart');
+  const reference = content?.attributes.find(a => a.namespaceUri === namespaces.relationships && a.localName === 'id');
+  const extent = descendants(frame).find(node => node.localName === 'extent' && node.namespaceUri?.endsWith('/wordprocessingDrawing'));
+  if (!content || !reference || !extent) throw new WordError('invalid_document', 'Ink drawing placement is incomplete.');
+  const previousScene = change?.preserveSampleTransform ? createOfficeInkScene(drawing.ink, { ...document.inkRendering, renderingProfile: 'word' }) : undefined;
+  if (previousScene && !previousScene.supported) throw new WordError('invalid_document', 'Cannot preserve an unsupported ink transform.');
+  const matrix = wordInkTransform(content, { ...drawing, widthPoints: Number(value(extent, 'cx')) / 12700, heightPoints: Number(value(extent, 'cy')) / 12700 }, previousScene?.supported ? previousScene.traceBounds : scene.traceBounds);
+  const transaction = beginPackageTransaction(document.package), editor = beginLosslessXmlEdit(document.source);
+  const relationships = document.package.relationships(document.part.name);
+  const freshPart = (directory: string, extension: string) => {
+    let index = 1;
+    while (document.package.getPart(`${directory}${index}.${extension}`)) index++;
+    return `${directory}${index}.${extension}`;
+  };
+  const freshId = (prefix: string) => { let index = 1; while (relationships.get(`${prefix}${index}`)) index++; return `${prefix}${index}`; };
+  const exclusive = (partName: string, id: string) => {
+    let incoming = 0;
+    for (const part of document.package.parts) {
+      if (!isRelationshipPartName(part.name)) continue;
+      const source = relationshipSource(part.name);
+      if (source === undefined) continue;
+      for (const relation of document.package.relationships(source).items) {
+        if (relation.targetMode === 'Internal' && relation.targetPartName.value === partName) incoming++;
+      }
+    }
+    const uses = [...document.source.elements()].flatMap(node => node.attributes).filter(attribute => attribute.namespaceUri === namespaces.relationships && attribute.value === id).length;
+    return incoming === 1 && uses === 1;
+  };
+  if (change) {
+    const originalInk = drawing.inkSource.partName;
+    if (exclusive(originalInk.value, reference.value)) transaction.replacePart(originalInk, ink.source.originalBytes());
+    else {
+      const inkPart = freshPart('/word/ink/edited', 'xml'), inkId = freshId('inkEdit');
+      transaction.addPart(inkPart, 'application/inkml+xml', ink.source.originalBytes());
+      transaction.addRelationship(document.part.name, { id: inkId, type: `${namespaces.relationships}/customXml`, target: inkPart });
+      // Preserve outgoing relationships of a copied ink part, including extension metadata.
+      for (const relationship of (document.package.archive.get(relationshipItemName(originalInk)) ? document.package.relationships(originalInk).items : [])) transaction.addRelationship(inkPart, relationship.targetMode === 'External'
+        ? { id: relationship.id, type: relationship.type, targetMode: 'External', target: relationship.target }
+        : { id: relationship.id, type: relationship.type, target: relationship.targetPartName });
+      editor.setAttribute(reference, inkId);
+    }
+  }
+  const fallback = children(element).find(node => node.namespaceUri === mc && node.localName === 'Fallback');
+  if (fallback) {
+    const shapes = descendants(fallback).filter(node => node.namespaceUri === vml && node.localName === 'shape');
+    const shape = shapes.length === 1 ? shapes[0] : undefined;
+    const image = shape && children(shape).find(node => node.namespaceUri === vml && node.localName === 'imagedata');
+    const imageReference = image?.attributes.find(a => a.namespaceUri === namespaces.relationships && a.localName === 'id');
+    const style = shape?.attributes.find(a => !a.namespaceUri && a.localName === 'style');
+    if (!shape || !imageReference || !style) throw new WordError('invalid_document', 'Cannot regenerate an unrecognized ink fallback.');
+    const raster = renderOfficeInkRaster(ink, { ...change?.preview, ...wordInkSceneOptions(matrix, { ...document.inkRendering, ...change?.preview }) });
+    if (!raster.supported) {
+      if (!raster.diagnostics.length || raster.diagnostics.some(d => d.code !== 'destination')) throw new WordError('invalid_document', raster.diagnostics.map(d => d.message).join(' '));
+      // An isolated PNG cannot encode a function of pixels behind it. Keep the
+      // complete native ink and omit the stale cache rather than invent a backdrop.
+      editor.removeElement(fallback);
+    } else {
+      const bitmapRelation = relationships.get(imageReference.value);
+      const oldBitmap = bitmapRelation?.targetMode === 'Internal' ? document.package.getPart(bitmapRelation.targetPartName) : undefined;
+      const png = encodeInkPng(raster.width, raster.height, raster.data);
+      if (oldBitmap?.contentType === 'image/png' && exclusive(oldBitmap.name.value, imageReference.value)) transaction.replacePart(oldBitmap.name, png);
+      else {
+        const bitmapPart = freshPart('/word/media/inkEdit', 'png'), bitmapId = freshId('inkBitmap');
+        transaction.addPart(bitmapPart, 'image/png', png);
+        transaction.addRelationship(document.part.name, { id: bitmapId, type: `${namespaces.relationships}/image`, target: bitmapPart });
+        editor.setAttribute(imageReference, bitmapId);
+      }
+      const position = (axis: string) => {
+        const node = descendants(frame).find(node => node.localName === `position${axis}`);
+        const offset = node && children(node).find(node => node.localName === 'posOffset');
+        return offset ? Number(document.source.textContent(offset)) / 12700 : 0;
+      };
+      const properties = new Map(style.value.split(';').filter(Boolean).map(entry => { const colon = entry.indexOf(':'); return [entry.slice(0, colon).trim().toLowerCase(), entry.slice(colon + 1).trim()]; }));
+      properties.set('width', `${raster.bounds.width}pt`); properties.set('height', `${raster.bounds.height}pt`);
+      // Rotation/flips are baked into the generated pixels, not applied a second time by VML.
+      properties.delete('rotation'); properties.delete('flip');
+      if (drawing.placement === 'anchor') {
+        properties.set('margin-left', `${position('H') + raster.bounds.x}pt`);
+        properties.set('margin-top', `${position('V') + raster.bounds.y}pt`);
+      }
+      editor.setAttribute(style, [...properties].map(([name, value]) => `${name}:${value}`).join(';'));
+      for (const node of [shape, ...descendants(shape)]) for (const attribute of node.attributes) {
+        if (attribute.namespaceUri === office && attribute.localName === 'gfxdata') editor.removeAttribute(attribute);
+      }
+    }
+  }
+  const edited = editor.commit();
+  transaction.replacePart(document.part.name, change?.preserveSampleTransform
+    ? preserveInkTransform(edited.document, content.id, matrix, scene.traceBounds, namespaces.drawing)
+    : edited.bytes);
+  return transaction.commit();
+}

@@ -1,7 +1,7 @@
 <script lang="ts">
   import WordShapeView from "./WordShapeView.svelte";
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
-  import { wordPointsToCssPixels, type WordImageDrawing, type WordLayoutFragment, type WordLayoutTable } from "@tumblerjs/word";
+  import { wordImagePaintBounds, wordPointsToCssPixels, type WordImageDrawing, type WordLayoutFragment, type WordLayoutTable } from "@tumblerjs/word";
   import { wordTableBorderCss } from './word-table-style.ts';
   import OoxmlChart from "./OoxmlChart.svelte";
   import { wordTextCss, wordTextTop } from "./word-font-metrics.ts";
@@ -22,7 +22,8 @@
   }
 
   function drawingStyle(fragment: WordLayoutFragment) {
-    return `left:${wordPointsToCssPixels(fragment.x)}px;top:${wordPointsToCssPixels(fragment.y)}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px`;
+    const box = fragment.drawing?.kind === 'image' ? wordImagePaintBounds(fragment.drawing, fragment.width, fragment.height) : { x: 0, y: 0, width: fragment.width, height: fragment.height };
+    return `left:${wordPointsToCssPixels(fragment.x + box.x)}px;top:${wordPointsToCssPixels(fragment.y + box.y)}px;width:${wordPointsToCssPixels(box.width)}px;height:${wordPointsToCssPixels(box.height)}px`;
   }
 </script>
 
@@ -66,7 +67,7 @@
         {/if}
         {#each line.fragments as fragment}
           {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
-            <img class="document-drawing" src={imageurl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
+            <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageurl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
           {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "shape"}
                   <div class="document-drawing" style={drawingStyle(fragment)}><WordShapeView shape={fragment.drawing.shape} /></div>
                 {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}

@@ -50,6 +50,10 @@
     try { session.updateDrawing(size); selection = undefined; onerror(''); }
     catch { onerror('Could not update this drawing.'); }
   }
+  function updateInk(change: import('@tumblerjs/word').WordInkTraceChange) {
+    try { session.replaceInkTrace(change); selection = undefined; onerror(''); }
+    catch (error) { onerror(error instanceof Error ? error.message : 'Could not edit this ink.'); }
+  }
   function command(value: 'undo' | 'redo' | 'save') {
     if (value === 'save') { ondownload(); return; }
     if (selection) selections.set(artifact, selection);
@@ -65,5 +69,5 @@
       {#if formatting}<FormattingToolbar state={formatting} capabilities={WORD_FORMATTING_CAPABILITIES} onformat={format} />{:else}<span class="selection-hint">Select text to format</span>{/if}
     </div>
   {/if}
-  <div class="viewer-body"><WordDocumentView bind:this={view} wordDocument={artifact.document} {editable} bind:scale {selection} onselectionchange={next => selection = next} onedit={edit} ondrawingchange={updateDrawing} oncommand={command} /></div>
+  <div class="viewer-body"><WordDocumentView bind:this={view} wordDocument={artifact.document} {editable} bind:scale {selection} onselectionchange={next => selection = next} onedit={edit} ondrawingchange={updateDrawing} oninkchange={updateInk} oncommand={command} /></div>
 </div>

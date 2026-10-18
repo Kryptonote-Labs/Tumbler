@@ -1,3 +1,5 @@
+import { paintWordInk, type WordInkPixelContext } from './ink-canvas.ts';
+import { wordImagePaintBounds } from './image-paint.ts';
 import { layoutChartScene, paintChartScene, type ChartCanvasContext } from "@tumblerjs/charts";
 import { canvasWordTextMeasurer, wordCanvasFont, type WordCanvasTextContext } from "./canvas-text.ts";
 import type { WordImageDrawing } from "./drawings.ts";
@@ -12,7 +14,7 @@ import { resolveWordColour } from "./theme-colours.ts";
  * The drawing subset of a Canvas 2D context. Browser, OffscreenCanvas and server canvases satisfy
  * it; `Path` is the host's Path2D.
  */
-export interface WordCanvasContext<Image, Path = unknown> extends ChartCanvasContext<Path>, WordCanvasTextContext {
+export interface WordCanvasContext<Image, Path = unknown> extends ChartCanvasContext<Path>, WordCanvasTextContext, WordInkPixelContext {
   direction: "inherit" | "ltr" | "rtl";
   fontKerning?: "auto" | "none" | "normal";
   letterSpacing?: string;
@@ -25,6 +27,10 @@ export interface WordCanvasContext<Image, Path = unknown> extends ChartCanvasCon
 export interface WordPagePaintOptions<Image, Path = unknown> {
   /** Device pixels per point. Defaults to CSS pixels (4/3). */
   readonly scale?: number;
+  /** Synchronous ink pixel budget. Infinity disables it; stored ink is never reduced. */
+  readonly inkMaxPixels?: number;
+  /** Paint the backdrop used to isolate destination-dependent ink for a DOM overlay. */
+  readonly omitDestinationInk?: boolean;
   /** Paper colour. Defaults to white; `"transparent"` leaves the canvas untouched. */
   readonly background?: string;
   /** Decoded image for a drawing; see wordPageImages. Images without a source paint as placeholders. */
@@ -60,6 +66,9 @@ export function paintWordPage<Image, Path>(context: WordCanvasContext<Image, Pat
   context.fontKerning = "none";
   const tables = [...page.columns.flatMap(column => column.tables), ...page.headerTables, ...page.footerTables, ...page.noteTables];
   const lines = [...page.columns.flatMap(column => column.lines), ...page.headerLines, ...page.footerLines, ...page.noteLines];
+  const floating = pageDrawingFragments(page).filter(fragment => fragment.drawing?.placement === 'anchor')
+    .sort((left, right) => (left.drawing?.anchor?.zOrder ?? 0) - (right.drawing?.anchor?.zOrder ?? 0));
+  for (const fragment of floating.filter(fragment => fragment.drawing?.anchor?.behindDocument)) paintDrawing(context, fragment, options);
   for (const table of tables) paintTable(context, table, options);
   paintDecorations(context, lines);
   if (page.noteSeparatorY !== undefined) {
@@ -67,15 +76,29 @@ export function paintWordPage<Image, Path>(context: WordCanvasContext<Image, Pat
     strokeLine(context, left, page.noteSeparatorY, left + 144, page.noteSeparatorY, { style: "single", widthPoints: 0.5, color: "#000000" });
   }
   for (const line of lines) paintLine(context, line, options);
+  for (const fragment of floating.filter(fragment => !fragment.drawing?.anchor?.behindDocument)) paintDrawing(context, fragment, options);
   context.restore();
 }
 
 /** Every image drawn on a page, in paint order. Decode these before painting when decoding is asynchronous. */
 export function wordPageImages(page: WordLayoutPage): WordImageDrawing[] {
-  const images = new Set<WordImageDrawing>();
+  return [...new Set(pageDrawingFragments(page).flatMap(fragment => fragment.drawing?.kind === "image" ? [fragment.drawing] : []))];
+}
+/** Regions whose ink requires composition with the already-painted page. */
+export function wordPageInkBounds(page: WordLayoutPage) {
+  return pageDrawingFragments(page).flatMap(fragment => {
+    const drawing = fragment.drawing;
+    if (drawing?.kind !== 'image' || drawing.inkRendering !== 'raster' || !drawing.inkProjection) return [];
+    const bounds = wordImagePaintBounds(drawing, fragment.width, fragment.height);
+    return [{ x: fragment.x + bounds.x, y: fragment.y + bounds.y, width: bounds.width, height: bounds.height }];
+  });
+}
+
+function pageDrawingFragments(page: WordLayoutPage): WordLayoutFragment[] {
+  const drawings: WordLayoutFragment[] = [];
   const visitLines = (lines: readonly WordLayoutLine[]) => {
     for (const line of lines)
-      for (const fragment of line.fragments) if (fragment.drawing?.kind === "image") images.add(fragment.drawing);
+      for (const fragment of line.fragments) if (fragment.drawing) drawings.push(fragment);
   };
   const visitTable = (table: WordLayoutTable): void => {
     for (const cell of table.cells) {
@@ -85,7 +108,7 @@ export function wordPageImages(page: WordLayoutPage): WordImageDrawing[] {
   };
   [...page.columns.flatMap(column => column.tables), ...page.headerTables, ...page.footerTables, ...page.noteTables].forEach(visitTable);
   visitLines([...page.columns.flatMap(column => column.lines), ...page.headerLines, ...page.footerLines, ...page.noteLines]);
-  return [...images];
+  return drawings;
 }
 
 function paintTable<Image, Path>(context: WordCanvasContext<Image, Path>, table: WordLayoutTable, options: WordPagePaintOptions<Image, Path>): void {
@@ -136,16 +159,21 @@ function paintBorders<Image, Path>(context: WordCanvasContext<Image, Path>, bord
 function paintLine<Image, Path>(context: WordCanvasContext<Image, Path>, line: WordLayoutLine, options: WordPagePaintOptions<Image, Path>): void {
   if (line.marker !== undefined) paintText(context, line.marker, line.marker.text.trimEnd());
   for (const fragment of line.fragments) {
-    if (fragment.kind === "drawing") paintDrawing(context, fragment, options);
+    if (fragment.kind === "drawing") {
+      if (fragment.drawing?.placement !== "anchor") paintDrawing(context, fragment, options);
+    }
     else if (fragment.kind !== "tab") paintText(context, fragment, fragment.text);
   }
 }
 
 function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, fragment: WordLayoutFragment, options: WordPagePaintOptions<Image, Path>): void {
   const drawing = fragment.drawing;
+  if (options.omitDestinationInk && drawing?.kind === 'image' && drawing.inkRendering === 'raster') return;
+  if (paintWordInk(context, fragment, options.scale ?? 4 / 3, options.inkMaxPixels)) return;
   const image = drawing?.kind === "image" ? options.image?.(drawing) : undefined;
-  if (image !== undefined) {
-    context.drawImage(image, fragment.x, fragment.y, fragment.width, fragment.height);
+  if (image !== undefined && drawing?.kind === 'image') {
+    const box = wordImagePaintBounds(drawing, fragment.width, fragment.height);
+    context.drawImage(image, fragment.x + box.x, fragment.y + box.y, box.width, box.height);
     return;
   }
   if (options.path !== undefined && drawing?.kind === "shape") return paintShape(context, drawing.shape, fragment, { ...options, path: options.path });

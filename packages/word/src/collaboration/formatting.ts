@@ -1,3 +1,4 @@
+import { isWordInkTraceOverrides, type WordInkTraceOverride } from '../ink-overrides.ts';
 import { isShapeTextBody } from '../shape-text.ts';
 import { isWordDrawingGeometry, type WordDrawingGeometry } from '../drawing-geometry.ts';
 import { isWordColour, type WordColour } from '../theme-colours.ts';
@@ -32,6 +33,7 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   breakType?: import('../breaks.ts').WordBreakType;
   shape?: WordAuthoredShape;
   drawing?: WordDrawingGeometry;
+  inkTraces?: readonly WordInkTraceOverride[];
   chartTitle?: string;
   chartTitleText?: readonly import('../create.ts').WordTextParagraph[];
   link?: string;
@@ -88,6 +90,7 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
     if (key === 'breakType' && typeof value === 'string' && ['line', 'page', 'column'].includes(value)) continue;
     if (key === 'chartTitleText' && isShapeTextBody(value)) continue;
     if (key === 'chartTitle' && typeof value === 'string' && value.isWellFormed() && !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(value)) continue;
+    if (key === 'inkTraces' && isWordInkTraceOverrides(value)) continue;
     if (key === 'drawing' && isWordDrawingGeometry(value)) continue;
     if (key === 'shape' && isWordAuthoredShape(value)) continue;
     if (key === 'link' && isWordHyperlink(value)) continue;
