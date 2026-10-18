@@ -30,7 +30,7 @@ test('transparency is applied once to a union of overlapping nibs', () => {
 
 test('destination-dependent ink requires an explicit backdrop', () => {
   const ink = read(pen + property('rasterOp', 'xOrPen'));
-  expect(renderOfficeInkRaster(ink)).toMatchObject({ supported: false, diagnostics: [{ code: 'rendering' }] });
+  expect(renderOfficeInkRaster(ink)).toMatchObject({ supported: false, diagnostics: [{ code: 'destination' }] });
   expect(renderOfficeInkRaster(ink, { background: [255, 255, 255] }).supported).toBe(true);
 });
 
