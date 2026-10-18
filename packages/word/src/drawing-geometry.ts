@@ -40,7 +40,6 @@ export function withWordDrawingGeometry(
 ): WordDrawing {
   if (!geometry) return drawing;
   if (!isWordDrawingGeometry(geometry)) throw new TypeError('Invalid drawing geometry.');
-  if (drawing.kind === 'image' && drawing.fallback === 'ink') throw new TypeError('Editing ink fallback geometry is not supported.');
   const layout =
     geometry.layout ??
     (drawing.placement === 'inline'

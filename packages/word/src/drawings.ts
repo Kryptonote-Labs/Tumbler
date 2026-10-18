@@ -1,3 +1,4 @@
+import { inkFrame, resizeWordInk, positionWordInk } from './ink-geometry.ts';
 import { wordInkChoice } from './ink-fallback.ts';
 import { readWordInkDrawing } from './ink.ts';
 import { isWordDrawingPosition, type WordDrawingPosition } from './drawing-placement.ts';
@@ -22,6 +23,7 @@ export interface WordDrawingAnchor {
   readonly verticalOffsetPoints: number | undefined;
   readonly wrap: "none" | "square" | "tight" | "through" | "top-bottom";
   readonly behindDocument: boolean;
+  readonly zOrder?: number;
   readonly allowOverlap: boolean;
   readonly distanceTopPoints: number;
   readonly distanceEndPoints: number;
@@ -35,6 +37,8 @@ interface WordDrawingBase {
   /** Decoded Office ink, including diagnostics; the original package part remains authoritative. */
   readonly ink?: import('@tumblerjs/ink').OfficeInkDocument;
   readonly inkSource?: { readonly partName: PartName; readonly relationshipId: string };
+  /** Native ink-to-drawing transform and painted bounds, shared by vector and raster hosts. */
+  readonly inkProjection?: { readonly matrix: import('./ink-transform.ts').InkMatrix; readonly bounds: import('@tumblerjs/ink').InkBounds; readonly options?: import('@tumblerjs/ink').InkSvgOptions };
   readonly inkRenderingDiagnostics?: readonly import('@tumblerjs/ink').InkDiagnostic[];
   readonly elementId: number;
   readonly placement: "inline" | "anchor";
@@ -51,7 +55,7 @@ export interface WordImageDrawing extends WordDrawingBase {
   readonly kind: "image";
   /** An ink display projection. Preserve the original part rather than editing only its preview. */
   readonly fallback?: "ink";
-  readonly inkRendering?: 'bitmap' | 'vector';
+  readonly inkRendering?: 'bitmap' | 'vector' | 'raster';
   readonly relationshipId: string | undefined;
   /** Stored image bytes, absent for generated previews. See inkSource for the native ink part. */
   readonly partName: PartName | undefined;
@@ -233,6 +237,7 @@ function parseAnchor(element: LosslessXmlElement, wp: string): WordDrawingAnchor
     verticalOffsetPoints: offsetChild(vertical, wp),
     wrap,
     behindDocument: onOff(attribute(element, "behindDoc"), false),
+    ...(Number(attribute(element, "relativeHeight") ?? 0) ? { zOrder: Number(attribute(element, "relativeHeight")) } : {}),
     allowOverlap: onOff(attribute(element, "allowOverlap"), true),
     distanceTopPoints: emu(attribute(element, "distT") ?? "0", "anchor top distance"),
     distanceEndPoints: emu(attribute(element, "distR") ?? "0", "anchor end distance"),
@@ -283,7 +288,7 @@ export function resizeWordDrawing(document: WordDocument, size: WordDrawingResiz
   const element = document.source.element(size.elementId);
   if (drawing === undefined || element === undefined || drawing.kind === "unsupported") throw new WordError("invalid_document", "Drawing cannot be resized.");
   if (cx === Math.round(drawing.widthPoints * EMUS_PER_POINT) && cy === Math.round(drawing.heightPoints * EMUS_PER_POINT)) return document.bytes();
-  if (drawing.kind === 'image' && drawing.fallback === 'ink') throw new WordError('unsupported_document', 'Editing ink fallback geometry is not supported.');
+  if (drawing.kind === 'image' && drawing.fallback === 'ink') return resizeWordInk(document, element, drawing, size);
   const wp = wordDrawingNamespace(document.conformance);
   const extent = descendants(element).find(item => item.namespaceUri === wp && item.localName === "extent");
   if (extent === undefined) throw new WordError("invalid_document", "Drawing extent is missing.");
@@ -329,9 +334,10 @@ export function positionWordDrawing(document: WordDocument, change: WordDrawingC
   const drawing = document.drawings.get(change.elementId);
   const element = document.source.element(change.elementId);
   if (drawing === undefined || element === undefined || drawing.kind === 'unsupported') throw new WordError('invalid_document', 'Drawing cannot be positioned.');
-  if (drawing.kind === 'image' && drawing.fallback === 'ink') throw new WordError('unsupported_document', 'Editing ink fallback geometry is not supported.');
+  const editor = beginLosslessXmlEdit(document.source);
+  if (drawing.kind === 'image' && drawing.fallback === 'ink') change = positionWordInk(editor, element, drawing, change);
   const wp = wordDrawingNamespace(document.conformance);
-  const placement = element.children.find((item): item is LosslessXmlElement => item.kind === 'element' && item.namespaceUri === wp && (item.localName === 'inline' || item.localName === 'anchor'));
+  const placement = inkFrame(element).children.find((item): item is LosslessXmlElement => item.kind === 'element' && item.namespaceUri === wp && (item.localName === 'inline' || item.localName === 'anchor'));
   if (placement === undefined) throw new WordError('invalid_document', 'Drawing placement is missing.');
   const prefix = placement.qualified.includes(':') ? placement.qualified.slice(0, placement.qualified.indexOf(':') + 1) : '';
   const raw = (item: { span: { start: number; end: number } }) => document.source.source.slice(item.span.start, item.span.end);
@@ -353,7 +359,6 @@ export function positionWordDrawing(document: WordDocument, change: WordDrawingC
     const positionV = `<${prefix}positionV relativeFrom="${change.verticalRelativeTo ?? 'page'}"><${prefix}posOffset>${y}</${prefix}posOffset></${prefix}positionV>`;
     if (drawing.placement === 'anchor' && change.layout === (drawing.anchor?.behindDocument ? 'behind' : 'front')) {
       // Movement preserves authored wrapping, overlap, distances, and stacking order.
-      const editor = beginLosslessXmlEdit(document.source);
       for (const [name, replacement] of [['positionH', positionH], ['positionV', positionV]] as const) {
         const existing = children.find(item => item.namespaceUri === wp && item.localName === name);
         if (existing !== undefined) editor.replaceElementMarkup(existing, replacement);
@@ -371,7 +376,6 @@ export function positionWordDrawing(document: WordDocument, change: WordDrawingC
     }
     markup = `<${prefix}anchor ${namespaces} distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="0" behindDoc="${change.layout === 'behind' ? 1 : 0}" locked="0" layoutInCell="1" allowOverlap="1"><${prefix}simplePos x="0" y="0"/><${prefix}positionH relativeFrom="${change.horizontalRelativeTo ?? 'page'}"><${prefix}posOffset>${x}</${prefix}posOffset></${prefix}positionH><${prefix}positionV relativeFrom="${change.verticalRelativeTo ?? 'page'}"><${prefix}posOffset>${y}</${prefix}posOffset></${prefix}positionV>${raw(extent)}${effect === undefined ? '' : raw(effect)}<${prefix}wrapNone/>${retained}</${prefix}anchor>`;
   }
-  const editor = beginLosslessXmlEdit(document.source);
   editor.replaceElementMarkup(placement, markup);
   const transaction = beginPackageTransaction(document.package);
   transaction.replacePart(document.part.name, editor.commit().bytes);

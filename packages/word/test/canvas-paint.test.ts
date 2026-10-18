@@ -144,3 +144,38 @@ test('paints run shading behind text and gives highlighting precedence', () => {
   expect(calls).toContainEqual(['fillRect', '#4C94D8', shaded!.x, shaded!.y, shaded!.width, shaded!.height]);
   expect(calls).toContainEqual(['fillRect', '#FFFF00', highlighted!.x, highlighted!.y, highlighted!.width, highlighted!.height]);
 });
+
+test.each([1, 4 / 3, 2])('native ink composes with browser and server page pixels at scale %s', async scale => {
+  for (const colorSpace of ['srgb', undefined] as const) {
+  const { inkFixture } = await import('./ink-fixture.ts');
+  const { officeInk } = await import('../../ink/test/fixture.ts');
+  const { source } = inkFixture(false, false, officeInk({ brush: '<brushProperty name="width" value="0.1" units="cm"/><brushProperty name="height" value="0.1" units="cm"/><brushProperty name="rasterOp" value="xOrPen"/><brushProperty name="color" value="#ffffff"/>' }));
+  const page = layoutWordDocument(source.document, measure).pages[0]!;
+  const { context, calls } = recorder();
+  let writes = 0;
+  const pixelContext = {
+    ...context,
+    getImageData: (_x: number, _y: number, width: number, height: number) => ({ width, height, ...(colorSpace === undefined ? {} : { colorSpace }), data: new Uint8ClampedArray(width * height * 4).map((_, index) => index % 4 === 3 ? 255 : 85) }),
+    putImageData: (pixels: { data: Uint8ClampedArray }) => {
+      writes++;
+      expect(pixels.data.some((value, index) => index % 4 !== 3 && value === 170)).toBe(true);
+      expect(pixels.data.some((value, index) => index % 4 !== 3 && value === 85)).toBe(true);
+    },
+  };
+  paintWordPage(pixelContext, page, { scale, image: () => 'cached-bitmap' });
+  expect(writes).toBe(1);
+  expect(calls.some(call => call[0] === 'drawImage')).toBe(false);
+  }
+});
+
+test('floating drawings paint behind or in front of text independently of their run order', () => {
+  for (const placement of ['front', 'behind'] as const) {
+    const page = layout([{ kind: 'paragraph', runs: [{ text: '\ufffc', image: { bytes: png, contentType: 'image/png', width: 20, height: 20, layout: placement, x: 0, y: 0 } }, { text: 'Backdrop' }] }]);
+    const { context, calls } = recorder();
+    paintWordPage(context, page, { image: () => 'image' });
+    const imageIndex = calls.findIndex(call => call[0] === 'drawImage');
+    const textIndex = calls.findIndex(call => call[0] === 'fillText' && call[1] === 'Backdrop');
+    expect(imageIndex).toBeGreaterThan(-1); expect(textIndex).toBeGreaterThan(-1);
+    expect(imageIndex > textIndex).toBe(placement === 'front');
+  }
+});

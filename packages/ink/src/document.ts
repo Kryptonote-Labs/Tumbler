@@ -1,3 +1,4 @@
+import { readOfficeInkRecognition, type OfficeInkRecognition } from './recognition.ts';
 import { parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement, type LosslessXmlLimits } from '@tumblerjs/ooxml';
 import { readOfficeBrush, type InkBrush } from './brush.ts';
 import { decodeInkTrace, InkError, type InkChannel, type InkPoint } from './trace.ts';
@@ -18,6 +19,7 @@ export interface OfficeInkTrace {
 export interface OfficeInkDocument {
   readonly source: LosslessXmlDocument;
   readonly traces: readonly OfficeInkTrace[];
+  readonly recognition: readonly OfficeInkRecognition[];
   readonly diagnostics: readonly InkDiagnostic[];
 }
 
@@ -93,7 +95,6 @@ export function readOfficeInk(bytes: Uint8Array, limits?: Partial<LosslessXmlLim
             ...(units === undefined ? {} : { units }), ...(resolution === undefined ? {} : { resolution }),
             ...(resolutionUnits === undefined ? {} : { resolutionUnits }), ...(defaultValue === undefined ? {} : { defaultValue }) };
         });
-        if (channels.some(c => c.intermittent)) diagnostics.push({ elementId: element.id, code: 'rendering', message: 'Office ignores intermittentChannels; native rendering is disabled for this ambiguous format.' });
         for (const property of properties) {
           if (!channels.some(c => c.name === attribute(property, 'channel'))) throw new InkError('structure', 'channelProperty references an undeclared channel.');
         }
@@ -108,5 +109,5 @@ export function readOfficeInk(bytes: Uint8Array, limits?: Partial<LosslessXmlLim
     }
   };
   visit(source.root);
-  return { source, traces, diagnostics };
+  return { source, traces, diagnostics, recognition: readOfficeInkRecognition(source) };
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import WordShapeView from "./WordShapeView.svelte";
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
-  import { wordPointsToCssPixels, type WordImageDrawing, type WordLayoutFragment, type WordLayoutTable } from "@tumblerjs/word";
+  import { wordImagePaintBounds, wordPointsToCssPixels, type WordImageDrawing, type WordLayoutFragment, type WordLayoutTable } from "@tumblerjs/word";
   import { wordTableBorderCss } from './word-table-style.ts';
   import OoxmlChart from "./OoxmlChart.svelte";
   import { wordTextCss, wordTextTop } from "./word-font-metrics.ts";
@@ -22,7 +22,8 @@
   }
 
   function drawingStyle(fragment: WordLayoutFragment) {
-    return `left:${wordPointsToCssPixels(fragment.x)}px;top:${wordPointsToCssPixels(fragment.y)}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px`;
+    const box = fragment.drawing?.kind === 'image' ? wordImagePaintBounds(fragment.drawing, fragment.width, fragment.height) : { x: 0, y: 0, width: fragment.width, height: fragment.height };
+    return `left:${wordPointsToCssPixels(fragment.x + box.x)}px;top:${wordPointsToCssPixels(fragment.y + box.y)}px;width:${wordPointsToCssPixels(box.width)}px;height:${wordPointsToCssPixels(box.height)}px`;
   }
 </script>
 

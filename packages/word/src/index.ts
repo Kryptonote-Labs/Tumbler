@@ -39,6 +39,7 @@ export {
   wordPointsToCssPixels,
 } from "./layout.ts";
 export { paintWordPage, wordPageImages } from "./canvas-paint.ts";
+export { wordImagePaintBounds } from './image-paint.ts';
 export type { WordCanvasContext, WordPagePaintOptions } from "./canvas-paint.ts";
 export { canvasWordTextMeasurer, wordCanvasFont, wordFontFamily } from "./canvas-text.ts";
 export type { WordCanvasTextContext, WordLineMetrics } from "./canvas-text.ts";
@@ -167,3 +168,5 @@ export { isWordDrawingGeometry, withWordDrawingGeometry, type WordDrawingGeometr
 export { wordChartTitleText, chartTitleFromWord } from './chart-title.ts';
 
 export type { WordSymbol } from './symbols.ts';
+
+export { replaceWordInkTrace, type WordInkTraceChange } from './ink-edit.ts';

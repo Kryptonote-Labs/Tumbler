@@ -1,3 +1,4 @@
+import { replaceWordInkTrace, type WordInkTraceChange } from './ink-edit.ts';
 import { wordStoryArtifact } from './stories.ts';
 import { openOpcPackage } from "@tumblerjs/opc";
 import type { FormattingAdapter, FormattingCapabilities, FormattingPatch, FormattingState, FormattingValue, OfficeColor } from "@tumblerjs/core";
@@ -67,6 +68,11 @@ export class WordArtifact implements FormattingAdapter<WordFormattingTarget, Wor
       ? positionWordDrawing(resized.document, change)
       : moveInlineWordDrawing(resized.document, change.elementId, change.inlinePosition);
     return bytes === resized.bytes() ? resized : this.reopen(bytes);
+  }
+
+  replaceInkTrace(change: WordInkTraceChange): WordArtifact {
+    const bytes = replaceWordInkTrace(this.document, change);
+    return bytes === this.bytes() ? this : this.reopen(bytes);
   }
 
   resizeDrawing(size: WordDrawingResize): WordArtifact {

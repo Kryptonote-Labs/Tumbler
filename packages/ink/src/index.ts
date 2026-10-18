@@ -3,4 +3,8 @@ export { readOfficeInk, type OfficeInkDocument, type OfficeInkTrace, type InkDia
 export { applyInkRasterOperation, INK_RASTER_OPERATIONS, type InkBrush, type InkRasterOperation } from './brush.ts';
 export { INKML_NAMESPACE } from './xml.ts';
 export { replaceOfficeInkTrace } from './edit.ts';
-export { renderOfficeInkSvg, type InkSvgOptions, type InkSvgResult, type InkBounds } from './render.ts';
+export { renderOfficeInkSvg, renderInkSceneSvg, type InkSvgOptions, type InkSvgResult, type InkBounds } from './render.ts';
+export { createOfficeInkScene, type InkShape, type InkPaint, type InkSceneResult } from './scene.ts';
+export { renderOfficeInkRaster, type InkRasterOptions, type InkRasterResult } from './raster.ts';
+export { encodeInkPng } from './png.ts';
+export { readOfficeInkRecognition, type OfficeInkRecognition } from './recognition.ts';

@@ -103,18 +103,48 @@ session.markSaved();
 const output = session.artifact.bytes();
 ```
 
-Word 2010 ink uses `@tumblerjs/ink` to expose decoded traces and diagnostics on
-`drawing.ink`. It prefers an embedded VML bitmap, or generates an SVG for supported
-native ink without a bitmap. `inkRendering` identifies the chosen representation. `inkSource` identifies the
-original InkML part; generated previews have no stored image `partName` or
-`relationshipId`. Strict and Transitional host namespaces are supported.
-Configure the synchronous preview budget with the `inkRendering.maxPoints`
-import option; exceeding it retains the decoded ink and reports
-`inkRenderingDiagnostics`, without rejecting the document.
-The object retains its original InkML and fallback through nearby text edits and
-export. Word ink editing and geometry changes remain guarded because both the
-source and its cached preview must change together. External relationships are
-not fetched. See [ink conformance](../../docs/ink-conformance.md) for limits.
+Word 2010 ink uses `@tumblerjs/ink` to expose decoded traces, recognition and
+diagnostics on `drawing.ink`. Native InkML is authoritative: the reader generates
+SVG for destination-independent pens, even when a cached VML bitmap exists.
+`inkRendering` is `vector`, `raster` (needs page pixels), or `bitmap` (native
+interpretation unavailable). `inkSource` identifies the stored InkML part;
+`inkProjection` supplies the affine transform and painted bounds. Generated
+previews have no stored image `partName` or `relationshipId`.
+
+`paintWordPage` renders native ink against the page backdrop when its context
+provides `getImageData` and `putImageData`. This implements all sixteen Office
+raster operations, with floating drawings painted behind/in front of text in
+z-order. Image-only consumers use the cached preview for destination-dependent
+pens; without one their preview is empty and diagnostics explain the requirement.
+Strict and Transitional host namespaces are supported. External relationships
+are never fetched.
+
+Moving/resizing updates DrawingML and VML together while retaining the InkML and
+media bytes. `WordArtifact.replaceInkTrace` and `WordEditingSession.replaceInkTrace`
+replace samples and regenerate an existing PNG fallback in one package revision.
+Shared parts are copied; exclusive parts are reused. Affected recognition caches
+and embedded VML ink caches are invalidated. Undo/redo restores the whole package.
+Samples use their declared channel order/device coordinates; the existing native
+frame stays fixed. Resize the drawing separately to change its placement.
+
+```ts
+const drawing = [...session.artifact.document.drawings.values()].find(d => d.ink);
+const trace = drawing?.ink?.traces[0];
+if (drawing && trace) {
+  session.replaceInkTrace({
+    elementId: drawing.elementId,
+    traceElementId: trace.elementId,
+    points: replacementSamples,
+  });
+}
+```
+
+Configure physical device defaults, relative brush units and the synchronous
+point budget through `inkRendering`; pixel consumers expose `maxPixels` (or
+`paintWordPage`'s `inkMaxPixels`). These are configurable work budgets, not document
+limits. Destination-dependent fallback generation requires explicit backdrop
+pixels or a background colour through `preview`. See [ink conformance](../../docs/ink-conformance.md)
+for validation evidence and remaining Word interoperability work.
 
 The current reader/layout slice includes Strict and Transitional main parts,
 styles and themes, numbering, sections and columns, tables and nested tables,

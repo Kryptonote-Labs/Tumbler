@@ -1,7 +1,7 @@
 <script lang="ts">
   import ChartTitleEditor from "./ChartTitleEditor.svelte";
   import WordShapeView from "./WordShapeView.svelte";
-  import { shapePlainText, wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing, type WordShapeTextChange } from '@tumblerjs/word';
+  import { shapePlainText, wordImagePaintBounds, wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing, type WordShapeTextChange } from '@tumblerjs/word';
   import OoxmlChart from './OoxmlChart.svelte';
   import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
 
@@ -160,7 +160,8 @@
   {#if drawing.kind === 'shape'}
     <WordShapeView shape={drawing.shape} {selected} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} editing={editingText !== undefined} initialText={editingText} oncommit={finishText} />
   {:else if drawing.kind === 'image'}
-    <img src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading={imageLoading} decoding="async" />
+    {@const painted = wordImagePaintBounds(drawing)}
+    <img src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading={imageLoading} decoding="async" style={`position:absolute;left:${painted.x / drawing.widthPoints * 100}%;top:${painted.y / drawing.heightPoints * 100}%;width:${painted.width / drawing.widthPoints * 100}%;height:${painted.height / drawing.heightPoints * 100}%`} />
   {:else if drawing.kind === 'chart'}
     <OoxmlChart model={drawing.model} width={displayWidth} height={displayHeight} clipId={`word-drawing-${drawing.elementId}`} />
   {:else}

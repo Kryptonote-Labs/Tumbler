@@ -40,17 +40,29 @@ of the Office profile. Points follow declared channel order. Missing intermitten
 values are `null`; booleans remain booleans. Integers must fit JavaScript's safe
 integer range, and decimal/double samples use finite IEEE-754 numbers.
 
-The SVG renderer supports explicit physical resolutions, ellipse and rectangle
-tips, linear pressure scaling, pen switches and per-stroke transparency. It
-returns diagnostics for unsupported rendering instead of omitting those strokes.
-Synchronous SVG generation defaults to a 100,000-point work budget. Override it
-with `renderOfficeInkSvg(ink, { maxPoints })`, including `Infinity` for an unlimited
-preview. Exceeding the budget produces a `resource` diagnostic before SVG
-allocation; it does not reject or truncate the source or decoded samples.
-It does not reproduce Word's proprietary curve fitting or pressure transfer.
-`applyInkRasterOperation` exposes all 16 Office RGB raster operations for raster
-consumers; destination-dependent operations cannot be represented by this SVG
-renderer.
+The shared scene builder renders ellipse/rectangle nibs, pen switches, pressure,
+rotating tips, line segments and fitted curves. Pressure scales nib dimensions
+linearly; curve fitting uses interpolating cubics with cusp preservation. Office
+does not prescribe either algorithm, and this does not claim pixel parity with
+Word. Transparency is applied once to the union of each stroke's coverage.
+
+`renderOfficeInkSvg` handles destination-independent pens. `renderOfficeInkRaster`
+implements all sixteen Office raster operations against supplied RGBA destination
+pixels or an explicit background. It never assumes a white backdrop for XOR or
+highlighter operations. Raster output can be encoded with `encodeInkPng` without
+browser or platform codecs. The raster renderer accepts an affine `transform`.
+
+`channelDefaults` supplies device calibration omitted from the file; explicit
+file properties take precedence. `relativeUnits` supplies physical em/ex sizes.
+The default point budget is 100,000, including curve expansion; the default raster
+budget is 4,194,304 pixels. Both accept `Infinity`. Exhaustion returns a resource
+diagnostic without discarding source samples.
+
+`ink.recognition` exposes Office EMMA contexts and ordered alternatives, with
+recognition diagnostics separate from geometry errors. Sample edits invalidate
+ancestor recognition caches while retaining unrelated groups and metadata.
+Embedding applications must still regenerate their cached previews; Word's
+`replaceInkTrace` performs that package transaction.
 
 This is **not a fully conforming W3C InkML processor**. General InkML streaming
 contexts, canvas mappings, MathML and trace views are outside the Office reader.
