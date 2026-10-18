@@ -161,7 +161,7 @@
     <WordShapeView shape={drawing.shape} {selected} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} editing={editingText !== undefined} initialText={editingText} oncommit={finishText} />
   {:else if drawing.kind === 'image'}
     {@const painted = wordImagePaintBounds(drawing)}
-    <img src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading={imageLoading} decoding="async" style={`position:absolute;left:${painted.x / drawing.widthPoints * 100}%;top:${painted.y / drawing.heightPoints * 100}%;width:${painted.width / drawing.widthPoints * 100}%;height:${painted.height / drawing.heightPoints * 100}%`} />
+    <img data-word-ink-rendering={drawing.inkRendering} src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading={imageLoading} decoding="async" style={`position:absolute;left:${painted.x / drawing.widthPoints * 100}%;top:${painted.y / drawing.heightPoints * 100}%;width:${painted.width / drawing.widthPoints * 100}%;height:${painted.height / drawing.heightPoints * 100}%`} />
   {:else if drawing.kind === 'chart'}
     <OoxmlChart model={drawing.model} width={displayWidth} height={displayHeight} clipId={`word-drawing-${drawing.elementId}`} />
   {:else}

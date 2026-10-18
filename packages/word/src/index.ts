@@ -38,7 +38,7 @@ export {
   layoutWordDocument,
   wordPointsToCssPixels,
 } from "./layout.ts";
-export { paintWordPage, wordPageImages } from "./canvas-paint.ts";
+export { paintWordPage, wordPageImages, wordPageInkBounds } from "./canvas-paint.ts";
 export { wordImagePaintBounds } from './image-paint.ts';
 export type { WordCanvasContext, WordPagePaintOptions } from "./canvas-paint.ts";
 export { canvasWordTextMeasurer, wordCanvasFont, wordFontFamily } from "./canvas-text.ts";

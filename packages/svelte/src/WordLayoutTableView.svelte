@@ -67,7 +67,7 @@
         {/if}
         {#each line.fragments as fragment}
           {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
-            <img class="document-drawing" src={imageurl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
+            <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageurl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
           {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "shape"}
                   <div class="document-drawing" style={drawingStyle(fragment)}><WordShapeView shape={fragment.drawing.shape} /></div>
                 {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}

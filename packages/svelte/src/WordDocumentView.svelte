@@ -1,4 +1,5 @@
 <script lang="ts">
+  import WordInkPageLayer from "./WordInkPageLayer.svelte";
   import WordShapeView from "./WordShapeView.svelte";
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
   import { flushSync, onDestroy, onMount, untrack } from "svelte";
@@ -466,6 +467,7 @@
         >
           <div
             class="word-page-content"
+            data-word-ink-page-host
             data-page={page.index}
             class:editable
             contenteditable={editable}
@@ -486,6 +488,7 @@
             onkeydown={handleKeydown}
             style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
           >
+            <WordInkPageLayer {page} {scale} background={layout.background} imageurl={imageUrl} />
             <WordParagraphDecorations lines={[...bodyLines(page), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
             {#if page.noteSeparatorY !== undefined}
               <div class="note-separator" style={`left:${wordPointsToCssPixels(page.section.marginLeftTwips / 20)}px;top:${wordPointsToCssPixels(page.noteSeparatorY)}px`}></div>
@@ -496,7 +499,7 @@
               {/if}
               {#each line.fragments as fragment}
                 {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
-                  <img class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment, 0, 0, true)} />
+                  <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment, 0, 0, true)} />
                 {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "shape"}
                   <div class="document-drawing" style={drawingStyle(fragment)}><WordShapeView shape={fragment.drawing.shape} /></div>
                 {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}

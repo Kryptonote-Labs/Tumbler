@@ -179,3 +179,17 @@ test('floating drawings paint behind or in front of text independently of their 
     expect(imageIndex > textIndex).toBe(placement === 'front');
   }
 });
+
+ test('DOM composition bounds include physical ink outside its editing frame', async () => {
+  const { inkFixture } = await import('./ink-fixture.ts');
+  const { officeInk } = await import('../../ink/test/fixture.ts');
+  const { wordPageInkBounds } = await import('../src/canvas-paint.ts');
+  const { source } = inkFixture(false, false, officeInk({ brush: '<brushProperty name="width" value="0.1" units="cm"/><brushProperty name="height" value="0.1" units="cm"/><brushProperty name="rasterOp" value="xOrPen"/>' }));
+  const page = layoutWordDocument(source.document, measure).pages[0]!;
+  const box = wordPageInkBounds(page)[0]!;
+  const drawing = [...source.document.drawings.values()][0]!;
+  expect(box.width).toBeCloseTo(drawing.widthPoints + .1 * 72 / 2.54);
+  expect(box.height).toBeCloseTo(drawing.heightPoints + .1 * 72 / 2.54);
+  const ordinary = inkFixture(false, false, officeInk()).source;
+  expect(wordPageInkBounds(layoutWordDocument(ordinary.document, measure).pages[0]!)).toEqual([]);
+});
