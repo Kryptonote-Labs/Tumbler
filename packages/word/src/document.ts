@@ -389,7 +389,7 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
   if (sectionElements.length > 1) throw new WordError("invalid_document", "A document body must not repeat final section properties.");
   const finalSection = parseSection(sectionElements[0], namespace);
   const numbering = readWordNumbering({ package: pkg, part: main, source, conformance: profile });
-  const drawings = readWordDrawings({ inkRendering: budget.inkRendering, package: pkg, part: main, source, conformance: profile, themeFonts: styles.themeFonts, themeColours: styles.themeColors });
+  const drawings = readWordDrawings({ styles, numbering, inkRendering: budget.inkRendering, package: pkg, part: main, source, conformance: profile, themeFonts: styles.themeFonts, themeColours: styles.themeColors });
   const notes = readNoteStories(pkg, main, profile, budget);
   const headerFooters = readHeaderFooterStories(pkg, main, profile, [...blocks.flatMap(sectionReferences), ...finalSection.headerReferences, ...finalSection.footerReferences], budget);
   let evenAndOddHeaders = false;

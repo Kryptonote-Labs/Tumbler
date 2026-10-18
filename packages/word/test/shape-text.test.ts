@@ -87,3 +87,27 @@ test('empty shapes retain typing formats and rich clipboard fragments replace in
   plain.destroy();
 });
 
+
+test('many text boxes retain distinct formatting and numbering across packages', () => {
+  for (const color of ['#123456', '#654321']) {
+    const boxes = Array.from({ length: 30 }, (_, index): WordAuthoredShape => ({
+      ...shape,
+      textBody: [{
+        runs: [{ text: `Box ${index}`, format: { color, bold: index % 2 === 0 } }],
+        list: { id: 'boxes', kind: 'decimal', level: 0, start: 3 },
+      }],
+    }));
+    const artifact = createWordArtifact({
+      paragraphs: boxes.map(shape => ({ runs: [{ text: '\uFFFC', shape }] })),
+    });
+    const drawings = [...artifact.document.drawings.values()];
+    expect(drawings).toHaveLength(boxes.length);
+    drawings.forEach((drawing, index) => {
+      if (drawing.kind !== 'shape') throw new Error('Expected text box');
+      expect(drawing.shape.textBody?.[0]).toMatchObject({
+        runs: [{ text: `Box ${index}`, format: { color, bold: index % 2 === 0 } }],
+        list: { kind: 'decimal', level: 0, start: 3 },
+      });
+    });
+  }
+});
