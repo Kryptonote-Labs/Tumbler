@@ -51,9 +51,9 @@ HIMETRIC unit, matching the inspected Word dot frame. This minimum and the exact
 Word source-bounds rounding still need comparison against the captured Word corpus. The
 Office profile does not itself establish those details. Synthetic matrix tests
 prove the transform math, not Word's intrinsic bounding-box convention.
-Nonuniform resizing of rotated drawings also needs additional interoperability
-work: scaling the local extents is not generally the same as scaling an arbitrary
-rotated outer bounding box.
+Rotation and nonuniform resizing operate on Word's local editing frame, not the
+painted outer box. The reference run exercises both, but exact rewritten sample
+rounding and curve-fitting parity remain unproven.
 
 The canvas page painter reads the real destination pixels. Image-only consumers,
 including the current Svelte DOM view, cannot reproduce destination-dependent
@@ -157,3 +157,14 @@ fallback interoperability, not native ink semantics.
 The Kryptonote server canvas omitted ImageData colour-space metadata and rejected
 the browser-specific fifth getImageData argument. The page painter now uses the
 shared four-argument form, accepts implicit sRGB, and rejects explicit display-p3.
+
+Kryptonote's isolated preview selected and resized native-only ink and ink with
+a cached preview. Both passed browser checks for eight resize handles, three
+collaborating editors and undo. The product Download action produced DOCX files
+after a 1 pt move and 10 pt width increase on the native-only control, and a
+10 pt width increase on the fallback control. Both passed the Microsoft Open XML
+validator, retained byte-identical InkML, and opened as native editable ink in
+desktop Word. Word saved, rotated, resized and exported PDFs from both downloads.
+LibreOffice on the Pi rendered the fallback download. The original private
+failed geometry request also passed a local export replay; production was not
+changed.
