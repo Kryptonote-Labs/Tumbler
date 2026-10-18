@@ -32,7 +32,7 @@ function projectWordInkDrawing(element: LosslessXmlElement, original: WordDrawin
   try {
     const ink = readOfficeInk(pkg.readPart(part));
     const inkSource = { partName: part.name, relationshipId: id! };
-    const scene = createOfficeInkScene(ink, options);
+    const scene = createOfficeInkScene(ink, { ...options, renderingProfile: 'word' });
     if (!scene.supported) return { ...fallback, ink, inkSource, ...(fallback.kind === 'image' ? { inkRendering: 'bitmap' as const } : {}), inkRenderingDiagnostics: scene.diagnostics };
     const unavailable = (message: string): WordDrawing => ({ ...fallback, ink, inkSource, ...(fallback.kind === 'image' ? { inkRendering: 'bitmap' as const } : {}), inkRenderingDiagnostics: [{ elementId: element.id, code: 'rendering', message }] });
     let matrix;

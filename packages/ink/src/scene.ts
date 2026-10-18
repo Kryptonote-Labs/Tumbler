@@ -1,3 +1,4 @@
+import { fitWindowsInkCurve } from './windows-curve-samples.ts';
 import { fitInkCurve } from './curve.ts';
 import { lengthInPoints } from './brush.ts';
 import type { InkDiagnostic, OfficeInkDocument, OfficeInkTrace } from './document.ts';
@@ -76,7 +77,7 @@ export function createOfficeInkScene(document: OfficeInkDocument, options: InkSv
       const rawX = point[xi], rawY = point[yi];
       if (typeof rawX !== 'number' || typeof rawY !== 'number') { problem(trace, 'Missing numeric X/Y sample.'); break; }
       const x = rawX * sx, y = rawY * sy;
-      minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      if (options.renderingProfile !== 'word' || !brush.fitToCurve || brush.rasterOp === 'noOperation') { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
       if (point[si] === false || brush.rasterOp === 'noOperation') { segments.push([]); continue; }
       const force = point[fi];
       const normalized = typeof force === 'number' ? Math.max(0, Math.min(1, (force - (pressure?.min ?? 0)) / ((pressure?.max ?? 1) - (pressure?.min ?? 0)))) : 0;
@@ -90,7 +91,20 @@ export function createOfficeInkScene(document: OfficeInkDocument, options: InkSv
     }
     for (const segment of segments) {
       let samples: typeof segment;
-      try { samples = brush.fitToCurve ? fitInkCurve(segment, tolerance, maxPoints - generatedPoints) : segment; }
+      const wordCurve = options.renderingProfile === 'word' && brush.fitToCurve;
+      try {
+        if (wordCurve) {
+          for (const point of fitWindowsInkCurve(segment, tolerance, maxPoints - generatedPoints)) {
+            minX = Math.min(minX, point.x); maxX = Math.max(maxX, point.x); minY = Math.min(minY, point.y); maxY = Math.max(maxY, point.y);
+          }
+          const [a, b, c, d, e, f] = matrix;
+          // Word fits after local resizing, before rotating the drawing. The
+          // fitter's cusp thresholds use an axis-aligned source bounding box.
+          const size = Math.hypot(a, b), cosine = size ? a / size : 1, sine = size ? b / size : 0;
+          samples = fitWindowsInkCurve(segment.map(p => ({ ...p, x: (cosine * a + sine * b) * p.x + (cosine * c + sine * d) * p.y, y: (-sine * a + cosine * b) * p.x + (-sine * c + cosine * d) * p.y })), tolerance, maxPoints - generatedPoints)
+            .map(p => ({ ...p, x: cosine * p.x - sine * p.y + e, y: sine * p.x + cosine * p.y + f }));
+        } else samples = brush.fitToCurve ? fitInkCurve(segment, tolerance, maxPoints - generatedPoints) : segment;
+      }
       catch (error) {
         if (!(error instanceof RangeError)) throw error;
         return { supported: false, diagnostics: [{ elementId: trace.elementId, code: 'resource', message: error.message }] };
@@ -100,7 +114,7 @@ export function createOfficeInkScene(document: OfficeInkDocument, options: InkSv
       let previous: readonly { x: number; y: number }[] | undefined;
       for (const sample of samples) {
         const [a, b, c, d, e, f] = matrix;
-        const x = a * sample.x + c * sample.y + e, y = b * sample.x + d * sample.y + f;
+        const x = wordCurve ? sample.x : a * sample.x + c * sample.y + e, y = wordCurve ? sample.y : b * sample.x + d * sample.y + f;
         const angle = (options.brushReflection ? -sample.angle : sample.angle) + (options.brushRotation ?? 0);
         const circular = options.renderingProfile === 'word' && brush.tip === 'ellipse';
         const rx = (circular ? Math.max(brush.widthPoints, brush.heightPoints) : brush.widthPoints) * sample.r / 2;

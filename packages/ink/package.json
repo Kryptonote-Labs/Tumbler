@@ -7,7 +7,8 @@
   "files": [
     "src",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "third-party"
   ],
   "license": "MIT",
   "repository": {

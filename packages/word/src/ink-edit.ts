@@ -46,14 +46,14 @@ function editWordInk(document: WordDocument, elementId: number, change?: WordInk
     if (trace.points.length === change.points.length && trace.points.every((point, index) => point.length === change.points[index]!.length && point.every((sample, channel) => sample === change.points[index]![channel]))) return document.bytes();
   }
   const ink = change ? replaceOfficeInkTrace(drawing.ink, change.traceElementId, change.points) : drawing.ink;
-  const scene = createOfficeInkScene(ink, { ...document.inkRendering, ...change?.preview });
+  const scene = createOfficeInkScene(ink, { ...document.inkRendering, ...change?.preview, renderingProfile: 'word' });
   if (!scene.supported) throw new WordError('invalid_document', scene.diagnostics.map(d => d.message).join(' '));
   const frame = inkFrame(element), namespaces = wordInkNamespaces(frame);
   const content = descendants(frame).find(node => node.namespaceUri === 'http://schemas.microsoft.com/office/word/2010/wordml' && node.localName === 'contentPart');
   const reference = content?.attributes.find(a => a.namespaceUri === namespaces.relationships && a.localName === 'id');
   const extent = descendants(frame).find(node => node.localName === 'extent' && node.namespaceUri?.endsWith('/wordprocessingDrawing'));
   if (!content || !reference || !extent) throw new WordError('invalid_document', 'Ink drawing placement is incomplete.');
-  const previousScene = change?.preserveSampleTransform ? createOfficeInkScene(drawing.ink, document.inkRendering) : undefined;
+  const previousScene = change?.preserveSampleTransform ? createOfficeInkScene(drawing.ink, { ...document.inkRendering, renderingProfile: 'word' }) : undefined;
   if (previousScene && !previousScene.supported) throw new WordError('invalid_document', 'Cannot preserve an unsupported ink transform.');
   const matrix = wordInkTransform(content, { ...drawing, widthPoints: Number(value(extent, 'cx')) / 12700, heightPoints: Number(value(extent, 'cy')) / 12700 }, previousScene?.supported ? previousScene.traceBounds : scene.traceBounds);
   const transaction = beginPackageTransaction(document.package), editor = beginLosslessXmlEdit(document.source);
