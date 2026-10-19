@@ -12,6 +12,7 @@ export const RELEASE_PACKAGE_DIRECTORIES = [
   "word",
   "slides",
   "svelte",
+  "cli",
 ] as const;
 
 export interface ReleasePackage {

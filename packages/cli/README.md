@@ -1,6 +1,8 @@
 # Tumbler CLI
 
-Run with Bun. Word is the first supported engine.
+Requires Bun 1.3 or later. Word is the first supported engine.
+
+Install with `bun add --global @tumblerjs/cli`.
 
 ```sh
 tumbler create draft.docx
@@ -21,4 +23,3 @@ body, including table paragraphs; live hosts may support additional regions. A t
 must be unique within its read page. `--within` narrows an exact match using surrounding
 text. Unknown flags and ambiguous targets fail without writes. Use `--help` for flags.
 
-This package is private while the CLI contract is being validated.

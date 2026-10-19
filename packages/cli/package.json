@@ -1,6 +1,5 @@
 {
   "name": "@tumblerjs/cli",
-  "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -11,11 +10,27 @@
   },
   "files": [
     "src",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "dependencies": {
-    "@tumblerjs/word": "workspace:*",
+    "@tumblerjs/word": "0.1.0-alpha.26",
     "zod": "^4.6.5",
     "yjs": "^13.6.0"
+  },
+  "version": "0.1.0-alpha.26",
+  "description": "Host-backed command-line operations for reading and editing Word documents.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kryptonote-Labs/Tumbler.git",
+    "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "latest"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
   }
 }
