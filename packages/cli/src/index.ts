@@ -26,7 +26,8 @@ export async function runTumbler(
 ): Promise<number> {
   try {
     if (!argv.length || argv.includes('--help')) {
-      const name = argv[1] && argv[1] !== '--help' ? argv[1] : undefined;
+      const name =
+        argv[0] === 'create' ? 'create' : argv[1] && argv[1] !== '--help' ? argv[1] : undefined;
       options.stdout(
         name ? tumblerOperationHelp(name, options.commandName) : tumblerHelp(options.commandName),
       );

@@ -96,3 +96,16 @@ test('the floating-layout help recipe changes an existing inline ink object', as
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('create path help does not attempt creation', async () => {
+  let output = '';
+  const code = await runTumbler(['create', 'missing.docx', '--help'], {
+    host: createFileHost(),
+    stdout: (value) => (output += value),
+    stderr: (value) => {
+      throw new Error(value);
+    },
+  });
+  expect(code).toBe(0);
+  expect(output).toContain('tumbler create <path.docx>');
+});
