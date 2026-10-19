@@ -125,3 +125,18 @@ test('host validation reads staged documents and rejects edits atomically withou
   expect(body.toString()).toBe('Edited\n');
   doc.destroy();
 });
+
+test('literal font families and host font IDs replace each other', () => {
+  const doc = new Y.Doc();
+  try {
+    const text = doc.getText('body');
+    text.insert(0, 'word\n', { font: 'calibri' });
+    const range = { start: 0, end: 4 };
+    text.applyDelta(commands.formatWordDelta(text, range, { fontFamily: 'Arial' }));
+    expect(commands.wordFormats(text, range)).toMatchObject({ fontFamily: 'Arial' });
+    expect(commands.wordFormats(text, range).font).toBeUndefined();
+    text.applyDelta(commands.formatWordDelta(text, range, { font: 'aptos' }));
+    expect(commands.wordFormats(text, range)).toMatchObject({ font: 'aptos' });
+    expect(commands.wordFormats(text, range).fontFamily).toBeUndefined();
+  } finally { doc.destroy(); }
+});

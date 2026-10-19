@@ -32,6 +32,13 @@ export const WORD_FORMATTING_CAPABILITIES: FormattingCapabilities = Object.freez
 
 export type WordFormattingTarget = WordTextSelection;
 
+/** Word-specific properties extend the shared Office formatting contract. */
+export type WordFormattingPatch = Omit<FormattingPatch, 'text'> & {
+  readonly text?: NonNullable<FormattingPatch['text']> & {
+    readonly strike?: import('@tumblerjs/core').FormattingChange<boolean>;
+  };
+};
+
 export interface WordFormattingDocumentAdapter extends FormattingAdapter<WordFormattingTarget, Uint8Array> {}
 
 export function wordFormattingState(document: WordDocument, target: WordFormattingTarget): FormattingState {
@@ -60,8 +67,17 @@ export function wordFormattingState(document: WordDocument, target: WordFormatti
 }
 
 /** Applies direct run/paragraph formatting without rewriting untouched package parts. */
-export function formatWordSelection(document: WordDocument, target: WordFormattingTarget, input: FormattingPatch): Uint8Array {
-  const patch = normalizeFormattingPatch(input);
+export function formatWordSelection(document: WordDocument, target: WordFormattingTarget, input: WordFormattingPatch): Uint8Array {
+  const strike = input.text?.strike;
+  if (strike !== undefined && !('inherit' in strike ? strike.inherit === true && !('set' in strike) : typeof strike.set === 'boolean'))
+    throw new TypeError('Strikethrough requires a boolean or inherit.');
+  // Word uses half-point sizes up to 1638 pt, unlike the shared spreadsheet range.
+  const fontSize = input.text?.fontSize;
+  if (fontSize && 'set' in fontSize && !(fontSize.set >= 1 && fontSize.set <= 1638 && Number.isInteger(fontSize.set * 2)))
+    throw new RangeError('Word font sizes use half-point steps from 1 to 1638 points.');
+  const { fontSize: _size, ...text } = input.text ?? {};
+  const normalized = normalizeFormattingPatch({ ...input, ...(input.text ? { text } : {}) });
+  const patch: WordFormattingPatch = { ...normalized, ...(input.text ? { text: { ...normalized.text, ...(fontSize ? { fontSize } : {}), ...(strike ? { strike } : {}) } } : {}) };
   if (patch.text === undefined && patch.block === undefined) return document.bytes();
   const ranges = selectedRanges(document, target);
   const editor = beginLosslessXmlEdit(document.source);
@@ -92,7 +108,7 @@ function formatRun(
   run: WordRun,
   selectionStart: number,
   selectionEnd: number,
-  patch: NonNullable<FormattingPatch["text"]>,
+  patch: NonNullable<WordFormattingPatch["text"]>,
 ): void {
   const runSegments = wordParagraphTextSegments(document, paragraph).filter((segment) => segment.runElementId === run.elementId);
   if (runSegments.length === 0 || runSegments.some((segment) => segment.kind !== "text" && segment.kind !== "tab")) {
@@ -173,13 +189,14 @@ function runPropertiesMarkup(
   document: WordDocument,
   prefix: string,
   properties: LosslessXmlElement | undefined,
-  patch: NonNullable<FormattingPatch["text"]>,
+  patch: NonNullable<WordFormattingPatch["text"]>,
 ): string {
   const names = new Set<string>();
   if (patch.fontFamily !== undefined) names.add("rFonts");
   if (patch.fontSize !== undefined) names.add("sz");
   if (patch.bold !== undefined) names.add("b");
   if (patch.italic !== undefined) names.add("i");
+  if (patch.strike !== undefined) { names.add("strike"); names.add("dstrike"); }
   if (patch.underline !== undefined) names.add("u");
   if (patch.color !== undefined) names.add("color");
   const retained = properties?.children.filter((child): child is LosslessXmlElement => child.kind === "element")
@@ -190,6 +207,7 @@ function runPropertiesMarkup(
     ["sz", property(prefix, "sz", patch.fontSize, (value) => `${qualified(prefix, "val")}="${Math.round(value * 2)}"`)],
     ["b", property(prefix, "b", patch.bold, (value) => `${qualified(prefix, "val")}="${value ? "1" : "0"}"`)],
     ["i", property(prefix, "i", patch.italic, (value) => `${qualified(prefix, "val")}="${value ? "1" : "0"}"`)],
+    ["strike", property(prefix, "strike", patch.strike, (value) => `${qualified(prefix, "val")}="${value ? "1" : "0"}"`)],
     ["u", property(prefix, "u", patch.underline, (value) => `${qualified(prefix, "val")}="${value}"`)],
     ["color", property(prefix, "color", patch.color, (value) => `${qualified(prefix, "val")}="${value.type === "automatic" ? "auto" : value.value.slice(1)}"`)],
   ] as const;
