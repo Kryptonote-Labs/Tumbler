@@ -64,3 +64,25 @@ Hosts enforce permissions, revisions, asset resolution, receipts and commit boun
 adapts DOCX files to the same operations and reconciles against their source package.
 
 Sheets, slides and document section-layout authoring are not implemented by this registry.
+
+## Replacement text
+
+`replace --value` decodes `\n`, `\r`, `\t` and `\\` once. Existing line breaks and unknown
+escapes are preserved. Use ordinary shell single quotes around escaped text. Add `--literal`
+to preserve every backslash. This decoding applies only to the `--value` flag; structured
+`--input` JSON is parsed as JSON without an additional escape-decoding step. Search targets
+remain literal.
+
+```sh
+tumbler draft.docx replace --page '<handle>' --start 0 --end 0 --value 'First line\nSecond line'
+tumbler draft.docx replace --page '<handle>' --find old --value 'C:\new\test.java' --literal
+tumbler draft.docx replace --page '<handle>' --start 0 --end 0 --value-file - <<'EOF_TEXT'
+public class HelloWorld {
+    // Quotes, backslashes and indentation stay as written.
+}
+EOF_TEXT
+```
+
+`--value-file path` reads UTF-8 text; `--value-file -` reads stdin. These preserve content exactly,
+including trailing newlines, and cannot be combined with `--value` or `--literal`. Injected
+hosts implement `readValue(path)` to supply files and stdin from their own environment.

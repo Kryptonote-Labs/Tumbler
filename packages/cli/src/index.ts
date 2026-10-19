@@ -1,3 +1,4 @@
+import { replacementHelp, replacementValue } from "./replacement-value.ts";
 import { wordOperations, wordOperation, targetSchema } from "@tumblerjs/word/operations";
 import { z } from "zod";
 import {
@@ -18,7 +19,7 @@ export function tumblerHelp(commandName = "tumbler") {
       "read: --offset <UTF-16 offset> --region <region>",
       "format/replace: --page <handle> and --find <exact text> [--within <surrounding text>] or --start <offset> --end <offset>",
       `format: ${formatFlags.map((key) => `--${flagName(key)}`).join(" ")}. Boolean flags accept true/false; null restores inheritance.`,
-      "replace: --value <text> (an empty string deletes the target)",
+      replacementHelp,
       "All Word operations: --page <handle> --target <JSON> --input <JSON>. Use <operation> --help for examples.",
       ...Object.values(wordOperations).map(
         (op) => `${op.name}: ${op.summary} Input: ${JSON.stringify(op.example)}`,
@@ -32,6 +33,7 @@ export async function runTumbler(
   argv: readonly string[],
   options: {
     commandName?: string;
+    readValue?: (path: string) => Promise<string>;
     host: OperationHost;
     stdout: (text: string) => void;
     stderr: (text: string) => void;
@@ -42,7 +44,7 @@ export async function runTumbler(
       const operation = wordOperations[argv[1] as keyof typeof wordOperations];
       options.stdout(
         operation
-          ? `${operation.name}: ${operation.summary}\n--input '${JSON.stringify(operation.example)}' --target '{"text":"exact text"}' --page <handle>\n`
+          ? `${operation.name}: ${operation.summary}${operation.name === "replace" ? "\n" + replacementHelp : ""}\n--input '${JSON.stringify(operation.example)}' --target '{"text":"exact text"}' --page <handle>\n`
           : tumblerHelp(options.commandName),
       );
       return 0;
@@ -104,7 +106,7 @@ export async function runTumbler(
               "within",
               "start",
               "end",
-              ...(name === "replace" ? ["value"] : formatFlags),
+              ...(name === "replace" ? ["value", "valueFile", "literal"] : formatFlags),
             ],
     );
     for (let i = 0; i < rest.length; i++) {
@@ -119,7 +121,7 @@ export async function runTumbler(
         name === "format" && Object.hasOwn(characterFormat.shape, key)
           ? characterFormat.shape[key as keyof typeof characterFormat.shape]
           : undefined;
-      const boolean = schema?.unwrap().unwrap() instanceof z.ZodBoolean;
+      const boolean = key === "literal" || schema?.unwrap().unwrap() instanceof z.ZodBoolean;
       let value: string;
       if (split >= 0) value = arg.slice(split + 1);
       else if (boolean && (rest[i + 1] === undefined || rest[i + 1]!.startsWith("--")))
@@ -150,7 +152,7 @@ export async function runTumbler(
       flags.target = JSON.parse(flags.target);
     let input: unknown = flags;
     if (name === "format" || name === "replace") {
-      const { page, find, within, start, end, value, ...format } = flags;
+      const { page, find, within, start, end, value, valueFile, literal, ...format } = flags;
       if (find !== undefined && (start !== undefined || end !== undefined))
         throw new Error("Use --find or --start/--end, not both.");
       if (find === undefined && within !== undefined) throw new Error("--within requires --find.");
@@ -160,7 +162,9 @@ export async function runTumbler(
           find === undefined
             ? { kind: "range", start, end }
             : { text: find, ...(within === undefined ? {} : { within }) },
-        ...(name === "replace" ? { value } : { format }),
+        ...(name === "replace"
+          ? { value: await replacementValue({ value, valueFile, literal }, options.readValue) }
+          : { format }),
       };
     }
     const result = await operation.execute(options.host, document, input);
