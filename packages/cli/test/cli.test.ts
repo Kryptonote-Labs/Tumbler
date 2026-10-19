@@ -180,3 +180,95 @@ test("structured operations execute through the real file host and reject invali
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("file hosts inspect regions and edit a header without modifying body text", async () => {
+  const { createWordStory } = await import("@tumblerjs/word");
+  const directory = mkdtempSync(join(tmpdir(), "tumbler-story-")),
+    path = join(directory, "story.docx");
+  try {
+    const { artifact, partName } = createWordStory(
+      createWordArtifact({ paragraphs: [{ runs: [{ text: "Body unchanged" }] }] }),
+      { kind: "header", type: "default", section: 0 },
+    );
+    writeFileSync(path, artifact.bytes());
+    const regions = await run([path, "inspect", "--input", '{"what":"regions"}']);
+    expect(regions.code).toBe(0);
+    expect(regions.stdout).toContain(partName);
+    const read = await run([path, "read", "--region", partName]);
+    expect(read.code).toBe(0);
+    const result = await run([
+      path,
+      "page-number",
+      "--page",
+      JSON.parse(read.stdout).page,
+      "--target",
+      '{"kind":"range","start":0,"end":0}',
+      "--input",
+      '{"preset":"page-x-of-y"}',
+    ]);
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(JSON.parse((await run([path, "read"])).stdout).text).toBe("Body unchanged\n");
+    expect(JSON.parse(result.stdout).page.region).toBe(partName);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("reading a new header stages it without writing until the first accepted edit", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "tumbler-new-story-")),
+    path = join(directory, "story.docx");
+  try {
+    writeFileSync(path, createWordArtifact().bytes());
+    const before = readFileSync(path);
+    const read = await run([path, "read", "--region", "header:0:default"]);
+    expect(read.code).toBe(0);
+    expect(readFileSync(path)).toEqual(before);
+    const result = await run([
+      path,
+      "page-number",
+      "--page",
+      JSON.parse(read.stdout).page,
+      "--target",
+      '{"kind":"range","start":0,"end":0}',
+      "--input",
+      '{"preset":"plain"}',
+    ]);
+    expect(result.stderr).toBe("");
+    expect(openWordArtifact(readFileSync(path)).document.headerFooters).toHaveLength(1);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("every advertised Word operation is dispatched by the CLI without a dedicated host method", async () => {
+  const { wordOperations } = await import("@tumblerjs/word/operations");
+  const calls: string[] = [];
+  for (const operation of Object.values(wordOperations)) {
+    let error = "";
+    const code = await runTumbler(
+      [
+        "document",
+        operation.name,
+        "--target",
+        '{"kind":"range","start":0,"end":1}',
+        "--input",
+        JSON.stringify(operation.example),
+      ],
+      {
+        host: {
+          ...host,
+          async operate(_document, input) {
+            calls.push(input.operation.name);
+            return { ok: true };
+          },
+        },
+        stdout: () => {},
+        stderr: (value) => (error += value),
+      },
+    );
+    expect(error).toBe("");
+    expect(code).toBe(0);
+  }
+  expect(calls).toEqual(Object.keys(wordOperations));
+});

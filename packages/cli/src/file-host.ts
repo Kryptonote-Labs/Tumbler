@@ -1,3 +1,6 @@
+import { fileRegion, fileRegions } from "./file-regions.ts";
+import { inspectWordObjects, inspectWordStyles } from "@tumblerjs/word/operations";
+import { NativeWordDocument } from "@tumblerjs/word";
 import { openWordOperationDocument, prepareWordOperation } from "@tumblerjs/word/operations";
 import { tableParagraphs } from "@tumblerjs/word/collaboration";
 import type { OperationInput } from "./registry.ts";
@@ -19,6 +22,7 @@ import type { OperationHost, ReadInput } from "./registry.ts";
 
 const handleSchema = z.object({
   revision: z.string(),
+  region: z.string().default("body"),
   start: z.number().int().nonnegative(),
   end: z.number().int().nonnegative(),
 });
@@ -45,16 +49,16 @@ function paragraphs(artifact: WordArtifact) {
     session.destroy();
   }
 }
-function page(artifact: WordArtifact, offset: number) {
+function page(artifact: WordArtifact, offset: number, region = "body") {
   const content = paragraphs(artifact);
   if (offset > content.text.length) throw new Error("Offset is outside the document.");
   // Transport pages are bounded; this does not constrain document size.
   let end = Math.min(content.text.length, offset + 4000);
   if (end < content.text.length && /[\uDC00-\uDFFF]/.test(content.text[end]!)) end--;
-  const handle = { revision: revision(artifact.bytes()), start: offset, end };
+  const handle = { revision: revision(artifact.bytes()), region, start: offset, end };
   return {
     page: Buffer.from(JSON.stringify(handle)).toString("base64url"),
-    region: "body",
+    region,
     start: offset,
     end,
     next: end < content.text.length ? end : null,
@@ -141,6 +145,12 @@ function resolveTarget(artifact: WordArtifact, input: OperationInput) {
       : start < handle.start || end > handle.end || end < start
   )
     throw new Error("Target is outside the read page.");
+  if (
+    input.operation.name === "move-object" &&
+    (input.operation.input.destination < handle.start ||
+      input.operation.input.destination > handle.end)
+  )
+    throw new Error("Move destination is outside the read page.");
   const segments = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(content.text);
   for (const offset of [start, end]) {
     const segment = segments.containing(offset);
@@ -159,12 +169,35 @@ export function createFileHost(): OperationHost {
     const temporary = `${path}.${randomUUID()}.tmp`;
     try {
       const original = readFileSync(path);
-      const artifact = open(original);
+      const main = open(original);
+      if (!input.page) throw new Error("Read first and supply --page.");
+      const region = handleSchema.parse(
+        JSON.parse(Buffer.from(input.page, "base64url").toString()),
+      ).region;
+      const artifact = fileRegion(main, region);
       const target = resolveTarget(artifact, input);
       const session = openWordOperationDocument(artifact, (image) => readFileSync(image.id));
       let result: WordArtifact;
       try {
-        session.text.applyDelta(prepareWordOperation(session.text, target, input.operation).delta);
+        session.text.applyDelta(
+          prepareWordOperation(
+            session.text,
+            target,
+            input.operation,
+            input.operation.name === "fit-table"
+              ? {
+                  availableWidthPoints: new NativeWordDocument({ source: artifact }).geometryAt(
+                    target.start,
+                    tableParagraphs(session.text).find(
+                      (p) =>
+                        p.table?.cell ===
+                        (input.operation.name === "fit-table" ? input.operation.input.cellId : ""),
+                    )?.table?.parents?.length ?? 0,
+                  ).availableWidthPoints,
+                }
+              : {},
+          ).delta,
+        );
         result = session.artifact();
       } finally {
         session.destroy();
@@ -173,7 +206,9 @@ export function createFileHost(): OperationHost {
       if (revision(readFileSync(path)) !== revision(original))
         throw new Error("The document changed while editing. Read it again.");
       renameSync(temporary, path);
-      return { page: page(result, Math.min(target.offset, paragraphs(result).text.length)) };
+      return {
+        page: page(result, Math.min(target.offset, paragraphs(result).text.length), region),
+      };
     } finally {
       try {
         unlinkSync(temporary);
@@ -185,28 +220,29 @@ export function createFileHost(): OperationHost {
     }
   }
   return {
+    async inspect(path, input) {
+      checkExtension(path);
+      const main = open(readFileSync(path));
+      if (input.what === "regions") return fileRegions(main);
+      const source = fileRegion(main, input.region);
+      if (input.what === "styles") return inspectWordStyles(source);
+      if (input.what === "geometry")
+        return new NativeWordDocument({ source }).geometryAt(input.offset);
+      const session = openWordOperationDocument(source);
+      try {
+        return inspectWordObjects(session.text, source, input.offset);
+      } finally {
+        session.destroy();
+      }
+    },
     async operate(path, input) {
       return edit(path, input);
     },
     async read(path: string, input: ReadInput) {
       checkExtension(path);
-      if (input.region !== "body")
-        throw new Error("The file host currently reads the body region.");
-      return page(open(readFileSync(path)), input.offset);
-    },
-    async format(path, input) {
-      return edit(path, {
-        page: input.page,
-        target: input.target,
-        operation: { name: "format", input: input.format },
-      });
-    },
-    async replace(path, input) {
-      return edit(path, {
-        page: input.page,
-        target: input.target,
-        operation: { name: "replace", input: { value: input.value } },
-      });
+      if (input.target) throw new Error("File navigation uses numeric offsets.");
+      const source = open(readFileSync(path));
+      return page(fileRegion(source, input.region), input.offset, input.region);
     },
     async create(path) {
       checkExtension(path);

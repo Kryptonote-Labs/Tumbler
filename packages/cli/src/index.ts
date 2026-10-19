@@ -10,10 +10,10 @@ export * from "./registry.ts";
 
 const formatFlags = Object.keys(characterFormat.shape);
 const flagName = (name: string) => name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
-export function tumblerHelp() {
+export function tumblerHelp(commandName = "tumbler") {
   return (
     [
-      "Usage: tumbler <document> <operation> [flags] | tumbler create <path.docx>",
+      `Usage: ${commandName} <document> <operation> [flags] | ${commandName} create <path.docx>`,
       ...Object.values(operations).map((operation) => `${operation.name}: ${operation.summary}`),
       "read: --offset <UTF-16 offset> --region <region>",
       "format/replace: --page <handle> and --find <exact text> [--within <surrounding text>] or --start <offset> --end <offset>",
@@ -30,7 +30,12 @@ export function tumblerHelp() {
 /** Parses an argv array, never shell source. Hosts own addressing, authority and storage. */
 export async function runTumbler(
   argv: readonly string[],
-  options: { host: OperationHost; stdout: (text: string) => void; stderr: (text: string) => void },
+  options: {
+    commandName?: string;
+    host: OperationHost;
+    stdout: (text: string) => void;
+    stderr: (text: string) => void;
+  },
 ): Promise<number> {
   try {
     if (!argv.length || argv.includes("--help")) {
@@ -38,7 +43,7 @@ export async function runTumbler(
       options.stdout(
         operation
           ? `${operation.name}: ${operation.summary}\n--input '${JSON.stringify(operation.example)}' --target '{"text":"exact text"}' --page <handle>\n`
-          : tumblerHelp(),
+          : tumblerHelp(options.commandName),
       );
       return 0;
     }
@@ -77,10 +82,20 @@ export async function runTumbler(
     if (!document || !name || !Object.hasOwn(operations, name))
       throw new Error("Specify a document and operation. Use --help.");
     const operation = operations[name as keyof typeof operations];
+    if (["inspect", "select", "unselect"].includes(name)) {
+      if (rest.length && (rest.length !== 2 || rest[0] !== "--input"))
+        throw new Error("Use inspect --input JSON.");
+      options.stdout(
+        JSON.stringify(
+          await operation.execute(options.host, document, JSON.parse(rest[1] ?? "{}")),
+        ) + "\n",
+      );
+      return 0;
+    }
     const flags: Record<string, unknown> = {};
     const allowed = new Set(
       name === "read"
-        ? ["offset", "region"]
+        ? ["offset", "region", "target"]
         : name === "create"
           ? []
           : [
@@ -125,12 +140,14 @@ export async function runTumbler(
               : value === "false"
                 ? false
                 : value
-            : ["start", "end", "offset", "fontSize"].includes(key)
+            : ["start", "end", "offset", "fontSize", "characterSpacingPoints"].includes(key)
               ? value.trim() === ""
                 ? NaN
                 : Number(value)
               : value;
     }
+    if (name === "read" && typeof flags.target === "string")
+      flags.target = JSON.parse(flags.target);
     let input: unknown = flags;
     if (name === "format" || name === "replace") {
       const { page, find, within, start, end, value, ...format } = flags;

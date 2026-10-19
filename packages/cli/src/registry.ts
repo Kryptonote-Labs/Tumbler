@@ -1,25 +1,8 @@
+import { inspectInput, type InspectInput } from "@tumblerjs/word/operations";
 import { wordOperation, targetSchema } from "@tumblerjs/word/operations";
 import { z } from "zod";
-import { TEXT_FORMATS, isFontSize } from "@tumblerjs/word/collaboration";
-
-// These flags follow the engine's boolean character formats, including strikethrough.
-const booleans = Object.fromEntries(
-  TEXT_FORMATS.map((key) => [key, z.boolean().nullable().optional()]),
-) as {
-  [Key in (typeof TEXT_FORMATS)[number]]: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
-};
-export const characterFormat = z
-  .object({
-    ...booleans,
-    fontFamily: z.string().min(1).nullable().optional(),
-    fontSize: z.number().refine(isFontSize).nullable().optional(),
-    color: z
-      .string()
-      .regex(/^#[0-9a-fA-F]{6}$/)
-      .nullable()
-      .optional(),
-  })
-  .strict();
+import { characterFormat } from "@tumblerjs/word/operations";
+export { characterFormat } from "@tumblerjs/word/operations";
 export const textTarget = z.union([
   z.object({ text: z.string().min(1), within: z.string().min(1).optional() }).strict(),
   z
@@ -33,7 +16,11 @@ export const textTarget = z.union([
 ]);
 const edit = z.object({ page: z.string().optional(), target: textTarget });
 export const readInput = z
-  .object({ offset: z.number().int().nonnegative().default(0), region: z.string().default("body") })
+  .object({
+    offset: z.number().int().nonnegative().default(0),
+    region: z.string().default("body"),
+    target: z.object({ start: z.string(), end: z.string() }).optional(),
+  })
   .strict();
 export const formatInput = edit
   .extend({
@@ -51,11 +38,14 @@ export const operationInput = z
   .object({ page: z.string().optional(), target: targetSchema, operation: wordOperation })
   .strict();
 export type OperationInput = z.infer<typeof operationInput>;
+export const selectInput = z.object({ page: z.string().optional(), target: targetSchema }).strict();
+export type SelectInput = z.infer<typeof selectInput>;
 export interface OperationHost {
-  operate?(document: string, input: OperationInput): Promise<unknown>;
+  select?(document: string, input: SelectInput): Promise<unknown>;
+  unselect?(document: string): Promise<unknown>;
+  inspect?(document: string, input: InspectInput): Promise<unknown>;
+  operate(document: string, input: OperationInput): Promise<unknown>;
   read(document: string, input: ReadInput): Promise<unknown>;
-  format(document: string, input: FormatInput): Promise<unknown>;
-  replace(document: string, input: ReplaceInput): Promise<unknown>;
   create(document: string): Promise<unknown>;
 }
 
@@ -73,6 +63,36 @@ export function defineOperation<S extends z.ZodType>(definition: {
   };
 }
 export const operations = {
+  select: defineOperation({
+    name: "select",
+    summary: "Select an exact text, range, cell or table target from a read page. --input JSON.",
+    access: "read",
+    input: selectInput,
+    run: (host, document, input) => {
+      if (!host.select) throw new Error("Selection is unavailable on this host.");
+      return host.select(document, input);
+    },
+  }),
+  unselect: defineOperation({
+    name: "unselect",
+    summary: "Collapse the current selection.",
+    access: "read",
+    input: z.object({}).strict(),
+    run: (host, document) => {
+      if (!host.unselect) throw new Error("Selection is unavailable on this host.");
+      return host.unselect(document);
+    },
+  }),
+  inspect: defineOperation({
+    name: "inspect",
+    summary: "Inspect styles, objects, regions or geometry using --input JSON.",
+    access: "read",
+    input: inspectInput,
+    run: (host, document, input) => {
+      if (!host.inspect) throw new Error("Inspection is unavailable on this host.");
+      return host.inspect(document, input);
+    },
+  }),
   read: defineOperation({
     name: "read",
     summary: "Read a bounded page and its revision handle",
@@ -85,14 +105,20 @@ export const operations = {
     summary: "Format one exact target from a read page",
     access: "edit",
     input: formatInput,
-    run: (host, document, input) => host.format(document, input),
+    run: (host, document, { format, ...input }) =>
+      host.operate(document, { ...input, operation: { name: "format", input: format } }),
   }),
   replace: defineOperation({
     name: "replace",
     summary: "Replace one exact target from a read page",
     access: "edit",
     input: replaceInput,
-    run: (host, document, input) => host.replace(document, input),
+    run: (host, document, input) =>
+      host.operate(document, {
+        page: input.page,
+        target: input.target,
+        operation: { name: "replace", input: { value: input.value } },
+      }),
   }),
   create: defineOperation({
     name: "create",
@@ -105,3 +131,5 @@ export const operations = {
 
 /** An uncertain write outcome must retry with the same operation identity. */
 export class OperationRecoveryError extends Error {}
+
+export { inspectInput, type InspectInput } from "@tumblerjs/word/operations";
