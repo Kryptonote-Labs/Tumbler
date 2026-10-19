@@ -1,0 +1,21 @@
+{
+  "name": "@tumblerjs/cli",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./file-host": "./src/file-host.ts"
+  },
+  "bin": {
+    "tumbler": "./src/bin.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "dependencies": {
+    "@tumblerjs/word": "workspace:*",
+    "zod": "^4.6.5",
+    "yjs": "^13.6.0"
+  }
+}
