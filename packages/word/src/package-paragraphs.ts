@@ -170,8 +170,8 @@ export function wordParagraphRenderer(
     for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[])
       if (run.format?.[key] !== undefined && run.format[key] !== original?.format?.[key])
         replacements.set(propertyNames[key], runProperties({ [key]: run.format[key] }));
-    if (resetStyle) for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[]) if (run.format?.[key] === undefined) replacements.set(propertyNames[key], '');
-    if (resetStyle) {
+    if (resetStyle || run.resetFormat) for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[]) if (run.format?.[key] === undefined) replacements.set(propertyNames[key], '');
+    if (resetStyle || run.resetFormat) {
       if (run.format?.fontSizePoints === undefined) replacements.set('szCs', '');
       if (run.format?.bold === undefined) replacements.set('bCs', '');
       if (run.format?.italic === undefined) replacements.set('iCs', '');

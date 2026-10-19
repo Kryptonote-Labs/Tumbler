@@ -44,6 +44,7 @@
     },
     "packages/cli": {
       "name": "@tumblerjs/cli",
+      "version": "0.1.0-alpha.26",
       "bin": {
         "tumbler": "./src/bin.ts",
       },
@@ -153,6 +154,7 @@
         "@tumblerjs/ink": "0.1.0-alpha.26",
         "@tumblerjs/ooxml": "0.1.0-alpha.26",
         "@tumblerjs/opc": "0.1.0-alpha.26",
+        "zod": "^4.6.5",
       },
       "devDependencies": {
         "yjs": "^13.6.0",

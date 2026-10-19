@@ -32,3 +32,45 @@ test('dots and straight axes render, malformed authoring fails before creating a
   }
   expect(() => createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', ink: { ...ink, points: [[0, 0, 2]] } }] }] })).toThrow();
 });
+
+test('multi-stroke drawings keep eyes small and all coordinates together through export', () => {
+  const grouped: WordAuthoredInk = {
+    width: 120, height: 120,
+    strokes: [
+      { color: '#ffaa00', size: 2, points: [[10, 60, 1], [60, 10, 1], [110, 60, 1], [60, 110, 1], [10, 60, 1]] },
+      { color: '#202020', size: 3, points: [[40, 40, 1]] },
+      { color: '#202020', size: 3, points: [[80, 40, 1]] },
+      { color: '#202020', size: 2, points: [[35, 70, 1], [60, 90, 1], [85, 70, 1]] },
+    ],
+  };
+  const model = new NativeWordDocument();
+  model.update([{ kind: 'paragraph', runs: [{ text: '\uFFFC', ink: grouped }] }]);
+  const artifact = openWordArtifact(model.artifact().bytes());
+  const drawings = [...artifact.document.drawings.values()];
+  expect(drawings).toHaveLength(1);
+  for (const drawing of [model.drawingAt(0)!, drawings[0]!]) {
+    expect(drawing.placement).toBe('inline');
+    expect(drawing.widthPoints).toBe(120);
+    expect(drawing.ink!.traces).toHaveLength(4);
+    expect(drawing.inkRenderingDiagnostics).toBeUndefined();
+    const actual = wordInkPoints(drawing);
+    const expected = grouped.strokes.flatMap(s => s.points);
+    expect(actual).toHaveLength(expected.length);
+    actual.forEach((p, i) => {
+      expect(p.x).toBeCloseTo(expected[i]![0], 1);
+      expect(p.y).toBeCloseTo(expected[i]![1], 1);
+    });
+  }
+});
+
+test('a single dot in a shared frame retains its offset without stretching', () => {
+  const artifact = createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', ink: {
+    width: 100, height: 100,
+    strokes: [{ color: '#202020', size: 3, points: [[30, 40, 1]] }],
+  } }] }] });
+  const drawing = [...artifact.document.drawings.values()][0]!;
+  const [dot] = wordInkPoints(drawing);
+  expect(dot!.x).toBeCloseTo(30, 1);
+  expect(dot!.y).toBeCloseTo(40, 1);
+  expect(drawing.inkRenderingDiagnostics).toBeUndefined();
+});

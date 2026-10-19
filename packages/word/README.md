@@ -595,3 +595,18 @@ the original point coordinates and normalized pressure.
 geometry and point overrides on export, including in a newly created document.
 Authored ink is native-only; readers such as LibreOffice that discard InkML do not
 render these strokes. No bitmap fallback or handwriting recognition is generated.
+
+### Authoring ink drawings
+
+Use `insert-ink` with `ink: { width, height, strokes }` to create one editable
+native drawing. Each stroke supplies `points: [[x, y, pressure], ...]`, `color`,
+`size`, and optional `highlighter`. Coordinates and dimensions use points;
+pressure is between zero and one. All strokes share the drawing's coordinate
+space, including empty margins. A single-point stroke creates a dot.
+
+The entire drawing flows inline by default. For floating placement, set `layout`
+to `front` or `behind` and supply `x`, `y`, `horizontalRelativeTo` and
+`verticalRelativeTo` on the ink object. Use one drawing for related strokes so
+that they move and resize together. `edit-object` can replace its complete ink
+value, including all strokes. Existing single-stroke `points/color/size` inputs
+remain supported with their previous fit-to-frame behavior.
