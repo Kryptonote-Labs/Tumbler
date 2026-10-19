@@ -40,7 +40,7 @@ export const wordOperations = {
   ),
   "edit-object": operation(
     "edit-object",
-    "Update one inspected image, shape, chart or ink object. Geometry uses points; retain properties that should not change.",
+    "Edit existing images, shapes, ink and chart titles; resize or switch between inline, floating in front of text, and behind text. Supports page-fixed or text-relative positioning in points. Preserve unchanged properties.",
     objectPatch,
     { drawing: { width: 100, height: 60, layout: "inline" } },
   ),

@@ -86,3 +86,17 @@ EOF_TEXT
 `--value-file path` reads UTF-8 text; `--value-file -` reads stdin. These preserve content exactly,
 including trailing newlines, and cannot be combined with `--value` or `--literal`. Injected
 hosts implement `readValue(path)` to supply files and stdin from their own environment.
+
+### Discovering operations
+
+`--help` lists the live operation registry. `<document> <operation> --help` is
+local and does not open a document. It explains targets, input fields and enum
+choices, units, and examples. Custom document values carry field descriptions
+alongside the generated input schema. `edit-object --help` includes a recipe for
+changing an existing drawing between inline, in front of text, and behind text,
+with page-fixed or text-relative positioning. `read`, `inspect`, `select`, and
+`create` also have dedicated help.
+
+Embedders can use `tumblerCapabilities()` for a registry-derived capability
+overview and `tumblerOperationHelp(name, commandName)` for detailed help. Host
+permissions and supported document types still apply.
