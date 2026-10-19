@@ -29,6 +29,7 @@ export function createWordOperations(commands = createWordCommands()) {
     text: Y.Text,
     range: WordRange,
     unvalidated: WordOperation,
+    context: { availableWidthPoints?: number } = {},
   ): WordPositionedEdit {
     const operation = wordOperation.parse(unvalidated);
     // This also validates UTF-16/grapheme boundaries before a structural helper runs.
@@ -39,6 +40,78 @@ export function createWordOperations(commands = createWordCommands()) {
         return range;
       };
       switch (operation.name) {
+        case "fit-table": {
+          const cell = findCell(staged, range, operation.input.cellId);
+          const width = context.availableWidthPoints;
+          if (!width || !Number.isFinite(width))
+            throw new Error("The host must resolve the actual containing width.");
+          const weights =
+            operation.input.columnWeights ??
+            (cell.structure.widths?.length ? cell.structure.widths : undefined) ??
+            Array.from({ length: cell.structure.columns }, () => 1);
+          if (weights.length !== cell.structure.columns || weights.some((w) => w <= 0))
+            throw new Error("Supply a positive weight per column.");
+          const total = weights.reduce((a, b) => a + b, 0);
+          staged.applyDelta(
+            commands.wordTransaction(staged, [
+              {
+                kind: "table-format",
+                target: commands.anchorWordRange(staged, { start: cell.start, end: cell.start }),
+                tableId: cell.structure.id,
+                cellId: cell.structure.cell,
+                patch: {
+                  scope: "table",
+                  columnWidths: weights.map((w) => (width * operation.input.fraction * w) / total),
+                },
+              },
+            ]),
+          );
+          return range;
+        }
+        case "edit-object":
+        case "move-object": {
+          if (range.end !== range.start + 1 || staged.toString()[range.start] !== "\uFFFC")
+            throw new Error("Target exactly one inspected object.");
+          const current = wordObjectAttributes(staged, range.start);
+          if (operation.name === "edit-object") {
+            const patch = defined(operation.input);
+            if (
+              (patch.image && !current.image) ||
+              (patch.shape && !current.shape) ||
+              (patch.ink && !current.ink)
+            )
+              throw new Error("The patch must match the existing object type.");
+            if (patch.drawing && current.image) {
+              const { drawing, ...other } = patch;
+              return format({
+                ...other,
+                image: normalizeImage({
+                  ...current.image,
+                  ...drawing,
+                  ...(drawing.verticalRelativeTo
+                    ? { moveWithText: drawing.verticalRelativeTo !== "page" }
+                    : {}),
+                }),
+              });
+            }
+            return format(patch);
+          }
+          const at = operation.input.destination;
+          commands.anchorWordRange(staged, { start: at, end: at });
+          if (at >= range.start && at <= range.end) return range;
+          const target = commands.anchorWordRange(staged, range),
+            destination = commands.anchorWordRange(staged, { start: at, end: at });
+          const changes: Parameters<typeof commands.wordTransaction>[1] = current.image
+            ? [{ kind: "image-move", target, destination, previous: current.image }]
+            : [
+                { kind: "replace", target, value: "", expected: "\uFFFC" },
+                { kind: "replace", target: destination, value: "\uFFFC", attributes: current },
+              ];
+          staged.applyDelta(commands.wordTransaction(staged, changes));
+          const start = at > range.start ? at - 1 : at;
+          return { start, end: start + 1 };
+        }
+
         case "format":
           return format(defined(operation.input));
         case "paragraph":
@@ -152,15 +225,9 @@ export function createWordOperations(commands = createWordCommands()) {
         }
         case "edit-table":
         case "format-table": {
-          const cell = tableParagraphs(staged).find(
-            (p) =>
-              p.table?.cell === operation.input.cellId &&
-              p.start >= range.start &&
-              p.start <= range.end,
-          );
-          if (!cell?.table) throw new Error("The target does not contain this cell.");
+          const cell = findCell(staged, range, operation.input.cellId);
           const target = commands.anchorWordRange(staged, { start: cell.start, end: cell.start });
-          const common = { target, tableId: cell.table.id, cellId: cell.table.cell };
+          const common = { target, tableId: cell.structure.id, cellId: cell.structure.cell };
           staged.applyDelta(
             commands.wordTransaction(staged, [
               operation.name === "edit-table"
@@ -193,15 +260,18 @@ export function createWordOperations(commands = createWordCommands()) {
           );
           return { start: range.start, end: range.start };
         }
+        case "insert-ink":
         case "insert-shape":
         case "insert-image": {
           const attributes =
-            operation.name === "insert-shape"
-              ? { shape: operation.input.shape }
-              : { image: normalizeImage(operation.input.image) };
+            operation.name === "insert-ink"
+              ? { ink: operation.input.ink }
+              : operation.name === "insert-shape"
+                ? { shape: operation.input.shape }
+                : { image: normalizeImage(operation.input.image) };
           staged.applyDelta(
             commands
-              .replaceWordDelta(staged, range, "\uFFFC")
+              .replaceWordDelta(staged, range, "\uFFFC", {})
               .map((part) =>
                 part.insert ? { ...part, attributes: { ...part.attributes, ...attributes } } : part,
               ),
@@ -221,3 +291,25 @@ export function createWordOperations(commands = createWordCommands()) {
   };
 }
 export const prepareWordOperation = createWordOperations();
+
+function findCell(text: Y.Text, range: WordRange, cellId: string) {
+  for (const p of tableParagraphs(text)) {
+    if (!p.table || p.start < range.start || p.start >= range.end) continue;
+    const structure = [...(p.table.parents ?? []), p.table].find((cell) => cell.cell === cellId);
+    if (structure) return { start: p.start, structure };
+  }
+  throw new Error("The target does not contain this cell.");
+}
+
+export function wordObjectAttributes(
+  text: Y.Text,
+  at: number,
+): import("../collaboration/formatting.ts").TextAttributes {
+  let offset = 0;
+  for (const part of text.toDelta()) {
+    const end = offset + part.insert.length;
+    if (at >= offset && at < end) return part.attributes ?? {};
+    offset = end;
+  }
+  throw new Error("Object unavailable.");
+}

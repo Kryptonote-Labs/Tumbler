@@ -1,3 +1,4 @@
+import { objectPatch, ink } from "./schemas.ts";
 import { z } from "zod";
 import { WORD_PAGE_NUMBER_PRESETS } from "../page-fields.ts";
 import { WORD_LIST_KINDS } from "../authored-list.ts";
@@ -25,6 +26,48 @@ const search = {
   wholeWord: z.boolean().optional(),
 };
 export const wordOperations = {
+  "fit-table": operation(
+    "fit-table",
+    "Fit the whole table to its actual page column or containing cell. Widths are points.",
+    z
+      .object({
+        cellId: z.string(),
+        fraction: z.number().positive().max(1).default(1),
+        columnWeights: z.array(z.number().positive()).optional(),
+      })
+      .strict(),
+    { cellId: "<cell-id>", fraction: 1 },
+  ),
+  "edit-object": operation(
+    "edit-object",
+    "Update one inspected image, shape, chart or ink object. Geometry uses points; retain properties that should not change.",
+    objectPatch,
+    { drawing: { width: 100, height: 60, layout: "inline" } },
+  ),
+  "move-object": operation(
+    "move-object",
+    "Move one object to a UTF-16 insertion point in the same region.",
+    z.object({ destination: z.number().int().nonnegative() }).strict(),
+    { destination: 0 },
+  ),
+  "insert-ink": operation(
+    "insert-ink",
+    "Insert a real ink stroke. Samples are local point coordinates and pressure from 0 to 1.",
+    z.object({ ink }).strict(),
+    {
+      ink: {
+        width: 100,
+        height: 30,
+        color: "#202020",
+        size: 2,
+        points: [
+          [0, 0, 1],
+          [100, 30, 1],
+        ],
+      },
+    },
+  ),
+
   format: operation(
     "format",
     "Format characters; omitted properties are preserved, null restores inheritance.",
@@ -162,6 +205,10 @@ export const wordOperations = {
   ),
 };
 export const wordOperation = z.discriminatedUnion("name", [
+  wordOperations["fit-table"].schema,
+  wordOperations["edit-object"].schema,
+  wordOperations["move-object"].schema,
+  wordOperations["insert-ink"].schema,
   wordOperations.format.schema,
   wordOperations.replace.schema,
   wordOperations.paragraph.schema,

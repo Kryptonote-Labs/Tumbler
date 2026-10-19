@@ -9,7 +9,21 @@ import type { DocumentImage } from "../collaboration/images.ts";
 
 function runAttributes(format: WordTextFormat | undefined): TextAttributes {
   if (!format) return {};
-  const { fontSizePoints, underline, highlight, ...rest } = format;
+  const { fontSizePoints, underline, highlight } = format;
+  const rest = Object.fromEntries(
+    Object.entries(format).filter(([key]) =>
+      [
+        "fontFamily",
+        "bold",
+        "italic",
+        "strike",
+        "color",
+        "shading",
+        "verticalAlign",
+        "characterSpacingPoints",
+      ].includes(key),
+    ),
+  );
   return {
     ...rest,
     ...(highlight === undefined ? {} : { highlight }),
@@ -124,6 +138,8 @@ export function importOperationDelta(artifact: WordArtifact) {
             ...(run.drawing ? { drawing: run.drawing } : {}),
             ...(run.ink ? { ink: run.ink } : {}),
             ...(run.inkTraces ? { inkTraces: run.inkTraces } : {}),
+            ...(run.chartTitle !== undefined ? { chartTitle: run.chartTitle } : {}),
+            ...(run.chartTitleText ? { chartTitleText: run.chartTitleText } : {}),
           };
           if (run.text) delta.push({ insert: run.text, attributes });
           else emptyFormats = attributes;

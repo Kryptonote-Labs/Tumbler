@@ -11,6 +11,7 @@ export const clearCharacterFormatting = {
   fontFamily: null,
   fontSize: null,
   color: null,
+  shading: null,
   wordUnderline: null,
 } satisfies WordFormatPatch;
 export function paragraphStylePatch(styleId: string): WordFormatPatch {
@@ -29,6 +30,7 @@ export function paragraphStylePatch(styleId: string): WordFormatPatch {
     verticalAlign: null,
     characterSpacingPoints: null,
     color: null,
+    shading: null,
   };
 }
 export function containingParagraphRange(value: string, range: WordRange): WordRange {

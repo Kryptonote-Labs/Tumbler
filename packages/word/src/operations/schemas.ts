@@ -1,3 +1,8 @@
+import { isWordParagraphPositioning } from "../positioning.ts";
+import { isWordDrawingGeometry } from "../drawing-geometry.ts";
+import { isWordAuthoredInk } from "../authored-ink.ts";
+import { isWordInkTraceOverrides } from "../ink-overrides.ts";
+import { isShapeTextBody } from "../shape-text.ts";
 import { z } from "zod";
 import { TEXT_FORMATS, isFontSize } from "../collaboration/formatting.ts";
 import { isWordColour } from "../theme-colours.ts";
@@ -41,6 +46,10 @@ export const characterFormat = z
   .strict();
 export const paragraphFormat = z
   .object({
+    positioning: z
+      .custom<import("../positioning.ts").WordParagraphPositioning>(isWordParagraphPositioning)
+      .nullable()
+      .optional(),
     align: z.enum(["left", "center", "right", "justify"]).nullable().optional(),
     paragraph: z
       .custom<import("../paragraph-format.ts").WordParagraphFormat>(isWordParagraphFormat)
@@ -71,3 +80,26 @@ export const targetSchema = z.union([
   z.object({ kind: z.literal("cell"), tableId: z.string(), cellId: z.string() }).strict(),
   z.object({ kind: z.literal("table"), tableId: z.string() }).strict(),
 ]);
+
+export const drawing = z.custom<import("../drawing-geometry.ts").WordDrawingGeometry>((value) =>
+  isWordDrawingGeometry(value),
+);
+export const ink = z.custom<import("../authored-ink.ts").WordAuthoredInk>(isWordAuthoredInk);
+export const objectPatch = z
+  .object({
+    shape: shape.optional(),
+    image: image.optional(),
+    drawing: drawing.optional(),
+    ink: ink.optional(),
+    inkTraces: z
+      .custom<readonly import("../ink-overrides.ts").WordInkTraceOverride[]>(
+        isWordInkTraceOverrides,
+      )
+      .optional(),
+    chartTitle: z.string().optional(),
+    chartTitleText: z
+      .custom<readonly import("../create.ts").WordTextParagraph[]>(isShapeTextBody)
+      .optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, "Supply an object property");

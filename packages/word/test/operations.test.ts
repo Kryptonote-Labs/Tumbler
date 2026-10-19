@@ -174,3 +174,123 @@ test("DOCX sessions preserve embedded images and resolve newly inserted images",
     session.destroy();
   }
 });
+
+test("objects can be resized, moved and inspected without changing neighboring text", async () => {
+  const { inspectWordObjects } = await import("../src/operations/index.ts");
+  const text = document("before after\n");
+  text.applyDelta(
+    prepareWordOperation(
+      text,
+      { start: 7, end: 7 },
+      {
+        name: "insert-shape",
+        input: {
+          shape: {
+            preset: "rect",
+            width: 100,
+            height: 60,
+            fill: "#ffffff",
+            outline: "#000000",
+            outlineWidth: 1,
+            text: "Label",
+          },
+        },
+      },
+    ).delta,
+  );
+  text.applyDelta(
+    prepareWordOperation(
+      text,
+      { start: 7, end: 8 },
+      {
+        name: "edit-object",
+        input: {
+          shape: {
+            preset: "rect",
+            width: 200,
+            height: 80,
+            fill: "#ffffff",
+            outline: "#000000",
+            outlineWidth: 1,
+            text: "Updated",
+          },
+        },
+      },
+    ).delta,
+  );
+  text.applyDelta(
+    prepareWordOperation(
+      text,
+      { start: 7, end: 8 },
+      { name: "move-object", input: { destination: 0 } },
+    ).delta,
+  );
+  expect(text.toString()).toBe("\uFFFCbefore after\n");
+  expect(inspectWordObjects(text, undefined).objects[0]).toMatchObject({
+    start: 0,
+    attributes: { shape: { width: 200, text: "Updated" } },
+  });
+  expect(() =>
+    prepareWordOperation(
+      text,
+      { start: 1, end: 2 },
+      { name: "edit-object", input: { drawing: { width: 10, height: 10 } } },
+    ),
+  ).toThrow("one inspected object");
+});
+
+test("fit-table uses host geometry and preserves proportions", () => {
+  const text = document();
+  text.applyDelta(
+    prepareWordOperation(
+      text,
+      { start: 0, end: 0 },
+      { name: "insert-table", input: { rows: [["A", "B"]] } },
+    ).delta,
+  );
+  const cells = tableParagraphs(text).filter((p) => p.table),
+    cell = cells[0]!.table!;
+  const range = { start: cells[0]!.start, end: cells.at(-1)!.end };
+  const operation = {
+    name: "fit-table" as const,
+    input: { cellId: cell.cell, fraction: 0.8, columnWeights: [1, 3] },
+  };
+  expect(() => prepareWordOperation(text, range, operation)).toThrow("containing width");
+  text.applyDelta(
+    prepareWordOperation(text, range, operation, { availableWidthPoints: 500 }).delta,
+  );
+  expect(tableParagraphs(text).find((p) => p.table)?.table?.widths).toEqual([100, 300]);
+});
+
+test("native ink created through operations survives DOCX export", async () => {
+  const { createWordArtifact } = await import("../src/index.ts");
+  const { openWordOperationDocument } = await import("../src/operations/index.ts");
+  const session = openWordOperationDocument(createWordArtifact());
+  try {
+    session.text.applyDelta(
+      prepareWordOperation(
+        session.text,
+        { start: 0, end: 0 },
+        {
+          name: "insert-ink",
+          input: {
+            ink: {
+              width: 100,
+              height: 30,
+              size: 2,
+              color: "#202020",
+              points: [
+                [0, 0, 1],
+                [100, 30, 0.5],
+              ],
+            },
+          },
+        },
+      ).delta,
+    );
+    const drawings = [...session.artifact().document.drawings.values()];
+    expect(drawings.some((d) => d.kind === "image" && d.ink)).toBe(true);
+  } finally {
+    session.destroy();
+  }
+});
