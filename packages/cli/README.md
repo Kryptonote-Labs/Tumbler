@@ -22,4 +22,3 @@ Reads use UTF-16 offsets and return a continuation offset. File reads currently 
 body, including table paragraphs; live hosts may support additional regions. A target
 must be unique within its read page. `--within` narrows an exact match using surrounding
 text. Unknown flags and ambiguous targets fail without writes. Use `--help` for flags.
-
