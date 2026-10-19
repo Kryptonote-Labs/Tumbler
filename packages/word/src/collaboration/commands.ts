@@ -263,6 +263,9 @@ function formatWordDelta(
     throw new Error('Use table operations to change cell structure.');
   const value = text.toString();
   const { align, styleId, paragraph, positioning, tab: _tab, list, table: _table, image: _image, field: _field, ...inline } = attributes;
+  // A font ID and a literal family are alternative ways to specify the same property.
+  if (attributes.fontFamily !== undefined && attributes.font === undefined) inline.font = null;
+  if (attributes.font !== undefined && attributes.fontFamily === undefined) inline.fontFamily = null;
   const delta: WordDelta = [];
   let cursor = 0;
   const append = (start: number, length: number, attributes: WordFormatPatch) => {

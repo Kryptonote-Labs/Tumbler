@@ -176,3 +176,5 @@ export { wordInkPoints, moveWordInkPoint, type WordInkPoint } from './ink-points
 export { withWordInkTraces, isWordInkTraceOverrides, type WordInkTraceOverride } from './ink-overrides.ts';
 
 export { authoredInkXml, isWordAuthoredInk, type WordAuthoredInk } from './authored-ink.ts';
+
+export type { WordFormattingPatch } from "./formatting.ts";
