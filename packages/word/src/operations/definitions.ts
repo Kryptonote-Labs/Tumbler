@@ -52,18 +52,13 @@ export const wordOperations = {
   ),
   "insert-ink": operation(
     "insert-ink",
-    "Insert a real ink stroke. Samples are local point coordinates and pressure from 0 to 1.",
+    "Insert one native ink drawing. Use strokes for a shared coordinate frame: each stroke has points [x,y,pressure], color and size. Width/height and coordinates are points. The whole drawing flows inline by default; use layout front and explicit placement to float it.",
     z.object({ ink }).strict(),
     {
       ink: {
         width: 100,
         height: 30,
-        color: "#202020",
-        size: 2,
-        points: [
-          [0, 0, 1],
-          [100, 30, 1],
-        ],
+        strokes: [{ color: "#202020", size: 2, points: [[10, 10, 1], [90, 20, 1]] }],
       },
     },
   ),
