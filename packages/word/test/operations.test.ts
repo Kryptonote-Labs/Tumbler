@@ -294,3 +294,34 @@ test("native ink created through operations survives DOCX export", async () => {
     session.destroy();
   }
 });
+
+test("regular image updates preserve bytes and alt text while changing size and layout", async () => {
+  const { createWordArtifact, openWordArtifact } = await import("../src/index.ts");
+  const { openWordOperationDocument, inspectWordObjects } = await import("../src/operations/index.ts");
+  const png = new Uint8Array(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=", "base64"));
+  let source = createWordArtifact({blocks:[{kind:"image",bytes:png,contentType:"image/png",width:80,height:40,alt:"Original"}]});
+  for (const layout of ["front", "behind", "inline"] as const) {
+    const session = openWordOperationDocument(source);
+    try {
+      const image = inspectWordObjects(session.text, source).objects[0]!.attributes.image!;
+      const drawing = {width:160,height:80,layout,x:72,y:90,horizontalRelativeTo:"page" as const,verticalRelativeTo:"page" as const};
+      const input = layout === "front" ? {drawing} : layout === "behind" ? {image:{...image,width:200},drawing} : {image:{...image,width:120,height:60,layout}};
+      session.text.applyDelta(prepareWordOperation(session.text,{start:0,end:1},{name:"edit-object",input}).delta);
+      source = openWordArtifact(session.artifact().bytes());
+      const result = [...source.document.drawings.values()][0]!;
+      expect(result.kind).toBe("image");
+      if (result.kind !== "image") throw new Error("Expected image");
+      expect(result.bytes).toEqual(png);
+      expect(result.widthPoints).toBe(layout === "inline" ? 120 : 160);
+      expect(result.heightPoints).toBe(layout === "inline" ? 60 : 80);
+      expect(result.altText).toBe("Original");
+      expect(result.placement).toBe(layout === "inline" ? "inline" : "anchor");
+      if (layout !== "inline") {
+        expect(result.anchor?.behindDocument).toBe(layout === "behind");
+        expect(result.anchor?.horizontalOffsetPoints).toBe(72);
+        expect(result.anchor?.verticalOffsetPoints).toBe(90);
+        expect(result.anchor?.verticalRelativeTo).toBe("page");
+      }
+    } finally { session.destroy(); }
+  }
+});

@@ -81,18 +81,22 @@ export function createWordOperations(commands = createWordCommands()) {
               (patch.ink && !current.ink)
             )
               throw new Error("The patch must match the existing object type.");
-            if (patch.drawing && current.image) {
-              const { drawing, ...other } = patch;
-              return format({
-                ...other,
+            if (current.image && (patch.image || patch.drawing)) {
+              const { image, drawing, ...other } = patch;
+              staged.applyDelta(commands.wordTransaction(staged, [{
+                kind: "image-update",
+                target: commands.anchorWordRange(staged, range),
+                previous: current.image,
                 image: normalizeImage({
-                  ...current.image,
+                  ...(image ?? current.image),
                   ...drawing,
-                  ...(drawing.verticalRelativeTo
+                  ...(drawing?.verticalRelativeTo
                     ? { moveWithText: drawing.verticalRelativeTo !== "page" }
                     : {}),
                 }),
-              });
+              }]));
+              if (Object.keys(other).length) format(other);
+              return range;
             }
             return format(patch);
           }
