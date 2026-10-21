@@ -118,6 +118,7 @@
     pointer-events: none;
   }
   .story {
+    flex-shrink: 0;
     color: #000;
     font:
       16px Aptos,
