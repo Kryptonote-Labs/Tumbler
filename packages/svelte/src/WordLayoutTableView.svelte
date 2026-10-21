@@ -69,7 +69,7 @@
           {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
             <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageurl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
           {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "shape"}
-                  <div class="document-drawing" style={drawingStyle(fragment)}><WordShapeView shape={fragment.drawing.shape} /></div>
+                  <div class="document-drawing shape-drawing" style={drawingStyle(fragment)}><WordShapeView shape={fragment.drawing.shape} /></div>
                 {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
             <div class="document-drawing" style={drawingStyle(fragment)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-table-chart-${pageIndex}-${fragment.contentElementId}`} /></div>
           {:else if fragment.kind === "drawing"}
@@ -95,6 +95,7 @@
   .document-table { user-select: none; pointer-events: none; }
   .document-cell { overflow: hidden; }
   .document-drawing { display: block; object-fit: fill; overflow: hidden; }
+  .shape-drawing { overflow: visible; }
   .drawing-fallback { border: 1px solid #d0d0d0; background: repeating-linear-gradient(135deg, #f3f3f3, #f3f3f3 8px, #fafafa 8px, #fafafa 16px); }
   span, button { display: block; white-space: pre; user-select: text; -webkit-user-select: text; }
   .caret-anchor { overflow: visible; }
