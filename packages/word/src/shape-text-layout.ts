@@ -1,4 +1,4 @@
-import { layoutWordSource, type WordLayoutLine, type WordLayoutTable, type WordTextMeasurer } from "./layout.ts";
+import { layoutWordStory, type WordLayoutLine, type WordLayoutTable, type WordTextMeasurer } from "./layout.ts";
 import { NativeWordDocument } from "./native-document.ts";
 import { shapeTextParagraphs } from "./shape-text.ts";
 import type { WordAuthoredShape } from "./shapes.ts";
@@ -6,8 +6,6 @@ import { resolveWordShapeTextInsets } from './shape-text-insets.ts';
 
 /** @deprecated Historical uniform inset. Use resolveWordShapeTextInsets for DrawingML defaults. */
 export const WORD_SHAPE_TEXT_INSET_POINTS = 4.5;
-// Word's tallest page (22in) bounds how much overflowing text is laid out before clipping.
-const STORY_HEIGHT_TWIPS = 31_680;
 
 export interface WordShapeTextLayout {
   /** Lines and tables relative to the text origin `(x, y)` in the shape's frame. */
@@ -35,24 +33,23 @@ export function layoutWordShapeText(
   if (inner <= 0 || innerHeight <= 0 || paragraphs.every(paragraph => paragraph.runs.every(run => run.text === ""))) return empty;
   const model = new NativeWordDocument({ defaultFormat: { fontFamily: "Aptos", fontSizePoints: 12 } });
   model.update(paragraphs.map(paragraph => ({ kind: "paragraph", ...paragraph })));
-  const twips = Math.max(1, Math.round(inner * 20));
-  const { pages } = layoutWordSource({
+  // A text box is one continuous story. Signed insets and vertical alignment can
+  // bring text beyond a page-sized prefix back inside the visible shape.
+  const story = layoutWordStory({
     blocks: model.blocks,
     drawings: model.drawings,
     listMarkers: model.listMarkers,
     wrapTrailSpaces: model.wrapTrailSpaces,
-    finalSection: { ...model.finalSection, pageWidthTwips: twips, pageHeightTwips: STORY_HEIGHT_TWIPS, marginTopTwips: 0, marginRightTwips: 0, marginBottomTwips: 0, marginLeftTwips: 0, headerDistanceTwips: 0, footerDistanceTwips: 0, gutterTwips: 0, columnCount: 1, headerReferences: [], footerReferences: [] },
     paragraphFormat: paragraph => model.paragraphFormat(paragraph),
     runFormat: (paragraph, run) => model.runFormat(paragraph, run),
-  }, measurer, { pageLimit: 1 });
-  const column = pages[0]?.columns[0];
-  if (!column) return empty;
-  const bottom = Math.max(0, ...column.lines.map(line => line.y + line.height), ...column.tables.map(table => table.y + table.height));
+  }, Math.max(1, Math.round(inner * 20) / 20), measurer);
+  const bottom = story.tables.reduce((bottom, table) => Math.max(bottom, table.y + table.height),
+    story.lines.reduce((bottom, line) => Math.max(bottom, line.y + line.height), 0));
   const free = innerHeight - bottom;
   return {
     x: inset.left,
     y: inset.top + (shape.textAnchor === "top" ? 0 : shape.textAnchor === "bottom" ? free : free / 2),
-    lines: column.lines,
-    tables: column.tables,
+    lines: story.lines,
+    tables: story.tables,
   };
 }

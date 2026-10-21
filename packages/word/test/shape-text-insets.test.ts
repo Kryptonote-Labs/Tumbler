@@ -123,3 +123,19 @@ test('insets that consume the frame leave no visible text without changing the s
     expect(result.lines).toEqual([]);
   }
 });
+
+test.each(['top', 'center', 'bottom'] as const)('signed insets keep late story text visible with %s anchoring', textAnchor => {
+  const textBody = Array.from({ length: 160 }, (_, index) => ({
+    runs: [{ text: `Line ${index}` }],
+    paragraph: { spacingBeforeTwips: 0, spacingAfterTwips: 0, lineSpacing: { rule: 'exact' as const, value: 240 } },
+  }));
+  const result = layoutWordShapeText({ ...shape, textBody, textAnchor, textInsets: { top: -1700, right: 0, bottom: 0, left: 0 } }, 100, 60, measure);
+  expect(result.lines).toHaveLength(160);
+  const visible = result.lines.filter(line => result.y + line.y < 60 && result.y + line.y + line.height > 0);
+  const labels = visible.map(line => line.fragments.map(fragment => fragment.text).join(''));
+  expect(labels).toEqual(textAnchor === 'top'
+    ? ['Line 141', 'Line 142', 'Line 143', 'Line 144', 'Line 145', 'Line 146']
+    : textAnchor === 'center'
+      ? ['Line 148', 'Line 149', 'Line 150', 'Line 151', 'Line 152', 'Line 153']
+      : ['Line 155', 'Line 156', 'Line 157', 'Line 158', 'Line 159']);
+});

@@ -540,6 +540,8 @@ Omitted sides use the DrawingML defaults of 3.6pt top/bottom and 7.2pt left/righ
 The editor, headless layout and canvas painter use the same margins. DOCX import
 and export retain explicit values, including zero. These margins are separate
 from paragraph spacing and the shape's distance from surrounding text.
+Headless shape layout measures the complete text story before vertical alignment
+and clipping, including text made visible by signed insets.
 Values follow `ST_Coordinate32`, including signed insets, and serialize as EMUs
 at 12,700 EMUs per point. See [ECMA-376 Part 1, fifth edition](https://ecma-international.org/wp-content/uploads/ECMA-376-1_5th_edition_december_2016.zip)
 §21.1.2.1.1 and §20.1.10.17–18.
