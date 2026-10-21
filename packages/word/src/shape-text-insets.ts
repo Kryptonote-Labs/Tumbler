@@ -43,8 +43,10 @@ export function wordShapeTextInsetsXml(insets: WordShapeTextInsets | undefined):
 export function readWordShapeTextInsets(attribute: (name: string) => string | undefined): WordShapeTextInsets | undefined {
   const insets: { -readonly [K in keyof WordShapeTextInsets]: WordShapeTextInsets[K] } = {};
   for (const [side, name] of attributes) {
-    const raw = attribute(name);
-    if (raw === undefined) continue;
+    const value = attribute(name);
+    if (value === undefined) continue;
+    // XML Schema numeric types collapse XML whitespace before lexical validation.
+    const raw = value.replace(/^[\t\n\r ]+|[\t\n\r ]+$/g, '');
     const units = /^([+-]?[0-9]+(?:\.[0-9]+)?)(mm|cm|in|pt|pc|pi)$/.exec(raw);
     const pointsPerUnit = { mm: 72 / 25.4, cm: 72 / 2.54, in: 72, pt: 1, pc: 12, pi: 12 };
     const unit = units?.[2] as keyof typeof pointsPerUnit | undefined;

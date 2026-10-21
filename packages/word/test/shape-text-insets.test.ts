@@ -80,6 +80,13 @@ test.each(['7.2pt', '0.1in', '2.54mm', '0.254cm', '0.6pc', '0.6pi'])('reads univ
   expect(drawingShape(create(current)).textInsets?.left).toBeCloseTo(7.2);
 });
 
+test('integer insets accept XML Schema whitespace without accepting spaces between digits', () => {
+  const current = drawingShape(imported('lIns=" 91440 " rIns="&#x9;+25400&#xA;" tIns="&#xD;-12700 " bIns=" 0 "'));
+  expect(current.textInsets).toEqual({ left: 7.2, right: 2, top: -1, bottom: 0 });
+  expect(drawingShape(create(current)).textInsets).toEqual(current.textInsets);
+  expect(() => imported('lIns="91 440"')).toThrow('ST_Coordinate32');
+});
+
 test('shape validation follows signed 32-bit EMUs without imposing a shape-size limit', () => {
   for (const left of [0, -2, -2_147_483_648 / 12700, 2_147_483_647 / 12700]) {
     expect(isWordAuthoredShape({ ...shape, textInsets: { left } })).toBe(true);
