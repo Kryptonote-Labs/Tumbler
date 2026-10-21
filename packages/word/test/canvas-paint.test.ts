@@ -12,7 +12,7 @@ function recorder() {
   const calls: Call[] = [];
   const context = {
     font: "", fillStyle: "" as unknown, strokeStyle: "" as unknown, lineWidth: 1, globalAlpha: 1, textAlign: "start", textBaseline: "alphabetic", direction: "inherit", letterSpacing: "0px",
-    save: () => {}, restore: () => {}, beginPath: () => {}, rect: () => {}, clip: () => {}, moveTo: () => {}, setLineDash: () => {}, rotate: () => {}, arc: () => {},
+    save: () => {}, restore: () => {}, beginPath: () => {}, rect: (x: number, y: number, width: number, height: number) => calls.push(['rect', x, y, width, height]), clip: () => {}, moveTo: () => {}, setLineDash: () => {}, rotate: () => {}, arc: () => {},
     measureText: (text: string) => ({ width: text.length * 6 }),
     scale: (x: number, y: number) => calls.push(["scale", x, y]),
     translate: (x: number, y: number) => calls.push(["translate", x, y]),
@@ -39,7 +39,7 @@ test("paints text, list markers and formatting at the layout's baselines", () =>
   const { context, calls } = recorder();
   paintWordPage(context, page, { scale: 0.5 });
   expect(calls[0]).toEqual(["scale", 0.5, 0.5]);
-  expect(calls[1]).toEqual(["fillRect", "#ffffff", 0, 0, page.width, page.height]);
+  expect(calls).toContainEqual(["fillRect", "#ffffff", 0, 0, page.width, page.height]);
   const texts = calls.filter(call => call[0] === "fillText");
   expect(texts.map(call => call[1])).toEqual(["Plain ", "bold", "1.", "Item"]);
   const bold = page.columns[0]!.lines[0]!.fragments[1]!;
@@ -98,6 +98,15 @@ test("shape text keeps its rich run formatting and alignment", () => {
   const start = paint("start")[0]![2] as number, end = paint("end")[0]![2] as number;
   expect(end).toBeGreaterThan(start);
   expect(centred[0]![2]).toBeCloseTo((start + end) / 2);
+});
+
+test('shape text paints and clips within its own asymmetric insets', () => {
+  const shape = { preset: 'rect', width: 100, height: 60, fill: 'none', outline: 'none', outlineWidth: 0, text: 'Label', textAnchor: 'top', textInsets: { top: 0, right: 2, bottom: 8, left: -4 } } as const;
+  const { context, calls } = recorder();
+  paintWordPage(context, layout([{ kind: 'paragraph', runs: [{ text: '\uFFFC', shape }] }]), { path: d => d, measurer: measure });
+  expect(calls).toContainEqual(['rect', -4, 0, 102, 52]);
+  expect(calls).toContainEqual(['translate', -4, 0]);
+  expect(calls.some(call => call[0] === 'fillText' && call[1] === 'Label')).toBe(true);
 });
 
 test("paints charts in CSS pixels within their frame", () => {

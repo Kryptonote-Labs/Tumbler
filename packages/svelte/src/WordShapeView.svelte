@@ -4,6 +4,7 @@
     shapeTextParagraphs,
     shapePlainText,
     resolveWordColour,
+    resolveWordShapeTextInsets,
     wordShapePath,
     type WordTextParagraph,
     type WordAuthoredShape,
@@ -32,6 +33,7 @@
     oncommit?: (textBody: readonly WordTextParagraph[], reason: 'input' | 'escape') => void;
   } = $props();
   let view = $state.raw<ShapeTextEditorView>();
+  const inset = $derived(resolveWordShapeTextInsets(shape));
   function mount(root: HTMLDivElement) {
     const current = new ShapeTextEditorView(
       root,
@@ -73,6 +75,10 @@
   </svg>
   <div
     class="text"
+    style:top={`${inset.top * 4 / 3}px`}
+    style:right={`${inset.right * 4 / 3}px`}
+    style:bottom={`${inset.bottom * 4 / 3}px`}
+    style:left={`${inset.left * 4 / 3}px`}
     style:justify-content={shape.textAnchor === 'top'
       ? 'flex-start'
       : shape.textAnchor === 'bottom'
@@ -106,7 +112,6 @@
   }
   .text {
     position: absolute;
-    inset: 6px;
     display: flex;
     flex-direction: column;
     overflow: hidden;

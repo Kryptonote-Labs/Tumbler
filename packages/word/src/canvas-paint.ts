@@ -5,7 +5,8 @@ import { canvasWordTextMeasurer, wordCanvasFont, type WordCanvasTextContext } fr
 import type { WordImageDrawing } from "./drawings.ts";
 import { wordHighlightColor } from "./highlight.ts";
 import type { WordLayoutFragment, WordLayoutLine, WordLayoutMarker, WordLayoutPage, WordLayoutTable, WordTextMeasurer } from "./layout.ts";
-import { layoutWordShapeText, WORD_SHAPE_TEXT_INSET_POINTS as INSET } from "./shape-text-layout.ts";
+import { layoutWordShapeText } from "./shape-text-layout.ts";
+import { resolveWordShapeTextInsets } from './shape-text-insets.ts';
 import { wordShapePath, type WordAuthoredShape } from "./shapes.ts";
 import type { WordCellBorders, WordTableBorder } from "./table-format.ts";
 import { resolveWordColour } from "./theme-colours.ts";
@@ -219,7 +220,8 @@ function paintShape<Image, Path>(context: WordCanvasContext<Image, Path>, shape:
   if (text.lines.length > 0 || text.tables.length > 0) {
     // Overflowing text is clipped to the text box, as in the editor.
     context.beginPath();
-    context.rect(INSET, INSET, fragment.width - INSET * 2, fragment.height - INSET * 2);
+    const inset = resolveWordShapeTextInsets(shape);
+    context.rect(inset.left, inset.top, fragment.width - inset.left - inset.right, fragment.height - inset.top - inset.bottom);
     context.clip();
     context.translate(text.x, text.y);
     for (const table of text.tables) paintTable(context, table, options);

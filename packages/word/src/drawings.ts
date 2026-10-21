@@ -6,6 +6,7 @@ import { readShapeText, type ShapeTextFormats } from './shape-text-import.ts';
 import { wordThemeSlot } from './theme-colour-xml.ts';
 import { DEFAULT_WORD_THEME, resolveWordColour, type WordColour, type WordThemeColour } from './theme-colours.ts';
 import { THEME_COLOR_SLOTS, parseThemeColorScheme, type ThemeColorScheme } from '@tumblerjs/ooxml';
+import { readWordShapeTextInsets } from './shape-text-insets.ts';
 import { isWordAuthoredShape } from './shapes.ts';
 import { ChartParseError, parseOoxmlChart, type ChartModel } from "@tumblerjs/charts";
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
@@ -182,8 +183,9 @@ function parseDrawing(
     const textBody = box ? readShapeText(input, box, OOXML_NAMESPACES[input.conformance].wordprocessing, shapeFormats) : undefined;
     if (box && !textBody) return unsupported(drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, 'This text box contains structures retained in the source document.');
     const body = nodes.find(n => n.localName === 'bodyPr');
+    const textInsets = readWordShapeTextInsets(name => attribute(body, name));
     const textAnchor = attribute(body, 'anchor') === 'ctr' ? 'center' : attribute(body, 'anchor') === 'b' ? 'bottom' : 'top';
-    const shape = { preset, textAnchor, ...(textBody ? { textBody } : {}), width: widthPoints, height: heightPoints, fill: color(props), outline: color(line), outlineWidth: Number(attribute(line, 'w') ?? 0) / EMUS_PER_POINT, ...(text ? { text } : {}), ...(altText ? { alt: altText } : {}), layout: placement === 'inline' ? 'inline' : anchor?.behindDocument ? 'behind' : 'front', ...(anchor ? { x: anchor.horizontalOffsetPoints ?? 0, y: anchor.verticalOffsetPoints ?? 0, moveWithText: anchor.verticalRelativeTo !== 'page', ...(anchor.horizontalRelativeTo === 'page' || anchor.horizontalRelativeTo === 'column' ? { horizontalRelativeTo: anchor.horizontalRelativeTo } : {}), ...(['page', 'line', 'paragraph'].includes(anchor.verticalRelativeTo ?? '') ? { verticalRelativeTo: anchor.verticalRelativeTo } : {}) } : {}) };
+    const shape = { preset, textAnchor, ...(textInsets ? { textInsets } : {}), ...(textBody ? { textBody } : {}), width: widthPoints, height: heightPoints, fill: color(props), outline: color(line), outlineWidth: Number(attribute(line, 'w') ?? 0) / EMUS_PER_POINT, ...(text ? { text } : {}), ...(altText ? { alt: altText } : {}), layout: placement === 'inline' ? 'inline' : anchor?.behindDocument ? 'behind' : 'front', ...(anchor ? { x: anchor.horizontalOffsetPoints ?? 0, y: anchor.verticalOffsetPoints ?? 0, moveWithText: anchor.verticalRelativeTo !== 'page', ...(anchor.horizontalRelativeTo === 'page' || anchor.horizontalRelativeTo === 'column' ? { horizontalRelativeTo: anchor.horizontalRelativeTo } : {}), ...(['page', 'line', 'paragraph'].includes(anchor.verticalRelativeTo ?? '') ? { verticalRelativeTo: anchor.verticalRelativeTo } : {}) } : {}) };
     if (isWordAuthoredShape(shape)) return { kind: 'shape', elementId: drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, shape };
   }
   const relationshipNs = input.conformance === "strict" ? "http://purl.oclc.org/ooxml/officeDocument/relationships" : "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
