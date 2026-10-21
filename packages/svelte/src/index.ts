@@ -63,3 +63,5 @@ export { default as WordParagraphDecorations } from './WordParagraphDecorations.
 export { default as WordShapeView } from './WordShapeView.svelte';
 
 export type { ShapeTextEditor } from './word-shape-text-editor.ts';
+
+export { wordDarkColour, wordDisplayColour } from './word-display-colour.ts';

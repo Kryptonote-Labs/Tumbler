@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { wordDisplayColour } from './word-display-colour.ts';
   import WordInkPointEditor from "./WordInkPointEditor.svelte";
   import ChartTitleEditor from "./ChartTitleEditor.svelte";
   import WordShapeView from "./WordShapeView.svelte";
@@ -41,7 +42,8 @@
   let preview = $state<WordDrawingBox>();
   let drag: { pointer: number; scale: number; target: HTMLElement | undefined; clientX: number; clientY: number; box: WordDrawingBox; handle?: Handle } | undefined;
   let currentLayout: NonNullable<WordDrawingChange['layout']> = $derived(drawing.placement === 'inline' ? 'inline' : drawing.anchor?.behindDocument ? 'behind' : 'front');
-  const inkSvg = $derived(wordInkSvg(drawing));
+  // Only engine-generated ink markup passes here. Pictures retain their original pixels.
+  const inkSvg = $derived(wordInkSvg(drawing)?.replace(/fill="(#[\da-f]{6})"/gi, (_, colour: string) => `style="fill:${wordDisplayColour(colour)}"`));
   const label = $derived(drawing.altText ?? drawing.name ?? (drawing.kind === 'chart' ? 'Chart' : 'Image'));
   let displayWidth = $derived(wordPointsToCssPixels(preview?.width ?? width));
   let displayHeight = $derived(wordPointsToCssPixels(preview?.height ?? height));
@@ -179,7 +181,7 @@
   {/if}
 {/snippet}
 
-<div class="drawing" class:moving={preview !== undefined} class:behind={currentLayout === 'behind'} class:selected={editable && selected} data-word-drawing={drawing.elementId} contenteditable="false" style={`${position};width:${displayWidth}px;height:${displayHeight}px;translate:${preview === undefined ? 'none' : `${wordPointsToCssPixels(preview.x - pageX)}px ${wordPointsToCssPixels(preview.y - pageY)}px`};--handle-size:${10 / scale}px;--outline-size:${1 / scale}px;--inverse-scale:${1 / scale}`}>
+<div class="drawing" class:ink={inkSvg !== undefined} class:moving={preview !== undefined} class:behind={currentLayout === 'behind'} class:selected={editable && selected} data-word-drawing={drawing.elementId} contenteditable="false" style={`${position};width:${displayWidth}px;height:${displayHeight}px;translate:${preview === undefined ? 'none' : `${wordPointsToCssPixels(preview.x - pageX)}px ${wordPointsToCssPixels(preview.y - pageY)}px`};--handle-size:${10 / scale}px;--outline-size:${1 / scale}px;--inverse-scale:${1 / scale}`}>
   {#if editingTitle && editable && drawing.kind === 'chart'}
     <ChartTitleEditor model={drawing.model} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} oncommit={(paragraphs) => { if (oncharttitletextchange) oncharttitletextchange(paragraphs); else oncharttitlechange?.(paragraphs.map(p => p.runs.map(r => r.text).join('')).join('\n')); }} oncancel={() => { editingTitle = false; onselect(drawing.elementId); }} />
   {/if}
@@ -217,7 +219,8 @@
 
 <style>
   /* Document lines preserve whitespace and may be as tall as an inline drawing. */
-  .drawing { position: absolute; white-space: normal; line-height: normal; }
+  .drawing { color-scheme: only light; position: absolute; white-space: normal; line-height: normal; }
+  .drawing.ink { color-scheme: inherit; }
   .drawing.moving { z-index: 3; }
   .drawing.behind .content { z-index: 0; }
   .drawing.selected { outline: var(--outline-size) solid var(--tumbler-document-accent, #25a735); }

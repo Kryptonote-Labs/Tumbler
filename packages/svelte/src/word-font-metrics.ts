@@ -1,3 +1,4 @@
+import { wordDisplayColour } from './word-display-colour.ts';
 import { canvasWordTextMeasurer, wordFontFamily, wordHighlightColor, wordPointsToCssPixels, type ComputedWordTextFormat, type WordCanvasTextContext, type WordTextMeasurer, type WordLayoutFragment } from "@tumblerjs/word";
 import { browserWordLineMetrics } from './word-line-metrics.ts';
 import { browserWordBaselineOffset } from './word-baseline.ts';
@@ -7,7 +8,10 @@ export function browserWordTextMeasurer(context: WordCanvasTextContext): WordTex
   return canvasWordTextMeasurer(context, browserWordLineMetrics(context));
 }
 
-export function wordTextCss(format: ComputedWordTextFormat): string {
+export function wordTextCss(format: ComputedWordTextFormat, background = '#ffffff'): string {
+  const highlight = wordHighlightColor(format.highlight);
+  const fill = highlight === 'transparent' ? format.shading ?? 'transparent' : highlight;
+  const surface = fill === 'transparent' ? background : fill;
   const separateStrike = format.strike && format.underline === "double";
   const decoration = [format.underline === "none" ? "" : "underline", format.strike && !separateStrike ? "line-through" : ""].filter(Boolean).join(" ") || "none";
   return [
@@ -20,8 +24,8 @@ export function wordTextCss(format: ComputedWordTextFormat): string {
     `text-decoration-line:${decoration}`,
     `text-decoration-style:${format.underline === "double" ? "double" : "solid"}`,
     `letter-spacing:${wordPointsToCssPixels(format.characterSpacingPoints ?? 0)}px`,
-    `color:${format.color}`,
-    `background-color:${wordHighlightColor(format.highlight) === "transparent" ? format.shading ?? "transparent" : wordHighlightColor(format.highlight)}`,
+    `color:${wordDisplayColour(format.color, surface)}`,
+    `background-color:${wordDisplayColour(fill)}`,
     ...(separateStrike ? ["background-image:linear-gradient(currentColor,currentColor)", "background-size:100% 1px", "background-position:center", "background-repeat:no-repeat"] : []),
     `direction:${format.rightToLeft ? "rtl" : "ltr"}`,
 

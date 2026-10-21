@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { wordDisplayColour } from './word-display-colour.ts';
   import WordInkPageLayer from "./WordInkPageLayer.svelte";
   import WordShapeView from "./WordShapeView.svelte";
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
@@ -24,9 +25,10 @@
     readonly ondrawingchange?: (change: WordDrawingChange) => void;
     readonly ondrawingresize?: (size: WordDrawingResize) => void;
     readonly scale?: number;
+    readonly displayMode?: "light" | "dark";
   }
 
-  let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, oninkchange, scale = $bindable(1) }: Props = $props();
+  let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, oninkchange, scale = $bindable(1), displayMode = "light" }: Props = $props();
   let scroller = $state<HTMLDivElement>();
   let viewportWidth = $state(0);
   let layout = $state<WordLayout>();
@@ -42,6 +44,22 @@
   let paragraphs = $derived(wordDocumentParagraphs(wordDocument));
   let paragraphOrder = $derived(new Map(paragraphs.map((paragraph, index) => [paragraph.elementId, index])));
   let paragraphText = $derived(new Map(paragraphs.map(paragraph => [paragraph.elementId, wordParagraphText(wordDocument, paragraph)])));
+  // Body text includes flattened table lines; retain each line's original surface for contrast.
+  const lineSurfaces = $derived.by(() => {
+    const result = new Map<number, string>();
+    const visit = (lines: readonly import('@tumblerjs/word').WordLayoutLine[], tables: readonly import('@tumblerjs/word').WordLayoutTable[], background: string) => {
+      for (const line of lines) result.set(line.paragraphElementId, line.paragraphDecoration?.shading ?? background);
+      for (const table of tables) for (const cell of table.cells) visit(cell.lines, cell.tables, cell.shading ?? background);
+    };
+    for (const page of layout?.pages ?? []) {
+      const background = layout?.background ?? '#ffffff';
+      for (const column of page.columns) visit(column.lines, column.tables, background);
+      visit(page.headerLines, page.headerTables, background);
+      visit(page.footerLines, page.footerTables, background);
+      visit(page.noteLines, page.noteTables, background);
+    }
+    return result;
+  });
   const imageUrls = new WeakMap<Uint8Array, string>();
   const createdUrls = new Set<string>();
 
@@ -418,8 +436,8 @@
     ]));
   }
 
-  function fragmentStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0) {
-    return `${wordTextCss(fragment.format)};left:${wordPointsToCssPixels(fragment.x - offsetX)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - offsetY)}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
+  function fragmentStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0, background = layout?.background ?? '#ffffff') {
+    return `${wordTextCss(fragment.format, background)};left:${wordPointsToCssPixels(fragment.x - offsetX)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - offsetY)}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 
   /** Inline runs keep browser word boundaries intact across formatting changes. */
@@ -427,7 +445,7 @@
     const fragment = line.fragments[index]!;
     const previous = line.fragments.slice(0, index).findLast(item => item.kind !== "drawing");
     const gap = fragment.x - (previous === undefined ? line.x : previous.x + previous.width);
-    return `${wordTextCss(fragment.format)};${fragment.format.verticalAlign === "baseline" ? "vertical-align:top;" : ""}margin-left:${wordPointsToCssPixels(gap)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - line.y)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
+    return `${wordTextCss(fragment.format, lineSurfaces.get(line.paragraphElementId))};${fragment.format.verticalAlign === "baseline" ? "vertical-align:top;" : ""}margin-left:${wordPointsToCssPixels(gap)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - line.y)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 
   function drawingStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0, paintImage = false) {
@@ -449,6 +467,7 @@
 
 <div
   class="word-scroller"
+  style:color-scheme={displayMode}
   bind:this={scroller}
   bind:clientWidth={viewportWidth}
   use:zoomGesture={(gesture) => { finishMouseSelection(); zoomAt(scale * gesture.factor, gesture.x, gesture.y, gesture.targetX, gesture.targetY); }}
@@ -462,7 +481,7 @@
         {@const pageIndex = viewport.first + localIndex}
         <section
           class="word-page"
-          style:background-color={layout.background ?? "#fff"}
+          style:background-color={wordDisplayColour(layout.background ?? "#fff")}
           aria-label={`Page ${page.index + 1}`}
           style={`left:${Math.max(24 * scale, (viewportWidth - wordPointsToCssPixels(page.width) * scale) / 2)}px;top:${viewport.offsets[pageIndex]! * scale}px;width:${wordPointsToCssPixels(page.width) * scale}px;height:${wordPointsToCssPixels(page.height) * scale}px`}
         >
@@ -496,7 +515,7 @@
             {/if}
             {#each [...page.headerLines, ...page.footerLines, ...page.noteLines] as line}
               {#if line.marker !== undefined}
-                <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
+                <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format, lineSurfaces.get(line.paragraphElementId))};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
               {/if}
               {#each line.fragments as fragment}
                 {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
@@ -508,18 +527,18 @@
                 {:else if fragment.kind === "drawing"}
                   <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment)}></div>
                 {:else if fragment.hyperlink === undefined}
-                  <span data-story="header-footer" data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment)}>{fragment.text}</span>
+                  <span data-story="header-footer" data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, 0, 0, lineSurfaces.get(line.paragraphElementId))}>{fragment.text}</span>
                 {:else}
-                  <button class="hyperlink" onkeydown={(event) => activateHyperlink(event, fragment.hyperlink)} onclick={(event) => activateHyperlink(event, fragment.hyperlink)} data-story="header-footer" data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment)}>{fragment.text}</button>
+                  <button class="hyperlink" onkeydown={(event) => activateHyperlink(event, fragment.hyperlink)} onclick={(event) => activateHyperlink(event, fragment.hyperlink)} data-story="header-footer" data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, 0, 0, lineSurfaces.get(line.paragraphElementId))}>{fragment.text}</button>
                 {/if}
               {/each}
             {/each}
             {#each [...page.headerTables, ...page.footerTables, ...page.noteTables] as table}
-              <WordLayoutTableView {table} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} story="auxiliary" />
+              <WordLayoutTableView {table} background={layout.background} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} story="auxiliary" />
             {/each}
             {#each page.columns as column}
               {#each column.tables as table}
-                <WordLayoutTableView {table} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} decorationsOnly />
+                <WordLayoutTableView {table} background={layout.background} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} decorationsOnly />
               {/each}
             {/each}
             {#each bodyLines(page) as line}
@@ -527,7 +546,7 @@
                 <span
                   class="list-marker"
                   aria-hidden="true"
-                  style={`${wordTextCss(line.marker.format)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}
+                  style={`${wordTextCss(line.marker.format, lineSurfaces.get(line.paragraphElementId))};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}
                 >{line.marker.text}</span>
               {/if}
 
@@ -574,7 +593,8 @@
 </div>
 
 <style>
-  .word-scroller { position: relative; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; background: var(--tumbler-document-workspace, #e7e8ea); color: #000; }
+  @media print { .word-scroller { color-scheme: only light !important; } }
+  .word-scroller { position: relative; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; background: var(--tumbler-document-workspace, #e7e8ea); color: light-dark(#000, #fff); }
   .word-surface { position: relative; min-width: 100%; }
   .word-page { position: absolute; overflow: hidden; box-sizing: border-box; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.2); contain: strict; }
   .word-page-content { position: absolute; inset: 0 auto auto 0; overflow: hidden; }

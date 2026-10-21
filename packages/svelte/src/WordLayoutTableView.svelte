@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { wordDisplayColour } from './word-display-colour.ts';
   import WordShapeView from "./WordShapeView.svelte";
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
   import { wordImagePaintBounds, wordPointsToCssPixels, type WordImageDrawing, type WordLayoutFragment, type WordLayoutTable } from "@tumblerjs/word";
@@ -13,12 +14,13 @@
     readonly onactivate: (event: MouseEvent | KeyboardEvent, target: string | undefined) => void;
     readonly story?: string;
     readonly decorationsOnly?: boolean;
+    readonly background?: string;
   }
 
-  let { table, pageIndex, imageurl, onactivate, story, decorationsOnly = false }: Props = $props();
+  let { table, pageIndex, imageurl, onactivate, story, decorationsOnly = false, background = '#ffffff' }: Props = $props();
 
-  function fragmentStyle(fragment: WordLayoutFragment) {
-    return `${wordTextCss(fragment.format)};left:${wordPointsToCssPixels(fragment.x)}px;top:${wordPointsToCssPixels(wordTextTop(fragment))}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
+  function fragmentStyle(fragment: WordLayoutFragment, surface: string) {
+    return `${wordTextCss(fragment.format, surface)};left:${wordPointsToCssPixels(fragment.x)}px;top:${wordPointsToCssPixels(wordTextTop(fragment))}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 
   function drawingStyle(fragment: WordLayoutFragment) {
@@ -27,7 +29,7 @@
   }
 </script>
 
-{#snippet renderTable(current: WordLayoutTable)}
+{#snippet renderTable(current: WordLayoutTable, surface = background)}
   <div
     class="document-table"
     data-table={current.tableElementId}
@@ -40,7 +42,7 @@
       <div
         class="document-cell"
         data-cell={cell.cellElementId}
-        style={`background:${cell.shading ?? 'transparent'};left:${wordPointsToCssPixels(cell.x - current.x)}px;top:${wordPointsToCssPixels(cell.y - current.y)}px;width:${wordPointsToCssPixels(cell.width)}px;height:${wordPointsToCssPixels(cell.height)}px`}
+        style={`background:${wordDisplayColour(cell.shading ?? 'transparent')};left:${wordPointsToCssPixels(cell.x - current.x)}px;top:${wordPointsToCssPixels(cell.y - current.y)}px;width:${wordPointsToCssPixels(cell.width)}px;height:${wordPointsToCssPixels(cell.height)}px`}
       ></div>
     {/each}
     {#each current.borders ?? [] as edge}
@@ -52,7 +54,7 @@
     {#if !decorationsOnly}
       {#each cell.lines as line}
         {#if line.marker !== undefined}
-          <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
+          <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format, line.paragraphDecoration?.shading ?? cell.shading ?? surface)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
         {/if}
         {#if line.fragments.length === 0 || line.fragments.at(-1)?.endOffset !== line.endOffset}
           <span
@@ -75,15 +77,15 @@
           {:else if fragment.kind === "drawing"}
             <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment)}></div>
           {:else if fragment.hyperlink === undefined}
-            <span data-story={story} data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment)}>{fragment.text}</span>
+            <span data-story={story} data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, line.paragraphDecoration?.shading ?? cell.shading ?? surface)}>{fragment.text}</span>
           {:else}
-            <button class="hyperlink" onkeydown={(event) => onactivate(event, fragment.hyperlink)} onclick={(event) => onactivate(event, fragment.hyperlink)} data-story={story} data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment)}>{fragment.text}</button>
+            <button class="hyperlink" onkeydown={(event) => onactivate(event, fragment.hyperlink)} onclick={(event) => onactivate(event, fragment.hyperlink)} data-story={story} data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, line.paragraphDecoration?.shading ?? cell.shading ?? surface)}>{fragment.text}</button>
           {/if}
         {/each}
       {/each}
     {/if}
     {#each cell.tables as nested}
-      {@render renderTable(nested)}
+      {@render renderTable(nested, cell.shading ?? surface)}
     {/each}
   {/each}
 {/snippet}
