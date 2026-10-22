@@ -82,7 +82,17 @@ export function payloadDelta(
   projection = false,
 ) {
   const value = payload(doc, address);
-  if (!value) return [];
+  if (!value)
+    return projection
+      ? [
+          {
+            insert: "\n",
+            attributes: doc.share.has(cellFormatName(address))
+              ? Object.fromEntries(doc.getMap<unknown>(cellFormatName(address)))
+              : {},
+          },
+        ]
+      : [];
   let offset = 0;
   return value.text
     .toDelta()

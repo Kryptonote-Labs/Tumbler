@@ -6,6 +6,7 @@ import { structuredColumnWidths } from "./widths.ts";
 import { structuredGrid } from "./grid.ts";
 import {
   cellKey,
+  cellName,
   existingText,
   isTableRemoved,
   payload,
@@ -41,8 +42,12 @@ export function projectWordSharedDocument(
       text.applyDelta(delta);
       return visit(
         projectWordOperationText(text, source, resolveImage),
-        Y.createRelativePositionFromTypeIndex(payload(doc, address)!.text, 0)
-          .tname!,
+        payload(doc, address)
+          ? Y.createRelativePositionFromTypeIndex(
+              payload(doc, address)!.text,
+              0,
+            ).tname!
+          : cellName(address),
       );
     } finally {
       temporary.destroy();

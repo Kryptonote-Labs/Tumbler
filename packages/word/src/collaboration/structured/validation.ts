@@ -13,6 +13,7 @@ import {
   existingText,
   cellKey,
   tableName,
+  cellFormatName,
 } from "./state.ts";
 import {
   payload,
@@ -35,23 +36,28 @@ export function validateStructuredTables(doc: Y.Doc) {
           "Object formatting cannot belong to a virtual paragraph boundary.",
         );
     }
-  // Yjs keeps named roots after undo. Empty table maps are inert unless content
-  // remains attached to them, in which case undo must refuse to hide that content.
-  for (const name of doc.share.keys()) {
-    if (!name.startsWith("word-cell-v2:")) continue;
-    const [story, table] = z
+  // A format-only root is retained content too, even if no Y.Text was encoded.
+  const retained = [...doc.share.keys()].flatMap((name) => {
+    const format = name.startsWith("word-cell-format-v2:");
+    if (!format && !name.startsWith("word-cell-v2:")) return [];
+    const [story, table, row, column] = z
       .tuple([storyId, id, id, id])
-      .parse(JSON.parse(name.slice("word-cell-v2:".length)));
-    const address = { story, table };
+      .parse(JSON.parse(name.slice(name.indexOf(":") + 1)));
+    const occupied = format
+      ? doc.getMap(name).size > 0
+      : existingText(doc, name)!.length > 0;
+    return occupied ? [{ story, table, row, column }] : [];
+  });
+  // Yjs leaves empty named maps after undo. Ignore them only if nothing is retained.
+  for (const address of retained) {
     if (
-      existingText(doc, name)!.length &&
-      (!doc.share.has(tableName(address)) ||
-        doc.getMap(tableName(address)).size === 0)
+      !doc.share.has(tableName(address)) ||
+      doc.getMap(tableName(address)).size === 0
     )
       throw new WordTableConflict(
         address,
         "deleted-content",
-        "Undo would detach retained cell content.",
+        "Undo would detach retained cell content or formatting.",
       );
   }
   for (const address of tableAddresses(doc)) {
@@ -92,7 +98,12 @@ export function validateStructuredTables(doc: Y.Doc) {
               cellKey(row, column) in value.witnesses
             )
               continue;
-            if (payloadDelta(doc, { ...address, row, column }).length)
+            if (
+              payloadDelta(doc, { ...address, row, column }).length ||
+              (doc.share.has(cellFormatName({ ...address, row, column })) &&
+                doc.getMap(cellFormatName({ ...address, row, column })).size >
+                  0)
+            )
               throw new WordTableConflict(
                 address,
                 "deleted-content",
@@ -109,36 +120,27 @@ export function validateStructuredTables(doc: Y.Doc) {
           ),
       ),
     );
-    for (const name of doc.share.keys())
-      if (name.startsWith("word-cell-v2:")) {
-        const [story, table, row, column] = z
-          .tuple([storyId, id, id, id])
-          .parse(JSON.parse(name.slice("word-cell-v2:".length)));
-        if (story !== address.story || table !== address.table) continue;
-        const text = existingText(doc, name)!;
-        const allRows = orderedAxes(doc, address, "row"),
-          allColumns = orderedAxes(doc, address, "column");
-        if (
-          text.length &&
-          (!allRows.includes(row) || !allColumns.includes(column))
-        )
-          throw new WordTableConflict(
-            address,
-            "deleted-content",
-            "Undo would detach retained cell content.",
-          );
-        if (
-          text.length &&
-          rows.includes(row) &&
-          columns.includes(column) &&
-          !visible.has(cellKey(row, column))
-        )
-          throw new WordTableConflict(
-            address,
-            "overlap",
-            "Merge coverage would hide retained cell content.",
-          );
-      }
+    for (const { story, table, row, column } of retained) {
+      if (story !== address.story || table !== address.table) continue;
+      const allRows = orderedAxes(doc, address, "row"),
+        allColumns = orderedAxes(doc, address, "column");
+      if (!allRows.includes(row) || !allColumns.includes(column))
+        throw new WordTableConflict(
+          address,
+          "deleted-content",
+          "Undo would detach retained cell content or formatting.",
+        );
+      if (
+        rows.includes(row) &&
+        columns.includes(column) &&
+        !visible.has(cellKey(row, column))
+      )
+        throw new WordTableConflict(
+          address,
+          "overlap",
+          "Merge coverage would hide retained cell content or formatting.",
+        );
+    }
     // A merge has explicit coverage. Concurrent interior insertions are ambiguous.
     const occupied = new Set<string>();
     const equivalent = new Set<string>();
