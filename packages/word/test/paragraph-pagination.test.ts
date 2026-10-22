@@ -92,3 +92,14 @@ test('keepNext without an eligible successor does not imply keepLines', () => {
   expect(textPages(filler + paragraph(text, '<w:keepNext/>') + forced)).toEqual(textPages(filler + paragraph(text) + forced));
   expect(textPages(filler + paragraph(text, '<w:keepNext/><w:keepLines/>')).map(page => page.length)).toEqual([1, 2, 2]);
 });
+test('keep chains cross compatible continuous sections but stop at forced boundaries', () => {
+  for (const extra of ['', '<w:keepLines/>']) {
+    const body = paragraph('filler1') + paragraph('filler2') + paragraph('heading', '<w:keepNext/>' + extra + section()) + paragraph('following');
+    const document = paginationDocument(body, section('<w:type w:val="continuous"/>'));
+    expect(layoutWordDocument(document, paginationMeasurer).pages.map(page => page.columns.flatMap(column => column.lines.map(line => line.fragments.map(fragment => fragment.text).join(''))))).toEqual([['filler1', 'filler2'], ['heading', 'following']]);
+  }
+  const body = paragraph('filler') + paragraph('h1', '<w:keepNext/>' + section()) + paragraph('h2', '<w:keepNext/>' + section('<w:type w:val="continuous"/>')) + paragraph('end');
+  expect(layoutWordDocument(paginationDocument(body, section('<w:type w:val="continuous"/>')), paginationMeasurer).pages.map(page => page.columns[0]!.lines.length)).toEqual([1, 3]);
+  const forced = paragraph('filler1') + paragraph('filler2') + paragraph('heading', '<w:keepNext/>' + section()) + paragraph('following');
+  expect(layoutWordDocument(paginationDocument(forced), paginationMeasurer).pages.map(page => page.columns[0]!.lines.length)).toEqual([3, 1]);
+});

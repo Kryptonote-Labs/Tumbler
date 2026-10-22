@@ -482,6 +482,30 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
     cursorY = page.columns[columnIndex]!.y;
   };
 
+  // A continuous section with matching geometry does not interrupt paragraph adjacency.
+  const keepBoundaries = new Set<number>();
+  let boundaryOffset = 0;
+  for (const [index, section] of sections.entries()) {
+    const previous = sections[index - 1]?.properties;
+    if (!previous || section.properties.breakType !== "continuous" || !samePageGeometry(previous, section.properties) ||
+      previous.columnCount !== section.properties.columnCount || previous.columnSpaceTwips !== section.properties.columnSpaceTwips) {
+      keepBoundaries.add(boundaryOffset);
+    }
+    boundaryOffset += section.blocks.length;
+  }
+  // Retain bounded lookahead across compatible sections; never reconsider each chain suffix.
+  const pending = new Map<number, { width: number; prepared: PreparedParagraph }>();
+  const prepareBody = (index: number): PreparedParagraph | undefined => {
+    const block = document.blocks[index];
+    if (block?.kind !== "paragraph") return undefined;
+    const cached = pending.get(index);
+    const width = page!.columns[columnIndex]!.width;
+    if (cached?.width === width) return cached.prepared;
+    const prepared = withParagraphSpacing(prepareParagraph(document, block, width, measurer, listMarkers.get(block.elementId)), document.blocks, index, paragraph => document.paragraphFormat(paragraph));
+    pending.set(index, { width, prepared });
+    return prepared;
+  };
+  let inKeepChain = false;
   let sectionBlockOffset = 0;
   try {
     for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
@@ -496,19 +520,10 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
         // Continuous sections share the current page but can change the remaining column set only on the next page.
       } else addPage(section.properties, section.properties.breakType === "evenPage" ? "even" : section.properties.breakType === "oddPage" ? "odd" : undefined);
 
-      // Retain only bounded lookahead preparations, and never reconsider every suffix of a keep chain.
-      const pending = new Map<number, { width: number; prepared: PreparedParagraph }>();
-      const prepareBody = (index: number): PreparedParagraph | undefined => {
-        const block = section.blocks[index];
-        if (block?.kind !== "paragraph") return undefined;
-        const cached = pending.get(index);
-        const width = page!.columns[columnIndex]!.width;
-        if (cached?.width === width) return cached.prepared;
-        const prepared = withParagraphSpacing(prepareParagraph(document, block, width, measurer, listMarkers.get(block.elementId)), document.blocks, sectionBlockOffset + index, paragraph => document.paragraphFormat(paragraph));
-        pending.set(index, { width, prepared });
-        return prepared;
-      };
-      let inKeepChain = false;
+      if (keepBoundaries.has(sectionBlockOffset)) {
+        pending.clear();
+        inKeepChain = false;
+      }
       for (let blockIndex = 0; blockIndex < section.blocks.length; blockIndex += 1) {
         const block = section.blocks[blockIndex]!;
         if (block.kind === "table") {
@@ -573,22 +588,23 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
           column.unsupportedBlocks.push(Object.freeze({ elementId: block.elementId, localName: block.localName, y: cursorY }));
           continue;
         }
-        let prepared = prepareBody(blockIndex)!;
+        const bodyIndex = sectionBlockOffset + blockIndex;
+        let prepared = prepareBody(bodyIndex)!;
         const currentColumn = page!.columns[columnIndex]!;
         const available = currentColumn.y + currentColumn.height - cursorY;
         let requiredHeight = 0;
-        const successor = section.blocks[blockIndex + 1];
+        const successor = keepBoundaries.has(bodyIndex + 1) ? undefined : document.blocks[bodyIndex + 1];
         const chainStart = prepared.format.keepNext && successor?.kind === "paragraph" &&
           !document.paragraphFormat(successor).pageBreakBefore && (!inKeepChain || prepared.format.pageBreakBefore);
         if (chainStart || prepared.format.keepLines) {
           let candidate: PreparedParagraph | undefined = prepared;
-          let index = blockIndex;
+          let index = bodyIndex;
           while (candidate) {
             const before = points(candidate.format.spacingBeforeTwips);
             const measured = keepHeightUntil(paragraphLineSequence(candidate.lines), currentColumn.height - requiredHeight - before);
             requiredHeight += before + measured.height + (measured.explicitBreak ? 0 : points(candidate.format.spacingAfterTwips));
             if (measured.explicitBreak || requiredHeight > currentColumn.height || !chainStart || !candidate.format.keepNext) break;
-            const next = section.blocks[index + 1];
+            const next = keepBoundaries.has(index + 1) ? undefined : document.blocks[index + 1];
             if (next?.kind !== "paragraph" || document.paragraphFormat(next).pageBreakBefore) break;
             candidate = prepareBody(++index);
           }
@@ -597,12 +613,12 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
           advanceColumn(section.properties);
           if (page!.columns[columnIndex]!.width !== currentColumn.width) {
             pending.clear();
-            prepared = prepareBody(blockIndex)!;
+            prepared = prepareBody(bodyIndex)!;
           }
         }
         const sequence = paragraphLineSequence(prepared.lines);
         inKeepChain = prepared.format.keepNext;
-        pending.delete(blockIndex);
+        pending.delete(bodyIndex);
         // A previous paragraph's after-spacing belongs to the old column. At a fresh
         // boundary retain only this paragraph's authored before-spacing.
         const before = cursorY === page!.columns[columnIndex]!.y
