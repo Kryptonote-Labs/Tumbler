@@ -35,8 +35,7 @@ export function payload(
   doc: Y.Doc,
   address: CellAddress,
 ):
-  | { text: Y.Text; start: number; end: number; source?: TableCell }
-  | undefined {
+  { text: Y.Text; start: number; end: number; source?: TableCell } | undefined {
   const source = sourceCell(doc, address);
   if (source) {
     const text = existingText(doc, address.story)!;
@@ -140,49 +139,60 @@ export function isTableRemoved(doc: Y.Doc, address: TableAddress) {
   );
 }
 export function payloadSignature(doc: Y.Doc, address: CellAddress) {
-  const value = payload(doc, address),
-    nested = new Set<string>();
-  if (value?.source)
-    for (const p of tableParagraphs(value.text))
-      if (
-        p.start >= value.start &&
-        p.end <= value.end + 1 &&
-        p.table &&
-        p.table.id !== address.table
-      )
-        nested.add(p.table.id);
-  const descendants = [...nested].sort().map((table) => ({
-    table,
-    records: tableRecords(doc, { story: address.story, table }).sort((a, b) =>
-      a.key < b.key ? -1 : 1,
-    ),
-    roots: [...doc.share.keys()]
-      .filter(
-        (name) =>
-          name.startsWith("word-cell-v2:") ||
-          name.startsWith("word-cell-format-v2:"),
-      )
-      .filter((name) => {
-        const tuple: unknown = JSON.parse(name.slice(name.indexOf(":") + 1));
-        return (
-          Array.isArray(tuple) &&
-          tuple[0] === address.story &&
-          tuple[1] === table
+  const value = payload(doc, address);
+  const descendants = new Map<string, unknown>();
+  const visit = (text: Y.Text, start: number, end: number) => {
+    const story = Y.createRelativePositionFromTypeIndex(text, 0).tname!;
+    for (const p of tableParagraphs(text)) {
+      if (p.start < start || p.end > end || !p.table) continue;
+      const lineage = [...(p.table.parents ?? []), p.table];
+      const owner =
+        story === address.story
+          ? lineage.findIndex((cell) => cell.id === address.table)
+          : -1;
+      for (const nested of lineage.slice(owner + 1)) {
+        if (story === address.story && nested.id === address.table) continue;
+        const key = JSON.stringify([story, nested.id]);
+        if (descendants.has(key)) continue;
+        const records = tableRecords(doc, { story, table: nested.id }).sort(
+          (a, b) => (a.key < b.key ? -1 : 1),
         );
-      })
-      .sort()
-      .map((name) => ({
-        name,
-        value: name.startsWith("word-cell-v2:")
-          ? existingText(doc, name)!.toDelta()
-          : Object.fromEntries(doc.getMap<unknown>(name)),
-      })),
-  }));
+        const roots: { name: string; value: unknown }[] = [];
+        descendants.set(key, { records, roots });
+        for (const name of [...doc.share.keys()].sort()) {
+          if (
+            !name.startsWith("word-cell-v2:") &&
+            !name.startsWith("word-cell-format-v2:")
+          )
+            continue;
+          const tuple: unknown = JSON.parse(name.slice(name.indexOf(":") + 1));
+          if (
+            !Array.isArray(tuple) ||
+            tuple[0] !== story ||
+            tuple[1] !== nested.id
+          )
+            continue;
+          if (name.startsWith("word-cell-v2:")) {
+            const root = existingText(doc, name)!;
+            roots.push({ name, value: root.toDelta() });
+            visit(root, 0, root.length);
+          } else
+            roots.push({
+              name,
+              value: Object.fromEntries(doc.getMap<unknown>(name)),
+            });
+        }
+      }
+    }
+  };
+  if (value) visit(value.text, value.start, value.end + (value.source ? 1 : 0));
   return stableStringify({
     content: payloadDelta(doc, address),
     terminal: doc.share.has(cellFormatName(address))
       ? Object.fromEntries(doc.getMap<unknown>(cellFormatName(address)))
       : {},
-    descendants,
+    descendants: Object.fromEntries(
+      [...descendants].sort(([a], [b]) => (a < b ? -1 : 1)),
+    ),
   });
 }

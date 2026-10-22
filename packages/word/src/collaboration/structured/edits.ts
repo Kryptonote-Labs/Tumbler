@@ -40,10 +40,25 @@ export function editDerivedText<T extends { delta: WordDelta }>(
     const result = edit(staged);
     const content: WordDelta = [];
     let offset = 0;
-    for (const part of result.delta) {
+    for (const [index, part] of result.delta.entries()) {
       if (part.retain) {
         const count = Math.min(part.retain, Math.max(0, text.length - offset));
         if (count) content.push({ ...part, retain: count });
+        if (
+          offset + part.retain > text.length &&
+          result.delta.slice(index + 1).some((next) => next.insert)
+        ) {
+          // A structural insertion after the virtual terminator needs a real
+          // boundary, otherwise the preceding text becomes the first child cell.
+          content.push({
+            insert: "\n",
+            attributes: Object.fromEntries(
+              Object.entries({ ...attributes, ...part.attributes }).filter(
+                ([, value]) => value !== null,
+              ),
+            ),
+          });
+        }
         if (offset + part.retain > text.length && part.attributes) {
           const format = doc.getMap<unknown>(name);
           for (const [key, value] of Object.entries(part.attributes))
