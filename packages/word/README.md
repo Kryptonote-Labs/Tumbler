@@ -498,8 +498,12 @@ and repeats pagination when the total changes. Formatting and ordinary surroundi
 text remain editable. DOCX export writes standard simple fields. Supported simple
 fields and complete complex `PAGE` / `NUMPAGES` fields split across runs import as
 the same editable content. Editing or deleting a complex field also replaces its
-source instructions and cached result on export. Section numbering restarts and numeral
-formats are not yet evaluated by this API.
+source instructions and cached result on export. Direct artifact deletion removes
+all owned markers, instructions and cached content, retaining neighboring run content.
+`move-object` retains field semantics and formatting across paragraphs. Page-number
+insertion inherits character formatting only, including at paragraph and table-cell starts.
+Nested general fields project stored results in order without evaluating instructions.
+Section numbering restarts and numeral formats are not yet evaluated by this API.
 
 ### Editable table formatting
 

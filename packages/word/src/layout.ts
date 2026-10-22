@@ -1,3 +1,4 @@
+import { createFieldVisibility } from './field-visibility.ts';
 import { alignWordPageDrawings } from './drawing-alignment.ts';
 import { resolveWordColour } from './theme-colours.ts';
 import { splitPreparedTable, joinPreparedTables, preparedBlockHeight } from './table-pagination.ts';
@@ -877,8 +878,7 @@ function resolvedParagraphAtoms(
 ): ParagraphAtom[] {
   const atoms: ParagraphAtom[] = [];
   let logicalOffset = 0;
-  let fieldDepth = 0;
-  let resultDepth = 0;
+  const visible = createFieldVisibility();
   const addRun = (run: WordRun, hyperlink: string | undefined): void => {
     const sourceFormat = resolveFormat(run);
     const shifted = sourceFormat.verticalAlign === "superscript" || sourceFormat.verticalAlign === "subscript";
@@ -890,16 +890,7 @@ function resolvedParagraphAtoms(
       return { ...value, ascent: value.ascent - baselineShift, descent: value.descent + baselineShift };
     };
     for (const content of run.contents) {
-      if (content.kind === "field-character") {
-        if (content.fieldType === "begin") fieldDepth += 1;
-        else if (content.fieldType === "separate" && fieldDepth > 0) resultDepth = fieldDepth;
-        else if (content.fieldType === "end") {
-          if (resultDepth === fieldDepth) resultDepth = 0;
-          fieldDepth = Math.max(0, fieldDepth - 1);
-        }
-        continue;
-      }
-      if (content.kind === "field-instruction" || content.kind === "deleted-text" || fieldDepth > 0 && resultDepth !== fieldDepth) continue;
+      if (!visible(content)) continue;
       if (content.kind === 'page-field') {
         const text = String(pageFields?.[content.field] ?? 1);
         const measurement = measure(text);
