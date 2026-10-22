@@ -15,7 +15,7 @@ for (const headingExists of [true, false]) {
     const model = new NativeWordDocument({ source, immutableContent: true });
     model.layout(measure); // Exercise already-cached retained stories before changing shared styles.
     model.update(content);
-    model.updateStory('/word/header.xml', edited);
+    model.updateStory(process.env.NUMBERING_STORY_SECTION ? { section: 0, kind: 'header', type: 'default' } : '/word/header.xml', edited);
     const layout = model.layout(measure);
     const exported = model.artifact();
     const reopenedLayout = layoutWordDocument(exported.document, measure);

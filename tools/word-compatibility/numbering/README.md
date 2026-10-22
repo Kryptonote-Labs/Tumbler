@@ -89,3 +89,8 @@ as part-name targets. Native replacement stories defer content compilation until
 their final content and shared context are available, so discarded placeholder
 paragraphs cannot consume the marker budget. The four mutable/immutable repros
 failed before these corrections and pass afterward.
+
+Section-targeted replacements also resolve the current section's existing story
+before native compilation, retaining direct cancellation and style-change intent.
+Use `NUMBERING_STORY_SECTION=1` with the story benchmark runner to measure this
+source-aware section-target path using the same fixtures and operation counts.

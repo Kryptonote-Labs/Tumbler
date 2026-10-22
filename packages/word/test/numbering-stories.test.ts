@@ -1,3 +1,4 @@
+import { wordStoryArtifact } from '../src/stories.ts';
 import { expect, test } from 'bun:test';
 import { importWordContent, layoutWordDocument, NativeWordDocument, openWordArtifact } from '../src/index.ts';
 import { numberingStoryFixture, numberingStoryMeasurer as measure } from './numbering-story-fixture.ts';
@@ -80,5 +81,17 @@ for (const immutableContent of [false, true]) {
     expect(story.listMarkers.size).toBe(0);
     expect(headerMarkers(model.layout(measure))).toEqual([]);
     expect(headerMarkers(layoutWordDocument(model.artifact().document, measure))).toEqual([]);
+  });
+}
+
+for (const immutableContent of [false, true]) for (const cancelled of [false, true]) {
+  test(`section story retains direct numbering and style edit intent: immutable=${immutableContent}, cancelled=${cancelled}`, () => {
+    const source = numberingStoryFixture(1, 1, true, '<w:pStyle w:val="Normal"/>' + (cancelled ? '<w:numPr><w:numId w:val="0"/></w:numPr>' : ''));
+    const model = new NativeWordDocument({ source, immutableContent });
+    const blocks = importWordContent(wordStoryArtifact(source, '/word/header.xml')).map(block => block.kind === 'paragraph' ? { ...block, styleId: 'Heading1' } : block);
+    model.updateStory({ section: 0, kind: 'header', type: 'default' }, blocks);
+    const expected = cancelled ? [] : ['5.'];
+    expect(headerMarkers(model.layout(measure))).toEqual(expected);
+    expect(headerMarkers(layoutWordDocument(model.artifact().document, measure))).toEqual(expected);
   });
 }

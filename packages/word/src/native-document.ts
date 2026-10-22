@@ -176,7 +176,12 @@ export class NativeWordDocument implements WordLayoutSource {
     const key = typeof target === 'string' ? target : `${target.section}:${target.kind}:${target.type}`;
     let entry = this.editedStories.get(key);
     if (!entry) {
-      const source = typeof target === 'string' && this.options.source ? wordStoryArtifact(this.options.source, target) : undefined;
+      const section = typeof target === 'string' ? undefined : wordSections(this)[target.section];
+      const reference = typeof target === 'string' ? undefined :
+        (target.kind === 'header' ? section?.headerReferences : section?.footerReferences)?.find(item => item.type === target.type);
+      const partName = typeof target === 'string' ? target : this.options.source?.document.headerFooters
+        .find(story => story.relationshipId === reference?.relationshipId)?.part.name.value;
+      const source = partName && this.options.source ? wordStoryArtifact(this.options.source, partName) : undefined;
       const { source: _bodySource, content: _bodyContent, ...options } = this.options;
       entry = { target, blocks, model: new NativeWordDocument({ ...options, [deferContent]: true, ...(source ? { source } : {}) }) };
       entry.model.inheritedDoNotExpandShiftReturn = this.doNotExpandShiftReturn;
