@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { wordDrawingStackOrder } from "./word-drawing-order.ts";
+  import { wordDrawingStackOrder, wordDrawingOverlayOrder } from "./word-drawing-order.ts";
   import WordPictureView from "./WordPictureView.svelte";
   import WordInkPageLayer from "./WordInkPageLayer.svelte";
   import WordShapeView from "./WordShapeView.svelte";
@@ -490,7 +490,7 @@
             }}
             onbeforeinput={handleBeforeInput}
             onkeydown={handleKeydown}
-            style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
+            style={`--word-ink-layer-z-index:${wordDrawingOverlayOrder(drawingOrder)};width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
           >
             <WordInkPageLayer {page} {scale} background={layout.background} imageurl={imageUrl} />
             <WordParagraphDecorations lines={[...bodyLines(page), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />

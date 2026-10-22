@@ -89,3 +89,13 @@ flock -x /tmp/tumbler-word-audit-heavy.lock env CHROMIUM_PATH=/usr/bin/google-ch
 ```
 
 Save the current `packages/word/src/image-paint.ts`, replace it temporarily with the version from `2a1b93b`, and run the same command for the failing-before result. Restore the saved file for the passing-after result. The recorded integration used isolated port 4191; the configuration above uses the repository's default port 4175. Keep the paired runs under a single shared lock when comparing them.
+
+## Composited ink above ranked drawings
+
+The second independent review found that the third front picture could have rank 4 while the ink overlay remained at rank 3. The page now sets `--word-ink-layer-z-index` to one greater than its highest drawing rank. `WordInkPageLayer` consumes this property with fallback 3 for standalone hosts and retains `pointer-events: none`. Hosts that assign drawing ranks must provide the property. PR126 must retain the identical CSS declaration when replacing the canvas with tiles.
+
+A generated DOCX places three overlapping front pictures below white XOR ink. The mounted DOM screenshot samples the same 32 by 32 pixel region as the full-page canvas reference. With the old fixed rank, the canvas contains 26 cyan ink pixels and the DOM contains 0. With the dynamic rank, both contain 26. The before run fails the visible-ink assertion; the after run passes. Screenshots: [before](assets/word-picture-ink-before.png), [after](assets/word-picture-ink-after.png).
+
+The focused after run passed all seven picture browser tests in 23.1 seconds. TypeScript and Svelte checks also passed, with zero Svelte errors or warnings. Run `word-picture-stacking.e2e.ts` through the same locked browser command above to reproduce; temporarily replace the CSS variable with `z-index: 3` for the failing case. These checks used the same Chrome, generated fixture, zoom and screenshot region. They are correctness evidence, not timing benchmarks.
+
+One accidentally broad browser invocation was cancelled by terminating only its verified owned timeout process. Its partial results were discarded; the seven-test focused run above replaced it. No full suite or performance benchmark was repeated for this change.

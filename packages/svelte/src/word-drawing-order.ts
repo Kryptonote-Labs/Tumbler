@@ -17,3 +17,10 @@ export function wordDrawingStackOrder(page: WordLayoutPage): ReadonlyMap<WordDra
   drawings.sort((a, b) => (a.anchor?.zOrder ?? 0) - (b.anchor?.zOrder ?? 0));
   return new Map(drawings.map((drawing, index) => [drawing, drawing.anchor?.behindDocument ? index - drawings.length : index + 2]));
 }
+
+/** The composited pixels already include front drawings, so their layer must be above every rank. */
+export function wordDrawingOverlayOrder(order: ReadonlyMap<WordDrawing, number>): number {
+  let highest = 2;
+  for (const rank of order.values()) highest = Math.max(highest, rank);
+  return highest + 1;
+}
