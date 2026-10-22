@@ -61,22 +61,20 @@ export function structuredGrid(
         "An inserted axis split an imported grid omission.",
       );
     const cells: StructuredCell[] = [];
-    for (let i = before; i < columns.length - after; ) {
+    for (let i = before; i < columns.length - after;) {
       const column = columns[i]!,
         target = { ...address, row, column },
         source = sourceCell(doc, target);
-      const nextOriginal = rows
-        .slice(rows.indexOf(row) + 1)
-        .find((id) => base.rows.includes(id));
+      const insertion = tableRecords(doc, address).find(
+        (r) =>
+          r.value.kind === "axis" &&
+          r.value.dimension === "row" &&
+          r.value.id === row,
+      )?.value;
       const continuation =
-        !original && nextOriginal
-          ? base.cells.find(
-              (cell) =>
-                cell.row === nextOriginal &&
-                cell.merge === "continue" &&
-                base.columns
-                  .slice(cell.column, cell.column + (cell.span ?? 1))
-                  .includes(column),
+        insertion?.kind === "axis"
+          ? insertion.continuations.find((coverage) =>
+              coverage.includes(column),
             )
           : undefined;
       const merge = tableRecords(doc, address).find(
@@ -101,14 +99,29 @@ export function structuredGrid(
         covered = columns.slice(i, end + 1);
       }
       if (continuation) {
-        const last =
-          base.columns[continuation.column + (continuation.span ?? 1) - 1]!;
-        covered = columns.slice(i, columns.indexOf(last) + 1);
+        const survivors = continuation.filter((c) => columns.includes(c));
+        covered = columns.slice(
+          i,
+          columns.indexOf(survivors.at(-1) ?? column) + 1,
+        );
       }
-      const payloads =
+      if (!covered.length || covered[0] !== column)
+        throw new WordTableConflict(
+          address,
+          "overlap",
+          "Merge coverage cannot advance the grid.",
+        );
+      const seen = new Set<string>();
+      const payloads = (
         merge?.kind === "merge"
           ? covered.map((column) => ({ ...address, row, column }))
-          : [target];
+          : [target]
+      ).filter((candidate) => {
+        const identity = sourceCell(doc, candidate)?.cell ?? candidate.column;
+        if (seen.has(identity)) return false;
+        seen.add(identity);
+        return true;
+      });
       cells.push({
         address: target,
         columns: covered,

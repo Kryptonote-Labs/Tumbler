@@ -1,6 +1,12 @@
 import * as Y from "yjs";
 import { createWordCommands, type WordRange } from "../commands.ts";
-import { existingText, cellName, payload } from "./state.ts";
+import {
+  existingText,
+  cellName,
+  payload,
+  sourceCell,
+  WordTableConflict,
+} from "./state.ts";
 import { resolveCell } from "./grid.ts";
 import type { WordScopedSelection, WordScopedAnchor } from "./types.ts";
 const commands = createWordCommands();
@@ -15,6 +21,19 @@ export function selectionText(
     return { text, start: 0, end: commands.bodyLength(text) };
   }
   const cell = resolveCell(doc, selection.cell);
+  const source = sourceCell(doc, selection.cell);
+  if (
+    !cell.payloads.some(
+      (candidate) =>
+        candidate.column === selection.cell.column ||
+        (source && sourceCell(doc, candidate)?.cell === source.cell),
+    )
+  )
+    throw new WordTableConflict(
+      selection.cell,
+      "overlap",
+      "Select a visible merged-cell payload from the logical grid.",
+    );
   const value = payload(doc, selection.cell);
   if (value) return value;
   return create

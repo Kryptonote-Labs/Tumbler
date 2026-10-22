@@ -127,6 +127,12 @@ export function applyStructuredChange(
       change.at > axes.length
     )
       throw new RangeError("Axis position is outside the table.");
+    const continuations =
+      change.dimension === "row"
+        ? (structuredGrid(doc, address)[change.at]?.cells ?? [])
+            .filter((cell) => cell.verticalMerge === "continue")
+            .map((cell) => cell.columns)
+        : [];
     const id = crypto.randomUUID();
     records.set("axis:" + id, {
       kind: "axis",
@@ -134,6 +140,7 @@ export function applyStructuredChange(
       id,
       left: axes[change.at - 1] ?? null,
       right: axes[change.at] ?? null,
+      continuations,
     });
   } else if (change.kind === "delete-table") {
     const witnesses: Record<string, string> = {};
@@ -165,6 +172,24 @@ export function applyStructuredChange(
             row,
             column,
           });
+    // Retire only merges observed by this deletion. Concurrent merges still conflict.
+    for (const { key, value } of tableRecords(doc, address)) {
+      if (value.kind !== "merge") continue;
+      if (change.dimension === "row" && value.row === change.id)
+        records.delete(key);
+      else if (
+        change.dimension === "column" &&
+        value.columns.includes(change.id)
+      ) {
+        records.delete(key);
+        const columns = value.columns.filter((column) => column !== change.id);
+        if (columns.length > 1)
+          records.set("merge:" + cellKey(value.row, columns[0]!), {
+            ...value,
+            columns,
+          });
+      }
+    }
     records.set("remove:" + change.dimension + ":" + change.id, {
       kind: "remove",
       dimension: change.dimension,

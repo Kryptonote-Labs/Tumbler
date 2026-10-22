@@ -2,6 +2,7 @@ import * as Y from "yjs";
 import { z } from "zod";
 import { validateAttributes } from "../formatting.ts";
 import { tableParagraphs } from "../tables.ts";
+import { structuredGrid } from "./grid.ts";
 import { id, storyId, WordTableConflict } from "./schema.ts";
 import {
   tableAddresses,
@@ -79,6 +80,13 @@ export function validateStructuredTables(doc: Y.Doc) {
               );
           }
       }
+    const visible = new Set(
+      structuredGrid(doc, address).flatMap((row) =>
+        row.cells.flatMap((cell) =>
+          cell.payloads.map((p) => cellKey(p.row, p.column)),
+        ),
+      ),
+    );
     for (const name of doc.share.keys())
       if (name.startsWith("word-cell-v2:")) {
         const [story, table, row, column] = z
@@ -96,6 +104,17 @@ export function validateStructuredTables(doc: Y.Doc) {
             address,
             "deleted-content",
             "Undo would detach retained cell content.",
+          );
+        if (
+          text.length &&
+          rows.includes(row) &&
+          columns.includes(column) &&
+          !visible.has(cellKey(row, column))
+        )
+          throw new WordTableConflict(
+            address,
+            "overlap",
+            "Merge coverage would hide retained cell content.",
           );
       }
     // A merge has explicit coverage. Concurrent interior insertions are ambiguous.
