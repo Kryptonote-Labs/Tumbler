@@ -30,6 +30,10 @@ export function wordParagraphRenderer(
     (block) => block.kind === 'paragraph',
   );
   const indexByParagraph = new Map(paragraphs.map((p, index) => [p, index]));
+  const owners = new Map(
+    originals.flatMap((p) => p.runs.map((run) => [run.source!, p] as const)),
+  );
+  // Count every surviving occurrence per source paragraph and copy scope.
   const states = new Map<number, { emitted: Set<number>; remaining: Map<number, number> }>();
   const stateFor = (scope: number) => {
     let state = states.get(scope);
@@ -43,8 +47,9 @@ export function wordParagraphRenderer(
     stateFor(copies.scopes.get(p) ?? 0);
     for (const run of p.runs) {
       const state = stateFor(copies.scopes.get(run) ?? 0);
-      if (run.source !== undefined)
-        state.remaining.set(run.source, (state.remaining.get(run.source) ?? 0) + 1);
+      const owner = run.source === undefined ? undefined : owners.get(run.source);
+      if (owner?.source !== undefined)
+        state.remaining.set(owner.source, (state.remaining.get(owner.source) ?? 0) + 1);
     }
   }
   let emitted = new Set<number>();
@@ -110,13 +115,11 @@ export function wordParagraphRenderer(
         )
         .join(''),
     );
-  const owners = new Map(
-    originals.flatMap((p) => p.runs.map((run) => [run.source!, p] as const)),
-  );
   const finishSource = (paragraph: WordTextParagraph) => {
     if (
       paragraph.source === undefined ||
-      paragraph.runs.some((run) => (remaining.get(run.source!) ?? 0) > 0)
+      (remaining.get(paragraph.source) ?? 0) > 0 ||
+      emitted.has(-paragraph.source)
     )
       return '';
     let result = '';
@@ -144,9 +147,11 @@ export function wordParagraphRenderer(
       if (!run.field) content = markup.word(`<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}`) + text(run.text) + markup.word('</w:r>');
       if (run.source !== undefined) {
         if (!emitted.has(run.source)) { content = (before.get(run.source) ?? []).join('') + content; emitted.add(run.source); }
-        remaining.set(run.source, remaining.get(run.source)! - 1);
         const owner = owners.get(run.source);
-        if (owner) content += finishSource(owner);
+        if (owner?.source !== undefined) {
+          remaining.set(owner.source, remaining.get(owner.source)! - 1);
+          content += finishSource(owner);
+        }
       }
       return copies.markers(content, scope);
     }
@@ -215,9 +220,11 @@ export function wordParagraphRenderer(
         content = (before.get(run.source) ?? []).join('') + content;
         emitted.add(run.source);
       }
-      remaining.set(run.source, remaining.get(run.source)! - 1);
       const owner = owners.get(run.source);
-      if (owner) content += finishSource(owner);
+      if (owner?.source !== undefined) {
+        remaining.set(owner.source, remaining.get(owner.source)! - 1);
+        content += finishSource(owner);
+      }
     }
     return copies.markers(content, scope);
   };
