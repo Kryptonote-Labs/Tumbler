@@ -123,3 +123,43 @@ test("browser and offscreen canvases are paint targets", () => {
   const targets: [(context: CanvasRenderingContext2D) => ChartCanvasContext<Path2D>, (context: OffscreenCanvasRenderingContext2D) => ChartCanvasContext<Path2D>] = [context => context, context => context];
   expect(targets).toHaveLength(2);
 });
+
+test('visible Cartesian value labels survive missing gridlines and use the host formatter', () => {
+  for (const kind of ['column', 'bar', 'line'] as const) {
+    const base = model({ kind, legend: undefined, axes: [{ id: 1, kind: 'value', position: 'left', majorGridlines: false, deleted: false, title: undefined, minimum: 0, maximum: 20, numberFormatCode: '0.0' }] });
+    const noGrid = layoutChartScene(base, 600, 400, { formatNumber: (value, code) => `${code}:${value}` });
+    expect(texts(noGrid.marks).filter(text => text.startsWith('0.0:')).length).toBeGreaterThan(1);
+    const grid = layoutChartScene({ ...base, axes: [{ ...base.axes[0]!, majorGridlines: true }] }, 600, 400, { formatNumber: (value, code) => `${code}:${value}` });
+    expect(texts(grid.marks)).toEqual(texts(noGrid.marks));
+    expect(grid.marks.filter(mark => mark.kind === 'line').length).toBeGreaterThan(noGrid.marks.filter(mark => mark.kind === 'line').length);
+    const deleted = layoutChartScene({ ...base, axes: [{ ...base.axes[0]!, majorGridlines: true, deleted: true }] }, 600, 400);
+    expect(texts(deleted.marks)).toEqual(['Results', 'Jan', 'Feb', 'Mar']);
+    expect(deleted.marks.filter(mark => mark.kind === 'line')).toHaveLength(1);
+  }
+});
+
+test('deleted XY axes suppress their labels, titles, strokes and gridlines without hiding the other axis', () => {
+  const base = model({ kind: 'scatter', legend: undefined, axisIds: [1, 2], axes: [
+    { id: 1, kind: 'value', position: 'bottom', title: 'Deleted X', majorGridlines: true, deleted: true, minimum: undefined, maximum: undefined, numberFormatCode: 'X' },
+    { id: 2, kind: 'value', position: 'left', title: 'Visible Y', majorGridlines: false, deleted: false, minimum: undefined, maximum: undefined, numberFormatCode: 'Y' },
+  ] });
+  const scene = layoutChartScene(base, 600, 400, { formatNumber: (value, code) => `${code}:${value}` });
+  expect(texts(scene.marks)).not.toContain('Deleted X');
+  expect(texts(scene.marks).some(text => text.startsWith('X:'))).toBe(false);
+  expect(texts(scene.marks).some(text => text.startsWith('Y:'))).toBe(true);
+  expect(scene.marks.filter(mark => mark.kind === 'line')).toHaveLength(1);
+});
+
+test('combination value labels and gridlines follow each axis independently', () => {
+  const base = model({ legend: undefined, axes: [
+    { id: 1, kind: 'category', position: 'bottom', majorGridlines: false, deleted: true, title: undefined, minimum: undefined, maximum: undefined },
+    { id: 2, kind: 'value', position: 'left', majorGridlines: false, deleted: false, title: undefined, minimum: undefined, maximum: undefined, numberFormatCode: 'Y' },
+  ], axisIds: [1, 2] });
+  const combo = { ...base, plots: [base] };
+  const scene = layoutChartScene(combo, 600, 400, { formatNumber: (value, code) => `${code}:${value}` });
+  expect(texts(scene.marks).some(text => text.startsWith('Y:'))).toBe(true);
+  expect(texts(scene.marks)).not.toContain('Jan');
+  expect(scene.marks.filter(mark => mark.kind === 'line')).toHaveLength(0);
+  const hidden = { ...base, axes: base.axes.map(axis => ({ ...axis, deleted: true, majorGridlines: true })) };
+  expect(texts(layoutChartScene({ ...hidden, plots: [hidden] }, 600, 400).marks)).toEqual(['Results']);
+});

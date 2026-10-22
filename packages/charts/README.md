@@ -107,3 +107,9 @@ restrictions; documents exceeding them cannot be previewed in full.
 preview limit, invalid geometry, or host callback prevents rendering. This applies
 to SVG and canvas consumers. Lower-level layout functions can still throw.
 Per-layout point maps and stack positions are rebuilt on each resize or host edit.
+
+Visible value axes render tick labels even when major gridlines are absent.
+Deleted axes suppress labels, gridlines, and axis strokes. Cartesian, combination,
+and XY ticks use the host `formatNumber` callback with the axis format code, falling
+back to the series cache format and then an English numeric format with up to six
+fractional digits.
