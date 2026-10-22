@@ -40,6 +40,9 @@
   let selectedDrawing = $state<number>();
   let editingFocused = $state(false);
   let inputSelectionOverride: WordTextSelection | undefined;
+  let inputRevision = $state(0);
+  let composition: { document: WordDocument; selection: WordTextSelection | undefined } | undefined;
+  let pendingInput: { document: WordDocument; selection: WordTextSelection | undefined; edit: WordDocumentEdit | undefined; command: "undo" | "redo" | undefined } | undefined;
   let pointerType = "mouse";
   let dragPoint: { x: number; y: number } | undefined;
   let scrollFrame = 0;
@@ -185,7 +188,7 @@
   }
 
   function readBrowserSelection() {
-    if (!editable || mouseSelection !== undefined) return;
+    if (!editable || mouseSelection !== undefined || composition !== undefined || pendingInput !== undefined) return;
     const next = browserTextSelection();
     if (next !== undefined && !sameWordTextSelection(selection, next)) onselectionchange?.(next);
   }
@@ -200,7 +203,7 @@
   }
 
   function restoreBrowserSelection() {
-    if (!editable || !editingFocused || selection === undefined || scroller === undefined || mouseSelection !== undefined) return;
+    if (composition !== undefined || pendingInput !== undefined || !editable || !editingFocused || selection === undefined || scroller === undefined || mouseSelection !== undefined) return;
     const anchor = browserPoint(selection.anchor);
     const focus = browserPoint(selection.focus);
     if (anchor === undefined || focus === undefined) return;
@@ -213,40 +216,119 @@
       .filter((fragment) => Number(fragment.dataset.start) <= position.offset && Number(fragment.dataset.end) >= position.offset);
     const fragment = position.affinity === "before" ? fragments.at(-1) : fragments[0];
     if (fragment === undefined) return undefined;
-    const node = fragment.firstChild ?? fragment;
-    return { node, offset: Math.max(0, Math.min(node.textContent?.length ?? 0, position.offset - Number(fragment.dataset.start))) };
+    const walker = globalThis.document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
+    let offset = Math.max(0, position.offset - Number(fragment.dataset.start));
+    let node = walker.nextNode();
+    while (node !== null) {
+      const length = node.textContent?.length ?? 0;
+      if (offset <= length) return { node, offset };
+      offset -= length;
+      node = walker.nextNode();
+    }
+    return { node: fragment, offset: fragment.childNodes.length };
   }
 
   function logicalPosition(node: Node | null, offset: number): WordTextPosition | undefined {
-    const element = node instanceof Element ? node : node?.parentElement;
+    if (node === null || !scroller?.contains(node)) return;
+    const element = node instanceof Element ? node : node.parentElement;
     const fragment = element?.closest<HTMLElement>("[data-paragraph][data-start][data-end]");
     if (fragment === null || fragment === undefined || fragment.dataset.story !== undefined) return undefined;
     const paragraphElementId = Number(fragment.dataset.paragraph);
     const start = Number(fragment.dataset.start);
     const end = Number(fragment.dataset.end);
     if (!Number.isInteger(paragraphElementId) || !Number.isInteger(start) || !Number.isInteger(end)) return undefined;
-    const local = node?.nodeType === Node.TEXT_NODE ? offset : offset === 0 ? 0 : fragment.textContent?.length ?? 0;
+    const range = globalThis.document.createRange();
+    range.selectNodeContents(fragment);
+    range.setEnd(node, offset);
+    const local = range.toString().length;
     return { paragraphElementId, offset: Math.min(end, start + local), affinity: local === 0 ? "before" : "after" };
   }
 
+  /** Only the body editing host owns these events; shape editors own their own input. */
+  function bodyInput(event: Event): boolean {
+    return event.target instanceof Element && event.target.closest('[contenteditable]') === event.currentTarget;
+  }
+
+  function targetSelection(event: InputEvent): WordTextSelection | undefined {
+    const ranges = event.getTargetRanges();
+    if (ranges.length !== 1) return;
+    const range = ranges[0]!;
+    const anchor = logicalPosition(range.startContainer, range.startOffset);
+    const focus = logicalPosition(range.endContainer, range.endOffset);
+    return anchor === undefined || focus === undefined ? undefined : { anchor, focus };
+  }
+
   function handleBeforeInput(event: InputEvent) {
-    if (!editable) return;
-    // A native drag is a two-part move. Until moves have a paired model operation, cancel both halves.
-    if (event.inputType === "deleteByDrag" || event.inputType === "insertFromDrop") {
-      event.preventDefault();
+    if (!bodyInput(event)) return;
+    // Every browser mutation needs a model operation, including unsupported intents and missing selections.
+    if (!editable) { event.preventDefault(); return; }
+    if (composition !== undefined || event.isComposing || event.inputType === "insertCompositionText") {
+      composition ??= { document: wordDocument, selection: browserTextSelection() ?? selection };
       return;
     }
-    // Keyboard navigation changes the DOM selection before Svelte can publish controlled state.
-    const activeSelection = inputSelectionOverride ?? browserTextSelection() ?? selection;
+    const activeSelection = inputSelectionOverride ?? (event.getTargetRanges().length > 0
+      ? targetSelection(event)
+      : browserTextSelection() ?? selection);
     inputSelectionOverride = undefined;
-    if (activeSelection === undefined) return;
-    const edit = wordInputEdit(wordDocument, activeSelection, event.inputType, event.dataTransfer?.getData("text/plain") ?? event.data);
-    if (edit === undefined) return;
+    const command = event.inputType === "historyUndo" ? "undo" : event.inputType === "historyRedo" ? "redo" : undefined;
+    const edit = activeSelection === undefined ? undefined : wordInputEdit(wordDocument, activeSelection, event.inputType, event.dataTransfer?.getData("text/plain") ?? event.data);
+    if (!event.cancelable) {
+      pendingInput = { document: wordDocument, selection: activeSelection, edit, command };
+      return;
+    }
     event.preventDefault();
-    onedit?.(edit);
+    if (command !== undefined) oncommand?.(command);
+    else if (edit !== undefined) onedit?.(edit);
+  }
+
+  /** Recreate Svelte-owned nodes after browser mutations, even when the model did not change. */
+  function reconcileInput(activeSelection: WordTextSelection | undefined, apply?: () => void) {
+    const focused = editingFocused;
+    flushSync(() => { inputRevision++; apply?.(); });
+    if (!focused || !editable) return;
+    editingFocused = true;
+    const next = selection ?? activeSelection;
+    const anchor = next === undefined ? undefined : browserPoint(next.anchor);
+    const focus = next === undefined ? undefined : browserPoint(next.focus);
+    const element = anchor?.node instanceof Element ? anchor.node : anchor?.node.parentElement;
+    element?.closest<HTMLElement>('[contenteditable]')?.focus({ preventScroll: true });
+    if (anchor !== undefined && focus !== undefined) globalThis.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
+  }
+
+  function handleInput(event: Event) {
+    if (!bodyInput(event) || composition !== undefined) return;
+    const pending = pendingInput;
+    pendingInput = undefined;
+    reconcileInput(pending?.selection, () => {
+      if (!editable || pending?.document !== wordDocument) return;
+      if (pending.command !== undefined) oncommand?.(pending.command);
+      else if (pending.edit !== undefined) onedit?.(pending.edit);
+    });
+  }
+
+  function handleCompositionStart(event: CompositionEvent) {
+    if (!editable || !bodyInput(event)) return;
+    pendingInput = undefined;
+    composition = { document: wordDocument, selection: inputSelectionOverride ?? browserTextSelection() ?? selection };
+    inputSelectionOverride = undefined;
+  }
+
+  function handleCompositionEnd(event: CompositionEvent) {
+    if (!bodyInput(event)) return;
+    const transaction = composition;
+    composition = undefined;
+    // Empty data cancels the provisional text. Never apply old offsets to a replacement document.
+    reconcileInput(transaction?.selection, () => {
+      if (!editable || transaction?.document !== wordDocument || transaction.selection === undefined || event.data === "") return;
+      const edit = wordInputEdit(wordDocument, transaction.selection, "insertText", event.data);
+      if (edit !== undefined) onedit?.(edit);
+    });
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (event.isComposing || composition !== undefined) return;
+    // Drawing controls share page commands; nested text editors own their shortcuts.
+    if (!(event.target instanceof Element) || event.target.closest('[contenteditable="true"]') !== event.currentTarget) return;
     if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) inputSelectionOverride = undefined;
     if (!editable || !(event.ctrlKey || event.metaKey) || event.altKey) return;
     const key = event.key.toLowerCase();
@@ -467,7 +549,7 @@
 >
   {#if layout !== undefined && viewport !== undefined}
     <div class="word-surface" style={`height:${viewport.totalHeight * scale}px;width:${viewport.totalWidth * scale}px`}>
-      {#each layout.pages.slice(viewport.first, viewport.last + 1) as page, localIndex (page.index)}
+      {#each layout.pages.slice(viewport.first, viewport.last + 1) as page, localIndex (`${page.index}:${inputRevision}`)}
         {@const pageIndex = viewport.first + localIndex}
         {@const drawingOrder = wordDrawingStackOrder(page)}
         <section
@@ -496,6 +578,9 @@
               if (!(event.relatedTarget instanceof Node) || !scroller?.contains(event.relatedTarget)) editingFocused = false;
             }}
             onbeforeinput={handleBeforeInput}
+            oninput={handleInput}
+            oncompositionstart={handleCompositionStart}
+            oncompositionend={handleCompositionEnd}
             onkeydown={handleKeydown}
             style={`--word-ink-layer-z-index:${wordDrawingOverlayOrder(drawingOrder)};width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
           >
