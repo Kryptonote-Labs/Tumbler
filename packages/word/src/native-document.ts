@@ -100,6 +100,7 @@ export class NativeWordDocument implements WordLayoutSource {
   private readonly editedStories = new Map<string, { target: string | WordStoryTarget; model: NativeWordDocument; blocks: readonly WordContentBlock[] }>();
   readonly finalSection: WordSectionProperties;
   readonly wrapTrailSpaces: boolean;
+  readonly doNotExpandShiftReturn: boolean;
   readonly background: string | undefined;
 
   constructor(private readonly options: NativeWordOptions = {}) {
@@ -108,6 +109,7 @@ export class NativeWordDocument implements WordLayoutSource {
     const document = options.source?.document;
     this.background = document?.background === undefined ? undefined : resolveWordColour(document.background, document.styles.themeColors);
     this.wrapTrailSpaces = options.source?.document.wrapTrailSpaces ?? false;
+    this.doNotExpandShiftReturn = options.source?.document.doNotExpandShiftReturn ?? false;
     const { width = 595.3, height = 841.9, margin = 72 } = options.page ?? {};
     if (
       ![width, height, margin].every(Number.isFinite) ||

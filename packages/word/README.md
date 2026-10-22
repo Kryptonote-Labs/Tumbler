@@ -641,7 +641,8 @@ line, including its height and logical caret offset.
 
 Justified paragraphs distribute unused line width across ordinary inter-word
 spaces on wrapped lines and explicit line breaks. Final paragraph lines and
-non-breaking spaces do not expand. Tabs retain their stops; only spaces after
+non-breaking spaces do not expand. The document compatibility setting
+`doNotExpandShiftReturn` suppresses expansion on explicit line breaks. Tabs retain their stops; only spaces after
 the last tab expand. Layout fragments expose the extra space advance as
 `wordSpacing` in points. DOM renderers apply that value to CSS word spacing;
 canvas renderers use the resulting fragment positions and widths.

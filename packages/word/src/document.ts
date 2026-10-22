@@ -292,6 +292,7 @@ export class WordDocument {
   readonly numbering: WordNumbering;
   readonly evenAndOddHeaders: boolean;
   readonly wrapTrailSpaces: boolean;
+  readonly doNotExpandShiftReturn: boolean;
   readonly headerFooters: readonly WordHeaderFooterStory[];
   readonly drawings: ReadonlyMap<number, WordDrawing>;
   readonly notes: readonly WordNoteStory[];
@@ -309,6 +310,7 @@ export class WordDocument {
     numbering: WordNumbering;
     evenAndOddHeaders?: boolean;
     wrapTrailSpaces?: boolean;
+    doNotExpandShiftReturn?: boolean;
     headerFooters: readonly WordHeaderFooterStory[];
     drawings: ReadonlyMap<number, WordDrawing>;
     notes: readonly WordNoteStory[];
@@ -325,6 +327,7 @@ export class WordDocument {
     this.numbering = input.numbering;
     this.evenAndOddHeaders = input.evenAndOddHeaders ?? false;
     this.wrapTrailSpaces = input.wrapTrailSpaces ?? false;
+    this.doNotExpandShiftReturn = input.doNotExpandShiftReturn ?? false;
     this.headerFooters = Object.freeze([...input.headerFooters]);
     this.drawings = input.drawings;
     this.notes = Object.freeze([...input.notes]);
@@ -394,6 +397,7 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
   const headerFooters = readHeaderFooterStories(pkg, main, profile, [...blocks.flatMap(sectionReferences), ...finalSection.headerReferences, ...finalSection.footerReferences], budget);
   let evenAndOddHeaders = false;
   let wrapTrailSpaces = false;
+  let doNotExpandShiftReturn = false;
   const settingsRel = relationships?.items.find(item => item.type.endsWith('/settings') && item.targetMode === 'Internal');
   if (settingsRel?.targetMode === 'Internal') {
     const settingsPart = pkg.getPart(settingsRel.targetPartName);
@@ -402,11 +406,13 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
       const value = settings.elements(namespace, 'evenAndOddHeaders')[0];
       evenAndOddHeaders = value !== undefined && !['0', 'false', 'off'].includes(attr(value, namespace, 'val') ?? 'true');
       const compatibility = settings.elements(namespace, 'compat')[0];
+      const shiftReturn = compatibility && children(compatibility, namespace, 'doNotExpandShiftReturn')[0];
+      doNotExpandShiftReturn = shiftReturn !== undefined && !['0', 'false', 'off'].includes(attr(shiftReturn, namespace, 'val') ?? 'true');
       const trailingSpaces = compatibility && children(compatibility, namespace, 'wrapTrailSpaces')[0];
       wrapTrailSpaces = trailingSpaces !== undefined && !['0', 'false', 'off'].includes(attr(trailingSpaces, namespace, 'val') ?? 'true');
     }
   }
-  return new WordDocument({ inkRendering: options.inkRendering, ...(background === undefined ? {} : { background }), pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes, evenAndOddHeaders, wrapTrailSpaces });
+  return new WordDocument({ inkRendering: options.inkRendering, ...(background === undefined ? {} : { background }), pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes, evenAndOddHeaders, wrapTrailSpaces, doNotExpandShiftReturn });
 }
 
 function readNoteStories(pkg: OpcPackage, main: OpcPart, conformance: WordConformance, budget: ParseBudget): readonly WordNoteStory[] {

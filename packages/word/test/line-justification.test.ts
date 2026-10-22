@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { layoutWordDocument } from '../src/index.ts';
+import { layoutWordDocument, NativeWordDocument, openWordArtifact } from '../src/index.ts';
 import { lineDocument, fixedMeasurer } from './line-layout-fixture.ts';
 
 test('justification expands inter-word spaces while preserving logical offsets', () => {
@@ -24,4 +24,17 @@ test('justify leaves final lines and unspaced words alone, but expands explicit 
   const lines = layoutWordDocument(lineDocument('<w:t>one two</w:t><w:br/>', '<w:jc w:val="both"/>', 100, true), fixedMeasurer).pages[0]!.columns[0]!.lines;
   expect(lines[0]!.width).toBe(100);
   expect(lines[1]!.width).toBe(0);
+});
+
+test('doNotExpandShiftReturn controls only soft-break lines', () => {
+  for (const [setting, width] of [['<w:doNotExpandShiftReturn/>', 35], ['<w:doNotExpandShiftReturn w:val="false"/>', 100], ['', 100]] as const) {
+    const document = lineDocument('<w:t>one two</w:t><w:br/><w:t>three</w:t>', '<w:jc w:val="both"/>', 100, true, setting);
+    const lines = layoutWordDocument(document, fixedMeasurer).pages[0]!.columns[0]!.lines;
+    expect(lines[0]!.width).toBe(width);
+    expect(lines[1]!.width).toBe(25);
+    const model = new NativeWordDocument({ source: openWordArtifact(document.bytes()) });
+    for (let repeat = 0; repeat < 2; repeat++) {
+      expect(model.layout(fixedMeasurer).pages[0]!.columns[0]!.lines[0]!.width).toBe(width);
+    }
+  }
 });
