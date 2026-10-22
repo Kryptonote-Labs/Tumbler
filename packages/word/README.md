@@ -103,6 +103,20 @@ session.markSaved();
 const output = session.artifact.bytes();
 ```
 
+Session subscribers receive immutable change snapshots in revision order. Reentrant
+edits, undo, redo, saves, and external revisions commit immediately, but their
+notifications wait until the current event reaches all its subscribers. Read
+`change.artifact` and `change.dirty` for that revision; the live session may already
+contain a later revision. Subscribing or unsubscribing affects events committed
+after that subscription change, not events already queued.
+
+Subscriber exceptions do not reject committed operations or stop other subscribers.
+Pass `onListenerError(error, change)` in session options to report them. By default,
+the session calls `console.error`. If a custom reporter throws, the session logs
+both errors and continues delivery. A throwing console is ignored. Reporters run
+synchronously and may also cause queued notifications. Callbacks must eventually
+stop making edits so the synchronous notification queue can finish draining.
+
 Word 2010 ink uses `@tumblerjs/ink` to expose decoded traces, recognition and
 diagnostics on `drawing.ink`. Native InkML is authoritative: the reader generates
 SVG for destination-independent pens, even when a cached VML bitmap exists.
