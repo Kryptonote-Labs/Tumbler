@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { createWordArtifact, openWordArtifact } from '../src/index.ts';
 import { openWordOperationDocument, prepareWordOperation } from '../src/operations/index.ts';
+import type { TextAttributes } from '../src/collaboration/formatting.ts';
 import { complexField, deleteField, fieldArtifact, textRun, visible } from './field-editing-fixture.ts';
 
 for (const field of ['PAGE', 'NUMPAGES']) {
@@ -21,7 +22,7 @@ for (const field of ['PAGE', 'NUMPAGES']) {
       const start = backwards ? 3 : 0;
       session.text.applyDelta(prepareWordOperation(session.text, { start, end: start + 1 }, { name: 'move-object', input: { destination: backwards ? 0 : 4 } }).delta);
       expect(session.text.toString()).toBe(backwards ? '\uFFFCabc\n' : 'abc\uFFFC\n');
-      expect(session.text.toDelta().find(part => part.attributes?.field)?.attributes).toMatchObject({ field, italic: true });
+      expect((session.text.toDelta() as { insert: string; attributes?: TextAttributes }[]).find(part => part.attributes?.field)?.attributes).toMatchObject({ field, italic: true });
       const saved = session.artifact();
       expect(saved.document.source.source).toContain(`w:instr="${field}"`);
       expect(visible(openWordArtifact(saved.bytes()))).toBe(backwards ? '\uFFFCabc' : 'abc\uFFFC');
@@ -45,7 +46,7 @@ for (const body of [
   try {
     session.text.applyDelta(prepareWordOperation(session.text, { start: 4, end: 4 }, { name: 'page-number', input: { preset: 'plain' } }).delta);
     expect(session.text.toString()).toStartWith('one\n\uFFFCtwo\n');
-    const attributes = session.text.toDelta().find(part => part.attributes?.field)?.attributes;
+    const attributes = (session.text.toDelta() as { insert: string; attributes?: TextAttributes }[]).find(part => part.attributes?.field)?.attributes;
     expect(attributes).toEqual({ field: 'PAGE', bold: false });
     expect(session.artifact().document.source.source).toContain('w:instr="PAGE"');
   } finally { session.destroy(); }
@@ -55,7 +56,7 @@ test('page number inherits character formatting without cloning neighboring obje
   const session = openWordOperationDocument(createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', field: 'NUMPAGES', format: { italic: true, fontSizePoints: 16 } }] }] }));
   try {
     session.text.applyDelta(prepareWordOperation(session.text, { start: 1, end: 1 }, { name: 'page-number', input: { preset: 'plain' } }).delta);
-    const attributes = session.text.toDelta().find(part => part.attributes?.field === 'PAGE')?.attributes;
+    const attributes = (session.text.toDelta() as { insert: string; attributes?: TextAttributes }[]).find(part => part.attributes?.field === 'PAGE')?.attributes;
     expect(attributes).toMatchObject({ field: 'PAGE', italic: true, fontSize: 16 });
     expect(attributes).not.toHaveProperty('wordSource');
     expect(session.artifact().document.source.source.match(/w:fldSimple/g)?.length).toBe(4);
@@ -78,7 +79,7 @@ test('complex field moves across paragraphs without changing the neighboring fie
     expect(session.text.toString()).toBe('abc\n\uFFFC\uFFFCend\n');
     const exported = openWordOperationDocument(openWordArtifact(session.artifact().bytes()));
     try {
-      expect(exported.text.toDelta().filter(part => part.attributes?.field).map(part => part.attributes?.field)).toEqual(['NUMPAGES', 'PAGE']);
+      expect((exported.text.toDelta() as { insert: string; attributes?: TextAttributes }[]).filter(part => part.attributes?.field).map(part => part.attributes?.field)).toEqual(['NUMPAGES', 'PAGE']);
     } finally { exported.destroy(); }
   } finally { session.destroy(); }
 });
