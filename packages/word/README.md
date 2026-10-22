@@ -631,3 +631,10 @@ to `front` or `behind` and supply `x`, `y`, `horizontalRelativeTo` and
 that they move and resize together. `edit-object` can replace its complete ink
 value, including all strokes. Existing single-stroke `points/color/size` inputs
 remain supported with their previous fit-to-frame behavior.
+
+### Line wrapping
+
+Non-breaking spaces U+00A0, U+202F, and U+2007 retain their advance and do not
+create word-wrap opportunities. Oversized unbreakable text still uses the existing
+emergency character wrapping. A terminal explicit line break keeps an empty final
+line, including its height and logical caret offset.

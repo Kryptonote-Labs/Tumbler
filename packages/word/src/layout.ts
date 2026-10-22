@@ -1019,7 +1019,7 @@ function* resolvedParagraphAtoms(
             descent: measurement.descent,
             baselineShift,
             breakAfter: isBreakOpportunity(grapheme),
-            whitespace: /^\s+$/u.test(grapheme),
+            whitespace: isBreakableSpace(grapheme),
             startOffset,
             endOffset: logicalOffset,
             format,
@@ -1079,6 +1079,7 @@ function* resolvedParagraphAtoms(
 
 function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: ComputedWordParagraphFormat, mark: WordTextMeasurement, wrapTrailSpaces: boolean): Generator<PreparedLine> {
   let lineCount = 0;
+  let terminalLineBreak = false;
   const iterator: Iterator<ParagraphAtom, void> = source[Symbol.iterator]();
   let pending: ParagraphAtom[] = [];
   let pendingIndex = 0;
@@ -1144,6 +1145,7 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
     return prepared;
   };
   for (let atom = take(); atom; atom = take()) {
+    terminalLineBreak = atom.kind === "break" && atom.breakType === "line";
     if (atom.kind === "break") {
       yield push(atom.breakType);
       offset = atom.endOffset;
@@ -1173,7 +1175,7 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
     lineWidth += atomWidthValue(materialized);
     if (materialized.kind === "glyph" && materialized.breakAfter) lastBreak = line.length - 1;
   }
-  if (line.length > 0 || lineCount === 0) yield push();
+  if (line.length > 0 || lineCount === 0 || terminalLineBreak) yield push();
 
 }
 
@@ -1647,8 +1649,13 @@ function* graphemes(value: string, preparation?: PreparationBudget): Generator<s
   }
 }
 
+// GL spaces and the word-joining BOM are neither wrap opportunities nor trimmed advances.
+function isBreakableSpace(value: string): boolean {
+  return /^[\t\n\r \u1680\u2000-\u2006\u2008-\u200A\u2028\u2029\u205F\u3000]+$/u.test(value);
+}
+
 function isBreakOpportunity(value: string): boolean {
-  return /^\s+$/u.test(value) || value === "-" || value === "\u2010" || value === "\u2013" || value === "\u200B";
+  return isBreakableSpace(value) || value === "-" || value === "\u2010" || value === "\u2013" || value === "\u200B";
 }
 
 function hyperlinkTarget(hyperlink: WordHyperlink): string | undefined {
