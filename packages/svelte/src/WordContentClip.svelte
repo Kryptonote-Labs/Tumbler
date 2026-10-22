@@ -1,10 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { wordPointsToCssPixels as pixels, type WordContentBounds } from '@tumblerjs/word';
-  let { clip, children }: { clip?: WordContentBounds; children: Snippet } = $props();
-  const style = $derived(clip
-    ? `position:absolute;inset:0;clip-path:polygon(${pixels(clip.x)}px ${pixels(clip.y)}px,${pixels(clip.x + clip.width)}px ${pixels(clip.y)}px,${pixels(clip.x + clip.width)}px ${pixels(clip.y + clip.height)}px,${pixels(clip.x)}px ${pixels(clip.y + clip.height)}px);pointer-events:none`
-    : 'display:contents');
+  import type { WordContentBounds } from '@tumblerjs/word';
+  import { wordContentClipCss } from './word-content-clip.ts';
+  let { clip, layer, children }: { clip?: WordContentBounds; layer?: number; children: Snippet } = $props();
+  const style = $derived(`position:absolute;inset:0;${wordContentClipCss(clip)};pointer-events:none;${layer === undefined ? '' : `z-index:${layer}`}`);
+
 </script>
 
 {#if clip}

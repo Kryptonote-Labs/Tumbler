@@ -538,7 +538,12 @@
               {/each}
             {/each}
             {#each bodyLines(page) as { line, clip }}
-              <WordContentClip {clip}>
+              {#each line.fragments as fragment}
+                {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
+                  <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment)} pageX={fragment.x} pageY={fragment.y} {clip} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
+                {/if}
+              {/each}
+              <WordContentClip {clip} layer={1}>
               {#if line.marker !== undefined}
                 <span
                   class="list-marker"
@@ -549,8 +554,8 @@
 
               <div class="text-line" style={`left:${wordPointsToCssPixels(line.x)}px;top:${wordPointsToCssPixels(line.y)}px;height:${wordPointsToCssPixels(line.height)}px`}>
                 {#each line.fragments as fragment, fragmentIndex}
-                  {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
-                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y, false, drawingOrder, true)} pageX={fragment.x} pageY={fragment.y} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
+                  {#if fragment.kind === "drawing"}
+                    <!-- Drawing content and controls share the page's stacking order. -->
                   {:else if fragment.hyperlink === undefined}
                     <span
                       data-paragraph={line.paragraphElementId}
