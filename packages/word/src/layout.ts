@@ -1,4 +1,4 @@
-import { paragraphLineSequence, widowGroupHeight } from './paragraph-pagination.ts';
+import { paragraphLineSequence, widowGroupHeight, keepHeightUntil } from './paragraph-pagination.ts';
 import { withParagraphSpacing } from './paragraph-spacing.ts';
 import { alignWordPageDrawings } from './drawing-alignment.ts';
 import { resolveWordColour } from './theme-colours.ts';
@@ -582,10 +582,10 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
           let candidate: PreparedParagraph | undefined = prepared;
           let index = blockIndex;
           while (candidate) {
-            requiredHeight += points(candidate.format.spacingBeforeTwips) +
-              paragraphLineSequence(candidate.lines).heightUntil(currentColumn.height - requiredHeight) +
-              points(candidate.format.spacingAfterTwips);
-            if (requiredHeight > currentColumn.height || !chainStart || !candidate.format.keepNext) break;
+            const before = points(candidate.format.spacingBeforeTwips);
+            const measured = keepHeightUntil(paragraphLineSequence(candidate.lines), currentColumn.height - requiredHeight - before);
+            requiredHeight += before + measured.height + (measured.explicitBreak ? 0 : points(candidate.format.spacingAfterTwips));
+            if (measured.explicitBreak || requiredHeight > currentColumn.height || !chainStart || !candidate.format.keepNext) break;
             const next = section.blocks[index + 1];
             if (next?.kind !== "paragraph" || document.paragraphFormat(next).pageBreakBefore) break;
             candidate = prepareBody(++index);

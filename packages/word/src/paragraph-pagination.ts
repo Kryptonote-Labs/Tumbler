@@ -36,3 +36,15 @@ export function widowGroupHeight(lines: ParagraphLineSequence, index: number, ca
   }
   return pair;
 }
+
+/** Authored page/column breaks terminate a keep group's preflight, even within a paragraph. */
+export function keepHeightUntil(lines: ParagraphLineSequence, capacity: number): { height: number; explicitBreak: boolean } {
+  let height = 0;
+  for (let index = 0; ; index++) {
+    const line = lines.get(index);
+    if (!line) return { height, explicitBreak: false };
+    height += line.ascent + line.descent;
+    if (line.breakAfter === 'page' || line.breakAfter === 'column') return { height, explicitBreak: true };
+    if (height > capacity) return { height, explicitBreak: false };
+  }
+}

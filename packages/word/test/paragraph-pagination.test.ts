@@ -76,3 +76,11 @@ test('lookahead rewraps after an inline break changes column width', () => {
   expect(column.lines.slice(-2).map(line => line.fragments.map(fragment => fragment.text).join(''))).toEqual(['abcdefghi', 'jklmno']);
   expect(column.lines.every(line => line.width <= column.width)).toBe(true);
 });
+test('keep lookahead stops at explicit page and column breaks', () => {
+  for (const kind of ['page', 'column']) {
+    const body = paragraph('filler') + paragraph(`heading</w:t><w:br w:type="${kind}"/><w:t>tail`, '<w:keepNext/>') + paragraph('end');
+    const document = paginationDocument(body, section(kind === 'column' ? '<w:cols w:num="2" w:space="0"/>' : ''));
+    const columns = layoutWordDocument(document, paginationMeasurer).pages.flatMap(page => page.columns.map(column => column.lines.map(line => line.fragments.map(fragment => fragment.text).join(''))));
+    expect(columns).toEqual([['filler', 'heading'], ['tail', 'end']]);
+  }
+});
