@@ -12,6 +12,7 @@ import {
   orderedAxes,
   existingText,
   cellKey,
+  tableName,
 } from "./state.ts";
 import {
   payload,
@@ -34,6 +35,25 @@ export function validateStructuredTables(doc: Y.Doc) {
           "Object formatting cannot belong to a virtual paragraph boundary.",
         );
     }
+  // Yjs keeps named roots after undo. Empty table maps are inert unless content
+  // remains attached to them, in which case undo must refuse to hide that content.
+  for (const name of doc.share.keys()) {
+    if (!name.startsWith("word-cell-v2:")) continue;
+    const [story, table] = z
+      .tuple([storyId, id, id, id])
+      .parse(JSON.parse(name.slice("word-cell-v2:".length)));
+    const address = { story, table };
+    if (
+      existingText(doc, name)!.length &&
+      (!doc.share.has(tableName(address)) ||
+        doc.getMap(tableName(address)).size === 0)
+    )
+      throw new WordTableConflict(
+        address,
+        "deleted-content",
+        "Undo would detach retained cell content.",
+      );
+  }
   for (const address of tableAddresses(doc)) {
     const base = tableBase(doc, address),
       rows = activeAxes(doc, address, "row"),

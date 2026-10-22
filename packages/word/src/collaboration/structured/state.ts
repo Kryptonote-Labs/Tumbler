@@ -78,7 +78,7 @@ export function tableRecords(doc: Y.Doc, address: TableAddress) {
 }
 export function tableAddresses(doc: Y.Doc): TableAddress[] {
   return [...doc.share.keys()]
-    .filter((name) => name.startsWith(prefix))
+    .filter((name) => name.startsWith(prefix) && doc.getMap(name).size > 0)
     .map((name) => {
       const parsed: unknown = JSON.parse(name.slice(prefix.length));
       const [story, table] = z.tuple([storyId, id]).parse(parsed);
