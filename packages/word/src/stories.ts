@@ -37,7 +37,7 @@ export function wordStoryArtifact(artifact: WordArtifact, partName: string): Wor
     pkg: document.package, part: story.part, source: story.source,
     blocks: story.blocks, drawings: story.drawings,
     conformance: document.conformance, styles: document.styles, numbering: document.numbering,
-    finalSection: document.finalSection, headerFooters: [], notes: [], evenAndOddHeaders: document.evenAndOddHeaders, wrapTrailSpaces: document.wrapTrailSpaces,
+    finalSection: document.finalSection, headerFooters: [], notes: [], evenAndOddHeaders: document.evenAndOddHeaders, wrapTrailSpaces: document.wrapTrailSpaces, doNotExpandShiftReturn: document.doNotExpandShiftReturn,
   }));
   mainArtifacts.set(view, artifact);
   return view;

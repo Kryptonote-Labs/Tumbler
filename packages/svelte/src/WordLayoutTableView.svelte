@@ -20,7 +20,7 @@
   let { table, drawingOrder, pageIndex, imageurl, onactivate, story, decorationsOnly = false }: Props = $props();
 
   function fragmentStyle(fragment: WordLayoutFragment) {
-    return `${wordTextCss(fragment.format)};left:${wordPointsToCssPixels(fragment.x)}px;top:${wordPointsToCssPixels(wordTextTop(fragment))}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
+    return `${wordTextCss(fragment.format)};word-spacing:${wordPointsToCssPixels(fragment.wordSpacing ?? 0)}px;left:${wordPointsToCssPixels(fragment.x)}px;top:${wordPointsToCssPixels(wordTextTop(fragment))}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 
   function drawingStyle(fragment: WordLayoutFragment) {

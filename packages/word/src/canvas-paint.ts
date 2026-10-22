@@ -241,7 +241,7 @@ function paintText<Image, Path>(context: WordCanvasContext<Image, Path>, item: W
     context.fillStyle = background;
     context.fillRect(item.x, item.y, item.width, item.height);
   }
-  if (text.trim() === "") return;
+  if (text.trim() === "" && !("wordSpacing" in item)) return;
   // The context is already scaled to points, so the font is sized in points.
   context.font = wordCanvasFont(format, 1);
   context.direction = format.rightToLeft ? "rtl" : "ltr";

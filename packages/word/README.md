@@ -171,6 +171,18 @@ scales the measured font line box; exact and at-least spacing use the authored
 point height. Browser measurers should include the font's line gap and avoid
 rounding vertical metrics at each text size, since small errors accumulate across pages.
 
+Body pagination keeps `keepNext` chains together independently of `keepLines`.
+Chains taller than a column start fresh once, then flow normally. Widow control is
+on by default and keeps the first and last pairs together when a column can hold
+them. Explicit page and column breaks take precedence. `nextColumn` sections reuse
+an available column when page and column geometry match.
+
+Body, table cells, and auxiliary stories share adjacent paragraph spacing. The gap
+uses the maximum of the previous after-spacing and current before-spacing.
+For matching computed paragraph styles, each `contextualSpacing` contribution is
+subtracted from that maximum, down to zero. These gaps also determine pagination
+and table heights; prepared source formats remain unchanged.
+
 See the repository's
 [WordprocessingML implementation status](../../docs/wordprocessingml-implementation.md)
 for the exact capability matrix and known limitations.
@@ -669,6 +681,36 @@ to `front` or `behind` and supply `x`, `y`, `horizontalRelativeTo` and
 that they move and resize together. `edit-object` can replace its complete ink
 value, including all strokes. Existing single-stroke `points/color/size` inputs
 remain supported with their previous fit-to-frame behavior.
+
+### Line wrapping
+
+Non-breaking spaces U+00A0, U+202F, and U+2007 retain their advance and do not
+create word-wrap opportunities. Oversized unbreakable text still uses the existing
+emergency character wrapping. A terminal explicit line break keeps an empty final
+line, including its height and logical caret offset.
+
+Justified paragraphs distribute unused line width across ordinary inter-word
+spaces on wrapped lines and explicit line breaks. Final paragraph lines and
+non-breaking spaces do not expand. The document compatibility setting
+`doNotExpandShiftReturn` suppresses expansion on explicit line breaks. Tabs retain their stops; only spaces after
+the last tab expand. Layout fragments expose the extra space advance as
+`wordSpacing` in points. DOM renderers apply that value to CSS word spacing;
+canvas renderers use the resulting fragment positions and widths.
+
+### Preparation limits
+
+`maxCharacters`, `maxAtoms`, and `maxMeasurements` bound preparation work per
+layout pass, including unpainted whitespace, table cells, and repeated stories.
+Defaults are 5,000,000 visited UTF-16 units, 1,000,000 glyph/control atoms, and
+1,000,000 measurer calls. Each limit accepts a positive safe integer; callers
+can raise it for larger documents. Exceeding one throws `limit_exceeded`.
+The standalone story and resolved-paragraph layout functions accept the same
+preparation options. Cached geometry avoids preparation and its measurement cost.
+
+Body pagination prepares lines on demand. A preview may prepare an extra page
+and bounded keep/widow lookahead before returning its requested pages. Aligned
+tabs may need a full following segment to find its width; decimal tabs stop at
+the decimal point. Such lookahead still consumes the preparation budgets.
 
 Paragraph `positioning.tabs` contains direct tab declarations. An empty array emits
 no `w:tabs` container and inherits style tab stops. When editing a source paragraph,

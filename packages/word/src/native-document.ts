@@ -100,6 +100,10 @@ export class NativeWordDocument implements WordLayoutSource {
   private readonly editedStories = new Map<string, { target: string | WordStoryTarget; model: NativeWordDocument; blocks: readonly WordContentBlock[] }>();
   readonly finalSection: WordSectionProperties;
   readonly wrapTrailSpaces: boolean;
+  private inheritedDoNotExpandShiftReturn?: boolean;
+  get doNotExpandShiftReturn(): boolean {
+    return this.inheritedDoNotExpandShiftReturn ?? this.options.source?.document.doNotExpandShiftReturn ?? false;
+  }
   readonly background: string | undefined;
 
   constructor(private readonly options: NativeWordOptions = {}) {
@@ -161,6 +165,7 @@ export class NativeWordDocument implements WordLayoutSource {
       const source = typeof target === 'string' && this.options.source ? wordStoryArtifact(this.options.source, target) : undefined;
       const { source: _bodySource, content: _bodyContent, ...options } = this.options;
       entry = { target, blocks, model: new NativeWordDocument({ ...options, content: blocks, ...(source ? { source } : {}) }) };
+      entry.model.inheritedDoNotExpandShiftReturn = this.doNotExpandShiftReturn;
       this.editedStories.set(key, entry);
     } else {
       entry.model.update(blocks);

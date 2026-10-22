@@ -52,7 +52,7 @@ const plainDocx = text.docx();` },
         { kind: 'text', text: 'NativeWordTextLayout measures continuous plain-text paragraph lines, without rich document pagination.' },
     ] },
     { id: 'limits', title: 'Validation and layout budgets', blocks: [
-        { kind: 'text', text: 'The authoring API no longer applies the former fixed block, cell, nesting, or image-data caps. Inputs still require valid dimensions, list levels, and document structure. ZIP/XML parsing has resource protections, and callers can set maxPages and maxFragments for layout work.' },
+        { kind: 'text', text: 'The authoring API no longer applies the former fixed block, cell, nesting, or image-data caps. Inputs still require valid dimensions, list levels, and document structure. ZIP/XML parsing has resource protections, and callers can set maxPages, maxFragments, maxCharacters, maxAtoms, and maxMeasurements for layout work. Preparation defaults to 5,000,000 UTF-16 units, 1,000,000 atoms, and 1,000,000 measurements per layout pass; exceeding a budget throws limit_exceeded. Increase these budgets for larger documents. Body paragraphs prepare lines incrementally, so pageLimit also stops paragraph preparation after the preview and pagination lookahead. Tables and repeated stories still prepare eagerly within the work budgets.' },
         { kind: 'text', text: 'A budget failure throws rather than returning silently truncated content.' },
         { kind: 'link', href: '/docs/word-support#word', label: 'Word support and remaining gaps' },
     ] },
