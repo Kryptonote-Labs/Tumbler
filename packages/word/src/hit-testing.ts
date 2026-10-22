@@ -8,19 +8,23 @@ import type { WordLayoutColumn, WordLayoutLine, WordLayoutPage, WordLayoutTable,
  * undefined for a page without body text. Resolve the character offset in the renderer.
  */
 export function wordLineAtPoint(page: WordLayoutPage, x: number, y: number): WordLayoutLine | undefined {
+  return wordClippedLineAtPoint(page, x, y)?.line;
+}
+
+/** The same hit target with its cell clip, for resolving visible character positions. */
+export function wordClippedLineAtPoint(page: WordLayoutPage, x: number, y: number): WordClippedLine | undefined {
   const cell = page.columns.map(column => cellAtPoint(column.tables, x, y)).find(cell => cell !== undefined);
   const lines = cell === undefined ? page.columns.flatMap(flowLines) : [...cell.cell.lines.map(line => ({ line, clip: cell.clip })), ...wordTableLinesWithClips(cell.cell.tables, cell.clip)];
-  let nearest: WordLayoutLine | undefined;
+  let nearest: WordClippedLine | undefined;
   let verticalDistance = Infinity;
   let horizontalDistance = Infinity;
   for (const entry of lines) {
     const bounds = wordVisibleLineBounds(entry);
     if (!bounds) continue;
-    const { line } = entry;
     const vertical = Math.max(bounds.y - y, y - bounds.y - bounds.height, 0);
     const horizontal = Math.max(bounds.x - x, x - bounds.x - bounds.width, 0);
     if (vertical < verticalDistance || vertical === verticalDistance && horizontal < horizontalDistance) {
-      nearest = line;
+      nearest = entry;
       verticalDistance = vertical;
       horizontalDistance = horizontal;
     }

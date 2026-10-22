@@ -8,7 +8,7 @@
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
   import { flushSync, onDestroy, onMount, tick, untrack } from "svelte";
   import { WordImageUrls } from "./word-image-urls.ts";
-  import { wordImagePaintBounds, wordLineAtPoint, layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
+  import { wordImagePaintBounds, wordClippedLineAtPoint, layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import { zoomGesture } from "./zoom-gesture.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
   import WordDrawingView from "./WordDrawingView.svelte";
@@ -383,10 +383,13 @@
     const page = layout.pages.find(item => item.index === Number(pageElement?.dataset.page));
     if (pageElement === undefined || page === undefined) return;
     const rect = pageElement.getBoundingClientRect();
-    const x = (clientX - rect.left) / scale;
+    let x = (clientX - rect.left) / scale;
     const y = (clientY - rect.top) / scale;
-    const line = wordLineAtPoint(page, x / wordPointsToCssPixels(1), y / wordPointsToCssPixels(1));
-    if (line === undefined) return;
+    const target = wordClippedLineAtPoint(page, x / wordPointsToCssPixels(1), y / wordPointsToCssPixels(1));
+    if (target === undefined) return;
+    const { line, clip } = target;
+    if (clip) x = Math.max(wordPointsToCssPixels(clip.x), Math.min(wordPointsToCssPixels(clip.x + clip.width), x));
+    const visibleClientX = rect.left + x * scale;
     const position = (offset: number): WordTextPosition => ({ paragraphElementId: line.paragraphElementId, offset });
     if (x <= wordPointsToCssPixels(line.x)) return position(line.startOffset);
     if (x >= wordPointsToCssPixels(line.x + line.width)) return position(line.endOffset);
@@ -399,8 +402,10 @@
     const element = pageElement.querySelector<HTMLElement>(`[data-paragraph="${line.paragraphElementId}"][data-start="${fragment.startOffset}"][data-end="${fragment.endOffset}"]:not(.caret-anchor):not([data-story])`);
     if (element?.firstChild?.nodeType !== Node.TEXT_NODE) return position(fragment.startOffset);
     const bounds = element.getBoundingClientRect();
-    const hitX = Math.max(bounds.left + 0.01, Math.min(bounds.right - 0.01, clientX));
-    const hitY = bounds.top + bounds.height / 2;
+    const hitX = Math.max(bounds.left + 0.01, Math.min(bounds.right - 0.01, visibleClientX));
+    const visibleTop = clip ? Math.max(bounds.top, rect.top + wordPointsToCssPixels(clip.y) * scale) : bounds.top;
+    const visibleBottom = clip ? Math.min(bounds.bottom, rect.top + wordPointsToCssPixels(clip.y + clip.height) * scale) : bounds.bottom;
+    const hitY = (visibleTop + visibleBottom) / 2;
     const document = globalThis.document as Document & {
       caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
       caretRangeFromPoint?: (x: number, y: number) => Range | null;
@@ -421,7 +426,7 @@
       measure.setStart(element.firstChild, 0);
       measure.setEnd(element.firstChild, boundary);
       const box = measure.getBoundingClientRect();
-      const delta = Math.abs((rtl ? box.left : box.right) - clientX);
+      const delta = Math.abs((rtl ? box.left : box.right) - visibleClientX);
       if (delta < distance) { distance = delta; nearest = boundary; }
     }
     return position(Math.min(fragment.endOffset, fragment.startOffset + nearest));

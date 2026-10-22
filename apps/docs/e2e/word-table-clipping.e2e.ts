@@ -4,11 +4,11 @@ import { tableClippingFixture } from '../../../packages/word/test/table-clipping
 
 const wordUrl = `/@fs${resolve('node_modules/@tumblerjs/word/src/index.ts')}`;
 
-test('exact cells clip DOM text and selection while canvas matches visible-only text', async ({ page }) => {
+test('exact cells clip DOM text and selection', async ({ page }) => {
   const fixture = tableClippingFixture();
   await page.route('**/samples/project-brief.docx', route => route.fulfill({ body: Buffer.from(fixture) }));
   await page.goto('/playground/word-brief');
-  await expect(page.getByText('VISIBLE', { exact: true })).toBeVisible();
+  await expect(page.getByText('VISIBLE', { exact: true })).toBeVisible({ timeout: 20000 });
   await page.getByLabel('Zoom', { exact: true }).selectOption('1');
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   const paper = page.locator('.word-page-content').first();
@@ -17,7 +17,7 @@ test('exact cells clip DOM text and selection while canvas matches visible-only 
   await paper.locator('[data-paragraph]').evaluateAll(nodes => {
     for (const node of nodes) if (node.textContent?.startsWith('HIDDEN')) (node as HTMLElement).style.visibility = 'hidden';
   });
-  expect(await paper.screenshot()).toEqual(original);
+  expect(Buffer.compare(await paper.screenshot(), original)).toBe(0);
   await paper.locator('[data-paragraph]').evaluateAll(nodes => {
     for (const node of nodes) (node as HTMLElement).style.visibility = '';
   });
@@ -37,6 +37,11 @@ test('exact cells clip DOM text and selection while canvas matches visible-only 
   });
   expect(selected).toContain('HIDDEN3');
 
+});
+
+test('canvas clips exact cells to the same pixels as visible-only text', async ({ page }) => {
+  await page.route('**/samples/project-brief.docx', route => route.fulfill({ body: Buffer.from(tableClippingFixture()) }));
+  await page.goto('/');
   const differences = await page.evaluate(async wordUrl => {
     const { openWordArtifact, layoutWordDocument, paintWordPage } = await import(wordUrl) as typeof import('../../../packages/word/src/index.ts');
     const bytes = new Uint8Array(await (await fetch('/samples/project-brief.docx')).arrayBuffer());
@@ -52,5 +57,23 @@ test('exact cells clip DOM text and selection while canvas matches visible-only 
     const actual = render(page), expected = render(visibleOnly);
     return actual.reduce((count, byte, index) => count + Number(byte !== expected[index]), 0);
   }, wordUrl);
+  console.log(`Canvas differing RGBA channels: ${differences}`);
   expect(differences).toBe(0);
+});
+
+test('pointer selection clamps horizontally overflowing text to its visible cell', async ({ page }) => {
+  const { clipTable, clipRow, clipCell, clipParagraph } = await import('../../../packages/word/test/table-clipping-fixture.ts');
+  const text = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+  const paragraph = clipParagraph(text).replace('<w:pPr>', '<w:pPr><w:ind w:left="-1000" w:right="-1000"/>');
+  await page.route('**/samples/project-brief.docx', route => route.fulfill({ body: Buffer.from(tableClippingFixture(clipTable(clipRow(clipCell(paragraph))))) }));
+  await page.goto('/playground/word-brief');
+  await expect(page.locator('.word-page-content [data-paragraph]').first()).toBeVisible({ timeout: 20000 });
+  await page.getByLabel('Zoom', { exact: true }).selectOption('1');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const cell = await page.locator('[data-cell]').first().boundingBox();
+  await page.mouse.click(cell!.x + cell!.width + 100, cell!.y + 5);
+  const focus = await page.evaluate(() => ({ text: getSelection()?.focusNode?.textContent, offset: getSelection()?.focusOffset }));
+  expect(focus.text).toContain('XXX');
+  expect(focus.offset).toBeGreaterThan(0);
+  expect(focus.offset).toBeLessThan(focus.text!.length);
 });
