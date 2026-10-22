@@ -198,6 +198,6 @@ test('combination category labels resolve the referenced axis in either declarat
     const scene = layoutChartScene({ ...primary, series: [...primary.series, ...secondary.series], plots: [primary, secondary] }, 600, 400);
     const labels = flat(scene.marks).filter(mark => mark.kind === 'text' && ['Jan', 'Feb', 'Mar'].includes(mark.text));
     expect(labels).toHaveLength(3);
-    expect(labels.every(mark => mark.kind === 'text' && mark.font.family === 'Primary Axis')).toBe(true);
+    expect(labels.every(mark => mark.kind === 'text' && mark.font.family === '"Primary Axis", sans-serif')).toBe(true);
   }
 });
