@@ -9,7 +9,7 @@ import { openWordArtifact, type WordArtifact } from './artifact.ts';
 import { createWordArtifact, type WordTextParagraph } from './create.ts';
 import type { WordContentBlock } from './create-content.ts';
 import { importWordContent } from './import-content.ts';
-import { mergeContentNumbering } from './package-numbering.ts';
+import { contentNumberingList, mergeContentNumbering } from './package-numbering.ts';
 import { PackageXml } from './package-xml.ts';
 import { wordParagraphRenderer } from './package-paragraphs.ts';
 import { contentCopyScopes } from './package-copies.ts';
@@ -135,6 +135,7 @@ export function prepareWordContent(
   const document = source.document;
   const markup = new PackageXml(document);
   const originals = wordContentParagraphs(importWordContent(source));
+  const originalRuns = new Map(originals.flatMap(p => p.runs.map(run => [run.source!, run] as const)));
   const originalParagraphs = new Map(originals.map((p) => [p.source!, p]));
   const paragraphs = wordContentParagraphs(blocks);
   const copies = contentCopyScopes(blocks, markup);
@@ -155,7 +156,8 @@ export function prepareWordContent(
   const generated = createWordArtifact({
     paragraphs: paragraphs.map((p) => ({
       runs: p.runs.map((run) => ({
-        text: run.text.replaceAll('\u2028', ''),
+        // This package supplies resources only. Source text leaves are rendered below.
+        text: (originalRuns.get(run.source!)?.text === run.text ? run.text.replace(/[\r\n]/g, '') : run.text).replaceAll('\u2028', ''),
         ...(run.shape ? { shape: run.shape } : {}),
         ...(run.ink ? { ink: { ...run.ink, ...run.drawing } } : {}),
         ...(run.link === undefined ? {} : { link: run.link }),
@@ -165,7 +167,7 @@ export function prepareWordContent(
       })),
       ...(p.list &&
       JSON.stringify(p.list) !== JSON.stringify(originalParagraphs.get(p.source!)?.list)
-        ? { list: p.list }
+        ? { list: contentNumberingList(document, p.list) }
         : {}),
     })),
   });
@@ -281,6 +283,7 @@ export function prepareWordContent(
     generated.document,
     transaction,
     prefix,
+    paragraphs,
   );
   const renderParagraph = wordParagraphRenderer(
     markup,

@@ -1,4 +1,5 @@
 import { renderOfficeInkRaster } from '@tumblerjs/ink';
+import type { WordContentBounds } from './table-clipping.ts';
 import type { WordLayoutFragment } from './layout.ts';
 import { wordImagePaintBounds } from './image-paint.ts';
 
@@ -17,7 +18,7 @@ export interface WordInkPixelContext {
 export interface WordInkViewport { readonly x: number; readonly y: number; readonly width: number; readonly height: number; }
 
 /** Read the actual already-painted page pixels; ROP2 cannot be represented by an isolated image. */
-export function paintWordInk(context: WordInkPixelContext, fragment: WordLayoutFragment, scale: number, maxPixels = 4_194_304, viewport?: WordInkViewport): boolean {
+export function paintWordInk(context: WordInkPixelContext, fragment: WordLayoutFragment, scale: number, maxPixels = 4_194_304, viewport?: WordInkViewport, cellClip?: WordContentBounds): boolean {
   const drawing = fragment.drawing;
   if (drawing?.kind !== 'image' || !drawing.ink || !drawing.inkProjection || !context.getImageData || !context.putImageData) return false;
   const { bounds, options } = drawing.inkProjection;
@@ -25,10 +26,14 @@ export function paintWordInk(context: WordInkPixelContext, fragment: WordLayoutF
   const box = wordImagePaintBounds(drawing, fragment.width, fragment.height);
   const left = fragment.x + box.x, top = fragment.y + box.y;
   const originX = viewport?.x ?? 0, originY = viewport?.y ?? 0;
-  const x = Math.max(viewport ? 0 : -Infinity, Math.floor(left * scale) - originX);
-  const y = Math.max(viewport ? 0 : -Infinity, Math.floor(top * scale) - originY);
-  const width = Math.min(viewport?.width ?? Infinity, Math.ceil((left + box.width) * scale) - originX) - x;
-  const height = Math.min(viewport?.height ?? Infinity, Math.ceil((top + box.height) * scale) - originY) - y;
+  // putImageData ignores canvas clips. Intersect in global device coordinates
+  // before subtracting the viewport origin. Cell edges round inward to avoid spill.
+  const globalX = Math.max(Math.floor(left * scale), viewport?.x ?? -Infinity, cellClip ? Math.ceil(cellClip.x * scale) : -Infinity);
+  const globalY = Math.max(Math.floor(top * scale), viewport?.y ?? -Infinity, cellClip ? Math.ceil(cellClip.y * scale) : -Infinity);
+  const right = Math.min(Math.ceil((left + box.width) * scale), viewport ? viewport.x + viewport.width : Infinity, cellClip ? Math.floor((cellClip.x + cellClip.width) * scale) : Infinity);
+  const bottom = Math.min(Math.ceil((top + box.height) * scale), viewport ? viewport.y + viewport.height : Infinity, cellClip ? Math.floor((cellClip.y + cellClip.height) * scale) : Infinity);
+  const x = globalX - originX, y = globalY - originY;
+  const width = right - globalX, height = bottom - globalY;
   if (width <= 0 || height <= 0) return true;
   if (!Number.isSafeInteger(width * height) || width * height > maxPixels) return false;
   // The four-argument form is shared by browser and server canvases. Their

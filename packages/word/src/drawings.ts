@@ -27,6 +27,7 @@ export interface WordDrawingAnchor {
   readonly behindDocument: boolean;
   readonly zOrder?: number;
   readonly allowOverlap: boolean;
+  readonly layoutInCell?: boolean;
   readonly distanceTopPoints: number;
   readonly distanceEndPoints: number;
   readonly distanceBottomPoints: number;
@@ -249,6 +250,7 @@ function parseAnchor(element: LosslessXmlElement, wp: string): WordDrawingAnchor
     wrap,
     behindDocument: onOff(attribute(element, "behindDoc"), false),
     ...(Number(attribute(element, "relativeHeight") ?? 0) ? { zOrder: Number(attribute(element, "relativeHeight")) } : {}),
+    layoutInCell: onOff(attribute(element, "layoutInCell"), true),
     allowOverlap: onOff(attribute(element, "allowOverlap"), true),
     distanceTopPoints: emu(attribute(element, "distT") ?? "0", "anchor top distance"),
     distanceEndPoints: emu(attribute(element, "distR") ?? "0", "anchor end distance"),

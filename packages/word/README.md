@@ -194,6 +194,32 @@ MIT licensed. See [LICENSE](LICENSE).
 `createWordArtifact({ blocks })` accepts paragraph, table and image blocks. A paragraph has
 formatted `runs`, optional alignment and optional `list: { id, kind, level, start }` metadata.
 Reuse a list ID to continue numbering; use a new ID to restart it. Levels range from zero to eight.
+Imported `source-list-N` identities bind to the package's existing numbering instance.
+Reusing one in appended or moved paragraphs continues that instance in native preview
+and export, including its level patterns and start overrides. Use a new identity to
+start an independently defined list. Imported identities must retain their source
+level definitions. Incompatible kind/start/marker metadata or an undefined source
+level throws `TypeError` in preview and export instead of silently dropping the edit.
+Compatible imported definitions, including empty bullet markers, remain valid when
+appending items. Newly authored bullet markers must still be nonempty.
+
+Numbering resolution counts derived marker text and suffixes in UTF-16 units.
+`numbering.markers(document, { maxCharacters })` and
+`numbering.markersFor(references, { maxCharacters })` default to a cumulative
+1,000,000-character budget per call. They throw `WordError` with code
+`limit_exceeded` before expanding text beyond the budget. Raise the budget explicitly
+for trusted documents that need larger output. `NativeWordOptions.maxMarkerCharacters`
+sets the cumulative update budget for both authored and imported markers.
+`WordLayoutOptions.maxMarkerCharacters` sets the body-and-story layout budget;
+native layout defaults to its constructor setting. Cached markers still count when
+a later request lowers the budget. Replaced headers and footers contribute only
+their current marker text; discarded original markers are not resolved or charged.
+This is a processing budget, separate
+from `openWordDocument`'s input-text limit; it does not restrict authored start values.
+Roman formatting checks the expanded length before allocating repeated symbols.
+Values above 3,999 retain the existing repeated-`M` representation when the budget
+permits them. No decimal fallback or claimed Word numeral-domain cutoff is applied.
+
 Tables have rectangular `rows` of cells, each containing `blocks`, and optional column widths in
 points. Image blocks contain PNG or JPEG bytes, dimensions in points and optional alt text.
 Images are embedded in the DOCX, with relationships created automatically. `blocks` and the
@@ -720,3 +746,20 @@ leader: 'none' }` at that position. Tab declarations are additive across styles.
 
 Authored cell properties and paragraph/cell borders serialize in schema order,
 regardless of the insertion order of their JavaScript properties.
+
+Text edits and `WordArtifact.replace` preserve the active header/footer part and
+open options, including ink rendering and parse limits. Retaining parse limits
+across edits is an intentional extension of the original invocation-scoped open
+contract, not a correction to a previously promised session-wide limit. Each reopened revision
+gets fresh parse counters across the main document and its parsed stories; limits
+are not a cumulative editing-session allowance. Intermediate revisions must also
+fit those limits. `replace(bytes, options)` can explicitly override them. A rejected
+edit leaves the input artifact and its package bytes unchanged.
+
+Paragraph joins and replacements reject crossings through tables, content
+controls, or other opaque XML blocks, even when those blocks have no projected
+text. Paragraphs in different containers cannot be joined.
+
+Splitting a paragraph moves its `w:sectPr` to the final continuation, preserving
+one section boundary. Multi-paragraph joins or replacements containing section
+properties are rejected until section-boundary transformations are supported.

@@ -29,6 +29,28 @@ describe("Word browser input translation", () => {
     });
   });
 
+  test("replacement and soft-line deletion operate on the supplied range", () => {
+    const document = fixture("<w:p><w:r><w:t>Hello world</w:t></w:r></w:p>");
+    const id = wordDocumentParagraphs(document)[0]!.elementId;
+    expect(wordInputEdit(document, selection(id, 0, 5), "insertReplacementText", "Hi")?.value).toBe("Hi");
+    expect(wordInputEdit(document, selection(id, 0, 5), "insertReplacementText", null)).toBeUndefined();
+    for (const inputType of ["deleteSoftLineBackward", "deleteSoftLineForward", "deleteEntireSoftLine"]) {
+      expect(wordInputEdit(document, selection(id, 0, 5), inputType, null)?.selection).toEqual(selection(id, 0, 5));
+      expect(wordInputEdit(document, selection(id, 5, 5), inputType, null)).toBeUndefined();
+    }
+    expect(wordInputEdit(document, selection(id, 0, 5), "insertCompositionText", "ni")).toBeUndefined();
+    expect(wordInputEdit(document, selection(id, 0, 5), "formatItalic", null)).toBeUndefined();
+  });
+
+  test("browser deletion ranges expand to whole model graphemes", () => {
+    const document = fixture("<w:p><w:r><w:t>é👩‍💻B</w:t></w:r></w:p>");
+    const id = wordDocumentParagraphs(document)[0]!.elementId;
+    for (const inputType of ["deleteContentBackward", "deleteContentForward", "deleteWordBackward", "deleteSoftLineBackward"]) {
+      expect(wordInputEdit(document, selection(id, 1, 2), inputType, null)?.selection).toEqual(selection(id, 0, 2));
+      expect(wordInputEdit(document, selection(id, 3, 5), inputType, null)?.selection).toEqual(selection(id, 2, 7));
+    }
+  });
+
   test("deletes whole grapheme clusters", () => {
     const document = fixture("<w:p><w:r><w:t>A👩‍💻B</w:t></w:r></w:p>");
     const paragraph = wordDocumentParagraphs(document)[0]!;

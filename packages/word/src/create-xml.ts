@@ -1,10 +1,10 @@
+import { validateXmlText } from "./text-validation.ts";
 import { WORD_HIGHLIGHTS } from './text-properties.ts';
 import { wordColourAttributes } from './theme-colour-xml.ts';
 import type { WordTextFormat } from './create.ts';
 
 export function xml(value: string) {
-  if (!value.isWellFormed()) throw new TypeError('Text contains unpaired UTF-16 surrogates.');
-  if (/[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]/.test(value)) throw new TypeError('Text contains characters not supported by XML.');
+  validateXmlText(value);
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;');
 }
 

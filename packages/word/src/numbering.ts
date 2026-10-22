@@ -1,3 +1,4 @@
+import type { WordAuthoredList } from './authored-list.ts';
 import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { RelationshipsError, type OpcPackage, type OpcPart, type PartName } from "@tumblerjs/opc";
 import { WordError, type WordBlock, type WordConformance, type WordParagraph } from "./document.ts";
@@ -5,6 +6,24 @@ import { WordError, type WordBlock, type WordConformance, type WordParagraph } f
 const NUMBERING_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml";
 const MAX_NUMBERING_DEFINITIONS = 100_000;
 const MAX_LEVEL = 8;
+const DEFAULT_MAX_MARKER_CHARACTERS = 1_000_000;
+
+export interface WordMarkerOptions {
+  /** Total derived UTF-16 units, including suffixes, per resolution call. */
+  readonly maxCharacters?: number;
+}
+
+export class WordMarkerBudget {
+  remaining: number;
+  constructor(maximum = DEFAULT_MAX_MARKER_CHARACTERS) {
+    if (!Number.isSafeInteger(maximum) || maximum < 0) throw new RangeError('Marker character budget must be a non-negative safe integer.');
+    this.remaining = maximum;
+  }
+  consume(length: number): void {
+    if (length > this.remaining) throw new WordError('limit_exceeded', 'Derived numbering text exceeds the marker character budget.');
+    this.remaining -= length;
+  }
+}
 
 export type WordNumberFormat = "decimal" | "lowerLetter" | "upperLetter" | "lowerRoman" | "upperRoman" | "bullet" | "none";
 
@@ -65,6 +84,23 @@ export class WordNumbering {
     this.#instances = new Map(this.instances.map((item) => [item.id, item]));
   }
 
+  /** Imported identities continue their original instance, including level overrides. */
+  importedReference(list: WordAuthoredList): WordParagraphNumbering | undefined {
+    const { id, level = 0 } = list;
+    const match = /^source-list-([1-9][0-9]*)$/.exec(id);
+    if (!match || !Number.isInteger(level) || level < 0 || level > MAX_LEVEL) return undefined;
+    const numId = Number(match[1]);
+    const instance = this.#instances.get(numId);
+    if (!instance) return undefined;
+    const definition = instance.levelOverrides.get(level) ?? this.#abstracts.get(instance.abstractId)?.levels.find(item => item.level === level);
+    if (!definition) throw new TypeError('An imported list identity cannot reference an undefined source level. Use a new identity for an independently defined list.');
+    if (list.kind !== definition.format || (list.start ?? 1) !== definition.start ||
+        (list.kind === 'bullet' && (list.marker ?? '•') !== definition.text) ||
+        (list.multilevel !== undefined && definition.text !== (list.multilevel ? Array.from({ length: level + 1 }, (_, index) => `%${index + 1}`).join('.') + '.' : `%${level + 1}.`)))
+      throw new TypeError('An imported list identity must retain its source definition. Use a new identity for an independently defined list.');
+    return { numId, level };
+  }
+
   paragraphReference(document: WordDocumentLike, paragraph: WordParagraph): WordParagraphNumbering | undefined {
     if (paragraph.propertiesElementId === undefined) return undefined;
     const properties = document.source.element(paragraph.propertiesElementId);
@@ -80,7 +116,7 @@ export class WordNumbering {
     return Object.freeze({ numId, level });
   }
 
-  markers(document: WordDocumentLike & { readonly blocks: readonly WordBlock[] }): ReadonlyMap<number, WordListMarker> {
+  markers(document: WordDocumentLike & { readonly blocks: readonly WordBlock[] }, options: WordMarkerOptions = {}, budget = new WordMarkerBudget(options.maxCharacters)): ReadonlyMap<number, WordListMarker> {
     const paragraphs: { elementId: number; reference: WordParagraphNumbering }[] = [];
     const visit = (blocks: readonly WordBlock[]): void => {
       for (const block of blocks) {
@@ -91,11 +127,11 @@ export class WordNumbering {
       }
     };
     visit(document.blocks);
-    return this.markersFor(paragraphs);
+    return this.markersFor(paragraphs, options, budget);
   }
 
   /** Number a semantic sequence without consulting XML or opening a package. */
-  markersFor(paragraphs: Iterable<{ elementId: number; reference: WordParagraphNumbering }>): ReadonlyMap<number, WordListMarker> {
+  markersFor(paragraphs: Iterable<{ elementId: number; reference: WordParagraphNumbering }>, options: WordMarkerOptions = {}, budget = new WordMarkerBudget(options.maxCharacters)): ReadonlyMap<number, WordListMarker> {
     const markers = new Map<number, WordListMarker>();
     const counters = new Map<number, number[]>();
     for (const { elementId, reference } of paragraphs) {
@@ -113,10 +149,10 @@ export class WordNumbering {
             else if (index === reference.level) state[index] = state[index]! + 1;
           }
           counters.set(reference.numId, state);
-          const text = level.format === "bullet" ? level.text : level.text.replace(/%([1-9])/g, (_match, digit: string) => {
-            const index = Number(digit) - 1;
+          budget.consume(level.suffix === 'nothing' ? 0 : 1);
+          const text = wordMarkerText(level.text, level.format === "bullet", budget, (index, maximum) => {
             const definition = instance.levelOverrides.get(index) ?? abstract.levels.find((item) => item.level === index);
-            return formatWordNumber(state[index] ?? definition?.start ?? 1, definition?.format ?? "decimal");
+            return formatWordNumber(state[index] ?? definition?.start ?? 1, definition?.format ?? "decimal", maximum);
           });
           markers.set(elementId, Object.freeze({ text, suffix: level.suffix, level: reference.level, indentStartTwips: level.indentStartTwips, hangingTwips: level.hangingTwips }));
     }
@@ -196,20 +232,52 @@ function parseLevel(element: LosslessXmlElement, ns: string, forcedLevel?: numbe
   });
 }
 
-export function formatWordNumber(value: number, format: WordNumberFormat): string {
+/** Budget derived text before expansion, including repeated placeholders and literals. */
+export function wordMarkerText(pattern: string, literal: boolean, budget: WordMarkerBudget, number: (index: number, maximum: number) => string): string {
+  if (literal) {
+    budget.consume(pattern.length);
+    return pattern;
+  }
+  const parts: string[] = [];
+  let offset = 0;
+  for (const match of pattern.matchAll(/%([1-9])/g)) {
+    budget.consume(match.index - offset);
+    parts.push(pattern.slice(offset, match.index));
+    const value = number(Number(match[1]) - 1, budget.remaining);
+    budget.consume(value.length);
+    parts.push(value);
+    offset = match.index + match[0].length;
+  }
+  budget.consume(pattern.length - offset);
+  parts.push(pattern.slice(offset));
+  return parts.join('');
+}
+
+/** Preserve numeral semantics; reject work exceeding the caller's derived-text budget. */
+export function formatWordNumber(value: number, format: WordNumberFormat, maxCharacters = DEFAULT_MAX_MARKER_CHARACTERS): string {
+  const budget = new WordMarkerBudget(maxCharacters);
   if (format === "none") return "";
+  if (!Number.isSafeInteger(value)) throw new WordError('invalid_document', 'Numbering value must be a safe integer.');
   if (format === "lowerLetter" || format === "upperLetter") {
     let current = Math.max(1, value); let result = "";
-    while (current > 0) { current -= 1; result = String.fromCharCode(65 + current % 26) + result; current = Math.floor(current / 26); }
+    while (current > 0) { budget.consume(1); current -= 1; result = String.fromCharCode(65 + current % 26) + result; current = Math.floor(current / 26); }
     return format === "lowerLetter" ? result.toLowerCase() : result;
   }
   if (format === "lowerRoman" || format === "upperRoman") {
     const pairs: readonly [number, string][] = [[1000,"M"],[900,"CM"],[500,"D"],[400,"CD"],[100,"C"],[90,"XC"],[50,"L"],[40,"XL"],[10,"X"],[9,"IX"],[5,"V"],[4,"IV"],[1,"I"]];
-    let current = Math.max(1, value); let result = "";
-    for (const [amount, symbol] of pairs) while (current >= amount) { result += symbol; current -= amount; }
+    let current = Math.max(1, value);
+    const counts = pairs.map(([amount, symbol]) => {
+      const count = Math.floor(current / amount);
+      budget.consume(count * symbol.length);
+      current -= count * amount;
+      return count;
+    });
+    const result = pairs.map(([, symbol], index) => symbol.repeat(counts[index]!)).join('');
     return format === "lowerRoman" ? result.toLowerCase() : result;
   }
-  return String(value);
+  const result = String(value);
+  budget.consume(result.length);
+  return result;
 }
 
 function namespace(conformance: WordConformance): string { return OOXML_NAMESPACES[conformance].wordprocessing; }

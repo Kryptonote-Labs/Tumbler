@@ -18,12 +18,7 @@ const mainArtifacts = new WeakMap<WordArtifact, WordArtifact>();
 /** Recover the main view without parsing the same immutable package revision again. */
 export function storyMainArtifact(artifact: WordArtifact): WordArtifact {
   if (artifact.document.source.root.localName === 'document') return artifact;
-  return mainArtifacts.get(artifact) ?? openWordArtifact(artifact.bytes(), {
-    inkRendering: artifact.document.inkRendering,
-    maxBlocks: Number.MAX_SAFE_INTEGER,
-    maxInlineItems: Number.MAX_SAFE_INTEGER,
-    maxTextCharacters: Number.MAX_SAFE_INTEGER,
-  });
+  return mainArtifacts.get(artifact) ?? openWordArtifact(artifact.bytes(), artifact.document.openOptions);
 }
 
 /** A story uses the same content, formatting and native editing APIs as the main body.
@@ -33,6 +28,7 @@ export function wordStoryArtifact(artifact: WordArtifact, partName: string): Wor
   const story = document.headerFooters.find(item => item.part.name.value === partName);
   if (!story) throw new Error('Unknown header or footer part.');
   const view = new WordArtifact(new WordDocument({
+    openOptions: document.openOptions,
     inkRendering: document.inkRendering,
     pkg: document.package, part: story.part, source: story.source,
     blocks: story.blocks, drawings: story.drawings,
