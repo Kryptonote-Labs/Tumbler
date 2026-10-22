@@ -646,3 +646,18 @@ non-breaking spaces do not expand. The document compatibility setting
 the last tab expand. Layout fragments expose the extra space advance as
 `wordSpacing` in points. DOM renderers apply that value to CSS word spacing;
 canvas renderers use the resulting fragment positions and widths.
+
+### Preparation limits
+
+`maxCharacters`, `maxAtoms`, and `maxMeasurements` bound preparation work per
+layout pass, including unpainted whitespace, table cells, and repeated stories.
+Defaults are 5,000,000 visited UTF-16 units, 1,000,000 glyph/control atoms, and
+1,000,000 measurer calls. Each limit accepts a positive safe integer; callers
+can raise it for larger documents. Exceeding one throws `limit_exceeded`.
+The standalone story and resolved-paragraph layout functions accept the same
+preparation options. Cached geometry avoids preparation and its measurement cost.
+
+Body pagination prepares lines on demand. A preview may prepare an extra page
+and bounded keep/widow lookahead before returning its requested pages. Aligned
+tabs may need a full following segment to find its width; decimal tabs stop at
+the decimal point. Such lookahead still consumes the preparation budgets.

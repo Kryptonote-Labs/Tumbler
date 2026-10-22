@@ -9,7 +9,6 @@ import type {
   WordBreakType,
   WordDocument,
   WordHyperlink,
-  WordInline,
   WordParagraph,
   WordRun,
   WordSectionProperties,
@@ -25,10 +24,7 @@ import type { WordDrawing } from "./drawings.ts";
 
 import { hasPageFields, type WordPageField } from './page-fields.ts';
 
-const measurementSources = new WeakMap<WordTextMeasurer, WordTextMeasurer>();
-function measurementIdentity(measurer: WordTextMeasurer): WordTextMeasurer {
-  return measurementSources.get(measurer) ?? measurer;
-}
+import { createPreparation, consumePreparation, measurementIdentity, type PreparationBudget } from './layout-preparation.ts';
 
 const TWIPS_PER_POINT = 20;
 const CSS_PIXELS_PER_POINT = 4 / 3;
@@ -172,22 +168,6 @@ export interface WordLayoutFragment {
   readonly hyperlink: string | undefined;
   readonly drawing: WordDrawing | undefined;
   readonly note: { readonly kind: "footnote" | "endnote"; readonly id: number } | undefined;
-}
-
-interface PreparationBudget {
-  readonly maxCharacters: number;
-  readonly maxAtoms: number;
-  readonly maxMeasurements: number;
-  characters: number;
-  atoms: number;
-  measurements: number;
-}
-
-function consumePreparation(budget: PreparationBudget | undefined, kind: 'characters' | 'atoms' | 'measurements', count = 1): void {
-  if (!budget) return;
-  const maximum = kind === 'characters' ? budget.maxCharacters : kind === 'atoms' ? budget.maxAtoms : budget.maxMeasurements;
-  if (count > maximum - budget[kind]) throw new WordError('limit_exceeded', `Layout exceeds ${maximum} prepared ${kind}.`);
-  budget[kind] += count;
 }
 
 interface LayoutBudget {
@@ -441,18 +421,9 @@ export function* layoutWordSourceProgressively(
 
 function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeasurer, options: WordLayoutOptions, stories: WordLayoutStories | undefined, totalPages: number, emitProgress: boolean): Generator<WordLayout, WordLayout, void> {
   if (document.cache) document.cache.layoutRevision += 1;
-  const preparation: PreparationBudget = {
-    maxCharacters: limit(options.maxCharacters, 5_000_000, 'character'),
-    maxAtoms: limit(options.maxAtoms, 1_000_000, 'atom'),
-    maxMeasurements: limit(options.maxMeasurements, 1_000_000, 'measurement'),
-    characters: 0, atoms: 0, measurements: 0,
-  };
-  const originalMeasurer = measurer;
-  measurer = { measure(text, format) {
-    consumePreparation(preparation, 'measurements');
-    return originalMeasurer.measure(text, format);
-  } };
-  measurementSources.set(measurer, originalMeasurer);
+  const prepared = createPreparation(measurer, options);
+  const preparation = prepared.budget;
+  measurer = prepared.measurer;
   const budget: LayoutBudget = {
     cache: document.cache,
     preparation,
@@ -495,8 +466,10 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
     sectionPageCounts.set(section, index + 1);
     if (stories) {
       decorateHeaderFooters(stories, [created], measurer, budget, sections, new Map([[section, index]]), totalPages);
-      const headerBottom = Math.max(points(section.marginTopTwips), ...created.headerLines.map(line => line.y + line.height), ...created.headerTables.map(table => table.y + table.height));
-      const footerTop = Math.min(created.height - points(section.marginBottomTwips), ...created.footerLines.map(line => line.y), ...created.footerTables.map(table => table.y));
+      const headerBottom = created.headerTables.reduce((bottom, table) => Math.max(bottom, table.y + table.height),
+        created.headerLines.reduce((bottom, line) => Math.max(bottom, line.y + line.height), points(section.marginTopTwips)));
+      const footerTop = created.footerTables.reduce((top, table) => Math.min(top, table.y),
+        created.footerLines.reduce((top, line) => Math.min(top, line.y), created.height - points(section.marginBottomTwips)));
       // A repeated story that fills the page cannot be resolved by adding identical pages.
       // Keep body content within its section margins and expose the collision to the host.
       // This is a layout fallback, not an authoring limit: all story content remains in the model/export.
@@ -943,7 +916,7 @@ function prepareParagraphFlow(
   // List hanging indents position the marker, not the first line of text.
   const textFormat = markerSource ? { ...format, firstLineTwips: 0, hangingTwips: 0 } : format;
   const iterator = breakLines(remainingAtoms(), width, textFormat, mark, wrapTrailSpaces, doNotExpandShiftReturn);
-  const marker = markerSource === undefined ? undefined : prepareMarker(document, paragraph, markerSource, measurer);
+  const marker = markerSource === undefined ? undefined : prepareMarker(document, paragraph, markerSource, measurer, preparation);
   const lines = new PreparedLineSequence(iterator, completed => {
     const value = Object.freeze({ paragraph, format, lines: completed, marker });
     document.cache?.paragraphs.set(paragraph, { width: columnWidth, marker: markerKey, measurer: measurementIdentity(measurer), wrapTrailSpaces, doNotExpandShiftReturn, value });
@@ -951,8 +924,13 @@ function prepareParagraphFlow(
   return { paragraph, format, lines, marker };
 }
 
-function prepareMarker(document: WordLayoutDocumentContext, paragraph: WordParagraph, source: WordListMarker, measurer: WordTextMeasurer): PreparedMarker {
-  const firstRun = paragraph.inlines.flatMap((inline) => inline.kind === "run" ? [inline] : inline.kind === "hyperlink" || inline.kind === "insertion" ? inline.runs : [])[0];
+function prepareMarker(document: WordLayoutDocumentContext, paragraph: WordParagraph, source: WordListMarker, measurer: WordTextMeasurer, preparation?: PreparationBudget): PreparedMarker {
+  consumePreparation(preparation, 'characters', source.text.length);
+  let firstRun: WordRun | undefined;
+  for (const inline of paragraph.inlines) {
+    firstRun = inline.kind === 'run' ? inline : inline.kind === 'hyperlink' || inline.kind === 'insertion' ? inline.runs[0] : undefined;
+    if (firstRun) break;
+  }
   const format = document.runFormat(paragraph, firstRun);
   const text = source.text + (source.suffix === "space" ? " " : source.suffix === "tab" ? "\t" : "");
   const measurement = validMeasurement(measurer.measure(source.text, format));
@@ -1426,10 +1404,12 @@ export function layoutWordStory(
   context: WordLayoutDocumentContext,
   width: number,
   measurer: WordTextMeasurer,
-  options: Pick<WordLayoutOptions, 'maxFragments'> = {},
+  options: Pick<WordLayoutOptions, 'maxFragments' | 'maxCharacters' | 'maxAtoms' | 'maxMeasurements'> = {},
 ) {
   if (!Number.isFinite(width) || width <= 0) throw new RangeError('Story width must be positive.');
-  return layoutStory(context, 0, width, measurer, {
+  const prepared = createPreparation(measurer, options);
+  return layoutStory(context, 0, width, prepared.measurer, {
+    preparation: prepared.budget,
     cache: context.cache,
     maxPages: 1,
     maxFragments: limit(options.maxFragments, 1_000_000, 'fragment'),
@@ -1586,11 +1566,6 @@ function translateLine(line: WordLayoutLine, dx: number, dy: number, cache?: Wor
   return value;
 }
 
-function paragraphHeight(paragraph: PreparedParagraph): number {
-  return points(paragraph.format.spacingBeforeTwips + paragraph.format.spacingAfterTwips) +
-    paragraph.lines.reduce((sum, line) => sum + line.ascent + line.descent, 0);
-}
-
 function firstFlowLineHeight(paragraph: ReturnType<typeof prepareParagraphFlow>): number {
   const first = paragraph.lines.get(0);
   return first === undefined ? 0 : points(paragraph.format.spacingBeforeTwips) + first.ascent + first.descent;
@@ -1724,13 +1699,16 @@ export function layoutWordResolvedParagraph(
   measurer: WordTextMeasurer,
   textFormat: ComputedWordTextFormat,
   format: ComputedWordParagraphFormat,
+  options: Pick<WordLayoutOptions, 'maxFragments' | 'maxCharacters' | 'maxAtoms' | 'maxMeasurements'> = {},
 ): readonly WordLayoutLine[] {
   if (!Number.isFinite(width) || width <= 0) throw new RangeError("Paragraph width must be positive.");
-  const atoms = resolvedParagraphAtoms(paragraph, measurer, () => textFormat, new Map());
+  const prepared = createPreparation(measurer, options);
+  measurer = prepared.measurer;
+  const atoms = resolvedParagraphAtoms(paragraph, measurer, () => textFormat, new Map(), undefined, prepared.budget);
   const lines = [...breakLines(atoms, Math.max(1, width - points(format.indentStartTwips + format.indentEndTwips)), format,
     validMeasurement(measurer.measure(' ', textFormat)), false)];
   const column: MutableColumn = { index: 0, x: 0, y: 0, width, height: Infinity, lines: [], tables: [], unsupportedBlocks: [] };
-  const budget = { maxPages: Infinity, maxFragments: Infinity, fragments: 0 };
+  const budget = { maxPages: Infinity, maxFragments: limit(options.maxFragments, 1_000_000, "fragment"), fragments: 0 };
   let y = points(format.spacingBeforeTwips);
   return lines.map((line) => {
     const placed = placeLine(paragraph, format, line, column, y, budget, undefined);

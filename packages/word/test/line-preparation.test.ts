@@ -43,3 +43,13 @@ test('decimal tab lookahead stops at the decimal point within preview budgets', 
   expect(calls).toBeLessThan(200);
   expect(layout.pages[0]!.columns[0]!.lines[0]!.fragments[0]!.width).toBe(55);
 });
+
+test('standalone stories and resolved paragraphs honor the same preparation budgets', async () => {
+  const { NativeWordDocument } = await import('../src/index.ts');
+  const { layoutWordStory, layoutWordResolvedParagraph } = await import('../src/layout.ts');
+  const model = new NativeWordDocument({ content: [{ kind: 'paragraph', runs: [{ text: ' '.repeat(200) }] }] });
+  expect(() => layoutWordStory(model, 100, fixedMeasurer, { maxAtoms: 10 })).toThrow('prepared atoms');
+  const paragraph = model.blocks[0]!;
+  if (paragraph.kind !== 'paragraph') throw new Error('Expected a paragraph');
+  expect(() => layoutWordResolvedParagraph(paragraph, 100, fixedMeasurer, model.runFormat(paragraph, undefined), model.paragraphFormat(paragraph), { maxCharacters: 10 })).toThrow('prepared characters');
+});
