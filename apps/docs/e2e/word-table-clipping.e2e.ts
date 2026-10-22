@@ -152,3 +152,43 @@ test('floating images keep their cell clip in the separate canvas paint pass', a
   expect(counts.inside).toBeGreaterThan(0);
   expect(counts.outside).toBe(0);
 });
+
+// Integration coverage for PR114 cell clips and PR126 device-pixel crops.
+test('cropped table ink matches full-page pixels at a shifted viewport', async ({ page }) => {
+  const { inkFixture } = await import('../../../packages/word/test/ink-fixture.ts');
+  const { officeInk } = await import('../../../packages/ink/test/fixture.ts');
+  const source = inkFixture(false, false, officeInk({ brush: '<brushProperty name="width" value="0.1" units="cm"/><brushProperty name="height" value="0.1" units="cm"/><brushProperty name="rasterOp" value="xOrPen"/><brushProperty name="color" value="#ffffff"/>' })).source;
+  await page.route('**/samples/project-brief.docx', route => route.fulfill({ body: Buffer.from(source.bytes()) }));
+  await page.goto('/');
+  const result = await page.evaluate(async wordUrl => {
+    const { openWordArtifact, layoutWordDocument, paintWordPage } = await import(wordUrl) as typeof import('../../../packages/word/src/index.ts');
+    const bytes = new Uint8Array(await (await fetch('/samples/project-brief.docx')).arrayBuffer());
+    const page = layoutWordDocument(openWordArtifact(bytes).document, { measure: text => ({ width: text.length * 5, ascent: 8, descent: 2 }) }).pages[0]!;
+    const column = page.columns[0]!;
+    const fragment = column.lines.flatMap(line => line.fragments).find(fragment => fragment.drawing)!;
+    const clip = { x: fragment.x + 5, y: fragment.y + 5, width: 20, height: 10 };
+    const input = { ...page, columns: [{ ...column, lines: [], tables: [{ tableElementId: 1, ...clip, cells: [{ cellElementId: 2, continuationElementIds: [], row: 0, column: 0, rowSpan: 1, columnSpan: 1, ...clip, lines: column.lines, tables: [] }] }] }] };
+    const scale = 2;
+    const viewport = { x: Math.ceil(clip.x * scale) + 3, y: Math.ceil(clip.y * scale) - 5, width: 50, height: 40 };
+    const full = document.createElement('canvas'); full.width = Math.ceil(page.width * scale); full.height = Math.ceil(page.height * scale);
+    paintWordPage(full.getContext('2d')!, input, { scale });
+    const expected = full.getContext('2d')!.getImageData(viewport.x, viewport.y, viewport.width, viewport.height).data;
+    const crop = document.createElement('canvas'); crop.width = viewport.width; crop.height = viewport.height;
+    paintWordPage(crop.getContext('2d')!, input, { scale, viewport });
+    const actual = crop.getContext('2d')!.getImageData(0, 0, crop.width, crop.height).data;
+    let differences = 0, inside = 0, outside = 0;
+    for (let y = 0; y < crop.height; y++) for (let x = 0; x < crop.width; x++) {
+      const i = (y * crop.width + x) * 4;
+      for (let c = 0; c < 4; c++) differences += Number(actual[i + c] !== expected[i + c]);
+      if (actual[i] === 255 && actual[i + 1] === 255 && actual[i + 2] === 255) continue;
+      const globalX = x + viewport.x, globalY = y + viewport.y;
+      if (globalX >= Math.ceil(clip.x * scale) && globalX < Math.floor((clip.x + clip.width) * scale) && globalY >= Math.ceil(clip.y * scale) && globalY < Math.floor((clip.y + clip.height) * scale)) inside++;
+      else outside++;
+    }
+    return { differences, inside, outside };
+  }, wordUrl);
+  console.log(`Combined shifted ink viewport: ${JSON.stringify(result)}`);
+  expect(result.differences).toBe(0);
+  expect(result.inside).toBeGreaterThan(0);
+  expect(result.outside).toBe(0);
+});
