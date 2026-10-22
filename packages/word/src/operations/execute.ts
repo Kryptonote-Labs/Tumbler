@@ -103,16 +103,19 @@ export function createWordOperations(commands = createWordCommands()) {
           const at = operation.input.destination;
           commands.anchorWordRange(staged, { start: at, end: at });
           if (at >= range.start && at <= range.end) return range;
-          const target = commands.anchorWordRange(staged, range),
-            destination = commands.anchorWordRange(staged, { start: at, end: at });
-          const changes: Parameters<typeof commands.wordTransaction>[1] = current.image
-            ? [{ kind: "image-move", target, destination, previous: current.image }]
-            : [
-                { kind: "replace", target, value: "", expected: "\uFFFC" },
-                { kind: "replace", target: destination, value: "\uFFFC", attributes: current },
-              ];
-          staged.applyDelta(commands.wordTransaction(staged, changes));
           const start = at > range.start ? at - 1 : at;
+          if (current.image) {
+            staged.applyDelta(commands.wordTransaction(staged, [{
+              kind: "image-move",
+              target: commands.anchorWordRange(staged, range),
+              destination: commands.anchorWordRange(staged, { start: at, end: at }),
+              previous: current.image,
+            }]));
+          } else {
+            // Moving an object carries its complete attributes, including field and source identity.
+            staged.delete(range.start, 1);
+            staged.insert(start, "\uFFFC", current);
+          }
           return { start, end: start + 1 };
         }
 

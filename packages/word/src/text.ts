@@ -18,6 +18,8 @@ export interface WordParagraphTextSegment {
   readonly kind: "text" | "symbol" | "tab" | "break" | "drawing" | "note" | "page-field";
   readonly field?: import("./page-fields.ts").WordPageField;
   readonly symbolFont?: string;
+  /** Additional source elements owned by a projected complex field. */
+  readonly replacedElementIds?: readonly number[];
   readonly elementId: number;
   readonly runElementId: number;
   readonly start: number;
@@ -33,20 +35,23 @@ export function wordParagraphText(document: WordDocument | undefined, paragraph:
 export function wordParagraphTextSegments(_document: WordDocument | undefined, paragraph: WordParagraph): readonly WordParagraphTextSegment[] {
   const segments: WordParagraphTextSegment[] = [];
   let offset = 0;
-  let fieldDepth = 0;
-  let resultDepth = 0;
+  const fieldResults: boolean[] = [];
+  let instructionDepth = 0;
   const addRun = (run: WordRun): void => {
     for (const content of run.contents) {
       if (content.kind === "field-character") {
-        if (content.fieldType === "begin") fieldDepth += 1;
-        else if (content.fieldType === "separate" && fieldDepth > 0) resultDepth = fieldDepth;
-        else if (content.fieldType === "end") {
-          if (resultDepth === fieldDepth) resultDepth = 0;
-          fieldDepth = Math.max(0, fieldDepth - 1);
+        if (content.fieldType === "begin") {
+          fieldResults.push(false);
+          instructionDepth += 1;
+        } else if (content.fieldType === "separate" && fieldResults.at(-1) === false) {
+          fieldResults[fieldResults.length - 1] = true;
+          instructionDepth -= 1;
+        } else if (content.fieldType === "end" && fieldResults.pop() === false) {
+          instructionDepth -= 1;
         }
         continue;
       }
-      if (content.kind === "field-instruction" || content.kind === "deleted-text" || fieldDepth > 0 && resultDepth !== fieldDepth) continue;
+      if (content.kind === "field-instruction" || content.kind === "deleted-text" || instructionDepth > 0) continue;
       const projected = content.kind === "page-field" ? { kind: "page-field" as const, value: "\uFFFC" }
         : content.kind === "text" ? { kind: "text" as const, value: content.value }
         : content.kind === "symbol" ? { kind: "symbol" as const, value: content.value }
@@ -63,7 +68,7 @@ export function wordParagraphTextSegments(_document: WordDocument | undefined, p
         ...(content.kind === "symbol" && !content.unicodeFallback ? { symbolFont: content.fontFamily } : {}),
         ...(content.kind === "break" ? { breakType: content.breakType } : {}),
         ...(content.kind === "tab" && content.position ? { tab: content.position } : {}),
-        ...(content.kind === "page-field" ? { field: content.field } : {}),
+        ...(content.kind === "page-field" ? { field: content.field, ...(content.replacedElementIds ? { replacedElementIds: content.replacedElementIds } : {}) } : {}),
         elementId: content.elementId,
         runElementId: run.elementId,
         start,
