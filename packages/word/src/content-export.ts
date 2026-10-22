@@ -9,7 +9,7 @@ import { openWordArtifact, type WordArtifact } from './artifact.ts';
 import { createWordArtifact, type WordTextParagraph } from './create.ts';
 import type { WordContentBlock } from './create-content.ts';
 import { importWordContent } from './import-content.ts';
-import { mergeContentNumbering } from './package-numbering.ts';
+import { contentNumberingList, mergeContentNumbering } from './package-numbering.ts';
 import { PackageXml } from './package-xml.ts';
 import { wordParagraphRenderer } from './package-paragraphs.ts';
 import { contentCopyScopes } from './package-copies.ts';
@@ -165,7 +165,7 @@ export function prepareWordContent(
       })),
       ...(p.list &&
       JSON.stringify(p.list) !== JSON.stringify(originalParagraphs.get(p.source!)?.list)
-        ? { list: p.list }
+        ? { list: contentNumberingList(document, p.list) }
         : {}),
     })),
   });
@@ -281,6 +281,7 @@ export function prepareWordContent(
     generated.document,
     transaction,
     prefix,
+    paragraphs,
   );
   const renderParagraph = wordParagraphRenderer(
     markup,

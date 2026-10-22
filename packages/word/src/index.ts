@@ -71,6 +71,7 @@ export type {
   WordAbstractNumbering,
   WordListMarker,
   WordNumberFormat,
+  WordMarkerOptions,
   WordNumberingInstance,
   WordNumberingLevel,
   WordParagraphNumbering,

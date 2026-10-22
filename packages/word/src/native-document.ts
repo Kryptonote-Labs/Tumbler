@@ -12,13 +12,13 @@ import { nativeShapeDrawing, validateShapeRun } from './shapes.ts';
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
 import { wordGeometryAt } from './geometry.ts';
-import { createWordStory, wordStoryArtifact, storyMainArtifact, type WordStoryTarget } from './stories.ts';
+import { createWordStory, wordStoryArtifact, storyMainArtifact, wordSections, type WordStoryTarget } from './stories.ts';
 import { NativeWordSource, retainOpaqueBlocks } from './native-source.ts';
 import type { WordArtifact } from './artifact.ts';
 import { reconcileWordContent } from './content-export.ts';
 import { wordParagraphText, wordParagraphTextSegments } from './text.ts';
 import type { WordInline } from './document.ts';
-import type { WordParagraphNumbering } from './numbering.ts';
+import { WordMarkerBudget, type WordParagraphNumbering } from './numbering.ts';
 import { authoredTableGrid } from './authored-table.ts';
 import { nativeImageDrawing } from './native-image.ts';
 import type { WordContentBlock } from './create-content.ts';
@@ -51,6 +51,8 @@ import {
 
 export interface NativeWordOptions extends Omit<CreateWordOptions, 'blocks' | 'paragraphs'> {
   readonly source?: WordArtifact;
+  /** Cumulative derived marker UTF-16 units per update, including suffixes. */
+  readonly maxMarkerCharacters?: number;
   /** Initial collaborative content, avoiding a redundant build of the original source. */
   readonly content?: readonly WordContentBlock[];
   /** Reuse signatures by authored object identity. All supplied blocks and descendants must remain immutable. */
@@ -178,27 +180,44 @@ export class NativeWordDocument implements WordLayoutSource {
     return layoutWordSource(this, measurer, {
       maxPages: Number.MAX_SAFE_INTEGER,
       maxFragments: Number.MAX_SAFE_INTEGER,
+      ...(this.options.maxMarkerCharacters === undefined ? {} : { maxMarkerCharacters: this.options.maxMarkerCharacters }),
       ...options,
-    }, this.layoutStories());
+    }, this.layoutStories(options.maxMarkerCharacters ?? this.options.maxMarkerCharacters));
   }
   /** Resume between completed pages. Do not mutate the model while an iterator is active. */
   layoutProgressively(measurer: WordTextMeasurer, options: WordLayoutOptions = {}) {
     return layoutWordSourceProgressively(this, measurer, {
       maxPages: Number.MAX_SAFE_INTEGER,
       maxFragments: Number.MAX_SAFE_INTEGER,
+      ...(this.options.maxMarkerCharacters === undefined ? {} : { maxMarkerCharacters: this.options.maxMarkerCharacters }),
       ...options,
-    }, this.layoutStories());
+    }, this.layoutStories(options.maxMarkerCharacters ?? this.options.maxMarkerCharacters));
   }
-  private layoutStories() {
-    const original = this.compiled ? wordLayoutStories(this.compiled.artifact.document) : { headerFooters: [], notes: [] };
-    const headerFooters = original.headerFooters.map(story => {
-      const part = this.options.source?.document.headerFooters.find(item => item.relationshipId === story.relationshipId)?.part.name.value;
-      const edited = part && this.editedStories.get(part);
-      return edited ? { ...story, context: edited.model } : story;
-    });
+  private layoutStories(maxCharacters?: number) {
+    const headerFooterOverrides = new Map<string, NativeWordDocument>();
+    const replaced = new Set<string>();
+    const document = this.compiled?.artifact.document;
+    const sections = wordSections(this);
+    for (const [key, entry] of this.editedStories) {
+      const target = entry.target;
+      const section = typeof target === 'string' ? undefined : sections?.[target.section];
+      const reference = typeof target === 'string' ? undefined :
+        (target.kind === 'header' ? section?.headerReferences : section?.footerReferences)?.find(item => item.type === target.type);
+      const part = typeof target === 'string' ? target :
+        document?.headerFooters.find(story => story.relationshipId === reference?.relationshipId)?.part.name.value;
+      if (part) {
+        headerFooterOverrides.set(part, entry.model);
+        replaced.add(key);
+      }
+    }
+    const original = this.compiled ? wordLayoutStories(this.compiled.artifact.document, {
+      ...(maxCharacters === undefined ? {} : { maxCharacters }),
+      headerFooterOverrides,
+    }) : { headerFooters: [], notes: [] };
+    const headerFooters = [...original.headerFooters];
     const bindings: { section: number; kind: 'header' | 'footer'; type: 'default' | 'first' | 'even'; relationshipId: string }[] = [];
     for (const [key, entry] of this.editedStories) {
-      if (typeof entry.target === 'string') continue;
+      if (typeof entry.target === 'string' || replaced.has(key)) continue;
       bindings.push({ ...entry.target, relationshipId: key });
       headerFooters.push({ ...entry.target, relationshipId: key, context: entry.model });
     }
@@ -243,6 +262,7 @@ export class NativeWordDocument implements WordLayoutSource {
     const sourceOccurrences = new Map<string, number>();
     const drawings = new Map<number, WordDrawing>();
     const markers = new Map<number, WordListMarker>();
+    const markerBudget = new WordMarkerBudget(this.options.maxMarkerCharacters);
     const counters = new Map<string, { levels: Map<number, WordAuthoredList>; values: number[] }>();
     const allocate = () => this.nextId--;
     const compiled = this.compiled;
@@ -514,8 +534,9 @@ export class NativeWordDocument implements WordLayoutSource {
             result = { signature: fingerprint, block, drawings: media };
           }
           const list = authored.list;
-          if (list && original?.numbering && JSON.stringify(list) === JSON.stringify(compiled?.lists.get(authored.source!))) {
-            numbering.push({ elementId: result.block.elementId, reference: original.numbering });
+          const importedReference = list && compiled?.artifact.document.numbering.importedReference(list);
+          if (importedReference) {
+            numbering.push({ elementId: result.block.elementId, reference: importedReference });
           } else if (list) {
             if (!isWordAuthoredList(list)) throw new TypeError('Invalid list.');
             const level = list.level ?? 0,
@@ -537,8 +558,9 @@ export class NativeWordDocument implements WordLayoutSource {
                   ? counter.levels.get(i)?.start ?? start
                   : counter.values[i]! + (i === level ? 1 : 0);
             counters.set(list.id, counter);
+            markerBudget.consume(1); // Authored markers have a tab suffix.
             markers.set(result.block.elementId, {
-              text: wordListMarker(list, counter.values, level, counter.levels),
+              text: wordListMarker(list, counter.values, level, counter.levels, markerBudget),
               suffix: 'tab',
               level,
               indentStartTwips: (level + 1) * 720,
@@ -566,7 +588,7 @@ export class NativeWordDocument implements WordLayoutSource {
       'body',
       compiled?.artifact.document.blocks,
     );
-    if (compiled) for (const [id, marker] of compiled.artifact.document.numbering.markersFor(numbering)) markers.set(id, marker);
+    if (compiled) for (const [id, marker] of compiled.artifact.document.numbering.markersFor(numbering, {}, markerBudget)) markers.set(id, marker);
     if (blocks.length !== this.blocks.length || blocks.some((block, index) => block !== this.blocks[index])) this.exported = undefined;
     this.records = records;
     this.blocks = blocks;

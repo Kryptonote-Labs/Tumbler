@@ -194,6 +194,32 @@ MIT licensed. See [LICENSE](LICENSE).
 `createWordArtifact({ blocks })` accepts paragraph, table and image blocks. A paragraph has
 formatted `runs`, optional alignment and optional `list: { id, kind, level, start }` metadata.
 Reuse a list ID to continue numbering; use a new ID to restart it. Levels range from zero to eight.
+Imported `source-list-N` identities bind to the package's existing numbering instance.
+Reusing one in appended or moved paragraphs continues that instance in native preview
+and export, including its level patterns and start overrides. Use a new identity to
+start an independently defined list. Imported identities must retain their source
+level definitions. Incompatible kind/start/marker metadata or an undefined source
+level throws `TypeError` in preview and export instead of silently dropping the edit.
+Compatible imported definitions, including empty bullet markers, remain valid when
+appending items. Newly authored bullet markers must still be nonempty.
+
+Numbering resolution counts derived marker text and suffixes in UTF-16 units.
+`numbering.markers(document, { maxCharacters })` and
+`numbering.markersFor(references, { maxCharacters })` default to a cumulative
+1,000,000-character budget per call. They throw `WordError` with code
+`limit_exceeded` before expanding text beyond the budget. Raise the budget explicitly
+for trusted documents that need larger output. `NativeWordOptions.maxMarkerCharacters`
+sets the cumulative update budget for both authored and imported markers.
+`WordLayoutOptions.maxMarkerCharacters` sets the body-and-story layout budget;
+native layout defaults to its constructor setting. Cached markers still count when
+a later request lowers the budget. Replaced headers and footers contribute only
+their current marker text; discarded original markers are not resolved or charged.
+This is a processing budget, separate
+from `openWordDocument`'s input-text limit; it does not restrict authored start values.
+Roman formatting checks the expanded length before allocating repeated symbols.
+Values above 3,999 retain the existing repeated-`M` representation when the budget
+permits them. No decimal fallback or claimed Word numeral-domain cutoff is applied.
+
 Tables have rectangular `rows` of cells, each containing `blocks`, and optional column widths in
 points. Image blocks contain PNG or JPEG bytes, dimensions in points and optional alt text.
 Images are embedded in the DOCX, with relationships created automatically. `blocks` and the
