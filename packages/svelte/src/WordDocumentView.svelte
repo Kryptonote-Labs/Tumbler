@@ -434,7 +434,7 @@
 
   function drawingStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0, paintImage = false, order?: ReadonlyMap<import('@tumblerjs/word').WordDrawing, number>) {
     const box = paintImage && fragment.drawing?.kind === 'image' ? wordImagePaintBounds(fragment.drawing, fragment.width, fragment.height) : { x: 0, y: 0, width: fragment.width, height: fragment.height };
-    return `z-index:${fragment.drawing ? order?.get(fragment.drawing) ?? (fragment.drawing.placement === 'inline' ? 1 : 2) : 1};left:${wordPointsToCssPixels(fragment.x + box.x - offsetX)}px;top:${wordPointsToCssPixels(fragment.y + box.y - offsetY)}px;width:${wordPointsToCssPixels(box.width)}px;height:${wordPointsToCssPixels(box.height)}px`;
+    return `z-index:var(--word-drawing-active-z-index,${fragment.drawing ? order?.get(fragment.drawing) ?? (fragment.drawing.placement === 'inline' ? 1 : 2) : 1});left:${wordPointsToCssPixels(fragment.x + box.x - offsetX)}px;top:${wordPointsToCssPixels(fragment.y + box.y - offsetY)}px;width:${wordPointsToCssPixels(box.width)}px;height:${wordPointsToCssPixels(box.height)}px`;
   }
 
   function imageUrl(drawing: WordImageDrawing): string {
