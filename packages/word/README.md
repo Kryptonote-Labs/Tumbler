@@ -157,6 +157,18 @@ scales the measured font line box; exact and at-least spacing use the authored
 point height. Browser measurers should include the font's line gap and avoid
 rounding vertical metrics at each text size, since small errors accumulate across pages.
 
+Body pagination keeps `keepNext` chains together independently of `keepLines`.
+Chains taller than a column start fresh once, then flow normally. Widow control is
+on by default and keeps the first and last pairs together when a column can hold
+them. Explicit page and column breaks take precedence. `nextColumn` sections reuse
+an available column when page and column geometry match.
+
+Body, table cells, and auxiliary stories share adjacent paragraph spacing. The gap
+uses the maximum of the previous after-spacing and current before-spacing.
+For matching computed paragraph styles, each `contextualSpacing` contribution is
+subtracted from that maximum, down to zero. These gaps also determine pagination
+and table heights; prepared source formats remain unchanged.
+
 See the repository's
 [WordprocessingML implementation status](../../docs/wordprocessingml-implementation.md)
 for the exact capability matrix and known limitations.
