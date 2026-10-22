@@ -81,7 +81,7 @@ export function nativeShapeDrawing(elementId: number, shape: WordAuthoredShape, 
   return { kind: 'shape', elementId, shape, placement: floating ? 'anchor' : 'inline', widthPoints: shape.width, heightPoints: shape.height, name: 'Shape', altText: shape.alt, anchor: floating ? {
     horizontalRelativeTo: shape.horizontalRelativeTo ?? 'column', verticalRelativeTo: shape.verticalRelativeTo ?? (shape.moveWithText === false ? 'page' : 'paragraph'),
     horizontalOffsetPoints: shape.x ?? (shape.alignment === 'center' ? (availableWidth - shape.width) / 2 : shape.alignment === 'right' ? availableWidth - shape.width : 0), verticalOffsetPoints: shape.y ?? 0,
-    wrap: 'none', behindDocument: shape.layout === 'behind', allowOverlap: true, distanceTopPoints: 0, distanceEndPoints: 0, distanceBottomPoints: 0, distanceStartPoints: 0,
+    wrap: 'none', behindDocument: shape.layout === 'behind', layoutInCell: true, allowOverlap: true, distanceTopPoints: 0, distanceEndPoints: 0, distanceBottomPoints: 0, distanceStartPoints: 0,
   } : undefined };
 }
 

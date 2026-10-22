@@ -66,7 +66,7 @@ export function withWordDrawingGeometry(
             verticalOffsetPoints: 0,
             wrap: 'none',
             behindDocument: layout === 'behind',
-            allowOverlap: true,
+            layoutInCell: true, allowOverlap: true,
             distanceTopPoints: 0,
             distanceEndPoints: 0,
             distanceBottomPoints: 0,

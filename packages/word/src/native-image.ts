@@ -34,7 +34,7 @@ export const nativeImageDrawing = (id: number, image: WordAuthoredImage, width: 
               verticalOffsetPoints: image.y ?? 0,
               wrap: 'none',
               behindDocument: image.layout === 'behind',
-              allowOverlap: true,
+              layoutInCell: true, allowOverlap: true,
               distanceTopPoints: 0,
               distanceEndPoints: 0,
               distanceBottomPoints: 0,
