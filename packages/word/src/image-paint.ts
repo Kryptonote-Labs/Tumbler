@@ -1,9 +1,11 @@
+import { wordPicturePaintBounds } from './picture-geometry.ts';
 import type { WordImageDrawing } from './drawings.ts';
 
-/** Image pixels can extend outside an ink drawing's native layout/editing frame. */
+/** Compositing AABB relative to the editing frame. Includes picture rotation and ink overflow.
+ * Use the original frame for DOM placement and editing; these bounds are for region selection. */
 export function wordImagePaintBounds(drawing: WordImageDrawing, width = drawing.widthPoints, height = drawing.heightPoints) {
   const bounds = drawing.inkProjection?.bounds;
-  if (!bounds) return { x: 0, y: 0, width, height };
+  if (!bounds) return drawing.picture ? wordPicturePaintBounds(drawing.picture, width, height) : { x: 0, y: 0, width, height };
   const sx = width / drawing.widthPoints, sy = height / drawing.heightPoints;
   return { x: bounds.x * sx, y: bounds.y * sy, width: bounds.width * sx, height: bounds.height * sy };
 }
