@@ -95,3 +95,21 @@ for (const immutableContent of [false, true]) for (const cancelled of [false, tr
     expect(headerMarkers(layoutWordDocument(model.artifact().document, measure))).toEqual(expected);
   });
 }
+
+for (const target of ['/word/header.xml', { section: 0, kind: 'header', type: 'first' }] as const) {
+  test(`invalid story text cannot materialize shared numbering styles: ${JSON.stringify(target)}`, () => {
+    const source = numberingStoryFixture();
+    const model = new NativeWordDocument({ source });
+    const original = model.artifact();
+    for (const text of ['bad\u0000text', 'bad\ntext']) {
+      expect(() => model.updateStory(target, [{ ...heading[0]!, runs: [{ text }] }])).toThrow();
+      expect(model.artifact()).toBe(original);
+      model.update(importWordContent(source));
+      expect(bodyMarkers(model)).toEqual([]);
+      expect(exportedBody(model)).toEqual([]);
+    }
+    model.updateStory(target, heading);
+    expect(bodyMarkers(model)).toEqual(['5.']);
+    expect(exportedBody(model)).toEqual(['5.']);
+  });
+}

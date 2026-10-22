@@ -1,12 +1,14 @@
 <script lang="ts">
   import { wordDrawingStackOrder, wordDrawingOverlayOrder } from "./word-drawing-order.ts";
   import WordPictureView from "./WordPictureView.svelte";
+  import WordContentClip from "./WordContentClip.svelte";
+  import { wordDrawingCellClip, wordTableLinesWithClips, type WordClippedLine } from "@tumblerjs/word";
   import WordInkPageLayer from "./WordInkPageLayer.svelte";
   import WordShapeView from "./WordShapeView.svelte";
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
   import { flushSync, onDestroy, onMount, tick, untrack } from "svelte";
   import { WordImageUrls } from "./word-image-urls.ts";
-  import { wordImagePaintBounds, wordLineAtPoint, layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
+  import { wordImagePaintBounds, wordClippedLineAtPoint, layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import { zoomGesture } from "./zoom-gesture.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
   import WordDrawingView from "./WordDrawingView.svelte";
@@ -38,6 +40,9 @@
   let selectedDrawing = $state<number>();
   let editingFocused = $state(false);
   let inputSelectionOverride: WordTextSelection | undefined;
+  let inputRevision = $state(0);
+  let composition: { document: WordDocument; selection: WordTextSelection | undefined } | undefined;
+  let pendingInput: { document: WordDocument; selection: WordTextSelection | undefined; edit: WordDocumentEdit | undefined; command: "undo" | "redo" | undefined } | undefined;
   let pointerType = "mouse";
   let dragPoint: { x: number; y: number } | undefined;
   let scrollFrame = 0;
@@ -183,7 +188,7 @@
   }
 
   function readBrowserSelection() {
-    if (!editable || mouseSelection !== undefined) return;
+    if (!editable || mouseSelection !== undefined || composition !== undefined || pendingInput !== undefined) return;
     const next = browserTextSelection();
     if (next !== undefined && !sameWordTextSelection(selection, next)) onselectionchange?.(next);
   }
@@ -198,7 +203,7 @@
   }
 
   function restoreBrowserSelection() {
-    if (!editable || !editingFocused || selection === undefined || scroller === undefined || mouseSelection !== undefined) return;
+    if (composition !== undefined || pendingInput !== undefined || !editable || !editingFocused || selection === undefined || scroller === undefined || mouseSelection !== undefined) return;
     const anchor = browserPoint(selection.anchor);
     const focus = browserPoint(selection.focus);
     if (anchor === undefined || focus === undefined) return;
@@ -211,40 +216,119 @@
       .filter((fragment) => Number(fragment.dataset.start) <= position.offset && Number(fragment.dataset.end) >= position.offset);
     const fragment = position.affinity === "before" ? fragments.at(-1) : fragments[0];
     if (fragment === undefined) return undefined;
-    const node = fragment.firstChild ?? fragment;
-    return { node, offset: Math.max(0, Math.min(node.textContent?.length ?? 0, position.offset - Number(fragment.dataset.start))) };
+    const walker = globalThis.document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
+    let offset = Math.max(0, position.offset - Number(fragment.dataset.start));
+    let node = walker.nextNode();
+    while (node !== null) {
+      const length = node.textContent?.length ?? 0;
+      if (offset <= length) return { node, offset };
+      offset -= length;
+      node = walker.nextNode();
+    }
+    return { node: fragment, offset: fragment.childNodes.length };
   }
 
   function logicalPosition(node: Node | null, offset: number): WordTextPosition | undefined {
-    const element = node instanceof Element ? node : node?.parentElement;
+    if (node === null || !scroller?.contains(node)) return;
+    const element = node instanceof Element ? node : node.parentElement;
     const fragment = element?.closest<HTMLElement>("[data-paragraph][data-start][data-end]");
     if (fragment === null || fragment === undefined || fragment.dataset.story !== undefined) return undefined;
     const paragraphElementId = Number(fragment.dataset.paragraph);
     const start = Number(fragment.dataset.start);
     const end = Number(fragment.dataset.end);
     if (!Number.isInteger(paragraphElementId) || !Number.isInteger(start) || !Number.isInteger(end)) return undefined;
-    const local = node?.nodeType === Node.TEXT_NODE ? offset : offset === 0 ? 0 : fragment.textContent?.length ?? 0;
+    const range = globalThis.document.createRange();
+    range.selectNodeContents(fragment);
+    range.setEnd(node, offset);
+    const local = range.toString().length;
     return { paragraphElementId, offset: Math.min(end, start + local), affinity: local === 0 ? "before" : "after" };
   }
 
+  /** Only the body editing host owns these events; shape editors own their own input. */
+  function bodyInput(event: Event): boolean {
+    return event.target instanceof Element && event.target.closest('[contenteditable]') === event.currentTarget;
+  }
+
+  function targetSelection(event: InputEvent): WordTextSelection | undefined {
+    const ranges = event.getTargetRanges();
+    if (ranges.length !== 1) return;
+    const range = ranges[0]!;
+    const anchor = logicalPosition(range.startContainer, range.startOffset);
+    const focus = logicalPosition(range.endContainer, range.endOffset);
+    return anchor === undefined || focus === undefined ? undefined : { anchor, focus };
+  }
+
   function handleBeforeInput(event: InputEvent) {
-    if (!editable) return;
-    // A native drag is a two-part move. Until moves have a paired model operation, cancel both halves.
-    if (event.inputType === "deleteByDrag" || event.inputType === "insertFromDrop") {
-      event.preventDefault();
+    if (!bodyInput(event)) return;
+    // Every browser mutation needs a model operation, including unsupported intents and missing selections.
+    if (!editable) { event.preventDefault(); return; }
+    if (composition !== undefined || event.isComposing || event.inputType === "insertCompositionText") {
+      composition ??= { document: wordDocument, selection: browserTextSelection() ?? selection };
       return;
     }
-    // Keyboard navigation changes the DOM selection before Svelte can publish controlled state.
-    const activeSelection = inputSelectionOverride ?? browserTextSelection() ?? selection;
+    const activeSelection = inputSelectionOverride ?? (event.getTargetRanges().length > 0
+      ? targetSelection(event)
+      : browserTextSelection() ?? selection);
     inputSelectionOverride = undefined;
-    if (activeSelection === undefined) return;
-    const edit = wordInputEdit(wordDocument, activeSelection, event.inputType, event.dataTransfer?.getData("text/plain") ?? event.data);
-    if (edit === undefined) return;
+    const command = event.inputType === "historyUndo" ? "undo" : event.inputType === "historyRedo" ? "redo" : undefined;
+    const edit = activeSelection === undefined ? undefined : wordInputEdit(wordDocument, activeSelection, event.inputType, event.dataTransfer?.getData("text/plain") ?? event.data);
+    if (!event.cancelable) {
+      pendingInput = { document: wordDocument, selection: activeSelection, edit, command };
+      return;
+    }
     event.preventDefault();
-    onedit?.(edit);
+    if (command !== undefined) oncommand?.(command);
+    else if (edit !== undefined) onedit?.(edit);
+  }
+
+  /** Recreate Svelte-owned nodes after browser mutations, even when the model did not change. */
+  function reconcileInput(activeSelection: WordTextSelection | undefined, apply?: () => void) {
+    const focused = editingFocused;
+    flushSync(() => { inputRevision++; apply?.(); });
+    if (!focused || !editable) return;
+    editingFocused = true;
+    const next = selection ?? activeSelection;
+    const anchor = next === undefined ? undefined : browserPoint(next.anchor);
+    const focus = next === undefined ? undefined : browserPoint(next.focus);
+    const element = anchor?.node instanceof Element ? anchor.node : anchor?.node.parentElement;
+    element?.closest<HTMLElement>('[contenteditable]')?.focus({ preventScroll: true });
+    if (anchor !== undefined && focus !== undefined) globalThis.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
+  }
+
+  function handleInput(event: Event) {
+    if (!bodyInput(event) || composition !== undefined) return;
+    const pending = pendingInput;
+    pendingInput = undefined;
+    reconcileInput(pending?.selection, () => {
+      if (!editable || pending?.document !== wordDocument) return;
+      if (pending.command !== undefined) oncommand?.(pending.command);
+      else if (pending.edit !== undefined) onedit?.(pending.edit);
+    });
+  }
+
+  function handleCompositionStart(event: CompositionEvent) {
+    if (!editable || !bodyInput(event)) return;
+    pendingInput = undefined;
+    composition = { document: wordDocument, selection: inputSelectionOverride ?? browserTextSelection() ?? selection };
+    inputSelectionOverride = undefined;
+  }
+
+  function handleCompositionEnd(event: CompositionEvent) {
+    if (!bodyInput(event)) return;
+    const transaction = composition;
+    composition = undefined;
+    // Empty data cancels the provisional text. Never apply old offsets to a replacement document.
+    reconcileInput(transaction?.selection, () => {
+      if (!editable || transaction?.document !== wordDocument || transaction.selection === undefined || event.data === "") return;
+      const edit = wordInputEdit(wordDocument, transaction.selection, "insertText", event.data);
+      if (edit !== undefined) onedit?.(edit);
+    });
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (event.isComposing || composition !== undefined) return;
+    // Drawing controls share page commands; nested text editors own their shortcuts.
+    if (!(event.target instanceof Element) || event.target.closest('[contenteditable="true"]') !== event.currentTarget) return;
     if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) inputSelectionOverride = undefined;
     if (!editable || !(event.ctrlKey || event.metaKey) || event.altKey) return;
     const key = event.key.toLowerCase();
@@ -271,8 +355,8 @@
 
   /** Body text must follow document order, including paragraphs inside tables. */
   function bodyLines(page: WordLayout["pages"][number]) {
-    return page.columns.flatMap(column => [...column.lines, ...tableLines(column.tables)])
-      .sort((left, right) => (paragraphOrder.get(left.paragraphElementId) ?? 0) - (paragraphOrder.get(right.paragraphElementId) ?? 0) || left.startOffset - right.startOffset);
+    return page.columns.flatMap(column => [...column.lines.map((line): WordClippedLine => ({ line })), ...wordTableLinesWithClips(column.tables)])
+      .sort(({ line: left }, { line: right }) => (paragraphOrder.get(left.paragraphElementId) ?? 0) - (paragraphOrder.get(right.paragraphElementId) ?? 0) || left.startOffset - right.startOffset);
   }
 
   function positionOrder(left: WordTextPosition, right: WordTextPosition) {
@@ -381,10 +465,13 @@
     const page = layout.pages.find(item => item.index === Number(pageElement?.dataset.page));
     if (pageElement === undefined || page === undefined) return;
     const rect = pageElement.getBoundingClientRect();
-    const x = (clientX - rect.left) / scale;
+    let x = (clientX - rect.left) / scale;
     const y = (clientY - rect.top) / scale;
-    const line = wordLineAtPoint(page, x / wordPointsToCssPixels(1), y / wordPointsToCssPixels(1));
-    if (line === undefined) return;
+    const target = wordClippedLineAtPoint(page, x / wordPointsToCssPixels(1), y / wordPointsToCssPixels(1));
+    if (target === undefined) return;
+    const { line, clip } = target;
+    if (clip) x = Math.max(wordPointsToCssPixels(clip.x), Math.min(wordPointsToCssPixels(clip.x + clip.width), x));
+    const visibleClientX = rect.left + x * scale;
     const position = (offset: number): WordTextPosition => ({ paragraphElementId: line.paragraphElementId, offset });
     if (x <= wordPointsToCssPixels(line.x)) return position(line.startOffset);
     if (x >= wordPointsToCssPixels(line.x + line.width)) return position(line.endOffset);
@@ -397,8 +484,10 @@
     const element = pageElement.querySelector<HTMLElement>(`[data-paragraph="${line.paragraphElementId}"][data-start="${fragment.startOffset}"][data-end="${fragment.endOffset}"]:not(.caret-anchor):not([data-story])`);
     if (element?.firstChild?.nodeType !== Node.TEXT_NODE) return position(fragment.startOffset);
     const bounds = element.getBoundingClientRect();
-    const hitX = Math.max(bounds.left + 0.01, Math.min(bounds.right - 0.01, clientX));
-    const hitY = bounds.top + bounds.height / 2;
+    const hitX = Math.max(bounds.left + 0.01, Math.min(bounds.right - 0.01, visibleClientX));
+    const visibleTop = clip ? Math.max(bounds.top, rect.top + wordPointsToCssPixels(clip.y) * scale) : bounds.top;
+    const visibleBottom = clip ? Math.min(bounds.bottom, rect.top + wordPointsToCssPixels(clip.y + clip.height) * scale) : bounds.bottom;
+    const hitY = (visibleTop + visibleBottom) / 2;
     const document = globalThis.document as Document & {
       caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
       caretRangeFromPoint?: (x: number, y: number) => Range | null;
@@ -419,17 +508,10 @@
       measure.setStart(element.firstChild, 0);
       measure.setEnd(element.firstChild, boundary);
       const box = measure.getBoundingClientRect();
-      const delta = Math.abs((rtl ? box.left : box.right) - clientX);
+      const delta = Math.abs((rtl ? box.left : box.right) - visibleClientX);
       if (delta < distance) { distance = delta; nearest = boundary; }
     }
     return position(Math.min(fragment.endOffset, fragment.startOffset + nearest));
-  }
-
-  function tableLines(tables: readonly WordLayout["pages"][number]["columns"][number]["tables"][number][]): WordLayout["pages"][number]["columns"][number]["lines"] {
-    return tables.flatMap((table) => table.cells.flatMap((cell) => [
-      ...cell.lines,
-      ...tableLines(cell.tables),
-    ]));
   }
 
   function fragmentStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0) {
@@ -467,7 +549,7 @@
 >
   {#if layout !== undefined && viewport !== undefined}
     <div class="word-surface" style={`height:${viewport.totalHeight * scale}px;width:${viewport.totalWidth * scale}px`}>
-      {#each layout.pages.slice(viewport.first, viewport.last + 1) as page, localIndex (page.index)}
+      {#each layout.pages.slice(viewport.first, viewport.last + 1) as page, localIndex (`${page.index}:${inputRevision}`)}
         {@const pageIndex = viewport.first + localIndex}
         {@const drawingOrder = wordDrawingStackOrder(page)}
         <section
@@ -496,12 +578,15 @@
               if (!(event.relatedTarget instanceof Node) || !scroller?.contains(event.relatedTarget)) editingFocused = false;
             }}
             onbeforeinput={handleBeforeInput}
+            oninput={handleInput}
+            oncompositionstart={handleCompositionStart}
+            oncompositionend={handleCompositionEnd}
             onkeydown={handleKeydown}
             style={`--word-ink-layer-z-index:${wordDrawingOverlayOrder(drawingOrder)};width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
           >
             <!-- Canvas decoding owns its URLs until the asynchronous paint completes. -->
             <WordInkPageLayer {page} {scale} background={layout.background} />
-            <WordParagraphDecorations lines={[...bodyLines(page), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
+            <WordParagraphDecorations lines={[...page.columns.flatMap(column => column.lines), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
             {#if page.noteSeparatorY !== undefined}
               <div class="note-separator" style={`left:${wordPointsToCssPixels(page.section.marginLeftTwips / 20)}px;top:${wordPointsToCssPixels(page.noteSeparatorY)}px`}></div>
             {/if}
@@ -537,7 +622,13 @@
                 <WordLayoutTableView {table} {drawingOrder} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} decorationsOnly />
               {/each}
             {/each}
-            {#each bodyLines(page) as line}
+            {#each bodyLines(page) as { line, clip }}
+              {#each line.fragments as fragment}
+                {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
+                  <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, 0, 0, false, drawingOrder, true)} pageX={fragment.x} pageY={fragment.y} clip={wordDrawingCellClip(fragment.drawing, clip)} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
+                {/if}
+              {/each}
+              <WordContentClip {clip} layer={1}>
               {#if line.marker !== undefined}
                 <span
                   class="list-marker"
@@ -548,8 +639,8 @@
 
               <div class="text-line" style={`left:${wordPointsToCssPixels(line.x)}px;top:${wordPointsToCssPixels(line.y)}px;height:${wordPointsToCssPixels(line.height)}px`}>
                 {#each line.fragments as fragment, fragmentIndex}
-                  {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
-                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y, false, drawingOrder, true)} pageX={fragment.x} pageY={fragment.y} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
+                  {#if fragment.kind === "drawing"}
+                    <!-- Drawing content and controls share the page's stacking order. -->
                   {:else if fragment.hyperlink === undefined}
                     <span
                       data-paragraph={line.paragraphElementId}
@@ -580,6 +671,7 @@
                   style={`left:${wordPointsToCssPixels(line.x + line.width)}px;top:${wordPointsToCssPixels(line.y)}px;width:1px;height:${wordPointsToCssPixels(line.height)}px;line-height:${wordPointsToCssPixels(line.height)}px`}
                 >{paragraphText.get(line.paragraphElementId)?.slice(line.fragments.at(-1)?.endOffset ?? line.startOffset, line.endOffset) || "\u200b"}</span>
               {/if}
+              </WordContentClip>
             {/each}
           </div>
         </section>

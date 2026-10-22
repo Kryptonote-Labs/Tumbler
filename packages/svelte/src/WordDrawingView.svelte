@@ -1,5 +1,6 @@
 <script lang="ts">
   import WordPictureView from "./WordPictureView.svelte";
+  import { wordContentClipCss } from "./word-content-clip.ts";
   import WordInkPointEditor from "./WordInkPointEditor.svelte";
   import ChartTitleEditor from "./ChartTitleEditor.svelte";
   import WordShapeView from "./WordShapeView.svelte";
@@ -7,10 +8,12 @@
   import OoxmlChart from './OoxmlChart.svelte';
   import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
 
-  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo, oncharttitlechange, oncharttitletextchange, oninkchange }: {
+  let { drawing, width, height, position, clip, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo, oncharttitlechange, oncharttitletextchange, oninkchange }: {
     drawing: WordDrawing; width: number; height: number; position: string; scale: number;
     editable: boolean; selected: boolean;
     pageX: number; pageY: number;
+    /** Page-point content clip. Editing controls remain outside it. */
+    clip?: import("@tumblerjs/word").WordContentBounds;
     imageurl: (image: WordImageDrawing) => string;
     imageLoading?: "eager" | "lazy";
     /** Hosts that offer placement in their own UI can omit the built-in layout select. */
@@ -46,6 +49,7 @@
   const label = $derived(drawing.altText ?? drawing.name ?? (drawing.kind === 'chart' ? 'Chart' : 'Image'));
   let displayWidth = $derived(wordPointsToCssPixels(preview?.width ?? width));
   let displayHeight = $derived(wordPointsToCssPixels(preview?.height ?? height));
+  const contentClip = $derived(wordContentClipCss(clip, preview?.x ?? pageX, preview?.y ?? pageY));
   // Undefined while not editing; otherwise the text editing starts with.
   let editingTitle = $state(false);
   let editingInk = $state(false);
@@ -188,9 +192,9 @@
   {/if}
   {#if editable && drawing.kind !== 'unsupported' && (onresize !== undefined || onchange !== undefined)}
     {#if editingText !== undefined}
-      <div class="content editing">{@render content()}</div>
+      <div class="content editing" style={contentClip}>{@render content()}</div>
     {:else}
-    <button class="content" class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)} ondblclick={doubleClick}>{@render content()}</button>
+    <button class="content" style={contentClip} class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)} ondblclick={doubleClick}>{@render content()}</button>
     {/if}
     {#if selected}
       {#if drawing.kind === 'image' && drawing.inkProjection && oninkchange}
@@ -214,7 +218,7 @@
       {/each}
     {/if}
   {:else}
-    <div class="content">{@render content()}</div>
+    <div class="content" style={contentClip}>{@render content()}</div>
   {/if}
 </div>
 

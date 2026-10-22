@@ -1,4 +1,5 @@
 import { refreshUnchangedNumbering } from './content-numbering.ts';
+import { validateXmlText } from "./text-validation.ts";
 import { withWordInkTraces } from './ink-overrides.ts';
 import { chartTitleFromWord } from './chart-title.ts';
 import { withWordDrawingGeometry } from './drawing-geometry.ts';
@@ -194,8 +195,9 @@ export class NativeWordDocument implements WordLayoutSource {
       const { source: _bodySource, content: _bodyContent, ...options } = this.options;
       entry = { target, blocks, model: new NativeWordDocument({ ...options, [deferContent]: true, ...(source ? { source } : {}) }) };
       entry.model.inheritedDoNotExpandShiftReturn = this.doNotExpandShiftReturn;
-      this.editedStories.set(key, entry);
     }
+    validateContentText(blocks, entry.model.compiled);
+    this.editedStories.set(key, entry);
     entry.blocks = blocks;
     const numbering = this.numberingFor(this.authored);
     // Update the edited story once, then refresh other models only if shared styles changed.
@@ -288,6 +290,7 @@ export class NativeWordDocument implements WordLayoutSource {
   }
 
   update(input: readonly WordContentBlock[]) {
+    validateContentText(input, this.compiled);
     const numbering = this.numberingFor(input);
     this.updateContent(input, numbering);
     this.shareNumbering(numbering);
@@ -548,8 +551,9 @@ export class NativeWordDocument implements WordLayoutSource {
                   }
                   media.push({ ...updated, elementId: id });
                 }
+              } else if (inherited?.content.kind === 'text' && inherited.content.value === authoredRun.text && /[\r\n]/.test(authoredRun.text)) {
+                contents.push({ ...inherited.content, elementId: allocate() });
               } else {
-                if (!authoredRun.text.isWellFormed()) throw new Error('Invalid document text.');
                 for (const part of authoredRun.text.split(/([\t\n\u2028])/)) {
                   if (!part) continue;
                   const elementId = allocate();
@@ -720,5 +724,21 @@ export class NativeWordDocument implements WordLayoutSource {
         return [value];
       });
     return visit(this.blocks);
+  }
+}
+
+/** Validate text before update allocates identities or changes source caches. */
+function validateContentText(blocks: readonly WordContentBlock[], source: NativeWordSource | undefined): void {
+  for (const block of blocks) {
+    if (block.kind === 'table') {
+      for (const row of block.rows) for (const cell of row) validateContentText(cell.blocks, source);
+    } else if (block.kind === 'paragraph') {
+      for (const run of block.runs) {
+        validateXmlText(run.text);
+        const original = source?.leaves.get(run.source!)?.content;
+        if (/[\r\n]/.test(run.text) && !(original?.kind === 'text' && original.value === run.text))
+          throw new TypeError('Use separate paragraphs for line-feed text.');
+      }
+    }
   }
 }

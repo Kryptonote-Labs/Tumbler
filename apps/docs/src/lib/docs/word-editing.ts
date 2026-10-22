@@ -39,6 +39,9 @@ const document = session.artifact.document;` },
   />
 </div>` },
     ] },
+    { id: 'browser-input', title: 'Browser input', blocks: [
+        { kind: 'text', text: 'Unsupported browser formatting and drag mutations are cancelled. Apply formatting through the host model controls. Replacement text and soft-line deletion use browser target ranges; browser undo and redo call oncommand. Non-cancellable input is reconciled against the model. Composition commits one replacement at composition end, while cancellation restores the original text. Native OS IME behavior still needs platform testing.' },
+    ] },
     { id: 'export', title: 'Export the document', blocks: [
         { kind: 'code', code: `const output = session.artifact.bytes();
 // Persist or download output before marking the revision saved.

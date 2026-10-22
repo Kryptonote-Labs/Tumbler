@@ -217,3 +217,27 @@ test('justified canvas text and underline use expanded layout positions', () => 
     if (fragment.wordSpacing) expect(calls.some(call => call[0] === 'lineTo' && call[1] === fragment.x + fragment.width)).toBe(true);
   }
 });
+
+test('cell clips nest and restore before the next cell and body text', async () => {
+  const { tableClippingFixture, clipTable, clipRow, clipCell, clipParagraph } = await import('./table-clipping-fixture.ts');
+  const nested = clipTable(clipRow(clipCell(clipParagraph('INNER')), 400));
+  const page = layoutWordDocument(openWordArtifact(tableClippingFixture(clipTable(clipRow(clipCell(nested), 100) + clipRow(clipCell(clipParagraph('NEXT')))) + clipParagraph('BODY'))).document, measure).pages[0]!;
+  const { context } = recorder();
+  type Rect = readonly [number, number, number, number];
+  let active: Rect[] = [], pending: Rect = [0, 0, 0, 0];
+  const stack: Rect[][] = [];
+  const painted = new Map<string, Rect[]>();
+  context.save = () => { stack.push([...active]); };
+  context.restore = () => { active = stack.pop()!; };
+  context.rect = (...rect) => { pending = rect; return 0; };
+  context.clip = () => { active.push(pending); };
+  context.fillText = text => { painted.set(text, [...active]); return 0; };
+  paintWordPage(context, page);
+  expect(painted.get('INNER')).toHaveLength(3);
+  expect(painted.get('INNER')![1]![3]).toBe(5);
+  expect(painted.get('NEXT')).toHaveLength(2);
+  expect(painted.get('NEXT')![1]![1]).toBe(15);
+  expect(painted.get('BODY')).toHaveLength(1);
+  expect(stack).toHaveLength(0);
+  expect(active).toEqual([]);
+});

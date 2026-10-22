@@ -186,3 +186,16 @@ test('tables without borders do not acquire stroke spacing', () => {
   expect(cells.map(cell => cell.height)).toEqual([20, 20]);
   expect(cells.map(cell => cell.lines[0]!.y - cell.y)).toEqual([5, 5]);
 });
+
+
+test.each([
+  ['false', false], ['0', false], ['off', false],
+  ['true', true], ['1', true], ['on', true], [undefined, true],
+] as const)('repeats header rows only when tblHeader %s enables them', (value, enabled) => {
+  const flag = value === undefined ? '<w:tblHeader/>' : `<w:tblHeader w:val="${value}"/>`;
+  const result = layout(table(row(cell(paragraph('Header')), flag) + Array.from({ length: 25 }, (_, i) => row(cell(paragraph(`Body${i}`)))).join('')));
+  expect(result.pages.length).toBeGreaterThan(1);
+  const headers = texts(result).filter(text => text === 'Header');
+  expect(headers).toHaveLength(enabled ? result.pages.length : 1);
+  expect(texts(result).filter(text => text.startsWith('Body'))).toHaveLength(25);
+});

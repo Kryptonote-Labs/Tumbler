@@ -28,7 +28,7 @@ assumed. Strict and Transitional namespaces are tested separately.
 - Resolve table grids, omitted columns, spans, vertical merges, margins,
   preferred widths, row heights, and cell alignment while retaining source IDs.
 - Render nested tables and continue rows across pages at cell line boundaries.
-- Repeat leading `tblHeader` rows and honor exact row heights.
+- Repeat leading `tblHeader` rows when enabled. Explicit `false`, `0`, and `off` disable repetition; `true`, `1`, `on`, and an omitted value enable it. Honor exact row heights. Cell content is clipped to the placed cell rectangle in DOM and canvas output, including ancestor clips for nested tables. Wrapped floating drawings with `wp:anchor layoutInCell="0"` or `"false"` retain their outside-cell placement and page clipping; inline and wrap-none drawings retain cell clipping. Signed shape text insets keep their geometry: text outside the shape remains visible within the cell and is clipped at cell and page boundaries. Pointer hit testing excludes fully clipped lines and uses the visible part of partially clipped lines. Hidden text and offsets remain available for document-order selection and editing. Floating drawings retain their cell clip in the separate canvas paint pass. DOM drawing content shares the page stacking order with text, while editing controls remain outside the cell content clip. Native ink pixel reads and writes intersect that clip explicitly, because pixel writes bypass canvas clipping. Device-pixel viewport crops and page-point cell clips are intersected before converting to viewport-local pixels.
 
 ### Milestone 3 — document stories and drawings
 
@@ -52,6 +52,17 @@ assumed. Strict and Transitional namespaces are tested separately.
 - Translate keyboard, composition, paste, and mobile `beforeinput` intent into
   controlled OOXML operations; the DOM is never canonical state.
 - Insert, replace, and delete ordinary text with grapheme-safe boundaries.
+  Direct formatting uses the same UTF-16 grapheme-boundary validation, including
+  supplementary characters, combining sequences and ZWJ emoji. Inserted strings
+  must be well-formed Unicode containing only XML 1.0 characters. Invalid input
+  throws before the source document changes. Split runs retain source attributes
+  and local namespace declarations in both Strict and Transitional documents.
+- `NativeWordDocument.update` rejects CR/LF inside run text before changing its
+  content or export cache, matching DOCX authoring. Use separate paragraph blocks
+  for paragraph boundaries and U+2028 for a soft line break. The direct text editor
+  continues to accept LF as a structural paragraph boundary. Unchanged imported
+  text leaves containing literal CR/LF retain their original XML and text; this
+  exception requires a matching source reference and does not permit new CR/LF.
 - Split and join structurally simple paragraphs, preserving paragraph and
   uniform direct-run properties. Unsafe wrapper/container crossings fail
   explicitly.
