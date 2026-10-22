@@ -324,7 +324,9 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (event.isComposing || composition !== undefined || !bodyInput(event)) return;
+    if (event.isComposing || composition !== undefined) return;
+    // Drawing controls share page commands; nested text editors own their shortcuts.
+    if (!(event.target instanceof Element) || event.target.closest('[contenteditable="true"]') !== event.currentTarget) return;
     if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) inputSelectionOverride = undefined;
     if (!editable || !(event.ctrlKey || event.metaKey) || event.altKey) return;
     const key = event.key.toLowerCase();

@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { openWordArtifact, wordParagraphText } from '@tumblerjs/word';
+import { pictureFixture } from '../../../packages/word/test/picture-fixture.ts';
 
 test.setTimeout(120_000);
 
@@ -33,6 +34,35 @@ test('Ctrl+I cannot create formatting outside the model', async ({ page }) => {
   await expect(title(page)).toHaveText('A calm workspace');
   await page.keyboard.press('Control+z');
   await expect(title(page)).toHaveText('A quieter workspace');
+});
+
+test('drawing controls retain host undo, redo and save shortcuts', async ({ page }) => {
+  const artifact = openWordArtifact(pictureFixture({ anchors: [0] }));
+  const drawing = [...artifact.document.drawings.values()][0]!;
+  const bytes = artifact.updateDrawing({ elementId: drawing.elementId, widthPoints: 72, heightPoints: 36, layout: 'front', xPoints: 50, yPoints: 72 }).bytes();
+  await page.route('**/samples/project-brief.docx', route => route.fulfill({ body: Buffer.from(bytes) }));
+  await page.goto('/playground/word-brief');
+  const active = page.locator(`[data-word-drawing="${drawing.elementId}"]`);
+  await expect(active).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await active.getByRole('button', { name: 'Select Quadrants 0', exact: true }).click();
+  const handle = active.getByRole('button', { name: 'Resize drawing right', exact: true });
+  const width = () => active.evaluate(element => element.getBoundingClientRect().width);
+  const originalWidth = await width();
+  await handle.focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(width).toBeLessThan(originalWidth);
+  const resizedWidth = await width();
+  await page.keyboard.press('Control+z');
+  await expect.poll(width).toBeCloseTo(originalWidth, 2);
+  await handle.focus();
+  await page.keyboard.press('Control+Shift+z');
+  await expect.poll(width).toBeCloseTo(resizedWidth, 2);
+  await handle.focus();
+  const download = page.waitForEvent('download');
+  await page.keyboard.press('Control+s');
+  const saved = openWordArtifact(new Uint8Array(await readFile((await (await download).path())!)));
+  expect(saved.document.drawings.get(drawing.elementId)?.widthPoints).toBe(71);
 });
 
 test('replacement and soft-line deletion use target ranges instead of the caret', async ({ page }) => {
@@ -114,7 +144,20 @@ test('unsupported input benchmark', async ({ page }) => {
     const nodesBefore = root.querySelectorAll('*').length;
     const textBefore = root.textContent;
     const samples = Array.from({ length: 7 }, () => run(1000));
-    return { userAgent: navigator.userAgent, samples, nodesBefore, nodesAfter: root.querySelectorAll('*').length, textUnchanged: root.textContent === textBefore };
+    // Synthetic Ctrl+B measures ignored shortcut routing without native browser formatting.
+    const keyboardRun = (count: number) => {
+      let cancelled = 0;
+      const start = performance.now();
+      for (let i = 0; i < count; i++) {
+        const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'b', ctrlKey: true });
+        root.dispatchEvent(event);
+        cancelled += Number(event.defaultPrevented);
+      }
+      return { ms: performance.now() - start, operations: count, cancelled };
+    };
+    keyboardRun(200);
+    const keyboardSamples = Array.from({ length: 7 }, () => keyboardRun(1000));
+    return { userAgent: navigator.userAgent, samples, keyboardSamples, nodesBefore, nodesAfter: root.querySelectorAll('*').length, textUnchanged: root.textContent === textBefore };
   });
   await cdp.send('HeapProfiler.collectGarbage');
   const heapAfter = (await cdp.send('Performance.getMetrics')).metrics.find(metric => metric.name === 'JSHeapUsedSize')!.value;
