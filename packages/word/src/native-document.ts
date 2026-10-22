@@ -11,6 +11,8 @@ import { nativeAuthoredInk } from './authored-ink.ts';
 import { nativeShapeDrawing, validateShapeRun } from './shapes.ts';
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
+import { mergeWordTabStops } from './tab-stops.ts';
+import { resolveNativeTabCatalog, type NativeTabCatalog } from './native-tab-styles.ts';
 import { wordGeometryAt } from './geometry.ts';
 import { createWordStory, wordStoryArtifact, storyMainArtifact, wordSections, type WordStoryTarget } from './stories.ts';
 import { NativeWordSource, retainOpaqueBlocks } from './native-source.ts';
@@ -70,6 +72,7 @@ interface RecordBlock {
 /** Shared in-memory Word engine. Imports compile source properties once; only export writes a package. */
 export class NativeWordDocument implements WordLayoutSource {
   private readonly namedStyles: ReturnType<typeof wordAuthoringStyles>;
+  private tabCatalog: NativeTabCatalog | undefined;
   private nextId = -1;
   private readonly compiled: NativeWordSource | undefined;
   private exported: WordArtifact | undefined;
@@ -143,7 +146,7 @@ export class NativeWordDocument implements WordLayoutSource {
     };
     if (options.content) this.update(options.content);
     else if (this.compiled) {
-      this.update(this.compiled.original);
+      this.prepareUpdate(this.compiled.original, { styles: this.compiled.artifact.document.styles, key: '' })();
       this.exported = this.compiled.artifact;
     }
   }
@@ -157,7 +160,10 @@ export class NativeWordDocument implements WordLayoutSource {
   }
   removeStory(target: string | WordStoryTarget) {
     const key = typeof target === 'string' ? target : `${target.section}:${target.kind}:${target.type}`;
-    if (this.editedStories.delete(key)) this.exported = undefined;
+    if (!this.editedStories.has(key)) return;
+    this.applyUpdate(this.authored, [...this.editedStories].filter(([id]) => id !== key).map(([, entry]) => entry));
+    this.editedStories.delete(key);
+    this.exported = undefined;
   }
   /** Update a shared header/footer once; every page referencing it uses this same native model. */
   updateStory(target: string | WordStoryTarget, blocks: readonly WordContentBlock[]) {
@@ -168,11 +174,10 @@ export class NativeWordDocument implements WordLayoutSource {
       const { source: _bodySource, content: _bodyContent, ...options } = this.options;
       entry = { target, blocks, model: new NativeWordDocument({ ...options, content: blocks, ...(source ? { source } : {}) }) };
       entry.model.inheritedDoNotExpandShiftReturn = this.doNotExpandShiftReturn;
-      this.editedStories.set(key, entry);
-    } else {
-      entry.model.update(blocks);
     }
-    entry.blocks = blocks;
+    const next = { ...entry, blocks };
+    this.applyUpdate(this.authored, [...this.editedStories].filter(([id]) => id !== key).map(([, value]) => value).concat(next), entry.model);
+    this.editedStories.set(key, next);
     this.exported = undefined;
     return entry.model;
   }
@@ -213,6 +218,7 @@ export class NativeWordDocument implements WordLayoutSource {
     const original = this.compiled ? wordLayoutStories(this.compiled.artifact.document, {
       ...(maxCharacters === undefined ? {} : { maxCharacters }),
       headerFooterOverrides,
+      ...(this.tabCatalog ? { styles: this.tabCatalog.styles } : {}),
     }) : { headerFooters: [], notes: [] };
     const headerFooters = [...original.headerFooters];
     const bindings: { section: number; kind: 'header' | 'footer'; type: 'default' | 'first' | 'even'; relationshipId: string }[] = [];
@@ -256,6 +262,22 @@ export class NativeWordDocument implements WordLayoutSource {
   }
 
   update(input: readonly WordContentBlock[]) {
+    this.applyUpdate(input, [...this.editedStories.values()], this);
+  }
+
+  private applyUpdate(input: readonly WordContentBlock[], stories: readonly { model: NativeWordDocument; blocks: readonly WordContentBlock[] }[], changed?: NativeWordDocument) {
+    const catalog = resolveNativeTabCatalog({
+      document: this.compiled?.artifact.document, defaults: this.options.defaultFormat,
+      fallback: this.namedStyles, contents: [input, ...stories.map(story => story.blocks)], previous: this.tabCatalog,
+    });
+    // Prepare every view before committing so an invalid shared update remains atomic.
+    const commit = [{ model: this, blocks: input }, ...stories]
+      .filter(story => story.model === changed || story.model.tabCatalog?.styles !== catalog.styles)
+      .map(story => story.model.prepareUpdate(story.blocks, catalog));
+    for (const apply of commit) apply();
+  }
+
+  private prepareUpdate(input: readonly WordContentBlock[], { styles: tabStyles, key: tabStyleKey }: NativeTabCatalog) {
     const records = new Map<string, RecordBlock>();
     const visited: (readonly [string, RecordBlock])[] = [];
     const keys = new Set<string>();
@@ -271,8 +293,9 @@ export class NativeWordDocument implements WordLayoutSource {
     const sectionOwners = new Map<string, WordTextParagraph>();
     const collectSections = (blocks: readonly WordContentBlock[]) => {
       for (const block of blocks) {
-        if (block.kind === 'paragraph' && block.source !== undefined)
-          sectionOwners.set(`${block.sourceCopy ?? ''}:${block.source}`, block);
+        if (block.kind === 'paragraph') {
+          if (block.source !== undefined) sectionOwners.set(`${block.sourceCopy ?? ''}:${block.source}`, block);
+        }
         else if (block.kind === 'table') for (const row of block.rows) for (const cell of row) collectSections(cell.blocks);
       }
     };
@@ -326,7 +349,7 @@ export class NativeWordDocument implements WordLayoutSource {
         const previous = this.records.get(key);
         const original = source.kind === 'paragraph' ? compiled?.paragraphs.get(source.source!) : undefined;
         const hasSection = source.kind === 'paragraph' && sectionOwners.get(`${source.sourceCopy ?? ''}:${source.source}`) === source;
-        const fingerprint = `${hasSection}:${signature(source, width)}`;
+        const fingerprint = `${tabStyleKey}:${hasSection}:${signature(source, width)}`;
         const descendantsStart = visited.length;
         let result: RecordBlock;
         if (this.options.immutableContent && previous?.signature === fingerprint && previous.subtree?.input === source) {
@@ -515,6 +538,7 @@ export class NativeWordDocument implements WordLayoutSource {
               inlines,
             };
             const resetParagraph = authored.styleId !== undefined && (authored.styleId !== original?.format.styleId || authored.paragraph === undefined);
+            const inheritedTabs = tabStyles.resolveParagraphStyle(authored.styleId ?? original?.format.styleId ?? '').paragraph.tabs;
             this.paragraphTextFormats.set(block, format(undefined, resetParagraph ? named?.text : original?.textFormat ?? named?.text));
             this.paragraphFormats.set(
               block,
@@ -522,7 +546,18 @@ export class NativeWordDocument implements WordLayoutSource {
                 ...DEFAULT_PARAGRAPH,
                 ...compiled?.defaults.paragraph,
                 ...(resetParagraph ? named?.paragraph : original?.format),
+                ...(authored.positioning?.tabs === undefined ? {
+                  tabs: mergeWordTabStops(inheritedTabs, resetParagraph && authored.positioning === undefined ? [] : original?.directTabs ?? []),
+                } : {}),
                 ...authored.positioning,
+                ...(authored.positioning?.tabs === undefined ? {} : {
+                  // Imported positioning contains effective stops, so retain source clears until replaced.
+                  tabs: mergeWordTabStops(
+                    inheritedTabs,
+                    original && JSON.stringify(authored.positioning) === JSON.stringify(compiled?.positioning.get(authored.source!))
+                      ? original.directTabs ?? [] : authored.positioning.tabs,
+                  ),
+                }),
                 ...resolveWordPaintProperties(authored.paragraph ?? {}, this.themeColours),
                 alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? (resetParagraph ? named?.paragraph.alignment : original?.format.alignment) ?? compiled?.defaults.paragraph.alignment ?? 'start',
                 lineSpacing: authored.paragraph?.lineSpacing ?? (resetParagraph ? named?.paragraph.lineSpacing : original?.format.lineSpacing) ?? compiled?.defaults.paragraph.lineSpacing ?? {
@@ -589,12 +624,15 @@ export class NativeWordDocument implements WordLayoutSource {
       compiled?.artifact.document.blocks,
     );
     if (compiled) for (const [id, marker] of compiled.artifact.document.numbering.markersFor(numbering, {}, markerBudget)) markers.set(id, marker);
-    if (blocks.length !== this.blocks.length || blocks.some((block, index) => block !== this.blocks[index])) this.exported = undefined;
-    this.records = records;
-    this.blocks = blocks;
-    this.drawings = drawings;
-    this.listMarkers = markers;
-    this.authored = input;
+    return () => {
+      if (blocks.length !== this.blocks.length || blocks.some((block, index) => block !== this.blocks[index])) this.exported = undefined;
+      this.records = records;
+      this.blocks = blocks;
+      this.drawings = drawings;
+      this.listMarkers = markers;
+      this.authored = input;
+      this.tabCatalog = { styles: tabStyles, key: tabStyleKey };
+    };
   }
 
   /** Inspect section and table-grid dimensions without guessing fonts or claiming rendered bounds. */
