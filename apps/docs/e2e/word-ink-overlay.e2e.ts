@@ -99,3 +99,18 @@ test('ink allocation benchmark', async ({ browser }) => {
   const { writeFile } = await import('node:fs/promises');
   await writeFile(process.env.INK_BENCHMARK!, JSON.stringify({ browser: browser.version(), warmups: 2, repeats: 5, rows }, null, 2));
 });
+
+test('many pages with small marks share scratch storage without exhausting the budget', async ({ page }) => {
+  await page.goto('/');
+  const result = await page.evaluate(async bytes => {
+    const url = '/src/lib/test-fixtures/ink-overlay.ts';
+    const api: typeof import('../src/lib/test-fixtures/ink-overlay.ts') = await import(/* @vite-ignore */ url);
+    const display = await api.show(api.fixture(bytes), 1, 32);
+    const ready = () => display.mounted.filter(({ target }) => target.querySelector('[data-word-ink-ready]')).length;
+    for (let i = 0; i < 1000 && ready() < 32 && !display.errors.length; i++) await new Promise(resolve => setTimeout(resolve, 10));
+    const result = { ready: ready(), errors: display.errors.slice() };
+    await display.dispose();
+    return result;
+  }, bytes);
+  expect(result).toEqual({ ready: 32, errors: [] });
+});
