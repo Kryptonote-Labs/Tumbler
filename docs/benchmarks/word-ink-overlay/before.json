@@ -1,0 +1,503 @@
+{
+  "browser": "156.0.8078.47",
+  "warmups": 2,
+  "repeats": 5,
+  "rows": [
+    {
+      "dpr": 1,
+      "zoom": 1,
+      "pages": 1,
+      "samples": [
+        {
+          "elapsedMs": 47,
+          "rasterAllocatedBytes": 5046,
+          "canvasPeakBytes": 10699944,
+          "canvasAllocatedPixels": 2674986,
+          "imageDataBytes": 7136660,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 7133296,
+          "canvasAndImageDataUpperBytes": 17833240,
+          "retainedCanvasPixels": 891662
+        },
+        {
+          "elapsedMs": 63.59999999962747,
+          "rasterAllocatedBytes": 5046,
+          "canvasPeakBytes": 10699944,
+          "canvasAllocatedPixels": 2674986,
+          "imageDataBytes": 7136660,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 7133296,
+          "canvasAndImageDataUpperBytes": 17833240,
+          "retainedCanvasPixels": 891662
+        },
+        {
+          "elapsedMs": 73.90000000037253,
+          "rasterAllocatedBytes": 5046,
+          "canvasPeakBytes": 10699944,
+          "canvasAllocatedPixels": 2674986,
+          "imageDataBytes": 7136660,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 7133296,
+          "canvasAndImageDataUpperBytes": 17833240,
+          "retainedCanvasPixels": 891662
+        },
+        {
+          "elapsedMs": 77.39999999850988,
+          "rasterAllocatedBytes": 5046,
+          "canvasPeakBytes": 10699944,
+          "canvasAllocatedPixels": 2674986,
+          "imageDataBytes": 7136660,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 7133296,
+          "canvasAndImageDataUpperBytes": 17833240,
+          "retainedCanvasPixels": 891662
+        },
+        {
+          "elapsedMs": 92.89999999850988,
+          "rasterAllocatedBytes": 5046,
+          "canvasPeakBytes": 10699944,
+          "canvasAllocatedPixels": 2674986,
+          "imageDataBytes": 7136660,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 7133296,
+          "canvasAndImageDataUpperBytes": 17833240,
+          "retainedCanvasPixels": 891662
+        }
+      ]
+    },
+    {
+      "dpr": 1,
+      "zoom": 1,
+      "pages": 4,
+      "samples": [
+        {
+          "elapsedMs": 177,
+          "rasterAllocatedBytes": 20184,
+          "canvasPeakBytes": 42799776,
+          "canvasAllocatedPixels": 10699944,
+          "imageDataBytes": 28546640,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 7133296,
+          "canvasAndImageDataUpperBytes": 49933072,
+          "retainedCanvasPixels": 3566648
+        },
+        {
+          "elapsedMs": 183.80000000074506,
+          "rasterAllocatedBytes": 20184,
+          "canvasPeakBytes": 42799776,
+          "canvasAllocatedPixels": 10699944,
+          "imageDataBytes": 28546640,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 7133296,
+          "canvasAndImageDataUpperBytes": 49933072,
+          "retainedCanvasPixels": 3566648
+        },
+        {
+          "elapsedMs": 175.7000000011176,
+          "rasterAllocatedBytes": 20184,
+          "canvasPeakBytes": 42799776,
+          "canvasAllocatedPixels": 10699944,
+          "imageDataBytes": 28546640,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 7133296,
+          "canvasAndImageDataUpperBytes": 49933072,
+          "retainedCanvasPixels": 3566648
+        },
+        {
+          "elapsedMs": 182.40000000037253,
+          "rasterAllocatedBytes": 20184,
+          "canvasPeakBytes": 42799776,
+          "canvasAllocatedPixels": 10699944,
+          "imageDataBytes": 28546640,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 7133296,
+          "canvasAndImageDataUpperBytes": 49933072,
+          "retainedCanvasPixels": 3566648
+        },
+        {
+          "elapsedMs": 179.80000000074506,
+          "rasterAllocatedBytes": 20184,
+          "canvasPeakBytes": 42799776,
+          "canvasAllocatedPixels": 10699944,
+          "imageDataBytes": 28546640,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 7133296,
+          "canvasAndImageDataUpperBytes": 49933072,
+          "retainedCanvasPixels": 3566648
+        }
+      ]
+    },
+    {
+      "dpr": 1,
+      "zoom": 3,
+      "pages": 1,
+      "samples": [
+        {
+          "elapsedMs": 413.09999999962747,
+          "rasterAllocatedBytes": 44376,
+          "canvasPeakBytes": 96270912,
+          "canvasAllocatedPixels": 24067728,
+          "imageDataBytes": 64210192,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 64180608,
+          "canvasAndImageDataUpperBytes": 160451520,
+          "retainedCanvasPixels": 8022576
+        },
+        {
+          "elapsedMs": 404.7999999988824,
+          "rasterAllocatedBytes": 44376,
+          "canvasPeakBytes": 96270912,
+          "canvasAllocatedPixels": 24067728,
+          "imageDataBytes": 64210192,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 64180608,
+          "canvasAndImageDataUpperBytes": 160451520,
+          "retainedCanvasPixels": 8022576
+        },
+        {
+          "elapsedMs": 394.19999999925494,
+          "rasterAllocatedBytes": 44376,
+          "canvasPeakBytes": 96270912,
+          "canvasAllocatedPixels": 24067728,
+          "imageDataBytes": 64210192,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 64180608,
+          "canvasAndImageDataUpperBytes": 160451520,
+          "retainedCanvasPixels": 8022576
+        },
+        {
+          "elapsedMs": 430.80000000074506,
+          "rasterAllocatedBytes": 44376,
+          "canvasPeakBytes": 96270912,
+          "canvasAllocatedPixels": 24067728,
+          "imageDataBytes": 64210192,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 64180608,
+          "canvasAndImageDataUpperBytes": 160451520,
+          "retainedCanvasPixels": 8022576
+        },
+        {
+          "elapsedMs": 351.09999999962747,
+          "rasterAllocatedBytes": 44376,
+          "canvasPeakBytes": 96270912,
+          "canvasAllocatedPixels": 24067728,
+          "imageDataBytes": 64210192,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 64180608,
+          "canvasAndImageDataUpperBytes": 160451520,
+          "retainedCanvasPixels": 8022576
+        }
+      ]
+    },
+    {
+      "dpr": 1,
+      "zoom": 3,
+      "pages": 4,
+      "samples": [
+        {
+          "elapsedMs": 1443.800000000745,
+          "rasterAllocatedBytes": 177504,
+          "canvasPeakBytes": 385083648,
+          "canvasAllocatedPixels": 96270912,
+          "imageDataBytes": 256840768,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 64180608,
+          "canvasAndImageDataUpperBytes": 449264256,
+          "retainedCanvasPixels": 32090304
+        },
+        {
+          "elapsedMs": 1575.5999999996275,
+          "rasterAllocatedBytes": 177504,
+          "canvasPeakBytes": 385083648,
+          "canvasAllocatedPixels": 96270912,
+          "imageDataBytes": 256840768,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 64180608,
+          "canvasAndImageDataUpperBytes": 449264256,
+          "retainedCanvasPixels": 32090304
+        },
+        {
+          "elapsedMs": 1374.9000000003725,
+          "rasterAllocatedBytes": 177504,
+          "canvasPeakBytes": 385083648,
+          "canvasAllocatedPixels": 96270912,
+          "imageDataBytes": 256840768,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 64180608,
+          "canvasAndImageDataUpperBytes": 449264256,
+          "retainedCanvasPixels": 32090304
+        },
+        {
+          "elapsedMs": 1450.199999999255,
+          "rasterAllocatedBytes": 177504,
+          "canvasPeakBytes": 385083648,
+          "canvasAllocatedPixels": 96270912,
+          "imageDataBytes": 256840768,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 64180608,
+          "canvasAndImageDataUpperBytes": 449264256,
+          "retainedCanvasPixels": 32090304
+        },
+        {
+          "elapsedMs": 1406.199999999255,
+          "rasterAllocatedBytes": 177504,
+          "canvasPeakBytes": 385083648,
+          "canvasAllocatedPixels": 96270912,
+          "imageDataBytes": 256840768,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 64180608,
+          "canvasAndImageDataUpperBytes": 449264256,
+          "retainedCanvasPixels": 32090304
+        }
+      ]
+    },
+    {
+      "dpr": 2,
+      "zoom": 1,
+      "pages": 1,
+      "samples": [
+        {
+          "elapsedMs": 211.2999999988824,
+          "rasterAllocatedBytes": 20184,
+          "canvasPeakBytes": 42799776,
+          "canvasAllocatedPixels": 10699944,
+          "imageDataBytes": 28546640,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 28533184,
+          "canvasAndImageDataUpperBytes": 71332960,
+          "retainedCanvasPixels": 3566648
+        },
+        {
+          "elapsedMs": 172,
+          "rasterAllocatedBytes": 20184,
+          "canvasPeakBytes": 42799776,
+          "canvasAllocatedPixels": 10699944,
+          "imageDataBytes": 28546640,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 28533184,
+          "canvasAndImageDataUpperBytes": 71332960,
+          "retainedCanvasPixels": 3566648
+        },
+        {
+          "elapsedMs": 192.90000000037253,
+          "rasterAllocatedBytes": 20184,
+          "canvasPeakBytes": 42799776,
+          "canvasAllocatedPixels": 10699944,
+          "imageDataBytes": 28546640,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 28533184,
+          "canvasAndImageDataUpperBytes": 71332960,
+          "retainedCanvasPixels": 3566648
+        },
+        {
+          "elapsedMs": 164.90000000037253,
+          "rasterAllocatedBytes": 20184,
+          "canvasPeakBytes": 42799776,
+          "canvasAllocatedPixels": 10699944,
+          "imageDataBytes": 28546640,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 28533184,
+          "canvasAndImageDataUpperBytes": 71332960,
+          "retainedCanvasPixels": 3566648
+        },
+        {
+          "elapsedMs": 188.89999999850988,
+          "rasterAllocatedBytes": 20184,
+          "canvasPeakBytes": 42799776,
+          "canvasAllocatedPixels": 10699944,
+          "imageDataBytes": 28546640,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 28533184,
+          "canvasAndImageDataUpperBytes": 71332960,
+          "retainedCanvasPixels": 3566648
+        }
+      ]
+    },
+    {
+      "dpr": 2,
+      "zoom": 1,
+      "pages": 4,
+      "samples": [
+        {
+          "elapsedMs": 631.8000000007451,
+          "rasterAllocatedBytes": 80736,
+          "canvasPeakBytes": 171199104,
+          "canvasAllocatedPixels": 42799776,
+          "imageDataBytes": 114186560,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 28533184,
+          "canvasAndImageDataUpperBytes": 199732288,
+          "retainedCanvasPixels": 14266592
+        },
+        {
+          "elapsedMs": 623.3000000007451,
+          "rasterAllocatedBytes": 80736,
+          "canvasPeakBytes": 171199104,
+          "canvasAllocatedPixels": 42799776,
+          "imageDataBytes": 114186560,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 28533184,
+          "canvasAndImageDataUpperBytes": 199732288,
+          "retainedCanvasPixels": 14266592
+        },
+        {
+          "elapsedMs": 730.4000000003725,
+          "rasterAllocatedBytes": 80736,
+          "canvasPeakBytes": 171199104,
+          "canvasAllocatedPixels": 42799776,
+          "imageDataBytes": 114186560,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 28533184,
+          "canvasAndImageDataUpperBytes": 199732288,
+          "retainedCanvasPixels": 14266592
+        },
+        {
+          "elapsedMs": 631.8000000007451,
+          "rasterAllocatedBytes": 80736,
+          "canvasPeakBytes": 171199104,
+          "canvasAllocatedPixels": 42799776,
+          "imageDataBytes": 114186560,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 28533184,
+          "canvasAndImageDataUpperBytes": 199732288,
+          "retainedCanvasPixels": 14266592
+        },
+        {
+          "elapsedMs": 639.3000000007451,
+          "rasterAllocatedBytes": 80736,
+          "canvasPeakBytes": 171199104,
+          "canvasAllocatedPixels": 42799776,
+          "imageDataBytes": 114186560,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 28533184,
+          "canvasAndImageDataUpperBytes": 199732288,
+          "retainedCanvasPixels": 14266592
+        }
+      ]
+    },
+    {
+      "dpr": 2,
+      "zoom": 3,
+      "pages": 1,
+      "samples": [
+        {
+          "elapsedMs": 1470.2000000011176,
+          "rasterAllocatedBytes": 177504,
+          "canvasPeakBytes": 385002816,
+          "canvasAllocatedPixels": 96250704,
+          "imageDataBytes": 256786880,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 256668544,
+          "canvasAndImageDataUpperBytes": 641671360,
+          "retainedCanvasPixels": 32083568
+        },
+        {
+          "elapsedMs": 1526.9000000003725,
+          "rasterAllocatedBytes": 177504,
+          "canvasPeakBytes": 385002816,
+          "canvasAllocatedPixels": 96250704,
+          "imageDataBytes": 256786880,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 256668544,
+          "canvasAndImageDataUpperBytes": 641671360,
+          "retainedCanvasPixels": 32083568
+        },
+        {
+          "elapsedMs": 1523.9000000003725,
+          "rasterAllocatedBytes": 177504,
+          "canvasPeakBytes": 385002816,
+          "canvasAllocatedPixels": 96250704,
+          "imageDataBytes": 256786880,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 256668544,
+          "canvasAndImageDataUpperBytes": 641671360,
+          "retainedCanvasPixels": 32083568
+        },
+        {
+          "elapsedMs": 1417.2000000011176,
+          "rasterAllocatedBytes": 177504,
+          "canvasPeakBytes": 385002816,
+          "canvasAllocatedPixels": 96250704,
+          "imageDataBytes": 256786880,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 256668544,
+          "canvasAndImageDataUpperBytes": 641671360,
+          "retainedCanvasPixels": 32083568
+        },
+        {
+          "elapsedMs": 1429.5,
+          "rasterAllocatedBytes": 177504,
+          "canvasPeakBytes": 385002816,
+          "canvasAllocatedPixels": 96250704,
+          "imageDataBytes": 256786880,
+          "reads": 3,
+          "pairedImageDataPeakBytes": 256668544,
+          "canvasAndImageDataUpperBytes": 641671360,
+          "retainedCanvasPixels": 32083568
+        }
+      ]
+    },
+    {
+      "dpr": 2,
+      "zoom": 3,
+      "pages": 4,
+      "samples": [
+        {
+          "elapsedMs": 5609.199999999255,
+          "rasterAllocatedBytes": 710016,
+          "canvasPeakBytes": 1540011264,
+          "canvasAllocatedPixels": 385002816,
+          "imageDataBytes": 1027147520,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 256668544,
+          "canvasAndImageDataUpperBytes": 1796679808,
+          "retainedCanvasPixels": 128334272
+        },
+        {
+          "elapsedMs": 5999.5,
+          "rasterAllocatedBytes": 710016,
+          "canvasPeakBytes": 1540011264,
+          "canvasAllocatedPixels": 385002816,
+          "imageDataBytes": 1027147520,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 256668544,
+          "canvasAndImageDataUpperBytes": 1796679808,
+          "retainedCanvasPixels": 128334272
+        },
+        {
+          "elapsedMs": 5634.299999998882,
+          "rasterAllocatedBytes": 710016,
+          "canvasPeakBytes": 1540011264,
+          "canvasAllocatedPixels": 385002816,
+          "imageDataBytes": 1027147520,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 256668544,
+          "canvasAndImageDataUpperBytes": 1796679808,
+          "retainedCanvasPixels": 128334272
+        },
+        {
+          "elapsedMs": 5849.199999999255,
+          "rasterAllocatedBytes": 710016,
+          "canvasPeakBytes": 1540011264,
+          "canvasAllocatedPixels": 385002816,
+          "imageDataBytes": 1027147520,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 256668544,
+          "canvasAndImageDataUpperBytes": 1796679808,
+          "retainedCanvasPixels": 128334272
+        },
+        {
+          "elapsedMs": 5733,
+          "rasterAllocatedBytes": 710016,
+          "canvasPeakBytes": 1540011264,
+          "canvasAllocatedPixels": 385002816,
+          "imageDataBytes": 1027147520,
+          "reads": 12,
+          "pairedImageDataPeakBytes": 256668544,
+          "canvasAndImageDataUpperBytes": 1796679808,
+          "retainedCanvasPixels": 128334272
+        }
+      ]
+    }
+  ]
+}

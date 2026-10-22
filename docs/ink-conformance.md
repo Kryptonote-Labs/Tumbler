@@ -93,8 +93,8 @@ the identity of subsequent edits. Native DOCX and fallback updates remain atomic
 Device-dependent files need host calibration. Em/ex dimensions need host physical
 unit sizes. The published InkML §6.4 defines `pc` as `1/22 pt`, unlike the usual
 pica; the codec follows that text, but Word interoperability for this unusual unit
-has not been established. All resource budgets are configurable and never remove
-stored samples. JavaScript numeric representation remains finite IEEE-754, with
+has not been established. Resource budgets never remove stored samples. Public
+rendering budgets can be lowered within the limits described above. JavaScript numeric representation remains finite IEEE-754, with
 safe-integer checks for integer channels.
 
 Full W3C §8.3 conformance is not claimed. General streaming contexts, inherited
