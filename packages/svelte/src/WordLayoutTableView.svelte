@@ -1,5 +1,6 @@
 <script lang="ts">
   import WordPictureView from "./WordPictureView.svelte";
+  import WordContentClip from "./WordContentClip.svelte";
   import WordShapeView from "./WordShapeView.svelte";
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
   import { wordImagePaintBounds, wordPointsToCssPixels, type WordImageDrawing, type WordLayoutFragment, type WordLayoutTable } from "@tumblerjs/word";
@@ -50,6 +51,7 @@
     {/each}
   </div>
   {#each current.cells as cell}
+    <WordContentClip clip={cell}>
     <WordParagraphDecorations lines={cell.lines} />
     {#if !decorationsOnly}
       {#each cell.lines as line}
@@ -91,6 +93,7 @@
     {#each cell.tables as nested}
       {@render renderTable(nested)}
     {/each}
+    </WordContentClip>
   {/each}
 {/snippet}
 

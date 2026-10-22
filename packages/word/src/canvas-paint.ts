@@ -124,9 +124,17 @@ function paintTable<Image, Path>(context: WordCanvasContext<Image, Path>, table:
     else strokeLine(context, edge.x, edge.y, edge.x, edge.y + edge.length, edge.border);
   }
   for (const cell of table.cells) {
-    paintDecorations(context, cell.lines);
-    for (const line of cell.lines) paintLine(context, line, options);
-    for (const nested of cell.tables) paintTable(context, nested, options);
+    context.save();
+    context.beginPath();
+    context.rect(cell.x, cell.y, cell.width, cell.height);
+    context.clip();
+    try {
+      paintDecorations(context, cell.lines);
+      for (const line of cell.lines) paintLine(context, line, options);
+      for (const nested of cell.tables) paintTable(context, nested, options);
+    } finally {
+      context.restore();
+    }
   }
 }
 

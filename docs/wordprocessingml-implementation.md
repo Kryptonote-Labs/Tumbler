@@ -28,7 +28,7 @@ assumed. Strict and Transitional namespaces are tested separately.
 - Resolve table grids, omitted columns, spans, vertical merges, margins,
   preferred widths, row heights, and cell alignment while retaining source IDs.
 - Render nested tables and continue rows across pages at cell line boundaries.
-- Repeat leading `tblHeader` rows when enabled. Explicit `false`, `0`, and `off` disable repetition; `true`, `1`, `on`, and an omitted value enable it. Honor exact row heights.
+- Repeat leading `tblHeader` rows when enabled. Explicit `false`, `0`, and `off` disable repetition; `true`, `1`, `on`, and an omitted value enable it. Honor exact row heights. Cell content is clipped to the placed cell rectangle in DOM and canvas output, including ancestor clips for nested tables. Pointer hit testing excludes fully clipped lines and uses the visible part of partially clipped lines. Hidden text and offsets remain available for document-order selection and editing.
 
 ### Milestone 3 — document stories and drawings
 

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { wordDrawingStackOrder, wordDrawingOverlayOrder } from "./word-drawing-order.ts";
   import WordPictureView from "./WordPictureView.svelte";
+  import WordContentClip from "./WordContentClip.svelte";
+  import { wordTableLinesWithClips, type WordClippedLine } from "@tumblerjs/word";
   import WordInkPageLayer from "./WordInkPageLayer.svelte";
   import WordShapeView from "./WordShapeView.svelte";
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
@@ -271,8 +273,8 @@
 
   /** Body text must follow document order, including paragraphs inside tables. */
   function bodyLines(page: WordLayout["pages"][number]) {
-    return page.columns.flatMap(column => [...column.lines, ...tableLines(column.tables)])
-      .sort((left, right) => (paragraphOrder.get(left.paragraphElementId) ?? 0) - (paragraphOrder.get(right.paragraphElementId) ?? 0) || left.startOffset - right.startOffset);
+    return page.columns.flatMap(column => [...column.lines.map((line): WordClippedLine => ({ line })), ...wordTableLinesWithClips(column.tables)])
+      .sort(({ line: left }, { line: right }) => (paragraphOrder.get(left.paragraphElementId) ?? 0) - (paragraphOrder.get(right.paragraphElementId) ?? 0) || left.startOffset - right.startOffset);
   }
 
   function positionOrder(left: WordTextPosition, right: WordTextPosition) {
@@ -425,13 +427,6 @@
     return position(Math.min(fragment.endOffset, fragment.startOffset + nearest));
   }
 
-  function tableLines(tables: readonly WordLayout["pages"][number]["columns"][number]["tables"][number][]): WordLayout["pages"][number]["columns"][number]["lines"] {
-    return tables.flatMap((table) => table.cells.flatMap((cell) => [
-      ...cell.lines,
-      ...tableLines(cell.tables),
-    ]));
-  }
-
   function fragmentStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0) {
     return `${wordTextCss(fragment.format)};word-spacing:${wordPointsToCssPixels(fragment.wordSpacing ?? 0)}px;left:${wordPointsToCssPixels(fragment.x - offsetX)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - offsetY)}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
@@ -501,7 +496,7 @@
           >
             <!-- Canvas decoding owns its URLs until the asynchronous paint completes. -->
             <WordInkPageLayer {page} {scale} background={layout.background} />
-            <WordParagraphDecorations lines={[...bodyLines(page), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
+            <WordParagraphDecorations lines={[...page.columns.flatMap(column => column.lines), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
             {#if page.noteSeparatorY !== undefined}
               <div class="note-separator" style={`left:${wordPointsToCssPixels(page.section.marginLeftTwips / 20)}px;top:${wordPointsToCssPixels(page.noteSeparatorY)}px`}></div>
             {/if}
@@ -537,7 +532,8 @@
                 <WordLayoutTableView {table} {drawingOrder} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} decorationsOnly />
               {/each}
             {/each}
-            {#each bodyLines(page) as line}
+            {#each bodyLines(page) as { line, clip }}
+              <WordContentClip {clip}>
               {#if line.marker !== undefined}
                 <span
                   class="list-marker"
@@ -580,6 +576,7 @@
                   style={`left:${wordPointsToCssPixels(line.x + line.width)}px;top:${wordPointsToCssPixels(line.y)}px;width:1px;height:${wordPointsToCssPixels(line.height)}px;line-height:${wordPointsToCssPixels(line.height)}px`}
                 >{paragraphText.get(line.paragraphElementId)?.slice(line.fragments.at(-1)?.endOffset ?? line.startOffset, line.endOffset) || "\u200b"}</span>
               {/if}
+              </WordContentClip>
             {/each}
           </div>
         </section>
