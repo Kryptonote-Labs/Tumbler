@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { generate } from '../../../tools/word-strict-resources/generate.ts';
+import { editTransitionalLogicalBorders, generate } from '../../../tools/word-strict-resources/generate.ts';
 import { importWordContent, openWordArtifact } from '../src/index.ts';
 import { reconcileWordContent } from '../src/content-export.ts';
 import { tableMeasurementTwips } from '../src/strict-resources.ts';
@@ -47,4 +47,11 @@ test('Strict physical measurements normalize to twips without accepting malforme
     expect(tableMeasurementTwips(value, strict)).toBe('1440');
   expect(tableMeasurementTwips('0.05pt', strict)).toBe('1');
   expect(tableMeasurementTwips('badpt', strict)).toBe('badpt');
+});
+
+test('Transitional physical border edits preserve logical border schema order', () => {
+  const artifact = editTransitionalLogicalBorders();
+  const borders = artifact.document.source.elements('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'tcBorders')[0]!;
+  expect(borders.children.filter(child => child.kind === 'element').map(child => child.localName))
+    .toEqual(['top', 'start', 'left', 'bottom', 'end']);
 });
