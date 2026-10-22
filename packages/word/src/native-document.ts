@@ -1,3 +1,4 @@
+import { refreshUnchangedNumbering } from './content-numbering.ts';
 import { withWordInkTraces } from './ink-overrides.ts';
 import { chartTitleFromWord } from './chart-title.ts';
 import { withWordDrawingGeometry } from './drawing-geometry.ts';
@@ -146,7 +147,8 @@ export class NativeWordDocument implements WordLayoutSource {
     };
     if (options.content) this.update(options.content);
     else if (this.compiled) {
-      this.updateContent(this.compiled.original, true);
+      this.numberingStylesKey = '[]';
+      this.updateContent(this.compiled.original, this.compiled.artifact.document.numbering);
       this.exported = this.compiled.artifact;
     }
   }
@@ -160,7 +162,10 @@ export class NativeWordDocument implements WordLayoutSource {
   }
   removeStory(target: string | WordStoryTarget) {
     const key = typeof target === 'string' ? target : `${target.section}:${target.kind}:${target.type}`;
-    if (this.editedStories.delete(key)) this.exported = undefined;
+    if (this.editedStories.delete(key)) {
+      this.shareNumbering(this.numberingFor(this.authored));
+      this.exported = undefined;
+    }
   }
   /** Update a shared header/footer once; every page referencing it uses this same native model. */
   updateStory(target: string | WordStoryTarget, blocks: readonly WordContentBlock[]) {
@@ -169,13 +174,15 @@ export class NativeWordDocument implements WordLayoutSource {
     if (!entry) {
       const source = typeof target === 'string' && this.options.source ? wordStoryArtifact(this.options.source, target) : undefined;
       const { source: _bodySource, content: _bodyContent, ...options } = this.options;
-      entry = { target, blocks, model: new NativeWordDocument({ ...options, content: blocks, ...(source ? { source } : {}) }) };
+      entry = { target, blocks, model: new NativeWordDocument({ ...options, content: [], ...(source ? { source } : {}) }) };
       entry.model.inheritedDoNotExpandShiftReturn = this.doNotExpandShiftReturn;
       this.editedStories.set(key, entry);
-    } else {
-      entry.model.update(blocks);
     }
     entry.blocks = blocks;
+    const numbering = this.numberingFor(this.authored);
+    // Update the edited story once, then refresh other models only if shared styles changed.
+    entry.model.updateContent(blocks, numbering);
+    this.shareNumbering(numbering);
     this.exported = undefined;
     return entry.model;
   }
@@ -216,6 +223,7 @@ export class NativeWordDocument implements WordLayoutSource {
     const original = this.compiled ? wordLayoutStories(this.compiled.artifact.document, {
       ...(maxCharacters === undefined ? {} : { maxCharacters }),
       headerFooterOverrides,
+      ...(this.effectiveNumbering ? { numbering: this.effectiveNumbering } : {}),
     }) : { headerFooters: [], notes: [] };
     const headerFooters = [...original.headerFooters];
     const bindings: { section: number; kind: 'header' | 'footer'; type: 'default' | 'first' | 'even'; relationshipId: string }[] = [];
@@ -252,17 +260,53 @@ export class NativeWordDocument implements WordLayoutSource {
         result = created.artifact;
         partName = created.partName;
       }
-      const edited = reconcileWordContent(wordStoryArtifact(result, partName), entry.blocks);
+      const current = wordStoryArtifact(result, partName);
+      const original = typeof entry.target === 'string' && this.options.source ? wordStoryArtifact(this.options.source, partName) : undefined;
+      const edited = reconcileWordContent(current, original ? refreshUnchangedNumbering(original, current, entry.blocks) : entry.blocks);
       result = storyMainArtifact(edited);
     }
     return this.exported = result;
   }
 
   update(input: readonly WordContentBlock[]) {
-    this.updateContent(input);
+    const numbering = this.numberingFor(input);
+    this.updateContent(input, numbering);
+    this.shareNumbering(numbering);
   }
 
-  private updateContent(input: readonly WordContentBlock[], preserveSourceStyles = false) {
+  /** Export adds styles package-wide, even when only a header/footer requests them. */
+  private numberingFor(input: readonly WordContentBlock[]): WordNumbering | undefined {
+    const document = this.compiled?.artifact.document;
+    if (!document) return this.effectiveNumbering;
+    const ids = new Set<string>();
+    const visit = (blocks: readonly WordContentBlock[]) => {
+      for (const block of blocks) {
+        if (block.kind === 'paragraph' && block.styleId !== undefined) ids.add(block.styleId);
+        else if (block.kind === 'table') for (const row of block.rows) for (const cell of row) visit(cell.blocks);
+      }
+    };
+    visit(input);
+    for (const entry of this.editedStories.values()) visit(entry.blocks);
+    const missing = missingAuthoredStyles(document, [...ids]);
+    const key = JSON.stringify(missing.map(style => style.styleId));
+    if (this.numberingStylesKey === key) return this.effectiveNumbering;
+    this.numberingStylesKey = key;
+    return document.numbering.withParagraphStyles(missing);
+  }
+
+  private shareNumbering(numbering: WordNumbering | undefined): void {
+    if (this.effectiveNumbering !== numbering) this.updateContent(this.authored, numbering);
+    for (const entry of this.editedStories.values()) {
+      if (entry.model.effectiveNumbering !== numbering) entry.model.updateContent(entry.blocks, numbering);
+    }
+  }
+
+  private updateContent(input: readonly WordContentBlock[], numberingContext?: WordNumbering) {
+    if (this.effectiveNumbering !== numberingContext) {
+      this.effectiveNumbering = numberingContext;
+      this.independentBlocks = new WeakMap();
+      this.exported = undefined;
+    }
     const records = new Map<string, RecordBlock>();
     const visited: (readonly [string, RecordBlock])[] = [];
     const keys = new Set<string>();
@@ -276,26 +320,14 @@ export class NativeWordDocument implements WordLayoutSource {
     const numbering: { elementId: number; reference: WordParagraphNumbering }[] = [];
     // A split paragraph owns its section break only at its final continuation.
     const sectionOwners = new Map<string, WordTextParagraph>();
-    const styleIds = new Set<string>();
     const collectSections = (blocks: readonly WordContentBlock[]) => {
       for (const block of blocks) {
-        if (block.kind === 'paragraph' && block.styleId !== undefined) styleIds.add(block.styleId);
         if (block.kind === 'paragraph' && block.source !== undefined)
           sectionOwners.set(`${block.sourceCopy ?? ''}:${block.source}`, block);
         else if (block.kind === 'table') for (const row of block.rows) for (const cell of row) collectSections(cell.blocks);
       }
     };
     collectSections(input);
-    if (compiled) {
-      const missing = preserveSourceStyles ? [] : missingAuthoredStyles(compiled.artifact.document, [...styleIds]);
-      const key = JSON.stringify(missing.map(style => style.styleId));
-      if (this.numberingStylesKey !== key) {
-        this.effectiveNumbering = compiled.artifact.document.numbering.withParagraphStyles(missing);
-        this.numberingStylesKey = key;
-        this.independentBlocks = new WeakMap();
-        this.exported = undefined;
-      }
-    }
     const format = (patch: WordTextParagraph['runs'][number]['format'], inherited?: ComputedWordTextFormat): ComputedWordTextFormat => {
       const value = { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }), ...this.compiled?.defaults.text, ...inherited, ...patch };
       if (
@@ -555,7 +587,7 @@ export class NativeWordDocument implements WordLayoutSource {
           const list = authored.list;
           // Export preserves source numPr when list metadata is unchanged. Resolve
           // that direct formatting against the edited style instead of its old marker.
-          const preserved = compiled && JSON.stringify(list) === JSON.stringify(compiled.lists.get(authored.source!));
+          const preserved = compiled ? JSON.stringify(list) === JSON.stringify(compiled.lists.get(authored.source!)) : !list;
           const importedReference = preserved
             ? this.effectiveNumbering?.reference(original?.directNumbering ?? {}, authored.styleId ?? original?.format.styleId)
             : list && this.effectiveNumbering?.importedReference(list);

@@ -21,7 +21,7 @@ import type {
 } from "./document.ts";
 import type { ComputedWordParagraphFormat, ComputedWordTextFormat, WordTabStop } from "./styles.ts";
 import { WordError } from "./document.ts";
-import { WordMarkerBudget, type WordMarkerOptions, type WordListMarker } from "./numbering.ts";
+import { WordMarkerBudget, type WordMarkerOptions, type WordNumbering, type WordListMarker } from "./numbering.ts";
 import { resolveWordTableGrid, type ResolvedWordTableCell } from "./table-grid.ts";
 import type { WordDrawing } from "./drawings.ts";
 
@@ -235,22 +235,25 @@ export interface WordLayoutStories {
   readonly notes: readonly (Pick<WordNoteStory, 'kind' | 'id' | 'type'> & { readonly context: WordLayoutDocumentContext })[];
 }
 
-const storySources = new WeakMap<WordDocument, Map<WordHeaderFooterStory | WordNoteStory, WordLayoutDocumentContext>>();
+const storySources = new WeakMap<WordDocument, WeakMap<WordNumbering, Map<WordHeaderFooterStory | WordNoteStory, WordLayoutDocumentContext>>>();
 /** Compile retained story styles once; replacement stories bypass original marker work. */
 export function wordLayoutStories(
   document: WordDocument,
-  options: WordMarkerOptions & { readonly headerFooterOverrides?: ReadonlyMap<string, WordLayoutDocumentContext> } = {},
+  options: WordMarkerOptions & { readonly headerFooterOverrides?: ReadonlyMap<string, WordLayoutDocumentContext>; readonly numbering?: WordNumbering } = {},
   budget = new WordMarkerBudget(options.maxCharacters),
 ): WordLayoutStories {
-  const cached = storySources.get(document) ?? new Map<WordHeaderFooterStory | WordNoteStory, WordLayoutDocumentContext>();
-  storySources.set(document, cached);
+  const numbering = options.numbering ?? document.numbering;
+  const variants = storySources.get(document) ?? new WeakMap<WordNumbering, Map<WordHeaderFooterStory | WordNoteStory, WordLayoutDocumentContext>>();
+  storySources.set(document, variants);
+  const cached = variants.get(numbering) ?? new Map<WordHeaderFooterStory | WordNoteStory, WordLayoutDocumentContext>();
+  variants.set(numbering, cached);
   const context = (story: WordHeaderFooterStory | WordNoteStory, replacement?: WordLayoutDocumentContext) => {
     const existing = replacement ?? cached.get(story);
     if (existing) {
       accountMarkers(existing.listMarkers, budget);
       return existing;
     }
-    const compiled = compileStory(document, story, budget);
+    const compiled = compileStory(document, story, budget, numbering);
     cached.set(story, compiled);
     return compiled;
   };
@@ -1387,7 +1390,7 @@ function decorateHeaderFooters(
   }
 }
 
-function compileStory(document: WordDocument, story: WordHeaderFooterStory | WordNoteStory, budget: WordMarkerBudget): WordLayoutDocumentContext {
+function compileStory(document: WordDocument, story: WordHeaderFooterStory | WordNoteStory, budget: WordMarkerBudget, numbering: WordNumbering): WordLayoutDocumentContext {
   const context = { package: document.package, part: story.part, source: story.source, conformance: document.conformance };
   const paragraphs = new Map<WordParagraph, ComputedWordParagraphFormat>();
   const defaults = new Map<WordParagraph, ComputedWordTextFormat>();
@@ -1408,7 +1411,7 @@ function compileStory(document: WordDocument, story: WordHeaderFooterStory | Wor
   visit(story.blocks);
   return {
     wrapTrailSpaces: document.wrapTrailSpaces, doNotExpandShiftReturn: document.doNotExpandShiftReturn,
-    drawings: story.drawings, blocks: story.blocks, listMarkers: document.numbering.markers({ ...context, blocks: story.blocks }, {}, budget),
+    drawings: story.drawings, blocks: story.blocks, listMarkers: numbering.markers({ ...context, blocks: story.blocks }, {}, budget),
     cache: new WordLayoutCache(),
     paragraphFormat: paragraph => paragraphs.get(paragraph)!,
     runFormat: (paragraph, run) => (run && runs.get(run)) || defaults.get(paragraph)!,

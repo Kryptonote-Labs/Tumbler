@@ -60,3 +60,26 @@ not total allocated bytes; GC and process scheduling can affect them.
 Run behavioral tests with `bun test packages/word/test/numbering-semantics.test.ts`.
 For the failing baseline, copy this test into the extracted baseline and run it
 there with the same Bun runtime. Do not run tests concurrently with measurements.
+
+## Shared body and story styles
+
+Native updates share materialized built-in numbering styles across the body,
+edited headers/footers, and retained stories. Retained-story caches are keyed by
+that numbering context. Removing the edit that requested a style restores the
+original context. Sequential export preserves unchanged source numbering intent
+when an earlier edit adds a shared style; retained story bytes remain unchanged.
+
+`numbering-stories.test.ts` covers both directions with cached/uncached stories
+and mutable/immutable input, removal, an edited existing header, and a new
+section-targeted header. The first eight cases failed at `4186834` before this fix.
+Run the matched update/layout/export measurement with:
+
+```sh
+bash tools/word-compatibility/numbering/run-pair.sh 4186834 /tmp/numbering-story-pair stories-benchmark.ts
+```
+
+It uses 50 original body paragraphs and ten header paragraphs, five warmups and
+ten samples per scenario, with an existing-style control and a missing-style
+correctness case. Each sample records CPU/wall time, heap/RSS deltas, operation
+counts and marker checksums. The missing-style case performs additional correct
+numbering work after the fix; its timings do not represent equivalent outputs.
