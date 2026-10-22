@@ -731,3 +731,7 @@ edit leaves the input artifact and its package bytes unchanged.
 Paragraph joins and replacements reject crossings through tables, content
 controls, or other opaque XML blocks, even when those blocks have no projected
 text. Paragraphs in different containers cannot be joined.
+
+Splitting a paragraph moves its `w:sectPr` to the final continuation, preserving
+one section boundary. Multi-paragraph joins or replacements containing section
+properties are rejected until section-boundary transformations are supported.

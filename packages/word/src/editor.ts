@@ -134,6 +134,10 @@ function replaceWordParagraphRange(document: WordDocument, selection: WordTextSe
 
   assertSafeParagraphBoundaryEdit(document, requiredElement(document, startParagraph.elementId), requiredElement(document, endParagraph.elementId));
 
+  if (startIndex !== endIndex && paragraphs.slice(startIndex, endIndex + 1).some(paragraph => paragraph.section !== undefined)) {
+    throw new WordError("unsupported_document", "Paragraph ranges containing section boundaries cannot be joined or replaced.");
+  }
+
   const lines = value.split("\n");
   let working = document;
   const startEnd = wordParagraphText(working, findParagraph(working, startParagraph.elementId)).length;
@@ -249,8 +253,10 @@ function insertParagraphContentsAfter(document: WordDocument, paragraph: WordPar
   const parent = parentElement(document, element);
   const siblings = parent.children.filter((child): child is LosslessXmlElement => child.kind === "element");
   const next = siblings[siblings.indexOf(element) + 1];
-  const markup = contents.map((content) => paragraphMarkup(document, element, content)).join("");
+  const markup = contents.map((content, index) => paragraphMarkup(document, element, content, index === contents.length - 1)).join("");
   const editor = beginLosslessXmlEdit(document.source);
+  const section = paragraphSectionElement(element);
+  if (section !== undefined) editor.removeElement(section);
   if (next === undefined) editor.appendMarkup(parent, markup);
   else editor.insertMarkupBefore(next, markup);
   return commitDocumentEdit(document, editor);
@@ -263,11 +269,18 @@ function paragraphContentMarkupForText(document: WordDocument, template: Lossles
   return value === "" ? "" : textRunMarkup(template.prefix, value, runPropertiesMarkup);
 }
 
-function paragraphMarkup(document: WordDocument, template: LosslessXmlElement, content: string): string {
-  const prefix = template.prefix;
+function paragraphMarkup(document: WordDocument, template: LosslessXmlElement, content: string, retainSection = false): string {
   const paragraphProperties = template.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.localName === "pPr");
-  const properties = paragraphProperties === undefined ? "" : document.source.source.slice(paragraphProperties.span.start, paragraphProperties.span.end);
+  const section = retainSection ? undefined : paragraphSectionElement(template);
+  const properties = paragraphProperties === undefined ? "" : section === undefined
+    ? document.source.source.slice(paragraphProperties.span.start, paragraphProperties.span.end)
+    : document.source.source.slice(paragraphProperties.span.start, section.span.start) + document.source.source.slice(section.span.end, paragraphProperties.span.end);
   return `<${template.qualified}>${properties}${content}</${template.qualified}>`;
+}
+
+function paragraphSectionElement(paragraph: LosslessXmlElement): LosslessXmlElement | undefined {
+  const properties = paragraph.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.namespaceUri === paragraph.namespaceUri && child.localName === "pPr");
+  return properties?.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.namespaceUri === paragraph.namespaceUri && child.localName === "sectPr");
 }
 
 function assertStructuralEditSafe(document: WordDocument, paragraph: WordParagraph): void {
