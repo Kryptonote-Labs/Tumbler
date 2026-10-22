@@ -75,7 +75,10 @@ Mounted overlays share a 4,194,304-pixel reservation pool, including an allowanc
 tiles shared across all pages. Scratch canvases are cleared before every yield. If the pool is full even at reduced resolution, the overlay reports
 an error and retains the fallback. Each tile keeps the ink raster budget finite,
 reads only its destination rectangle, and yields before the next tile so page
-changes can cancel pending work. These limits do not alter stored ink samples.
+changes can cancel pending work. These limits do not alter stored ink samples. Hosts that
+assign drawing stacking ranks must set `--word-ink-layer-z-index` above their
+highest rank so the final composite remains visible. Standalone hosts default to
+layer 3; the overlay keeps `pointer-events: none`.
 
 `paintWordPage` also accepts a `viewport` in integer device pixels for cropped
 canvases. It translates page painting and clips native ink pixel reads to that
