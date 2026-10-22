@@ -13,11 +13,13 @@ const graphemeSegmenter = typeof Intl.Segmenter === 'undefined'
 export function validateWordTextOffset(text: string, offset: number): void {
   if (!Number.isInteger(offset) || offset < 0 || offset > text.length) throw new RangeError("A Word text offset is outside its paragraph.");
   if (offset === 0 || offset === text.length) return;
-  // containing() asks ICU for this boundary instead of enumerating every cluster.
+  // Check the preceding cluster's end with one lookup, without enumerating clusters.
+  // Bun 1.3.14 can misreport containing(offset) at a leading surrogate.
   // Keep the existing scalar-boundary fallback on runtimes without Segmenter.
+  const previous = graphemeSegmenter?.segment(text).containing(offset - 1);
   const boundary = graphemeSegmenter === undefined
     ? !(text.charCodeAt(offset - 1) >= 0xd800 && text.charCodeAt(offset - 1) <= 0xdbff &&
         text.charCodeAt(offset) >= 0xdc00 && text.charCodeAt(offset) <= 0xdfff)
-    : graphemeSegmenter.segment(text).containing(offset)?.index === offset;
+    : previous !== undefined && previous.index + previous.segment.length === offset;
   if (!boundary) throw new RangeError("A Word text offset cannot split a grapheme cluster.");
 }

@@ -28,6 +28,22 @@ for (const conformance of ['strict', 'transitional'] as const) {
       expect(text(artifact.replaceText(selection(artifact, 0, value.length), `${value}${value}`))).toBe(`${value}${value}!`);
     });
   }
+  test(`${conformance}: editing and formatting accept boundaries beside supplementary text`, () => {
+    for (const value of ['🙂', '🡨', '👩‍💻', '🇺🇳', '👍🏽']) {
+      const artifact = open(`<w:r><w:t>a${value}b</w:t></w:r>`);
+      const start = 1;
+      const end = start + value.length;
+      expect(text(artifact.applyFormatting(selection(artifact, start, end), { text: { bold: { set: true } } }))).toBe(`a${value}b`);
+      expect(text(artifact.replaceText(selection(artifact, start, end), 'X'))).toBe('aXb');
+      expect(text(artifact.replaceText(selection(artifact, start, start), 'X'))).toBe(`aX${value}b`);
+      expect(text(artifact.replaceText(selection(artifact, end, end), 'X'))).toBe(`a${value}Xb`);
+    }
+    // The shrunk CI edit history, seed 1455459784, inserts beside an existing emoji.
+    const empty = open('<w:r><w:t></w:t></w:r>');
+    const first = empty.replaceText(selection(empty, 0, 0), 'a');
+    const second = first.replaceText(selection(first, 1, 1), '🙂');
+    expect(text(second.replaceText(selection(second, 0, 1), ''))).toBe('🙂');
+  });
   test(`${conformance}: native import retains literal CR/LF through later formatting and export`, () => {
     for (const entity of ['&#10;', '&#13;']) {
       const source = open(`<w:r><w:t xml:space="preserve">a${entity}b</w:t></w:r>`);
