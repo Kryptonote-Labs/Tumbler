@@ -10,7 +10,7 @@ baseline_dir=$(mktemp -d /tmp/chart-baseline.XXXXXX)
 # Chart dependencies are unchanged by this PR; both versions use the installed lockfile dependencies.
 git archive "$baseline_ref" packages/charts | tar -x -C "$baseline_dir"
 mkdir -p "$baseline_dir/packages/charts/bench"
-ln -s "$PWD/node_modules" "$baseline_dir/node_modules"
+ln -s "$PWD/packages/charts/node_modules" "$baseline_dir/packages/charts/node_modules"
 cp packages/charts/bench/render.ts "$baseline_dir/packages/charts/bench/render.ts"
 bun "$baseline_dir/packages/charts/bench/render.ts" > "$output_dir/before.jsonl"
 bun packages/charts/bench/render.ts > "$output_dir/after.jsonl"
