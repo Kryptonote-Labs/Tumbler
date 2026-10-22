@@ -223,7 +223,10 @@ function joinParagraphRange(document: WordDocument, startId: number, endId: numb
   if (startIndex < 0 || endIndex <= startIndex) throw new WordError("invalid_document", "Paragraph order changed during editing.");
   const editor = beginLosslessXmlEdit(document.source);
   const endContent = paragraphContentMarkup(document, end);
-  if (endContent !== "") editor.appendMarkup(start, endContent);
+  if (endContent !== "") {
+    if (start.selfClosing) editor.replaceElementMarkup(start, openSelfClosing(document, start, endContent));
+    else editor.appendMarkup(start, endContent);
+  }
   for (const sibling of siblings.slice(startIndex + 1, endIndex + 1)) editor.removeElement(sibling);
   return commitDocumentEdit(document, editor);
 }
