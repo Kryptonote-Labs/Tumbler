@@ -132,6 +132,8 @@ function replaceWordParagraphRange(document: WordDocument, selection: WordTextSe
   const endParent = parentElement(document, requiredElement(document, endParagraph.elementId));
   if (startParent !== endParent) throw new WordError("invalid_document", "A paragraph edit cannot cross table-cell or story boundaries.");
 
+  assertSafeParagraphBoundaryEdit(document, requiredElement(document, startParagraph.elementId), requiredElement(document, endParagraph.elementId));
+
   const lines = value.split("\n");
   let working = document;
   const startEnd = wordParagraphText(working, findParagraph(working, startParagraph.elementId)).length;
@@ -189,6 +191,21 @@ function documentParagraphs(document: WordDocument): WordParagraph[] {
   };
   visit(document.blocks);
   return result;
+}
+
+/** Inspect source siblings, including blocks omitted from the text projection, before editing. */
+function assertSafeParagraphBoundaryEdit(document: WordDocument, start: LosslessXmlElement, end: LosslessXmlElement): void {
+  const parent = parentElement(document, start);
+  if (parentElement(document, end) !== parent) throw new WordError("invalid_document", "A paragraph edit cannot cross OOXML containers.");
+  const siblings = parent.children;
+  const first = siblings.indexOf(start);
+  const last = siblings.indexOf(end);
+  if (first < 0 || last < first) throw new WordError("invalid_document", "Paragraph order changed during editing.");
+  for (const sibling of siblings.slice(first, last + 1)) {
+    if (sibling.kind === "element" && (sibling.namespaceUri !== start.namespaceUri || sibling.localName !== "p")) {
+      throw new WordError("unsupported_document", "Paragraph edits cannot cross tables or unsupported XML blocks.");
+    }
+  }
 }
 
 function joinParagraphRange(document: WordDocument, startId: number, endId: number): Uint8Array {

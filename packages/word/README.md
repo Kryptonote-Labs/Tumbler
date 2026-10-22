@@ -727,3 +727,7 @@ gets fresh parse counters across the main document and its parsed stories; limit
 are not a cumulative editing-session allowance. Intermediate revisions must also
 fit those limits. `replace(bytes, options)` can explicitly override them. A rejected
 edit leaves the input artifact and its package bytes unchanged.
+
+Paragraph joins and replacements reject crossings through tables, content
+controls, or other opaque XML blocks, even when those blocks have no projected
+text. Paragraphs in different containers cannot be joined.
