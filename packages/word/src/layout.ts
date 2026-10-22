@@ -470,7 +470,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
   };
 
   const advanceColumn = (section: WordSectionProperties): void => {
-    if (page === undefined || page.section !== section || columnIndex + 1 >= page.columns.length) {
+    if (page === undefined || columnIndex + 1 >= page.columns.length) {
       addPage(section);
       return;
     }
@@ -483,7 +483,10 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
       const section = sections[sectionIndex]!;
       const isFirst = page === undefined;
       if (isFirst) addPage(section.properties);
-      else if (section.properties.breakType === "nextColumn") advanceColumn(section.properties);
+      else if (section.properties.breakType === "nextColumn" && samePageGeometry(page!.section, section.properties) &&
+        page!.section.columnCount === section.properties.columnCount && page!.section.columnSpaceTwips === section.properties.columnSpaceTwips) {
+        advanceColumn(section.properties);
+      }
       else if (section.properties.breakType === "continuous" && samePageGeometry(page!.section, section.properties)) {
         // Continuous sections share the current page but can change the remaining column set only on the next page.
       } else addPage(section.properties, section.properties.breakType === "evenPage" ? "even" : section.properties.breakType === "oddPage" ? "odd" : undefined);
