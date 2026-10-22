@@ -4,27 +4,20 @@ export function validateXmlText(value: string): void {
   if (/[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]/.test(value)) throw new TypeError('Text contains characters not supported by XML.');
 }
 
+// Reuse ICU's segmenter, without retaining paragraph strings or boundary sets.
+const graphemeSegmenter = typeof Intl.Segmenter === 'undefined'
+  ? undefined
+  : new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
 /** Text edits and direct formatting share UTF-16 grapheme boundaries. */
 export function validateWordTextOffset(text: string, offset: number): void {
   if (!Number.isInteger(offset) || offset < 0 || offset > text.length) throw new RangeError("A Word text offset is outside its paragraph.");
-  if (!graphemeBoundaries(text).has(offset)) throw new RangeError("A Word text offset cannot split a grapheme cluster.");
+  if (offset === 0 || offset === text.length) return;
+  // containing() asks ICU for this boundary instead of enumerating every cluster.
+  // Keep the existing scalar-boundary fallback on runtimes without Segmenter.
+  const boundary = graphemeSegmenter === undefined
+    ? !(text.charCodeAt(offset - 1) >= 0xd800 && text.charCodeAt(offset - 1) <= 0xdbff &&
+        text.charCodeAt(offset) >= 0xdc00 && text.charCodeAt(offset) <= 0xdfff)
+    : graphemeSegmenter.segment(text).containing(offset)?.index === offset;
+  if (!boundary) throw new RangeError("A Word text offset cannot split a grapheme cluster.");
 }
-
-function graphemeBoundaries(value: string): ReadonlySet<number> {
-  const boundaries = new Set<number>([0, value.length]);
-  const Segmenter = Intl.Segmenter;
-  if (Segmenter === undefined) {
-    let offset = 0;
-    for (const scalar of value) {
-      offset += scalar.length;
-      boundaries.add(offset);
-    }
-    return boundaries;
-  }
-  for (const segment of new Segmenter(undefined, { granularity: "grapheme" }).segment(value)) {
-    boundaries.add(segment.index);
-    boundaries.add(segment.index + segment.segment.length);
-  }
-  return boundaries;
-}
-

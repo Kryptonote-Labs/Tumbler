@@ -14,7 +14,7 @@ for (const conformance of ['strict', 'transitional'] as const) {
     if (paragraph.kind !== 'paragraph') throw new Error('Expected paragraph');
     return wordParagraphText(artifact.document, paragraph);
   };
-  for (const value of ['😀', 'e\u0301', '👩‍💻']) {
+  for (const value of ['😀', 'e\u0301', '👩‍💻', '🇺🇳', '👍🏽']) {
     test(`${conformance}: text and formatting reject split grapheme ${value}`, () => {
       const artifact = open(`<w:r><w:t>${value}!</w:t></w:r>`);
       const before = artifact.bytes();

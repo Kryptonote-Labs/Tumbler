@@ -274,7 +274,7 @@ function localSelection(paragraph: WordParagraph, start: number, end: number): W
 function selectedRuns(document: WordDocument, paragraph: WordParagraph, target: WordFormattingTarget, required = true): readonly WordRun[] {
   const start = Math.min(target.anchor.offset, target.focus.offset);
   const end = Math.max(target.anchor.offset, target.focus.offset);
-  validateRange(wordParagraphText(document, paragraph), start, end);
+  // Both callers pass ranges already checked by selectedRanges.
   const segments = wordParagraphTextSegments(document, paragraph);
   const selected = start === end
     ? [segments.find((segment) => start > segment.start && start < segment.end) ?? segments.findLast((segment) => segment.end <= start) ?? segments[0]].filter((segment) => segment !== undefined)

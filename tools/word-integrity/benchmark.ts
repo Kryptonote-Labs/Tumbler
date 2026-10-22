@@ -2,7 +2,9 @@ import { cpus } from 'node:os';
 import { openWordArtifact, wordParagraphText } from '../../packages/word/src/index.ts';
 import { buildWordDocumentFixture } from '../../packages/word/test/document-fixture.ts';
 
-const value = 'Hello 😀 é 👩‍💻 world. '.repeat(50);
+const repeats = Number(process.env.WORD_BENCH_REPEATS ?? 50);
+if (!Number.isInteger(repeats) || repeats < 1 || repeats > 5000) throw new RangeError('WORD_BENCH_REPEATS must be 1..5000.');
+const value = 'Hello 😀 é 👩‍💻 world. '.repeat(repeats);
 const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const artifact = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${ns}"><w:body><w:p><w:r><w:t>${value}</w:t></w:r></w:p></w:body></w:document>` }));
 const paragraphElementId = artifact.document.blocks[0]!.elementId;
