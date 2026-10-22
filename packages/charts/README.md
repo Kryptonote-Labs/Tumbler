@@ -94,3 +94,16 @@ supported for plain-text callers). `WordDrawingView` hosts provide
 connect title editing to the same formatting controls as shape text. Double-click
 the title or press F2 while the chart is selected. Edits apply as you type; Enter
 adds a paragraph and Escape leaves text editing. Undo restores earlier changes.
+
+Chart previews enforce resource limits independently of OOXML cache counts. Cache
+indices must be below 100,000 even without `ptCount`. Cartesian previews allow at
+most 20,000 category positions and 20,000 total series/category cells, including
+combination plots and sparse gaps. Preview input is also limited to 100,000 stored
+points, 256 series/axes per plot, and 16 combination plots. Combination accounting
+includes the root model and each plot. These are product limits, not OOXML schema
+restrictions; documents exceeding them cannot be previewed in full.
+
+`layoutChartScene` returns a two-mark "Chart preview unavailable" scene when a
+preview limit, invalid geometry, or host callback prevents rendering. This applies
+to SVG and canvas consumers. Lower-level layout functions can still throw.
+Per-layout point maps and stack positions are rebuilt on each resize or host edit.

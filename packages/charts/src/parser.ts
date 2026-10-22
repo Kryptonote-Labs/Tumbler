@@ -242,6 +242,7 @@ function parseSequenceContainer(element: LosslessXmlElement, namespace: string, 
   const seen = new Set<number>();
   const parsed = points.map((point): ChartDataPoint => {
     const index = unsigned(requiredAttr(point, "idx", "cache point index"), "cache point index");
+    if (index >= MAX_CACHE_POINTS) throw new ChartParseError(`Chart cache index exceeds ${MAX_CACHE_POINTS - 1}.`);
     if (declaredCount !== undefined && index >= declaredCount) throw new ChartParseError(`Chart cache point ${index} is outside ptCount ${declaredCount}.`);
     if (seen.has(index)) throw new ChartParseError(`Chart cache repeats point ${index}.`);
     seen.add(index);

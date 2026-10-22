@@ -1,6 +1,5 @@
 import { layoutBarBand } from "./bar-layout.ts";
-import { cartesianStack, chartSequenceValue, chartValueCoordinate, layoutCartesianChart } from "./layout.ts";
-import type { ChartSeries, SupportedChartModel } from "./model.ts";
+import { chartValueCoordinate, layoutCartesianChart } from "./layout.ts";
 import { legendMarks, line, type ChartMark, type SceneContext } from "./scene-marks.ts";
 import { chartFont, chartStroke } from "./scene-style.ts";
 
@@ -40,9 +39,9 @@ export function cartesianScene(context: SceneContext): ChartMark[] {
 
   model.series.forEach((series, seriesIndex) => {
     if (model.kind === "line") {
-      marks.push({ kind: "path", d: linePath(model, series, layout), stroke: context.color(series, seriesIndex, true), strokeWidth: 2 });
+      marks.push({ kind: "path", d: linePath(seriesIndex, layout), stroke: context.color(series, seriesIndex, true), strokeWidth: 2 });
       layout.categories.forEach((_, index) => {
-        const current = value(model, series, index);
+        const current = layout.stacks[seriesIndex]?.[index]?.end;
         if (current !== undefined) marks.push({ kind: "circle", cx: plot.x + (index + 0.5) / count * plot.width, cy: y(current), r: 3, fill: context.color(series, seriesIndex, true) });
       });
       return;
@@ -50,9 +49,9 @@ export function cartesianScene(context: SceneContext): ChartMark[] {
     const band = (horizontal ? plot.height : plot.width) / count;
     const bars = layoutBarBand(model, band);
     layout.categories.forEach((_, index) => {
-      const current = value(model, series, index);
+      const current = layout.stacks[seriesIndex]?.[index]?.end;
       if (current === undefined) return;
-      const start = cartesianStack(model, seriesIndex, index)?.start ?? 0;
+      const start = layout.stacks[seriesIndex]?.[index]?.start ?? 0;
       const offset = index * band + bars.inset + seriesIndex * bars.stride;
       const fill = context.color(series, seriesIndex);
       marks.push(horizontal
@@ -78,18 +77,13 @@ export function cartesianScene(context: SceneContext): ChartMark[] {
   return marks;
 }
 
-function value(model: SupportedChartModel, series: ChartSeries, index: number): number | undefined {
-  const point = chartSequenceValue(series.values, index);
-  return typeof point === "number" ? cartesianStack(model, model.series.indexOf(series), index)?.end : undefined;
-}
-
 /** Gaps in a series break the line rather than bridging missing categories. */
-function linePath(model: SupportedChartModel, series: ChartSeries, layout: ReturnType<typeof layoutCartesianChart>): string {
+function linePath(seriesIndex: number, layout: ReturnType<typeof layoutCartesianChart>): string {
   const count = Math.max(1, layout.categories.length);
   let path = "";
   let previous = -2;
   for (let index = 0; index < count; index += 1) {
-    const current = value(model, series, index);
+    const current = layout.stacks[seriesIndex]?.[index]?.end;
     if (current === undefined) continue;
     const x = layout.plot.x + (index + 0.5) / count * layout.plot.width;
     const y = chartValueCoordinate(current, layout.minimum, layout.maximum, layout.plot.y, layout.plot.height, true);
