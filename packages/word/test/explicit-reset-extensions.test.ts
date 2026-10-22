@@ -89,3 +89,33 @@ for (const opaque of [' ext:hint="keep"', '<!--keep-->', '<?keep value?>']) test
     expect(session.artifact().document.source.source).toContain(opaque);
   } finally { session.destroy(); }
 });
+
+test('partial removal of replacement tabs is rejected before returning a delta', () => {
+  const source = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${ns}" xmlns:ext="urn:custom"><w:body><w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="1440"/><ext:keep/></w:tabs></w:pPr><w:r><w:t>Hello</w:t></w:r></w:p></w:body></w:document>` }));
+  const session = openWordOperationDocument(source);
+  try {
+    session.text.applyDelta(prepareWordOperation(session.text, { start: 0, end: 5 }, { name: 'paragraph', input: { positioning: { reset: true, tabs: [{ positionTwips: 2880, alignment: 'start', leader: 'none' }] } } }).delta);
+    const before = session.text.toDelta();
+    expect(() => prepareWordOperation(session.text, { start: 0, end: 5 }, { name: 'paragraph', input: { positioning: { tabs: [] } } })).toThrow('Cannot reset source tabs');
+    expect(session.text.toDelta()).toEqual(before);
+    expect(session.artifact().document.source.elements('urn:custom', 'keep')).toHaveLength(1);
+  } finally { session.destroy(); }
+});
+
+test('new paragraph resets inherit the effective default paragraph style', () => {
+  const source = openWordArtifact(buildWordDocumentFixture({
+    documentXml: `<w:document xmlns:w="${ns}"><w:body><w:p><w:r><w:t>Hello</w:t></w:r></w:p></w:body></w:document>`,
+    relationships: [{ id: 'styles', type: `${rel}/styles`, target: 'styles.xml' }],
+    parts: [{ itemName: 'word/styles.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml', xml: `<w:styles xmlns:w="${ns}"><w:style w:type="paragraph" w:default="1" w:styleId="CustomDefault"><w:name w:val="Custom default"/><w:pPr><w:tabs><w:tab w:val="left" w:pos="2880"/></w:tabs><w:ind w:left="240"/></w:pPr></w:style></w:styles>` }],
+  }));
+  const model = new NativeWordDocument({ source, content: [{ kind: 'paragraph', runs: [{ text: 'New' }], positioning: { reset: true } }] });
+  const native = model.blocks[0]!;
+  const output = model.artifact();
+  const exported = output.document.blocks[0]!;
+  if (native.kind !== 'paragraph' || exported.kind !== 'paragraph') throw new Error('Expected paragraphs');
+  const parsed = output.document.styles.paragraphFormat(output.document, exported);
+  expect(model.paragraphFormat(native).indentStartTwips).toBe(240);
+  expect(model.paragraphFormat(native).tabs.map(tab => tab.positionTwips)).toEqual([2880]);
+  expect(model.paragraphFormat(native).tabs).toEqual(parsed.tabs);
+  expect(model.paragraphFormat(native).indentStartTwips).toBe(parsed.indentStartTwips);
+});
