@@ -24,7 +24,7 @@ for (const property of ['bold', 'italic', 'strike'] as const) {
         style('CChild', 'character', { [property]: false }, { basedOn: 'C0' }),
       ] });
       expect(resolver.resolveParagraphStyle('Child').text[property]).toBe(true);
-      expect(resolver.resolveStyledRun('P', 'C')[property]).toBe(expected[Number(defaults)]![values.indexOf(paragraph)]![values.indexOf(character)]);
+      expect(resolver.resolveStyledRun('P', 'C')[property]).toBe(expected[Number(defaults)]![values.indexOf(paragraph)]![values.indexOf(character)]!);
       expect(resolver.resolveStyledRun('P', 'CChild')[property]).toBe(Boolean(Number(defaults) ^ Number(paragraph ?? defaults)));
     }
   });
