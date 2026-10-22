@@ -53,8 +53,9 @@ export function combinationScene(context: SceneContext): ChartMark[] {
     });
   });
   const first = plots[0];
-  if (first && !first.model.axes.find(axis => axis.kind === "category")?.deleted) {
-    const font = chartFont("category", first.model.axes.find(axis => axis.kind === "category")?.textStyle, model, resolve);
+  const categoryAxis = first?.model.axes.find(axis => axis.kind === "category" && (!first.model.axisIds || first.model.axisIds.includes(axis.id)));
+  if (first && !categoryAxis?.deleted) {
+    const font = chartFont("category", categoryAxis?.textStyle, model, resolve);
     const count = Math.max(1, first.categories.length);
     const { plot } = first;
     first.categories.forEach((text, c) => marks.push(first.model.kind === "bar"

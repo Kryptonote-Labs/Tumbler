@@ -184,3 +184,20 @@ test('automatic XY ticks remove arithmetic noise while retaining tiny intervals'
     expect(labels).toEqual([...expected, ...expected]);
   }
 });
+
+test('combination category labels resolve the referenced axis in either declaration order', () => {
+  const axes: SupportedChartModel['axes'] = [
+    { id: 1, kind: 'category', position: 'bottom', majorGridlines: false, deleted: true, title: undefined, minimum: undefined, maximum: undefined, textStyle: { fontFamily: 'Hidden Axis' } },
+    { id: 2, kind: 'value', position: 'right', majorGridlines: false, deleted: false, title: undefined, minimum: 0, maximum: 20 },
+    { id: 3, kind: 'category', position: 'bottom', majorGridlines: false, deleted: false, title: undefined, minimum: undefined, maximum: undefined, textStyle: { fontFamily: 'Primary Axis' } },
+    { id: 4, kind: 'value', position: 'left', majorGridlines: false, deleted: false, title: undefined, minimum: 0, maximum: 20 },
+  ];
+  for (const ordered of [axes, [...axes].reverse()]) {
+    const primary = model({ axes: ordered, axisIds: [3, 4], legend: undefined });
+    const secondary = { ...primary, kind: 'line' as const, axisIds: [1, 2], series: [{ ...primary.series[0]!, index: 1 }] };
+    const scene = layoutChartScene({ ...primary, series: [...primary.series, ...secondary.series], plots: [primary, secondary] }, 600, 400);
+    const labels = flat(scene.marks).filter(mark => mark.kind === 'text' && ['Jan', 'Feb', 'Mar'].includes(mark.text));
+    expect(labels).toHaveLength(3);
+    expect(labels.every(mark => mark.kind === 'text' && mark.font.family === 'Primary Axis')).toBe(true);
+  }
+});
