@@ -220,21 +220,22 @@
 
 <style>
   /* Document lines preserve whitespace and may be as tall as an inline drawing. */
-  .drawing { position: absolute; white-space: normal; line-height: normal; }
-  .drawing.moving { --word-drawing-active-z-index: calc(var(--word-ink-layer-z-index, 3) + 1); z-index: var(--word-drawing-active-z-index); }
-  .drawing.behind .content { z-index: 0; }
+  /* Keep stationary wrappers out of stacking contexts so controls can sit above other pictures. */
+  .drawing { --word-drawing-controls-z-index: calc(var(--word-ink-layer-z-index, 3) + 1); position: absolute; white-space: normal; line-height: normal; }
+  .drawing.moving { z-index: var(--word-drawing-controls-z-index); }
+  .drawing.behind .content { z-index: var(--word-drawing-rank, 0); }
   .drawing.selected { outline: var(--outline-size) solid var(--tumbler-document-accent, #25a735); }
-  .content { position: absolute; inset: 0; z-index: 2; display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; touch-action: none; }
+  .content { position: absolute; inset: 0; z-index: var(--word-drawing-rank, 2); display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; touch-action: none; }
   .content.movable { cursor: grab; }
   .content.movable:active { cursor: grabbing; }
-  .content.editing { cursor: text; outline: var(--outline-size) dashed var(--tumbler-document-accent, #25a735); }
+  .content.editing { z-index: var(--word-drawing-controls-z-index); cursor: text; outline: var(--outline-size) dashed var(--tumbler-document-accent, #25a735); }
   .content:focus-visible { outline: var(--outline-size) solid var(--tumbler-document-accent, #25a735); }
   .ink-vector :global(svg) { display: block; width: 100%; height: 100%; }
   img { display: block; width: 100%; height: 100%; }
-  .resize { position: absolute; z-index: 4; translate: -50% -50%; width: var(--handle-size); height: var(--handle-size); min-width: 0; min-height: 0; box-sizing: border-box; line-height: 0; padding: 0; border: var(--outline-size) solid var(--tumbler-document-accent, #25a735); border-radius: 50%; background: white; touch-action: none; }
-  .controls { position: absolute; z-index: 4; right: 0; bottom: calc(100% + 10px * var(--inverse-scale)); display: flex; gap: 4px; padding: 4px; border: 1px solid #3b483e; border-radius: 6px; background: #181b18; color: #e2fee7; font: 13px/1.4 system-ui, sans-serif; transform: scale(var(--inverse-scale)); transform-origin: bottom right; }
+  .resize { position: absolute; z-index: var(--word-drawing-controls-z-index); translate: -50% -50%; width: var(--handle-size); height: var(--handle-size); min-width: 0; min-height: 0; box-sizing: border-box; line-height: 0; padding: 0; border: var(--outline-size) solid var(--tumbler-document-accent, #25a735); border-radius: 50%; background: white; touch-action: none; }
+  .controls { position: absolute; z-index: var(--word-drawing-controls-z-index); right: 0; bottom: calc(100% + 10px * var(--inverse-scale)); display: flex; gap: 4px; padding: 4px; border: 1px solid #3b483e; border-radius: 6px; background: #181b18; color: #e2fee7; font: 13px/1.4 system-ui, sans-serif; transform: scale(var(--inverse-scale)); transform-origin: bottom right; }
   .controls button, select { position: static; padding: 5px 8px; border: 1px solid #3b483e; border-radius: 4px; background: #202521; color: inherit; font: inherit; }
-  .ink-controls { position:absolute; z-index:6; left:0; top:calc(100% + 8px); transform:scale(var(--inverse-scale)); transform-origin:top left; }
+  .ink-controls { position:absolute; z-index:var(--word-drawing-controls-z-index); left:0; top:calc(100% + 8px); transform:scale(var(--inverse-scale)); transform-origin:top left; }
   .ink-controls button { padding:4px 8px; border:1px solid #3b483e; border-radius:4px; background:#202521; color:#e2fee7; font:13px/1.4 system-ui; }
   .controls button { cursor: move; touch-action: none; }
   .fallback { width: 100%; height: 100%; background: #eee; }

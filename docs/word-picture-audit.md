@@ -102,6 +102,15 @@ One accidentally broad browser invocation was cancelled by terminating only its 
 
 ## Drag preview elevation
 
-The third independent review found that inline drawing ranks override the existing moving-state CSS. A real pointer drag of a lower-ranked picture now raises its preview above the page's compositing layer, then restores its saved rank on release. The inline rank accepts a moving-only CSS custom property; this does not change document z-order or exported markup.
+The third independent review found that inline drawing ranks override the existing moving-state CSS. A real pointer drag of a lower-ranked picture now raises its preview above the page's compositing layer, then restores its saved rank on release. The moving wrapper temporarily rises above the page overlay; this does not change document z-order or exported markup. The stationary content/control separation described below supersedes the initial moving-only CSS override.
 
 The mounted `word-picture-drag.e2e.ts` test moves an exposed low-rank picture over two higher-ranked pictures. Before the fix, its computed rank remains 2 and the center hit target is the other picture, element 59 instead of element 5. After the fix, the moving rank is 6, the hit target is element 5, the controls remain visible, and release restores rank 2. The paired test failed before and passed after under the same shared lock, Chrome, fixture, zoom and pointer sequence. An initial test setup failed before dragging and was discarded; the corrected test waits for the loaded editable drawing and scrolls it into view. The other seven picture browser tests passed with the new CSS during that initial run; only the corrected drag test was repeated. Full suites and benchmarks were not repeated for this CSS change.
+
+
+## Stationary selection controls
+
+The fourth review found that a stationary low-rank drawing still trapped its toolbar and resize handles below other pictures. Normal ranks now apply to drawing content. Stationary interactive wrappers do not create stacking contexts, so controls use a separate rank above the page overlay. Moving previews still rise temporarily. Chart-title and ink-point editors inherit the control rank, with their existing standalone fallbacks. This keeps editor controls above drawing content without raising the selected picture itself.
+
+The mounted selection test reproduces the inaccessible right resize handle before the fix: hit testing finds picture 59 instead of picture 5's handle. After the fix it finds the handle, while an interior point still hits the higher-ranked picture 59. A real pointer resize through that handle increases width from 72 to 84 points. The paired run under one shared lock fails before and passes after; all nine picture browser tests pass in 26.4 seconds. The drag test also passes with the stationary wrapper restored to `auto` after release and content retaining its original rank. These are behavioral checks, not performance measurements.
+
+After sharing the control-rank property with the title and point editors, the three focused drag, selection and ink-stacking tests passed again in 16.9 seconds. Svelte checking reported zero errors and zero warnings. No broad suite or benchmark was repeated.

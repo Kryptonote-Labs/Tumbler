@@ -432,9 +432,9 @@
     return `${wordTextCss(fragment.format)};${fragment.format.verticalAlign === "baseline" ? "vertical-align:top;" : ""}margin-left:${wordPointsToCssPixels(gap)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - line.y)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 
-  function drawingStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0, paintImage = false, order?: ReadonlyMap<import('@tumblerjs/word').WordDrawing, number>) {
+  function drawingStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0, paintImage = false, order?: ReadonlyMap<import('@tumblerjs/word').WordDrawing, number>, interactive = false) {
     const box = paintImage && fragment.drawing?.kind === 'image' ? wordImagePaintBounds(fragment.drawing, fragment.width, fragment.height) : { x: 0, y: 0, width: fragment.width, height: fragment.height };
-    return `z-index:var(--word-drawing-active-z-index,${fragment.drawing ? order?.get(fragment.drawing) ?? (fragment.drawing.placement === 'inline' ? 1 : 2) : 1});left:${wordPointsToCssPixels(fragment.x + box.x - offsetX)}px;top:${wordPointsToCssPixels(fragment.y + box.y - offsetY)}px;width:${wordPointsToCssPixels(box.width)}px;height:${wordPointsToCssPixels(box.height)}px`;
+    return `${interactive ? '--word-drawing-rank' : 'z-index'}:${fragment.drawing ? order?.get(fragment.drawing) ?? (fragment.drawing.placement === 'inline' ? 1 : 2) : 1};left:${wordPointsToCssPixels(fragment.x + box.x - offsetX)}px;top:${wordPointsToCssPixels(fragment.y + box.y - offsetY)}px;width:${wordPointsToCssPixels(box.width)}px;height:${wordPointsToCssPixels(box.height)}px`;
   }
 
   function imageUrl(drawing: WordImageDrawing): string {
@@ -541,7 +541,7 @@
               <div class="text-line" style={`left:${wordPointsToCssPixels(line.x)}px;top:${wordPointsToCssPixels(line.y)}px;height:${wordPointsToCssPixels(line.height)}px`}>
                 {#each line.fragments as fragment, fragmentIndex}
                   {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
-                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y, false, drawingOrder)} pageX={fragment.x} pageY={fragment.y} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
+                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y, false, drawingOrder, true)} pageX={fragment.x} pageY={fragment.y} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
                   {:else if fragment.hyperlink === undefined}
                     <span
                       data-paragraph={line.paragraphElementId}
