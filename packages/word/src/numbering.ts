@@ -1,3 +1,4 @@
+import { readNumberingStyles, WordNumberingStyles } from './numbering-styles.ts';
 import type { WordAuthoredList } from './authored-list.ts';
 import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { RelationshipsError, type OpcPackage, type OpcPart, type PartName } from "@tumblerjs/opc";
@@ -30,6 +31,9 @@ export type WordNumberFormat = "decimal" | "lowerLetter" | "upperLetter" | "lowe
 export interface WordNumberingLevel {
   readonly level: number;
   readonly start: number;
+  /** One-based restart trigger; zero disables automatic restarts. */
+  readonly restart?: number;
+  readonly paragraphStyleId?: string;
   readonly format: WordNumberFormat;
   readonly text: string;
   readonly suffix: "tab" | "space" | "nothing";
@@ -40,6 +44,7 @@ export interface WordNumberingLevel {
 export interface WordAbstractNumbering {
   readonly id: number;
   readonly levels: readonly WordNumberingLevel[];
+  readonly numberingStyleId?: string;
 }
 
 export interface WordNumberingInstance {
@@ -76,7 +81,11 @@ export class WordNumbering {
   readonly #abstracts: ReadonlyMap<number, WordAbstractNumbering>;
   readonly #instances: ReadonlyMap<number, WordNumberingInstance>;
 
-  constructor(input: { partName?: PartName; abstracts?: readonly WordAbstractNumbering[]; instances?: readonly WordNumberingInstance[] } = {}) {
+  readonly #styles: WordNumberingStyles;
+  readonly #resolved = new Map<number, readonly WordNumberingLevel[]>();
+
+  constructor(input: { styles?: WordNumberingStyles; partName?: PartName; abstracts?: readonly WordAbstractNumbering[]; instances?: readonly WordNumberingInstance[] } = {}) {
+    this.#styles = input.styles ?? new WordNumberingStyles();
     this.partName = input.partName;
     this.abstracts = Object.freeze([...(input.abstracts ?? [])]);
     this.instances = Object.freeze([...(input.instances ?? [])]);
@@ -92,7 +101,7 @@ export class WordNumbering {
     const numId = Number(match[1]);
     const instance = this.#instances.get(numId);
     if (!instance) return undefined;
-    const definition = instance.levelOverrides.get(level) ?? this.#abstracts.get(instance.abstractId)?.levels.find(item => item.level === level);
+    const definition = this.level({ numId, level });
     if (!definition) throw new TypeError('An imported list identity cannot reference an undefined source level. Use a new identity for an independently defined list.');
     if (list.kind !== definition.format || (list.start ?? 1) !== definition.start ||
         (list.kind === 'bullet' && (list.marker ?? '•') !== definition.text) ||
@@ -101,18 +110,65 @@ export class WordNumbering {
     return { numId, level };
   }
 
+  /** Resolve style indirection once per instance, then apply overrides from inner to outer. */
+  #levels(numId: number): readonly WordNumberingLevel[] {
+    const cached = this.#resolved.get(numId);
+    if (cached) return cached;
+    const path: WordNumberingInstance[] = [];
+    const seen = new Set<number>();
+    let current: number | undefined = numId;
+    let levels: readonly WordNumberingLevel[] = [];
+    while (current !== undefined) {
+      if (seen.has(current)) throw new WordError('invalid_document', 'Numbering style link has a cycle.');
+      if (path.length >= 100) throw new WordError('limit_exceeded', 'Numbering style link chain exceeds 100 entries.');
+      const resolved = this.#resolved.get(current);
+      if (resolved) {
+        const starts = this.#instances.get(current)?.startOverrides;
+        levels = resolved.map(level => starts?.has(level.level) ? { ...level, start: starts.get(level.level)! } : level);
+        break;
+      }
+      seen.add(current);
+      const instance = this.#instances.get(current);
+      const abstract = instance && this.#abstracts.get(instance.abstractId);
+      if (!instance || !abstract) break;
+      path.push(instance);
+      if (abstract.numberingStyleId === undefined) { levels = abstract.levels; break; }
+      current = this.#styles.resolve(abstract.numberingStyleId, 'numbering').numId;
+    }
+    for (const instance of path.reverse()) {
+      const merged = new Map(levels.map(level => [level.level, level]));
+      for (const [index, definition] of instance.levelOverrides) merged.set(index, definition);
+      const definitions = Object.freeze([...merged.values()]);
+      this.#resolved.set(instance.id, definitions);
+      // Inner start overrides become inherited starts, while the outer instance
+      // retains its own override separately from its source definition.
+      levels = definitions.map(level => instance.startOverrides.has(level.level)
+        ? { ...level, start: instance.startOverrides.get(level.level)! } : level);
+    }
+    return this.#resolved.get(numId) ?? [];
+  }
+
+  /** Effective level shared by package markers, native import, and export validation. */
+  level(reference: WordParagraphNumbering): WordNumberingLevel | undefined {
+    return this.#levels(reference.numId).find(item => item.level === reference.level);
+  }
+
   paragraphReference(document: WordDocumentLike, paragraph: WordParagraph): WordParagraphNumbering | undefined {
-    if (paragraph.propertiesElementId === undefined) return undefined;
-    const properties = document.source.element(paragraph.propertiesElementId);
-    if (properties === undefined) return undefined;
+    const properties = paragraph.propertiesElementId === undefined ? undefined : document.source.element(paragraph.propertiesElementId);
     const ns = namespace(document.conformance);
-    const numPr = one(properties, ns, "numPr", "Paragraph properties must not repeat numPr.");
-    if (numPr === undefined) return undefined;
-    const rawId = valueChild(numPr, ns, "numId");
-    if (rawId === undefined) return undefined;
-    const numId = integer(rawId, "numbering instance", 0, 2_147_483_647);
-    if (numId === 0) return undefined;
-    const level = integer(valueChild(numPr, ns, "ilvl") ?? "0", "numbering level", 0, MAX_LEVEL);
+    const numPr = properties && one(properties, ns, "numPr", "Paragraph properties must not repeat numPr.");
+    const rawId = numPr && valueChild(numPr, ns, "numId");
+    // Direct cancellation takes precedence even over malformed inherited chains.
+    const directId = rawId === undefined ? undefined : integer(rawId, "numbering instance", 0, 2_147_483_647);
+    if (directId === 0) return undefined;
+    const rawLevel = numPr && valueChild(numPr, ns, 'ilvl');
+    if (directId !== undefined && rawLevel !== undefined) return Object.freeze({ numId: directId, level: integer(rawLevel, 'numbering level', 0, MAX_LEVEL) });
+    const style = this.#styles.resolve(properties && valueChild(properties, ns, 'pStyle'), 'paragraph');
+    const numId = directId ?? style.numId;
+    if (numId === undefined || numId === 0) return undefined;
+    const levels = this.#levels(numId);
+    const linkedLevel = style.ids.map(id => levels.find(level => level.paragraphStyleId === id)).find(level => level !== undefined);
+    const level = rawLevel === undefined ? linkedLevel?.level ?? 0 : integer(rawLevel, "numbering level", 0, MAX_LEVEL);
     return Object.freeze({ numId, level });
   }
 
@@ -136,13 +192,17 @@ export class WordNumbering {
     const counters = new Map<number, number[]>();
     for (const { elementId, reference } of paragraphs) {
           const instance = this.#instances.get(reference.numId);
-          const abstract = instance === undefined ? undefined : this.#abstracts.get(instance.abstractId);
-          const level = instance?.levelOverrides.get(reference.level) ?? abstract?.levels.find((item) => item.level === reference.level);
-          if (instance === undefined || abstract === undefined || level === undefined) continue;
+          const levels = this.#levels(reference.numId);
+          const level = levels.find(item => item.level === reference.level);
+          if (instance === undefined || level === undefined) continue;
           const state = counters.get(reference.numId) ?? [];
-          for (let index = reference.level + 1; index < state.length; index += 1) state[index] = Number.NaN;
+          for (let index = reference.level + 1; index < state.length; index += 1) {
+            const definition = levels.find(item => item.level === index);
+            const restart = definition?.restart ?? index;
+            if (restart !== 0 && reference.level < restart) state[index] = Number.NaN;
+          }
           for (let index = 0; index <= reference.level; index += 1) {
-            const definition = instance.levelOverrides.get(index) ?? abstract.levels.find((item) => item.level === index);
+            const definition = levels.find((item) => item.level === index);
             if (definition === undefined) continue;
             const start = instance.startOverrides.get(index) ?? definition.start;
             if (!Number.isFinite(state[index])) state[index] = start;
@@ -151,7 +211,7 @@ export class WordNumbering {
           counters.set(reference.numId, state);
           budget.consume(level.suffix === 'nothing' ? 0 : 1);
           const text = wordMarkerText(level.text, level.format === "bullet", budget, (index, maximum) => {
-            const definition = instance.levelOverrides.get(index) ?? abstract.levels.find((item) => item.level === index);
+            const definition = levels.find((item) => item.level === index);
             return formatWordNumber(state[index] ?? definition?.start ?? 1, definition?.format ?? "decimal", maximum);
           });
           markers.set(elementId, Object.freeze({ text, suffix: level.suffix, level: reference.level, indentStartTwips: level.indentStartTwips, hangingTwips: level.hangingTwips }));
@@ -192,7 +252,8 @@ export function readWordNumbering(document: WordDocumentLike): WordNumbering {
     const levels = children(element, ns, "lvl").map((level) => parseLevel(level, ns));
     const levelIds = new Set(levels.map((level) => level.level));
     if (levelIds.size !== levels.length) throw new WordError("invalid_document", `Abstract numbering ${id} repeats a level.`);
-    return Object.freeze({ id, levels: Object.freeze(levels) });
+    const numberingStyleId = valueChild(element, ns, 'numStyleLink');
+    return Object.freeze({ id, levels: Object.freeze(levels), ...(numberingStyleId === undefined ? {} : { numberingStyleId }) });
   });
   const instanceIds = new Set<number>();
   const instances = instanceElements.map((element): WordNumberingInstance => {
@@ -211,7 +272,7 @@ export function readWordNumbering(document: WordDocumentLike): WordNumbering {
     }
     return Object.freeze({ id, abstractId, startOverrides, levelOverrides });
   });
-  return new WordNumbering({ partName: part.name, abstracts, instances });
+  return new WordNumbering({ partName: part.name, abstracts, instances, styles: readNumberingStyles(document.package, document.part, relationshipType.replace(/numbering$/, 'styles'), ns) });
 }
 
 function parseLevel(element: LosslessXmlElement, ns: string, forcedLevel?: number): WordNumberingLevel {
@@ -221,9 +282,14 @@ function parseLevel(element: LosslessXmlElement, ns: string, forcedLevel?: numbe
   const suffixValue = valueChild(element, ns, "suff");
   const pPr = one(element, ns, "pPr", "A numbering level must not repeat pPr.");
   const ind = pPr === undefined ? undefined : one(pPr, ns, "ind", "Numbering paragraph properties must not repeat ind.");
+  const rawRestart = valueChild(element, ns, 'lvlRestart');
+  const restart = rawRestart === undefined ? level : integer(rawRestart, 'numbering restart', 0, 2_147_483_647);
+  const paragraphStyleId = valueChild(element, ns, 'pStyle');
   return Object.freeze({
     level,
-    start: integer(valueChild(element, ns, "start") ?? "1", "numbering start", 0, 2_147_483_647),
+    restart: restart > level ? level : restart,
+    ...(paragraphStyleId === undefined ? {} : { paragraphStyleId }),
+    start: integer(valueChild(element, ns, "start") ?? "0", "numbering start", 0, 2_147_483_647),
     format,
     text: valueChild(element, ns, "lvlText") ?? (format === "bullet" ? "•" : `%${level + 1}.`),
     suffix: suffixValue === "space" || suffixValue === "nothing" ? suffixValue : "tab",

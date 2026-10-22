@@ -203,6 +203,16 @@ level throws `TypeError` in preview and export instead of silently dropping the 
 Compatible imported definitions, including empty bullet markers, remain valid when
 appending items. Newly authored bullet markers must still be nonempty.
 
+Imported numbering resolves paragraph-style `numPr` through `basedOn`, including the
+default paragraph style. Level `pStyle` selects the inherited level; direct `ilvl`
+overrides it, and `numId=0` cancels numbering. Numbering-style `numStyleLink` references
+resolve before instance overrides. Missing links have no marker; cycles throw
+`invalid_document`, and style/link chains over 100 entries throw `limit_exceeded`.
+`lvlRestart=0` never restarts. Other valid triggers restart at that level or an earlier
+level, with the preceding level as the default. An omitted imported `start` is zero;
+newly authored lists still explicitly start at one. Package, native, and edit/export
+paths share these definitions and preserve existing numbering-part bytes.
+
 Numbering resolution counts derived marker text and suffixes in UTF-16 units.
 `numbering.markers(document, { maxCharacters })` and
 `numbering.markersFor(references, { maxCharacters })` default to a cumulative

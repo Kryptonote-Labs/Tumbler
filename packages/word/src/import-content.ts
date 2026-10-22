@@ -48,14 +48,7 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
     if (!projected.length)
       projected.push({ text: '', format: document.styles.runFormat(document, block) });
     const reference = document.numbering.paragraphReference(document, block);
-    const instance = document.numbering.instances.find((item) => item.id === reference?.numId);
-    const definition = document.numbering.abstracts.find(
-      (item) => item.id === instance?.abstractId,
-    );
-    const level =
-      reference &&
-      (instance?.levelOverrides.get(reference.level) ??
-        definition?.levels.find((item) => item.level === reference.level));
+    const level = reference && document.numbering.level(reference);
     const list =
       reference && level
         ? {

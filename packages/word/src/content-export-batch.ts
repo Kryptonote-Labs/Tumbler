@@ -64,16 +64,12 @@ export function reconcileWordContentAndStories(
 function hasUnresolvedNumbering(artifact: WordArtifact): boolean {
   const document = artifact.document;
   const numbering = document.numbering;
-  const instances = new Map(numbering.instances.map(item => [item.id, item]));
-  const abstracts = new Map(numbering.abstracts.map(item => [item.id, item]));
   const visit = (blocks: readonly WordBlock[]): boolean => blocks.some(block => {
     if (block.kind === 'table') return block.rows.some(row => row.cells.some(cell => visit(cell.blocks)));
     if (block.kind !== 'paragraph') return false;
     const reference = numbering.paragraphReference(document, block);
     if (!reference) return false;
-    const instance = instances.get(reference.numId);
-    const definition = instance && abstracts.get(instance.abstractId);
-    return !instance || !definition || !(instance.levelOverrides.get(reference.level) ?? definition.levels.find(level => level.level === reference.level));
+    return numbering.level(reference) === undefined;
   });
   return visit(document.blocks);
 }
