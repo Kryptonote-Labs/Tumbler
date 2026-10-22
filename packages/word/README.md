@@ -194,6 +194,22 @@ MIT licensed. See [LICENSE](LICENSE).
 `createWordArtifact({ blocks })` accepts paragraph, table and image blocks. A paragraph has
 formatted `runs`, optional alignment and optional `list: { id, kind, level, start }` metadata.
 Reuse a list ID to continue numbering; use a new ID to restart it. Levels range from zero to eight.
+Imported `source-list-N` identities bind to the package's existing numbering instance.
+Reusing one in appended or moved paragraphs continues that instance in native preview
+and export, including its level patterns and start overrides. Use a new identity to
+start an independently defined list.
+
+Numbering resolution counts derived marker text and suffixes in UTF-16 units.
+`numbering.markers(document, { maxCharacters })` and
+`numbering.markersFor(references, { maxCharacters })` default to a cumulative
+1,000,000-character budget per call. They throw `WordError` with code
+`limit_exceeded` before expanding text beyond the budget. Raise the budget explicitly
+for trusted documents that need larger output. This is a processing budget, separate
+from `openWordDocument`'s input-text limit; it does not restrict authored start values.
+Roman formatting checks the expanded length before allocating repeated symbols.
+Values above 3,999 retain the existing repeated-`M` representation when the budget
+permits them. No decimal fallback or claimed Word numeral-domain cutoff is applied.
+
 Tables have rectangular `rows` of cells, each containing `blocks`, and optional column widths in
 points. Image blocks contain PNG or JPEG bytes, dimensions in points and optional alt text.
 Images are embedded in the DOCX, with relationships created automatically. `blocks` and the
