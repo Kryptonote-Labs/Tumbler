@@ -631,3 +631,12 @@ to `front` or `behind` and supply `x`, `y`, `horizontalRelativeTo` and
 that they move and resize together. `edit-object` can replace its complete ink
 value, including all strokes. Existing single-stroke `points/color/size` inputs
 remain supported with their previous fit-to-frame behavior.
+
+Paragraph `positioning.tabs` contains direct tab declarations. An empty array emits
+no `w:tabs` container and inherits style tab stops. When editing a source paragraph,
+`tabs: []` removes its direct tab declarations; omitting `tabs` preserves them.
+To remove an inherited stop, supply `{ positionTwips: 720, alignment: 'clear',
+leader: 'none' }` at that position. Tab declarations are additive across styles.
+
+Authored cell properties and paragraph/cell borders serialize in schema order,
+regardless of the insertion order of their JavaScript properties.

@@ -276,7 +276,7 @@ export function wordParagraphRenderer(
     }
     if (paragraph.positioning && JSON.stringify(paragraph.positioning) !== JSON.stringify(original?.positioning)) {
       const positioning = paragraphPositioningXml({ ...original?.positioning, ...paragraph.positioning }, document.conformance);
-      if (positioning.tabs !== undefined) replacements.set('tabs', positioning.tabs);
+      if (paragraph.positioning.tabs !== undefined) replacements.set('tabs', positioning.tabs ?? '');
       if (positioning.ind !== undefined) replacements.set('ind', positioning.ind);
     }
     const generatedP = generatedParagraphs[indexByParagraph.get(paragraph)!]!;
