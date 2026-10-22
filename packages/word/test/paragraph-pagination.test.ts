@@ -41,3 +41,9 @@ test('pageLimit retains the exact completed-page prefix for keeps and widows', (
   }
   expect(() => layoutWordDocument(document, paginationMeasurer, { maxFragments: 1 })).toThrow('fragment');
 });
+test('before spacing on the first paragraph does not create a blank page', () => {
+  const body = paragraph('a'.repeat(21), '<w:spacing w:before="240" w:line="200" w:lineRule="exact"/>');
+  const pages = textPages(body);
+  expect(pages[0]!.length).toBeGreaterThan(0);
+  expect(pages.flat().join('')).toBe('a'.repeat(21));
+});

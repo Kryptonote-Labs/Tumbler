@@ -601,7 +601,8 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
           const lineHeight = line.ascent + line.descent;
           const pairHeight = prepared.format.widowControl ? widowPairHeight(sequence, lineIndex) : 0;
           const required = pairHeight <= column.height ? Math.max(lineHeight, pairHeight) : lineHeight;
-          if (cursorY + required > column.y + column.height && cursorY > column.y) {
+          if (cursorY + required > column.y + column.height &&
+            (column.lines.length > 0 || column.tables.length > 0 || column.unsupportedBlocks.length > 0)) {
             advanceColumn(section.properties);
             column = page!.columns[columnIndex]!;
           }
