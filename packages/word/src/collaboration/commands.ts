@@ -1,3 +1,4 @@
+import { paragraphPropertyPatch, readWordParagraphFormat } from './paragraph-attributes.ts';
 import { wordColoursEqual } from '../theme-colours.ts';
 import { formatTableDelta, type WordTableFormatPatch } from './table-format.ts';
 import { editTableDelta, type TableAction } from './table-edits.ts';
@@ -178,7 +179,8 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
     if (last >= offset && last < offset + part.insert.length) {
       if (part.attributes?.wordParagraph) result.wordParagraph = part.attributes.wordParagraph;
       if (part.attributes?.styleId) result.styleId = part.attributes.styleId;
-      if (part.attributes?.paragraph) result.paragraph = part.attributes.paragraph;
+      const paragraph = readWordParagraphFormat(part.attributes);
+      if (paragraph !== undefined) result.paragraph = paragraph;
       if (part.attributes?.positioning) result.positioning = part.attributes.positioning;
       if (part.attributes?.align) result.align = part.attributes.align;
       if (part.attributes?.list) result.list = part.attributes.list;
@@ -268,7 +270,7 @@ function formatWordDelta(
   if (attributes.font !== undefined && attributes.fontFamily === undefined) inline.fontFamily = null;
   const delta: WordDelta = [];
   let cursor = 0;
-  const append = (start: number, length: number, attributes: WordFormatPatch) => {
+  const append = (start: number, length: number, attributes: Record<string, unknown>) => {
     if (!length) return;
     if (start > cursor) delta.push({ retain: start - cursor });
     delta.push({ retain: length, attributes });
@@ -290,7 +292,8 @@ function formatWordDelta(
         ...(list !== undefined ? { list } : {}),
         ...(positioning !== undefined ? { positioning } : {}),
         ...(styleId !== undefined ? { styleId } : {}),
-        ...(paragraph !== undefined ? { paragraph: paragraph === null ? null : { ...wordFormats(text, { start, end: start }).paragraph, ...paragraph } } : {}),
+        ...(paragraph !== undefined ? paragraphPropertyPatch(paragraph) : {}),
+        ...(paragraph === null ? { paragraph: null } : {}),
       });
     if (end >= Math.max(range.start, range.end - 1)) break;
     start = end + 1;

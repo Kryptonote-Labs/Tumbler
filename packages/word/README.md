@@ -425,6 +425,20 @@ CRLF input is normalized before determining the resulting range. Empty replaceme
 `format`; use a format operation on an explicit paragraph range when deleting and restyling are
 separate intentions.
 
+Paragraph format patches retain the public `{ paragraph: { keepNext: true } }` shape. Each
+supplied paragraph property has its own Yjs register, so concurrent patches to different properties
+survive synchronization and selective undo. Structured properties such as `lineSpacing` and `borders`
+remain atomic. `paragraph: {}` is a no-op; `paragraph: null` removes all supported direct paragraph
+properties. Concurrent reset and patch operations resolve per property using Yjs conflict ordering.
+
+Existing `paragraph` object attributes remain readable. New edits use internal
+`wordParagraphFormat:<property>` attributes with wrapped values; wrapped null masks an old property.
+`wordFormats` returns the decoded public object. Hosts reading raw deltas or paragraph slices should
+call `readWordParagraphFormat(attributes)` before converting paragraph formatting to Office content.
+Upgrade all collaborating writers together: old clients do not understand these registers, and legacy
+whole-object writes do not override existing property registers. This wire change does not add OOXML
+properties or alter their units.
+
 `wordParagraphIdentity(body, newlineOffset)` follows paragraph terminators through edits and remote
 updates. It avoids a repeated scan from the start of the CRDT when projecting stable native block IDs.
 

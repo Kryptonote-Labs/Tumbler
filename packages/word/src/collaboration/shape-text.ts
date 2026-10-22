@@ -1,3 +1,4 @@
+import { readWordParagraphFormat } from './paragraph-attributes.ts';
 import * as Y from 'yjs';
 import { wordAuthoringStyles } from '../authored-styles.ts';
 const shapeStyles = wordAuthoringStyles(undefined, { fontFamily: 'Aptos', fontSizePoints: 12 });
@@ -178,6 +179,7 @@ export class WordShapeText {
     for (const part of this.text.toDelta()) {
       if (typeof part.insert !== 'string') continue;
       const a: TextAttributes = part.attributes ?? {};
+      const paragraph = readWordParagraphFormat(part.attributes);
       const lines = part.insert.split('\n');
       for (let i = 0; i < lines.length; i++) {
         if (lines[i]) runs.push({ text: lines[i]!, format: format(a) });
@@ -187,7 +189,7 @@ export class WordShapeText {
             ...(a.align
               ? { alignment: a.align === 'left' ? 'start' : a.align === 'right' ? 'end' : a.align }
               : {}),
-            ...(a.paragraph ? { paragraph: a.paragraph } : {}),
+            ...(paragraph !== undefined ? { paragraph } : {}),
             ...(a.positioning ? { positioning: a.positioning } : {}),
             ...(a.styleId ? { styleId: a.styleId } : {}),
             ...(a.list ? { list: a.list } : {}),

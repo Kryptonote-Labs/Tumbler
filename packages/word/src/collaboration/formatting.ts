@@ -1,3 +1,4 @@
+import { isParagraphPropertyAttribute, isParagraphPropertyValue } from './paragraph-attributes.ts';
 import { isWordAuthoredInk, type WordAuthoredInk } from "../authored-ink.ts";
 import { isWordInkTraceOverrides, type WordInkTraceOverride } from "../ink-overrides.ts";
 import { isShapeTextBody } from "../shape-text.ts";
@@ -86,6 +87,7 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
     )
       continue;
     if (key === "paragraph" && isWordParagraphFormat(value)) continue;
+    if (isParagraphPropertyAttribute(key) && isParagraphPropertyValue(key, value)) continue;
     if (key === "positioning" && isWordParagraphPositioning(value)) continue;
     if (key === "tab" && isWordPositionalTab(value)) continue;
     if (key === "field" && (value === "PAGE" || value === "NUMPAGES")) continue;
