@@ -1,4 +1,5 @@
 <script lang="ts">
+  import WordPictureView from "./WordPictureView.svelte";
   import WordInkPointEditor from "./WordInkPointEditor.svelte";
   import ChartTitleEditor from "./ChartTitleEditor.svelte";
   import WordShapeView from "./WordShapeView.svelte";
@@ -165,7 +166,9 @@
     <WordShapeView shape={drawing.shape} {selected} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} editing={editingText !== undefined} initialText={editingText} oncommit={finishText} />
   {:else if drawing.kind === 'image'}
     {@const painted = wordImagePaintBounds(drawing)}
-    {#if inkSvg !== undefined}
+    {#if drawing.picture}
+      <WordPictureView {drawing} src={imageurl(drawing)} loading={imageLoading} />
+    {:else if inkSvg !== undefined}
       <span class="ink-vector" data-word-ink-rendering="vector" role="img" aria-label={drawing.altText ?? 'Ink'} style={`position:absolute;left:${painted.x / drawing.widthPoints * 100}%;top:${painted.y / drawing.heightPoints * 100}%;width:${painted.width / drawing.widthPoints * 100}%;height:${painted.height / drawing.heightPoints * 100}%`}>
         {@html inkSvg}
       </span>

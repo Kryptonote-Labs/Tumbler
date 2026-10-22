@@ -179,3 +179,5 @@ export { withWordInkTraces, isWordInkTraceOverrides, type WordInkTraceOverride }
 export { authoredInkXml, isWordAuthoredInk, type WordAuthoredInk } from './authored-ink.ts';
 
 export type { WordFormattingPatch } from "./formatting.ts";
+
+export { wordPictureImageRect, type WordPictureGeometry } from './picture-geometry.ts';
