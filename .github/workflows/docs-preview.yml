@@ -1,0 +1,81 @@
+name: Docs preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'apps/docs/**'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: docs-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # No PR code is checked out or executed with the deployment credential.
+      - name: Request docs preview
+        uses: actions/github-script@v7
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              ...context.repo, pull_number: pr.number, per_page: 100
+            });
+            const touchesDocs = files.some(file =>
+              file.filename.startsWith('apps/docs/') ||
+              file.previous_filename?.startsWith('apps/docs/'));
+            if (!touchesDocs) {
+              core.info('No docs changes. No Vercel request sent.');
+              return;
+            }
+            const { VERCEL_TOKEN, VERCEL_PROJECT_ID, VERCEL_TEAM_ID } = process.env;
+            if (!VERCEL_TOKEN || !VERCEL_PROJECT_ID || !VERCEL_TEAM_ID) {
+              core.setFailed('Configure VERCEL_TOKEN secret and VERCEL_PROJECT_ID / VERCEL_TEAM_ID repository variables.');
+              return;
+            }
+            const endpoint = new URL('https://api.vercel.com/v13/deployments');
+            endpoint.searchParams.set('teamId', VERCEL_TEAM_ID);
+            const response = await fetch(endpoint, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${VERCEL_TOKEN}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                name: 'tumbler',
+                project: VERCEL_PROJECT_ID,
+                gitSource: {
+                  type: 'github',
+                  repoId: String(pr.head.repo.id),
+                  ref: pr.head.sha
+                }
+              })
+            });
+            if (!response.ok) {
+              const failure = await response.json().catch(() => null);
+              const code = failure?.error?.code;
+              const detail = typeof code === 'string' && /^[a-zA-Z0-9_-]+$/.test(code) ? ` (${code})` : '';
+              core.setFailed(`Vercel rejected the preview request: HTTP ${response.status}${detail}.`);
+              return;
+            }
+            const deployment = await response.json();
+            if (typeof deployment.url !== 'string' || !/^[a-zA-Z0-9.-]+\.vercel\.app$/.test(deployment.url)) {
+              core.setFailed('Vercel did not return a valid preview URL.');
+              return;
+            }
+            await core.summary.addHeading('Docs preview requested')
+              .addLink('Preview deployment', `https://${deployment.url}`)
+              .addRaw('\nDeployment was requested; this does not certify that its build passed.\n')
+              .write();
