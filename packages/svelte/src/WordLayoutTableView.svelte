@@ -51,7 +51,7 @@
     {/each}
   </div>
   {#each current.cells as cell}
-    <WordContentClip clip={cell} layer={1}>
+    <WordContentClip clip={cell} layer={1} decorative={decorationsOnly}>
     <WordParagraphDecorations lines={cell.lines} />
     {#if !decorationsOnly}
       {#each cell.lines as line}
