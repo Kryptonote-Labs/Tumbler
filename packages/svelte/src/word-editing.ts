@@ -27,12 +27,17 @@ export function wordInputEdit(
   data: string | null,
 ): WordInputEdit | undefined {
   const ordered = orderSelection(document, selection);
-  if (inputType === "insertText" || inputType === "insertCompositionText" || inputType === "insertFromPaste") {
-    const value = (data ?? "").replace(/\r\n?/g, "\n");
+  if (inputType === "insertText" || inputType === "insertReplacementText" || inputType === "insertFromPaste") {
+    if (data === null) return undefined;
+    const value = data.replace(/\r\n?/g, "\n");
     return edit(ordered, value, caretAfterInsertion(ordered, value));
   }
   if (inputType === "insertParagraph" || inputType === "insertLineBreak") {
     return edit(ordered, "\n", caretAfterInsertion(ordered, "\n"));
+  }
+  // Soft-line boundaries come from the browser target range, not paragraph boundaries.
+  if (inputType === "deleteSoftLineBackward" || inputType === "deleteSoftLineForward" || inputType === "deleteEntireSoftLine") {
+    return collapsed(selection) ? undefined : edit(ordered, "", ordered.anchor);
   }
   if (inputType === "deleteByCut") return collapsed(selection) ? undefined : edit(ordered, "", ordered.anchor);
   if (inputType === "deleteWordBackward" || inputType === "deleteWordForward") {

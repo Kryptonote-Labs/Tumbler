@@ -83,6 +83,15 @@ canonical state:
 />
 ```
 
+Body input is controlled through `onedit`. Unsupported browser formatting and drag
+mutations are cancelled; use the host formatting controls to apply model changes.
+Replacement text and soft-line deletion use browser target ranges when available.
+Browser history intents call `oncommand` with `undo` or `redo`. Non-cancellable
+input is reconciled against the document. Composition text stays provisional in
+the DOM and commits as one replacement at composition end; cancellation restores
+the original text. Automated Chromium composition coverage does not establish
+native OS IME compatibility across platforms.
+
 In edit mode, `ondrawingchange` enables dragging, eight resize handles, and inline,
 in-front-of-text, or behind-text placement. Corners preserve proportions; edges
 resize one dimension. Dragging an inline drawing moves it within the text flow without changing its layout.
