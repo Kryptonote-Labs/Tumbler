@@ -96,8 +96,8 @@ export function wordPageImages(page: WordLayoutPage, regions?: readonly WordInkV
     const drawing = fragment.drawing;
     if (drawing?.kind !== 'image') return [];
     const box = wordImagePaintBounds(drawing, fragment.width, fragment.height);
-    if (regions && !regions.some(region => fragment.x + box.x < region.x + region.width && fragment.y + box.y < region.y + region.height
-      && fragment.x + box.x + box.width > region.x && fragment.y + box.y + box.height > region.y)) return [];
+    if (regions && (box.width <= 0 || box.height <= 0 || !regions.some(region => fragment.x + box.x < region.x + region.width && fragment.y + box.y < region.y + region.height
+      && fragment.x + box.x + box.width > region.x && fragment.y + box.y + box.height > region.y))) return [];
     return [drawing];
   }))];
 }
@@ -190,7 +190,7 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
   if (drawing?.kind === 'image' && options.viewport) {
     const box = wordImagePaintBounds(drawing, fragment.width, fragment.height);
     const scale = options.scale ?? 4 / 3, view = options.viewport;
-    if ((fragment.x + box.x + box.width) * scale <= view.x || (fragment.y + box.y + box.height) * scale <= view.y
+    if (box.width <= 0 || box.height <= 0 || (fragment.x + box.x + box.width) * scale <= view.x || (fragment.y + box.y + box.height) * scale <= view.y
       || (fragment.x + box.x) * scale >= view.x + view.width || (fragment.y + box.y) * scale >= view.y + view.height) return;
   }
   if (drawing?.kind === 'image' && drawing.inkRendering === 'raster') options.onInkFallback?.(drawing);

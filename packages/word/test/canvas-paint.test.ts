@@ -189,7 +189,7 @@ test('floating drawings paint behind or in front of text independently of their 
   }
 });
 
- test('DOM composition bounds include physical ink outside its editing frame', async () => {
+test('DOM composition bounds include physical ink outside its editing frame', async () => {
   const { inkFixture } = await import('./ink-fixture.ts');
   const { officeInk } = await import('../../ink/test/fixture.ts');
   const { wordPageInkBounds } = await import('../src/canvas-paint.ts');
@@ -217,6 +217,7 @@ test('justified canvas text and underline use expanded layout positions', () => 
     if (fragment.wordSpacing) expect(calls.some(call => call[0] === 'lineTo' && call[1] === fragment.x + fragment.width)).toBe(true);
   }
 });
+
 test('cropped destination ink matches the same pixels in an uncropped render', async () => {
   const { inkFixture } = await import('./ink-fixture.ts');
   const { officeInk } = await import('../../ink/test/fixture.ts');
@@ -247,3 +248,10 @@ test('a crop never requests an unrelated image', () => {
   paintWordPage(recorder().context, page, { viewport: { x: 0, y: 0, width: 4, height: 4 }, image: () => { throw Error('unrelated decode failure'); } });
 });
 
+test('empty painted image bounds never require decoding for an overlay', () => {
+  const laidOut = layout([{ kind: 'image', bytes: png, contentType: 'image/png', width: 80, height: 40 }]);
+  const page = { ...laidOut, columns: laidOut.columns.map(column => ({ ...column, lines: column.lines.map(line => ({ ...line, fragments: line.fragments.map(fragment => ({ ...fragment, width: 0 })) })) })) };
+  const region = { x: 0, y: 0, width: page.width, height: page.height };
+  expect(wordPageImages(page, [region])).toEqual([]);
+  paintWordPage(recorder().context, page, { scale: 1, viewport: { ...region, width: Math.ceil(region.width), height: Math.ceil(region.height) }, image: () => { throw Error('empty image decoded'); } });
+});
