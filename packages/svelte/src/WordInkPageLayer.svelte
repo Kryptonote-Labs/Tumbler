@@ -1,25 +1,32 @@
 <script lang="ts">
-  import { paintWordPage, wordPageImages, wordPageInkBounds, wordPointsToCssPixels, type WordImageDrawing, type WordLayoutPage } from '@tumblerjs/word';
+  import { paintWordPage, wordPageImages, wordPageInkBounds, type WordImageDrawing, type WordLayoutPage } from '@tumblerjs/word';
+  import { reserveWordInkPixels, wordInkTiles, WORD_INK_PAGE_PIXELS, WORD_INK_TILE_PIXELS } from './word-ink-tiles.ts';
 
-  let { page, scale = 1, background = '#fff', imageurl, onerror }: {
+  let { page, scale = 1, background = '#fff', maxPixels = WORD_INK_PAGE_PIXELS, imageurl, onerror }: {
     page: WordLayoutPage;
     scale?: number;
     background?: string;
+    /** Retained pixels per page, at most 1,048,576. Resolution falls to fit. */
+    maxPixels?: number;
     imageurl?: (drawing: WordImageDrawing) => string | undefined;
     onerror?: (message: string) => void;
   } = $props();
-  let canvas = $state<HTMLCanvasElement>();
+  let host = $state<HTMLDivElement>();
   const regions = $derived(wordPageInkBounds(page));
 
-  // The final page pixels include text and later drawings over the ink. Only the
-  // affected regions cover the DOM; its text, selection and controls stay interactive.
   $effect(() => {
-    const current = page, boxes = regions, paper = background, source = imageurl;
+    const current = page, boxes = regions, paper = background, source = imageurl, budget = maxPixels;
     const resolution = 4 / 3 * scale * (window.devicePixelRatio || 1);
-    if (!boxes.length || !canvas) return;
-    const target = canvas;
+    if (!boxes.length || !host) return;
+    const target = host;
     let cancelled = false;
-    const urls: string[] = [];
+    let release: (() => void) | undefined;
+    const urls: string[] = [], canvases: HTMLCanvasElement[] = [];
+    const report = (error: unknown) => {
+      if (cancelled) return;
+      const message = error instanceof Error ? error.message : 'Ink could not be rendered.';
+      if (onerror) onerror(message); else console.error(message);
+    };
     const decode = async (drawing: WordImageDrawing) => {
       if (drawing.inkProjection) return undefined;
       let url = source?.(drawing);
@@ -33,51 +40,80 @@
       await image.decode();
       return image;
     };
+    const clear = () => {
+      target.removeAttribute('data-word-ink-ready');
+      target.replaceChildren();
+      for (const canvas of canvases) { canvas.width = 0; canvas.height = 0; }
+      release?.(); release = undefined;
+    };
     void (async () => {
       try {
-        const drawings = wordPageImages(current);
-        const images = new Map(await Promise.all(drawings.map(async drawing => [drawing, await decode(drawing)] as const)));
-        if (cancelled) return;
-        const buffer = document.createElement('canvas');
-        buffer.width = Math.ceil(current.width * resolution);
-        buffer.height = Math.ceil(current.height * resolution);
-        const context = buffer.getContext('2d');
-        if (!context) throw new Error('The document canvas is unavailable.');
-        paintWordPage(context, current, { scale: resolution, inkMaxPixels: Infinity, background: paper, image: drawing => images.get(drawing), path: d => new Path2D(d) });
-        // Compare with the same page without these strokes. Unchanged pixels
-        // remain transparent, so DOM selection is not hidden by a rectangular patch.
-        const backdrop = document.createElement('canvas');
-        backdrop.width = buffer.width; backdrop.height = buffer.height;
-        const underneath = backdrop.getContext('2d');
-        if (!underneath) throw new Error('The ink canvas is unavailable.');
-        paintWordPage(underneath, current, { scale: resolution, inkMaxPixels: Infinity, background: paper, omitDestinationInk: true, image: drawing => images.get(drawing), path: d => new Path2D(d) });
-        const pixels = context.getImageData(0, 0, buffer.width, buffer.height);
-        const original = underneath.getImageData(0, 0, buffer.width, buffer.height).data;
-        for (let index = 0; index < pixels.data.length; index += 4) {
-          if (pixels.data[index] === original[index] && pixels.data[index + 1] === original[index + 1] && pixels.data[index + 2] === original[index + 2] && pixels.data[index + 3] === original[index + 3]) pixels.data[index + 3] = 0;
+        let plan = wordInkTiles(current, resolution, budget);
+        release = reserveWordInkPixels(plan.pixels + 2 * WORD_INK_TILE_PIXELS);
+        for (let smaller = Math.floor(budget / 2); !release && smaller >= 1; smaller = Math.floor(smaller / 2)) {
+          plan = wordInkTiles(current, resolution, smaller);
+          release = reserveWordInkPixels(plan.pixels + 2 * WORD_INK_TILE_PIXELS);
         }
-        context.putImageData(pixels, 0, 0);
-        if (cancelled) return;
-        target.width = buffer.width; target.height = buffer.height;
-        target.getContext('2d')?.drawImage(buffer, 0, 0);
-      } catch (error) {
-        if (!cancelled) {
-          const message = error instanceof Error ? error.message : 'Ink could not be rendered.';
-          if (onerror) onerror(message); else console.error(message);
+        if (!release) throw new Error('Mounted ink overlays exceed the aggregate pixel budget.');
+        // Keep decode failures separate; only an image used by a tile can abort it.
+        const images = new Map<WordImageDrawing, HTMLImageElement | undefined>();
+        const failures = new Map<WordImageDrawing, unknown>();
+        for (const drawing of wordPageImages(current, plan.tiles.map(tile => ({ x: tile.x / plan.scale, y: tile.y / plan.scale, width: tile.width / plan.scale, height: tile.height / plan.scale })))) {
+          if (cancelled) return;
+          try { images.set(drawing, await decode(drawing)); }
+          catch (error) { failures.set(drawing, error); }
         }
-      } finally {
-        urls.forEach(url => URL.revokeObjectURL(url));
-      }
+        const buffer = document.createElement('canvas'), backdrop = document.createElement('canvas');
+        canvases.push(buffer, backdrop);
+        for (const tile of plan.tiles) {
+          await new Promise<void>(resolve => setTimeout(resolve, 0));
+          if (cancelled) return;
+          buffer.width = backdrop.width = tile.width;
+          buffer.height = backdrop.height = tile.height;
+          const context = buffer.getContext('2d'), underneath = backdrop.getContext('2d');
+          if (!context || !underneath) throw new Error('The ink canvas is unavailable.');
+          const options = {
+            scale: plan.scale, viewport: tile, inkMaxPixels: WORD_INK_TILE_PIXELS, background: paper,
+            onInkFallback: () => { throw new Error('Native ink could not be composed within the tile budget.'); },
+            image: (drawing: WordImageDrawing) => {
+              if (failures.has(drawing)) throw failures.get(drawing);
+              return images.get(drawing);
+            }, path: (d: string) => new Path2D(d),
+          };
+          paintWordPage(context, current, options);
+          paintWordPage(underneath, current, { ...options, omitDestinationInk: true });
+          const pixels = context.getImageData(0, 0, tile.width, tile.height);
+          const original = underneath.getImageData(0, 0, tile.width, tile.height).data;
+          for (let index = 0; index < pixels.data.length; index += 4) {
+            if (pixels.data[index] === original[index] && pixels.data[index + 1] === original[index + 1] && pixels.data[index + 2] === original[index + 2] && pixels.data[index + 3] === original[index + 3]) pixels.data[index + 3] = 0;
+          }
+          const canvas = document.createElement('canvas');
+          canvases.push(canvas);
+          canvas.width = tile.width; canvas.height = tile.height;
+          const output = canvas.getContext('2d');
+          if (!output) throw new Error('The ink canvas is unavailable.');
+          output.putImageData(pixels, 0, 0);
+          const css = 4 / 3 / plan.scale;
+          canvas.style.cssText = `position:absolute;left:${tile.x * css}px;top:${tile.y * css}px;width:${tile.width * css}px;height:${tile.height * css}px`;
+          target.append(canvas);
+        }
+        buffer.width = backdrop.width = 0;
+        buffer.height = backdrop.height = 0;
+        if (!cancelled) target.setAttribute('data-word-ink-ready', '');
+      } catch (error) { clear(); report(error); }
+      finally { urls.forEach(url => URL.revokeObjectURL(url)); }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clear(); urls.forEach(url => URL.revokeObjectURL(url)); };
   });
 </script>
 
 {#if regions.length}
-  <canvas bind:this={canvas} aria-hidden="true" contenteditable="false" data-word-ink-page style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px`}></canvas>
+  <div bind:this={host} aria-hidden="true" contenteditable="false" data-word-ink-page></div>
 {/if}
 
 <style>
-  :global([data-word-ink-page-host] img[data-word-ink-rendering="raster"]) { visibility: hidden; }
-  canvas { position: absolute; inset: 0; z-index: var(--word-ink-layer-z-index, 3); pointer-events: none; }
+  :global([data-word-ink-page-host]:has([data-word-ink-ready]) img[data-word-ink-rendering="raster"]) { visibility: hidden; }
+  div { position: absolute; inset: 0; z-index: var(--word-ink-layer-z-index, 3); pointer-events: none; visibility: hidden; }
+  div:global([data-word-ink-ready]) { visibility: visible; }
+
 </style>

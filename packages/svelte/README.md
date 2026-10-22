@@ -52,6 +52,13 @@ leading, at a large reference size to avoid cumulative pixel rounding. Custom
 renderers can supply their CSS font stack and clear this cache when fonts load.
 `browserWordTextMeasurer` uses these metrics automatically in the browser.
 
+`WordDocumentView` composes destination-dependent ink in affected-region tiles.
+Its optional `inkMaxPixels` prop sets the retained pixel budget per page, from 1 to
+1,048,576. The renderer lowers resolution to fit, caps resolution at four device
+pixels per point, and shares a finite budget across mounted pages. Cached ink
+images stay visible until the replacement succeeds. See
+[ink rendering limits](../../docs/ink-conformance.md) for allocation and cancellation behavior.
+
 Word font leading is placed above the baseline, and automatic paragraph spacing
 advances below it in whole twips. Custom HTML renderers should use
 `wordTextTop(fragment, cssFontStack)` for a text span's top position, with

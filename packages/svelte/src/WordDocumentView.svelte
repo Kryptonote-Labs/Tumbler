@@ -26,10 +26,12 @@
     readonly oninkchange?: (change: import('@tumblerjs/word').WordInkTraceChange) => void;
     readonly ondrawingchange?: (change: WordDrawingChange) => void;
     readonly ondrawingresize?: (size: WordDrawingResize) => void;
+    /** Maximum retained ink overlay pixels per page; finite and at most 1,048,576. */
+    readonly inkMaxPixels?: number;
     readonly scale?: number;
   }
 
-  let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, oninkchange, scale = $bindable(1) }: Props = $props();
+  let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, oninkchange, inkMaxPixels, scale = $bindable(1) }: Props = $props();
   let scroller = $state<HTMLDivElement>();
   let viewportWidth = $state(0);
   let layout = $state<WordLayout>();
@@ -500,7 +502,7 @@
             style={`--word-ink-layer-z-index:${wordDrawingOverlayOrder(drawingOrder)};width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
           >
             <!-- Canvas decoding owns its URLs until the asynchronous paint completes. -->
-            <WordInkPageLayer {page} {scale} background={layout.background} />
+            <WordInkPageLayer {page} {scale} maxPixels={inkMaxPixels} background={layout.background} />
             <WordParagraphDecorations lines={[...bodyLines(page), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
             {#if page.noteSeparatorY !== undefined}
               <div class="note-separator" style={`left:${wordPointsToCssPixels(page.section.marginLeftTwips / 20)}px;top:${wordPointsToCssPixels(page.noteSeparatorY)}px`}></div>

@@ -217,3 +217,33 @@ test('justified canvas text and underline use expanded layout positions', () => 
     if (fragment.wordSpacing) expect(calls.some(call => call[0] === 'lineTo' && call[1] === fragment.x + fragment.width)).toBe(true);
   }
 });
+test('cropped destination ink matches the same pixels in an uncropped render', async () => {
+  const { inkFixture } = await import('./ink-fixture.ts');
+  const { officeInk } = await import('../../ink/test/fixture.ts');
+  const { paintWordInk } = await import('../src/ink-canvas.ts');
+  for (const rasterOp of ['xOrPen', 'maskPen', 'notMergePen']) for (const scale of [4 / 3, 2.3, 8]) {
+    const source = inkFixture(false, false, officeInk({ brush: `<brushProperty name="rasterOp" value="${rasterOp}"/>` })).source;
+    const page = layoutWordDocument(source.document, measure).pages[0]!;
+    const fragment = { ...drawingFragment(page), width: 20, height: 20 };
+    const rendered: { x: number; y: number; width: number; height: number; data: Uint8ClampedArray }[] = [];
+    const pixels = { getImageData: (x: number, y: number, width: number, height: number) => ({ width, height, data: new Uint8ClampedArray(width * height * 4).map((_, i) => i % 4 === 3 ? 255 : 85) }),
+      putImageData: (image: { width: number; height: number; data: Uint8ClampedArray }, x: number, y: number) => { rendered.push({ ...image, x, y }); } };
+    expect(paintWordInk(pixels, fragment, scale)).toBe(true);
+    const full = rendered[0]!;
+    const viewport = { x: full.x + 3, y: full.y + 5, width: 19, height: 23 };
+    expect(paintWordInk(pixels, fragment, scale, 19 * 23, viewport)).toBe(true);
+    const crop = rendered[1]!;
+    expect([crop.x, crop.y, crop.width, crop.height]).toEqual([0, 0, 19, 23]);
+    for (let y = 0; y < crop.height; y++) {
+      const offset = ((y + 5) * full.width + 3) * 4;
+      expect(crop.data.slice(y * crop.width * 4, (y + 1) * crop.width * 4)).toEqual(full.data.slice(offset, offset + crop.width * 4));
+    }
+    expect(paintWordInk({ ...pixels, getImageData: () => { throw Error('off-tile read'); } }, fragment, scale, 16, { x: 0, y: 0, width: 4, height: 4 })).toBe(true);
+  }
+});
+
+test('a crop never requests an unrelated image', () => {
+  const page = layout([{ kind: 'image', bytes: png, contentType: 'image/png', width: 80, height: 40 }]);
+  paintWordPage(recorder().context, page, { viewport: { x: 0, y: 0, width: 4, height: 4 }, image: () => { throw Error('unrelated decode failure'); } });
+});
+

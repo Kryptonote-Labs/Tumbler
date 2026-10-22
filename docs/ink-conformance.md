@@ -63,7 +63,25 @@ bounded agreement on the captured corpus, not universal pixel identity.
 The canvas page painter reads the real destination pixels. `WordInkPageLayer`
 connects that painter to Svelte and Kryptonote pages, composing destination-dependent
 strokes against the page's text, images and other drawings. It overlays only changed
-pixels and suppresses the isolated cached image for those strokes.
+pixels and suppresses the isolated cached image only after the complete replacement
+is ready. Failed or cancelled renders keep the cached image visible. Image decode
+failures outside the affected tiles do not prevent ink from rendering.
+
+The overlay renders disjoint affected-region tiles of at most 256×256 pixels.
+`WordDocumentView.inkMaxPixels` bounds retained pixels per page, defaults to
+1,048,576, and accepts positive integers up to that limit. Resolution is capped at
+four device pixels per point and reduced further until all affected tiles fit.
+Mounted overlays share a 4,194,304-pixel reservation pool, including two scratch
+tiles per page. If the pool is full even at reduced resolution, the overlay reports
+an error and retains the fallback. Each tile keeps the ink raster budget finite,
+reads only its destination rectangle, and yields before the next tile so page
+changes can cancel pending work. These limits do not alter stored ink samples.
+
+`paintWordPage` also accepts a `viewport` in integer device pixels for cropped
+canvases. It translates page painting and clips native ink pixel reads to that
+viewport. `wordPageImages(page, regions)` optionally restricts image decoding to
+rectangles in page points. Standalone canvas callers retain their existing
+`inkMaxPixels` setting; the Svelte overlay never passes `Infinity`.
 
 Selected ink exposes an Edit points control. Pointer drags and keyboard nudges use
 the same headless sample operation, retain non-coordinate channels, and preserve
