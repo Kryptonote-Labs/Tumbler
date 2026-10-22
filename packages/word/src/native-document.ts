@@ -197,7 +197,7 @@ export class NativeWordDocument implements WordLayoutSource {
     const headerFooterOverrides = new Map<string, NativeWordDocument>();
     const replaced = new Set<string>();
     const document = this.compiled?.artifact.document;
-    const sections = document && wordSections(document);
+    const sections = wordSections(this);
     for (const [key, entry] of this.editedStories) {
       const target = entry.target;
       const section = typeof target === 'string' ? undefined : sections?.[target.section];

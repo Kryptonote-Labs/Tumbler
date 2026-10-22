@@ -100,15 +100,32 @@ test.each([
   expect(() => layoutWordDocument(source.document, measurer)).toThrow('budget');
 });
 
-function hugeHeaderSource() {
+function hugeHeaderSource(twoSections = false) {
   const word = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   const office = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
   return openWordArtifact(buildWordDocumentFixture({
-    documentXml: `<w:document xmlns:w="${word}" xmlns:r="${office}"><w:body><w:p><w:r><w:t>Body</w:t></w:r></w:p><w:sectPr><w:headerReference w:type="default" r:id="header"/></w:sectPr></w:body></w:document>`,
-    relationships: [{ id: 'header', type: `${office}/header`, target: 'header1.xml' }, { id: 'n', type: `${office}/numbering`, target: 'numbering.xml' }],
+    documentXml: `<w:document xmlns:w="${word}" xmlns:r="${office}"><w:body>${twoSections ? '<w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="first"/></w:sectPr></w:pPr><w:r><w:t>First section</w:t></w:r></w:p>' : ''}<w:p><w:r><w:t>Body</w:t></w:r></w:p><w:sectPr><w:headerReference w:type="default" r:id="header"/></w:sectPr></w:body></w:document>`,
+    relationships: [...(twoSections ? [{ id: 'first', type: `${office}/header`, target: 'header0.xml' }] : []), { id: 'header', type: `${office}/header`, target: 'header1.xml' }, { id: 'n', type: `${office}/numbering`, target: 'numbering.xml' }],
     parts: [
+      ...(twoSections ? [{ itemName: 'word/header0.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml', xml: `<w:hdr xmlns:w="${word}"><w:p><w:r><w:t>First header</w:t></w:r></w:p></w:hdr>` }] : []),
       { itemName: 'word/header1.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml', xml: `<w:hdr xmlns:w="${word}"><w:p><w:pPr><w:numPr><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Header</w:t></w:r></w:p></w:hdr>` },
       { itemName: 'word/numbering.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml', xml: `<w:numbering xmlns:w="${word}"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="2147483647"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="%1."/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>` },
     ],
   }));
 }
+
+
+test.each([false, true])('resolves replacement targets after deleting an earlier section, cached=%j', cached => {
+  const source = hugeHeaderSource(true);
+  if (cached) layoutWordDocument(source.document, measurer, { maxMarkerCharacters: 3000000 });
+  const native = new NativeWordDocument({ source, content: importWordContent(source).slice(1) });
+  native.updateStory({ section: 0, kind: 'header', type: 'default' }, [{ kind: 'paragraph', runs: [{ text: 'Replacement' }] }]);
+  const layout = native.layout(measurer, { maxMarkerCharacters: 0 });
+  expect(layout.pages[0]?.headerLines.flatMap(line => line.fragments.map(fragment => fragment.text)).join('')).toBe('Replacement');
+  const progressive = native.layoutProgressively(measurer, { maxMarkerCharacters: 0 });
+  let step = progressive.next();
+  while (!step.done) step = progressive.next();
+  expect(step.value.pages[0]?.headerLines.flatMap(line => line.fragments.map(fragment => fragment.text)).join('')).toBe('Replacement');
+  const exported = layoutWordDocument(native.artifact().document, measurer, { maxMarkerCharacters: 0 });
+  expect(exported.pages[0]?.headerLines.flatMap(line => line.fragments.map(fragment => fragment.text)).join('')).toBe('Replacement');
+});
