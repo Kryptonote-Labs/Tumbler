@@ -200,6 +200,8 @@ and export, including its level patterns and start overrides. Use a new identity
 start an independently defined list. Imported identities must retain their source
 level definitions. Incompatible kind/start/marker metadata or an undefined source
 level throws `TypeError` in preview and export instead of silently dropping the edit.
+Compatible imported definitions, including empty bullet markers, remain valid when
+appending items. Newly authored bullet markers must still be nonempty.
 
 Numbering resolution counts derived marker text and suffixes in UTF-16 units.
 `numbering.markers(document, { maxCharacters })` and

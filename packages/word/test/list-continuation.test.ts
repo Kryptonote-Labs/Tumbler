@@ -63,7 +63,7 @@ test('rejects undefined imported levels consistently before remapping any shared
   expect(() => new NativeWordDocument({ source: original, content })).toThrow('undefined source level');
 });
 
-test.each(['transitional', 'strict'] as const)('retains an unchanged empty %s imported bullet marker', conformance => {
+test.each(['transitional', 'strict'] as const)('retains and appends an empty %s imported bullet marker', conformance => {
   const word = conformance === 'strict' ? 'http://purl.oclc.org/ooxml/wordprocessingml/main' : 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   const office = conformance === 'strict' ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
   const original = openWordArtifact(buildWordDocumentFixture({
@@ -75,4 +75,21 @@ test.each(['transitional', 'strict'] as const)('retains an unchanged empty %s im
   expect([...native.listMarkers.values()].map(marker => marker.text)).toEqual(['']);
   const exported = native.artifact();
   expect([...exported.document.numbering.markers(exported.document).values()].map(marker => marker.text)).toEqual(['']);
+  const content = importWordContent(original);
+  const first = content[0]!;
+  if (first.kind !== 'paragraph' || !first.list) throw new Error('Expected list');
+  content.push({ kind: 'paragraph', runs: [{ text: 'Appended' }], list: first.list });
+  const edited = new NativeWordDocument({ source: original, content });
+  expect([...edited.listMarkers.values()].map(marker => marker.text)).toEqual(['', '']);
+  for (const artifact of [reconcileWordContent(original, content), edited.artifact()]) {
+    const reopened = openWordArtifact(artifact.bytes());
+    expect([...reopened.document.numbering.markers(reopened.document).values()].map(marker => marker.text)).toEqual(['', '']);
+    expect(reopened.document.numbering.instances).toHaveLength(1);
+    expect(reopened.document.package.readPart(reopened.document.package.getPart('/word/numbering.xml')!))
+      .toEqual(original.document.package.readPart(original.document.package.getPart('/word/numbering.xml')!));
+    expect([...new NativeWordDocument({ source: reopened }).listMarkers.values()].map(marker => marker.text)).toEqual(['', '']);
+  }
+  expect(() => createWordArtifact({ paragraphs: [{ runs: [{ text: 'Authored' }], list: { id: 'new', kind: 'bullet', marker: '' } }] })).toThrow('Invalid list');
+  expect(() => reconcileWordContent(original, [...content, { kind: 'paragraph', runs: [{ text: 'Authored' }], list: { id: 'new', kind: 'bullet', marker: '' } }])).toThrow('Invalid list');
+
 });

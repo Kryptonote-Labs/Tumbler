@@ -2,6 +2,13 @@ import { beginLosslessXmlEdit, parseLosslessXml } from '@tumblerjs/ooxml';
 import { PartName, type PackageTransaction } from '@tumblerjs/opc';
 import type { WordDocument } from './document.ts';
 import type { WordTextParagraph } from './create.ts';
+import type { WordAuthoredList } from './authored-list.ts';
+
+/** Temporary definitions only supply numPr; imported instances retain their source XML. */
+export function contentNumberingList(source: WordDocument, list: WordAuthoredList): WordAuthoredList {
+  const reference = source.numbering.importedReference(list);
+  return reference ? { id: list.id, kind: 'decimal', level: reference.level } : list;
+}
 
 /** New lists share the document's numbering part without renumbering existing definitions. */
 export function mergeContentNumbering(
