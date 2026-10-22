@@ -63,3 +63,22 @@ test('a section-targeted new header shares package numbering styles', () => {
   expect(bodyMarkers(model)).toEqual(['5.']);
   expect(exportedBody(model)).toEqual(['5.']);
 });
+
+for (const immutableContent of [false, true]) {
+  test(`existing section target preserves shared numbering, immutable=${immutableContent}`, () => {
+    const source = numberingStoryFixture();
+    const model = new NativeWordDocument({ source, immutableContent });
+    model.update([...importWordContent(source), ...heading]);
+    model.updateStory({ section: 0, kind: 'header', type: 'default' }, [{ kind: 'paragraph', source: source.document.headerFooters[0]!.blocks[0]!.elementId, styleId: 'Child', runs: [{ text: 'edited' }] }]);
+    expect(headerMarkers(model.layout(measure))).toEqual(['5.']);
+    expect(headerMarkers(layoutWordDocument(model.artifact().document, measure))).toEqual(['5.']);
+  });
+  test(`replacement story budgets only final content, immutable=${immutableContent}`, () => {
+    const source = numberingStoryFixture();
+    const model = new NativeWordDocument({ source, immutableContent, maxMarkerCharacters: 0 });
+    const story = model.updateStory('/word/header.xml', [{ kind: 'paragraph', source: source.document.headerFooters[0]!.blocks[0]!.elementId, styleId: 'Child', runs: [{ text: 'edited' }] }]);
+    expect(story.listMarkers.size).toBe(0);
+    expect(headerMarkers(model.layout(measure))).toEqual([]);
+    expect(headerMarkers(layoutWordDocument(model.artifact().document, measure))).toEqual([]);
+  });
+}

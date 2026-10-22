@@ -70,6 +70,9 @@ interface RecordBlock {
 }
 
 /** Shared in-memory Word engine. Imports compile source properties once; only export writes a package. */
+// Story models receive their final content with the shared numbering context.
+const deferContent = Symbol('defer story content');
+
 export class NativeWordDocument implements WordLayoutSource {
   private readonly namedStyles: ReturnType<typeof wordAuthoringStyles>;
   private nextId = -1;
@@ -112,7 +115,7 @@ export class NativeWordDocument implements WordLayoutSource {
   }
   readonly background: string | undefined;
 
-  constructor(private readonly options: NativeWordOptions = {}) {
+  constructor(private readonly options: NativeWordOptions & { readonly [deferContent]?: true } = {}) {
     this.namedStyles = wordAuthoringStyles(options.source?.document.styles, options.defaultFormat);
     this.compiled = options.source ? new NativeWordSource(options.source) : undefined;
     const document = options.source?.document;
@@ -145,6 +148,7 @@ export class NativeWordDocument implements WordLayoutSource {
       headerReferences: [],
       footerReferences: [],
     };
+    if (options[deferContent]) return;
     if (options.content) this.update(options.content);
     else if (this.compiled) {
       this.numberingStylesKey = '[]';
@@ -174,7 +178,7 @@ export class NativeWordDocument implements WordLayoutSource {
     if (!entry) {
       const source = typeof target === 'string' && this.options.source ? wordStoryArtifact(this.options.source, target) : undefined;
       const { source: _bodySource, content: _bodyContent, ...options } = this.options;
-      entry = { target, blocks, model: new NativeWordDocument({ ...options, content: [], ...(source ? { source } : {}) }) };
+      entry = { target, blocks, model: new NativeWordDocument({ ...options, [deferContent]: true, ...(source ? { source } : {}) }) };
       entry.model.inheritedDoNotExpandShiftReturn = this.doNotExpandShiftReturn;
       this.editedStories.set(key, entry);
     }
@@ -261,7 +265,8 @@ export class NativeWordDocument implements WordLayoutSource {
         partName = created.partName;
       }
       const current = wordStoryArtifact(result, partName);
-      const original = typeof entry.target === 'string' && this.options.source ? wordStoryArtifact(this.options.source, partName) : undefined;
+      const original = this.options.source?.document.headerFooters.some(story => story.part.name.value === partName)
+        ? wordStoryArtifact(this.options.source, partName) : undefined;
       const edited = reconcileWordContent(current, original ? refreshUnchangedNumbering(original, current, entry.blocks) : entry.blocks);
       result = storyMainArtifact(edited);
     }

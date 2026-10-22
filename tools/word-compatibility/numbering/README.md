@@ -83,3 +83,9 @@ ten samples per scenario, with an existing-style control and a missing-style
 correctness case. Each sample records CPU/wall time, heap/RSS deltas, operation
 counts and marker checksums. The missing-style case performs additional correct
 numbering work after the fix; its timings do not represent equivalent outputs.
+
+Existing section-targeted stories receive the same unchanged-numbering refresh
+as part-name targets. Native replacement stories defer content compilation until
+their final content and shared context are available, so discarded placeholder
+paragraphs cannot consume the marker budget. The four mutable/immutable repros
+failed before these corrections and pass afterward.
