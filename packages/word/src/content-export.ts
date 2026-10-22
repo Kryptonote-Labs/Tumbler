@@ -281,6 +281,7 @@ export function prepareWordContent(
     generated.document,
     transaction,
     prefix,
+    paragraphs,
   );
   const renderParagraph = wordParagraphRenderer(
     markup,

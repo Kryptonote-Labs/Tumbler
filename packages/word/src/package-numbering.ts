@@ -1,6 +1,7 @@
 import { beginLosslessXmlEdit, parseLosslessXml } from '@tumblerjs/ooxml';
 import { PartName, type PackageTransaction } from '@tumblerjs/opc';
 import type { WordDocument } from './document.ts';
+import type { WordTextParagraph } from './create.ts';
 
 /** New lists share the document's numbering part without renumbering existing definitions. */
 export function mergeContentNumbering(
@@ -8,6 +9,7 @@ export function mergeContentNumbering(
   generated: WordDocument,
   transaction: PackageTransaction,
   prefix: string,
+  paragraphs: readonly WordTextParagraph[],
 ) {
   const generatedName = generated.numbering.partName;
   if (!generatedName) return (value: string) => value;
@@ -15,9 +17,20 @@ export function mergeContentNumbering(
     ...source.numbering.abstracts.map((item) => item.id),
     ...source.numbering.instances.map((item) => item.id),
   ]);
-  const ids = new Map<number, number>();
+  // Generated paragraph order matches the authored sequence, even when an
+  // unchanged paragraph did not need a generated numbering reference.
+  const continued = new Map<number, number>();
+  for (const [index, block] of generated.blocks.entries()) {
+    const list = paragraphs[index]?.list;
+    if (block.kind !== 'paragraph' || !list) continue;
+    const existing = source.numbering.importedReference(list.id, list.level ?? 0);
+    const fresh = generated.numbering.paragraphReference(generated, block);
+    if (existing && fresh) continued.set(fresh.numId, existing.numId);
+  }
+  const ids = new Map<number, number>(continued);
   let next = 1;
   for (const item of generated.numbering.instances) {
+    if (continued.has(item.id)) continue;
     while (used.has(next)) next++;
     ids.set(item.id, next);
     used.add(next++);
@@ -41,12 +54,17 @@ export function mergeContentNumbering(
   );
   const children = input.root.children
     .filter((node) => node.kind === 'element')
+    .filter((node) => {
+      const id = node.attributes.find(attribute => attribute.localName === (node.localName === 'num' ? 'numId' : 'abstractNumId'));
+      return !id || !continued.has(Number(id.value));
+    })
     .map((node) =>
       rewrite(input.source.slice(node.span.start, node.span.end)).replace(
         /^<w:(\w+)/,
         `<w:$1 xmlns:w="${source.source.root.namespaceUri}"`,
       ),
     );
+  if (!children.length) return rewrite;
   const existingName = source.numbering.partName;
   if (existingName) {
     const existing = parseLosslessXml(

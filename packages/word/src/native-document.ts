@@ -514,10 +514,11 @@ export class NativeWordDocument implements WordLayoutSource {
             result = { signature: fingerprint, block, drawings: media };
           }
           const list = authored.list;
-          if (list && original?.numbering && JSON.stringify(list) === JSON.stringify(compiled?.lists.get(authored.source!))) {
-            numbering.push({ elementId: result.block.elementId, reference: original.numbering });
+          if (list && !isWordAuthoredList(list)) throw new TypeError('Invalid list.');
+          const importedReference = list && compiled?.artifact.document.numbering.importedReference(list.id, list.level ?? 0);
+          if (importedReference) {
+            numbering.push({ elementId: result.block.elementId, reference: importedReference });
           } else if (list) {
-            if (!isWordAuthoredList(list)) throw new TypeError('Invalid list.');
             const level = list.level ?? 0,
               start = list.start ?? 1;
             if (

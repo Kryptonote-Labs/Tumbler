@@ -65,6 +65,17 @@ export class WordNumbering {
     this.#instances = new Map(this.instances.map((item) => [item.id, item]));
   }
 
+  /** Imported identities continue their original instance, including level overrides. */
+  importedReference(id: string, level: number): WordParagraphNumbering | undefined {
+    const match = /^source-list-([1-9][0-9]*)$/.exec(id);
+    if (!match || !Number.isInteger(level) || level < 0 || level > MAX_LEVEL) return undefined;
+    const numId = Number(match[1]);
+    const instance = this.#instances.get(numId);
+    if (!instance) return undefined;
+    const definition = instance.levelOverrides.get(level) ?? this.#abstracts.get(instance.abstractId)?.levels.find(item => item.level === level);
+    return definition ? { numId, level } : undefined;
+  }
+
   paragraphReference(document: WordDocumentLike, paragraph: WordParagraph): WordParagraphNumbering | undefined {
     if (paragraph.propertiesElementId === undefined) return undefined;
     const properties = document.source.element(paragraph.propertiesElementId);
