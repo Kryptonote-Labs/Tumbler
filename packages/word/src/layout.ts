@@ -1,3 +1,4 @@
+import { paragraphLineSequence, widowPairHeight } from './paragraph-pagination.ts';
 import { withParagraphSpacing } from './paragraph-spacing.ts';
 import { alignWordPageDrawings } from './drawing-alignment.ts';
 import { resolveWordColour } from './theme-colours.ts';
@@ -492,9 +493,22 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
         // Continuous sections share the current page but can change the remaining column set only on the next page.
       } else addPage(section.properties, section.properties.breakType === "evenPage" ? "even" : section.properties.breakType === "oddPage" ? "odd" : undefined);
 
+      // Retain only bounded lookahead preparations, and never reconsider every suffix of a keep chain.
+      const pending = new Map<number, PreparedParagraph>();
+      const prepareBody = (index: number): PreparedParagraph | undefined => {
+        const block = section.blocks[index];
+        if (block?.kind !== "paragraph") return undefined;
+        const cached = pending.get(index);
+        if (cached) return cached;
+        const prepared = withParagraphSpacing(prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId)), section.blocks, index, paragraph => document.paragraphFormat(paragraph));
+        pending.set(index, prepared);
+        return prepared;
+      };
+      let inKeepChain = false;
       for (let blockIndex = 0; blockIndex < section.blocks.length; blockIndex += 1) {
         const block = section.blocks[blockIndex]!;
         if (block.kind === "table") {
+          inKeepChain = false;
           let target = page!.columns[columnIndex]!;
           const preparedTable = prepareTable(document, block, target.width, measurer, listMarkers);
           const groups = tableRowGroups(preparedTable);
@@ -550,42 +564,46 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
           continue;
         }
         if (block.kind !== "paragraph") {
+          inKeepChain = false;
           const column = page!.columns[columnIndex]!;
           column.unsupportedBlocks.push(Object.freeze({ elementId: block.elementId, localName: block.localName, y: cursorY }));
           continue;
         }
-        let prepared = withParagraphSpacing(prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId)), section.blocks, blockIndex, paragraph => document.paragraphFormat(paragraph));
-        const nextBlock = section.blocks[blockIndex + 1];
-        const requiredHeight = paragraphHeight(prepared) + (prepared.format.keepNext && nextBlock?.kind === "paragraph"
-          ? firstLineHeight(withParagraphSpacing(prepareParagraph(document, nextBlock, page!.columns[columnIndex]!.width, measurer, listMarkers.get(nextBlock.elementId)), section.blocks, blockIndex + 1, paragraph => document.paragraphFormat(paragraph)))
-          : 0);
+        const prepared = prepareBody(blockIndex)!;
+        const sequence = paragraphLineSequence(prepared.lines);
         const currentColumn = page!.columns[columnIndex]!;
-        if ((prepared.format.pageBreakBefore || prepared.format.keepLines && requiredHeight > currentColumn.y + currentColumn.height - cursorY) && cursorY > currentColumn.y) {
-          advanceColumn(section.properties);
-          prepared = withParagraphSpacing(prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId)), section.blocks, blockIndex, paragraph => document.paragraphFormat(paragraph));
+        const available = currentColumn.y + currentColumn.height - cursorY;
+        let requiredHeight = 0;
+        const chainStart = prepared.format.keepNext && (!inKeepChain || prepared.format.pageBreakBefore);
+        if (chainStart || prepared.format.keepLines) {
+          let candidate: PreparedParagraph | undefined = prepared;
+          let index = blockIndex;
+          while (candidate) {
+            requiredHeight += points(candidate.format.spacingBeforeTwips) +
+              paragraphLineSequence(candidate.lines).heightUntil(currentColumn.height - requiredHeight) +
+              points(candidate.format.spacingAfterTwips);
+            if (requiredHeight > currentColumn.height || !chainStart || !candidate.format.keepNext) break;
+            const next = section.blocks[index + 1];
+            if (next?.kind !== "paragraph" || document.paragraphFormat(next).pageBreakBefore) break;
+            candidate = prepareBody(++index);
+          }
         }
+        if ((prepared.format.pageBreakBefore || requiredHeight > available) && cursorY > currentColumn.y) {
+          advanceColumn(section.properties);
+        }
+        inKeepChain = prepared.format.keepNext;
+        pending.delete(blockIndex);
         cursorY += points(prepared.format.spacingBeforeTwips);
-        for (let lineIndex = 0; lineIndex < prepared.lines.length; lineIndex += 1) {
-          const line = prepared.lines[lineIndex]!;
+        for (let lineIndex = 0; ; lineIndex += 1) {
+          const line = prepared.lines[lineIndex];
+          if (!line) break;
           let column = page!.columns[columnIndex]!;
           const lineHeight = line.ascent + line.descent;
-          if (cursorY + lineHeight > column.y + column.height && cursorY > column.y) {
-            // Widow control keeps at least two lines together at either side when practical.
-            const remaining = prepared.lines.length - lineIndex;
-            if (prepared.format.widowControl && lineIndex === 1 && column.lines.at(-1)?.paragraphElementId === block.elementId) {
-              const moved = column.lines.pop();
-              if (moved !== undefined) cursorY = moved.y;
-              advanceColumn(section.properties);
-              column = page!.columns[columnIndex]!;
-              if (moved !== undefined) {
-                const translated = translateLine(moved, column.x - moved.x, cursorY - moved.y, budget.cache);
-                column.lines.push(translated);
-                cursorY += translated.height;
-              }
-            } else {
-              advanceColumn(section.properties);
-              column = page!.columns[columnIndex]!;
-            }
+          const pairHeight = prepared.format.widowControl ? widowPairHeight(sequence, lineIndex) : 0;
+          const required = pairHeight <= column.height ? Math.max(lineHeight, pairHeight) : lineHeight;
+          if (cursorY + required > column.y + column.height && cursorY > column.y) {
+            advanceColumn(section.properties);
+            column = page!.columns[columnIndex]!;
           }
           const laidOut = placeLine(block, prepared.format, line, column, cursorY, budget, lineIndex === 0 ? prepared.marker : undefined);
           column.lines.push(laidOut);
@@ -1448,16 +1466,6 @@ function translateLine(line: WordLayoutLine, dx: number, dy: number, cache?: Wor
   });
   cache?.translated.set(line, { dx, dy, value });
   return value;
-}
-
-function paragraphHeight(paragraph: PreparedParagraph): number {
-  return points(paragraph.format.spacingBeforeTwips + paragraph.format.spacingAfterTwips) +
-    paragraph.lines.reduce((sum, line) => sum + line.ascent + line.descent, 0);
-}
-
-function firstLineHeight(paragraph: PreparedParagraph): number {
-  const first = paragraph.lines[0];
-  return first === undefined ? 0 : points(paragraph.format.spacingBeforeTwips) + first.ascent + first.descent;
 }
 
 /** Measure each tab-delimited segment once. Aligned tabs position its content, not its start. */
