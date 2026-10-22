@@ -540,7 +540,7 @@
             {#each bodyLines(page) as { line, clip }}
               {#each line.fragments as fragment}
                 {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
-                  <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment)} pageX={fragment.x} pageY={fragment.y} clip={wordDrawingCellClip(fragment.drawing, clip)} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
+                  <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, 0, 0, false, drawingOrder, true)} pageX={fragment.x} pageY={fragment.y} clip={wordDrawingCellClip(fragment.drawing, clip)} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
                 {/if}
               {/each}
               <WordContentClip {clip} layer={1}>
