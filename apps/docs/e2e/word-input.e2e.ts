@@ -191,3 +191,18 @@ test('touch viewport accepts replacement input without a keyboard shortcut', asy
   await expect(title(page)).toHaveText('A calm workspace');
   await context.close();
 });
+
+test('partial combining-mark deletion targets remove one whole model grapheme', async ({ page }) => {
+  await openEditor(page);
+  await page.keyboard.insertText('e\u0301');
+  await expect(title(page)).toHaveText('A e\u0301 workspace');
+  await page.evaluate(() => {
+    const run = document.querySelector('[data-paragraph="14"][data-start="0"]')!;
+    const event = new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'deleteContentBackward' });
+    Object.defineProperty(event, 'getTargetRanges', { value: () => [new StaticRange({ startContainer: run.firstChild!, startOffset: 3, endContainer: run.firstChild!, endOffset: 4 })] });
+    run.dispatchEvent(event);
+  });
+  await expect(title(page)).toHaveText('A  workspace');
+  await page.keyboard.press('Control+z');
+  await expect(title(page)).toHaveText('A e\u0301 workspace');
+});

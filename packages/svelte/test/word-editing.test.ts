@@ -42,6 +42,15 @@ describe("Word browser input translation", () => {
     expect(wordInputEdit(document, selection(id, 0, 5), "formatItalic", null)).toBeUndefined();
   });
 
+  test("browser deletion ranges expand to whole model graphemes", () => {
+    const document = fixture("<w:p><w:r><w:t>é👩‍💻B</w:t></w:r></w:p>");
+    const id = wordDocumentParagraphs(document)[0]!.elementId;
+    for (const inputType of ["deleteContentBackward", "deleteContentForward", "deleteWordBackward", "deleteSoftLineBackward"]) {
+      expect(wordInputEdit(document, selection(id, 1, 2), inputType, null)?.selection).toEqual(selection(id, 0, 2));
+      expect(wordInputEdit(document, selection(id, 3, 5), inputType, null)?.selection).toEqual(selection(id, 2, 7));
+    }
+  });
+
   test("deletes whole grapheme clusters", () => {
     const document = fixture("<w:p><w:r><w:t>A👩‍💻B</w:t></w:r></w:p>");
     const paragraph = wordDocumentParagraphs(document)[0]!;

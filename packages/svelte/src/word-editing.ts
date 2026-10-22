@@ -26,7 +26,10 @@ export function wordInputEdit(
   inputType: string,
   data: string | null,
 ): WordInputEdit | undefined {
-  const ordered = orderSelection(document, selection);
+  const orderedSelection = orderSelection(document, selection);
+  const ordered = inputType.startsWith("delete") && !collapsed(orderedSelection)
+    ? expandDeletionGraphemes(document, orderedSelection)
+    : orderedSelection;
   if (inputType === "insertText" || inputType === "insertReplacementText" || inputType === "insertFromPaste") {
     if (data === null) return undefined;
     const value = data.replace(/\r\n?/g, "\n");
@@ -88,6 +91,20 @@ function orderSelection(document: WordDocument, selection: WordTextSelection): W
   if (anchor < 0 || focus < 0) return selection;
   if (anchor < focus || anchor === focus && selection.anchor.offset <= selection.focus.offset) return selection;
   return Object.freeze({ anchor: selection.focus, focus: selection.anchor });
+}
+
+/** Browsers may target a combining mark or part of an emoji; model offsets must cover whole graphemes. */
+function expandDeletionGraphemes(document: WordDocument, selection: WordTextSelection): WordTextSelection {
+  const paragraphs = wordDocumentParagraphs(document);
+  const first = paragraphs.find(paragraph => paragraph.elementId === selection.anchor.paragraphElementId);
+  const last = paragraphs.find(paragraph => paragraph.elementId === selection.focus.paragraphElementId);
+  if (first === undefined || last === undefined) return selection;
+  const startBoundaries = boundaries(wordParagraphText(document, first));
+  const endBoundaries = first === last ? startBoundaries : boundaries(wordParagraphText(document, last));
+  return {
+    anchor: { ...selection.anchor, offset: startBoundaries.findLast(offset => offset <= selection.anchor.offset) ?? selection.anchor.offset },
+    focus: { ...selection.focus, offset: endBoundaries.find(offset => offset >= selection.focus.offset) ?? selection.focus.offset },
+  };
 }
 
 function previousGraphemeSelection(document: WordDocument, position: WordTextPosition): WordTextSelection | undefined {
