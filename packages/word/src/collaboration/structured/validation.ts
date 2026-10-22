@@ -191,11 +191,16 @@ export function validateStructuredTables(doc: Y.Doc) {
             );
         }
     // Keep source structure available even if all of its axes are hidden.
-    for (const cell of base.cells)
+    for (const cell of base.cells) {
+      const split = tableRecords(doc, address).find(
+        (r) => r.value.kind === "split" && r.value.cell === cell.cell,
+      )?.value;
       payload(doc, {
         ...address,
         row: cell.row,
-        column: base.columns[cell.column]!,
+        column:
+          split?.kind === "split" ? split.column : base.columns[cell.column]!,
       });
+    }
   }
 }

@@ -86,7 +86,9 @@ const widthSchema = z
     value: z.number().finite().positive(),
   })
   .strict();
-const splitSchema = z.object({ kind: z.literal("split"), cell: id }).strict();
+const splitSchema = z
+  .object({ kind: z.literal("split"), cell: id, column: id })
+  .strict();
 export const recordSchema = z.discriminatedUnion("kind", [
   axisSchema,
   baseSchema,

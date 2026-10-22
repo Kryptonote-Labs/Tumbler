@@ -2,6 +2,7 @@ import * as Y from "yjs";
 import { isTableCell, tableParagraphs, type TableCell } from "../tables.ts";
 import {
   tableBase,
+  liveAxes,
   tableRecords,
   existingText,
   cellName,
@@ -21,14 +22,27 @@ export function sourceCell(doc: Y.Doc, address: CellAddress) {
       cell.column <= index &&
       cell.column + (cell.span ?? 1) > index,
   );
-  if (
-    cell &&
-    index !== cell.column &&
-    tableRecords(doc, address).some(
-      (r) => r.value.kind === "split" && r.value.cell === cell.cell,
-    )
-  )
-    return undefined;
+  if (cell) {
+    const splits = tableRecords(doc, address).flatMap((r) =>
+      r.value.kind === "split" && r.value.cell === cell.cell ? [r.value] : [],
+    );
+    if (new Set(splits.map((split) => split.column)).size > 1)
+      throw new WordTableConflict(
+        address,
+        "overlap",
+        "Concurrent split ownership conflicts. Split at the chosen surviving coordinate to resolve.",
+      );
+    const split = splits[0];
+    if (split?.kind === "split" && address.column !== split.column) {
+      // Keep the original deleted coordinate as a witness alias. Visible content
+      // stays attached to the coordinate selected at split time, including undo.
+      if (
+        index !== cell.column ||
+        liveAxes(doc, address, "column").includes(address.column)
+      )
+        return undefined;
+    }
+  }
   return cell;
 }
 export function payload(

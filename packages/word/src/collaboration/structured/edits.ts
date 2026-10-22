@@ -13,6 +13,7 @@ import {
   orderedAxes,
   payloadSignature,
   tableName,
+  tableBase,
   tableRecords,
   WordTableConflict,
   type CellAddress,
@@ -308,6 +309,38 @@ export function applyStructuredChange(
       columns: coverage,
     });
   } else {
+    const base = tableBase(doc, address);
+    const original = base.cells.find(
+      (cell) =>
+        cell.row === change.cell.row &&
+        base.columns
+          .slice(cell.column, cell.column + (cell.span ?? 1))
+          .includes(change.cell.column),
+    );
+    const splits = tableRecords(doc, address).filter(
+      (r) => r.value.kind === "split" && r.value.cell === original?.cell,
+    );
+    const owners = new Set(
+      splits.flatMap((r) => (r.value.kind === "split" ? [r.value.column] : [])),
+    );
+    if (original && owners.size > 1) {
+      if (
+        !owners.has(change.cell.column) ||
+        !liveAxes(doc, address, "column").includes(change.cell.column)
+      )
+        throw new WordTableConflict(
+          address,
+          "overlap",
+          "Choose a surviving split ownership coordinate.",
+        );
+      for (const split of splits) records.delete(split.key);
+      records.set("split:" + original.cell + ":" + change.cell.column, {
+        kind: "split",
+        cell: original.cell,
+        column: change.cell.column,
+      });
+      return;
+    }
     const merges = tableRecords(doc, address).filter(
       (r) =>
         r.value.kind === "merge" &&
@@ -323,9 +356,10 @@ export function applyStructuredChange(
           "overlap",
           "Select a horizontally merged cell.",
         );
-      records.set("split:" + cell.source.cell, {
+      records.set("split:" + cell.source.cell + ":" + cell.address.column, {
         kind: "split",
         cell: cell.source.cell,
+        column: cell.address.column,
       });
     }
   }
