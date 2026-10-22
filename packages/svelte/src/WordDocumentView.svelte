@@ -293,7 +293,7 @@
     if (anchor !== undefined && focus !== undefined) globalThis.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
   }
 
-  function handleInput(event: InputEvent) {
+  function handleInput(event: Event) {
     if (!bodyInput(event) || composition !== undefined) return;
     const pending = pendingInput;
     pendingInput = undefined;
