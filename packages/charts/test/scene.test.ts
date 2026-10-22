@@ -172,3 +172,15 @@ test('small numeric ticks remain distinct without a host formatter in every char
     for (const value of ['0', '0.00000002', '0.00000004', '0.00000006', '0.00000008', '0.0000001']) expect(labels).toContain(value);
   }
 });
+
+test('automatic XY ticks remove arithmetic noise while retaining tiny intervals', () => {
+  for (const kind of ['scatter', 'bubble'] as const) for (const maximum of [0.8, 8e-8]) {
+    const base = model({ kind, title: undefined, legend: undefined, axisIds: [1, 2], axes: [
+      { id: 1, kind: 'value', position: 'bottom', title: undefined, majorGridlines: false, deleted: false, minimum: 0, maximum },
+      { id: 2, kind: 'value', position: 'left', title: undefined, majorGridlines: false, deleted: false, minimum: 0, maximum },
+    ] });
+    const labels = texts(layoutChartScene(base, 600, 400).marks);
+    const expected = maximum === 0.8 ? ['0', '0.2', '0.4', '0.6', '0.8'] : ['0', '0.00000002', '0.00000004', '0.00000006', '0.00000008'];
+    expect(labels).toEqual([...expected, ...expected]);
+  }
+});

@@ -2,7 +2,7 @@ import { assertChartSceneBudget } from './scene-budget.ts';
 import { chartStacks, indexChartSequence, type StackPoint } from './indexed-data.ts';
 import { chartTitleHeight } from './title-scene.ts';
 import { chartFont, chartLegendPositions, type ChartFont } from './scene-style.ts';
-import { cartesianAxisScale, chartAxisTicks } from "./axis-scale.ts";
+import { cartesianAxisScale, chartAxisTicks, roundChartTick } from "./axis-scale.ts";
 import { BUBBLE_CHART_POINT_LIMIT, type ChartDataSequence, type SupportedChartModel } from "./model.ts";
 
 export interface ChartRect {
@@ -299,7 +299,12 @@ function linearTicks(minimum: number, maximum: number, count: number): readonly 
   const step = (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) * magnitude;
   const first = Math.ceil(minimum / step) * step;
   const ticks: number[] = [];
-  for (let value = first; value <= maximum + step * 1e-9 && ticks.length < 100; value += step) ticks.push(Object.is(value, -0) ? 0 : value);
+  for (let index = 0; index < 100; index++) {
+    const value = first + index * step;
+    if (value > maximum + step * 1e-9) break;
+    const tick = roundChartTick(value, step);
+    if (ticks.length === 0 || tick > ticks[ticks.length - 1]!) ticks.push(tick);
+  }
   if (ticks.length === 0) return Object.freeze([minimum, maximum]);
   return Object.freeze(ticks);
 }
