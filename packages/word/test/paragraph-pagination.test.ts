@@ -84,3 +84,11 @@ test('keep lookahead stops at explicit page and column breaks', () => {
     expect(columns).toEqual([['filler', 'heading'], ['tail', 'end']]);
   }
 });
+test('keepNext without an eligible successor does not imply keepLines', () => {
+  const filler = paragraph('filler');
+  const text = 'a'.repeat(61);
+  expect(textPages(filler + paragraph(text, '<w:keepNext/>'))).toEqual(textPages(filler + paragraph(text)));
+  const forced = paragraph('next', '<w:pageBreakBefore/>');
+  expect(textPages(filler + paragraph(text, '<w:keepNext/>') + forced)).toEqual(textPages(filler + paragraph(text) + forced));
+  expect(textPages(filler + paragraph(text, '<w:keepNext/><w:keepLines/>')).map(page => page.length)).toEqual([1, 2, 2]);
+});

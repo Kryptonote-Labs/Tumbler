@@ -577,7 +577,9 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
         const currentColumn = page!.columns[columnIndex]!;
         const available = currentColumn.y + currentColumn.height - cursorY;
         let requiredHeight = 0;
-        const chainStart = prepared.format.keepNext && (!inKeepChain || prepared.format.pageBreakBefore);
+        const successor = section.blocks[blockIndex + 1];
+        const chainStart = prepared.format.keepNext && successor?.kind === "paragraph" &&
+          !document.paragraphFormat(successor).pageBreakBefore && (!inKeepChain || prepared.format.pageBreakBefore);
         if (chainStart || prepared.format.keepLines) {
           let candidate: PreparedParagraph | undefined = prepared;
           let index = blockIndex;
