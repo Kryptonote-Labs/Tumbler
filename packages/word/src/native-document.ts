@@ -516,6 +516,10 @@ export class NativeWordDocument implements WordLayoutSource {
               inlines,
             };
             const resetParagraph = authored.styleId !== undefined && (authored.styleId !== original?.format.styleId || authored.paragraph === undefined);
+            const sourceStyles = compiled?.artifact.document.styles;
+            // Imported styles retain broken chains. Built-ins apply only to newly requested styles.
+            const tabStyles = sourceStyles && (authored.styleId === undefined || authored.styleId === original?.format.styleId || sourceStyles.style(authored.styleId))
+              ? sourceStyles : this.namedStyles;
             this.paragraphTextFormats.set(block, format(undefined, resetParagraph ? named?.text : original?.textFormat ?? named?.text));
             this.paragraphFormats.set(
               block,
@@ -527,7 +531,7 @@ export class NativeWordDocument implements WordLayoutSource {
                 ...(authored.positioning?.tabs === undefined ? {} : {
                   // Imported positioning contains effective stops, so retain source clears until replaced.
                   tabs: mergeWordTabStops(
-                    this.namedStyles.resolveParagraphStyle(authored.styleId ?? original?.format.styleId ?? '').paragraph.tabs,
+                    tabStyles.resolveParagraphStyle(authored.styleId ?? original?.format.styleId ?? '').paragraph.tabs,
                     original && JSON.stringify(authored.positioning) === JSON.stringify(compiled?.positioning.get(authored.source!))
                       ? original.directTabs ?? [] : authored.positioning.tabs,
                   ),
