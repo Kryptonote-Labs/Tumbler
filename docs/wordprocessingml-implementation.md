@@ -205,6 +205,9 @@ direct stops do not survive a replacement array.
 Native tabs use the style definitions that export adds for the whole update.
 Adding or removing a requested built-in style also invalidates inherited tab
 formats on existing paragraphs and paragraphs inside reused tables.
+Initial import uses the retained artifact's definitions. Body and edited stories
+share a catalog; retained story layout caches also follow that catalog. Invalid
+shared updates leave body and story views unchanged.
 An unknown or wrong-type selected style falls back to the default of the requested
 type. A missing or wrong-type `basedOn` target only ends that chain. Cycles and
 chains over 100 styles still fail. Resolved declarations are cached per named style

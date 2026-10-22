@@ -19,7 +19,7 @@ import type {
   WordHeaderFooterStory,
   WordNoteStory,
 } from "./document.ts";
-import type { ComputedWordParagraphFormat, ComputedWordTextFormat, WordTabStop } from "./styles.ts";
+import type { ComputedWordParagraphFormat, ComputedWordTextFormat, WordTabStop, WordStyles } from "./styles.ts";
 import { WordError } from "./document.ts";
 import { WordMarkerBudget, type WordMarkerOptions, type WordListMarker } from "./numbering.ts";
 import { resolveWordTableGrid, type ResolvedWordTableCell } from "./table-grid.ts";
@@ -235,22 +235,25 @@ export interface WordLayoutStories {
   readonly notes: readonly (Pick<WordNoteStory, 'kind' | 'id' | 'type'> & { readonly context: WordLayoutDocumentContext })[];
 }
 
-const storySources = new WeakMap<WordDocument, Map<WordHeaderFooterStory | WordNoteStory, WordLayoutDocumentContext>>();
+const storySources = new WeakMap<WordDocument, WeakMap<WordStyles, Map<WordHeaderFooterStory | WordNoteStory, WordLayoutDocumentContext>>>();
 /** Compile retained story styles once; replacement stories bypass original marker work. */
 export function wordLayoutStories(
   document: WordDocument,
-  options: WordMarkerOptions & { readonly headerFooterOverrides?: ReadonlyMap<string, WordLayoutDocumentContext> } = {},
+  options: WordMarkerOptions & { readonly headerFooterOverrides?: ReadonlyMap<string, WordLayoutDocumentContext>; readonly styles?: WordStyles } = {},
   budget = new WordMarkerBudget(options.maxCharacters),
 ): WordLayoutStories {
-  const cached = storySources.get(document) ?? new Map<WordHeaderFooterStory | WordNoteStory, WordLayoutDocumentContext>();
-  storySources.set(document, cached);
+  const styles = options.styles ?? document.styles;
+  const variants = storySources.get(document) ?? new WeakMap<WordStyles, Map<WordHeaderFooterStory | WordNoteStory, WordLayoutDocumentContext>>();
+  storySources.set(document, variants);
+  const cached = variants.get(styles) ?? new Map<WordHeaderFooterStory | WordNoteStory, WordLayoutDocumentContext>();
+  variants.set(styles, cached);
   const context = (story: WordHeaderFooterStory | WordNoteStory, replacement?: WordLayoutDocumentContext) => {
     const existing = replacement ?? cached.get(story);
     if (existing) {
       accountMarkers(existing.listMarkers, budget);
       return existing;
     }
-    const compiled = compileStory(document, story, budget);
+    const compiled = compileStory(document, story, budget, styles);
     cached.set(story, compiled);
     return compiled;
   };
@@ -1387,7 +1390,7 @@ function decorateHeaderFooters(
   }
 }
 
-function compileStory(document: WordDocument, story: WordHeaderFooterStory | WordNoteStory, budget: WordMarkerBudget): WordLayoutDocumentContext {
+function compileStory(document: WordDocument, story: WordHeaderFooterStory | WordNoteStory, budget: WordMarkerBudget, styles = document.styles): WordLayoutDocumentContext {
   const context = { package: document.package, part: story.part, source: story.source, conformance: document.conformance };
   const paragraphs = new Map<WordParagraph, ComputedWordParagraphFormat>();
   const defaults = new Map<WordParagraph, ComputedWordTextFormat>();
@@ -1396,11 +1399,11 @@ function compileStory(document: WordDocument, story: WordHeaderFooterStory | Wor
     for (const block of blocks) {
       if (block.kind === 'table') for (const row of block.rows) for (const cell of row.cells) visit(cell.blocks);
       else if (block.kind === 'paragraph') {
-        paragraphs.set(block, document.styles.paragraphFormat(context, block));
-        defaults.set(block, document.styles.runFormat(context, block));
+        paragraphs.set(block, styles.paragraphFormat(context, block));
+        defaults.set(block, styles.runFormat(context, block));
         for (const inline of block.inlines) {
           for (const run of inline.kind === 'run' ? [inline] : inline.kind === 'hyperlink' || inline.kind === 'insertion' ? inline.runs : [])
-            runs.set(run, document.styles.runFormat(context, block, run));
+            runs.set(run, styles.runFormat(context, block, run));
         }
       }
     }
