@@ -72,3 +72,14 @@ outside the repository. Never commit that file or its extracted resources.
 - Domain: `tumbler.alexco.dev`
 
 The app uses the Vercel adapter and prerenders every docs and sample route. There are no runtime secrets. Workspace dependencies load Tumbler source directly, so preview deployments exercise that commit rather than the last published package. The UI shows the package version and source commit.
+
+Preview builds run only when `apps/docs` changed since the branch's previous
+successful deployment, or since the previous commit for a branch without a
+successful deployment. Production builds are unaffected. Missing comparison
+history allows the build. Package-only changes still run GitHub CI, including
+the docs build and browser tests, but do not build a Vercel preview.
+
+`vercel.json` configures this through `scripts/ignore-preview.sh`. Vercel's
+Ignored Build Step skips the build but still counts the deployment request
+against its limits; it does not reset an existing rate limit. A Vercel quota
+failure is not a merge blocker when the code checks pass.
