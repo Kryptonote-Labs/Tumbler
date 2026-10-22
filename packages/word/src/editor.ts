@@ -1,6 +1,7 @@
+import { WordArtifact } from "./artifact.ts";
 import { beginLosslessXmlEdit, type LosslessXmlElement } from "@tumblerjs/ooxml";
-import { beginPackageTransaction, openOpcPackage } from "@tumblerjs/opc";
-import { openWordDocument, WordError, type WordDocument, type WordParagraph } from "./document.ts";
+import { beginPackageTransaction } from "@tumblerjs/opc";
+import { WordError, type WordDocument, type WordParagraph } from "./document.ts";
 import { wordParagraphText, wordParagraphTextSegments, type WordParagraphTextSegment, type WordTextSelection, type WordTextPosition } from "./text.ts";
 
 const XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace";
@@ -75,14 +76,14 @@ export function replaceWordText(document: WordDocument, selection: WordTextSelec
     const target = insertionTarget(segments, start, selection.focus.affinity ?? "after");
     if (target === undefined) appendTextRun(editor, document, paragraph, value);
     else if (target.kind === "text") replaceTextElement(editor, document, target, insertInto(target, start, value));
-    else insertRunBesideControl(editor, document, target, value, selection.focus.affinity ?? "after", start);
+    else insertTextBesideControl(editor, document, target, value, selection.focus.affinity ?? "after", start);
   } else {
     const selectedText = selected.filter((segment) => segment.kind === "text");
     if (selectedText.length === 0) {
       for (const segment of selected) removeSegment(editor, document, segment);
       const target = insertionTarget(segments.filter((segment) => !selected.includes(segment)), start, "after");
       if (target?.kind === "text") replaceTextElement(editor, document, target, insertInto(target, start, value));
-      else if (target !== undefined) insertRunBesideControl(editor, document, target, value, "after", start);
+      else if (target !== undefined) insertTextBesideControl(editor, document, target, value, "after", start);
       else appendTextRun(editor, document, paragraph, value);
     } else {
       const insertionElementId = selectedText[0]!.elementId;
@@ -105,7 +106,7 @@ export function replaceWordText(document: WordDocument, selection: WordTextSelec
   transaction.replacePart(document.part.name, edited.bytes);
   const bytes = transaction.commit();
   // Reopening here is an intentional structural validation boundary before bytes escape.
-  openWordDocument(openOpcPackage(bytes));
+  reopenEdited(document, bytes);
   return bytes;
 }
 
@@ -130,6 +131,12 @@ function replaceWordParagraphRange(document: WordDocument, selection: WordTextSe
   const startParent = parentElement(document, requiredElement(document, startParagraph.elementId));
   const endParent = parentElement(document, requiredElement(document, endParagraph.elementId));
   if (startParent !== endParent) throw new WordError("invalid_document", "A paragraph edit cannot cross table-cell or story boundaries.");
+
+  assertSafeParagraphBoundaryEdit(document, requiredElement(document, startParagraph.elementId), requiredElement(document, endParagraph.elementId));
+
+  if (startIndex !== endIndex && paragraphs.slice(startIndex, endIndex + 1).some(paragraph => paragraph.section !== undefined)) {
+    throw new WordError("unsupported_document", "Paragraph ranges containing section boundaries cannot be joined or replaced.");
+  }
 
   const lines = value.split("\n");
   let working = document;
@@ -175,7 +182,7 @@ function replaceWordParagraphRange(document: WordDocument, selection: WordTextSe
 }
 
 function reopenEdited(document: WordDocument, bytes: Uint8Array): WordDocument {
-  return openWordDocument(openOpcPackage(bytes));
+  return new WordArtifact(document).replace(bytes).document;
 }
 
 function documentParagraphs(document: WordDocument): WordParagraph[] {
@@ -190,6 +197,21 @@ function documentParagraphs(document: WordDocument): WordParagraph[] {
   return result;
 }
 
+/** Inspect source siblings, including blocks omitted from the text projection, before editing. */
+function assertSafeParagraphBoundaryEdit(document: WordDocument, start: LosslessXmlElement, end: LosslessXmlElement): void {
+  const parent = parentElement(document, start);
+  if (parentElement(document, end) !== parent) throw new WordError("invalid_document", "A paragraph edit cannot cross OOXML containers.");
+  const siblings = parent.children;
+  const first = siblings.indexOf(start);
+  const last = siblings.indexOf(end);
+  if (first < 0 || last < first) throw new WordError("invalid_document", "Paragraph order changed during editing.");
+  for (const sibling of siblings.slice(first, last + 1)) {
+    if (sibling.kind === "element" && (sibling.namespaceUri !== start.namespaceUri || sibling.localName !== "p")) {
+      throw new WordError("unsupported_document", "Paragraph edits cannot cross tables or unsupported XML blocks.");
+    }
+  }
+}
+
 function joinParagraphRange(document: WordDocument, startId: number, endId: number): Uint8Array {
   const start = requiredElement(document, startId);
   const end = requiredElement(document, endId);
@@ -201,7 +223,10 @@ function joinParagraphRange(document: WordDocument, startId: number, endId: numb
   if (startIndex < 0 || endIndex <= startIndex) throw new WordError("invalid_document", "Paragraph order changed during editing.");
   const editor = beginLosslessXmlEdit(document.source);
   const endContent = paragraphContentMarkup(document, end);
-  if (endContent !== "") editor.appendMarkup(start, endContent);
+  if (endContent !== "") {
+    if (start.selfClosing) editor.replaceElementMarkup(start, openSelfClosing(document, start, endContent));
+    else editor.appendMarkup(start, endContent);
+  }
   for (const sibling of siblings.slice(startIndex + 1, endIndex + 1)) editor.removeElement(sibling);
   return commitDocumentEdit(document, editor);
 }
@@ -231,8 +256,10 @@ function insertParagraphContentsAfter(document: WordDocument, paragraph: WordPar
   const parent = parentElement(document, element);
   const siblings = parent.children.filter((child): child is LosslessXmlElement => child.kind === "element");
   const next = siblings[siblings.indexOf(element) + 1];
-  const markup = contents.map((content) => paragraphMarkup(document, element, content)).join("");
+  const markup = contents.map((content, index) => paragraphMarkup(document, element, content, index === contents.length - 1)).join("");
   const editor = beginLosslessXmlEdit(document.source);
+  const section = paragraphSectionElement(element);
+  if (section !== undefined) editor.removeElement(section);
   if (next === undefined) editor.appendMarkup(parent, markup);
   else editor.insertMarkupBefore(next, markup);
   return commitDocumentEdit(document, editor);
@@ -245,11 +272,18 @@ function paragraphContentMarkupForText(document: WordDocument, template: Lossles
   return value === "" ? "" : textRunMarkup(template.prefix, value, runPropertiesMarkup);
 }
 
-function paragraphMarkup(document: WordDocument, template: LosslessXmlElement, content: string): string {
-  const prefix = template.prefix;
+function paragraphMarkup(document: WordDocument, template: LosslessXmlElement, content: string, retainSection = false): string {
   const paragraphProperties = template.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.localName === "pPr");
-  const properties = paragraphProperties === undefined ? "" : document.source.source.slice(paragraphProperties.span.start, paragraphProperties.span.end);
+  const section = retainSection ? undefined : paragraphSectionElement(template);
+  const properties = paragraphProperties === undefined ? "" : section === undefined
+    ? document.source.source.slice(paragraphProperties.span.start, paragraphProperties.span.end)
+    : document.source.source.slice(paragraphProperties.span.start, section.span.start) + document.source.source.slice(section.span.end, paragraphProperties.span.end);
   return `<${template.qualified}>${properties}${content}</${template.qualified}>`;
+}
+
+function paragraphSectionElement(paragraph: LosslessXmlElement): LosslessXmlElement | undefined {
+  const properties = paragraph.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.namespaceUri === paragraph.namespaceUri && child.localName === "pPr");
+  return properties?.children.find((child): child is LosslessXmlElement => child.kind === "element" && child.namespaceUri === paragraph.namespaceUri && child.localName === "sectPr");
 }
 
 function assertStructuralEditSafe(document: WordDocument, paragraph: WordParagraph): void {
@@ -302,7 +336,7 @@ function commitDocumentEdit(document: WordDocument, editor: ReturnType<typeof be
   const transaction = beginPackageTransaction(document.package);
   transaction.replacePart(document.part.name, edited.bytes);
   const bytes = transaction.commit();
-  openWordDocument(openOpcPackage(bytes));
+  reopenEdited(document, bytes);
   return bytes;
 }
 
@@ -415,7 +449,8 @@ function appendTextRun(
   else editor.appendMarkup(element, markup);
 }
 
-function insertRunBesideControl(
+/** Insert within the existing run so its properties and exact control boundary survive. */
+function insertTextBesideControl(
   editor: ReturnType<typeof beginLosslessXmlEdit>,
   document: WordDocument,
   segment: WordParagraphTextSegment,
@@ -426,22 +461,23 @@ function insertRunBesideControl(
   if (value.length === 0) return;
   const control = requiredElement(document, segment.elementId);
   const run = requiredElement(document, segment.runElementId);
-  if (segment.kind === "symbol") {
-    const symbol = document.source.source.slice(control.span.start, control.span.end);
-    const text = textContentMarkup(run.prefix, value);
-    editor.replaceElementMarkup(control, offset <= segment.start ? text + symbol : symbol + text);
+  // A projected field may span several XML leaves or be a paragraph-level fldSimple.
+  // Keep its existing run-relative insertion until field boundaries are editable explicitly.
+  if (segment.kind === "page-field") {
+    const markup = textRunMarkup(run.prefix, value);
+    if (affinity === "before") editor.insertMarkupBefore(run, markup);
+    else {
+      const parent = parentElement(document, run);
+      const siblings = parent.children.filter((child): child is LosslessXmlElement => child.kind === "element");
+      const next = siblings[siblings.indexOf(run) + 1];
+      if (next === undefined) editor.appendMarkup(parent, markup);
+      else editor.insertMarkupBefore(next, markup);
+    }
     return;
   }
-  const markup = textRunMarkup(run.prefix, value);
-  if (affinity === "before") editor.insertMarkupBefore(run, markup);
-  else {
-    const parent = parentElement(document, run);
-    const siblings = parent.children.filter((child): child is LosslessXmlElement => child.kind === "element");
-    const next = siblings[siblings.indexOf(run) + 1];
-    if (next === undefined) editor.appendMarkup(parent, markup);
-    else editor.insertMarkupBefore(next, markup);
-  }
-  void control;
+  const original = document.source.source.slice(control.span.start, control.span.end);
+  const text = textContentMarkup(run.prefix, value);
+  editor.replaceElementMarkup(control, offset <= segment.start ? text + original : original + text);
 }
 
 function parentElement(document: WordDocument, target: LosslessXmlElement): LosslessXmlElement {

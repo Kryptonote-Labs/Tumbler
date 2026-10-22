@@ -279,6 +279,8 @@ interface ParseBudget {
 }
 
 export class WordDocument {
+  /** Reapplied to each immutable revision; parse counters reset on every open. */
+  readonly openOptions: OpenWordDocumentOptions;
   readonly inkRendering: import('@tumblerjs/ink').InkSvgOptions;
   /** Authored solid page colour; absent or automatic uses the viewer default. */
   readonly background: WordColour | undefined;
@@ -298,6 +300,7 @@ export class WordDocument {
   readonly notes: readonly WordNoteStory[];
 
   constructor(input: {
+    openOptions?: OpenWordDocumentOptions;
     inkRendering?: import('@tumblerjs/ink').InkSvgOptions | undefined;
     background?: WordColour;
     pkg: OpcPackage;
@@ -316,6 +319,7 @@ export class WordDocument {
     notes: readonly WordNoteStory[];
   }) {
     this.inkRendering = Object.freeze({ ...input.inkRendering });
+    this.openOptions = Object.freeze({ ...input.openOptions, inkRendering: this.inkRendering });
     this.background = input.background;
     this.package = input.pkg;
     this.part = input.part;
@@ -412,7 +416,7 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
       wrapTrailSpaces = trailingSpaces !== undefined && !['0', 'false', 'off'].includes(attr(trailingSpaces, namespace, 'val') ?? 'true');
     }
   }
-  return new WordDocument({ inkRendering: options.inkRendering, ...(background === undefined ? {} : { background }), pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes, evenAndOddHeaders, wrapTrailSpaces, doNotExpandShiftReturn });
+  return new WordDocument({ openOptions: options, inkRendering: options.inkRendering, ...(background === undefined ? {} : { background }), pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes, evenAndOddHeaders, wrapTrailSpaces, doNotExpandShiftReturn });
 }
 
 function readNoteStories(pkg: OpcPackage, main: OpcPart, conformance: WordConformance, budget: ParseBudget): readonly WordNoteStory[] {
