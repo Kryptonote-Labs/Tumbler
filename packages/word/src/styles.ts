@@ -184,6 +184,7 @@ export class WordStyles {
   // Source and paragraph identities keep revisions and story parts separate, even when IDs repeat.
   readonly #paragraphs = new WeakMap<WordDocumentLike, WeakMap<WordParagraph, ParagraphStyleCache>>();
   readonly #byId: ReadonlyMap<string, WordStyle>;
+  readonly #resolvedStyles = new Map<string | undefined, { paragraph: WordParagraphProperties; run: WordRunProperties }>();
   readonly #defaultParagraphStyleId: string | undefined;
   readonly #defaultCharacterStyleId: string | undefined;
 
@@ -212,17 +213,17 @@ export class WordStyles {
 
   /** Resolve a named paragraph style without reading document XML. */
   resolveParagraphStyle(styleId: string) {
-    const chain = this.styleChain(styleId, 'paragraph');
+    const resolved = this.resolvedStyle(styleId, 'paragraph');
     return {
-      paragraph: computedParagraph(chain.reduce((value, style) => mergeParagraph(value, style.paragraph), this.documentParagraphDefaults), styleId, this.themeColors),
-      text: this.computedRun(chain.reduce((value, style) => mergeRun(value, style.run), this.documentRunDefaults)),
+      paragraph: computedParagraph(resolved.paragraph, styleId, this.themeColors),
+      text: this.computedRun(mergeRun(this.documentRunDefaults, resolved.run)),
     };
   }
 
   /** Resolve inherited run formatting while retaining an imported character style. */
   resolveStyledRun(paragraphStyleId: string, characterStyleId?: string): ComputedWordTextFormat {
-    const paragraph = this.styleChain(paragraphStyleId, 'paragraph').reduce((value, style) => mergeRun(value, style.run), this.documentRunDefaults);
-    return this.computedRun(this.styleChain(characterStyleId ?? this.#defaultCharacterStyleId, 'character').reduce((value, style) => mergeRun(value, style.run), paragraph));
+    const paragraph = mergeRun(this.documentRunDefaults, this.resolvedStyle(paragraphStyleId, 'paragraph').run);
+    return this.computedRun(mergeStyleLevels(paragraph, this.resolvedStyle(characterStyleId, 'character').run, this.documentRunDefaults));
   }
 
   runCharacterStyle(document: WordDocumentLike, run: WordRun): string | undefined {
@@ -234,10 +235,7 @@ export class WordStyles {
     if (cached.format) return cached.format;
     const direct = cached.direct;
     const styleId = direct.styleId ?? this.#defaultParagraphStyleId;
-    const cascade = this.styleChain(styleId, "paragraph").reduce(
-      (result, style) => mergeParagraph(result, style.paragraph),
-      this.documentParagraphDefaults,
-    );
+    const cascade = this.resolvedStyle(styleId, "paragraph").paragraph;
     return cached.format = computedParagraph(mergeParagraph(cascade, direct), styleId, this.themeColors);
   }
 
@@ -249,19 +247,13 @@ export class WordStyles {
     const namespace = wordNamespace(document.conformance);
     const paragraphDirect = cached.direct;
     const paragraphStyleId = paragraphDirect.styleId ?? this.#defaultParagraphStyleId;
-    const paragraphRun = cached.inheritedRun ??= this.styleChain(paragraphStyleId, "paragraph").reduce(
-      (result, style) => mergeRun(result, style.run),
-      this.documentRunDefaults,
-    );
+    const paragraphRun = cached.inheritedRun ??= mergeRun(this.documentRunDefaults, this.resolvedStyle(paragraphStyleId, "paragraph").run);
     const runDirect = run?.propertiesElementId === undefined
       ? {}
       : parseRunProperties(requiredElement(document, run.propertiesElementId), namespace);
     const runElement = run?.propertiesElementId === undefined ? undefined : requiredElement(document, run.propertiesElementId);
     const characterStyleId = runElement === undefined ? this.#defaultCharacterStyleId : valueChild(runElement, namespace, "rStyle") ?? this.#defaultCharacterStyleId;
-    const characterRun = this.styleChain(characterStyleId, "character").reduce(
-      (result, style) => mergeRun(result, style.run),
-      paragraphRun,
-    );
+    const characterRun = mergeStyleLevels(paragraphRun, this.resolvedStyle(characterStyleId, "character").run, this.documentRunDefaults);
     // Paragraph-mark formatting controls blank lines, but does not format ordinary runs.
     const paragraphProperties = paragraph.propertiesElementId === undefined ? undefined : requiredElement(document, paragraph.propertiesElementId);
     const mark = run === undefined && paragraphProperties
@@ -288,6 +280,23 @@ export class WordStyles {
       paragraphs.set(paragraph, cached);
     }
     return cached;
+  }
+
+  // Resolve each basedOn chain with nearest-declaration semantics before combining levels.
+  private resolvedStyle(styleId: string | undefined, type: "paragraph" | "character") {
+    const requested = styleId === undefined ? undefined : this.#byId.get(styleId);
+    const selectedId = requested?.type === type ? styleId
+      : type === "paragraph" ? this.#defaultParagraphStyleId : this.#defaultCharacterStyleId;
+    const cached = this.#resolvedStyles.get(selectedId);
+    if (cached) return cached;
+    const chain = this.styleChain(selectedId, type);
+    const resolved = {
+      paragraph: chain.reduce((value, style) => mergeParagraph(value, style.paragraph), mergeParagraph({}, this.documentParagraphDefaults)),
+      run: chain.reduce<WordRunProperties>((value, style) => mergeRun(value, style.run), {}),
+    };
+    // Missing references share the default style or one unstyled entry.
+    this.#resolvedStyles.set(selectedId, resolved);
+    return resolved;
   }
 
   private styleChain(styleId: string | undefined, expectedType: "paragraph" | "character"): readonly WordStyle[] {
@@ -521,8 +530,23 @@ function mergeRun(base: WordRunProperties, overlay: WordRunProperties): WordRunP
   return Object.freeze({ ...base, ...overlay });
 }
 
+// ECMA-376 17.7.3: toggle across levels, not within basedOn chains. MS-OI29500
+// 2.1.230 uses document defaults for absent levels and complements XOR when true.
+// The unsupported table-style level retains its document-default value.
+function mergeStyleLevels(paragraph: WordRunProperties, character: WordRunProperties, defaults: WordRunProperties): WordRunProperties {
+  const toggle = (key: "bold" | "italic" | "strike") =>
+    Boolean(Number(paragraph[key] ?? false) ^ Number(character[key] ?? defaults[key] ?? false) ^ Number(defaults[key] ?? false));
+  return Object.freeze({ ...paragraph, ...character, bold: toggle("bold"), italic: toggle("italic"), strike: toggle("strike") });
+}
+
 function mergeParagraph(base: WordParagraphProperties, overlay: WordParagraphProperties): WordParagraphProperties {
-  return freezeParagraph({ ...base, ...overlay });
+  if (overlay.tabs === undefined || overlay.tabs.length === 0) return Object.freeze({ ...base, ...overlay, ...(base.tabs === undefined ? {} : { tabs: base.tabs }) });
+  const tabs = new Map(base.tabs?.filter(tab => tab.alignment !== "clear").map(tab => [tab.positionTwips, tab]));
+  for (const tab of overlay.tabs) {
+    if (tab.alignment === "clear") tabs.delete(tab.positionTwips);
+    else tabs.set(tab.positionTwips, tab);
+  }
+  return Object.freeze({ ...base, ...overlay, tabs: Object.freeze([...tabs.values()].sort((a, b) => a.positionTwips - b.positionTwips)) });
 }
 
 function freezeParagraph(properties: WordParagraphProperties): WordParagraphProperties {

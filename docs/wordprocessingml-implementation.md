@@ -182,3 +182,24 @@ shapes and text-wrapped shapes remain opaque source drawings. Neighbouring edits
 original markup; they are not flattened into the simpler editable shape model.
 
 When assigning a style through `NativeWordDocument.update`, omit `paragraph` and each run's `format` to reset direct formatting to the style. Properties explicitly retained in the update remain overrides, including the effective formatting returned by `importWordContent`. Kryptonote's style action clears those overrides. Unknown imported style references retain Word's default-style fallback.
+
+### Effective style cascade
+
+Run toggles currently modeled by the reader are bold, italic and single strike.
+Within each paragraph or character `basedOn` chain, the nearest declaration wins,
+including explicit false. Between paragraph and character levels, these properties
+combine as toggles. Direct run formatting and empty-paragraph mark formatting are
+absolute overrides. The resolver follows the document-default behavior described
+in [MS-OI29500 §2.1.230](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/f7130225-2368-48f3-acae-a9d278d0fb25),
+including defaults of true and levels without a declaration. Table-style run
+formatting and the remaining ECMA toggle properties are not added by this change.
+
+Custom tabs accumulate by position through document defaults, paragraph style
+chains and direct formatting, per ECMA-376 Part 1 §17.3.1.38. A later declaration
+at the same position replaces alignment and leader; `clear` removes that position.
+Empty tab arrays or containers inherit earlier positions. Computed tabs are sorted
+and contain no clear entries; source declarations remain intact for serialization.
+An unknown or wrong-type selected style falls back to the default of the requested
+type. A missing or wrong-type `basedOn` target only ends that chain. Cycles and
+chains over 100 styles still fail. Resolved declarations are cached per named style
+within a `WordStyles` instance; unknown references do not grow the cache.
