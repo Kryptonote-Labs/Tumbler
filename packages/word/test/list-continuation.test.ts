@@ -62,3 +62,17 @@ test('rejects undefined imported levels consistently before remapping any shared
   expect(() => reconcileWordContent(original, content)).toThrow('undefined source level');
   expect(() => new NativeWordDocument({ source: original, content })).toThrow('undefined source level');
 });
+
+test.each(['transitional', 'strict'] as const)('retains an unchanged empty %s imported bullet marker', conformance => {
+  const word = conformance === 'strict' ? 'http://purl.oclc.org/ooxml/wordprocessingml/main' : 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const office = conformance === 'strict' ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const original = openWordArtifact(buildWordDocumentFixture({
+    documentXml: `<w:document xmlns:w="${word}"><w:body><w:p><w:pPr><w:numPr><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Item</w:t></w:r></w:p></w:body></w:document>`,
+    relationships: [{ id: 'n', type: `${office}/numbering`, target: 'numbering.xml' }],
+    parts: [{ itemName: 'word/numbering.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml', xml: `<w:numbering xmlns:w="${word}"><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val=""/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>` }],
+  }));
+  const native = new NativeWordDocument({ source: original });
+  expect([...native.listMarkers.values()].map(marker => marker.text)).toEqual(['']);
+  const exported = native.artifact();
+  expect([...exported.document.numbering.markers(exported.document).values()].map(marker => marker.text)).toEqual(['']);
+});
