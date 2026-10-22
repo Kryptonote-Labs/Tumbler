@@ -406,6 +406,15 @@ it must not mutate either document and can throw to reject the edit atomically. 
 encoded-update hooks are supplied, both run. A `defaultAttributes(body)` callback supplies document-specific formatting defaults
 for selection inspection and inserted text. The adapter does not provide authenticated networking or persistence.
 
+`wordTextRange(text, start, end)` reads UTF-16 ranges and effective attributes without materializing
+unchanged character content. It walks linked CRDT items, so heavily fragmented text can still cost
+more than a contiguous run. `isWordTextOnlyEdit(event.delta, previousText)` proves that an edit on an
+already validated region preserves paragraph, table, list and object structure. `previousText` must
+be an untouched pre-edit replica. A false result requires full validation. Hosts still validate
+inserted source references, custom attributes, immutable metadata, region identities and update
+completeness. Formatting changes and edits containing paragraph terminators or object characters
+always require full validation.
+
 Replacement changes accept an optional `format` patch, for example
 `{ kind: 'replace', target, value: 'Welcome', format: { bold: true, italic: null } }`.
 The replacement inherits formatting as usual, then patches the resulting text in the same staged
