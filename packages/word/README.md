@@ -29,6 +29,12 @@ const bytes = artifact.bytes();
 
 Creation defaults to A4 with one-inch margins and modern Word compatibility.
 
+Adding lists or tables to an imported Strict document emits Strict numbering,
+theme and table vocabulary. Table widths and cell margins use physical units and
+reopen as integer twips in the model. Existing resource parts are preserved when
+content edits do not change them. This bounded conversion does not validate an
+entire package or establish desktop Office interoperability.
+
 Line layout lets ordinary trailing spaces extend past the margin without moving
 a fitting word or adding space-only lines. Their logical offsets are retained
 even though they have no painted width. The document compatibility setting

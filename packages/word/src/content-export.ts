@@ -1,3 +1,4 @@
+import { strictThemeMarkup } from './strict-resources.ts';
 import { chartTitleFromWord } from './chart-title.ts';
 import { updateChartTitle } from '@tumblerjs/charts';
 import { mergeAuthoredStyles, missingAuthoredStyles } from './package-styles.ts';
@@ -268,8 +269,8 @@ export function prepareWordContent(
     }
     const isTheme = /\/theme$/.test(rel.type);
     const bytes = generated.document.package.readPart(part);
-    transaction.addPart(name, part.contentType, isTheme
-      ? new TextEncoder().encode(conformanceMarkup(new TextDecoder().decode(bytes)))
+    transaction.addPart(name, part.contentType, isTheme && document.conformance === 'strict'
+      ? new TextEncoder().encode(strictThemeMarkup(conformanceMarkup(new TextDecoder().decode(bytes))))
       : bytes);
     // Themes and styles are shared; images and custom XML stay with this story.
     transaction.addRelationship(isTheme ? sharedOwner : document.part.name, {

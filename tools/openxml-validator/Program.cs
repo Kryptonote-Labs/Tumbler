@@ -28,6 +28,9 @@ foreach (var path in paths)
             ".docx" => WordprocessingDocument.Open(path, false),
             _ => SpreadsheetDocument.Open(path, false),
         };
+        var translated = StrictThemeValidation.Translate(document);
+        if (translated > 0)
+            Console.WriteLine($"INFO {path}: translated {translated} Strict theme miter limits for SDK validation only; input unchanged.");
         var errors = validator.Validate(document).ToArray();
         if (errors.Length == 0)
         {

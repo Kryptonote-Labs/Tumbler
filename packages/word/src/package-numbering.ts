@@ -1,3 +1,4 @@
+import { strictNumberingMarkup } from './strict-resources.ts';
 import { beginLosslessXmlEdit, parseLosslessXml } from '@tumblerjs/ooxml';
 import { PartName, type PackageTransaction } from '@tumblerjs/opc';
 import type { WordDocument } from './document.ts';
@@ -66,7 +67,9 @@ export function mergeContentNumbering(
       return !id || !continued.has(Number(id.value));
     })
     .map((node) =>
-      rewrite(input.source.slice(node.span.start, node.span.end)).replace(
+      rewrite(source.conformance === 'strict'
+        ? strictNumberingMarkup(input.source.slice(node.span.start, node.span.end))
+        : input.source.slice(node.span.start, node.span.end)).replace(
         /^<w:(\w+)/,
         `<w:$1 xmlns:w="${source.source.root.namespaceUri}"`,
       ),
