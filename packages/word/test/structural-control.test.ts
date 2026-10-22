@@ -25,3 +25,11 @@ for (const affinity of ['before', 'after'] as const) {
     });
   }
 }
+
+test('simple page field insertion still creates a paragraph-level run', () => {
+  const artifact = open('<w:p><w:fldSimple w:instr="PAGE"><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p>');
+  const edited = artifact.replaceText(selection(artifact, 1), 'X');
+  expect(texts(edited)).toEqual(['\uFFFCX']);
+  const paragraph = edited.document.source.element(paragraphs(edited)[0]!.elementId)!;
+  expect(paragraph.children.filter(child => child.kind === 'element').map(child => child.localName)).toEqual(['fldSimple', 'r']);
+});
