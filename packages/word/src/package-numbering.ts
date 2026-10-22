@@ -23,7 +23,7 @@ export function mergeContentNumbering(
   for (const [index, block] of generated.blocks.entries()) {
     const list = paragraphs[index]?.list;
     if (block.kind !== 'paragraph' || !list) continue;
-    const existing = source.numbering.importedReference(list.id, list.level ?? 0);
+    const existing = source.numbering.importedReference(list);
     const fresh = generated.numbering.paragraphReference(generated, block);
     if (existing && fresh) continued.set(fresh.numId, existing.numId);
   }

@@ -1,3 +1,4 @@
+import type { WordAuthoredList } from './authored-list.ts';
 import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { RelationshipsError, type OpcPackage, type OpcPart, type PartName } from "@tumblerjs/opc";
 import { WordError, type WordBlock, type WordConformance, type WordParagraph } from "./document.ts";
@@ -84,14 +85,20 @@ export class WordNumbering {
   }
 
   /** Imported identities continue their original instance, including level overrides. */
-  importedReference(id: string, level: number): WordParagraphNumbering | undefined {
+  importedReference(list: WordAuthoredList): WordParagraphNumbering | undefined {
+    const { id, level = 0 } = list;
     const match = /^source-list-([1-9][0-9]*)$/.exec(id);
     if (!match || !Number.isInteger(level) || level < 0 || level > MAX_LEVEL) return undefined;
     const numId = Number(match[1]);
     const instance = this.#instances.get(numId);
     if (!instance) return undefined;
     const definition = instance.levelOverrides.get(level) ?? this.#abstracts.get(instance.abstractId)?.levels.find(item => item.level === level);
-    return definition ? { numId, level } : undefined;
+    if (!definition) throw new TypeError('An imported list identity cannot reference an undefined source level. Use a new identity for an independently defined list.');
+    if (list.kind !== definition.format || (list.start ?? 1) !== definition.start ||
+        (list.kind === 'bullet' && (list.marker ?? '•') !== definition.text) ||
+        (list.multilevel !== undefined && definition.text !== (list.multilevel ? Array.from({ length: level + 1 }, (_, index) => `%${index + 1}`).join('.') + '.' : `%${level + 1}.`)))
+      throw new TypeError('An imported list identity must retain its source definition. Use a new identity for an independently defined list.');
+    return { numId, level };
   }
 
   paragraphReference(document: WordDocumentLike, paragraph: WordParagraph): WordParagraphNumbering | undefined {

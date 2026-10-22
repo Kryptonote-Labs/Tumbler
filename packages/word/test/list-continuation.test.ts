@@ -41,3 +41,24 @@ test.each(['transitional', 'strict'] as const)('preserves %s source instances, o
   const native = new NativeWordDocument({ source: original, content });
   expect([...native.listMarkers.values()].map(m => m.text)).toEqual(['III)', 'III.a)', 'III.b)', 'IV)']);
 });
+
+test.each([{ kind: 'upperRoman' as const }, { start: 5 }, { kind: 'bullet' as const }])('rejects incompatible metadata on an imported identity: %j', change => {
+  const original = source();
+  const content = importWordContent(original).map(block => block.kind === 'paragraph' && block.list ? { ...block, list: { ...block.list, ...change } } : block);
+  expect(() => reconcileWordContent(original, content)).toThrow('retain its source definition');
+  expect(() => new NativeWordDocument({ source: original, content })).toThrow('retain its source definition');
+});
+
+test('rejects undefined imported levels consistently before remapping any shared instance', () => {
+  const word = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const original = openWordArtifact(buildWordDocumentFixture({
+    documentXml: `<w:document xmlns:w="${word}"><w:body><w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="42"/></w:numPr></w:pPr><w:r><w:t>One</w:t></w:r></w:p></w:body></w:document>`,
+    relationships: [{ id: 'n', type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering', target: 'numbering.xml' }],
+    parts: [{ itemName: 'word/numbering.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml', xml: `<w:numbering xmlns:w="${word}"><w:abstractNum w:abstractNumId="7"><w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl></w:abstractNum><w:num w:numId="42"><w:abstractNumId w:val="7"/></w:num></w:numbering>` }],
+  }));
+  const content = importWordContent(original);
+  content.push({ kind: 'paragraph', runs: [{ text: 'Nested' }], list: { id: 'source-list-42', kind: 'decimal', level: 1 } });
+  content.push({ kind: 'paragraph', runs: [{ text: 'Continue' }], list: { id: 'source-list-42', kind: 'decimal', level: 0 } });
+  expect(() => reconcileWordContent(original, content)).toThrow('undefined source level');
+  expect(() => new NativeWordDocument({ source: original, content })).toThrow('undefined source level');
+});
