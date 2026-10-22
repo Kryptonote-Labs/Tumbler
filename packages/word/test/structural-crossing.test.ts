@@ -1,7 +1,4 @@
 import { expect, test } from 'bun:test';
-import { openWordArtifact } from '../src/index.ts';
-import { wordStoryArtifact, storyMainArtifact } from '../src/stories.ts';
-import { buildWordDocumentFixture } from './document-fixture.ts';
 import { ns, rel, p, open, paragraphs, selection, texts } from './structural-editor-fixture.ts';
 
 for (const block of ['<w:tbl><w:tr><w:tc>' + p('cell') + '</w:tc></w:tr></w:tbl>', '<w:sdt><w:sdtContent>' + p('hidden') + '</w:sdtContent></w:sdt>']) {

@@ -1,7 +1,4 @@
 import { expect, test } from 'bun:test';
-import { openWordArtifact } from '../src/index.ts';
-import { wordStoryArtifact, storyMainArtifact } from '../src/stories.ts';
-import { buildWordDocumentFixture } from './document-fixture.ts';
 import { ns, rel, p, open, paragraphs, selection, texts } from './structural-editor-fixture.ts';
 
 for (const control of ['tab', 'br', 'cr']) {

@@ -1,5 +1,4 @@
 import { openWordArtifact, wordParagraphText, type WordArtifact } from '../src/index.ts';
-import { wordStoryArtifact, storyMainArtifact } from '../src/stories.ts';
 import { buildWordDocumentFixture } from './document-fixture.ts';
 
 export const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
