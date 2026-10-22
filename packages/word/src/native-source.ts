@@ -14,6 +14,7 @@ export class NativeWordSource {
     format: ComputedWordParagraphFormat;
     textFormat: ComputedWordTextFormat;
     numbering: WordParagraphNumbering | undefined;
+    directNumbering: Partial<WordParagraphNumbering>;
   }>();
   readonly leaves = new Map<number, {
     run: WordRun;
@@ -52,6 +53,7 @@ export class NativeWordSource {
             format: document.styles.paragraphFormat(document, block),
             textFormat: document.styles.runFormat(document, block),
             numbering: document.numbering.paragraphReference(document, block),
+            directNumbering: document.numbering.paragraphProperties(document, block),
           });
           for (const owner of block.inlines) {
             const runs = owner.kind === 'run' ? [owner] : owner.kind === 'hyperlink' || owner.kind === 'insertion' ? owner.runs : [];

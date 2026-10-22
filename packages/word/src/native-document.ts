@@ -90,7 +90,7 @@ export class NativeWordDocument implements WordLayoutSource {
     const cached = this.independentBlocks.get(block);
     if (cached !== undefined) return cached;
     const value = (!('source' in block) || block.source === undefined) &&
-      (block.kind !== 'paragraph' || !block.list) &&
+      (block.kind !== 'paragraph' || (!block.list && !this.compiled?.artifact.document.numbering.reference({}, block.styleId))) &&
       (block.kind !== 'table' || block.rows.every(row => row.every(cell => cell.blocks.every(child => this.independent(child)))));
     this.independentBlocks.set(block, value);
     return value;
@@ -534,10 +534,15 @@ export class NativeWordDocument implements WordLayoutSource {
             result = { signature: fingerprint, block, drawings: media };
           }
           const list = authored.list;
-          const importedReference = list && compiled?.artifact.document.numbering.importedReference(list);
+          // Export preserves source numPr when list metadata is unchanged. Resolve
+          // that direct formatting against the edited style instead of its old marker.
+          const preserved = compiled && JSON.stringify(list) === JSON.stringify(compiled.lists.get(authored.source!));
+          const importedReference = preserved
+            ? compiled.artifact.document.numbering.reference(original?.directNumbering ?? {}, authored.styleId ?? original?.format.styleId)
+            : list && compiled?.artifact.document.numbering.importedReference(list);
           if (importedReference) {
             numbering.push({ elementId: result.block.elementId, reference: importedReference });
-          } else if (list) {
+          } else if (list && !preserved) {
             if (!isWordAuthoredList(list)) throw new TypeError('Invalid list.');
             const level = list.level ?? 0,
               start = list.start ?? 1;

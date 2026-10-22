@@ -77,9 +77,9 @@ test('omitted imported start is zero; authored default stays one', () => {
   expect(markers(authored)).toEqual(['1.']);
 });
 
-test('numbering styles inherit their instance and links can span multiple styles', () => {
+test('numbering links can span multiple styles while basedOn is ignored', () => {
   const definitions = linked().replace('<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>', '<w:num w:numId="2"><w:abstractNumId w:val="2"/></w:num>') + '<w:abstractNum w:abstractNumId="2"><w:numStyleLink w:val="Next"/></w:abstractNum><w:num w:numId="3"><w:abstractNumId w:val="1"/></w:num>';
-  const styles = style('N', '', '<w:basedOn w:val="Parent"/>', 'numbering') + style('Parent', ref(0, 2), '', 'numbering') + style('Next', ref(0, 3), '', 'numbering');
+  const styles = style('N', ref(0, 2), '<w:basedOn w:val="N"/>', 'numbering') + style('Parent', ref(0, 2), '', 'numbering') + style('Next', ref(0, 3), '', 'numbering');
   verify(make(p(ref()) + p(ref()), definitions, styles), ['1.', '2.']);
 });
 
@@ -101,4 +101,37 @@ test('style link traversal is bounded without recursion', () => {
   const definitions = Array.from({ length: 101 }, (_, i) => `<w:abstractNum w:abstractNumId="${i}"><w:numStyleLink w:val="N${i + 1}"/></w:abstractNum><w:num w:numId="${i + 1}"><w:abstractNumId w:val="${i}"/></w:num>`).join('');
   const styles = Array.from({ length: 101 }, (_, i) => style(`N${i + 1}`, ref(0, i + 2), '', 'numbering')).join('');
   expect(() => markers(make(p(ref()), definitions, styles))).toThrow('exceeds 100');
+});
+
+test('a numbering style cannot inherit a missing numId through basedOn', () => {
+  verify(make(p(ref()), linked(), style('N', '', '<w:basedOn w:val="Parent"/>', 'numbering') + style('Parent', ref(0, 2), '', 'numbering')), []);
+});
+
+test.each([false, true])('native style changes and inserted styled items agree with export, immutable=%s', immutableContent => {
+  const definitions = nums(lvl(0, '<w:pStyle w:val="A"/>') + lvl(1, '<w:pStyle w:val="B"/>', '<w:start w:val="5"/>'));
+  const styles = style('A', '<w:numPr><w:numId w:val="1"/></w:numPr>') + style('B', '<w:numPr><w:numId w:val="1"/></w:numPr>') + style('Plain', '');
+  const a = make(p('<w:pStyle w:val="A"/>'), definitions, styles);
+  const content = importWordContent(a);
+  const model = new NativeWordDocument({ source: a, immutableContent });
+  const verifyModel = (expected: string[]) => {
+    expect([...model.listMarkers.values()].map(marker => marker.text)).toEqual(expected);
+    expect(markers(openWordArtifact(model.artifact().bytes()))).toEqual(expected);
+  };
+  model.update(content.map(block => ({ ...block, styleId: 'B' })));
+  verifyModel(['5.']);
+  model.update(content.map(block => ({ ...block, styleId: 'Plain' })));
+  verifyModel([]);
+  const table = { kind: 'table' as const, rows: [[{ blocks: [{ kind: 'paragraph' as const, styleId: 'B', runs: [{ text: 'inside' }] }] }]] };
+  model.update([...content, table]);
+  verifyModel(['1.', '5.']);
+  model.update([...content, { kind: 'paragraph', styleId: 'B', runs: [{ text: 'insert' }] }, table]);
+  verifyModel(['1.', '5.', '6.']);
+});
+
+test('native style edits preserve direct numbering and explicit cancellation', () => {
+  const a = make(p('<w:pStyle w:val="A"/>' + ref()) + p('<w:pStyle w:val="A"/>' + ref(0, 0)), nums(lvl(0) + lvl(1, '<w:pStyle w:val="B"/>', '<w:start w:val="5"/>')), style('A', ref()) + style('B', ref()));
+  const model = new NativeWordDocument({ source: a });
+  model.update(importWordContent(a).map(block => ({ ...block, styleId: 'B' })));
+  expect([...model.listMarkers.values()].map(marker => marker.text)).toEqual(['1.']);
+  expect(markers(model.artifact())).toEqual(['1.']);
 });

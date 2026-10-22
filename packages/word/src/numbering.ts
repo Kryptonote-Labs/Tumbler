@@ -153,23 +153,36 @@ export class WordNumbering {
     return this.#levels(reference.numId).find(item => item.level === reference.level);
   }
 
-  paragraphReference(document: WordDocumentLike, paragraph: WordParagraph): WordParagraphNumbering | undefined {
+  /** Compile direct properties once for native edits; omitted fields still inherit. */
+  paragraphProperties(document: WordDocumentLike, paragraph: WordParagraph): Partial<WordParagraphNumbering> {
     const properties = paragraph.propertiesElementId === undefined ? undefined : document.source.element(paragraph.propertiesElementId);
     const ns = namespace(document.conformance);
     const numPr = properties && one(properties, ns, "numPr", "Paragraph properties must not repeat numPr.");
     const rawId = numPr && valueChild(numPr, ns, "numId");
-    // Direct cancellation takes precedence even over malformed inherited chains.
-    const directId = rawId === undefined ? undefined : integer(rawId, "numbering instance", 0, 2_147_483_647);
-    if (directId === 0) return undefined;
     const rawLevel = numPr && valueChild(numPr, ns, 'ilvl');
-    if (directId !== undefined && rawLevel !== undefined) return Object.freeze({ numId: directId, level: integer(rawLevel, 'numbering level', 0, MAX_LEVEL) });
-    const style = this.#styles.resolve(properties && valueChild(properties, ns, 'pStyle'), 'paragraph');
+    return {
+      ...(rawId === undefined ? {} : { numId: integer(rawId, 'numbering instance', 0, 2_147_483_647) }),
+      ...(rawLevel === undefined ? {} : { level: integer(rawLevel, 'numbering level', 0, MAX_LEVEL) }),
+    };
+  }
+
+  /** Resolve the same direct properties and current style for XML and native paragraphs. */
+  reference(properties: Partial<WordParagraphNumbering>, styleId?: string): WordParagraphNumbering | undefined {
+    const { numId: directId, level: directLevel } = properties;
+    if (directId === 0) return undefined;
+    if (directId !== undefined && directLevel !== undefined) return Object.freeze({ numId: directId, level: directLevel });
+    const style = this.#styles.resolve(styleId, 'paragraph');
     const numId = directId ?? style.numId;
     if (numId === undefined || numId === 0) return undefined;
     const levels = this.#levels(numId);
     const linkedLevel = style.ids.map(id => levels.find(level => level.paragraphStyleId === id)).find(level => level !== undefined);
-    const level = rawLevel === undefined ? linkedLevel?.level ?? 0 : integer(rawLevel, "numbering level", 0, MAX_LEVEL);
-    return Object.freeze({ numId, level });
+    return Object.freeze({ numId, level: directLevel ?? linkedLevel?.level ?? 0 });
+  }
+
+  paragraphReference(document: WordDocumentLike, paragraph: WordParagraph): WordParagraphNumbering | undefined {
+    const properties = paragraph.propertiesElementId === undefined ? undefined : document.source.element(paragraph.propertiesElementId);
+    const styleId = properties && valueChild(properties, namespace(document.conformance), 'pStyle');
+    return this.reference(this.paragraphProperties(document, paragraph), styleId);
   }
 
   markers(document: WordDocumentLike & { readonly blocks: readonly WordBlock[] }, options: WordMarkerOptions = {}, budget = new WordMarkerBudget(options.maxCharacters)): ReadonlyMap<number, WordListMarker> {

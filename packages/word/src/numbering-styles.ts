@@ -50,7 +50,7 @@ export class WordNumberingStyles {
       seen.add(current);
       ids.push(current);
       numId ??= style.numId;
-      current = style.basedOn;
+      current = type === 'paragraph' ? style.basedOn : undefined;
     }
     const result = { numId, ids: Object.freeze(ids) };
     this.#cache.set(selected, result);

@@ -20,6 +20,12 @@ has 12 passes and 85 assertions. The four reported marker changes are:
 defines style-derived numbering and selection through the level's `pStyle`, ignoring
 `ilvl` inside a paragraph style. [Numbering style links](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.numberingstylelink?view=openxml-3.0.1)
 reference a numbering style, whose instance supplies the underlying definition.
+[`basedOn`](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.basedon?view=openxml-3.0.1)
+is ignored for numbering styles. Native style changes resolve preserved direct
+numbering against the edited style; newly inserted styled paragraphs do the same.
+Review repros initially produced native `1.` versus exported `5.` after changing
+A to B, and omitted a native marker for a new B paragraph. Both paths now agree.
+The expanded semantics and budget suites pass 30 tests with 148 assertions.
 
 [Starting values](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.startnumberingvalue?view=openxml-3.0.1)
 default to zero when omitted. Microsoft's [Word implementation notes](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/8f145055-5422-4df0-933d-e67a81c633cd)
