@@ -635,7 +635,9 @@ remain supported with their previous fit-to-frame behavior.
 ### Structured collaborative tables, schema 2
 
 Concurrent table structure uses stable row and column identities. Numeric grid
-positions are derived from their shared ordering records. Existing cell text stays
+positions are derived from their shared ordering records. Row insertions also
+record the vertical-merge coverage observed at insertion, so deleting a neighbor
+cannot change the inserted row into a different kind of cell. Existing cell text stays
 in its original Y.Text; new intersections use deterministically named, initially
 empty Y.Text roots. Concurrent first typing therefore edits one shared character
 sequence, without inserting duplicate paragraph terminators.
@@ -698,7 +700,11 @@ migrated tables; switch those callers to the scoped operation adapter.
 
 Deletion retains payloads and records what the deleting peer observed. Concurrent
 edits that would be hidden produce a conflict; `restore-axis` or `restore-table`
-can expose them again. `inspectWordTableState` exposes retained axis records even
+can expose them again. Deletion witnesses include nested stories recursively.
+Deleting an axis updates observed explicit merges; undo restores that coverage.
+An explicit `restore-axis` exposes the retained cells without recreating retired
+merge records. Select merged-cell text through the grid's `payloads`; covered
+coordinates that do not name a visible payload are rejected. `inspectWordTableState` exposes retained axis records even
 when export is blocked. Overlapping merge coverage, contradictory axis order,
 conflicting migration baselines, and unions exceeding the package's 63-grid-column
 limit also block export. Content is never flattened into other cells to satisfy
@@ -711,7 +717,9 @@ undo that would detach it. Its journal lives for the editing session and replay
 cost grows with that journal; destroy it when the editor closes. Migration belongs
 outside this editing history. The canonical empty cell's final paragraph boundary
 is virtual; formatting it uses separate shared registers, and only user-entered
-paragraph breaks become actual characters.
+paragraph breaks and boundaries required before nested tables become actual
+characters. Empty named table maps left by undo are inert; retained remote cell
+content still prevents a destructive structural undo.
 
 DOCX export contains ordinary cells and valid table grids. Implicit intersections
 become empty cells at their actual coordinates. DOCX does not preserve CRDT axis
@@ -731,11 +739,11 @@ flock -x /tmp/tumbler-word-audit-heavy.lock bash -c '
 ```
 
 On Bun 1.4.4 and an Intel Celeron N5095, a 12×4 table with two local column edits
-and ten healthy validation/grid-read pairs took a median 11.169 ms before and
-78.131 ms after, across seven samples following three warmups. Raw total times
-ranged 9.839–14.384 ms before and 75.028–81.872 ms after. Median CPU time rose from
-23.745 to 110.382 ms, full peer-state bytes from 35,052 to 45,800, and net heap
-change from 115,820 to 256,243 bytes. These are correctness costs, not a speedup.
-One-time migration took a median 13.616 ms, measured separately. The unchanged
+and ten healthy validation/grid-read pairs took a median 10.635 ms before and
+104.546 ms after, across seven samples following three warmups. Raw total times
+ranged 9.107–12.694 ms before and 99.213–113.663 ms after. Median CPU time rose from
+21.726 to 129.705 ms, full peer-state bytes from 35,052 to 45,832, and net heap
+change from 113,568 to 406,089 bytes. These are correctness costs, not a speedup.
+One-time migration took a median 16.412 ms, measured separately. The unchanged
 retained-text hash matched in every sample; merged validation changed from 0/7
 successes to 7/7. Heap change is not a measure of total allocated bytes.
