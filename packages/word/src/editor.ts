@@ -1,6 +1,7 @@
+import { WordArtifact } from "./artifact.ts";
 import { beginLosslessXmlEdit, type LosslessXmlElement } from "@tumblerjs/ooxml";
-import { beginPackageTransaction, openOpcPackage } from "@tumblerjs/opc";
-import { openWordDocument, WordError, type WordDocument, type WordParagraph } from "./document.ts";
+import { beginPackageTransaction } from "@tumblerjs/opc";
+import { WordError, type WordDocument, type WordParagraph } from "./document.ts";
 import { wordParagraphText, wordParagraphTextSegments, type WordParagraphTextSegment, type WordTextSelection, type WordTextPosition } from "./text.ts";
 
 const XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace";
@@ -105,7 +106,7 @@ export function replaceWordText(document: WordDocument, selection: WordTextSelec
   transaction.replacePart(document.part.name, edited.bytes);
   const bytes = transaction.commit();
   // Reopening here is an intentional structural validation boundary before bytes escape.
-  openWordDocument(openOpcPackage(bytes));
+  reopenEdited(document, bytes);
   return bytes;
 }
 
@@ -175,7 +176,7 @@ function replaceWordParagraphRange(document: WordDocument, selection: WordTextSe
 }
 
 function reopenEdited(document: WordDocument, bytes: Uint8Array): WordDocument {
-  return openWordDocument(openOpcPackage(bytes));
+  return new WordArtifact(document).replace(bytes).document;
 }
 
 function documentParagraphs(document: WordDocument): WordParagraph[] {
@@ -302,7 +303,7 @@ function commitDocumentEdit(document: WordDocument, editor: ReturnType<typeof be
   const transaction = beginPackageTransaction(document.package);
   transaction.replacePart(document.part.name, edited.bytes);
   const bytes = transaction.commit();
-  openWordDocument(openOpcPackage(bytes));
+  reopenEdited(document, bytes);
   return bytes;
 }
 

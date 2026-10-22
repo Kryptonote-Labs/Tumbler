@@ -720,3 +720,10 @@ leader: 'none' }` at that position. Tab declarations are additive across styles.
 
 Authored cell properties and paragraph/cell borders serialize in schema order,
 regardless of the insertion order of their JavaScript properties.
+
+Text edits and `WordArtifact.replace` preserve the active header/footer part and
+open options, including ink rendering and parse limits. Each reopened revision
+gets fresh parse counters across the main document and its parsed stories; limits
+are not a cumulative editing-session allowance. Intermediate revisions must also
+fit those limits. `replace(bytes, options)` can explicitly override them. A rejected
+edit leaves the input artifact and its package bytes unchanged.
