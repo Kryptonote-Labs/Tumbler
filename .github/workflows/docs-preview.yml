@@ -64,7 +64,10 @@ jobs:
               })
             });
             if (!response.ok) {
-              core.setFailed(`Vercel rejected the preview request: HTTP ${response.status}.`);
+              const failure = await response.json().catch(() => null);
+              const code = failure?.error?.code;
+              const detail = typeof code === 'string' && /^[a-zA-Z0-9_-]+$/.test(code) ? ` (${code})` : '';
+              core.setFailed(`Vercel rejected the preview request: HTTP ${response.status}${detail}.`);
               return;
             }
             const deployment = await response.json();
