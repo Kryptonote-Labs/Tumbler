@@ -3,13 +3,16 @@
 From the repository root, with Bun installed and working-tree dependencies installed:
 
 ```sh
-flock -x /tmp/tumbler-word-audit-heavy.lock bash tools/word-numbering/compare.sh /tmp/word-numbering-results
+bash tools/word-numbering/compare.sh /tmp/word-numbering-results
 ```
 
 The script reconstructs audit commit `4d1465ddf85ee238a727dbed75aac7bf043f05f8`
 in a temporary directory and installs its frozen dependencies. It copies the same
 benchmark and behavioral repro tests into that checkout, then runs baseline and
-current measurements sequentially while the caller holds the lock. It removes
+current measurements sequentially under one shared host lock. Setup and dependency
+installation happen before acquiring the lock. The paired measurements and repro
+tests have a ten-minute execution timeout, excluding lock wait time. Do not wrap
+this script in another `flock`. It removes
 only that generated temporary checkout on exit. Tests do not overlap benchmarks.
 
 Each case uses two warmups and seven measured samples, with one operation per
