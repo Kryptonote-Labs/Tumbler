@@ -12,7 +12,7 @@ test('Strict authored resources use target vocabulary and retain table geometry 
   expect(xml).toContain('<w:start');
   expect(xml).not.toContain('<w:left');
   const table = artifact.document.blocks.find(block => block.kind === 'table')!;
-  expect(table.width).toEqual({ type: 'dxa', value: 4000 });
+  expect(table.properties.width).toEqual({ type: 'dxa', value: 4000 });
   expect(table.rows[0]!.cells[0]!.width).toEqual({ type: 'dxa', value: 4000 });
   expect(table.rows[0]!.cells[0]!.margins).toEqual({ topTwips: 10, endTwips: 20, bottomTwips: 30, startTwips: 40 });
   const resources = artifact.document.package.parts.filter(part => /theme|numbering/.test(part.name.value));
@@ -27,7 +27,7 @@ test('Strict authored resources use target vocabulary and retain table geometry 
   const edited = reconcileWordContent(artifact, blocks.map(block => block.kind === 'paragraph'
     ? { ...block, runs: [{ text: 'edited' }] } : block));
   for (const part of resources) expect(edited.document.package.readPart(edited.document.package.getPart(part.name)!)).toEqual(artifact.document.package.readPart(part));
-  expect(edited.document.blocks.find(block => block.kind === 'table')!.width).toEqual(table.width);
+  expect(edited.document.blocks.find(block => block.kind === 'table')!.properties.width).toEqual(table.properties.width);
   // Reapplying imported borders replaces start/end instead of duplicating them.
   const document = edited.document.source;
   const borders = document.elements(strict, 'tcBorders')[0]!;
