@@ -4,7 +4,7 @@ export const propertyOrder: Record<string, readonly string[]> = {
     'tblStyle tblpPr tblOverlap bidiVisual tblStyleRowBandSize tblStyleColBandSize tblW jc tblCellSpacing tblInd tblBorders shd tblLayout tblCellMar tblLook tblCaption tblDescription tblPrChange'.split(
       ' ',
     ),
-  tcBorders: 'top left bottom right insideH insideV tl2br tr2bl'.split(' '),
+  tcBorders: 'top left start bottom right end insideH insideV tl2br tr2bl'.split(' '),
   pBdr: 'top left bottom right between bar'.split(' '),
   trPr: 'cnfStyle divId gridBefore gridAfter wBefore wAfter cantSplit trHeight tblHeader tblCellSpacing jc hidden ins del trPrChange'.split(
     ' ',

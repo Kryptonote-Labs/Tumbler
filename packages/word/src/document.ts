@@ -1,3 +1,4 @@
+import { tableMeasurementTwips } from './strict-resources.ts';
 import { wordInkChoice } from './ink-fallback.ts';
 import { readWordColour } from "./theme-colour-xml.ts";
 import type { WordColour } from "./theme-colours.ts";
@@ -636,7 +637,7 @@ function parseTableWidth(element: LosslessXmlElement | undefined, namespace: str
   const rawType = attr(element, namespace, "type") ?? "dxa";
   const type = rawType === "auto" || rawType === "pct" || rawType === "nil" ? rawType : "dxa";
   const rawValue = attr(element, namespace, "w") ?? "0";
-  return Object.freeze({ type, value: unsignedInteger(rawValue, "table width", 0, 2_147_483_647) });
+  return Object.freeze({ type, value: unsignedInteger(type === "dxa" ? tableMeasurementTwips(rawValue, namespace) : rawValue, "table width", 0, 2_147_483_647) });
 }
 
 function tableIndent(element: LosslessXmlElement | undefined, namespace: string): number {
@@ -661,7 +662,7 @@ function parseCellMargins(element: LosslessXmlElement | undefined, namespace: st
   const measurement = (modern: string, legacy: string, defaultValue: number): number => {
     const child = onlyChild(element, namespace, modern, `Cell margins must not repeat ${modern}.`) ?? onlyChild(element, namespace, legacy, `Cell margins must not repeat ${legacy}.`);
     const raw = child === undefined ? undefined : attr(child, namespace, "w");
-    return raw === undefined || attr(child!, namespace, "type") !== "dxa" ? defaultValue : unsignedInteger(raw, `${modern} cell margin`, 0, 2_147_483_647);
+    return raw === undefined || attr(child!, namespace, "type") !== "dxa" ? defaultValue : unsignedInteger(tableMeasurementTwips(raw, namespace), `${modern} cell margin`, 0, 2_147_483_647);
   };
   return Object.freeze({
     topTwips: measurement("top", "top", fallback.topTwips),
