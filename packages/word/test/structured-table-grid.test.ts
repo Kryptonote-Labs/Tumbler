@@ -1,27 +1,11 @@
 import { expect, test } from "bun:test";
 import * as Y from "yjs";
+
 import {
-  createWordArtifact,
-  importWordContent,
-  openWordArtifact,
-} from "../src/index.ts";
-import type { WordContentBlock } from "../src/create-content.ts";
-import {
-  openWordOperationDocument,
-  prepareWordScopedOperation,
-} from "../src/operations/index.ts";
-import { tableParagraphs } from "../src/collaboration/tables.ts";
-import {
-  commitWordUpdate,
-  prepareWordUpdate,
   structuredGrid,
   validateWordSharedDocument,
-  type WordStructuredChange,
 } from "../src/collaboration/structured/index.ts";
-import {
-  cellName,
-  tableAddresses,
-} from "../src/collaboration/structured/state.ts";
+
 import {
   cell,
   vertical,
@@ -31,7 +15,6 @@ import {
   sync,
   exported,
   texts,
-  derived,
 } from "./structured-table-fixtures.ts";
 test("review 1: deleting the endpoint of an inserted vertical continuation advances the grid", () => {
   const { session, table, doc } = vertical();

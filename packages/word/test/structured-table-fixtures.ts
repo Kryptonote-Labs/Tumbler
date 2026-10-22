@@ -5,22 +5,15 @@ import {
   openWordArtifact,
 } from "../src/index.ts";
 import type { WordContentBlock } from "../src/create-content.ts";
-import {
-  openWordOperationDocument,
-  prepareWordScopedOperation,
-} from "../src/operations/index.ts";
+import { openWordOperationDocument } from "../src/operations/index.ts";
 import { tableParagraphs } from "../src/collaboration/tables.ts";
 import {
   commitWordUpdate,
   prepareWordUpdate,
   structuredGrid,
-  validateWordSharedDocument,
   type WordStructuredChange,
 } from "../src/collaboration/structured/index.ts";
-import {
-  cellName,
-  tableAddresses,
-} from "../src/collaboration/structured/state.ts";
+
 export const paragraph = (text: string) => ({
   kind: "paragraph" as const,
   runs: [{ text }],
