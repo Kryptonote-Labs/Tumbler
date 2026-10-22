@@ -70,6 +70,12 @@ interface RecordBlock {
 }
 
 /** Shared in-memory Word engine. Imports compile source properties once; only export writes a package. */
+/** OOXML cells end in a paragraph, including after a nested table. */
+function cellContent(blocks: readonly WordContentBlock[]): readonly WordContentBlock[] {
+  return !blocks.length || blocks.at(-1)?.kind === 'table'
+    ? [...blocks, { kind: 'paragraph', runs: [] }] : blocks;
+}
+
 // Story models receive their final content with the shared numbering context.
 const deferContent = Symbol('defer story content');
 
@@ -97,8 +103,11 @@ export class NativeWordDocument implements WordLayoutSource {
     const cached = this.independentBlocks.get(block);
     if (cached !== undefined) return cached;
     const value = (!('source' in block) || block.source === undefined) &&
-      (block.kind !== 'paragraph' || (!block.list && !this.effectiveNumbering?.reference({}, block.styleId))) &&
-      (block.kind !== 'table' || block.rows.every(row => row.every(cell => cell.blocks.every(child => this.independent(child)))));
+      (block.kind === 'table'
+        ? block.rows.every(row => row.every(cell => cellContent(cell.blocks).every(child => this.independent(child))))
+        : block.kind === 'paragraph'
+          ? !block.list && !this.effectiveNumbering?.reference({}, block.styleId)
+          : !this.effectiveNumbering?.reference({}));
     this.independentBlocks.set(block, value);
     return value;
   }
@@ -408,7 +417,7 @@ export class NativeWordDocument implements WordLayoutSource {
               const authored = source.rows[rowIndex]![cellIndex]!;
               const geometry = previous.tableGrid![rowIndex]![cellIndex]!;
               const blocks = visit(
-                authored.blocks.length ? authored.blocks : [{ kind: 'paragraph', runs: [] }],
+                cellContent(authored.blocks),
                 geometry.width,
                 `${key}/${rowIndex}/${geometry.column}`,
                 compiled?.cells.get(authored.source!)?.blocks,
@@ -448,7 +457,7 @@ export class NativeWordDocument implements WordLayoutSource {
               verticalAlignment: cell.format?.verticalAlignment ?? compiled?.cells.get(cell.source!)?.verticalAlignment ?? 'top' as const,
               margins: cell.format?.margins ?? compiled?.cells.get(cell.source!)?.margins,
               blocks: visit(
-                cell.blocks.length ? cell.blocks : [{ kind: 'paragraph', runs: [] }],
+                cellContent(cell.blocks),
                 cellWidth,
                 `${key}/${rowIndex}/${column}`,
                 compiled?.cells.get(cell.source!)?.blocks,

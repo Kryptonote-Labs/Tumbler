@@ -94,3 +94,18 @@ Section-targeted replacements also resolve the current section's existing story
 before native compilation, retaining direct cancellation and style-change intent.
 Use `NUMBERING_STORY_SECTION=1` with the story benchmark runner to measure this
 source-aware section-target path using the same fixtures and operation counts.
+
+Native cells include implicit paragraphs for empty cells and after nested tables,
+matching export. These paragraphs, and image-block paragraphs, inherit default
+numbering and participate in immutable-cache eligibility and counter advancement.
+`numbering-cells.test.ts` checks repeated updates and a following body paragraph
+in both mutable and immutable modes. Before the fix, two cases passed and four
+failed; all six pass afterward. Measure the changed table-update path with:
+
+```sh
+bash tools/word-compatibility/numbering/run-pair.sh c958ccc /tmp/numbering-cells-pair cells-benchmark.ts
+```
+
+Each sample constructs one native model, updates the same 100-table input twice,
+then appends a body paragraph. The explicit-paragraph control has equivalent
+outputs; the empty/nested cases require additional correct numbering work.
