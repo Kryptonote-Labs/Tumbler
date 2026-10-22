@@ -683,7 +683,9 @@ still be retained when they expose a conflict; validate with
 Selections use `{ cell: { story, table, row, column }, range }`. Offsets are local
 to the selected payload. `anchorScopedSelection` and `resolveScopedAnchor` retain
 Yjs-relative positions; an empty-cell anchor resolves to its logical cell's start.
-The grid exposes `payloads` for selecting the original paragraphs of an explicit
+Story-scoped edits that touch migrated source cells, including nested ancestry,
+are rejected. Canonical cell roots also require cell-scoped selections. Object
+move destinations receive the same guard. The grid exposes `payloads` for selecting the original paragraphs of an explicit
 merge. Navigation should enumerate `session.grid()` rather than physical body
 paragraphs. Object move destinations are cell-local and validated against the selected
 payload. `fit-table` uses current projected widths when weights are omitted.
@@ -700,7 +702,11 @@ Migration does not copy or delete legacy characters. Identical concurrent
 migrations write the same canonical baseline record. Different baselines report
 a migration conflict. Imported sources, nested ancestry, spans, widths, and grid
 omissions remain available. New tables created through `prepareOperation` migrate
-in the same prepared update. Existing body-delta table edit/format helpers reject
+in the same prepared update. Splitting an imported span after deleting its first
+column attaches its source to the chosen surviving coordinate. Restoring an old
+coordinate does not duplicate that source. Concurrent splits that choose different
+coordinates report a conflict; an explicit split at one surviving choice resolves
+it without deleting the source text. Existing body-delta table edit/format helpers reject
 migrated tables; switch those callers to the scoped operation adapter.
 
 Deletion retains payloads and records what the deleting peer observed. Concurrent
@@ -727,7 +733,9 @@ cost grows with that journal; destroy it when the editor closes. Migration belon
 outside this editing history. The canonical empty cell's final paragraph boundary
 is virtual; formatting it uses separate shared registers, and only user-entered
 paragraph breaks and boundaries required before nested tables become actual
-characters. Empty named table maps left by undo are inert; retained remote cell
+characters. Formatting an untouched empty cell needs only its format map;
+projection includes its virtual paragraph even when no text root exists. Structural
+undo treats these format-only roots as retained content. Empty named table maps left by undo are inert; retained remote cell
 content still prevents a destructive structural undo.
 
 DOCX export contains ordinary cells and valid table grids. Implicit intersections
@@ -748,11 +756,11 @@ flock -x /tmp/tumbler-word-audit-heavy.lock bash -c '
 ```
 
 On Bun 1.4.4 and an Intel Celeron N5095, a 12×4 table with two local column edits
-and ten healthy validation/grid-read pairs took a median 10.768 ms before and
-106.143 ms after, across seven samples following three warmups. Raw total times
-ranged 9.018–12.469 ms before and 100.709–113.023 ms after. Median CPU time rose from
-22.484 to 133.744 ms, full peer-state bytes from 35,052 to 45,832, and net heap
-change from 113,336 to 428,685 bytes. These are correctness costs, not a speedup.
-One-time migration took a median 15.827 ms, measured separately. The unchanged
+and ten healthy validation/grid-read pairs took a median 10.731 ms before and
+123.370 ms after, across seven samples following three warmups. Raw total times
+ranged 9.186–11.439 ms before and 116.919–127.207 ms after. Median CPU time rose from
+21.164 to 152.545 ms, full peer-state bytes from 35,052 to 45,832, and net heap
+change from 114,428 to 456,788 bytes. These are correctness costs, not a speedup.
+One-time migration took a median 18.042 ms, measured separately. The unchanged
 retained-text hash matched in every sample; merged validation changed from 0/7
 successes to 7/7. Heap change is not a measure of total allocated bytes.
