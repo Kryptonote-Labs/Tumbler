@@ -13,4 +13,4 @@ export const fixtures = {
   borders: [{ kind: 'paragraph', runs: [{ text: 'Borders' }], paragraph: { borders: { right: border, left: border, bottom: border, top: border } } }],
   emptyTabs: [{ kind: 'paragraph', runs: [{ text: 'Empty tabs' }], positioning: { tabs: [] } }],
   clearTabs: [{ kind: 'paragraph', runs: [{ text: 'Clear one inherited tab' }], positioning: { tabs: [{ positionTwips: 720, alignment: 'clear', leader: 'none' }] } }],
-} satisfies Record<string, WordContentBlock[]>;
+} as const satisfies Record<string, readonly WordContentBlock[]>;

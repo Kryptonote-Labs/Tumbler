@@ -44,7 +44,7 @@ empty tabs. Afterward they pass, along with a source-edit test proving explicit
 
 Official Transitional XSD: the three reported repros fail before and pass after.
 The explicit-clear control passes both. The combined permutation/subset document
-also passes after. All eight fixed fixture packages compare equivalent under
+also passes after. All ten fixture packages compare equivalent under
 the narrow normalization above.
 
 Strict paragraph borders and empty tabs fail before and pass after; explicit
@@ -73,3 +73,21 @@ then change into the fixed checkout and run it again. Do not acquire nested lock
 `heapDeltas` are observed live heap growth across each sample, not allocated-byte
 counts, and may include GC effects. `maxRssKiB` is process peak RSS. This shared
 host has background contention; timings are observations, not a speedup claim.
+
+The recorded locked run used Bun 1.4.4 on an Intel Celeron N5095 with four logical
+CPUs. Median time per operation was 4.165 ms before and 3.758 ms after. Sample
+ranges were 2.698–5.718 ms and 3.210–5.551 ms. Output decreased from 194,900 to
+191,700 bytes by omitting 100 empty `tabs` containers and their empty `pPr`
+containers. Each revision performed 320 serializations including warmups.
+Peak RSS was 65,164 KiB before and 66,416 KiB after. Median observed live heap
+growth per 20-operation sample was 4,050,032 bytes before and 2,984,958 after.
+Raw timing and heap samples are in `results/before.json` and `results/after.json`.
+There is no allocated-byte counter in this measurement.
+
+The initial run without the lock had an 18.321 ms baseline median and was
+discarded because competing workloads dominated it. The locked results above
+use identical runtime, hardware, fixtures and measurement code. Background work
+outside the advisory lock remains a limitation. No speedup is claimed.
+
+For the tooling typecheck, run `bunx tsc --noEmit -p tools/word-schema-order/tsconfig.json`
+under the same advisory lock.
