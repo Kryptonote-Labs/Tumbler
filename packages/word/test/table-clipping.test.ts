@@ -43,3 +43,12 @@ test('repeated headers and continuation pages use their placed cell bounds', () 
     expect(wordLineAtPoint(page, 11, 15)).toBe(entries[0]!.line);
   }
 });
+
+test('a right-aligned empty caret at a zero-margin cell boundary remains selectable', () => {
+  const paragraph = clipParagraph('').replace('<w:pPr>', '<w:pPr><w:jc w:val="right"/>');
+  const page = layout(clipTable(clipRow(clipCell(paragraph, '<w:tcMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tcMar>')))).pages[0]!;
+  const cell = page.columns[0]!.tables[0]!.cells[0]!;
+  expect(cell.lines[0]!.width).toBe(0);
+  expect(cell.lines[0]!.x).toBe(cell.x + cell.width);
+  expect(wordLineAtPoint(page, cell.x + cell.width - 1, cell.y + 1)).toBe(cell.lines[0]);
+});

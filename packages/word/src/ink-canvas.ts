@@ -1,4 +1,5 @@
 import { renderOfficeInkRaster } from '@tumblerjs/ink';
+import type { WordContentBounds } from './table-clipping.ts';
 import type { WordLayoutFragment } from './layout.ts';
 import { wordImagePaintBounds } from './image-paint.ts';
 
@@ -14,17 +15,26 @@ export interface WordInkPixelContext {
   getImageData?(x: number, y: number, width: number, height: number): WordInkPixels;
   putImageData?(pixels: WordInkPixels, x: number, y: number): void;
 }
+export interface WordInkViewport { readonly x: number; readonly y: number; readonly width: number; readonly height: number; }
+
 /** Read the actual already-painted page pixels; ROP2 cannot be represented by an isolated image. */
-export function paintWordInk(context: WordInkPixelContext, fragment: WordLayoutFragment, scale: number, maxPixels = 4_194_304): boolean {
+export function paintWordInk(context: WordInkPixelContext, fragment: WordLayoutFragment, scale: number, maxPixels = 4_194_304, viewport?: WordInkViewport, cellClip?: WordContentBounds): boolean {
   const drawing = fragment.drawing;
   if (drawing?.kind !== 'image' || !drawing.ink || !drawing.inkProjection || !context.getImageData || !context.putImageData) return false;
   const { bounds, options } = drawing.inkProjection;
   if (!bounds.width || !bounds.height || !fragment.width || !fragment.height) return true;
   const box = wordImagePaintBounds(drawing, fragment.width, fragment.height);
   const left = fragment.x + box.x, top = fragment.y + box.y;
-  const x = Math.floor(left * scale), y = Math.floor(top * scale);
-  const width = Math.ceil((left + box.width) * scale) - x;
-  const height = Math.ceil((top + box.height) * scale) - y;
+  const originX = viewport?.x ?? 0, originY = viewport?.y ?? 0;
+  // putImageData ignores canvas clips. Intersect in global device coordinates
+  // before subtracting the viewport origin. Cell edges round inward to avoid spill.
+  const globalX = Math.max(Math.floor(left * scale), viewport?.x ?? -Infinity, cellClip ? Math.ceil(cellClip.x * scale) : -Infinity);
+  const globalY = Math.max(Math.floor(top * scale), viewport?.y ?? -Infinity, cellClip ? Math.ceil(cellClip.y * scale) : -Infinity);
+  const right = Math.min(Math.ceil((left + box.width) * scale), viewport ? viewport.x + viewport.width : Infinity, cellClip ? Math.floor((cellClip.x + cellClip.width) * scale) : Infinity);
+  const bottom = Math.min(Math.ceil((top + box.height) * scale), viewport ? viewport.y + viewport.height : Infinity, cellClip ? Math.floor((cellClip.y + cellClip.height) * scale) : Infinity);
+  const x = globalX - originX, y = globalY - originY;
+  const width = right - globalX, height = bottom - globalY;
+  if (width <= 0 || height <= 0) return true;
   if (!Number.isSafeInteger(width * height) || width * height > maxPixels) return false;
   // The four-argument form is shared by browser and server canvases. Their
   // optional colour-space arguments differ; validate the returned pixels instead.
@@ -33,7 +43,7 @@ export function paintWordInk(context: WordInkPixelContext, fragment: WordLayoutF
   const sx = fragment.width / drawing.widthPoints, sy = fragment.height / drawing.heightPoints;
   const result = renderOfficeInkRaster(drawing.ink, {
     ...options, scale, maxPixels, destination: destination.data,
-    transform: [sx, 0, 0, sy, fragment.x - x / scale, fragment.y - y / scale],
+    transform: [sx, 0, 0, sy, fragment.x - (x + originX) / scale, fragment.y - (y + originY) / scale],
     bounds: { x: 0, y: 0, width: width / scale, height: height / scale },
   });
   if (!result.supported) return false;

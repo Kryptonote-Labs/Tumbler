@@ -28,7 +28,9 @@ export function wordTableLinesWithClips(tables: readonly WordLayoutTable[], ance
 
 /** Empty lines still have a caret; fully clipped lines have no pointer target. */
 export function wordVisibleLineBounds({ line, clip }: WordClippedLine): WordContentBounds | undefined {
-  const bounds = { x: line.x, y: line.y, width: Math.max(1, line.width), height: line.height };
+  // A right-aligned empty caret can sit exactly on the cell's end boundary.
+  const x = clip && line.width === 0 && line.x === clip.x + clip.width ? line.x - 1 : line.x;
+  const bounds = { x, y: line.y, width: Math.max(1, line.width), height: line.height };
   const visible = clip ? intersectWordContentBounds(bounds, clip) : bounds;
   return visible.width > 0 && visible.height > 0 ? visible : undefined;
 }

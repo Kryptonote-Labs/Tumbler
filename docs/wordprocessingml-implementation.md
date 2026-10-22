@@ -28,7 +28,7 @@ assumed. Strict and Transitional namespaces are tested separately.
 - Resolve table grids, omitted columns, spans, vertical merges, margins,
   preferred widths, row heights, and cell alignment while retaining source IDs.
 - Render nested tables and continue rows across pages at cell line boundaries.
-- Repeat leading `tblHeader` rows when enabled. Explicit `false`, `0`, and `off` disable repetition; `true`, `1`, `on`, and an omitted value enable it. Honor exact row heights. Cell content is clipped to the placed cell rectangle in DOM and canvas output, including ancestor clips for nested tables. Pointer hit testing excludes fully clipped lines and uses the visible part of partially clipped lines. Hidden text and offsets remain available for document-order selection and editing.
+- Repeat leading `tblHeader` rows when enabled. Explicit `false`, `0`, and `off` disable repetition; `true`, `1`, `on`, and an omitted value enable it. Honor exact row heights. Cell content is clipped to the placed cell rectangle in DOM and canvas output, including ancestor clips for nested tables. Pointer hit testing excludes fully clipped lines and uses the visible part of partially clipped lines. Hidden text and offsets remain available for document-order selection and editing. Floating drawings retain their cell clip in the separate canvas paint pass. Native ink pixel reads and writes intersect that clip explicitly, because pixel writes bypass canvas clipping. Device-pixel viewport crops and page-point cell clips are intersected before converting to viewport-local pixels.
 
 ### Milestone 3 — document stories and drawings
 

@@ -5,6 +5,7 @@ import { clipCell, clipParagraph, clipRow, clipTable, tableClippingFixture } fro
 import type { WordCanvasContext } from '../../packages/word/src/index.ts';
 
 const root = resolve(process.argv[2] ?? '.');
+const revision = Bun.spawnSync(['git', '-C', root, 'rev-parse', 'HEAD']).stdout.toString().trim();
 const api = await import(`${root}/packages/word/src/index.ts`) as typeof import('../../packages/word/src/index.ts');
 const { openWordArtifact, layoutWordDocument, paintWordPage, wordLineAtPoint } = api;
 let measurements = 0;
@@ -47,5 +48,5 @@ const retainedHeapBytes = process.memoryUsage().heapUsed - heapBefore;
 const repro = layoutWordDocument(openWordArtifact(tableClippingFixture()).document, measurer).pages[0]!;
 const table = repro.columns[0]!.tables[0]!;
 const hit = wordLineAtPoint(repro, 500, 45)?.fragments[0]?.text;
-console.log(JSON.stringify({ root, runtime: Bun.version, cpu: cpus()[0]?.model, cpuCount: cpus().length, fixtureBytes: bytes.byteLength, pages: layout.pages.length, fragments: layout.fragmentCount, layoutMeasurements, geometryHash: new Bun.CryptoHasher('sha256').update(JSON.stringify(layout)).digest('hex'), paintOperations, layoutTiming, paintTiming, hit1000Timing: hitTiming, retainedHeapBytes, retainedLayouts: retained.length, repro: { rowBounds: table.cells.map(cell => [cell.y, cell.height]), firstRowLines: table.cells[0]!.lines.map(line => line.y), hitOutsideAtY45: hit, expectedHit: 'NEXT', pass: hit === 'NEXT' } }, null, 2));
+console.log(JSON.stringify({ root, revision, runtime: Bun.version, cpu: cpus()[0]?.model, cpuCount: cpus().length, fixtureBytes: bytes.byteLength, pages: layout.pages.length, fragments: layout.fragmentCount, layoutMeasurements, geometryHash: new Bun.CryptoHasher('sha256').update(JSON.stringify(layout)).digest('hex'), paintOperations, layoutTiming, paintTiming, hit1000Timing: hitTiming, retainedHeapBytes, retainedLayouts: retained.length, repro: { rowBounds: table.cells.map(cell => [cell.y, cell.height]), firstRowLines: table.cells[0]!.lines.map(line => line.y), hitOutsideAtY45: hit, expectedHit: 'NEXT', pass: hit === 'NEXT' } }, null, 2));
 if (process.argv.includes('--verify') && hit !== 'NEXT') process.exitCode = 1;
