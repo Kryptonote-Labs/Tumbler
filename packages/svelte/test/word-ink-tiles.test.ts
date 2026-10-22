@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { layoutWordDocument } from '@tumblerjs/word';
 import { inkFixture } from '../../word/test/ink-fixture.ts';
 import { officeInk } from '../../ink/test/fixture.ts';
-import { wordInkTiles, reserveWordInkPixels, WORD_INK_TOTAL_PIXELS } from '../src/word-ink-tiles.ts';
+import { wordInkTiles, reserveWordInkPixels, WORD_INK_RETAINED_PIXELS } from '../src/word-ink-tiles.ts';
 
 const source = inkFixture(false, false, officeInk({ brush: '<brushProperty name="rasterOp" value="xOrPen"/>' })).source;
 const page = layoutWordDocument(source.document, { measure: text => ({ width: text.length * 6, ascent: 9, descent: 3 }) }).pages[0]!;
@@ -24,11 +24,11 @@ test('affected-region plans stay disjoint and within finite budgets at extreme z
 });
 
 test('mounted overlays share a budget and release reservations once', () => {
-  const release = reserveWordInkPixels(WORD_INK_TOTAL_PIXELS)!;
+  const release = reserveWordInkPixels(WORD_INK_RETAINED_PIXELS)!;
   expect(release).toBeFunction();
   expect(reserveWordInkPixels(1)).toBeUndefined();
   release(); release();
-  const again = reserveWordInkPixels(WORD_INK_TOTAL_PIXELS)!;
+  const again = reserveWordInkPixels(WORD_INK_RETAINED_PIXELS)!;
   expect(again).toBeFunction();
   expect(reserveWordInkPixels(1)).toBeUndefined();
   again();

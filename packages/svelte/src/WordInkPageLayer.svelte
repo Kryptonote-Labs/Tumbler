@@ -49,10 +49,10 @@
     void (async () => {
       try {
         let plan = wordInkTiles(current, resolution, budget);
-        release = reserveWordInkPixels(plan.pixels + 2 * WORD_INK_TILE_PIXELS);
+        release = reserveWordInkPixels(plan.pixels);
         for (let smaller = Math.floor(budget / 2); !release && smaller >= 1; smaller = Math.floor(smaller / 2)) {
           plan = wordInkTiles(current, resolution, smaller);
-          release = reserveWordInkPixels(plan.pixels + 2 * WORD_INK_TILE_PIXELS);
+          release = reserveWordInkPixels(plan.pixels);
         }
         if (!release) throw new Error('Mounted ink overlays exceed the aggregate pixel budget.');
         // Keep decode failures separate; only an image used by a tile can abort it.
@@ -96,6 +96,9 @@
           const css = 4 / 3 / plan.scale;
           canvas.style.cssText = `position:absolute;left:${tile.x * css}px;top:${tile.y * css}px;width:${tile.width * css}px;height:${tile.height * css}px`;
           target.append(canvas);
+          // Release scratch storage before yielding; other pages share this allowance.
+          buffer.width = backdrop.width = 0;
+          buffer.height = backdrop.height = 0;
         }
         buffer.width = backdrop.width = 0;
         buffer.height = backdrop.height = 0;

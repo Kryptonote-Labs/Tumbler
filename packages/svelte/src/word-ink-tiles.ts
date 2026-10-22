@@ -4,12 +4,14 @@ type Box = { x: number; y: number; width: number; height: number };
 export const WORD_INK_TILE_PIXELS = 256 * 256;
 export const WORD_INK_PAGE_PIXELS = 1_048_576;
 export const WORD_INK_TOTAL_PIXELS = 4_194_304;
+// Only one synchronous tile runs at a time. Keep room for its two scratch canvases.
+export const WORD_INK_RETAINED_PIXELS = WORD_INK_TOTAL_PIXELS - 2 * WORD_INK_TILE_PIXELS;
 let reservedPixels = 0;
 
 /** Reserve retained overlay pixels across mounted pages, including in-flight renders. */
 export function reserveWordInkPixels(pixels: number) {
   if (!Number.isSafeInteger(pixels) || pixels < 0) throw new RangeError('Invalid ink pixel reservation.');
-  if (pixels > WORD_INK_TOTAL_PIXELS - reservedPixels) return undefined;
+  if (pixels > WORD_INK_RETAINED_PIXELS - reservedPixels) return undefined;
   reservedPixels += pixels;
   let released = false;
   return () => { if (!released) { released = true; reservedPixels -= pixels; } };
