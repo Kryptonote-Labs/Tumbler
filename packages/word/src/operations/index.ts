@@ -5,3 +5,5 @@ export * from "./formatting.ts";
 export { openWordOperationDocument } from "./document.ts";
 export * from "./inspect.ts";
 export { wordDrawingChanges } from "./drawing.ts";
+
+export { prepareWordScopedOperation } from "./structured.ts";

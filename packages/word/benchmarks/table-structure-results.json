@@ -1,0 +1,212 @@
+{
+  "baselineCommit": "4d1465ddf85ee238a727dbed75aac7bf043f05f8",
+  "method": "One sequential paired run under flock -x /tmp/tumbler-word-audit-heavy.lock, bounded 5m per process. Same script, generated fixture, runtime and host. Migration excluded from main timer and reported separately. Main timer covers two local column edits plus ten healthy validation/grid-read pairs. Exchange and merged validity check follow timing. Heap deltas are net heap changes, not total allocated bytes. No performance speedup is claimed.",
+  "baseline": {
+    "mode": "legacy",
+    "runtime": "1.4.4",
+    "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+    "rows": 12,
+    "columns": 4,
+    "reads": 10,
+    "warmups": 3,
+    "samples": 7,
+    "fixtureBytes": 9762,
+    "fixtureHash": "c1859557ae97301aaa7522e0d6a466f999ef7b60ebb98c886f8c57fb41020d1c",
+    "operationsPerSample": {
+      "columnEdits": 2,
+      "explicitHealthyValidations": 10,
+      "gridReads": 10,
+      "postTimingMergedValidation": 1
+    },
+    "results": [
+      {
+        "migrationMs": 0,
+        "editsMs": 6.620861000000019,
+        "readsMs": 6.01444699999999,
+        "totalMs": 12.635308000000009,
+        "cpuMs": 33.424,
+        "heapDeltaBytes": 117047,
+        "rssBytes": 61792256,
+        "updateBytes": 35052,
+        "mergedValid": false,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 0,
+        "editsMs": 5.312427000000014,
+        "readsMs": 5.856479999999976,
+        "totalMs": 11.16890699999999,
+        "cpuMs": 21.976,
+        "heapDeltaBytes": 118088,
+        "rssBytes": 62406656,
+        "updateBytes": 35052,
+        "mergedValid": false,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 0,
+        "editsMs": 4.718859000000009,
+        "readsMs": 6.046824999999956,
+        "totalMs": 10.765683999999965,
+        "cpuMs": 19.667,
+        "heapDeltaBytes": 107593,
+        "rssBytes": 63135744,
+        "updateBytes": 35052,
+        "mergedValid": false,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 0,
+        "editsMs": 5.769558000000018,
+        "readsMs": 6.178934999999967,
+        "totalMs": 11.948492999999985,
+        "cpuMs": 32.261,
+        "heapDeltaBytes": 114278,
+        "rssBytes": 64794624,
+        "updateBytes": 35052,
+        "mergedValid": false,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 0,
+        "editsMs": 4.806857999999977,
+        "readsMs": 5.0323379999999815,
+        "totalMs": 9.839195999999959,
+        "cpuMs": 22.678,
+        "heapDeltaBytes": 115496,
+        "rssBytes": 65196032,
+        "updateBytes": 35052,
+        "mergedValid": false,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 0,
+        "editsMs": 4.9705679999999575,
+        "readsMs": 5.769219000000021,
+        "totalMs": 10.739786999999978,
+        "cpuMs": 23.745,
+        "heapDeltaBytes": 115820,
+        "rssBytes": 65495040,
+        "updateBytes": 35052,
+        "mergedValid": false,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 0,
+        "editsMs": 8.530183000000022,
+        "readsMs": 5.853895000000023,
+        "totalMs": 14.384078000000045,
+        "cpuMs": 48.705,
+        "heapDeltaBytes": 120275,
+        "rssBytes": 66605056,
+        "updateBytes": 35052,
+        "mergedValid": false,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      }
+    ]
+  },
+  "structured": {
+    "mode": "structured",
+    "runtime": "1.4.4",
+    "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+    "rows": 12,
+    "columns": 4,
+    "reads": 10,
+    "warmups": 3,
+    "samples": 7,
+    "fixtureBytes": 9762,
+    "fixtureHash": "c1859557ae97301aaa7522e0d6a466f999ef7b60ebb98c886f8c57fb41020d1c",
+    "operationsPerSample": {
+      "columnEdits": 2,
+      "explicitHealthyValidations": 10,
+      "gridReads": 10,
+      "postTimingMergedValidation": 1
+    },
+    "results": [
+      {
+        "migrationMs": 13.838008999999943,
+        "editsMs": 25.616821000000073,
+        "readsMs": 56.25494900000001,
+        "totalMs": 81.87177000000008,
+        "cpuMs": 116.689,
+        "heapDeltaBytes": 263875,
+        "rssBytes": 80982016,
+        "updateBytes": 45800,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 13.659177,
+        "editsMs": 29.21520099999998,
+        "readsMs": 52.049076000000014,
+        "totalMs": 81.26427699999999,
+        "cpuMs": 128.084,
+        "heapDeltaBytes": 217101,
+        "rssBytes": 81399808,
+        "updateBytes": 45800,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 15.563938000000007,
+        "editsMs": 27.55836199999999,
+        "readsMs": 50.57236,
+        "totalMs": 78.13072199999999,
+        "cpuMs": 110.382,
+        "heapDeltaBytes": 247909,
+        "rssBytes": 82726912,
+        "updateBytes": 45800,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 12.597004000000084,
+        "editsMs": 23.055457000000047,
+        "readsMs": 52.153681000000006,
+        "totalMs": 75.20913800000005,
+        "cpuMs": 100.676,
+        "heapDeltaBytes": 251772,
+        "rssBytes": 81354752,
+        "updateBytes": 45796,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 13.616221999999993,
+        "editsMs": 24.250725000000102,
+        "readsMs": 50.777673999999934,
+        "totalMs": 75.02839900000004,
+        "cpuMs": 91.97,
+        "heapDeltaBytes": 256243,
+        "rssBytes": 78188544,
+        "updateBytes": 45800,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 12.916472999999996,
+        "editsMs": 26.45146499999987,
+        "readsMs": 48.94040599999994,
+        "totalMs": 75.39187099999981,
+        "cpuMs": 95.212,
+        "heapDeltaBytes": 349404,
+        "rssBytes": 80998400,
+        "updateBytes": 45800,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 12.425762000000077,
+        "editsMs": 28.592968000000155,
+        "readsMs": 52.682142999999996,
+        "totalMs": 81.27511100000015,
+        "cpuMs": 122.969,
+        "heapDeltaBytes": 263295,
+        "rssBytes": 80199680,
+        "updateBytes": 45799,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      }
+    ]
+  }
+}

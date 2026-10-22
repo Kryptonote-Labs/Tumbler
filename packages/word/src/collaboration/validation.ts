@@ -2,6 +2,7 @@ import { registerWordListLevel, type WordAuthoredList } from '../authored-list.t
 import type * as Y from 'yjs';
 import { validateAttributes } from './formatting.ts';
 import { groupTableParagraphs, tableParagraphs } from './tables.ts';
+import { validateStructuredTables } from './structured/state.ts';
 import { documentImageRefs } from './images.ts';
 export function validateText(text: string) {
   if (!text.isWellFormed()) throw new Error('This document contains an incomplete character.');
@@ -31,6 +32,7 @@ export function validateWordText(text: Y.Text) {
     }
   }
   validateText(text.toString());
-  groupTableParagraphs(tableParagraphs(text));
+  groupTableParagraphs(tableParagraphs(text), { retainedBaseline: true });
+  if (text.doc) validateStructuredTables(text.doc);
   documentImageRefs(text);
 }

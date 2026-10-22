@@ -13,6 +13,7 @@ export function formatTableDelta(text: Y.Text, at: number, tableId: string, cell
     patch.cell !== undefined && !isWordCellFormat(patch.cell) || patch.row !== undefined && !isWordRowFormat(patch.row)) throw new TypeError('Invalid table formatting.');
   const paragraphs = tableParagraphs(text);
   const target = paragraphs.find(p => p.start <= at && at < p.end)?.table;
+  if (target?.schema === 2) throw new Error('Use the structured table executor after migration.');
   if (!target || target.id !== tableId || target.cell !== cellId) throw new Error('The table cell changed. Read the document again.');
   if (patch.columnWidths && (patch.columnWidths.length !== target.columns || !patch.columnWidths.every(w => Number.isFinite(w) && w > 0))) throw new RangeError('Provide one positive width per grid column.');
   const delta: Parameters<Y.Text['applyDelta']>[0] = [];

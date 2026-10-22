@@ -631,3 +631,111 @@ to `front` or `behind` and supply `x`, `y`, `horizontalRelativeTo` and
 that they move and resize together. `edit-object` can replace its complete ink
 value, including all strokes. Existing single-stroke `points/color/size` inputs
 remain supported with their previous fit-to-frame behavior.
+
+### Structured collaborative tables, schema 2
+
+Concurrent table structure uses stable row and column identities. Numeric grid
+positions are derived from their shared ordering records. Existing cell text stays
+in its original Y.Text; new intersections use deterministically named, initially
+empty Y.Text roots. Concurrent first typing therefore edits one shared character
+sequence, without inserting duplicate paragraph terminators.
+
+This is a breaking host API migration. A body-only `applyDelta` cannot commit
+changes to cell roots or structural records. Upgrade every writer and persist and
+transport **complete Y.Doc updates**, including all named roots. Coordinate the
+protocol upgrade before permitting schema-2 edits. Migration marks the legacy
+cell metadata with `schema: 2`, which old validated writers reject. Direct Yjs
+mutations that bypass validation remain the host's responsibility.
+
+Use the operation document's prepared-update executor:
+
+```ts
+const session = openWordOperationDocument(artifact);
+const prepared = session.prepare([
+  { kind: 'migrate', table: { story: 'body', table: inspectedTableId } },
+]);
+session.commit(prepared);
+const history = session.history(); // Start editing history after migration.
+const cell = session.grid(inspectedTableId)[1]!.cells[1]!.address;
+const selection = session.commit(
+  session.prepareOperation(
+    { cell, range: { start: 0, end: 0 } },
+    { name: 'replace', input: { value: 'Hello' } },
+  ),
+  history.origin,
+);
+const bytes = session.artifact().bytes();
+history.destroy();
+session.destroy();
+```
+
+`prepareWordUpdate` and `commitWordUpdate` provide the same contract directly for
+Y.Doc hosts. Preparation and commit preflight the whole shared document on a
+replica. A rejected operation leaves the original unchanged. Remote updates must
+still be retained when they expose a conflict; validate with
+`validateWordSharedDocument` and show the recoverable `WordTableConflict`.
+
+Selections use `{ cell: { story, table, row, column }, range }`. Offsets are local
+to the selected payload. `anchorScopedSelection` and `resolveScopedAnchor` retain
+Yjs-relative positions; an empty-cell anchor resolves to its logical cell's start.
+The grid exposes `payloads` for selecting the original paragraphs of an explicit
+merge. Navigation should enumerate `session.grid()` rather than physical body
+paragraphs. A missing payload is an editable empty cell. First edit materializes
+it automatically; reads and selection changes emit no repair writes.
+
+`WordStructuredProjection` observes the complete document, including cell-root
+updates. `projectWordSharedDocument` performs an uncached projection. The old
+`WordTableProjection`/`groupTableParagraphs` rendering path rejects schema-2 cells
+instead of rendering obsolete body-grid positions. `tableParagraphs` remains a
+low-level view of retained legacy source paragraphs, not the logical grid.
+
+Migration does not copy or delete legacy characters. Identical concurrent
+migrations write the same canonical baseline record. Different baselines report
+a migration conflict. Imported sources, nested ancestry, spans, widths, and grid
+omissions remain available. New tables created through `prepareOperation` migrate
+in the same prepared update. Existing body-delta table edit/format helpers reject
+migrated tables; switch those callers to the scoped operation adapter.
+
+Deletion retains payloads and records what the deleting peer observed. Concurrent
+edits that would be hidden produce a conflict; `restore-axis` or `restore-table`
+can expose them again. `inspectWordTableState` exposes retained axis records even
+when export is blocked. Overlapping merge coverage, contradictory axis order,
+conflicting migration baselines, and unions exceeding the package's 63-grid-column
+limit also block export. Content is never flattened into other cells to satisfy
+the limit. Explicit split/restore/delete operations resolve supported conflicts.
+
+Use `WordStructuredUndo` with its local `origin`, not a body-only Y.UndoManager.
+It replays the update journal into a disposable document and validates undo/redo
+before changing the live document. This preserves remote text and rejects an
+undo that would detach it. Its journal lives for the editing session and replay
+cost grows with that journal; destroy it when the editor closes. Migration belongs
+outside this editing history. The canonical empty cell's final paragraph boundary
+is virtual; formatting it uses separate shared registers, and only user-entered
+paragraph breaks become actual characters.
+
+DOCX export contains ordinary cells and valid table grids. Implicit intersections
+become empty cells at their actual coordinates. DOCX does not preserve CRDT axis
+identities or history; persist Yjs updates alongside the exported file when the
+collaborative session must continue.
+
+The reproducible fixture benchmark is
+`packages/word/benchmarks/table-structure.ts`, with raw results in
+`table-structure-results.json` beside it. Copy the script unchanged to audit
+commit `4d1465d`, then run the following sequentially under one lock:
+
+```sh
+flock -x /tmp/tumbler-word-audit-heavy.lock bash -c '
+  timeout 5m bun /path/to/audit/packages/word/benchmarks/table-structure.ts legacy
+  timeout 5m bun packages/word/benchmarks/table-structure.ts structured
+'
+```
+
+On Bun 1.4.4 and an Intel Celeron N5095, a 12×4 table with two local column edits
+and ten healthy validation/grid-read pairs took a median 11.169 ms before and
+78.131 ms after, across seven samples following three warmups. Raw total times
+ranged 9.839–14.384 ms before and 75.028–81.872 ms after. Median CPU time rose from
+23.745 to 110.382 ms, full peer-state bytes from 35,052 to 45,800, and net heap
+change from 115,820 to 256,243 bytes. These are correctness costs, not a speedup.
+One-time migration took a median 13.616 ms, measured separately. The unchanged
+retained-text hash matched in every sample; merged validation changed from 0/7
+successes to 7/7. Heap change is not a measure of total allocated bytes.
