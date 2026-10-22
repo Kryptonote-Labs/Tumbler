@@ -58,3 +58,23 @@ export function wordPictureImageRect(picture: WordPictureGeometry) {
   const width = 1 / (1 - picture.left - picture.right), height = 1 / (1 - picture.top - picture.bottom);
   return { x: -picture.left * width, y: -picture.top * height, width, height };
 }
+
+/** AABB of the clipped source image after reflection and rotation, relative to the editing frame. */
+export function wordPicturePaintBounds(picture: WordPictureGeometry, width: number, height: number) {
+  const rect = wordPictureImageRect(picture);
+  const left = Math.max(0, rect.x) * width, right = Math.min(1, rect.x + rect.width) * width;
+  const top = Math.max(0, rect.y) * height, bottom = Math.min(1, rect.y + rect.height) * height;
+  if (right <= left || bottom <= top) return { x: 0, y: 0, width: 0, height: 0 };
+  const cx = (left + right - width) / 2 * (picture.flipH ? -1 : 1);
+  const cy = (top + bottom - height) / 2 * (picture.flipV ? -1 : 1);
+  const angle = picture.rotation * Math.PI / 180;
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  const paintedWidth = Math.abs(cos) * (right - left) + Math.abs(sin) * (bottom - top);
+  const paintedHeight = Math.abs(sin) * (right - left) + Math.abs(cos) * (bottom - top);
+  return {
+    x: width / 2 + cos * cx - sin * cy - paintedWidth / 2,
+    y: height / 2 + sin * cx + cos * cy - paintedHeight / 2,
+    width: paintedWidth,
+    height: paintedHeight,
+  };
+}

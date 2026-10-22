@@ -24,7 +24,7 @@
   }
 
   function drawingStyle(fragment: WordLayoutFragment) {
-    const box = fragment.drawing?.kind === 'image' ? wordImagePaintBounds(fragment.drawing, fragment.width, fragment.height) : { x: 0, y: 0, width: fragment.width, height: fragment.height };
+    const box = fragment.drawing?.kind === 'image' && !fragment.drawing.picture ? wordImagePaintBounds(fragment.drawing, fragment.width, fragment.height) : { x: 0, y: 0, width: fragment.width, height: fragment.height };
     return `z-index:${fragment.drawing ? drawingOrder?.get(fragment.drawing) ?? 1 : 1};left:${wordPointsToCssPixels(fragment.x + box.x)}px;top:${wordPointsToCssPixels(fragment.y + box.y)}px;width:${wordPointsToCssPixels(box.width)}px;height:${wordPointsToCssPixels(box.height)}px`;
   }
 </script>
