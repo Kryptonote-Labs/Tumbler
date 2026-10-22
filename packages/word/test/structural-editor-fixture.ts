@@ -17,4 +17,3 @@ export function selection(artifact: WordArtifact, start: number, end = start, la
 export function texts(artifact: WordArtifact) {
   return paragraphs(artifact).map(item => wordParagraphText(artifact.document, item));
 }
-
