@@ -12,6 +12,7 @@ import { nativeShapeDrawing, validateShapeRun } from './shapes.ts';
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
 import { mergeWordTabStops } from './tab-stops.ts';
+import { missingAuthoredStyles } from './package-styles.ts';
 import { wordGeometryAt } from './geometry.ts';
 import { createWordStory, wordStoryArtifact, storyMainArtifact, wordSections, type WordStoryTarget } from './stories.ts';
 import { NativeWordSource, retainOpaqueBlocks } from './native-source.ts';
@@ -71,6 +72,8 @@ interface RecordBlock {
 /** Shared in-memory Word engine. Imports compile source properties once; only export writes a package. */
 export class NativeWordDocument implements WordLayoutSource {
   private readonly namedStyles: ReturnType<typeof wordAuthoringStyles>;
+  private tabStyles: ReturnType<typeof wordAuthoringStyles> | undefined;
+  private tabStyleKey = '';
   private nextId = -1;
   private readonly compiled: NativeWordSource | undefined;
   private exported: WordArtifact | undefined;
@@ -270,14 +273,22 @@ export class NativeWordDocument implements WordLayoutSource {
     const numbering: { elementId: number; reference: WordParagraphNumbering }[] = [];
     // A split paragraph owns its section break only at its final continuation.
     const sectionOwners = new Map<string, WordTextParagraph>();
+    const requestedStyles: string[] = [];
     const collectSections = (blocks: readonly WordContentBlock[]) => {
       for (const block of blocks) {
-        if (block.kind === 'paragraph' && block.source !== undefined)
-          sectionOwners.set(`${block.sourceCopy ?? ''}:${block.source}`, block);
+        if (block.kind === 'paragraph') {
+          if (block.styleId) requestedStyles.push(block.styleId);
+          if (block.source !== undefined) sectionOwners.set(`${block.sourceCopy ?? ''}:${block.source}`, block);
+        }
         else if (block.kind === 'table') for (const row of block.rows) for (const cell of row) collectSections(cell.blocks);
       }
     };
     collectSections(input);
+    // Match the definitions export adds for the whole update, including nested paragraphs.
+    const addedStyles = compiled ? missingAuthoredStyles(compiled.artifact.document, requestedStyles) : [];
+    const tabStyleKey = addedStyles.map(style => style.styleId).join(',');
+    const tabStyles = !compiled ? this.namedStyles : this.tabStyles && this.tabStyleKey === tabStyleKey
+      ? this.tabStyles : wordAuthoringStyles(compiled.artifact.document.styles, this.options.defaultFormat, addedStyles);
     const format = (patch: WordTextParagraph['runs'][number]['format'], inherited?: ComputedWordTextFormat): ComputedWordTextFormat => {
       const value = { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }), ...this.compiled?.defaults.text, ...inherited, ...patch };
       if (
@@ -327,7 +338,7 @@ export class NativeWordDocument implements WordLayoutSource {
         const previous = this.records.get(key);
         const original = source.kind === 'paragraph' ? compiled?.paragraphs.get(source.source!) : undefined;
         const hasSection = source.kind === 'paragraph' && sectionOwners.get(`${source.sourceCopy ?? ''}:${source.source}`) === source;
-        const fingerprint = `${hasSection}:${signature(source, width)}`;
+        const fingerprint = `${tabStyleKey}:${hasSection}:${signature(source, width)}`;
         const descendantsStart = visited.length;
         let result: RecordBlock;
         if (this.options.immutableContent && previous?.signature === fingerprint && previous.subtree?.input === source) {
@@ -516,10 +527,7 @@ export class NativeWordDocument implements WordLayoutSource {
               inlines,
             };
             const resetParagraph = authored.styleId !== undefined && (authored.styleId !== original?.format.styleId || authored.paragraph === undefined);
-            const sourceStyles = compiled?.artifact.document.styles;
-            // Imported styles retain broken chains. Built-ins apply only to newly requested styles.
-            const tabStyles = sourceStyles && (authored.styleId === undefined || authored.styleId === original?.format.styleId || sourceStyles.style(authored.styleId))
-              ? sourceStyles : this.namedStyles;
+            const inheritedTabs = tabStyles.resolveParagraphStyle(authored.styleId ?? original?.format.styleId ?? '').paragraph.tabs;
             this.paragraphTextFormats.set(block, format(undefined, resetParagraph ? named?.text : original?.textFormat ?? named?.text));
             this.paragraphFormats.set(
               block,
@@ -527,11 +535,14 @@ export class NativeWordDocument implements WordLayoutSource {
                 ...DEFAULT_PARAGRAPH,
                 ...compiled?.defaults.paragraph,
                 ...(resetParagraph ? named?.paragraph : original?.format),
+                ...(authored.positioning?.tabs === undefined ? {
+                  tabs: mergeWordTabStops(inheritedTabs, resetParagraph && authored.positioning === undefined ? [] : original?.directTabs ?? []),
+                } : {}),
                 ...authored.positioning,
                 ...(authored.positioning?.tabs === undefined ? {} : {
                   // Imported positioning contains effective stops, so retain source clears until replaced.
                   tabs: mergeWordTabStops(
-                    tabStyles.resolveParagraphStyle(authored.styleId ?? original?.format.styleId ?? '').paragraph.tabs,
+                    inheritedTabs,
                     original && JSON.stringify(authored.positioning) === JSON.stringify(compiled?.positioning.get(authored.source!))
                       ? original.directTabs ?? [] : authored.positioning.tabs,
                   ),
@@ -608,6 +619,8 @@ export class NativeWordDocument implements WordLayoutSource {
     this.drawings = drawings;
     this.listMarkers = markers;
     this.authored = input;
+    this.tabStyles = tabStyles;
+    this.tabStyleKey = tabStyleKey;
   }
 
   /** Inspect section and table-grid dimensions without guessing fonts or claiming rendered bounds. */

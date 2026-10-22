@@ -202,6 +202,9 @@ and contain no clear entries; source declarations remain intact for serializatio
 Native paragraph updates resolve replacement direct tab declarations against the
 selected style and document defaults, matching the exported document. Previous
 direct stops do not survive a replacement array.
+Native tabs use the style definitions that export adds for the whole update.
+Adding or removing a requested built-in style also invalidates inherited tab
+formats on existing paragraphs and paragraphs inside reused tables.
 An unknown or wrong-type selected style falls back to the default of the requested
 type. A missing or wrong-type `basedOn` target only ends that chain. Cycles and
 chains over 100 styles still fail. Resolved declarations are cached per named style
