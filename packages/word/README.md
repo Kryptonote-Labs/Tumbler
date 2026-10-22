@@ -631,3 +631,19 @@ to `front` or `behind` and supply `x`, `y`, `horizontalRelativeTo` and
 that they move and resize together. `edit-object` can replace its complete ink
 value, including all strokes. Existing single-stroke `points/color/size` inputs
 remain supported with their previous fit-to-frame behavior.
+
+### Explicit positioning and hyperlink resets
+
+For `paragraph` operations, omitting `positioning` or supplying `{}` preserves the
+current positioning. Partial objects update their supplied members. `positioning:
+null` removes direct paragraph indents and tabs, allowing paragraph styles and
+document defaults to apply. Yjs consumes null attributes, so commands store this
+intent as `positioning: { reset: true }`. The same object works in authored content
+and `NativeWordDocument`; it can include replacement positioning members. The
+marker survives projection, undo and collaborative updates, and is not written to
+OOXML. Source extension attributes and unrelated XML remain preserved.
+
+For `format` operations, omitting `link` preserves it; `link: null` and `link: ''`
+both unlink. Commands store the existing empty-string sentinel so native projection
+and source-aware export cannot restore the old hyperlink. In authored content,
+use `link: ''` to unlink and omit `link` to preserve the source wrapper.

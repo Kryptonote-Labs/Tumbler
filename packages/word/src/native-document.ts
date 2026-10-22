@@ -497,6 +497,11 @@ export class NativeWordDocument implements WordLayoutSource {
                 ...DEFAULT_PARAGRAPH,
                 ...compiled?.defaults.paragraph,
                 ...(resetParagraph ? named?.paragraph : original?.format),
+                ...(authored.positioning?.reset ? (() => {
+                  const inherited = this.namedStyles.resolveParagraphStyle(authored.styleId ?? original?.format.styleId ?? '').paragraph;
+                  const { tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips } = inherited;
+                  return { tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips };
+                })() : {}),
                 ...authored.positioning,
                 ...resolveWordPaintProperties(authored.paragraph ?? {}, this.themeColours),
                 alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? (resetParagraph ? named?.paragraph.alignment : original?.format.alignment) ?? compiled?.defaults.paragraph.alignment ?? 'start',

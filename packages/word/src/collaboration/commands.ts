@@ -263,6 +263,8 @@ function formatWordDelta(
     throw new Error('Use table operations to change cell structure.');
   const value = text.toString();
   const { align, styleId, paragraph, positioning, tab: _tab, list, table: _table, image: _image, field: _field, ...inline } = attributes;
+  // Yjs consumes null attributes. Retain explicit unlink intent in its existing sentinel.
+  if (inline.link === null) inline.link = '';
   // A font ID and a literal family are alternative ways to specify the same property.
   if (attributes.fontFamily !== undefined && attributes.font === undefined) inline.font = null;
   if (attributes.font !== undefined && attributes.fontFamily === undefined) inline.fontFamily = null;
@@ -288,7 +290,7 @@ function formatWordDelta(
       append(end, 1, {
         ...(align !== undefined ? { align: align === 'left' ? null : align } : {}),
         ...(list !== undefined ? { list } : {}),
-        ...(positioning !== undefined ? { positioning } : {}),
+        ...(positioning !== undefined ? { positioning: positioning === null ? { reset: true as const } : positioning.reset ? positioning : { ...wordFormats(text, { start, end: start }).positioning, ...positioning } } : {}),
         ...(styleId !== undefined ? { styleId } : {}),
         ...(paragraph !== undefined ? { paragraph: paragraph === null ? null : { ...wordFormats(text, { start, end: start }).paragraph, ...paragraph } } : {}),
       });
