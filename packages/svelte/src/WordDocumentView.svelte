@@ -2,7 +2,8 @@
   import WordInkPageLayer from "./WordInkPageLayer.svelte";
   import WordShapeView from "./WordShapeView.svelte";
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
-  import { flushSync, onDestroy, onMount, untrack } from "svelte";
+  import { flushSync, onDestroy, onMount, tick, untrack } from "svelte";
+  import { WordImageUrls } from "./word-image-urls.ts";
   import { wordImagePaintBounds, wordLineAtPoint, layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import { zoomGesture } from "./zoom-gesture.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
@@ -42,11 +43,12 @@
   let paragraphs = $derived(wordDocumentParagraphs(wordDocument));
   let paragraphOrder = $derived(new Map(paragraphs.map((paragraph, index) => [paragraph.elementId, index])));
   let paragraphText = $derived(new Map(paragraphs.map(paragraph => [paragraph.elementId, wordParagraphText(wordDocument, paragraph)])));
-  const imageUrls = new WeakMap<Uint8Array, string>();
-  const createdUrls = new Set<string>();
+  const imageUrls = new WordImageUrls();
+  let destroyed = false;
 
   onDestroy(() => {
-    createdUrls.forEach((url) => URL.revokeObjectURL(url));
+    destroyed = true;
+    void tick().then(() => imageUrls.destroy());
     finishMouseSelection();
   });
 
@@ -74,6 +76,16 @@
   $effect(() => {
     scale;
     if (mounted) untrack(updateViewport);
+  });
+
+  $effect(() => {
+    layout;
+    viewport;
+    // Child drawing views must finish updating before old URLs can be released.
+    void tick().then(() => {
+      if (destroyed || scroller === undefined) return;
+      imageUrls.retain(new Set(Array.from(scroller.querySelectorAll('img'), image => image.src)));
+    });
   });
 
   $effect(() => {
@@ -436,12 +448,7 @@
   }
 
   function imageUrl(drawing: WordImageDrawing): string {
-    const existing = imageUrls.get(drawing.bytes);
-    if (existing !== undefined) return existing;
-    const url = URL.createObjectURL(new Blob([Uint8Array.from(drawing.bytes).buffer], { type: drawing.contentType }));
-    imageUrls.set(drawing.bytes, url);
-    createdUrls.add(url);
-    return url;
+    return imageUrls.get(drawing);
   }
 </script>
 
@@ -489,7 +496,8 @@
             onkeydown={handleKeydown}
             style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
           >
-            <WordInkPageLayer {page} {scale} background={layout.background} imageurl={imageUrl} />
+            <!-- Canvas decoding owns its URLs until the asynchronous paint completes. -->
+            <WordInkPageLayer {page} {scale} background={layout.background} />
             <WordParagraphDecorations lines={[...bodyLines(page), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
             {#if page.noteSeparatorY !== undefined}
               <div class="note-separator" style={`left:${wordPointsToCssPixels(page.section.marginLeftTwips / 20)}px;top:${wordPointsToCssPixels(page.noteSeparatorY)}px`}></div>
