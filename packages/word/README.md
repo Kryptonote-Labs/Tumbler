@@ -197,14 +197,20 @@ Reuse a list ID to continue numbering; use a new ID to restart it. Levels range 
 Imported `source-list-N` identities bind to the package's existing numbering instance.
 Reusing one in appended or moved paragraphs continues that instance in native preview
 and export, including its level patterns and start overrides. Use a new identity to
-start an independently defined list.
+start an independently defined list. Imported identities must retain their source
+level definitions. Incompatible kind/start/marker metadata or an undefined source
+level throws `TypeError` in preview and export instead of silently dropping the edit.
 
 Numbering resolution counts derived marker text and suffixes in UTF-16 units.
 `numbering.markers(document, { maxCharacters })` and
 `numbering.markersFor(references, { maxCharacters })` default to a cumulative
 1,000,000-character budget per call. They throw `WordError` with code
 `limit_exceeded` before expanding text beyond the budget. Raise the budget explicitly
-for trusted documents that need larger output. This is a processing budget, separate
+for trusted documents that need larger output. `NativeWordOptions.maxMarkerCharacters`
+sets the cumulative update budget for both authored and imported markers.
+`WordLayoutOptions.maxMarkerCharacters` sets the body-and-story layout budget;
+native layout defaults to its constructor setting. Cached markers still count when
+a later request lowers the budget. This is a processing budget, separate
 from `openWordDocument`'s input-text limit; it does not restrict authored start values.
 Roman formatting checks the expanded length before allocating repeated symbols.
 Values above 3,999 retain the existing repeated-`M` representation when the budget

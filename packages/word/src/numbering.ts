@@ -13,7 +13,7 @@ export interface WordMarkerOptions {
   readonly maxCharacters?: number;
 }
 
-class MarkerBudget {
+export class WordMarkerBudget {
   remaining: number;
   constructor(maximum = DEFAULT_MAX_MARKER_CHARACTERS) {
     if (!Number.isSafeInteger(maximum) || maximum < 0) throw new RangeError('Marker character budget must be a non-negative safe integer.');
@@ -116,7 +116,7 @@ export class WordNumbering {
     return Object.freeze({ numId, level });
   }
 
-  markers(document: WordDocumentLike & { readonly blocks: readonly WordBlock[] }, options: WordMarkerOptions = {}): ReadonlyMap<number, WordListMarker> {
+  markers(document: WordDocumentLike & { readonly blocks: readonly WordBlock[] }, options: WordMarkerOptions = {}, budget = new WordMarkerBudget(options.maxCharacters)): ReadonlyMap<number, WordListMarker> {
     const paragraphs: { elementId: number; reference: WordParagraphNumbering }[] = [];
     const visit = (blocks: readonly WordBlock[]): void => {
       for (const block of blocks) {
@@ -127,12 +127,11 @@ export class WordNumbering {
       }
     };
     visit(document.blocks);
-    return this.markersFor(paragraphs, options);
+    return this.markersFor(paragraphs, options, budget);
   }
 
   /** Number a semantic sequence without consulting XML or opening a package. */
-  markersFor(paragraphs: Iterable<{ elementId: number; reference: WordParagraphNumbering }>, options: WordMarkerOptions = {}): ReadonlyMap<number, WordListMarker> {
-    const budget = new MarkerBudget(options.maxCharacters);
+  markersFor(paragraphs: Iterable<{ elementId: number; reference: WordParagraphNumbering }>, options: WordMarkerOptions = {}, budget = new WordMarkerBudget(options.maxCharacters)): ReadonlyMap<number, WordListMarker> {
     const markers = new Map<number, WordListMarker>();
     const counters = new Map<number, number[]>();
     for (const { elementId, reference } of paragraphs) {
@@ -151,7 +150,7 @@ export class WordNumbering {
           }
           counters.set(reference.numId, state);
           budget.consume(level.suffix === 'nothing' ? 0 : 1);
-          const text = markerText(level, budget, (index, maximum) => {
+          const text = wordMarkerText(level.text, level.format === "bullet", budget, (index, maximum) => {
             const definition = instance.levelOverrides.get(index) ?? abstract.levels.find((item) => item.level === index);
             return formatWordNumber(state[index] ?? definition?.start ?? 1, definition?.format ?? "decimal", maximum);
           });
@@ -234,29 +233,29 @@ function parseLevel(element: LosslessXmlElement, ns: string, forcedLevel?: numbe
 }
 
 /** Budget derived text before expansion, including repeated placeholders and literals. */
-function markerText(level: WordNumberingLevel, budget: MarkerBudget, number: (index: number, maximum: number) => string): string {
-  if (level.format === 'bullet') {
-    budget.consume(level.text.length);
-    return level.text;
+export function wordMarkerText(pattern: string, literal: boolean, budget: WordMarkerBudget, number: (index: number, maximum: number) => string): string {
+  if (literal) {
+    budget.consume(pattern.length);
+    return pattern;
   }
   const parts: string[] = [];
   let offset = 0;
-  for (const match of level.text.matchAll(/%([1-9])/g)) {
+  for (const match of pattern.matchAll(/%([1-9])/g)) {
     budget.consume(match.index - offset);
-    parts.push(level.text.slice(offset, match.index));
+    parts.push(pattern.slice(offset, match.index));
     const value = number(Number(match[1]) - 1, budget.remaining);
     budget.consume(value.length);
     parts.push(value);
     offset = match.index + match[0].length;
   }
-  budget.consume(level.text.length - offset);
-  parts.push(level.text.slice(offset));
+  budget.consume(pattern.length - offset);
+  parts.push(pattern.slice(offset));
   return parts.join('');
 }
 
 /** Preserve numeral semantics; reject work exceeding the caller's derived-text budget. */
 export function formatWordNumber(value: number, format: WordNumberFormat, maxCharacters = DEFAULT_MAX_MARKER_CHARACTERS): string {
-  const budget = new MarkerBudget(maxCharacters);
+  const budget = new WordMarkerBudget(maxCharacters);
   if (format === "none") return "";
   if (!Number.isSafeInteger(value)) throw new WordError('invalid_document', 'Numbering value must be a safe integer.');
   if (format === "lowerLetter" || format === "upperLetter") {

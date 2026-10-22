@@ -21,7 +21,7 @@ import type {
 } from "./document.ts";
 import type { ComputedWordParagraphFormat, ComputedWordTextFormat, WordTabStop } from "./styles.ts";
 import { WordError } from "./document.ts";
-import type { WordListMarker } from "./numbering.ts";
+import { WordMarkerBudget, type WordMarkerOptions, type WordListMarker } from "./numbering.ts";
 import { resolveWordTableGrid, type ResolvedWordTableCell } from "./table-grid.ts";
 import type { WordDrawing } from "./drawings.ts";
 
@@ -45,6 +45,8 @@ export interface WordTextMeasurer {
 }
 
 export interface WordLayoutOptions {
+  /** Cumulative derived marker UTF-16 units across body and stories, including suffixes. */
+  readonly maxMarkerCharacters?: number;
   readonly maxPages?: number;
   readonly maxFragments?: number;
   /** Maximum UTF-16 text units visited while preparing layout. */
@@ -235,13 +237,16 @@ export interface WordLayoutStories {
 
 const storySources = new WeakMap<WordDocument, WordLayoutStories>();
 /** Compile story styles once. Repeated page layout reads only semantic nodes and computed formats. */
-export function wordLayoutStories(document: WordDocument): WordLayoutStories {
+export function wordLayoutStories(document: WordDocument, options: WordMarkerOptions = {}, budget = new WordMarkerBudget(options.maxCharacters)): WordLayoutStories {
   const cached = storySources.get(document);
-  if (cached) return cached;
+  if (cached) {
+    for (const story of [...cached.headerFooters, ...cached.notes]) accountMarkers(story.context.listMarkers, budget);
+    return cached;
+  }
   const result = {
     evenAndOddHeaders: document.evenAndOddHeaders,
-    headerFooters: document.headerFooters.map(story => ({ kind: story.kind, type: story.type, relationshipId: story.relationshipId, context: compileStory(document, story) })),
-    notes: document.notes.map(story => ({ kind: story.kind, type: story.type, id: story.id, context: compileStory(document, story) })),
+    headerFooters: document.headerFooters.map(story => ({ kind: story.kind, type: story.type, relationshipId: story.relationshipId, context: compileStory(document, story, budget) })),
+    notes: document.notes.map(story => ({ kind: story.kind, type: story.type, id: story.id, context: compileStory(document, story, budget) })),
   };
   storySources.set(document, result);
   return result;
@@ -381,13 +386,14 @@ export function layoutWordDocument(
   measurer: WordTextMeasurer,
   options: WordLayoutOptions = {},
 ): WordLayout {
+  const markerBudget = new WordMarkerBudget(options.maxMarkerCharacters);
   return layoutWordSource({
     background: document.background === undefined ? undefined : resolveWordColour(document.background, document.styles.themeColors),
     blocks: document.blocks, drawings: document.drawings, finalSection: document.finalSection, wrapTrailSpaces: document.wrapTrailSpaces, doNotExpandShiftReturn: document.doNotExpandShiftReturn,
-    listMarkers: document.numbering.markers(document),
+    listMarkers: document.numbering.markers(document, {}, markerBudget),
     paragraphFormat: paragraph => document.styles.paragraphFormat(document, paragraph),
     runFormat: (paragraph, run) => document.styles.runFormat(document, paragraph, run),
-  }, measurer, options, wordLayoutStories(document));
+  }, measurer, options, wordLayoutStories(document, {}, markerBudget));
 }
 
 /** Shared pagination for package-backed and native document models. */
@@ -412,6 +418,9 @@ export function* layoutWordSourceProgressively(
   stories?: WordLayoutStories,
   emitProgress = true,
 ): Generator<WordLayout, WordLayout, void> {
+  const markerBudget = new WordMarkerBudget(options.maxMarkerCharacters);
+  accountMarkers(document.listMarkers, markerBudget);
+  for (const story of [...stories?.headerFooters ?? [], ...stories?.notes ?? []]) accountMarkers(story.context.listMarkers, markerBudget);
   const needsTotal = stories?.headerFooters.some(story => hasPageFields(story.context.blocks, 'NUMPAGES'));
   let total = 1;
   const seen = new Set<number>();
@@ -1369,7 +1378,7 @@ function decorateHeaderFooters(
   }
 }
 
-function compileStory(document: WordDocument, story: WordHeaderFooterStory | WordNoteStory): WordLayoutDocumentContext {
+function compileStory(document: WordDocument, story: WordHeaderFooterStory | WordNoteStory, budget: WordMarkerBudget): WordLayoutDocumentContext {
   const context = { package: document.package, part: story.part, source: story.source, conformance: document.conformance };
   const paragraphs = new Map<WordParagraph, ComputedWordParagraphFormat>();
   const defaults = new Map<WordParagraph, ComputedWordTextFormat>();
@@ -1390,7 +1399,7 @@ function compileStory(document: WordDocument, story: WordHeaderFooterStory | Wor
   visit(story.blocks);
   return {
     wrapTrailSpaces: document.wrapTrailSpaces, doNotExpandShiftReturn: document.doNotExpandShiftReturn,
-    drawings: story.drawings, blocks: story.blocks, listMarkers: document.numbering.markers({ ...context, blocks: story.blocks }),
+    drawings: story.drawings, blocks: story.blocks, listMarkers: document.numbering.markers({ ...context, blocks: story.blocks }, {}, budget),
     cache: new WordLayoutCache(),
     paragraphFormat: paragraph => paragraphs.get(paragraph)!,
     runFormat: (paragraph, run) => (run && runs.get(run)) || defaults.get(paragraph)!,
@@ -1755,4 +1764,9 @@ export function layoutWordResolvedParagraph(
     y += placed.height;
     return placed;
   });
+}
+
+/** Cached marker maps still count against each layout request's resource budget. */
+function accountMarkers(markers: ReadonlyMap<number, WordListMarker>, budget: WordMarkerBudget): void {
+  for (const marker of markers.values()) budget.consume(marker.text.length + (marker.suffix === 'nothing' ? 0 : 1));
 }

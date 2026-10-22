@@ -1,4 +1,4 @@
-import { formatWordNumber } from './numbering.ts';
+import { formatWordNumber, wordMarkerText, WordMarkerBudget } from './numbering.ts';
 export const WORD_LIST_KINDS = ['none', 'bullet', 'decimal', 'lowerLetter', 'upperLetter', 'lowerRoman', 'upperRoman'] as const;
 export type WordListKind = typeof WORD_LIST_KINDS[number];
 export interface WordAuthoredList { readonly id: string; readonly kind: WordListKind; readonly level?: number; readonly start?: number; readonly marker?: string; readonly multilevel?: boolean; }
@@ -15,8 +15,8 @@ export function isWordAuthoredList(value: unknown): value is WordAuthoredList {
 export function wordListPattern(list: WordAuthoredList, level: number): string {
   return list.kind === 'none' ? '' : list.kind === 'bullet' ? list.marker ?? '•' : list.multilevel ? Array.from({ length: level + 1 }, (_, i) => `%${i + 1}`).join('.') + '.' : `%${level + 1}.`;
 }
-export function wordListMarker(list: WordAuthoredList, values: readonly number[], level: number, levels?: ReadonlyMap<number, WordAuthoredList>): string {
-  return wordListPattern(list, level).replace(/%([1-9])/g, (_, index: string) => formatWordNumber(values[Number(index) - 1] ?? list.start ?? 1, levels?.get(Number(index) - 1)?.kind ?? list.kind));
+export function wordListMarker(list: WordAuthoredList, values: readonly number[], level: number, levels?: ReadonlyMap<number, WordAuthoredList>, budget = new WordMarkerBudget()): string {
+  return wordMarkerText(wordListPattern(list, level), list.kind === 'bullet', budget, (index, maximum) => formatWordNumber(values[index] ?? list.start ?? 1, levels?.get(index)?.kind ?? list.kind, maximum));
 }
 
 /** A numbering definition may use a different format at each of its nine levels. */

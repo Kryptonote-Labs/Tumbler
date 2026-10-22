@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { createWordArtifact } from '../src/create.ts';
+import { createWordArtifact, importWordContent, layoutWordDocument, NativeWordDocument } from '../src/index.ts';
 import { WordError } from '../src/document.ts';
 import { formatWordNumber, WordNumbering, type WordNumberFormat } from '../src/numbering.ts';
 
@@ -52,3 +52,31 @@ test('parses the full start range and applies derived budget when resolving mark
   expect(artifact.document.numbering.abstracts[0]?.levels[0]?.start).toBe(2147483647);
   expect(() => artifact.document.numbering.markers(artifact.document)).toThrow('budget');
 });
+
+test('shares the native budget across authored and imported markers and allows explicit opt-in', () => {
+  const content = Array.from({ length: 2 }, () => ({ kind: 'paragraph' as const, runs: [{ text: 'One' }], list: { id: 'large', kind: 'upperRoman' as const, start: 600000000 } }));
+  const source = createWordArtifact({ blocks: content });
+  expect(() => new NativeWordDocument({ content })).toThrow('budget');
+  expect(() => new NativeWordDocument({ source })).toThrow('budget');
+  expect(() => layoutWordDocument(source.document, measurer)).toThrow('budget');
+  const native = new NativeWordDocument({ content, maxMarkerCharacters: 2000000 });
+  expect([...native.listMarkers.values()].reduce((sum, marker) => sum + marker.text.length + 1, 0)).toBe(1200005);
+  expect(() => native.layout(measurer)).not.toThrow();
+  expect(() => new NativeWordDocument({ source, maxMarkerCharacters: 2000000 }).layout(measurer)).not.toThrow();
+  expect(() => layoutWordDocument(source.document, measurer, { maxMarkerCharacters: 2000000 })).not.toThrow();
+  expect(() => native.layout(measurer, { maxMarkerCharacters: 1000000 })).toThrow('budget');
+  const mixed = importWordContent(source);
+  mixed.push({ kind: 'paragraph', runs: [{ text: 'Authored' }], list: { id: 'new', kind: 'upperRoman', start: 600000000 } });
+  expect(() => new NativeWordDocument({ source, content: mixed, maxMarkerCharacters: 1800007 })).not.toThrow();
+  expect(() => new NativeWordDocument({ source, content: mixed, maxMarkerCharacters: 1800006 })).toThrow('budget');
+});
+
+test('shares story budgets and rechecks cached markers under tighter layout limits', () => {
+  const native = new NativeWordDocument({ content: [{ kind: 'paragraph', runs: [{ text: 'Body' }], list: { id: 'b', kind: 'decimal' } }] });
+  native.updateStory({ kind: 'header', type: 'default', section: 0 }, [{ kind: 'paragraph', runs: [{ text: 'Header' }], list: { id: 'h', kind: 'decimal' } }]);
+  const source = native.artifact();
+  expect(() => layoutWordDocument(source.document, measurer, { maxMarkerCharacters: 6 })).not.toThrow();
+  expect(() => layoutWordDocument(source.document, measurer, { maxMarkerCharacters: 5 })).toThrow('budget');
+});
+
+const measurer = { measure: (_text: string) => ({ width: 1, ascent: 8, descent: 2 }) };
