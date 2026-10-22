@@ -63,7 +63,7 @@ export async function runScenarios(scenarios: readonly Scenario[], options: Runn
         const log = join(directory, 'openxml.log');
         await Bun.write(log, validation.output);
         artifacts.push({ path: relative(options.output, log), sha256: sha256(validation.output) });
-        record('openxml', validation.code === 0 ? 'passed' : 'failed', validation.code === 0 ? 'Open XML SDK accepted every fixture; this does not establish Word rendering or complete clause coverage.' : `Open XML SDK rejected the fixtures or failed (exit ${validation.code}); see ${scenario.id}/openxml.log`);
+        record('openxml', validation.code === 0 ? 'passed' : 'failed', validation.code === 0 ? 'Open XML SDK validator accepted every fixture, with documented validation-only Strict theme translation where needed; this does not establish Word rendering or complete clause coverage.' : `Open XML SDK rejected the fixtures or failed (exit ${validation.code}); see ${scenario.id}/openxml.log`);
       }
     }
     if (scenario.oracles.includes('libreoffice')) {

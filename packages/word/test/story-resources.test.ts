@@ -37,6 +37,7 @@ for (const conformance of ['strict', 'transitional'] as const) {
       const theme = shared.find(rel => rel.type === `${office}/theme`)!;
       if (theme.targetMode !== 'Internal') throw new Error('Expected internal theme');
       const themeBytes = main.package.readPart(main.package.getPart(theme.targetPartName)!);
+      expect(new TextDecoder().decode(themeBytes)).toContain(conformance === 'strict' ? '<a:miter lim="800%"' : '<a:miter lim="800000"');
       const updated = storyMainArtifact(reconcileWordContent(story, content('Heading2')));
       expect(updated.document.styles.partName).toEqual(stylesName);
       expect(updated.document.styles.style('Heading1')).toBeDefined();
