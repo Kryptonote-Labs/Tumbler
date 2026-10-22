@@ -186,11 +186,22 @@ export function payloadSignature(doc: Y.Doc, address: CellAddress) {
     }
   };
   if (value) visit(value.text, value.start, value.end + (value.source ? 1 : 0));
+  let terminal: Record<string, unknown> = {};
+  if (value?.source) {
+    let offset = 0;
+    for (const part of value.text.toDelta()) {
+      if (typeof part.insert !== "string") continue;
+      if (offset <= value.end && offset + part.insert.length > value.end) {
+        terminal = part.attributes ?? {};
+        break;
+      }
+      offset += part.insert.length;
+    }
+  } else if (doc.share.has(cellFormatName(address)))
+    terminal = Object.fromEntries(doc.getMap<unknown>(cellFormatName(address)));
   return stableStringify({
     content: payloadDelta(doc, address),
-    terminal: doc.share.has(cellFormatName(address))
-      ? Object.fromEntries(doc.getMap<unknown>(cellFormatName(address)))
-      : {},
+    terminal,
     descendants: Object.fromEntries(
       [...descendants].sort(([a], [b]) => (a < b ? -1 : 1)),
     ),
