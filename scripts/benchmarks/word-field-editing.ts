@@ -1,13 +1,18 @@
 // Run before and after with the same Bun binary and no concurrent tests.
 import { cpus } from 'node:os';
-import { createWordArtifact } from '../../packages/word/src/index.ts';
+import { createWordArtifact, layoutWordDocument } from '../../packages/word/src/index.ts';
 import { openWordOperationDocument, prepareWordOperation } from '../../packages/word/src/operations/index.ts';
 import { complexField, deleteField, fieldArtifact, textRun, visible } from '../../packages/word/test/field-editing-fixture.ts';
 const complex = fieldArtifact(`<w:p>${textRun('L')}${complexField('PAGE', textRun('1'))}${textRun('R')}</w:p>`);
 const nested = fieldArtifact(`<w:p>${complexField('IF', textRun('A') + complexField('REF x', textRun('B')) + textRun('C'))}${textRun('D')}</w:p>`);
 const move = createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', field: 'PAGE' }, { text: 'abc' }] }] });
 const insertion = createWordArtifact({ paragraphs: [{ runs: [{ text: 'one' }] }, { runs: [{ text: 'two' }] }] });
+const plain = fieldArtifact(`<w:p>${textRun('ABCD')}</w:p>`);
+const measure = { measure: (text: string) => ({ width: text.length * 6, ascent: 8, descent: 2 }) };
 const cases = {
+  plain: () => visible(plain) === 'ABCD',
+  nestedLayout: () => layoutWordDocument(nested.document, measure).pages.flatMap(page =>
+    page.columns.flatMap(column => column.lines.flatMap(line => line.fragments.map(fragment => fragment.text)))).join('') === 'ABCD',
   delete: () => visible(deleteField(complex)) === 'LR',
   nested: () => visible(nested) === 'ABCD',
   move: () => {

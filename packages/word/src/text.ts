@@ -1,3 +1,4 @@
+import { createFieldVisibility } from './field-visibility.ts';
 import type { WordDocument, WordInline, WordParagraph, WordRun } from "./document.ts";
 
 export interface WordTextPosition {
@@ -35,23 +36,10 @@ export function wordParagraphText(document: WordDocument | undefined, paragraph:
 export function wordParagraphTextSegments(_document: WordDocument | undefined, paragraph: WordParagraph): readonly WordParagraphTextSegment[] {
   const segments: WordParagraphTextSegment[] = [];
   let offset = 0;
-  const fieldResults: boolean[] = [];
-  let instructionDepth = 0;
+  const visible = createFieldVisibility();
   const addRun = (run: WordRun): void => {
     for (const content of run.contents) {
-      if (content.kind === "field-character") {
-        if (content.fieldType === "begin") {
-          fieldResults.push(false);
-          instructionDepth += 1;
-        } else if (content.fieldType === "separate" && fieldResults.at(-1) === false) {
-          fieldResults[fieldResults.length - 1] = true;
-          instructionDepth -= 1;
-        } else if (content.fieldType === "end" && fieldResults.pop() === false) {
-          instructionDepth -= 1;
-        }
-        continue;
-      }
-      if (content.kind === "field-instruction" || content.kind === "deleted-text" || instructionDepth > 0) continue;
+      if (!visible(content)) continue;
       const projected = content.kind === "page-field" ? { kind: "page-field" as const, value: "\uFFFC" }
         : content.kind === "text" ? { kind: "text" as const, value: content.value }
         : content.kind === "symbol" ? { kind: "symbol" as const, value: content.value }

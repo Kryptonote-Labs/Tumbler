@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
-import { createWordArtifact, openWordArtifact } from '../src/index.ts';
+import { createWordArtifact, openWordArtifact, layoutWordDocument } from '../src/index.ts';
 import { openWordOperationDocument, prepareWordOperation } from '../src/operations/index.ts';
 import type { TextAttributes } from '../src/collaboration/formatting.ts';
-import { complexField, deleteField, fieldArtifact, textRun, visible } from './field-editing-fixture.ts';
+import { complexField, deleteField, firstParagraph, fieldArtifact, textRun, visible } from './field-editing-fixture.ts';
 
 for (const field of ['PAGE', 'NUMPAGES']) {
   for (const kind of ['simple', 'complex', 'empty complex']) test(`direct deletion removes entire ${kind} ${field} and keeps neighbors`, () => {
@@ -82,4 +82,20 @@ test('complex field moves across paragraphs without changing the neighboring fie
       expect((exported.text.toDelta() as { insert: string; attributes?: TextAttributes }[]).filter(part => part.attributes?.field).map(part => part.attributes?.field)).toEqual(['NUMPAGES', 'PAGE']);
     } finally { exported.destroy(); }
   } finally { session.destroy(); }
+});
+
+for (const instructionNested of [false, true]) test(`nested field layout offsets match editable text, instruction nesting ${instructionNested}`, () => {
+  const inner = complexField('REF x', textRun('B'));
+  const outer = instructionNested
+    ? complexField('IF', textRun('A')).replace('<w:r><w:instrText>IF</w:instrText></w:r>', `<w:r><w:instrText>IF</w:instrText></w:r>${inner}`)
+    : complexField('IF', textRun('A') + inner + textRun('C'));
+  const source = fieldArtifact(`<w:p>${outer}${textRun('D')}</w:p>`);
+  const fragments = layoutWordDocument(source.document, { measure: text => ({ width: text.length * 6, ascent: 8, descent: 2 }) }).pages.flatMap(page => page.columns.flatMap(column => column.lines.flatMap(line => line.fragments)));
+  expect(fragments.map(fragment => fragment.text).join('')).toBe(visible(source));
+  const last = fragments.find(fragment => fragment.text === 'D')!;
+  expect(last.startOffset).toBe(instructionNested ? 1 : 3);
+  expect(last.endOffset).toBe(instructionNested ? 2 : 4);
+  const paragraphElementId = firstParagraph(source).elementId;
+  const edited = source.replaceText({ anchor: { paragraphElementId, offset: last.startOffset }, focus: { paragraphElementId, offset: last.endOffset } }, '');
+  expect(visible(edited)).toBe(instructionNested ? 'A' : 'ABC');
 });
