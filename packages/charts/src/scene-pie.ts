@@ -1,4 +1,5 @@
-import { chartSequenceValue, layoutPieSlices, pieArcPath } from "./layout.ts";
+import { indexChartSequence } from './indexed-data.ts';
+import { layoutPieSlices, pieArcPath } from "./layout.ts";
 import { legendGroup, type ChartMark, type SceneContext } from "./scene-marks.ts";
 import { chartFont } from "./scene-style.ts";
 
@@ -31,8 +32,9 @@ export function pieScene(context: SceneContext): ChartMark[] {
   if (model.legend === undefined) return marks;
 
   const font = chartFont("legend", model.legend.textStyle, model, options.resolveColor);
+  const categories = indexChartSequence(first.categories);
   const entries = slices.map((slice, index) => {
-    const label = String(chartSequenceValue(first.categories, slice.index) ?? slice.index + 1);
+    const label = String(categories.get(slice.index) ?? slice.index + 1);
     if (!horizontal) return { label, x: position === "left" ? PADDING : width - sideWidth, y: titleHeight + 16 + index * 20, extent: 0 };
     const row = Math.floor(index / columns);
     const rowCount = Math.min(columns, count - row * columns);

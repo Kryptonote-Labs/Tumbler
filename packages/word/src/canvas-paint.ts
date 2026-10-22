@@ -1,3 +1,4 @@
+import { paintWordPicture } from './picture-paint.ts';
 import { paintWordInk, type WordInkPixelContext } from './ink-canvas.ts';
 import { wordImagePaintBounds } from './image-paint.ts';
 import { layoutChartScene, paintChartScene, type ChartCanvasContext } from "@tumblerjs/charts";
@@ -173,6 +174,7 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
   if (paintWordInk(context, fragment, options.scale ?? 4 / 3, options.inkMaxPixels)) return;
   const image = drawing?.kind === "image" ? options.image?.(drawing) : undefined;
   if (image !== undefined && drawing?.kind === 'image') {
+    if (drawing.picture) return paintWordPicture(context, image, drawing.picture, fragment);
     const box = wordImagePaintBounds(drawing, fragment.width, fragment.height);
     context.drawImage(image, fragment.x + box.x, fragment.y + box.y, box.width, box.height);
     return;

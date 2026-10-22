@@ -123,3 +123,81 @@ test("browser and offscreen canvases are paint targets", () => {
   const targets: [(context: CanvasRenderingContext2D) => ChartCanvasContext<Path2D>, (context: OffscreenCanvasRenderingContext2D) => ChartCanvasContext<Path2D>] = [context => context, context => context];
   expect(targets).toHaveLength(2);
 });
+
+test('visible Cartesian value labels survive missing gridlines and use the host formatter', () => {
+  for (const kind of ['column', 'bar', 'line'] as const) {
+    const base = model({ kind, legend: undefined, axes: [{ id: 1, kind: 'value', position: 'left', majorGridlines: false, deleted: false, title: undefined, minimum: 0, maximum: 20, numberFormatCode: '0.0' }] });
+    const noGrid = layoutChartScene(base, 600, 400, { formatNumber: (value, code) => `${code}:${value}` });
+    expect(texts(noGrid.marks).filter(text => text.startsWith('0.0:')).length).toBeGreaterThan(1);
+    const grid = layoutChartScene({ ...base, axes: [{ ...base.axes[0]!, majorGridlines: true }] }, 600, 400, { formatNumber: (value, code) => `${code}:${value}` });
+    expect(texts(grid.marks)).toEqual(texts(noGrid.marks));
+    expect(grid.marks.filter(mark => mark.kind === 'line').length).toBeGreaterThan(noGrid.marks.filter(mark => mark.kind === 'line').length);
+    const deleted = layoutChartScene({ ...base, axes: [{ ...base.axes[0]!, majorGridlines: true, deleted: true }] }, 600, 400);
+    expect(texts(deleted.marks)).toEqual(['Results', 'Jan', 'Feb', 'Mar']);
+    expect(deleted.marks.filter(mark => mark.kind === 'line')).toHaveLength(1);
+  }
+});
+
+test('deleted XY axes suppress their labels, titles, strokes and gridlines without hiding the other axis', () => {
+  const base = model({ kind: 'scatter', legend: undefined, axisIds: [1, 2], axes: [
+    { id: 1, kind: 'value', position: 'bottom', title: 'Deleted X', majorGridlines: true, deleted: true, minimum: undefined, maximum: undefined, numberFormatCode: 'X' },
+    { id: 2, kind: 'value', position: 'left', title: 'Visible Y', majorGridlines: false, deleted: false, minimum: undefined, maximum: undefined, numberFormatCode: 'Y' },
+  ] });
+  const scene = layoutChartScene(base, 600, 400, { formatNumber: (value, code) => `${code}:${value}` });
+  expect(texts(scene.marks)).not.toContain('Deleted X');
+  expect(texts(scene.marks).some(text => text.startsWith('X:'))).toBe(false);
+  expect(texts(scene.marks).some(text => text.startsWith('Y:'))).toBe(true);
+  expect(scene.marks.filter(mark => mark.kind === 'line')).toHaveLength(1);
+});
+
+test('combination value labels and gridlines follow each axis independently', () => {
+  const base = model({ legend: undefined, axes: [
+    { id: 1, kind: 'category', position: 'bottom', majorGridlines: false, deleted: true, title: undefined, minimum: undefined, maximum: undefined },
+    { id: 2, kind: 'value', position: 'left', majorGridlines: false, deleted: false, title: undefined, minimum: undefined, maximum: undefined, numberFormatCode: 'Y' },
+  ], axisIds: [1, 2] });
+  const combo = { ...base, plots: [base] };
+  const scene = layoutChartScene(combo, 600, 400, { formatNumber: (value, code) => `${code}:${value}` });
+  expect(texts(scene.marks).some(text => text.startsWith('Y:'))).toBe(true);
+  expect(texts(scene.marks)).not.toContain('Jan');
+  expect(scene.marks.filter(mark => mark.kind === 'line')).toHaveLength(0);
+  const hidden = { ...base, axes: base.axes.map(axis => ({ ...axis, deleted: true, majorGridlines: true })) };
+  expect(texts(layoutChartScene({ ...hidden, plots: [hidden] }, 600, 400).marks)).toEqual(['Results']);
+});
+
+test('small numeric ticks remain distinct without a host formatter in every chart family', () => {
+  const axis = { id: 1, kind: 'value' as const, position: 'left' as const, majorGridlines: false, deleted: false, title: undefined, minimum: 0, maximum: 1e-7, majorUnit: 2e-8 };
+  const base = model({ legend: undefined, title: undefined, axes: [axis], axisIds: [1] });
+  for (const current of [base, { ...base, plots: [base] }, { ...base, kind: 'scatter' as const, axisIds: [1, 1] }]) {
+    const labels = texts(layoutChartScene(current, 600, 400).marks);
+    for (const value of ['0', '0.00000002', '0.00000004', '0.00000006', '0.00000008', '0.0000001']) expect(labels).toContain(value);
+  }
+});
+
+test('automatic XY ticks remove arithmetic noise while retaining tiny intervals', () => {
+  for (const kind of ['scatter', 'bubble'] as const) for (const maximum of [0.8, 8e-8]) {
+    const base = model({ kind, title: undefined, legend: undefined, axisIds: [1, 2], axes: [
+      { id: 1, kind: 'value', position: 'bottom', title: undefined, majorGridlines: false, deleted: false, minimum: 0, maximum },
+      { id: 2, kind: 'value', position: 'left', title: undefined, majorGridlines: false, deleted: false, minimum: 0, maximum },
+    ] });
+    const labels = texts(layoutChartScene(base, 600, 400).marks);
+    const expected = maximum === 0.8 ? ['0', '0.2', '0.4', '0.6', '0.8'] : ['0', '0.00000002', '0.00000004', '0.00000006', '0.00000008'];
+    expect(labels).toEqual([...expected, ...expected]);
+  }
+});
+
+test('combination category labels resolve the referenced axis in either declaration order', () => {
+  const axes: SupportedChartModel['axes'] = [
+    { id: 1, kind: 'category', position: 'bottom', majorGridlines: false, deleted: true, title: undefined, minimum: undefined, maximum: undefined, textStyle: { fontFamily: 'Hidden Axis' } },
+    { id: 2, kind: 'value', position: 'right', majorGridlines: false, deleted: false, title: undefined, minimum: 0, maximum: 20 },
+    { id: 3, kind: 'category', position: 'bottom', majorGridlines: false, deleted: false, title: undefined, minimum: undefined, maximum: undefined, textStyle: { fontFamily: 'Primary Axis' } },
+    { id: 4, kind: 'value', position: 'left', majorGridlines: false, deleted: false, title: undefined, minimum: 0, maximum: 20 },
+  ];
+  for (const ordered of [axes, [...axes].reverse()]) {
+    const primary = model({ axes: ordered, axisIds: [3, 4], legend: undefined });
+    const secondary = { ...primary, kind: 'line' as const, axisIds: [1, 2], series: [{ ...primary.series[0]!, index: 1 }] };
+    const scene = layoutChartScene({ ...primary, series: [...primary.series, ...secondary.series], plots: [primary, secondary] }, 600, 400);
+    const labels = flat(scene.marks).filter(mark => mark.kind === 'text' && ['Jan', 'Feb', 'Mar'].includes(mark.text));
+    expect(labels).toHaveLength(3);
+    expect(labels.every(mark => mark.kind === 'text' && mark.font.family === '"Primary Axis", sans-serif')).toBe(true);
+  }
+});

@@ -29,9 +29,15 @@ test('page previews stop preparing within one long paragraph, including keepLine
 
 test('fragment and page limits stop consuming a long paragraph', () => {
   for (const options of [{ maxFragments: 1 }, { maxPages: 1 }] satisfies WordLayoutOptions[]) {
-    let calls = 0;
-    expect(() => layoutWordDocument(lineDocument('word '.repeat(40_000)), { measure(text) { calls++; return fixedMeasurer.measure(text); } }, options)).toThrow();
-    expect(calls).toBeLessThan(120);
+    const counts = [40_000, 80_000].map(words => {
+      let calls = 0;
+      expect(() => layoutWordDocument(lineDocument('word '.repeat(words)), { measure(text) { calls++; return fixedMeasurer.measure(text); } }, options)).toThrow();
+      // Pagination reads up to three following lines for widow protection. That
+      // bounded lookahead must not grow with the unconsumed paragraph length.
+      expect(calls).toBeLessThan(160);
+      return calls;
+    });
+    expect(counts[1]).toBe(counts[0]);
   }
 });
 

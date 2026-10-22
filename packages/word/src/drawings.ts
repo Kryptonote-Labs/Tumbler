@@ -1,3 +1,4 @@
+import { readWordPictureGeometry, type WordPictureGeometry } from './picture-geometry.ts';
 import { inkFrame, resizeWordInk, positionWordInk } from './ink-geometry.ts';
 import { wordInkChoice } from './ink-fallback.ts';
 import { readWordInkDrawing } from './ink.ts';
@@ -54,6 +55,7 @@ export interface WordShapeDrawing extends WordDrawingBase { readonly kind: 'shap
 
 export interface WordImageDrawing extends WordDrawingBase {
   readonly kind: "image";
+  readonly picture?: WordPictureGeometry;
   /** An ink display projection. Preserve the original part rather than editing only its preview. */
   readonly fallback?: "ink";
   readonly inkRendering?: 'bitmap' | 'vector' | 'raster';
@@ -228,7 +230,9 @@ function parseDrawing(
   if (relationship?.targetMode !== "Internal" || relationship.type !== `${relationshipNs}/image`) return unsupported(drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, "Images must target internal Image parts.");
   const part = input.package.getPart(relationship.targetPartName);
   if (part === undefined || !part.contentType.startsWith("image/")) return unsupported(drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, "Image relationship target has the wrong content type.");
-  return Object.freeze({ kind: "image", elementId: drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, relationshipId: id, partName: part.name, contentType: part.contentType, bytes: input.package.readPart(part) });
+  const picture = readWordPictureGeometry(graphicData, drawingNs, widthPoints, heightPoints);
+  if (typeof picture === 'string') return unsupported(drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, picture);
+  return Object.freeze({ kind: "image", ...(picture ? { picture } : {}), elementId: drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, relationshipId: id, partName: part.name, contentType: part.contentType, bytes: input.package.readPart(part) });
 }
 
 function parseAnchor(element: LosslessXmlElement, wp: string): WordDrawingAnchor {

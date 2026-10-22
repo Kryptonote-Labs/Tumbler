@@ -1,3 +1,6 @@
+import { widowGroupHeight, keepHeightUntil } from './paragraph-pagination.ts';
+import { withParagraphSpacing } from './paragraph-spacing.ts';
+import { createFieldVisibility } from './field-visibility.ts';
 import { alignWordPageDrawings } from './drawing-alignment.ts';
 import { resolveWordColour } from './theme-colours.ts';
 import { splitPreparedTable, joinPreparedTables, preparedBlockHeight } from './table-pagination.ts';
@@ -325,6 +328,8 @@ interface BreakAtom extends AtomBase {
 }
 
 export interface PreparedParagraph {
+  /** Own before-spacing, excluding the previous paragraph, for a fresh flow boundary. */
+  readonly spacingBeforeAtStartTwips?: number;
   readonly paragraph: WordParagraph;
   readonly format: ComputedWordParagraphFormat;
   readonly lines: readonly PreparedLine[];
@@ -490,7 +495,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
   };
 
   const advanceColumn = (section: WordSectionProperties): void => {
-    if (page === undefined || page.section !== section || columnIndex + 1 >= page.columns.length) {
+    if (page === undefined || columnIndex + 1 >= page.columns.length) {
       addPage(section);
       return;
     }
@@ -498,19 +503,52 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
     cursorY = page.columns[columnIndex]!.y;
   };
 
+  // A continuous section with matching geometry does not interrupt paragraph adjacency.
+  const keepBoundaries = new Set<number>();
+  let boundaryOffset = 0;
+  for (const [index, section] of sections.entries()) {
+    const previous = sections[index - 1]?.properties;
+    if (!previous || section.properties.breakType !== "continuous" || !samePageGeometry(previous, section.properties) ||
+      previous.columnCount !== section.properties.columnCount || previous.columnSpaceTwips !== section.properties.columnSpaceTwips) {
+      keepBoundaries.add(boundaryOffset);
+    }
+    boundaryOffset += section.blocks.length;
+  }
+  // Retain bounded lookahead across compatible sections; never reconsider each chain suffix.
+  const pending = new Map<number, { width: number; prepared: ReturnType<typeof prepareParagraphFlow> }>();
+  const prepareBody = (index: number): ReturnType<typeof prepareParagraphFlow> | undefined => {
+    const block = document.blocks[index];
+    if (block?.kind !== "paragraph") return undefined;
+    const cached = pending.get(index);
+    const width = page!.columns[columnIndex]!.width;
+    if (cached?.width === width) return cached.prepared;
+    const prepared = withParagraphSpacing(prepareParagraphFlow(document, block, width, measurer, listMarkers.get(block.elementId), preparation), document.blocks, index, paragraph => document.paragraphFormat(paragraph));
+    pending.set(index, { width, prepared });
+    return prepared;
+  };
+  let inKeepChain = false;
+  let sectionBlockOffset = 0;
   try {
     for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
       const section = sections[sectionIndex]!;
       const isFirst = page === undefined;
       if (isFirst) addPage(section.properties);
-      else if (section.properties.breakType === "nextColumn") advanceColumn(section.properties);
+      else if (section.properties.breakType === "nextColumn" && samePageGeometry(page!.section, section.properties) &&
+        page!.section.columnCount === section.properties.columnCount && page!.section.columnSpaceTwips === section.properties.columnSpaceTwips) {
+        advanceColumn(section.properties);
+      }
       else if (section.properties.breakType === "continuous" && samePageGeometry(page!.section, section.properties)) {
         // Continuous sections share the current page but can change the remaining column set only on the next page.
       } else addPage(section.properties, section.properties.breakType === "evenPage" ? "even" : section.properties.breakType === "oddPage" ? "odd" : undefined);
 
+      if (keepBoundaries.has(sectionBlockOffset)) {
+        pending.clear();
+        inKeepChain = false;
+      }
       for (let blockIndex = 0; blockIndex < section.blocks.length; blockIndex += 1) {
         const block = section.blocks[blockIndex]!;
         if (block.kind === "table") {
+          inKeepChain = false;
           let target = page!.columns[columnIndex]!;
           const preparedTable = prepareTable(document, block, target.width, measurer, listMarkers, preparation);
           const groups = tableRowGroups(preparedTable);
@@ -566,42 +604,58 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
           continue;
         }
         if (block.kind !== "paragraph") {
+          inKeepChain = false;
           const column = page!.columns[columnIndex]!;
           column.unsupportedBlocks.push(Object.freeze({ elementId: block.elementId, localName: block.localName, y: cursorY }));
           continue;
         }
-        let prepared = prepareParagraphFlow(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId), preparation);
-        const nextBlock = section.blocks[blockIndex + 1];
-        const requiredHeight = points(prepared.format.spacingBeforeTwips + prepared.format.spacingAfterTwips) + (prepared.format.keepLines ? prepared.lines.heightUntil(page!.columns[columnIndex]!.height) : 0) + (prepared.format.keepNext && nextBlock?.kind === "paragraph"
-          ? firstFlowLineHeight(prepareParagraphFlow(document, nextBlock, page!.columns[columnIndex]!.width, measurer, listMarkers.get(nextBlock.elementId), preparation))
-          : 0);
+        const bodyIndex = sectionBlockOffset + blockIndex;
+        let prepared = prepareBody(bodyIndex)!;
         const currentColumn = page!.columns[columnIndex]!;
-        if ((prepared.format.pageBreakBefore || prepared.format.keepLines && requiredHeight > currentColumn.y + currentColumn.height - cursorY) && cursorY > currentColumn.y) {
-          advanceColumn(section.properties);
-          prepared = prepareParagraphFlow(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId), preparation);
+        const available = currentColumn.y + currentColumn.height - cursorY;
+        let requiredHeight = 0;
+        const successor = keepBoundaries.has(bodyIndex + 1) ? undefined : document.blocks[bodyIndex + 1];
+        const chainStart = prepared.format.keepNext && successor?.kind === "paragraph" &&
+          !document.paragraphFormat(successor).pageBreakBefore && (!inKeepChain || prepared.format.pageBreakBefore);
+        if (chainStart || prepared.format.keepLines) {
+          let candidate: ReturnType<typeof prepareParagraphFlow> | undefined = prepared;
+          let index = bodyIndex;
+          while (candidate) {
+            const before = points(candidate.format.spacingBeforeTwips);
+            const measured = keepHeightUntil(candidate.lines, currentColumn.height - requiredHeight - before);
+            requiredHeight += before + measured.height + (measured.explicitBreak ? 0 : points(candidate.format.spacingAfterTwips));
+            if (measured.explicitBreak || requiredHeight > currentColumn.height || !chainStart || !candidate.format.keepNext) break;
+            const next = keepBoundaries.has(index + 1) ? undefined : document.blocks[index + 1];
+            if (next?.kind !== "paragraph" || document.paragraphFormat(next).pageBreakBefore) break;
+            candidate = prepareBody(++index);
+          }
         }
-        cursorY += points(prepared.format.spacingBeforeTwips);
+        if ((prepared.format.pageBreakBefore || requiredHeight > available) && cursorY > currentColumn.y) {
+          advanceColumn(section.properties);
+          if (page!.columns[columnIndex]!.width !== currentColumn.width) {
+            pending.clear();
+            prepared = prepareBody(bodyIndex)!;
+          }
+        }
+        const sequence = prepared.lines;
+        inKeepChain = prepared.format.keepNext;
+        pending.delete(bodyIndex);
+        // A previous paragraph's after-spacing belongs to the old column. At a fresh
+        // boundary retain only this paragraph's authored before-spacing.
+        const before = cursorY === page!.columns[columnIndex]!.y
+          ? document.paragraphFormat(block).spacingBeforeTwips : prepared.format.spacingBeforeTwips;
+        cursorY += points(before);
         for (let lineIndex = 0; ; lineIndex += 1) {
           const line = prepared.lines.get(lineIndex);
           if (!line) break;
           let column = page!.columns[columnIndex]!;
           const lineHeight = line.ascent + line.descent;
-          if (cursorY + lineHeight > column.y + column.height && cursorY > column.y) {
-            // Widow control keeps at least two lines together at either side when practical.
-            if (prepared.format.widowControl && lineIndex === 1 && column.lines.at(-1)?.paragraphElementId === block.elementId) {
-              const moved = column.lines.pop();
-              if (moved !== undefined) cursorY = moved.y;
-              advanceColumn(section.properties);
-              column = page!.columns[columnIndex]!;
-              if (moved !== undefined) {
-                const translated = translateLine(moved, column.x - moved.x, cursorY - moved.y, budget.cache);
-                column.lines.push(translated);
-                cursorY += translated.height;
-              }
-            } else {
-              advanceColumn(section.properties);
-              column = page!.columns[columnIndex]!;
-            }
+          const pairHeight = prepared.format.widowControl ? widowGroupHeight(sequence, lineIndex, column.height) : 0;
+          const required = pairHeight <= column.height ? Math.max(lineHeight, pairHeight) : lineHeight;
+          if (cursorY + required > column.y + column.height &&
+            (column.lines.length > 0 || column.tables.length > 0 || column.unsupportedBlocks.length > 0)) {
+            advanceColumn(section.properties);
+            column = page!.columns[columnIndex]!;
           }
           const laidOut = placeLine(block, prepared.format, line, column, cursorY, budget, lineIndex === 0 ? prepared.marker : undefined);
           column.lines.push(laidOut);
@@ -612,6 +666,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
         }
         cursorY += points(prepared.format.spacingAfterTwips);
       }
+      sectionBlockOffset += section.blocks.length;
     }
   } catch (error) {
     if (error !== TRUNCATED) throw error;
@@ -682,8 +737,8 @@ function prepareTable(
     const sourceMargins = cell.source.margins ?? table.properties.cellMargins;
     const margins = Object.freeze({ top: points(sourceMargins.topTwips) + inset.top, end: points(sourceMargins.endTwips), bottom: points(sourceMargins.bottomTwips) + inset.bottom, start: points(sourceMargins.startTwips) });
     const innerWidth = Math.max(1, cellWidth - margins.start - margins.end);
-    const blocks = cell.source.blocks.flatMap((block): (PreparedParagraph | PreparedTable)[] =>
-      block.kind === "paragraph" ? [prepareParagraph(document, block, innerWidth, measurer, listMarkers.get(block.elementId), preparation)]
+    const blocks = cell.source.blocks.flatMap((block, index): (PreparedParagraph | PreparedTable)[] =>
+      block.kind === "paragraph" ? [withParagraphSpacing(prepareParagraph(document, block, innerWidth, measurer, listMarkers.get(block.elementId), preparation), cell.source.blocks, index, paragraph => document.paragraphFormat(paragraph))]
         : block.kind === "table" ? [prepareTable(document, block, innerWidth, measurer, listMarkers, preparation)] : []);
     const contentHeight = blocks.reduce((sum, block) => sum + preparedBlockHeight(block), 0) + margins.top + margins.bottom;
     preparedCells.push(Object.freeze({ resolved: cell, width: cellWidth, contentHeight, blocks: Object.freeze(blocks), margins, verticalAlignment: cell.source.verticalAlignment }));
@@ -950,8 +1005,7 @@ function* resolvedParagraphAtoms(
   preparation?: PreparationBudget,
 ): Generator<ParagraphAtom> {
   let logicalOffset = 0;
-  let fieldDepth = 0;
-  let resultDepth = 0;
+  const visible = createFieldVisibility();
   function* addRun(run: WordRun, hyperlink: string | undefined): Generator<ParagraphAtom> {
     const sourceFormat = resolveFormat(run);
     const shifted = sourceFormat.verticalAlign === "superscript" || sourceFormat.verticalAlign === "subscript";
@@ -964,16 +1018,7 @@ function* resolvedParagraphAtoms(
     };
     for (const content of run.contents) {
       if (content.kind !== 'text') consumePreparation(preparation, 'characters');
-      if (content.kind === "field-character") {
-        if (content.fieldType === "begin") fieldDepth += 1;
-        else if (content.fieldType === "separate" && fieldDepth > 0) resultDepth = fieldDepth;
-        else if (content.fieldType === "end") {
-          if (resultDepth === fieldDepth) resultDepth = 0;
-          fieldDepth = Math.max(0, fieldDepth - 1);
-        }
-        continue;
-      }
-      if (content.kind === "field-instruction" || content.kind === "deleted-text" || fieldDepth > 0 && resultDepth !== fieldDepth) continue;
+      if (!visible(content)) continue;
       if (content.kind !== 'text') consumePreparation(preparation, 'atoms');
       if (content.kind === 'page-field') {
         const text = String(pageFields?.[content.field] ?? 1);
@@ -1427,9 +1472,9 @@ function layoutStory(
   const column: MutableColumn = { index: 0, x, y: 0, width, height: Number.MAX_SAFE_INTEGER, lines: [], tables: [], unsupportedBlocks: [] };
   const markers = context.listMarkers;
   let cursor = 0;
-  for (const block of context.blocks) {
+  for (const [blockIndex, block] of context.blocks.entries()) {
     if (block.kind === "paragraph") {
-      const paragraph = prepareParagraph(context, block, width, measurer, markers.get(block.elementId), budget.preparation);
+      const paragraph = withParagraphSpacing(prepareParagraph(context, block, width, measurer, markers.get(block.elementId), budget.preparation), context.blocks, blockIndex, paragraph => context.paragraphFormat(paragraph));
       cursor += points(paragraph.format.spacingBeforeTwips);
       for (let index = 0; index < paragraph.lines.length; index += 1) {
         const line = placeLine(block, paragraph.format, paragraph.lines[index]!, column, cursor, budget, index === 0 ? paragraph.marker : undefined);
@@ -1564,11 +1609,6 @@ function translateLine(line: WordLayoutLine, dx: number, dy: number, cache?: Wor
   });
   cache?.translated.set(line, { dx, dy, value });
   return value;
-}
-
-function firstFlowLineHeight(paragraph: ReturnType<typeof prepareParagraphFlow>): number {
-  const first = paragraph.lines.get(0);
-  return first === undefined ? 0 : points(paragraph.format.spacingBeforeTwips) + first.ascent + first.descent;
 }
 
 /** Measure each tab-delimited segment once. Aligned tabs position its content, not its start. */

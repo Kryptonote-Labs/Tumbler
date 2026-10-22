@@ -116,6 +116,11 @@ clipped page container, such as `position: relative; overflow: hidden`, to keep
 previews and handles out of surrounding UI. `WordDocumentView` already provides
 that container.
 
+`WordDocumentView` owns its embedded image blob URLs. It reuses unchanged image
+bytes across artifact replacements and releases URLs after their image elements
+leave the rendered page window or the viewer is destroyed. Keep supplied image
+bytes immutable; replace the byte array when changing an image.
+
 Applications own history and persistence, or can use `WordEditingSession` from
 `@tumblerjs/word`. Internal bookmark links scroll inside the owned page surface;
 external targets are passed to the host for its security policy.

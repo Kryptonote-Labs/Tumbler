@@ -33,6 +33,10 @@ assumed. Strict and Transitional namespaces are tested separately.
 ### Milestone 3 — document stories and drawings
 
 - Resolve default, first, and even headers and footers per section.
+- Content reconciliation creates shared styles and themes through the Main Document
+  relationship, including when a header or footer is edited first. Images and
+  hyperlinks remain related to their story. Existing styles and themes are reused;
+  Strict exports use Strict relationship and theme namespaces.
 - Resolve footnote and endnote parts and place note stories separately from body
   content.
 - Resolve internal embedded images without fetching external relationships.

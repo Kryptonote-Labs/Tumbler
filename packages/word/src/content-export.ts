@@ -195,14 +195,16 @@ export function prepareWordContent(
     transaction.replacePart(drawing.partName, updateChartTitle(document.package.readPart(part), run.chartTitleText ? chartTitleFromWord(run.chartTitleText) : run.chartTitle!));
   }
   mergeAuthoredStyles(document, paragraphs.flatMap(p => p.styleId ? [p.styleId] : []), transaction);
+  const sharedOwner = document.package.mainOfficeDocumentPart().name;
   let prefix = 'tumbler-content-';
   let existingIds = new Set<string>();
-  try {
-    existingIds = new Set(
-      document.package.relationships(document.part.name).items.map((rel) => rel.id),
-    );
-  } catch (error) {
-    if (!(error instanceof RelationshipsError) || error.code !== 'missing_item') throw error;
+  // Generated IDs must be free in both the story and shared resource owner.
+  for (const owner of new Set([document.part.name.value, sharedOwner.value])) {
+    try {
+      for (const rel of document.package.relationships(PartName.parse(owner)).items) existingIds.add(rel.id);
+    } catch (error) {
+      if (!(error instanceof RelationshipsError) || error.code !== 'missing_item') throw error;
+    }
   }
   while (
     relationships.some((rel) => existingIds.has(prefix + rel.id)) ||
@@ -262,8 +264,13 @@ export function prepareWordContent(
       // Numbering is a singleton. Merge definitions with disjoint numeric IDs into the original part.
       continue;
     }
-    transaction.addPart(name, part.contentType, generated.document.package.readPart(part));
-    transaction.addRelationship(document.part.name, {
+    const isTheme = /\/theme$/.test(rel.type);
+    const bytes = generated.document.package.readPart(part);
+    transaction.addPart(name, part.contentType, isTheme
+      ? new TextEncoder().encode(conformanceMarkup(new TextDecoder().decode(bytes)))
+      : bytes);
+    // Themes and styles are shared; images and custom XML stay with this story.
+    transaction.addRelationship(isTheme ? sharedOwner : document.part.name, {
       id: prefix + rel.id,
       type: conformanceMarkup(rel.type),
       target: name,

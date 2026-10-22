@@ -1,0 +1,509 @@
+{
+  "baselineSha": "4d1465ddf85ee238a727dbed75aac7bf043f05f8",
+  "implementationSha": "2a1b93bd89b6cc6c3604f857bc31e84302b554fd",
+  "sequence": [
+    "before",
+    "after",
+    "after-repeat",
+    "before-repeat"
+  ],
+  "lock": "/tmp/tumbler-word-audit-heavy.lock",
+  "samples": {
+    "before": {
+      "root": "/tmp/tumbler-picture-before",
+      "bun": "1.4.4",
+      "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+      "logicalCpus": 4,
+      "results": [
+        {
+          "transformed": false,
+          "fixtureBytes": 1586,
+          "exportUnchanged": true,
+          "counts": {
+            "operations": 8,
+            "draws": 1,
+            "coordinateChecksum": 252
+          },
+          "parse": {
+            "iterationsPerSample": 20,
+            "warmupBatches": 3,
+            "milliseconds": [
+              28.13968300000002,
+              29.55552,
+              44.082425,
+              61.16212200000001,
+              58.526317000000006,
+              25.270242000000053,
+              23.426402000000053
+            ],
+            "medianMs": 29.55552,
+            "retainedHeapBytes": [
+              -5875,
+              70058,
+              16644,
+              -8914,
+              43816,
+              37828,
+              -6237
+            ],
+            "rssBytes": 59297792
+          },
+          "commandPaint": {
+            "iterationsPerSample": 5000,
+            "warmupBatches": 3,
+            "milliseconds": [
+              17.30545500000005,
+              13.185145000000034,
+              11.07324600000004,
+              12.211235999999985,
+              11.665453999999954,
+              10.630972999999926,
+              9.898982000000046
+            ],
+            "medianMs": 11.665453999999954,
+            "retainedHeapBytes": [
+              -12359,
+              9026,
+              2469,
+              -5115,
+              1959,
+              2726,
+              2517
+            ],
+            "rssBytes": 64040960
+          }
+        },
+        {
+          "transformed": true,
+          "fixtureBytes": 1603,
+          "exportUnchanged": true,
+          "counts": {
+            "operations": 8,
+            "draws": 1,
+            "coordinateChecksum": 252
+          },
+          "parse": {
+            "iterationsPerSample": 20,
+            "warmupBatches": 3,
+            "milliseconds": [
+              16.46767699999998,
+              16.001575000000003,
+              14.996865999999955,
+              25.43469300000004,
+              17.21405700000014,
+              14.881542000000081,
+              14.825493999999935
+            ],
+            "medianMs": 16.001575000000003,
+            "retainedHeapBytes": [
+              542,
+              11462,
+              12281,
+              -295,
+              -11813,
+              17309,
+              7745
+            ],
+            "rssBytes": 65138688
+          },
+          "commandPaint": {
+            "iterationsPerSample": 5000,
+            "warmupBatches": 3,
+            "milliseconds": [
+              10.23110799999995,
+              11.13468899999998,
+              9.917969000000085,
+              10.436733000000004,
+              11.445098000000144,
+              9.376484000000119,
+              9.391455999999835
+            ],
+            "medianMs": 10.23110799999995,
+            "retainedHeapBytes": [
+              208,
+              -788,
+              -208,
+              2646,
+              2469,
+              80,
+              48
+            ],
+            "rssBytes": 64589824
+          }
+        }
+      ]
+    },
+    "after": {
+      "root": "/home/alexc/.t3/worktrees/Tumbler/fix-audit-word-picture-geometry",
+      "bun": "1.4.4",
+      "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+      "logicalCpus": 4,
+      "results": [
+        {
+          "transformed": false,
+          "fixtureBytes": 1586,
+          "exportUnchanged": true,
+          "counts": {
+            "operations": 8,
+            "draws": 1,
+            "coordinateChecksum": 252
+          },
+          "parse": {
+            "iterationsPerSample": 20,
+            "warmupBatches": 3,
+            "milliseconds": [
+              24.021449999999987,
+              30.99237099999999,
+              22.086570999999992,
+              21.939024000000018,
+              24.852625999999987,
+              20.089121999999975,
+              18.043150000000026
+            ],
+            "medianMs": 22.086570999999992,
+            "retainedHeapBytes": [
+              16671,
+              30312,
+              18999,
+              15173,
+              43403,
+              34271,
+              12589
+            ],
+            "rssBytes": 59940864
+          },
+          "commandPaint": {
+            "iterationsPerSample": 5000,
+            "warmupBatches": 3,
+            "milliseconds": [
+              19.945588000000043,
+              16.28193399999998,
+              11.644924999999944,
+              11.60128199999997,
+              10.790815000000066,
+              10.784301999999911,
+              10.641581999999971
+            ],
+            "medianMs": 11.60128199999997,
+            "retainedHeapBytes": [
+              -17203,
+              11655,
+              -3092,
+              0,
+              208,
+              5035,
+              0
+            ],
+            "rssBytes": 63852544
+          }
+        },
+        {
+          "transformed": true,
+          "fixtureBytes": 1603,
+          "exportUnchanged": true,
+          "counts": {
+            "operations": 17,
+            "draws": 1,
+            "coordinateChecksum": 108
+          },
+          "parse": {
+            "iterationsPerSample": 20,
+            "warmupBatches": 3,
+            "milliseconds": [
+              24.18011200000001,
+              24.80061699999999,
+              25.588021000000026,
+              19.508452000000034,
+              19.493623999999954,
+              19.12385299999994,
+              15.825200999999993
+            ],
+            "medianMs": 19.508452000000034,
+            "retainedHeapBytes": [
+              3420,
+              3059,
+              10698,
+              -3669,
+              -17378,
+              6396,
+              24209
+            ],
+            "rssBytes": 64688128
+          },
+          "commandPaint": {
+            "iterationsPerSample": 5000,
+            "warmupBatches": 3,
+            "milliseconds": [
+              14.216969999999947,
+              25.552387999999837,
+              25.354425999999876,
+              17.0955570000001,
+              18.997376999999915,
+              11.886158999999907,
+              12.348591999999826
+            ],
+            "medianMs": 17.0955570000001,
+            "retainedHeapBytes": [
+              3045,
+              4768,
+              -3836,
+              0,
+              4588,
+              128,
+              0
+            ],
+            "rssBytes": 64466944
+          }
+        }
+      ]
+    },
+    "after-repeat": {
+      "root": "/home/alexc/.t3/worktrees/Tumbler/fix-audit-word-picture-geometry",
+      "bun": "1.4.4",
+      "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+      "logicalCpus": 4,
+      "results": [
+        {
+          "transformed": false,
+          "fixtureBytes": 1586,
+          "exportUnchanged": true,
+          "counts": {
+            "operations": 8,
+            "draws": 1,
+            "coordinateChecksum": 252
+          },
+          "parse": {
+            "iterationsPerSample": 20,
+            "warmupBatches": 3,
+            "milliseconds": [
+              21.619501000000014,
+              16.016917000000035,
+              23.18194600000004,
+              22.56501700000001,
+              29.557007,
+              23.84021100000001,
+              22.870663000000036
+            ],
+            "medianMs": 22.870663000000036,
+            "retainedHeapBytes": [
+              30393,
+              46457,
+              4038,
+              14445,
+              58689,
+              14302,
+              -18486
+            ],
+            "rssBytes": 61571072
+          },
+          "commandPaint": {
+            "iterationsPerSample": 5000,
+            "warmupBatches": 3,
+            "milliseconds": [
+              20.253472999999985,
+              23.931668999999943,
+              10.109419000000003,
+              10.977654999999913,
+              18.86471700000004,
+              12.764739000000077,
+              10.139841000000047
+            ],
+            "medianMs": 12.764739000000077,
+            "retainedHeapBytes": [
+              -12167,
+              12879,
+              -2374,
+              -2469,
+              0,
+              5035,
+              0
+            ],
+            "rssBytes": 61865984
+          }
+        },
+        {
+          "transformed": true,
+          "fixtureBytes": 1603,
+          "exportUnchanged": true,
+          "counts": {
+            "operations": 17,
+            "draws": 1,
+            "coordinateChecksum": 108
+          },
+          "parse": {
+            "iterationsPerSample": 20,
+            "warmupBatches": 3,
+            "milliseconds": [
+              15.618826999999897,
+              17.215605000000096,
+              19.387493999999947,
+              13.681637999999907,
+              13.527614999999969,
+              13.56052499999987,
+              18.453658000000132
+            ],
+            "medianMs": 15.618826999999897,
+            "retainedHeapBytes": [
+              -2880,
+              8837,
+              10611,
+              -2081,
+              9324,
+              -21490,
+              10153
+            ],
+            "rssBytes": 64978944
+          },
+          "commandPaint": {
+            "iterationsPerSample": 5000,
+            "warmupBatches": 3,
+            "milliseconds": [
+              13.731766000000107,
+              16.861212000000023,
+              17.99643600000013,
+              21.51880300000016,
+              22.245061000000078,
+              14.68514099999993,
+              12.65274199999999
+            ],
+            "medianMs": 16.861212000000023,
+            "retainedHeapBytes": [
+              2693,
+              4768,
+              272,
+              -4108,
+              4524,
+              128,
+              0
+            ],
+            "rssBytes": 64389120
+          }
+        }
+      ]
+    },
+    "before-repeat": {
+      "root": "/tmp/tumbler-picture-before",
+      "bun": "1.4.4",
+      "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+      "logicalCpus": 4,
+      "results": [
+        {
+          "transformed": false,
+          "fixtureBytes": 1586,
+          "exportUnchanged": true,
+          "counts": {
+            "operations": 8,
+            "draws": 1,
+            "coordinateChecksum": 252
+          },
+          "parse": {
+            "iterationsPerSample": 20,
+            "warmupBatches": 3,
+            "milliseconds": [
+              18.997647,
+              17.832438000000025,
+              18.24738400000001,
+              16.55319400000002,
+              18.031862000000046,
+              15.011491999999976,
+              16.191692999999987
+            ],
+            "medianMs": 17.832438000000025,
+            "retainedHeapBytes": [
+              16675,
+              31301,
+              6146,
+              17750,
+              43404,
+              12652,
+              25945
+            ],
+            "rssBytes": 59990016
+          },
+          "commandPaint": {
+            "iterationsPerSample": 5000,
+            "warmupBatches": 3,
+            "milliseconds": [
+              13.687690999999973,
+              14.274970999999994,
+              13.022954999999968,
+              12.250720999999999,
+              10.592586000000097,
+              10.024237999999968,
+              10.068174999999997
+            ],
+            "medianMs": 12.250720999999999,
+            "retainedHeapBytes": [
+              -14103,
+              11991,
+              -2374,
+              -2469,
+              1895,
+              3739,
+              1296
+            ],
+            "rssBytes": 65191936
+          }
+        },
+        {
+          "transformed": true,
+          "fixtureBytes": 1603,
+          "exportUnchanged": true,
+          "counts": {
+            "operations": 8,
+            "draws": 1,
+            "coordinateChecksum": 252
+          },
+          "parse": {
+            "iterationsPerSample": 20,
+            "warmupBatches": 3,
+            "milliseconds": [
+              19.084829000000013,
+              15.724654999999984,
+              14.718318999999951,
+              12.736683999999968,
+              12.475693999999976,
+              14.391383000000019,
+              12.800432999999998
+            ],
+            "medianMs": 14.391383000000019,
+            "retainedHeapBytes": [
+              548,
+              11424,
+              11897,
+              -295,
+              -18700,
+              8292,
+              23617
+            ],
+            "rssBytes": 64806912
+          },
+          "commandPaint": {
+            "iterationsPerSample": 5000,
+            "warmupBatches": 3,
+            "milliseconds": [
+              10.739345000000071,
+              10.039996999999971,
+              9.733638999999926,
+              9.986129000000005,
+              10.490473000000065,
+              14.502792999999997,
+              9.6146379999999
+            ],
+            "medianMs": 10.039996999999971,
+            "retainedHeapBytes": [
+              208,
+              -996,
+              208,
+              2438,
+              2469,
+              80,
+              48
+            ],
+            "rssBytes": 62300160
+          }
+        }
+      ]
+    }
+  }
+}

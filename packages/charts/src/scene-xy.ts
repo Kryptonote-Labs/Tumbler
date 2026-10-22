@@ -1,3 +1,4 @@
+import { chartTickLabel } from './tick-label.ts';
 import { chartValueCoordinate, layoutBubbleChart, layoutScatterChart, scatterLinePath, type ScatterPoint } from "./layout.ts";
 import type { ChartAxis, ChartSeries, SupportedChartModel } from "./model.ts";
 import { legendMarks, line, type ChartMark, type SceneContext } from "./scene-marks.ts";
@@ -14,26 +15,26 @@ export function xyScene(context: SceneContext): ChartMark[] {
   const yAxis = axis(model, 1);
   const xFormat = xAxis?.numberFormatCode ?? model.series.find(series => series.xValues?.formatCode !== undefined)?.xValues?.formatCode;
   const yFormat = yAxis?.numberFormatCode ?? model.series.find(series => series.values?.formatCode !== undefined)?.values?.formatCode;
-  const label = (value: number, format: string | undefined) => options.formatNumber?.(value, format) ?? new Intl.NumberFormat("en-US", { maximumFractionDigits: 6 }).format(value);
+  const label = (value: number, format: string | undefined) => chartTickLabel(value, format, options);
   const marks: ChartMark[] = [];
 
   const yGrid = chartStroke("gridline", yAxis?.gridlineStyle, model, resolve);
   const yFont = chartFont("tick", yAxis?.textStyle, model, resolve);
-  for (const tick of layout.yTicks) {
+  for (const tick of (yAxis?.deleted ? [] : layout.yTicks)) {
     const y = chartValueCoordinate(tick, layout.yMinimum, layout.yMaximum, plot.y, plot.height, true);
     if (yAxis?.majorGridlines) marks.push(...line(plot.x, y, plot.x + plot.width, y, yGrid));
     marks.push({ kind: "text", text: label(tick, yFormat), x: plot.x - 6, y: y + 4, anchor: "end", font: yFont });
   }
   const xGrid = chartStroke("gridline", xAxis?.gridlineStyle, model, resolve);
   const xFont = chartFont("tick", xAxis?.textStyle, model, resolve);
-  for (const tick of layout.xTicks) {
+  for (const tick of (xAxis?.deleted ? [] : layout.xTicks)) {
     const x = chartValueCoordinate(tick, layout.xMinimum, layout.xMaximum, plot.x, plot.width);
     if (xAxis?.majorGridlines) marks.push(...line(x, plot.y, x, plot.y + plot.height, xGrid));
     marks.push({ kind: "text", text: label(tick, xFormat), x, y: plot.y + plot.height + 17, anchor: "middle", font: xFont });
   }
   const bottom = plot.y + plot.height;
-  marks.push(...line(plot.x, bottom, plot.x + plot.width, bottom, chartStroke("axis", model.axes.find(axis => axis.position === "bottom" || axis.position === "top")?.lineStyle, model, resolve)));
-  marks.push(...line(plot.x, plot.y, plot.x, bottom, chartStroke("axis", model.axes.find(axis => axis.position === "left" || axis.position === "right")?.lineStyle, model, resolve)));
+  if (!xAxis?.deleted) marks.push(...line(plot.x, bottom, plot.x + plot.width, bottom, chartStroke("axis", model.axes.find(axis => axis.position === "bottom" || axis.position === "top")?.lineStyle, model, resolve)));
+  if (!yAxis?.deleted) marks.push(...line(plot.x, plot.y, plot.x, bottom, chartStroke("axis", model.axes.find(axis => axis.position === "left" || axis.position === "right")?.lineStyle, model, resolve)));
 
   const series: ChartMark[] = [];
   model.series.forEach((item, index) => {
@@ -51,8 +52,8 @@ export function xyScene(context: SceneContext): ChartMark[] {
   marks.push({ kind: "group", clip: plot, marks: series });
 
   const titleFont = chartFont("axisTitle", undefined, model, resolve);
-  if (xAxis?.title !== undefined) marks.push({ kind: "text", text: xAxis.title, x: plot.x + plot.width / 2, y: height - 4, anchor: "middle", font: titleFont });
-  if (yAxis?.title !== undefined) marks.push({ kind: "text", text: yAxis.title, x: 12, y: plot.y + plot.height / 2, anchor: "middle", font: titleFont, rotate: -90 });
+  if (!xAxis?.deleted && xAxis?.title !== undefined) marks.push({ kind: "text", text: xAxis.title, x: plot.x + plot.width / 2, y: height - 4, anchor: "middle", font: titleFont });
+  if (!yAxis?.deleted && yAxis?.title !== undefined) marks.push({ kind: "text", text: yAxis.title, x: 12, y: plot.y + plot.height / 2, anchor: "middle", font: titleFont, rotate: -90 });
   if (model.legend !== undefined) {
     marks.push(...legendMarks(context, model.series.map((item, index) => ({
       label: item.title ?? `Series ${index + 1}`,
@@ -66,8 +67,8 @@ export function xyScene(context: SceneContext): ChartMark[] {
 
 function axis(model: SupportedChartModel, index: number): ChartAxis | undefined {
   const id = model.axisIds?.[index];
-  if (id !== undefined) return model.axes.find(axis => axis.id === id && !axis.deleted);
-  return model.axes.filter(axis => axis.kind === "value" && !axis.deleted)[index];
+  if (id !== undefined) return model.axes.find(axis => axis.id === id);
+  return model.axes.filter(axis => axis.kind === "value")[index];
 }
 
 function lineVisible(model: SupportedChartModel, series: ChartSeries): boolean {
