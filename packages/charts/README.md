@@ -114,3 +114,17 @@ Deleted axes suppress labels, gridlines, and axis strokes. Cartesian, combinatio
 and XY ticks use the host `formatNumber` callback with the axis format code, falling
 back to the series cache format and then an English numeric format preserving up to 21
 significant digits, including distinct ticks below one millionth.
+
+To compare the audit baseline with the current renderer using identical generated
+fixtures and installed dependencies, run:
+
+```sh
+flock -x /tmp/tumbler-word-audit-heavy.lock bash packages/charts/bench/compare.sh /tmp/chart-results
+```
+
+The JSONL files contain separate parse/scene timings, two warmups and five samples,
+CPU/runtime metadata, heap deltas, scene hashes, and mark counts. A separate pass
+counts cache-index reads with getters, outside the timed samples. Heap deltas are
+observations of Bun's reported live heap, not total allocated bytes; zero deltas do
+not imply zero allocation. Other processes that do not use the lock can still
+contend for this shared host.
