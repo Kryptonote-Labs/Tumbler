@@ -17,7 +17,10 @@ import { type OpenWordArtifactOptions, WordArtifact, openWordArtifact } from "./
 import type { WordTextSelection } from "./text.ts";
 import type { FormattingPatch } from "@tumblerjs/core";
 
-export interface WordEditingSessionOptions extends EditingHistoryOptions, OpenWordArtifactOptions {}
+export interface WordEditingSessionOptions extends EditingHistoryOptions, OpenWordArtifactOptions {
+  /** Reports subscriber failures without rejecting committed edits. Defaults to console.error. */
+  readonly onListenerError?: (error: unknown, change: WordSessionChange) => void;
+}
 
 export type WordSessionChangeReason = "edit" | "undo" | "redo" | "save" | "external-revision";
 
@@ -36,6 +39,8 @@ export class WordEditingSession {
   #revision = 0;
   readonly #options: WordEditingSessionOptions;
   readonly #listeners = new Set<WordSessionListener>();
+  readonly #notifications: ({ change: WordSessionChange; listeners: WordSessionListener[] } | undefined)[] = [];
+  #dispatching = false;
 
   constructor(initial: WordArtifact, options: WordEditingSessionOptions = {}) {
     this.#options = Object.freeze({ ...options });
@@ -104,6 +109,7 @@ export class WordEditingSession {
     return next;
   }
 
+  /** Subscription changes affect events committed after the change, including reentrant edits. */
   subscribe(listener: WordSessionListener): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
@@ -121,7 +127,39 @@ export class WordEditingSession {
   #emit(reason: WordSessionChangeReason): void {
     this.#revision += 1;
     const change = Object.freeze({ reason, revision: this.#revision, artifact: this.artifact, dirty: this.dirty });
-    for (const listener of [...this.#listeners]) listener(change);
+    this.#notifications.push({ change, listeners: [...this.#listeners] });
+    if (this.#dispatching) return;
+    this.#dispatching = true;
+    try {
+      // An index keeps draining linear even when listeners enqueue many revisions.
+      for (let index = 0; index < this.#notifications.length; index++) {
+        const notification = this.#notifications[index]!;
+        this.#notifications[index] = undefined;
+        for (const listener of notification.listeners) {
+          try {
+            listener(notification.change);
+          } catch (error) {
+            this.#reportListenerError(error, notification.change);
+          }
+        }
+      }
+    } finally {
+      this.#notifications.length = 0;
+      this.#dispatching = false;
+    }
+  }
+
+  #reportListenerError(error: unknown, change: WordSessionChange): void {
+    try {
+      if (this.#options.onListenerError) {
+        this.#options.onListenerError(error, change);
+        return;
+      }
+    } catch (reportingError) {
+      // A broken host reporter must not abort delivery of committed revisions either.
+      logListenerError(reportingError);
+    }
+    logListenerError(error);
   }
 }
 
@@ -131,4 +169,12 @@ export function openWordEditingSession(bytes: Uint8Array, options: WordEditingSe
 
 function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function logListenerError(error: unknown): void {
+  try {
+    console.error("Word session listener failed", error);
+  } catch {
+    // Even a host-provided console may throw. Notification delivery still continues.
+  }
 }

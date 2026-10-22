@@ -30,6 +30,10 @@ export function wordParagraphRenderer(
     (block) => block.kind === 'paragraph',
   );
   const indexByParagraph = new Map(paragraphs.map((p, index) => [p, index]));
+  const owners = new Map(
+    originals.flatMap((p) => p.runs.map((run) => [run.source!, p] as const)),
+  );
+  // Count every surviving occurrence per source paragraph and copy scope.
   const states = new Map<number, { emitted: Set<number>; remaining: Map<number, number> }>();
   const stateFor = (scope: number) => {
     let state = states.get(scope);
@@ -43,8 +47,9 @@ export function wordParagraphRenderer(
     stateFor(copies.scopes.get(p) ?? 0);
     for (const run of p.runs) {
       const state = stateFor(copies.scopes.get(run) ?? 0);
-      if (run.source !== undefined)
-        state.remaining.set(run.source, (state.remaining.get(run.source) ?? 0) + 1);
+      const owner = run.source === undefined ? undefined : owners.get(run.source);
+      if (owner?.source !== undefined)
+        state.remaining.set(owner.source, (state.remaining.get(owner.source) ?? 0) + 1);
     }
   }
   let emitted = new Set<number>();
@@ -110,13 +115,11 @@ export function wordParagraphRenderer(
         )
         .join(''),
     );
-  const owners = new Map(
-    originals.flatMap((p) => p.runs.map((run) => [run.source!, p] as const)),
-  );
   const finishSource = (paragraph: WordTextParagraph) => {
     if (
       paragraph.source === undefined ||
-      paragraph.runs.some((run) => (remaining.get(run.source!) ?? 0) > 0)
+      (remaining.get(paragraph.source) ?? 0) > 0 ||
+      emitted.has(-paragraph.source)
     )
       return '';
     let result = '';
@@ -144,9 +147,11 @@ export function wordParagraphRenderer(
       if (!run.field) content = markup.word(`<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}`) + text(run.text) + markup.word('</w:r>');
       if (run.source !== undefined) {
         if (!emitted.has(run.source)) { content = (before.get(run.source) ?? []).join('') + content; emitted.add(run.source); }
-        remaining.set(run.source, remaining.get(run.source)! - 1);
         const owner = owners.get(run.source);
-        if (owner) content += finishSource(owner);
+        if (owner?.source !== undefined) {
+          remaining.set(owner.source, remaining.get(owner.source)! - 1);
+          content += finishSource(owner);
+        }
       }
       return copies.markers(content, scope);
     }
@@ -215,9 +220,11 @@ export function wordParagraphRenderer(
         content = (before.get(run.source) ?? []).join('') + content;
         emitted.add(run.source);
       }
-      remaining.set(run.source, remaining.get(run.source)! - 1);
       const owner = owners.get(run.source);
-      if (owner) content += finishSource(owner);
+      if (owner?.source !== undefined) {
+        remaining.set(owner.source, remaining.get(owner.source)! - 1);
+        content += finishSource(owner);
+      }
     }
     return copies.markers(content, scope);
   };
@@ -249,14 +256,16 @@ export function wordParagraphRenderer(
       if (paragraph.positioning === undefined) for (const key of ['ind', 'tabs']) replacements.set(key, '');
       if (paragraph.alignment === undefined) replacements.set('jc', '');
     }
+    if (paragraph.resetParagraphFormat)
+      for (const key of ['spacing', 'keepNext', 'keepLines', 'pageBreakBefore', 'widowControl', 'contextualSpacing', 'pBdr', 'shd']) replacements.set(key, '');
     if (styleChanged) replacements.set('pStyle', `<w:pStyle w:val="${xml(paragraph.styleId!)}"/>`);
     if (paragraph.alignment !== undefined && paragraph.alignment !== original?.alignment)
       replacements.set('jc', `<w:jc w:val="${paragraph.alignment === 'justify' ? 'both' : paragraph.alignment}"/>`);
-    if (paragraph.paragraph && JSON.stringify(paragraph.paragraph) !== JSON.stringify(original?.paragraph)) {
-      const changed = Object.fromEntries(Object.entries(paragraph.paragraph).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(original?.paragraph?.[key as keyof NonNullable<WordTextParagraph['paragraph']>])));
+    if (paragraph.paragraph && (paragraph.resetParagraphFormat || JSON.stringify(paragraph.paragraph) !== JSON.stringify(original?.paragraph))) {
+      const changed = Object.fromEntries(Object.entries(paragraph.paragraph).filter(([key, value]) => paragraph.resetParagraphFormat || JSON.stringify(value) !== JSON.stringify(original?.paragraph?.[key as keyof NonNullable<WordTextParagraph['paragraph']>])));
       for (const [key, value] of paragraphFormatXml(changed)) replacements.set(key, value);
       const spacing = markup.children(properties, 'spacing')[0];
-      if (spacing && replacements.has('spacing')) {
+      if (spacing && replacements.has('spacing') && !paragraph.resetParagraphFormat) {
         const names = new Set<string>();
         if ('spacingBeforeTwips' in changed) for (const key of ['before', 'beforeLines', 'beforeAutospacing']) names.add(key);
         if ('spacingAfterTwips' in changed) for (const key of ['after', 'afterLines', 'afterAutospacing']) names.add(key);
@@ -266,7 +275,7 @@ export function wordParagraphRenderer(
         replacements.set('spacing', `<w:spacing${kept.map(attribute => ` ${attribute.qualified}="${xml(attribute.value)}"`).join('')}${fresh}/>`);
       }
       const borders = markup.children(properties, 'pBdr')[0];
-      if (borders && changed.borders) {
+      if (borders && changed.borders && !paragraph.resetParagraphFormat) {
         const edges = new Map<string, string>();
         const borderChanges = Object.fromEntries(Object.entries(paragraph.paragraph.borders ?? {}).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(original?.paragraph?.borders?.[key as keyof NonNullable<NonNullable<WordTextParagraph['paragraph']>['borders']>])));
         const generated = paragraphFormatXml({ borders: borderChanges }).get('pBdr') ?? '';
@@ -276,7 +285,7 @@ export function wordParagraphRenderer(
     }
     if (paragraph.positioning && JSON.stringify(paragraph.positioning) !== JSON.stringify(original?.positioning)) {
       const positioning = paragraphPositioningXml({ ...original?.positioning, ...paragraph.positioning }, document.conformance);
-      if (positioning.tabs !== undefined) replacements.set('tabs', positioning.tabs);
+      if (paragraph.positioning.tabs !== undefined) replacements.set('tabs', positioning.tabs ?? '');
       if (positioning.ind !== undefined) replacements.set('ind', positioning.ind);
     }
     const generatedP = generatedParagraphs[indexByParagraph.get(paragraph)!]!;

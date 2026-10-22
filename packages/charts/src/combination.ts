@@ -1,7 +1,8 @@
+import { chartStacks } from './indexed-data.ts';
+import { assertChartSceneBudget } from './scene-budget.ts';
 import { chartFont, type ChartFont } from './scene-style.ts';
 import { chartAxisTicks } from "./axis-scale.ts";
 import {
-  cartesianStack,
   chartValueCoordinate,
   layoutCartesianChart,
 } from "./layout.ts";
@@ -13,6 +14,7 @@ export function layoutCombinationChart(
   height: number,
   measure?: (text: string, font: ChartFont) => number,
 ) {
+  assertChartSceneBudget(model);
   const plots = (model.plots ?? [model]).map(({ plots: _nested, ...plot }) => ({
     ...plot,
     series: plot.series.map(
@@ -67,6 +69,7 @@ export function layoutCombinationChart(
         plot.kind === "bar" ? rect.width : rect.height,
         plot.kind !== "bar",
       );
+    const stacks = chartStacks(plot, common.categories.length);
     return {
       model: plot,
       axis,
@@ -82,7 +85,7 @@ export function layoutCombinationChart(
       coordinate,
       points: plot.series.map((_, s) =>
         common.categories.map((_, c) => {
-          const point = cartesianStack(plot, s, c);
+          const point = stacks[s]?.[c];
           return point
             ? { start: coordinate(point.start), end: coordinate(point.end) }
             : undefined;

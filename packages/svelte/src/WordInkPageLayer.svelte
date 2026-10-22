@@ -79,5 +79,5 @@
 
 <style>
   :global([data-word-ink-page-host] img[data-word-ink-rendering="raster"]) { visibility: hidden; }
-  canvas { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+  canvas { position: absolute; inset: 0; z-index: var(--word-ink-layer-z-index, 3); pointer-events: none; }
 </style>

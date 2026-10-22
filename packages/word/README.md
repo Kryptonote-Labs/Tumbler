@@ -103,6 +103,20 @@ session.markSaved();
 const output = session.artifact.bytes();
 ```
 
+Session subscribers receive immutable change snapshots in revision order. Reentrant
+edits, undo, redo, saves, and external revisions commit immediately, but their
+notifications wait until the current event reaches all its subscribers. Read
+`change.artifact` and `change.dirty` for that revision; the live session may already
+contain a later revision. Subscribing or unsubscribing affects events committed
+after that subscription change, not events already queued.
+
+Subscriber exceptions do not reject committed operations or stop other subscribers.
+Pass `onListenerError(error, change)` in session options to report them. By default,
+the session calls `console.error`. If a custom reporter throws, the session logs
+both errors and continues delivery. A throwing console is ignored. Reporters run
+synchronously and may also cause queued notifications. Callbacks must eventually
+stop making edits so the synchronous notification queue can finish draining.
+
 Word 2010 ink uses `@tumblerjs/ink` to expose decoded traces, recognition and
 diagnostics on `drawing.ink`. Native InkML is authoritative: the reader generates
 SVG for destination-independent pens, even when a cached VML bitmap exists.
@@ -437,13 +451,33 @@ CRLF input is normalized before determining the resulting range. Empty replaceme
 `format`; use a format operation on an explicit paragraph range when deleting and restyling are
 separate intentions.
 
+Paragraph format patches retain the public `{ paragraph: { keepNext: true } }` shape. Each
+supplied paragraph property has its own Yjs register, so concurrent patches to different properties
+survive synchronization and selective undo. Structured properties such as `lineSpacing` and `borders`
+remain atomic. `paragraph: {}` is a no-op; `paragraph: null` removes all supported direct paragraph
+properties. Concurrent reset and patch operations resolve per property using Yjs conflict ordering.
+
+Existing `paragraph` object attributes remain readable. New edits use internal
+`wordParagraphFormat:<property>` attributes with wrapped values; wrapped null masks an old property.
+`wordFormats` returns the decoded public object. Hosts reading raw deltas or paragraph slices should
+call `readWordParagraphFormat(attributes)` before converting paragraph formatting to Office content.
+For source-aware reconciliation, also set `resetParagraphFormat: true` on `WordTextParagraph` when
+`hasWordParagraphReset(attributes)` returns true. This clears imported direct paragraph properties
+before applying the surviving values, including after concurrent reset and patch operations.
+Upgrade all collaborating writers together: old clients do not understand these registers, and legacy
+whole-object writes do not override existing property registers. This wire change does not add OOXML
+properties or alter their units.
+
 `wordParagraphIdentity(body, newlineOffset)` follows paragraph terminators through edits and remote
 updates. It avoids a repeated scan from the start of the CRDT when projecting stable native block IDs.
 
 `WordParagraphProjection(body, project)` consumes Yjs transaction deltas and retains unchanged
 paragraph slices. A slice contains its stable terminator identity, UTF-16 length and formatted parts,
 including the newline when present. The `paragraphs` getter invokes `project(slice)` only for changed
-slices. Treat slices and projected values as immutable, and call `destroy()` when finished.
+slices. Attribute retains that remove absent keys or assign equal values retain the original slice,
+including absent-versus-empty attribute equivalence. Formatting undo therefore does not reproject
+unformatted paragraphs merely because Yjs emits a broad attribute retain. Treat slices and projected
+values as immutable, and call `destroy()` when finished.
 `WordTableProjection.update(paragraphs)` reuses table trees whose projected paragraphs are unchanged,
 while checking table contiguity across the entire result. These projections keep conversion work near
 the edited paragraphs; updating offset arrays and semantic traversal still depends on document size.
@@ -476,8 +510,12 @@ and repeats pagination when the total changes. Formatting and ordinary surroundi
 text remain editable. DOCX export writes standard simple fields. Supported simple
 fields and complete complex `PAGE` / `NUMPAGES` fields split across runs import as
 the same editable content. Editing or deleting a complex field also replaces its
-source instructions and cached result on export. Section numbering restarts and numeral
-formats are not yet evaluated by this API.
+source instructions and cached result on export. Direct artifact deletion removes
+all owned markers, instructions and cached content, retaining neighboring run content.
+`move-object` retains field semantics and formatting across paragraphs. Page-number
+insertion inherits character formatting only, including at paragraph and table-cell starts.
+Nested general fields project stored results in order without evaluating instructions.
+Section numbering restarts and numeral formats are not yet evaluated by this API.
 
 ### Editable table formatting
 
@@ -643,3 +681,12 @@ to `front` or `behind` and supply `x`, `y`, `horizontalRelativeTo` and
 that they move and resize together. `edit-object` can replace its complete ink
 value, including all strokes. Existing single-stroke `points/color/size` inputs
 remain supported with their previous fit-to-frame behavior.
+
+Paragraph `positioning.tabs` contains direct tab declarations. An empty array emits
+no `w:tabs` container and inherits style tab stops. When editing a source paragraph,
+`tabs: []` removes its direct tab declarations; omitting `tabs` preserves them.
+To remove an inherited stop, supply `{ positionTwips: 720, alignment: 'clear',
+leader: 'none' }` at that position. Tab declarations are additive across styles.
+
+Authored cell properties and paragraph/cell borders serialize in schema order,
+regardless of the insertion order of their JavaScript properties.

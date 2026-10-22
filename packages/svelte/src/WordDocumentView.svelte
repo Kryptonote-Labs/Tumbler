@@ -1,8 +1,11 @@
 <script lang="ts">
+  import { wordDrawingStackOrder, wordDrawingOverlayOrder } from "./word-drawing-order.ts";
+  import WordPictureView from "./WordPictureView.svelte";
   import WordInkPageLayer from "./WordInkPageLayer.svelte";
   import WordShapeView from "./WordShapeView.svelte";
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
-  import { flushSync, onDestroy, onMount, untrack } from "svelte";
+  import { flushSync, onDestroy, onMount, tick, untrack } from "svelte";
+  import { WordImageUrls } from "./word-image-urls.ts";
   import { wordImagePaintBounds, wordLineAtPoint, layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import { zoomGesture } from "./zoom-gesture.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
@@ -42,11 +45,12 @@
   let paragraphs = $derived(wordDocumentParagraphs(wordDocument));
   let paragraphOrder = $derived(new Map(paragraphs.map((paragraph, index) => [paragraph.elementId, index])));
   let paragraphText = $derived(new Map(paragraphs.map(paragraph => [paragraph.elementId, wordParagraphText(wordDocument, paragraph)])));
-  const imageUrls = new WeakMap<Uint8Array, string>();
-  const createdUrls = new Set<string>();
+  const imageUrls = new WordImageUrls();
+  let destroyed = false;
 
   onDestroy(() => {
-    createdUrls.forEach((url) => URL.revokeObjectURL(url));
+    destroyed = true;
+    void tick().then(() => imageUrls.destroy());
     finishMouseSelection();
   });
 
@@ -74,6 +78,16 @@
   $effect(() => {
     scale;
     if (mounted) untrack(updateViewport);
+  });
+
+  $effect(() => {
+    layout;
+    viewport;
+    // Child drawing views must finish updating before old URLs can be released.
+    void tick().then(() => {
+      if (destroyed || scroller === undefined) return;
+      imageUrls.retain(new Set(Array.from(scroller.querySelectorAll('img'), image => image.src)));
+    });
   });
 
   $effect(() => {
@@ -430,18 +444,13 @@
     return `${wordTextCss(fragment.format)};${fragment.format.verticalAlign === "baseline" ? "vertical-align:top;" : ""}margin-left:${wordPointsToCssPixels(gap)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - line.y)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 
-  function drawingStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0, paintImage = false) {
+  function drawingStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0, paintImage = false, order?: ReadonlyMap<import('@tumblerjs/word').WordDrawing, number>, interactive = false) {
     const box = paintImage && fragment.drawing?.kind === 'image' ? wordImagePaintBounds(fragment.drawing, fragment.width, fragment.height) : { x: 0, y: 0, width: fragment.width, height: fragment.height };
-    return `left:${wordPointsToCssPixels(fragment.x + box.x - offsetX)}px;top:${wordPointsToCssPixels(fragment.y + box.y - offsetY)}px;width:${wordPointsToCssPixels(box.width)}px;height:${wordPointsToCssPixels(box.height)}px`;
+    return `${interactive ? '--word-drawing-rank' : 'z-index'}:${fragment.drawing ? order?.get(fragment.drawing) ?? (fragment.drawing.placement === 'inline' ? 1 : 2) : 1};left:${wordPointsToCssPixels(fragment.x + box.x - offsetX)}px;top:${wordPointsToCssPixels(fragment.y + box.y - offsetY)}px;width:${wordPointsToCssPixels(box.width)}px;height:${wordPointsToCssPixels(box.height)}px`;
   }
 
   function imageUrl(drawing: WordImageDrawing): string {
-    const existing = imageUrls.get(drawing.bytes);
-    if (existing !== undefined) return existing;
-    const url = URL.createObjectURL(new Blob([Uint8Array.from(drawing.bytes).buffer], { type: drawing.contentType }));
-    imageUrls.set(drawing.bytes, url);
-    createdUrls.add(url);
-    return url;
+    return imageUrls.get(drawing);
   }
 </script>
 
@@ -460,6 +469,7 @@
     <div class="word-surface" style={`height:${viewport.totalHeight * scale}px;width:${viewport.totalWidth * scale}px`}>
       {#each layout.pages.slice(viewport.first, viewport.last + 1) as page, localIndex (page.index)}
         {@const pageIndex = viewport.first + localIndex}
+        {@const drawingOrder = wordDrawingStackOrder(page)}
         <section
           class="word-page"
           style:background-color={layout.background ?? "#fff"}
@@ -487,9 +497,10 @@
             }}
             onbeforeinput={handleBeforeInput}
             onkeydown={handleKeydown}
-            style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
+            style={`--word-ink-layer-z-index:${wordDrawingOverlayOrder(drawingOrder)};width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
           >
-            <WordInkPageLayer {page} {scale} background={layout.background} imageurl={imageUrl} />
+            <!-- Canvas decoding owns its URLs until the asynchronous paint completes. -->
+            <WordInkPageLayer {page} {scale} background={layout.background} />
             <WordParagraphDecorations lines={[...bodyLines(page), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
             {#if page.noteSeparatorY !== undefined}
               <div class="note-separator" style={`left:${wordPointsToCssPixels(page.section.marginLeftTwips / 20)}px;top:${wordPointsToCssPixels(page.noteSeparatorY)}px`}></div>
@@ -500,13 +511,17 @@
               {/if}
               {#each line.fragments as fragment}
                 {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
-                  <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment, 0, 0, true)} />
+                  {#if fragment.drawing.picture}
+                    <div class="document-drawing picture-drawing" style={drawingStyle(fragment, 0, 0, false, drawingOrder)}><WordPictureView drawing={fragment.drawing} src={imageUrl(fragment.drawing)} /></div>
+                  {:else}
+                    <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment, 0, 0, true, drawingOrder)} />
+                  {/if}
                 {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "shape"}
-                  <div class="document-drawing shape-drawing" style={drawingStyle(fragment)}><WordShapeView shape={fragment.drawing.shape} /></div>
+                  <div class="document-drawing shape-drawing" style={drawingStyle(fragment, 0, 0, false, drawingOrder)}><WordShapeView shape={fragment.drawing.shape} /></div>
                 {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
-                  <div class="document-drawing" style={drawingStyle(fragment)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-chart-${page.index}-${fragment.contentElementId}`} /></div>
+                  <div class="document-drawing" style={drawingStyle(fragment, 0, 0, false, drawingOrder)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-chart-${page.index}-${fragment.contentElementId}`} /></div>
                 {:else if fragment.kind === "drawing"}
-                  <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment)}></div>
+                  <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment, 0, 0, false, drawingOrder)}></div>
                 {:else if fragment.hyperlink === undefined}
                   <span data-story="header-footer" data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment)}>{fragment.text}</span>
                 {:else}
@@ -515,11 +530,11 @@
               {/each}
             {/each}
             {#each [...page.headerTables, ...page.footerTables, ...page.noteTables] as table}
-              <WordLayoutTableView {table} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} story="auxiliary" />
+              <WordLayoutTableView {table} {drawingOrder} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} story="auxiliary" />
             {/each}
             {#each page.columns as column}
               {#each column.tables as table}
-                <WordLayoutTableView {table} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} decorationsOnly />
+                <WordLayoutTableView {table} {drawingOrder} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} decorationsOnly />
               {/each}
             {/each}
             {#each bodyLines(page) as line}
@@ -534,7 +549,7 @@
               <div class="text-line" style={`left:${wordPointsToCssPixels(line.x)}px;top:${wordPointsToCssPixels(line.y)}px;height:${wordPointsToCssPixels(line.height)}px`}>
                 {#each line.fragments as fragment, fragmentIndex}
                   {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
-                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y)} pageX={fragment.x} pageY={fragment.y} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
+                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y, false, drawingOrder, true)} pageX={fragment.x} pageY={fragment.y} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
                   {:else if fragment.hyperlink === undefined}
                     <span
                       data-paragraph={line.paragraphElementId}
@@ -581,7 +596,7 @@
   .word-page-content.editable { outline: 0; caret-color: var(--tumbler-document-accent, #25a735); }
   .caret-anchor { overflow: visible; }
   .document-drawing { position: absolute; display: block; object-fit: fill; overflow: hidden; }
-  .shape-drawing { overflow: visible; }
+  .shape-drawing, .picture-drawing { overflow: visible; }
   .drawing-fallback { background: repeating-linear-gradient(135deg, #f3f3f3, #f3f3f3 8px, #fafafa 8px, #fafafa 16px); border: 1px solid #d0d0d0; }
   .note-separator { position: absolute; width: 96px; border-top: 1px solid #777; }
   .text-line { position: absolute; white-space: pre; font-size: 0; line-height: 0; }

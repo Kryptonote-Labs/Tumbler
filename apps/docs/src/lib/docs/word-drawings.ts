@@ -21,6 +21,11 @@ const artifact = createWordArtifact({ blocks: [{
         { kind: 'text', text: 'Dimensions and offsets use points. x overrides horizontal alignment. y is relative to the paragraph by default, or the page when moveWithText is false.' },
         { kind: 'text', text: 'Reuse the same immutable Uint8Array when changing image geometry so media identity stays stable. Front and behind placement do not reserve text space. Tight and through text wrapping remain incomplete.' },
     ] },
+    { id: 'imported-pictures', title: 'Imported picture geometry', blocks: [
+        { kind: 'text', text: 'DOM and canvas rendering apply DrawingML source cropping, clockwise rotation and horizontal or vertical reflection. Negative crop offsets leave transparent padding. Crop and transform markup and media bytes survive movement, resizing, export, undo and redo. Editing coordinates and handles remain in the unrotated drawing frame.' },
+        { kind: 'text', text: 'Floating drawings use relativeHeight order within their front or behind layer, including values above the CSS signed-integer limit.' },
+        { kind: 'note', text: 'Grouped pictures, tiled fills, non-default fill rectangles, nonrectangular masks, fills that do not rotate with their shape, and local picture extents that differ from the drawing frame are classified as unsupported and retain their original XML. This does not add support for picture effects or complete tight/through wrapping.' },
+    ] },
     { id: 'shapes', title: 'Editable shapes', blocks: [
         { kind: 'code', code: `import { NativeWordDocument } from '@tumblerjs/word';
 
