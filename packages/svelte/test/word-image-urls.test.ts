@@ -6,6 +6,21 @@ afterEach(() => { for (const owner of owners.splice(0)) owner.destroy(); });
 function owner() { const value = new WordImageUrls(); owners.push(value); return value; }
 const image = (bytes = new Uint8Array([1, 2, 3]), contentType = 'image/png') => ({ elementId: 1, bytes, contentType });
 
+test('drawings sharing immutable bytes share a blob until their references disappear', async () => {
+  const urls = owner();
+  const first = image();
+  const second = { ...first, elementId: 2 };
+  const shared = urls.get(first);
+  expect(urls.get(second)).toBe(shared);
+  const changed = urls.get(image(new Uint8Array([4])));
+  urls.retain(new Set([shared, changed]));
+  expect(urls.get(second)).toBe(shared);
+  expect((await fetch(shared)).ok).toBe(true);
+  urls.retain(new Set([changed]));
+  await expect(fetch(shared)).rejects.toThrow();
+  expect(urls.get(second)).not.toBe(shared);
+});
+
 test('120 artifact replacements reuse equal bytes and retain a readable blob', async () => {
   const urls = owner();
   const url = urls.get(image());

@@ -6,17 +6,23 @@ interface Entry { image: Image; url: string }
 /** Own blob URLs for one viewer, retaining only images still referenced by its DOM. */
 export class WordImageUrls {
   private readonly drawings = new Map<number, Entry>();
+  private readonly bytes = new Map<Uint8Array, Entry>();
   private readonly entries = new Set<Entry>();
 
   get(image: Image): string {
-    const previous = this.drawings.get(image.elementId);
+    const shared = this.bytes.get(image.bytes);
+    const previous = shared?.image.contentType === image.contentType ? shared : this.drawings.get(image.elementId);
     if (previous !== undefined && previous.image.contentType === image.contentType && sameBytes(previous.image.bytes, image.bytes)) {
       // Keep the latest artifact's identity so repeated rendering does not rescan its bytes.
+      if (this.bytes.get(previous.image.bytes) === previous) this.bytes.delete(previous.image.bytes);
       previous.image = image;
+      this.bytes.set(image.bytes, previous);
+      this.drawings.set(image.elementId, previous);
       return previous.url;
     }
     const entry = { image, url: URL.createObjectURL(new Blob([Uint8Array.from(image.bytes).buffer], { type: image.contentType })) };
     this.drawings.set(image.elementId, entry);
+    this.bytes.set(image.bytes, entry);
     this.entries.add(entry);
     return entry.url;
   }
@@ -27,8 +33,9 @@ export class WordImageUrls {
       if (activeUrls.has(entry.url)) continue;
       URL.revokeObjectURL(entry.url);
       this.entries.delete(entry);
-      if (this.drawings.get(entry.image.elementId) === entry) this.drawings.delete(entry.image.elementId);
+      if (this.bytes.get(entry.image.bytes) === entry) this.bytes.delete(entry.image.bytes);
     }
+    for (const [id, entry] of this.drawings) if (!this.entries.has(entry)) this.drawings.delete(id);
   }
 
   destroy(): void {
