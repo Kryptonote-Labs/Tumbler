@@ -135,6 +135,7 @@ export function prepareWordContent(
   const document = source.document;
   const markup = new PackageXml(document);
   const originals = wordContentParagraphs(importWordContent(source));
+  const originalRuns = new Map(originals.flatMap(p => p.runs.map(run => [run.source!, run] as const)));
   const originalParagraphs = new Map(originals.map((p) => [p.source!, p]));
   const paragraphs = wordContentParagraphs(blocks);
   const copies = contentCopyScopes(blocks, markup);
@@ -155,7 +156,8 @@ export function prepareWordContent(
   const generated = createWordArtifact({
     paragraphs: paragraphs.map((p) => ({
       runs: p.runs.map((run) => ({
-        text: run.text.replaceAll('\u2028', ''),
+        // This package supplies resources only. Source text leaves are rendered below.
+        text: (originalRuns.get(run.source!)?.text === run.text ? run.text.replace(/[\r\n]/g, '') : run.text).replaceAll('\u2028', ''),
         ...(run.shape ? { shape: run.shape } : {}),
         ...(run.ink ? { ink: { ...run.ink, ...run.drawing } } : {}),
         ...(run.link === undefined ? {} : { link: run.link }),

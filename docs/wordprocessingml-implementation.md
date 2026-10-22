@@ -60,7 +60,9 @@ assumed. Strict and Transitional namespaces are tested separately.
 - `NativeWordDocument.update` rejects CR/LF inside run text before changing its
   content or export cache, matching DOCX authoring. Use separate paragraph blocks
   for paragraph boundaries and U+2028 for a soft line break. The direct text editor
-  continues to accept LF as a structural paragraph boundary.
+  continues to accept LF as a structural paragraph boundary. Unchanged imported
+  text leaves containing literal CR/LF retain their original XML and text; this
+  exception requires a matching source reference and does not permit new CR/LF.
 - Split and join structurally simple paragraphs, preserving paragraph and
   uniform direct-run properties. Unsafe wrapper/container crossings fail
   explicitly.

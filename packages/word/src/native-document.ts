@@ -238,7 +238,7 @@ export class NativeWordDocument implements WordLayoutSource {
   }
 
   update(input: readonly WordContentBlock[]) {
-    validateContentText(input);
+    validateContentText(input, this.compiled);
     const records = new Map<string, RecordBlock>();
     const visited: (readonly [string, RecordBlock])[] = [];
     const keys = new Set<string>();
@@ -460,6 +460,8 @@ export class NativeWordDocument implements WordLayoutSource {
                   }
                   media.push({ ...updated, elementId: id });
                 }
+              } else if (inherited?.content.kind === 'text' && inherited.content.value === authoredRun.text && /[\r\n]/.test(authoredRun.text)) {
+                contents.push({ ...inherited.content, elementId: allocate() });
               } else {
                 for (const part of authoredRun.text.split(/([\t\n\u2028])/)) {
                   if (!part) continue;
@@ -628,14 +630,16 @@ export class NativeWordDocument implements WordLayoutSource {
 }
 
 /** Validate text before update allocates identities or changes source caches. */
-function validateContentText(blocks: readonly WordContentBlock[]): void {
+function validateContentText(blocks: readonly WordContentBlock[], source: NativeWordSource | undefined): void {
   for (const block of blocks) {
     if (block.kind === 'table') {
-      for (const row of block.rows) for (const cell of row) validateContentText(cell.blocks);
+      for (const row of block.rows) for (const cell of row) validateContentText(cell.blocks, source);
     } else if (block.kind === 'paragraph') {
       for (const run of block.runs) {
         validateXmlText(run.text);
-        if (/[\r\n]/.test(run.text)) throw new TypeError('Use separate paragraphs for line-feed text.');
+        const original = source?.leaves.get(run.source!)?.content;
+        if (/[\r\n]/.test(run.text) && !(original?.kind === 'text' && original.value === run.text))
+          throw new TypeError('Use separate paragraphs for line-feed text.');
       }
     }
   }

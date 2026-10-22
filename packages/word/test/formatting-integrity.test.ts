@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { NativeWordDocument, openWordArtifact, wordParagraphText } from '../src/index.ts';
+import { NativeWordDocument, importWordContent, openWordArtifact, wordParagraphText } from '../src/index.ts';
 import { buildWordDocumentFixture } from './document-fixture.ts';
 
 for (const conformance of ['strict', 'transitional'] as const) {
@@ -28,6 +28,29 @@ for (const conformance of ['strict', 'transitional'] as const) {
       expect(text(artifact.replaceText(selection(artifact, 0, value.length), `${value}${value}`))).toBe(`${value}${value}!`);
     });
   }
+  test(`${conformance}: native import retains literal CR/LF through later formatting and export`, () => {
+    for (const entity of ['&#10;', '&#13;']) {
+      const source = open(`<w:r><w:t xml:space="preserve">a${entity}b</w:t></w:r>`);
+      const document = new NativeWordDocument({ source });
+      expect(document.artifact()).toBe(source);
+      const originalText = text(source);
+      const nativeParagraph = document.blocks[0]!;
+      if (nativeParagraph.kind !== 'paragraph') throw new Error('Expected paragraph');
+      expect(wordParagraphText(undefined, nativeParagraph)).toBe(originalText);
+      const content = importWordContent(source);
+      const paragraph = content[0]!;
+      if (paragraph.kind !== 'paragraph') throw new Error('Expected paragraph');
+      document.update([{ ...paragraph, runs: paragraph.runs.map(run => ({ ...run, format: { ...run.format, bold: true } })) }]);
+      const edited = document.artifact();
+      expect(text(edited)).toBe(originalText);
+      expect(edited.document.source.source).toContain(`a${entity}b`);
+      expect(edited.document.source.elements(ns, 'b')).toHaveLength(1);
+      const blocks = document.blocks;
+      expect(() => document.update([{ ...paragraph, runs: paragraph.runs.map(run => ({ ...run, text: run.text + '\nnew' })) }])).toThrow();
+      expect(document.blocks).toBe(blocks);
+      expect(document.artifact()).toBe(edited);
+    }
+  });
   test(`${conformance}: insertion rejects invalid XML Unicode atomically`, () => {
     const artifact = open('<w:r><w:t>safe</w:t></w:r>');
     const before = artifact.bytes();
