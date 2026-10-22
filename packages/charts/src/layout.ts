@@ -1,6 +1,8 @@
+import { assertChartSceneBudget } from './scene-budget.ts';
+import { chartStacks, indexChartSequence, type StackPoint } from './indexed-data.ts';
 import { chartTitleHeight } from './title-scene.ts';
 import { chartFont, chartLegendPositions, type ChartFont } from './scene-style.ts';
-import { cartesianAxisScale, chartAxisTicks } from "./axis-scale.ts";
+import { cartesianAxisScale, chartAxisTicks, roundChartTick } from "./axis-scale.ts";
 import { BUBBLE_CHART_POINT_LIMIT, type ChartDataSequence, type SupportedChartModel } from "./model.ts";
 
 export interface ChartRect {
@@ -13,6 +15,7 @@ export interface ChartRect {
 export interface CartesianChartLayout {
   readonly plot: ChartRect;
   readonly categories: readonly string[];
+  readonly stacks: readonly (readonly (StackPoint | undefined)[])[];
   readonly categoryRotation: number;
   readonly minimum: number;
   readonly maximum: number;
@@ -65,7 +68,9 @@ export interface BubbleChartLayout {
 export function layoutCartesianChart(model: SupportedChartModel, width: number, height: number, measure: (text: string, font: ChartFont) => number = (text, font) => text.length * font.size * 0.55): CartesianChartLayout {
   finiteSize(width, "chart width");
   finiteSize(height, "chart height");
-  const categories = categoryLabels(model);
+  const count = assertChartSceneBudget(model);
+  const categories = categoryLabels(model, count);
+  const stacks = chartStacks(model, count);
   const horizontal = model.kind === "bar";
   const categoryAxis = model.axes.find(axis => axis.kind === "category" && !axis.deleted);
   const categoryFont = chartFont("category", categoryAxis?.textStyle, model);
@@ -84,17 +89,18 @@ export function layoutCartesianChart(model: SupportedChartModel, width: number, 
   const top = (model.title === undefined ? 16 : chartTitleHeight(model) + 28) + (legend === "top" ? 28 : 0);
   const plot = Object.freeze({ x: left, y: top, width: plotWidth, height: Math.max(1, height - top - bottomLegend - categoryHeight) });
   const axis = model.axes.find((candidate) => candidate.kind === "value" && !candidate.deleted);
-  const values = model.series.flatMap((_, series) => categories.flatMap((_, index) => {
-    const point = cartesianStack(model,series,index);
-    return point ? [point.start,point.end] : [];
-  }));
-  const minimum = axis?.minimum ?? Math.min(0, ...values);
-  const maximum = axis?.maximum ?? Math.max(0, ...values);
+  let dataMinimum = 0, dataMaximum = 0;
+  for (const points of stacks) for (const point of points) if (point) {
+    dataMinimum = Math.min(dataMinimum, point.start, point.end);
+    dataMaximum = Math.max(dataMaximum, point.start, point.end);
+  }
+  const minimum = axis?.minimum ?? dataMinimum;
+  const maximum = axis?.maximum ?? dataMaximum;
   const scale = cartesianAxisScale(minimum, maximum, axis, model.grouping === "percent-stacked", {
     length: horizontal ? plot.width : plot.height,
     labelSize: chartFont("tick", axis?.textStyle, model).size * (horizontal ? 2 : 1),
   });
-  return Object.freeze({ plot, categories, categoryRotation, ...scale });
+  return Object.freeze({ plot, categories, stacks, categoryRotation, ...scale });
 }
 
 /** Lays out paired numeric X/Y values without converting them to category positions. */
@@ -280,13 +286,9 @@ export function pieArcPath(cx: number, cy: number, outerRadius: number, startAng
   return `M ${outerStart.x} ${outerStart.y} A ${outerRadius} ${outerRadius} 0 ${large} 1 ${outerEnd.x} ${outerEnd.y} L ${innerEnd.x} ${innerEnd.y} A ${innerRadius} ${innerRadius} 0 ${large} 0 ${innerStart.x} ${innerStart.y} Z`;
 }
 
-function categoryLabels(model: SupportedChartModel): readonly string[] {
-  const maximumIndex = Math.max(-1, ...model.series.flatMap((series) => [
-    ...(series.categories?.points.map((point) => point.index) ?? []),
-    ...(series.values?.points.map((point) => point.index) ?? []),
-  ]));
-  const primary = model.series.find((series) => series.categories !== undefined)?.categories;
-  return Object.freeze(Array.from({ length: maximumIndex + 1 }, (_, index) => String(chartSequenceValue(primary, index) ?? index + 1)));
+function categoryLabels(model: SupportedChartModel, count: number): readonly string[] {
+  const primary = indexChartSequence(model.series.find(series => series.categories !== undefined)?.categories);
+  return Object.freeze(Array.from({ length: count }, (_, index) => String(primary.get(index) ?? index + 1)));
 }
 
 function linearTicks(minimum: number, maximum: number, count: number): readonly number[] {
@@ -297,7 +299,12 @@ function linearTicks(minimum: number, maximum: number, count: number): readonly 
   const step = (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) * magnitude;
   const first = Math.ceil(minimum / step) * step;
   const ticks: number[] = [];
-  for (let value = first; value <= maximum + step * 1e-9 && ticks.length < 100; value += step) ticks.push(Object.is(value, -0) ? 0 : value);
+  for (let index = 0; index < 100; index++) {
+    const value = first + index * step;
+    if (value > maximum + step * 1e-9) break;
+    const tick = roundChartTick(value, step);
+    if (ticks.length === 0 || tick > ticks[ticks.length - 1]!) ticks.push(tick);
+  }
   if (ticks.length === 0) return Object.freeze([minimum, maximum]);
   return Object.freeze(ticks);
 }

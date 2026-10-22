@@ -1,4 +1,5 @@
 import { setWordResetSource } from '../collaboration/source-resets.ts';
+import { hasWordParagraphReset, readWordParagraphFormat } from "../collaboration/paragraph-attributes.ts";
 import type { DocumentImage } from "../collaboration/images.ts";
 import * as Y from "yjs";
 import type { WordArtifact } from "../artifact.ts";
@@ -33,6 +34,7 @@ function project(
   const parts: { insert: string; attributes?: TextAttributes }[] = text.toDelta();
   for (const part of parts) {
     const a = part.attributes ?? {};
+    const paragraph = readWordParagraphFormat(a);
     const {
       fontFamily,
       bold,
@@ -129,7 +131,8 @@ function project(
           ...(a.wordParagraph === undefined ? {} : { source: a.wordParagraph }),
           ...(a.wordCopy === undefined ? {} : { sourceCopy: a.wordCopy }),
           ...(a.styleId ? { styleId: a.styleId } : {}),
-          ...(a.paragraph ? { paragraph: a.paragraph } : {}),
+          ...(paragraph !== undefined ? { paragraph } : {}),
+          ...(hasWordParagraphReset(a) ? { resetParagraphFormat: true } : {}),
           ...(a.positioning ? { positioning: a.positioning } : {}),
           ...(a.list ? { list: a.list } : {}),
           ...(a.table ? { table: a.table } : {}),

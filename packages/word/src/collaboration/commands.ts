@@ -1,4 +1,5 @@
 import { assertWordPositioningReset, inheritWordResetSource } from './source-resets.ts';
+import { hasWordParagraphReset, paragraphPropertyPatch, readWordParagraphFormat } from './paragraph-attributes.ts';
 import { wordColoursEqual } from '../theme-colours.ts';
 import { formatTableDelta, type WordTableFormatPatch } from './table-format.ts';
 import { editTableDelta, type TableAction } from './table-edits.ts';
@@ -179,7 +180,8 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
     if (last >= offset && last < offset + part.insert.length) {
       if (part.attributes?.wordParagraph) result.wordParagraph = part.attributes.wordParagraph;
       if (part.attributes?.styleId) result.styleId = part.attributes.styleId;
-      if (part.attributes?.paragraph) result.paragraph = part.attributes.paragraph;
+      const paragraph = readWordParagraphFormat(part.attributes);
+      if (paragraph !== undefined) result.paragraph = paragraph;
       if (part.attributes?.positioning) result.positioning = part.attributes.positioning;
       if (part.attributes?.align) result.align = part.attributes.align;
       if (part.attributes?.list) result.list = part.attributes.list;
@@ -215,6 +217,19 @@ function replaceWordDelta(
       table = parent ? {...parent, ...(parents.length > 1 ? {parents: parents.slice(0,-1)} : {})} : undefined;
     }
   }
+  let paragraphReset = false;
+  if (value.includes('\n')) {
+    let offset = 0;
+    const terminator = text.toString().indexOf('\n', range.start);
+    for (const part of text.toDelta()) {
+      const length = typeof part.insert === 'string' ? part.insert.length : 1;
+      if (terminator >= offset && terminator < offset + length) {
+        paragraphReset = hasWordParagraphReset(part.attributes);
+        break;
+      }
+      offset += length;
+    }
+  }
   const inserts: WordDelta = [];
   const lines = value.split('\n');
   for (let index = 0; index < lines.length; index++) {
@@ -228,6 +243,7 @@ function replaceWordDelta(
           ...(align ? { align } : {}),
           ...(positioning ? { positioning } : {}),
           ...(paragraph ? { paragraph } : {}),
+          ...(paragraphReset ? { ...paragraphPropertyPatch(null), ...paragraphPropertyPatch(paragraph ?? {}) } : {}),
           ...(styleId ? { styleId } : {}),
           ...(list ? { list } : {}),
           ...(table ? { table } : {}),
@@ -283,7 +299,7 @@ function formatWordDelta(
   }
   const delta: WordDelta = [];
   let cursor = 0;
-  const append = (start: number, length: number, attributes: WordFormatPatch) => {
+  const append = (start: number, length: number, attributes: Record<string, unknown>) => {
     if (!length) return;
     if (start > cursor) delta.push({ retain: start - cursor });
     delta.push({ retain: length, attributes });
@@ -308,7 +324,8 @@ function formatWordDelta(
             ? { positioning: positioning.reset ? positioning : { ...positioningByEnd.get(end), ...positioning } }
             : {}),
         ...(styleId !== undefined ? { styleId } : {}),
-        ...(paragraph !== undefined ? { paragraph: paragraph === null ? null : { ...wordFormats(text, { start, end: start }).paragraph, ...paragraph } } : {}),
+        ...(paragraph !== undefined ? paragraphPropertyPatch(paragraph) : {}),
+        ...(paragraph === null ? { paragraph: null } : {}),
       });
     if (end >= Math.max(range.start, range.end - 1)) break;
     start = end + 1;

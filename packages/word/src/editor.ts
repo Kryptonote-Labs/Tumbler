@@ -396,7 +396,10 @@ function removeSegment(
 ): void {
   const element = requiredElement(document, segment.elementId);
   if (segment.kind === "text") editor.setText(element, "");
-  else editor.removeElement(element);
+  else {
+    editor.removeElement(element);
+    for (const id of segment.replacedElementIds ?? []) editor.removeElement(requiredElement(document, id));
+  }
 }
 
 function appendTextRun(

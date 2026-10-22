@@ -1,0 +1,304 @@
+{
+  "baselineCommit": "4d1465ddf85ee238a727dbed75aac7bf043f05f8",
+  "initialContendedBaseline": [
+    {
+      "runtime": "1.4.4",
+      "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+      "size": 8000,
+      "samples": 3,
+      "warmups": 1,
+      "peakProcessRssBytes": 193572864,
+      "results": [
+        {
+          "wallMs": 5144.377587999999,
+          "cpuMs": 2952.996,
+          "heapDeltaBytes": 31172211,
+          "xmlBytes": 353001,
+          "sha256": "a830bae8ffaaa7568f7b5412febbd61b576c3ec868ca1cbffe437d35c57170dd"
+        },
+        {
+          "wallMs": 3437.5204630000007,
+          "cpuMs": 2808.796,
+          "heapDeltaBytes": 18019542,
+          "xmlBytes": 353001,
+          "sha256": "a830bae8ffaaa7568f7b5412febbd61b576c3ec868ca1cbffe437d35c57170dd"
+        },
+        {
+          "wallMs": 7694.644206999998,
+          "cpuMs": 2868.953,
+          "heapDeltaBytes": 25341202,
+          "xmlBytes": 353001,
+          "sha256": "a830bae8ffaaa7568f7b5412febbd61b576c3ec868ca1cbffe437d35c57170dd"
+        }
+      ]
+    },
+    {
+      "runtime": "1.4.4",
+      "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+      "size": 16000,
+      "samples": 3,
+      "warmups": 1,
+      "peakProcessRssBytes": 291733504,
+      "results": [
+        {
+          "wallMs": 51009.283756000004,
+          "cpuMs": 13809.761,
+          "heapDeltaBytes": 102110507,
+          "xmlBytes": 705001,
+          "sha256": "f284244caf9ce43784a1ec98c3cbb6a08b9b77ab064cec99493c2f7cf2261cf5"
+        },
+        {
+          "wallMs": 28534.781265000012,
+          "cpuMs": 13387.775,
+          "heapDeltaBytes": 98066191,
+          "xmlBytes": 705001,
+          "sha256": "f284244caf9ce43784a1ec98c3cbb6a08b9b77ab064cec99493c2f7cf2261cf5"
+        },
+        {
+          "wallMs": 32812.35318199999,
+          "cpuMs": 13006.11,
+          "heapDeltaBytes": 89068768,
+          "xmlBytes": 705001,
+          "sha256": "f284244caf9ce43784a1ec98c3cbb6a08b9b77ab064cec99493c2f7cf2261cf5"
+        }
+      ]
+    },
+    {
+      "runtime": "1.4.4",
+      "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+      "size": 32000,
+      "samples": 3,
+      "warmups": 1,
+      "peakProcessRssBytes": 522883072,
+      "results": [
+        {
+          "wallMs": 51335.75333200001,
+          "cpuMs": 46523.702,
+          "heapDeltaBytes": 51303463,
+          "xmlBytes": 1409001,
+          "sha256": "a2015fe9cf1f0940c919a91a0c52e8d310adcab301d95ca02009dfe75af27bef"
+        },
+        {
+          "wallMs": 49815.12568,
+          "cpuMs": 45447.983,
+          "heapDeltaBytes": 145451908,
+          "xmlBytes": 1409001,
+          "sha256": "a2015fe9cf1f0940c919a91a0c52e8d310adcab301d95ca02009dfe75af27bef"
+        },
+        {
+          "wallMs": 45446.56074399999,
+          "cpuMs": 43212.072,
+          "heapDeltaBytes": 52105327,
+          "xmlBytes": 1409001,
+          "sha256": "a2015fe9cf1f0940c919a91a0c52e8d310adcab301d95ca02009dfe75af27bef"
+        }
+      ]
+    }
+  ],
+  "lockedBefore": [
+    {
+      "runtime": "1.4.4",
+      "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+      "size": 8000,
+      "samples": 3,
+      "warmups": 1,
+      "peakProcessRssBytes": 191434752,
+      "results": [
+        {
+          "wallMs": 1360.5157159999999,
+          "cpuMs": 1619.018,
+          "heapDeltaBytes": 32408551,
+          "xmlBytes": 353001,
+          "sha256": "a830bae8ffaaa7568f7b5412febbd61b576c3ec868ca1cbffe437d35c57170dd"
+        },
+        {
+          "wallMs": 1674.3473749999998,
+          "cpuMs": 1870.021,
+          "heapDeltaBytes": 45065956,
+          "xmlBytes": 353001,
+          "sha256": "a830bae8ffaaa7568f7b5412febbd61b576c3ec868ca1cbffe437d35c57170dd"
+        },
+        {
+          "wallMs": 1366.432997,
+          "cpuMs": 1592.428,
+          "heapDeltaBytes": 27745807,
+          "xmlBytes": 353001,
+          "sha256": "a830bae8ffaaa7568f7b5412febbd61b576c3ec868ca1cbffe437d35c57170dd"
+        }
+      ]
+    },
+    {
+      "runtime": "1.4.4",
+      "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+      "size": 16000,
+      "samples": 3,
+      "warmups": 1,
+      "peakProcessRssBytes": 305807360,
+      "results": [
+        {
+          "wallMs": 9367.851384999998,
+          "cpuMs": 9764.585,
+          "heapDeltaBytes": 41897813,
+          "xmlBytes": 705001,
+          "sha256": "f284244caf9ce43784a1ec98c3cbb6a08b9b77ab064cec99493c2f7cf2261cf5"
+        },
+        {
+          "wallMs": 7033.451692999999,
+          "cpuMs": 7507.168,
+          "heapDeltaBytes": 93584636,
+          "xmlBytes": 705001,
+          "sha256": "f284244caf9ce43784a1ec98c3cbb6a08b9b77ab064cec99493c2f7cf2261cf5"
+        },
+        {
+          "wallMs": 8494.332883,
+          "cpuMs": 8664.059,
+          "heapDeltaBytes": 89258615,
+          "xmlBytes": 705001,
+          "sha256": "f284244caf9ce43784a1ec98c3cbb6a08b9b77ab064cec99493c2f7cf2261cf5"
+        }
+      ]
+    },
+    {
+      "runtime": "1.4.4",
+      "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+      "size": 32000,
+      "samples": 3,
+      "warmups": 1,
+      "peakProcessRssBytes": 513253376,
+      "results": [
+        {
+          "wallMs": 35090.687992,
+          "cpuMs": 35732.867,
+          "heapDeltaBytes": 80575327,
+          "xmlBytes": 1409001,
+          "sha256": "a2015fe9cf1f0940c919a91a0c52e8d310adcab301d95ca02009dfe75af27bef"
+        },
+        {
+          "wallMs": 34081.84711799999,
+          "cpuMs": 34768.45,
+          "heapDeltaBytes": 52363591,
+          "xmlBytes": 1409001,
+          "sha256": "a2015fe9cf1f0940c919a91a0c52e8d310adcab301d95ca02009dfe75af27bef"
+        },
+        {
+          "wallMs": 36260.893158000006,
+          "cpuMs": 36858.57,
+          "heapDeltaBytes": 48787790,
+          "xmlBytes": 1409001,
+          "sha256": "a2015fe9cf1f0940c919a91a0c52e8d310adcab301d95ca02009dfe75af27bef"
+        }
+      ]
+    }
+  ],
+  "lockedAfter": [
+    {
+      "runtime": "1.4.4",
+      "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+      "size": 8000,
+      "samples": 3,
+      "warmups": 1,
+      "peakProcessRssBytes": 204267520,
+      "results": [
+        {
+          "wallMs": 496.0458289999999,
+          "cpuMs": 754.112,
+          "heapDeltaBytes": 41035571,
+          "xmlBytes": 353001,
+          "sha256": "a830bae8ffaaa7568f7b5412febbd61b576c3ec868ca1cbffe437d35c57170dd"
+        },
+        {
+          "wallMs": 412.7320410000002,
+          "cpuMs": 635.28,
+          "heapDeltaBytes": 51154742,
+          "xmlBytes": 353001,
+          "sha256": "a830bae8ffaaa7568f7b5412febbd61b576c3ec868ca1cbffe437d35c57170dd"
+        },
+        {
+          "wallMs": 417.2134180000003,
+          "cpuMs": 648.733,
+          "heapDeltaBytes": 32495028,
+          "xmlBytes": 353001,
+          "sha256": "a830bae8ffaaa7568f7b5412febbd61b576c3ec868ca1cbffe437d35c57170dd"
+        }
+      ]
+    },
+    {
+      "runtime": "1.4.4",
+      "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+      "size": 16000,
+      "samples": 3,
+      "warmups": 1,
+      "peakProcessRssBytes": 300503040,
+      "results": [
+        {
+          "wallMs": 749.1898809999998,
+          "cpuMs": 1126.251,
+          "heapDeltaBytes": 88049023,
+          "xmlBytes": 705001,
+          "sha256": "f284244caf9ce43784a1ec98c3cbb6a08b9b77ab064cec99493c2f7cf2261cf5"
+        },
+        {
+          "wallMs": 757.9075779999998,
+          "cpuMs": 1133.328,
+          "heapDeltaBytes": 88293412,
+          "xmlBytes": 705001,
+          "sha256": "f284244caf9ce43784a1ec98c3cbb6a08b9b77ab064cec99493c2f7cf2261cf5"
+        },
+        {
+          "wallMs": 833.010976,
+          "cpuMs": 1012.149,
+          "heapDeltaBytes": 91080539,
+          "xmlBytes": 705001,
+          "sha256": "f284244caf9ce43784a1ec98c3cbb6a08b9b77ab064cec99493c2f7cf2261cf5"
+        }
+      ]
+    },
+    {
+      "runtime": "1.4.4",
+      "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+      "size": 32000,
+      "samples": 3,
+      "warmups": 1,
+      "peakProcessRssBytes": 561537024,
+      "results": [
+        {
+          "wallMs": 1558.666957,
+          "cpuMs": 2404.436,
+          "heapDeltaBytes": 50148961,
+          "xmlBytes": 1409001,
+          "sha256": "a2015fe9cf1f0940c919a91a0c52e8d310adcab301d95ca02009dfe75af27bef"
+        },
+        {
+          "wallMs": 1426.4094539999996,
+          "cpuMs": 1916.05,
+          "heapDeltaBytes": 143961903,
+          "xmlBytes": 1409001,
+          "sha256": "a2015fe9cf1f0940c919a91a0c52e8d310adcab301d95ca02009dfe75af27bef"
+        },
+        {
+          "wallMs": 1426.6772280000005,
+          "cpuMs": 2118.097,
+          "heapDeltaBytes": 143531758,
+          "xmlBytes": 1409001,
+          "sha256": "a2015fe9cf1f0940c919a91a0c52e8d310adcab301d95ca02009dfe75af27bef"
+        }
+      ]
+    }
+  ],
+  "sourceReadProbe": {
+    "runs": 256,
+    "scope": "original-run source reads during rendering, excluding setup",
+    "cases": [
+      {
+        "emptyContinuations": 0,
+        "before": 33919,
+        "after": 256
+      },
+      {
+        "emptyContinuations": 256,
+        "before": 164991,
+        "after": 256
+      }
+    ]
+  }
+}
