@@ -73,13 +73,23 @@ outside the repository. Never commit that file or its extracted resources.
 
 The app uses the Vercel adapter and prerenders every docs and sample route. There are no runtime secrets. Workspace dependencies load Tumbler source directly, so preview deployments exercise that commit rather than the last published package. The UI shows the package version and source commit.
 
-Preview builds run only when `apps/docs` changed since the branch's previous
-successful deployment, or since the previous commit for a branch without a
-successful deployment. Production builds are unaffected. Missing comparison
-history allows the build. Package-only changes still run GitHub CI, including
-the docs build and browser tests, but do not build a Vercel preview.
+Preview requests are made by `.github/workflows/docs-preview.yml` only for
+same-repository pull requests that change `apps/docs`. The workflow checks the
+changed paths before calling Vercel, so package-only pull requests make no
+preview deployment requests and consume no preview deployment quota. It requests
+the exact PR head commit without executing repository code with the API token.
+Fork previews are not deployed automatically. GitHub CI still tests all changes.
 
-`vercel.json` configures this through `scripts/ignore-preview.sh`. Vercel's
-Ignored Build Step skips the build but still counts the deployment request
-against its limits; it does not reset an existing rate limit. A Vercel quota
-failure is not a merge blocker when the code checks pass.
+`vercel.json` disables automatic Git deployments on every branch except `main`.
+Production deployment behavior is unchanged. There is no Ignored Build Step.
+The preview workflow requires repository secret `VERCEL_TOKEN` and repository
+variables `VERCEL_PROJECT_ID` and `VERCEL_TEAM_ID` for the existing docs project.
+Store the token directly in GitHub Actions secrets, never in this repository.
+
+Rollout: existing branches must incorporate this configuration before their next
+push, because Vercel reads configuration from the deployed branch. Until that
+happens, older branches can still trigger automatic deployments. Configure the
+credentials before enabling docs previews. The workflow records the requested
+preview URL; successful submission does not certify a successful Vercel build.
+Existing deployment quota failures remain non-blocking for merge when code
+checks pass. This does not refund earlier requests or reset the current quota.
