@@ -1,3 +1,4 @@
+import { withParagraphSpacing } from './paragraph-spacing.ts';
 import { alignWordPageDrawings } from './drawing-alignment.ts';
 import { resolveWordColour } from './theme-colours.ts';
 import { splitPreparedTable, joinPreparedTables, preparedBlockHeight } from './table-pagination.ts';
@@ -553,15 +554,15 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
           column.unsupportedBlocks.push(Object.freeze({ elementId: block.elementId, localName: block.localName, y: cursorY }));
           continue;
         }
-        let prepared = prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId));
+        let prepared = withParagraphSpacing(prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId)), section.blocks, blockIndex, paragraph => document.paragraphFormat(paragraph));
         const nextBlock = section.blocks[blockIndex + 1];
         const requiredHeight = paragraphHeight(prepared) + (prepared.format.keepNext && nextBlock?.kind === "paragraph"
-          ? firstLineHeight(prepareParagraph(document, nextBlock, page!.columns[columnIndex]!.width, measurer, listMarkers.get(nextBlock.elementId)))
+          ? firstLineHeight(withParagraphSpacing(prepareParagraph(document, nextBlock, page!.columns[columnIndex]!.width, measurer, listMarkers.get(nextBlock.elementId)), section.blocks, blockIndex + 1, paragraph => document.paragraphFormat(paragraph)))
           : 0);
         const currentColumn = page!.columns[columnIndex]!;
         if ((prepared.format.pageBreakBefore || prepared.format.keepLines && requiredHeight > currentColumn.y + currentColumn.height - cursorY) && cursorY > currentColumn.y) {
           advanceColumn(section.properties);
-          prepared = prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId));
+          prepared = withParagraphSpacing(prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId)), section.blocks, blockIndex, paragraph => document.paragraphFormat(paragraph));
         }
         cursorY += points(prepared.format.spacingBeforeTwips);
         for (let lineIndex = 0; lineIndex < prepared.lines.length; lineIndex += 1) {
@@ -663,8 +664,8 @@ function prepareTable(
     const sourceMargins = cell.source.margins ?? table.properties.cellMargins;
     const margins = Object.freeze({ top: points(sourceMargins.topTwips) + inset.top, end: points(sourceMargins.endTwips), bottom: points(sourceMargins.bottomTwips) + inset.bottom, start: points(sourceMargins.startTwips) });
     const innerWidth = Math.max(1, cellWidth - margins.start - margins.end);
-    const blocks = cell.source.blocks.flatMap((block): (PreparedParagraph | PreparedTable)[] =>
-      block.kind === "paragraph" ? [prepareParagraph(document, block, innerWidth, measurer, listMarkers.get(block.elementId))]
+    const blocks = cell.source.blocks.flatMap((block, index): (PreparedParagraph | PreparedTable)[] =>
+      block.kind === "paragraph" ? [withParagraphSpacing(prepareParagraph(document, block, innerWidth, measurer, listMarkers.get(block.elementId)), cell.source.blocks, index, paragraph => document.paragraphFormat(paragraph))]
         : block.kind === "table" ? [prepareTable(document, block, innerWidth, measurer, listMarkers)] : []);
     const contentHeight = blocks.reduce((sum, block) => sum + preparedBlockHeight(block), 0) + margins.top + margins.bottom;
     preparedCells.push(Object.freeze({ resolved: cell, width: cellWidth, contentHeight, blocks: Object.freeze(blocks), margins, verticalAlignment: cell.source.verticalAlignment }));
@@ -1310,9 +1311,9 @@ function layoutStory(
   const column: MutableColumn = { index: 0, x, y: 0, width, height: Number.MAX_SAFE_INTEGER, lines: [], tables: [], unsupportedBlocks: [] };
   const markers = context.listMarkers;
   let cursor = 0;
-  for (const block of context.blocks) {
+  for (const [blockIndex, block] of context.blocks.entries()) {
     if (block.kind === "paragraph") {
-      const paragraph = prepareParagraph(context, block, width, measurer, markers.get(block.elementId));
+      const paragraph = withParagraphSpacing(prepareParagraph(context, block, width, measurer, markers.get(block.elementId)), context.blocks, blockIndex, paragraph => context.paragraphFormat(paragraph));
       cursor += points(paragraph.format.spacingBeforeTwips);
       for (let index = 0; index < paragraph.lines.length; index += 1) {
         const line = placeLine(block, paragraph.format, paragraph.lines[index]!, column, cursor, budget, index === 0 ? paragraph.marker : undefined);
