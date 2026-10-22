@@ -6,6 +6,27 @@ afterEach(() => { for (const owner of owners.splice(0)) owner.destroy(); });
 function owner() { const value = new WordImageUrls(); owners.push(value); return value; }
 const image = (bytes = new Uint8Array([1, 2, 3]), contentType = 'image/png') => ({ elementId: 1, bytes, contentType });
 
+test('colliding story IDs keep both images stable across repeated pages and 120 edits', async () => {
+  const urls = owner();
+  const header = urls.get(image(new Uint8Array([1])));
+  const footer = urls.get(image(new Uint8Array([2])));
+  expect(header).not.toBe(footer);
+  for (let edit = 0; edit < 120; edit++) {
+    const headerImage = image(new Uint8Array([1]));
+    const footerImage = image(new Uint8Array([2]));
+    for (let page = 0; page < 3; page++) {
+      expect(urls.get(headerImage)).toBe(header);
+      expect(urls.get(footerImage)).toBe(footer);
+    }
+    urls.retain(new Set([header, footer]));
+  }
+  expect(new Uint8Array(await (await fetch(header)).arrayBuffer())).toEqual(new Uint8Array([1]));
+  expect(new Uint8Array(await (await fetch(footer)).arrayBuffer())).toEqual(new Uint8Array([2]));
+  urls.retain(new Set([footer]));
+  await expect(fetch(header)).rejects.toThrow();
+  expect(urls.get(image(new Uint8Array([2])))).toBe(footer);
+});
+
 test('drawings sharing immutable bytes share a blob until their references disappear', async () => {
   const urls = owner();
   const first = image();
