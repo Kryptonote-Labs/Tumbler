@@ -43,7 +43,7 @@ test('native reset agrees with export and retains unknown positioning markup', (
   if (first.kind !== 'paragraph') throw new Error('Expected paragraph');
   for (const positioning of [{ reset: true as const }, { reset: true as const, indentEndTwips: 360 }]) {
     const model = new NativeWordDocument({ source });
-    model.update([{ ...first, positioning, runs: first.runs.map(run => ({ ...run, link: '' })) }]);
+    model.update([{ ...first, positioning: { ...positioning, tabs: [{ positionTwips: 2880, alignment: 'start', leader: 'none' }] }, runs: first.runs.map(run => ({ ...run, link: '' })) }]);
     const paragraph = model.blocks[0]!;
     if (paragraph.kind !== 'paragraph') throw new Error('Expected paragraph');
     const output = model.artifact();
@@ -128,7 +128,8 @@ test('bulk partial positioning keeps each paragraph reset without rescanning all
   expect(scans).toBeLessThanOrEqual(2);
   text.toDelta = original;
   text.applyDelta(delta);
-  const boundaries = text.toDelta().filter(part => part.insert === '\n');
+  const parts: { insert: string; attributes?: import('../src/collaboration/formatting.ts').TextAttributes }[] = text.toDelta();
+  const boundaries = parts.filter(part => part.insert === '\n');
   expect(boundaries).toHaveLength(100);
   for (const [index, part] of boundaries.entries()) expect(part.attributes?.positioning).toEqual(index % 2
     ? { reset: true, indentEndTwips: 40, firstLineTwips: 240 }

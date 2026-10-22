@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { openWordArtifact, importWordContent, NativeWordDocument } from '../src/index.ts';
+import { openWordOperationDocument, prepareWordOperation } from '../src/operations/index.ts';
 import { buildWordDocumentFixture } from './document-fixture.ts';
 const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const rel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -10,7 +11,7 @@ test('positioning reset preserves an opaque w prefix', () => {
   const model = new NativeWordDocument({ source, content: [{ ...p, positioning: { reset: true } }] });
   expect(model.artifact().document.source.elements('urn:custom', 'payload')).toHaveLength(1);
 });
-for (const tabsContent of ['\n<w:tab w:val="left" w:pos="1440"/>\n', '<w:tab w:val="left" w:pos="1440"/><ext:keep/>']) test(`reset retains inherited tabs with ${tabsContent.startsWith('\n') ? 'whitespace' : 'extension'} content`, () => {
+for (const tabsContent of ['\n<w:tab w:val="left" w:pos="1440"/>\n', '<w:tab w:val="left" w:pos="1440"/><ext:keep/>']) test(tabsContent.startsWith('\n') ? 'reset inherits tabs after removing whitespace-only container' : 'opaque-only tabs reset is rejected atomically', () => {
   const source = openWordArtifact(buildWordDocumentFixture({
     documentXml: `<w:document xmlns:w="${ns}" xmlns:ext="urn:custom" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="ext"><w:body><w:p><w:pPr><w:pStyle w:val="Custom"/><w:tabs>${tabsContent}</w:tabs></w:pPr><w:r><w:t>Hello</w:t></w:r></w:p></w:body></w:document>`,
     relationships: [{ id: 'styles', type: `${rel}/styles`, target: 'styles.xml' }],
@@ -18,7 +19,25 @@ for (const tabsContent of ['\n<w:tab w:val="left" w:pos="1440"/>\n', '<w:tab w:v
   }));
   const p = importWordContent(source)[0]!;
   if (p.kind !== 'paragraph') throw Error('paragraph');
-  const model = new NativeWordDocument({ source, content: [{ ...p, positioning: { reset: true } }] });
+  const model = new NativeWordDocument({ source });
+  if (tabsContent.includes('ext:keep')) {
+    const before = model.blocks;
+    expect(() => model.update([{ ...p, positioning: { reset: true } }])).toThrow('Cannot reset source tabs');
+    expect(model.blocks).toBe(before);
+    expect(model.artifact()).toBe(source);
+    const session = openWordOperationDocument(source);
+    try {
+      const delta = session.text.toDelta();
+      expect(() => prepareWordOperation(session.text, { start: 0, end: 5 }, { name: 'paragraph', input: { positioning: null } })).toThrow('Cannot reset source tabs');
+      expect(session.text.toDelta()).toEqual(delta);
+      expect(session.artifact().document.source.elements('urn:custom', 'keep')).toHaveLength(1);
+      // Hosts can apply arbitrary remote deltas; export still rejects unsupported persisted state.
+      session.text.format(5, 1, { positioning: { reset: true } });
+      expect(() => session.artifact()).toThrow('Cannot reset source tabs');
+    } finally { session.destroy(); }
+    return;
+  }
+  model.update([{ ...p, positioning: { reset: true } }]);
   const output = model.artifact();
   const exported = output.document.blocks[0]!;
   if (exported.kind !== 'paragraph' || model.blocks[0]?.kind !== 'paragraph') throw Error('paragraph');
@@ -39,4 +58,34 @@ for (const prefix of ['x:', '']) test(`reset plus replacement preserves extensio
   if (edited.kind !== 'paragraph') throw Error('paragraph');
   expect(edited.positioning?.indentEndTwips).toBe(360);
   expect(edited.positioning?.indentStartTwips).toBe(0);
+});
+
+test('empty-target hyperlinks survive no-op but explicit null and empty-string unlink remove them', async () => {
+  const { openWordOperationDocument, prepareWordOperation } = await import('../src/operations/index.ts');
+  const source = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${ns}"><w:body><w:p><w:hyperlink><w:r><w:t>Hello</w:t></w:r></w:hyperlink></w:p></w:body></w:document>` }));
+  const noOp = openWordOperationDocument(source);
+  try { expect(noOp.artifact().document.source.elements(ns, 'hyperlink')).toHaveLength(1); }
+  finally { noOp.destroy(); }
+  const native = new NativeWordDocument({ source });
+  expect(native.blocks[0]?.kind === 'paragraph' && native.blocks[0].inlines[0]?.kind).toBe('hyperlink');
+  for (const link of [null, '']) {
+    const session = openWordOperationDocument(source);
+    try {
+      session.text.applyDelta(prepareWordOperation(session.text, { start: 0, end: 5 }, { name: 'format', input: { link } }).delta);
+      expect(session.artifact().document.source.elements(ns, 'hyperlink')).toHaveLength(0);
+    } finally { session.destroy(); }
+  }
+});
+
+for (const opaque of [' ext:hint="keep"', '<!--keep-->', '<?keep value?>']) test(`source reset rejects opaque tabs ${opaque}`, () => {
+  const attribute = opaque.startsWith(' ') ? opaque : '';
+  const child = attribute ? '' : opaque;
+  const source = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${ns}" xmlns:ext="urn:custom"><w:body><w:p><w:pPr><w:tabs${attribute}><w:tab w:val="left" w:pos="1440"/>${child}</w:tabs></w:pPr><w:r><w:t>Hello</w:t></w:r></w:p></w:body></w:document>` }));
+  const session = openWordOperationDocument(source);
+  try {
+    const before = session.text.toDelta();
+    expect(() => prepareWordOperation(session.text, { start: 0, end: 5 }, { name: 'paragraph', input: { positioning: null } })).toThrow('Cannot reset source tabs');
+    expect(session.text.toDelta()).toEqual(before);
+    expect(session.artifact().document.source.source).toContain(opaque);
+  } finally { session.destroy(); }
 });

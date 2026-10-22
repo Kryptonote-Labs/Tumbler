@@ -1,3 +1,4 @@
+import { inheritWordResetSource } from './source-resets.ts';
 import * as Y from 'yjs';
 import { wordPageNumberRuns, type WordPageNumberPreset } from '../page-fields.ts';
 import type { WordPositionalTab } from '../document.ts';
@@ -37,6 +38,7 @@ export function positionedWordEdit(text: Y.Text, edit: (staged: Y.Text) => WordR
     const name = [...text.doc.share].find(([, value]) => Object.is(value, text))?.[0];
     if (!name) throw new Error('Missing document region.');
     const staged = doc.getText(name);
+    inheritWordResetSource(text, staged);
     let delta: WordDelta = [];
     staged.observe(event => { delta = event.delta; });
     let selection: WordRange = {start:0,end:0};

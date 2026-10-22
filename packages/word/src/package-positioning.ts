@@ -1,4 +1,6 @@
 import type { LosslessXmlElement } from '@tumblerjs/ooxml';
+import type { WordDocument } from './document.ts';
+import type { WordParagraphPositioning } from './positioning.ts';
 import type { PackageXml } from './package-xml.ts';
 
 const indentNames = new Set(['left', 'right', 'start', 'end', 'firstLine', 'hanging', 'leftChars', 'rightChars', 'startChars', 'endChars', 'firstLineChars', 'hangingChars']);
@@ -10,6 +12,8 @@ export function resetPositioningMarkup(markup: PackageXml, element: LosslessXmlE
   const attributes = element.attributes.filter(attribute => !removed.includes(attribute));
   const children = element.children.filter(child => !(name === 'tabs' && child.kind === 'element' && child.namespaceUri === element.namespaceUri && child.localName === 'tab'));
   if (!replacement && !attributes.some(attribute => attribute.prefix !== 'xmlns' && attribute.qualified !== 'xmlns') && children.every(child => child.kind === 'text' && !child.value.trim())) return '';
+
+  if (name === 'tabs' && !replacement.includes('<w:tab ')) throw new Error(OPAQUE_TABS_RESET_ERROR);
 
   const closing = `</${element.qualified}>`;
   let opening = markup.wrap(element, name, '').slice(0, -closing.length);
@@ -32,4 +36,18 @@ export function resetPositioningMarkup(markup: PackageXml, element: LosslessXmlE
   const freshChildren = name === 'tabs' ? replacement.replace(/^<w:tabs>/, '').replace(/<\/w:tabs>$/, '').replaceAll('<w:tab ', `<w:tab xmlns:w="${element.namespaceUri}" `) : '';
   opening = opening.slice(0, -1) + binding + freshAttributes + '>';
   return opening + children.map(child => markup.raw(child)).join('') + freshChildren + closing;
+}
+
+export const OPAQUE_TABS_RESET_ERROR = 'Cannot reset source tabs containing opaque XML without replacement tab stops.';
+
+/** Refuse a reset that cannot retain opaque tabs in a schema-valid property container. */
+export function assertSourcePositioningReset(document: WordDocument, source: number | undefined, positioning: WordParagraphPositioning | undefined): void {
+  if (!positioning?.reset || positioning.tabs?.length || source === undefined) return;
+  const paragraph = document.source.element(source);
+  const child = (element: LosslessXmlElement | undefined, name: string) => element?.children.find((node): node is LosslessXmlElement => node.kind === 'element' && node.namespaceUri === paragraph?.namespaceUri && node.localName === name);
+  const tabs = child(child(paragraph, 'pPr'), 'tabs');
+  if (!tabs) return;
+  const opaqueAttributes = tabs.attributes.some(attribute => attribute.prefix !== 'xmlns' && attribute.qualified !== 'xmlns');
+  const opaqueChildren = tabs.children.some(node => !(node.kind === 'element' && node.namespaceUri === tabs.namespaceUri && node.localName === 'tab') && !(node.kind === 'text' && !node.value.trim()));
+  if (opaqueAttributes || opaqueChildren) throw new Error(OPAQUE_TABS_RESET_ERROR);
 }

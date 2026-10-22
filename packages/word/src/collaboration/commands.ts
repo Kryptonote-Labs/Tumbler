@@ -1,3 +1,4 @@
+import { assertWordPositioningReset, inheritWordResetSource } from './source-resets.ts';
 import { wordColoursEqual } from '../theme-colours.ts';
 import { formatTableDelta, type WordTableFormatPatch } from './table-format.ts';
 import { editTableDelta, type TableAction } from './table-edits.ts';
@@ -263,6 +264,7 @@ function formatWordDelta(
     throw new Error('Use table operations to change cell structure.');
   const value = text.toString();
   const { align, styleId, paragraph, positioning, tab: _tab, list, table: _table, image: _image, field: _field, ...inline } = attributes;
+  assertWordPositioningReset(text, range, positioning);
   // Yjs consumes null attributes. Retain explicit unlink intent in its existing sentinel.
   if (inline.link === null) inline.link = '';
   // A font ID and a literal family are alternative ways to specify the same property.
@@ -322,6 +324,7 @@ function wordTransaction(text: Y.Text, changes: readonly WordChange[]): WordDelt
   try {
     Y.applyUpdate(replica, state);
     const staged = replica.getText(wordTextName(text));
+    inheritWordResetSource(text, staged);
     let result: WordDelta = [];
     staged.observe((event) => {
       result = event.delta;

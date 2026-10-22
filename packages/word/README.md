@@ -647,3 +647,17 @@ For `format` operations, omitting `link` preserves it; `link: null` and `link: '
 both unlink. Commands store the existing empty-string sentinel so native projection
 and source-aware export cannot restore the old hyperlink. In authored content,
 use `link: ''` to unlink and omit `link` to preserve the source wrapper.
+
+A reset without replacement tab stops is unsupported when the source `w:tabs`
+contains opaque attributes, extension children, comments or processing instructions.
+Removing all recognized stops would leave a schema-invalid container; deleting the
+container would lose the opaque data. Source-backed operation sessions reject this
+case before returning an edit delta, and native updates reject it before changing
+the model. Export also rejects it if a host bypasses these APIs with a raw or remote
+Yjs update. The original artifact is unchanged and no partial package is returned.
+Known tab stops with only surrounding whitespace reset normally. Supplying at least
+one replacement tab stop allows the opaque container content to remain valid.
+
+Imported targetless hyperlink wrappers omit the public `link` attribute and retain
+their source identity. This keeps no-op exports intact while reserving `link: ''`
+for explicit unlinking.
