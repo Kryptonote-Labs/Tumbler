@@ -1,4 +1,4 @@
-import { paragraphPropertyPatch, readWordParagraphFormat } from './paragraph-attributes.ts';
+import { hasWordParagraphReset, paragraphPropertyPatch, readWordParagraphFormat } from './paragraph-attributes.ts';
 import { wordColoursEqual } from '../theme-colours.ts';
 import { formatTableDelta, type WordTableFormatPatch } from './table-format.ts';
 import { editTableDelta, type TableAction } from './table-edits.ts';
@@ -216,6 +216,19 @@ function replaceWordDelta(
       table = parent ? {...parent, ...(parents.length > 1 ? {parents: parents.slice(0,-1)} : {})} : undefined;
     }
   }
+  let paragraphReset = false;
+  if (value.includes('\n')) {
+    let offset = 0;
+    const terminator = text.toString().indexOf('\n', range.start);
+    for (const part of text.toDelta()) {
+      const length = typeof part.insert === 'string' ? part.insert.length : 1;
+      if (terminator >= offset && terminator < offset + length) {
+        paragraphReset = hasWordParagraphReset(part.attributes);
+        break;
+      }
+      offset += length;
+    }
+  }
   const inserts: WordDelta = [];
   const lines = value.split('\n');
   for (let index = 0; index < lines.length; index++) {
@@ -229,6 +242,7 @@ function replaceWordDelta(
           ...(align ? { align } : {}),
           ...(positioning ? { positioning } : {}),
           ...(paragraph ? { paragraph } : {}),
+          ...(paragraphReset ? { ...paragraphPropertyPatch(null), ...paragraphPropertyPatch(paragraph ?? {}) } : {}),
           ...(styleId ? { styleId } : {}),
           ...(list ? { list } : {}),
           ...(table ? { table } : {}),

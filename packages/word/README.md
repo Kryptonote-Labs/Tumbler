@@ -435,6 +435,9 @@ Existing `paragraph` object attributes remain readable. New edits use internal
 `wordParagraphFormat:<property>` attributes with wrapped values; wrapped null masks an old property.
 `wordFormats` returns the decoded public object. Hosts reading raw deltas or paragraph slices should
 call `readWordParagraphFormat(attributes)` before converting paragraph formatting to Office content.
+For source-aware reconciliation, also set `resetParagraphFormat: true` on `WordTextParagraph` when
+`hasWordParagraphReset(attributes)` returns true. This clears imported direct paragraph properties
+before applying the surviving values, including after concurrent reset and patch operations.
 Upgrade all collaborating writers together: old clients do not understand these registers, and legacy
 whole-object writes do not override existing property registers. This wire change does not add OOXML
 properties or alter their units.

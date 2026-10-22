@@ -15,4 +15,4 @@ export { formatTableDelta, type WordTableFormatPatch } from './table-format.ts';
 export { findWordMatches, replaceWordMatches, type WordSearchOptions } from './search.ts';
 export { WordShapeText } from './shape-text.ts';
 
-export { readWordParagraphFormat } from './paragraph-attributes.ts';
+export { hasWordParagraphReset, readWordParagraphFormat } from './paragraph-attributes.ts';

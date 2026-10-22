@@ -1,4 +1,4 @@
-import { readWordParagraphFormat } from "../collaboration/paragraph-attributes.ts";
+import { hasWordParagraphReset, readWordParagraphFormat } from "../collaboration/paragraph-attributes.ts";
 import type { DocumentImage } from "../collaboration/images.ts";
 import * as Y from "yjs";
 import type { WordArtifact } from "../artifact.ts";
@@ -130,6 +130,7 @@ function project(
           ...(a.wordCopy === undefined ? {} : { sourceCopy: a.wordCopy }),
           ...(a.styleId ? { styleId: a.styleId } : {}),
           ...(paragraph !== undefined ? { paragraph } : {}),
+          ...(hasWordParagraphReset(a) ? { resetParagraphFormat: true } : {}),
           ...(a.positioning ? { positioning: a.positioning } : {}),
           ...(a.list ? { list: a.list } : {}),
           ...(a.table ? { table: a.table } : {}),

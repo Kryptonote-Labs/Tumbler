@@ -112,3 +112,31 @@ test('property registers project through DOCX and shape text without leaking wir
   expect(shape.paragraphs()[0]?.paragraph).toEqual({ keepNext: true });
   shape.destroy(); document.destroy();
 });
+
+test('concurrent reset and patch remove imported properties from DOCX', async () => {
+  const { createWordArtifact, importWordContent } = await import('../src/index.ts');
+  const { openWordOperationDocument } = await import('../src/operations/document.ts');
+  for (const styleId of [undefined, 'Normal']) {
+    const source = createWordArtifact({ paragraphs: [{ ...(styleId ? { styleId } : {}), runs: [{ text: 'Hello' }], paragraph: { keepNext: true, spacingBeforeTwips: 120 } }] });
+    const document = openWordOperationDocument(source);
+    const a = document.text.doc!;
+    a.clientID = 100;
+    const b = new Y.Doc(); b.clientID = 200;
+    Y.applyUpdate(b, Y.encodeStateAsUpdate(a));
+    const peer = b.getText('body');
+    document.text.applyDelta(commands.formatWordDelta(document.text, range, { paragraph: null }));
+    peer.applyDelta(commands.formatWordDelta(peer, range, { paragraph: { keepLines: true } }));
+    Y.applyUpdate(a, Y.encodeStateAsUpdate(b), 'remote');
+    expect(commands.wordFormats(document.text, range).paragraph).toEqual({ keepLines: true });
+    expect(importWordContent(document.artifact())[0]).toMatchObject({ paragraph: { keepLines: true } });
+    const xml = document.artifact().document.source.source;
+    expect(xml).not.toContain('<w:keepNext');
+    expect(xml).not.toContain('w:before="120"');
+    document.text.applyDelta(commands.replaceWordDelta(document.text, { start: 2, end: 2 }, '\n'));
+    const split = document.artifact();
+    expect(split.document.source.source).not.toContain('<w:keepNext');
+    expect(split.document.source.source).not.toContain('w:before="120"');
+    expect(importWordContent(split)).toHaveLength(2);
+    document.destroy(); b.destroy();
+  }
+});

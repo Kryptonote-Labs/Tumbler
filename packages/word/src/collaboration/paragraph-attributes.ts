@@ -45,3 +45,9 @@ export function paragraphPropertyPatch(patch: WordParagraphFormat | null): Recor
   return Object.fromEntries((patch === null ? properties.map(key => [key, null] as const) : Object.entries(patch))
     .map(([key, value]) => [prefix + key, { value }]));
 }
+
+/** Source-aware exporters must preserve explicit removal intent alongside decoded values. */
+export function hasWordParagraphReset(attributes?: Readonly<Record<string, unknown>>): boolean {
+  return Object.entries(attributes ?? {}).some(([key, value]) =>
+    isParagraphPropertyValue(key, value) && value.value === null);
+}
