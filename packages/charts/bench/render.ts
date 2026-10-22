@@ -1,7 +1,7 @@
 import { parseOoxmlChart, layoutChartScene } from '../src/index.ts';
 import { cpus } from 'node:os';
 const encode = (points: string) => new TextEncoder().encode(`<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart><c:plotArea><c:barChart><c:barDir val="col"/><c:ser><c:idx val="0"/><c:order val="0"/><c:val><c:numLit>${points}</c:numLit></c:val></c:ser></c:barChart></c:plotArea></c:chart></c:chartSpace>`);
-console.log(JSON.stringify({bun:Bun.version,cpu:cpus()[0]?.model,warmups:2,samples:5,width:300,height:200}));
+console.log(JSON.stringify({bun:Bun.version,cpu:cpus()[0]?.model,cpuCount:cpus().length,warmups:2,samples:5,width:300,height:200}));
 for (const n of [1000,5000,10000]) {
  const xml=encode(Array.from({length:n},(_,i)=>`<c:pt idx="${i}"><c:v>1</c:v></c:pt>`).join(''));
  const model=parseOoxmlChart(xml,'transitional'); if(model.status!=='supported')throw Error(model.reason);
