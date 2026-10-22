@@ -96,7 +96,8 @@ the title or press F2 while the chart is selected. Edits apply as you type; Ente
 adds a paragraph and Escape leaves text editing. Undo restores earlier changes.
 
 Chart previews enforce resource limits independently of OOXML cache counts. Cache
-indices must be below 100,000 even without `ptCount`. Cartesian previews allow at
+indices must be below 100,000 even without `ptCount`; larger indices return an
+unsupported chart so the host document can still open. Cartesian previews allow at
 most 20,000 category positions and 20,000 total series/category cells, including
 combination plots and sparse gaps. Preview input is also limited to 100,000 stored
 points, 256 series/axes per plot, and 16 combination plots. Combination accounting
@@ -111,5 +112,5 @@ Per-layout point maps and stack positions are rebuilt on each resize or host edi
 Visible value axes render tick labels even when major gridlines are absent.
 Deleted axes suppress labels, gridlines, and axis strokes. Cartesian, combination,
 and XY ticks use the host `formatNumber` callback with the axis format code, falling
-back to the series cache format and then an English numeric format with up to six
-fractional digits.
+back to the series cache format and then an English numeric format preserving up to 21
+significant digits, including distinct ticks below one millionth.

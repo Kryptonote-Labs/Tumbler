@@ -163,3 +163,12 @@ test('combination value labels and gridlines follow each axis independently', ()
   const hidden = { ...base, axes: base.axes.map(axis => ({ ...axis, deleted: true, majorGridlines: true })) };
   expect(texts(layoutChartScene({ ...hidden, plots: [hidden] }, 600, 400).marks)).toEqual(['Results']);
 });
+
+test('small numeric ticks remain distinct without a host formatter in every chart family', () => {
+  const axis = { id: 1, kind: 'value' as const, position: 'left' as const, majorGridlines: false, deleted: false, title: undefined, minimum: 0, maximum: 1e-7, majorUnit: 2e-8 };
+  const base = model({ legend: undefined, title: undefined, axes: [axis], axisIds: [1] });
+  for (const current of [base, { ...base, plots: [base] }, { ...base, kind: 'scatter' as const, axisIds: [1, 1] }]) {
+    const labels = texts(layoutChartScene(current, 600, 400).marks);
+    for (const value of ['0', '0.00000002', '0.00000004', '0.00000006', '0.00000008', '0.0000001']) expect(labels).toContain(value);
+  }
+});
