@@ -14,7 +14,11 @@ function sparse(index: number): SupportedChartModel {
 }
 
 test('undeclared cache indices have an independent limit; bounded gaps keep their category positions', () => {
-  for (const index of [100_000, 4294967295]) expect(() => parseOoxmlChart(xml(index), 'transitional')).toThrow('cache index');
+  for (const index of [100_000, 4294967295]) {
+    const parsed = parseOoxmlChart(xml(index), 'transitional');
+    expect(parsed.status).toBe('unsupported');
+    if (parsed.status === 'unsupported') expect(parsed.reason).toContain('cache index');
+  }
   expect(layoutCartesianChart(sparse(2), 300, 200).categories).toEqual(['1', '2', '3']);
   for (const index of [20_000, 4294967295, -1, 1.5]) {
     let measures = 0;

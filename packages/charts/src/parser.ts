@@ -31,6 +31,9 @@ export class ChartParseError extends Error {
   }
 }
 
+/** A product preview limit is unsupported content, not malformed host XML. */
+class ChartPreviewLimitError extends Error {}
+
 export interface ChartParseOptions {
   /** Localized Office-compatible text for an existing title without a text child. */
   readonly defaultTitle?: string;
@@ -92,7 +95,13 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
   if (kind === undefined) {
     return unsupported(chartType.localName, `${chartType.localName} is not supported in this milestone.`, title, titleFormula, legend);
   }
-  const series = children(chartType, chartNamespace, "ser").map((element) => parseSeries(element, kind, chartNamespace, drawingNamespace));
+  let series: ChartSeries[];
+  try {
+    series = children(chartType, chartNamespace, "ser").map((element) => parseSeries(element, kind, chartNamespace, drawingNamespace));
+  } catch (error) {
+    if (error instanceof ChartPreviewLimitError) return unsupported(chartType.localName, error.message, title, titleFormula, legend);
+    throw error;
+  }
   const axes = plotArea.children.filter((child): child is LosslessXmlElement =>
     child.kind === "element" && child.namespaceUri === chartNamespace && (child.localName === "catAx" || child.localName === "valAx")
   ).map((element) => parseAxis(element, chartNamespace, drawingNamespace));
@@ -242,7 +251,7 @@ function parseSequenceContainer(element: LosslessXmlElement, namespace: string, 
   const seen = new Set<number>();
   const parsed = points.map((point): ChartDataPoint => {
     const index = unsigned(requiredAttr(point, "idx", "cache point index"), "cache point index");
-    if (index >= MAX_CACHE_POINTS) throw new ChartParseError(`Chart cache index exceeds ${MAX_CACHE_POINTS - 1}.`);
+    if (index >= MAX_CACHE_POINTS) throw new ChartPreviewLimitError(`Chart cache index exceeds ${MAX_CACHE_POINTS - 1}.`);
     if (declaredCount !== undefined && index >= declaredCount) throw new ChartParseError(`Chart cache point ${index} is outside ptCount ${declaredCount}.`);
     if (seen.has(index)) throw new ChartParseError(`Chart cache repeats point ${index}.`);
     seen.add(index);
