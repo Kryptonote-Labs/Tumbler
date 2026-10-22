@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { beginPackageTransaction } from '../../packages/opc/src/index.ts';
 import { openWordArtifact } from '../../packages/word/src/index.ts';
 import { reconcileWordContent } from '../../packages/word/src/content-export.ts';
@@ -51,7 +51,7 @@ for (const item of cases) {
   const bytes = fixture(item.profile, item.limit, 'invalidHighlight' in item && item.invalidHighlight);
   const path = resolve(directory, `${item.name}.docx`);
   await Bun.write(path, bytes);
-  const result = spawnSync(dotnet, [resolve(validator), path], { encoding: 'utf8', timeout: 30_000 });
+  const result: SpawnSyncReturns<string> = spawnSync(dotnet, [resolve(validator), path], { encoding: 'utf8', timeout: 30_000 });
   if (result.error) throw result.error;
   const log = result.stdout + result.stderr;
   await Bun.write(resolve(directory, `${item.name}.log`), log);
