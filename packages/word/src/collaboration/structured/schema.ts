@@ -35,7 +35,9 @@ const axisSchema = z
     id,
     left: id.nullable(),
     right: id.nullable(),
-    continuations: z.array(z.array(id).min(1)),
+    continuations: z.array(
+      z.object({ columns: z.array(id).min(1), group: id }).strict(),
+    ),
   })
   .strict();
 const baseSchema = z

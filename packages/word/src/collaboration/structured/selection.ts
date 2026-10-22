@@ -21,6 +21,12 @@ export function selectionText(
     return { text, start: 0, end: commands.bodyLength(text) };
   }
   const cell = resolveCell(doc, selection.cell);
+  if (cell.verticalMerge === "continue")
+    throw new WordTableConflict(
+      selection.cell,
+      "overlap",
+      "Select the restart cell to edit a vertical merge.",
+    );
   const source = sourceCell(doc, selection.cell);
   if (
     !cell.payloads.some(

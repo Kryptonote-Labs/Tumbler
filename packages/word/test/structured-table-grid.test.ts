@@ -118,7 +118,7 @@ test("covered coordinates cannot create an invisible continuation payload", () =
         selection: { cell: target, range: { start: 0, end: 0 } },
         value: "Hidden",
       }),
-    ).toThrow("visible merged-cell payload");
+    ).toThrow("restart cell");
     expect(Y.encodeStateAsUpdate(doc)).toEqual(before);
   } finally {
     session.destroy();

@@ -146,7 +146,10 @@ export function applyStructuredChange(
       change.dimension === "row"
         ? (structuredGrid(doc, address)[change.at]?.cells ?? [])
             .filter((cell) => cell.verticalMerge === "continue")
-            .map((cell) => cell.columns)
+            .map((cell) => ({
+              columns: cell.columns,
+              group: cell.verticalGroup!,
+            }))
         : [];
     const id = crypto.randomUUID();
     records.set("axis:" + id, {
@@ -199,7 +202,7 @@ export function applyStructuredChange(
         records.delete(key);
         const columns = value.columns.filter((column) => column !== change.id);
         if (columns.length > 1)
-          records.set("merge:" + cellKey(value.row, columns[0]!), {
+          records.set("merge:" + crypto.randomUUID(), {
             ...value,
             columns,
           });
@@ -285,25 +288,33 @@ export function applyStructuredChange(
         (cell) => cell.address.column === current.address.column,
       ),
       next = row.cells[at + 1];
-    if (!next || current.source?.merge || next.source?.merge)
+    if (!next || current.verticalMerge || next.verticalMerge)
       throw new WordTableConflict(
         address,
         "overlap",
         "No compatible adjacent cell.",
       );
-    records.set("merge:" + cellKey(change.cell.row, current.address.column), {
+    const coverage = [...current.columns, ...next.columns];
+    for (const { key, value } of tableRecords(doc, address))
+      if (
+        value.kind === "merge" &&
+        value.row === change.cell.row &&
+        value.columns.some((column) => coverage.includes(column))
+      )
+        records.delete(key);
+    records.set("merge:" + crypto.randomUUID(), {
       kind: "merge",
       row: change.cell.row,
-      columns: [...current.columns, ...next.columns],
+      columns: coverage,
     });
   } else {
-    const merge = tableRecords(doc, address).find(
+    const merges = tableRecords(doc, address).filter(
       (r) =>
         r.value.kind === "merge" &&
         r.value.row === change.cell.row &&
         r.value.columns.includes(change.cell.column),
     );
-    if (merge) records.delete(merge.key);
+    if (merges.length) for (const merge of merges) records.delete(merge.key);
     else {
       const cell = resolveCell(doc, change.cell);
       if (!cell.source || (cell.source.span ?? 1) <= 1 || cell.source.merge)

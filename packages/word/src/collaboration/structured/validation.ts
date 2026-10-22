@@ -102,9 +102,11 @@ export function validateStructuredTables(doc: Y.Doc) {
       }
     const visible = new Set(
       structuredGrid(doc, address).flatMap((row) =>
-        row.cells.flatMap((cell) =>
-          cell.payloads.map((p) => cellKey(p.row, p.column)),
-        ),
+        row.cells
+          .filter((cell) => cell.verticalMerge !== "continue")
+          .flatMap((cell) =>
+            cell.payloads.map((p) => cellKey(p.row, p.column)),
+          ),
       ),
     );
     for (const name of doc.share.keys())
@@ -139,8 +141,12 @@ export function validateStructuredTables(doc: Y.Doc) {
       }
     // A merge has explicit coverage. Concurrent interior insertions are ambiguous.
     const occupied = new Set<string>();
+    const equivalent = new Set<string>();
     for (const { value } of tableRecords(doc, address))
       if (value.kind === "merge") {
+        const identity = JSON.stringify([value.row, value.columns]);
+        if (equivalent.has(identity)) continue;
+        equivalent.add(identity);
         const indexes = value.columns.map((column) => columns.indexOf(column));
         if (
           !rows.includes(value.row) ||

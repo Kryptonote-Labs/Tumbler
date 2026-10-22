@@ -15,6 +15,7 @@ export type StructuredCell = {
   columns: string[];
   payloads: CellAddress[];
   source?: TableCell;
+  verticalGroup?: string;
   verticalMerge?: "restart" | "continue";
 };
 export type StructuredRow = {
@@ -23,6 +24,25 @@ export type StructuredRow = {
   after: number;
   cells: StructuredCell[];
 };
+/** Follow the retained baseline, including deleted restart rows, to retain group identity. */
+function sourceGroup(
+  base: ReturnType<typeof tableBase>,
+  source: TableCell,
+): string {
+  let group = source.cell;
+  for (let i = base.rows.indexOf(source.row); i >= 0; i--) {
+    const candidate = base.cells.find(
+      (cell) =>
+        cell.row === base.rows[i] &&
+        cell.column === source.column &&
+        (cell.span ?? 1) === (source.span ?? 1),
+    );
+    if (!candidate?.merge) break;
+    group = candidate.cell;
+    if (candidate.merge === "restart") break;
+  }
+  return group;
+}
 /** Logical addresses remain stable when other peers insert axes before the selected cell. */
 export function structuredGrid(
   doc: Y.Doc,
@@ -74,7 +94,7 @@ export function structuredGrid(
       const continuation =
         insertion?.kind === "axis"
           ? insertion.continuations.find((coverage) =>
-              coverage.includes(column),
+              coverage.columns.includes(column),
             )
           : undefined;
       const merge = tableRecords(doc, address).find(
@@ -99,7 +119,9 @@ export function structuredGrid(
         covered = columns.slice(i, end + 1);
       }
       if (continuation) {
-        const survivors = continuation.filter((c) => columns.includes(c));
+        const survivors = continuation.columns.filter((c) =>
+          columns.includes(c),
+        );
         covered = columns.slice(
           i,
           columns.indexOf(survivors.at(-1) ?? column) + 1,
@@ -128,6 +150,11 @@ export function structuredGrid(
         payloads,
         ...(source ? { source } : {}),
         ...(source?.merge
+          ? { verticalGroup: sourceGroup(base, source) }
+          : continuation
+            ? { verticalGroup: continuation.group }
+            : {}),
+        ...(source?.merge
           ? { verticalMerge: source.merge }
           : continuation
             ? { verticalMerge: "continue" as const }
@@ -144,7 +171,8 @@ export function structuredGrid(
       const key = JSON.stringify(cell.columns);
       if (
         cell.verticalMerge === "continue" &&
-        !previous.get(key)?.verticalMerge
+        (!previous.get(key)?.verticalMerge ||
+          previous.get(key)?.verticalGroup !== cell.verticalGroup)
       )
         cell.verticalMerge = "restart";
       current.set(key, cell);
