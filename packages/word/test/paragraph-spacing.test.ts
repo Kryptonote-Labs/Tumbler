@@ -32,3 +32,11 @@ test('resolved gaps determine body page count and table row height', () => {
   expect(table.pages).toHaveLength(1);
   expect(table.pages[0]!.columns[0]!.tables[0]!.height).toBe(32);
 });
+test('continuous sections retain body paragraph adjacency', () => {
+  for (const contextual of [false, true]) {
+    const body = paragraph('first', spacing(0, 12, contextual) + section('', 6000)) + paragraph('second', spacing(12, 0, contextual));
+    const document = paginationDocument(body, section('<w:type w:val="continuous"/>', 6000));
+    const lines = layoutWordDocument(document, paginationMeasurer).pages[0]!.columns[0]!.lines;
+    expect(lines[1]!.y - lines[0]!.y - 10).toBe(contextual ? 0 : 12);
+  }
+});

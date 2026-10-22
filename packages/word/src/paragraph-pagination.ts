@@ -25,7 +25,7 @@ export function paragraphLineSequence(lines: readonly { readonly ascent: number;
 export function widowPairHeight(lines: ParagraphLineSequence, index: number): number {
   const current = lines.get(index);
   const next = lines.get(index + 1);
-  if (!current || !next || current.breakAfter) return 0;
+  if (!current || !next || current.breakAfter === "page" || current.breakAfter === "column") return 0;
   if (index !== 0 && lines.get(index + 2)) return 0;
   return current.ascent + current.descent + next.ascent + next.descent;
 }

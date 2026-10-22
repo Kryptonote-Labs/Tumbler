@@ -47,3 +47,14 @@ test('before spacing on the first paragraph does not create a blank page', () =>
   expect(pages[0]!.length).toBeGreaterThan(0);
   expect(pages.flat().join('')).toBe('a'.repeat(21));
 });
+test('ordinary line breaks retain first and last widow protection', () => {
+  const lines = (count: number) => paragraph(Array.from({ length: count }, (_, i) => String(i)).join('</w:t><w:br/><w:t>'));
+  expect(textPages(paragraph('filler1') + paragraph('filler2') + lines(3)).map(page => page.length)).toEqual([2, 3]);
+  expect(textPages(lines(4)).map(page => page.length)).toEqual([2, 2]);
+});
+test('predecessor spacing stays behind when a keep chain or page break moves', () => {
+  const filler = paragraph('filler', '<w:spacing w:after="240" w:line="200" w:lineRule="exact"/>');
+  expect(textPages(filler + paragraph('heading', '<w:keepNext/>') + paragraph('end'))).toEqual([['filler'], ['heading', 'end']]);
+  const document = paginationDocument(filler + paragraph('next', '<w:pageBreakBefore/>'));
+  expect(layoutWordDocument(document, paginationMeasurer).pages[1]!.columns[0]!.lines[0]!.y).toBe(10);
+});

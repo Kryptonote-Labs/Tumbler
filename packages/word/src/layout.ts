@@ -480,6 +480,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
     cursorY = page.columns[columnIndex]!.y;
   };
 
+  let sectionBlockOffset = 0;
   try {
     for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
       const section = sections[sectionIndex]!;
@@ -500,7 +501,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
         if (block?.kind !== "paragraph") return undefined;
         const cached = pending.get(index);
         if (cached) return cached;
-        const prepared = withParagraphSpacing(prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId)), section.blocks, index, paragraph => document.paragraphFormat(paragraph));
+        const prepared = withParagraphSpacing(prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId)), document.blocks, sectionBlockOffset + index, paragraph => document.paragraphFormat(paragraph));
         pending.set(index, prepared);
         return prepared;
       };
@@ -593,7 +594,11 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
         }
         inKeepChain = prepared.format.keepNext;
         pending.delete(blockIndex);
-        cursorY += points(prepared.format.spacingBeforeTwips);
+        // A previous paragraph's after-spacing belongs to the old column. At a fresh
+        // boundary retain only this paragraph's authored before-spacing.
+        const before = cursorY === page!.columns[columnIndex]!.y
+          ? document.paragraphFormat(block).spacingBeforeTwips : prepared.format.spacingBeforeTwips;
+        cursorY += points(before);
         for (let lineIndex = 0; ; lineIndex += 1) {
           const line = prepared.lines[lineIndex];
           if (!line) break;
@@ -615,6 +620,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
         }
         cursorY += points(prepared.format.spacingAfterTwips);
       }
+      sectionBlockOffset += section.blocks.length;
     }
   } catch (error) {
     if (error !== TRUNCATED) throw error;
