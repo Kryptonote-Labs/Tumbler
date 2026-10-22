@@ -314,6 +314,8 @@ interface BreakAtom extends AtomBase {
 }
 
 export interface PreparedParagraph {
+  /** Own before-spacing, excluding the previous paragraph, for a fresh flow boundary. */
+  readonly spacingBeforeAtStartTwips?: number;
   readonly paragraph: WordParagraph;
   readonly format: ComputedWordParagraphFormat;
   readonly lines: readonly PreparedLine[];
@@ -495,14 +497,15 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
       } else addPage(section.properties, section.properties.breakType === "evenPage" ? "even" : section.properties.breakType === "oddPage" ? "odd" : undefined);
 
       // Retain only bounded lookahead preparations, and never reconsider every suffix of a keep chain.
-      const pending = new Map<number, PreparedParagraph>();
+      const pending = new Map<number, { width: number; prepared: PreparedParagraph }>();
       const prepareBody = (index: number): PreparedParagraph | undefined => {
         const block = section.blocks[index];
         if (block?.kind !== "paragraph") return undefined;
         const cached = pending.get(index);
-        if (cached) return cached;
-        const prepared = withParagraphSpacing(prepareParagraph(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId)), document.blocks, sectionBlockOffset + index, paragraph => document.paragraphFormat(paragraph));
-        pending.set(index, prepared);
+        const width = page!.columns[columnIndex]!.width;
+        if (cached?.width === width) return cached.prepared;
+        const prepared = withParagraphSpacing(prepareParagraph(document, block, width, measurer, listMarkers.get(block.elementId)), document.blocks, sectionBlockOffset + index, paragraph => document.paragraphFormat(paragraph));
+        pending.set(index, { width, prepared });
         return prepared;
       };
       let inKeepChain = false;

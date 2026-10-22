@@ -40,3 +40,12 @@ test('continuous sections retain body paragraph adjacency', () => {
     expect(lines[1]!.y - lines[0]!.y - 10).toBe(contextual ? 0 : 12);
   }
 });
+test('table continuations discard predecessor spacing at the split', () => {
+  const body = paragraph('first', spacing(0, 24)) + paragraph('second', spacing(0, 0));
+  const document = paginationDocument(`<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>${body}</w:tc></w:tr></w:tbl>`);
+  const layout = layoutWordDocument(document, paginationMeasurer);
+  const column = layout.pages[1]!.columns[0]!;
+  const lines = column.tables[0]!.cells[0]!.lines;
+  expect(lines[0]!.y).toBe(10);
+  expect(lines.every(line => line.y + line.height <= column.y + column.height)).toBe(true);
+});

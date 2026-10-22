@@ -69,3 +69,10 @@ test('a preflight move reprepares at the destination column width', () => {
   expect(column.lines.map(line => line.fragments.map(fragment => fragment.text).join(''))).toEqual(['abcdefghi', 'jklmno']);
   expect(column.lines.every(line => line.width <= column.width)).toBe(true);
 });
+test('lookahead rewraps after an inline break changes column width', () => {
+  const body = paragraph('filler', section('', 6000)) + paragraph('heading</w:t><w:br w:type="page"/><w:t>tail', '<w:keepNext/>') + paragraph('abcdefghijklmno');
+  const document = paginationDocument(body, section('<w:type w:val="continuous"/><w:cols w:num="2" w:space="200"/>', 6000));
+  const column = layoutWordDocument(document, paginationMeasurer).pages[1]!.columns[0]!;
+  expect(column.lines.slice(-2).map(line => line.fragments.map(fragment => fragment.text).join(''))).toEqual(['abcdefghi', 'jklmno']);
+  expect(column.lines.every(line => line.width <= column.width)).toBe(true);
+});

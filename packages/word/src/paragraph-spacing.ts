@@ -29,5 +29,5 @@ export function withParagraphSpacing(
   const before = paragraphGap(previous?.kind === 'paragraph' ? format(previous) : undefined, prepared.format);
   const after = next?.kind === 'paragraph' ? 0 : prepared.format.spacingAfterTwips;
   if (before === prepared.format.spacingBeforeTwips && after === prepared.format.spacingAfterTwips) return prepared;
-  return { ...prepared, format: { ...prepared.format, spacingBeforeTwips: before, spacingAfterTwips: after } };
+  return { ...prepared, spacingBeforeAtStartTwips: prepared.format.spacingBeforeTwips, format: { ...prepared.format, spacingBeforeTwips: before, spacingAfterTwips: after } };
 }
