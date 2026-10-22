@@ -1,12 +1,14 @@
 <script lang="ts">
   import { wordDrawingStackOrder, wordDrawingOverlayOrder } from "./word-drawing-order.ts";
   import WordPictureView from "./WordPictureView.svelte";
+  import WordContentClip from "./WordContentClip.svelte";
+  import { wordDrawingCellClip, wordTableLinesWithClips, type WordClippedLine } from "@tumblerjs/word";
   import WordInkPageLayer from "./WordInkPageLayer.svelte";
   import WordShapeView from "./WordShapeView.svelte";
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
   import { flushSync, onDestroy, onMount, tick, untrack } from "svelte";
   import { WordImageUrls } from "./word-image-urls.ts";
-  import { wordImagePaintBounds, wordLineAtPoint, layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
+  import { wordImagePaintBounds, wordClippedLineAtPoint, layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import { zoomGesture } from "./zoom-gesture.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
   import WordDrawingView from "./WordDrawingView.svelte";
@@ -271,8 +273,8 @@
 
   /** Body text must follow document order, including paragraphs inside tables. */
   function bodyLines(page: WordLayout["pages"][number]) {
-    return page.columns.flatMap(column => [...column.lines, ...tableLines(column.tables)])
-      .sort((left, right) => (paragraphOrder.get(left.paragraphElementId) ?? 0) - (paragraphOrder.get(right.paragraphElementId) ?? 0) || left.startOffset - right.startOffset);
+    return page.columns.flatMap(column => [...column.lines.map((line): WordClippedLine => ({ line })), ...wordTableLinesWithClips(column.tables)])
+      .sort(({ line: left }, { line: right }) => (paragraphOrder.get(left.paragraphElementId) ?? 0) - (paragraphOrder.get(right.paragraphElementId) ?? 0) || left.startOffset - right.startOffset);
   }
 
   function positionOrder(left: WordTextPosition, right: WordTextPosition) {
@@ -381,10 +383,13 @@
     const page = layout.pages.find(item => item.index === Number(pageElement?.dataset.page));
     if (pageElement === undefined || page === undefined) return;
     const rect = pageElement.getBoundingClientRect();
-    const x = (clientX - rect.left) / scale;
+    let x = (clientX - rect.left) / scale;
     const y = (clientY - rect.top) / scale;
-    const line = wordLineAtPoint(page, x / wordPointsToCssPixels(1), y / wordPointsToCssPixels(1));
-    if (line === undefined) return;
+    const target = wordClippedLineAtPoint(page, x / wordPointsToCssPixels(1), y / wordPointsToCssPixels(1));
+    if (target === undefined) return;
+    const { line, clip } = target;
+    if (clip) x = Math.max(wordPointsToCssPixels(clip.x), Math.min(wordPointsToCssPixels(clip.x + clip.width), x));
+    const visibleClientX = rect.left + x * scale;
     const position = (offset: number): WordTextPosition => ({ paragraphElementId: line.paragraphElementId, offset });
     if (x <= wordPointsToCssPixels(line.x)) return position(line.startOffset);
     if (x >= wordPointsToCssPixels(line.x + line.width)) return position(line.endOffset);
@@ -397,8 +402,10 @@
     const element = pageElement.querySelector<HTMLElement>(`[data-paragraph="${line.paragraphElementId}"][data-start="${fragment.startOffset}"][data-end="${fragment.endOffset}"]:not(.caret-anchor):not([data-story])`);
     if (element?.firstChild?.nodeType !== Node.TEXT_NODE) return position(fragment.startOffset);
     const bounds = element.getBoundingClientRect();
-    const hitX = Math.max(bounds.left + 0.01, Math.min(bounds.right - 0.01, clientX));
-    const hitY = bounds.top + bounds.height / 2;
+    const hitX = Math.max(bounds.left + 0.01, Math.min(bounds.right - 0.01, visibleClientX));
+    const visibleTop = clip ? Math.max(bounds.top, rect.top + wordPointsToCssPixels(clip.y) * scale) : bounds.top;
+    const visibleBottom = clip ? Math.min(bounds.bottom, rect.top + wordPointsToCssPixels(clip.y + clip.height) * scale) : bounds.bottom;
+    const hitY = (visibleTop + visibleBottom) / 2;
     const document = globalThis.document as Document & {
       caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
       caretRangeFromPoint?: (x: number, y: number) => Range | null;
@@ -419,17 +426,10 @@
       measure.setStart(element.firstChild, 0);
       measure.setEnd(element.firstChild, boundary);
       const box = measure.getBoundingClientRect();
-      const delta = Math.abs((rtl ? box.left : box.right) - clientX);
+      const delta = Math.abs((rtl ? box.left : box.right) - visibleClientX);
       if (delta < distance) { distance = delta; nearest = boundary; }
     }
     return position(Math.min(fragment.endOffset, fragment.startOffset + nearest));
-  }
-
-  function tableLines(tables: readonly WordLayout["pages"][number]["columns"][number]["tables"][number][]): WordLayout["pages"][number]["columns"][number]["lines"] {
-    return tables.flatMap((table) => table.cells.flatMap((cell) => [
-      ...cell.lines,
-      ...tableLines(cell.tables),
-    ]));
   }
 
   function fragmentStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0) {
@@ -501,7 +501,7 @@
           >
             <!-- Canvas decoding owns its URLs until the asynchronous paint completes. -->
             <WordInkPageLayer {page} {scale} background={layout.background} />
-            <WordParagraphDecorations lines={[...bodyLines(page), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
+            <WordParagraphDecorations lines={[...page.columns.flatMap(column => column.lines), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
             {#if page.noteSeparatorY !== undefined}
               <div class="note-separator" style={`left:${wordPointsToCssPixels(page.section.marginLeftTwips / 20)}px;top:${wordPointsToCssPixels(page.noteSeparatorY)}px`}></div>
             {/if}
@@ -537,7 +537,13 @@
                 <WordLayoutTableView {table} {drawingOrder} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} decorationsOnly />
               {/each}
             {/each}
-            {#each bodyLines(page) as line}
+            {#each bodyLines(page) as { line, clip }}
+              {#each line.fragments as fragment}
+                {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
+                  <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, 0, 0, false, drawingOrder, true)} pageX={fragment.x} pageY={fragment.y} clip={wordDrawingCellClip(fragment.drawing, clip)} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
+                {/if}
+              {/each}
+              <WordContentClip {clip} layer={1}>
               {#if line.marker !== undefined}
                 <span
                   class="list-marker"
@@ -548,8 +554,8 @@
 
               <div class="text-line" style={`left:${wordPointsToCssPixels(line.x)}px;top:${wordPointsToCssPixels(line.y)}px;height:${wordPointsToCssPixels(line.height)}px`}>
                 {#each line.fragments as fragment, fragmentIndex}
-                  {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
-                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y, false, drawingOrder, true)} pageX={fragment.x} pageY={fragment.y} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
+                  {#if fragment.kind === "drawing"}
+                    <!-- Drawing content and controls share the page's stacking order. -->
                   {:else if fragment.hyperlink === undefined}
                     <span
                       data-paragraph={line.paragraphElementId}
@@ -580,6 +586,7 @@
                   style={`left:${wordPointsToCssPixels(line.x + line.width)}px;top:${wordPointsToCssPixels(line.y)}px;width:1px;height:${wordPointsToCssPixels(line.height)}px;line-height:${wordPointsToCssPixels(line.height)}px`}
                 >{paragraphText.get(line.paragraphElementId)?.slice(line.fragments.at(-1)?.endOffset ?? line.startOffset, line.endOffset) || "\u200b"}</span>
               {/if}
+              </WordContentClip>
             {/each}
           </div>
         </section>
