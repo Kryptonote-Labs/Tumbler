@@ -93,6 +93,16 @@ export class WordNumbering {
     this.#instances = new Map(this.instances.map((item) => [item.id, item]));
   }
 
+  /** Native updates see the same added built-ins as package export, without changing imported metadata. */
+  withParagraphStyles(styles: Parameters<WordNumberingStyles['withParagraphStyles']>[0]): WordNumbering {
+    if (!styles.length) return this;
+    return new WordNumbering({
+      ...(this.partName === undefined ? {} : { partName: this.partName }),
+      abstracts: this.abstracts, instances: this.instances,
+      styles: this.#styles.withParagraphStyles(styles),
+    });
+  }
+
   /** Imported identities continue their original instance, including level overrides. */
   importedReference(list: WordAuthoredList): WordParagraphNumbering | undefined {
     const { id, level = 0 } = list;

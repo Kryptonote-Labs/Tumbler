@@ -25,12 +25,12 @@ function make(body: string, numbering: string, styles = '', strict = false) {
 }
 const markers = (a: ReturnType<typeof make>) => [...a.document.numbering.markers(a.document).values()].map(m => m.text);
 function verify(a: ReturnType<typeof make>, expected: string[]) {
-  expect(markers(a)).toEqual(expected);
-  expect([...new NativeWordDocument({ source: a }).listMarkers.values()].map(m => m.text)).toEqual(expected);
+  expect(markers(a)).toEqual([...expected]);
+  expect([...new NativeWordDocument({ source: a }).listMarkers.values()].map(m => m.text)).toEqual([...expected]);
   const blocks = importWordContent(a).map(block => block.kind === 'paragraph' ? { ...block, runs: block.runs.map(run => ({ ...run, text: run.text + '!' })) } : block);
   const reopened = openWordArtifact(reconcileWordContent(a, blocks).bytes());
-  expect(markers(reopened)).toEqual(expected);
-  expect([...new NativeWordDocument({ source: reopened }).listMarkers.values()].map(m => m.text)).toEqual(expected);
+  expect(markers(reopened)).toEqual([...expected]);
+  expect([...new NativeWordDocument({ source: reopened }).listMarkers.values()].map(m => m.text)).toEqual([...expected]);
   expect(reopened.document.package.readPart(reopened.document.package.getPart(reopened.document.numbering.partName!)!)).toEqual(a.document.package.readPart(a.document.package.getPart(a.document.numbering.partName!)!));
 }
 
@@ -114,8 +114,8 @@ test.each([false, true])('native style changes and inserted styled items agree w
   const content = importWordContent(a);
   const model = new NativeWordDocument({ source: a, immutableContent });
   const verifyModel = (expected: string[]) => {
-    expect([...model.listMarkers.values()].map(marker => marker.text)).toEqual(expected);
-    expect(markers(openWordArtifact(model.artifact().bytes()))).toEqual(expected);
+    expect([...model.listMarkers.values()].map(marker => marker.text)).toEqual([...expected]);
+    expect(markers(openWordArtifact(model.artifact().bytes()))).toEqual([...expected]);
   };
   model.update(content.map(block => ({ ...block, styleId: 'B' })));
   verifyModel(['5.']);
@@ -134,4 +134,44 @@ test('native style edits preserve direct numbering and explicit cancellation', (
   model.update(importWordContent(a).map(block => ({ ...block, styleId: 'B' })));
   expect([...model.listMarkers.values()].map(marker => marker.text)).toEqual(['1.']);
   expect(markers(model.artifact())).toEqual(['1.']);
+});
+
+test.each([false, true])('native numbering sees built-in styles materialized by export, immutable=%s', immutableContent => {
+  const normal = style('Normal', ref()).replace('w:type="paragraph"', 'w:type="paragraph" w:default="1"');
+  const a = make(p(), nums(lvl(0) + lvl(1, '<w:pStyle w:val="Heading1"/>', '<w:start w:val="5"/>')), normal);
+  const model = new NativeWordDocument({ source: a, immutableContent });
+  const table = { kind: 'table' as const, rows: [[{ blocks: [{ kind: 'paragraph' as const, styleId: 'Heading1', runs: [{ text: 'heading' }] }] }]] };
+  const blocks = [...importWordContent(a), table];
+  model.update(blocks);
+  expect([...model.listMarkers.values()].map(marker => [marker.text, marker.level])).toEqual([['1.', 0], ['5.', 1]]);
+  expect([...model.artifact().document.numbering.markers(model.artifact().document).values()].map(marker => [marker.text, marker.level])).toEqual([['1.', 0], ['5.', 1]]);
+  model.update([...importWordContent(a), { kind: 'paragraph', styleId: 'Heading1', runs: [{ text: 'insert' }] }, table]);
+  expect([...model.listMarkers.values()].map(marker => marker.text)).toEqual(['1.', '5.', '6.']);
+  expect(markers(model.artifact())).toEqual(['1.', '5.', '6.']);
+});
+
+test('opening a source does not materialize a missing built-in until an update', () => {
+  const styles = style('Other', ref()).replace('w:type="paragraph"', 'w:type="paragraph" w:default="1"');
+  const a = make(p('<w:pStyle w:val="Heading1"/>'), nums(lvl(0)), styles);
+  const model = new NativeWordDocument({ source: a });
+  expect([...model.listMarkers.values()].map(marker => marker.text)).toEqual(['1.']);
+  expect(markers(model.artifact())).toEqual(['1.']);
+  // Export now adds Heading1 and an empty Normal, rather than inheriting Other.
+  model.update(importWordContent(a));
+  expect([...model.listMarkers.values()]).toEqual([]);
+  expect(markers(model.artifact())).toEqual([]);
+});
+
+test('adding and removing a requested built-in invalidates dependent immutable table numbering', () => {
+  const styles = style('Normal', ref()).replace('w:type="paragraph"', 'w:type="paragraph" w:default="1"') + style('Child', '', '<w:basedOn w:val="Heading1"/>');
+  const a = make(p(), nums(lvl(0) + lvl(1, '<w:pStyle w:val="Heading1"/>', '<w:start w:val="5"/>')), styles);
+  const model = new NativeWordDocument({ source: a, immutableContent: true });
+  const body = importWordContent(a);
+  const table = { kind: 'table' as const, rows: [[{ blocks: [{ kind: 'paragraph' as const, styleId: 'Child', runs: [{ text: 'child' }] }] }]] };
+  const heading = { kind: 'paragraph' as const, styleId: 'Heading1', runs: [{ text: 'heading' }] };
+  for (const [blocks, expected] of [[ [...body, table], ['1.']], [[...body, table, heading], ['1.', '5.', '6.']], [[...body, table], ['1.']]] as const) {
+    model.update(blocks);
+    expect([...model.listMarkers.values()].map(marker => marker.text)).toEqual([...expected]);
+    expect(markers(model.artifact())).toEqual([...expected]);
+  }
 });

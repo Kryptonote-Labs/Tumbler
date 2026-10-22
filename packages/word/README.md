@@ -208,7 +208,8 @@ default paragraph style. Level `pStyle` selects the inherited level; direct `ilv
 overrides it, and `numId=0` cancels numbering. Numbering-style `numStyleLink` references
 resolve before instance overrides; numbering styles ignore `basedOn`. Native style
 edits and new styled paragraphs resolve numbering against their current style while
-retaining direct numbering and cancellation. Missing links have no marker; cycles throw
+retaining direct numbering and cancellation. Native updates also include the missing
+built-in styles that export will add; opening an untouched source keeps its imported styles. Missing links have no marker; cycles throw
 `invalid_document`, and style/link chains over 100 entries throw `limit_exceeded`.
 `lvlRestart=0` never restarts. Other valid triggers restart at that level or an earlier
 level, with the preceding level as the default. An omitted imported `start` is zero;

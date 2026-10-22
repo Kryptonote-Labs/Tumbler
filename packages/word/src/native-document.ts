@@ -5,6 +5,7 @@ import { reconcileWordStories, reconcileWordContentAndStories } from './content-
 import { DEFAULT_WORD_THEME, resolveWordColour, resolveWordPaintProperties } from './theme-colours.ts';
 import { isWordAuthoredList, registerWordListLevel, wordListMarker, type WordAuthoredList } from './authored-list.ts';
 import { isWordHyperlink } from './hyperlinks.ts';
+import { missingAuthoredStyles } from './package-styles.ts';
 import { wordAuthoringStyles, validateWordStyleId } from './authored-styles.ts';
 import { wordBreakXml, validateBreakRun } from './breaks.ts';
 import { nativeAuthoredInk } from './authored-ink.ts';
@@ -18,7 +19,7 @@ import type { WordArtifact } from './artifact.ts';
 import { reconcileWordContent } from './content-export.ts';
 import { wordParagraphText, wordParagraphTextSegments } from './text.ts';
 import type { WordInline } from './document.ts';
-import { WordMarkerBudget, type WordParagraphNumbering } from './numbering.ts';
+import { WordMarkerBudget, type WordNumbering, type WordParagraphNumbering } from './numbering.ts';
 import { authoredTableGrid } from './authored-table.ts';
 import { nativeImageDrawing } from './native-image.ts';
 import type { WordContentBlock } from './create-content.ts';
@@ -84,13 +85,15 @@ export class NativeWordDocument implements WordLayoutSource {
   private nextImageId = 0;
   private readonly signatures = new WeakMap<WordContentBlock, string>();
   private readonly paragraphTexts = new WeakMap<WordParagraph, string>();
-  private readonly independentBlocks = new WeakMap<WordContentBlock, boolean>();
+  private effectiveNumbering: WordNumbering | undefined;
+  private numberingStylesKey: string | undefined;
+  private independentBlocks = new WeakMap<WordContentBlock, boolean>();
   // Source continuations and numbering depend on preceding content and must still be visited.
   private independent(block: WordContentBlock): boolean {
     const cached = this.independentBlocks.get(block);
     if (cached !== undefined) return cached;
     const value = (!('source' in block) || block.source === undefined) &&
-      (block.kind !== 'paragraph' || (!block.list && !this.compiled?.artifact.document.numbering.reference({}, block.styleId))) &&
+      (block.kind !== 'paragraph' || (!block.list && !this.effectiveNumbering?.reference({}, block.styleId))) &&
       (block.kind !== 'table' || block.rows.every(row => row.every(cell => cell.blocks.every(child => this.independent(child)))));
     this.independentBlocks.set(block, value);
     return value;
@@ -143,7 +146,7 @@ export class NativeWordDocument implements WordLayoutSource {
     };
     if (options.content) this.update(options.content);
     else if (this.compiled) {
-      this.update(this.compiled.original);
+      this.updateContent(this.compiled.original, true);
       this.exported = this.compiled.artifact;
     }
   }
@@ -256,6 +259,10 @@ export class NativeWordDocument implements WordLayoutSource {
   }
 
   update(input: readonly WordContentBlock[]) {
+    this.updateContent(input);
+  }
+
+  private updateContent(input: readonly WordContentBlock[], preserveSourceStyles = false) {
     const records = new Map<string, RecordBlock>();
     const visited: (readonly [string, RecordBlock])[] = [];
     const keys = new Set<string>();
@@ -269,14 +276,26 @@ export class NativeWordDocument implements WordLayoutSource {
     const numbering: { elementId: number; reference: WordParagraphNumbering }[] = [];
     // A split paragraph owns its section break only at its final continuation.
     const sectionOwners = new Map<string, WordTextParagraph>();
+    const styleIds = new Set<string>();
     const collectSections = (blocks: readonly WordContentBlock[]) => {
       for (const block of blocks) {
+        if (block.kind === 'paragraph' && block.styleId !== undefined) styleIds.add(block.styleId);
         if (block.kind === 'paragraph' && block.source !== undefined)
           sectionOwners.set(`${block.sourceCopy ?? ''}:${block.source}`, block);
         else if (block.kind === 'table') for (const row of block.rows) for (const cell of row) collectSections(cell.blocks);
       }
     };
     collectSections(input);
+    if (compiled) {
+      const missing = preserveSourceStyles ? [] : missingAuthoredStyles(compiled.artifact.document, [...styleIds]);
+      const key = JSON.stringify(missing.map(style => style.styleId));
+      if (this.numberingStylesKey !== key) {
+        this.effectiveNumbering = compiled.artifact.document.numbering.withParagraphStyles(missing);
+        this.numberingStylesKey = key;
+        this.independentBlocks = new WeakMap();
+        this.exported = undefined;
+      }
+    }
     const format = (patch: WordTextParagraph['runs'][number]['format'], inherited?: ComputedWordTextFormat): ComputedWordTextFormat => {
       const value = { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }), ...this.compiled?.defaults.text, ...inherited, ...patch };
       if (
@@ -329,7 +348,7 @@ export class NativeWordDocument implements WordLayoutSource {
         const fingerprint = `${hasSection}:${signature(source, width)}`;
         const descendantsStart = visited.length;
         let result: RecordBlock;
-        if (this.options.immutableContent && previous?.signature === fingerprint && previous.subtree?.input === source) {
+        if (this.options.immutableContent && previous?.signature === fingerprint && previous.subtree?.input === source && this.independent(source)) {
           for (const [childKey, child] of previous.subtree.records) {
             if (keys.has(childKey)) throw new Error('Native document block identities must be unique.');
             keys.add(childKey);
@@ -538,8 +557,8 @@ export class NativeWordDocument implements WordLayoutSource {
           // that direct formatting against the edited style instead of its old marker.
           const preserved = compiled && JSON.stringify(list) === JSON.stringify(compiled.lists.get(authored.source!));
           const importedReference = preserved
-            ? compiled.artifact.document.numbering.reference(original?.directNumbering ?? {}, authored.styleId ?? original?.format.styleId)
-            : list && compiled?.artifact.document.numbering.importedReference(list);
+            ? this.effectiveNumbering?.reference(original?.directNumbering ?? {}, authored.styleId ?? original?.format.styleId)
+            : list && this.effectiveNumbering?.importedReference(list);
           if (importedReference) {
             numbering.push({ elementId: result.block.elementId, reference: importedReference });
           } else if (list && !preserved) {
@@ -593,7 +612,7 @@ export class NativeWordDocument implements WordLayoutSource {
       'body',
       compiled?.artifact.document.blocks,
     );
-    if (compiled) for (const [id, marker] of compiled.artifact.document.numbering.markersFor(numbering, {}, markerBudget)) markers.set(id, marker);
+    if (this.effectiveNumbering) for (const [id, marker] of this.effectiveNumbering.markersFor(numbering, {}, markerBudget)) markers.set(id, marker);
     if (blocks.length !== this.blocks.length || blocks.some((block, index) => block !== this.blocks[index])) this.exported = undefined;
     this.records = records;
     this.blocks = blocks;

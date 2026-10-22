@@ -33,6 +33,18 @@ export class WordNumberingStyles {
     }
   }
 
+  /** Mirror only the missing paragraph styles that this export will materialize. */
+  withParagraphStyles(styles: readonly { readonly styleId: string; readonly basedOn: string | undefined }[]): WordNumberingStyles {
+    if (!styles.length) return this;
+    const result = new WordNumberingStyles();
+    for (const [id, style] of this.#styles) result.#styles.set(id, style);
+    result.#default = this.#default;
+    for (const style of styles) if (!result.#styles.has(style.styleId)) {
+      result.#styles.set(style.styleId, { id: style.styleId, type: 'paragraph', basedOn: style.basedOn, numId: undefined });
+    }
+    return result;
+  }
+
   resolve(styleId: string | undefined, type: 'paragraph' | 'numbering'): { numId: number | undefined; ids: readonly string[] } {
     const selected = styleId !== undefined && this.#styles.get(styleId)?.type === type ? styleId : type === 'paragraph' ? this.#default : undefined;
     if (selected === undefined) return { numId: undefined, ids: [] };
