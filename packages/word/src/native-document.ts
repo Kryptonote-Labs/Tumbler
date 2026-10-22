@@ -1,3 +1,4 @@
+import { assertSourcePositioningReset } from './package-positioning.ts';
 import { withWordInkTraces } from './ink-overrides.ts';
 import { chartTitleFromWord } from './chart-title.ts';
 import { withWordDrawingGeometry } from './drawing-geometry.ts';
@@ -246,8 +247,10 @@ export class NativeWordDocument implements WordLayoutSource {
     const sectionOwners = new Map<string, WordTextParagraph>();
     const collectSections = (blocks: readonly WordContentBlock[]) => {
       for (const block of blocks) {
-        if (block.kind === 'paragraph' && block.source !== undefined)
+        if (block.kind === 'paragraph' && block.source !== undefined) {
+          if (this.compiled) assertSourcePositioningReset(this.compiled.artifact.document, block.source, block.positioning);
           sectionOwners.set(`${block.sourceCopy ?? ''}:${block.source}`, block);
+        }
         else if (block.kind === 'table') for (const row of block.rows) for (const cell of row) collectSections(cell.blocks);
       }
     };
@@ -497,6 +500,11 @@ export class NativeWordDocument implements WordLayoutSource {
                 ...DEFAULT_PARAGRAPH,
                 ...compiled?.defaults.paragraph,
                 ...(resetParagraph ? named?.paragraph : original?.format),
+                ...(authored.positioning?.reset ? (() => {
+                  const inherited = this.namedStyles.resolveParagraphStyle(authored.styleId ?? original?.format.styleId ?? compiled?.defaults.paragraph.styleId ?? '').paragraph;
+                  const { tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips } = inherited;
+                  return { tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips };
+                })() : {}),
                 ...authored.positioning,
                 ...resolveWordPaintProperties(authored.paragraph ?? {}, this.themeColours),
                 alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? (resetParagraph ? named?.paragraph.alignment : original?.format.alignment) ?? compiled?.defaults.paragraph.alignment ?? 'start',

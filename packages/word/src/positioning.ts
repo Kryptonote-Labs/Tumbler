@@ -3,6 +3,8 @@ import type { WordTabStop } from './styles.ts';
 
 /** Paragraph positioning in Word twips. Omitted members inherit their source values. */
 export interface WordParagraphPositioning {
+  /** Remove direct source positioning before applying members; style/default values still inherit. */
+  readonly reset?: true;
   /** Direct tab declarations. Empty arrays inherit; clear entries remove inherited positions. */
   readonly tabs?: readonly WordTabStop[];
   readonly indentStartTwips?: number;
@@ -23,6 +25,7 @@ export function isWordPositionalTab(value: unknown): value is WordPositionalTab 
 export function isWordParagraphPositioning(value: unknown): value is WordParagraphPositioning {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   return Object.entries(value).every(([key, member]) => {
+    if (key === 'reset') return member === true;
     if (key === 'tabs') return Array.isArray(member) && member.every((stop: unknown) => {
       if (!stop || typeof stop !== 'object') return false;
       const item = stop as Record<string, unknown>;

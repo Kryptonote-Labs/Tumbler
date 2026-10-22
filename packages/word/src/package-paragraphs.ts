@@ -1,3 +1,4 @@
+import { resetPositioningMarkup } from './package-positioning.ts';
 import { wordBreakXml } from './breaks.ts';
 import { paragraphFormatXml } from './paragraph-format.ts';
 import { paragraphPositioningXml, positionalTabXml } from './positioning.ts';
@@ -283,10 +284,18 @@ export function wordParagraphRenderer(
         replacements.set('pBdr', markup.properties(borders, 'pBdr', edges));
       }
     }
+    if (paragraph.positioning?.reset) {
+      for (const name of ['ind', 'tabs'] as const)
+        replacements.set(name, '');
+    }
     if (paragraph.positioning && JSON.stringify(paragraph.positioning) !== JSON.stringify(original?.positioning)) {
-      const positioning = paragraphPositioningXml({ ...original?.positioning, ...paragraph.positioning }, document.conformance);
+      const positioning = paragraphPositioningXml({ ...(paragraph.positioning.reset ? {} : original?.positioning), ...paragraph.positioning }, document.conformance);
       if (paragraph.positioning.tabs !== undefined) replacements.set('tabs', positioning.tabs ?? '');
       if (positioning.ind !== undefined) replacements.set('ind', positioning.ind);
+    }
+    if (paragraph.positioning?.reset) {
+      for (const name of ['ind', 'tabs'] as const)
+        replacements.set(name, resetPositioningMarkup(markup, markup.children(properties, name)[0], name, replacements.get(name)));
     }
     const generatedP = generatedParagraphs[indexByParagraph.get(paragraph)!]!;
     if (JSON.stringify(paragraph.list) !== JSON.stringify(original?.list)) {
@@ -318,7 +327,7 @@ export function wordParagraphRenderer(
     return markup.wrap(
       element,
       'p',
-      markup.properties(properties, 'pPr', replacements) + content,
+      markup.properties(properties, 'pPr', replacements, paragraph.positioning?.reset ? new Set(['ind', 'tabs']) : undefined) + content,
     );
   };
   return renderParagraph;

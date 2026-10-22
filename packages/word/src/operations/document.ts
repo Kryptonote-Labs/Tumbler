@@ -1,3 +1,4 @@
+import { setWordResetSource } from '../collaboration/source-resets.ts';
 import { hasWordParagraphReset, readWordParagraphFormat } from "../collaboration/paragraph-attributes.ts";
 import type { DocumentImage } from "../collaboration/images.ts";
 import * as Y from "yjs";
@@ -16,6 +17,7 @@ export function openWordOperationDocument(
   const doc = new Y.Doc();
   const text = doc.getText("body");
   text.applyDelta(importOperationDelta(source));
+  setWordResetSource(text, source.document);
   return {
     text,
     destroy: () => doc.destroy(),

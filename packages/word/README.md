@@ -670,6 +670,35 @@ that they move and resize together. `edit-object` can replace its complete ink
 value, including all strokes. Existing single-stroke `points/color/size` inputs
 remain supported with their previous fit-to-frame behavior.
 
+### Explicit positioning and hyperlink resets
+
+For `paragraph` operations, omitting `positioning` or supplying `{}` preserves the
+current positioning. Partial objects update their supplied members. `positioning:
+null` removes direct paragraph indents and tabs, allowing paragraph styles and
+document defaults to apply. Yjs consumes null attributes, so commands store this
+intent as `positioning: { reset: true }`. The same object works in authored content
+and `NativeWordDocument`; it can include replacement positioning members. The
+marker survives projection, undo and collaborative updates, and is not written to
+OOXML. Source extension attributes and unrelated XML remain preserved.
+
+For `format` operations, omitting `link` preserves it; `link: null` and `link: ''`
+both unlink. Commands store the existing empty-string sentinel so native projection
+and source-aware export cannot restore the old hyperlink. In authored content,
+use `link: ''` to unlink and omit `link` to preserve the source wrapper.
+
+A reset without replacement tab stops is unsupported when the source `w:tabs`
+contains opaque attributes, extension children, comments or processing instructions.
+Removing all recognized stops would leave a schema-invalid container; deleting the
+container would lose the opaque data. Source-backed operation sessions reject this
+case before returning an edit delta, and native updates reject it before changing
+the model. Export also rejects it if a host bypasses these APIs with a raw or remote
+Yjs update. The original artifact is unchanged and no partial package is returned.
+Known tab stops with only surrounding whitespace reset normally. Supplying at least
+one replacement tab stop allows the opaque container content to remain valid.
+
+Imported targetless hyperlink wrappers omit the public `link` attribute and retain
+their source identity. This keeps no-op exports intact while reserving `link: ''`
+for explicit unlinking.
 Paragraph `positioning.tabs` contains direct tab declarations. An empty array emits
 no `w:tabs` container and inherits style tab stops. When editing a source paragraph,
 `tabs: []` removes its direct tab declarations; omitting `tabs` preserves them.
