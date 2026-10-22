@@ -181,4 +181,4 @@ export { authoredInkXml, isWordAuthoredInk, type WordAuthoredInk } from './autho
 export type { WordFormattingPatch } from "./formatting.ts";
 
 export { wordPictureImageRect, type WordPictureGeometry } from './picture-geometry.ts';
-export { intersectWordContentBounds, wordTableLinesWithClips, wordVisibleLineBounds, type WordContentBounds, type WordClippedLine } from './table-clipping.ts';
+export { wordDrawingCellClip, intersectWordContentBounds, wordTableLinesWithClips, wordVisibleLineBounds, type WordContentBounds, type WordClippedLine } from './table-clipping.ts';

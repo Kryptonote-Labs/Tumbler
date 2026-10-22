@@ -1,3 +1,4 @@
+import type { WordDrawing } from './drawings.ts';
 import type { WordLayoutLine, WordLayoutTable } from './layout.ts';
 
 /** Page-relative content clip in points. Nested cells intersect their ancestors. */
@@ -33,4 +34,9 @@ export function wordVisibleLineBounds({ line, clip }: WordClippedLine): WordCont
   const bounds = { x, y: line.y, width: Math.max(1, line.width), height: line.height };
   const visible = clip ? intersectWordContentBounds(bounds, clip) : bounds;
   return visible.width > 0 && visible.height > 0 ? visible : undefined;
+}
+
+/** Wrapped floating drawings can explicitly opt out of their anchor cell's bounds. */
+export function wordDrawingCellClip(drawing: WordDrawing, clip?: WordContentBounds): WordContentBounds | undefined {
+  return drawing.placement === 'anchor' && drawing.anchor?.layoutInCell === false && drawing.anchor.wrap !== 'none' ? undefined : clip;
 }

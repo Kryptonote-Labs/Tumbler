@@ -3,7 +3,7 @@
   import WordContentClip from "./WordContentClip.svelte";
   import WordShapeView from "./WordShapeView.svelte";
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
-  import { wordImagePaintBounds, wordPointsToCssPixels, type WordImageDrawing, type WordLayoutFragment, type WordLayoutTable } from "@tumblerjs/word";
+  import { wordDrawingCellClip, wordTableLinesWithClips, wordImagePaintBounds, wordPointsToCssPixels, type WordImageDrawing, type WordLayoutFragment, type WordLayoutTable } from "@tumblerjs/word";
   import { wordTableBorderCss } from './word-table-style.ts';
   import OoxmlChart from "./OoxmlChart.svelte";
   import { wordTextCss, wordTextTop } from "./word-font-metrics.ts";
@@ -51,7 +51,7 @@
     {/each}
   </div>
   {#each current.cells as cell}
-    <WordContentClip clip={cell}>
+    <WordContentClip clip={cell} layer={1}>
     <WordParagraphDecorations lines={cell.lines} />
     {#if !decorationsOnly}
       {#each cell.lines as line}
@@ -70,18 +70,8 @@
           >{"\u200b"}</span>
         {/if}
         {#each line.fragments as fragment}
-          {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
-            {#if fragment.drawing.picture}
-              <div class="document-drawing picture-drawing" style={drawingStyle(fragment)}><WordPictureView drawing={fragment.drawing} src={imageurl(fragment.drawing)} /></div>
-            {:else}
-              <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageurl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
-            {/if}
-          {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "shape"}
-                  <div class="document-drawing shape-drawing" style={drawingStyle(fragment)}><WordShapeView shape={fragment.drawing.shape} /></div>
-                {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
-            <div class="document-drawing" style={drawingStyle(fragment)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-table-chart-${pageIndex}-${fragment.contentElementId}`} /></div>
-          {:else if fragment.kind === "drawing"}
-            <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment)}></div>
+          {#if fragment.kind === "drawing"}
+            <!-- Drawings render separately so cell opt-outs can escape ancestor clips. -->
           {:else if fragment.hyperlink === undefined}
             <span data-story={story} data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment)}>{fragment.text}</span>
           {:else}
@@ -98,6 +88,30 @@
 {/snippet}
 
 {@render renderTable(table)}
+
+{#if !decorationsOnly}
+  {#each wordTableLinesWithClips([table]) as { line, clip }}
+    {#each line.fragments as fragment}
+      {#if fragment.drawing}
+        <WordContentClip clip={wordDrawingCellClip(fragment.drawing, clip)} layer={drawingOrder?.get(fragment.drawing) ?? (fragment.drawing.anchor?.behindDocument ? 0 : 2)}>
+          {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
+            {#if fragment.drawing.picture}
+              <div class="document-drawing picture-drawing" style={drawingStyle(fragment)}><WordPictureView drawing={fragment.drawing} src={imageurl(fragment.drawing)} /></div>
+            {:else}
+              <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageurl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
+            {/if}
+          {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "shape"}
+            <div class="document-drawing shape-drawing" style={drawingStyle(fragment)}><WordShapeView shape={fragment.drawing.shape} /></div>
+          {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
+            <div class="document-drawing" style={drawingStyle(fragment)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-table-chart-${pageIndex}-${fragment.contentElementId}`} /></div>
+          {:else if fragment.kind === "drawing"}
+            <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment)}></div>
+          {/if}
+        </WordContentClip>
+      {/if}
+    {/each}
+  {/each}
+{/if}
 
 <style>
   .document-table, .document-cell, .document-drawing, span, button { position: absolute; box-sizing: border-box; }

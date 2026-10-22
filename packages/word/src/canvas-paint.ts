@@ -1,6 +1,6 @@
 import { paintWordPicture } from './picture-paint.ts';
 import { paintWordInk, type WordInkPixelContext } from './ink-canvas.ts';
-import { intersectWordContentBounds, type WordContentBounds } from './table-clipping.ts';
+import { wordDrawingCellClip, intersectWordContentBounds, type WordContentBounds } from './table-clipping.ts';
 import { wordImagePaintBounds } from './image-paint.ts';
 import { layoutChartScene, paintChartScene, type ChartCanvasContext } from "@tumblerjs/charts";
 import { canvasWordTextMeasurer, wordCanvasFont, type WordCanvasTextContext } from "./canvas-text.ts";
@@ -112,7 +112,10 @@ function pageDrawingEntries(page: WordLayoutPage): DrawingEntry[] {
   const drawings: DrawingEntry[] = [];
   const visitLines = (lines: readonly WordLayoutLine[], clip?: WordContentBounds) => {
     for (const line of lines)
-      for (const fragment of line.fragments) if (fragment.drawing) drawings.push({ fragment, ...(clip ? { clip } : {}) });
+      for (const fragment of line.fragments) if (fragment.drawing) {
+        const drawingClip = wordDrawingCellClip(fragment.drawing, clip);
+        drawings.push({ fragment, ...(drawingClip ? { clip: drawingClip } : {}) });
+      }
   };
   const visitTable = (table: WordLayoutTable, ancestor?: WordContentBounds): void => {
     for (const cell of table.cells) {
