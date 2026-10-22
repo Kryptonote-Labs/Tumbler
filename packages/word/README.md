@@ -445,7 +445,10 @@ updates. It avoids a repeated scan from the start of the CRDT when projecting st
 `WordParagraphProjection(body, project)` consumes Yjs transaction deltas and retains unchanged
 paragraph slices. A slice contains its stable terminator identity, UTF-16 length and formatted parts,
 including the newline when present. The `paragraphs` getter invokes `project(slice)` only for changed
-slices. Treat slices and projected values as immutable, and call `destroy()` when finished.
+slices. Attribute retains that remove absent keys or assign equal values retain the original slice,
+including absent-versus-empty attribute equivalence. Formatting undo therefore does not reproject
+unformatted paragraphs merely because Yjs emits a broad attribute retain. Treat slices and projected
+values as immutable, and call `destroy()` when finished.
 `WordTableProjection.update(paragraphs)` reuses table trees whose projected paragraphs are unchanged,
 while checking table contiguity across the entire result. These projections keep conversion work near
 the edited paragraphs; updating offset arrays and semantic traversal still depends on document size.
