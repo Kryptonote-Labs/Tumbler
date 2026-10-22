@@ -43,6 +43,27 @@ test('missing and wrong-type paragraph references select default; broken basedOn
 });
 
 for (const conformance of ['strict', 'transitional'] as const) {
+  test(`${conformance}: opaque tabs with no recognized stops inherit named style tabs`, () => {
+    const w = conformance === 'strict' ? 'http://purl.oclc.org/ooxml/wordprocessingml/main' : 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const rel = conformance === 'strict' ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const bytes = buildWordDocumentFixture({
+      conformance,
+      relationships: [{ id: 's', type: `${rel}/styles`, target: 'styles.xml' }],
+      parts: [{
+        itemName: 'word/styles.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml',
+        xml: `<w:styles xmlns:w="${w}"><w:style w:type="paragraph" w:styleId="Named"><w:pPr><w:tabs><w:tab w:val="start" w:pos="720"/></w:tabs></w:pPr></w:style></w:styles>`,
+      }],
+      documentXml: `<w:document xmlns:w="${w}" xmlns:ext="urn:tabs-extension"><w:body><w:p><w:pPr><w:pStyle w:val="Named"/><w:tabs><ext:keep/></w:tabs></w:pPr><w:r><w:t>Text</w:t></w:r></w:p></w:body></w:document>`,
+    });
+    const document = openWordDocument(openOpcPackage(bytes));
+    const paragraph = document.blocks[0];
+    if (paragraph?.kind !== 'paragraph') throw new Error('Expected paragraph');
+    expect(document.styles.paragraphFormat(document, paragraph).tabs).toEqual([
+      { positionTwips: 720, alignment: 'start', leader: 'none' },
+    ]);
+    expect(document.bytes()).toEqual(bytes);
+  });
+
   test(`${conformance}: additive tabs, clears, empty declarations, absolute direct toggles and fallback`, () => {
     const w = conformance === 'strict' ? 'http://purl.oclc.org/ooxml/wordprocessingml/main' : 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
     const rel = conformance === 'strict' ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
