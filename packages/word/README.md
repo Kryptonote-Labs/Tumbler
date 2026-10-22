@@ -638,3 +638,10 @@ Non-breaking spaces U+00A0, U+202F, and U+2007 retain their advance and do not
 create word-wrap opportunities. Oversized unbreakable text still uses the existing
 emergency character wrapping. A terminal explicit line break keeps an empty final
 line, including its height and logical caret offset.
+
+Justified paragraphs distribute unused line width across ordinary inter-word
+spaces on wrapped lines and explicit line breaks. Final paragraph lines and
+non-breaking spaces do not expand. Tabs retain their stops; only spaces after
+the last tab expand. Layout fragments expose the extra space advance as
+`wordSpacing` in points. DOM renderers apply that value to CSS word spacing;
+canvas renderers use the resulting fragment positions and widths.

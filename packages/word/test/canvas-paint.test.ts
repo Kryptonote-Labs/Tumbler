@@ -202,3 +202,18 @@ test('floating drawings paint behind or in front of text independently of their 
   const ordinary = inkFixture(false, false, officeInk()).source;
   expect(wordPageInkBounds(layoutWordDocument(ordinary.document, measure).pages[0]!)).toEqual([]);
 });
+
+test('justified canvas text and underline use expanded layout positions', () => {
+  const artifact = openWordArtifact(createWordArtifact({ page: { width: 140, height: 300, margin: 20 },
+    paragraphs: [{ alignment: 'justify', runs: [{ text: 'one two three four five six seven', format: { underline: 'single' } }] }],
+  }).bytes());
+  const page = layoutWordDocument(artifact.document, measure).pages[0]!;
+  const { context, calls } = recorder();
+  paintWordPage(context, page);
+  const line = page.columns[0]!.lines[0]!;
+  expect(line.width).toBe(100);
+  for (const fragment of line.fragments) {
+    expect(calls.some(call => call[0] === 'fillText' && call[1] === fragment.text && call[2] === fragment.x)).toBe(true);
+    if (fragment.wordSpacing) expect(calls.some(call => call[0] === 'lineTo' && call[1] === fragment.x + fragment.width)).toBe(true);
+  }
+});

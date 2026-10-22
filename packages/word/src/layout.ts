@@ -154,6 +154,8 @@ export interface WordLayoutMarker {
 }
 
 export interface WordLayoutFragment {
+  /** Additional advance in points for an isolated justified ordinary space. */
+  readonly wordSpacing?: number;
   readonly kind: "text" | "tab" | "drawing" | "note";
   readonly field?: WordPageField;
   readonly runElementId: number;
@@ -375,6 +377,7 @@ export interface PreparedTableCell {
 }
 
 interface PreparedLine {
+  readonly justify: boolean;
   readonly atoms: readonly Exclude<ParagraphAtom, BreakAtom>[];
   readonly startOffset: number;
   readonly endOffset: number;
@@ -1106,7 +1109,7 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
   let lineWidth = 0;
   let lastBreak = -1;
   let offset = 0;
-  const push = (breakAfter?: WordBreakType): PreparedLine => {
+  const push = (breakAfter?: WordBreakType, justify = false): PreparedLine => {
     const logicalStart = line[0]?.startOffset ?? offset;
     const logicalEnd = line.at(-1)?.endOffset ?? offset;
     // Include trailing whitespace and the paragraph mark in vertical metrics even when unpainted.
@@ -1129,6 +1132,7 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
       last = line.at(-1);
     }
     const prepared = Object.freeze({
+      justify,
       atoms: Object.freeze(line),
       startOffset: logicalStart,
       endOffset: logicalEnd,
@@ -1147,13 +1151,13 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
   for (let atom = take(); atom; atom = take()) {
     terminalLineBreak = atom.kind === "break" && atom.breakType === "line";
     if (atom.kind === "break") {
-      yield push(atom.breakType);
+      yield push(atom.breakType, atom.breakType === "line");
       offset = atom.endOffset;
       continue;
     }
     let atomWidth = atom.kind === "tab" ? tabAdvance(atom, following, lineWidth, width, format, lineCount === 0) : atom.width;
     if (atom.kind === "tab" && atom.position && atomWidth < 0 && line.length) {
-      yield push();
+      yield push(undefined, true);
       atomWidth = tabAdvance(atom, following, 0, width, format, false);
     }
     atomWidth = Math.max(0, atomWidth);
@@ -1165,10 +1169,10 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
       if (lastBreak >= 0) {
         const carry = line.splice(lastBreak + 1);
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);
-        yield push();
+        yield push(undefined, true);
         line = carry;
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);
-      } else yield push();
+      } else yield push(undefined, true);
       if (atom.kind === "tab") materialized = Object.freeze({ ...atom, width: Math.max(0, tabAdvance(atom, following, lineWidth, width, format, lineCount === 0)) });
     }
     line.push(materialized);
@@ -1201,12 +1205,24 @@ function placeLine(
     budget.cache!.lines.set(line, { marker, value });
     return value;
   }
+  // Stretch only ordinary spaces between words, after the final tab stop.
+  const gaps = new Set<ParagraphAtom>();
+  if (format.alignment === 'justify' && line.justify && available > line.width) {
+    let hasWord = false;
+    for (const atom of line.atoms) {
+      if (atom.kind === 'tab') { gaps.clear(); hasWord = false; }
+      else if (atom.kind === 'glyph' && atom.text === ' ') { if (hasWord) gaps.add(atom); }
+      else hasWord = true;
+    }
+  }
+  const wordSpacing = gaps.size ? (available - line.width) / gaps.size : 0;
   const fragments: WordLayoutFragment[] = [];
   let cursorX = x;
   for (const atom of line.atoms) {
     const previous = fragments.at(-1);
-    const atomWidth = atomWidthValue(atom);
-    const canMerge = atom.kind === "glyph" && previous?.kind === "text" &&
+    const expanded = gaps.has(atom);
+    const atomWidth = atomWidthValue(atom) + (expanded ? wordSpacing : 0);
+    const canMerge = !expanded && !previous?.wordSpacing && atom.kind === "glyph" && previous?.kind === "text" &&
       previous.runElementId === atom.runElementId && previous.contentElementId === atom.contentElementId &&
       previous.endOffset === atom.startOffset;
     if (canMerge) {
@@ -1223,6 +1239,7 @@ function placeLine(
       const descent = atomDescent(atom);
       fragments.push(Object.freeze({
         kind: atom.kind === "glyph" ? "text" : atom.kind,
+        ...(expanded ? { wordSpacing } : {}),
         ...(atom.kind === "glyph" && atom.field ? { field: atom.field } : {}),
         runElementId: atom.runElementId,
         contentElementId: atom.contentElementId,
@@ -1247,7 +1264,7 @@ function placeLine(
     ...((format.shading || format.borders) ? { paragraphDecoration: { x: column.x + points(format.indentStartTwips), width: Math.max(0, column.width - points(format.indentStartTwips + format.indentEndTwips)), ...(format.shading ? { shading: format.shading } : {}), ...(format.borders ? { borders: format.borders } : {}) } } : {}),
     x,
     y,
-    width: line.width,
+    width: wordSpacing ? available : line.width,
     height: line.ascent + line.descent,
     baseline: y + line.ascent,
     startOffset: line.startOffset,

@@ -1,0 +1,27 @@
+import { expect, test } from 'bun:test';
+import { layoutWordDocument } from '../src/index.ts';
+import { lineDocument, fixedMeasurer } from './line-layout-fixture.ts';
+
+test('justification expands inter-word spaces while preserving logical offsets', () => {
+  const lines = layoutWordDocument(lineDocument('one two three four five six seven', '<w:jc w:val="both"/>'), fixedMeasurer).pages[0]!.columns[0]!.lines;
+  expect(lines.map(line => line.width)).toEqual([100, 70]);
+  const first = lines[0]!;
+  expect(first.fragments.map(f => f.text).join('')).toBe('one two three four');
+  expect(first.fragments.filter(f => f.wordSpacing).map(f => f.wordSpacing)).toEqual([10 / 3, 10 / 3, 10 / 3]);
+  for (const [index, fragment] of first.fragments.entries()) {
+    expect(fragment.text).toBe('one two three four'.slice(fragment.startOffset, fragment.endOffset));
+    if (index > 0) expect(fragment.x).toBeCloseTo(first.fragments[index - 1]!.x + first.fragments[index - 1]!.width);
+  }
+  expect(first.fragments.at(-1)!.x + first.fragments.at(-1)!.width).toBeCloseTo(first.x + 100);
+  expect(lines[1]!.fragments).toHaveLength(1);
+});
+
+test('justify leaves final lines and unspaced words alone, but expands explicit line breaks', () => {
+  for (const text of ['one two', 'aaaaaaaaaaaaaaaaaaaaa']) {
+    const lines = layoutWordDocument(lineDocument(text, '<w:jc w:val="both"/>'), fixedMeasurer).pages[0]!.columns[0]!.lines;
+    expect(lines.flatMap(line => line.fragments).some(f => f.wordSpacing)).toBe(false);
+  }
+  const lines = layoutWordDocument(lineDocument('<w:t>one two</w:t><w:br/>', '<w:jc w:val="both"/>', 100, true), fixedMeasurer).pages[0]!.columns[0]!.lines;
+  expect(lines[0]!.width).toBe(100);
+  expect(lines[1]!.width).toBe(0);
+});
