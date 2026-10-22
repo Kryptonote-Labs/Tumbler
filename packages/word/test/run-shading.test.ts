@@ -22,8 +22,9 @@ test('imports run shading, inheritance and explicit clearing separately from hig
   const source = fixture();
   const runs = layoutWordDocument(source.document, measure).pages[0]!.columns[0]!.lines[0]!.fragments;
   expect(runs.map(r => r.format.shading)).toEqual(['#4c94d8', 'transparent', '#112233', '#008800']);
-  expect(wordTextCss(runs[0]!.format)).toContain('background-color:#4c94d8');
-  expect(wordTextCss(runs[2]!.format)).toContain('background-color:#FFFF00');
+  expect(wordTextCss(runs[0]!.format)).toMatch(/background-color:light-dark\(#4c94d8,#[\da-f]{6}\)/);
+  expect(wordTextCss(runs[1]!.format)).toContain('background-color:transparent');
+  expect(wordTextCss(runs[2]!.format)).toMatch(/background-color:light-dark\(#FFFF00,#[\da-f]{6}\)/);
   const blocks = importWordContent(source);
   const first = blocks[0]!;
   if (first.kind !== 'paragraph') throw Error('Expected paragraph');
