@@ -637,7 +637,10 @@ remain supported with their previous fit-to-frame behavior.
 Concurrent table structure uses stable row and column identities. Numeric grid
 positions are derived from their shared ordering records. Row insertions also
 record the vertical-merge coverage observed at insertion, so deleting a neighbor
-cannot change the inserted row into a different kind of cell. Existing cell text stays
+cannot change the inserted row into a different kind of cell. Vertical merge
+groups retain their original identity when a restart row is deleted. Editing a
+continuation is rejected with `WordTableConflict`; select its visible restart
+cell instead. The grid exposes `verticalGroup` to distinguish adjacent groups. Existing cell text stays
 in its original Y.Text; new intersections use deterministically named, initially
 empty Y.Text roots. Concurrent first typing therefore edits one shared character
 sequence, without inserting duplicate paragraph terminators.
@@ -682,7 +685,9 @@ to the selected payload. `anchorScopedSelection` and `resolveScopedAnchor` retai
 Yjs-relative positions; an empty-cell anchor resolves to its logical cell's start.
 The grid exposes `payloads` for selecting the original paragraphs of an explicit
 merge. Navigation should enumerate `session.grid()` rather than physical body
-paragraphs. A missing payload is an editable empty cell. First edit materializes
+paragraphs. Object move destinations are cell-local and validated against the selected
+payload. `fit-table` uses current projected widths when weights are omitted.
+A missing payload is an editable empty cell. First edit materializes
 it automatically; reads and selection changes emit no repair writes.
 
 `WordStructuredProjection` observes the complete document, including cell-root
@@ -702,6 +707,10 @@ Deletion retains payloads and records what the deleting peer observed. Concurren
 edits that would be hidden produce a conflict; `restore-axis` or `restore-table`
 can expose them again. Deletion witnesses include nested stories recursively.
 Deleting an axis updates observed explicit merges; undo restores that coverage.
+Each merge operation retains its own identity. Equivalent concurrent coverage
+projects once; contradictory overlapping coverage blocks export. Sequential
+extension consumes the observed neighboring merges. Deletion witnesses include
+source paragraph terminator attributes as well as derived-cell registers.
 An explicit `restore-axis` exposes the retained cells without recreating retired
 merge records. Select merged-cell text through the grid's `payloads`; covered
 coordinates that do not name a visible payload are rejected. `inspectWordTableState` exposes retained axis records even
@@ -739,11 +748,11 @@ flock -x /tmp/tumbler-word-audit-heavy.lock bash -c '
 ```
 
 On Bun 1.4.4 and an Intel Celeron N5095, a 12×4 table with two local column edits
-and ten healthy validation/grid-read pairs took a median 10.635 ms before and
-104.546 ms after, across seven samples following three warmups. Raw total times
-ranged 9.107–12.694 ms before and 99.213–113.663 ms after. Median CPU time rose from
-21.726 to 129.705 ms, full peer-state bytes from 35,052 to 45,832, and net heap
-change from 113,568 to 406,089 bytes. These are correctness costs, not a speedup.
-One-time migration took a median 16.412 ms, measured separately. The unchanged
+and ten healthy validation/grid-read pairs took a median 10.768 ms before and
+106.143 ms after, across seven samples following three warmups. Raw total times
+ranged 9.018–12.469 ms before and 100.709–113.023 ms after. Median CPU time rose from
+22.484 to 133.744 ms, full peer-state bytes from 35,052 to 45,832, and net heap
+change from 113,336 to 428,685 bytes. These are correctness costs, not a speedup.
+One-time migration took a median 15.827 ms, measured separately. The unchanged
 retained-text hash matched in every sample; merged validation changed from 0/7
 successes to 7/7. Heap change is not a measure of total allocated bytes.
