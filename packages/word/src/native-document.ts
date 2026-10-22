@@ -1,3 +1,4 @@
+import { validateXmlText } from "./text-validation.ts";
 import { withWordInkTraces } from './ink-overrides.ts';
 import { chartTitleFromWord } from './chart-title.ts';
 import { withWordDrawingGeometry } from './drawing-geometry.ts';
@@ -237,6 +238,7 @@ export class NativeWordDocument implements WordLayoutSource {
   }
 
   update(input: readonly WordContentBlock[]) {
+    validateContentText(input);
     const records = new Map<string, RecordBlock>();
     const visited: (readonly [string, RecordBlock])[] = [];
     const keys = new Set<string>();
@@ -459,7 +461,6 @@ export class NativeWordDocument implements WordLayoutSource {
                   media.push({ ...updated, elementId: id });
                 }
               } else {
-                if (!authoredRun.text.isWellFormed()) throw new Error('Invalid document text.');
                 for (const part of authoredRun.text.split(/([\t\n\u2028])/)) {
                   if (!part) continue;
                   const elementId = allocate();
@@ -623,5 +624,19 @@ export class NativeWordDocument implements WordLayoutSource {
         return [value];
       });
     return visit(this.blocks);
+  }
+}
+
+/** Validate text before update allocates identities or changes source caches. */
+function validateContentText(blocks: readonly WordContentBlock[]): void {
+  for (const block of blocks) {
+    if (block.kind === 'table') {
+      for (const row of block.rows) for (const cell of row) validateContentText(cell.blocks);
+    } else if (block.kind === 'paragraph') {
+      for (const run of block.runs) {
+        validateXmlText(run.text);
+        if (/[\r\n]/.test(run.text)) throw new TypeError('Use separate paragraphs for line-feed text.');
+      }
+    }
   }
 }

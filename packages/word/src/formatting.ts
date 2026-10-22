@@ -1,3 +1,4 @@
+import { validateWordTextOffset } from "./text-validation.ts";
 import {
   normalizeFormattingPatch,
   type FormattingAdapter,
@@ -134,7 +135,7 @@ function formatRun(
   const prefix = text.slice(0, selectedStart);
   const selected = text.slice(selectedStart, selectedEnd);
   const suffix = text.slice(selectedEnd);
-  const markup = `${runMarkup(element.prefix, prefix, originalPropertiesMarkup)}${runMarkup(element.prefix, selected, formattedProperties)}${runMarkup(element.prefix, suffix, originalPropertiesMarkup)}`;
+  const markup = `${runMarkup(document, element, prefix, originalPropertiesMarkup)}${runMarkup(document, element, selected, formattedProperties)}${runMarkup(document, element, suffix, originalPropertiesMarkup)}`;
   editor.replaceElementMarkup(element, markup);
 }
 
@@ -202,14 +203,17 @@ function runPropertiesMarkup(
   const retained = properties?.children.filter((child): child is LosslessXmlElement => child.kind === "element")
     .filter((child) => child.namespaceUri !== namespace(document) || !names.has(child.localName))
     .map((child) => ({ name: child.namespaceUri === namespace(document) ? child.localName : undefined, markup: sourceMarkup(document, child) })) ?? [];
+  const sourcePrefix = properties?.prefix ?? prefix;
+  const propertyPrefix = sourcePrefix || "w";
+  const declaration = sourcePrefix ? "" : ` xmlns:w="${namespace(document)}"`;
   const additions = [
-    ["rFonts", property(prefix, "rFonts", patch.fontFamily, (value) => `${qualified(prefix, "ascii")}="${escapeAttribute(value)}" ${qualified(prefix, "hAnsi")}="${escapeAttribute(value)}"`)],
-    ["sz", property(prefix, "sz", patch.fontSize, (value) => `${qualified(prefix, "val")}="${Math.round(value * 2)}"`)],
-    ["b", property(prefix, "b", patch.bold, (value) => `${qualified(prefix, "val")}="${value ? "1" : "0"}"`)],
-    ["i", property(prefix, "i", patch.italic, (value) => `${qualified(prefix, "val")}="${value ? "1" : "0"}"`)],
-    ["strike", property(prefix, "strike", patch.strike, (value) => `${qualified(prefix, "val")}="${value ? "1" : "0"}"`)],
-    ["u", property(prefix, "u", patch.underline, (value) => `${qualified(prefix, "val")}="${value}"`)],
-    ["color", property(prefix, "color", patch.color, (value) => `${qualified(prefix, "val")}="${value.type === "automatic" ? "auto" : value.value.slice(1)}"`)],
+    ["rFonts", property(propertyPrefix, declaration, "rFonts", patch.fontFamily, (value) => `${qualified(propertyPrefix, "ascii")}="${escapeAttribute(value)}" ${qualified(propertyPrefix, "hAnsi")}="${escapeAttribute(value)}"`)],
+    ["sz", property(propertyPrefix, declaration, "sz", patch.fontSize, (value) => `${qualified(propertyPrefix, "val")}="${Math.round(value * 2)}"`)],
+    ["b", property(propertyPrefix, declaration, "b", patch.bold, (value) => `${qualified(propertyPrefix, "val")}="${value ? "1" : "0"}"`)],
+    ["i", property(propertyPrefix, declaration, "i", patch.italic, (value) => `${qualified(propertyPrefix, "val")}="${value ? "1" : "0"}"`)],
+    ["strike", property(propertyPrefix, declaration, "strike", patch.strike, (value) => `${qualified(propertyPrefix, "val")}="${value ? "1" : "0"}"`)],
+    ["u", property(propertyPrefix, declaration, "u", patch.underline, (value) => `${qualified(propertyPrefix, "val")}="${value}"`)],
+    ["color", property(propertyPrefix, declaration, "color", patch.color, (value) => `${qualified(propertyPrefix, "val")}="${value.type === "automatic" ? "auto" : value.value.slice(1)}"`)],
   ] as const;
   // Use the ordered Transitional/SDK representation, also valid in Strict.
   // Insert new properties without reordering or rewriting retained property XML.
@@ -223,11 +227,11 @@ function runPropertiesMarkup(
   const start = properties === undefined
     ? `<${qualified(prefix, "rPr")}>`
     : document.source.source.slice(properties.startTagSpan.start, properties.startTagSpan.end).replace(/\/\s*>$/, ">");
-  return `${start}${retained.map(item => item.markup).join("")}</${qualified(prefix, "rPr")}>`;
+  return `${start}${retained.map(item => item.markup).join("")}</${properties?.qualified ?? qualified(prefix, "rPr")}>`;
 }
 
-function property<T>(prefix: string, name: string, change: { readonly set: T } | { readonly inherit: true } | undefined, attrs: (value: T) => string): string {
-  return change === undefined || "inherit" in change ? "" : `<${qualified(prefix, name)} ${attrs(change.set)}/>`;
+function property<T>(prefix: string, declaration: string, name: string, change: { readonly set: T } | { readonly inherit: true } | undefined, attrs: (value: T) => string): string {
+  return change === undefined || "inherit" in change ? "" : `<${qualified(prefix, name)}${declaration} ${attrs(change.set)}/>`;
 }
 
 function documentParagraphs(document: WordDocument): WordParagraph[] {
@@ -317,11 +321,18 @@ function namespace(document: WordDocument): string { return OOXML_NAMESPACES[doc
 function requiredElement(document: WordDocument, id: number): LosslessXmlElement { const element = document.source.element(id); if (element === undefined) throw new WordError("invalid_document", `Source element ${id} is missing.`); return element; }
 function sourceMarkup(document: WordDocument, element: LosslessXmlElement): string { return document.source.source.slice(element.span.start, element.span.end); }
 function qualified(prefix: string, local: string): string { return prefix.length === 0 ? local : `${prefix}:${local}`; }
-function runMarkup(prefix: string, value: string, properties: string): string {
+function runMarkup(document: WordDocument, element: LosslessXmlElement, value: string, properties: string): string {
+  const prefix = element.prefix;
   if (value.length === 0) return "";
   const content = value.split("\t").map(text => `<${qualified(prefix, "t")} xml:space="preserve">${escapeText(text)}</${qualified(prefix, "t")}>`).join(`<${qualified(prefix, "tab")}/>`);
-  return `<${qualified(prefix, "r")}>${properties}${content}</${qualified(prefix, "r")}>`;
+  // Fragments stay under the same parent, so retain the source tag's local
+  // namespace declarations and run attributes on every reconstructed run.
+  const opening = document.source.source.slice(element.startTagSpan.start, element.startTagSpan.end);
+  return `${opening}${properties}${content}</${element.qualified}>`;
 }
 function escapeText(value: string): string { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll("]]>", "]]&gt;"); }
 function escapeAttribute(value: string): string { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;"); }
-function validateRange(text: string, start: number, end: number): void { if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > text.length) throw new RangeError("A Word formatting range is outside its paragraph."); }
+function validateRange(text: string, start: number, end: number): void {
+  validateWordTextOffset(text, start);
+  validateWordTextOffset(text, end);
+}

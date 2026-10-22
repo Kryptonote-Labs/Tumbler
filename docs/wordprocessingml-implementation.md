@@ -52,6 +52,15 @@ assumed. Strict and Transitional namespaces are tested separately.
 - Translate keyboard, composition, paste, and mobile `beforeinput` intent into
   controlled OOXML operations; the DOM is never canonical state.
 - Insert, replace, and delete ordinary text with grapheme-safe boundaries.
+  Direct formatting uses the same UTF-16 grapheme-boundary validation, including
+  supplementary characters, combining sequences and ZWJ emoji. Inserted strings
+  must be well-formed Unicode containing only XML 1.0 characters. Invalid input
+  throws before the source document changes. Split runs retain source attributes
+  and local namespace declarations in both Strict and Transitional documents.
+- `NativeWordDocument.update` rejects CR/LF inside run text before changing its
+  content or export cache, matching DOCX authoring. Use separate paragraph blocks
+  for paragraph boundaries and U+2028 for a soft line break. The direct text editor
+  continues to accept LF as a structural paragraph boundary.
 - Split and join structurally simple paragraphs, preserving paragraph and
   uniform direct-run properties. Unsafe wrapper/container crossings fail
   explicitly.

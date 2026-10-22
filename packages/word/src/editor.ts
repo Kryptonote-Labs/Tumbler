@@ -1,4 +1,5 @@
 import { WordArtifact } from "./artifact.ts";
+import { validateWordTextOffset as validateOffset, validateXmlText } from "./text-validation.ts";
 import { beginLosslessXmlEdit, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { beginPackageTransaction } from "@tumblerjs/opc";
 import { WordError, type WordDocument, type WordParagraph } from "./document.ts";
@@ -56,6 +57,7 @@ export function moveInlineWordDrawing(document: WordDocument, elementId: number,
 /** Replaces visible logical text inside one paragraph while preserving surrounding OOXML wrappers. */
 export function replaceWordText(document: WordDocument, selection: WordTextSelection, value: string): Uint8Array {
   if (value.length > MAX_INSERTED_TEXT) throw new RangeError(`Inserted text cannot exceed ${MAX_INSERTED_TEXT} UTF-16 code units.`);
+  validateXmlText(value);
   if (value.includes("\r")) throw new WordError("invalid_document", "Word text input must use line-feed paragraph boundaries.");
   if (selection.anchor.paragraphElementId !== selection.focus.paragraphElementId || value.includes("\n")) {
     return replaceWordParagraphRange(document, selection, value);
@@ -356,29 +358,6 @@ function findParagraph(document: WordDocument, elementId: number): WordParagraph
   const paragraph = visit(document.blocks);
   if (paragraph === undefined) throw new WordError("invalid_document", `Paragraph element ${elementId} does not exist.`);
   return paragraph;
-}
-
-function validateOffset(text: string, offset: number): void {
-  if (!Number.isInteger(offset) || offset < 0 || offset > text.length) throw new RangeError("A Word text offset is outside its paragraph.");
-  if (!graphemeBoundaries(text).has(offset)) throw new RangeError("A Word text offset cannot split a grapheme cluster.");
-}
-
-function graphemeBoundaries(value: string): ReadonlySet<number> {
-  const boundaries = new Set<number>([0, value.length]);
-  const Segmenter = Intl.Segmenter;
-  if (Segmenter === undefined) {
-    let offset = 0;
-    for (const scalar of value) {
-      offset += scalar.length;
-      boundaries.add(offset);
-    }
-    return boundaries;
-  }
-  for (const segment of new Segmenter(undefined, { granularity: "grapheme" }).segment(value)) {
-    boundaries.add(segment.index);
-    boundaries.add(segment.index + segment.segment.length);
-  }
-  return boundaries;
 }
 
 function insertionTarget(
