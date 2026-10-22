@@ -34,3 +34,12 @@ test('fragment and page limits stop consuming a long paragraph', () => {
     expect(calls).toBeLessThan(120);
   }
 });
+
+test('decimal tab lookahead stops at the decimal point within preview budgets', () => {
+  let calls = 0;
+  const document = lineDocument(`<w:tab/><w:t>1.${'word '.repeat(1000)}</w:t>`, '<w:tabs><w:tab w:val="decimal" w:pos="1200"/></w:tabs>', 100, true);
+  const layout = layoutWordDocument(document, { measure(text) { calls++; return fixedMeasurer.measure(text); } }, { pageLimit: 1, maxMeasurements: 200 });
+  expect(layout.truncated).toBe(true);
+  expect(calls).toBeLessThan(200);
+  expect(layout.pages[0]!.columns[0]!.lines[0]!.fragments[0]!.width).toBe(55);
+});

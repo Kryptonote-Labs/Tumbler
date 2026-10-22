@@ -1093,17 +1093,19 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
     const next = iterator.next();
     return next.done ? undefined : next.value;
   };
-  const following = (): Iterable<ParagraphAtom> => {
-    if (pendingIndex === pending.length) {
-      pending = [];
-      pendingIndex = 0;
-      for (let next = iterator.next(); !next.done; next = iterator.next()) {
-        pending.push(next.value);
-        if (next.value.kind === 'tab' || next.value.kind === 'break') break;
+  function* following(): Generator<ParagraphAtom> {
+    for (let index = pendingIndex; ; index++) {
+      let atom = pending[index];
+      if (!atom) {
+        const next = iterator.next();
+        if (next.done) return;
+        atom = next.value;
+        pending.push(atom);
       }
+      yield atom;
+      if (atom.kind === 'tab' || atom.kind === 'break') return;
     }
-    return pending;
-  };
+  }
 
   let line: Exclude<ParagraphAtom, BreakAtom>[] = [];
   let lineWidth = 0;
