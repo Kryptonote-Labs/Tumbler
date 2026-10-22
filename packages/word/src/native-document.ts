@@ -12,7 +12,7 @@ import { nativeShapeDrawing, validateShapeRun } from './shapes.ts';
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
 import { wordGeometryAt } from './geometry.ts';
-import { createWordStory, wordStoryArtifact, storyMainArtifact, type WordStoryTarget } from './stories.ts';
+import { createWordStory, wordStoryArtifact, storyMainArtifact, wordSections, type WordStoryTarget } from './stories.ts';
 import { NativeWordSource, retainOpaqueBlocks } from './native-source.ts';
 import type { WordArtifact } from './artifact.ts';
 import { reconcileWordContent } from './content-export.ts';
@@ -194,15 +194,30 @@ export class NativeWordDocument implements WordLayoutSource {
     }, this.layoutStories(options.maxMarkerCharacters ?? this.options.maxMarkerCharacters));
   }
   private layoutStories(maxCharacters?: number) {
-    const original = this.compiled ? wordLayoutStories(this.compiled.artifact.document, maxCharacters === undefined ? {} : { maxCharacters }) : { headerFooters: [], notes: [] };
-    const headerFooters = original.headerFooters.map(story => {
-      const part = this.options.source?.document.headerFooters.find(item => item.relationshipId === story.relationshipId)?.part.name.value;
-      const edited = part && this.editedStories.get(part);
-      return edited ? { ...story, context: edited.model } : story;
-    });
+    const headerFooterOverrides = new Map<string, NativeWordDocument>();
+    const replaced = new Set<string>();
+    const document = this.compiled?.artifact.document;
+    const sections = document && wordSections(document);
+    for (const [key, entry] of this.editedStories) {
+      const target = entry.target;
+      const section = typeof target === 'string' ? undefined : sections?.[target.section];
+      const reference = typeof target === 'string' ? undefined :
+        (target.kind === 'header' ? section?.headerReferences : section?.footerReferences)?.find(item => item.type === target.type);
+      const part = typeof target === 'string' ? target :
+        document?.headerFooters.find(story => story.relationshipId === reference?.relationshipId)?.part.name.value;
+      if (part) {
+        headerFooterOverrides.set(part, entry.model);
+        replaced.add(key);
+      }
+    }
+    const original = this.compiled ? wordLayoutStories(this.compiled.artifact.document, {
+      ...(maxCharacters === undefined ? {} : { maxCharacters }),
+      headerFooterOverrides,
+    }) : { headerFooters: [], notes: [] };
+    const headerFooters = [...original.headerFooters];
     const bindings: { section: number; kind: 'header' | 'footer'; type: 'default' | 'first' | 'even'; relationshipId: string }[] = [];
     for (const [key, entry] of this.editedStories) {
-      if (typeof entry.target === 'string') continue;
+      if (typeof entry.target === 'string' || replaced.has(key)) continue;
       bindings.push({ ...entry.target, relationshipId: key });
       headerFooters.push({ ...entry.target, relationshipId: key, context: entry.model });
     }

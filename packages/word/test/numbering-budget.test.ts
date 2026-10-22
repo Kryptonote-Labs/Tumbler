@@ -1,5 +1,6 @@
+import { buildWordDocumentFixture } from './document-fixture.ts';
 import { expect, test } from 'bun:test';
-import { createWordArtifact, importWordContent, layoutWordDocument, NativeWordDocument } from '../src/index.ts';
+import { createWordArtifact, importWordContent, layoutWordDocument, NativeWordDocument, openWordArtifact } from '../src/index.ts';
 import { WordError } from '../src/document.ts';
 import { formatWordNumber, WordNumbering, type WordNumberFormat } from '../src/numbering.ts';
 
@@ -80,3 +81,34 @@ test('shares story budgets and rechecks cached markers under tighter layout limi
 });
 
 const measurer = { measure: (_text: string) => ({ width: 1, ascent: 8, descent: 2 }) };
+
+test.each([
+  { cached: false, bySection: false }, { cached: true, bySection: false },
+  { cached: false, bySection: true }, { cached: true, bySection: true },
+])('budgets only replacement headers: %j', ({ cached, bySection }) => {
+  const source = hugeHeaderSource();
+  if (cached) expect(() => layoutWordDocument(source.document, measurer, { maxMarkerCharacters: 3000000 })).not.toThrow();
+  const native = new NativeWordDocument({ source });
+  const partName = source.document.headerFooters[0]!.part.name.value;
+  native.updateStory(bySection ? { kind: 'header', type: 'default', section: 0 } : partName, [{ kind: 'paragraph', runs: [{ text: 'Replacement' }] }]);
+  expect(native.layout(measurer, { maxMarkerCharacters: 0 }).pages).toHaveLength(1);
+  const progressive = native.layoutProgressively(measurer, { maxMarkerCharacters: 0 });
+  let step = progressive.next();
+  while (!step.done) step = progressive.next();
+  expect(step.value.pages).toHaveLength(1);
+  expect(layoutWordDocument(native.artifact().document, measurer, { maxMarkerCharacters: 0 }).pages).toHaveLength(1);
+  expect(() => layoutWordDocument(source.document, measurer)).toThrow('budget');
+});
+
+function hugeHeaderSource() {
+  const word = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const office = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  return openWordArtifact(buildWordDocumentFixture({
+    documentXml: `<w:document xmlns:w="${word}" xmlns:r="${office}"><w:body><w:p><w:r><w:t>Body</w:t></w:r></w:p><w:sectPr><w:headerReference w:type="default" r:id="header"/></w:sectPr></w:body></w:document>`,
+    relationships: [{ id: 'header', type: `${office}/header`, target: 'header1.xml' }, { id: 'n', type: `${office}/numbering`, target: 'numbering.xml' }],
+    parts: [
+      { itemName: 'word/header1.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml', xml: `<w:hdr xmlns:w="${word}"><w:p><w:pPr><w:numPr><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Header</w:t></w:r></w:p></w:hdr>` },
+      { itemName: 'word/numbering.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml', xml: `<w:numbering xmlns:w="${word}"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="2147483647"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="%1."/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>` },
+    ],
+  }));
+}

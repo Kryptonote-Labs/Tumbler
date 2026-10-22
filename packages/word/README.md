@@ -210,7 +210,9 @@ for trusted documents that need larger output. `NativeWordOptions.maxMarkerChara
 sets the cumulative update budget for both authored and imported markers.
 `WordLayoutOptions.maxMarkerCharacters` sets the body-and-story layout budget;
 native layout defaults to its constructor setting. Cached markers still count when
-a later request lowers the budget. This is a processing budget, separate
+a later request lowers the budget. Replaced headers and footers contribute only
+their current marker text; discarded original markers are not resolved or charged.
+This is a processing budget, separate
 from `openWordDocument`'s input-text limit; it does not restrict authored start values.
 Roman formatting checks the expanded length before allocating repeated symbols.
 Values above 3,999 retain the existing repeated-`M` representation when the budget
