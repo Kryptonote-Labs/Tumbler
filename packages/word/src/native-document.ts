@@ -525,8 +525,12 @@ export class NativeWordDocument implements WordLayoutSource {
                 ...(resetParagraph ? named?.paragraph : original?.format),
                 ...authored.positioning,
                 ...(authored.positioning?.tabs === undefined ? {} : {
-                  // Replacing direct declarations retains style tabs, not previous direct stops.
-                  tabs: mergeWordTabStops(this.namedStyles.resolveParagraphStyle(authored.styleId ?? original?.format.styleId ?? '').paragraph.tabs, authored.positioning.tabs),
+                  // Imported positioning contains effective stops, so retain source clears until replaced.
+                  tabs: mergeWordTabStops(
+                    this.namedStyles.resolveParagraphStyle(authored.styleId ?? original?.format.styleId ?? '').paragraph.tabs,
+                    original && JSON.stringify(authored.positioning) === JSON.stringify(compiled?.positioning.get(authored.source!))
+                      ? original.directTabs ?? [] : authored.positioning.tabs,
+                  ),
                 }),
                 ...resolveWordPaintProperties(authored.paragraph ?? {}, this.themeColours),
                 alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? (resetParagraph ? named?.paragraph.alignment : original?.format.alignment) ?? compiled?.defaults.paragraph.alignment ?? 'start',

@@ -1,10 +1,11 @@
 import { wordDocumentDefaults } from './document-defaults.ts';
+import { OOXML_NAMESPACES } from '@tumblerjs/ooxml';
 import { resolveWordTableGrid } from './table-grid.ts';
 import type { WordArtifact } from './artifact.ts';
 import type { WordBlock, WordParagraph, WordRun, WordRunContent, WordInline, WordTable, WordTableRow, WordTableCell } from './document.ts';
 import { importWordContent } from './import-content.ts';
 import type { WordTextParagraph } from './create.ts';
-import type { ComputedWordParagraphFormat, ComputedWordTextFormat } from './styles.ts';
+import { parseParagraphProperties, type WordTabStop, type ComputedWordParagraphFormat, type ComputedWordTextFormat } from './styles.ts';
 import type { WordParagraphNumbering } from './numbering.ts';
 
 /** Compiled once at import. Editing resolves semantic properties by identity, never by XML. */
@@ -14,6 +15,7 @@ export class NativeWordSource {
     format: ComputedWordParagraphFormat;
     textFormat: ComputedWordTextFormat;
     numbering: WordParagraphNumbering | undefined;
+    directTabs: readonly WordTabStop[] | undefined;
   }>();
   readonly leaves = new Map<number, {
     run: WordRun;
@@ -27,6 +29,7 @@ export class NativeWordSource {
   readonly rows = new Map<number, WordTableRow>();
   readonly cells = new Map<number, WordTableCell>();
   readonly lists = new Map<number, WordTextParagraph['list']>();
+  readonly positioning = new Map<number, WordTextParagraph['positioning']>();
   readonly original;
   readonly defaults;
 
@@ -47,11 +50,13 @@ export class NativeWordSource {
             }
           }
         } else if (block.kind === 'paragraph') {
+          const properties = block.propertiesElementId === undefined ? undefined : document.source.element(block.propertiesElementId);
           this.paragraphs.set(block.elementId, {
             block,
             format: document.styles.paragraphFormat(document, block),
             textFormat: document.styles.runFormat(document, block),
             numbering: document.numbering.paragraphReference(document, block),
+            directTabs: properties ? parseParagraphProperties(properties, OOXML_NAMESPACES[document.conformance].wordprocessing).tabs : undefined,
           });
           for (const owner of block.inlines) {
             const runs = owner.kind === 'run' ? [owner] : owner.kind === 'hyperlink' || owner.kind === 'insertion' ? owner.runs : [];
@@ -68,7 +73,10 @@ export class NativeWordSource {
     visit(document.blocks);
     const lists = (blocks: typeof this.original) => {
       for (const block of blocks) {
-        if (block.kind === 'paragraph' && block.source !== undefined) this.lists.set(block.source, block.list);
+        if (block.kind === 'paragraph' && block.source !== undefined) {
+          this.lists.set(block.source, block.list);
+          this.positioning.set(block.source, block.positioning);
+        }
         else if (block.kind === 'table') for (const row of block.rows) for (const cell of row) lists([...cell.blocks]);
       }
     };
