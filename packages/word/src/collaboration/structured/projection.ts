@@ -2,9 +2,9 @@ import * as Y from "yjs";
 import type { WordArtifact } from "../../artifact.ts";
 import type { WordContentBlock } from "../../create-content.ts";
 import { projectWordOperationText } from "../../operations/document.ts";
+import { structuredColumnWidths } from "./widths.ts";
 import { structuredGrid } from "./grid.ts";
 import {
-  activeAxes,
   cellKey,
   existingText,
   isTableRemoved,
@@ -55,11 +55,7 @@ export function projectWordSharedDocument(
     const formatFor = (id: string) =>
       records.find((r) => r.value.kind === "cell-format" && r.value.cell === id)
         ?.value;
-    const oldWidths = base.cells[0]?.widths?.length
-      ? base.cells[0].widths
-      : records.some((r) => r.value.kind === "width")
-        ? base.columns.map(() => 72)
-        : undefined;
+    const widths = structuredColumnWidths(doc, address);
     const rows = grid.map((row) =>
       row.cells.map((cell) => {
         const format = formatFor(
@@ -88,21 +84,7 @@ export function projectWordSharedDocument(
       kind: "table",
       rows,
       rowGrids: grid.map((row) => ({ before: row.before, after: row.after })),
-      ...(oldWidths?.length
-        ? {
-            columnWidths: activeAxes(doc, address, "column").map((column) =>
-              (() => {
-                const width = records.find(
-                  (r) => r.value.kind === "width" && r.value.column === column,
-                )?.value;
-                return width?.kind === "width"
-                  ? width.value
-                  : (oldWidths[base.columns.indexOf(column)] ??
-                      oldWidths.reduce((a, b) => a + b, 0) / oldWidths.length);
-              })(),
-            ),
-          }
-        : {}),
+      ...(widths ? { columnWidths: widths } : {}),
       rowFormats: grid.map((row) => {
         const format = records.find(
           (r) => r.value.kind === "row-format" && r.value.row === row.id,

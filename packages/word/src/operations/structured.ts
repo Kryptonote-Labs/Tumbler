@@ -16,6 +16,8 @@ import {
   tableAddresses,
   WordTableConflict,
 } from "../collaboration/structured/state.ts";
+import { checkRange } from "../collaboration/structured/selection.ts";
+import { structuredColumnWidths } from "../collaboration/structured/widths.ts";
 import { resolveCell } from "../collaboration/structured/grid.ts";
 import { tableParagraphs } from "../collaboration/tables.ts";
 
@@ -73,6 +75,7 @@ export function prepareWordScopedOperation(
         const count = activeAxes(staged, cell, "column").length,
           weights =
             operation.input.columnWeights ??
+            structuredColumnWidths(staged, cell) ??
             Array.from({ length: count }, () => 1);
         if (weights.length !== count || weights.some((w) => w <= 0))
           throw new Error("Supply positive column weights.");
@@ -162,6 +165,15 @@ export function prepareWordScopedOperation(
       }
     }
     const value = selectionText(staged, selection, true)!;
+    checkRange(selection.range, value.end - value.start);
+    if (operation.name === "move-object")
+      checkRange(
+        {
+          start: operation.input.destination,
+          end: operation.input.destination,
+        },
+        value.end - value.start,
+      );
     if ("cell" in selection && !("source" in value)) {
       const edit = editDerivedText(staged, selection.cell, value.text, (text) =>
         prepareWordOperation(text, selection.range, operation, context),
@@ -179,7 +191,22 @@ export function prepareWordScopedOperation(
       start: value.start + selection.range.start,
       end: value.start + selection.range.end,
     };
-    const edit = prepareWordOperation(value.text, range, operation, context);
+    const scopedOperation =
+      operation.name === "move-object"
+        ? {
+            ...operation,
+            input: {
+              ...operation.input,
+              destination: value.start + operation.input.destination,
+            },
+          }
+        : operation;
+    const edit = prepareWordOperation(
+      value.text,
+      range,
+      scopedOperation,
+      context,
+    );
     value.text.applyDelta(edit.delta);
     if (operation.name === "insert-table" && "story" in selection) {
       const migrated = new Set(
