@@ -1,4 +1,5 @@
 import { wordThemeSlot } from './theme-colour-xml.ts';
+import { mergeWordTabStops } from './tab-stops.ts';
 import { resolveWordColour, resolveWordPaintProperties, DEFAULT_WORD_THEME, type WordThemeColour } from './theme-colours.ts';
 import {
   OOXML_NAMESPACES,
@@ -541,12 +542,7 @@ function mergeStyleLevels(paragraph: WordRunProperties, character: WordRunProper
 
 function mergeParagraph(base: WordParagraphProperties, overlay: WordParagraphProperties): WordParagraphProperties {
   if (overlay.tabs === undefined || overlay.tabs.length === 0) return Object.freeze({ ...base, ...overlay, ...(base.tabs === undefined ? {} : { tabs: base.tabs }) });
-  const tabs = new Map(base.tabs?.filter(tab => tab.alignment !== "clear").map(tab => [tab.positionTwips, tab]));
-  for (const tab of overlay.tabs) {
-    if (tab.alignment === "clear") tabs.delete(tab.positionTwips);
-    else tabs.set(tab.positionTwips, tab);
-  }
-  return Object.freeze({ ...base, ...overlay, tabs: Object.freeze([...tabs.values()].sort((a, b) => a.positionTwips - b.positionTwips)) });
+  return Object.freeze({ ...base, ...overlay, tabs: mergeWordTabStops(base.tabs ?? [], overlay.tabs) });
 }
 
 function freezeParagraph(properties: WordParagraphProperties): WordParagraphProperties {

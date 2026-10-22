@@ -11,6 +11,7 @@ import { nativeAuthoredInk } from './authored-ink.ts';
 import { nativeShapeDrawing, validateShapeRun } from './shapes.ts';
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
+import { mergeWordTabStops } from './tab-stops.ts';
 import { wordGeometryAt } from './geometry.ts';
 import { createWordStory, wordStoryArtifact, storyMainArtifact, wordSections, type WordStoryTarget } from './stories.ts';
 import { NativeWordSource, retainOpaqueBlocks } from './native-source.ts';
@@ -523,6 +524,10 @@ export class NativeWordDocument implements WordLayoutSource {
                 ...compiled?.defaults.paragraph,
                 ...(resetParagraph ? named?.paragraph : original?.format),
                 ...authored.positioning,
+                ...(authored.positioning?.tabs === undefined ? {} : {
+                  // Replacing direct declarations retains style tabs, not previous direct stops.
+                  tabs: mergeWordTabStops(this.namedStyles.resolveParagraphStyle(authored.styleId ?? original?.format.styleId ?? '').paragraph.tabs, authored.positioning.tabs),
+                }),
                 ...resolveWordPaintProperties(authored.paragraph ?? {}, this.themeColours),
                 alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? (resetParagraph ? named?.paragraph.alignment : original?.format.alignment) ?? compiled?.defaults.paragraph.alignment ?? 'start',
                 lineSpacing: authored.paragraph?.lineSpacing ?? (resetParagraph ? named?.paragraph.lineSpacing : original?.format.lineSpacing) ?? compiled?.defaults.paragraph.lineSpacing ?? {

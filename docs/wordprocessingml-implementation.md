@@ -199,6 +199,9 @@ chains and direct formatting, per ECMA-376 Part 1 §17.3.1.38. A later declarati
 at the same position replaces alignment and leader; `clear` removes that position.
 Empty tab arrays or containers inherit earlier positions. Computed tabs are sorted
 and contain no clear entries; source declarations remain intact for serialization.
+Native paragraph updates resolve replacement direct tab declarations against the
+selected style and document defaults, matching the exported document. Previous
+direct stops do not survive a replacement array.
 An unknown or wrong-type selected style falls back to the default of the requested
 type. A missing or wrong-type `basedOn` target only ends that chain. Cycles and
 chains over 100 styles still fail. Resolved declarations are cached per named style
