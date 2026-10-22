@@ -15,6 +15,10 @@ tests have a ten-minute execution timeout, excluding lock wait time. Do not wrap
 this script in another `flock`. It removes
 only that generated temporary checkout on exit. Tests do not overlap benchmarks.
 
+To measure only continuation after a focused export change, pass
+`continuation-101` to `bun tools/word-numbering/benchmark.ts` in both checkouts
+under the same lock. The optional argument selects one case by name.
+
 Each case uses two warmups and seven measured samples, with one operation per
 sample. `Bun.gc(true)` runs before each timed sample. The timing includes consuming
 every output character, including flattening any rope strings. Fixtures are

@@ -20,6 +20,7 @@ function continuation() { const a = reconcileWordContent(source, content); retur
 const native = new NativeWordDocument({ source, content });
 console.log(JSON.stringify({ runtime: Bun.version, cpu: cpus()[0]?.model, logicalCpus: cpus().length, warmups: 2, samples: 7, operationsPerSample: 1, nativeLast: native.listMarkers.get(native.blocks.at(-1)!.elementId)?.text, exportLast: continuation().texts.at(-1), ordinary: markers(ordinary), romanFirstLength: markers(large).texts[0]?.length ?? 0 }));
 for (const [name, run] of [['roman-large-default-8', () => markers(large)], ['roman-large-opt-in-8', () => markers(large, 20_000_000)], ['roman-ordinary-8', () => markers(ordinary)], ['continuation-101', continuation]] as const) {
+  if (process.argv[2] && name !== process.argv[2]) continue;
   for (let i = 0; i < 2; i++) run();
   const samples = [];
   for (let i = 0; i < 7; i++) {
