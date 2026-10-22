@@ -36,11 +36,17 @@ test('exact cells clip DOM text and selection', async ({ page }) => {
     return getSelection()!.toString();
   });
   expect(selected).toContain('HIDDEN3');
-  const highlighted = await paper.screenshot();
+  // Hiding selected text can shorten the highlight within the visible first line.
+  // Pixels below that cell must stay identical, including the next row's text.
+  const paperBox = (await paper.boundingBox())!;
+  const cellBox = (await page.locator('[data-cell]').first().boundingBox())!;
+  const belowY = Math.ceil(cellBox.y + cellBox.height);
+  const belowCell = { x: paperBox.x, y: belowY, width: paperBox.width, height: paperBox.y + paperBox.height - belowY };
+  const highlighted = await page.screenshot({ clip: belowCell });
   await paper.locator('[data-paragraph]').evaluateAll(nodes => {
     for (const node of nodes) if (node.textContent?.startsWith('HIDDEN')) (node as HTMLElement).style.visibility = 'hidden';
   });
-  expect(Buffer.compare(await paper.screenshot(), highlighted)).toBe(0);
+  expect(Buffer.compare(await page.screenshot({ clip: belowCell }), highlighted)).toBe(0);
 
 });
 
