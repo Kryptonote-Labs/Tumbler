@@ -470,7 +470,8 @@ export function parseParagraphProperties(element: LosslessXmlElement, namespace:
     ...optionalOnOffChild(element, namespace, "widowControl", "widowControl"),
     ...optionalOnOffChild(element, namespace, "contextualSpacing", "contextualSpacing"),
     ...optionalOnOffChild(element, namespace, "bidi", "rightToLeft"),
-    ...(tabs === undefined ? {} : { tabs: parseTabStops(tabs, namespace) }),
+    // Empty preserved extension containers add no stops to the inherited tab set.
+    ...(tabs === undefined || !children(tabs, namespace, "tab").length ? {} : { tabs: parseTabStops(tabs, namespace) }),
   });
 }
 

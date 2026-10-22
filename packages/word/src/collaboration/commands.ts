@@ -268,6 +268,17 @@ function formatWordDelta(
   // A font ID and a literal family are alternative ways to specify the same property.
   if (attributes.fontFamily !== undefined && attributes.font === undefined) inline.font = null;
   if (attributes.font !== undefined && attributes.fontFamily === undefined) inline.fontFamily = null;
+  // Read boundary attributes once for a bulk partial positioning edit.
+  const positioningByEnd = new Map<number, TextAttributes['positioning']>();
+  if (positioning && !positioning.reset && Object.keys(positioning).length) {
+    let offset = 0;
+    const parts: { insert: string; attributes?: TextAttributes }[] = text.toDelta();
+    for (const part of parts) {
+      for (let at = part.insert.indexOf('\n'); at >= 0; at = part.insert.indexOf('\n', at + 1))
+        positioningByEnd.set(offset + at, part.attributes?.positioning);
+      offset += part.insert.length;
+    }
+  }
   const delta: WordDelta = [];
   let cursor = 0;
   const append = (start: number, length: number, attributes: WordFormatPatch) => {
@@ -290,7 +301,10 @@ function formatWordDelta(
       append(end, 1, {
         ...(align !== undefined ? { align: align === 'left' ? null : align } : {}),
         ...(list !== undefined ? { list } : {}),
-        ...(positioning !== undefined ? { positioning: positioning === null ? { reset: true as const } : positioning.reset ? positioning : { ...wordFormats(text, { start, end: start }).positioning, ...positioning } } : {}),
+        ...(positioning === null ? { positioning: { reset: true as const } }
+          : positioning && Object.keys(positioning).length
+            ? { positioning: positioning.reset ? positioning : { ...positioningByEnd.get(end), ...positioning } }
+            : {}),
         ...(styleId !== undefined ? { styleId } : {}),
         ...(paragraph !== undefined ? { paragraph: paragraph === null ? null : { ...wordFormats(text, { start, end: start }).paragraph, ...paragraph } } : {}),
       });

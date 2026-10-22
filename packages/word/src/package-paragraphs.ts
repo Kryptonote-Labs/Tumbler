@@ -318,7 +318,7 @@ export function wordParagraphRenderer(
     return markup.wrap(
       element,
       'p',
-      markup.properties(properties, 'pPr', replacements) + content,
+      markup.properties(properties, 'pPr', replacements, paragraph.positioning?.reset ? new Set(['ind', 'tabs']) : undefined) + content,
     );
   };
   return renderParagraph;

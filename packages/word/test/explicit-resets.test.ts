@@ -112,3 +112,26 @@ for (const conformance of ['transitional', 'strict'] as const) test(`${conforman
     expect(reset.positioning?.tabs?.map(tab => tab.positionTwips)).toEqual([2880]);
   } finally { session.destroy(); }
 });
+
+test('bulk partial positioning keeps each paragraph reset without rescanning all deltas', async () => {
+  const { createWordCommands } = await import('../src/collaboration/commands.ts');
+  const doc = new Y.Doc();
+  const text = doc.getText('body');
+  text.applyDelta(Array.from({ length: 100 }, (_, index) => [
+    { insert: 'Hello' },
+    { insert: '\n', attributes: { positioning: index % 2 ? { reset: true, indentEndTwips: 40 } : { indentStartTwips: 720 } } },
+  ]).flat());
+  const original = text.toDelta.bind(text);
+  let scans = 0;
+  text.toDelta = (...args: Parameters<typeof text.toDelta>) => { scans++; return original(...args); };
+  const delta = createWordCommands().formatWordDelta(text, { start: 0, end: text.length - 1 }, { positioning: { firstLineTwips: 240 } });
+  expect(scans).toBeLessThanOrEqual(2);
+  text.toDelta = original;
+  text.applyDelta(delta);
+  const boundaries = text.toDelta().filter(part => part.insert === '\n');
+  expect(boundaries).toHaveLength(100);
+  for (const [index, part] of boundaries.entries()) expect(part.attributes?.positioning).toEqual(index % 2
+    ? { reset: true, indentEndTwips: 40, firstLineTwips: 240 }
+    : { indentStartTwips: 720, firstLineTwips: 240 });
+  doc.destroy();
+});

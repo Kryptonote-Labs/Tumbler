@@ -1,5 +1,7 @@
 // Run with: bun packages/word/test/explicit-resets.bench.ts
 import { cpus } from 'node:os';
+import * as Y from 'yjs';
+import { createWordCommands } from '../src/collaboration/commands.ts';
 import { createWordArtifact, importWordContent } from '../src/index.ts';
 import { openWordOperationDocument, prepareWordOperation } from '../src/operations/index.ts';
 
@@ -34,4 +36,28 @@ for (let i = 0; i < 9; i++) {
   const xml = output.document.source.source;
   samples.push({ ms, cpuMs: (usedCpu.user + usedCpu.system) / 1000, heapDeltaBytes: after.heapUsed - memory.heapUsed, rssDeltaBytes: after.rss - memory.rss, outputXmlBytes: Buffer.byteLength(xml), remainingIndents: [...xml.matchAll(/w:left="720"/g)].length, remainingLinks: [...xml.matchAll(/<w:hyperlink\b/g)].length });
 }
-console.log(JSON.stringify({ runtime: Bun.version, cpu: cpus()[0]?.model, logicalCpus: cpus().length, paragraphs, operationsPerSample: 2, exportsPerSample: 1, warmups: 5, noOpEquivalent: true, samples }, null, 2));
+const partial = [];
+for (const count of [100, 500, 1000]) {
+  const doc = new Y.Doc();
+  const text = doc.getText('body');
+  text.applyDelta(Array.from({ length: count }, () => [
+    { insert: 'Hello' }, { insert: '\n', attributes: { positioning: { indentStartTwips: 720 } } },
+  ]).flat());
+  const commands = createWordCommands();
+  const format = () => commands.formatWordDelta(text, { start: 0, end: text.length - 1 }, { positioning: { indentEndTwips: 360 } });
+  for (let i = 0; i < 5; i++) format();
+  const original = text.toDelta.bind(text);
+  let scans = 0;
+  text.toDelta = (...args: Parameters<typeof text.toDelta>) => { scans++; return original(...args); };
+  const timings = [];
+  for (let i = 0; i < 9; i++) {
+    scans = 0;
+    const start = performance.now();
+    const delta = format();
+    timings.push({ ms: performance.now() - start, fullDeltaScans: scans, outputOperations: delta.length });
+  }
+  text.toDelta = original;
+  partial.push({ paragraphs: count, timings });
+  doc.destroy();
+}
+console.log(JSON.stringify({ partial, runtime: Bun.version, cpu: cpus()[0]?.model, logicalCpus: cpus().length, paragraphs, operationsPerSample: 2, exportsPerSample: 1, warmups: 5, noOpEquivalent: true, samples }, null, 2));
