@@ -1281,6 +1281,22 @@ function pageFragments(page: MutablePage): readonly WordLayoutFragment[] {
   return body;
 }
 
+/** Lays out a complete auxiliary story without imposing page boundaries on its text. */
+export function layoutWordStory(
+  context: WordLayoutDocumentContext,
+  width: number,
+  measurer: WordTextMeasurer,
+  options: Pick<WordLayoutOptions, 'maxFragments'> = {},
+) {
+  if (!Number.isFinite(width) || width <= 0) throw new RangeError('Story width must be positive.');
+  return layoutStory(context, 0, width, measurer, {
+    cache: context.cache,
+    maxPages: 1,
+    maxFragments: limit(options.maxFragments, 1_000_000, 'fragment'),
+    fragments: 0,
+  });
+}
+
 function layoutStory(
   context: WordLayoutDocumentContext,
   x: number,

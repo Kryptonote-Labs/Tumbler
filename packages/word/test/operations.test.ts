@@ -213,6 +213,7 @@ test("objects can be resized, moved and inspected without changing neighboring t
             outline: "#000000",
             outlineWidth: 1,
             text: "Updated",
+            textInsets: { top: 0, right: 2, bottom: 0, left: 2 },
           },
         },
       },
@@ -228,7 +229,7 @@ test("objects can be resized, moved and inspected without changing neighboring t
   expect(text.toString()).toBe("\uFFFCbefore after\n");
   expect(inspectWordObjects(text, undefined).objects[0]).toMatchObject({
     start: 0,
-    attributes: { shape: { width: 200, text: "Updated" } },
+    attributes: { shape: { width: 200, text: "Updated", textInsets: { top: 0, right: 2, bottom: 0, left: 2 } } },
   });
   expect(() =>
     prepareWordOperation(

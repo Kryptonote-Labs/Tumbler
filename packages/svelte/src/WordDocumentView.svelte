@@ -502,7 +502,7 @@
                 {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
                   <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment, 0, 0, true)} />
                 {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "shape"}
-                  <div class="document-drawing" style={drawingStyle(fragment)}><WordShapeView shape={fragment.drawing.shape} /></div>
+                  <div class="document-drawing shape-drawing" style={drawingStyle(fragment)}><WordShapeView shape={fragment.drawing.shape} /></div>
                 {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
                   <div class="document-drawing" style={drawingStyle(fragment)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-chart-${page.index}-${fragment.contentElementId}`} /></div>
                 {:else if fragment.kind === "drawing"}
@@ -581,6 +581,7 @@
   .word-page-content.editable { outline: 0; caret-color: var(--tumbler-document-accent, #25a735); }
   .caret-anchor { overflow: visible; }
   .document-drawing { position: absolute; display: block; object-fit: fill; overflow: hidden; }
+  .shape-drawing { overflow: visible; }
   .drawing-fallback { background: repeating-linear-gradient(135deg, #f3f3f3, #f3f3f3 8px, #fafafa 8px, #fafafa 16px); border: 1px solid #d0d0d0; }
   .note-separator { position: absolute; width: 96px; border-top: 1px solid #777; }
   .text-line { position: absolute; white-space: pre; font-size: 0; line-height: 0; }

@@ -543,6 +543,18 @@ creation shares the body paragraph writer, including numbering resources.
 Import resolves text-box run styles and preserves paragraph formatting. Text boxes
 with unsupported nested structures remain opaque instead of losing their contents.
 
+`textInsets` sets independent internal margins in points, for example
+`textInsets: { top: 0, right: 2, bottom: 0, left: 2 }` for a compact label.
+Omitted sides use the DrawingML defaults of 3.6pt top/bottom and 7.2pt left/right.
+The editor, headless layout and canvas painter use the same margins. DOCX import
+and export retain explicit values, including zero. These margins are separate
+from paragraph spacing and the shape's distance from surrounding text.
+Headless shape layout measures the complete text story before vertical alignment
+and clipping, including text made visible by signed insets.
+Values follow `ST_Coordinate32`, including signed insets, and serialize as EMUs
+at 12,700 EMUs per point. See [ECMA-376 Part 1, fifth edition](https://ecma-international.org/wp-content/uploads/ECMA-376-1_5th_edition_december_2016.zip)
+§21.1.2.1.1 and §20.1.10.17–18.
+
 `WordShapeText` from `@tumblerjs/word/collaboration` exposes range replacement,
 formatting, formatting state and rich clipboard fragments. Hosts persist its
 `paragraphs()` output through their document transaction system. This engine uses

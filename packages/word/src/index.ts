@@ -160,6 +160,7 @@ export { wordThemePalette, type WordColourSwatch } from './theme-palette.ts';
 export { ThemeColorScheme } from '@tumblerjs/ooxml';
 export { wordColoursEqual } from './theme-colours.ts';
 
+export { resolveWordShapeTextInsets, type WordShapeTextInsets } from './shape-text-insets.ts';
 export { shapeTextParagraphs, shapePlainText, isShapeTextBody } from './shape-text.ts';
 export { layoutWordShapeText, WORD_SHAPE_TEXT_INSET_POINTS, type WordShapeTextLayout } from './shape-text-layout.ts';
 

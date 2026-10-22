@@ -30,11 +30,13 @@ model.update([{
     preset: 'roundRect', width: 160, height: 72,
     fill: '#DDF5EB', outline: '#24634B', outlineWidth: 1,
     text: 'Review complete', layout: 'inline',
+    textInsets: { top: 0, right: 2, bottom: 0, left: 2 },
   } }],
 }]);
 const output = model.artifact().bytes();` },
         { kind: 'text', text: 'The seven presets are rect, roundRect, ellipse, triangle, diamond, rightArrow, and line. Shapes use one U+FFFC object character, point dimensions, solid RGB or none fills/outlines, and plain text. Placement is inline, front, or behind, using the same positioning properties as images.' },
         { kind: 'text', text: 'Exports contain editable DrawingML shapes.' },
+        { kind: 'text', text: 'textInsets sets internal text margins in points on each side. Omitted sides use 3.6pt top/bottom and 7.2pt left/right. Explicit zero is supported. The editor, canvas rendering, and DOCX import/export use the same margins.' },
         { kind: 'text', text: 'WordDrawingView reports in-place text edits through ontextchange when editable and a callback is connected. Double-click a shape or type while it is selected; Escape or blur commits the text. The host updates its native content model.' },
         { kind: 'text', text: 'Set layoutControl to false when the host supplies placement controls. WordDocumentView renders shapes, but does not connect this text callback itself.' },
         { kind: 'note', text: 'Imported groups, transformed shapes, theme/effect fills, and text-wrapped shapes remain opaque source drawings. Neighbouring edits retain their markup. Full preset geometry, rich text boxes, and shape effects are not supported by this editable model.' },

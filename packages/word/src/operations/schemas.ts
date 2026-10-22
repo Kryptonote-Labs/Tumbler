@@ -82,7 +82,7 @@ export const tableFormat = z
 export const shape = z
   .custom<import('../shapes.ts').WordAuthoredShape>(isWordAuthoredShape)
   .describe(
-    'Shape object: required preset (rect|roundRect|ellipse|triangle|diamond|rightArrow|line), width/height in points, fill/outline colours, outlineWidth in points. Optional text, textBody rich paragraphs, textAnchor top|center|bottom, alt. Placement: layout inline|front|behind, x/y points, horizontalRelativeTo page|column, verticalRelativeTo page|line|paragraph, alignment left|center|right, moveWithText boolean, wrap none.',
+    'Shape object: required preset (rect|roundRect|ellipse|triangle|diamond|rightArrow|line), width/height in points, fill/outline colours, outlineWidth in points. Optional text, textBody rich paragraphs, textAnchor top|center|bottom, textInsets {top?,right?,bottom?,left?} in points (omitted sides: top/bottom 3.6, left/right 7.2; zero allowed), alt. Placement: layout inline|front|behind, x/y points, horizontalRelativeTo page|column, verticalRelativeTo page|line|paragraph, alignment left|center|right, moveWithText boolean, wrap none.',
   );
 export const image = z
   .custom<import('../collaboration/images.ts').DocumentImage>(isDocumentImage)
