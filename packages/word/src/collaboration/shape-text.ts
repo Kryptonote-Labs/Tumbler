@@ -1,4 +1,4 @@
-import { readWordParagraphFormat } from './paragraph-attributes.ts';
+import { paragraphPropertyPatch, readWordParagraphFormat } from './paragraph-attributes.ts';
 import * as Y from 'yjs';
 import { wordAuthoringStyles } from '../authored-styles.ts';
 const shapeStyles = wordAuthoringStyles(undefined, { fontFamily: 'Aptos', fontSizePoints: 12 });
@@ -167,7 +167,17 @@ export class WordShapeText {
     for (const part of fragment.text.toDelta()) {
       if (typeof part.insert !== 'string') continue;
       const length = Math.min(part.insert.length, fragment.length - offset);
-      if (length > 0) this.text.format(range.start + offset, length, part.attributes ?? {});
+      if (length > 0) {
+        const paragraph = readWordParagraphFormat(part.attributes);
+        this.text.format(range.start + offset, length, {
+          ...part.attributes,
+          ...(paragraph !== undefined ? {
+            paragraph: null,
+            ...paragraphPropertyPatch(null),
+            ...paragraphPropertyPatch(paragraph),
+          } : {}),
+        });
+      }
       offset += part.insert.length;
     }
     fragment.destroy();

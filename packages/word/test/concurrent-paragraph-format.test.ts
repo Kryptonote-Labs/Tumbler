@@ -140,3 +140,15 @@ test('concurrent reset and patch remove imported properties from DOCX', async ()
     document.destroy(); b.destroy();
   }
 });
+
+test('shape paste overrides paragraph removal registers with clipboard formatting', async () => {
+  const { WordShapeText } = await import('../src/collaboration/shape-text.ts');
+  const shape = new WordShapeText({ text: 'Hello' });
+  shape.format(range, { paragraph: null });
+  shape.paste({ start: 0, end: 0 }, [
+    { runs: [{ text: 'First' }], paragraph: { keepNext: true, spacingBeforeTwips: 120 } },
+    { runs: [{ text: 'Second' }] },
+  ]);
+  expect(shape.paragraphs()[0]?.paragraph).toEqual({ keepNext: true, spacingBeforeTwips: 120 });
+  shape.destroy();
+});
