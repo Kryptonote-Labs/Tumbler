@@ -76,11 +76,11 @@ host has background contention; timings are observations, not a speedup claim.
 
 The recorded locked run used Bun 1.4.4 on an Intel Celeron N5095 with four logical
 CPUs. Median time per operation was 4.165 ms before and 3.758 ms after. Sample
-ranges were 2.698–5.718 ms and 3.210–5.551 ms. Output decreased from 194,900 to
+ranges were 2.698 to 5.718 ms and 3.210 to 5.551 ms. Output decreased from 194,900 to
 191,700 bytes by omitting 100 empty `tabs` containers and their empty `pPr`
 containers. Each revision performed 320 serializations including warmups.
 Peak RSS was 65,164 KiB before and 66,416 KiB after. Median observed live heap
-growth per 20-operation sample was 4,050,032 bytes before and 2,984,958 after.
+growth per 20-operation sample was 4,050,000 bytes before and 2,987,233 after.
 Raw timing and heap samples are in `results/before.json` and `results/after.json`.
 There is no allocated-byte counter in this measurement.
 
