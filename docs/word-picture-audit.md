@@ -114,3 +114,14 @@ The fourth review found that a stationary low-rank drawing still trapped its too
 The mounted selection test reproduces the inaccessible right resize handle before the fix: hit testing finds picture 59 instead of picture 5's handle. After the fix it finds the handle, while an interior point still hits the higher-ranked picture 59. A real pointer resize through that handle increases width from 72 to 84 points. The paired run under one shared lock fails before and passes after; all nine picture browser tests pass in 26.4 seconds. The drag test also passes with the stationary wrapper restored to `auto` after release and content retaining its original rank. These are behavioral checks, not performance measurements.
 
 After sharing the control-rank property with the title and point editors, the three focused drag, selection and ink-stacking tests passed again in 16.9 seconds. Svelte checking reported zero errors and zero warnings. No broad suite or benchmark was repeated.
+
+
+## Finishing out-of-frame ink edits
+
+The fifth review found that expanded ink-point hit areas could cover the Done button when both used the same control rank. Points now use a separate rank one above the page overlay, and toolbars use a rank two above it. The point editor retains its standalone fallback of 5. PR126's overlay CSS is unchanged.
+
+The generated four-drawing fixture moves the first ink point 80 points downward through keyboard input, expanding the point editor below the frame and across Done. Before the fix, overlay/points/toolbar ranks are 6/7/7; a real mouse click at Done hits `Ink point 1 of 2`, leaving editing active. After the fix, ranks are 6/7/8, the hit is Done, and the same click exits editing. The paired runs use the same Chrome, fixture, zoom, host and shared lock. This CSS ordering change adds no paint/decode operations or geometry calculations; the earlier performance measurements still cover those unchanged paths.
+
+Reproduce with `word-picture-ink-controls.e2e.ts` using the locked browser command above. The before run used `e4c5c45` production CSS with this same test; restore that CSS to reproduce the failure.
+
+The failing-before run had one failed interaction test. The after run passed all ten focused picture browser tests in 30.1 seconds, including normal paint order, drag elevation, stationary resize controls, crop/transform pixels, ink composition and Done interaction. No broad suite or performance benchmark was repeated for this CSS-only fix.

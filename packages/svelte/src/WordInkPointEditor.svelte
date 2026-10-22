@@ -77,7 +77,7 @@
   <canvas bind:this={canvas} aria-hidden="true"></canvas>
 </button>
 <style>
-  .points { position:absolute; z-index:var(--word-drawing-controls-z-index, 5); background:transparent; border:0; padding:0; touch-action:none; cursor:crosshair; }
+  .points { position:absolute; z-index:var(--word-drawing-points-z-index, 5); background:transparent; border:0; padding:0; touch-action:none; cursor:crosshair; }
   .points:focus-visible { outline:1px dotted #25a735; }
   canvas { display:block; width:100%; height:100%; pointer-events:none; }
 </style>

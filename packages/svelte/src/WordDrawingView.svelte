@@ -220,8 +220,8 @@
 
 <style>
   /* Document lines preserve whitespace and may be as tall as an inline drawing. */
-  /* Keep stationary wrappers out of stacking contexts so controls can sit above other pictures. */
-  .drawing { --word-drawing-controls-z-index: calc(var(--word-ink-layer-z-index, 3) + 1); position: absolute; white-space: normal; line-height: normal; }
+  /* Stationary wrappers do not stack. Points sit above composited ink; toolbars sit above expanded point hit areas. */
+  .drawing { --word-drawing-points-z-index: calc(var(--word-ink-layer-z-index, 3) + 1); --word-drawing-controls-z-index: calc(var(--word-ink-layer-z-index, 3) + 2); position: absolute; white-space: normal; line-height: normal; }
   .drawing.moving { z-index: var(--word-drawing-controls-z-index); }
   .drawing.behind .content { z-index: var(--word-drawing-rank, 0); }
   .drawing.selected { outline: var(--outline-size) solid var(--tumbler-document-accent, #25a735); }
