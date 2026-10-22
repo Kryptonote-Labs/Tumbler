@@ -80,3 +80,39 @@ for (const value of ['0', '1']) {
     expect(painted).toBe(value === '0' ? 400 : 0);
   });
 }
+
+for (const story of ['header', 'footer'] as const) {
+  test(`${story} table front anchors paint above later inline drawings`, async ({ page }) => {
+    const { buildWordDocumentFixture } = await import('../../../packages/word/test/document-fixture.ts');
+    const w = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const r = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const shape = { preset: 'rect' as const, width: 60, height: 30, fill: '#ff0000', outline: 'none' as const, outlineWidth: 0 };
+    const generated = createWordArtifact({ blocks: [{ kind: 'table', rowFormats: [{ heightTwips: 1600, heightRule: 'exact' }], rows: [[{ format: { margins }, blocks: [
+      { kind: 'paragraph', paragraph, runs: [{ text: '\ufffc', shape: { ...shape, layout: 'front', x: 0, y: 0, horizontalRelativeTo: 'column', verticalRelativeTo: 'paragraph' } }] },
+      { kind: 'paragraph', paragraph, runs: [{ text: '\ufffc', shape: { ...shape, fill: '#0000ff', layout: 'inline' } }] },
+    ] }]] }] }).document.source.source;
+    const table = generated.slice(generated.indexOf('<w:tbl>'), generated.indexOf('</w:tbl>') + '</w:tbl>'.length);
+    const root = generated.slice(generated.indexOf('<w:document'), generated.indexOf('><w:body>') + 1).replace('w:document', story === 'header' ? 'w:hdr' : 'w:ftr');
+    const bytes = buildWordDocumentFixture({
+      documentXml: `<w:document xmlns:w="${w}" xmlns:r="${r}"><w:body><w:p/><w:sectPr><w:${story}Reference w:type="default" r:id="story"/><w:pgSz w:w="8000" w:h="8000"/><w:pgMar w:top="2400" w:right="1600" w:bottom="2400" w:left="1600" w:header="200" w:footer="200"/></w:sectPr></w:body></w:document>`,
+      relationships: [{ id: 'story', type: `${r}/${story}`, target: `${story}.xml` }],
+      parts: [{ itemName: `word/${story}.xml`, contentType: `application/vnd.openxmlformats-officedocument.wordprocessingml.${story}+xml`, xml: `${root}${table}</${story === 'header' ? 'w:hdr' : 'w:ftr'}>` }],
+    });
+    await page.route('**/samples/project-brief.docx', route => route.fulfill({ body: Buffer.from(bytes) }));
+    await page.goto('/playground/word-brief');
+    const drawings = page.locator('.word-page-content .shape-drawing');
+    await expect(drawings).toHaveCount(2, { timeout: 20000 });
+    const order = await drawings.first().evaluate((front, inline) => {
+      if (!inline) throw Error('Missing inline drawing');
+      const a = front.getBoundingClientRect(), b = inline.getBoundingClientRect();
+      const left = Math.max(a.left, b.left), top = Math.max(a.top, b.top);
+      const right = Math.min(a.right, b.right), bottom = Math.min(a.bottom, b.bottom);
+      if (right <= left || bottom <= top) throw Error('Fixture drawings must overlap');
+      const hits = document.elementsFromPoint((left + right) / 2, (top + bottom) / 2);
+      return { front: hits.indexOf(front), inline: hits.indexOf(inline) };
+    }, await drawings.last().elementHandle());
+    expect(order.front).toBeGreaterThanOrEqual(0);
+    expect(order.inline).toBeGreaterThanOrEqual(0);
+    expect(order.front).toBeLessThan(order.inline);
+  });
+}

@@ -93,7 +93,7 @@
   {#each wordTableLinesWithClips([table]) as { line, clip }}
     {#each line.fragments as fragment}
       {#if fragment.drawing}
-        <WordContentClip clip={wordDrawingCellClip(fragment.drawing, clip)} layer={drawingOrder?.get(fragment.drawing) ?? (fragment.drawing.anchor?.behindDocument ? 0 : 2)}>
+        <WordContentClip clip={wordDrawingCellClip(fragment.drawing, clip)} layer={drawingOrder?.get(fragment.drawing) ?? (fragment.drawing.placement === 'inline' ? 1 : fragment.drawing.anchor?.behindDocument ? 0 : 2)}>
           {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
             {#if fragment.drawing.picture}
               <div class="document-drawing picture-drawing" style={drawingStyle(fragment)}><WordPictureView drawing={fragment.drawing} src={imageurl(fragment.drawing)} /></div>
