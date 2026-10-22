@@ -270,7 +270,7 @@ export function wordParagraphRenderer(
       const borders = markup.children(properties, 'pBdr')[0];
       if (borders && changed.borders && !paragraph.resetParagraphFormat) {
         const edges = new Map<string, string>();
-        const borderChanges = Object.fromEntries(Object.entries(paragraph.paragraph.borders ?? {}).filter(([key, value]) => paragraph.resetParagraphFormat || JSON.stringify(value) !== JSON.stringify(original?.paragraph?.borders?.[key as keyof NonNullable<NonNullable<WordTextParagraph['paragraph']>['borders']>])));
+        const borderChanges = Object.fromEntries(Object.entries(paragraph.paragraph.borders ?? {}).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(original?.paragraph?.borders?.[key as keyof NonNullable<NonNullable<WordTextParagraph['paragraph']>['borders']>])));
         const generated = paragraphFormatXml({ borders: borderChanges }).get('pBdr') ?? '';
         for (const match of generated.matchAll(/<w:([a-zA-Z]+)\b[^>]*\/>/g)) edges.set(match[1]!, match[0]);
         replacements.set('pBdr', markup.properties(borders, 'pBdr', edges));
