@@ -76,14 +76,14 @@ export function replaceWordText(document: WordDocument, selection: WordTextSelec
     const target = insertionTarget(segments, start, selection.focus.affinity ?? "after");
     if (target === undefined) appendTextRun(editor, document, paragraph, value);
     else if (target.kind === "text") replaceTextElement(editor, document, target, insertInto(target, start, value));
-    else insertRunBesideControl(editor, document, target, value, selection.focus.affinity ?? "after", start);
+    else insertTextBesideControl(editor, document, target, value, start);
   } else {
     const selectedText = selected.filter((segment) => segment.kind === "text");
     if (selectedText.length === 0) {
       for (const segment of selected) removeSegment(editor, document, segment);
       const target = insertionTarget(segments.filter((segment) => !selected.includes(segment)), start, "after");
       if (target?.kind === "text") replaceTextElement(editor, document, target, insertInto(target, start, value));
-      else if (target !== undefined) insertRunBesideControl(editor, document, target, value, "after", start);
+      else if (target !== undefined) insertTextBesideControl(editor, document, target, value, start);
       else appendTextRun(editor, document, paragraph, value);
     } else {
       const insertionElementId = selectedText[0]!.elementId;
@@ -446,33 +446,20 @@ function appendTextRun(
   else editor.appendMarkup(element, markup);
 }
 
-function insertRunBesideControl(
+/** Insert within the existing run so its properties and exact control boundary survive. */
+function insertTextBesideControl(
   editor: ReturnType<typeof beginLosslessXmlEdit>,
   document: WordDocument,
   segment: WordParagraphTextSegment,
   value: string,
-  affinity: "before" | "after",
   offset: number,
 ): void {
   if (value.length === 0) return;
   const control = requiredElement(document, segment.elementId);
   const run = requiredElement(document, segment.runElementId);
-  if (segment.kind === "symbol") {
-    const symbol = document.source.source.slice(control.span.start, control.span.end);
-    const text = textContentMarkup(run.prefix, value);
-    editor.replaceElementMarkup(control, offset <= segment.start ? text + symbol : symbol + text);
-    return;
-  }
-  const markup = textRunMarkup(run.prefix, value);
-  if (affinity === "before") editor.insertMarkupBefore(run, markup);
-  else {
-    const parent = parentElement(document, run);
-    const siblings = parent.children.filter((child): child is LosslessXmlElement => child.kind === "element");
-    const next = siblings[siblings.indexOf(run) + 1];
-    if (next === undefined) editor.appendMarkup(parent, markup);
-    else editor.insertMarkupBefore(next, markup);
-  }
-  void control;
+  const original = document.source.source.slice(control.span.start, control.span.end);
+  const text = textContentMarkup(run.prefix, value);
+  editor.replaceElementMarkup(control, offset <= segment.start ? text + original : original + text);
 }
 
 function parentElement(document: WordDocument, target: LosslessXmlElement): LosslessXmlElement {
