@@ -606,7 +606,7 @@ function parseRowProperties(element: LosslessXmlElement | undefined, namespace: 
     gridBefore: element === undefined ? 0 : valueIntegerChild(element, namespace, "gridBefore", 0, 32_767),
     gridAfter: element === undefined ? 0 : valueIntegerChild(element, namespace, "gridAfter", 0, 32_767),
     cantSplit: rowOnOff(element, namespace, "cantSplit"),
-    repeatHeader: element !== undefined && children(element, namespace, "tblHeader").length > 0,
+    repeatHeader: rowOnOff(element, namespace, "tblHeader"),
     heightTwips: rawHeight === undefined ? undefined : unsignedInteger(rawHeight, "row height", 0, 2_147_483_647),
     heightRule: rule === "exact" || rule === "auto" ? rule : "atLeast",
   };
