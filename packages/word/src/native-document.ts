@@ -100,7 +100,10 @@ export class NativeWordDocument implements WordLayoutSource {
   private readonly editedStories = new Map<string, { target: string | WordStoryTarget; model: NativeWordDocument; blocks: readonly WordContentBlock[] }>();
   readonly finalSection: WordSectionProperties;
   readonly wrapTrailSpaces: boolean;
-  readonly doNotExpandShiftReturn: boolean;
+  private inheritedDoNotExpandShiftReturn?: boolean;
+  get doNotExpandShiftReturn(): boolean {
+    return this.inheritedDoNotExpandShiftReturn ?? this.options.source?.document.doNotExpandShiftReturn ?? false;
+  }
   readonly background: string | undefined;
 
   constructor(private readonly options: NativeWordOptions = {}) {
@@ -109,7 +112,6 @@ export class NativeWordDocument implements WordLayoutSource {
     const document = options.source?.document;
     this.background = document?.background === undefined ? undefined : resolveWordColour(document.background, document.styles.themeColors);
     this.wrapTrailSpaces = options.source?.document.wrapTrailSpaces ?? false;
-    this.doNotExpandShiftReturn = options.source?.document.doNotExpandShiftReturn ?? false;
     const { width = 595.3, height = 841.9, margin = 72 } = options.page ?? {};
     if (
       ![width, height, margin].every(Number.isFinite) ||
@@ -163,6 +165,7 @@ export class NativeWordDocument implements WordLayoutSource {
       const source = typeof target === 'string' && this.options.source ? wordStoryArtifact(this.options.source, target) : undefined;
       const { source: _bodySource, content: _bodyContent, ...options } = this.options;
       entry = { target, blocks, model: new NativeWordDocument({ ...options, content: blocks, ...(source ? { source } : {}) }) };
+      entry.model.inheritedDoNotExpandShiftReturn = this.doNotExpandShiftReturn;
       this.editedStories.set(key, entry);
     } else {
       entry.model.update(blocks);

@@ -38,3 +38,22 @@ test('doNotExpandShiftReturn controls only soft-break lines', () => {
     }
   }
 });
+
+test('new native headers and footers inherit soft-break compatibility through export and caching', () => {
+  for (const kind of ['header', 'footer'] as const) {
+    const document = lineDocument('body', '', 100, false, '<w:doNotExpandShiftReturn/>');
+    const model = new NativeWordDocument({ source: openWordArtifact(document.bytes()) });
+    const story = model.updateStory({ section: 0, kind, type: 'default' }, [
+      { kind: 'paragraph', alignment: 'justify', runs: [{ text: 'one two' }, { text: '\u2028', breakType: 'line' }, { text: 'three' }] },
+    ]);
+    expect(story.doNotExpandShiftReturn).toBe(true);
+    for (let repeat = 0; repeat < 2; repeat++) {
+      const native = model.layout(fixedMeasurer).pages[0]!;
+      const exported = layoutWordDocument(model.artifact().document, fixedMeasurer).pages[0]!;
+      const nativeLines = kind === 'header' ? native.headerLines : native.footerLines;
+      const exportedLines = kind === 'header' ? exported.headerLines : exported.footerLines;
+      expect(nativeLines.map(line => line.width)).toEqual([35, 25]);
+      expect(nativeLines.map(line => line.width)).toEqual(exportedLines.map(line => line.width));
+    }
+  }
+});
