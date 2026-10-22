@@ -166,6 +166,14 @@ export function prepareWordScopedOperation(
     }
     const value = selectionText(staged, selection, true)!;
     checkRange(selection.range, value.end - value.start);
+    if (operation.name === "move-object" && "story" in selection)
+      selectionText(staged, {
+        ...selection,
+        range: {
+          start: operation.input.destination,
+          end: operation.input.destination,
+        },
+      });
     if (operation.name === "move-object")
       checkRange(
         {

@@ -1,4 +1,6 @@
 import * as Y from "yjs";
+import { z } from "zod";
+import { id, storyId } from "./schema.ts";
 import { createWordCommands, type WordRange } from "../commands.ts";
 import {
   existingText,
@@ -7,6 +9,7 @@ import {
   sourceCell,
   WordTableConflict,
 } from "./state.ts";
+import { tableParagraphs } from "../tables.ts";
 import { resolveCell } from "./grid.ts";
 import type { WordScopedSelection, WordScopedAnchor } from "./types.ts";
 const commands = createWordCommands();
@@ -16,8 +19,32 @@ export function selectionText(
   create = false,
 ) {
   if ("story" in selection) {
+    if (selection.story.startsWith("word-cell-v2:")) {
+      const [story, table] = z
+        .tuple([storyId, id, id, id])
+        .parse(JSON.parse(selection.story.slice("word-cell-v2:".length)));
+      throw new WordTableConflict(
+        { story, table },
+        "legacy-writer",
+        "Use a scoped cell selection to edit a migrated table.",
+      );
+    }
     const text = existingText(doc, selection.story);
     if (!text) throw new Error("Missing story.");
+    const touched = tableParagraphs(text).find(
+      (p) =>
+        (p.table?.schema === 2 ||
+          p.table?.parents?.some((parent) => parent.schema === 2)) &&
+        (selection.range.start === selection.range.end
+          ? selection.range.start >= p.start && selection.range.start < p.end
+          : selection.range.start < p.end && selection.range.end > p.start),
+    );
+    if (touched?.table)
+      throw new WordTableConflict(
+        { story: selection.story, table: touched.table.id },
+        "legacy-writer",
+        "Use a scoped cell selection to edit a migrated table.",
+      );
     return { text, start: 0, end: commands.bodyLength(text) };
   }
   const cell = resolveCell(doc, selection.cell);
