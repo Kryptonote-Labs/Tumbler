@@ -58,3 +58,14 @@ test('predecessor spacing stays behind when a keep chain or page break moves', (
   const document = paginationDocument(filler + paragraph('next', '<w:pageBreakBefore/>'));
   expect(layoutWordDocument(document, paginationMeasurer).pages[1]!.columns[0]!.lines[0]!.y).toBe(10);
 });
+test('three-line paragraphs keep both ends together when a fresh column fits all three', () => {
+  for (const text of ['a'.repeat(41), 'a</w:t><w:br/><w:t>b</w:t><w:br/><w:t>c']) {
+    expect(textPages(paragraph('filler') + paragraph(text)).map(page => page.length)).toEqual([1, 3]);
+  }
+});
+test('a preflight move reprepares at the destination column width', () => {
+  const document = paginationDocument(paragraph('filler', section('', 6000)) + paragraph('abcdefghijklmno', '<w:pageBreakBefore/>'), section('<w:type w:val="continuous"/><w:cols w:num="2" w:space="200"/>', 6000));
+  const column = layoutWordDocument(document, paginationMeasurer).pages[1]!.columns[0]!;
+  expect(column.lines.map(line => line.fragments.map(fragment => fragment.text).join(''))).toEqual(['abcdefghi', 'jklmno']);
+  expect(column.lines.every(line => line.width <= column.width)).toBe(true);
+});

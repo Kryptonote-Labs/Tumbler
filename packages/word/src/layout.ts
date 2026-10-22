@@ -1,4 +1,4 @@
-import { paragraphLineSequence, widowPairHeight } from './paragraph-pagination.ts';
+import { paragraphLineSequence, widowGroupHeight } from './paragraph-pagination.ts';
 import { withParagraphSpacing } from './paragraph-spacing.ts';
 import { alignWordPageDrawings } from './drawing-alignment.ts';
 import { resolveWordColour } from './theme-colours.ts';
@@ -570,8 +570,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
           column.unsupportedBlocks.push(Object.freeze({ elementId: block.elementId, localName: block.localName, y: cursorY }));
           continue;
         }
-        const prepared = prepareBody(blockIndex)!;
-        const sequence = paragraphLineSequence(prepared.lines);
+        let prepared = prepareBody(blockIndex)!;
         const currentColumn = page!.columns[columnIndex]!;
         const available = currentColumn.y + currentColumn.height - cursorY;
         let requiredHeight = 0;
@@ -591,7 +590,12 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
         }
         if ((prepared.format.pageBreakBefore || requiredHeight > available) && cursorY > currentColumn.y) {
           advanceColumn(section.properties);
+          if (page!.columns[columnIndex]!.width !== currentColumn.width) {
+            pending.clear();
+            prepared = prepareBody(blockIndex)!;
+          }
         }
+        const sequence = paragraphLineSequence(prepared.lines);
         inKeepChain = prepared.format.keepNext;
         pending.delete(blockIndex);
         // A previous paragraph's after-spacing belongs to the old column. At a fresh
@@ -604,7 +608,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
           if (!line) break;
           let column = page!.columns[columnIndex]!;
           const lineHeight = line.ascent + line.descent;
-          const pairHeight = prepared.format.widowControl ? widowPairHeight(sequence, lineIndex) : 0;
+          const pairHeight = prepared.format.widowControl ? widowGroupHeight(sequence, lineIndex, column.height) : 0;
           const required = pairHeight <= column.height ? Math.max(lineHeight, pairHeight) : lineHeight;
           if (cursorY + required > column.y + column.height &&
             (column.lines.length > 0 || column.tables.length > 0 || column.unsupportedBlocks.length > 0)) {
