@@ -15,14 +15,12 @@ import {
   tableName,
   cellFormatName,
 } from "./state.ts";
-import {
-  payload,
-  sourceCell,
-  payloadDelta,
-  payloadSignature,
-} from "./payload.ts";
+import { payload, sourceCell, payloadDelta, payloadSignature } from "./payload.ts";
+import { structuredReadCache } from "./read-cache.ts";
 /** Check hidden content too: deletion and structural undo must not silently detach edits. */
 export function validateStructuredTables(doc: Y.Doc) {
+  const cache = structuredReadCache(doc);
+  if (!cache.active && cache.valid) return;
   for (const name of doc.share.keys())
     if (name.startsWith("word-cell-format-v2:")) {
       const attributes = Object.fromEntries(doc.getMap<unknown>(name));
@@ -32,9 +30,7 @@ export function validateStructuredTables(doc: Y.Doc) {
           (key) => key in attributes,
         )
       )
-        throw new Error(
-          "Object formatting cannot belong to a virtual paragraph boundary.",
-        );
+        throw new Error("Object formatting cannot belong to a virtual paragraph boundary.");
     }
   // A format-only root is retained content too, even if no Y.Text was encoded.
   const retained = [...doc.share.keys()].flatMap((name) => {
@@ -43,17 +39,12 @@ export function validateStructuredTables(doc: Y.Doc) {
     const [story, table, row, column] = z
       .tuple([storyId, id, id, id])
       .parse(JSON.parse(name.slice(name.indexOf(":") + 1)));
-    const occupied = format
-      ? doc.getMap(name).size > 0
-      : existingText(doc, name)!.length > 0;
+    const occupied = format ? doc.getMap(name).size > 0 : existingText(doc, name)!.length > 0;
     return occupied ? [{ story, table, row, column }] : [];
   });
   // Yjs leaves empty named maps after undo. Ignore them only if nothing is retained.
   for (const address of retained) {
-    if (
-      !doc.share.has(tableName(address)) ||
-      doc.getMap(tableName(address)).size === 0
-    )
+    if (!doc.share.has(tableName(address)) || doc.getMap(tableName(address)).size === 0)
       throw new WordTableConflict(
         address,
         "deleted-content",
@@ -74,9 +65,7 @@ export function validateStructuredTables(doc: Y.Doc) {
             source &&
             rows.includes(row) &&
             columns.some(
-              (column) =>
-                sourceCell(doc, { ...address, row, column })?.cell ===
-                source.cell,
+              (column) => sourceCell(doc, { ...address, row, column })?.cell === source.cell,
             )
           )
             continue;
@@ -92,17 +81,14 @@ export function validateStructuredTables(doc: Y.Doc) {
           for (const column of orderedAxes(doc, address, "column")) {
             if (
               (value.kind === "remove" &&
-                !value.ids.includes(
-                  value.dimension === "row" ? row : column,
-                )) ||
+                !value.ids.includes(value.dimension === "row" ? row : column)) ||
               cellKey(row, column) in value.witnesses
             )
               continue;
             if (
               payloadDelta(doc, { ...address, row, column }).length ||
               (doc.share.has(cellFormatName({ ...address, row, column })) &&
-                doc.getMap(cellFormatName({ ...address, row, column })).size >
-                  0)
+                doc.getMap(cellFormatName({ ...address, row, column })).size > 0)
             )
               throw new WordTableConflict(
                 address,
@@ -115,9 +101,7 @@ export function validateStructuredTables(doc: Y.Doc) {
       structuredGrid(doc, address).flatMap((row) =>
         row.cells
           .filter((cell) => cell.verticalMerge !== "continue")
-          .flatMap((cell) =>
-            cell.payloads.map((p) => cellKey(p.row, p.column)),
-          ),
+          .flatMap((cell) => cell.payloads.map((p) => cellKey(p.row, p.column))),
       ),
     );
     for (const { story, table, row, column } of retained) {
@@ -130,11 +114,7 @@ export function validateStructuredTables(doc: Y.Doc) {
           "deleted-content",
           "Undo would detach retained cell content or formatting.",
         );
-      if (
-        rows.includes(row) &&
-        columns.includes(column) &&
-        !visible.has(cellKey(row, column))
-      )
+      if (rows.includes(row) && columns.includes(column) && !visible.has(cellKey(row, column)))
         throw new WordTableConflict(
           address,
           "overlap",
@@ -154,28 +134,17 @@ export function validateStructuredTables(doc: Y.Doc) {
           !rows.includes(value.row) ||
           indexes.some((n, i) => n < 0 || (i > 0 && n !== indexes[i - 1]! + 1))
         )
-          throw new WordTableConflict(
-            address,
-            "overlap",
-            "Merge coverage changed concurrently.",
-          );
+          throw new WordTableConflict(address, "overlap", "Merge coverage changed concurrently.");
         for (const column of value.columns) {
           const key = cellKey(value.row, column);
           if (occupied.has(key))
-            throw new WordTableConflict(
-              address,
-              "overlap",
-              "Overlapping merges.",
-            );
+            throw new WordTableConflict(address, "overlap", "Overlapping merges.");
           occupied.add(key);
         }
       }
     const body = existingText(doc, address.story)!;
     for (const p of tableParagraphs(body))
-      for (const cell of [
-        ...(p.table?.parents ?? []),
-        ...(p.table ? [p.table] : []),
-      ])
+      for (const cell of [...(p.table?.parents ?? []), ...(p.table ? [p.table] : [])])
         if (cell.id === address.table) {
           const original = base.cells.find((c) => c.cell === cell.cell);
           if (
@@ -200,9 +169,9 @@ export function validateStructuredTables(doc: Y.Doc) {
       payload(doc, {
         ...address,
         row: cell.row,
-        column:
-          split?.kind === "split" ? split.column : base.columns[cell.column]!,
+        column: split?.kind === "split" ? split.column : base.columns[cell.column]!,
       });
     }
   }
+  if (!cache.active) cache.valid = true;
 }

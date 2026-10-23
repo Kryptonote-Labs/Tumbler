@@ -40,7 +40,11 @@ export function wordSharedText(text: Y.Text) {
 
 /** Linear editing coordinates over a shared grid. The view is local and never persisted. */
 export class WordSharedText {
-  readonly text: Y.Text;
+  private readonly projectedText: Y.Text;
+  get text(): Y.Text {
+    if (this.conflict) throw this.conflict;
+    return this.projectedText;
+  }
   readonly sourceText: Y.Text;
   private readonly projection = new Y.Doc();
   private spans: WordViewSpan[] = [];
@@ -53,6 +57,7 @@ export class WordSharedText {
   };
   private readonly disposed = () => this.destroy();
   private readonly refresh = () => {
+    this.conflict = undefined;
     try {
       if (this.structured()) this.sync();
       else {
@@ -72,7 +77,7 @@ export class WordSharedText {
   ) {
     this.sourceText = doc.getText(story);
     wordParagraphIdentity(this.sourceText, this.sourceText.length);
-    this.text = this.projection.getText(story);
+    this.projectedText = this.projection.getText(story);
     views.set(this.sourceText, this);
     views.set(this.text, this);
     owners.set(this.projection, doc);
@@ -277,12 +282,12 @@ export class WordSharedText {
     return commitWordUpdate(this.doc, prepared, origin);
   }
   destroy() {
-    setWordParagraphIdentity(this.text, undefined);
+    setWordParagraphIdentity(this.projectedText, undefined);
     this.doc.off("afterTransaction", this.refresh);
     this.doc.off("destroy", this.disposed);
     this.sourceText.unobserve(this.sourceChanged);
     views.delete(this.sourceText);
-    views.delete(this.text);
+    views.delete(this.projectedText);
     this.projection.destroy();
   }
 }

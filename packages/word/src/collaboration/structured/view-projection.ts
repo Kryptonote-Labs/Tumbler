@@ -12,6 +12,7 @@ import {
   payload,
   tableName,
   tableRecords,
+  validateStructuredTables,
   type CellAddress,
   type TableAddress,
 } from "./state.ts";
@@ -27,9 +28,14 @@ export type WordViewSpan = {
 
 /** A local linear view for existing editors. Only the source document is synchronized. */
 export function projectWordSharedText(doc: Y.Doc, story: string) {
+  validateStructuredTables(doc);
   const delta: WordDelta = [];
   const spans: WordViewSpan[] = [];
   const paragraphs = new Map<string, ReturnType<typeof tableParagraphs>>();
+  const rootParts = new WeakMap<
+    Y.Text,
+    { insert: string; attributes?: Record<string, unknown>; offset: number; end: number }[]
+  >();
   let length = 0;
   const append = (
     insert: string,
@@ -42,18 +48,38 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
     length += insert.length;
   };
   const parts = (text: Y.Text, start: number, end: number) => {
-    let offset = 0;
-    return (text.toDelta() as { insert: string; attributes?: Record<string, unknown> }[]).flatMap(
-      (part) => {
-        const at = offset;
-        offset += part.insert.length;
-        const from = Math.max(start, at),
-          to = Math.min(end, offset);
-        return to > from
-          ? [{ ...part, insert: part.insert.slice(from - at, to - at), offset: from }]
-          : [];
-      },
-    );
+    let indexed = rootParts.get(text);
+    if (!indexed) {
+      let offset = 0;
+      indexed = (text.toDelta() as { insert: string; attributes?: Record<string, unknown> }[]).map(
+        (part) => {
+          const start = offset;
+          offset += part.insert.length;
+          return { ...part, offset: start, end: offset };
+        },
+      );
+      rootParts.set(text, indexed);
+    }
+    let low = 0,
+      high = indexed.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (indexed[middle]!.end <= start) low = middle + 1;
+      else high = middle;
+    }
+    const result: { insert: string; attributes?: Record<string, unknown>; offset: number }[] = [];
+    for (let index = low; index < indexed.length && indexed[index]!.offset < end; index++) {
+      const part = indexed[index]!,
+        from = Math.max(start, part.offset),
+        to = Math.min(end, part.end);
+      if (to > from)
+        result.push({
+          ...part,
+          insert: part.insert.slice(from - part.offset, to - part.offset),
+          offset: from,
+        });
+    }
+    return result;
   };
   const visit = (
     root: string,

@@ -2,7 +2,12 @@ import { expect, test } from "bun:test";
 import * as Y from "yjs";
 import { WordSharedText } from "../src/collaboration/structured/view.ts";
 import { groupTableParagraphs, tableParagraphs } from "../src/collaboration/tables.ts";
-import { cell, clone, fixture, sync } from "./structured-table-fixtures.ts";
+import { apply, cell, clone, derived, fixture, sync } from "./structured-table-fixtures.ts";
+import {
+  prepareWordUpdate,
+  commitWordUpdate,
+} from "../src/collaboration/structured/transactions.ts";
+import { activeAxes } from "../src/collaboration/structured/state.ts";
 import { createWordCommands } from "../src/collaboration/commands.ts";
 import { openWordOperationDocument } from "../src/operations/document.ts";
 import { createWordArtifact } from "../src/index.ts";
@@ -67,6 +72,45 @@ test("paragraph identities come from shared terminators and survive preceding te
   views.forEach((view) => view.destroy());
   docs.forEach((doc) => doc.destroy());
   source.destroy();
+});
+
+test("a conflicting remote deletion blocks projected reads until retained cell content is restored", () => {
+  const seed = derived();
+  const left = clone(seed.doc),
+    right = clone(seed.doc);
+  const view = new WordSharedText(left, "body");
+  apply(left, {
+    kind: "delete-axis",
+    table: seed.table,
+    dimension: "column",
+    id: seed.target.column,
+  });
+  commitWordUpdate(
+    right,
+    prepareWordUpdate(right, [
+      {
+        kind: "replace",
+        selection: { cell: seed.target, range: { start: 0, end: 0 } },
+        value: "Retained edit",
+      },
+    ]),
+  );
+  Y.applyUpdate(left, Y.encodeStateAsUpdate(right));
+  expect(view.conflict).toBeDefined();
+  expect(() => view.text).toThrow();
+  apply(left, {
+    kind: "restore-axis",
+    table: seed.table,
+    dimension: "column",
+    id: seed.target.column,
+  });
+  expect(view.conflict).toBeUndefined();
+  expect(view.text.toString()).toContain("Retained edit");
+  expect(activeAxes(left, seed.table, "column")).toContain(seed.target.column);
+  view.destroy();
+  left.destroy();
+  right.destroy();
+  seed.session.destroy();
 });
 
 test("browser deltas edit implicit cells, paragraphs and their virtual formatting boundary", () => {

@@ -17,6 +17,7 @@ import {
   type TableBase,
 } from "./schema.ts";
 import { stableStringify } from "./payload.ts";
+import { structuredReadCache } from "./read-cache.ts";
 export {
   WordTableConflict,
   type TableAddress,
@@ -37,13 +38,11 @@ const prefix = "word-table-v2:";
 export const tableName = (address: TableAddress) =>
   prefix + JSON.stringify([address.story, address.table]);
 export const cellName = (address: CellAddress) =>
-  "word-cell-v2:" +
-  JSON.stringify([address.story, address.table, address.row, address.column]);
+  "word-cell-v2:" + JSON.stringify([address.story, address.table, address.row, address.column]);
 export const cellFormatName = (address: CellAddress) =>
   "word-cell-format-v2:" +
   JSON.stringify([address.story, address.table, address.row, address.column]);
-export const cellKey = (row: string, column: string) =>
-  JSON.stringify([row, column]);
+export const cellKey = (row: string, column: string) => JSON.stringify([row, column]);
 export function existingText(doc: Y.Doc, name: string) {
   return doc.share.has(name) ? doc.getText(name) : undefined;
 }
@@ -55,26 +54,25 @@ function freezeRecord(value: unknown): void {
   }
 }
 export function tableRecords(doc: Y.Doc, address: TableAddress) {
+  const cache = structuredReadCache(doc),
+    name = tableName(address);
+  const cached = !cache.active && cache.records.get(name);
+  if (cached) return cached;
   if (!doc.share.has(tableName(address))) return [];
-  return [...doc.getMap<unknown>(tableName(address)).entries()].map(
-    ([key, value]) => {
-      if (value && typeof value === "object") {
-        const cached = parsedRecords.get(value);
-        if (cached) return { key, value: cached };
-      }
-      const parsed = recordSchema.safeParse(value);
-      if (!parsed.success)
-        throw new WordTableConflict(
-          address,
-          "schema",
-          "Invalid structured table record.",
-        );
-      freezeRecord(parsed.data);
-      if (value && typeof value === "object")
-        parsedRecords.set(value, parsed.data);
-      return { key, value: parsed.data };
-    },
-  );
+  const result = [...doc.getMap<unknown>(tableName(address)).entries()].map(([key, value]) => {
+    if (value && typeof value === "object") {
+      const cached = parsedRecords.get(value);
+      if (cached) return { key, value: cached };
+    }
+    const parsed = recordSchema.safeParse(value);
+    if (!parsed.success)
+      throw new WordTableConflict(address, "schema", "Invalid structured table record.");
+    freezeRecord(parsed.data);
+    if (value && typeof value === "object") parsedRecords.set(value, parsed.data);
+    return { key, value: parsed.data };
+  });
+  if (!cache.active) cache.records.set(name, result);
+  return result;
 }
 export function tableAddresses(doc: Y.Doc): TableAddress[] {
   return [...doc.share.keys()]
@@ -100,22 +98,17 @@ export function tableBase(doc: Y.Doc, address: TableAddress): TableBase {
 /** Baseline cells remain in the body so simultaneous migration never seeds duplicate text. */
 export function migrateTable(doc: Y.Doc, address: TableAddress) {
   const text = existingText(doc, address.story);
-  if (!text)
-    throw new WordTableConflict(address, "migration", "Missing source story.");
+  if (!text) throw new WordTableConflict(address, "migration", "Missing source story.");
   const paragraphs = tableParagraphs(text);
   groupTableParagraphs(paragraphs, { retainedBaseline: true });
   const cells = new Map<string, TableCell>();
   for (const p of paragraphs)
-    for (const cell of [
-      ...(p.table?.parents ?? []),
-      ...(p.table ? [p.table] : []),
-    ])
+    for (const cell of [...(p.table?.parents ?? []), ...(p.table ? [p.table] : [])])
       if (cell.id === address.table) {
         const { schema: _schema, parents: _parents, ...base } = cell;
         cells.set(cell.cell, base);
       }
-  if (!cells.size)
-    throw new WordTableConflict(address, "migration", "Missing source table.");
+  if (!cells.size) throw new WordTableConflict(address, "migration", "Missing source table.");
   const values = [...cells.values()];
   const base: TableBase = {
     kind: "base",
@@ -139,11 +132,7 @@ export function migrateTable(doc: Y.Doc, address: TableAddress) {
     }
   tableBase(doc, address);
 }
-export function orderedAxes(
-  doc: Y.Doc,
-  address: TableAddress,
-  dimension: "row" | "column",
-) {
+export function orderedAxes(doc: Y.Doc, address: TableAddress, dimension: "row" | "column") {
   const base = tableBase(doc, address);
   const initial = dimension === "row" ? base.rows : base.columns;
   const inserts = tableRecords(doc, address).flatMap((r) =>
@@ -156,11 +145,7 @@ export function orderedAxes(
   const add = (left: string | null, right: string | null) => {
     if (left === null || right === null) return;
     if (!ids.has(left) || !ids.has(right))
-      throw new WordTableConflict(
-        address,
-        "order",
-        "Missing axis ordering witness.",
-      );
+      throw new WordTableConflict(address, "order", "Missing axis ordering witness.");
     edges.get(left)!.add(right);
   };
   initial.slice(1).forEach((right, i) => add(initial[i]!, right));
@@ -188,32 +173,17 @@ export function orderedAxes(
     throw new WordTableConflict(address, "order", "Contradictory axis order.");
   return ordered;
 }
-export function liveAxes(
-  doc: Y.Doc,
-  address: TableAddress,
-  dimension: "row" | "column",
-) {
+export function liveAxes(doc: Y.Doc, address: TableAddress, dimension: "row" | "column") {
   const removed = new Set(
     tableRecords(doc, address).flatMap((r) =>
-      r.value.kind === "remove" && r.value.dimension === dimension
-        ? r.value.ids
-        : [],
+      r.value.kind === "remove" && r.value.dimension === dimension ? r.value.ids : [],
     ),
   );
-  return orderedAxes(doc, address, dimension).filter(
-    (value) => !removed.has(value),
-  );
+  return orderedAxes(doc, address, dimension).filter((value) => !removed.has(value));
 }
-export function activeAxes(
-  doc: Y.Doc,
-  address: TableAddress,
-  dimension: "row" | "column",
-) {
+export function activeAxes(doc: Y.Doc, address: TableAddress, dimension: "row" | "column") {
   const result = liveAxes(doc, address, dimension);
-  if (
-    !result.length ||
-    (dimension === "column" && result.length > MAX_TABLE_COLUMNS)
-  )
+  if (!result.length || (dimension === "column" && result.length > MAX_TABLE_COLUMNS))
     throw new WordTableConflict(
       address,
       "capacity",
