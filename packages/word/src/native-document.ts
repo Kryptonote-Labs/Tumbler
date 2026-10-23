@@ -1,3 +1,4 @@
+import { refreshUnchangedNumbering } from './content-numbering.ts';
 import { validateXmlText } from "./text-validation.ts";
 import { withWordInkTraces } from './ink-overrides.ts';
 import { chartTitleFromWord } from './chart-title.ts';
@@ -6,6 +7,7 @@ import { reconcileWordStories, reconcileWordContentAndStories } from './content-
 import { DEFAULT_WORD_THEME, resolveWordColour, resolveWordPaintProperties } from './theme-colours.ts';
 import { isWordAuthoredList, registerWordListLevel, wordListMarker, type WordAuthoredList } from './authored-list.ts';
 import { isWordHyperlink } from './hyperlinks.ts';
+import { missingAuthoredStyles } from './package-styles.ts';
 import { wordAuthoringStyles, validateWordStyleId } from './authored-styles.ts';
 import { wordBreakXml, validateBreakRun } from './breaks.ts';
 import { nativeAuthoredInk } from './authored-ink.ts';
@@ -19,7 +21,7 @@ import type { WordArtifact } from './artifact.ts';
 import { reconcileWordContent } from './content-export.ts';
 import { wordParagraphText, wordParagraphTextSegments } from './text.ts';
 import type { WordInline } from './document.ts';
-import { WordMarkerBudget, type WordParagraphNumbering } from './numbering.ts';
+import { WordMarkerBudget, type WordNumbering, type WordParagraphNumbering } from './numbering.ts';
 import { authoredTableGrid } from './authored-table.ts';
 import { nativeImageDrawing } from './native-image.ts';
 import type { WordContentBlock } from './create-content.ts';
@@ -69,6 +71,15 @@ interface RecordBlock {
 }
 
 /** Shared in-memory Word engine. Imports compile source properties once; only export writes a package. */
+/** OOXML cells end in a paragraph, including after a nested table. */
+function cellContent(blocks: readonly WordContentBlock[]): readonly WordContentBlock[] {
+  return !blocks.length || blocks.at(-1)?.kind === 'table'
+    ? [...blocks, { kind: 'paragraph', runs: [] }] : blocks;
+}
+
+// Story models receive their final content with the shared numbering context.
+const deferContent = Symbol('defer story content');
+
 export class NativeWordDocument implements WordLayoutSource {
   private readonly namedStyles: ReturnType<typeof wordAuthoringStyles>;
   private nextId = -1;
@@ -85,14 +96,19 @@ export class NativeWordDocument implements WordLayoutSource {
   private nextImageId = 0;
   private readonly signatures = new WeakMap<WordContentBlock, string>();
   private readonly paragraphTexts = new WeakMap<WordParagraph, string>();
-  private readonly independentBlocks = new WeakMap<WordContentBlock, boolean>();
+  private effectiveNumbering: WordNumbering | undefined;
+  private numberingStylesKey: string | undefined;
+  private independentBlocks = new WeakMap<WordContentBlock, boolean>();
   // Source continuations and numbering depend on preceding content and must still be visited.
   private independent(block: WordContentBlock): boolean {
     const cached = this.independentBlocks.get(block);
     if (cached !== undefined) return cached;
     const value = (!('source' in block) || block.source === undefined) &&
-      (block.kind !== 'paragraph' || !block.list) &&
-      (block.kind !== 'table' || block.rows.every(row => row.every(cell => cell.blocks.every(child => this.independent(child)))));
+      (block.kind === 'table'
+        ? block.rows.every(row => row.every(cell => cellContent(cell.blocks).every(child => this.independent(child))))
+        : block.kind === 'paragraph'
+          ? !block.list && !this.effectiveNumbering?.reference({}, block.styleId)
+          : !this.effectiveNumbering?.reference({}));
     this.independentBlocks.set(block, value);
     return value;
   }
@@ -109,7 +125,7 @@ export class NativeWordDocument implements WordLayoutSource {
   }
   readonly background: string | undefined;
 
-  constructor(private readonly options: NativeWordOptions = {}) {
+  constructor(private readonly options: NativeWordOptions & { readonly [deferContent]?: true } = {}) {
     this.namedStyles = wordAuthoringStyles(options.source?.document.styles, options.defaultFormat);
     this.compiled = options.source ? new NativeWordSource(options.source) : undefined;
     const document = options.source?.document;
@@ -142,9 +158,11 @@ export class NativeWordDocument implements WordLayoutSource {
       headerReferences: [],
       footerReferences: [],
     };
+    if (options[deferContent]) return;
     if (options.content) this.update(options.content);
     else if (this.compiled) {
-      this.update(this.compiled.original);
+      this.numberingStylesKey = '[]';
+      this.updateContent(this.compiled.original, this.compiled.artifact.document.numbering);
       this.exported = this.compiled.artifact;
     }
   }
@@ -158,22 +176,33 @@ export class NativeWordDocument implements WordLayoutSource {
   }
   removeStory(target: string | WordStoryTarget) {
     const key = typeof target === 'string' ? target : `${target.section}:${target.kind}:${target.type}`;
-    if (this.editedStories.delete(key)) this.exported = undefined;
+    if (this.editedStories.delete(key)) {
+      this.shareNumbering(this.numberingFor(this.authored));
+      this.exported = undefined;
+    }
   }
   /** Update a shared header/footer once; every page referencing it uses this same native model. */
   updateStory(target: string | WordStoryTarget, blocks: readonly WordContentBlock[]) {
     const key = typeof target === 'string' ? target : `${target.section}:${target.kind}:${target.type}`;
     let entry = this.editedStories.get(key);
     if (!entry) {
-      const source = typeof target === 'string' && this.options.source ? wordStoryArtifact(this.options.source, target) : undefined;
+      const section = typeof target === 'string' ? undefined : wordSections(this)[target.section];
+      const reference = typeof target === 'string' ? undefined :
+        (target.kind === 'header' ? section?.headerReferences : section?.footerReferences)?.find(item => item.type === target.type);
+      const partName = typeof target === 'string' ? target : this.options.source?.document.headerFooters
+        .find(story => story.relationshipId === reference?.relationshipId)?.part.name.value;
+      const source = partName && this.options.source ? wordStoryArtifact(this.options.source, partName) : undefined;
       const { source: _bodySource, content: _bodyContent, ...options } = this.options;
-      entry = { target, blocks, model: new NativeWordDocument({ ...options, content: blocks, ...(source ? { source } : {}) }) };
+      entry = { target, blocks, model: new NativeWordDocument({ ...options, [deferContent]: true, ...(source ? { source } : {}) }) };
       entry.model.inheritedDoNotExpandShiftReturn = this.doNotExpandShiftReturn;
-      this.editedStories.set(key, entry);
-    } else {
-      entry.model.update(blocks);
     }
+    validateContentText(blocks, entry.model.compiled);
+    this.editedStories.set(key, entry);
     entry.blocks = blocks;
+    const numbering = this.numberingFor(this.authored);
+    // Update the edited story once, then refresh other models only if shared styles changed.
+    entry.model.updateContent(blocks, numbering);
+    this.shareNumbering(numbering);
     this.exported = undefined;
     return entry.model;
   }
@@ -214,6 +243,7 @@ export class NativeWordDocument implements WordLayoutSource {
     const original = this.compiled ? wordLayoutStories(this.compiled.artifact.document, {
       ...(maxCharacters === undefined ? {} : { maxCharacters }),
       headerFooterOverrides,
+      ...(this.effectiveNumbering ? { numbering: this.effectiveNumbering } : {}),
     }) : { headerFooters: [], notes: [] };
     const headerFooters = [...original.headerFooters];
     const bindings: { section: number; kind: 'header' | 'footer'; type: 'default' | 'first' | 'even'; relationshipId: string }[] = [];
@@ -250,7 +280,10 @@ export class NativeWordDocument implements WordLayoutSource {
         result = created.artifact;
         partName = created.partName;
       }
-      const edited = reconcileWordContent(wordStoryArtifact(result, partName), entry.blocks);
+      const current = wordStoryArtifact(result, partName);
+      const original = this.options.source?.document.headerFooters.some(story => story.part.name.value === partName)
+        ? wordStoryArtifact(this.options.source, partName) : undefined;
+      const edited = reconcileWordContent(current, original ? refreshUnchangedNumbering(original, current, entry.blocks) : entry.blocks);
       result = storyMainArtifact(edited);
     }
     return this.exported = result;
@@ -258,6 +291,44 @@ export class NativeWordDocument implements WordLayoutSource {
 
   update(input: readonly WordContentBlock[]) {
     validateContentText(input, this.compiled);
+    const numbering = this.numberingFor(input);
+    this.updateContent(input, numbering);
+    this.shareNumbering(numbering);
+  }
+
+  /** Export adds styles package-wide, even when only a header/footer requests them. */
+  private numberingFor(input: readonly WordContentBlock[]): WordNumbering | undefined {
+    const document = this.compiled?.artifact.document;
+    if (!document) return this.effectiveNumbering;
+    const ids = new Set<string>();
+    const visit = (blocks: readonly WordContentBlock[]) => {
+      for (const block of blocks) {
+        if (block.kind === 'paragraph' && block.styleId !== undefined) ids.add(block.styleId);
+        else if (block.kind === 'table') for (const row of block.rows) for (const cell of row) visit(cell.blocks);
+      }
+    };
+    visit(input);
+    for (const entry of this.editedStories.values()) visit(entry.blocks);
+    const missing = missingAuthoredStyles(document, [...ids]);
+    const key = JSON.stringify(missing.map(style => style.styleId));
+    if (this.numberingStylesKey === key) return this.effectiveNumbering;
+    this.numberingStylesKey = key;
+    return document.numbering.withParagraphStyles(missing);
+  }
+
+  private shareNumbering(numbering: WordNumbering | undefined): void {
+    if (this.effectiveNumbering !== numbering) this.updateContent(this.authored, numbering);
+    for (const entry of this.editedStories.values()) {
+      if (entry.model.effectiveNumbering !== numbering) entry.model.updateContent(entry.blocks, numbering);
+    }
+  }
+
+  private updateContent(input: readonly WordContentBlock[], numberingContext?: WordNumbering) {
+    if (this.effectiveNumbering !== numberingContext) {
+      this.effectiveNumbering = numberingContext;
+      this.independentBlocks = new WeakMap();
+      this.exported = undefined;
+    }
     const records = new Map<string, RecordBlock>();
     const visited: (readonly [string, RecordBlock])[] = [];
     const keys = new Set<string>();
@@ -331,7 +402,7 @@ export class NativeWordDocument implements WordLayoutSource {
         const fingerprint = `${hasSection}:${signature(source, width)}`;
         const descendantsStart = visited.length;
         let result: RecordBlock;
-        if (this.options.immutableContent && previous?.signature === fingerprint && previous.subtree?.input === source) {
+        if (this.options.immutableContent && previous?.signature === fingerprint && previous.subtree?.input === source && this.independent(source)) {
           for (const [childKey, child] of previous.subtree.records) {
             if (keys.has(childKey)) throw new Error('Native document block identities must be unique.');
             keys.add(childKey);
@@ -349,7 +420,7 @@ export class NativeWordDocument implements WordLayoutSource {
               const authored = source.rows[rowIndex]![cellIndex]!;
               const geometry = previous.tableGrid![rowIndex]![cellIndex]!;
               const blocks = visit(
-                authored.blocks.length ? authored.blocks : [{ kind: 'paragraph', runs: [] }],
+                cellContent(authored.blocks),
                 geometry.width,
                 `${key}/${rowIndex}/${geometry.column}`,
                 compiled?.cells.get(authored.source!)?.blocks,
@@ -389,7 +460,7 @@ export class NativeWordDocument implements WordLayoutSource {
               verticalAlignment: cell.format?.verticalAlignment ?? compiled?.cells.get(cell.source!)?.verticalAlignment ?? 'top' as const,
               margins: cell.format?.margins ?? compiled?.cells.get(cell.source!)?.margins,
               blocks: visit(
-                cell.blocks.length ? cell.blocks : [{ kind: 'paragraph', runs: [] }],
+                cellContent(cell.blocks),
                 cellWidth,
                 `${key}/${rowIndex}/${column}`,
                 compiled?.cells.get(cell.source!)?.blocks,
@@ -537,10 +608,15 @@ export class NativeWordDocument implements WordLayoutSource {
             result = { signature: fingerprint, block, drawings: media };
           }
           const list = authored.list;
-          const importedReference = list && compiled?.artifact.document.numbering.importedReference(list);
+          // Export preserves source numPr when list metadata is unchanged. Resolve
+          // that direct formatting against the edited style instead of its old marker.
+          const preserved = compiled ? JSON.stringify(list) === JSON.stringify(compiled.lists.get(authored.source!)) : !list;
+          const importedReference = preserved
+            ? this.effectiveNumbering?.reference(original?.directNumbering ?? {}, authored.styleId ?? original?.format.styleId)
+            : list && this.effectiveNumbering?.importedReference(list);
           if (importedReference) {
             numbering.push({ elementId: result.block.elementId, reference: importedReference });
-          } else if (list) {
+          } else if (list && !preserved) {
             if (!isWordAuthoredList(list)) throw new TypeError('Invalid list.');
             const level = list.level ?? 0,
               start = list.start ?? 1;
@@ -591,7 +667,7 @@ export class NativeWordDocument implements WordLayoutSource {
       'body',
       compiled?.artifact.document.blocks,
     );
-    if (compiled) for (const [id, marker] of compiled.artifact.document.numbering.markersFor(numbering, {}, markerBudget)) markers.set(id, marker);
+    if (this.effectiveNumbering) for (const [id, marker] of this.effectiveNumbering.markersFor(numbering, {}, markerBudget)) markers.set(id, marker);
     if (blocks.length !== this.blocks.length || blocks.some((block, index) => block !== this.blocks[index])) this.exported = undefined;
     this.records = records;
     this.blocks = blocks;

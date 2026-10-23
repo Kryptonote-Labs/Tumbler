@@ -84,12 +84,7 @@ export function readShapeText(
       });
     }
     const reference = numbering.paragraphReference(input, paragraph);
-    const instance = numbering.instances.find((i) => i.id === reference?.numId);
-    const definition = numbering.abstracts.find((i) => i.id === instance?.abstractId);
-    const level =
-      reference &&
-      (instance?.levelOverrides.get(reference.level) ??
-        definition?.levels.find((l) => l.level === reference.level));
+    const level = reference && numbering.level(reference);
     output.push({
       runs,
       ...(p.styleId ? { styleId: p.styleId } : {}),
