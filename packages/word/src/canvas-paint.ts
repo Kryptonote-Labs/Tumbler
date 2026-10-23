@@ -1,4 +1,6 @@
-import { paintWordInk, type WordInkPixelContext } from './ink-canvas.ts';
+import { paintWordPicture } from './picture-paint.ts';
+import { paintWordInk, type WordInkViewport, type WordInkPixelContext } from './ink-canvas.ts';
+import { wordDrawingCellClip, intersectWordContentBounds, type WordContentBounds } from './table-clipping.ts';
 import { wordImagePaintBounds } from './image-paint.ts';
 import { layoutChartScene, paintChartScene, type ChartCanvasContext } from "@tumblerjs/charts";
 import { canvasWordTextMeasurer, wordCanvasFont, type WordCanvasTextContext } from "./canvas-text.ts";
@@ -28,10 +30,14 @@ export interface WordCanvasContext<Image, Path = unknown> extends ChartCanvasCon
 export interface WordPagePaintOptions<Image, Path = unknown> {
   /** Device pixels per point. Defaults to CSS pixels (4/3). */
   readonly scale?: number;
+  /** Device-pixel crop. The canvas must have this size; ink reads are clipped to it. */
+  readonly viewport?: WordInkViewport;
   /** Synchronous ink pixel budget. Infinity disables it; stored ink is never reduced. */
   readonly inkMaxPixels?: number;
   /** Paint the backdrop used to isolate destination-dependent ink for a DOM overlay. */
   readonly omitDestinationInk?: boolean;
+  /** Notify an overlay that native destination ink could not replace its cached image. */
+  readonly onInkFallback?: (drawing: WordImageDrawing) => void;
   /** Paper colour. Defaults to white; `"transparent"` leaves the canvas untouched. */
   readonly background?: string;
   /** Decoded image for a drawing; see wordPageImages. Images without a source paint as placeholders. */
@@ -45,6 +51,8 @@ export interface WordPagePaintOptions<Image, Path = unknown> {
   readonly measurer?: WordTextMeasurer;
 }
 
+type PaintOptions<Image, Path> = WordPagePaintOptions<Image, Path> & { readonly clip?: WordContentBounds };
+
 const PLACEHOLDER = "rgba(0,0,0,0.06)";
 
 /**
@@ -53,7 +61,12 @@ const PLACEHOLDER = "rgba(0,0,0,0.06)";
  */
 export function paintWordPage<Image, Path>(context: WordCanvasContext<Image, Path>, page: WordLayoutPage, options: WordPagePaintOptions<Image, Path> = {}): void {
   const scale = options.scale ?? 4 / 3;
+  const paintOptions = { ...options, clip: { x: 0, y: 0, width: page.width, height: page.height } };
+  const viewport = options.viewport;
+  if (viewport && (![viewport.x, viewport.y, viewport.width, viewport.height].every(Number.isSafeInteger)
+    || viewport.width <= 0 || viewport.height <= 0 || !Number.isFinite(scale) || scale <= 0)) throw new RangeError('Invalid page pixel viewport.');
   context.save();
+  if (options.viewport) context.translate(-options.viewport.x, -options.viewport.y);
   context.scale(scale, scale);
   context.beginPath();
   context.rect(0, 0, page.width, page.height);
@@ -67,52 +80,85 @@ export function paintWordPage<Image, Path>(context: WordCanvasContext<Image, Pat
   context.fontKerning = "none";
   const tables = [...page.columns.flatMap(column => column.tables), ...page.headerTables, ...page.footerTables, ...page.noteTables];
   const lines = [...page.columns.flatMap(column => column.lines), ...page.headerLines, ...page.footerLines, ...page.noteLines];
-  const floating = pageDrawingFragments(page).filter(fragment => fragment.drawing?.placement === 'anchor')
-    .sort((left, right) => (left.drawing?.anchor?.zOrder ?? 0) - (right.drawing?.anchor?.zOrder ?? 0));
-  for (const fragment of floating.filter(fragment => fragment.drawing?.anchor?.behindDocument)) paintDrawing(context, fragment, options);
-  for (const table of tables) paintTable(context, table, options);
+  const floating = pageDrawingEntries(page).filter(({ fragment }) => fragment.drawing?.placement === 'anchor')
+    .sort((left, right) => (left.fragment.drawing?.anchor?.zOrder ?? 0) - (right.fragment.drawing?.anchor?.zOrder ?? 0));
+  for (const entry of floating.filter(({ fragment }) => fragment.drawing?.anchor?.behindDocument)) paintFloatingDrawing(context, entry, paintOptions);
+  for (const table of tables) paintTable(context, table, paintOptions);
   paintDecorations(context, lines);
   if (page.noteSeparatorY !== undefined) {
     const left = page.section.marginLeftTwips / 20;
     strokeLine(context, left, page.noteSeparatorY, left + 144, page.noteSeparatorY, { style: "single", widthPoints: 0.5, color: "#000000" });
   }
-  for (const line of lines) paintLine(context, line, options);
-  for (const fragment of floating.filter(fragment => !fragment.drawing?.anchor?.behindDocument)) paintDrawing(context, fragment, options);
+  for (const line of lines) paintLine(context, line, paintOptions);
+  for (const entry of floating.filter(({ fragment }) => !fragment.drawing?.anchor?.behindDocument)) paintFloatingDrawing(context, entry, paintOptions);
   context.restore();
 }
 
-/** Every image drawn on a page, in paint order. Decode these before painting when decoding is asynchronous. */
-export function wordPageImages(page: WordLayoutPage): WordImageDrawing[] {
-  return [...new Set(pageDrawingFragments(page).flatMap(fragment => fragment.drawing?.kind === "image" ? [fragment.drawing] : []))];
+/** Every image drawn on a page. Optional regions are in page points and restrict decoding to intersecting images. */
+export function wordPageImages(page: WordLayoutPage, regions?: readonly WordInkViewport[]): WordImageDrawing[] {
+  return [...new Set(pageDrawingFragments(page).flatMap(fragment => {
+    const drawing = fragment.drawing;
+    if (drawing?.kind !== 'image') return [];
+    const box = wordImagePaintBounds(drawing, fragment.width, fragment.height);
+    if (regions && (box.width <= 0 || box.height <= 0 || !regions.some(region => fragment.x + box.x < region.x + region.width && fragment.y + box.y < region.y + region.height
+      && fragment.x + box.x + box.width > region.x && fragment.y + box.y + box.height > region.y))) return [];
+    return [drawing];
+  }))];
 }
 /** Regions whose ink requires composition with the already-painted page. */
 export function wordPageInkBounds(page: WordLayoutPage) {
-  return pageDrawingFragments(page).flatMap(fragment => {
+  return pageDrawingEntries(page).flatMap(({ fragment, clip }) => {
     const drawing = fragment.drawing;
     if (drawing?.kind !== 'image' || drawing.inkRendering !== 'raster' || !drawing.inkProjection) return [];
     const bounds = wordImagePaintBounds(drawing, fragment.width, fragment.height);
-    return [{ x: fragment.x + bounds.x, y: fragment.y + bounds.y, width: bounds.width, height: bounds.height }];
+    const painted = { x: fragment.x + bounds.x, y: fragment.y + bounds.y, width: bounds.width, height: bounds.height };
+    const visible = clip ? intersectWordContentBounds(painted, clip) : painted;
+    return visible.width > 0 && visible.height > 0 ? [visible] : [];
   });
 }
 
+interface DrawingEntry { readonly fragment: WordLayoutFragment; readonly clip?: WordContentBounds }
+
 function pageDrawingFragments(page: WordLayoutPage): WordLayoutFragment[] {
-  const drawings: WordLayoutFragment[] = [];
-  const visitLines = (lines: readonly WordLayoutLine[]) => {
+  return pageDrawingEntries(page).map(entry => entry.fragment);
+}
+
+function pageDrawingEntries(page: WordLayoutPage): DrawingEntry[] {
+  const drawings: DrawingEntry[] = [];
+  const visitLines = (lines: readonly WordLayoutLine[], clip?: WordContentBounds) => {
     for (const line of lines)
-      for (const fragment of line.fragments) if (fragment.drawing) drawings.push(fragment);
+      for (const fragment of line.fragments) if (fragment.drawing) {
+        const drawingClip = wordDrawingCellClip(fragment.drawing, clip);
+        drawings.push({ fragment, ...(drawingClip ? { clip: drawingClip } : {}) });
+      }
   };
-  const visitTable = (table: WordLayoutTable): void => {
+  const visitTable = (table: WordLayoutTable, ancestor?: WordContentBounds): void => {
     for (const cell of table.cells) {
-      visitLines(cell.lines);
-      cell.tables.forEach(visitTable);
+      const clip = ancestor ? intersectWordContentBounds(ancestor, cell) : cell;
+      visitLines(cell.lines, clip);
+      for (const nested of cell.tables) visitTable(nested, clip);
     }
   };
-  [...page.columns.flatMap(column => column.tables), ...page.headerTables, ...page.footerTables, ...page.noteTables].forEach(visitTable);
+  for (const table of [...page.columns.flatMap(column => column.tables), ...page.headerTables, ...page.footerTables, ...page.noteTables]) visitTable(table);
   visitLines([...page.columns.flatMap(column => column.lines), ...page.headerLines, ...page.footerLines, ...page.noteLines]);
   return drawings;
 }
 
-function paintTable<Image, Path>(context: WordCanvasContext<Image, Path>, table: WordLayoutTable, options: WordPagePaintOptions<Image, Path>): void {
+function paintFloatingDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, entry: DrawingEntry, options: PaintOptions<Image, Path>): void {
+  if (!entry.clip) return paintDrawing(context, entry.fragment, options);
+  const clip = options.clip ? intersectWordContentBounds(options.clip, entry.clip) : entry.clip;
+  context.save();
+  context.beginPath();
+  context.rect(clip.x, clip.y, clip.width, clip.height);
+  context.clip();
+  try {
+    paintDrawing(context, entry.fragment, { ...options, clip });
+  } finally {
+    context.restore();
+  }
+}
+
+function paintTable<Image, Path>(context: WordCanvasContext<Image, Path>, table: WordLayoutTable, options: PaintOptions<Image, Path>): void {
   for (const cell of table.cells) {
     if (cell.shading === undefined) continue;
     context.fillStyle = cell.shading;
@@ -123,9 +169,19 @@ function paintTable<Image, Path>(context: WordCanvasContext<Image, Path>, table:
     else strokeLine(context, edge.x, edge.y, edge.x, edge.y + edge.length, edge.border);
   }
   for (const cell of table.cells) {
-    paintDecorations(context, cell.lines);
-    for (const line of cell.lines) paintLine(context, line, options);
-    for (const nested of cell.tables) paintTable(context, nested, options);
+    context.save();
+    context.beginPath();
+    context.rect(cell.x, cell.y, cell.width, cell.height);
+    context.clip();
+    try {
+      const clip = options.clip ? intersectWordContentBounds(options.clip, cell) : cell;
+      const cellOptions = { ...options, clip };
+      paintDecorations(context, cell.lines);
+      for (const line of cell.lines) paintLine(context, line, cellOptions);
+      for (const nested of cell.tables) paintTable(context, nested, cellOptions);
+    } finally {
+      context.restore();
+    }
   }
 }
 
@@ -157,7 +213,7 @@ function paintBorders<Image, Path>(context: WordCanvasContext<Image, Path>, bord
   if (borders?.right) strokeLine(context, right - borders.right.widthPoints / 2, top, right - borders.right.widthPoints / 2, bottom, borders.right);
 }
 
-function paintLine<Image, Path>(context: WordCanvasContext<Image, Path>, line: WordLayoutLine, options: WordPagePaintOptions<Image, Path>): void {
+function paintLine<Image, Path>(context: WordCanvasContext<Image, Path>, line: WordLayoutLine, options: PaintOptions<Image, Path>): void {
   if (line.marker !== undefined) paintText(context, line.marker, line.marker.text.trimEnd());
   for (const fragment of line.fragments) {
     if (fragment.kind === "drawing") {
@@ -167,12 +223,20 @@ function paintLine<Image, Path>(context: WordCanvasContext<Image, Path>, line: W
   }
 }
 
-function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, fragment: WordLayoutFragment, options: WordPagePaintOptions<Image, Path>): void {
+function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, fragment: WordLayoutFragment, options: PaintOptions<Image, Path>): void {
   const drawing = fragment.drawing;
   if (options.omitDestinationInk && drawing?.kind === 'image' && drawing.inkRendering === 'raster') return;
-  if (paintWordInk(context, fragment, options.scale ?? 4 / 3, options.inkMaxPixels)) return;
+  if (paintWordInk(context, fragment, options.scale ?? 4 / 3, options.inkMaxPixels, options.viewport, options.clip)) return;
+  if (drawing?.kind === 'image' && options.viewport) {
+    const box = wordImagePaintBounds(drawing, fragment.width, fragment.height);
+    const scale = options.scale ?? 4 / 3, view = options.viewport;
+    if (box.width <= 0 || box.height <= 0 || (fragment.x + box.x + box.width) * scale <= view.x || (fragment.y + box.y + box.height) * scale <= view.y
+      || (fragment.x + box.x) * scale >= view.x + view.width || (fragment.y + box.y) * scale >= view.y + view.height) return;
+  }
+  if (drawing?.kind === 'image' && drawing.inkRendering === 'raster') options.onInkFallback?.(drawing);
   const image = drawing?.kind === "image" ? options.image?.(drawing) : undefined;
   if (image !== undefined && drawing?.kind === 'image') {
+    if (drawing.picture) return paintWordPicture(context, image, drawing.picture, fragment);
     const box = wordImagePaintBounds(drawing, fragment.width, fragment.height);
     context.drawImage(image, fragment.x + box.x, fragment.y + box.y, box.width, box.height);
     return;
@@ -239,7 +303,7 @@ function paintText<Image, Path>(context: WordCanvasContext<Image, Path>, item: W
     context.fillStyle = background;
     context.fillRect(item.x, item.y, item.width, item.height);
   }
-  if (text.trim() === "") return;
+  if (text.trim() === "" && !("wordSpacing" in item)) return;
   // The context is already scaled to points, so the font is sized in points.
   context.font = wordCanvasFont(format, 1);
   context.direction = format.rightToLeft ? "rtl" : "ltr";

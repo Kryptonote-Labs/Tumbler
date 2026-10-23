@@ -101,13 +101,21 @@ export function placeWordRange(text: Y.Text, range: WordRange, alignment: WordIt
   return {start:contentStart,end:at};
 }
 
+const inlineFormatKeys = [
+  'bold', 'italic', 'underline', 'strike', 'fontFamily', 'wordUnderline',
+  'highlight', 'shading', 'verticalAlign', 'characterSpacingPoints',
+  'link', 'color', 'font', 'fontSize',
+] as const satisfies readonly (keyof TextAttributes)[];
+
 /** Update an explicitly selected recipe, or insert a new one at the supplied cursor range. */
 export function pageNumberEdit(text: Y.Text, range: WordRange, preset: WordPageNumberPreset, alignment?: WordItemAlignment): WordPositionedEdit {
   return positionedWordEdit(text, staged => {
     if (range.start < 0 || range.end < range.start || range.end >= staged.length) throw new Error('Page number range is outside the document.');
     if (/[\n\t\u2028]/.test(staged.toString().slice(range.start,range.end))) throw new Error('Page numbers replace inline content only.');
     const inherited = runsIn(staged,range.start === range.end ? {start:Math.max(0,range.start-1),end:range.start} : range)[0]?.attributes ?? {};
-    const {field:_field,tab:_tab,align:_align,positioning:_positioning,wordSource:_source,...format} = inherited;
+    // Inherit only character formatting, never paragraph structure or object/source identity.
+    const format = Object.fromEntries(inlineFormatKeys.flatMap(key =>
+      inherited[key] === undefined ? [] : [[key, inherited[key]]])) as TextAttributes;
     staged.delete(range.start, range.end-range.start);
     let end = range.start;
     for (const run of wordPageNumberRuns(preset)) {

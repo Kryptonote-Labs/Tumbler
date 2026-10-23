@@ -95,11 +95,20 @@ function splitBlocks(blocks: readonly Block[], available: number, force: boolean
     const split = 'paragraph' in block
       ? splitParagraph(block, available - used, force && head.length === 0)
       : splitPreparedTable(block, available - used, force && head.length === 0);
-    if (!split) return { head, tail: blocks.slice(index) };
+    if (!split) return { head, tail: atColumnStart(blocks.slice(index)) };
     head.push(split.head);
-    return { head, tail: [...(split.tail ? [split.tail] : []), ...blocks.slice(index + 1)] };
+    return { head, tail: atColumnStart([...(split.tail ? [split.tail] : []), ...blocks.slice(index + 1)]) };
   }
   return { head, tail: [] };
+}
+
+/** The predecessor remains on the old column; only this paragraph's own spacing travels. */
+function atColumnStart(blocks: Block[]): Block[] {
+  const first = blocks[0];
+  if (first && 'paragraph' in first && first.spacingBeforeAtStartTwips !== undefined) {
+    blocks[0] = { ...first, format: { ...first.format, spacingBeforeTwips: first.spacingBeforeAtStartTwips } };
+  }
+  return blocks;
 }
 
 function splitParagraph(paragraph: PreparedParagraph, available: number, force: boolean): Split<PreparedParagraph> | undefined {
@@ -115,7 +124,7 @@ function splitParagraph(paragraph: PreparedParagraph, available: number, force: 
   const head = Object.freeze({ ...paragraph, lines: Object.freeze(paragraph.lines.slice(0, count)),
     format: Object.freeze({ ...paragraph.format, spacingAfterTwips: 0 }) });
   if (count === paragraph.lines.length) return { head };
-  return { head, tail: Object.freeze({ ...paragraph, marker: undefined,
+  return { head, tail: Object.freeze({ ...paragraph, marker: undefined, spacingBeforeAtStartTwips: 0,
     lines: Object.freeze(paragraph.lines.slice(count)),
     format: Object.freeze({ ...paragraph.format, spacingBeforeTwips: 0 }) }) };
 }

@@ -1,3 +1,5 @@
+import { tableBorderName, tableWidthValue } from './strict-resources.ts';
+import { orderedPropertyXml } from './property-order.ts';
 import { readWordColour, wordColourAttributes } from './theme-colour-xml.ts';
 import { isWordColour, type WordColour } from './theme-colours.ts';
 import type { LosslessXmlElement } from '@tumblerjs/ooxml';
@@ -61,19 +63,30 @@ export function readTableShading(e: LosslessXmlElement | undefined, ns: string, 
   if (attr(e, ns, 'val') === 'nil') return 'transparent';
   return readWordColour(e, ns, attr(e, ns, 'val') === 'solid' ? 'color' : 'fill', scheme) ?? 'transparent';
 }
-export function cellFormatXml(format: WordCellFormat): Map<string, string> {
+export function cellFormatXml(format: WordCellFormat, strict = false): Map<string, string> {
   if (!isWordCellFormat(format)) throw new TypeError('Invalid cell formatting.');
   const values = new Map<string, string>();
+  if (format.borders) values.set('tcBorders', `<w:tcBorders>${borderXml(format.borders, strict)}</w:tcBorders>`);
   if (format.shading !== undefined) values.set('shd', `<w:shd w:val="clear" ${format.shading === 'transparent' ? 'w:fill="auto"' : wordColourAttributes(format.shading, true)}/>`);
+  if (format.margins) values.set('tcMar', `<w:tcMar>${([['top', format.margins.topTwips], ['left', format.margins.startTwips], ['bottom', format.margins.bottomTwips], ['right', format.margins.endTwips]] as const).map(([k,v]) => `<w:${tableBorderName(k, strict)} w:w="${tableWidthValue(v, strict)}" w:type="dxa"/>`).join('')}</w:tcMar>`);
   if (format.verticalAlignment) values.set('vAlign', `<w:vAlign w:val="${format.verticalAlignment}"/>`);
-  if (format.margins) values.set('tcMar', `<w:tcMar>${[['top', format.margins.topTwips], ['left', format.margins.startTwips], ['bottom', format.margins.bottomTwips], ['right', format.margins.endTwips]].map(([k,v]) => `<w:${k} w:w="${v}" w:type="dxa"/>`).join('')}</w:tcMar>`);
-  if (format.borders) values.set('tcBorders', `<w:tcBorders>${borderXml(format.borders)}</w:tcBorders>`);
   return values;
 }
-export function borderXml(borders: WordTableBorders): string {
-  return Object.entries(borders).map(([side,b]) => `<w:${side} w:val="${b.style}" w:sz="${Math.round(b.widthPoints * 8)}" ${wordColourAttributes(b.color).replace('w:val=', 'w:color=')}/>`).join('');
+export function borderXml(borders: WordTableBorders, strict = false): string {
+  const values = new Map(Object.entries(borders).flatMap(([side, b]) => b ? [[side, `<w:${side} w:val="${b.style}" w:sz="${Math.round(b.widthPoints * 8)}" ${wordColourAttributes(b.color).replace('w:val=', 'w:color=')}/>`] as const] : []));
+  const output = orderedPropertyXml('tcBorders', values);
+  return strict ? output.replace(/<w:(left|right)\b/g, (_, side: string) => `<w:${tableBorderName(side, true)}`) : output;
 }
 export function rowFormatXml(format: WordRowFormat): string {
   if (!isWordRowFormat(format)) throw new TypeError('Invalid row formatting.');
   return `<w:trHeight w:val="${format.heightTwips ?? 0}" w:hRule="${format.heightRule ?? 'atLeast'}"/>`;
+}
+
+/** CT_TcPr combines structural and visual properties before ordering them. */
+export function authoredCellPropertiesXml(width: number, span: number, merge: 'restart' | 'continue' | undefined, format: WordCellFormat | undefined): string {
+  const values = format ? cellFormatXml(format) : new Map<string, string>();
+  values.set('tcW', `<w:tcW w:w="${Math.round(width * 20)}" w:type="dxa"/>`);
+  if (span > 1) values.set('gridSpan', `<w:gridSpan w:val="${span}"/>`);
+  if (merge) values.set('vMerge', `<w:vMerge w:val="${merge}"/>`);
+  return orderedPropertyXml('tcPr', values);
 }

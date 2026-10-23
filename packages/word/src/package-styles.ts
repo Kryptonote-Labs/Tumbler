@@ -20,12 +20,13 @@ export function mergeAuthoredStyles(document: WordDocument, ids: readonly string
     while (document.package.getPart(path)) path = PartName.parse(`/word/tumbler-styles-${++suffix}.xml`);
     transaction.addPart(path, 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml', new TextEncoder().encode(`<w:styles xmlns:w="${namespace}">${content}</w:styles>`));
     const office = document.conformance === 'strict' ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const owner = document.package.mainOfficeDocumentPart().name;
     let id = 'tumbler-styles';
     let existingIds = new Set<string>();
-    try { existingIds = new Set(document.package.relationships(document.part.name).items.map(rel => rel.id)); }
+    try { existingIds = new Set(document.package.relationships(owner).items.map(rel => rel.id)); }
     catch (error) { if (!(error instanceof RelationshipsError) || error.code !== 'missing_item') throw error; }
     while (existingIds.has(id)) id += '-new';
-    transaction.addRelationship(document.part.name, { id, type: `${office}/styles`, target: path });
+    transaction.addRelationship(owner, { id, type: `${office}/styles`, target: path });
   }
 }
 

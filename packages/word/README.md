@@ -29,6 +29,12 @@ const bytes = artifact.bytes();
 
 Creation defaults to A4 with one-inch margins and modern Word compatibility.
 
+Adding lists or tables to an imported Strict document emits Strict numbering,
+theme and table vocabulary. Table widths and cell margins use physical units and
+reopen as integer twips in the model. Existing resource parts are preserved when
+content edits do not change them. This bounded conversion does not validate an
+entire package or establish desktop Office interoperability.
+
 Line layout lets ordinary trailing spaces extend past the margin without moving
 a fitting word or adding space-only lines. Their logical offsets are retained
 even though they have no painted width. The document compatibility setting
@@ -103,6 +109,20 @@ session.markSaved();
 const output = session.artifact.bytes();
 ```
 
+Session subscribers receive immutable change snapshots in revision order. Reentrant
+edits, undo, redo, saves, and external revisions commit immediately, but their
+notifications wait until the current event reaches all its subscribers. Read
+`change.artifact` and `change.dirty` for that revision; the live session may already
+contain a later revision. Subscribing or unsubscribing affects events committed
+after that subscription change, not events already queued.
+
+Subscriber exceptions do not reject committed operations or stop other subscribers.
+Pass `onListenerError(error, change)` in session options to report them. By default,
+the session calls `console.error`. If a custom reporter throws, the session logs
+both errors and continues delivery. A throwing console is ignored. Reporters run
+synchronously and may also cause queued notifications. Callbacks must eventually
+stop making edits so the synchronous notification queue can finish draining.
+
 Word 2010 ink uses `@tumblerjs/ink` to expose decoded traces, recognition and
 diagnostics on `drawing.ink`. Native InkML is authoritative: the reader generates
 SVG for destination-independent pens, even when a cached VML bitmap exists.
@@ -157,6 +177,18 @@ scales the measured font line box; exact and at-least spacing use the authored
 point height. Browser measurers should include the font's line gap and avoid
 rounding vertical metrics at each text size, since small errors accumulate across pages.
 
+Body pagination keeps `keepNext` chains together independently of `keepLines`.
+Chains taller than a column start fresh once, then flow normally. Widow control is
+on by default and keeps the first and last pairs together when a column can hold
+them. Explicit page and column breaks take precedence. `nextColumn` sections reuse
+an available column when page and column geometry match.
+
+Body, table cells, and auxiliary stories share adjacent paragraph spacing. The gap
+uses the maximum of the previous after-spacing and current before-spacing.
+For matching computed paragraph styles, each `contextualSpacing` contribution is
+subtracted from that maximum, down to zero. These gaps also determine pagination
+and table heights; prepared source formats remain unchanged.
+
 See the repository's
 [WordprocessingML implementation status](../../docs/wordprocessingml-implementation.md)
 for the exact capability matrix and known limitations.
@@ -168,6 +200,45 @@ MIT licensed. See [LICENSE](LICENSE).
 `createWordArtifact({ blocks })` accepts paragraph, table and image blocks. A paragraph has
 formatted `runs`, optional alignment and optional `list: { id, kind, level, start }` metadata.
 Reuse a list ID to continue numbering; use a new ID to restart it. Levels range from zero to eight.
+Imported `source-list-N` identities bind to the package's existing numbering instance.
+Reusing one in appended or moved paragraphs continues that instance in native preview
+and export, including its level patterns and start overrides. Use a new identity to
+start an independently defined list. Imported identities must retain their source
+level definitions. Incompatible kind/start/marker metadata or an undefined source
+level throws `TypeError` in preview and export instead of silently dropping the edit.
+Compatible imported definitions, including empty bullet markers, remain valid when
+appending items. Newly authored bullet markers must still be nonempty.
+
+Imported numbering resolves paragraph-style `numPr` through `basedOn`, including the
+default paragraph style. Level `pStyle` selects the inherited level; direct `ilvl`
+overrides it, and `numId=0` cancels numbering. Numbering-style `numStyleLink` references
+resolve before instance overrides; numbering styles ignore `basedOn`. Native style
+edits and new styled paragraphs resolve numbering against their current style while
+retaining direct numbering and cancellation. Native updates also include the missing
+built-in styles that export will add; opening an untouched source keeps its imported styles. Missing links have no marker; cycles throw
+`invalid_document`, and style/link chains over 100 entries throw `limit_exceeded`.
+`lvlRestart=0` never restarts. Other valid triggers restart at that level or an earlier
+level, with the preceding level as the default. An omitted imported `start` is zero;
+newly authored lists still explicitly start at one. Package, native, and edit/export
+paths share these definitions and preserve existing numbering-part bytes.
+
+Numbering resolution counts derived marker text and suffixes in UTF-16 units.
+`numbering.markers(document, { maxCharacters })` and
+`numbering.markersFor(references, { maxCharacters })` default to a cumulative
+1,000,000-character budget per call. They throw `WordError` with code
+`limit_exceeded` before expanding text beyond the budget. Raise the budget explicitly
+for trusted documents that need larger output. `NativeWordOptions.maxMarkerCharacters`
+sets the cumulative update budget for both authored and imported markers.
+`WordLayoutOptions.maxMarkerCharacters` sets the body-and-story layout budget;
+native layout defaults to its constructor setting. Cached markers still count when
+a later request lowers the budget. Replaced headers and footers contribute only
+their current marker text; discarded original markers are not resolved or charged.
+This is a processing budget, separate
+from `openWordDocument`'s input-text limit; it does not restrict authored start values.
+Roman formatting checks the expanded length before allocating repeated symbols.
+Values above 3,999 retain the existing repeated-`M` representation when the budget
+permits them. No decimal fallback or claimed Word numeral-domain cutoff is applied.
+
 Tables have rectangular `rows` of cells, each containing `blocks`, and optional column widths in
 points. Image blocks contain PNG or JPEG bytes, dimensions in points and optional alt text.
 Images are embedded in the DOCX, with relationships created automatically. `blocks` and the
@@ -425,13 +496,33 @@ CRLF input is normalized before determining the resulting range. Empty replaceme
 `format`; use a format operation on an explicit paragraph range when deleting and restyling are
 separate intentions.
 
+Paragraph format patches retain the public `{ paragraph: { keepNext: true } }` shape. Each
+supplied paragraph property has its own Yjs register, so concurrent patches to different properties
+survive synchronization and selective undo. Structured properties such as `lineSpacing` and `borders`
+remain atomic. `paragraph: {}` is a no-op; `paragraph: null` removes all supported direct paragraph
+properties. Concurrent reset and patch operations resolve per property using Yjs conflict ordering.
+
+Existing `paragraph` object attributes remain readable. New edits use internal
+`wordParagraphFormat:<property>` attributes with wrapped values; wrapped null masks an old property.
+`wordFormats` returns the decoded public object. Hosts reading raw deltas or paragraph slices should
+call `readWordParagraphFormat(attributes)` before converting paragraph formatting to Office content.
+For source-aware reconciliation, also set `resetParagraphFormat: true` on `WordTextParagraph` when
+`hasWordParagraphReset(attributes)` returns true. This clears imported direct paragraph properties
+before applying the surviving values, including after concurrent reset and patch operations.
+Upgrade all collaborating writers together: old clients do not understand these registers, and legacy
+whole-object writes do not override existing property registers. This wire change does not add OOXML
+properties or alter their units.
+
 `wordParagraphIdentity(body, newlineOffset)` follows paragraph terminators through edits and remote
 updates. It avoids a repeated scan from the start of the CRDT when projecting stable native block IDs.
 
 `WordParagraphProjection(body, project)` consumes Yjs transaction deltas and retains unchanged
 paragraph slices. A slice contains its stable terminator identity, UTF-16 length and formatted parts,
 including the newline when present. The `paragraphs` getter invokes `project(slice)` only for changed
-slices. Treat slices and projected values as immutable, and call `destroy()` when finished.
+slices. Attribute retains that remove absent keys or assign equal values retain the original slice,
+including absent-versus-empty attribute equivalence. Formatting undo therefore does not reproject
+unformatted paragraphs merely because Yjs emits a broad attribute retain. Treat slices and projected
+values as immutable, and call `destroy()` when finished.
 `WordTableProjection.update(paragraphs)` reuses table trees whose projected paragraphs are unchanged,
 while checking table contiguity across the entire result. These projections keep conversion work near
 the edited paragraphs; updating offset arrays and semantic traversal still depends on document size.
@@ -464,8 +555,12 @@ and repeats pagination when the total changes. Formatting and ordinary surroundi
 text remain editable. DOCX export writes standard simple fields. Supported simple
 fields and complete complex `PAGE` / `NUMPAGES` fields split across runs import as
 the same editable content. Editing or deleting a complex field also replaces its
-source instructions and cached result on export. Section numbering restarts and numeral
-formats are not yet evaluated by this API.
+source instructions and cached result on export. Direct artifact deletion removes
+all owned markers, instructions and cached content, retaining neighboring run content.
+`move-object` retains field semantics and formatting across paragraphs. Page-number
+insertion inherits character formatting only, including at paragraph and table-cell starts.
+Nested general fields project stored results in order without evaluating instructions.
+Section numbering restarts and numeral formats are not yet evaluated by this API.
 
 ### Editable table formatting
 
@@ -764,3 +859,58 @@ change from 114,428 to 456,788 bytes. These are correctness costs, not a speedup
 One-time migration took a median 18.042 ms, measured separately. The unchanged
 retained-text hash matched in every sample; merged validation changed from 0/7
 successes to 7/7. Heap change is not a measure of total allocated bytes.
+### Line wrapping
+
+Non-breaking spaces U+00A0, U+202F, and U+2007 retain their advance and do not
+create word-wrap opportunities. Oversized unbreakable text still uses the existing
+emergency character wrapping. A terminal explicit line break keeps an empty final
+line, including its height and logical caret offset.
+
+Justified paragraphs distribute unused line width across ordinary inter-word
+spaces on wrapped lines and explicit line breaks. Final paragraph lines and
+non-breaking spaces do not expand. The document compatibility setting
+`doNotExpandShiftReturn` suppresses expansion on explicit line breaks. Tabs retain their stops; only spaces after
+the last tab expand. Layout fragments expose the extra space advance as
+`wordSpacing` in points. DOM renderers apply that value to CSS word spacing;
+canvas renderers use the resulting fragment positions and widths.
+
+### Preparation limits
+
+`maxCharacters`, `maxAtoms`, and `maxMeasurements` bound preparation work per
+layout pass, including unpainted whitespace, table cells, and repeated stories.
+Defaults are 5,000,000 visited UTF-16 units, 1,000,000 glyph/control atoms, and
+1,000,000 measurer calls. Each limit accepts a positive safe integer; callers
+can raise it for larger documents. Exceeding one throws `limit_exceeded`.
+The standalone story and resolved-paragraph layout functions accept the same
+preparation options. Cached geometry avoids preparation and its measurement cost.
+
+Body pagination prepares lines on demand. A preview may prepare an extra page
+and bounded keep/widow lookahead before returning its requested pages. Aligned
+tabs may need a full following segment to find its width; decimal tabs stop at
+the decimal point. Such lookahead still consumes the preparation budgets.
+
+Paragraph `positioning.tabs` contains direct tab declarations. An empty array emits
+no `w:tabs` container and inherits style tab stops. When editing a source paragraph,
+`tabs: []` removes its direct tab declarations; omitting `tabs` preserves them.
+To remove an inherited stop, supply `{ positionTwips: 720, alignment: 'clear',
+leader: 'none' }` at that position. Tab declarations are additive across styles.
+
+Authored cell properties and paragraph/cell borders serialize in schema order,
+regardless of the insertion order of their JavaScript properties.
+
+Text edits and `WordArtifact.replace` preserve the active header/footer part and
+open options, including ink rendering and parse limits. Retaining parse limits
+across edits is an intentional extension of the original invocation-scoped open
+contract, not a correction to a previously promised session-wide limit. Each reopened revision
+gets fresh parse counters across the main document and its parsed stories; limits
+are not a cumulative editing-session allowance. Intermediate revisions must also
+fit those limits. `replace(bytes, options)` can explicitly override them. A rejected
+edit leaves the input artifact and its package bytes unchanged.
+
+Paragraph joins and replacements reject crossings through tables, content
+controls, or other opaque XML blocks, even when those blocks have no projected
+text. Paragraphs in different containers cannot be joined.
+
+Splitting a paragraph moves its `w:sectPr` to the final continuation, preserving
+one section boundary. Multi-paragraph joins or replacements containing section
+properties are rejected until section-boundary transformations are supported.

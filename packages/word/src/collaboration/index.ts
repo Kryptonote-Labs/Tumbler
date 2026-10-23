@@ -16,3 +16,4 @@ export { findWordMatches, replaceWordMatches, type WordSearchOptions } from './s
 export { WordShapeText } from './shape-text.ts';
 
 export * from "./structured/index.ts";
+export { hasWordParagraphReset, readWordParagraphFormat } from './paragraph-attributes.ts';

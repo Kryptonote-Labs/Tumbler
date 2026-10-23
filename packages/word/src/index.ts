@@ -71,6 +71,7 @@ export type {
   WordAbstractNumbering,
   WordListMarker,
   WordNumberFormat,
+  WordMarkerOptions,
   WordNumberingInstance,
   WordNumberingLevel,
   WordParagraphNumbering,
@@ -118,7 +119,7 @@ export type { WordContentBlock, WordContentCell, WordAuthoredImage } from './cre
 
 export type { WordImagePosition } from './image-placement.ts';
 
-export { wordLineAtPoint } from "./hit-testing.ts";
+export { wordLineAtPoint, wordClippedLineAtPoint } from "./hit-testing.ts";
 export { wordAdjacentLine, type WordLineLocation, type WordLineNavigationTarget } from "./navigation.ts";
 
 export { NativeWordText, NativeWordTextLayout } from './native-text.ts';
@@ -179,3 +180,6 @@ export { withWordInkTraces, isWordInkTraceOverrides, type WordInkTraceOverride }
 export { authoredInkXml, isWordAuthoredInk, type WordAuthoredInk } from './authored-ink.ts';
 
 export type { WordFormattingPatch } from "./formatting.ts";
+
+export { wordPictureImageRect, type WordPictureGeometry } from './picture-geometry.ts';
+export { wordDrawingCellClip, intersectWordContentBounds, wordTableLinesWithClips, wordVisibleLineBounds, type WordContentBounds, type WordClippedLine } from './table-clipping.ts';

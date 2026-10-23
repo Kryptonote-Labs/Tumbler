@@ -34,7 +34,7 @@ test('overflowing shape text keeps its full height and vertical anchor', async (
   }
 });
 
-test('signed insets stay visible in body and auxiliary shapes, with clipping at the page', async ({ page }) => {
+test('signed insets stay visible outside shapes and clip at cell and page boundaries', async ({ page }) => {
   const paragraph = (alt: string, left = -30): WordContentBlock => ({
     kind: 'paragraph', runs: [{ text: '\uFFFC', shape: {
       preset: 'rect', width: 100, height: 60, fill: 'none', outline: 'none', outlineWidth: 0,
@@ -47,7 +47,10 @@ test('signed insets stay visible in body and auxiliary shapes, with clipping at 
   for (const kind of ['header', 'footer'] as const) {
     model.updateStory({ section: 0, kind, type: 'default' }, [
       paragraph(`${kind} inset`),
-      { kind: 'table', rows: [[{ blocks: [paragraph(`${kind} table inset`)] }]] },
+      // The signed inset extends beyond the shape while remaining inside this cell.
+      { kind: 'table', rows: [[{ format: { margins: { topTwips: 0, endTwips: 108, bottomTwips: 0, startTwips: 800 } }, blocks: [paragraph(`${kind} table inset`)] }]] },
+      // Retain the original unpadded geometry to test text crossing the cell edge.
+      { kind: 'table', rows: [[{ blocks: [paragraph(`${kind} cell boundary inset`)] }]] },
       ...(kind === 'header' ? [paragraph('Page boundary inset', -90)] : []),
     ]);
   }
@@ -57,7 +60,7 @@ test('signed insets stay visible in body and auxiliary shapes, with clipping at 
   await expect(page.getByRole('img', { name: 'Body inset', exact: true })).toBeVisible({ timeout: 20_000 });
   await page.getByLabel('Zoom', { exact: true }).selectOption('1');
 
-  for (const name of ['Body inset', 'header inset', 'footer inset', 'header table inset', 'footer table inset', 'Page boundary inset']) {
+  for (const name of ['Body inset', 'header inset', 'footer inset', 'header table inset', 'footer table inset', 'header cell boundary inset', 'footer cell boundary inset', 'Page boundary inset']) {
     const shape = page.getByRole('img', { name, exact: true });
     await shape.scrollIntoViewIfNeeded();
     const story = shape.getByRole('textbox', { name: 'Shape text', exact: true });
@@ -72,7 +75,11 @@ test('signed insets stay visible in body and auxiliary shapes, with clipping at 
       const glyph = range.getBoundingClientRect();
       const frame = element.closest('[role="img"]')!.getBoundingClientRect();
       const paper = element.closest('.word-page')!.getBoundingClientRect();
+      const cell = [...element.closest('.word-page')!.querySelectorAll('[data-cell]')]
+        .map(node => node.getBoundingClientRect())
+        .find(bounds => frame.left >= bounds.left && frame.left < bounds.right && frame.top >= bounds.top && frame.top < bounds.bottom);
       return {
+        insideCell: cell ? glyph.left > cell.left && glyph.right < cell.right && (glyph.top + glyph.bottom) / 2 >= cell.top && (glyph.top + glyph.bottom) / 2 < cell.bottom : undefined,
         outsideShape: glyph.right < frame.left,
         insidePage: glyph.left > paper.left,
         hit: document.elementsFromPoint(glyph.x + glyph.width / 2, glyph.y + glyph.height / 2).includes(span),
@@ -80,6 +87,9 @@ test('signed insets stay visible in body and auxiliary shapes, with clipping at 
     });
     expect(result.outsideShape, name).toBe(true);
     expect(result.insidePage, name).toBe(name !== 'Page boundary inset');
-    expect(result.hit, name).toBe(name !== 'Page boundary inset');
+    if (name.includes('table inset') || name.includes('cell boundary inset')) {
+      expect(result.insideCell, name).toBe(!name.includes('boundary'));
+    }
+    expect(result.hit, name).toBe(!name.includes('boundary'));
   }
 });

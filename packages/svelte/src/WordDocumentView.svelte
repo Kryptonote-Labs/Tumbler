@@ -1,9 +1,14 @@
 <script lang="ts">
+  import { wordDrawingStackOrder, wordDrawingOverlayOrder } from "./word-drawing-order.ts";
+  import WordPictureView from "./WordPictureView.svelte";
+  import WordContentClip from "./WordContentClip.svelte";
+  import { wordDrawingCellClip, wordTableLinesWithClips, type WordClippedLine } from "@tumblerjs/word";
   import WordInkPageLayer from "./WordInkPageLayer.svelte";
   import WordShapeView from "./WordShapeView.svelte";
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
-  import { flushSync, onDestroy, onMount, untrack } from "svelte";
-  import { wordImagePaintBounds, wordLineAtPoint, layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
+  import { flushSync, onDestroy, onMount, tick, untrack } from "svelte";
+  import { WordImageUrls } from "./word-image-urls.ts";
+  import { wordImagePaintBounds, wordClippedLineAtPoint, layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import { zoomGesture } from "./zoom-gesture.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
   import WordDrawingView from "./WordDrawingView.svelte";
@@ -23,10 +28,12 @@
     readonly oninkchange?: (change: import('@tumblerjs/word').WordInkTraceChange) => void;
     readonly ondrawingchange?: (change: WordDrawingChange) => void;
     readonly ondrawingresize?: (size: WordDrawingResize) => void;
+    /** Maximum retained ink overlay pixels per page; finite and at most 1,048,576. */
+    readonly inkMaxPixels?: number;
     readonly scale?: number;
   }
 
-  let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, oninkchange, scale = $bindable(1) }: Props = $props();
+  let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, oninkchange, inkMaxPixels, scale = $bindable(1) }: Props = $props();
   let scroller = $state<HTMLDivElement>();
   let viewportWidth = $state(0);
   let layout = $state<WordLayout>();
@@ -35,6 +42,9 @@
   let selectedDrawing = $state<number>();
   let editingFocused = $state(false);
   let inputSelectionOverride: WordTextSelection | undefined;
+  let inputRevision = $state(0);
+  let composition: { document: WordDocument; selection: WordTextSelection | undefined } | undefined;
+  let pendingInput: { document: WordDocument; selection: WordTextSelection | undefined; edit: WordDocumentEdit | undefined; command: "undo" | "redo" | undefined } | undefined;
   let pointerType = "mouse";
   let dragPoint: { x: number; y: number } | undefined;
   let scrollFrame = 0;
@@ -42,11 +52,12 @@
   let paragraphs = $derived(wordDocumentParagraphs(wordDocument));
   let paragraphOrder = $derived(new Map(paragraphs.map((paragraph, index) => [paragraph.elementId, index])));
   let paragraphText = $derived(new Map(paragraphs.map(paragraph => [paragraph.elementId, wordParagraphText(wordDocument, paragraph)])));
-  const imageUrls = new WeakMap<Uint8Array, string>();
-  const createdUrls = new Set<string>();
+  const imageUrls = new WordImageUrls();
+  let destroyed = false;
 
   onDestroy(() => {
-    createdUrls.forEach((url) => URL.revokeObjectURL(url));
+    destroyed = true;
+    void tick().then(() => imageUrls.destroy());
     finishMouseSelection();
   });
 
@@ -74,6 +85,16 @@
   $effect(() => {
     scale;
     if (mounted) untrack(updateViewport);
+  });
+
+  $effect(() => {
+    layout;
+    viewport;
+    // Child drawing views must finish updating before old URLs can be released.
+    void tick().then(() => {
+      if (destroyed || scroller === undefined) return;
+      imageUrls.retain(new Set(Array.from(scroller.querySelectorAll('img'), image => image.src)));
+    });
   });
 
   $effect(() => {
@@ -169,7 +190,7 @@
   }
 
   function readBrowserSelection() {
-    if (!editable || mouseSelection !== undefined) return;
+    if (!editable || mouseSelection !== undefined || composition !== undefined || pendingInput !== undefined) return;
     const next = browserTextSelection();
     if (next !== undefined && !sameWordTextSelection(selection, next)) onselectionchange?.(next);
   }
@@ -184,7 +205,7 @@
   }
 
   function restoreBrowserSelection() {
-    if (!editable || !editingFocused || selection === undefined || scroller === undefined || mouseSelection !== undefined) return;
+    if (composition !== undefined || pendingInput !== undefined || !editable || !editingFocused || selection === undefined || scroller === undefined || mouseSelection !== undefined) return;
     const anchor = browserPoint(selection.anchor);
     const focus = browserPoint(selection.focus);
     if (anchor === undefined || focus === undefined) return;
@@ -197,40 +218,119 @@
       .filter((fragment) => Number(fragment.dataset.start) <= position.offset && Number(fragment.dataset.end) >= position.offset);
     const fragment = position.affinity === "before" ? fragments.at(-1) : fragments[0];
     if (fragment === undefined) return undefined;
-    const node = fragment.firstChild ?? fragment;
-    return { node, offset: Math.max(0, Math.min(node.textContent?.length ?? 0, position.offset - Number(fragment.dataset.start))) };
+    const walker = globalThis.document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
+    let offset = Math.max(0, position.offset - Number(fragment.dataset.start));
+    let node = walker.nextNode();
+    while (node !== null) {
+      const length = node.textContent?.length ?? 0;
+      if (offset <= length) return { node, offset };
+      offset -= length;
+      node = walker.nextNode();
+    }
+    return { node: fragment, offset: fragment.childNodes.length };
   }
 
   function logicalPosition(node: Node | null, offset: number): WordTextPosition | undefined {
-    const element = node instanceof Element ? node : node?.parentElement;
+    if (node === null || !scroller?.contains(node)) return;
+    const element = node instanceof Element ? node : node.parentElement;
     const fragment = element?.closest<HTMLElement>("[data-paragraph][data-start][data-end]");
     if (fragment === null || fragment === undefined || fragment.dataset.story !== undefined) return undefined;
     const paragraphElementId = Number(fragment.dataset.paragraph);
     const start = Number(fragment.dataset.start);
     const end = Number(fragment.dataset.end);
     if (!Number.isInteger(paragraphElementId) || !Number.isInteger(start) || !Number.isInteger(end)) return undefined;
-    const local = node?.nodeType === Node.TEXT_NODE ? offset : offset === 0 ? 0 : fragment.textContent?.length ?? 0;
+    const range = globalThis.document.createRange();
+    range.selectNodeContents(fragment);
+    range.setEnd(node, offset);
+    const local = range.toString().length;
     return { paragraphElementId, offset: Math.min(end, start + local), affinity: local === 0 ? "before" : "after" };
   }
 
+  /** Only the body editing host owns these events; shape editors own their own input. */
+  function bodyInput(event: Event): boolean {
+    return event.target instanceof Element && event.target.closest('[contenteditable]') === event.currentTarget;
+  }
+
+  function targetSelection(event: InputEvent): WordTextSelection | undefined {
+    const ranges = event.getTargetRanges();
+    if (ranges.length !== 1) return;
+    const range = ranges[0]!;
+    const anchor = logicalPosition(range.startContainer, range.startOffset);
+    const focus = logicalPosition(range.endContainer, range.endOffset);
+    return anchor === undefined || focus === undefined ? undefined : { anchor, focus };
+  }
+
   function handleBeforeInput(event: InputEvent) {
-    if (!editable) return;
-    // A native drag is a two-part move. Until moves have a paired model operation, cancel both halves.
-    if (event.inputType === "deleteByDrag" || event.inputType === "insertFromDrop") {
-      event.preventDefault();
+    if (!bodyInput(event)) return;
+    // Every browser mutation needs a model operation, including unsupported intents and missing selections.
+    if (!editable) { event.preventDefault(); return; }
+    if (composition !== undefined || event.isComposing || event.inputType === "insertCompositionText") {
+      composition ??= { document: wordDocument, selection: browserTextSelection() ?? selection };
       return;
     }
-    // Keyboard navigation changes the DOM selection before Svelte can publish controlled state.
-    const activeSelection = inputSelectionOverride ?? browserTextSelection() ?? selection;
+    const activeSelection = inputSelectionOverride ?? (event.getTargetRanges().length > 0
+      ? targetSelection(event)
+      : browserTextSelection() ?? selection);
     inputSelectionOverride = undefined;
-    if (activeSelection === undefined) return;
-    const edit = wordInputEdit(wordDocument, activeSelection, event.inputType, event.dataTransfer?.getData("text/plain") ?? event.data);
-    if (edit === undefined) return;
+    const command = event.inputType === "historyUndo" ? "undo" : event.inputType === "historyRedo" ? "redo" : undefined;
+    const edit = activeSelection === undefined ? undefined : wordInputEdit(wordDocument, activeSelection, event.inputType, event.dataTransfer?.getData("text/plain") ?? event.data);
+    if (!event.cancelable) {
+      pendingInput = { document: wordDocument, selection: activeSelection, edit, command };
+      return;
+    }
     event.preventDefault();
-    onedit?.(edit);
+    if (command !== undefined) oncommand?.(command);
+    else if (edit !== undefined) onedit?.(edit);
+  }
+
+  /** Recreate Svelte-owned nodes after browser mutations, even when the model did not change. */
+  function reconcileInput(activeSelection: WordTextSelection | undefined, apply?: () => void) {
+    const focused = editingFocused;
+    flushSync(() => { inputRevision++; apply?.(); });
+    if (!focused || !editable) return;
+    editingFocused = true;
+    const next = selection ?? activeSelection;
+    const anchor = next === undefined ? undefined : browserPoint(next.anchor);
+    const focus = next === undefined ? undefined : browserPoint(next.focus);
+    const element = anchor?.node instanceof Element ? anchor.node : anchor?.node.parentElement;
+    element?.closest<HTMLElement>('[contenteditable]')?.focus({ preventScroll: true });
+    if (anchor !== undefined && focus !== undefined) globalThis.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
+  }
+
+  function handleInput(event: Event) {
+    if (!bodyInput(event) || composition !== undefined) return;
+    const pending = pendingInput;
+    pendingInput = undefined;
+    reconcileInput(pending?.selection, () => {
+      if (!editable || pending?.document !== wordDocument) return;
+      if (pending.command !== undefined) oncommand?.(pending.command);
+      else if (pending.edit !== undefined) onedit?.(pending.edit);
+    });
+  }
+
+  function handleCompositionStart(event: CompositionEvent) {
+    if (!editable || !bodyInput(event)) return;
+    pendingInput = undefined;
+    composition = { document: wordDocument, selection: inputSelectionOverride ?? browserTextSelection() ?? selection };
+    inputSelectionOverride = undefined;
+  }
+
+  function handleCompositionEnd(event: CompositionEvent) {
+    if (!bodyInput(event)) return;
+    const transaction = composition;
+    composition = undefined;
+    // Empty data cancels the provisional text. Never apply old offsets to a replacement document.
+    reconcileInput(transaction?.selection, () => {
+      if (!editable || transaction?.document !== wordDocument || transaction.selection === undefined || event.data === "") return;
+      const edit = wordInputEdit(wordDocument, transaction.selection, "insertText", event.data);
+      if (edit !== undefined) onedit?.(edit);
+    });
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (event.isComposing || composition !== undefined) return;
+    // Drawing controls share page commands; nested text editors own their shortcuts.
+    if (!(event.target instanceof Element) || event.target.closest('[contenteditable="true"]') !== event.currentTarget) return;
     if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) inputSelectionOverride = undefined;
     if (!editable || !(event.ctrlKey || event.metaKey) || event.altKey) return;
     const key = event.key.toLowerCase();
@@ -257,8 +357,8 @@
 
   /** Body text must follow document order, including paragraphs inside tables. */
   function bodyLines(page: WordLayout["pages"][number]) {
-    return page.columns.flatMap(column => [...column.lines, ...tableLines(column.tables)])
-      .sort((left, right) => (paragraphOrder.get(left.paragraphElementId) ?? 0) - (paragraphOrder.get(right.paragraphElementId) ?? 0) || left.startOffset - right.startOffset);
+    return page.columns.flatMap(column => [...column.lines.map((line): WordClippedLine => ({ line })), ...wordTableLinesWithClips(column.tables)])
+      .sort(({ line: left }, { line: right }) => (paragraphOrder.get(left.paragraphElementId) ?? 0) - (paragraphOrder.get(right.paragraphElementId) ?? 0) || left.startOffset - right.startOffset);
   }
 
   function positionOrder(left: WordTextPosition, right: WordTextPosition) {
@@ -367,10 +467,13 @@
     const page = layout.pages.find(item => item.index === Number(pageElement?.dataset.page));
     if (pageElement === undefined || page === undefined) return;
     const rect = pageElement.getBoundingClientRect();
-    const x = (clientX - rect.left) / scale;
+    let x = (clientX - rect.left) / scale;
     const y = (clientY - rect.top) / scale;
-    const line = wordLineAtPoint(page, x / wordPointsToCssPixels(1), y / wordPointsToCssPixels(1));
-    if (line === undefined) return;
+    const target = wordClippedLineAtPoint(page, x / wordPointsToCssPixels(1), y / wordPointsToCssPixels(1));
+    if (target === undefined) return;
+    const { line, clip } = target;
+    if (clip) x = Math.max(wordPointsToCssPixels(clip.x), Math.min(wordPointsToCssPixels(clip.x + clip.width), x));
+    const visibleClientX = rect.left + x * scale;
     const position = (offset: number): WordTextPosition => ({ paragraphElementId: line.paragraphElementId, offset });
     if (x <= wordPointsToCssPixels(line.x)) return position(line.startOffset);
     if (x >= wordPointsToCssPixels(line.x + line.width)) return position(line.endOffset);
@@ -383,8 +486,10 @@
     const element = pageElement.querySelector<HTMLElement>(`[data-paragraph="${line.paragraphElementId}"][data-start="${fragment.startOffset}"][data-end="${fragment.endOffset}"]:not(.caret-anchor):not([data-story])`);
     if (element?.firstChild?.nodeType !== Node.TEXT_NODE) return position(fragment.startOffset);
     const bounds = element.getBoundingClientRect();
-    const hitX = Math.max(bounds.left + 0.01, Math.min(bounds.right - 0.01, clientX));
-    const hitY = bounds.top + bounds.height / 2;
+    const hitX = Math.max(bounds.left + 0.01, Math.min(bounds.right - 0.01, visibleClientX));
+    const visibleTop = clip ? Math.max(bounds.top, rect.top + wordPointsToCssPixels(clip.y) * scale) : bounds.top;
+    const visibleBottom = clip ? Math.min(bounds.bottom, rect.top + wordPointsToCssPixels(clip.y + clip.height) * scale) : bounds.bottom;
+    const hitY = (visibleTop + visibleBottom) / 2;
     const document = globalThis.document as Document & {
       caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
       caretRangeFromPoint?: (x: number, y: number) => Range | null;
@@ -405,21 +510,14 @@
       measure.setStart(element.firstChild, 0);
       measure.setEnd(element.firstChild, boundary);
       const box = measure.getBoundingClientRect();
-      const delta = Math.abs((rtl ? box.left : box.right) - clientX);
+      const delta = Math.abs((rtl ? box.left : box.right) - visibleClientX);
       if (delta < distance) { distance = delta; nearest = boundary; }
     }
     return position(Math.min(fragment.endOffset, fragment.startOffset + nearest));
   }
 
-  function tableLines(tables: readonly WordLayout["pages"][number]["columns"][number]["tables"][number][]): WordLayout["pages"][number]["columns"][number]["lines"] {
-    return tables.flatMap((table) => table.cells.flatMap((cell) => [
-      ...cell.lines,
-      ...tableLines(cell.tables),
-    ]));
-  }
-
   function fragmentStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0) {
-    return `${wordTextCss(fragment.format)};left:${wordPointsToCssPixels(fragment.x - offsetX)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - offsetY)}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
+    return `${wordTextCss(fragment.format)};word-spacing:${wordPointsToCssPixels(fragment.wordSpacing ?? 0)}px;left:${wordPointsToCssPixels(fragment.x - offsetX)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - offsetY)}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 
   /** Inline runs keep browser word boundaries intact across formatting changes. */
@@ -427,21 +525,16 @@
     const fragment = line.fragments[index]!;
     const previous = line.fragments.slice(0, index).findLast(item => item.kind !== "drawing");
     const gap = fragment.x - (previous === undefined ? line.x : previous.x + previous.width);
-    return `${wordTextCss(fragment.format)};${fragment.format.verticalAlign === "baseline" ? "vertical-align:top;" : ""}margin-left:${wordPointsToCssPixels(gap)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - line.y)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
+    return `${wordTextCss(fragment.format)};word-spacing:${wordPointsToCssPixels(fragment.wordSpacing ?? 0)}px;${fragment.format.verticalAlign === "baseline" ? "vertical-align:top;" : ""}margin-left:${wordPointsToCssPixels(gap)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - line.y)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 
-  function drawingStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0, paintImage = false) {
+  function drawingStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0, paintImage = false, order?: ReadonlyMap<import('@tumblerjs/word').WordDrawing, number>, interactive = false) {
     const box = paintImage && fragment.drawing?.kind === 'image' ? wordImagePaintBounds(fragment.drawing, fragment.width, fragment.height) : { x: 0, y: 0, width: fragment.width, height: fragment.height };
-    return `left:${wordPointsToCssPixels(fragment.x + box.x - offsetX)}px;top:${wordPointsToCssPixels(fragment.y + box.y - offsetY)}px;width:${wordPointsToCssPixels(box.width)}px;height:${wordPointsToCssPixels(box.height)}px`;
+    return `${interactive ? '--word-drawing-rank' : 'z-index'}:${fragment.drawing ? order?.get(fragment.drawing) ?? (fragment.drawing.placement === 'inline' ? 1 : 2) : 1};left:${wordPointsToCssPixels(fragment.x + box.x - offsetX)}px;top:${wordPointsToCssPixels(fragment.y + box.y - offsetY)}px;width:${wordPointsToCssPixels(box.width)}px;height:${wordPointsToCssPixels(box.height)}px`;
   }
 
   function imageUrl(drawing: WordImageDrawing): string {
-    const existing = imageUrls.get(drawing.bytes);
-    if (existing !== undefined) return existing;
-    const url = URL.createObjectURL(new Blob([Uint8Array.from(drawing.bytes).buffer], { type: drawing.contentType }));
-    imageUrls.set(drawing.bytes, url);
-    createdUrls.add(url);
-    return url;
+    return imageUrls.get(drawing);
   }
 </script>
 
@@ -458,8 +551,9 @@
 >
   {#if layout !== undefined && viewport !== undefined}
     <div class="word-surface" style={`height:${viewport.totalHeight * scale}px;width:${viewport.totalWidth * scale}px`}>
-      {#each layout.pages.slice(viewport.first, viewport.last + 1) as page, localIndex (page.index)}
+      {#each layout.pages.slice(viewport.first, viewport.last + 1) as page, localIndex (`${page.index}:${inputRevision}`)}
         {@const pageIndex = viewport.first + localIndex}
+        {@const drawingOrder = wordDrawingStackOrder(page)}
         <section
           class="word-page"
           style:background-color={layout.background ?? "#fff"}
@@ -486,11 +580,15 @@
               if (!(event.relatedTarget instanceof Node) || !scroller?.contains(event.relatedTarget)) editingFocused = false;
             }}
             onbeforeinput={handleBeforeInput}
+            oninput={handleInput}
+            oncompositionstart={handleCompositionStart}
+            oncompositionend={handleCompositionEnd}
             onkeydown={handleKeydown}
-            style={`width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
+            style={`--word-ink-layer-z-index:${wordDrawingOverlayOrder(drawingOrder)};width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
           >
-            <WordInkPageLayer {page} {scale} background={layout.background} imageurl={imageUrl} />
-            <WordParagraphDecorations lines={[...bodyLines(page), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
+            <!-- Canvas decoding owns its URLs until the asynchronous paint completes. -->
+            <WordInkPageLayer {page} {scale} maxPixels={inkMaxPixels} background={layout.background} />
+            <WordParagraphDecorations lines={[...page.columns.flatMap(column => column.lines), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
             {#if page.noteSeparatorY !== undefined}
               <div class="note-separator" style={`left:${wordPointsToCssPixels(page.section.marginLeftTwips / 20)}px;top:${wordPointsToCssPixels(page.noteSeparatorY)}px`}></div>
             {/if}
@@ -500,13 +598,17 @@
               {/if}
               {#each line.fragments as fragment}
                 {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
-                  <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment, 0, 0, true)} />
+                  {#if fragment.drawing.picture}
+                    <div class="document-drawing picture-drawing" style={drawingStyle(fragment, 0, 0, false, drawingOrder)}><WordPictureView drawing={fragment.drawing} src={imageUrl(fragment.drawing)} /></div>
+                  {:else}
+                    <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment, 0, 0, true, drawingOrder)} />
+                  {/if}
                 {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "shape"}
-                  <div class="document-drawing shape-drawing" style={drawingStyle(fragment)}><WordShapeView shape={fragment.drawing.shape} /></div>
+                  <div class="document-drawing shape-drawing" style={drawingStyle(fragment, 0, 0, false, drawingOrder)}><WordShapeView shape={fragment.drawing.shape} /></div>
                 {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
-                  <div class="document-drawing" style={drawingStyle(fragment)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-chart-${page.index}-${fragment.contentElementId}`} /></div>
+                  <div class="document-drawing" style={drawingStyle(fragment, 0, 0, false, drawingOrder)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-chart-${page.index}-${fragment.contentElementId}`} /></div>
                 {:else if fragment.kind === "drawing"}
-                  <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment)}></div>
+                  <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment, 0, 0, false, drawingOrder)}></div>
                 {:else if fragment.hyperlink === undefined}
                   <span data-story="header-footer" data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment)}>{fragment.text}</span>
                 {:else}
@@ -515,14 +617,20 @@
               {/each}
             {/each}
             {#each [...page.headerTables, ...page.footerTables, ...page.noteTables] as table}
-              <WordLayoutTableView {table} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} story="auxiliary" />
+              <WordLayoutTableView {table} {drawingOrder} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} story="auxiliary" />
             {/each}
             {#each page.columns as column}
               {#each column.tables as table}
-                <WordLayoutTableView {table} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} decorationsOnly />
+                <WordLayoutTableView {table} {drawingOrder} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} decorationsOnly />
               {/each}
             {/each}
-            {#each bodyLines(page) as line}
+            {#each bodyLines(page) as { line, clip }}
+              {#each line.fragments as fragment}
+                {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
+                  <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, 0, 0, false, drawingOrder, true)} pageX={fragment.x} pageY={fragment.y} clip={wordDrawingCellClip(fragment.drawing, clip)} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
+                {/if}
+              {/each}
+              <WordContentClip {clip} layer={1}>
               {#if line.marker !== undefined}
                 <span
                   class="list-marker"
@@ -533,8 +641,8 @@
 
               <div class="text-line" style={`left:${wordPointsToCssPixels(line.x)}px;top:${wordPointsToCssPixels(line.y)}px;height:${wordPointsToCssPixels(line.height)}px`}>
                 {#each line.fragments as fragment, fragmentIndex}
-                  {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
-                    <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, line.x, line.y)} pageX={fragment.x} pageY={fragment.y} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
+                  {#if fragment.kind === "drawing"}
+                    <!-- Drawing content and controls share the page's stacking order. -->
                   {:else if fragment.hyperlink === undefined}
                     <span
                       data-paragraph={line.paragraphElementId}
@@ -565,6 +673,7 @@
                   style={`left:${wordPointsToCssPixels(line.x + line.width)}px;top:${wordPointsToCssPixels(line.y)}px;width:1px;height:${wordPointsToCssPixels(line.height)}px;line-height:${wordPointsToCssPixels(line.height)}px`}
                 >{paragraphText.get(line.paragraphElementId)?.slice(line.fragments.at(-1)?.endOffset ?? line.startOffset, line.endOffset) || "\u200b"}</span>
               {/if}
+              </WordContentClip>
             {/each}
           </div>
         </section>
@@ -581,7 +690,7 @@
   .word-page-content.editable { outline: 0; caret-color: var(--tumbler-document-accent, #25a735); }
   .caret-anchor { overflow: visible; }
   .document-drawing { position: absolute; display: block; object-fit: fill; overflow: hidden; }
-  .shape-drawing { overflow: visible; }
+  .shape-drawing, .picture-drawing { overflow: visible; }
   .drawing-fallback { background: repeating-linear-gradient(135deg, #f3f3f3, #f3f3f3 8px, #fafafa 8px, #fafafa 16px); border: 1px solid #d0d0d0; }
   .note-separator { position: absolute; width: 96px; border-top: 1px solid #777; }
   .text-line { position: absolute; white-space: pre; font-size: 0; line-height: 0; }

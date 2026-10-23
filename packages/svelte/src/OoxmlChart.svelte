@@ -22,7 +22,12 @@
   });
   let scene = $derived.by(() => {
     void fonts;
-    return model.status === "supported" ? layoutChartScene(model, width, height, { resolveColor, formatNumber, measureText: measureChartText }) : undefined;
+    try {
+      return model.status === "supported" ? layoutChartScene(model, width, height, { resolveColor, formatNumber, measureText: measureChartText }) : undefined;
+    } catch {
+      // A bad scale, host callback or preview budget must not break the host document.
+      return undefined;
+    }
   });
 </script>
 

@@ -1,3 +1,4 @@
+import { chartTickLabel } from './tick-label.ts';
 import { layoutBarBand } from "./bar-layout.ts";
 import { layoutCombinationChart } from "./combination.ts";
 import { legendMarks, line, type ChartMark, type SceneContext } from "./scene-marks.ts";
@@ -13,18 +14,22 @@ export function combinationScene(context: SceneContext): ChartMark[] {
     const horizontal = plot.model.kind === "bar";
     const count = Math.max(1, plot.categories.length);
     const band = (horizontal ? plot.plot.height : plot.plot.width) / count;
+    const valueAxis = plot.model.axes.find(axis => axis.kind === 'value' && (!plot.model.axisIds || plot.model.axisIds.includes(axis.id)));
     // Each value axis labels its ticks once, from the first plot drawn on it.
-    if (plots.findIndex(other => other.axis?.id === plot.axis?.id) === plotIndex) {
+    if (!valueAxis?.deleted && plots.findIndex(other => other.axis?.id === plot.axis?.id) === plotIndex) {
       const font = chartFont("tick", plot.axis?.textStyle, model, resolve);
       const gridline = chartStroke("gridline", plot.axis?.gridlineStyle, model, resolve);
       const right = plot.axis?.position === "right";
       for (const tick of plot.ticks) {
         const position = plot.coordinate(tick);
-        const text = String(Number(tick.toPrecision(3)));
+        const format = valueAxis?.numberFormatCode ?? plot.model.series.find(series => series.values?.formatCode !== undefined)?.values?.formatCode;
+        const text = chartTickLabel(tick, format, options);
         marks.push(horizontal
           ? { kind: "text", text, x: position, y: plot.plot.y + plot.plot.height + 15, anchor: "middle", font }
           : { kind: "text", text, x: right ? plot.plot.x + plot.plot.width + 5 : plot.plot.x - 5, y: position + 4, anchor: right ? "start" : "end", font });
-        if (plotIndex === 0 && !horizontal) marks.push(...line(plot.plot.x, position, plot.plot.x + plot.plot.width, position, gridline));
+        if (valueAxis?.majorGridlines) marks.push(...(horizontal
+          ? line(position, plot.plot.y, position, plot.plot.y + plot.plot.height, gridline)
+          : line(plot.plot.x, position, plot.plot.x + plot.plot.width, position, gridline)));
       }
     }
     const bars = layoutBarBand(plot.model, band);
@@ -48,8 +53,9 @@ export function combinationScene(context: SceneContext): ChartMark[] {
     });
   });
   const first = plots[0];
-  if (first) {
-    const font = chartFont("category", first.model.axes.find(axis => axis.kind === "category")?.textStyle, model, resolve);
+  const categoryAxis = first?.model.axes.find(axis => axis.kind === "category" && (!first.model.axisIds || first.model.axisIds.includes(axis.id)));
+  if (first && !categoryAxis?.deleted) {
+    const font = chartFont("category", categoryAxis?.textStyle, model, resolve);
     const count = Math.max(1, first.categories.length);
     const { plot } = first;
     first.categories.forEach((text, c) => marks.push(first.model.kind === "bar"

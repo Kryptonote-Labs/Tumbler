@@ -94,3 +94,37 @@ supported for plain-text callers). `WordDrawingView` hosts provide
 connect title editing to the same formatting controls as shape text. Double-click
 the title or press F2 while the chart is selected. Edits apply as you type; Enter
 adds a paragraph and Escape leaves text editing. Undo restores earlier changes.
+
+Chart previews enforce resource limits independently of OOXML cache counts. Cache
+indices must be below 100,000 even without `ptCount`; larger indices return an
+unsupported chart so the host document can still open. Cartesian previews allow at
+most 20,000 category positions and 20,000 total series/category cells, including
+combination plots and sparse gaps. Preview input is also limited to 100,000 stored
+points, 256 series/axes per plot, and 16 combination plots. Combination accounting
+includes the root model and each plot. These are product limits, not OOXML schema
+restrictions; documents exceeding them cannot be previewed in full.
+
+`layoutChartScene` returns a two-mark "Chart preview unavailable" scene when a
+preview limit, invalid geometry, or host callback prevents rendering. This applies
+to SVG and canvas consumers. Lower-level layout functions can still throw.
+Per-layout point maps and stack positions are rebuilt on each resize or host edit.
+
+Visible value axes render tick labels even when major gridlines are absent.
+Deleted axes suppress labels, gridlines, and axis strokes. Cartesian, combination,
+and XY ticks use the host `formatNumber` callback with the axis format code, falling
+back to the series cache format and then an English numeric format preserving up to 21
+significant digits, including distinct ticks below one millionth.
+
+To compare the audit baseline with the current renderer using identical generated
+fixtures and installed dependencies, run:
+
+```sh
+flock -x /tmp/tumbler-word-audit-heavy.lock bash packages/charts/bench/compare.sh /tmp/chart-results
+```
+
+The JSONL files contain separate parse/scene timings, two warmups and five samples,
+CPU/runtime metadata, heap deltas, scene hashes, and mark counts. A separate pass
+counts cache-index reads with getters, outside the timed samples. Heap deltas are
+observations of Bun's reported live heap, not total allocated bytes; zero deltas do
+not imply zero allocation. Other processes that do not use the lock can still
+contend for this shared host.

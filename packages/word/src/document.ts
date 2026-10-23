@@ -1,3 +1,4 @@
+import { tableMeasurementTwips } from './strict-resources.ts';
 import { wordInkChoice } from './ink-fallback.ts';
 import { readWordColour } from "./theme-colour-xml.ts";
 import type { WordColour } from "./theme-colours.ts";
@@ -279,6 +280,8 @@ interface ParseBudget {
 }
 
 export class WordDocument {
+  /** Reapplied to each immutable revision; parse counters reset on every open. */
+  readonly openOptions: OpenWordDocumentOptions;
   readonly inkRendering: import('@tumblerjs/ink').InkSvgOptions;
   /** Authored solid page colour; absent or automatic uses the viewer default. */
   readonly background: WordColour | undefined;
@@ -292,11 +295,13 @@ export class WordDocument {
   readonly numbering: WordNumbering;
   readonly evenAndOddHeaders: boolean;
   readonly wrapTrailSpaces: boolean;
+  readonly doNotExpandShiftReturn: boolean;
   readonly headerFooters: readonly WordHeaderFooterStory[];
   readonly drawings: ReadonlyMap<number, WordDrawing>;
   readonly notes: readonly WordNoteStory[];
 
   constructor(input: {
+    openOptions?: OpenWordDocumentOptions;
     inkRendering?: import('@tumblerjs/ink').InkSvgOptions | undefined;
     background?: WordColour;
     pkg: OpcPackage;
@@ -309,11 +314,13 @@ export class WordDocument {
     numbering: WordNumbering;
     evenAndOddHeaders?: boolean;
     wrapTrailSpaces?: boolean;
+    doNotExpandShiftReturn?: boolean;
     headerFooters: readonly WordHeaderFooterStory[];
     drawings: ReadonlyMap<number, WordDrawing>;
     notes: readonly WordNoteStory[];
   }) {
     this.inkRendering = Object.freeze({ ...input.inkRendering });
+    this.openOptions = Object.freeze({ ...input.openOptions, inkRendering: this.inkRendering });
     this.background = input.background;
     this.package = input.pkg;
     this.part = input.part;
@@ -325,6 +332,7 @@ export class WordDocument {
     this.numbering = input.numbering;
     this.evenAndOddHeaders = input.evenAndOddHeaders ?? false;
     this.wrapTrailSpaces = input.wrapTrailSpaces ?? false;
+    this.doNotExpandShiftReturn = input.doNotExpandShiftReturn ?? false;
     this.headerFooters = Object.freeze([...input.headerFooters]);
     this.drawings = input.drawings;
     this.notes = Object.freeze([...input.notes]);
@@ -394,6 +402,7 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
   const headerFooters = readHeaderFooterStories(pkg, main, profile, [...blocks.flatMap(sectionReferences), ...finalSection.headerReferences, ...finalSection.footerReferences], budget);
   let evenAndOddHeaders = false;
   let wrapTrailSpaces = false;
+  let doNotExpandShiftReturn = false;
   const settingsRel = relationships?.items.find(item => item.type.endsWith('/settings') && item.targetMode === 'Internal');
   if (settingsRel?.targetMode === 'Internal') {
     const settingsPart = pkg.getPart(settingsRel.targetPartName);
@@ -402,11 +411,13 @@ export function openWordDocument(pkg: OpcPackage, options: OpenWordDocumentOptio
       const value = settings.elements(namespace, 'evenAndOddHeaders')[0];
       evenAndOddHeaders = value !== undefined && !['0', 'false', 'off'].includes(attr(value, namespace, 'val') ?? 'true');
       const compatibility = settings.elements(namespace, 'compat')[0];
+      const shiftReturn = compatibility && children(compatibility, namespace, 'doNotExpandShiftReturn')[0];
+      doNotExpandShiftReturn = shiftReturn !== undefined && !['0', 'false', 'off'].includes(attr(shiftReturn, namespace, 'val') ?? 'true');
       const trailingSpaces = compatibility && children(compatibility, namespace, 'wrapTrailSpaces')[0];
       wrapTrailSpaces = trailingSpaces !== undefined && !['0', 'false', 'off'].includes(attr(trailingSpaces, namespace, 'val') ?? 'true');
     }
   }
-  return new WordDocument({ inkRendering: options.inkRendering, ...(background === undefined ? {} : { background }), pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes, evenAndOddHeaders, wrapTrailSpaces });
+  return new WordDocument({ openOptions: options, inkRendering: options.inkRendering, ...(background === undefined ? {} : { background }), pkg, part: main, source, conformance: profile, blocks, finalSection, styles, numbering, headerFooters, drawings, notes, evenAndOddHeaders, wrapTrailSpaces, doNotExpandShiftReturn });
 }
 
 function readNoteStories(pkg: OpcPackage, main: OpcPart, conformance: WordConformance, budget: ParseBudget): readonly WordNoteStory[] {
@@ -600,7 +611,7 @@ function parseRowProperties(element: LosslessXmlElement | undefined, namespace: 
     gridBefore: element === undefined ? 0 : valueIntegerChild(element, namespace, "gridBefore", 0, 32_767),
     gridAfter: element === undefined ? 0 : valueIntegerChild(element, namespace, "gridAfter", 0, 32_767),
     cantSplit: rowOnOff(element, namespace, "cantSplit"),
-    repeatHeader: element !== undefined && children(element, namespace, "tblHeader").length > 0,
+    repeatHeader: rowOnOff(element, namespace, "tblHeader"),
     heightTwips: rawHeight === undefined ? undefined : unsignedInteger(rawHeight, "row height", 0, 2_147_483_647),
     heightRule: rule === "exact" || rule === "auto" ? rule : "atLeast",
   };
@@ -626,7 +637,7 @@ function parseTableWidth(element: LosslessXmlElement | undefined, namespace: str
   const rawType = attr(element, namespace, "type") ?? "dxa";
   const type = rawType === "auto" || rawType === "pct" || rawType === "nil" ? rawType : "dxa";
   const rawValue = attr(element, namespace, "w") ?? "0";
-  return Object.freeze({ type, value: unsignedInteger(rawValue, "table width", 0, 2_147_483_647) });
+  return Object.freeze({ type, value: unsignedInteger(type === "dxa" ? tableMeasurementTwips(rawValue, namespace) : rawValue, "table width", 0, 2_147_483_647) });
 }
 
 function tableIndent(element: LosslessXmlElement | undefined, namespace: string): number {
@@ -651,7 +662,7 @@ function parseCellMargins(element: LosslessXmlElement | undefined, namespace: st
   const measurement = (modern: string, legacy: string, defaultValue: number): number => {
     const child = onlyChild(element, namespace, modern, `Cell margins must not repeat ${modern}.`) ?? onlyChild(element, namespace, legacy, `Cell margins must not repeat ${legacy}.`);
     const raw = child === undefined ? undefined : attr(child, namespace, "w");
-    return raw === undefined || attr(child!, namespace, "type") !== "dxa" ? defaultValue : unsignedInteger(raw, `${modern} cell margin`, 0, 2_147_483_647);
+    return raw === undefined || attr(child!, namespace, "type") !== "dxa" ? defaultValue : unsignedInteger(tableMeasurementTwips(raw, namespace), `${modern} cell margin`, 0, 2_147_483_647);
   };
   return Object.freeze({
     topTwips: measurement("top", "top", fallback.topTwips),

@@ -5,6 +5,22 @@ import { buildWordDocumentFixture } from "./document-fixture.ts";
 const word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
 describe("WordprocessingML tables", () => {
+  test.each([
+    ['false', false], ['0', false], ['off', false],
+    ['true', true], ['1', true], ['on', true], [undefined, true],
+  ] as const)('honors tblHeader on/off value %s', (value, expected) => {
+    const property = value === undefined ? '<w:tblHeader/>' : `<w:tblHeader w:val="${value}"/>`;
+    const table = openTable(`<w:tbl><w:tr><w:trPr>${property}</w:trPr><w:tc><w:p/></w:tc></w:tr></w:tbl>`);
+    expect(table.rows[0]!.repeatHeader).toBe(expected);
+  });
+
+  test('an omitted tblHeader is false and invalid or duplicate flags are rejected', () => {
+    const table = (properties: string) => `<w:tbl><w:tr><w:trPr>${properties}</w:trPr><w:tc><w:p/></w:tc></w:tr></w:tbl>`;
+    expect(openTable(table('')).rows[0]!.repeatHeader).toBe(false);
+    expect(() => openTable(table('<w:tblHeader w:val="yes"/>'))).toThrow('on/off value');
+    expect(() => openTable(table('<w:tblHeader/><w:tblHeader/>'))).toThrow('must not repeat tblHeader');
+  });
+
   test("imports, lays out, and preserves negative table indentation", () => {
     const artifact = open(indentedTable("-15"));
     const table = artifact.document.blocks[0];

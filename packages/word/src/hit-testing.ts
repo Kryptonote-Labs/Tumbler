@@ -1,3 +1,4 @@
+import { intersectWordContentBounds, wordTableLinesWithClips, wordVisibleLineBounds, type WordContentBounds, type WordClippedLine } from "./table-clipping.ts";
 import type { WordLayoutColumn, WordLayoutLine, WordLayoutPage, WordLayoutTable, WordLayoutTableCell } from "./layout.ts";
 
 /**
@@ -7,16 +8,23 @@ import type { WordLayoutColumn, WordLayoutLine, WordLayoutPage, WordLayoutTable,
  * undefined for a page without body text. Resolve the character offset in the renderer.
  */
 export function wordLineAtPoint(page: WordLayoutPage, x: number, y: number): WordLayoutLine | undefined {
+  return wordClippedLineAtPoint(page, x, y)?.line;
+}
+
+/** The same hit target with its cell clip, for resolving visible character positions. */
+export function wordClippedLineAtPoint(page: WordLayoutPage, x: number, y: number): WordClippedLine | undefined {
   const cell = page.columns.map(column => cellAtPoint(column.tables, x, y)).find(cell => cell !== undefined);
-  const lines = cell === undefined ? page.columns.flatMap(flowLines) : flowLines(cell);
-  let nearest: WordLayoutLine | undefined;
+  const lines = cell === undefined ? page.columns.flatMap(flowLines) : [...cell.cell.lines.map(line => ({ line, clip: cell.clip })), ...wordTableLinesWithClips(cell.cell.tables, cell.clip)];
+  let nearest: WordClippedLine | undefined;
   let verticalDistance = Infinity;
   let horizontalDistance = Infinity;
-  for (const line of lines) {
-    const vertical = Math.max(line.y - y, y - line.y - line.height, 0);
-    const horizontal = Math.max(line.x - x, x - line.x - line.width, 0);
+  for (const entry of lines) {
+    const bounds = wordVisibleLineBounds(entry);
+    if (!bounds) continue;
+    const vertical = Math.max(bounds.y - y, y - bounds.y - bounds.height, 0);
+    const horizontal = Math.max(bounds.x - x, x - bounds.x - bounds.width, 0);
     if (vertical < verticalDistance || vertical === verticalDistance && horizontal < horizontalDistance) {
-      nearest = line;
+      nearest = entry;
       verticalDistance = vertical;
       horizontalDistance = horizontal;
     }
@@ -24,15 +32,16 @@ export function wordLineAtPoint(page: WordLayoutPage, x: number, y: number): Wor
   return nearest;
 }
 
-function cellAtPoint(tables: readonly WordLayoutTable[], x: number, y: number): WordLayoutTableCell | undefined {
+function cellAtPoint(tables: readonly WordLayoutTable[], x: number, y: number, ancestor?: WordContentBounds): { cell: WordLayoutTableCell; clip: WordContentBounds } | undefined {
   for (const table of tables) for (const cell of table.cells) {
-    if (x >= cell.x && x < cell.x + cell.width && y >= cell.y && y < cell.y + cell.height) {
-      return cellAtPoint(cell.tables, x, y) ?? cell;
+    const clip = ancestor ? intersectWordContentBounds(ancestor, cell) : cell;
+    if (x >= clip.x && x < clip.x + clip.width && y >= clip.y && y < clip.y + clip.height) {
+      return cellAtPoint(cell.tables, x, y, clip) ?? { cell, clip };
     }
   }
   return undefined;
 }
 
-function flowLines(flow: Pick<WordLayoutColumn, "lines" | "tables">): WordLayoutLine[] {
-  return [...flow.lines, ...flow.tables.flatMap(table => table.cells.flatMap(flowLines))];
+function flowLines(flow: Pick<WordLayoutColumn, "lines" | "tables">): WordClippedLine[] {
+  return [...flow.lines.map(line => ({ line })), ...wordTableLinesWithClips(flow.tables)];
 }

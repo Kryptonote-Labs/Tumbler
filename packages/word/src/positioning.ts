@@ -3,6 +3,7 @@ import type { WordTabStop } from './styles.ts';
 
 /** Paragraph positioning in Word twips. Omitted members inherit their source values. */
 export interface WordParagraphPositioning {
+  /** Direct tab declarations. Empty arrays inherit; clear entries remove inherited positions. */
   readonly tabs?: readonly WordTabStop[];
   readonly indentStartTwips?: number;
   readonly indentEndTwips?: number;
@@ -49,7 +50,7 @@ export function paragraphPositioningXml(value: WordParagraphPositioning, conform
     return amount === undefined ? [] : [`w:${name}="${amount}"`];
   });
   return {
-    ...(value.tabs ? { tabs: `<w:tabs>${value.tabs.map(stop => `<w:tab w:val="${stop.alignment}" w:pos="${stop.positionTwips}" w:leader="${stop.leader}"/>`).join('')}</w:tabs>` } : {}),
+    ...(value.tabs?.length ? { tabs: `<w:tabs>${value.tabs.map(stop => `<w:tab w:val="${stop.alignment}" w:pos="${stop.positionTwips}" w:leader="${stop.leader}"/>`).join('')}</w:tabs>` } : {}),
     ...(indents.length ? { ind: `<w:ind ${indents.join(' ')}/>` } : {}),
   };
 }

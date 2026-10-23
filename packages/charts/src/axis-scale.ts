@@ -44,11 +44,16 @@ export function chartAxisTicks(minimum: number, maximum: number, majorUnit?: num
   const count = Math.floor(intervals / stride + 1e-9) + 1;
   const ticks = Array.from({ length: Math.max(0, count) }, (_, i) => {
     const value = minimum + i * stride * step;
-    const rounded = Number(value.toPrecision(14));
-    // Remove decimal arithmetic noise only when it is negligible beside a major unit.
-    return Math.abs(rounded - value) < step * 1e-6 ? rounded : value;
+    return roundChartTick(value, step);
   });
   return Object.freeze(ticks.filter((tick, i) => i === 0 || tick > ticks[i - 1]!));
+}
+
+/** Remove arithmetic noise only when rounding is negligible beside the tick step. */
+export function roundChartTick(value: number, step: number): number {
+  const rounded = Number(value.toPrecision(14));
+  const tick = Math.abs(rounded - value) < step * 1e-6 ? rounded : value;
+  return Object.is(tick, -0) ? 0 : tick;
 }
 
 function niceStep(raw: number): number {

@@ -63,7 +63,28 @@ bounded agreement on the captured corpus, not universal pixel identity.
 The canvas page painter reads the real destination pixels. `WordInkPageLayer`
 connects that painter to Svelte and Kryptonote pages, composing destination-dependent
 strokes against the page's text, images and other drawings. It overlays only changed
-pixels and suppresses the isolated cached image for those strokes.
+pixels and suppresses the isolated cached image only after the complete replacement
+is ready. Failed or cancelled renders keep the cached image visible. Image decode
+failures outside the affected tiles do not prevent ink from rendering.
+
+The overlay renders disjoint affected-region tiles of at most 256×256 pixels.
+`WordDocumentView.inkMaxPixels` bounds retained pixels per page, defaults to
+1,048,576, and accepts positive integers up to that limit. Resolution is capped at
+four device pixels per point and reduced further until all affected tiles fit.
+Mounted overlays share a 4,194,304-pixel reservation pool, including an allowance for two scratch
+tiles shared across all pages. Scratch canvases are cleared before every yield. If the pool is full even at reduced resolution, the overlay reports
+an error and retains the fallback. Each tile keeps the ink raster budget finite,
+reads only its destination rectangle, and yields before the next tile so page
+changes can cancel pending work. These limits do not alter stored ink samples. Hosts that
+assign drawing stacking ranks must set `--word-ink-layer-z-index` above their
+highest rank so the final composite remains visible. Standalone hosts default to
+layer 3; the overlay keeps `pointer-events: none`.
+
+`paintWordPage` also accepts a `viewport` in integer device pixels for cropped
+canvases. It translates page painting and clips native ink pixel reads to that
+viewport. `wordPageImages(page, regions)` optionally restricts image decoding to
+rectangles in page points. Standalone canvas callers retain their existing
+`inkMaxPixels` setting; the Svelte overlay never passes `Infinity`.
 
 Selected ink exposes an Edit points control. Pointer drags and keyboard nudges use
 the same headless sample operation, retain non-coordinate channels, and preserve
@@ -75,8 +96,8 @@ the identity of subsequent edits. Native DOCX and fallback updates remain atomic
 Device-dependent files need host calibration. Em/ex dimensions need host physical
 unit sizes. The published InkML §6.4 defines `pc` as `1/22 pt`, unlike the usual
 pica; the codec follows that text, but Word interoperability for this unusual unit
-has not been established. All resource budgets are configurable and never remove
-stored samples. JavaScript numeric representation remains finite IEEE-754, with
+has not been established. Resource budgets never remove stored samples. Public
+rendering budgets can be lowered within the limits described above. JavaScript numeric representation remains finite IEEE-754, with
 safe-integer checks for integer channels.
 
 Full W3C §8.3 conformance is not claimed. General streaming contexts, inherited

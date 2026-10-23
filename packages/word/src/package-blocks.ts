@@ -1,3 +1,4 @@
+import { tableBorderName, tableWidthValue } from './strict-resources.ts';
 import { borderXml, cellFormatXml, rowFormatXml } from './table-format.ts';
 import type { WordContentBlock } from './create-content.ts';
 import type { WordTextParagraph } from './create.ts';
@@ -9,6 +10,7 @@ export function renderWordBlocks(
   blocks: readonly WordContentBlock[],
   renderParagraph: (paragraph: WordTextParagraph) => string,
 ) {
+  const strict = markup.document.conformance === 'strict';
   const render = (
     content: readonly WordContentBlock[],
   ): { source?: number; markup: string }[] =>
@@ -67,10 +69,10 @@ export function renderWordBlocks(
               cell.verticalMerge !== oldMerge
             ) {
               const properties = markup.children(cellElement, 'tcPr')[0];
-              const replacements = cell.format ? cellFormatXml(cell.format) : new Map<string, string>();
+              const replacements = cell.format ? cellFormatXml(cell.format, strict) : new Map<string, string>();
               if (cell.format?.borders) {
                 const borders = markup.children(properties, 'tcBorders')[0];
-                const changes = new Map(Object.entries(cell.format.borders).map(([side, border]) => [side, borderXml({ [side]: border })]));
+                const changes = new Map(Object.entries(cell.format.borders).map(([side, border]) => [tableBorderName(side, strict), borderXml({ [side]: border }, strict)]));
                 replacements.set('tcBorders', markup.properties(borders, 'tcBorders', changes));
               }
               if (widthsChanged) {
@@ -79,7 +81,7 @@ export function renderWordBlocks(
                   .reduce((a, b) => a + b, 0);
                 replacements.set(
                   'tcW',
-                  `<w:tcW w:w="${Math.round(width * 20)}" w:type="dxa"/>`,
+                  `<w:tcW w:w="${tableWidthValue(Math.round(width * 20), strict)}" w:type="dxa"/>`,
                 );
               }
               if (cell.gridSpan !== undefined)
@@ -132,11 +134,11 @@ export function renderWordBlocks(
       let output = markup.container(element, 'tbl', ['tr'], rows);
       if (!element) {
         const borders = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
-          .map((side) => `<w:${side} w:val="single" w:sz="4" w:color="000000"/>`)
+          .map((side) => `<w:${tableBorderName(side, strict)} w:val="single" w:sz="4" w:color="000000"/>`)
           .join('');
         output = output.replace(
           /^(<[^>]+>)/,
-          `$1${markup.word(`<w:tblPr>${block.columnWidths?.length ? `<w:tblW w:w="${Math.round(block.columnWidths.reduce((a, b) => a + b, 0) * 20)}" w:type="dxa"/>` : ''}<w:tblBorders>${borders}</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr>`)}`,
+          `$1${markup.word(`<w:tblPr>${block.columnWidths?.length ? `<w:tblW w:w="${tableWidthValue(Math.round(block.columnWidths.reduce((a, b) => a + b, 0) * 20), strict)}" w:type="dxa"/>` : ''}<w:tblBorders>${borders}</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr>`)}`,
         );
       }
       if (widthsChanged) {
@@ -145,7 +147,7 @@ export function renderWordBlocks(
         const nextProps = markup.properties(
           props,
           'tblPr',
-          new Map([['tblW', `<w:tblW w:w="${Math.round(total * 20)}" w:type="dxa"/>`]]),
+          new Map([['tblW', `<w:tblW w:w="${tableWidthValue(Math.round(total * 20), strict)}" w:type="dxa"/>`]]),
         );
         if (props) output = output.replace(markup.raw(props), nextProps);
         else if (element) output = output.replace(/^(<[^>]+>)/, `$1${nextProps}`);

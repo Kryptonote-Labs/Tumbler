@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import * as Y from 'yjs';
-import { WordParagraphProjection, WordTableProjection, groupTableParagraphs, insertTableDelta, type WordParagraphSlice, isTableCell } from '../src/collaboration/index.ts';
+import { createWordCommands, WordParagraphProjection, WordTableProjection, groupTableParagraphs, insertTableDelta, type WordParagraphSlice, isTableCell } from '../src/collaboration/index.ts';
 
 function equivalent(text: Y.Text, paragraphs: readonly WordParagraphSlice[]) {
   const copy = new Y.Doc();
@@ -44,7 +44,7 @@ test('paragraph projection preserves untouched objects through formatting, joins
   const peer = new Y.Doc();
   Y.applyUpdate(peer, Y.encodeStateAsUpdate(doc));
   peer.getText('body').insert(0, 'Remote\n');
-  Y.applyUpdate(doc, Y.encodeStateAsUpdate(peer));
+  Y.applyUpdate(doc, Y.encodeStateAsUpdate(peer), 'remote');
   equivalent(text, projection.paragraphs);
   text.delete(0, text.length);
   equivalent(text, projection.paragraphs);
@@ -93,5 +93,52 @@ test('table projection reuses unaffected trees and validates rebuilt structure',
   expect(after[1]).toBe(before[1]);
   text.insert(10, 'Cell edit');
   expect(tables.update(projection.paragraphs)).toEqual(groupTableParagraphs(projection.paragraphs));
+  projection.destroy(); doc.destroy();
+});
+
+test('formatting undo retains unformatted paragraphs after a remote replacement', () => {
+  const doc = new Y.Doc();
+  const text = doc.getText('body');
+  text.insert(0, 'Hello world\nTail\n');
+  const peer = new Y.Doc();
+  Y.applyUpdate(peer, Y.encodeStateAsUpdate(doc));
+  let calls = 0;
+  const projection = new WordParagraphProjection(text, slice => { calls++; return slice; });
+  const tail = projection.paragraphs[1];
+  const undo = new Y.UndoManager(text, { captureTimeout: 0 });
+  text.format(0, 5, { bold: true });
+  const remote = peer.getText('body');
+  remote.applyDelta(createWordCommands().replaceWordDelta(remote, { start: 6, end: 11 }, 'team'));
+  Y.applyUpdate(peer, Y.encodeStateAsUpdate(doc));
+  Y.applyUpdate(doc, Y.encodeStateAsUpdate(peer), 'remote');
+  equivalent(text, projection.paragraphs);
+  const before = calls;
+  undo.undo();
+  expect(projection.paragraphs[1]).toBe(tail);
+  expect(calls - before).toBe(1);
+  expect(tail?.parts[0]?.attributes).toBeUndefined();
+  equivalent(text, projection.paragraphs);
+  undo.redo();
+  expect(projection.paragraphs[1]).toBe(tail);
+  equivalent(text, projection.paragraphs);
+  undo.destroy(); projection.destroy(); peer.destroy(); doc.destroy();
+});
+
+test('equal structured attributes and partial no-op retains preserve slices', () => {
+  const doc = new Y.Doc();
+  const text = doc.getText('body');
+  text.insert(0, 'One\nTail', { custom: { value: 1 } });
+  let calls = 0;
+  const projection = new WordParagraphProjection(text, slice => { calls++; return slice; });
+  const initial = projection.paragraphs;
+  text.format(1, 5, { custom: { value: 1 }, absent: null });
+  expect(projection.paragraphs[0]).toBe(initial[0]);
+  expect(projection.paragraphs[1]).toBe(initial[1]);
+  expect(calls).toBe(2);
+  equivalent(text, projection.paragraphs);
+  text.format(1, 2, { custom: { value: 2 } });
+  expect(projection.paragraphs[0]).not.toBe(initial[0]);
+  expect(projection.paragraphs[1]).toBe(initial[1]);
+  equivalent(text, projection.paragraphs);
   projection.destroy(); doc.destroy();
 });
