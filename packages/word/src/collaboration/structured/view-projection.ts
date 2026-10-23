@@ -12,6 +12,7 @@ import {
   isTableRemoved,
   payload,
   tableName,
+  tableBase,
   tableRecords,
   validateStructuredTables,
   type CellAddress,
@@ -183,7 +184,9 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
     const columns = activeAxes(doc, address, "column");
     const widths = structuredColumnWidths(doc, address);
     const records = tableRecords(doc, address);
-    for (const row of grid)
+    const base = tableBase(doc, address);
+    for (const row of grid) {
+      const originalRow = base.cells.find(cell => cell.row === row.id);
       for (const cell of row.cells) {
         const format = records.find(
           (r) =>
@@ -204,7 +207,11 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
           ...(row.after ? { after: row.after } : {}),
           ...(cell.columns.length > 1 ? { span: cell.columns.length } : {}),
           ...(cell.verticalMerge ? { merge: cell.verticalMerge } : {}),
-          ...(cell.source?.source ? { source: cell.source.source } : {}),
+          ...(base.cells[0]?.source ? { source: {
+            table: base.cells[0].source.table,
+            ...(originalRow?.source?.row === undefined ? {} : { row: originalRow.source.row }),
+            ...(cell.source?.source?.cell === undefined ? {} : { cell: cell.source.source.cell }),
+          } } : cell.source?.source ? { source: cell.source.source } : {}),
           ...(format?.kind === "cell-format"
             ? { format: format.format }
             : cell.source?.format
@@ -212,8 +219,8 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
               : {}),
           ...(rowFormat?.kind === "row-format"
             ? { rowFormat: rowFormat.format }
-            : cell.source?.rowFormat
-              ? { rowFormat: cell.source.rowFormat }
+            : originalRow?.rowFormat
+              ? { rowFormat: originalRow.rowFormat }
               : {}),
         };
         for (const owner of cell.payloads) {
@@ -244,6 +251,7 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
           }
         }
       }
+    }
   };
   const text = existingText(doc, story);
   if (!text) throw new Error("Missing document story.");
