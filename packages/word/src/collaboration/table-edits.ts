@@ -27,6 +27,7 @@ export function editTableDelta(
   if (!TABLE_ACTIONS.includes(action)) throw new Error('Unknown table operation.');
   const paragraphs = tableParagraphs(text);
   const target = paragraphs.find((p) => p.start <= at && at < p.end)?.table;
+  if (target?.schema === 2) throw new Error('Use prepareWordUpdate for structured table edits.');
   if (!target || target.id !== tableId || target.cell !== cellId)
     throw new Error('The table cell changed. Read the document again.');
   const table = paragraphs.flatMap((p) => {

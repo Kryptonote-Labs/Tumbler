@@ -1,0 +1,213 @@
+{
+  "beforeCommit": "4efccc57cc4f59f37f08ad94452044c84db6c8c7",
+  "afterCommit": "32955beaa430e4a2417c8f916bb18dabe6bf6d2f",
+  "platform": "linux arm64",
+  "before": {
+    "mode": "structured",
+    "runtime": "1.4.0",
+    "cpu": "unknown",
+    "rows": 12,
+    "columns": 4,
+    "reads": 10,
+    "warmups": 3,
+    "samples": 7,
+    "fixtureBytes": 9762,
+    "fixtureHash": "c1859557ae97301aaa7522e0d6a466f999ef7b60ebb98c886f8c57fb41020d1c",
+    "operationsPerSample": {
+      "columnEdits": 2,
+      "explicitHealthyValidations": 10,
+      "gridReads": 10,
+      "postTimingMergedValidation": 1
+    },
+    "results": [
+      {
+        "migrationMs": 26.55660899999998,
+        "editsMs": 45.580277000000024,
+        "readsMs": 120.95394399999986,
+        "totalMs": 166.5342209999999,
+        "cpuMs": 184.575,
+        "heapDeltaBytes": 642627,
+        "rssBytes": 95125504,
+        "updateBytes": 45832,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 23.386363999999958,
+        "editsMs": 52.92216099999996,
+        "readsMs": 118.15946200000008,
+        "totalMs": 171.08162300000004,
+        "cpuMs": 241.404,
+        "heapDeltaBytes": 596766,
+        "rssBytes": 97697792,
+        "updateBytes": 45832,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 25.884825999999975,
+        "editsMs": 47.509790000000066,
+        "readsMs": 113.85109899999998,
+        "totalMs": 161.36088900000004,
+        "cpuMs": 206.047,
+        "heapDeltaBytes": 675507,
+        "rssBytes": 104284160,
+        "updateBytes": 45832,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 22.00444799999991,
+        "editsMs": 46.37928299999999,
+        "readsMs": 109.10332499999981,
+        "totalMs": 155.4826079999998,
+        "cpuMs": 199.316,
+        "heapDeltaBytes": 599961,
+        "rssBytes": 103038976,
+        "updateBytes": 45832,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 24.241518999999926,
+        "editsMs": 45.588111000000026,
+        "readsMs": 104.80892500000004,
+        "totalMs": 150.39703600000007,
+        "cpuMs": 163.424,
+        "heapDeltaBytes": 608391,
+        "rssBytes": 100401152,
+        "updateBytes": 45832,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 23.77675599999975,
+        "editsMs": 48.6300940000001,
+        "readsMs": 115.43633099999988,
+        "totalMs": 164.06642499999998,
+        "cpuMs": 173.414,
+        "heapDeltaBytes": 575615,
+        "rssBytes": 100925440,
+        "updateBytes": 45832,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 22.83873100000028,
+        "editsMs": 46.219967,
+        "readsMs": 121.73752299999978,
+        "totalMs": 167.95748999999978,
+        "cpuMs": 211.835,
+        "heapDeltaBytes": 581525,
+        "rssBytes": 102285312,
+        "updateBytes": 45831,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      }
+    ]
+  },
+  "after": {
+    "mode": "structured",
+    "runtime": "1.4.0",
+    "cpu": "unknown",
+    "rows": 12,
+    "columns": 4,
+    "reads": 10,
+    "warmups": 3,
+    "samples": 7,
+    "fixtureBytes": 9762,
+    "fixtureHash": "c1859557ae97301aaa7522e0d6a466f999ef7b60ebb98c886f8c57fb41020d1c",
+    "operationsPerSample": {
+      "columnEdits": 2,
+      "explicitHealthyValidations": 10,
+      "gridReads": 10,
+      "postTimingMergedValidation": 1
+    },
+    "results": [
+      {
+        "migrationMs": 9.062228000000005,
+        "editsMs": 15.289899999999989,
+        "readsMs": 9.125988000000007,
+        "totalMs": 24.415887999999995,
+        "cpuMs": 37.985,
+        "heapDeltaBytes": 0,
+        "rssBytes": 89112576,
+        "updateBytes": 45832,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 8.006388000000015,
+        "editsMs": 18.64016300000003,
+        "readsMs": 13.698297000000025,
+        "totalMs": 32.338460000000055,
+        "cpuMs": 98.576,
+        "heapDeltaBytes": 0,
+        "rssBytes": 93831168,
+        "updateBytes": 45828,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 11.28009499999996,
+        "editsMs": 14.880248999999935,
+        "readsMs": 9.230822000000103,
+        "totalMs": 24.111071000000038,
+        "cpuMs": 43.571,
+        "heapDeltaBytes": 0,
+        "rssBytes": 99467264,
+        "updateBytes": 45832,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 6.757082999999966,
+        "editsMs": 15.81086700000003,
+        "readsMs": 10.217698000000041,
+        "totalMs": 26.02856500000007,
+        "cpuMs": 61.083,
+        "heapDeltaBytes": 0,
+        "rssBytes": 101040128,
+        "updateBytes": 45832,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 9.594675999999936,
+        "editsMs": 13.386349999999993,
+        "readsMs": 7.444143000000054,
+        "totalMs": 20.830493000000047,
+        "cpuMs": 28.37,
+        "heapDeltaBytes": 0,
+        "rssBytes": 99352576,
+        "updateBytes": 45831,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 7.481273000000101,
+        "editsMs": 12.656734000000029,
+        "readsMs": 6.891010000000051,
+        "totalMs": 19.54774400000008,
+        "cpuMs": 23.499,
+        "heapDeltaBytes": 0,
+        "rssBytes": 98795520,
+        "updateBytes": 45832,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      },
+      {
+        "migrationMs": 6.58763799999997,
+        "editsMs": 13.851630999999998,
+        "readsMs": 12.31761999999992,
+        "totalMs": 26.169250999999917,
+        "cpuMs": 53.352,
+        "heapDeltaBytes": 0,
+        "rssBytes": 102989824,
+        "updateBytes": 45832,
+        "mergedValid": true,
+        "contentHash": "d2a90154cc7a02a53ababf7960becdef47ae21fb3e7648b30e413b7dbf08a5f5"
+      }
+    ]
+  }
+}

@@ -727,6 +727,157 @@ that they move and resize together. `edit-object` can replace its complete ink
 value, including all strokes. Existing single-stroke `points/color/size` inputs
 remain supported with their previous fit-to-frame behavior.
 
+### Structured collaborative tables, schema 2
+
+Concurrent table structure uses stable row and column identities. Numeric grid
+positions are derived from their shared ordering records. Row insertions also
+record the vertical-merge coverage observed at insertion, so deleting a neighbor
+cannot change the inserted row into a different kind of cell. Vertical merge
+groups retain their original identity when a restart row is deleted. Editing a
+continuation is rejected with `WordTableConflict`; select its visible restart
+cell instead. The grid exposes `verticalGroup` to distinguish adjacent groups. Existing cell text stays
+in its original Y.Text; new intersections use deterministically named, initially
+empty Y.Text roots. Concurrent first typing therefore edits one shared character
+sequence, without inserting duplicate paragraph terminators.
+
+Cell root names are opaque identities. Existing v2 names remain stable. Deeper
+canonical nesting uses a coordinate path with linear growth, preserving its exact
+parent root without repeatedly escaping the complete ancestry. Story names have
+no document-authoring length limit.
+
+This is a breaking host API migration. A body-only `applyDelta` cannot commit
+changes to cell roots or structural records. Upgrade every writer and persist and
+transport **complete Y.Doc updates**, including all named roots. Coordinate the
+protocol upgrade before permitting schema-2 edits. Migration marks the legacy
+cell metadata with `schema: 2`, which old validated writers reject. Direct Yjs
+mutations that bypass validation remain the host's responsibility.
+
+Use the operation document's prepared-update executor:
+
+```ts
+const session = openWordOperationDocument(artifact);
+const prepared = session.prepare([
+  { kind: 'migrate', table: { story: 'body', table: inspectedTableId } },
+]);
+session.commit(prepared);
+const history = session.history(); // Start editing history after migration.
+const cell = session.grid(inspectedTableId)[1]!.cells[1]!.address;
+const selection = session.commit(
+  session.prepareOperation(
+    { cell, range: { start: 0, end: 0 } },
+    { name: 'replace', input: { value: 'Hello' } },
+  ),
+  history.origin,
+);
+const bytes = session.artifact().bytes();
+history.destroy();
+session.destroy();
+```
+
+`prepareWordUpdate` and `commitWordUpdate` provide the same contract directly for
+Y.Doc hosts. Preparation and commit preflight the whole shared document on a
+replica. A rejected operation leaves the original unchanged. Remote updates must
+still be retained when they expose a conflict; validate with
+`validateWordSharedDocument` and show the recoverable `WordTableConflict`.
+
+Selections use `{ cell: { story, table, row, column }, range }`. Offsets are local
+to the selected payload. `anchorScopedSelection` and `resolveScopedAnchor` retain
+Yjs-relative positions; an empty-cell anchor resolves to its logical cell's start.
+Story-scoped edits that touch migrated source cells, including nested ancestry,
+are rejected. Canonical cell roots also require cell-scoped selections. Object
+move destinations receive the same guard. The grid exposes `payloads` for selecting the original paragraphs of an explicit
+merge. Navigation should enumerate `session.grid()` rather than physical body
+paragraphs. Object move destinations are cell-local and validated against the selected
+payload. `fit-table` uses current projected widths when weights are omitted.
+A missing payload is an editable empty cell. First edit materializes
+it automatically; reads and selection changes emit no repair writes.
+
+`WordStructuredProjection` observes the complete document, including cell-root
+updates. `projectWordSharedDocument` performs an uncached projection. The old
+`WordTableProjection`/`groupTableParagraphs` rendering path rejects schema-2 cells
+instead of rendering obsolete body-grid positions. `tableParagraphs` remains a
+low-level view of retained legacy source paragraphs, not the logical grid.
+
+Migration does not copy or delete legacy characters. Identical concurrent
+migrations write the same canonical baseline record. Different baselines report
+a migration conflict. Imported sources, nested ancestry, spans, widths, and grid
+omissions remain available. New tables created through `prepareOperation` migrate
+in the same prepared update. Splitting an imported span after deleting its first
+column attaches its source to the chosen surviving coordinate. Restoring an old
+coordinate does not duplicate that source. Concurrent splits that choose different
+coordinates report a conflict; an explicit split at one surviving choice resolves
+it without deleting the source text. Existing body-delta table edit/format helpers reject
+migrated tables; switch those callers to the scoped operation adapter.
+
+Deletion retains payloads and records what the deleting peer observed. Concurrent
+edits that would be hidden produce a conflict; `restore-axis` or `restore-table`
+can expose them again. Deletion witnesses include nested stories recursively.
+Whole-table deletions keep separate records so concurrent deletions and their undo
+do not overwrite each other. When a linear edit also consumes the paragraph break
+before a deleted table, its physical separator stays with the retained baseline
+and is omitted from the logical paragraph flow. Export uses the same projection
+as the editor, including those joined paragraphs.
+Deleting an axis updates observed explicit merges; undo restores that coverage.
+Each merge operation retains its own identity. Equivalent concurrent coverage
+projects once; contradictory overlapping coverage blocks export. Sequential
+extension consumes the observed neighboring merges. Deletion witnesses include
+source paragraph terminator attributes, derived-cell registers and cell formatting.
+Row deletion also witnesses row formatting; column deletion witnesses column widths.
+Structural undo retains these formatting records even when a cell has no text.
+An explicit `restore-axis` exposes the retained cells without recreating retired
+merge records. Select merged-cell text through the grid's `payloads`; covered
+coordinates that do not name a visible payload are rejected. `inspectWordTableState` exposes retained axis records even
+when export is blocked. Overlapping merge coverage, contradictory axis order,
+conflicting migration baselines, and unions exceeding the package's 63-grid-column
+limit also block export. Content is never flattened into other cells to satisfy
+the limit. Explicit split/restore/delete operations resolve supported conflicts.
+
+Use `WordStructuredUndo` with its local `origin`, not a body-only Y.UndoManager.
+It rehearses the next undo or redo against a disposable current snapshot before
+changing the live document. This preserves remote text and rejects an undo that
+would detach it, without replaying the session's update history. Snapshot cost
+still depends on document size. Destroy the history when the editor closes.
+Hosts that need direct access to history stacks and selection metadata should use
+`createWordUndoManager(doc, { trackedOrigins, captureTimeout })`, then call
+`preflightWordUndo` with an additional source/permission validator before applying
+undo or redo. Guarded undo rejects foreign managers or changed item filters.
+An arbitrary Yjs `deleteFilter` can close over live object identities or split an
+atomic document operation; it cannot be safely reproduced against a disposable
+document. Select local edits through tracked origins instead of filtering items.
+Migration belongs outside this editing history. The canonical empty cell's final paragraph boundary
+is virtual; formatting it uses separate shared registers, and only user-entered
+paragraph breaks and boundaries required before nested tables become actual
+characters. Formatting an untouched empty cell needs only its format map;
+projection includes its virtual paragraph even when no text root exists. Structural
+undo treats these format-only roots as retained content. Empty named table maps left by undo are inert; retained remote cell
+content still prevents a destructive structural undo.
+
+DOCX export contains ordinary cells and valid table grids. Implicit intersections
+become empty cells at their actual coordinates. DOCX does not preserve CRDT axis
+identities or history; persist Yjs updates alongside the exported file when the
+collaborative session must continue.
+
+The reproducible fixture benchmark is
+`packages/word/benchmarks/table-structure.ts`, with raw results in
+`table-structure-results.json` beside it. Copy the script unchanged to audit
+commit `4d1465d`, then run the following sequentially under one lock:
+
+```sh
+flock -x /tmp/tumbler-word-audit-heavy.lock bash -c '
+  timeout 5m bun /path/to/audit/packages/word/benchmarks/table-structure.ts legacy
+  timeout 5m bun packages/word/benchmarks/table-structure.ts structured
+'
+```
+
+On Bun 1.4.4 and an Intel Celeron N5095, a 12×4 table with two local column edits
+and ten healthy validation/grid-read pairs took a median 10.731 ms before and
+123.370 ms after, across seven samples following three warmups. Raw total times
+ranged 9.186–11.439 ms before and 116.919–127.207 ms after. Median CPU time rose from
+21.164 to 152.545 ms, full peer-state bytes from 35,052 to 45,832, and net heap
+change from 114,428 to 456,788 bytes. These are correctness costs, not a speedup.
+One-time migration took a median 18.042 ms, measured separately. The unchanged
+retained-text hash matched in every sample; merged validation changed from 0/7
+successes to 7/7. Heap change is not a measure of total allocated bytes.
 ### Line wrapping
 
 Non-breaking spaces U+00A0, U+202F, and U+2007 retain their advance and do not
@@ -782,3 +933,69 @@ text. Paragraphs in different containers cannot be joined.
 Splitting a paragraph moves its `w:sectPr` to the final continuation, preserving
 one section boundary. Multi-paragraph joins or replacements containing section
 properties are rejected until section-boundary transformations are supported.
+
+
+### Connecting linear editors to shared tables
+
+`wordSharedText(doc.getText('body'))` returns a cached `WordSharedText` adapter.
+Its `text` is a local rich-text projection in logical document order, including
+implicit cells and nested tables. Use it for layout, text hit testing, formatting
+state and paragraph/table inspection. Treat it as read-only. Never persist or
+synchronize its Y.Doc; persist complete updates from the adapter's authoritative
+`doc` instead. `wordSharedOwner` resolves the projection document to that owner
+when a host needs its retained source or metadata.
+
+```ts
+const view = wordSharedText(doc.getText('body'));
+const target = view.anchor({ start: 10, end: 10 });
+// After receiving other peers' complete document updates:
+const range = view.resolve(target);
+const edit = view.prepareOperation(range, {
+  name: 'replace', input: { value: 'Hello' },
+});
+view.commit(edit, history.origin);
+// edit.range is the resulting selection in the linear view.
+```
+
+Operations use the visible paragraphs and cell payloads, including joins around
+retained table content. Ranges and `move-object` destinations use linear view
+coordinates. Host operation callbacks receive an isolated snapshot with the same
+story name and document metadata, including formatting defaults. Use the returned
+`range` for editor selections. The
+optional `selection` is omitted when that range crosses hidden source content
+and cannot be represented by one contiguous scoped selection. Clearing a cell
+retains hidden table baselines and their required separators for undo and validation.
+Scoped and linear nested-table insertion use the same cell-local operation path.
+Both source and canonical cells retain the preceding paragraph and exactly one
+trailing parent paragraph after inserting into their final paragraph.
+
+`prepareDelta(delta)` translates existing editor deltas into payload-local edits.
+It retains source cell boundaries, rich pasted text and virtual paragraph
+formatting. Pasted tables migrate in the same update. `prepareChanges(changes)`
+executes anchored batches, including table structure, cell formatting, object
+moves and expected-text checks. All prepare methods leave the owner unchanged
+and return complete updates, which `commit` revalidates before one atomic write.
+Hosts still validate package provenance, asset access and editing authority.
+
+`anchor` and `resolve` use authoritative character identities and cell addresses,
+so a selection in a new empty cell survives other peers inserting columns before
+it. Paragraph identities also come from shared terminators, not the local
+projection's Yjs client ID. `prepareMigration()` can be committed separately
+before starting the user's undo history. Read-only clients do not migrate data.
+
+A conflicting projection throws the retained `WordTableConflict` rather than
+returning an outdated document that might omit hidden edits. The complete source
+state remains available for inspection and explicit restore operations. Once the
+conflict is resolved, the existing adapter resumes normal reads. Destroy an
+adapter explicitly or destroy its owning Y.Doc when the session closes.
+
+Structured read caches invalidate at transaction boundaries and are bypassed
+during writes, so multiple writes inside one transaction see current state.
+Repeated validation and projection reuse parsed records and source-cell ranges.
+On the same Linux arm64 host with Bun 1.4.0, the unchanged 12×4 benchmark's median
+total for two column edits and ten validation/grid-read pairs fell from 164.066 ms
+to 24.416 ms. Median reads fell from 115.436 ms to 9.231 ms, and edits from
+46.379 ms to 14.880 ms. Both revisions passed merged validation in all seven
+samples and retained the same text hash and 45,832 state bytes. These numbers
+cover this synthetic fixture, not general editing latency. Revisions and raw
+samples are in `benchmarks/table-structure-read-cache-results.json`.

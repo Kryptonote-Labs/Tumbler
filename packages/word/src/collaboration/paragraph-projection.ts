@@ -34,6 +34,16 @@ export class WordParagraphProjection<T> {
   }
 
   get paragraphs(): readonly T[] {
+    let offset = 0;
+    const slices = this.slices.map(slice => {
+      offset += slice.length;
+      const id = slice.terminated ? wordParagraphIdentity(this.text, offset - 1) : 'end';
+      return id === slice.id ? slice : Object.freeze({ ...slice, id });
+    });
+    if (slices.some((slice, index) => slice !== this.slices[index])) {
+      this.slices = slices;
+      this.output = undefined;
+    }
     return this.output ??= this.slices.map(slice => {
       if (this.projected.has(slice)) return this.projected.get(slice)!;
       const value = this.project(slice);
