@@ -37,11 +37,7 @@ export { validateStructuredTables } from "./validation.ts";
 const prefix = "word-table-v2:";
 export const tableName = (address: TableAddress) =>
   prefix + JSON.stringify([address.story, address.table]);
-export const cellName = (address: CellAddress) =>
-  "word-cell-v2:" + JSON.stringify([address.story, address.table, address.row, address.column]);
-export const cellFormatName = (address: CellAddress) =>
-  "word-cell-format-v2:" +
-  JSON.stringify([address.story, address.table, address.row, address.column]);
+export { cellName, cellFormatName, cellAddressFromName } from "./names.ts";
 export const cellKey = (row: string, column: string) => JSON.stringify([row, column]);
 export function existingText(doc: Y.Doc, name: string) {
   return doc.share.has(name) ? doc.getText(name) : undefined;

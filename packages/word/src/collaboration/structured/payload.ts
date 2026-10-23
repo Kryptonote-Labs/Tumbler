@@ -7,6 +7,7 @@ import {
   existingText,
   cellName,
   cellFormatName,
+  cellAddressFromName,
 } from "./state.ts";
 import { WordTableConflict, type CellAddress, type TableAddress } from "./schema.ts";
 import { structuredReadCache } from "./read-cache.ts";
@@ -185,8 +186,8 @@ export function payloadSignature(doc: Y.Doc, address: CellAddress, removed?: "ro
         for (const name of [...doc.share.keys()].sort()) {
           if (!name.startsWith("word-cell-v2:") && !name.startsWith("word-cell-format-v2:"))
             continue;
-          const tuple: unknown = JSON.parse(name.slice(name.indexOf(":") + 1));
-          if (!Array.isArray(tuple) || tuple[0] !== story || tuple[1] !== nested.id) continue;
+          const owner = cellAddressFromName(name);
+          if (owner.story !== story || owner.table !== nested.id) continue;
           if (name.startsWith("word-cell-v2:")) {
             const root = existingText(doc, name)!;
             roots.push({ name, value: root.toDelta() });

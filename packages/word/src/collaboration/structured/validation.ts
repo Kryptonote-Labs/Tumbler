@@ -3,7 +3,7 @@ import { z } from "zod";
 import { validateAttributes } from "../formatting.ts";
 import { tableParagraphs } from "../tables.ts";
 import { structuredGrid } from "./grid.ts";
-import { id, storyId, WordTableConflict } from "./schema.ts";
+import { id, WordTableConflict } from "./schema.ts";
 import {
   tableAddresses,
   tableBase,
@@ -14,6 +14,7 @@ import {
   cellKey,
   tableName,
   cellFormatName,
+  cellAddressFromName,
 } from "./state.ts";
 import { payload, sourceCell, payloadDelta, payloadSignature, cellFormatting, stableStringify, rowFormatting, columnFormatting } from "./payload.ts";
 import { structuredReadCache } from "./read-cache.ts";
@@ -36,11 +37,9 @@ export function validateStructuredTables(doc: Y.Doc) {
   const retained = [...doc.share.keys()].flatMap((name) => {
     const format = name.startsWith("word-cell-format-v2:");
     if (!format && !name.startsWith("word-cell-v2:")) return [];
-    const [story, table, row, column] = z
-      .tuple([storyId, id, id, id])
-      .parse(JSON.parse(name.slice(name.indexOf(":") + 1)));
+    const address = cellAddressFromName(name);
     const occupied = format ? doc.getMap(name).size > 0 : existingText(doc, name)!.length > 0;
-    return occupied ? [{ story, table, row, column }] : [];
+    return occupied ? [address] : [];
   });
   for (const address of tableAddresses(doc)) {
     const base = tableBase(doc, address);

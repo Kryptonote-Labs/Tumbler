@@ -740,6 +740,11 @@ in its original Y.Text; new intersections use deterministically named, initially
 empty Y.Text roots. Concurrent first typing therefore edits one shared character
 sequence, without inserting duplicate paragraph terminators.
 
+Cell root names are opaque identities. Existing v2 names remain stable. Deeper
+canonical nesting uses a coordinate path with linear growth, preserving its exact
+parent root without repeatedly escaping the complete ancestry. Story names have
+no document-authoring length limit.
+
 This is a breaking host API migration. A body-only `applyDelta` cannot commit
 changes to cell roots or structural records. Upgrade every writer and persist and
 transport **complete Y.Doc updates**, including all named roots. Coordinate the

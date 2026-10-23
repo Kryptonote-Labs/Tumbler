@@ -1,10 +1,9 @@
 import * as Y from "yjs";
-import { z } from "zod";
-import { id, storyId } from "./schema.ts";
 import { createWordCommands, type WordRange } from "../commands.ts";
 import {
   existingText,
   cellName,
+  cellAddressFromName,
   payload,
   sourceCell,
   WordTableConflict,
@@ -20,9 +19,7 @@ export function selectionText(
 ) {
   if ("story" in selection) {
     if (selection.story.startsWith("word-cell-v2:")) {
-      const [story, table] = z
-        .tuple([storyId, id, id, id])
-        .parse(JSON.parse(selection.story.slice("word-cell-v2:".length)));
+      const { story, table } = cellAddressFromName(selection.story);
       throw new WordTableConflict(
         { story, table },
         "legacy-writer",

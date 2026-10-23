@@ -27,7 +27,7 @@ export class WordTableConflict extends Error {
   }
 }
 export const id = z.string().min(1).max(200);
-export const storyId = z.string().min(1).max(8192);
+export const storyId = z.string().min(1);
 const axisSchema = z
   .object({
     kind: z.literal("axis"),
