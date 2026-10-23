@@ -53,7 +53,15 @@ export class WordSharedText {
     return [...this.doc.share.keys()].some((name) => name.startsWith("word-table-v2:"));
   }
   private readonly sourceChanged = (event: Y.YTextEvent) => {
-    if (!this.structured()) this.text.applyDelta(event.delta);
+    if (!this.structured()) {
+      this.text.applyDelta(event.delta);
+      this.spans = this.text.length
+        ? [{ start: 0, end: this.text.length, root: this.story, offset: 0 }]
+        : [];
+    }
+  };
+  private readonly beforeObservers = () => {
+    if (this.structured()) this.refresh();
   };
   private readonly disposed = () => this.destroy();
   private readonly refresh = () => {
@@ -91,6 +99,7 @@ export class WordSharedText {
         : wordParagraphIdentity(doc.getText(span.root), span.offset + at - span.start);
     });
     this.sourceText.observe(this.sourceChanged);
+    doc.on("beforeObserverCalls", this.beforeObservers);
     doc.on("afterTransaction", this.refresh);
     doc.on("destroy", this.disposed);
   }
@@ -212,12 +221,20 @@ export class WordSharedText {
   }
   prepareChanges(changes: readonly WordChange[]): PreparedWordUpdate {
     if (this.conflict) throw this.conflict;
+    const commands = createWordCommands();
+    const canonical = (anchor: WordAnchor) => {
+      try { this.resolve(anchor); return anchor; }
+      catch { return this.anchor(commands.resolveWordRange(this.text, anchor)); }
+    };
+    const anchored = changes.map(change => change.kind === 'image-move'
+      ? { ...change, target: canonical(change.target), destination: canonical(change.destination) }
+      : { ...change, target: canonical(change.target) });
     return stageWordUpdate(this.doc, (staged) => {
       this.migrate(staged);
       const view = new WordSharedText(staged, this.story);
       const commands = createWordCommands();
       try {
-        for (const change of changes) {
+        for (const change of anchored) {
           view.sync();
           const range = view.resolve(change.target);
           if (
@@ -284,6 +301,7 @@ export class WordSharedText {
   destroy() {
     setWordParagraphIdentity(this.projectedText, undefined);
     this.doc.off("afterTransaction", this.refresh);
+    this.doc.off("beforeObserverCalls", this.beforeObservers);
     this.doc.off("destroy", this.disposed);
     this.sourceText.unobserve(this.sourceChanged);
     views.delete(this.sourceText);

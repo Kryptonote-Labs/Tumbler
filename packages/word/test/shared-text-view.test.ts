@@ -190,6 +190,16 @@ test("an existing legacy table migrates in the same prepared operation without c
   session.destroy();
 });
 
+test('legacy drawing and formatting helpers can anchor changes in a local linear view', () => {
+  const seed = fixture([[cell('First'), cell('Second')]]);
+  const view = new WordSharedText(seed.doc, 'body');
+  const commands = createWordCommands();
+  const target = commands.anchorWordRange(view.text, { start: 0, end: 5 });
+  view.commit(view.prepareChanges([{ kind: 'format', target, attributes: { bold: true } }]));
+  expect(commands.wordFormats(view.text, { start: 0, end: 5 }).bold).toBe(true);
+  view.destroy(); seed.session.destroy();
+});
+
 test("an implicit-cell anchor stays in its cell after another column is inserted", () => {
   const seed = fixture([[cell("A"), cell("B")]]);
   const view = new WordSharedText(seed.doc, "body");
@@ -218,4 +228,33 @@ test("an implicit-cell anchor stays in its cell after another column is inserted
   expect(view.text.toString()).toContain("Anchored");
   view.destroy();
   seed.session.destroy();
+});
+
+test('a view resolves new positions before preexisting document observers run', () => {
+  const doc = new Y.Doc();
+  doc.getText('body').insert(0, 'Short\n');
+  let view: WordSharedText;
+  doc.on('afterTransaction', transaction => {
+    if (!transaction.changed.size) return;
+    const end = view.text.length - 1;
+    expect(view.resolve(view.anchor({ start: end, end }))).toEqual({ start: end, end });
+  });
+  view = new WordSharedText(doc, 'body');
+  doc.getText('body').insert(0, 'A much longer prefix ');
+  view.destroy(); doc.destroy();
+});
+
+test('table projections update before preexisting document observers read them', () => {
+  const seed = fixture([[cell('A'), cell('B')]]);
+  let view: WordSharedText;
+  seed.doc.on('afterTransaction', transaction => {
+    if (transaction.changed.size)
+      expect(tableParagraphs(view.text).filter(p => p.table)).toHaveLength(3);
+  });
+  view = new WordSharedText(seed.doc, 'body');
+  const first = tableParagraphs(view.text)[0]!;
+  view.commit(view.prepareOperation({ start: 0, end: 0 }, {
+    name: 'edit-table', input: { action: 'column-after', cellId: first.table!.cell },
+  }));
+  view.destroy(); seed.session.destroy();
 });
