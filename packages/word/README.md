@@ -821,11 +821,13 @@ limit also block export. Content is never flattened into other cells to satisfy
 the limit. Explicit split/restore/delete operations resolve supported conflicts.
 
 Use `WordStructuredUndo` with its local `origin`, not a body-only Y.UndoManager.
-It replays the update journal into a disposable document and validates undo/redo
-before changing the live document. This preserves remote text and rejects an
-undo that would detach it. Its journal lives for the editing session and replay
-cost grows with that journal; destroy it when the editor closes. Migration belongs
-outside this editing history. The canonical empty cell's final paragraph boundary
+It rehearses the next undo or redo against a disposable current snapshot before
+changing the live document. This preserves remote text and rejects an undo that
+would detach it, without replaying the session's update history. Snapshot cost
+still depends on document size. Destroy the history when the editor closes.
+Hosts with their own document-wide Y.UndoManager can call `preflightWordUndo`
+with an additional source/permission validator before applying undo or redo.
+Migration belongs outside this editing history. The canonical empty cell's final paragraph boundary
 is virtual; formatting it uses separate shared registers, and only user-entered
 paragraph breaks and boundaries required before nested tables become actual
 characters. Formatting an untouched empty cell needs only its format map;
@@ -914,3 +916,57 @@ text. Paragraphs in different containers cannot be joined.
 Splitting a paragraph moves its `w:sectPr` to the final continuation, preserving
 one section boundary. Multi-paragraph joins or replacements containing section
 properties are rejected until section-boundary transformations are supported.
+
+
+### Connecting linear editors to shared tables
+
+`wordSharedText(doc.getText('body'))` returns a cached `WordSharedText` adapter.
+Its `text` is a local rich-text projection in logical document order, including
+implicit cells and nested tables. Use it for layout, text hit testing, formatting
+state and paragraph/table inspection. Treat it as read-only. Never persist or
+synchronize its Y.Doc; persist complete updates from the adapter's authoritative
+`doc` instead. `wordSharedOwner` resolves the projection document to that owner
+when a host needs its retained source or metadata.
+
+```ts
+const view = wordSharedText(doc.getText('body'));
+const target = view.anchor({ start: 10, end: 10 });
+// After receiving other peers' complete document updates:
+const range = view.resolve(target);
+const edit = view.prepareOperation(range, {
+  name: 'replace', input: { value: 'Hello' },
+});
+view.commit(edit, history.origin);
+// edit.range is the resulting selection in the linear view.
+```
+
+`prepareDelta(delta)` translates existing editor deltas into payload-local edits.
+It retains source cell boundaries, rich pasted text and virtual paragraph
+formatting. Pasted tables migrate in the same update. `prepareChanges(changes)`
+executes anchored batches, including table structure, cell formatting, object
+moves and expected-text checks. All prepare methods leave the owner unchanged
+and return complete updates, which `commit` revalidates before one atomic write.
+Hosts still validate package provenance, asset access and editing authority.
+
+`anchor` and `resolve` use authoritative character identities and cell addresses,
+so a selection in a new empty cell survives other peers inserting columns before
+it. Paragraph identities also come from shared terminators, not the local
+projection's Yjs client ID. `prepareMigration()` can be committed separately
+before starting the user's undo history. Read-only clients do not migrate data.
+
+A conflicting projection throws the retained `WordTableConflict` rather than
+returning an outdated document that might omit hidden edits. The complete source
+state remains available for inspection and explicit restore operations. Once the
+conflict is resolved, the existing adapter resumes normal reads. Destroy an
+adapter explicitly or destroy its owning Y.Doc when the session closes.
+
+Structured read caches invalidate at transaction boundaries and are bypassed
+during writes, so multiple writes inside one transaction see current state.
+Repeated validation and projection reuse parsed records and source-cell ranges.
+On the same Linux arm64 host with Bun 1.4.0, the unchanged 12×4 benchmark's median
+total for two column edits and ten validation/grid-read pairs fell from 164.066 ms
+to 24.416 ms. Median reads fell from 115.436 ms to 9.231 ms, and edits from
+46.379 ms to 14.880 ms. Both revisions passed merged validation in all seven
+samples and retained the same text hash and 45,832 state bytes. These numbers
+cover this synthetic fixture, not general editing latency. Revisions and raw
+samples are in `benchmarks/table-structure-read-cache-results.json`.
