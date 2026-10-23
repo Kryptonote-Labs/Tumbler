@@ -89,7 +89,13 @@ export class WordSharedText {
     this.sync();
     setWordParagraphIdentity(this.text, (at) => {
       if (!this.structured()) return wordParagraphIdentity(this.sourceText, at);
-      const span = this.spans.find((span) => at >= span.start && at < span.end);
+      let low = 0, high = this.spans.length;
+      while (low < high) {
+        const middle = (low + high) >>> 1;
+        if (this.spans[middle]!.end <= at) low = middle + 1;
+        else high = middle;
+      }
+      const span = this.spans[low];
       if (!span) return `${this.story}:end`;
       return span.virtual
         ? `${span.root}:end`

@@ -260,3 +260,18 @@ test('an earlier document observer can synchronize its table projection before r
   }));
   view.destroy(); seed.session.destroy();
 });
+
+test('paragraph projections refresh shared identities when equal text retains a mirror terminator', async () => {
+  const { WordParagraphProjection } = await import('../src/collaboration/paragraph-projection.ts');
+  const doc = new Y.Doc();
+  const source = doc.getText('body');
+  source.insert(0, 'Before\nAfter\n');
+  const view = new WordSharedText(doc, 'body');
+  const projection = new WordParagraphProjection(view.text, slice => ({ id: slice.id }));
+  const before = projection.paragraphs.map(p => p.id);
+  doc.transact(() => { source.delete(6, 1); source.insert(6, '\n'); });
+  expect(view.text.toString()).toBe('Before\nAfter\n');
+  expect(projection.paragraphs[0]!.id).not.toBe(before[0]!);
+  expect(projection.paragraphs[1]!.id).toBe(before[1]!);
+  projection.destroy(); view.destroy(); doc.destroy();
+});
