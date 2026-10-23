@@ -25,12 +25,20 @@ export type WordViewSpan = {
   cell?: CellAddress;
   virtual?: boolean;
 };
+export type WordViewTable = {
+  table: TableAddress;
+  start: number;
+  end: number;
+  offset: number;
+  container?: CellAddress;
+};
 
 /** A local linear view for existing editors. Only the source document is synchronized. */
 export function projectWordSharedText(doc: Y.Doc, story: string) {
   validateStructuredTables(doc);
   const delta: WordDelta = [];
   const spans: WordViewSpan[] = [];
+  const tables: WordViewTable[] = [];
   const paragraphs = new Map<string, ReturnType<typeof tableParagraphs>>();
   const rootParts = new WeakMap<
     Y.Text,
@@ -99,12 +107,21 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
       const nested = lineage.find((ref) => !parents.some((parent) => parent.id === ref.id));
       const address = nested && { story: root, table: nested.id };
       if (address && doc.share.has(tableName(address)) && doc.getMap(tableName(address)).size) {
-        emitTable(address, parents);
         const members = rows.filter(
           (row) =>
             row.table?.id === address.table ||
             row.table?.parents?.some((ref) => ref.id === address.table),
         );
+        const boundary: WordViewTable = {
+          table: address,
+          start: length,
+          end: length,
+          offset: members[0]!.start,
+          ...(cell ? { container: cell } : {}),
+        };
+        tables.push(boundary);
+        emitTable(address, parents);
+        boundary.end = length;
         cursor = members.at(-1)!.end;
         continue;
       }
@@ -224,5 +241,5 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
   const text = existingText(doc, story);
   if (!text) throw new Error("Missing document story.");
   visit(story, 0, text.length);
-  return { delta, spans, length };
+  return { delta, spans, tables, length };
 }

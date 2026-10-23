@@ -2,12 +2,18 @@ import * as Y from "yjs";
 import type { WordDelta } from "../commands.ts";
 import { tableParagraphs } from "../tables.ts";
 import { applyStructuredChange, editDerivedText } from "./edits.ts";
-import { migrateTable, type TableAddress } from "./state.ts";
+import { cellName, migrateTable, type TableAddress } from "./state.ts";
 import { selectionText } from "./selection.ts";
-import type { WordViewSpan } from "./view-projection.ts";
+import type { WordViewSpan, WordViewTable } from "./view-projection.ts";
 
 type Part = WordDelta[number];
-type Edit = { span: WordViewSpan; offset: number; part: Part; start: number };
+type Edit = {
+  span: WordViewSpan;
+  offset: number;
+  part: Part;
+  start: number;
+  outsideTable?: boolean;
+};
 
 /** Translate a browser delta into payload-local edits without synchronizing the linear view. */
 export function applyWordViewDelta(
@@ -16,10 +22,10 @@ export function applyWordViewDelta(
   text: Y.Text,
   spans: readonly WordViewSpan[],
   delta: WordDelta,
+  tables: readonly WordViewTable[],
 ) {
   const edits: Edit[] = [];
   const removed: { start: number; end: number; table: TableAddress }[] = [];
-  const paragraphs = tableParagraphs(text);
   let cursor = 0;
   const split = (start: number, count: number, part: Part) => {
     if (start < 0 || count < 0 || start + count > text.length)
@@ -44,54 +50,74 @@ export function applyWordViewDelta(
   let inserted: WordDelta = [];
   for (const part of delta) {
     if (typeof part.insert === "string") inserted.push(part);
-    else if (part.delete !== undefined) ordered.push(part);
+    else if (part.delete !== undefined) {
+      const previous = ordered.at(-1);
+      if (previous?.delete !== undefined) previous.delete += part.delete;
+      else ordered.push({ ...part });
+    }
     else {
       ordered.push(...inserted, part);
       inserted = [];
     }
   }
   ordered.push(...inserted);
-  for (const part of ordered) {
+  let paragraphPrefix = 0;
+  for (const [index, part] of ordered.entries()) {
     if (part.retain !== undefined) {
       if (part.attributes) split(cursor, part.retain, part);
       cursor += part.retain;
     } else if (part.delete !== undefined) {
       const end = cursor + part.delete;
-      for (const p of paragraphs)
-        for (const ref of [...(p.table?.parents ?? []), ...(p.table ? [p.table] : [])]) {
-          const members = paragraphs.filter(
-            (p) =>
-              p.table?.id === ref.id || p.table?.parents?.some((parent) => parent.id === ref.id),
-          );
-          const start = members[0]!.start,
-            finish = members.at(-1)!.end;
-          if (
-            cursor <= start &&
-            end >= finish &&
-            !removed.some((row) => row.start <= start && row.end >= finish)
-          ) {
-            const span = spans.find(
-              (span) => span.start >= start && span.start < finish && span.cell?.table === ref.id,
-            );
-            if (span?.cell)
-              removed.push({
-                start,
-                end: finish,
-                table: { story: span.cell.story, table: ref.id },
-              });
-          }
-        }
+      for (const table of tables)
+        if (
+          table.end > table.start && cursor <= table.start && end >= table.end &&
+          !removed.some(row => row.start <= table.start && row.end >= table.end)
+        ) removed.push(table);
       split(cursor, part.delete, part);
       cursor = end;
     } else if (typeof part.insert === "string") {
       const span = spans.find((span) => cursor >= span.start && cursor < span.end) ??
         spans.at(-1) ?? { root: story, offset: 0, start: 0, end: 0 };
+      if (typeof ordered[index - 1]?.insert !== "string") {
+        let content = "";
+        for (let next = index; typeof ordered[next]?.insert === "string"; next++)
+          content += ordered[next]!.insert;
+        paragraphPrefix = content.lastIndexOf("\n") + 1;
+      }
+      const boundary = tables.find(
+        (table) => table.end === cursor && removed.some(
+          (row) => row.start === table.start && row.end === table.end &&
+            row.table.table === table.table.table && row.table.story === table.table.story,
+        ),
+      );
+      const count = Math.min(paragraphPrefix, part.insert.length);
+      paragraphPrefix -= count;
+      let insert = part.insert;
+      // Complete replacement paragraphs belong to the removed table's container.
+      // A suffix without a newline still joins the following paragraph, as in Y.Text.
+      if (
+        count && boundary && (span.cell ? cellName(span.cell) : undefined) !==
+          (boundary.container ? cellName(boundary.container) : undefined)
+      ) {
+        edits.push({
+          span: {
+            root: boundary.table.story, offset: boundary.offset, start: cursor, end: cursor,
+            ...(boundary.container ? { cell: boundary.container } : {}),
+          },
+          start: cursor,
+          offset: boundary.offset,
+          part: { ...part, insert: insert.slice(0, count) },
+          outsideTable: true,
+        });
+        insert = insert.slice(count);
+      }
+      if (!insert) continue;
       edits.push({
         span,
         start: cursor,
         offset:
           span.offset + (span.virtual ? 0 : Math.min(cursor - span.start, span.end - span.start)),
-        part,
+        part: { ...part, insert },
       });
     } else throw new Error("Only text is supported.");
   }
@@ -99,19 +125,21 @@ export function applyWordViewDelta(
   for (const edit of edits.reverse()) {
     if (removed.some((row) => edit.start >= row.start && edit.start < row.end)) continue;
     const { span } = edit;
-    const value = selectionText(
-      doc,
-      span.cell
-        ? { cell: span.cell, range: { start: 0, end: 0 } }
-        : {
-            story: span.root,
-            range: {
-              start: edit.offset,
-              end: edit.offset + (edit.part.delete ?? edit.part.retain ?? 0),
-            },
-          },
-      true,
-    )!;
+    const value = edit.outsideTable && !span.cell
+      ? { text: doc.getText(span.root), start: 0, end: doc.getText(span.root).length }
+      : selectionText(
+          doc,
+          span.cell
+            ? { cell: span.cell, range: { start: 0, end: 0 } }
+            : {
+                story: span.root,
+                range: {
+                  start: edit.offset,
+                  end: edit.offset + (edit.part.delete ?? edit.part.retain ?? 0),
+                },
+              },
+          true,
+        )!;
     const at = Math.max(0, edit.offset - value.start);
     const attributes = { ...edit.part.attributes };
     if (span.cell) {
@@ -129,7 +157,7 @@ export function applyWordViewDelta(
         }
       }
     }
-    const part = { ...edit.part, ...(edit.part.attributes ? { attributes } : {}) };
+    const part = { ...edit.part, ...(edit.part.attributes || Object.keys(attributes).length ? { attributes } : {}) };
     // The final source-cell boundary remains owned by its retained baseline.
     if (part.delete && span.cell) {
       part.delete = Math.min(part.delete, Math.max(0, value.end - value.start - at));

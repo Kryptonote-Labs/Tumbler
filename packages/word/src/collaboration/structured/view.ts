@@ -12,7 +12,7 @@ import { applyWordScopedOperation, type WordScopedOperationContext } from "../..
 import { stageWordUpdate, commitWordUpdate } from "./transactions.ts";
 import { cellName, migrateTable, payload, tableName } from "./state.ts";
 import type { WordScopedSelection, PreparedWordUpdate } from "./types.ts";
-import { projectWordSharedText, type WordViewSpan } from "./view-projection.ts";
+import { projectWordSharedText, type WordViewSpan, type WordViewTable } from "./view-projection.ts";
 import { anchorWordView, resolveWordView } from "./view-anchors.ts";
 import { syncWordView } from "./view-sync.ts";
 import { applyWordViewDelta } from "./view-delta.ts";
@@ -48,6 +48,7 @@ export class WordSharedText {
   readonly sourceText: Y.Text;
   private readonly projection = new Y.Doc();
   private spans: WordViewSpan[] = [];
+  private tables: WordViewTable[] = [];
   conflict: Error | undefined;
   private structured() {
     return [...this.doc.share.keys()].some((name) => name.startsWith("word-table-v2:"));
@@ -119,6 +120,7 @@ export class WordSharedText {
   sync() {
     const next = projectWordSharedText(this.doc, this.story);
     this.spans = next.spans;
+    this.tables = next.tables;
     this.projection.transact(() => {
       this.syncMetadata();
       syncWordView(this.text, next.delta);
@@ -195,9 +197,11 @@ export class WordSharedText {
   }
   prepareDelta(delta: WordDelta): PreparedWordUpdate {
     if (this.conflict) throw this.conflict;
+    if (!this.structured()) this.sync();
     return stageWordUpdate(this.doc, (staged) => {
-      this.migrate(staged);
-      applyWordViewDelta(staged, this.story, this.text, this.spans, delta);
+      const migrated = this.migrate(staged);
+      const tables = migrated ? projectWordSharedText(staged, this.story).tables : this.tables;
+      applyWordViewDelta(staged, this.story, this.text, this.spans, delta, tables);
       return undefined;
     });
   }
@@ -285,7 +289,7 @@ export class WordSharedText {
                   }
                 : { ...change, target };
             const delta = commands.wordTransaction(view.text, [local]);
-            applyWordViewDelta(staged, this.story, view.text, view.spans, delta);
+            applyWordViewDelta(staged, this.story, view.text, view.spans, delta, view.tables);
           }
         }
       } finally {
@@ -295,6 +299,7 @@ export class WordSharedText {
     });
   }
   private migrate(doc: Y.Doc) {
+    let migrated = false;
     for (const [name, value] of doc.share) {
       if (!(value instanceof Y.Text)) continue;
       const seen = new Set<string>();
@@ -302,9 +307,11 @@ export class WordSharedText {
         for (const ref of [...(p.table?.parents ?? []), ...(p.table ? [p.table] : [])])
           if (ref.schema !== 2 && !seen.has(ref.id)) {
             migrateTable(doc, { story: name, table: ref.id });
+            migrated = true;
             seen.add(ref.id);
           }
     }
+    return migrated;
   }
   commit(prepared: PreparedWordUpdate, origin?: unknown) {
     return commitWordUpdate(this.doc, prepared, origin);
