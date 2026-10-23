@@ -1,6 +1,21 @@
 import * as Y from "yjs";
 import { validateWordSharedDocument } from "./transactions.ts";
 
+const filters = new WeakMap<Y.UndoManager, Y.UndoManager["deleteFilter"]>();
+
+/** Keep document operations atomic; host callbacks must not filter individual CRDT items. */
+export function createWordUndoManager(
+  doc: Y.Doc,
+  options: Pick<NonNullable<ConstructorParameters<typeof Y.UndoManager>[1]>, "trackedOrigins" | "captureTimeout"> = {},
+) {
+  const manager = new Y.UndoManager(doc, {
+    trackedOrigins: options.trackedOrigins,
+    captureTimeout: options.captureTimeout,
+  });
+  filters.set(manager, manager.deleteFilter);
+  return manager;
+}
+
 /** Validate document-wide undo against current remote edits before changing live state or history. */
 export function preflightWordUndo(
   doc: Y.Doc,
@@ -10,6 +25,8 @@ export function preflightWordUndo(
 ) {
   if (manager.doc !== doc || manager.scope.length !== 1 || manager.scope[0] !== doc)
     throw new Error("Guarded undo requires document-wide history for this document.");
+  if (!filters.has(manager) || filters.get(manager) !== manager.deleteFilter)
+    throw new Error("Use createWordUndoManager for guarded undo; custom item filters are unsupported.");
   const candidate = new Y.Doc({ gc: false });
   Y.applyUpdate(candidate, Y.encodeStateAsUpdate(doc));
   for (const [name, value] of doc.share) {
@@ -28,7 +45,6 @@ export function preflightWordUndo(
       }
   });
   const history = new Y.UndoManager(candidate, {
-    deleteFilter: manager.deleteFilter,
     ignoreRemoteMapChanges: manager.ignoreRemoteMapChanges,
   });
   try {
@@ -48,7 +64,7 @@ export class WordStructuredUndo {
   readonly origin = {};
   private readonly manager: Y.UndoManager;
   constructor(private readonly doc: Y.Doc) {
-    this.manager = new Y.UndoManager(doc, {
+    this.manager = createWordUndoManager(doc, {
       trackedOrigins: new Set([this.origin]),
       captureTimeout: 0,
     });

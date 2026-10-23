@@ -25,5 +25,5 @@ export {
   projectWordSharedDocument,
   WordStructuredProjection,
 } from "./projection.ts";
-export { WordStructuredUndo, preflightWordUndo } from "./undo.ts";
+export { WordStructuredUndo, createWordUndoManager, preflightWordUndo } from "./undo.ts";
 export { WordSharedText, wordSharedText, getWordSharedText, wordSharedOwner } from './view.ts';
