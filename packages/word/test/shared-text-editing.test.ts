@@ -55,3 +55,21 @@ test("browser deltas type, format, replace and delete body text after a leading 
     expect(view.text.toString()).toBe("A\nB\n\n");
   } finally { view.destroy(); seed.session.destroy(); }
 });
+
+for (const order of ["insert-first", "delete-first"] as const) {
+  test(`${order} replacement of a full table preserves inserted rich text`, async () => {
+    const Y = await import("yjs");
+    const seed = fixture([[cell("A"), cell("B")]]);
+    const view = new WordSharedText(seed.doc, "body"), expected = new Y.Doc();
+    try {
+      const inserts = [{ insert: "Rich ", attributes: { bold: true } }, { insert: "replacement", attributes: { italic: true } }];
+      const remove = { delete: view.text.length - 1 };
+      const delta = order === "insert-first" ? [...inserts, remove] : [remove, ...inserts];
+      expected.getText("body").applyDelta(view.text.toDelta());
+      expected.getText("body").applyDelta(structuredClone(delta));
+      view.commit(view.prepareDelta(delta));
+      expect(view.text.toDelta()).toEqual(expected.getText("body").toDelta());
+      expect(view.text.toString()).toBe("Rich replacement\n");
+    } finally { expected.destroy(); view.destroy(); seed.session.destroy(); }
+  });
+}

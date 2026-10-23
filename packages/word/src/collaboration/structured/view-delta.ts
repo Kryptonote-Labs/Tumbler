@@ -38,7 +38,20 @@ export function applyWordViewDelta(
       });
     }
   };
+  // Insert/delete runs describe one replacement in either order. Apply deletions first
+  // so inserted content targets the surviving boundary outside a removed table.
+  const ordered: WordDelta = [];
+  let inserted: WordDelta = [];
   for (const part of delta) {
+    if (typeof part.insert === "string") inserted.push(part);
+    else if (part.delete !== undefined) ordered.push(part);
+    else {
+      ordered.push(...inserted, part);
+      inserted = [];
+    }
+  }
+  ordered.push(...inserted);
+  for (const part of ordered) {
     if (part.retain !== undefined) {
       if (part.attributes) split(cursor, part.retain, part);
       cursor += part.retain;
