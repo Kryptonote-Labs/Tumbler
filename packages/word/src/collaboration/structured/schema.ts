@@ -60,6 +60,10 @@ const removeTableSchema = z
   .object({
     kind: z.literal("remove-table"),
     witnesses: z.record(z.string(), z.string()),
+    boundaries: z.array(z.object({
+      client: z.number().int().nonnegative(),
+      clock: z.number().int().nonnegative(),
+    }).strict()).optional(),
   })
   .strict();
 const mergeSchema = z

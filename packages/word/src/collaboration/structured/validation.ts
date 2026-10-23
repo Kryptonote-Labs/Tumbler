@@ -18,6 +18,7 @@ import {
 } from "./state.ts";
 import { payload, sourceCell, payloadDelta, payloadSignature, cellFormatting, stableStringify, rowFormatting, columnFormatting } from "./payload.ts";
 import { structuredReadCache } from "./read-cache.ts";
+import { retainedParagraphBoundaries } from "./boundaries.ts";
 /** Check hidden content too: deletion and structural undo must not silently detach edits. */
 export function validateStructuredTables(doc: Y.Doc) {
   const cache = structuredReadCache(doc);
@@ -202,5 +203,6 @@ export function validateStructuredTables(doc: Y.Doc) {
       });
     }
   }
+  retainedParagraphBoundaries(doc);
   if (!cache.active) cache.valid = true;
 }

@@ -1,8 +1,9 @@
 import * as Y from "yjs";
 import type { WordDelta } from "../commands.ts";
 import { tableParagraphs } from "../tables.ts";
-import { applyStructuredChange, editDerivedText } from "./edits.ts";
+import { editDerivedText } from "./edits.ts";
 import { cellName, migrateTable, type TableAddress } from "./state.ts";
+import { removeWordTable } from "./boundaries.ts";
 import { selectionText } from "./selection.ts";
 import type { WordViewSpan, WordViewTable } from "./view-projection.ts";
 
@@ -62,12 +63,15 @@ export function applyWordViewDelta(
   }
   ordered.push(...inserted);
   let paragraphPrefix = 0;
+  let replacement: { start: number; end: number } | undefined;
   for (const [index, part] of ordered.entries()) {
     if (part.retain !== undefined) {
+      if (part.retain) replacement = undefined;
       if (part.attributes) split(cursor, part.retain, part);
       cursor += part.retain;
     } else if (part.delete !== undefined) {
       const end = cursor + part.delete;
+      replacement = { start: cursor, end };
       for (const table of tables)
         if (
           table.end > table.start && cursor <= table.start && end >= table.end &&
@@ -84,8 +88,9 @@ export function applyWordViewDelta(
           content += ordered[next]!.insert;
         paragraphPrefix = content.lastIndexOf("\n") + 1;
       }
-      const boundary = tables.find(
-        (table) => table.end === cursor && removed.some(
+      const boundary = tables.findLast(
+        (table) => replacement && table.start >= replacement.start &&
+          table.end <= replacement.end && removed.some(
           (row) => row.start === table.start && row.end === table.end &&
             row.table.table === table.table.table && row.table.story === table.table.story,
         ),
@@ -121,11 +126,37 @@ export function applyWordViewDelta(
       });
     } else throw new Error("Only text is supported.");
   }
-  for (const row of removed) applyStructuredChange(doc, { kind: "delete-table", table: row.table });
+  // Validate story targets before changing paragraph boundaries in this staged edit.
+  const approvedStories = new Set<Edit>();
+  for (const edit of edits) {
+    if (edit.span.cell || edit.outsideTable) continue;
+    selectionText(doc, { story: edit.span.root, range: {
+      start: edit.offset, end: edit.offset + (edit.part.delete ?? edit.part.retain ?? 0),
+    } }, true);
+    approvedStories.add(edit);
+  }
+  for (const row of removed) {
+    const table = tables.find(table => table.table.story === row.table.story && table.table.table === row.table.table)!;
+    const before = spans.find(span => table.start - 1 >= span.start && table.start - 1 < span.end);
+    const boundaries: Y.ID[] = [];
+    if (!before || before.virtual || before.root !== table.table.story ||
+      (before.cell ? cellName(before.cell) : undefined) !== (table.container ? cellName(table.container) : undefined)) {
+      removeWordTable(doc, row.table);
+      continue;
+    }
+    const at = table.offset - 1, text = doc.getText(before.root);
+    const deletion = edits.find(edit => edit.span === before && edit.part.delete && edit.offset + edit.part.delete - 1 === at);
+    if (deletion?.part.delete && text.toString()[at] === "\n") {
+      boundaries.push(Y.createRelativePositionFromTypeIndex(text, at).item!);
+      deletion.part = { delete: deletion.part.delete - 1 };
+    }
+    removeWordTable(doc, row.table, boundaries);
+  }
   for (const edit of edits.reverse()) {
+    if (edit.part.delete === 0) continue;
     if (removed.some((row) => edit.start >= row.start && edit.start < row.end)) continue;
     const { span } = edit;
-    const value = edit.outsideTable && !span.cell
+    const value = (edit.outsideTable && !span.cell) || approvedStories.has(edit)
       ? { text: doc.getText(span.root), start: 0, end: doc.getText(span.root).length }
       : selectionText(
           doc,

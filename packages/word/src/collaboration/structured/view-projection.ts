@@ -3,6 +3,7 @@ import { tableParagraphs, type TableCell } from "../tables.ts";
 import type { WordDelta } from "../commands.ts";
 import { structuredGrid } from "./grid.ts";
 import { structuredColumnWidths } from "./widths.ts";
+import { retainedParagraphBoundaries } from "./boundaries.ts";
 import {
   activeAxes,
   cellFormatName,
@@ -36,6 +37,7 @@ export type WordViewTable = {
 /** A local linear view for existing editors. Only the source document is synchronized. */
 export function projectWordSharedText(doc: Y.Doc, story: string) {
   validateStructuredTables(doc);
+  const boundaries = retainedParagraphBoundaries(doc);
   const delta: WordDelta = [];
   const spans: WordViewSpan[] = [];
   const tables: WordViewTable[] = [];
@@ -80,12 +82,17 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
       const part = indexed[index]!,
         from = Math.max(start, part.offset),
         to = Math.min(end, part.end);
-      if (to > from)
-        result.push({
-          ...part,
-          insert: part.insert.slice(from - part.offset, to - part.offset),
-          offset: from,
-        });
+      let cursor = from;
+      for (const boundary of [...(boundaries.get(text) ?? []), to]) {
+        if (boundary < cursor || boundary > to) continue;
+        if (boundary > cursor)
+          result.push({
+            ...part,
+            insert: part.insert.slice(cursor - part.offset, boundary - part.offset),
+            offset: cursor,
+          });
+        cursor = boundary + 1;
+      }
     }
     return result;
   };

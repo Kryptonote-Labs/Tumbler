@@ -812,6 +812,11 @@ migrated tables; switch those callers to the scoped operation adapter.
 Deletion retains payloads and records what the deleting peer observed. Concurrent
 edits that would be hidden produce a conflict; `restore-axis` or `restore-table`
 can expose them again. Deletion witnesses include nested stories recursively.
+Whole-table deletions keep separate records so concurrent deletions and their undo
+do not overwrite each other. When a linear edit also consumes the paragraph break
+before a deleted table, its physical separator stays with the retained baseline
+and is omitted from the logical paragraph flow. Export uses the same projection
+as the editor, including those joined paragraphs.
 Deleting an axis updates observed explicit merges; undo restores that coverage.
 Each merge operation retains its own identity. Equivalent concurrent coverage
 projects once; contradictory overlapping coverage blocks export. Sequential

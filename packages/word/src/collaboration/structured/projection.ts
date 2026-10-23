@@ -1,131 +1,26 @@
 import * as Y from "yjs";
 import type { WordArtifact } from "../../artifact.ts";
 import type { WordContentBlock } from "../../create-content.ts";
-import { projectWordOperationText } from "../../operations/document.ts";
-import { structuredColumnWidths } from "./widths.ts";
-import { structuredGrid } from "./grid.ts";
-import {
-  cellKey,
-  cellName,
-  existingText,
-  isTableRemoved,
-  payload,
-  tableName,
-  tableRecords,
-  payloadDelta,
-  tableAddresses,
-  tableBase,
-  validateStructuredTables,
-  type TableAddress,
-} from "./state.ts";
 import type { DocumentImage } from "../images.ts";
+import { projectWordOperationText } from "../../operations/document.ts";
+import { projectWordSharedText } from "./view-projection.ts";
 
-/** Project roots in logical grid order. Reads never initialize an empty cell root. */
+/** Export the same logical paragraphs and table ownership that editors display. */
 export function projectWordSharedDocument(
   doc: Y.Doc,
   story: string,
   source: WordArtifact,
   resolveImage?: (image: DocumentImage) => Uint8Array,
 ): WordContentBlock[] {
-  validateStructuredTables(doc);
-  const text = existingText(doc, story);
-  if (!text) throw new Error("Missing story.");
-  const addresses = new Map(tableAddresses(doc).map((a) => [tableName(a), a]));
-  const projectCell = (
-    address: Parameters<typeof payloadDelta>[1],
-  ): WordContentBlock[] => {
-    const delta = payloadDelta(doc, address, true);
-    if (!delta.length) return [{ kind: "paragraph", runs: [] }];
-    const temporary = new Y.Doc();
-    try {
-      const text = temporary.getText("cell");
-      text.applyDelta(delta);
-      return visit(
-        projectWordOperationText(text, source, resolveImage),
-        payload(doc, address)
-          ? Y.createRelativePositionFromTypeIndex(
-              payload(doc, address)!.text,
-              0,
-            ).tname!
-          : cellName(address),
-      );
-    } finally {
-      temporary.destroy();
-    }
-  };
-  const table = (address: TableAddress): WordContentBlock => {
-    const base = tableBase(doc, address),
-      grid = structuredGrid(doc, address),
-      records = tableRecords(doc, address);
-    const formatFor = (id: string) =>
-      records.find((r) => r.value.kind === "cell-format" && r.value.cell === id)
-        ?.value;
-    const widths = structuredColumnWidths(doc, address);
-    const rows = grid.map((row) =>
-      row.cells.map((cell) => {
-        const format = formatFor(
-          cell.source?.cell ?? cellKey(row.id, cell.address.column),
-        );
-        return {
-          blocks: cell.payloads.flatMap(projectCell),
-          ...(cell.columns.length > 1 ? { gridSpan: cell.columns.length } : {}),
-          ...(cell.verticalMerge ? { verticalMerge: cell.verticalMerge } : {}),
-          ...(format?.kind === "cell-format"
-            ? { format: format.format }
-            : cell.source?.format
-              ? { format: cell.source.format }
-              : {}),
-          ...(cell.source?.source?.cell
-            ? { source: cell.source.source.cell }
-            : {}),
-        };
-      }),
-    );
-    const count = grid[0]!.cells.reduce(
-      (n, c) => n + c.columns.length,
-      grid[0]!.before + grid[0]!.after,
-    );
-    return {
-      kind: "table",
-      rows,
-      rowGrids: grid.map((row) => ({ before: row.before, after: row.after })),
-      ...(widths ? { columnWidths: widths } : {}),
-      rowFormats: grid.map((row) => {
-        const format = records.find(
-          (r) => r.value.kind === "row-format" && r.value.row === row.id,
-        )?.value;
-        return format?.kind === "row-format"
-          ? format.format
-          : base.cells.find((c) => c.row === row.id)?.rowFormat;
-      }),
-      ...(base.cells[0]?.source
-        ? {
-            source: base.cells[0].source.table,
-            rowSources: grid.map(
-              (row) => base.cells.find((c) => c.row === row.id)?.source?.row,
-            ),
-          }
-        : {}),
-    };
-  };
-  const visit = (
-    blocks: ReturnType<typeof projectWordOperationText>,
-    scope: string,
-  ): WordContentBlock[] =>
-    blocks.flatMap((block) => {
-      if (block.kind !== "table") return block;
-      const address = addresses.get(
-        tableName({ story: scope, table: block.id }),
-      );
-      if (address) return isTableRemoved(doc, address) ? [] : [table(address)];
-      return {
-        ...block,
-        rows: block.rows.map((row) =>
-          row.map((cell) => ({ ...cell, blocks: visit(cell.blocks, scope) })),
-        ),
-      };
-    });
-  return visit(projectWordOperationText(text, source, resolveImage), story);
+  const projected = projectWordSharedText(doc, story);
+  const temporary = new Y.Doc();
+  try {
+    const text = temporary.getText("story");
+    text.applyDelta(projected.delta);
+    return projectWordOperationText(text, source, resolveImage);
+  } finally {
+    temporary.destroy();
+  }
 }
 
 /** Invalidate on any shared-root update, including first typing in an implicit cell. */

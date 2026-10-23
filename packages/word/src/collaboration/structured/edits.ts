@@ -22,6 +22,7 @@ import {
 import { resolveCell, structuredGrid } from "./grid.ts";
 import { selectionText, checkRange } from "./selection.ts";
 import type { WordScopedSelection, WordStructuredChange } from "./types.ts";
+import { removeWordTable } from "./boundaries.ts";
 const commands = createWordCommands();
 export function editDerivedText<T extends { delta: WordDelta }>(
   doc: Y.Doc,
@@ -162,17 +163,10 @@ export function applyStructuredChange(
       continuations,
     });
   } else if (change.kind === "delete-table") {
-    const witnesses: Record<string, string> = {};
-    for (const row of orderedAxes(doc, address, "row"))
-      for (const column of orderedAxes(doc, address, "column"))
-        witnesses[cellKey(row, column)] = payloadSignature(doc, {
-          ...address,
-          row,
-          column,
-        }, "table");
-    records.set("remove-table", { kind: "remove-table", witnesses });
+    removeWordTable(doc, address);
   } else if (change.kind === "restore-table") {
-    records.delete("remove-table");
+    for (const { key, value } of tableRecords(doc, address))
+      if (value.kind === "remove-table") records.delete(key);
   } else if (change.kind === "restore-axis") {
     records.delete("remove:" + change.dimension + ":" + change.id);
   } else if (change.kind === "delete-axis") {
