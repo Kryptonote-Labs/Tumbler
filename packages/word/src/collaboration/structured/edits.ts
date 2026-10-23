@@ -169,7 +169,7 @@ export function applyStructuredChange(
           ...address,
           row,
           column,
-        });
+        }, "table");
     records.set("remove-table", { kind: "remove-table", witnesses });
   } else if (change.kind === "restore-table") {
     records.delete("remove-table");
@@ -190,7 +190,7 @@ export function applyStructuredChange(
             ...address,
             row,
             column,
-          });
+          }, change.dimension);
     // Retire only merges observed by this deletion. Concurrent merges still conflict.
     for (const { key, value } of tableRecords(doc, address)) {
       if (value.kind !== "merge") continue;

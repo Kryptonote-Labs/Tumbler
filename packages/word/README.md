@@ -811,7 +811,9 @@ Deleting an axis updates observed explicit merges; undo restores that coverage.
 Each merge operation retains its own identity. Equivalent concurrent coverage
 projects once; contradictory overlapping coverage blocks export. Sequential
 extension consumes the observed neighboring merges. Deletion witnesses include
-source paragraph terminator attributes as well as derived-cell registers.
+source paragraph terminator attributes, derived-cell registers and cell formatting.
+Row deletion also witnesses row formatting; column deletion witnesses column widths.
+Structural undo retains these formatting records even when a cell has no text.
 An explicit `restore-axis` exposes the retained cells without recreating retired
 merge records. Select merged-cell text through the grid's `payloads`; covered
 coordinates that do not name a visible payload are rejected. `inspectWordTableState` exposes retained axis records even
@@ -825,8 +827,13 @@ It rehearses the next undo or redo against a disposable current snapshot before
 changing the live document. This preserves remote text and rejects an undo that
 would detach it, without replaying the session's update history. Snapshot cost
 still depends on document size. Destroy the history when the editor closes.
-Hosts with their own document-wide Y.UndoManager can call `preflightWordUndo`
-with an additional source/permission validator before applying undo or redo.
+Hosts that need direct access to history stacks and selection metadata should use
+`createWordUndoManager(doc, { trackedOrigins, captureTimeout })`, then call
+`preflightWordUndo` with an additional source/permission validator before applying
+undo or redo. Guarded undo rejects foreign managers or changed item filters.
+An arbitrary Yjs `deleteFilter` can close over live object identities or split an
+atomic document operation; it cannot be safely reproduced against a disposable
+document. Select local edits through tracked origins instead of filtering items.
 Migration belongs outside this editing history. The canonical empty cell's final paragraph boundary
 is virtual; formatting it uses separate shared registers, and only user-entered
 paragraph breaks and boundaries required before nested tables become actual

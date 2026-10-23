@@ -15,7 +15,7 @@ import {
   tableName,
   cellFormatName,
 } from "./state.ts";
-import { payload, sourceCell, payloadDelta, payloadSignature } from "./payload.ts";
+import { payload, sourceCell, payloadDelta, payloadSignature, cellFormatting, stableStringify, rowFormatting, columnFormatting } from "./payload.ts";
 import { structuredReadCache } from "./read-cache.ts";
 /** Check hidden content too: deletion and structural undo must not silently detach edits. */
 export function validateStructuredTables(doc: Y.Doc) {
@@ -42,6 +42,18 @@ export function validateStructuredTables(doc: Y.Doc) {
     const occupied = format ? doc.getMap(name).size > 0 : existingText(doc, name)!.length > 0;
     return occupied ? [{ story, table, row, column }] : [];
   });
+  for (const address of tableAddresses(doc)) {
+    const base = tableBase(doc, address);
+    for (const { value } of tableRecords(doc, address)) {
+      if (value.kind !== "cell-format") continue;
+      const source = base.cells.find(cell => cell.cell === value.cell);
+      if (source) retained.push({ ...address, row: source.row, column: base.columns[source.column]! });
+      else {
+        const [row, column] = z.tuple([id, id]).parse(JSON.parse(value.cell));
+        retained.push({ ...address, row, column });
+      }
+    }
+  }
   // Yjs leaves empty named maps after undo. Ignore them only if nothing is retained.
   for (const address of retained) {
     if (!doc.share.has(tableName(address)) || doc.getMap(tableName(address)).size === 0)
@@ -54,9 +66,18 @@ export function validateStructuredTables(doc: Y.Doc) {
   for (const address of tableAddresses(doc)) {
     const base = tableBase(doc, address),
       rows = activeAxes(doc, address, "row"),
-      columns = activeAxes(doc, address, "column");
+      columns = activeAxes(doc, address, "column"),
+      allRows = orderedAxes(doc, address, "row"),
+      allColumns = orderedAxes(doc, address, "column");
+    for (const { value } of tableRecords(doc, address))
+      if ((value.kind === "row-format" && !allRows.includes(value.row)) ||
+          (value.kind === "width" && !allColumns.includes(value.column)))
+        throw new WordTableConflict(address, "deleted-content", "Undo would detach retained row or column formatting.");
     for (const { value } of tableRecords(doc, address))
       if (value.kind === "remove" || value.kind === "remove-table") {
+        const witnessed = Object.keys(value.witnesses).map(key => z.tuple([id, id]).parse(JSON.parse(key)));
+        const witnessedRows = new Set(witnessed.map(([row]) => row));
+        const witnessedColumns = new Set(witnessed.map(([, column]) => column));
         for (const [key, signature] of Object.entries(value.witnesses)) {
           const [row, column] = z.tuple([id, id]).parse(JSON.parse(key));
           const source = sourceCell(doc, { ...address, row, column });
@@ -67,9 +88,15 @@ export function validateStructuredTables(doc: Y.Doc) {
             columns.some(
               (column) => sourceCell(doc, { ...address, row, column })?.cell === source.cell,
             )
-          )
+          ) {
+            // A span keeps its shared payload, but the deleted column still loses its width.
+            const previous = z.object({ columnWidth: z.unknown().optional() }).parse(JSON.parse(signature));
+            const width = columnFormatting(doc, { ...address, row, column });
+            if (stableStringify(previous.columnWidth) !== stableStringify(width))
+              throw new WordTableConflict(address, "deleted-content", "Deleted axis contains edits not observed by the deletion.");
             continue;
-          if (payloadSignature(doc, { ...address, row, column }) !== signature)
+          }
+          if (payloadSignature(doc, { ...address, row, column }, value.kind === "remove" ? value.dimension : "table") !== signature)
             throw new WordTableConflict(
               address,
               "deleted-content",
@@ -77,8 +104,8 @@ export function validateStructuredTables(doc: Y.Doc) {
             );
         }
         // New intersections on a removed axis were not observed by the deleting peer.
-        for (const row of orderedAxes(doc, address, "row"))
-          for (const column of orderedAxes(doc, address, "column")) {
+        for (const row of allRows)
+          for (const column of allColumns) {
             if (
               (value.kind === "remove" &&
                 !value.ids.includes(value.dimension === "row" ? row : column)) ||
@@ -87,6 +114,11 @@ export function validateStructuredTables(doc: Y.Doc) {
               continue;
             if (
               payloadDelta(doc, { ...address, row, column }).length ||
+              cellFormatting(doc, { ...address, row, column }) !== undefined ||
+              (value.kind === "remove-table" && (
+                (!witnessedRows.has(row) && rowFormatting(doc, { ...address, row, column }) !== undefined) ||
+                (!witnessedColumns.has(column) && columnFormatting(doc, { ...address, row, column }) !== undefined)
+              )) ||
               (doc.share.has(cellFormatName({ ...address, row, column })) &&
                 doc.getMap(cellFormatName({ ...address, row, column })).size > 0)
             )
@@ -106,8 +138,6 @@ export function validateStructuredTables(doc: Y.Doc) {
     );
     for (const { story, table, row, column } of retained) {
       if (story !== address.story || table !== address.table) continue;
-      const allRows = orderedAxes(doc, address, "row"),
-        allColumns = orderedAxes(doc, address, "column");
       if (!allRows.includes(row) || !allColumns.includes(column))
         throw new WordTableConflict(
           address,

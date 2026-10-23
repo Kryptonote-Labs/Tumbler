@@ -143,7 +143,27 @@ export function stableStringify(value: unknown): string {
 export function isTableRemoved(doc: Y.Doc, address: TableAddress) {
   return tableRecords(doc, address).some((r) => r.value.kind === "remove-table");
 }
-export function payloadSignature(doc: Y.Doc, address: CellAddress) {
+export function cellFormatting(doc: Y.Doc, address: CellAddress) {
+  const key = sourceCell(doc, address)?.cell ?? JSON.stringify([address.row, address.column]);
+  const record = tableRecords(doc, address).find(({ value }) => value.kind === "cell-format" && value.cell === key)?.value;
+  return record?.kind === "cell-format" ? record.format : undefined;
+}
+function changedFormat(current: unknown, baseline: unknown) {
+  return stableStringify(current ?? {}) === stableStringify(baseline ?? {}) ? undefined : current;
+}
+export function rowFormatting(doc: Y.Doc, address: CellAddress) {
+  const record = tableRecords(doc, address).find(({ value }) => value.kind === "row-format" && value.row === address.row)?.value;
+  return record?.kind === "row-format"
+    ? changedFormat(record.format, tableBase(doc, address).cells.find(cell => cell.row === address.row)?.rowFormat)
+    : undefined;
+}
+export function columnFormatting(doc: Y.Doc, address: CellAddress) {
+  const base = tableBase(doc, address), widths = base.cells[0]?.widths;
+  const original = widths?.length ? widths[base.columns.indexOf(address.column)] ?? widths.reduce((sum, width) => sum + width, 0) / widths.length : undefined;
+  const record = tableRecords(doc, address).find(({ value }) => value.kind === "width" && value.column === address.column)?.value;
+  return record?.kind === "width" && record.value !== original ? record.value : undefined;
+}
+export function payloadSignature(doc: Y.Doc, address: CellAddress, removed?: "row" | "column" | "table") {
   const value = payload(doc, address);
   const descendants = new Map<string, unknown>();
   const visit = (text: Y.Text, start: number, end: number) => {
@@ -197,6 +217,13 @@ export function payloadSignature(doc: Y.Doc, address: CellAddress) {
   return stableStringify({
     content: payloadDelta(doc, address),
     terminal,
+    cellFormat: changedFormat(cellFormatting(doc, address), value?.source?.format),
+    rowFormat: removed === "row" || removed === "table"
+      ? rowFormatting(doc, address)
+      : undefined,
+    columnWidth: removed === "column" || removed === "table"
+      ? columnFormatting(doc, address)
+      : undefined,
     descendants: Object.fromEntries([...descendants].sort(([a], [b]) => (a < b ? -1 : 1))),
   });
 }
