@@ -1,11 +1,11 @@
 import * as Y from "yjs";
 import type { WordDelta } from "../commands.ts";
-import { tableParagraphs } from "../tables.ts";
+import { isTableCell, tableParagraphs } from "../tables.ts";
 import { editDerivedText } from "./edits.ts";
 import { cellName, migrateTable, type TableAddress } from "./state.ts";
 import { removeWordTable } from "./boundaries.ts";
 import { selectionText } from "./selection.ts";
-import type { WordViewSpan, WordViewTable } from "./view-projection.ts";
+import type { WordViewCell, WordViewSpan, WordViewTable } from "./view-projection.ts";
 
 type Part = WordDelta[number];
 type Edit = {
@@ -24,6 +24,7 @@ export function applyWordViewDelta(
   spans: readonly WordViewSpan[],
   delta: WordDelta,
   tables: readonly WordViewTable[],
+  scope?: WordViewCell,
 ) {
   const edits: Edit[] = [];
   const removed: { start: number; end: number; table: TableAddress }[] = [];
@@ -80,9 +81,25 @@ export function applyWordViewDelta(
       split(cursor, part.delete, part);
       cursor = end;
     } else if (typeof part.insert === "string") {
-      const span = spans.find((span) => cursor >= span.start && cursor < span.end) ??
+      const scopedEnd = scope && cursor === scope.end;
+      const span = (scopedEnd ? spans.find(span => scope.end - 1 >= span.start && scope.end - 1 < span.end) : undefined) ??
+        spans.find((span) => cursor >= span.start && cursor < span.end) ??
         spans.at(-1) ?? { root: story, offset: 0, start: 0, end: 0 };
+      const insertionOffset = scopedEnd
+        ? span.offset + (span.virtual ? 0 : span.end - span.start - 1)
+        : span.offset + (span.virtual ? 0 : Math.min(cursor - span.start, span.end - span.start));
       if (typeof ordered[index - 1]?.insert !== "string") {
+        if (scopedEnd) {
+          let at = 0;
+          const parts: { insert: string; attributes?: Record<string, unknown> }[] = text.toDelta();
+          const ending = parts.find(part => {
+            const contains = scope.end - 1 >= at && scope.end - 1 < at + part.insert.length;
+            at += part.insert.length;
+            return contains;
+          });
+          const { table: _table, ...attributes } = ending?.attributes ?? {};
+          edits.push({ span, start: cursor, offset: insertionOffset, part: { insert: "\n", attributes } });
+        }
         let content = "";
         for (let next = index; typeof ordered[next]?.insert === "string"; next++)
           content += ordered[next]!.insert;
@@ -120,8 +137,7 @@ export function applyWordViewDelta(
       edits.push({
         span,
         start: cursor,
-        offset:
-          span.offset + (span.virtual ? 0 : Math.min(cursor - span.start, span.end - span.start)),
+        offset: insertionOffset,
         part: { ...part, insert },
       });
     } else throw new Error("Only text is supported.");
@@ -175,6 +191,22 @@ export function applyWordViewDelta(
     const attributes = { ...edit.part.attributes };
     if (span.cell) {
       const table: unknown = attributes.table;
+      if (isTableCell(table) && table.id !== span.cell.table) {
+        const parents = table.parents ?? [];
+        const owner = parents.findIndex(parent => parent.id === span.cell!.table);
+        const descendants = parents.slice(owner + 1);
+        let offset = 0;
+        let inherited: unknown;
+        if ("source" in value)
+          for (const part of value.text.toDelta()) {
+            if (offset <= value.end && offset + part.insert.length > value.end) inherited = part.attributes?.table;
+            offset += part.insert.length;
+          }
+        const ancestry = isTableCell(inherited) ? [...(inherited.parents ?? []), inherited] : [];
+        const nested = [...ancestry, ...descendants.filter(parent => !ancestry.some(ancestor => ancestor.id === parent.id))];
+        const { parents: _parents, ...own } = table;
+        attributes.table = { ...own, ...(nested.length ? { parents: nested } : {}) };
+      }
       if (table === undefined || (table && typeof table === "object" && "id" in table && table.id === span.cell.table)) {
         delete attributes.table;
         if (typeof edit.part.insert === "string" && "source" in value) {

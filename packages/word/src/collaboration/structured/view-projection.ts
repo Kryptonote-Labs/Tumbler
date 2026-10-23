@@ -34,6 +34,7 @@ export type WordViewTable = {
   offset: number;
   container?: CellAddress;
 };
+export type WordViewCell = { cell: CellAddress; start: number; end: number };
 
 /** A local linear view for existing editors. Only the source document is synchronized. */
 export function projectWordSharedText(doc: Y.Doc, story: string) {
@@ -42,6 +43,7 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
   const delta: WordDelta = [];
   const spans: WordViewSpan[] = [];
   const tables: WordViewTable[] = [];
+  const cells: WordViewCell[] = [];
   const paragraphs = new Map<string, ReturnType<typeof tableParagraphs>>();
   const rootParts = new WeakMap<
     Y.Text,
@@ -224,6 +226,8 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
               : {}),
         };
         for (const owner of cell.payloads) {
+          const scope: WordViewCell = { cell: owner, start: length, end: length };
+          cells.push(scope);
           const value = payload(doc, owner);
           const root = value?.source ? address.story : cellName(owner);
           if (value)
@@ -249,6 +253,7 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
               },
             );
           }
+          scope.end = length;
         }
       }
     }
@@ -256,5 +261,5 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
   const text = existingText(doc, story);
   if (!text) throw new Error("Missing document story.");
   visit(story, 0, text.length);
-  return { delta, spans, tables, length };
+  return { delta, spans, tables, cells, length };
 }

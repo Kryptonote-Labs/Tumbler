@@ -16,6 +16,7 @@ import { projectWordSharedText, type WordViewSpan, type WordViewTable } from "./
 import { anchorWordView, resolveWordView } from "./view-anchors.ts";
 import { syncWordView } from "./view-sync.ts";
 import { applyWordViewDelta } from "./view-delta.ts";
+import { prepareWordViewOperation } from "./view-operations.ts";
 import { applyStructuredChange } from "./edits.ts";
 import { wordParagraphIdentity, setWordParagraphIdentity } from "../paragraph-identity.ts";
 
@@ -50,8 +51,8 @@ export class WordSharedText {
   private spans: WordViewSpan[] = [];
   private tables: WordViewTable[] = [];
   conflict: Error | undefined;
-  private structured() {
-    return [...this.doc.share.keys()].some((name) => name.startsWith("word-table-v2:"));
+  private structured(doc = this.doc) {
+    return [...doc.share.keys()].some((name) => name.startsWith("word-table-v2:"));
   }
   private readonly sourceChanged = (event: Y.YTextEvent) => {
     if (!this.structured()) {
@@ -219,6 +220,17 @@ export class WordSharedText {
     let result = range;
     const migration = stageWordUpdate(this.doc, (staged) => {
       this.migrate(staged);
+      if (!cellId && operation.name !== "fit-table" && this.structured(staged)) {
+        const projected = projectWordSharedText(staged, this.story);
+        const edit = prepareWordViewOperation(this.text, projected.cells, selection, range, operation, context);
+        applyWordViewDelta(staged, this.story, this.text, projected.spans, edit.delta, projected.tables, edit.scope);
+        result = edit.selection;
+        const after = new WordSharedText(staged, this.story);
+        try {
+          const scoped = after.selection(result);
+          return scoped.range.end - scoped.range.start === result.end - result.start ? scoped : undefined;
+        } finally { after.destroy(); }
+      }
       const after = applyWordScopedOperation(staged, selection, operation, context);
       const view = new WordSharedText(staged, this.story);
       try {

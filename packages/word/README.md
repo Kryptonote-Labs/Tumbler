@@ -957,6 +957,12 @@ view.commit(edit, history.origin);
 // edit.range is the resulting selection in the linear view.
 ```
 
+Operations use the visible paragraphs and cell payloads, including joins around
+retained table content. Use the returned `range` for editor selections. The
+optional `selection` is omitted when that range crosses hidden source content
+and cannot be represented by one contiguous scoped selection. Clearing a cell
+retains hidden table baselines and their required separators for undo and validation.
+
 `prepareDelta(delta)` translates existing editor deltas into payload-local edits.
 It retains source cell boundaries, rich pasted text and virtual paragraph
 formatting. Pasted tables migrate in the same update. `prepareChanges(changes)`

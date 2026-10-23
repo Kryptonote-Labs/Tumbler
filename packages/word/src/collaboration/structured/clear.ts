@@ -3,6 +3,7 @@ import { tableParagraphs } from "../tables.ts";
 import { applyStructuredChange } from "./edits.ts";
 import { selectionText } from "./selection.ts";
 import { cellName, isTableRemoved, migrateTable, payload, type CellAddress } from "./state.ts";
+import { retainedParagraphBoundaries } from "./boundaries.ts";
 
 /** Clear visible cell content while retaining the baselines of migrated nested tables. */
 export function clearWordCell(doc: Y.Doc, cell: CellAddress) {
@@ -31,8 +32,20 @@ export function clearWordCell(doc: Y.Doc, cell: CellAddress) {
     const table = { story, table: range.table };
     if (!isTableRemoved(doc, table)) applyStructuredChange(doc, { kind: "delete-table", table });
   }
+  const protectedRanges = [
+    ...retained,
+    ...(retainedParagraphBoundaries(doc).get(value.text) ?? [])
+      .filter(at => at >= value.start && at < value.end)
+      .map(at => ({ start: at, end: at + 1 })),
+  ].sort((a, b) => a.start - b.start);
+  const merged: { start: number; end: number }[] = [];
+  for (const range of protectedRanges) {
+    const previous = merged.at(-1);
+    if (previous && range.start <= previous.end) previous.end = Math.max(previous.end, range.end);
+    else merged.push({ start: range.start, end: range.end });
+  }
   let end = value.end;
-  for (const range of retained.toReversed()) {
+  for (const range of merged.toReversed()) {
     if (end > range.end) value.text.delete(range.end, end - range.end);
     end = range.start;
   }
