@@ -1,0 +1,161 @@
+import { expect, test } from "bun:test";
+import * as Y from "yjs";
+import { WordSharedText } from "../src/collaboration/structured/view.ts";
+import { groupTableParagraphs, tableParagraphs } from "../src/collaboration/tables.ts";
+import { cell, clone, fixture, sync } from "./structured-table-fixtures.ts";
+import { createWordCommands } from "../src/collaboration/commands.ts";
+import { openWordOperationDocument } from "../src/operations/document.ts";
+import { createWordArtifact } from "../src/index.ts";
+
+test("linear editor views retain concurrent columns and map both peers to the same cell", () => {
+  const seed = fixture([
+    [cell("A"), cell("B")],
+    [cell("C"), cell("D")],
+  ]);
+  const docs = [clone(seed.doc), clone(seed.doc)];
+  const views = docs.map((doc) => new WordSharedText(doc, "body"));
+  for (const view of views) {
+    const first = tableParagraphs(view.text)[0]!;
+    view.commit(
+      view.prepareOperation(
+        { start: first.start, end: first.start },
+        {
+          name: "edit-table",
+          input: { action: "column-after", cellId: first.table!.cell },
+        },
+      ),
+    );
+  }
+  sync(docs[0]!, docs[1]!);
+  for (const view of views) {
+    expect(view.conflict).toBeUndefined();
+    const cells = tableParagraphs(view.text).filter((p) => p.table);
+    expect(cells).toHaveLength(8);
+    expect(cells.every((p) => p.table!.columns === 4)).toBe(true);
+    expect(groupTableParagraphs(cells)).toMatchObject([{ kind: "table" }]);
+    const empty = cells[1]!;
+    view.commit(
+      view.prepareOperation(
+        { start: empty.start, end: empty.start },
+        {
+          name: "replace",
+          input: { value: view === views[0] ? "Alice" : "Bob" },
+        },
+      ),
+    );
+  }
+  sync(docs[0]!, docs[1]!);
+  expect(views[0]!.text.toDelta()).toEqual(views[1]!.text.toDelta());
+  expect(views[0]!.text.toString()).toContain("Alice");
+  expect(views[0]!.text.toString()).toContain("Bob");
+  views.forEach((view) => view.destroy());
+  docs.forEach((doc) => doc.destroy());
+  seed.session.destroy();
+});
+
+test("browser deltas edit implicit cells, paragraphs and their virtual formatting boundary", () => {
+  const seed = fixture([[cell("A"), cell("B")]]);
+  const view = new WordSharedText(seed.doc, "body");
+  const commands = createWordCommands();
+  const first = tableParagraphs(view.text)[0]!;
+  view.commit(
+    view.prepareOperation(
+      { start: 0, end: 0 },
+      {
+        name: "edit-table",
+        input: { action: "column-after", cellId: first.table!.cell },
+      },
+    ),
+  );
+  const empty = tableParagraphs(view.text)[1]!;
+  view.commit(
+    view.prepareDelta(
+      commands.replaceWordDelta(
+        view.text,
+        { start: empty.start, end: empty.start },
+        "First\nSecond",
+        { bold: true },
+      ),
+    ),
+  );
+  expect(view.conflict).toBeUndefined();
+  expect(view.text.toString()).toBe("A\nFirst\nSecond\nB\n\n");
+  const second = view.text.toString().indexOf("Second");
+  view.commit(
+    view.prepareDelta(
+      commands.formatWordDelta(
+        view.text,
+        { start: second, end: second + 6 },
+        { paragraph: { keepNext: true } },
+      ),
+    ),
+  );
+  expect(view.conflict).toBeUndefined();
+  expect(
+    commands.wordFormats(view.text, { start: second, end: second + 6 }).paragraph?.keepNext,
+  ).toBe(true);
+  view.commit(
+    view.prepareDelta(
+      commands.replaceWordDelta(
+        view.text,
+        { start: empty.start, end: empty.start + 12 },
+        "Replacement",
+      ),
+    ),
+  );
+  expect(view.text.toString()).toContain("Replacement");
+  view.destroy();
+  seed.session.destroy();
+});
+
+test("an existing legacy table migrates in the same prepared operation without changing its text", () => {
+  const session = openWordOperationDocument(
+    createWordArtifact({ blocks: [{ kind: "table", rows: [[cell("Original"), cell("Second")]] }] }),
+  );
+  const view = new WordSharedText(session.text.doc!, "body");
+  const first = tableParagraphs(view.text)[0]!;
+  view.commit(
+    view.prepareOperation(
+      { start: first.start, end: first.start },
+      {
+        name: "edit-table",
+        input: { action: "column-after", cellId: first.table!.cell },
+      },
+    ),
+  );
+  expect(view.conflict).toBeUndefined();
+  expect(tableParagraphs(view.text).filter((p) => p.table)).toHaveLength(3);
+  expect(view.text.toString()).toContain("Original\n\nSecond");
+  view.destroy();
+  session.destroy();
+});
+
+test("an implicit-cell anchor stays in its cell after another column is inserted", () => {
+  const seed = fixture([[cell("A"), cell("B")]]);
+  const view = new WordSharedText(seed.doc, "body");
+  const first = tableParagraphs(view.text)[0]!;
+  const insert = () =>
+    view.commit(
+      view.prepareOperation(
+        { start: 0, end: 0 },
+        {
+          name: "edit-table",
+          input: { action: "column-after", cellId: first.table!.cell },
+        },
+      ),
+    );
+  insert();
+  const empty = tableParagraphs(view.text)[1]!;
+  const anchor = view.anchor({ start: empty.start, end: empty.start });
+  const state = Y.encodeStateAsUpdate(seed.doc);
+  expect(view.resolve(anchor)).toEqual({ start: empty.start, end: empty.start });
+  expect(Y.encodeStateAsUpdate(seed.doc)).toEqual(state);
+  insert();
+  const at = view.resolve(anchor);
+  expect(at.start).toBeGreaterThan(empty.start);
+  view.commit(view.prepareOperation(at, { name: "replace", input: { value: "Anchored" } }));
+  expect(tableParagraphs(view.text).find((p) => p.start === at.start + 0)?.table?.column).toBe(2);
+  expect(view.text.toString()).toContain("Anchored");
+  view.destroy();
+  seed.session.destroy();
+});

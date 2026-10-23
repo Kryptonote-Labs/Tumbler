@@ -26,3 +26,4 @@ export {
   WordStructuredProjection,
 } from "./projection.ts";
 export { WordStructuredUndo } from "./undo.ts";
+export { WordSharedText, wordSharedText, getWordSharedText, wordSharedOwner } from './view.ts';
