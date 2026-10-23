@@ -95,9 +95,9 @@ export function applyWordViewDelta(
     )!;
     const at = Math.max(0, edit.offset - value.start);
     const attributes = { ...edit.part.attributes };
-    if (span.cell && attributes.table) {
+    if (span.cell) {
       const table: unknown = attributes.table;
-      if (table && typeof table === "object" && "id" in table && table.id === span.cell.table) {
+      if (table === undefined || (table && typeof table === "object" && "id" in table && table.id === span.cell.table)) {
         delete attributes.table;
         if (typeof edit.part.insert === "string" && "source" in value) {
           let offset = 0;

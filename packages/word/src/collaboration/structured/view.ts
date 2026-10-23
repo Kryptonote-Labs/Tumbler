@@ -54,7 +54,12 @@ export class WordSharedText {
   }
   private readonly sourceChanged = (event: Y.YTextEvent) => {
     if (!this.structured()) {
-      this.text.applyDelta(event.delta);
+      // Y.Text fills missing formatting keys in the supplied delta. Other source observers
+      // must receive the original event, including incremental validation and history.
+      this.text.applyDelta(event.delta.map(part => ({
+        ...part,
+        ...(part.attributes ? { attributes: { ...part.attributes } } : {}),
+      })));
       this.spans = this.text.length
         ? [{ start: 0, end: this.text.length, root: this.story, offset: 0 }]
         : [];

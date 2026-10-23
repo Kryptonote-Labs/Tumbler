@@ -275,3 +275,27 @@ test('paragraph projections refresh shared identities when equal text retains a 
   expect(projection.paragraphs[1]!.id).toBe(before[1]!);
   projection.destroy(); view.destroy(); doc.destroy();
 });
+
+test('plain formatting resets keep inserted paragraphs inside retained source cells', () => {
+  const seed = fixture([[cell('First'), cell('Other')]]);
+  const view = new WordSharedText(seed.doc, 'body');
+  const commands = createWordCommands();
+  view.commit(view.prepareDelta(commands.replaceWordDelta(view.text, { start: 0, end: 0 }, 'One\nTwo', {})));
+  const paragraphs = tableParagraphs(view.text);
+  expect(paragraphs[0]!.table?.cell).toBe(paragraphs[1]!.table?.cell);
+  expect(paragraphs[0]!.table?.id).toBeDefined();
+  expect(view.text.toString()).toContain('One\nTwoFirst');
+  view.destroy(); seed.session.destroy();
+});
+
+test('synchronizing a view does not mutate deltas received by later source observers', () => {
+  const doc = new Y.Doc();
+  const source = doc.getText('body');
+  source.insert(0, 'Imported\n', { bold: true, strike: false });
+  const view = new WordSharedText(doc, 'body');
+  let inserted: Record<string, unknown> | undefined;
+  source.observe(event => { inserted = event.delta.find(part => part.insert)?.attributes; });
+  source.insert(1, 'new', { bold: true });
+  expect(inserted).toEqual({ bold: true });
+  view.destroy(); doc.destroy();
+});
