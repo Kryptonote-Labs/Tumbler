@@ -86,10 +86,10 @@ export function applyWordViewDelta(
         spans.find((span) => cursor >= span.start && cursor < span.end) ??
         spans.at(-1) ?? { root: story, offset: 0, start: 0, end: 0 };
       const insertionOffset = scopedEnd
-        ? span.offset + (span.virtual ? 0 : span.end - span.start - 1)
+        ? span.offset + (span.virtual ? 0 : span.end - span.start)
         : span.offset + (span.virtual ? 0 : Math.min(cursor - span.start, span.end - span.start));
       if (typeof ordered[index - 1]?.insert !== "string") {
-        if (scopedEnd) {
+        if (scopedEnd && span.virtual) {
           let at = 0;
           const parts: { insert: string; attributes?: Record<string, unknown> }[] = text.toDelta();
           const ending = parts.find(part => {

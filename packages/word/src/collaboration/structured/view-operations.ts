@@ -6,8 +6,25 @@ import type { WordDelta, WordRange } from "../commands.ts";
 import { isTableCell } from "../tables.ts";
 import { cellName } from "./state.ts";
 import type { WordScopedSelection } from "./types.ts";
-import type { WordViewCell } from "./view-projection.ts";
+import { projectWordSharedText, type WordViewCell } from "./view-projection.ts";
 import { withWordOperationText } from "./operation-text.ts";
+import { applyWordViewDelta } from "./view-delta.ts";
+
+/** Apply one operation through the same logical projection for scoped and linear callers. */
+export function applyWordViewOperation(
+  doc: Y.Doc,
+  story: string,
+  text: Y.Text,
+  selection: WordScopedSelection,
+  range: WordRange,
+  operation: WordOperation,
+  context: WordScopedOperationContext,
+) {
+  const projected = projectWordSharedText(doc, story);
+  const edit = prepareWordViewOperation(text, projected.cells, selection, range, operation, context);
+  applyWordViewDelta(doc, story, text, projected.spans, edit.delta, projected.tables, edit.scope);
+  return edit.selection;
+}
 
 /** Execute against visible paragraphs; raw retained baselines are not operation targets. */
 export function prepareWordViewOperation(
@@ -50,9 +67,9 @@ export function prepareWordViewOperation(
       ? { ...operation, input: { ...operation.input, destination: operation.input.destination - scope.start } }
       : operation;
     const edit = execute(local, { start: at(range.start), end: at(range.end) }, scopedOperation, context);
-    // The existing final cell terminator supplies the empty paragraph after a new nested table.
+    // Canonical cells already supply a virtual final paragraph after the new nested table.
     const last = edit.delta.at(-1);
-    const content = operation.name === "insert-table" && last?.insert === "\n" && !last.attributes?.table
+    const content = scope.virtual && operation.name === "insert-table" && last?.insert === "\n" && !last.attributes?.table
       ? edit.delta.slice(0, -1) : edit.delta;
     return {
       ...edit,

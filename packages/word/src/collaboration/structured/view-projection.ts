@@ -34,7 +34,7 @@ export type WordViewTable = {
   offset: number;
   container?: CellAddress;
 };
-export type WordViewCell = { cell: CellAddress; start: number; end: number };
+export type WordViewCell = { cell: CellAddress; start: number; end: number; virtual: boolean };
 
 /** A local linear view for existing editors. Only the source document is synchronized. */
 export function projectWordSharedText(doc: Y.Doc, story: string) {
@@ -226,9 +226,9 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
               : {}),
         };
         for (const owner of cell.payloads) {
-          const scope: WordViewCell = { cell: owner, start: length, end: length };
-          cells.push(scope);
           const value = payload(doc, owner);
+          const scope: WordViewCell = { cell: owner, start: length, end: length, virtual: !value?.source };
+          cells.push(scope);
           const root = value?.source ? address.story : cellName(owner);
           if (value)
             visit(

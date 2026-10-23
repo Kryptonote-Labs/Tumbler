@@ -965,6 +965,9 @@ story name and document metadata, including formatting defaults. Use the returne
 optional `selection` is omitted when that range crosses hidden source content
 and cannot be represented by one contiguous scoped selection. Clearing a cell
 retains hidden table baselines and their required separators for undo and validation.
+Scoped and linear nested-table insertion use the same cell-local operation path.
+Both source and canonical cells retain the preceding paragraph and exactly one
+trailing parent paragraph after inserting into their final paragraph.
 
 `prepareDelta(delta)` translates existing editor deltas into payload-local edits.
 It retains source cell boundaries, rich pasted text and virtual paragraph

@@ -16,7 +16,7 @@ import { projectWordSharedText, type WordViewSpan, type WordViewTable } from "./
 import { anchorWordView, resolveWordView } from "./view-anchors.ts";
 import { syncWordView } from "./view-sync.ts";
 import { applyWordViewDelta } from "./view-delta.ts";
-import { prepareWordViewOperation } from "./view-operations.ts";
+import { applyWordViewOperation } from "./view-operations.ts";
 import { applyStructuredChange } from "./edits.ts";
 import { wordParagraphIdentity, setWordParagraphIdentity } from "../paragraph-identity.ts";
 
@@ -221,10 +221,7 @@ export class WordSharedText {
     const migration = stageWordUpdate(this.doc, (staged) => {
       this.migrate(staged);
       if (!cellId && operation.name !== "fit-table" && this.structured(staged)) {
-        const projected = projectWordSharedText(staged, this.story);
-        const edit = prepareWordViewOperation(this.text, projected.cells, selection, range, operation, context);
-        applyWordViewDelta(staged, this.story, this.text, projected.spans, edit.delta, projected.tables, edit.scope);
-        result = edit.selection;
+        result = applyWordViewOperation(staged, this.story, this.text, selection, range, operation, context);
         const after = new WordSharedText(staged, this.story);
         try {
           const scoped = after.selection(result);

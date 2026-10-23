@@ -11,7 +11,7 @@ import {
 } from "../collaboration/structured/transactions.ts";
 import {
   activeAxes,
-  cellName,
+  cellAddressFromName,
   migrateTable,
   tableAddresses,
   WordTableConflict,
@@ -22,6 +22,8 @@ import { resolveCell } from "../collaboration/structured/grid.ts";
 import { tableParagraphs } from "../collaboration/tables.ts";
 import { clearWordCell } from "../collaboration/structured/clear.ts";
 import { withWordOperationText } from "../collaboration/structured/operation-text.ts";
+import { getWordSharedText, WordSharedText } from "../collaboration/structured/view.ts";
+import { applyWordViewOperation } from "../collaboration/structured/view-operations.ts";
 
 function defined<T extends object>(value: T) {
   return Object.fromEntries(Object.entries(value).filter(([, part]) => part !== undefined)) as {
@@ -55,6 +57,22 @@ export function applyWordScopedOperation(
   const operation = wordOperation.parse(input);
   if ("cell" in selection) {
     const cell = selection.cell;
+    if (operation.name === "insert-table") {
+      let story = cell.story;
+      while (story.startsWith("word-cell-v2:")) story = cellAddressFromName(story).story;
+      const previous = getWordSharedText(staged.getText(story));
+      const view = previous ?? new WordSharedText(staged, story);
+      try {
+        view.sync();
+        const result = applyWordViewOperation(
+          staged, story, view.text, selection, view.range(selection), operation, context,
+        );
+        view.sync();
+        return view.selection(result);
+      } finally {
+        if (!previous) view.destroy();
+      }
+    }
     if (operation.name === "replace" && !context.prepareOperation) {
       const result = applyStructuredChange(staged, {
         kind: "replace",
@@ -195,13 +213,6 @@ export function applyWordScopedOperation(
         (context.prepareOperation ?? prepareWordOperation)(local, selection.range, operation, context),
       ),
     );
-    if (operation.name === "insert-table")
-      for (const p of tableParagraphs(value.text))
-        if (p.table && p.table.schema !== 2)
-          migrateTable(staged, {
-            story: cellName(selection.cell),
-            table: p.table.id,
-          });
     return { ...selection, range: edit.selection };
   }
   const range = {
