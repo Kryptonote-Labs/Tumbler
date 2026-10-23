@@ -589,17 +589,20 @@ export class NativeWordDocument implements WordLayoutSource {
               inlines,
             };
             const resetParagraph = authored.styleId !== undefined && (authored.styleId !== original?.format.styleId || authored.paragraph === undefined);
+            const paragraphFormat = authored.resetParagraphFormat && original && !resetParagraph
+              ? resetDirectParagraphFormat(original.format, named?.paragraph ?? compiled?.defaults.paragraph ?? DEFAULT_PARAGRAPH)
+              : resetParagraph ? named?.paragraph : original?.format;
             this.paragraphTextFormats.set(block, format(undefined, resetParagraph ? named?.text : original?.textFormat ?? named?.text));
             this.paragraphFormats.set(
               block,
               Object.freeze({
                 ...DEFAULT_PARAGRAPH,
                 ...compiled?.defaults.paragraph,
-                ...(resetParagraph ? named?.paragraph : original?.format),
+                ...paragraphFormat,
                 ...authored.positioning,
                 ...resolveWordPaintProperties(authored.paragraph ?? {}, this.themeColours),
                 alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? (resetParagraph ? named?.paragraph.alignment : original?.format.alignment) ?? compiled?.defaults.paragraph.alignment ?? 'start',
-                lineSpacing: authored.paragraph?.lineSpacing ?? (resetParagraph ? named?.paragraph.lineSpacing : original?.format.lineSpacing) ?? compiled?.defaults.paragraph.lineSpacing ?? {
+                lineSpacing: authored.paragraph?.lineSpacing ?? paragraphFormat?.lineSpacing ?? compiled?.defaults.paragraph.lineSpacing ?? {
                   rule: 'auto' as const,
                   value: Math.round((this.options.lineSpacing ?? 1) * 240),
                 },
@@ -725,6 +728,16 @@ export class NativeWordDocument implements WordLayoutSource {
       });
     return visit(this.blocks);
   }
+}
+
+/** Clear supported direct paragraph properties while retaining positioning and text direction. */
+function resetDirectParagraphFormat(format: ComputedWordParagraphFormat, inherited: ComputedWordParagraphFormat): ComputedWordParagraphFormat {
+  const {
+    spacingBeforeTwips, spacingAfterTwips, lineSpacing, keepNext, keepLines,
+    pageBreakBefore, widowControl, contextualSpacing, shading, shadingColour,
+    borders, borderColours, ...retained
+  } = format;
+  return { ...inherited, ...retained };
 }
 
 /** Validate text before update allocates identities or changes source caches. */
