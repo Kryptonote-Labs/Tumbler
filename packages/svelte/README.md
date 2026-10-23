@@ -67,6 +67,11 @@ This aligns the painted baseline with `fragment.baseline` despite browser font
 rounding. The optional font stack must match the one used to measure and paint
 the text. Font loading invalidates the cached CSS baseline measurements.
 
+`browserWordBaselineOffset(format, cssFontStack, heightPoints)` returns the CSS
+line box's baseline offset in points. Custom carets and placement previews can
+use the same measurement as `wordTextTop`, including browser rounding at the
+rendered font size. It returns `undefined` when no browser document is available.
+
 `wordTextCss` and `browserWordTextMeasurer` explicitly disable font kerning to
 match the engine's unkerned advances and Word's default when `w:kern` is absent.
 Custom renderers must also set `font-kerning:none`; inherited
