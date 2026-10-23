@@ -8,7 +8,7 @@ import {
 } from "../commands.ts";
 import { tableParagraphs } from "../tables.ts";
 import type { WordOperation } from "../../operations/definitions.ts";
-import { applyWordScopedOperation } from "../../operations/structured.ts";
+import { applyWordScopedOperation, type WordScopedOperationContext } from "../../operations/structured.ts";
 import { stageWordUpdate, commitWordUpdate } from "./transactions.ts";
 import { cellName, migrateTable, payload, tableName } from "./state.ts";
 import type { WordScopedSelection, PreparedWordUpdate } from "./types.ts";
@@ -60,9 +60,6 @@ export class WordSharedText {
         : [];
     }
   };
-  private readonly beforeObservers = () => {
-    if (this.structured()) this.refresh();
-  };
   private readonly disposed = () => this.destroy();
   private readonly refresh = () => {
     this.conflict = undefined;
@@ -99,7 +96,6 @@ export class WordSharedText {
         : wordParagraphIdentity(doc.getText(span.root), span.offset + at - span.start);
     });
     this.sourceText.observe(this.sourceChanged);
-    doc.on("beforeObserverCalls", this.beforeObservers);
     doc.on("afterTransaction", this.refresh);
     doc.on("destroy", this.disposed);
   }
@@ -197,7 +193,7 @@ export class WordSharedText {
   prepareOperation(
     range: WordRange,
     operation: WordOperation,
-    context: { availableWidthPoints?: number } = {},
+    context: WordScopedOperationContext = {},
   ): PreparedWordUpdate & { range: WordRange } {
     if (this.conflict) throw this.conflict;
     if (!this.structured()) this.sync();
@@ -301,7 +297,6 @@ export class WordSharedText {
   destroy() {
     setWordParagraphIdentity(this.projectedText, undefined);
     this.doc.off("afterTransaction", this.refresh);
-    this.doc.off("beforeObserverCalls", this.beforeObservers);
     this.doc.off("destroy", this.disposed);
     this.sourceText.unobserve(this.sourceChanged);
     views.delete(this.sourceText);

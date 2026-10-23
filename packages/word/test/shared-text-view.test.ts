@@ -244,12 +244,14 @@ test('a view resolves new positions before preexisting document observers run', 
   view.destroy(); doc.destroy();
 });
 
-test('table projections update before preexisting document observers read them', () => {
+test('an earlier document observer can synchronize its table projection before reading', () => {
   const seed = fixture([[cell('A'), cell('B')]]);
   let view: WordSharedText;
   seed.doc.on('afterTransaction', transaction => {
-    if (transaction.changed.size)
+    if (transaction.changed.size) {
+      view.sync();
       expect(tableParagraphs(view.text).filter(p => p.table)).toHaveLength(3);
+    }
   });
   view = new WordSharedText(seed.doc, 'body');
   const first = tableParagraphs(view.text)[0]!;

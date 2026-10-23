@@ -26,12 +26,17 @@ function defined<T extends object>(value: T) {
     [K in keyof T]: Exclude<T[K], undefined>;
   };
 }
+export type WordScopedOperationContext = {
+  availableWidthPoints?: number;
+  prepareOperation?: typeof prepareWordOperation;
+};
+
 /** The supported operation adapter commits complete shared-document updates after migration. */
 export function prepareWordScopedOperation(
   doc: Y.Doc,
   selection: WordScopedSelection,
   input: WordOperation,
-  context: { availableWidthPoints?: number } = {},
+  context: WordScopedOperationContext = {},
 ) {
   return stageWordUpdate(doc, (staged) =>
     applyWordScopedOperation(staged, selection, input, context),
@@ -43,7 +48,7 @@ export function applyWordScopedOperation(
   staged: Y.Doc,
   selection: WordScopedSelection,
   input: WordOperation,
-  context: { availableWidthPoints?: number } = {},
+  context: WordScopedOperationContext = {},
 ) {
   const operation = wordOperation.parse(input);
   if ("cell" in selection) {
@@ -193,7 +198,7 @@ export function applyWordScopedOperation(
     );
   if ("cell" in selection && !("source" in value)) {
     const edit = editDerivedText(staged, selection.cell, value.text, (text) =>
-      prepareWordOperation(text, selection.range, operation, context),
+      (context.prepareOperation ?? prepareWordOperation)(text, selection.range, operation, context),
     );
     if (operation.name === "insert-table")
       for (const p of tableParagraphs(value.text))
@@ -218,7 +223,7 @@ export function applyWordScopedOperation(
           },
         }
       : operation;
-  const edit = prepareWordOperation(value.text, range, scopedOperation, context);
+  const edit = (context.prepareOperation ?? prepareWordOperation)(value.text, range, scopedOperation, context);
   value.text.applyDelta(edit.delta);
   if (operation.name === "insert-table" && "story" in selection) {
     const migrated = new Set(
