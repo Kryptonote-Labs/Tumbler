@@ -60,8 +60,16 @@ jobs:
           dotnet-version: 8.0.425
       - name: Install dependencies and LibreOffice
         if: steps.available.outputs.present == 'true'
+        timeout-minutes: 8
         run: |
           bun install --frozen-lockfile
+          # The runner's Azure mirror can stall large LibreOffice downloads.
+          printf '%s\n' 'https://archive.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt
+          sudo tee /etc/apt/apt.conf.d/80-word-compatibility > /dev/null <<'EOF'
+          Acquire::Retries "2";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          EOF
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends libreoffice-writer
       - name: Install browser for everyday capability measurements
