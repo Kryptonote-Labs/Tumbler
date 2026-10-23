@@ -112,8 +112,24 @@ export function resolveScopedAnchor(
   doc: Y.Doc,
   anchor: WordScopedAnchor,
 ): WordScopedSelection {
-  const scope =
-    "cell" in anchor ? { cell: anchor.cell } : { story: anchor.story };
+  if ("story" in anchor) {
+    const text = existingText(doc, anchor.story);
+    const start = Y.createAbsolutePositionFromRelativePosition(anchor.start, doc);
+    const end = Y.createAbsolutePositionFromRelativePosition(anchor.end, doc);
+    if (!text || !start || !end || start.type !== text || end.type !== text)
+      throw new Error("Selection no longer resolves.");
+    const limit = commands.bodyLength(text);
+    const selection = {
+      story: anchor.story,
+      range: {
+        start: Math.min(limit, start.index, end.index),
+        end: Math.min(limit, Math.max(start.index, end.index)),
+      },
+    };
+    selectionText(doc, selection);
+    return selection;
+  }
+  const scope = { cell: anchor.cell };
   const value = selectionText(doc, { ...scope, range: { start: 0, end: 0 } });
   const position = (relative: Y.RelativePosition | null) => {
     if (relative === null) return 0;

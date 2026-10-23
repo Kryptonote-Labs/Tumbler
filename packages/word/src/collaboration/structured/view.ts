@@ -219,10 +219,14 @@ export class WordSharedText {
       const view = new WordSharedText(staged, this.story);
       try {
         if (after) result = view.range(after);
+        else {
+          const at = Math.min(target ? target.start : range.start, Math.max(0, view.text.length - 1));
+          result = { start: at, end: at };
+        }
+        return after ?? view.selection(result);
       } finally {
         view.destroy();
       }
-      return after;
     });
     return { ...migration, range: result };
   }

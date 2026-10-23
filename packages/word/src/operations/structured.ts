@@ -175,6 +175,9 @@ export function applyWordScopedOperation(
           break;
       }
       applyStructuredChange(staged, change);
+      // Deletion has no surviving cell target. Linear hosts choose a new visible caret.
+      if (action === "delete-row" || action === "delete-column" || action === "delete-table")
+        return undefined;
       return selection;
     }
   }

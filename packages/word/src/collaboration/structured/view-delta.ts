@@ -90,7 +90,13 @@ export function applyWordViewDelta(
       doc,
       span.cell
         ? { cell: span.cell, range: { start: 0, end: 0 } }
-        : { story: span.root, range: { start: 0, end: 0 } },
+        : {
+            story: span.root,
+            range: {
+              start: edit.offset,
+              end: edit.offset + (edit.part.delete ?? edit.part.retain ?? 0),
+            },
+          },
       true,
     )!;
     const at = Math.max(0, edit.offset - value.start);

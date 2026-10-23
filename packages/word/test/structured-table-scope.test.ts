@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import { test, expect } from "bun:test";
-import { cell, apply, vertical } from "./structured-table-fixtures.ts";
+import { cell, apply, vertical, fixture } from "./structured-table-fixtures.ts";
 
 import { tableParagraphs } from "../src/collaboration/tables.ts";
 
@@ -52,4 +52,14 @@ test("story aliases for canonical roots cannot bypass cell visibility", async ()
   } finally {
     session.destroy();
   }
+});
+
+test("story anchors after a leading migrated table resolve at their actual location", () => {
+  const seed = fixture([[cell("A"), cell("B")]]);
+  try {
+    const at = seed.doc.getText("body").length - 1;
+    const selection = { story: "body", range: { start: at, end: at } };
+    const anchor = seed.session.anchor(selection);
+    expect(seed.session.resolve(anchor)).toEqual(selection);
+  } finally { seed.session.destroy(); }
 });
