@@ -41,7 +41,7 @@ export function prepareWordUpdate(
   return stageWordUpdate(doc, (replica) => {
     let selection: WordScopedSelection | undefined;
     for (const change of changes)
-      selection = applyStructuredChange(replica, change) ?? selection;
+      selection = applyStructuredChange(replica, change);
     return selection;
   });
 }
