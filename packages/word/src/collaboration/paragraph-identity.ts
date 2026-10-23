@@ -1,24 +1,39 @@
-import * as Y from 'yjs';
+import * as Y from "yjs";
 
 const identities = new WeakMap<Y.Text, Map<number, string>>();
+const projections = new WeakMap<Y.Text, (at: number) => string>();
+
+/** A local editing projection uses the identities of its authoritative paragraphs. */
+export function setWordParagraphIdentity(
+  text: Y.Text,
+  project: ((at: number) => string) | undefined,
+) {
+  if (project) projections.set(text, project);
+  else projections.delete(text);
+}
 
 /** Track paragraph terminators through deltas instead of searching the CRDT from its start per line. */
 export function wordParagraphIdentity(text: Y.Text, at: number): string {
+  const project = projections.get(text);
+  if (project) return project(at);
   let positions = identities.get(text);
   if (!positions) {
     positions = new Map();
     identities.set(text, positions);
-    text.observe(event => {
-      const previous = [...positions!.entries()].sort((a,b) => a[0]-b[0]);
+    text.observe((event) => {
+      const previous = [...positions!.entries()].sort((a, b) => a[0] - b[0]);
       positions!.clear();
-      let item = 0, before = 0, after = 0;
+      let item = 0,
+        before = 0,
+        after = 0;
       const retain = (length: number) => {
         const end = before + length;
         while (item < previous.length && previous[item]![0] < end) {
           const [offset, id] = previous[item++]!;
           positions!.set(after + offset - before, id);
         }
-        before = end; after += length;
+        before = end;
+        after += length;
       };
       for (const part of event.delta) {
         if (part.retain) retain(part.retain);
@@ -26,7 +41,8 @@ export function wordParagraphIdentity(text: Y.Text, at: number): string {
           before += part.delete;
           while (item < previous.length && previous[item]![0] < before) item++;
         }
-        if (part.insert !== undefined) after += typeof part.insert === 'string' ? part.insert.length : 1;
+        if (part.insert !== undefined)
+          after += typeof part.insert === "string" ? part.insert.length : 1;
       }
       while (item < previous.length) {
         const [offset, id] = previous[item++]!;
@@ -37,7 +53,7 @@ export function wordParagraphIdentity(text: Y.Text, at: number): string {
   let id = positions.get(at);
   if (id === undefined) {
     const identity = Y.createRelativePositionFromTypeIndex(text, at).item;
-    id = identity ? `${identity.client}:${identity.clock}` : 'end';
+    id = identity ? `${identity.client}:${identity.clock}` : "end";
     positions.set(at, id);
   }
   return id;

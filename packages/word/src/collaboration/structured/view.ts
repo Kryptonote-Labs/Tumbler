@@ -17,6 +17,7 @@ import { anchorWordView, resolveWordView } from "./view-anchors.ts";
 import { syncWordView } from "./view-sync.ts";
 import { applyWordViewDelta } from "./view-delta.ts";
 import { applyStructuredChange } from "./edits.ts";
+import { wordParagraphIdentity, setWordParagraphIdentity } from "../paragraph-identity.ts";
 
 const views = new WeakMap<Y.Text, WordSharedText>();
 const owners = new WeakMap<Y.Doc, Y.Doc>();
@@ -70,11 +71,20 @@ export class WordSharedText {
     readonly story: string,
   ) {
     this.sourceText = doc.getText(story);
+    wordParagraphIdentity(this.sourceText, this.sourceText.length);
     this.text = this.projection.getText(story);
     views.set(this.sourceText, this);
     views.set(this.text, this);
     owners.set(this.projection, doc);
     this.sync();
+    setWordParagraphIdentity(this.text, (at) => {
+      if (!this.structured()) return wordParagraphIdentity(this.sourceText, at);
+      const span = this.spans.find((span) => at >= span.start && at < span.end);
+      if (!span) return `${this.story}:end`;
+      return span.virtual
+        ? `${span.root}:end`
+        : wordParagraphIdentity(doc.getText(span.root), span.offset + at - span.start);
+    });
     this.sourceText.observe(this.sourceChanged);
     doc.on("afterTransaction", this.refresh);
     doc.on("destroy", this.disposed);
@@ -267,6 +277,7 @@ export class WordSharedText {
     return commitWordUpdate(this.doc, prepared, origin);
   }
   destroy() {
+    setWordParagraphIdentity(this.text, undefined);
     this.doc.off("afterTransaction", this.refresh);
     this.doc.off("destroy", this.disposed);
     this.sourceText.unobserve(this.sourceChanged);

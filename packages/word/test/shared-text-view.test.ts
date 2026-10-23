@@ -6,6 +6,7 @@ import { cell, clone, fixture, sync } from "./structured-table-fixtures.ts";
 import { createWordCommands } from "../src/collaboration/commands.ts";
 import { openWordOperationDocument } from "../src/operations/document.ts";
 import { createWordArtifact } from "../src/index.ts";
+import { wordParagraphIdentity } from "../src/collaboration/paragraph-identity.ts";
 
 test("linear editor views retain concurrent columns and map both peers to the same cell", () => {
   const seed = fixture([
@@ -51,6 +52,21 @@ test("linear editor views retain concurrent columns and map both peers to the sa
   views.forEach((view) => view.destroy());
   docs.forEach((doc) => doc.destroy());
   seed.session.destroy();
+});
+
+test("paragraph identities come from shared terminators and survive preceding text edits", () => {
+  const source = new Y.Doc();
+  source.getText("body").insert(0, "First\nSecond\n");
+  const docs = [clone(source), clone(source)];
+  const views = docs.map((doc) => new WordSharedText(doc, "body"));
+  const identities = views.map((view) => wordParagraphIdentity(view.text, 12));
+  expect(identities[0]).toBe(identities[1]);
+  docs[0]!.getText("body").insert(0, "Before ");
+  sync(docs[0]!, docs[1]!);
+  for (const view of views) expect(wordParagraphIdentity(view.text, 19)).toBe(identities[0]!);
+  views.forEach((view) => view.destroy());
+  docs.forEach((doc) => doc.destroy());
+  source.destroy();
 });
 
 test("browser deltas edit implicit cells, paragraphs and their virtual formatting boundary", () => {
