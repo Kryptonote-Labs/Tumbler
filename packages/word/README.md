@@ -958,7 +958,10 @@ view.commit(edit, history.origin);
 ```
 
 Operations use the visible paragraphs and cell payloads, including joins around
-retained table content. Use the returned `range` for editor selections. The
+retained table content. Ranges and `move-object` destinations use linear view
+coordinates. Host operation callbacks receive an isolated snapshot with the same
+story name and document metadata, including formatting defaults. Use the returned
+`range` for editor selections. The
 optional `selection` is omitted when that range crosses hidden source content
 and cannot be represented by one contiguous scoped selection. Clearing a cell
 retains hidden table baselines and their required separators for undo and validation.

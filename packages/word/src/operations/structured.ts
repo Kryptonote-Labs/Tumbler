@@ -21,6 +21,7 @@ import { structuredColumnWidths } from "../collaboration/structured/widths.ts";
 import { resolveCell } from "../collaboration/structured/grid.ts";
 import { tableParagraphs } from "../collaboration/tables.ts";
 import { clearWordCell } from "../collaboration/structured/clear.ts";
+import { withWordOperationText } from "../collaboration/structured/operation-text.ts";
 
 function defined<T extends object>(value: T) {
   return Object.fromEntries(Object.entries(value).filter(([, part]) => part !== undefined)) as {
@@ -54,7 +55,7 @@ export function applyWordScopedOperation(
   const operation = wordOperation.parse(input);
   if ("cell" in selection) {
     const cell = selection.cell;
-    if (operation.name === "replace") {
+    if (operation.name === "replace" && !context.prepareOperation) {
       const result = applyStructuredChange(staged, {
         kind: "replace",
         selection,
@@ -71,7 +72,7 @@ export function applyWordScopedOperation(
         });
       return result;
     }
-    if (operation.name === "format")
+    if (operation.name === "format" && !context.prepareOperation)
       return applyStructuredChange(staged, {
         kind: "format",
         selection,
@@ -190,7 +191,9 @@ export function applyWordScopedOperation(
     );
   if ("cell" in selection && !("source" in value)) {
     const edit = editDerivedText(staged, selection.cell, value.text, (text) =>
-      (context.prepareOperation ?? prepareWordOperation)(text, selection.range, operation, context),
+      withWordOperationText(value.text, text.toDelta(), local =>
+        (context.prepareOperation ?? prepareWordOperation)(local, selection.range, operation, context),
+      ),
     );
     if (operation.name === "insert-table")
       for (const p of tableParagraphs(value.text))
