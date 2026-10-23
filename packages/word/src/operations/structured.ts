@@ -20,6 +20,7 @@ import { checkRange } from "../collaboration/structured/selection.ts";
 import { structuredColumnWidths } from "../collaboration/structured/widths.ts";
 import { resolveCell } from "../collaboration/structured/grid.ts";
 import { tableParagraphs } from "../collaboration/tables.ts";
+import { clearWordCell } from "../collaboration/structured/clear.ts";
 
 function defined<T extends object>(value: T) {
   return Object.fromEntries(Object.entries(value).filter(([, part]) => part !== undefined)) as {
@@ -150,21 +151,9 @@ export function applyWordScopedOperation(
           };
           break;
         case "clear-cell": {
-          for (const target of resolved.payloads) {
-            const value = selectionText(staged, {
-              cell: target,
-              range: { start: 0, end: 0 },
-            });
-            applyStructuredChange(staged, {
-              kind: "replace",
-              selection: {
-                cell: target,
-                range: { start: 0, end: value ? value.end - value.start : 0 },
-              },
-              value: "",
-            });
-          }
-          return { cell, range: { start: 0, end: 0 } };
+          const offsets = resolved.payloads.map(target => clearWordCell(staged, target));
+          const at = offsets[0] ?? 0;
+          return { cell: resolved.payloads[0] ?? cell, range: { start: at, end: at } };
         }
         case "merge-right":
         case "split-cell":
