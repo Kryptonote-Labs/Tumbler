@@ -1,3 +1,4 @@
+import { readWordDocumentSettings } from '../document-settings.ts';
 import * as Y from "yjs";
 import { validateWordText } from "../validation.ts";
 import { tableAddresses, validateStructuredTables } from "./state.ts";
@@ -20,6 +21,7 @@ export {
 } from "./selection.ts";
 export { editDerivedText, applyStructuredChange } from "./edits.ts";
 export function validateWordSharedDocument(doc: Y.Doc) {
+  readWordDocumentSettings(doc);
   for (const address of tableAddresses(doc)) doc.getText(address.story);
   for (const name of doc.share.keys())
     if (name.startsWith("word-cell-v2:")) doc.getText(name);

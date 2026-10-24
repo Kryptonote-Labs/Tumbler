@@ -999,3 +999,20 @@ to 24.416 ms. Median reads fell from 115.436 ms to 9.231 ms, and edits from
 samples and retained the same text hash and 45,832 state bytes. These numbers
 cover this synthetic fixture, not general editing latency. Revisions and raw
 samples are in `benchmarks/table-structure-read-cache-results.json`.
+
+### Page colour
+
+`NativeWordDocument.updateSettings({ background })` changes the native layout and
+DOCX export together. A colour can be RGB or a theme reference. `null` removes the
+background; an omitted property preserves the imported value. Calling
+`updateSettings({})` restores the source settings.
+
+Collaborative hosts use `prepareWordDocumentSettings(doc, patch)` and
+`commitWordUpdate`. Settings use separate property registers in `word-settings`
+and participate in the document's undo history. The `page-color` operation is
+available through `prepareWordScopedOperation`, `WordSharedText.prepareOperation`
+and `openWordOperationDocument`. The legacy text-delta API cannot carry document
+settings and rejects this operation.
+
+Exports write ECMA-376 Part 1 §17.2.1 document backgrounds and §17.15.1.26
+`displayBackgroundShape`, preserving theme identities and unrelated package data.

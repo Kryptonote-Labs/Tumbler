@@ -183,3 +183,5 @@ export type { WordFormattingPatch } from "./formatting.ts";
 
 export { wordPictureImageRect, type WordPictureGeometry } from './picture-geometry.ts';
 export { wordDrawingCellClip, intersectWordContentBounds, wordTableLinesWithClips, wordVisibleLineBounds, type WordContentBounds, type WordClippedLine } from './table-clipping.ts';
+
+export { applyWordDocumentSettings, isWordDocumentSettings, type WordDocumentSettings } from './document-settings.ts';

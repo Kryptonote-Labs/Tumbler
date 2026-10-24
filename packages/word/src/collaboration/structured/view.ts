@@ -220,7 +220,7 @@ export class WordSharedText {
     let result = range;
     const migration = stageWordUpdate(this.doc, (staged) => {
       this.migrate(staged);
-      if (!cellId && operation.name !== "fit-table" && this.structured(staged)) {
+      if (!cellId && operation.name !== "fit-table" && operation.name !== "page-color" && this.structured(staged)) {
         result = applyWordViewOperation(staged, this.story, this.text, selection, range, operation, context);
         const after = new WordSharedText(staged, this.story);
         try {
