@@ -102,3 +102,20 @@ test('line-number measurements respect preparation limits and validate geometry'
   expect(() => native.layout(measure, { maxMeasurements: 2 })).toThrow('measurements');
   expect(() => native.layout({ measure: text => ({ width: text === '1' ? NaN : 6, ascent: 9, descent: 3 }) })).toThrow('finite non-negative geometry');
 });
+
+
+test('page restart mode continues through a continuous section on the same page', () => {
+  const native = new NativeWordDocument({ content: [
+    { kind: 'paragraph', runs: [{ text: 'One' }], section: { format: { lineNumbers: { countBy: 1, start: 1, restart: 'newPage' } } } },
+    { kind: 'paragraph', runs: [{ text: 'Two' }] },
+    { kind: 'paragraph', runs: [{ text: 'Three' }] },
+  ] });
+  native.updateSettings({ finalSection: { breakType: 'continuous', lineNumbers: { countBy: 1, start: 1, restart: 'newPage' } } });
+  expect(numbers(native.layout(measure))).toEqual([['1', '2', '3']]);
+});
+
+test('line-number authoring accepts Word limits and rejects values beyond them', () => {
+  expect(isWordDocumentSettings({ finalSection: { lineNumbers: { countBy: 100, start: 32768 } } })).toBe(true);
+  expect(isWordDocumentSettings({ finalSection: { lineNumbers: { countBy: 101, start: 1 } } })).toBe(false);
+  expect(isWordDocumentSettings({ finalSection: { lineNumbers: { countBy: 1, start: 32769 } } })).toBe(false);
+});

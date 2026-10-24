@@ -4,9 +4,10 @@ import type { WordBlock, WordParagraph, WordSectionProperties } from './document
 import type { WordLayout, WordLayoutSource, WordTextMeasurer } from './layout.ts';
 import { DEFAULT_TEXT } from './styles.ts';
 
+// Word bounds and skipped-start semantics: MS-OE376 §2.1.214, https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/7b579d67-5dd6-4e60-b176-31b8157addd0
 export const wordLineNumberingSchema = z.object({
-  countBy: z.number().int().positive(),
-  start: z.number().int().positive().default(1),
+  countBy: z.number().int().min(1).max(100),
+  start: z.number().int().min(1).max(32768).default(1),
   distanceTwips: z.number().int().nonnegative().optional(),
   restart: z.enum(['newPage', 'newSection', 'continuous']).default('newPage'),
 }).strict();
@@ -34,7 +35,7 @@ export function numberWordLayout(layout: WordLayout, document: WordLayoutSource,
   const tables = new Set<number>();
   const begin = (section: WordSectionProperties | undefined, page: number) => {
     const settings = section?.lineNumbers;
-    if (settings && (!started || previous !== section && settings.restart !== 'continuous' || settings.restart === 'newPage' && lastPage !== page)) {
+    if (settings && (!started || previous !== section && settings.restart === 'newSection' || settings.restart === 'newPage' && lastPage !== page)) {
       counter = settings.start;
       started = true;
     }
