@@ -1,3 +1,4 @@
+import { writeWordDocumentSettings } from '../collaboration/document-settings.ts';
 import * as Y from "yjs";
 import { prepareWordOperation } from "./execute.ts";
 import { wordOperation, type WordOperation } from "./definitions.ts";
@@ -55,6 +56,10 @@ export function applyWordScopedOperation(
   context: WordScopedOperationContext = {},
 ) {
   const operation = wordOperation.parse(input);
+  if (operation.name === 'page-color') {
+    writeWordDocumentSettings(staged, { background: operation.input.color });
+    return selection;
+  }
   if ("cell" in selection) {
     const cell = selection.cell;
     if (operation.name === "insert-table") {

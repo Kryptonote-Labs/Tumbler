@@ -1,3 +1,4 @@
+import { applyWordDocumentSettings, isWordDocumentSettings, type WordDocumentSettings } from './document-settings.ts';
 import { refreshUnchangedNumbering } from './content-numbering.ts';
 import { validateXmlText } from "./text-validation.ts";
 import { withWordInkTraces } from './ink-overrides.ts';
@@ -123,13 +124,24 @@ export class NativeWordDocument implements WordLayoutSource {
   get doNotExpandShiftReturn(): boolean {
     return this.inheritedDoNotExpandShiftReturn ?? this.options.source?.document.doNotExpandShiftReturn ?? false;
   }
-  readonly background: string | undefined;
+  private settings: WordDocumentSettings = {};
+  get background(): string | undefined {
+    const value = this.settings.background === undefined ? this.options.source?.document.background : this.settings.background;
+    return value == null ? undefined : resolveWordColour(value, this.options.source ? this.options.source.document.styles.themeColors : this.themeColours);
+  }
+  updateSettings(settings: WordDocumentSettings) {
+    if (!isWordDocumentSettings(settings)) throw new TypeError('Invalid document settings.');
+    this.settings = { ...settings };
+    this.exported = undefined;
+  }
+  private finishArtifact(artifact: WordArtifact) {
+    return this.exported = applyWordDocumentSettings(artifact, this.settings);
+  }
 
   constructor(private readonly options: NativeWordOptions & { readonly [deferContent]?: true } = {}) {
     this.namedStyles = wordAuthoringStyles(options.source?.document.styles, options.defaultFormat);
     this.compiled = options.source ? new NativeWordSource(options.source) : undefined;
     const document = options.source?.document;
-    this.background = document?.background === undefined ? undefined : resolveWordColour(document.background, document.styles.themeColors);
     this.wrapTrailSpaces = options.source?.document.wrapTrailSpaces ?? false;
     const { width = 595.3, height = 841.9, margin = 72 } = options.page ?? {};
     if (
@@ -264,14 +276,14 @@ export class NativeWordDocument implements WordLayoutSource {
     const existingStories = [...this.editedStories.values()].flatMap(entry =>
       typeof entry.target === 'string' ? [{ partName: entry.target, blocks: entry.blocks }] : []);
     if (this.compiled && existingStories.length === this.editedStories.size)
-      return this.exported = reconcileWordContentAndStories(this.compiled.artifact, this.authored, existingStories);
+      return this.finishArtifact(reconcileWordContentAndStories(this.compiled.artifact, this.authored, existingStories));
     let result = this.compiled
       ? reconcileWordContent(this.compiled.artifact, this.authored)
        : this.hasAuthoredInkEdits(this.authored)
         ? reconcileWordContent(createWordArtifact({ ...this.options, paragraphs: [] }), this.authored)
         : createWordArtifact({ ...this.options, blocks: this.authored });
     if (existingStories.length === this.editedStories.size)
-      return this.exported = reconcileWordStories(result, existingStories);
+      return this.finishArtifact(reconcileWordStories(result, existingStories));
     for (const entry of this.editedStories.values()) {
       let partName: string;
       if (typeof entry.target === 'string') partName = entry.target;
@@ -286,7 +298,7 @@ export class NativeWordDocument implements WordLayoutSource {
       const edited = reconcileWordContent(current, original ? refreshUnchangedNumbering(original, current, entry.blocks) : entry.blocks);
       result = storyMainArtifact(edited);
     }
-    return this.exported = result;
+    return this.finishArtifact(result);
   }
 
   update(input: readonly WordContentBlock[]) {

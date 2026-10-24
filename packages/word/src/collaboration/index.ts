@@ -17,3 +17,5 @@ export { WordShapeText } from './shape-text.ts';
 
 export * from "./structured/index.ts";
 export { hasWordParagraphReset, readWordParagraphFormat } from './paragraph-attributes.ts';
+
+export { WORD_DOCUMENT_SETTINGS, readWordDocumentSettings, prepareWordDocumentSettings } from './document-settings.ts';

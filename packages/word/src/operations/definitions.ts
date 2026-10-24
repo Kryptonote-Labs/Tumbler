@@ -1,3 +1,4 @@
+import { isWordColour, type WordColour } from '../theme-colours.ts';
 import { objectPatch, ink } from "./schemas.ts";
 import { z } from "zod";
 import { WORD_PAGE_NUMBER_PRESETS } from "../page-fields.ts";
@@ -26,6 +27,12 @@ const search = {
   wholeWord: z.boolean().optional(),
 };
 export const wordOperations = {
+  'page-color': operation(
+    'page-color',
+    'Set the background of every page. Null removes the document background. Supports RGB or theme colours.',
+    z.object({ color: z.custom<WordColour>(isWordColour).nullable() }).strict(),
+    { color: '#C1E4F5' },
+  ),
   "fit-table": operation(
     "fit-table",
     "Fit the whole table to its actual page column or containing cell. Widths are points.",
@@ -200,6 +207,7 @@ export const wordOperations = {
   ),
 };
 export const wordOperation = z.discriminatedUnion("name", [
+  wordOperations["page-color"].schema,
   wordOperations["fit-table"].schema,
   wordOperations["edit-object"].schema,
   wordOperations["move-object"].schema,

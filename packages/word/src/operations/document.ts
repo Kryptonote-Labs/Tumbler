@@ -1,3 +1,5 @@
+import { readWordDocumentSettings } from '../collaboration/document-settings.ts';
+import { applyWordDocumentSettings } from '../document-settings.ts';
 import { hasWordParagraphReset, readWordParagraphFormat } from "../collaboration/paragraph-attributes.ts";
 import type { DocumentImage } from "../collaboration/images.ts";
 import * as Y from "yjs";
@@ -31,7 +33,7 @@ export function openWordOperationDocument(
     resolve: (anchor: Parameters<typeof resolveScopedAnchor>[1]) => resolveScopedAnchor(doc, anchor),
     history: () => new WordStructuredUndo(doc),
     destroy: () => doc.destroy(),
-    artifact: () => reconcileWordContent(source, projectWordSharedDocument(doc, "body", source, resolveImage)),
+    artifact: () => applyWordDocumentSettings(reconcileWordContent(source, projectWordSharedDocument(doc, "body", source, resolveImage)), readWordDocumentSettings(doc)),
   };
 }
 export function projectWordOperationText(

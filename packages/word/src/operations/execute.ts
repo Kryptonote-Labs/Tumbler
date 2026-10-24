@@ -40,6 +40,8 @@ export function createWordOperations(commands = createWordCommands()) {
         return range;
       };
       switch (operation.name) {
+        case 'page-color':
+          throw new Error('Document settings require prepareWordScopedOperation or WordSharedText.prepareOperation.');
         case "fit-table": {
           const cell = findCell(staged, range, operation.input.cellId);
           const width = context.availableWidthPoints;

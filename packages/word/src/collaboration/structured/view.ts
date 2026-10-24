@@ -1,3 +1,4 @@
+import { anchorScopedSelection } from './selection.ts';
 import * as Y from "yjs";
 import {
   createWordCommands,
@@ -8,7 +9,7 @@ import {
 } from "../commands.ts";
 import { tableParagraphs } from "../tables.ts";
 import type { WordOperation } from "../../operations/definitions.ts";
-import { applyWordScopedOperation, type WordScopedOperationContext } from "../../operations/structured.ts";
+import { prepareWordScopedOperation, applyWordScopedOperation, type WordScopedOperationContext } from "../../operations/structured.ts";
 import { stageWordUpdate, commitWordUpdate } from "./transactions.ts";
 import { cellName, migrateTable, payload, tableName } from "./state.ts";
 import type { WordScopedSelection, PreparedWordUpdate } from "./types.ts";
@@ -211,6 +212,16 @@ export class WordSharedText {
     operation: WordOperation,
     context: WordScopedOperationContext = {},
   ): PreparedWordUpdate & { range: WordRange } {
+    if (operation.name === 'page-color') {
+      const { selection: _placeholder, ...edit } = prepareWordScopedOperation(this.doc, { story: 'body', range: { start: 0, end: 0 } }, operation, context);
+      let selection: WordScopedSelection | undefined;
+      try {
+        const candidate = this.selection(range);
+        anchorScopedSelection(this.doc, candidate);
+        selection = candidate;
+      } catch { /* A document-wide setting also accepts ranges across cells. */ }
+      return { ...edit, ...(selection ? { selection } : {}), range };
+    }
     if (this.conflict) throw this.conflict;
     if (!this.structured()) this.sync();
     const cellId = "cellId" in operation.input ? operation.input.cellId : undefined;
