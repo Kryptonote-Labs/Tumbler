@@ -65,12 +65,12 @@ export function resolveWordSection(base: WordSectionProperties, format: WordSect
   return result;
 }
 
-export function sectionFormatXml(format: WordSectionFormat): Map<string, string> {
+export function sectionFormatXml(format: WordSectionFormat, relationshipNamespace = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'): Map<string, string> {
   wordSectionFormatSchema.parse(format);
   const result = new Map<string, string>();
   for (const [key, name] of [['headerReferences', 'headerReference'], ['footerReferences', 'footerReference']] as const) {
     const references = format[key];
-    if (references) result.set(name, references.map(reference => `<w:${name} w:type="${reference.type}" r:id="${xml(reference.relationshipId)}"/>`).join(''));
+    if (references) result.set(name, references.map(reference => `<w:${name} xmlns:r="${relationshipNamespace}" w:type="${reference.type}" r:id="${xml(reference.relationshipId)}"/>`).join(''));
   }
   const attributes = (names: Readonly<Record<string, string>>) => Object.entries(names)
     .flatMap(([key, name]) => { const value = format[key as keyof WordSectionFormat]; return value === undefined ? [] : [` w:${name}="${value}"`]; }).join('');
@@ -99,7 +99,7 @@ export function sectionBoundaryXml(markup: PackageXml, boundary: WordSectionBoun
         ? [{ kind: relationship.type.endsWith('/header') ? 'header' : 'footer', type: 'default', relationshipId: relationship.id }] : []);
   } catch (error) { if (!(error instanceof RelationshipsError) || error.code !== 'missing_item') throw error; }
   validateWordSectionReferences(format, wordSections(markup.document), relationships);
-  const changes = sectionFormatXml(format);
+  const changes = sectionFormatXml(format, markup.document.conformance === 'strict' ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : undefined);
   if (changes.has('cols') && element) {
     const base = wordSections(markup.document).find(section => section.elementId === element.id);
     if (base) {

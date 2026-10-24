@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import * as Y from 'yjs';
 import { OOXML_NAMESPACES } from '@tumblerjs/ooxml';
-import { NativeWordDocument, createWordArtifact, importWordContent, layoutWordDocument, openWordArtifact, wordSections } from '../src/index.ts';
+import { NativeWordDocument, applyWordDocumentSettings, createWordArtifact, importWordContent, layoutWordDocument, openWordArtifact, wordSections } from '../src/index.ts';
 import { openWordOperationDocument, inspectWordSections } from '../src/operations/index.ts';
 import { readWordDocumentSettings, wordSharedText } from '../src/collaboration/index.ts';
 import { buildWordDocumentFixture } from './document-fixture.ts';
@@ -231,3 +231,22 @@ test('section formats reject header relationships absent from the source package
   expect(() => native.updateSettings({ finalSection: { headerReferences: [{ kind: 'header', type: 'default', relationshipId: 'unknown' }] } })).toThrow('Unknown section story relationship');
   session.destroy();
 });
+
+
+for (const conformance of ['strict', 'transitional'] as const) for (const rebound of [false, true]) {
+  test(`${conformance} inherited references declare their relationship namespace with local bindings: ${rebound}`, () => {
+    const ns = OOXML_NAMESPACES[conformance].wordprocessing;
+    const rel = conformance === 'strict' ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const source = openWordArtifact(buildWordDocumentFixture({ conformance,
+      documentXml: `<w:document xmlns:w="${ns}"><w:body><w:p><w:pPr><w:sectPr><w:headerReference xmlns:r="${rel}" w:type="default" r:id="header"/></w:sectPr></w:pPr><w:r><w:t>First</w:t></w:r></w:p><w:p><w:r><w:t>Second</w:t></w:r></w:p><w:sectPr${rebound ? ' xmlns:r="urn:foreign"' : ''}/></w:body></w:document>`,
+      relationships: [{ id: 'header', type: `${rel}/header`, target: 'header.xml' }],
+      parts: [{ itemName: 'word/header.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml', xml: `<w:hdr xmlns:w="${ns}"><w:p><w:r><w:t>Original</w:t></w:r></w:p></w:hdr>` }],
+    }));
+    const direct = applyWordDocumentSettings(source, { finalSection: { headerReferences: [{ kind: 'header', type: 'default', relationshipId: 'header' }] } });
+    expect(direct.document.finalSection.headerReferences[0]!.relationshipId).toBe('header');
+    const session = openWordOperationDocument(source);
+    session.commit(session.prepareOperation(at(5), { name: 'remove-section-break', input: {} }));
+    expect(layoutWordDocument(session.artifact().document, measure).pages[0]!.headerLines[0]!.fragments[0]!.text).toBe('Original');
+    session.destroy();
+  });
+}
