@@ -45,7 +45,7 @@ export function applyWordDocumentSettings(artifact: WordArtifact, settings: Word
         source.source.slice(source.root.span.start, source.root.span.end).replace(/\s*\/>$/, `>${display}</${source.root.qualified}>`));
       else {
         const preceding = new Set(['writeProtection', 'view', 'zoom', 'removePersonalInformation', 'removeDateAndTime', 'doNotDisplayPageBoundaries']);
-        const first = source.root.children.find(child => child.kind === 'element' && !preceding.has(child.localName));
+        const first = source.root.children.find(child => child.kind === 'element' && child.namespaceUri === namespace && !preceding.has(child.localName));
         if (first?.kind === 'element') edit.insertMarkupBefore(first, display);
         else edit.appendMarkup(source.root, display);
       }

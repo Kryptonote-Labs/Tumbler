@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import * as Y from 'yjs';
+import type { TextAttributes } from '../src/collaboration/formatting.ts';
 import { NativeWordDocument, applyWordDocumentSettings, createWordArtifact, openWordArtifact } from '../src/index.ts';
 import { commitWordUpdate, prepareWordDocumentSettings, readWordDocumentSettings, WordStructuredUndo, wordSharedText } from '../src/collaboration/index.ts';
 import { openWordOperationDocument } from '../src/operations/index.ts';
@@ -75,4 +76,41 @@ test('invalid shared settings fail before commit', () => {
   const doc = new Y.Doc();
   expect(() => prepareWordDocumentSettings(doc, { background: '#nothex' })).toThrow('Invalid document settings');
   doc.destroy();
+});
+
+test('page colour accepts a selection spanning cells and undo survives a remote column insertion', () => {
+  const source = createWordArtifact({ blocks: [{ kind: 'table', rows: [[
+    { blocks: [{ kind: 'paragraph', runs: [{ text: 'A' }] }] },
+    { blocks: [{ kind: 'paragraph', runs: [{ text: 'B' }] }] },
+  ]] }] });
+  const session = openWordOperationDocument(source);
+  const view = wordSharedText(session.text);
+  const history = session.history();
+  view.commit(view.prepareOperation({ start: 0, end: 3 }, { name: 'page-color', input: { color: '#ABCDEF' } }), history.origin);
+  const remote = new Y.Doc();
+  Y.applyUpdate(remote, Y.encodeStateAsUpdate(session.text.doc!));
+  const other = wordSharedText(remote.getText('body'));
+  const parts: { attributes?: TextAttributes }[] = other.text.toDelta();
+  const cell = parts.find(part => part.attributes?.table)?.attributes?.table;
+  if (!cell) throw new Error('Expected a table cell');
+  other.commit(other.prepareOperation({ start: 0, end: 0 }, { name: 'edit-table', input: { cellId: cell.cell, action: 'column-after' } }));
+  Y.applyUpdate(session.text.doc!, Y.encodeStateAsUpdate(remote));
+  expect(() => history.undo()).not.toThrow();
+  expect(readWordDocumentSettings(session.text.doc!)).toEqual({});
+  expect(session.grid(cell.id)[0]!.cells).toHaveLength(3);
+  history.destroy(); session.destroy(); remote.destroy();
+});
+
+test('background display follows view and zoom even with leading ignorable extensions', () => {
+  const ns = OOXML_NAMESPACES.transitional.wordprocessing;
+  const source = openWordArtifact(buildWordDocumentFixture({
+    documentXml: `<w:document xmlns:w="${ns}"><w:body><w:p/></w:body></w:document>`,
+    relationships: [{ id: 'settings', type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings', target: 'settings.xml' }],
+    parts: [{ itemName: 'word/settings.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml', xml: `<w:settings xmlns:w="${ns}" xmlns:x="urn:extension"><x:retained/><w:view w:val="print"/><w:zoom w:percent="100"/><w:compat/></w:settings>` }],
+  }));
+  const edited = applyWordDocumentSettings(source, { background: '#123456' });
+  const xml = new TextDecoder().decode(edited.document.package.readPart(edited.document.package.getPart('/word/settings.xml')!));
+  expect(xml).toContain('<x:retained/>');
+  expect(xml.indexOf('displayBackgroundShape')).toBeGreaterThan(xml.indexOf('w:zoom'));
+  expect(xml.indexOf('displayBackgroundShape')).toBeLessThan(xml.indexOf('w:compat'));
 });

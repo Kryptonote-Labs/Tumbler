@@ -8,7 +8,7 @@ import {
 } from "../commands.ts";
 import { tableParagraphs } from "../tables.ts";
 import type { WordOperation } from "../../operations/definitions.ts";
-import { applyWordScopedOperation, type WordScopedOperationContext } from "../../operations/structured.ts";
+import { prepareWordScopedOperation, applyWordScopedOperation, type WordScopedOperationContext } from "../../operations/structured.ts";
 import { stageWordUpdate, commitWordUpdate } from "./transactions.ts";
 import { cellName, migrateTable, payload, tableName } from "./state.ts";
 import type { WordScopedSelection, PreparedWordUpdate } from "./types.ts";
@@ -211,6 +211,9 @@ export class WordSharedText {
     operation: WordOperation,
     context: WordScopedOperationContext = {},
   ): PreparedWordUpdate & { range: WordRange } {
+    if (operation.name === 'page-color') return {
+      ...prepareWordScopedOperation(this.doc, { story: 'body', range: { start: 0, end: 0 } }, operation, context), range,
+    };
     if (this.conflict) throw this.conflict;
     if (!this.structured()) this.sync();
     const cellId = "cellId" in operation.input ? operation.input.cellId : undefined;
@@ -220,7 +223,7 @@ export class WordSharedText {
     let result = range;
     const migration = stageWordUpdate(this.doc, (staged) => {
       this.migrate(staged);
-      if (!cellId && operation.name !== "fit-table" && operation.name !== "page-color" && this.structured(staged)) {
+      if (!cellId && operation.name !== "fit-table" && this.structured(staged)) {
         result = applyWordViewOperation(staged, this.story, this.text, selection, range, operation, context);
         const after = new WordSharedText(staged, this.story);
         try {
