@@ -38,6 +38,9 @@ and ignore case and horizontal whitespace around the command and arguments.
 Counts must be positive safe integers. Malformed commands return `undefined`.
 The generated text is deterministic and uses LF between paragraphs, without a
 trailing LF. English text is not localized or copied from Word's help text.
+Hosts can supply a nonempty sentence array as the second argument, such as
+`wordSampleText('=rand(2,1)', ['Custom sentence.'])`. This replaces only the
+`=rand()` corpus; command parsing, counts and `=lorem()` remain the same.
 
 Custom editors can call `wordSampleTextEdit(document, selection)` on Enter. It
 returns a replacement only when the caret is collapsed at the end of a paragraph
