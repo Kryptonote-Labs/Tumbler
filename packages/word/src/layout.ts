@@ -450,7 +450,9 @@ export function* layoutWordSourceProgressively(
     }, id => {
       const paragraph = document.blocks.find(block => block.kind === 'paragraph' && block.elementId === id);
       return paragraph?.kind === 'paragraph' ? document.paragraphFormat(paragraph) : undefined;
-    });
+    }, new Set(documentSections(document.blocks, document.finalSection).flatMap((section, index, all) =>
+      all[index + 1]?.properties.breakType === 'nextColumn' ? [section.properties] : [])));
+
     if (!needsTotal || layout.truncated || layout.pages.length === total) return layout;
     if (seen.has(layout.pages.length)) throw new WordError('invalid_document', 'Page count fields did not reach a stable layout.');
     seen.add(total);

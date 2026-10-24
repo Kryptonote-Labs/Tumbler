@@ -5,7 +5,7 @@ import type { WordLayout } from './layout.ts';
 export type WordColumnLimits = ReadonlyMap<WordSectionProperties, { readonly page: number; readonly height: number }>;
 
 /** Reuse pagination's keep/widow/table rules while finding the shortest final column set. */
-export function balanceWordColumns(initial: WordLayout, run: (limits: WordColumnLimits) => WordLayout, format: (id: number) => ComputedWordParagraphFormat | undefined): WordLayout {
+export function balanceWordColumns(initial: WordLayout, run: (limits: WordColumnLimits) => WordLayout, format: (id: number) => ComputedWordParagraphFormat | undefined, excluded: ReadonlySet<WordSectionProperties> = new Set()): WordLayout {
   if (initial.truncated) return initial;
   const last = new Map<WordSectionProperties, { page: number; height: number; columns: number }>();
   for (const page of initial.pages) {
@@ -17,7 +17,7 @@ export function balanceWordColumns(initial: WordLayout, run: (limits: WordColumn
     }
     for (const [section, columns] of groups) last.set(section, { page: page.index, height: columns[0]!.height, columns: columns.length });
   }
-  const bounds = [...last].filter(([, group]) => group.columns > 1 && group.height > 1)
+  const bounds = [...last].filter(([section, group]) => !excluded.has(section) && group.columns > 1 && group.height > 1)
     .map(([section, group]) => {
       const page = initial.pages[group.page]!;
       const paragraphs = new Map<number, typeof page.columns[number]['lines'][number][]>();
@@ -31,7 +31,7 @@ export function balanceWordColumns(initial: WordLayout, run: (limits: WordColumn
         const step = Math.max(...lines.map((line, index) => Math.max(line.height, index && line.y > lines[index - 1]!.y ? line.y - lines[index - 1]!.y : 0)));
         const kept = properties?.keepLines ? step * lines.length : properties?.widowControl !== false && lines.length > 1 ? step * 2 : step;
         if (kept <= group.height) low = Math.max(low, kept - 0.001);
-        chain += step * lines.length;
+        if (chain || properties?.keepNext) chain += step * lines.length;
         if (!properties?.keepNext) {
           if (chain <= group.height) low = Math.max(low, chain - 0.001);
           chain = 0;
