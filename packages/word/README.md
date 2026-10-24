@@ -1073,3 +1073,18 @@ The markup follows ECMA-376 Part 1 §17.6.8 and §17.3.1.35. Table counting foll
 Line-number `start` is the displayed first number. Word's stored `w:start` is a
 skip count, so the engine translates between the API's 1 and Word's 0. See
 [MS-OE376 §2.1.214](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/7b579d67-5dd6-4e60-b176-31b8157addd0).
+
+### Embedded document fonts
+
+`readWordEmbeddedFonts(artifact.document)` reads the font table's internal regular,
+bold, italic and bold-italic font parts in Strict and Transitional packages. It
+returns document-scoped font bytes with ECMA-376 §17.8.1 obfuscation removed, without
+changing the package. These bytes are for rendering their owning document.
+
+Browser hosts can pass this array to `loadEmbeddedFonts` from `@tumblerjs/svelte`,
+then use its family resolver for both text measurement and rendering.
+
+Imported `w:kern` thresholds are inherited through run styles. Kerning applies at
+or above that point size, with zero disabling it. Canvas measurement, painting and
+Svelte text CSS use the same rule. Layout measures compatible text as a consistent shaped prefix on each line,
+including ligatures, and reshapes carried text at a new line.

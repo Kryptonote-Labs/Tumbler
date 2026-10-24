@@ -35,6 +35,8 @@ export interface WordRunProperties {
   readonly italic?: boolean;
   readonly underline?: "none" | "single" | "double";
   readonly characterSpacingPoints?: number;
+  /** Minimum point size for pair kerning; zero explicitly disables it. */
+  readonly kerningPoints?: number;
   readonly strike?: boolean;
   readonly color?: WordColor;
   readonly highlight?: string;
@@ -84,6 +86,8 @@ export interface ComputedWordTextFormat {
   readonly italic: boolean;
   readonly underline: "none" | "single" | "double";
   readonly characterSpacingPoints?: number;
+  /** Minimum point size for pair kerning; zero explicitly disables it. */
+  readonly kerningPoints?: number;
   readonly strike: boolean;
   readonly color: string;
   readonly themeColour?: WordThemeColour;
@@ -326,6 +330,7 @@ export class WordStyles {
       ...(properties.color?.type === 'theme' ? { themeColour: { theme: properties.color.slot, fallback: this.resolveColor(properties.color) ?? DEFAULT_TEXT.color, ...(properties.color.tint === undefined ? {} : { tint: properties.color.tint }), ...(properties.color.shade === undefined ? {} : { shade: properties.color.shade }) } } : {}),
       highlight: properties.highlight,
       ...(properties.shading === undefined ? {} : { shading: resolveWordColour(properties.shading, this.themeColors), shadingColour: properties.shading }),
+      ...(properties.kerningPoints === undefined ? {} : { kerningPoints: properties.kerningPoints }),
       ...(properties.characterSpacingPoints === undefined ? {} : { characterSpacingPoints: properties.characterSpacingPoints }),
       verticalAlign: properties.verticalAlign ?? DEFAULT_TEXT.verticalAlign,
       rightToLeft: properties.rightToLeft ?? DEFAULT_TEXT.rightToLeft,
@@ -422,6 +427,7 @@ export function parseRunProperties(element: LosslessXmlElement, namespace: strin
   const highlight = valueChild(element, namespace, "highlight");
   const shading = readTableShading(onlyChild(element, namespace, "shd", "Duplicate run shading"), namespace);
   const spacing = valueChild(element, namespace, "spacing");
+  const kerning = valueChild(element, namespace, "kern");
   return Object.freeze({
     ...(literalFont === undefined ? {} : { fontFamily: literalFont }),
     ...(themeValue === undefined ? {} : { themeFont: themeValue.startsWith("major") ? "major" as const : "minor" as const }),
@@ -434,6 +440,7 @@ export function parseRunProperties(element: LosslessXmlElement, namespace: strin
     ...(color === undefined ? {} : { color: parseColor(color, namespace) }),
     ...(highlight === undefined ? {} : { highlight }),
     ...(shading === undefined ? {} : { shading }),
+    ...(kerning === undefined ? {} : { kerningPoints: integer(kerning, "kerning size", 0, 4_294_967_295) / 2 }),
     ...(spacing === undefined ? {} : { characterSpacingPoints: signedTwips(spacing, "character spacing") / 20 }),
     ...(vertical === "superscript" || vertical === "subscript" || vertical === "baseline" ? { verticalAlign: vertical } : {}),
   });

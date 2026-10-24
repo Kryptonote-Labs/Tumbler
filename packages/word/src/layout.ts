@@ -1,3 +1,4 @@
+import { wordFontKerning } from './font-kerning.ts';
 import { reflowPreparedTable } from './table-reflow.ts';
 import { numberWordLayout } from './line-numbering.ts';
 import { balanceWordColumns, type WordColumnLimits } from './column-balance.ts';
@@ -313,6 +314,9 @@ interface AtomBase {
 }
 
 interface GlyphAtom extends AtomBase {
+  /** Advance with no preceding glyph, used when a kerned pair crosses a line boundary. */
+  readonly lineStartWidth?: number;
+  readonly shaping?: { readonly key: string; readonly measure: (text: string) => WordTextMeasurement };
   readonly field?: WordPageField;
   readonly kind: "glyph";
   readonly text: string;
@@ -1125,6 +1129,7 @@ function* resolvedParagraphAtoms(
       const value = validMeasurement(measurer.measure(text, format));
       return { ...value, ascent: value.ascent - baselineShift, descent: value.descent + baselineShift };
     };
+    const shaping = wordFontKerning(format) === 'normal' ? { key: JSON.stringify([format.fontFamily, format.fontSizePoints, format.bold, format.italic, format.rightToLeft, format.characterSpacingPoints, baselineShift, format.color, format.highlight, format.shading, format.underline, format.strike, hyperlink]), measure } : undefined;
     for (const content of run.contents) {
       if (content.kind !== 'text') consumePreparation(preparation, 'characters');
       if (!visible(content)) continue;
@@ -1155,6 +1160,7 @@ function* resolvedParagraphAtoms(
             contentElementId: content.elementId,
             text: grapheme,
             width: measurement.width,
+            ...(shaping ? { shaping } : {}),
             ascent: measurement.ascent,
             descent: measurement.descent,
             baselineShift,
@@ -1300,9 +1306,10 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
       atomWidth = tabAdvance(atom, following, 0, width, format, false);
     }
     atomWidth = Math.max(0, atomWidth);
-    let materialized = atom.kind === "tab" ? Object.freeze({ ...atom, width: atomWidth }) : atom;
+    let materialized: Exclude<ParagraphAtom, BreakAtom> = atom.kind === "tab" ? Object.freeze({ ...atom, width: atomWidth }) : atom;
     // ISO/IEC 29500 wrapTrailSpaces: ordinary trailing spaces hang by default.
     // Keep their logical offsets; push() removes only their painted advance.
+    materialized = shapeLineAdvance(materialized, line);
     const hangingSpace = !wrapTrailSpaces && materialized.kind === "glyph" && materialized.text === " ";
     if (!hangingSpace && line.length > 0 && lineWidth + atomWidthValue(materialized) > Math.max(1, width - (lineCount === 0 ? points(format.firstLineTwips - format.hangingTwips) : 0))) {
       if (lastBreak >= 0) {
@@ -1310,9 +1317,11 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);
         yield push(undefined, true);
         line = carry;
+        for (let index = 0; index < line.length; index++) line[index] = shapeLineAdvance(line[index]!, line.slice(0, index));
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);
       } else yield push(undefined, true);
       if (atom.kind === "tab") materialized = Object.freeze({ ...atom, width: Math.max(0, tabAdvance(atom, following, lineWidth, width, format, lineCount === 0)) });
+      materialized = shapeLineAdvance(materialized, line);
     }
     line.push(materialized);
     lineWidth += atomWidthValue(materialized);
@@ -1320,6 +1329,22 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
   }
   if (line.length > 0 || lineCount === 0 || terminalLineBreak) yield push();
 
+}
+
+/** Shape the contiguous font span on this line as one prefix. Independent pairs
+ * cannot represent overlapping ligatures; reset the prefix when wrapping. */
+function shapeLineAdvance(atom: Exclude<ParagraphAtom, BreakAtom>, line: readonly Exclude<ParagraphAtom, BreakAtom>[]): Exclude<ParagraphAtom, BreakAtom> {
+  if (atom.kind !== 'glyph' || !atom.shaping) return atom;
+  let prefix = '', advance = 0;
+  for (let index = line.length - 1; index >= 0; index--) {
+    const previous = line[index]!;
+    if (previous.kind !== 'glyph' || previous.shaping?.key !== atom.shaping.key) break;
+    prefix = previous.text + prefix;
+    advance += previous.width;
+  }
+  const standalone = atom.lineStartWidth ?? atom.width;
+  const width = prefix ? Math.max(0, atom.shaping.measure(prefix + atom.text).width - advance) : standalone;
+  return { ...atom, width, lineStartWidth: standalone };
 }
 
 function placeLine(
@@ -1357,12 +1382,14 @@ function placeLine(
   const wordSpacing = gaps.size ? (available - line.width) / gaps.size : 0;
   const fragments: WordLayoutFragment[] = [];
   let cursorX = x;
-  for (const atom of line.atoms) {
+  for (const [index, atom] of line.atoms.entries()) {
     const previous = fragments.at(-1);
+    const preceding = line.atoms[index - 1];
     const expanded = gaps.has(atom);
     const atomWidth = atomWidthValue(atom) + (expanded ? wordSpacing : 0);
     const canMerge = !expanded && !previous?.wordSpacing && atom.kind === "glyph" && previous?.kind === "text" &&
-      previous.runElementId === atom.runElementId && previous.contentElementId === atom.contentElementId &&
+      (previous.runElementId === atom.runElementId && previous.contentElementId === atom.contentElementId ||
+        atom.shaping && preceding?.kind === 'glyph' && preceding.shaping?.key === atom.shaping.key) &&
       previous.endOffset === atom.startOffset;
     if (canMerge) {
       fragments[fragments.length - 1] = Object.freeze({
@@ -1383,9 +1410,9 @@ function placeLine(
         runElementId: atom.runElementId,
         contentElementId: atom.contentElementId,
         text: atom.kind === "glyph" || atom.kind === "note" ? atom.text : atom.kind === "tab" ? "\t" : "\uFFFC",
-        x: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? (atom.drawing.anchor?.horizontalRelativeTo === "page" ? 0 : column.x) + (atom.drawing.anchor?.horizontalOffsetPoints ?? cursorX - column.x) : cursorX,
+        x: atom.kind === 'glyph' && atom.lineStartWidth !== undefined ? cursorX + atom.width - atom.lineStartWidth : atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? (atom.drawing.anchor?.horizontalRelativeTo === "page" ? 0 : column.x) + (atom.drawing.anchor?.horizontalOffsetPoints ?? cursorX - column.x) : cursorX,
         y: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? (atom.drawing.anchor?.verticalRelativeTo === "page" ? 0 : atom.drawing.anchor?.verticalRelativeTo === "paragraph" ? column.lines.find(item => item.paragraphElementId === paragraph.elementId)?.y ?? y : y) + (atom.drawing.anchor?.verticalOffsetPoints ?? 0) : y + line.ascent - ascent,
-        width: atom.kind === "drawing" ? atom.width : atomWidth,
+        width: atom.kind === "drawing" ? atom.width : atom.kind === 'glyph' && atom.lineStartWidth !== undefined ? atom.lineStartWidth : atomWidth,
         height: atom.kind === "drawing" ? atom.drawing?.heightPoints ?? ascent + descent : ascent + descent,
         baseline: y + line.ascent + (atom.baselineShift ?? 0),
         startOffset: atom.startOffset,
@@ -1727,10 +1754,16 @@ function tabAdvance(tab: TabAtom, followingAtoms: () => Iterable<ParagraphAtom>,
   } else target = stop ? points(stop.positionTwips) : Math.ceil((absoluteX + 0.001) / DEFAULT_TAB_POINTS) * DEFAULT_TAB_POINTS;
   let following = 0;
   if (alignment !== "start" && alignment !== "left") {
+    const segment: Exclude<ParagraphAtom, BreakAtom>[] = [];
     for (const atom of followingAtoms()) {
       if (atom.kind === "tab" || atom.kind === "break") break;
-      if (alignment === "decimal" && atom.kind === "glyph" && atom.text === ".") break;
-      following += atomWidthValue(atom);
+      const shaped = shapeLineAdvance(atom, segment);
+      if (alignment === "decimal" && shaped.kind === "glyph" && shaped.text === ".") {
+        following += shaped.width - (shaped.lineStartWidth ?? shaped.width);
+        break;
+      }
+      segment.push(shaped);
+      following += atomWidthValue(shaped);
     }
   }
   const shift = alignment === "center" ? following / 2 : following;

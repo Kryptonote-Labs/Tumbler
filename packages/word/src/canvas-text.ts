@@ -1,3 +1,4 @@
+import { wordFontKerning } from './font-kerning.ts';
 import { wordPointsToCssPixels, type WordTextMeasurement, type WordTextMeasurer } from "./layout.ts";
 import type { ComputedWordTextFormat } from "./styles.ts";
 
@@ -32,11 +33,12 @@ export function canvasWordTextMeasurer(context: WordCanvasTextContext, lineMetri
     measure(text: string, format: ComputedWordTextFormat) {
       const font = wordCanvasFont(format);
       const direction = format.rightToLeft ? "rtl" : "ltr";
-      const key = `${font}\u0000${direction}\u0000${format.characterSpacingPoints ?? 0}\u0000${text}`;
+      const kerning = wordFontKerning(format);
+      const key = `${kerning}\u0000${font}\u0000${direction}\u0000${format.characterSpacingPoints ?? 0}\u0000${text}`;
       const cached = measured.get(key);
       if (cached !== undefined) return cached;
       context.font = font;
-      context.fontKerning = "none";
+      context.fontKerning = kerning;
       context.direction = direction;
       const metrics = context.measureText(text);
       const line = lineMetrics?.measure(format, wordFontFamily(format.fontFamily));
