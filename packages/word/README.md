@@ -29,6 +29,32 @@ const bytes = artifact.bytes();
 
 Creation defaults to A4 with one-inch margins and modern Word compatibility.
 
+### Sample text
+
+`wordSampleText('=lorem(5,3)')` generates five paragraphs of three sentences.
+`=rand()` generates original English filler; `=lorem()` generates Latin filler.
+Both accept optional paragraph and sentence counts, defaulting to three each,
+and ignore case and horizontal whitespace around the command and arguments.
+Counts must be positive safe integers. Malformed commands return `undefined`.
+The generated text is deterministic and uses LF between paragraphs, without a
+trailing LF. English text is not localized or copied from Word's help text.
+
+Custom editors can call `wordSampleTextEdit(document, selection)` on Enter. It
+returns a replacement only when the caret is collapsed at the end of a paragraph
+containing the command alone, including paragraphs inside table cells:
+
+```ts
+const edit = wordSampleTextEdit(session.artifact.document, selection);
+if (edit) session.replaceText(edit.selection, edit.value);
+```
+
+The replacement includes a final empty paragraph for continued typing. Apply it
+through the host's normal edit/history path so expansion is one undoable change.
+`@tumblerjs/svelte`'s `wordInputEdit` does this translation for `insertParagraph`;
+typing, pasting and Shift+Enter do not trigger expansion.
+
+The command syntax follows [Word's sample-text utilities](https://support.microsoft.com/en-us/word/how-to-insert-sample-text-in-microsoft-office-word).
+
 Adding lists or tables to an imported Strict document emits Strict numbering,
 theme and table vocabulary. Table widths and cell margins use physical units and
 reopen as integer twips in the model. Existing resource parts are preserved when

@@ -65,6 +65,27 @@ describe("Word browser input translation", () => {
     expect(wordInputEdit(document, selection(paragraph.elementId, 0, 0), "insertFromPaste", "one\r\ntwo\rthree")?.value).toBe("one\ntwo\nthree");
   });
 
+  test("Enter expands a standalone sample-text command as one replacement", () => {
+    const document = fixture("<w:p><w:r><w:t>=lorem(2,1)</w:t></w:r></w:p>");
+    const id = wordDocumentParagraphs(document)[0]!.elementId;
+    const result = wordInputEdit(document, selection(id, 11, 11), "insertParagraph", null)!;
+    expect(result.selection).toEqual(selection(id, 0, 11));
+    expect(result.value.split('\n')).toHaveLength(3);
+    expect(result.value).toStartWith('Lorem ipsum');
+    expect(result.caret).toEqual({ paragraphElementId: id, offset: 0 });
+  });
+
+  test("sample commands stay literal for Shift+Enter, selection replacement, typing and paste", () => {
+    const document = fixture("<w:p><w:r><w:t>=rand()</w:t></w:r></w:p>");
+    const id = wordDocumentParagraphs(document)[0]!.elementId;
+    expect(wordInputEdit(document, selection(id, 7, 7), "insertLineBreak", null)?.value).toBe('\n');
+    expect(wordInputEdit(document, selection(id, 0, 7), "insertParagraph", null)?.selection).toEqual(selection(id, 0, 7));
+    expect(wordInputEdit(document, selection(id, 3, 3), "insertParagraph", null)?.value).toBe('\n');
+    for (const input of ['insertText', 'insertFromPaste']) {
+      expect(wordInputEdit(document, selection(id, 7, 7), input, '=lorem()')?.value).toBe('=lorem()');
+    }
+  });
+
   test("word deletion removes a word and cut produces a controlled edit", () => {
     const document = fixture("<w:p><w:r><w:t>Hello world</w:t></w:r></w:p>");
     const paragraph = wordDocumentParagraphs(document)[0]!;

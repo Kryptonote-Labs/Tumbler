@@ -1,4 +1,4 @@
-import { wordParagraphText, type WordDocument, type WordParagraph, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
+import { wordParagraphText, wordSampleTextEdit, type WordDocument, type WordParagraph, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
 
 export interface WordInputEdit {
   readonly selection: WordTextSelection;
@@ -34,6 +34,10 @@ export function wordInputEdit(
     if (data === null) return undefined;
     const value = data.replace(/\r\n?/g, "\n");
     return edit(ordered, value, caretAfterInsertion(ordered, value));
+  }
+  if (inputType === "insertParagraph") {
+    const sample = wordSampleTextEdit(document, ordered);
+    if (sample) return edit(sample.selection, sample.value, caretAfterInsertion(sample.selection, sample.value));
   }
   if (inputType === "insertParagraph" || inputType === "insertLineBreak") {
     return edit(ordered, "\n", caretAfterInsertion(ordered, "\n"));

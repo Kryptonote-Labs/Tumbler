@@ -6,7 +6,6 @@ import { WordError, type WordDocument, type WordParagraph } from "./document.ts"
 import { wordParagraphText, wordParagraphTextSegments, type WordParagraphTextSegment, type WordTextSelection, type WordTextPosition } from "./text.ts";
 
 const XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace";
-const MAX_INSERTED_TEXT = 1_000_000;
 
 /** Move an inline drawing to a logical text position without changing its wrapping. */
 export function moveInlineWordDrawing(document: WordDocument, elementId: number, position: WordTextPosition): Uint8Array {
@@ -56,7 +55,6 @@ export function moveInlineWordDrawing(document: WordDocument, elementId: number,
 
 /** Replaces visible logical text inside one paragraph while preserving surrounding OOXML wrappers. */
 export function replaceWordText(document: WordDocument, selection: WordTextSelection, value: string): Uint8Array {
-  if (value.length > MAX_INSERTED_TEXT) throw new RangeError(`Inserted text cannot exceed ${MAX_INSERTED_TEXT} UTF-16 code units.`);
   validateXmlText(value);
   if (value.includes("\r")) throw new WordError("invalid_document", "Word text input must use line-feed paragraph boundaries.");
   if (selection.anchor.paragraphElementId !== selection.focus.paragraphElementId || value.includes("\n")) {
