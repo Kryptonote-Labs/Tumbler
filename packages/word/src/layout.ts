@@ -1,3 +1,4 @@
+import { reflowPreparedTable } from './table-reflow.ts';
 import { balanceWordColumns, type WordColumnLimits } from './column-balance.ts';
 import { wordSectionColumns, sameWordColumns } from './section-columns.ts';
 import { widowGroupHeight, keepHeightUntil } from './paragraph-pagination.ts';
@@ -372,6 +373,7 @@ export interface PreparedTable {
   readonly width: number;
   readonly columnOffsets: readonly number[];
   readonly rowHeights: readonly number[];
+  readonly sourceRows: readonly number[];
   readonly cells: readonly PreparedTableCell[];
   readonly cellsByRow: readonly (readonly PreparedTableCell[])[];
 }
@@ -606,13 +608,24 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
         if (block.kind === "table") {
           inKeepChain = false;
           let target = page!.columns[columnIndex]!;
-          const preparedTable = prepareTable(document, block, target.width, measurer, listMarkers, preparation);
+          let preparedWidth = target.width;
+          let preparedTable = prepareTable(document, block, preparedWidth, measurer, listMarkers, preparation);
           const groups = tableRowGroups(preparedTable);
           const headerRows = leadingHeaderRows(preparedTable);
           let groupIndex = 0;
           let continuation: PreparedTable | undefined;
           while (groupIndex < groups.length) {
             target = page!.columns[columnIndex]!;
+            if (target.width !== preparedWidth) {
+              preparedWidth = target.width;
+              preparedTable = prepareTable(document, block, preparedWidth, measurer, listMarkers, preparation);
+              if (continuation) continuation = reflowPreparedTable(continuation, preparedTable,
+                (paragraph, width, offset) => {
+                  const flow = prepareParagraphFlow(document, paragraph, width, measurer, listMarkers.get(paragraph.elementId), preparation, offset);
+                  return { ...flow, lines: Object.freeze([...flow.lines]) };
+                },
+                (table, width) => prepareTable(document, table, width, measurer, listMarkers, preparation));
+            }
             const atTop = cursorY === target.y;
             const repeated = groupIndex > 0 || continuation ? headerRows : [];
             const parts: PreparedTable[] = [];
@@ -640,7 +653,9 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
               // but even that row must flow across pages when it exceeds a full page.
               const keepRow = !continuation && group.some(row => block.rows[row]!.cantSplit || block.rows[row]!.heightRule === "exact");
               const fresh = atTop && parts.length === headerParts;
-              if (keepRow && !fresh) break;
+              const naturalHeight = page!.height - points(section.properties.marginBottomTwips) - target.y - used;
+              // A balancing candidate cannot make a fitting protected row oversized.
+              if (keepRow && (!fresh || height <= naturalHeight && height > available)) break;
               const split = splitPreparedTable(remaining, available, fresh);
               if (!split) break;
               parts.push(split.head);
@@ -829,7 +844,7 @@ function prepareTable(
   }
   const cellsByRow = rowHeights.map((): PreparedTableCell[] => []);
   for (const cell of preparedCells) cellsByRow[cell.resolved.row]!.push(cell);
-  const value = Object.freeze({ table, xOffset, width, columnOffsets: Object.freeze(columnOffsets), rowHeights: Object.freeze(rowHeights), cells: Object.freeze(preparedCells), cellsByRow: Object.freeze(cellsByRow.map(row => Object.freeze(row))) });
+  const value = Object.freeze({ table, xOffset, width, columnOffsets: Object.freeze(columnOffsets), rowHeights: Object.freeze(rowHeights), sourceRows: Object.freeze(rowHeights.map((_, index) => index)), cells: Object.freeze(preparedCells), cellsByRow: Object.freeze(cellsByRow.map(row => Object.freeze(row))) });
   if (document.cache) {
     const markers: [number, string][] = [];
     const collect = (blocks: readonly WordBlock[]) => {
@@ -900,6 +915,7 @@ function slicePreparedTable(prepared: PreparedTable, rows: readonly number[], ca
   const value = Object.freeze({
     ...prepared,
     rowHeights: Object.freeze(rows.map((row) => prepared.rowHeights[row]!)),
+    sourceRows: Object.freeze(rows.map(row => prepared.sourceRows[row]!)),
     cells: Object.freeze(cells),
     cellsByRow: Object.freeze(cellsByRow.map(row => Object.freeze(row))),
   });
@@ -1046,7 +1062,7 @@ function prepareParagraphFlow(
   const mark = validMeasurement(measurer.measure(' ', document.runFormat(paragraph, emptyRun)));
   // List hanging indents position the marker, not the first line of text.
   const textFormat = markerSource || startOffset > 0 ? { ...format, firstLineTwips: 0, hangingTwips: 0 } : format;
-  const iterator = startOffset > 0 && first.done ? [][Symbol.iterator]() : breakLines(remainingAtoms(), width, textFormat, mark, wrapTrailSpaces, doNotExpandShiftReturn);
+  const iterator = startOffset > 0 && first.done ? [][Symbol.iterator]() : breakLines(remainingAtoms(), width, textFormat, mark, wrapTrailSpaces, doNotExpandShiftReturn, startOffset);
   const marker = markerSource === undefined ? undefined : prepareMarker(document, paragraph, markerSource, measurer, preparation);
   const lines = new PreparedLineSequence(iterator, completed => {
     const value = Object.freeze({ paragraph, format, lines: completed, marker });
@@ -1184,7 +1200,7 @@ function* resolvedParagraphAtoms(
   }
 }
 
-function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: ComputedWordParagraphFormat, mark: WordTextMeasurement, wrapTrailSpaces: boolean, doNotExpandShiftReturn = false): Generator<PreparedLine> {
+function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: ComputedWordParagraphFormat, mark: WordTextMeasurement, wrapTrailSpaces: boolean, doNotExpandShiftReturn = false, startOffset = 0): Generator<PreparedLine> {
   let lineCount = 0;
   let terminalLineBreak = false;
   const iterator: Iterator<ParagraphAtom, void> = source[Symbol.iterator]();
@@ -1214,7 +1230,7 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
   let line: Exclude<ParagraphAtom, BreakAtom>[] = [];
   let lineWidth = 0;
   let lastBreak = -1;
-  let offset = 0;
+  let offset = startOffset;
   const push = (breakAfter?: WordBreakType, justify = false): PreparedLine => {
     const logicalStart = line[0]?.startOffset ?? offset;
     const logicalEnd = line.at(-1)?.endOffset ?? offset;

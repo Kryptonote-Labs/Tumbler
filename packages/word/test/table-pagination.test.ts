@@ -199,3 +199,28 @@ test.each([
   expect(headers).toHaveLength(enabled ? result.pages.length : 1);
   expect(texts(result).filter(text => text.startsWith('Body'))).toHaveLength(25);
 });
+
+test('balancing keeps a row intact when it fits the natural column height', () => {
+  const sect = '<w:sectPr><w:pgSz w:w="8000" w:h="4000"/><w:pgMar w:top="400" w:bottom="400" w:left="400" w:right="400"/><w:cols w:num="2" w:space="400"/></w:sectPr>';
+  const artifact = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${namespace}"><w:body>${table(row(cell(lines('Row', 6)), '<w:cantSplit/>'))}${sect}</w:body></w:document>` }));
+  const result = layoutWordDocument(artifact.document, measure);
+  const tables = result.pages.flatMap(page => page.columns.flatMap(column => column.tables));
+  expect(tables).toHaveLength(1);
+  expect(tables[0]!.height).toBe(60);
+});
+
+test('percentage table continuations rewrap at each unequal column width', () => {
+  const sect = '<w:sectPr><w:pgSz w:w="8000" w:h="3000"/><w:pgMar w:top="400" w:bottom="400" w:left="400" w:right="400"/><w:cols w:equalWidth="0"><w:col w:w="4000" w:space="400"/><w:col w:w="1600"/></w:cols></w:sectPr>';
+  const text = 'abcdef '.repeat(160);
+  const content = table(row(cell(paragraph(text)))).replace('<w:tblPr>', '<w:tblPr><w:tblW w:type="pct" w:w="5000"/>');
+  const artifact = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${namespace}"><w:body>${content}${sect}</w:body></w:document>` }));
+  const result = layoutWordDocument(artifact.document, measure);
+  for (const page of result.pages) for (const column of page.columns) for (const table of column.tables) {
+    expect(table.width).toBe(column.width);
+    expect(tableLines(table).every(line => line.width <= column.width)).toBe(true);
+  }
+  const rendered = allLines(result);
+  expect(rendered[0]!.startOffset).toBe(0);
+  expect(rendered.at(-1)!.endOffset).toBe(text.length);
+  for (let index = 1; index < rendered.length; index++) expect(rendered[index]!.startOffset).toBe(rendered[index - 1]!.endOffset);
+});

@@ -167,3 +167,12 @@ test('authored sections without a source template export the same resolved page 
   native.updateSettings({ finalSection: { pageWidthTwips: 8000 } });
   expect(layoutWordDocument(native.artifact().document, measure).pages[0]!.width).toBe(native.layout(measure).pages[0]!.width);
 });
+
+test('adjacent column breaks retain their source offsets while reflowing unequal columns', () => {
+  const native = new NativeWordDocument({ content: [{ kind: 'paragraph', runs: [{ text: 'abc' }, { text: '\u2028', breakType: 'column' }, { text: '\u2028', breakType: 'column' }, { text: 'def' }] }], page: { width: 400, height: 200, margin: 20 } });
+  native.updateSettings({ finalSection: { columns: [{ widthTwips: 4000, spaceTwips: 400 }, { widthTwips: 1600, spaceTwips: 0 }] } });
+  const layout = native.layout(measure, { maxPages: 5 });
+  const lines = layout.pages.flatMap(page => page.columns.flatMap(column => column.lines));
+  expect(lines.flatMap(line => line.fragments.map(fragment => fragment.text)).join('')).toBe('abcdef');
+  expect(lines.map(line => line.startOffset)).toEqual([0, 4, 5]);
+});

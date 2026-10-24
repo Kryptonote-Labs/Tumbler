@@ -186,6 +186,6 @@ export { wordDrawingCellClip, intersectWordContentBounds, wordTableLinesWithClip
 
 export { applyWordDocumentSettings, isWordDocumentSettings, type WordDocumentSettings } from './document-settings.ts';
 
-export { resolveWordSection, wordSectionFormatSchema, type WordSectionFormat, type WordSectionBoundary } from './section-format.ts';
+export { resolveWordSection, wordSectionFormat, wordSectionFormatSchema, type WordSectionFormat, type WordSectionBoundary } from './section-format.ts';
 export { wordSectionColumns, wordColumnSeparators } from './section-columns.ts';
 export { wordSectionBaseline, type WordSectionBaseline } from './section-baseline.ts';
