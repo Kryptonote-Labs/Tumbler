@@ -75,7 +75,8 @@ export function sectionFormatXml(format: WordSectionFormat): Map<string, string>
 export function sectionBoundaryXml(markup: PackageXml, boundary: WordSectionBoundary) {
   const element = boundary.source === undefined ? undefined : markup.element(boundary.source, 'sectPr');
   if (boundary.source !== undefined && !element) throw new Error('Unknown source section.');
-  const changes = sectionFormatXml(boundary.format);
+  const format = boundary.source === undefined ? { ...wordSectionFormat(markup.document.finalSection), ...boundary.format } : boundary.format;
+  const changes = sectionFormatXml(format);
   if (changes.has('cols') && element) {
     const base = wordSections(markup.document).find(section => section.elementId === element.id);
     if (base) {

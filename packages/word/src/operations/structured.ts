@@ -1,3 +1,4 @@
+import { bindWordLayoutSource } from '../collaboration/layout-validation.ts';
 import { applyWordLayoutOperation, isWordLayoutOperation } from './layout.ts';
 import { writeWordDocumentSettings } from '../collaboration/document-settings.ts';
 import * as Y from "yjs";
@@ -45,6 +46,7 @@ export function prepareWordScopedOperation(
   input: WordOperation,
   context: WordScopedOperationContext = {},
 ) {
+  if (context.source) bindWordLayoutSource(doc, context.source);
   return stageWordUpdate(doc, (staged) =>
     applyWordScopedOperation(staged, selection, input, context),
   );

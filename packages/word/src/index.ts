@@ -188,3 +188,4 @@ export { applyWordDocumentSettings, isWordDocumentSettings, type WordDocumentSet
 
 export { resolveWordSection, wordSectionFormatSchema, type WordSectionFormat, type WordSectionBoundary } from './section-format.ts';
 export { wordSectionColumns, wordColumnSeparators } from './section-columns.ts';
+export { wordSectionBaseline, type WordSectionBaseline } from './section-baseline.ts';

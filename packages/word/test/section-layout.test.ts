@@ -122,3 +122,48 @@ test('the final columns balance through the pagination engine without splitting 
   const exported = native.artifact();
   expect(layoutWordDocument(exported.document, measure).pages[0]!.columns.map(column => column.lines.length)).toEqual([6, 6]);
 });
+
+test('paragraph continuations rewrap when flowing into narrower unequal columns', () => {
+  const native = new NativeWordDocument({ content: [{ kind: 'paragraph', runs: [{ text: 'abcdef '.repeat(100) }] }], page: { width: 400, height: 150, margin: 20 } });
+  native.updateSettings({ finalSection: { columns: [{ widthTwips: 4000, spaceTwips: 400 }, { widthTwips: 1600, spaceTwips: 0 }] } });
+  const layout = native.layout(measure);
+  expect(layout.pages.some(page => page.columns[1]!.lines.length > 0)).toBe(true);
+  for (const page of layout.pages) for (const column of page.columns)
+    expect(column.lines.every(line => line.width <= column.width)).toBe(true);
+  const lines = layout.pages.flatMap(page => page.columns.flatMap(column => column.lines));
+  expect(lines.at(-1)!.endOffset).toBe('abcdef '.repeat(100).length);
+});
+
+test('two prepared settings updates cannot commit an invalid composed page box', () => {
+  const source = createWordArtifact();
+  const session = openWordOperationDocument(source);
+  const left = session.prepareOperation(at(0), { name: 'section-layout', input: { scope: 'section', format: { marginLeftTwips: 6000 } } });
+  const right = session.prepareOperation(at(0), { name: 'section-layout', input: { scope: 'section', format: { marginRightTwips: 6000 } } });
+  session.commit(left);
+  expect(() => session.commit(right)).toThrow('no text area');
+  expect(session.artifact().document.finalSection).toMatchObject({ marginLeftTwips: 6000, marginRightTwips: 1440 });
+  session.destroy();
+});
+
+test('matching multi-column continuous sections balance before the next section starts', () => {
+  const paragraphs = Array.from({ length: 8 }, (_, i) => ({ ...paragraph(`Line ${i + 1}`), ...(i === 5 ? { section: { format: { columnCount: 2 } } } : {}) }));
+  const native = new NativeWordDocument({ source: createWordArtifact({ paragraphs }) });
+  native.updateSettings({ finalSection: { columnCount: 2, breakType: 'continuous' } });
+  const layout = native.layout(measure);
+  expect(layout.pages).toHaveLength(1);
+  expect(layout.pages[0]!.columns.map(column => column.lines.length)).toEqual([3, 3, 1, 1]);
+  expect(layout.pages[0]!.columns[2]!.y).toBeCloseTo(layout.pages[0]!.columns[0]!.y + 36, 0);
+});
+
+test('authored sections without a source template export the same resolved page defaults', () => {
+  const native = new NativeWordDocument({ page: { width: 300, height: 500, margin: 20 }, content: [
+    { kind: 'paragraph', runs: [{ text: 'First' }], section: { format: { columnCount: 2 } } },
+    { kind: 'paragraph', runs: [{ text: 'Second' }] },
+  ] });
+  const layout = native.layout(measure);
+  const artifact = native.artifact();
+  expect(artifact.document.blocks[0]).toMatchObject({ section: { pageWidthTwips: 6000, marginLeftTwips: 400 } });
+  expect(layoutWordDocument(artifact.document, measure).pages.map(page => page.width)).toEqual(layout.pages.map(page => page.width));
+  native.updateSettings({ finalSection: { pageWidthTwips: 8000 } });
+  expect(layoutWordDocument(native.artifact().document, measure).pages[0]!.width).toBe(native.layout(measure).pages[0]!.width);
+});

@@ -1,4 +1,4 @@
-import { sectionFormatXml } from './section-format.ts';
+import { sectionFormatXml, type WordSectionFormat } from './section-format.ts';
 import { orderedPropertyXml } from './property-order.ts';
 import { authoredInkMarkup } from './authored-ink.ts';
 import { validateWordStyleId } from './authored-styles.ts';
@@ -27,7 +27,7 @@ const namespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const office = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/';
 
 /** One traversal writes structure, numbering and media relationships together. */
-export function authoredContent(blocks: readonly WordContentBlock[], width: number) {
+export function authoredContent(blocks: readonly WordContentBlock[], width: number, sectionDefaults: WordSectionFormat = {}) {
   const parts: { name: string; data: Uint8Array }[] = [];
   const lists = new Map<string, { id: number; defaults: WordAuthoredList; levels: Map<number, WordAuthoredList> }>();
   let relationships = '';
@@ -92,7 +92,7 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
           const positioning = block.positioning ? paragraphPositioningXml(block.positioning) : {};
           const paragraph = block.paragraph ? paragraphFormatXml(block.paragraph) : new Map<string, string>();
           const early = ['keepNext', 'keepLines', 'pageBreakBefore', 'widowControl'];
-          const section = block.section ? `<w:sectPr>${orderedPropertyXml('sectPr', sectionFormatXml(block.section.format))}</w:sectPr>` : '';
+          const section = block.section ? `<w:sectPr>${orderedPropertyXml('sectPr', sectionFormatXml({ ...sectionDefaults, ...block.section.format }))}</w:sectPr>` : '';
           const properties = (block.styleId ? `<w:pStyle w:val="${xmlAttribute(block.styleId)}"/>` : '') + early.map(key => paragraph.get(key) ?? '').join('') + numbering + (paragraph.get('pBdr') ?? '') + (paragraph.get('shd') ?? '') + (positioning.tabs ?? '') + (paragraph.get('spacing') ?? '') + (positioning.ind ?? '') + (paragraph.get('contextualSpacing') ?? '') + (block.alignment ? `<w:jc w:val="${block.alignment === 'justify' ? 'both' : block.alignment}"/>` : '') + section;
           return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => linked(run.link, run.ink ? (run.text === '\uFFFC' && !run.shape && !run.image && !run.field ? inkMarkup(run.ink, availableWidth) : (() => { throw new TypeError('Ink occupies one object character.'); })()) : run.shape ? (run.text === '\uFFFC' ? wordShapeXml(run.shape, ++imageId, availableWidth, paragraphs => visit(paragraphs.map(p => ({ kind: 'paragraph', ...p })), run.shape!.width)) : (() => { throw new TypeError('Shape runs occupy one object character.'); })()) : run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${run.breakType ? wordBreakXml(run.breakType, run.text) : run.tab ? positionalTabXml(run.tab, run.text) : textContent(run.text)}</w:r>`)).join('')}</w:p>`;
         }

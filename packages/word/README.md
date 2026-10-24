@@ -1042,3 +1042,12 @@ same geometry to canvas and Svelte consumers.
 
 These settings follow ECMA-376 Part 1 §§17.6.3–4, 17.6.11, 17.6.13 and 17.6.22.
 Hyphenation is unchanged.
+
+Shared-document hosts can bind immutable imported geometry with
+`bindWordLayoutSource(doc, artifact)` or the `layout` baseline in
+`createWordSourceManifest`. Staging, commit and guarded undo validate the composed
+page box against this baseline. Invalid combinations of independently prepared or
+remote settings are rejected before the live document changes. Remote updates
+must pass `commitWordUpdate` or staged `validateWordSharedDocument`; applying raw
+Yjs updates alone does not perform document validation. Documents without layout
+edits retain their existing text-validation cost.

@@ -40,18 +40,23 @@ export function balanceWordColumns(initial: WordLayout, run: (limits: WordColumn
       return { section, page: group.page, low, high: group.height };
     });
   if (!bounds.length) return initial;
-  for (let iteration = 0; iteration < 14 && bounds.some(bound => bound.high - bound.low > 0.05); iteration++) {
-    const limits = new Map(bounds.map(bound => [bound.section, { page: bound.page, height: Math.max(1, (bound.low + bound.high) / 2) }]));
-    const candidate = run(limits);
-    const ends = new Map<WordSectionProperties, number>();
-    for (const page of candidate.pages) for (const column of page.columns)
-      if (column.lines.length || column.tables.length || column.unsupportedBlocks.length) ends.set(column.section ?? page.section, page.index);
-    for (const bound of bounds) {
-      const middle = limits.get(bound.section)!.height;
-      if ((ends.get(bound.section) ?? 0) <= bound.page) bound.high = middle;
+  const accepted = new Map<WordSectionProperties, { page: number; height: number }>();
+  let balanced = initial;
+  // Earlier sections determine the space available to later continuous sections.
+  for (const bound of bounds) {
+    for (let iteration = 0; iteration < 14 && bound.high - bound.low > 0.05; iteration++) {
+      const middle = Math.max(1, (bound.low + bound.high) / 2);
+      const limits = new Map(accepted);
+      limits.set(bound.section, { page: bound.page, height: middle });
+      const candidate = run(limits);
+      let end = 0;
+      for (const page of candidate.pages) for (const column of page.columns)
+        if ((column.section ?? page.section) === bound.section && (column.lines.length || column.tables.length || column.unsupportedBlocks.length)) end = page.index;
+      if (end <= bound.page) bound.high = middle;
       else bound.low = middle;
     }
+    accepted.set(bound.section, { page: bound.page, height: bound.high });
+    balanced = run(accepted);
   }
-  const balanced = run(new Map(bounds.map(bound => [bound.section, { page: bound.page, height: bound.high }])));
   return balanced.pages.length <= initial.pages.length ? balanced : initial;
 }

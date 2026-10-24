@@ -1,3 +1,4 @@
+import { bindWordLayoutSource } from '../collaboration/layout-validation.ts';
 import { readWordSectionBoundary } from '../collaboration/section-attributes.ts';
 import { readWordDocumentSettings } from '../collaboration/document-settings.ts';
 import { applyWordDocumentSettings } from '../document-settings.ts';
@@ -22,6 +23,7 @@ export function openWordOperationDocument(
   resolveImage?: (image: DocumentImage) => Uint8Array,
 ) {
   const doc = new Y.Doc();
+  bindWordLayoutSource(doc, source);
   const text = doc.getText("body");
   text.applyDelta(importOperationDelta(source));
   return {

@@ -56,7 +56,11 @@ export function createWordArtifact(options: CreateWordOptions = {}): WordArtifac
   const lineSpacing = Math.round((options.lineSpacing ?? 1) * 240);
   if (lineSpacing < 1 || lineSpacing > 2147483647) throw new RangeError('Line spacing is outside the WordprocessingML range.');
   if (options.blocks !== undefined && options.paragraphs !== undefined) throw new TypeError('Supply blocks or paragraphs, not both.');
-  const authored = authoredContent(options.blocks ?? (options.paragraphs ?? [{ runs: [] }]).map(paragraph => ({ kind: 'paragraph', ...paragraph })), page.width - page.margin * 2);
+  const authored = authoredContent(options.blocks ?? (options.paragraphs ?? [{ runs: [] }]).map(paragraph => ({ kind: 'paragraph', ...paragraph })), page.width - page.margin * 2, {
+    pageWidthTwips: Math.round(page.width * 20), pageHeightTwips: Math.round(page.height * 20),
+    marginTopTwips: Math.round(page.margin * 20), marginBottomTwips: Math.round(page.margin * 20),
+    marginLeftTwips: Math.round(page.margin * 20), marginRightTwips: Math.round(page.margin * 20),
+  });
   const content = authored.content;
   const parts = [
     ['word/theme/theme1.xml', wordThemeXml(options.themeColours)],

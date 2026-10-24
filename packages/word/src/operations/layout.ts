@@ -1,3 +1,4 @@
+import { wordSectionBaseline, type WordSectionBaseline } from '../section-baseline.ts';
 import type * as Y from 'yjs';
 import type { WordArtifact } from '../artifact.ts';
 import type { WordSectionProperties } from '../document.ts';
@@ -18,11 +19,12 @@ export function isWordLayoutOperation(operation: WordOperation): operation is Wo
 }
 
 /** Section scope follows paragraph marks, including a section containing a selected table cell. */
-export function inspectWordSections(text: Y.Text, source?: WordArtifact) {
+export function inspectWordSections(text: Y.Text, source?: WordArtifact | WordSectionBaseline) {
   const settings = text.doc ? readWordDocumentSettings(wordSharedOwner(text.doc)) : {};
-  const finalSection = resolveWordSection(source?.document.finalSection ?? DEFAULT_WORD_SECTION, settings.finalSection ?? {});
-  const imported = source ? wordSections(source.document) : [];
-  const sourceParagraphs = new Map(source?.document.blocks.flatMap(block => block.kind === 'paragraph' && block.section ? [[block.elementId, block.section] as const] : []));
+  const baseline = source && ('document' in source ? wordSectionBaseline(source) : source);
+  const finalSection = resolveWordSection(baseline?.finalSection ?? DEFAULT_WORD_SECTION, settings.finalSection ?? {});
+  const imported = baseline ? [...baseline.sections.map(section => section.properties), baseline.finalSection] : [];
+  const sourceParagraphs = new Map(baseline?.sections.map(section => [section.paragraph, section.properties] as const));
   const result: { start: number; end: number; boundary?: WordSectionBoundary; properties: WordSectionProperties }[] = [];
   const lastSource = new Map<number, number>();
   let cursor = 0;

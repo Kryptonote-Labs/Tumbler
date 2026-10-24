@@ -20,3 +20,4 @@ export { hasWordParagraphReset, readWordParagraphFormat } from './paragraph-attr
 
 export { WORD_DOCUMENT_SETTINGS, readWordDocumentSettings, prepareWordDocumentSettings } from './document-settings.ts';
 export { readWordSectionBoundary, sectionPropertyPatch } from './section-attributes.ts';
+export { bindWordLayoutSource, validateWordLayout } from './layout-validation.ts';

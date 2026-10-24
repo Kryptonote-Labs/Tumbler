@@ -1,4 +1,5 @@
 import { anchorScopedSelection } from './selection.ts';
+import { bindWordLayoutSource } from '../layout-validation.ts';
 import { isWordLayoutOperation, applyWordLayoutOperation } from '../../operations/layout.ts';
 import { wordOperation } from '../../operations/definitions.ts';
 import * as Y from "yjs";
@@ -214,6 +215,7 @@ export class WordSharedText {
     operation: WordOperation,
     context: WordScopedOperationContext = {},
   ): PreparedWordUpdate & { range: WordRange } {
+    if (context.source) bindWordLayoutSource(this.doc, context.source);
     if (operation.name === 'page-color') {
       const { selection: _placeholder, ...edit } = prepareWordScopedOperation(this.doc, { story: 'body', range: { start: 0, end: 0 } }, operation, context);
       let selection: WordScopedSelection | undefined;

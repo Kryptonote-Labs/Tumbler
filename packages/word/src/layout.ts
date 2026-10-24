@@ -577,7 +577,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
         const current = page!;
         const active = current.columns[columnIndex]!;
         const previous = active.section ?? current.section;
-        if (!sameWordColumns(previous, section.properties)) {
+        if (!sameWordColumns(previous, section.properties) || previous.columnCount > 1 || section.properties.columnCount > 1) {
           const top = Math.max(cursorY, ...current.columns.filter(column => column.y === active.y)
             .flatMap(column => [...column.lines.map(line => line.y + line.height), ...column.tables.map(table => table.y + table.height)]));
           const bottom = current.height - points(section.properties.marginBottomTwips);
@@ -695,7 +695,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
             prepared = prepareBody(bodyIndex)!;
           }
         }
-        const sequence = prepared.lines;
+        let sequence = prepared.lines;
         inKeepChain = prepared.format.keepNext;
         pending.delete(bodyIndex);
         // A previous paragraph's after-spacing belongs to the old column. At a fresh
@@ -704,7 +704,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
           ? document.paragraphFormat(block).spacingBeforeTwips : prepared.format.spacingBeforeTwips;
         cursorY += points(before);
         for (let lineIndex = 0; ; lineIndex += 1) {
-          const line = prepared.lines.get(lineIndex);
+          let line = prepared.lines.get(lineIndex);
           if (!line) break;
           let column = page!.columns[columnIndex]!;
           const lineHeight = line.ascent + line.descent;
@@ -712,14 +712,28 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
           const required = pairHeight <= column.height ? Math.max(lineHeight, pairHeight) : lineHeight;
           if (cursorY + required > column.y + column.height &&
             (column.lines.length > 0 || column.tables.length > 0 || column.unsupportedBlocks.length > 0)) {
+            const width = column.width;
             advanceColumn(section.properties);
             column = page!.columns[columnIndex]!;
+            if (column.width !== width) {
+              prepared = prepareParagraphFlow(document, block, column.width, measurer, listMarkers.get(block.elementId), preparation, line.startOffset);
+              sequence = prepared.lines;
+              lineIndex = 0;
+              line = sequence.get(0);
+              if (!line) break;
+            }
           }
-          const laidOut = placeLine(block, prepared.format, line, column, cursorY, budget, lineIndex === 0 ? prepared.marker : undefined);
+          const laidOut = placeLine(block, prepared.format, line, column, cursorY, budget, line.startOffset === 0 ? prepared.marker : undefined);
           column.lines.push(laidOut);
           cursorY += laidOut.height;
+          const width = column.width;
           if (line.breakAfter === "page") addPage(section.properties);
           else if (line.breakAfter === "column") advanceColumn(section.properties);
+          if (page!.columns[columnIndex]!.width !== width) {
+            prepared = prepareParagraphFlow(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId), preparation, line.endOffset + 1);
+            sequence = prepared.lines;
+            lineIndex = -1;
+          }
           yield* progress();
         }
         cursorY += points(prepared.format.spacingAfterTwips);
@@ -1007,11 +1021,12 @@ function prepareParagraphFlow(
   measurer: WordTextMeasurer,
   markerSource?: WordListMarker,
   preparation?: PreparationBudget,
+  startOffset = 0,
 ) {
   const wrapTrailSpaces = document.wrapTrailSpaces ?? false;
   const doNotExpandShiftReturn = document.doNotExpandShiftReturn ?? false;
   const markerKey = JSON.stringify(markerSource);
-  const cached = document.cache?.paragraphs.get(paragraph);
+  const cached = startOffset === 0 ? document.cache?.paragraphs.get(paragraph) : undefined;
   if (cached && cached.width === columnWidth && cached.marker === markerKey && cached.measurer === measurementIdentity(measurer) && cached.wrapTrailSpaces === wrapTrailSpaces && cached.doNotExpandShiftReturn === doNotExpandShiftReturn) return { ...cached.value, lines: new PreparedLineSequence(cached.value.lines.values()) };
   if (document.cache) document.cache.measuredParagraphs++;
   const computed = document.paragraphFormat(paragraph);
@@ -1021,18 +1036,21 @@ function prepareParagraphFlow(
     hangingTwips: computed.hangingTwips !== 0 ? computed.hangingTwips : markerSource.hangingTwips ?? 360,
   });
   const width = Math.max(1, columnWidth - points(format.indentStartTwips + format.indentEndTwips));
-  const atoms = paragraphAtoms(document, paragraph, measurer, preparation);
+  function* suffix() {
+    for (const atom of paragraphAtoms(document, paragraph, measurer, preparation)) if (atom.startOffset >= startOffset) yield atom;
+  }
+  const atoms = suffix();
   const first = atoms.next();
   const emptyRun = first.done ? paragraph.inlines.find(inline => inline.kind === 'run') : undefined;
   function* remainingAtoms() { if (!first.done) yield first.value; yield* atoms; }
   const mark = validMeasurement(measurer.measure(' ', document.runFormat(paragraph, emptyRun)));
   // List hanging indents position the marker, not the first line of text.
-  const textFormat = markerSource ? { ...format, firstLineTwips: 0, hangingTwips: 0 } : format;
-  const iterator = breakLines(remainingAtoms(), width, textFormat, mark, wrapTrailSpaces, doNotExpandShiftReturn);
+  const textFormat = markerSource || startOffset > 0 ? { ...format, firstLineTwips: 0, hangingTwips: 0 } : format;
+  const iterator = startOffset > 0 && first.done ? [][Symbol.iterator]() : breakLines(remainingAtoms(), width, textFormat, mark, wrapTrailSpaces, doNotExpandShiftReturn);
   const marker = markerSource === undefined ? undefined : prepareMarker(document, paragraph, markerSource, measurer, preparation);
   const lines = new PreparedLineSequence(iterator, completed => {
     const value = Object.freeze({ paragraph, format, lines: completed, marker });
-    document.cache?.paragraphs.set(paragraph, { width: columnWidth, marker: markerKey, measurer: measurementIdentity(measurer), wrapTrailSpaces, doNotExpandShiftReturn, value });
+    if (startOffset === 0) document.cache?.paragraphs.set(paragraph, { width: columnWidth, marker: markerKey, measurer: measurementIdentity(measurer), wrapTrailSpaces, doNotExpandShiftReturn, value });
   });
   return { paragraph, format, lines, marker };
 }
