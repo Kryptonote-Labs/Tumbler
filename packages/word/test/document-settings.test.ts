@@ -123,3 +123,12 @@ test('an imported theme colour without a theme part retains its RGB fallback', (
   expect(native.layout(measurer).background).toBe('#ff0000');
   expect(native.artifact().document.background).toMatchObject({ fallback: '#ff0000' });
 });
+
+
+test('page colour preserves a representable scoped selection', () => {
+  const session = openWordOperationDocument(createWordArtifact({ paragraphs: [{ runs: [{ text: 'First second' }] }] }));
+  const view = wordSharedText(session.text);
+  const edit = view.prepareOperation({ start: 6, end: 12 }, { name: 'page-color', input: { color: '#123456' } });
+  expect(view.commit(edit)).toEqual({ story: 'body', range: { start: 6, end: 12 } });
+  session.destroy();
+});
