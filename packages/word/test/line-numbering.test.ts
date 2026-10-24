@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { OOXML_NAMESPACES } from '@tumblerjs/ooxml';
-import { NativeWordDocument, createWordArtifact, layoutWordDocument, openWordArtifact } from '../src/index.ts';
+import { NativeWordDocument, isWordDocumentSettings, createWordArtifact, layoutWordDocument, openWordArtifact } from '../src/index.ts';
 import { openWordOperationDocument } from '../src/operations/index.ts';
 import { buildWordDocumentFixture } from './document-fixture.ts';
 
@@ -11,7 +11,7 @@ for (const conformance of ['strict', 'transitional'] as const) {
   test(`${conformance} section line numbers import, render and round-trip`, () => {
     const ns = OOXML_NAMESPACES[conformance].wordprocessing;
     const source = openWordArtifact(buildWordDocumentFixture({ conformance,
-      documentXml: `<w:document xmlns:w="${ns}"><w:body><w:p><w:r><w:t>First</w:t></w:r></w:p><w:p><w:r><w:t>Second</w:t></w:r></w:p><w:p><w:r><w:t>Third</w:t></w:r></w:p><w:sectPr><w:lnNumType w:countBy="2" w:start="2" w:distance="200" w:restart="continuous"/></w:sectPr></w:body></w:document>`,
+      documentXml: `<w:document xmlns:w="${ns}"><w:body><w:p><w:r><w:t>First</w:t></w:r></w:p><w:p><w:r><w:t>Second</w:t></w:r></w:p><w:p><w:r><w:t>Third</w:t></w:r></w:p><w:sectPr><w:lnNumType w:countBy="2" w:start="1" w:distance="200" w:restart="continuous"/></w:sectPr></w:body></w:document>`,
     }));
     const layout = layoutWordDocument(source.document, measure);
     expect(numbers(layout)).toEqual([['2', undefined, '4']]);
@@ -76,4 +76,29 @@ test('numbering continues through multiple columns and progressive layout agrees
   let result = iterator.next();
   while (!result.done) result = iterator.next();
   expect(numbers(result.value)).toEqual(numbers(final));
+});
+
+
+test('Word stores the number of skipped lines while the API uses the displayed start', () => {
+  const ns = OOXML_NAMESPACES.transitional.wordprocessing;
+  const source = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${ns}"><w:body><w:p><w:r><w:t>Text</w:t></w:r></w:p><w:sectPr><w:lnNumType w:countBy="1" w:start="0"/></w:sectPr></w:body></w:document>` }));
+  expect(numbers(layoutWordDocument(source.document, measure))).toEqual([['1']]);
+  const native = new NativeWordDocument({ source });
+  native.updateSettings({ finalSection: { lineNumbers: { countBy: 1, start: 1, restart: 'newPage' } } });
+  expect(native.artifact().document.source.source).toContain('w:start="0"');
+});
+
+test('schema defaults survive JSON settings input and DOCX export', () => {
+  const native = new NativeWordDocument({ content: [{ kind: 'paragraph', runs: [{ text: 'Text' }] }] });
+  const settings: unknown = JSON.parse('{"finalSection":{"lineNumbers":{"countBy":1}}}');
+  if (!isWordDocumentSettings(settings)) throw new Error('Expected valid settings');
+  native.updateSettings(settings);
+  expect(numbers(layoutWordDocument(native.artifact().document, measure))).toEqual([['1']]);
+});
+
+test('line-number measurements respect preparation limits and validate geometry', () => {
+  const native = new NativeWordDocument({ content: [{ kind: 'paragraph', runs: [{ text: 'x' }] }] });
+  native.updateSettings({ finalSection: { lineNumbers: { countBy: 1, start: 1, restart: 'newPage' } } });
+  expect(() => native.layout(measure, { maxMeasurements: 2 })).toThrow('measurements');
+  expect(() => native.layout({ measure: text => ({ width: text === '1' ? NaN : 6, ascent: 9, descent: 3 }) })).toThrow('finite non-negative geometry');
 });

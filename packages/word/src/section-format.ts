@@ -69,7 +69,7 @@ export function resolveWordSection(base: WordSectionProperties, format: WordSect
 }
 
 export function sectionFormatXml(format: WordSectionFormat, relationshipNamespace = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'): Map<string, string> {
-  wordSectionFormatSchema.parse(format);
+  format = wordSectionFormatSchema.parse(format);
   const result = new Map<string, string>();
   for (const [key, name] of [['headerReferences', 'headerReference'], ['footerReferences', 'footerReference']] as const) {
     const references = format[key];
@@ -83,7 +83,7 @@ export function sectionFormatXml(format: WordSectionFormat, relationshipNamespac
   if (margins) result.set('pgMar', `<w:pgMar${margins}/>`);
   if (format.lineNumbers !== undefined) {
     const n = format.lineNumbers;
-    result.set('lnNumType', n === null ? '' : `<w:lnNumType w:countBy="${n.countBy}" w:start="${n.start}" w:restart="${n.restart}"${n.distanceTwips === undefined ? '' : ` w:distance="${n.distanceTwips}"`}/>`);
+    result.set('lnNumType', n === null ? '' : `<w:lnNumType w:countBy="${n.countBy}" w:start="${n.start - 1}" w:restart="${n.restart}"${n.distanceTwips === undefined ? '' : ` w:distance="${n.distanceTwips}"`}/>`);
   }
   if (format.breakType !== undefined) result.set('type', `<w:type w:val="${format.breakType}"/>`);
   if (['columns', 'columnCount', 'columnSpaceTwips', 'columnSeparator'].some(key => key in format)) {

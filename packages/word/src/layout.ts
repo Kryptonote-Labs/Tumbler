@@ -31,7 +31,7 @@ import type { WordDrawing } from "./drawings.ts";
 
 import { hasPageFields, type WordPageField } from './page-fields.ts';
 
-import { createPreparation, consumePreparation, measurementIdentity, type PreparationBudget } from './layout-preparation.ts';
+import { validMeasurement, createPreparation, consumePreparation, measurementIdentity, type PreparationBudget } from './layout-preparation.ts';
 
 const TWIPS_PER_POINT = 20;
 const CSS_PIXELS_PER_POINT = 4 / 3;
@@ -463,7 +463,7 @@ export function* layoutWordSourceProgressively(
       return following?.breakType !== 'continuous' ? [section.properties] : [];
     })));
 
-    if (!needsTotal || layout.truncated || layout.pages.length === total) return numberWordLayout(layout, document, measurer);
+    if (!needsTotal || layout.truncated || layout.pages.length === total) return layout;
     if (seen.has(layout.pages.length)) throw new WordError('invalid_document', 'Page count fields did not reach a stable layout.');
     seen.add(total);
     total = layout.pages.length;
@@ -780,12 +780,12 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
   }
   const frozenPages = Object.freeze(pages.map((page, index) => alignWordPageDrawings(freezePage(page, document.cache?.pages[index]))));
   if (document.cache) document.cache.pages = frozenPages;
-  return Object.freeze({
+  return numberWordLayout(Object.freeze({
     ...(document.background === undefined ? {} : { background: document.background }),
     pages: frozenPages,
     fragmentCount: budget.fragments,
     ...(truncated ? { truncated: true as const } : {}),
-  });
+  }), document, measurer);
 }
 
 const TRUNCATED = Symbol("truncated");
@@ -1768,12 +1768,6 @@ function atomDescent(atom: Exclude<ParagraphAtom, BreakAtom>): number {
   return atom.kind === "tab" ? atom.format.fontSizePoints * 0.2 : atom.descent;
 }
 
-function validMeasurement(measurement: WordTextMeasurement): WordTextMeasurement {
-  if (![measurement.width, measurement.ascent, measurement.descent].every((value) => Number.isFinite(value) && value >= 0)) {
-    throw new TypeError("A Word text measurer must return finite non-negative geometry.");
-  }
-  return measurement;
-}
 
 function* graphemes(value: string, preparation?: PreparationBudget): Generator<string> {
   const Segmenter = Intl.Segmenter;

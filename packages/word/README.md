@@ -1069,3 +1069,7 @@ canvas and Svelte layouts. Numbers remain outside editable document text.
 
 The markup follows ECMA-376 Part 1 §17.6.8 and §17.3.1.35. Table counting follows
 [Microsoft Word's documented behaviour](https://support.microsoft.com/en-us/word/add-or-remove-line-numbers).
+
+Line-number `start` is the displayed first number. Word's stored `w:start` is a
+skip count, so the engine translates between the API's 1 and Word's 0. See
+[MS-OE376 §2.1.214](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/7b579d67-5dd6-4e60-b176-31b8157addd0).

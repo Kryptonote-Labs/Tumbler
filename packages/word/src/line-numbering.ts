@@ -1,3 +1,4 @@
+import { validMeasurement } from './layout-preparation.ts';
 import { z } from 'zod';
 import type { WordBlock, WordParagraph, WordSectionProperties } from './document.ts';
 import type { WordLayout, WordLayoutSource, WordTextMeasurer } from './layout.ts';
@@ -5,11 +6,13 @@ import { DEFAULT_TEXT } from './styles.ts';
 
 export const wordLineNumberingSchema = z.object({
   countBy: z.number().int().positive(),
-  start: z.number().int().nonnegative().default(1),
+  start: z.number().int().positive().default(1),
   distanceTwips: z.number().int().nonnegative().optional(),
   restart: z.enum(['newPage', 'newSection', 'continuous']).default('newPage'),
 }).strict();
 export type WordLineNumbering = z.infer<typeof wordLineNumberingSchema>;
+
+const measurements = new WeakMap<WordTextMeasurer, Map<string, ReturnType<WordTextMeasurer['measure']>>>();
 
 /** Number body lines after pagination. Suppressed paragraphs do not enter the count. */
 export function numberWordLayout(layout: WordLayout, document: WordLayoutSource, measurer: WordTextMeasurer): WordLayout {
@@ -56,7 +59,11 @@ export function numberWordLayout(layout: WordLayout, document: WordLayoutSource,
       const number = counter++;
       if (number % settings.countBy !== 0) continue;
       const text = String(number);
-      const metrics = measurer.measure(text, format);
+      let cache = measurements.get(measurer);
+      if (!cache) { cache = new Map(); measurements.set(measurer, cache); }
+      const key = JSON.stringify(format) + ':' + text;
+      let metrics = cache.get(key);
+      if (!metrics) { metrics = validMeasurement(measurer.measure(text, format)); cache.set(key, metrics); }
       markers.set(line, { text, x: column.x - (settings.distanceTwips ?? 360) / 20 - metrics.width,
         y: line.baseline - metrics.ascent, width: metrics.width, height: metrics.ascent + metrics.descent, baseline: line.baseline, format });
     }

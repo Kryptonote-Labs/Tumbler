@@ -850,7 +850,7 @@ function parseSection(element: LosslessXmlElement | undefined, namespace: string
     columnCount: integerAttr(columns, namespace, "num", 1, 1, 45),
     ...(lineNumber && countBy !== undefined && Number(countBy) > 0 ? { lineNumbers: {
       countBy: integerAttr(lineNumber, namespace, 'countBy', 1, 1, Number.MAX_SAFE_INTEGER),
-      start: integerAttr(lineNumber, namespace, 'start', 1, 0, Number.MAX_SAFE_INTEGER),
+      start: integerAttr(lineNumber, namespace, 'start', 0, 0, Number.MAX_SAFE_INTEGER) + 1,
       ...(attr(lineNumber, namespace, 'distance') === undefined ? {} : { distanceTwips: twipsAttr(lineNumber, namespace, 'distance', 360) }),
       restart: attr(lineNumber, namespace, 'restart') === 'newSection' ? 'newSection' as const : attr(lineNumber, namespace, 'restart') === 'continuous' ? 'continuous' as const : 'newPage' as const,
     } } : {}),
