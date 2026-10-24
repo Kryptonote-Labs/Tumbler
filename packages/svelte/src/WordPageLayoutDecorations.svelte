@@ -2,7 +2,7 @@
   import { wordDisplayColour } from './word-display-colour.ts';
   import { wordColumnSeparators, wordPointsToCssPixels, type WordLayoutPage } from '@tumblerjs/word';
   import { wordTextCss, wordTextTop } from './word-font-metrics.ts';
-  let { page }: { page: WordLayoutPage } = $props();
+  let { page, background = '#ffffff' }: { page: WordLayoutPage; background?: string | undefined } = $props();
 </script>
 
 {#each wordColumnSeparators(page) as line}
@@ -12,6 +12,6 @@
 {#each page.columns.flatMap(column => column.lines) as line}
   {#if line.lineNumber}
     {@const number = line.lineNumber}
-    <span aria-hidden="true" style={`position:absolute;pointer-events:none;user-select:none;${wordTextCss(number.format)};left:${wordPointsToCssPixels(number.x)}px;top:${wordPointsToCssPixels(wordTextTop(number))}px;line-height:${wordPointsToCssPixels(number.height)}px`}>{number.text}</span>
+    <span aria-hidden="true" style={`position:absolute;pointer-events:none;user-select:none;${wordTextCss(number.format, background)};left:${wordPointsToCssPixels(number.x)}px;top:${wordPointsToCssPixels(wordTextTop(number))}px;line-height:${wordPointsToCssPixels(number.height)}px`}>{number.text}</span>
   {/if}
 {/each}
