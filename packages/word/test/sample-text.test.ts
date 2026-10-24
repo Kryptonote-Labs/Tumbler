@@ -29,6 +29,14 @@ describe('Word sample text', () => {
     expect(wordSampleText('=lorem(2,4)')).toBe(wordSampleText('=lorem(2,4)'));
   });
 
+  test('hosts can supply rand sentences while retaining counts and lorem text', () => {
+    const sentences = ['First sentence.', 'Second sentence.', 'Third sentence.'] as const;
+    expect(wordSampleText('=rand(2,2)', sentences)).toBe('First sentence. Second sentence.\nThird sentence. First sentence.');
+    expect(wordSampleText('=rand()', sentences)?.split('\n')).toHaveLength(3);
+    expect(wordSampleText('=lorem(2,2)', sentences)).toBe(wordSampleText('=lorem(2,2)'));
+    expect(wordSampleText('=rand(no)', sentences)).toBeUndefined();
+  });
+
   test('leaves malformed commands and surrounding content literal', () => {
     for (const command of [
       '=random()', '=rand.old()', '=lorem', '=lorem(0)', '=rand(-1)', '=rand(2,0)',

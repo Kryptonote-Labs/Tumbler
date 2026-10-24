@@ -23,13 +23,13 @@ const latin = [
 ] as const;
 
 /** Expand =rand(p,s) or =lorem(p,s). Omitted counts default to three; invalid commands stay literal. */
-export function wordSampleText(command: string): string | undefined {
+export function wordSampleText(command: string, randSentences: readonly [string, ...string[]] = english): string | undefined {
   const match = /^[\t ]*=(rand|lorem)[\t ]*\([\t ]*(\d*)[\t ]*(?:,[\t ]*(\d*)[\t ]*)?\)[\t ]*$/i.exec(command);
   if (!match || match[0] !== command) return undefined;
   const paragraphs = Number(match[2] || 3);
   const sentences = Number(match[3] || 3);
   if (![paragraphs, sentences].every(count => Number.isSafeInteger(count) && count > 0)) return undefined;
-  const source = match[1]!.toLowerCase() === 'rand' ? english : latin;
+  const source = match[1]!.toLowerCase() === 'rand' ? randSentences : latin;
   // Both sequences repeat. Build at most one corpus cycle, even for very large counts.
   const cycle = Array.from({ length: Math.min(paragraphs, source.length) }, (_, index) => {
     const start = (index * (sentences % source.length)) % source.length;
