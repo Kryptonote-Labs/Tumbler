@@ -127,7 +127,7 @@ export class NativeWordDocument implements WordLayoutSource {
   private settings: WordDocumentSettings = {};
   get background(): string | undefined {
     const value = this.settings.background === undefined ? this.options.source?.document.background : this.settings.background;
-    return value == null ? undefined : resolveWordColour(value, this.themeColours);
+    return value == null ? undefined : resolveWordColour(value, this.options.source ? this.options.source.document.styles.themeColors : this.themeColours);
   }
   updateSettings(settings: WordDocumentSettings) {
     if (!isWordDocumentSettings(settings)) throw new TypeError('Invalid document settings.');

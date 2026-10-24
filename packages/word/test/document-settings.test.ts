@@ -114,3 +114,12 @@ test('background display follows view and zoom even with leading ignorable exten
   expect(xml.indexOf('displayBackgroundShape')).toBeGreaterThan(xml.indexOf('w:zoom'));
   expect(xml.indexOf('displayBackgroundShape')).toBeLessThan(xml.indexOf('w:compat'));
 });
+
+
+test('an imported theme colour without a theme part retains its RGB fallback', () => {
+  const ns = OOXML_NAMESPACES.transitional.wordprocessing;
+  const source = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${ns}"><w:background w:color="FF0000" w:themeColor="accent1"/><w:body><w:p/></w:body></w:document>` }));
+  const native = new NativeWordDocument({ source });
+  expect(native.layout(measurer).background).toBe('#ff0000');
+  expect(native.artifact().document.background).toMatchObject({ fallback: '#ff0000' });
+});
