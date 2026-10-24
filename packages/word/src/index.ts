@@ -191,3 +191,5 @@ export { wordSectionColumns, wordColumnSeparators } from './section-columns.ts';
 export { wordSectionBaseline, type WordSectionBaseline } from './section-baseline.ts';
 
 export { wordLineNumberingSchema, type WordLineNumbering } from './line-numbering.ts';
+
+export { readWordEmbeddedFonts, type WordEmbeddedFont } from './embedded-fonts.ts';

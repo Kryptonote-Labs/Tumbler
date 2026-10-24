@@ -199,3 +199,12 @@ font fallback stack. Pass the same resolver used to measure and render body text
 so line-number advances and baselines agree with the host's layout. The default
 uses Tumbler's standard Word font stack. Numbers anchor their right edge at the
 layout's number gutter, so browser advance rounding does not shift individual labels.
+
+### Loading embedded fonts
+
+`loadEmbeddedFonts(fonts)` registers regular/bold/italic faces under private CSS
+family names, shared until the last consumer calls `destroy()`. `family(name)`
+resolves a document family to its private alias, and `ready` resolves after all
+font loads settle. Failed faces keep the supplied fallback available. Use the same
+resolver for layout measurements, text CSS and baseline probes. The loader does
+not install fonts on the system or affect another document's font family.
