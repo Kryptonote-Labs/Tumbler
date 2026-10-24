@@ -60,6 +60,7 @@ export type {
   WordTextSelection,
 } from "./text.ts";
 export { replaceWordText } from "./editor.ts";
+export { wordSampleText, wordSampleTextEdit, type WordSampleTextEdit } from './sample-text.ts';
 export {
   formatWordSelection,
   wordFormattingState,

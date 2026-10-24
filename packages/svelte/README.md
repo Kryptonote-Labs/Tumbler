@@ -104,6 +104,13 @@ the DOM and commits as one replacement at composition end; cancellation restores
 the original text. Automated Chromium composition coverage does not establish
 native OS IME compatibility across platforms.
 
+Enter expands a standalone `=rand()` or `=lorem()` paragraph through one `onedit`
+replacement, using `wordSampleTextEdit` from `@tumblerjs/word`. Optional arguments
+set paragraph and sentence counts, such as `=lorem(5,3)`. Both counts default to
+three. The replacement ends with an empty paragraph for continued typing;
+resolve its caret against the resulting paragraphs as for other multiline edits.
+Shift+Enter, typing and paste keep the command literal.
+
 In edit mode, `ondrawingchange` enables dragging, eight resize handles, and inline,
 in-front-of-text, or behind-text placement. Corners preserve proportions; edges
 resize one dimension. Dragging an inline drawing moves it within the text flow without changing its layout.
