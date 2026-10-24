@@ -119,3 +119,13 @@ test('line-number authoring accepts Word limits and rejects values beyond them',
   expect(isWordDocumentSettings({ finalSection: { lineNumbers: { countBy: 101, start: 1 } } })).toBe(false);
   expect(isWordDocumentSettings({ finalSection: { lineNumbers: { countBy: 1, start: 32769 } } })).toBe(false);
 });
+
+test('unnumbered content cannot consume a pending page restart', () => {
+  const native = new NativeWordDocument({ content: [
+    { kind: 'paragraph', runs: [{ text: 'One' }], section: { format: { lineNumbers: { countBy: 1, start: 1, restart: 'newPage' } } } },
+    { kind: 'paragraph', runs: [{ text: 'Unnumbered' }], section: { format: { breakType: 'nextPage', lineNumbers: null } } },
+    { kind: 'paragraph', runs: [{ text: 'Restart' }] },
+  ] });
+  native.updateSettings({ finalSection: { breakType: 'continuous', lineNumbers: { countBy: 1, start: 1, restart: 'newPage' } } });
+  expect(numbers(native.layout(measure))).toEqual([['1'], [undefined, '1']]);
+});

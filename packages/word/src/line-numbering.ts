@@ -39,7 +39,8 @@ export function numberWordLayout(layout: WordLayout, document: WordLayoutSource,
       counter = settings.start;
       started = true;
     }
-    previous = section; lastPage = page;
+    previous = section;
+    if (settings) lastPage = page;
     return settings;
   };
   const pages = layout.pages.map(page => ({ ...page, columns: page.columns.map(column => {
