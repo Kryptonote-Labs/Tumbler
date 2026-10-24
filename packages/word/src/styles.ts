@@ -70,6 +70,7 @@ export interface WordParagraphProperties {
   readonly keepNext?: boolean;
   readonly keepLines?: boolean;
   readonly pageBreakBefore?: boolean;
+  readonly suppressLineNumbers?: boolean;
   readonly widowControl?: boolean;
   readonly contextualSpacing?: boolean;
   readonly rightToLeft?: boolean;
@@ -110,6 +111,7 @@ export interface ComputedWordParagraphFormat {
   readonly keepNext: boolean;
   readonly keepLines: boolean;
   readonly pageBreakBefore: boolean;
+  readonly suppressLineNumbers: boolean;
   readonly widowControl: boolean;
   readonly contextualSpacing: boolean;
   readonly rightToLeft: boolean;
@@ -160,6 +162,7 @@ export const DEFAULT_PARAGRAPH: ComputedWordParagraphFormat = Object.freeze({
   keepNext: false,
   keepLines: false,
   pageBreakBefore: false,
+  suppressLineNumbers: false,
   widowControl: true,
   contextualSpacing: false,
   rightToLeft: false,
@@ -467,6 +470,7 @@ export function parseParagraphProperties(element: LosslessXmlElement, namespace:
     ...optionalOnOffChild(element, namespace, "keepNext", "keepNext"),
     ...optionalOnOffChild(element, namespace, "keepLines", "keepLines"),
     ...optionalOnOffChild(element, namespace, "pageBreakBefore", "pageBreakBefore"),
+    ...optionalOnOffChild(element, namespace, "suppressLineNumbers", "suppressLineNumbers"),
     ...optionalOnOffChild(element, namespace, "widowControl", "widowControl"),
     ...optionalOnOffChild(element, namespace, "contextualSpacing", "contextualSpacing"),
     ...optionalOnOffChild(element, namespace, "bidi", "rightToLeft"),
@@ -510,6 +514,7 @@ function computedParagraph(properties: WordParagraphProperties, styleId: string 
     keepNext: properties.keepNext ?? DEFAULT_PARAGRAPH.keepNext,
     keepLines: properties.keepLines ?? DEFAULT_PARAGRAPH.keepLines,
     pageBreakBefore: properties.pageBreakBefore ?? DEFAULT_PARAGRAPH.pageBreakBefore,
+    suppressLineNumbers: properties.suppressLineNumbers ?? DEFAULT_PARAGRAPH.suppressLineNumbers,
     widowControl: properties.widowControl ?? DEFAULT_PARAGRAPH.widowControl,
     contextualSpacing: properties.contextualSpacing ?? DEFAULT_PARAGRAPH.contextualSpacing,
     rightToLeft: properties.rightToLeft ?? DEFAULT_PARAGRAPH.rightToLeft,

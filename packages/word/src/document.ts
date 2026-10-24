@@ -237,6 +237,7 @@ export interface WordSectionProperties {
   readonly columnSpaceTwips: number;
   readonly columns?: readonly { readonly widthTwips: number; readonly spaceTwips: number }[] | undefined;
   readonly columnSeparator?: boolean;
+  readonly lineNumbers?: import('./line-numbering.ts').WordLineNumbering | undefined;
   readonly breakType: "continuous" | "nextPage" | "nextColumn" | "evenPage" | "oddPage";
   readonly titlePage: boolean;
   readonly headerReferences: readonly WordHeaderFooterReference[];
@@ -817,6 +818,8 @@ function parseSection(element: LosslessXmlElement | undefined, namespace: string
   const pageSize = element === undefined ? undefined : onlyChild(element, namespace, "pgSz", "Section properties must not repeat pgSz.");
   const pageMargins = element === undefined ? undefined : onlyChild(element, namespace, "pgMar", "Section properties must not repeat pgMar.");
   const columns = element === undefined ? undefined : onlyChild(element, namespace, "cols", "Section properties must not repeat cols.");
+  const lineNumber = element === undefined ? undefined : children(element, namespace, 'lnNumType')[0];
+  const countBy = lineNumber && attr(lineNumber, namespace, 'countBy');
   const width = twipsAttr(pageSize, namespace, "w", 12_240);
   const height = twipsAttr(pageSize, namespace, "h", 15_840);
   const rawOrientation = pageSize === undefined ? undefined : attr(pageSize, namespace, "orient");
@@ -845,6 +848,12 @@ function parseSection(element: LosslessXmlElement | undefined, namespace: string
     footerDistanceTwips: twipsAttr(pageMargins, namespace, "footer", 720),
     gutterTwips: twipsAttr(pageMargins, namespace, "gutter", 0),
     columnCount: integerAttr(columns, namespace, "num", 1, 1, 45),
+    ...(lineNumber && countBy !== undefined && Number(countBy) > 0 ? { lineNumbers: {
+      countBy: integerAttr(lineNumber, namespace, 'countBy', 1, 1, Number.MAX_SAFE_INTEGER),
+      start: integerAttr(lineNumber, namespace, 'start', 1, 0, Number.MAX_SAFE_INTEGER),
+      ...(attr(lineNumber, namespace, 'distance') === undefined ? {} : { distanceTwips: twipsAttr(lineNumber, namespace, 'distance', 360) }),
+      restart: attr(lineNumber, namespace, 'restart') === 'newSection' ? 'newSection' as const : attr(lineNumber, namespace, 'restart') === 'continuous' ? 'continuous' as const : 'newPage' as const,
+    } } : {}),
     columnSpaceTwips: twipsAttr(columns, namespace, "space", 720),
     ...(columns && ['0', 'false', 'off'].includes(attr(columns, namespace, 'equalWidth') ?? 'true') ? {
       columns: children(columns, namespace, 'col').map(col => ({ widthTwips: twipsAttr(col, namespace, 'w', 1440), spaceTwips: twipsAttr(col, namespace, 'space', 0) })),

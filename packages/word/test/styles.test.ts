@@ -52,6 +52,7 @@ describe("WordprocessingML style cascade", () => {
       keepNext: true,
       keepLines: false,
       pageBreakBefore: false,
+      suppressLineNumbers: false,
       widowControl: true,
       contextualSpacing: false,
       rightToLeft: false,

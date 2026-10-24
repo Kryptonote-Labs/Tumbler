@@ -57,7 +57,7 @@ export const paragraphFormat = z
     paragraph: z
       .custom<import('../paragraph-format.ts').WordParagraphFormat>(isWordParagraphFormat)
       .describe(
-        'Paragraph properties: spacingBeforeTwips, spacingAfterTwips (20 twips per point); lineSpacing {rule:auto|atLeast|exact,value} (auto uses 240 per line, others twips); keepNext, keepLines, pageBreakBefore, widowControl, contextualSpacing booleans; shading colour; borders.',
+        'Paragraph properties: spacingBeforeTwips, spacingAfterTwips (20 twips per point); lineSpacing {rule:auto|atLeast|exact,value} (auto uses 240 per line, others twips); keepNext, keepLines, pageBreakBefore, widowControl, contextualSpacing, suppressLineNumbers booleans; shading colour; borders.',
       )
       .nullable()
       .optional(),

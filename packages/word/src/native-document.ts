@@ -186,6 +186,7 @@ export class NativeWordDocument implements WordLayoutSource {
       this.exported = this.compiled.artifact;
     }
   }
+  get lineNumberFormat() { return this.namedStyles.resolveStyledRun('Normal', 'LineNumber'); }
   get themeColours() { return this.namedStyles.themeColors ?? this.options.themeColours ?? DEFAULT_WORD_THEME; }
   paragraphFormat(paragraph: WordParagraph) {
     return this.paragraphFormats.get(paragraph) ?? DEFAULT_PARAGRAPH;
@@ -765,7 +766,7 @@ export class NativeWordDocument implements WordLayoutSource {
 function resetDirectParagraphFormat(format: ComputedWordParagraphFormat, inherited: ComputedWordParagraphFormat): ComputedWordParagraphFormat {
   const {
     spacingBeforeTwips, spacingAfterTwips, lineSpacing, keepNext, keepLines,
-    pageBreakBefore, widowControl, contextualSpacing, shading, shadingColour,
+    pageBreakBefore, suppressLineNumbers, widowControl, contextualSpacing, shading, shadingColour,
     borders, borderColours, ...retained
   } = format;
   return { ...inherited, ...retained };

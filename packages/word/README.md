@@ -1054,3 +1054,18 @@ Yjs updates alone does not perform document validation. Documents without layout
 edits retain their existing text-validation cost.
 
 Removing a section break preserves effective inherited header/footer references on the surviving section. Section format `headerReferences` and `footerReferences` can reuse existing source relationships; unknown or mismatched relationships are rejected.
+### Line numbering
+
+Section format `lineNumbers: { countBy, start, restart, distanceTwips? }` enables
+line numbers. Restart modes are `newPage`, `newSection` and `continuous`.
+`lineNumbers: null` disables numbering. The same `section-layout` operation edits
+these values for people and agents, with document undo and DOCX export.
+
+Paragraph `suppressLineNumbers: true` removes its lines from the count, including
+when inherited from a style. Tables count once; their cell contents, auxiliary
+stories and text-box contents do not receive line numbers. Number markers follow
+the `LineNumber` character style and use the same positions in native, package,
+canvas and Svelte layouts. Numbers remain outside editable document text.
+
+The markup follows ECMA-376 Part 1 §17.6.8 and §17.3.1.35. Table counting follows
+[Microsoft Word's documented behaviour](https://support.microsoft.com/en-us/word/add-or-remove-line-numbers).

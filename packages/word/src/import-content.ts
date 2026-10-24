@@ -60,12 +60,12 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
           }
         : undefined;
     const { styleId, alignment, tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips } = document.styles.paragraphFormat(document, block);
-    const { spacingBeforeTwips, spacingAfterTwips, lineSpacing, keepNext, keepLines, pageBreakBefore, widowControl, contextualSpacing, shading, borders } = document.styles.paragraphFormat(document, block);
+    const { spacingBeforeTwips, spacingAfterTwips, lineSpacing, keepNext, keepLines, pageBreakBefore, suppressLineNumbers, widowControl, contextualSpacing, shading, borders } = document.styles.paragraphFormat(document, block);
     return {
       kind: 'paragraph',
           ...(block.section ? { section: { source: block.section.elementId, format: {} } } : {}),
       ...(styleId === undefined ? {} : { styleId }),
-      paragraph: { spacingBeforeTwips, spacingAfterTwips, lineSpacing, keepNext, keepLines, pageBreakBefore, widowControl, contextualSpacing, ...(shading === undefined ? {} : { shading: document.styles.paragraphFormat(document, block).shadingColour ?? shading }), ...(borders === undefined ? {} : { borders: document.styles.paragraphFormat(document, block).borderColours ?? borders }) },
+      paragraph: { spacingBeforeTwips, spacingAfterTwips, lineSpacing, keepNext, keepLines, pageBreakBefore, suppressLineNumbers, widowControl, contextualSpacing, ...(shading === undefined ? {} : { shading: document.styles.paragraphFormat(document, block).shadingColour ?? shading }), ...(borders === undefined ? {} : { borders: document.styles.paragraphFormat(document, block).borderColours ?? borders }) },
       ...(tabs.length || indentStartTwips || indentEndTwips || firstLineTwips || hangingTwips
         ? { positioning: { tabs, indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips } } : {}),
       id: `source-${block.elementId}`,
