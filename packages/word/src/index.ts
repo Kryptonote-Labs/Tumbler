@@ -193,3 +193,5 @@ export { wordSectionBaseline, type WordSectionBaseline } from './section-baselin
 export { wordLineNumberingSchema, type WordLineNumbering } from './line-numbering.ts';
 
 export { readWordEmbeddedFonts, type WordEmbeddedFont } from './embedded-fonts.ts';
+
+export { wordFontKerning } from './font-kerning.ts';

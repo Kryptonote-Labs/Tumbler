@@ -1,3 +1,4 @@
+import { wordFontKerning } from './font-kerning.ts';
 import { reflowPreparedTable } from './table-reflow.ts';
 import { numberWordLayout } from './line-numbering.ts';
 import { balanceWordColumns, type WordColumnLimits } from './column-balance.ts';
@@ -313,6 +314,8 @@ interface AtomBase {
 }
 
 interface GlyphAtom extends AtomBase {
+  /** Advance with no preceding glyph, used when a kerned pair crosses a line boundary. */
+  readonly lineStartWidth?: number;
   readonly field?: WordPageField;
   readonly kind: "glyph";
   readonly text: string;
@@ -1125,7 +1128,9 @@ function* resolvedParagraphAtoms(
       const value = validMeasurement(measurer.measure(text, format));
       return { ...value, ascent: value.ascent - baselineShift, descent: value.descent + baselineShift };
     };
+    let previousGlyph: { text: string; width: number } | undefined;
     for (const content of run.contents) {
+      if (content.kind !== 'text') previousGlyph = undefined;
       if (content.kind !== 'text') consumePreparation(preparation, 'characters');
       if (!visible(content)) continue;
       if (content.kind !== 'text') consumePreparation(preparation, 'atoms');
@@ -1147,6 +1152,9 @@ function* resolvedParagraphAtoms(
         for (const grapheme of graphemes(content.value, preparation)) {
           consumePreparation(preparation, 'atoms');
           const measurement = measure(grapheme);
+          const kerned = previousGlyph && wordFontKerning(format) === 'normal'
+            ? Math.max(0, measure(previousGlyph.text + grapheme).width - previousGlyph.width) : measurement.width;
+          previousGlyph = { text: grapheme, width: measurement.width };
           const startOffset = logicalOffset;
           logicalOffset += grapheme.length;
           yield Object.freeze({
@@ -1154,7 +1162,8 @@ function* resolvedParagraphAtoms(
             runElementId: run.elementId,
             contentElementId: content.elementId,
             text: grapheme,
-            width: measurement.width,
+            width: kerned,
+            ...(kerned === measurement.width ? {} : { lineStartWidth: measurement.width }),
             ascent: measurement.ascent,
             descent: measurement.descent,
             baselineShift,
@@ -1303,6 +1312,8 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
     let materialized = atom.kind === "tab" ? Object.freeze({ ...atom, width: atomWidth }) : atom;
     // ISO/IEC 29500 wrapTrailSpaces: ordinary trailing spaces hang by default.
     // Keep their logical offsets; push() removes only their painted advance.
+    if (materialized.kind === 'glyph' && line.length === 0 && materialized.lineStartWidth !== undefined)
+      materialized = { ...materialized, width: materialized.lineStartWidth };
     const hangingSpace = !wrapTrailSpaces && materialized.kind === "glyph" && materialized.text === " ";
     if (!hangingSpace && line.length > 0 && lineWidth + atomWidthValue(materialized) > Math.max(1, width - (lineCount === 0 ? points(format.firstLineTwips - format.hangingTwips) : 0))) {
       if (lastBreak >= 0) {
@@ -1310,10 +1321,14 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);
         yield push(undefined, true);
         line = carry;
+        const first = line[0];
+        if (first?.kind === 'glyph' && first.lineStartWidth !== undefined) line[0] = { ...first, width: first.lineStartWidth };
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);
       } else yield push(undefined, true);
       if (atom.kind === "tab") materialized = Object.freeze({ ...atom, width: Math.max(0, tabAdvance(atom, following, lineWidth, width, format, lineCount === 0)) });
     }
+    if (materialized.kind === 'glyph' && line.length === 0 && materialized.lineStartWidth !== undefined)
+      materialized = { ...materialized, width: materialized.lineStartWidth };
     line.push(materialized);
     lineWidth += atomWidthValue(materialized);
     if (materialized.kind === "glyph" && materialized.breakAfter) lastBreak = line.length - 1;
@@ -1383,9 +1398,9 @@ function placeLine(
         runElementId: atom.runElementId,
         contentElementId: atom.contentElementId,
         text: atom.kind === "glyph" || atom.kind === "note" ? atom.text : atom.kind === "tab" ? "\t" : "\uFFFC",
-        x: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? (atom.drawing.anchor?.horizontalRelativeTo === "page" ? 0 : column.x) + (atom.drawing.anchor?.horizontalOffsetPoints ?? cursorX - column.x) : cursorX,
+        x: atom.kind === 'glyph' && atom.lineStartWidth !== undefined ? cursorX + atom.width - atom.lineStartWidth : atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? (atom.drawing.anchor?.horizontalRelativeTo === "page" ? 0 : column.x) + (atom.drawing.anchor?.horizontalOffsetPoints ?? cursorX - column.x) : cursorX,
         y: atom.kind === "drawing" && atom.drawing?.placement === "anchor" ? (atom.drawing.anchor?.verticalRelativeTo === "page" ? 0 : atom.drawing.anchor?.verticalRelativeTo === "paragraph" ? column.lines.find(item => item.paragraphElementId === paragraph.elementId)?.y ?? y : y) + (atom.drawing.anchor?.verticalOffsetPoints ?? 0) : y + line.ascent - ascent,
-        width: atom.kind === "drawing" ? atom.width : atomWidth,
+        width: atom.kind === "drawing" ? atom.width : atom.kind === 'glyph' && atom.lineStartWidth !== undefined ? atom.lineStartWidth : atomWidth,
         height: atom.kind === "drawing" ? atom.drawing?.heightPoints ?? ascent + descent : ascent + descent,
         baseline: y + line.ascent + (atom.baselineShift ?? 0),
         startOffset: atom.startOffset,

@@ -1,3 +1,4 @@
+import { wordFontKerning } from './font-kerning.ts';
 import { wordColumnSeparators } from './section-columns.ts';
 import { paintWordPicture } from './picture-paint.ts';
 import { paintWordInk, type WordInkViewport, type WordInkPixelContext } from './ink-canvas.ts';
@@ -309,6 +310,7 @@ function paintText<Image, Path>(context: WordCanvasContext<Image, Path>, item: W
   if (text.trim() === "" && !("wordSpacing" in item)) return;
   // The context is already scaled to points, so the font is sized in points.
   context.font = wordCanvasFont(format, 1);
+  context.fontKerning = wordFontKerning(format);
   context.direction = format.rightToLeft ? "rtl" : "ltr";
   context.letterSpacing = `${format.characterSpacingPoints ?? 0}px`;
   context.fillStyle = format.color;

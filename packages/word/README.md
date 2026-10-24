@@ -1083,3 +1083,8 @@ changing the package. These bytes are for rendering their owning document.
 
 Browser hosts can pass this array to `loadEmbeddedFonts` from `@tumblerjs/svelte`,
 then use its family resolver for both text measurement and rendering.
+
+Imported `w:kern` thresholds are inherited through run styles. Kerning applies at
+or above that point size, with zero disabling it. Canvas measurement, painting and
+Svelte text CSS use the same rule. Layout retains pair advances while wrapping
+and discards the preceding line's pair adjustment at a new line.

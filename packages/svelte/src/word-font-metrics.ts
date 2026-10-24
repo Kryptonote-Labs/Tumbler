@@ -1,5 +1,5 @@
 import { wordDisplayColour } from './word-display-colour.ts';
-import { canvasWordTextMeasurer, wordFontFamily, wordHighlightColor, wordPointsToCssPixels, type ComputedWordTextFormat, type WordCanvasTextContext, type WordTextMeasurer, type WordLayoutFragment } from "@tumblerjs/word";
+import { canvasWordTextMeasurer, wordFontKerning, wordFontFamily, wordHighlightColor, wordPointsToCssPixels, type ComputedWordTextFormat, type WordCanvasTextContext, type WordTextMeasurer, type WordLayoutFragment } from "@tumblerjs/word";
 import { browserWordLineMetrics } from './word-line-metrics.ts';
 import { browserWordBaselineOffset } from './word-baseline.ts';
 
@@ -19,8 +19,8 @@ export function wordTextCss(format: ComputedWordTextFormat, background = '#fffff
     `font-size:${wordPointsToCssPixels(format.fontSizePoints)}px`,
     `font-weight:${format.bold ? 700 : 400}`,
     `font-style:${format.italic ? "italic" : "normal"}`,
-    // Word defaults to unkerned text; inherited browser typography must not change advances.
-    "font-kerning:none",
+    // Kerning is inherited from the document, not the surrounding application.
+    `font-kerning:${wordFontKerning(format)}`,
     `text-decoration-line:${decoration}`,
     `text-decoration-style:${format.underline === "double" ? "double" : "solid"}`,
     `letter-spacing:${wordPointsToCssPixels(format.characterSpacingPoints ?? 0)}px`,
