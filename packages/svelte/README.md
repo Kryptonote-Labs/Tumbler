@@ -197,4 +197,5 @@ these backgrounds for body, header, footer, and note content.
 `WordPageLayoutDecorations` accepts a `fontFamily` resolver for hosts with a custom
 font fallback stack. Pass the same resolver used to measure and render body text
 so line-number advances and baselines agree with the host's layout. The default
-uses Tumbler's standard Word font stack.
+uses Tumbler's standard Word font stack. Numbers anchor their right edge at the
+layout's number gutter, so browser advance rounding does not shift individual labels.

@@ -18,6 +18,6 @@
   {#if line.lineNumber}
     {@const number = line.lineNumber}
     {@const family = fontFamily(number.format.fontFamily)}
-    <span aria-hidden="true" contenteditable="false" style={`position:absolute;pointer-events:none;user-select:none;${wordTextCss(number.format, background)};font-family:${family};left:${wordPointsToCssPixels(number.x)}px;top:${wordPointsToCssPixels(wordTextTop(number, family))}px;line-height:${wordPointsToCssPixels(number.height)}px`}>{number.text}</span>
+    <span aria-hidden="true" contenteditable="false" style={`position:absolute;pointer-events:none;user-select:none;${wordTextCss(number.format, background)};font-family:${family};left:${wordPointsToCssPixels(number.x + number.width)}px;transform:translateX(-100%);white-space:pre;top:${wordPointsToCssPixels(wordTextTop(number, family))}px;line-height:${wordPointsToCssPixels(number.height)}px`}>{number.text}</span>
   {/if}
 {/each}
