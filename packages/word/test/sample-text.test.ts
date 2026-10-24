@@ -37,8 +37,25 @@ describe('Word sample text', () => {
     ]) expect(wordSampleText(command)).toBeUndefined();
   });
 
-  test('does not impose a paragraph count cap', () => {
-    expect(wordSampleText('=lorem(1001,1)')!.split('\n')).toHaveLength(1001);
+  test('large expansions export completely and undo in one step', () => {
+    const command = '=lorem(1001,12)';
+    const source = createWordArtifact({ paragraphs: [{ runs: [{ text: command }] }] });
+    const session = openWordEditingSession(source.bytes());
+    const paragraph = session.artifact.document.blocks[0] as WordParagraph;
+    const position = { paragraphElementId: paragraph.elementId, offset: command.length };
+    const edit = wordSampleTextEdit(session.artifact.document, { anchor: position, focus: position })!;
+    expect(edit.value.length).toBeGreaterThan(1_000_000);
+    session.replaceText(edit.selection, edit.value);
+    const saved = openWordArtifact(session.artifact.bytes());
+    const blocks = importWordContent(saved);
+    expect(blocks).toHaveLength(1002);
+    expect(blocks.map(block => block.kind === 'paragraph' ? block.runs.map(run => run.text).join('') : '').join('\n'))
+      .toBe(edit.value);
+    session.undo();
+    expect(session.artifact.bytes()).toEqual(source.bytes());
+    expect(session.canUndo).toBe(false);
+    session.redo();
+    expect(session.artifact.bytes()).toEqual(saved.bytes());
   });
 
   test('expansion is one formatted, exportable edit with undo and redo', () => {
