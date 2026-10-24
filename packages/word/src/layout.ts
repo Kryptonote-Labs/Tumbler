@@ -316,6 +316,7 @@ interface AtomBase {
 interface GlyphAtom extends AtomBase {
   /** Advance with no preceding glyph, used when a kerned pair crosses a line boundary. */
   readonly lineStartWidth?: number;
+  readonly shaping?: { readonly key: string; readonly measure: (text: string) => WordTextMeasurement };
   readonly field?: WordPageField;
   readonly kind: "glyph";
   readonly text: string;
@@ -1128,9 +1129,8 @@ function* resolvedParagraphAtoms(
       const value = validMeasurement(measurer.measure(text, format));
       return { ...value, ascent: value.ascent - baselineShift, descent: value.descent + baselineShift };
     };
-    let previousGlyph: { text: string; width: number } | undefined;
+    const shaping = wordFontKerning(format) === 'normal' ? { key: JSON.stringify([format.fontFamily, format.fontSizePoints, format.bold, format.italic, format.rightToLeft, format.characterSpacingPoints, baselineShift]), measure } : undefined;
     for (const content of run.contents) {
-      if (content.kind !== 'text') previousGlyph = undefined;
       if (content.kind !== 'text') consumePreparation(preparation, 'characters');
       if (!visible(content)) continue;
       if (content.kind !== 'text') consumePreparation(preparation, 'atoms');
@@ -1152,9 +1152,6 @@ function* resolvedParagraphAtoms(
         for (const grapheme of graphemes(content.value, preparation)) {
           consumePreparation(preparation, 'atoms');
           const measurement = measure(grapheme);
-          const kerned = previousGlyph && wordFontKerning(format) === 'normal'
-            ? Math.max(0, measure(previousGlyph.text + grapheme).width - previousGlyph.width) : measurement.width;
-          previousGlyph = { text: grapheme, width: measurement.width };
           const startOffset = logicalOffset;
           logicalOffset += grapheme.length;
           yield Object.freeze({
@@ -1162,8 +1159,8 @@ function* resolvedParagraphAtoms(
             runElementId: run.elementId,
             contentElementId: content.elementId,
             text: grapheme,
-            width: kerned,
-            ...(kerned === measurement.width ? {} : { lineStartWidth: measurement.width }),
+            width: measurement.width,
+            ...(shaping ? { shaping } : {}),
             ascent: measurement.ascent,
             descent: measurement.descent,
             baselineShift,
@@ -1309,11 +1306,10 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
       atomWidth = tabAdvance(atom, following, 0, width, format, false);
     }
     atomWidth = Math.max(0, atomWidth);
-    let materialized = atom.kind === "tab" ? Object.freeze({ ...atom, width: atomWidth }) : atom;
+    let materialized: Exclude<ParagraphAtom, BreakAtom> = atom.kind === "tab" ? Object.freeze({ ...atom, width: atomWidth }) : atom;
     // ISO/IEC 29500 wrapTrailSpaces: ordinary trailing spaces hang by default.
     // Keep their logical offsets; push() removes only their painted advance.
-    if (materialized.kind === 'glyph' && line.length === 0 && materialized.lineStartWidth !== undefined)
-      materialized = { ...materialized, width: materialized.lineStartWidth };
+    materialized = shapeLineAdvance(materialized, line);
     const hangingSpace = !wrapTrailSpaces && materialized.kind === "glyph" && materialized.text === " ";
     if (!hangingSpace && line.length > 0 && lineWidth + atomWidthValue(materialized) > Math.max(1, width - (lineCount === 0 ? points(format.firstLineTwips - format.hangingTwips) : 0))) {
       if (lastBreak >= 0) {
@@ -1321,20 +1317,34 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);
         yield push(undefined, true);
         line = carry;
-        const first = line[0];
-        if (first?.kind === 'glyph' && first.lineStartWidth !== undefined) line[0] = { ...first, width: first.lineStartWidth };
+        for (let index = 0; index < line.length; index++) line[index] = shapeLineAdvance(line[index]!, line.slice(0, index));
         lineWidth = line.reduce((sum, item) => sum + atomWidthValue(item), 0);
       } else yield push(undefined, true);
       if (atom.kind === "tab") materialized = Object.freeze({ ...atom, width: Math.max(0, tabAdvance(atom, following, lineWidth, width, format, lineCount === 0)) });
+      materialized = shapeLineAdvance(materialized, line);
     }
-    if (materialized.kind === 'glyph' && line.length === 0 && materialized.lineStartWidth !== undefined)
-      materialized = { ...materialized, width: materialized.lineStartWidth };
     line.push(materialized);
     lineWidth += atomWidthValue(materialized);
     if (materialized.kind === "glyph" && materialized.breakAfter) lastBreak = line.length - 1;
   }
   if (line.length > 0 || lineCount === 0 || terminalLineBreak) yield push();
 
+}
+
+/** Shape the contiguous font span on this line as one prefix. Independent pairs
+ * cannot represent overlapping ligatures; reset the prefix when wrapping. */
+function shapeLineAdvance(atom: Exclude<ParagraphAtom, BreakAtom>, line: readonly Exclude<ParagraphAtom, BreakAtom>[]): Exclude<ParagraphAtom, BreakAtom> {
+  if (atom.kind !== 'glyph' || !atom.shaping) return atom;
+  let prefix = '', advance = 0;
+  for (let index = line.length - 1; index >= 0; index--) {
+    const previous = line[index]!;
+    if (previous.kind !== 'glyph' || previous.shaping?.key !== atom.shaping.key) break;
+    prefix = previous.text + prefix;
+    advance += previous.width;
+  }
+  const standalone = atom.lineStartWidth ?? atom.width;
+  const width = prefix ? Math.max(0, atom.shaping.measure(prefix + atom.text).width - advance) : standalone;
+  return { ...atom, width, lineStartWidth: standalone };
 }
 
 function placeLine(

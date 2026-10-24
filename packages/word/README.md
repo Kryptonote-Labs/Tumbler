@@ -1086,5 +1086,5 @@ then use its family resolver for both text measurement and rendering.
 
 Imported `w:kern` thresholds are inherited through run styles. Kerning applies at
 or above that point size, with zero disabling it. Canvas measurement, painting and
-Svelte text CSS use the same rule. Layout retains pair advances while wrapping
-and discards the preceding line's pair adjustment at a new line.
+Svelte text CSS use the same rule. Layout measures compatible text as a consistent shaped prefix on each line,
+including ligatures, and reshapes carried text at a new line.
