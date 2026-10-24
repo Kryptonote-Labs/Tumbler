@@ -1,3 +1,4 @@
+import { refreshUnchangedNumbering } from './content-numbering.ts';
 import { beginPackageTransaction } from '@tumblerjs/opc';
 import { openWordArtifact, type WordArtifact } from './artifact.ts';
 import { prepareWordContent, reconcileWordContent } from './content-export.ts';
@@ -9,16 +10,17 @@ import { storyMainArtifact, wordStoryArtifact } from './stories.ts';
 export function reconcileWordStories(
   source: WordArtifact,
   updates: readonly { partName: string; blocks: readonly WordContentBlock[] }[],
+  originalSource = source,
 ): WordArtifact {
   if (!updates.length) return source;
   const transaction = beginPackageTransaction(source.document.package);
   const seen = new Set<string>();
   for (const update of updates) {
-    if (seen.has(update.partName) || !prepareWordContent(wordStoryArtifact(source, update.partName), update.blocks, transaction)) {
+    if (seen.has(update.partName) || !prepareWordContent(wordStoryArtifact(source, update.partName), refreshUnchangedNumbering(wordStoryArtifact(originalSource, update.partName), wordStoryArtifact(source, update.partName), update.blocks), transaction)) {
       // Discard all staged changes; every edit below sees its predecessor's resources.
       transaction.rollback();
       return updates.reduce((current, next) => storyMainArtifact(reconcileWordContent(
-        wordStoryArtifact(current, next.partName), next.blocks,
+        wordStoryArtifact(current, next.partName), refreshUnchangedNumbering(wordStoryArtifact(originalSource, next.partName), wordStoryArtifact(current, next.partName), next.blocks),
       )), source);
     }
     seen.add(update.partName);
@@ -41,7 +43,7 @@ export function reconcileWordContentAndStories(
   const transaction = beginPackageTransaction(source.document.package);
   const fallback = () => {
     transaction.rollback();
-    return reconcileWordStories(reconcileWordContent(source, blocks), updates);
+    return reconcileWordStories(reconcileWordContent(source, blocks), updates, source);
   };
   if (!prepareWordContent(source, blocks, transaction, 'body')) return fallback();
   const seen = new Set<string>([source.document.part.name.value]);
@@ -64,16 +66,12 @@ export function reconcileWordContentAndStories(
 function hasUnresolvedNumbering(artifact: WordArtifact): boolean {
   const document = artifact.document;
   const numbering = document.numbering;
-  const instances = new Map(numbering.instances.map(item => [item.id, item]));
-  const abstracts = new Map(numbering.abstracts.map(item => [item.id, item]));
   const visit = (blocks: readonly WordBlock[]): boolean => blocks.some(block => {
     if (block.kind === 'table') return block.rows.some(row => row.cells.some(cell => visit(cell.blocks)));
     if (block.kind !== 'paragraph') return false;
     const reference = numbering.paragraphReference(document, block);
     if (!reference) return false;
-    const instance = instances.get(reference.numId);
-    const definition = instance && abstracts.get(instance.abstractId);
-    return !instance || !definition || !(instance.levelOverrides.get(reference.level) ?? definition.levels.find(level => level.level === reference.level));
+    return numbering.level(reference) === undefined;
   });
   return visit(document.blocks);
 }

@@ -46,6 +46,12 @@ jobs:
       - name: Generate fixtures
         run: bun run compatibility:fixtures -- "$RUNNER_TEMP/tumbler-fixtures"
 
+      - name: Check Strict theme validation translation
+        run: |
+          bunx tsc --noEmit -p tools/openxml-validator/tsconfig.json
+          dotnet build tools/openxml-validator/OpenXmlValidator.csproj -o "$RUNNER_TEMP/strict-theme-validator" --nologo
+          bun tools/openxml-validator/test-strict-theme.ts "$RUNNER_TEMP/strict-theme-validator/OpenXmlValidator.dll" "$RUNNER_TEMP/strict-theme-fixtures"
+
       - name: Generate presentation fixtures
         run: bun run compatibility:presentations -- "$RUNNER_TEMP/tumbler-presentations" --with-edits
 
@@ -65,7 +71,8 @@ jobs:
           fi
 
   libreoffice:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Check out source
         uses: actions/checkout@v5
@@ -79,7 +86,15 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Install LibreOffice Calc
+        timeout-minutes: 8
         run: |
+          # Use the bounded download setup already used by Word qualification.
+          printf '%s\n' 'https://archive.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt
+          sudo tee /etc/apt/apt.conf.d/80-tumbler-compatibility > /dev/null <<'EOF'
+          Acquire::Retries "2";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          EOF
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends libreoffice-calc python3-uno
 

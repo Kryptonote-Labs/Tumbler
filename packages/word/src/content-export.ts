@@ -1,3 +1,4 @@
+import { strictThemeMarkup } from './strict-resources.ts';
 import { chartTitleFromWord } from './chart-title.ts';
 import { updateChartTitle } from '@tumblerjs/charts';
 import { mergeAuthoredStyles, missingAuthoredStyles } from './package-styles.ts';
@@ -9,7 +10,7 @@ import { openWordArtifact, type WordArtifact } from './artifact.ts';
 import { createWordArtifact, type WordTextParagraph } from './create.ts';
 import type { WordContentBlock } from './create-content.ts';
 import { importWordContent } from './import-content.ts';
-import { mergeContentNumbering } from './package-numbering.ts';
+import { contentNumberingList, mergeContentNumbering } from './package-numbering.ts';
 import { PackageXml } from './package-xml.ts';
 import { wordParagraphRenderer } from './package-paragraphs.ts';
 import { contentCopyScopes } from './package-copies.ts';
@@ -135,6 +136,7 @@ export function prepareWordContent(
   const document = source.document;
   const markup = new PackageXml(document);
   const originals = wordContentParagraphs(importWordContent(source));
+  const originalRuns = new Map(originals.flatMap(p => p.runs.map(run => [run.source!, run] as const)));
   const originalParagraphs = new Map(originals.map((p) => [p.source!, p]));
   const paragraphs = wordContentParagraphs(blocks);
   const copies = contentCopyScopes(blocks, markup);
@@ -155,7 +157,8 @@ export function prepareWordContent(
   const generated = createWordArtifact({
     paragraphs: paragraphs.map((p) => ({
       runs: p.runs.map((run) => ({
-        text: run.text.replaceAll('\u2028', ''),
+        // This package supplies resources only. Source text leaves are rendered below.
+        text: (originalRuns.get(run.source!)?.text === run.text ? run.text.replace(/[\r\n]/g, '') : run.text).replaceAll('\u2028', ''),
         ...(run.shape ? { shape: run.shape } : {}),
         ...(run.ink ? { ink: { ...run.ink, ...run.drawing } } : {}),
         ...(run.link === undefined ? {} : { link: run.link }),
@@ -165,7 +168,7 @@ export function prepareWordContent(
       })),
       ...(p.list &&
       JSON.stringify(p.list) !== JSON.stringify(originalParagraphs.get(p.source!)?.list)
-        ? { list: p.list }
+        ? { list: contentNumberingList(document, p.list) }
         : {}),
     })),
   });
@@ -195,14 +198,16 @@ export function prepareWordContent(
     transaction.replacePart(drawing.partName, updateChartTitle(document.package.readPart(part), run.chartTitleText ? chartTitleFromWord(run.chartTitleText) : run.chartTitle!));
   }
   mergeAuthoredStyles(document, paragraphs.flatMap(p => p.styleId ? [p.styleId] : []), transaction);
+  const sharedOwner = document.package.mainOfficeDocumentPart().name;
   let prefix = 'tumbler-content-';
   let existingIds = new Set<string>();
-  try {
-    existingIds = new Set(
-      document.package.relationships(document.part.name).items.map((rel) => rel.id),
-    );
-  } catch (error) {
-    if (!(error instanceof RelationshipsError) || error.code !== 'missing_item') throw error;
+  // Generated IDs must be free in both the story and shared resource owner.
+  for (const owner of new Set([document.part.name.value, sharedOwner.value])) {
+    try {
+      for (const rel of document.package.relationships(PartName.parse(owner)).items) existingIds.add(rel.id);
+    } catch (error) {
+      if (!(error instanceof RelationshipsError) || error.code !== 'missing_item') throw error;
+    }
   }
   while (
     relationships.some((rel) => existingIds.has(prefix + rel.id)) ||
@@ -262,8 +267,13 @@ export function prepareWordContent(
       // Numbering is a singleton. Merge definitions with disjoint numeric IDs into the original part.
       continue;
     }
-    transaction.addPart(name, part.contentType, generated.document.package.readPart(part));
-    transaction.addRelationship(document.part.name, {
+    const isTheme = /\/theme$/.test(rel.type);
+    const bytes = generated.document.package.readPart(part);
+    transaction.addPart(name, part.contentType, isTheme && document.conformance === 'strict'
+      ? new TextEncoder().encode(strictThemeMarkup(conformanceMarkup(new TextDecoder().decode(bytes))))
+      : bytes);
+    // Themes and styles are shared; images and custom XML stay with this story.
+    transaction.addRelationship(isTheme ? sharedOwner : document.part.name, {
       id: prefix + rel.id,
       type: conformanceMarkup(rel.type),
       target: name,
@@ -274,6 +284,7 @@ export function prepareWordContent(
     generated.document,
     transaction,
     prefix,
+    paragraphs,
   );
   const renderParagraph = wordParagraphRenderer(
     markup,

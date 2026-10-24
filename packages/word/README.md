@@ -29,6 +29,12 @@ const bytes = artifact.bytes();
 
 Creation defaults to A4 with one-inch margins and modern Word compatibility.
 
+Adding lists or tables to an imported Strict document emits Strict numbering,
+theme and table vocabulary. Table widths and cell margins use physical units and
+reopen as integer twips in the model. Existing resource parts are preserved when
+content edits do not change them. This bounded conversion does not validate an
+entire package or establish desktop Office interoperability.
+
 Line layout lets ordinary trailing spaces extend past the margin without moving
 a fitting word or adding space-only lines. Their logical offsets are retained
 even though they have no painted width. The document compatibility setting
@@ -103,6 +109,20 @@ session.markSaved();
 const output = session.artifact.bytes();
 ```
 
+Session subscribers receive immutable change snapshots in revision order. Reentrant
+edits, undo, redo, saves, and external revisions commit immediately, but their
+notifications wait until the current event reaches all its subscribers. Read
+`change.artifact` and `change.dirty` for that revision; the live session may already
+contain a later revision. Subscribing or unsubscribing affects events committed
+after that subscription change, not events already queued.
+
+Subscriber exceptions do not reject committed operations or stop other subscribers.
+Pass `onListenerError(error, change)` in session options to report them. By default,
+the session calls `console.error`. If a custom reporter throws, the session logs
+both errors and continues delivery. A throwing console is ignored. Reporters run
+synchronously and may also cause queued notifications. Callbacks must eventually
+stop making edits so the synchronous notification queue can finish draining.
+
 Word 2010 ink uses `@tumblerjs/ink` to expose decoded traces, recognition and
 diagnostics on `drawing.ink`. Native InkML is authoritative: the reader generates
 SVG for destination-independent pens, even when a cached VML bitmap exists.
@@ -157,6 +177,18 @@ scales the measured font line box; exact and at-least spacing use the authored
 point height. Browser measurers should include the font's line gap and avoid
 rounding vertical metrics at each text size, since small errors accumulate across pages.
 
+Body pagination keeps `keepNext` chains together independently of `keepLines`.
+Chains taller than a column start fresh once, then flow normally. Widow control is
+on by default and keeps the first and last pairs together when a column can hold
+them. Explicit page and column breaks take precedence. `nextColumn` sections reuse
+an available column when page and column geometry match.
+
+Body, table cells, and auxiliary stories share adjacent paragraph spacing. The gap
+uses the maximum of the previous after-spacing and current before-spacing.
+For matching computed paragraph styles, each `contextualSpacing` contribution is
+subtracted from that maximum, down to zero. These gaps also determine pagination
+and table heights; prepared source formats remain unchanged.
+
 See the repository's
 [WordprocessingML implementation status](../../docs/wordprocessingml-implementation.md)
 for the exact capability matrix and known limitations.
@@ -168,6 +200,45 @@ MIT licensed. See [LICENSE](LICENSE).
 `createWordArtifact({ blocks })` accepts paragraph, table and image blocks. A paragraph has
 formatted `runs`, optional alignment and optional `list: { id, kind, level, start }` metadata.
 Reuse a list ID to continue numbering; use a new ID to restart it. Levels range from zero to eight.
+Imported `source-list-N` identities bind to the package's existing numbering instance.
+Reusing one in appended or moved paragraphs continues that instance in native preview
+and export, including its level patterns and start overrides. Use a new identity to
+start an independently defined list. Imported identities must retain their source
+level definitions. Incompatible kind/start/marker metadata or an undefined source
+level throws `TypeError` in preview and export instead of silently dropping the edit.
+Compatible imported definitions, including empty bullet markers, remain valid when
+appending items. Newly authored bullet markers must still be nonempty.
+
+Imported numbering resolves paragraph-style `numPr` through `basedOn`, including the
+default paragraph style. Level `pStyle` selects the inherited level; direct `ilvl`
+overrides it, and `numId=0` cancels numbering. Numbering-style `numStyleLink` references
+resolve before instance overrides; numbering styles ignore `basedOn`. Native style
+edits and new styled paragraphs resolve numbering against their current style while
+retaining direct numbering and cancellation. Native updates also include the missing
+built-in styles that export will add; opening an untouched source keeps its imported styles. Missing links have no marker; cycles throw
+`invalid_document`, and style/link chains over 100 entries throw `limit_exceeded`.
+`lvlRestart=0` never restarts. Other valid triggers restart at that level or an earlier
+level, with the preceding level as the default. An omitted imported `start` is zero;
+newly authored lists still explicitly start at one. Package, native, and edit/export
+paths share these definitions and preserve existing numbering-part bytes.
+
+Numbering resolution counts derived marker text and suffixes in UTF-16 units.
+`numbering.markers(document, { maxCharacters })` and
+`numbering.markersFor(references, { maxCharacters })` default to a cumulative
+1,000,000-character budget per call. They throw `WordError` with code
+`limit_exceeded` before expanding text beyond the budget. Raise the budget explicitly
+for trusted documents that need larger output. `NativeWordOptions.maxMarkerCharacters`
+sets the cumulative update budget for both authored and imported markers.
+`WordLayoutOptions.maxMarkerCharacters` sets the body-and-story layout budget;
+native layout defaults to its constructor setting. Cached markers still count when
+a later request lowers the budget. Replaced headers and footers contribute only
+their current marker text; discarded original markers are not resolved or charged.
+This is a processing budget, separate
+from `openWordDocument`'s input-text limit; it does not restrict authored start values.
+Roman formatting checks the expanded length before allocating repeated symbols.
+Values above 3,999 retain the existing repeated-`M` representation when the budget
+permits them. No decimal fallback or claimed Word numeral-domain cutoff is applied.
+
 Tables have rectangular `rows` of cells, each containing `blocks`, and optional column widths in
 points. Image blocks contain PNG or JPEG bytes, dimensions in points and optional alt text.
 Images are embedded in the DOCX, with relationships created automatically. `blocks` and the
@@ -425,13 +496,33 @@ CRLF input is normalized before determining the resulting range. Empty replaceme
 `format`; use a format operation on an explicit paragraph range when deleting and restyling are
 separate intentions.
 
+Paragraph format patches retain the public `{ paragraph: { keepNext: true } }` shape. Each
+supplied paragraph property has its own Yjs register, so concurrent patches to different properties
+survive synchronization and selective undo. Structured properties such as `lineSpacing` and `borders`
+remain atomic. `paragraph: {}` is a no-op; `paragraph: null` removes all supported direct paragraph
+properties. Concurrent reset and patch operations resolve per property using Yjs conflict ordering.
+
+Existing `paragraph` object attributes remain readable. New edits use internal
+`wordParagraphFormat:<property>` attributes with wrapped values; wrapped null masks an old property.
+`wordFormats` returns the decoded public object. Hosts reading raw deltas or paragraph slices should
+call `readWordParagraphFormat(attributes)` before converting paragraph formatting to Office content.
+For source-aware reconciliation, also set `resetParagraphFormat: true` on `WordTextParagraph` when
+`hasWordParagraphReset(attributes)` returns true. This clears imported direct paragraph properties
+before applying the surviving values, including after concurrent reset and patch operations.
+Upgrade all collaborating writers together: old clients do not understand these registers, and legacy
+whole-object writes do not override existing property registers. This wire change does not add OOXML
+properties or alter their units.
+
 `wordParagraphIdentity(body, newlineOffset)` follows paragraph terminators through edits and remote
 updates. It avoids a repeated scan from the start of the CRDT when projecting stable native block IDs.
 
 `WordParagraphProjection(body, project)` consumes Yjs transaction deltas and retains unchanged
 paragraph slices. A slice contains its stable terminator identity, UTF-16 length and formatted parts,
 including the newline when present. The `paragraphs` getter invokes `project(slice)` only for changed
-slices. Treat slices and projected values as immutable, and call `destroy()` when finished.
+slices. Attribute retains that remove absent keys or assign equal values retain the original slice,
+including absent-versus-empty attribute equivalence. Formatting undo therefore does not reproject
+unformatted paragraphs merely because Yjs emits a broad attribute retain. Treat slices and projected
+values as immutable, and call `destroy()` when finished.
 `WordTableProjection.update(paragraphs)` reuses table trees whose projected paragraphs are unchanged,
 while checking table contiguity across the entire result. These projections keep conversion work near
 the edited paragraphs; updating offset arrays and semantic traversal still depends on document size.
@@ -464,8 +555,12 @@ and repeats pagination when the total changes. Formatting and ordinary surroundi
 text remain editable. DOCX export writes standard simple fields. Supported simple
 fields and complete complex `PAGE` / `NUMPAGES` fields split across runs import as
 the same editable content. Editing or deleting a complex field also replaces its
-source instructions and cached result on export. Section numbering restarts and numeral
-formats are not yet evaluated by this API.
+source instructions and cached result on export. Direct artifact deletion removes
+all owned markers, instructions and cached content, retaining neighboring run content.
+`move-object` retains field semantics and formatting across paragraphs. Page-number
+insertion inherits character formatting only, including at paragraph and table-cell starts.
+Nested general fields project stored results in order without evaluating instructions.
+Section numbering restarts and numeral formats are not yet evaluated by this API.
 
 ### Editable table formatting
 
@@ -631,3 +726,276 @@ to `front` or `behind` and supply `x`, `y`, `horizontalRelativeTo` and
 that they move and resize together. `edit-object` can replace its complete ink
 value, including all strokes. Existing single-stroke `points/color/size` inputs
 remain supported with their previous fit-to-frame behavior.
+
+### Structured collaborative tables, schema 2
+
+Concurrent table structure uses stable row and column identities. Numeric grid
+positions are derived from their shared ordering records. Row insertions also
+record the vertical-merge coverage observed at insertion, so deleting a neighbor
+cannot change the inserted row into a different kind of cell. Vertical merge
+groups retain their original identity when a restart row is deleted. Editing a
+continuation is rejected with `WordTableConflict`; select its visible restart
+cell instead. The grid exposes `verticalGroup` to distinguish adjacent groups. Existing cell text stays
+in its original Y.Text; new intersections use deterministically named, initially
+empty Y.Text roots. Concurrent first typing therefore edits one shared character
+sequence, without inserting duplicate paragraph terminators.
+
+Cell root names are opaque identities. Existing v2 names remain stable. Deeper
+canonical nesting uses a coordinate path with linear growth, preserving its exact
+parent root without repeatedly escaping the complete ancestry. Story names have
+no document-authoring length limit.
+
+This is a breaking host API migration. A body-only `applyDelta` cannot commit
+changes to cell roots or structural records. Upgrade every writer and persist and
+transport **complete Y.Doc updates**, including all named roots. Coordinate the
+protocol upgrade before permitting schema-2 edits. Migration marks the legacy
+cell metadata with `schema: 2`, which old validated writers reject. Direct Yjs
+mutations that bypass validation remain the host's responsibility.
+
+Use the operation document's prepared-update executor:
+
+```ts
+const session = openWordOperationDocument(artifact);
+const prepared = session.prepare([
+  { kind: 'migrate', table: { story: 'body', table: inspectedTableId } },
+]);
+session.commit(prepared);
+const history = session.history(); // Start editing history after migration.
+const cell = session.grid(inspectedTableId)[1]!.cells[1]!.address;
+const selection = session.commit(
+  session.prepareOperation(
+    { cell, range: { start: 0, end: 0 } },
+    { name: 'replace', input: { value: 'Hello' } },
+  ),
+  history.origin,
+);
+const bytes = session.artifact().bytes();
+history.destroy();
+session.destroy();
+```
+
+`prepareWordUpdate` and `commitWordUpdate` provide the same contract directly for
+Y.Doc hosts. Preparation and commit preflight the whole shared document on a
+replica. A rejected operation leaves the original unchanged. Remote updates must
+still be retained when they expose a conflict; validate with
+`validateWordSharedDocument` and show the recoverable `WordTableConflict`.
+
+Selections use `{ cell: { story, table, row, column }, range }`. Offsets are local
+to the selected payload. `anchorScopedSelection` and `resolveScopedAnchor` retain
+Yjs-relative positions; an empty-cell anchor resolves to its logical cell's start.
+Story-scoped edits that touch migrated source cells, including nested ancestry,
+are rejected. Canonical cell roots also require cell-scoped selections. Object
+move destinations receive the same guard. The grid exposes `payloads` for selecting the original paragraphs of an explicit
+merge. Navigation should enumerate `session.grid()` rather than physical body
+paragraphs. Object move destinations are cell-local and validated against the selected
+payload. `fit-table` uses current projected widths when weights are omitted.
+A missing payload is an editable empty cell. First edit materializes
+it automatically; reads and selection changes emit no repair writes.
+
+`WordStructuredProjection` observes the complete document, including cell-root
+updates. `projectWordSharedDocument` performs an uncached projection. The old
+`WordTableProjection`/`groupTableParagraphs` rendering path rejects schema-2 cells
+instead of rendering obsolete body-grid positions. `tableParagraphs` remains a
+low-level view of retained legacy source paragraphs, not the logical grid.
+
+Migration does not copy or delete legacy characters. Identical concurrent
+migrations write the same canonical baseline record. Different baselines report
+a migration conflict. Imported sources, nested ancestry, spans, widths, and grid
+omissions remain available. New tables created through `prepareOperation` migrate
+in the same prepared update. Splitting an imported span after deleting its first
+column attaches its source to the chosen surviving coordinate. Restoring an old
+coordinate does not duplicate that source. Concurrent splits that choose different
+coordinates report a conflict; an explicit split at one surviving choice resolves
+it without deleting the source text. Existing body-delta table edit/format helpers reject
+migrated tables; switch those callers to the scoped operation adapter.
+
+Deletion retains payloads and records what the deleting peer observed. Concurrent
+edits that would be hidden produce a conflict; `restore-axis` or `restore-table`
+can expose them again. Deletion witnesses include nested stories recursively.
+Whole-table deletions keep separate records so concurrent deletions and their undo
+do not overwrite each other. When a linear edit also consumes the paragraph break
+before a deleted table, its physical separator stays with the retained baseline
+and is omitted from the logical paragraph flow. Export uses the same projection
+as the editor, including those joined paragraphs.
+Deleting an axis updates observed explicit merges; undo restores that coverage.
+Each merge operation retains its own identity. Equivalent concurrent coverage
+projects once; contradictory overlapping coverage blocks export. Sequential
+extension consumes the observed neighboring merges. Deletion witnesses include
+source paragraph terminator attributes, derived-cell registers and cell formatting.
+Row deletion also witnesses row formatting; column deletion witnesses column widths.
+Structural undo retains these formatting records even when a cell has no text.
+An explicit `restore-axis` exposes the retained cells without recreating retired
+merge records. Select merged-cell text through the grid's `payloads`; covered
+coordinates that do not name a visible payload are rejected. `inspectWordTableState` exposes retained axis records even
+when export is blocked. Overlapping merge coverage, contradictory axis order,
+conflicting migration baselines, and unions exceeding the package's 63-grid-column
+limit also block export. Content is never flattened into other cells to satisfy
+the limit. Explicit split/restore/delete operations resolve supported conflicts.
+
+Use `WordStructuredUndo` with its local `origin`, not a body-only Y.UndoManager.
+It rehearses the next undo or redo against a disposable current snapshot before
+changing the live document. This preserves remote text and rejects an undo that
+would detach it, without replaying the session's update history. Snapshot cost
+still depends on document size. Destroy the history when the editor closes.
+Hosts that need direct access to history stacks and selection metadata should use
+`createWordUndoManager(doc, { trackedOrigins, captureTimeout })`, then call
+`preflightWordUndo` with an additional source/permission validator before applying
+undo or redo. Guarded undo rejects foreign managers or changed item filters.
+An arbitrary Yjs `deleteFilter` can close over live object identities or split an
+atomic document operation; it cannot be safely reproduced against a disposable
+document. Select local edits through tracked origins instead of filtering items.
+Migration belongs outside this editing history. The canonical empty cell's final paragraph boundary
+is virtual; formatting it uses separate shared registers, and only user-entered
+paragraph breaks and boundaries required before nested tables become actual
+characters. Formatting an untouched empty cell needs only its format map;
+projection includes its virtual paragraph even when no text root exists. Structural
+undo treats these format-only roots as retained content. Empty named table maps left by undo are inert; retained remote cell
+content still prevents a destructive structural undo.
+
+DOCX export contains ordinary cells and valid table grids. Implicit intersections
+become empty cells at their actual coordinates. DOCX does not preserve CRDT axis
+identities or history; persist Yjs updates alongside the exported file when the
+collaborative session must continue.
+
+The reproducible fixture benchmark is
+`packages/word/benchmarks/table-structure.ts`, with raw results in
+`table-structure-results.json` beside it. Copy the script unchanged to audit
+commit `4d1465d`, then run the following sequentially under one lock:
+
+```sh
+flock -x /tmp/tumbler-word-audit-heavy.lock bash -c '
+  timeout 5m bun /path/to/audit/packages/word/benchmarks/table-structure.ts legacy
+  timeout 5m bun packages/word/benchmarks/table-structure.ts structured
+'
+```
+
+On Bun 1.4.4 and an Intel Celeron N5095, a 12×4 table with two local column edits
+and ten healthy validation/grid-read pairs took a median 10.731 ms before and
+123.370 ms after, across seven samples following three warmups. Raw total times
+ranged 9.186–11.439 ms before and 116.919–127.207 ms after. Median CPU time rose from
+21.164 to 152.545 ms, full peer-state bytes from 35,052 to 45,832, and net heap
+change from 114,428 to 456,788 bytes. These are correctness costs, not a speedup.
+One-time migration took a median 18.042 ms, measured separately. The unchanged
+retained-text hash matched in every sample; merged validation changed from 0/7
+successes to 7/7. Heap change is not a measure of total allocated bytes.
+### Line wrapping
+
+Non-breaking spaces U+00A0, U+202F, and U+2007 retain their advance and do not
+create word-wrap opportunities. Oversized unbreakable text still uses the existing
+emergency character wrapping. A terminal explicit line break keeps an empty final
+line, including its height and logical caret offset.
+
+Justified paragraphs distribute unused line width across ordinary inter-word
+spaces on wrapped lines and explicit line breaks. Final paragraph lines and
+non-breaking spaces do not expand. The document compatibility setting
+`doNotExpandShiftReturn` suppresses expansion on explicit line breaks. Tabs retain their stops; only spaces after
+the last tab expand. Layout fragments expose the extra space advance as
+`wordSpacing` in points. DOM renderers apply that value to CSS word spacing;
+canvas renderers use the resulting fragment positions and widths.
+
+### Preparation limits
+
+`maxCharacters`, `maxAtoms`, and `maxMeasurements` bound preparation work per
+layout pass, including unpainted whitespace, table cells, and repeated stories.
+Defaults are 5,000,000 visited UTF-16 units, 1,000,000 glyph/control atoms, and
+1,000,000 measurer calls. Each limit accepts a positive safe integer; callers
+can raise it for larger documents. Exceeding one throws `limit_exceeded`.
+The standalone story and resolved-paragraph layout functions accept the same
+preparation options. Cached geometry avoids preparation and its measurement cost.
+
+Body pagination prepares lines on demand. A preview may prepare an extra page
+and bounded keep/widow lookahead before returning its requested pages. Aligned
+tabs may need a full following segment to find its width; decimal tabs stop at
+the decimal point. Such lookahead still consumes the preparation budgets.
+
+Paragraph `positioning.tabs` contains direct tab declarations. An empty array emits
+no `w:tabs` container and inherits style tab stops. When editing a source paragraph,
+`tabs: []` removes its direct tab declarations; omitting `tabs` preserves them.
+To remove an inherited stop, supply `{ positionTwips: 720, alignment: 'clear',
+leader: 'none' }` at that position. Tab declarations are additive across styles.
+
+Authored cell properties and paragraph/cell borders serialize in schema order,
+regardless of the insertion order of their JavaScript properties.
+
+Text edits and `WordArtifact.replace` preserve the active header/footer part and
+open options, including ink rendering and parse limits. Retaining parse limits
+across edits is an intentional extension of the original invocation-scoped open
+contract, not a correction to a previously promised session-wide limit. Each reopened revision
+gets fresh parse counters across the main document and its parsed stories; limits
+are not a cumulative editing-session allowance. Intermediate revisions must also
+fit those limits. `replace(bytes, options)` can explicitly override them. A rejected
+edit leaves the input artifact and its package bytes unchanged.
+
+Paragraph joins and replacements reject crossings through tables, content
+controls, or other opaque XML blocks, even when those blocks have no projected
+text. Paragraphs in different containers cannot be joined.
+
+Splitting a paragraph moves its `w:sectPr` to the final continuation, preserving
+one section boundary. Multi-paragraph joins or replacements containing section
+properties are rejected until section-boundary transformations are supported.
+
+
+### Connecting linear editors to shared tables
+
+`wordSharedText(doc.getText('body'))` returns a cached `WordSharedText` adapter.
+Its `text` is a local rich-text projection in logical document order, including
+implicit cells and nested tables. Use it for layout, text hit testing, formatting
+state and paragraph/table inspection. Treat it as read-only. Never persist or
+synchronize its Y.Doc; persist complete updates from the adapter's authoritative
+`doc` instead. `wordSharedOwner` resolves the projection document to that owner
+when a host needs its retained source or metadata.
+
+```ts
+const view = wordSharedText(doc.getText('body'));
+const target = view.anchor({ start: 10, end: 10 });
+// After receiving other peers' complete document updates:
+const range = view.resolve(target);
+const edit = view.prepareOperation(range, {
+  name: 'replace', input: { value: 'Hello' },
+});
+view.commit(edit, history.origin);
+// edit.range is the resulting selection in the linear view.
+```
+
+Operations use the visible paragraphs and cell payloads, including joins around
+retained table content. Ranges and `move-object` destinations use linear view
+coordinates. Host operation callbacks receive an isolated snapshot with the same
+story name and document metadata, including formatting defaults. Use the returned
+`range` for editor selections. The
+optional `selection` is omitted when that range crosses hidden source content
+and cannot be represented by one contiguous scoped selection. Clearing a cell
+retains hidden table baselines and their required separators for undo and validation.
+Scoped and linear nested-table insertion use the same cell-local operation path.
+Both source and canonical cells retain the preceding paragraph and exactly one
+trailing parent paragraph after inserting into their final paragraph.
+
+`prepareDelta(delta)` translates existing editor deltas into payload-local edits.
+It retains source cell boundaries, rich pasted text and virtual paragraph
+formatting. Pasted tables migrate in the same update. `prepareChanges(changes)`
+executes anchored batches, including table structure, cell formatting, object
+moves and expected-text checks. All prepare methods leave the owner unchanged
+and return complete updates, which `commit` revalidates before one atomic write.
+Hosts still validate package provenance, asset access and editing authority.
+
+`anchor` and `resolve` use authoritative character identities and cell addresses,
+so a selection in a new empty cell survives other peers inserting columns before
+it. Paragraph identities also come from shared terminators, not the local
+projection's Yjs client ID. `prepareMigration()` can be committed separately
+before starting the user's undo history. Read-only clients do not migrate data.
+
+A conflicting projection throws the retained `WordTableConflict` rather than
+returning an outdated document that might omit hidden edits. The complete source
+state remains available for inspection and explicit restore operations. Once the
+conflict is resolved, the existing adapter resumes normal reads. Destroy an
+adapter explicitly or destroy its owning Y.Doc when the session closes.
+
+Structured read caches invalidate at transaction boundaries and are bypassed
+during writes, so multiple writes inside one transaction see current state.
+Repeated validation and projection reuse parsed records and source-cell ranges.
+On the same Linux arm64 host with Bun 1.4.0, the unchanged 12×4 benchmark's median
+total for two column edits and ten validation/grid-read pairs fell from 164.066 ms
+to 24.416 ms. Median reads fell from 115.436 ms to 9.231 ms, and edits from
+46.379 ms to 14.880 ms. Both revisions passed merged validation in all seven
+samples and retained the same text hash and 45,832 state bytes. These numbers
+cover this synthetic fixture, not general editing latency. Revisions and raw
+samples are in `benchmarks/table-structure-read-cache-results.json`.

@@ -189,7 +189,7 @@ test('floating drawings paint behind or in front of text independently of their 
   }
 });
 
- test('DOM composition bounds include physical ink outside its editing frame', async () => {
+test('DOM composition bounds include physical ink outside its editing frame', async () => {
   const { inkFixture } = await import('./ink-fixture.ts');
   const { officeInk } = await import('../../ink/test/fixture.ts');
   const { wordPageInkBounds } = await import('../src/canvas-paint.ts');
@@ -201,4 +201,81 @@ test('floating drawings paint behind or in front of text independently of their 
   expect(box.height).toBeCloseTo(drawing.heightPoints + .1 * 72 / 2.54);
   const ordinary = inkFixture(false, false, officeInk()).source;
   expect(wordPageInkBounds(layoutWordDocument(ordinary.document, measure).pages[0]!)).toEqual([]);
+});
+
+test('justified canvas text and underline use expanded layout positions', () => {
+  const artifact = openWordArtifact(createWordArtifact({ page: { width: 140, height: 300, margin: 20 },
+    paragraphs: [{ alignment: 'justify', runs: [{ text: 'one two three four five six seven', format: { underline: 'single' } }] }],
+  }).bytes());
+  const page = layoutWordDocument(artifact.document, measure).pages[0]!;
+  const { context, calls } = recorder();
+  paintWordPage(context, page);
+  const line = page.columns[0]!.lines[0]!;
+  expect(line.width).toBe(100);
+  for (const fragment of line.fragments) {
+    expect(calls.some(call => call[0] === 'fillText' && call[1] === fragment.text && call[2] === fragment.x)).toBe(true);
+    if (fragment.wordSpacing) expect(calls.some(call => call[0] === 'lineTo' && call[1] === fragment.x + fragment.width)).toBe(true);
+  }
+});
+
+test('cell clips nest and restore before the next cell and body text', async () => {
+  const { tableClippingFixture, clipTable, clipRow, clipCell, clipParagraph } = await import('./table-clipping-fixture.ts');
+  const nested = clipTable(clipRow(clipCell(clipParagraph('INNER')), 400));
+  const page = layoutWordDocument(openWordArtifact(tableClippingFixture(clipTable(clipRow(clipCell(nested), 100) + clipRow(clipCell(clipParagraph('NEXT')))) + clipParagraph('BODY'))).document, measure).pages[0]!;
+  const { context } = recorder();
+  type Rect = readonly [number, number, number, number];
+  let active: Rect[] = [], pending: Rect = [0, 0, 0, 0];
+  const stack: Rect[][] = [];
+  const painted = new Map<string, Rect[]>();
+  context.save = () => { stack.push([...active]); };
+  context.restore = () => { active = stack.pop()!; };
+  context.rect = (...rect) => { pending = rect; return 0; };
+  context.clip = () => { active.push(pending); };
+  context.fillText = text => { painted.set(text, [...active]); return 0; };
+  paintWordPage(context, page);
+  expect(painted.get('INNER')).toHaveLength(3);
+  expect(painted.get('INNER')![1]![3]).toBe(5);
+  expect(painted.get('NEXT')).toHaveLength(2);
+  expect(painted.get('NEXT')![1]![1]).toBe(15);
+  expect(painted.get('BODY')).toHaveLength(1);
+  expect(stack).toHaveLength(0);
+  expect(active).toEqual([]);
+});
+
+test('cropped destination ink matches the same pixels in an uncropped render', async () => {
+  const { inkFixture } = await import('./ink-fixture.ts');
+  const { officeInk } = await import('../../ink/test/fixture.ts');
+  const { paintWordInk } = await import('../src/ink-canvas.ts');
+  for (const rasterOp of ['xOrPen', 'maskPen', 'notMergePen']) for (const scale of [4 / 3, 2.3, 8]) {
+    const source = inkFixture(false, false, officeInk({ brush: `<brushProperty name="rasterOp" value="${rasterOp}"/>` })).source;
+    const page = layoutWordDocument(source.document, measure).pages[0]!;
+    const fragment = { ...drawingFragment(page), width: 20, height: 20 };
+    const rendered: { x: number; y: number; width: number; height: number; data: Uint8ClampedArray }[] = [];
+    const pixels = { getImageData: (x: number, y: number, width: number, height: number) => ({ width, height, data: new Uint8ClampedArray(width * height * 4).map((_, i) => i % 4 === 3 ? 255 : 85) }),
+      putImageData: (image: { width: number; height: number; data: Uint8ClampedArray }, x: number, y: number) => { rendered.push({ ...image, x, y }); } };
+    expect(paintWordInk(pixels, fragment, scale)).toBe(true);
+    const full = rendered[0]!;
+    const viewport = { x: full.x + 3, y: full.y + 5, width: 19, height: 23 };
+    expect(paintWordInk(pixels, fragment, scale, 19 * 23, viewport)).toBe(true);
+    const crop = rendered[1]!;
+    expect([crop.x, crop.y, crop.width, crop.height]).toEqual([0, 0, 19, 23]);
+    for (let y = 0; y < crop.height; y++) {
+      const offset = ((y + 5) * full.width + 3) * 4;
+      expect(crop.data.slice(y * crop.width * 4, (y + 1) * crop.width * 4)).toEqual(full.data.slice(offset, offset + crop.width * 4));
+    }
+    expect(paintWordInk({ ...pixels, getImageData: () => { throw Error('off-tile read'); } }, fragment, scale, 16, { x: 0, y: 0, width: 4, height: 4 })).toBe(true);
+  }
+});
+
+test('a crop never requests an unrelated image', () => {
+  const page = layout([{ kind: 'image', bytes: png, contentType: 'image/png', width: 80, height: 40 }]);
+  paintWordPage(recorder().context, page, { viewport: { x: 0, y: 0, width: 4, height: 4 }, image: () => { throw Error('unrelated decode failure'); } });
+});
+
+test('empty painted image bounds never require decoding for an overlay', () => {
+  const laidOut = layout([{ kind: 'image', bytes: png, contentType: 'image/png', width: 80, height: 40 }]);
+  const page = { ...laidOut, columns: laidOut.columns.map(column => ({ ...column, lines: column.lines.map(line => ({ ...line, fragments: line.fragments.map(fragment => ({ ...fragment, width: 0 })) })) })) };
+  const region = { x: 0, y: 0, width: page.width, height: page.height };
+  expect(wordPageImages(page, [region])).toEqual([]);
+  paintWordPage(recorder().context, page, { scale: 1, viewport: { ...region, width: Math.ceil(region.width), height: Math.ceil(region.height) }, image: () => { throw Error('empty image decoded'); } });
 });

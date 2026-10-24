@@ -1,3 +1,4 @@
+import { hasWordParagraphReset, readWordParagraphFormat } from "../collaboration/paragraph-attributes.ts";
 import type { DocumentImage } from "../collaboration/images.ts";
 import * as Y from "yjs";
 import type { WordArtifact } from "../artifact.ts";
@@ -5,6 +6,11 @@ import type { WordTextParagraph, WordTextRun } from "../create.ts";
 import type { TextAttributes } from "../collaboration/formatting.ts";
 import { groupTableParagraphs, type TableCell } from "../collaboration/tables.ts";
 import { reconcileWordContent } from "../package-document.ts";
+import { projectWordSharedDocument } from '../collaboration/structured/projection.ts';
+import { prepareWordUpdate, commitWordUpdate, anchorScopedSelection, resolveScopedAnchor } from '../collaboration/structured/transactions.ts';
+import { structuredGrid } from '../collaboration/structured/grid.ts';
+import { WordStructuredUndo } from '../collaboration/structured/undo.ts';
+import { prepareWordScopedOperation } from './structured.ts';
 import { importOperationDelta } from "./import.ts";
 
 /** A disposable editing session retaining source XML identities for faithful package reconciliation. */
@@ -17,11 +23,18 @@ export function openWordOperationDocument(
   text.applyDelta(importOperationDelta(source));
   return {
     text,
+    prepare: (changes: Parameters<typeof prepareWordUpdate>[1]) => prepareWordUpdate(doc, changes),
+    prepareOperation: (selection: Parameters<typeof prepareWordScopedOperation>[1], operation: Parameters<typeof prepareWordScopedOperation>[2], context?: Parameters<typeof prepareWordScopedOperation>[3]) => prepareWordScopedOperation(doc, selection, operation, context),
+    commit: (prepared: Parameters<typeof commitWordUpdate>[1], origin?: unknown) => commitWordUpdate(doc, prepared, origin),
+    grid: (table: string) => structuredGrid(doc, { story: 'body', table }),
+    anchor: (selection: Parameters<typeof anchorScopedSelection>[1]) => anchorScopedSelection(doc, selection),
+    resolve: (anchor: Parameters<typeof resolveScopedAnchor>[1]) => resolveScopedAnchor(doc, anchor),
+    history: () => new WordStructuredUndo(doc),
     destroy: () => doc.destroy(),
-    artifact: () => reconcileWordContent(source, project(text, source, resolveImage)),
+    artifact: () => reconcileWordContent(source, projectWordSharedDocument(doc, "body", source, resolveImage)),
   };
 }
-function project(
+export function projectWordOperationText(
   text: Y.Text,
   source: WordArtifact,
   resolveImage?: (image: DocumentImage) => Uint8Array,
@@ -31,6 +44,7 @@ function project(
   const parts: { insert: string; attributes?: TextAttributes }[] = text.toDelta();
   for (const part of parts) {
     const a = part.attributes ?? {};
+    const paragraph = readWordParagraphFormat(a);
     const {
       fontFamily,
       bold,
@@ -127,7 +141,8 @@ function project(
           ...(a.wordParagraph === undefined ? {} : { source: a.wordParagraph }),
           ...(a.wordCopy === undefined ? {} : { sourceCopy: a.wordCopy }),
           ...(a.styleId ? { styleId: a.styleId } : {}),
-          ...(a.paragraph ? { paragraph: a.paragraph } : {}),
+          ...(paragraph !== undefined ? { paragraph } : {}),
+          ...(hasWordParagraphReset(a) ? { resetParagraphFormat: true } : {}),
           ...(a.positioning ? { positioning: a.positioning } : {}),
           ...(a.list ? { list: a.list } : {}),
           ...(a.table ? { table: a.table } : {}),
@@ -143,5 +158,5 @@ function project(
     }
   }
   if (runs.length) paragraphs.push({ kind: "paragraph", runs });
-  return groupTableParagraphs(paragraphs);
+  return groupTableParagraphs(paragraphs, { retainedBaseline: true });
 }

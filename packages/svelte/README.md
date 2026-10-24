@@ -52,6 +52,13 @@ leading, at a large reference size to avoid cumulative pixel rounding. Custom
 renderers can supply their CSS font stack and clear this cache when fonts load.
 `browserWordTextMeasurer` uses these metrics automatically in the browser.
 
+`WordDocumentView` composes destination-dependent ink in affected-region tiles.
+Its optional `inkMaxPixels` prop sets the retained pixel budget per page, from 1 to
+1,048,576. The renderer lowers resolution to fit, caps resolution at four device
+pixels per point, and shares a finite budget across mounted pages. Cached ink
+images stay visible until the replacement succeeds. See
+[ink rendering limits](../../docs/ink-conformance.md) for allocation and cancellation behavior.
+
 Word font leading is placed above the baseline, and automatic paragraph spacing
 advances below it in whole twips. Custom HTML renderers should use
 `wordTextTop(fragment, cssFontStack)` for a text span's top position, with
@@ -59,6 +66,11 @@ advances below it in whole twips. Custom HTML renderers should use
 This aligns the painted baseline with `fragment.baseline` despite browser font
 rounding. The optional font stack must match the one used to measure and paint
 the text. Font loading invalidates the cached CSS baseline measurements.
+
+`browserWordBaselineOffset(format, cssFontStack, heightPoints)` returns the CSS
+line box's baseline offset in points. Custom carets and placement previews can
+use the same measurement as `wordTextTop`, including browser rounding at the
+rendered font size. It returns `undefined` when no browser document is available.
 
 `wordTextCss` and `browserWordTextMeasurer` explicitly disable font kerning to
 match the engine's unkerned advances and Word's default when `w:kern` is absent.
@@ -82,6 +94,15 @@ canonical state:
   }}
 />
 ```
+
+Body input is controlled through `onedit`. Unsupported browser formatting and drag
+mutations are cancelled; use the host formatting controls to apply model changes.
+Replacement text and soft-line deletion use browser target ranges when available.
+Browser history intents call `oncommand` with `undo` or `redo`. Non-cancellable
+input is reconciled against the document. Composition text stays provisional in
+the DOM and commits as one replacement at composition end; cancellation restores
+the original text. Automated Chromium composition coverage does not establish
+native OS IME compatibility across platforms.
 
 In edit mode, `ondrawingchange` enables dragging, eight resize handles, and inline,
 in-front-of-text, or behind-text placement. Corners preserve proportions; edges
@@ -115,6 +136,11 @@ it never attaches controls to `document.body`. Put it inside a positioned,
 clipped page container, such as `position: relative; overflow: hidden`, to keep
 previews and handles out of surrounding UI. `WordDocumentView` already provides
 that container.
+
+`WordDocumentView` owns its embedded image blob URLs. It reuses unchanged image
+bytes across artifact replacements and releases URLs after their image elements
+leave the rendered page window or the viewer is destroyed. Keep supplied image
+bytes immutable; replace the byte array when changing an image.
 
 Applications own history and persistence, or can use `WordEditingSession` from
 `@tumblerjs/word`. Internal bookmark links scroll inside the owned page surface;

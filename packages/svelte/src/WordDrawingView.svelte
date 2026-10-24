@@ -1,5 +1,7 @@
 <script lang="ts">
   import { wordDisplayColour } from './word-display-colour.ts';
+  import WordPictureView from "./WordPictureView.svelte";
+  import { wordContentClipCss } from "./word-content-clip.ts";
   import WordInkPointEditor from "./WordInkPointEditor.svelte";
   import ChartTitleEditor from "./ChartTitleEditor.svelte";
   import WordShapeView from "./WordShapeView.svelte";
@@ -7,10 +9,12 @@
   import OoxmlChart from './OoxmlChart.svelte';
   import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
 
-  let { drawing, width, height, position, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo, oncharttitlechange, oncharttitletextchange, oninkchange }: {
+  let { drawing, width, height, position, clip, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo, oncharttitlechange, oncharttitletextchange, oninkchange }: {
     drawing: WordDrawing; width: number; height: number; position: string; scale: number;
     editable: boolean; selected: boolean;
     pageX: number; pageY: number;
+    /** Page-point content clip. Editing controls remain outside it. */
+    clip?: import("@tumblerjs/word").WordContentBounds;
     imageurl: (image: WordImageDrawing) => string;
     imageLoading?: "eager" | "lazy";
     /** Hosts that offer placement in their own UI can omit the built-in layout select. */
@@ -47,6 +51,7 @@
   const label = $derived(drawing.altText ?? drawing.name ?? (drawing.kind === 'chart' ? 'Chart' : 'Image'));
   let displayWidth = $derived(wordPointsToCssPixels(preview?.width ?? width));
   let displayHeight = $derived(wordPointsToCssPixels(preview?.height ?? height));
+  const contentClip = $derived(wordContentClipCss(clip, preview?.x ?? pageX, preview?.y ?? pageY));
   // Undefined while not editing; otherwise the text editing starts with.
   let editingTitle = $state(false);
   let editingInk = $state(false);
@@ -167,7 +172,9 @@
     <WordShapeView shape={drawing.shape} {selected} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} editing={editingText !== undefined} initialText={editingText} oncommit={finishText} />
   {:else if drawing.kind === 'image'}
     {@const painted = wordImagePaintBounds(drawing)}
-    {#if inkSvg !== undefined}
+    {#if drawing.picture}
+      <WordPictureView {drawing} src={imageurl(drawing)} loading={imageLoading} />
+    {:else if inkSvg !== undefined}
       <span class="ink-vector" data-word-ink-rendering="vector" role="img" aria-label={drawing.altText ?? 'Ink'} style={`position:absolute;left:${painted.x / drawing.widthPoints * 100}%;top:${painted.y / drawing.heightPoints * 100}%;width:${painted.width / drawing.widthPoints * 100}%;height:${painted.height / drawing.heightPoints * 100}%`}>
         {@html inkSvg}
       </span>
@@ -187,9 +194,9 @@
   {/if}
   {#if editable && drawing.kind !== 'unsupported' && (onresize !== undefined || onchange !== undefined)}
     {#if editingText !== undefined}
-      <div class="content editing">{@render content()}</div>
+      <div class="content editing" style={contentClip}>{@render content()}</div>
     {:else}
-    <button class="content" class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)} ondblclick={doubleClick}>{@render content()}</button>
+    <button class="content" style={contentClip} class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)} ondblclick={doubleClick}>{@render content()}</button>
     {/if}
     {#if selected}
       {#if drawing.kind === 'image' && drawing.inkProjection && oninkchange}
@@ -213,28 +220,29 @@
       {/each}
     {/if}
   {:else}
-    <div class="content">{@render content()}</div>
+    <div class="content" style={contentClip}>{@render content()}</div>
   {/if}
 </div>
 
 <style>
   /* Document lines preserve whitespace and may be as tall as an inline drawing. */
-  .drawing { color-scheme: only light; position: absolute; white-space: normal; line-height: normal; }
+  /* Stationary wrappers do not stack. Points sit above composited ink; toolbars sit above expanded point hit areas. */
+  .drawing { color-scheme: only light; --word-drawing-points-z-index: calc(var(--word-ink-layer-z-index, 3) + 1); --word-drawing-controls-z-index: calc(var(--word-ink-layer-z-index, 3) + 2); position: absolute; white-space: normal; line-height: normal; }
+  .drawing.moving { z-index: var(--word-drawing-controls-z-index); }
+  .drawing.behind .content { z-index: var(--word-drawing-rank, 0); }
   .drawing.ink { color-scheme: inherit; }
-  .drawing.moving { z-index: 3; }
-  .drawing.behind .content { z-index: 0; }
   .drawing.selected { outline: var(--outline-size) solid var(--tumbler-document-accent, #25a735); }
-  .content { position: absolute; inset: 0; z-index: 2; display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; touch-action: none; }
+  .content { position: absolute; inset: 0; z-index: var(--word-drawing-rank, 2); display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; touch-action: none; }
   .content.movable { cursor: grab; }
   .content.movable:active { cursor: grabbing; }
-  .content.editing { cursor: text; outline: var(--outline-size) dashed var(--tumbler-document-accent, #25a735); }
+  .content.editing { z-index: var(--word-drawing-controls-z-index); cursor: text; outline: var(--outline-size) dashed var(--tumbler-document-accent, #25a735); }
   .content:focus-visible { outline: var(--outline-size) solid var(--tumbler-document-accent, #25a735); }
   .ink-vector :global(svg) { display: block; width: 100%; height: 100%; }
   img { display: block; width: 100%; height: 100%; }
-  .resize { position: absolute; z-index: 4; translate: -50% -50%; width: var(--handle-size); height: var(--handle-size); min-width: 0; min-height: 0; box-sizing: border-box; line-height: 0; padding: 0; border: var(--outline-size) solid var(--tumbler-document-accent, #25a735); border-radius: 50%; background: white; touch-action: none; }
-  .controls { position: absolute; z-index: 4; right: 0; bottom: calc(100% + 10px * var(--inverse-scale)); display: flex; gap: 4px; padding: 4px; border: 1px solid #3b483e; border-radius: 6px; background: #181b18; color: #e2fee7; font: 13px/1.4 system-ui, sans-serif; transform: scale(var(--inverse-scale)); transform-origin: bottom right; }
+  .resize { position: absolute; z-index: var(--word-drawing-controls-z-index); translate: -50% -50%; width: var(--handle-size); height: var(--handle-size); min-width: 0; min-height: 0; box-sizing: border-box; line-height: 0; padding: 0; border: var(--outline-size) solid var(--tumbler-document-accent, #25a735); border-radius: 50%; background: white; touch-action: none; }
+  .controls { position: absolute; z-index: var(--word-drawing-controls-z-index); right: 0; bottom: calc(100% + 10px * var(--inverse-scale)); display: flex; gap: 4px; padding: 4px; border: 1px solid #3b483e; border-radius: 6px; background: #181b18; color: #e2fee7; font: 13px/1.4 system-ui, sans-serif; transform: scale(var(--inverse-scale)); transform-origin: bottom right; }
   .controls button, select { position: static; padding: 5px 8px; border: 1px solid #3b483e; border-radius: 4px; background: #202521; color: inherit; font: inherit; }
-  .ink-controls { position:absolute; z-index:6; left:0; top:calc(100% + 8px); transform:scale(var(--inverse-scale)); transform-origin:top left; }
+  .ink-controls { position:absolute; z-index:var(--word-drawing-controls-z-index); left:0; top:calc(100% + 8px); transform:scale(var(--inverse-scale)); transform-origin:top left; }
   .ink-controls button { padding:4px 8px; border:1px solid #3b483e; border-radius:4px; background:#202521; color:#e2fee7; font:13px/1.4 system-ui; }
   .controls button { cursor: move; touch-action: none; }
   .fallback { width: 100%; height: 100%; background: #eee; }

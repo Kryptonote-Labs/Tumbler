@@ -5,6 +5,7 @@ import type * as Y from 'yjs';
 export const MAX_TABLE_COLUMNS = 63;
 
 export type TableCell = {
+  schema?: 2;
   format?: WordCellFormat;
   rowFormat?: WordRowFormat;
   id: string;
@@ -43,6 +44,7 @@ export function isTableCell(value: unknown): value is TableCell {
     value.column < value.columns &&
     Object.keys(value).every((key) =>
       [
+        'schema',
         'id',
         'row',
         'cell',
@@ -59,6 +61,7 @@ export function isTableCell(value: unknown): value is TableCell {
         'after',
       ].includes(key),
     ) &&
+    (!('schema' in value) || value.schema === 2) &&
     ['before', 'after'].every(
       (key) =>
         !(key in value) ||
@@ -134,7 +137,10 @@ export type GroupedTable<T> = {
 /** Paragraph boundaries retain the full table ancestry, including merged and nested cells. */
 export function groupTableParagraphs<T extends { table?: TableCell }>(
   paragraphs: readonly T[],
+  options: { retainedBaseline?: boolean } = {},
 ): (T | GroupedTable<T>)[] {
+  if (!options.retainedBaseline && paragraphs.some(p => p.table?.schema === 2 || p.table?.parents?.some(parent => parent.schema === 2)))
+    throw new Error('Use WordStructuredProjection for migrated tables.');
   const seen = new Set<string>();
   const visit = (input: readonly T[], depth: number): (T | GroupedTable<T>)[] => {
     const result: (T | GroupedTable<T>)[] = [];

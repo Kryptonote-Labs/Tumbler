@@ -5,7 +5,7 @@ import { buildWordDocumentFixture } from './document-fixture.ts';
 const measure = { measure: (text: string) => ({ width: text.length * 6, ascent: 9, descent: 3 }) };
 function fixture(relative = 'margin', alignment = 'center', columns = 1) {
   return openWordArtifact(buildWordDocumentFixture({
-    documentXml: `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body><w:p><w:r><w:drawing><wp:anchor><wp:positionH relativeFrom="${relative}"><wp:align>${alignment}</wp:align></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>1257300</wp:posOffset></wp:positionV><wp:extent cx="914400" cy="914400"/><wp:wrapNone/><a:graphic><a:graphicData><a:blip r:embed="image"/></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r><w:r><w:t>Caption</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="12000" w:h="16000"/><w:pgMar w:top="1440" w:left="1200" w:right="2400" w:bottom="1440"/><w:cols w:num="${columns}" w:space="720"/></w:sectPr></w:body></w:document>`,
+    documentXml: `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body><w:p><w:r><w:drawing><wp:anchor><wp:positionH relativeFrom="${relative}"><wp:align>${alignment}</wp:align></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>1257300</wp:posOffset></wp:positionV><wp:extent cx="914400" cy="914400"/><wp:wrapNone/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:blipFill><a:blip r:embed="image"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r><w:r><w:t>Caption</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="12000" w:h="16000"/><w:pgMar w:top="1440" w:left="1200" w:right="2400" w:bottom="1440"/><w:cols w:num="${columns}" w:space="720"/></w:sectPr></w:body></w:document>`,
     relationships: [{ id: 'image', type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image', target: 'media/image.png' }],
     parts: [{ itemName: 'word/media/image.png', contentType: 'image/png', xml: 'image bytes' }],
   }));
@@ -32,6 +32,7 @@ test.each([
 test('recalculates centered geometry after resize and clears alignment on explicit movement', () => {
   const source = fixture();
   const drawing = [...source.document.drawings.values()][0]!;
+  expect(drawing.kind).toBe('image');
   const resized = source.resizeDrawing({ elementId: drawing.elementId, widthPoints: 144, heightPoints: 72 });
   expect(image(layoutWordDocument(resized.document, measure)).x).toBe(198);
   const moved = source.updateDrawing({ elementId: drawing.elementId, widthPoints: 72, heightPoints: 72, layout: 'front', horizontalRelativeTo: 'page', verticalRelativeTo: 'page', xPoints: 100, yPoints: 99 });

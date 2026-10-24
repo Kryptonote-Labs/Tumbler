@@ -44,5 +44,5 @@
 <div class="title-editor" style:min-height={`${titleHeight}px`} data-shape-text role="textbox" aria-label="Chart title" aria-multiline="true" contenteditable="true" tabindex="0" use:mount></div>
 
 <style>
-  .title-editor { position:absolute;left:8px;right:8px;top:8px;box-sizing:border-box;padding:0;min-height:1em;text-align:center;background:white;border:0;outline:1px solid #777;z-index:3;cursor:text;white-space:pre-wrap; }
+  .title-editor { position:absolute;left:8px;right:8px;top:8px;box-sizing:border-box;padding:0;min-height:1em;text-align:center;background:white;border:0;outline:1px solid #777;z-index:var(--word-drawing-controls-z-index, 3);cursor:text;white-space:pre-wrap; }
 </style>

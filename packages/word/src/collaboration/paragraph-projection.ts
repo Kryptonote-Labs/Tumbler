@@ -34,6 +34,16 @@ export class WordParagraphProjection<T> {
   }
 
   get paragraphs(): readonly T[] {
+    let offset = 0;
+    const slices = this.slices.map(slice => {
+      offset += slice.length;
+      const id = slice.terminated ? wordParagraphIdentity(this.text, offset - 1) : 'end';
+      return id === slice.id ? slice : Object.freeze({ ...slice, id });
+    });
+    if (slices.some((slice, index) => slice !== this.slices[index])) {
+      this.slices = slices;
+      this.output = undefined;
+    }
     return this.output ??= this.slices.map(slice => {
       if (this.projected.has(slice)) return this.projected.get(slice)!;
       const value = this.project(slice);
@@ -52,8 +62,14 @@ export class WordParagraphProjection<T> {
     let index = 0;
     let offset = 0;
     const finish = (terminated: boolean) => {
-      result.push(Object.freeze({
-        id: terminated ? wordParagraphIdentity(this.text, outputOffset - 1) : 'end',
+      const id = terminated ? wordParagraphIdentity(this.text, outputOffset - 1) : 'end';
+      const previous = this.slices[index] ?? this.slices[index - 1];
+      if (previous?.id === id && previous.length === pendingLength && previous.terminated === terminated &&
+          previous.parts.length === pending.length && previous.parts.every((part, at) =>
+            part.insert === pending[at]!.insert && equalAttributes(part.attributes, pending[at]!.attributes))) {
+        result.push(previous);
+      } else result.push(Object.freeze({
+        id,
         length: pendingLength,
         terminated,
         parts: Object.freeze(pending),
@@ -82,7 +98,8 @@ export class WordParagraphProjection<T> {
         const paragraph = this.slices[index]!;
         const count = Math.min(length, paragraph.length - offset);
         if (!count) { index++; offset = 0; continue; }
-        if (retain && !attributes && offset === 0 && count === paragraph.length && paragraph.terminated && pendingLength === 0) {
+        if (retain && offset === 0 && count === paragraph.length && paragraph.terminated && pendingLength === 0 &&
+          (!attributes || paragraph.parts.every(part => !attributesChange(part.attributes, attributes)))) {
           result.push(paragraph);
           outputOffset += count;
         } else if (retain) {
@@ -92,13 +109,13 @@ export class WordParagraphProjection<T> {
             const to = Math.min(offset + count - partOffset, part.insert.length);
             if (to > from) {
               let format = part.attributes;
-              if (attributes) {
+              if (attributes && attributesChange(format, attributes)) {
                 const patched = { ...format };
                 for (const [key, value] of Object.entries(attributes)) {
                   if (value === null) delete patched[key];
                   else patched[key] = value;
                 }
-                format = Object.freeze(patched);
+                format = Object.keys(patched).length ? Object.freeze(patched) : undefined;
               }
               append(part.insert.slice(from, to), format);
             }
@@ -135,4 +152,11 @@ function equalAttributes(left?: Readonly<Record<string, unknown>>, right?: Reado
   const keys = Object.keys(left ?? {});
   return keys.length === Object.keys(right ?? {}).length &&
     keys.every(key => JSON.stringify(left![key]) === JSON.stringify(right?.[key]));
+}
+
+/** Removing an absent key and assigning an equal structured value are semantic no-ops. */
+function attributesChange(current: Readonly<Record<string, unknown>> | undefined, patch: Readonly<Record<string, unknown>>) {
+  return Object.entries(patch).some(([key, value]) => value === null
+    ? current !== undefined && Object.hasOwn(current, key)
+    : JSON.stringify(current?.[key]) !== JSON.stringify(value));
 }
