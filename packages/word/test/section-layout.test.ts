@@ -176,3 +176,22 @@ test('adjacent column breaks retain their source offsets while reflowing unequal
   expect(lines.flatMap(line => line.fragments.map(fragment => fragment.text)).join('')).toBe('abcdef');
   expect(lines.map(line => line.startOffset)).toEqual([0, 4, 5]);
 });
+
+test('unsourced authored section defaults refresh when final-section geometry changes', () => {
+  const native = new NativeWordDocument({ immutableContent: true, content: [
+    { kind: 'paragraph', runs: [{ text: 'A' }], section: { format: { columnCount: 2 } } },
+    { kind: 'paragraph', runs: [{ text: 'B' }] },
+  ] });
+  native.updateSettings({ finalSection: { pageHeightTwips: 10000 } });
+  expect(native.layout(measure).pages.map(page => page.height)).toEqual([500, 500]);
+  expect(layoutWordDocument(native.artifact().document, measure).pages.map(page => page.height)).toEqual([500, 500]);
+});
+
+test('a trailing soft-break caret line survives reflow into a narrower column', () => {
+  const native = new NativeWordDocument({ page: { width: 200, height: 30, margin: 5 }, content: [
+    { kind: 'paragraph', runs: [{ text: 'abc' }, { text: '\u2028', breakType: 'line' }] },
+  ] });
+  native.updateSettings({ finalSection: { columns: [{ widthTwips: 2000, spaceTwips: 200 }, { widthTwips: 800, spaceTwips: 0 }] } });
+  const layout = native.layout(measure);
+  expect(layout.pages[0]!.columns.flatMap(column => column.lines).map(line => line.startOffset)).toEqual([0, 4]);
+});

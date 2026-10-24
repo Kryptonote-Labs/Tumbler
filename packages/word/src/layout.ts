@@ -500,11 +500,12 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
   let columnIndex = 0;
   let cursorY = 0;
 
+  const bodyBottoms = new WeakMap<MutablePage, number>();
   const sectionPageCounts = new Map<WordSectionProperties, number>();
   const appendPage = (section: WordSectionProperties) => {
     // Earlier pages can still change until the next one starts, so the limit allows one page more.
     if (pageLimit !== undefined && pages.length > pageLimit) throw TRUNCATED;
-    const created = createPage(section, pages, budget, columnLimits);
+    const created = createPage(section, pages, budget);
     const index = sectionPageCounts.get(section) ?? 0;
     sectionPageCounts.set(section, index + 1);
     if (stories) {
@@ -519,6 +520,9 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
       if (footerTop <= headerBottom) created.storyOverflow = true;
       else for (const [columnIndex, column] of created.columns.entries()) created.columns[columnIndex] = { ...column, y: headerBottom, height: Math.max(1, Math.min(column.y + column.height, footerTop) - headerBottom) };
     }
+    bodyBottoms.set(created, Math.min(...created.columns.map(column => column.y + column.height)));
+    const limit = columnLimits?.get(section);
+    if (limit?.page === created.index) for (const [index, column] of created.columns.entries()) created.columns[index] = { ...column, height: Math.min(column.height, limit.height) };
     return created;
   };
   const addPage = (section: WordSectionProperties, parity?: "even" | "odd"): MutablePage => {
@@ -582,7 +586,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
         if (!sameWordColumns(previous, section.properties) || previous.columnCount > 1 || section.properties.columnCount > 1) {
           const top = Math.max(cursorY, ...current.columns.filter(column => column.y === active.y)
             .flatMap(column => [...column.lines.map(line => line.y + line.height), ...column.tables.map(table => table.y + table.height)]));
-          const bottom = current.height - points(section.properties.marginBottomTwips);
+          const bottom = Math.min(current.height - points(section.properties.marginBottomTwips), bodyBottoms.get(current)!);
           if (top >= bottom) addPage(section.properties);
           else {
             for (let i = 0; i < current.columns.length; i++) {
@@ -653,7 +657,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
               // but even that row must flow across pages when it exceeds a full page.
               const keepRow = !continuation && group.some(row => block.rows[row]!.cantSplit || block.rows[row]!.heightRule === "exact");
               const fresh = atTop && parts.length === headerParts;
-              const naturalHeight = page!.height - points(section.properties.marginBottomTwips) - target.y - used;
+              const naturalHeight = bodyBottoms.get(page!)! - target.y - used;
               // A balancing candidate cannot make a fitting protected row oversized.
               if (keepRow && (!fresh || height <= naturalHeight && height > available)) break;
               const split = splitPreparedTable(remaining, available, fresh);
@@ -1052,8 +1056,12 @@ function prepareParagraphFlow(
     hangingTwips: computed.hangingTwips !== 0 ? computed.hangingTwips : markerSource.hangingTwips ?? 360,
   });
   const width = Math.max(1, columnWidth - points(format.indentStartTwips + format.indentEndTwips));
+  let preceding: ParagraphAtom | undefined;
   function* suffix() {
-    for (const atom of paragraphAtoms(document, paragraph, measurer, preparation)) if (atom.startOffset >= startOffset) yield atom;
+    for (const atom of paragraphAtoms(document, paragraph, measurer, preparation)) {
+      if (atom.startOffset >= startOffset) yield atom;
+      else preceding = atom;
+    }
   }
   const atoms = suffix();
   const first = atoms.next();
@@ -1062,7 +1070,8 @@ function prepareParagraphFlow(
   const mark = validMeasurement(measurer.measure(' ', document.runFormat(paragraph, emptyRun)));
   // List hanging indents position the marker, not the first line of text.
   const textFormat = markerSource || startOffset > 0 ? { ...format, firstLineTwips: 0, hangingTwips: 0 } : format;
-  const iterator = startOffset > 0 && first.done ? [][Symbol.iterator]() : breakLines(remainingAtoms(), width, textFormat, mark, wrapTrailSpaces, doNotExpandShiftReturn, startOffset);
+  const terminalLine = preceding?.kind === "break" && preceding.breakType === "line" && preceding.endOffset === startOffset;
+  const iterator = startOffset > 0 && first.done && !terminalLine ? [][Symbol.iterator]() : breakLines(remainingAtoms(), width, textFormat, mark, wrapTrailSpaces, doNotExpandShiftReturn, startOffset);
   const marker = markerSource === undefined ? undefined : prepareMarker(document, paragraph, markerSource, measurer, preparation);
   const lines = new PreparedLineSequence(iterator, completed => {
     const value = Object.freeze({ paragraph, format, lines: completed, marker });

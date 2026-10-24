@@ -224,3 +224,16 @@ test('percentage table continuations rewrap at each unequal column width', () =>
   expect(rendered.at(-1)!.endOffset).toBe(text.length);
   for (let index = 1; index < rendered.length; index++) expect(rendered[index]!.startOffset).toBe(rendered[index - 1]!.endOffset);
 });
+
+test('protected rows larger than the footer-adjusted body make progress across pages', () => {
+  const rel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const sect = '<w:sectPr><w:footerReference w:type="default" r:id="footer"/><w:pgSz w:w="4400" w:h="2400"/><w:pgMar w:top="200" w:bottom="200" w:left="200" w:right="200" w:footer="200"/></w:sectPr>';
+  const artifact = openWordArtifact(buildWordDocumentFixture({
+    documentXml: `<w:document xmlns:w="${namespace}" xmlns:r="${rel}"><w:body>${table(row(cell(lines('Row', 6)), '<w:cantSplit/>'))}${sect}</w:body></w:document>`,
+    relationships: [{ id: 'footer', type: `${rel}/footer`, target: 'footer.xml' }],
+    parts: [{ itemName: 'word/footer.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml', xml: `<w:ftr xmlns:w="${namespace}">${paragraph('Footer', 1000)}</w:ftr>` }],
+  }));
+  const result = layoutWordDocument(artifact.document, measure, { maxPages: 5 });
+  expect(result.pages).toHaveLength(2);
+  expect(texts(result)).toEqual(Array.from({ length: 6 }, (_, index) => `Row${index}`));
+});

@@ -423,7 +423,8 @@ export class NativeWordDocument implements WordLayoutSource {
         const previous = this.records.get(key);
         const original = source.kind === 'paragraph' ? compiled?.paragraphs.get(source.source!) : undefined;
         const hasSection = source.kind === 'paragraph' && sectionOwners.get(`${source.sourceCopy ?? ''}:${source.source}`) === source;
-        const fingerprint = `${hasSection}:${signature(source, width)}`;
+        const sectionDefaults = source.kind === 'paragraph' && source.section && source.section.source === undefined ? JSON.stringify(this.finalSection) : '';
+        const fingerprint = `${hasSection}:${sectionDefaults}:${signature(source, width)}`;
         const descendantsStart = visited.length;
         let result: RecordBlock;
         if (this.options.immutableContent && previous?.signature === fingerprint && previous.subtree?.input === source && this.independent(source)) {
