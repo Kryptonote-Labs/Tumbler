@@ -67,10 +67,11 @@ test('section operations author, disable and undo numbering without changing tex
 });
 
 test('numbering continues through multiple columns and progressive layout agrees with final layout', () => {
-  const source = createWordArtifact({ paragraphs: Array.from({ length: 10 }, (_, i) => ({ runs: [{ text: `Line ${i + 1}` }] })) });
+  const source = createWordArtifact({ page: { width: 400, height: 100, margin: 20 }, paragraphs: Array.from({ length: 10 }, (_, i) => ({ runs: [{ text: `Line ${i + 1}` }] })) });
   const native = new NativeWordDocument({ source });
   native.updateSettings({ finalSection: { columnCount: 2, lineNumbers: { countBy: 1, start: 1, restart: 'newPage' } } });
   const final = native.layout(measure);
+  expect(final.pages[0]!.columns.map(column => column.lines.length)).toEqual([5, 5]);
   expect(numbers(final)).toEqual([Array.from({ length: 10 }, (_, i) => String(i + 1))]);
   const iterator = native.layoutProgressively(measure);
   let result = iterator.next();
