@@ -1,12 +1,14 @@
+import { xml } from './create-xml.ts';
 import { z } from 'zod';
-import type { WordSectionProperties } from './document.ts';
+import type { WordSectionProperties, WordHeaderFooterReference } from './document.ts';
 import { PackageXml } from './package-xml.ts';
 import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
-import { beginPackageTransaction } from '@tumblerjs/opc';
+import { beginPackageTransaction, RelationshipsError } from '@tumblerjs/opc';
 import { wordSections } from './stories.ts';
 import { openWordArtifact, type WordArtifact } from './artifact.ts';
 
 const twips = z.number().int().nonnegative();
+const storyReference = z.object({ kind: z.enum(['header', 'footer']), type: z.enum(['default', 'first', 'even']), relationshipId: z.string().min(1) }).strict();
 export const wordSectionFormatSchema = z.object({
   pageWidthTwips: twips.positive().optional(), pageHeightTwips: twips.positive().optional(),
   orientation: z.enum(['portrait', 'landscape']).optional(),
@@ -16,6 +18,7 @@ export const wordSectionFormatSchema = z.object({
   columnCount: twips.positive().optional(), columnSpaceTwips: twips.optional(),
   columns: z.array(z.object({ widthTwips: twips.positive(), spaceTwips: twips }).strict()).min(1).nullable().optional(),
   columnSeparator: z.boolean().optional(),
+  headerReferences: z.array(storyReference).optional(), footerReferences: z.array(storyReference).optional(),
   breakType: z.enum(['continuous', 'nextPage', 'nextColumn', 'evenPage', 'oddPage']).optional(),
 }).strict();
 export type WordSectionFormat = z.infer<typeof wordSectionFormatSchema>;
@@ -39,6 +42,15 @@ export function wordSectionFormat(properties: WordSectionProperties): WordSectio
     .filter(([key, value]) => key in wordSectionFormatSchema.shape && value !== undefined)));
 }
 
+/** Section references can only reuse existing header/footer relationships in the source package. */
+export function validateWordSectionReferences(format: { readonly headerReferences?: WordSectionProperties['headerReferences'] | undefined; readonly footerReferences?: WordSectionProperties['footerReferences'] | undefined }, sections: readonly WordSectionProperties[], additional: readonly WordHeaderFooterReference[] = []) {
+  for (const kind of ['header', 'footer'] as const) {
+    const references = kind === 'header' ? format.headerReferences : format.footerReferences;
+    const known = new Set([...sections.flatMap(section => kind === 'header' ? section.headerReferences : section.footerReferences), ...additional].filter(reference => reference.kind === kind).map(reference => reference.relationshipId));
+    for (const reference of references ?? []) if (reference.kind !== kind || !known.has(reference.relationshipId)) throw new Error('Unknown section story relationship.');
+  }
+}
+
 /** Apply a semantic patch to imported section properties without losing references or opaque XML. */
 export function resolveWordSection(base: WordSectionProperties, format: WordSectionFormat): WordSectionProperties {
   const patch = wordSectionFormatSchema.parse(format);
@@ -56,6 +68,10 @@ export function resolveWordSection(base: WordSectionProperties, format: WordSect
 export function sectionFormatXml(format: WordSectionFormat): Map<string, string> {
   wordSectionFormatSchema.parse(format);
   const result = new Map<string, string>();
+  for (const [key, name] of [['headerReferences', 'headerReference'], ['footerReferences', 'footerReference']] as const) {
+    const references = format[key];
+    if (references) result.set(name, references.map(reference => `<w:${name} w:type="${reference.type}" r:id="${xml(reference.relationshipId)}"/>`).join(''));
+  }
   const attributes = (names: Readonly<Record<string, string>>) => Object.entries(names)
     .flatMap(([key, name]) => { const value = format[key as keyof WordSectionFormat]; return value === undefined ? [] : [` w:${name}="${value}"`]; }).join('');
   const size = attributes({ pageWidthTwips: 'w', pageHeightTwips: 'h', orientation: 'orient' });
@@ -76,6 +92,13 @@ export function sectionBoundaryXml(markup: PackageXml, boundary: WordSectionBoun
   const element = boundary.source === undefined ? undefined : markup.element(boundary.source, 'sectPr');
   if (boundary.source !== undefined && !element) throw new Error('Unknown source section.');
   const format = boundary.source === undefined ? { ...wordSectionFormat(markup.document.finalSection), ...boundary.format } : boundary.format;
+  let relationships: readonly WordHeaderFooterReference[] = [];
+  try {
+    relationships = markup.document.package.relationships(markup.document.part.name).items.flatMap((relationship): WordHeaderFooterReference[] =>
+      relationship.targetMode === 'Internal' && (relationship.type.endsWith('/header') || relationship.type.endsWith('/footer'))
+        ? [{ kind: relationship.type.endsWith('/header') ? 'header' : 'footer', type: 'default', relationshipId: relationship.id }] : []);
+  } catch (error) { if (!(error instanceof RelationshipsError) || error.code !== 'missing_item') throw error; }
+  validateWordSectionReferences(format, wordSections(markup.document), relationships);
   const changes = sectionFormatXml(format);
   if (changes.has('cols') && element) {
     const base = wordSections(markup.document).find(section => section.elementId === element.id);

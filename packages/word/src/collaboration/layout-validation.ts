@@ -1,3 +1,4 @@
+import { validateWordSectionReferences } from '../section-format.ts';
 import type * as Y from 'yjs';
 import type { WordArtifact } from '../artifact.ts';
 import { wordSectionBaseline, type WordSectionBaseline } from '../section-baseline.ts';
@@ -23,5 +24,7 @@ export function validateWordLayout(doc: Y.Doc) {
       key.startsWith('wordSectionFormat:') || key === 'wordSection' && !!value && typeof value === 'object' && 'format' in value && !!value.format && typeof value.format === 'object' && Object.keys(value.format).length > 0));
     if (!authored) return;
   }
-  inspectWordSections(wordSharedText(doc.getText('body')).text, source);
+  const sections = inspectWordSections(wordSharedText(doc.getText('body')).text, source);
+  const known = source ? [...source.sections.map(section => section.properties), source.finalSection] : [];
+  for (const section of sections) validateWordSectionReferences(section.properties, known);
 }

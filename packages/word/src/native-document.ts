@@ -1,3 +1,4 @@
+import { validateWordSectionReferences } from './section-format.ts';
 import { resolveWordSection, wordSectionFormat } from './section-format.ts';
 import { applyWordDocumentSettings, isWordDocumentSettings, type WordDocumentSettings } from './document-settings.ts';
 import { refreshUnchangedNumbering } from './content-numbering.ts';
@@ -134,6 +135,7 @@ export class NativeWordDocument implements WordLayoutSource {
   updateSettings(settings: WordDocumentSettings) {
     if (!isWordDocumentSettings(settings)) throw new TypeError('Invalid document settings.');
     if (JSON.stringify(this.settings) === JSON.stringify(settings)) return;
+    validateWordSectionReferences(settings.finalSection ?? {}, this.options.source ? wordSections(this.options.source.document) : []);
     this.settings = { ...settings };
     this.finalSection = resolveWordSection(this.originalFinalSection, settings.finalSection ?? {});
     if (this.authored.length) this.update(this.authored);
@@ -606,6 +608,7 @@ export class NativeWordDocument implements WordLayoutSource {
               return inherited?.owner.kind === 'hyperlink' || inherited?.owner.kind === 'insertion'
                 ? { ...inherited.owner, elementId: allocate(), runs: [run] } : run;
             });
+            if (authored.section) validateWordSectionReferences(authored.section.format, compiled ? wordSections(compiled.artifact.document) : []);
             const block: WordParagraph = {
               kind: 'paragraph',
               elementId: previous?.block.elementId ?? allocate(),

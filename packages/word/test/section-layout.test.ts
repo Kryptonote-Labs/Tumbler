@@ -195,3 +195,39 @@ test('a trailing soft-break caret line survives reflow into a narrower column', 
   const layout = native.layout(measure);
   expect(layout.pages[0]!.columns.flatMap(column => column.lines).map(line => line.startOffset)).toEqual([0, 4]);
 });
+
+for (const conformance of ['strict', 'transitional'] as const) for (const replacement of [false, true]) {
+  test(`${conformance} removing a section break preserves inherited stories and respects explicit replacements: ${replacement}`, () => {
+    const ns = OOXML_NAMESPACES[conformance].wordprocessing;
+    const rel = conformance === 'strict' ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const source = openWordArtifact(buildWordDocumentFixture({ conformance,
+      documentXml: `<w:document xmlns:w="${ns}" xmlns:r="${rel}"><w:body><w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="header"/><w:footerReference w:type="default" r:id="footer"/></w:sectPr></w:pPr><w:r><w:t>First</w:t></w:r></w:p><w:p><w:r><w:t>Second</w:t></w:r></w:p><w:sectPr>${replacement ? '<w:headerReference w:type="default" r:id="replacement"/>' : ''}<w:docGrid w:linePitch="360"/></w:sectPr></w:body></w:document>`,
+      relationships: [{ id: 'header', type: `${rel}/header`, target: 'header.xml' }, { id: 'footer', type: `${rel}/footer`, target: 'footer.xml' }, ...(replacement ? [{ id: 'replacement', type: `${rel}/header`, target: 'replacement.xml' }] : [])],
+      parts: [{ itemName: 'word/header.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml', xml: `<w:hdr xmlns:w="${ns}"><w:p><w:r><w:t>Original</w:t></w:r></w:p></w:hdr>` },
+        { itemName: 'word/footer.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml', xml: `<w:ftr xmlns:w="${ns}"><w:p><w:r><w:t>Footer</w:t></w:r></w:p></w:ftr>` },
+        ...(replacement ? [{ itemName: 'word/replacement.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml', xml: `<w:hdr xmlns:w="${ns}"><w:p><w:r><w:t>Replacement</w:t></w:r></w:p></w:hdr>` }] : [])],
+    }));
+    const session = openWordOperationDocument(source);
+    const history = session.history();
+    session.commit(session.prepareOperation(at(5), { name: 'remove-section-break', input: {} }), history.origin);
+    const artifact = session.artifact();
+    const layout = layoutWordDocument(artifact.document, measure);
+    expect(layout.pages[0]!.headerLines[0]!.fragments[0]!.text).toBe(replacement ? 'Replacement' : 'Original');
+    expect(layout.pages[0]!.footerLines[0]!.fragments[0]!.text).toBe('Footer');
+    expect(artifact.document.source.source).toContain('w:docGrid w:linePitch="360"');
+    expect(wordSections(artifact.document)).toHaveLength(1);
+    history.undo();
+    expect(wordSections(session.artifact().document)).toHaveLength(2);
+    history.redo();
+    expect(wordSections(session.artifact().document)).toHaveLength(1);
+    history.destroy(); session.destroy();
+  });
+}
+
+test('section formats reject header relationships absent from the source package', () => {
+  const session = openWordOperationDocument(createWordArtifact());
+  expect(() => session.prepareOperation(at(0), { name: 'section-layout', input: { scope: 'section', format: { headerReferences: [{ kind: 'header', type: 'default', relationshipId: 'unknown' }] } } })).toThrow('Unknown section story relationship');
+  const native = new NativeWordDocument();
+  expect(() => native.updateSettings({ finalSection: { headerReferences: [{ kind: 'header', type: 'default', relationshipId: 'unknown' }] } })).toThrow('Unknown section story relationship');
+  session.destroy();
+});

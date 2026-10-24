@@ -1051,3 +1051,5 @@ remote settings are rejected before the live document changes. Remote updates
 must pass `commitWordUpdate` or staged `validateWordSharedDocument`; applying raw
 Yjs updates alone does not perform document validation. Documents without layout
 edits retain their existing text-validation cost.
+
+Removing a section break preserves effective inherited header/footer references on the surviving section. Section format `headerReferences` and `footerReferences` can reuse existing source relationships; unknown or mismatched relationships are rejected.

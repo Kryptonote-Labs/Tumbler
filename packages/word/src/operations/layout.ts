@@ -101,6 +101,22 @@ export function applyWordLayoutOperation(doc: Y.Doc, selection: WordScopedSelect
   } else {
     const boundary = sections.find(section => section.boundary && (section.end - 1 === range.start || section.end === range.start));
     if (!boundary) throw new Error('Place the caret at a section break.');
+    const index = sections.indexOf(boundary);
+    const inherited = new Map<string, import('../document.ts').WordHeaderFooterReference>();
+    for (const section of sections.slice(0, index + 2))
+      for (const reference of [...section.properties.headerReferences, ...section.properties.footerReferences]) inherited.set(`${reference.kind}:${reference.type}`, reference);
+    const following = sections[index + 1]!;
+    const references: import('../section-format.ts').WordSectionFormat = {};
+    const headers = [...inherited.values()].filter(reference => reference.kind === 'header');
+    const footers = [...inherited.values()].filter(reference => reference.kind === 'footer');
+    if (JSON.stringify(headers) !== JSON.stringify(following.properties.headerReferences)) references.headerReferences = headers;
+    if (JSON.stringify(footers) !== JSON.stringify(following.properties.footerReferences)) references.footerReferences = footers;
+    if (Object.keys(references).length) {
+      patch(index + 1, references);
+      for (const change of changes) apply([{ retain: change.at }, { retain: 1, attributes: change.attributes }]);
+      owner.sync();
+    }
+
     apply([{ retain: boundary.end - 1 }, { delete: 1 }]);
     owner.sync();
     const at = boundary.end - 1;
