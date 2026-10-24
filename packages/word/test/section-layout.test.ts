@@ -126,6 +126,22 @@ test('columns balance when closed by a continuous section break', () => {
   expect(layoutWordDocument(exported.document, measure).pages[0]!.columns.slice(0, 2).map(column => column.lines.length)).toEqual([6, 6]);
 });
 
+for (const type of ['continuous', 'nextPage'] as const) test(`trailing ${type} boundary retains its column balancing semantics`, () => {
+  const native = new NativeWordDocument({ content:
+    Array.from({ length: 6 }, (_, index) => ({ kind: 'paragraph' as const, runs: [{ text: `Line ${index + 1}` }],
+      ...(index === 5 ? { section: { format: { columnCount: 2 } } } : {}),
+    })),
+  });
+  native.updateSettings({ finalSection: { breakType: type } });
+  const expected = type === 'continuous' ? [3, 3] : [6, 0];
+  expect(native.layout(measure).pages[0]!.columns.map(column => column.lines.length)).toEqual(expected);
+  expect(layoutWordDocument(native.artifact().document, measure).pages[0]!.columns.map(column => column.lines.length)).toEqual(expected);
+  const progressive = native.layoutProgressively(measure);
+  let step = progressive.next();
+  while (!step.done) step = progressive.next();
+  expect(step.value.pages[0]!.columns.map(column => column.lines.length)).toEqual(expected);
+});
+
 for (const count of [1, 5]) test(`short three-column text stays in the first column: ${count} paragraphs`, () => {
   const native = new NativeWordDocument({ page: { width: 600, height: 800, margin: 50 }, content:
     Array.from({ length: count }, () => ({ kind: 'paragraph' as const, runs: [{ text: "Here's some text Here's some text Here's some text Here's some text" }] })),
