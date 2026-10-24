@@ -74,3 +74,24 @@ for (const alignment of ['right', 'center', 'decimal'] as const) test(`${alignme
     expect(anchor).toBeCloseTo(100);
   }
 });
+
+test('decimal tabs align the kerned decimal mark', () => {
+  const original = source('<w:tab/><w:t>AV.5</w:t>', 150).document.source.source;
+  const artifact = openWordArtifact(buildWordDocumentFixture({ documentXml: original.replace('<w:p>', '<w:p><w:pPr><w:tabs><w:tab w:val="decimal" w:pos="2000"/></w:tabs></w:pPr>') }));
+  const measure = { measure(text: string) { return { width: text.length * 10 - (text.includes('AV') ? 2 : 0) - (text.includes('V.') ? 3 : 0), ascent: 8, descent: 2 }; } };
+  for (const layout of [layoutWordDocument(artifact.document, measure), new NativeWordDocument({ source: artifact }).layout(measure)]) {
+    const line = layout.pages[0]!.columns[0]!.lines[0]!;
+    const text = line.fragments.find(fragment => fragment.kind === 'text')!;
+    expect(text.x - line.x + measure.measure('AV.').width - measure.measure('.').width).toBeCloseTo(100);
+  }
+});
+
+test('positive kerning cannot overflow a line that fits the individual glyphs', () => {
+  const artifact = source('<w:t>AV</w:t>', 21);
+  const measure = { measure(text: string) { return { width: text.length * 10 + (text === 'AV' ? 2 : 0), ascent: 8, descent: 2 }; } };
+  for (const layout of [layoutWordDocument(artifact.document, measure), new NativeWordDocument({ source: artifact }).layout(measure)]) {
+    const lines = layout.pages[0]!.columns[0]!.lines;
+    expect(lines.map(line => line.fragments[0]!.text)).toEqual(['A', 'V']);
+    expect(lines.map(line => line.width)).toEqual([10, 10]);
+  }
+});
