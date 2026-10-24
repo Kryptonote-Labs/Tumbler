@@ -235,6 +235,8 @@ export interface WordSectionProperties {
   readonly gutterTwips: number;
   readonly columnCount: number;
   readonly columnSpaceTwips: number;
+  readonly columns?: readonly { readonly widthTwips: number; readonly spaceTwips: number }[] | undefined;
+  readonly columnSeparator?: boolean;
   readonly breakType: "continuous" | "nextPage" | "nextColumn" | "evenPage" | "oddPage";
   readonly titlePage: boolean;
   readonly headerReferences: readonly WordHeaderFooterReference[];
@@ -844,6 +846,11 @@ function parseSection(element: LosslessXmlElement | undefined, namespace: string
     gutterTwips: twipsAttr(pageMargins, namespace, "gutter", 0),
     columnCount: integerAttr(columns, namespace, "num", 1, 1, 45),
     columnSpaceTwips: twipsAttr(columns, namespace, "space", 720),
+    ...(columns && ['0', 'false', 'off'].includes(attr(columns, namespace, 'equalWidth') ?? 'true') ? {
+      columns: children(columns, namespace, 'col').map(col => ({ widthTwips: twipsAttr(col, namespace, 'w', 1440), spaceTwips: twipsAttr(col, namespace, 'space', 0) })),
+      columnCount: children(columns, namespace, 'col').length || 1,
+    } : {}),
+    columnSeparator: columns !== undefined && ['1', 'true', 'on'].includes(attr(columns, namespace, 'sep') ?? 'false'),
     breakType: rawBreakType === "continuous" || rawBreakType === "nextColumn" || rawBreakType === "evenPage" || rawBreakType === "oddPage"
       ? rawBreakType
       : "nextPage",

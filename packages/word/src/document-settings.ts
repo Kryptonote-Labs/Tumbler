@@ -1,3 +1,4 @@
+import { applyWordFinalSection, wordSectionFormatSchema, type WordSectionFormat } from './section-format.ts';
 import { beginLosslessXmlEdit, parseLosslessXml } from '@tumblerjs/ooxml';
 import { beginPackageTransaction, RelationshipsError } from '@tumblerjs/opc';
 import { openWordArtifact, type WordArtifact } from './artifact.ts';
@@ -8,16 +9,18 @@ import { isWordColour, type WordColour } from './theme-colours.ts';
 export interface WordDocumentSettings {
   /** Omitted preserves the source; null removes its background, including any background drawing. */
   readonly background?: WordColour | null;
+  readonly finalSection?: WordSectionFormat;
 }
 
 export function isWordDocumentSettings(value: unknown): value is WordDocumentSettings {
   return !!value && typeof value === 'object' && !Array.isArray(value) &&
-    Object.entries(value).every(([key, item]) => key === 'background' && (item === null || isWordColour(item)));
+    Object.entries(value).every(([key, item]) => key === 'background' ? item === null || isWordColour(item) : key === 'finalSection' && wordSectionFormatSchema.safeParse(item).success);
 }
 
 /** ECMA-376 §17.2.1 and §17.15.1.26. Changes retain unrelated XML and package parts. */
 export function applyWordDocumentSettings(artifact: WordArtifact, settings: WordDocumentSettings): WordArtifact {
   if (!isWordDocumentSettings(settings)) throw new TypeError('Invalid document settings.');
+  if (settings.finalSection) artifact = applyWordFinalSection(artifact, settings.finalSection);
   if (settings.background === undefined) return artifact;
   const document = artifact.document;
   if (document.source.root.localName !== 'document') throw new Error('Document settings require the main document.');

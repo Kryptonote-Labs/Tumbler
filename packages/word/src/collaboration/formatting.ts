@@ -1,3 +1,5 @@
+import { wordSectionBoundarySchema } from '../section-format.ts';
+import { isSectionPropertyAttribute, isSectionPropertyValue } from './section-attributes.ts';
 import { isParagraphPropertyAttribute, isParagraphPropertyValue } from './paragraph-attributes.ts';
 import { isWordAuthoredInk, type WordAuthoredInk } from "../authored-ink.ts";
 import { isWordInkTraceOverrides, type WordInkTraceOverride } from "../ink-overrides.ts";
@@ -25,6 +27,7 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   wordSource?: number;
   wordParagraph?: number;
   wordCopy?: string;
+  wordSection?: import('../section-format.ts').WordSectionBoundary | { remove: true } | null;
   fontFamily?: string;
   wordUnderline?: "single" | "double";
   align?: Alignment;
@@ -86,6 +89,8 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
       !/[\x00-\x1f]/.test(value)
     )
       continue;
+    if (key === 'wordSection' && (value === null || !!value && typeof value === 'object' && Object.keys(value).length === 1 && 'remove' in value && value.remove === true || wordSectionBoundarySchema.safeParse(value).success)) continue;
+    if (isSectionPropertyAttribute(key) && isSectionPropertyValue(key, value)) continue;
     if (key === "paragraph" && isWordParagraphFormat(value)) continue;
     if (isParagraphPropertyAttribute(key) && isParagraphPropertyValue(key, value)) continue;
     if (key === "positioning" && isWordParagraphPositioning(value)) continue;

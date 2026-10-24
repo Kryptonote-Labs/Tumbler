@@ -2,6 +2,7 @@
   import { wordDisplaySurfaces } from './word-display-surfaces.ts';
   import { wordDisplayInkSvg } from './word-display-ink.ts';
   import { wordDisplayColour } from './word-display-colour.ts';
+  import WordPageLayoutDecorations from './WordPageLayoutDecorations.svelte';
   import { wordDrawingStackOrder, wordDrawingOverlayOrder } from "./word-drawing-order.ts";
   import WordPictureView from "./WordPictureView.svelte";
   import WordContentClip from "./WordContentClip.svelte";
@@ -606,6 +607,7 @@
           >
             <!-- Canvas decoding owns its URLs until the asynchronous paint completes. -->
             <WordInkPageLayer {page} {scale} maxPixels={inkMaxPixels} background={layout.background} />
+            <WordPageLayoutDecorations {page} />
             <WordParagraphDecorations lines={[...page.columns.flatMap(column => column.lines), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
             {#if page.noteSeparatorY !== undefined}
               <div class="note-separator" style={`left:${wordPointsToCssPixels(page.section.marginLeftTwips / 20)}px;top:${wordPointsToCssPixels(page.noteSeparatorY)}px`}></div>

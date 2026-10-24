@@ -1,6 +1,7 @@
 // CT_RPr, CT_PPr and CT_TcPr child order in WordprocessingML.
 export const propertyOrder: Record<string, readonly string[]> = {
   document: ['background', 'body'],
+  sectPr: 'headerReference footerReference footnotePr endnotePr type pgSz pgMar paperSrc pgBorders lnNumType pgNumType cols formProt vAlign noEndnote titlePg textDirection bidi rtlGutter docGrid printerSettings sectPrChange'.split(' '),
   tblPr:
     'tblStyle tblpPr tblOverlap bidiVisual tblStyleRowBandSize tblStyleColBandSize tblW jc tblCellSpacing tblInd tblBorders shd tblLayout tblCellMar tblLook tblCaption tblDescription tblPrChange'.split(
       ' ',

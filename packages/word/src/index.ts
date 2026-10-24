@@ -185,3 +185,7 @@ export { wordPictureImageRect, type WordPictureGeometry } from './picture-geomet
 export { wordDrawingCellClip, intersectWordContentBounds, wordTableLinesWithClips, wordVisibleLineBounds, type WordContentBounds, type WordClippedLine } from './table-clipping.ts';
 
 export { applyWordDocumentSettings, isWordDocumentSettings, type WordDocumentSettings } from './document-settings.ts';
+
+export { resolveWordSection, wordSectionFormat, wordSectionFormatSchema, type WordSectionFormat, type WordSectionBoundary } from './section-format.ts';
+export { wordSectionColumns, wordColumnSeparators } from './section-columns.ts';
+export { wordSectionBaseline, type WordSectionBaseline } from './section-baseline.ts';

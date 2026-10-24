@@ -1,3 +1,4 @@
+import { isSectionPropertyAttribute } from './section-attributes.ts';
 import { isParagraphPropertyAttribute } from './paragraph-attributes.ts';
 import { registerWordListLevel, type WordAuthoredList } from '../authored-list.ts';
 import type * as Y from 'yjs';
@@ -25,6 +26,7 @@ export function validateWordText(text: Y.Text) {
     if (part.attributes?.styleId && !/^\n+$/.test(part.insert)) throw new Error('Paragraph styles belong on paragraph boundaries.');
     if ((part.attributes?.paragraph || Object.keys(part.attributes ?? {}).some(isParagraphPropertyAttribute)) && !/^\n+$/.test(part.insert)) throw new Error('Paragraph formatting belongs on paragraph boundaries.');
     if (part.attributes?.positioning && !/^\n+$/.test(part.insert)) throw new Error('Paragraph positioning belongs on paragraph boundaries.');
+    if ((part.attributes?.wordSection || Object.keys(part.attributes ?? {}).some(isSectionPropertyAttribute)) && (!/^\n+$/.test(part.insert) || part.attributes?.table)) throw new Error('Section boundaries belong on body paragraph marks.');
     const list = part.attributes?.list;
     if (list) {
       const levels = lists.get(list.id) ?? new Map<number, WordAuthoredList>();

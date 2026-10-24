@@ -1,3 +1,4 @@
+import { inheritWordLayoutSource } from '../layout-validation.ts';
 import * as Y from "yjs";
 import { validateWordSharedDocument } from "./transactions.ts";
 
@@ -29,6 +30,7 @@ export function preflightWordUndo(
     throw new Error("Use createWordUndoManager for guarded undo; custom item filters are unsupported.");
   const candidate = new Y.Doc({ gc: false });
   Y.applyUpdate(candidate, Y.encodeStateAsUpdate(doc));
+  inheritWordLayoutSource(doc, candidate);
   for (const [name, value] of doc.share) {
     if (value instanceof Y.Text) candidate.getText(name);
     else if (value instanceof Y.Map) candidate.getMap(name);

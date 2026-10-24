@@ -199,3 +199,54 @@ test.each([
   expect(headers).toHaveLength(enabled ? result.pages.length : 1);
   expect(texts(result).filter(text => text.startsWith('Body'))).toHaveLength(25);
 });
+
+test('balancing keeps a row intact when it fits the natural column height', () => {
+  const sect = '<w:sectPr><w:pgSz w:w="8000" w:h="4000"/><w:pgMar w:top="400" w:bottom="400" w:left="400" w:right="400"/><w:cols w:num="2" w:space="400"/></w:sectPr>';
+  const artifact = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${namespace}"><w:body>${table(row(cell(lines('Row', 6)), '<w:cantSplit/>'))}<w:p><w:pPr>${sect}</w:pPr></w:p>${paragraph('After')}${sect.replace('<w:sectPr>', '<w:sectPr><w:type w:val="continuous"/>').replace('<w:cols w:num="2" w:space="400"/>', '')}</w:body></w:document>` }));
+  const result = layoutWordDocument(artifact.document, measure);
+  const tables = result.pages.flatMap(page => page.columns.flatMap(column => column.tables));
+  expect(tables).toHaveLength(1);
+  expect(tables[0]!.height).toBe(60);
+});
+
+test('percentage table continuations rewrap at each unequal column width', () => {
+  const sect = '<w:sectPr><w:pgSz w:w="8000" w:h="3000"/><w:pgMar w:top="400" w:bottom="400" w:left="400" w:right="400"/><w:cols w:equalWidth="0"><w:col w:w="4000" w:space="400"/><w:col w:w="1600"/></w:cols></w:sectPr>';
+  const text = 'abcdef '.repeat(160);
+  const content = table(row(cell(paragraph(text)))).replace('<w:tblPr>', '<w:tblPr><w:tblW w:type="pct" w:w="5000"/>');
+  const artifact = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${namespace}"><w:body>${content}${sect}</w:body></w:document>` }));
+  const result = layoutWordDocument(artifact.document, measure);
+  for (const page of result.pages) for (const column of page.columns) for (const table of column.tables) {
+    expect(table.width).toBe(column.width);
+    expect(tableLines(table).every(line => line.width <= column.width)).toBe(true);
+  }
+  const rendered = allLines(result);
+  expect(rendered[0]!.startOffset).toBe(0);
+  expect(rendered.at(-1)!.endOffset).toBe(text.length);
+  for (let index = 1; index < rendered.length; index++) expect(rendered[index]!.startOffset).toBe(rendered[index - 1]!.endOffset);
+});
+
+test('protected rows larger than the footer-adjusted body make progress across pages', () => {
+  const rel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const sect = '<w:sectPr><w:footerReference w:type="default" r:id="footer"/><w:pgSz w:w="4400" w:h="2400"/><w:pgMar w:top="200" w:bottom="200" w:left="200" w:right="200" w:footer="200"/></w:sectPr>';
+  const artifact = openWordArtifact(buildWordDocumentFixture({
+    documentXml: `<w:document xmlns:w="${namespace}" xmlns:r="${rel}"><w:body>${table(row(cell(lines('Row', 6)), '<w:cantSplit/>'))}${sect}</w:body></w:document>`,
+    relationships: [{ id: 'footer', type: `${rel}/footer`, target: 'footer.xml' }],
+    parts: [{ itemName: 'word/footer.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml', xml: `<w:ftr xmlns:w="${namespace}">${paragraph('Footer', 1000)}</w:ftr>` }],
+  }));
+  const result = layoutWordDocument(artifact.document, measure, { maxPages: 5 });
+  expect(result.pages).toHaveLength(2);
+  expect(texts(result)).toEqual(Array.from({ length: 6 }, (_, index) => `Row${index}`));
+});
+
+test('protected rows below continuous sections move intact to a fresh page', () => {
+  const box = '<w:pgSz w:w="4400" w:h="2400"/><w:pgMar w:top="200" w:bottom="200" w:left="200" w:right="200"/>';
+  const first = `<w:sectPr>${box}<w:cols w:num="2" w:space="200"/></w:sectPr>`;
+  let before = lines('Before', 10);
+  const mark = before.lastIndexOf('</w:pPr>');
+  before = before.slice(0, mark) + first + before.slice(mark);
+  const artifact = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${namespace}"><w:body>${before}${table(row(cell(lines('Row', 6)), '<w:cantSplit/>'))}<w:sectPr>${box}<w:type w:val="continuous"/></w:sectPr></w:body></w:document>` }));
+  const result = layoutWordDocument(artifact.document, measure);
+  expect(result.pages).toHaveLength(2);
+  expect(result.pages[0]!.columns.flatMap(column => column.tables)).toHaveLength(0);
+  expect(result.pages[1]!.columns[0]!.tables[0]!.height).toBe(60);
+});

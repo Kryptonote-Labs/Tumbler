@@ -1,3 +1,5 @@
+import { bindWordLayoutSource } from '../collaboration/layout-validation.ts';
+import { readWordSectionBoundary } from '../collaboration/section-attributes.ts';
 import { readWordDocumentSettings } from '../collaboration/document-settings.ts';
 import { applyWordDocumentSettings } from '../document-settings.ts';
 import { hasWordParagraphReset, readWordParagraphFormat } from "../collaboration/paragraph-attributes.ts";
@@ -21,12 +23,13 @@ export function openWordOperationDocument(
   resolveImage?: (image: DocumentImage) => Uint8Array,
 ) {
   const doc = new Y.Doc();
+  bindWordLayoutSource(doc, source);
   const text = doc.getText("body");
   text.applyDelta(importOperationDelta(source));
   return {
     text,
     prepare: (changes: Parameters<typeof prepareWordUpdate>[1]) => prepareWordUpdate(doc, changes),
-    prepareOperation: (selection: Parameters<typeof prepareWordScopedOperation>[1], operation: Parameters<typeof prepareWordScopedOperation>[2], context?: Parameters<typeof prepareWordScopedOperation>[3]) => prepareWordScopedOperation(doc, selection, operation, context),
+    prepareOperation: (selection: Parameters<typeof prepareWordScopedOperation>[1], operation: Parameters<typeof prepareWordScopedOperation>[2], context?: Parameters<typeof prepareWordScopedOperation>[3]) => prepareWordScopedOperation(doc, selection, operation, { ...context, source }),
     commit: (prepared: Parameters<typeof commitWordUpdate>[1], origin?: unknown) => commitWordUpdate(doc, prepared, origin),
     grid: (table: string) => structuredGrid(doc, { story: 'body', table }),
     anchor: (selection: Parameters<typeof anchorScopedSelection>[1]) => anchorScopedSelection(doc, selection),
@@ -140,6 +143,7 @@ export function projectWordOperationText(
         paragraphs.push({
           kind: "paragraph",
           runs,
+          ...(a.wordSection === null ? { section: null } : a.wordSection !== undefined ? { section: readWordSectionBoundary(a)! } : {}),
           ...(a.wordParagraph === undefined ? {} : { source: a.wordParagraph }),
           ...(a.wordCopy === undefined ? {} : { sourceCopy: a.wordCopy }),
           ...(a.styleId ? { styleId: a.styleId } : {}),

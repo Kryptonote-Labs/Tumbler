@@ -1,3 +1,4 @@
+import { inheritWordLayoutSource, validateWordLayout } from '../layout-validation.ts';
 import { readWordDocumentSettings } from '../document-settings.ts';
 import * as Y from "yjs";
 import { validateWordText } from "../validation.ts";
@@ -34,6 +35,7 @@ export function validateWordSharedDocument(doc: Y.Doc) {
       if (value instanceof Y.Text) validateWordText(value);
     }
   validateStructuredTables(doc);
+  validateWordLayout(doc);
 }
 /** Full updates preserve edits to named cell roots and structural maps. Preparation is read-only. */
 export function prepareWordUpdate(
@@ -54,6 +56,7 @@ export function stageWordUpdate(
   const replica = new Y.Doc();
   try {
     Y.applyUpdate(replica, Y.encodeStateAsUpdate(doc));
+    inheritWordLayoutSource(doc, replica);
     // Restore root constructors after decoding. Yjs initially represents unknown roots generically.
     for (const [name, value] of doc.share)
       if (value instanceof Y.Text) replica.getText(name);
@@ -81,6 +84,7 @@ export function commitWordUpdate(
   const candidate = new Y.Doc();
   try {
     Y.applyUpdate(candidate, Y.encodeStateAsUpdate(doc));
+    inheritWordLayoutSource(doc, candidate);
     Y.applyUpdate(candidate, prepared.update);
     for (const [name, value] of doc.share)
       if (value instanceof Y.Text) candidate.getText(name);

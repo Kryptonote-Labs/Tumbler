@@ -63,6 +63,7 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
     const { spacingBeforeTwips, spacingAfterTwips, lineSpacing, keepNext, keepLines, pageBreakBefore, widowControl, contextualSpacing, shading, borders } = document.styles.paragraphFormat(document, block);
     return {
       kind: 'paragraph',
+          ...(block.section ? { section: { source: block.section.elementId, format: {} } } : {}),
       ...(styleId === undefined ? {} : { styleId }),
       paragraph: { spacingBeforeTwips, spacingAfterTwips, lineSpacing, keepNext, keepLines, pageBreakBefore, widowControl, contextualSpacing, ...(shading === undefined ? {} : { shading: document.styles.paragraphFormat(document, block).shadingColour ?? shading }), ...(borders === undefined ? {} : { borders: document.styles.paragraphFormat(document, block).borderColours ?? borders }) },
       ...(tabs.length || indentStartTwips || indentEndTwips || firstLineTwips || hangingTwips

@@ -7,3 +7,4 @@ export * from "./inspect.ts";
 export { wordDrawingChanges } from "./drawing.ts";
 
 export { prepareWordScopedOperation } from "./structured.ts";
+export { inspectWordSections } from './layout.ts';

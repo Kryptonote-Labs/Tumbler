@@ -1,3 +1,6 @@
+import { reflowPreparedTable } from './table-reflow.ts';
+import { balanceWordColumns, type WordColumnLimits } from './column-balance.ts';
+import { wordSectionColumns, sameWordColumns } from './section-columns.ts';
 import { widowGroupHeight, keepHeightUntil } from './paragraph-pagination.ts';
 import { withParagraphSpacing } from './paragraph-spacing.ts';
 import { createFieldVisibility } from './field-visibility.ts';
@@ -93,6 +96,7 @@ export interface WordLayoutPage {
 }
 
 export interface WordLayoutColumn {
+  readonly section?: WordSectionProperties;
   readonly index: number;
   readonly x: number;
   readonly y: number;
@@ -184,6 +188,7 @@ interface LayoutBudget {
 }
 
 interface MutableColumn {
+  readonly section?: WordSectionProperties;
   readonly index: number;
   readonly x: number;
   readonly y: number;
@@ -368,6 +373,7 @@ export interface PreparedTable {
   readonly width: number;
   readonly columnOffsets: readonly number[];
   readonly rowHeights: readonly number[];
+  readonly sourceRows: readonly number[];
   readonly cells: readonly PreparedTableCell[];
   readonly cellsByRow: readonly (readonly PreparedTableCell[])[];
 }
@@ -437,7 +443,22 @@ export function* layoutWordSourceProgressively(
   let total = 1;
   const seen = new Set<number>();
   while (true) {
-    const layout = yield* layoutWordSourcePass(document, measurer, options, stories, total, emitProgress);
+    const initial = yield* layoutWordSourcePass(document, measurer, options, stories, total, emitProgress);
+    const layout = balanceWordColumns(initial, limits => {
+      const pass = layoutWordSourcePass(document, measurer, options, stories, total, false, limits);
+      let step = pass.next();
+      while (!step.done) step = pass.next();
+      return step.value;
+    }, id => {
+      const paragraph = document.blocks.find(block => block.kind === 'paragraph' && block.elementId === id);
+      return paragraph?.kind === 'paragraph' ? document.paragraphFormat(paragraph) : undefined;
+    }, new Set(documentSections(document.blocks, document.finalSection).flatMap((section, index, all) => {
+      // ECMA-376 §17.18.77: a continuous break balances the preceding section.
+      // documentSections omits an empty final section after a trailing boundary.
+      const following = all[index + 1]?.properties ?? (section.properties !== document.finalSection ? document.finalSection : undefined);
+      return following?.breakType !== 'continuous' ? [section.properties] : [];
+    })));
+
     if (!needsTotal || layout.truncated || layout.pages.length === total) return layout;
     if (seen.has(layout.pages.length)) throw new WordError('invalid_document', 'Page count fields did not reach a stable layout.');
     seen.add(total);
@@ -445,7 +466,7 @@ export function* layoutWordSourceProgressively(
   }
 }
 
-function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeasurer, options: WordLayoutOptions, stories: WordLayoutStories | undefined, totalPages: number, emitProgress: boolean): Generator<WordLayout, WordLayout, void> {
+function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeasurer, options: WordLayoutOptions, stories: WordLayoutStories | undefined, totalPages: number, emitProgress: boolean, columnLimits?: WordColumnLimits): Generator<WordLayout, WordLayout, void> {
   if (document.cache) document.cache.layoutRevision += 1;
   const prepared = createPreparation(measurer, options);
   const preparation = prepared.budget;
@@ -483,6 +504,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
   let columnIndex = 0;
   let cursorY = 0;
 
+  const bodyBottoms = new WeakMap<MutablePage, number>();
   const sectionPageCounts = new Map<WordSectionProperties, number>();
   const appendPage = (section: WordSectionProperties) => {
     // Earlier pages can still change until the next one starts, so the limit allows one page more.
@@ -500,8 +522,11 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
       // Keep body content within its section margins and expose the collision to the host.
       // This is a layout fallback, not an authoring limit: all story content remains in the model/export.
       if (footerTop <= headerBottom) created.storyOverflow = true;
-      else for (const [columnIndex, column] of created.columns.entries()) created.columns[columnIndex] = { ...column, y: headerBottom, height: footerTop - headerBottom };
+      else for (const [columnIndex, column] of created.columns.entries()) created.columns[columnIndex] = { ...column, y: headerBottom, height: Math.max(1, Math.min(column.y + column.height, footerTop) - headerBottom) };
     }
+    bodyBottoms.set(created, Math.min(...created.columns.map(column => column.y + column.height)));
+    const limit = columnLimits?.get(section);
+    if (limit?.page === created.index) for (const [index, column] of created.columns.entries()) created.columns[index] = { ...column, height: Math.min(column.height, limit.height) };
     return created;
   };
   const addPage = (section: WordSectionProperties, parity?: "even" | "odd"): MutablePage => {
@@ -530,7 +555,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
   for (const [index, section] of sections.entries()) {
     const previous = sections[index - 1]?.properties;
     if (!previous || section.properties.breakType !== "continuous" || !samePageGeometry(previous, section.properties) ||
-      previous.columnCount !== section.properties.columnCount || previous.columnSpaceTwips !== section.properties.columnSpaceTwips) {
+      !sameWordColumns(previous, section.properties)) {
       keepBoundaries.add(boundaryOffset);
     }
     boundaryOffset += section.blocks.length;
@@ -555,11 +580,31 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
       const isFirst = page === undefined;
       if (isFirst) addPage(section.properties);
       else if (section.properties.breakType === "nextColumn" && samePageGeometry(page!.section, section.properties) &&
-        page!.section.columnCount === section.properties.columnCount && page!.section.columnSpaceTwips === section.properties.columnSpaceTwips) {
+        sameWordColumns(page!.columns[columnIndex]!.section ?? page!.section, section.properties)) {
         advanceColumn(section.properties);
       }
       else if (section.properties.breakType === "continuous" && samePageGeometry(page!.section, section.properties)) {
-        // Continuous sections share the current page but can change the remaining column set only on the next page.
+        const current = page!;
+        const active = current.columns[columnIndex]!;
+        const previous = active.section ?? current.section;
+        if (!sameWordColumns(previous, section.properties) || previous.columnCount > 1 || section.properties.columnCount > 1) {
+          const top = Math.max(cursorY, ...current.columns.filter(column => column.y === active.y)
+            .flatMap(column => [...column.lines.map(line => line.y + line.height), ...column.tables.map(table => table.y + table.height)]));
+          const bottom = Math.min(current.height - points(section.properties.marginBottomTwips), bodyBottoms.get(current)!);
+          if (top >= bottom) addPage(section.properties);
+          else {
+            for (let i = 0; i < current.columns.length; i++) {
+              const column = current.columns[i]!;
+              if (column.y === active.y) current.columns[i] = { ...column, height: Math.max(0, top - column.y) };
+            }
+            columnIndex = current.columns.length;
+            current.columns.push(...wordSectionColumns(section.properties).map((column, i) => ({
+              section: section.properties, index: columnIndex + i, x: column.x, y: top, width: column.width, height: Math.min(bottom - top, columnLimits?.get(section.properties)?.page === current.index ? columnLimits.get(section.properties)!.height : Infinity),
+              lines: [], tables: [], unsupportedBlocks: [],
+            })));
+            cursorY = top;
+          }
+        }
       } else addPage(section.properties, section.properties.breakType === "evenPage" ? "even" : section.properties.breakType === "oddPage" ? "odd" : undefined);
 
       if (keepBoundaries.has(sectionBlockOffset)) {
@@ -571,13 +616,24 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
         if (block.kind === "table") {
           inKeepChain = false;
           let target = page!.columns[columnIndex]!;
-          const preparedTable = prepareTable(document, block, target.width, measurer, listMarkers, preparation);
+          let preparedWidth = target.width;
+          let preparedTable = prepareTable(document, block, preparedWidth, measurer, listMarkers, preparation);
           const groups = tableRowGroups(preparedTable);
           const headerRows = leadingHeaderRows(preparedTable);
           let groupIndex = 0;
           let continuation: PreparedTable | undefined;
           while (groupIndex < groups.length) {
             target = page!.columns[columnIndex]!;
+            if (target.width !== preparedWidth) {
+              preparedWidth = target.width;
+              preparedTable = prepareTable(document, block, preparedWidth, measurer, listMarkers, preparation);
+              if (continuation) continuation = reflowPreparedTable(continuation, preparedTable,
+                (paragraph, width, offset) => {
+                  const flow = prepareParagraphFlow(document, paragraph, width, measurer, listMarkers.get(paragraph.elementId), preparation, offset);
+                  return { ...flow, lines: Object.freeze([...flow.lines]) };
+                },
+                (table, width) => prepareTable(document, table, width, measurer, listMarkers, preparation));
+            }
             const atTop = cursorY === target.y;
             const repeated = groupIndex > 0 || continuation ? headerRows : [];
             const parts: PreparedTable[] = [];
@@ -605,7 +661,9 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
               // but even that row must flow across pages when it exceeds a full page.
               const keepRow = !continuation && group.some(row => block.rows[row]!.cantSplit || block.rows[row]!.heightRule === "exact");
               const fresh = atTop && parts.length === headerParts;
-              if (keepRow && !fresh) break;
+              const naturalHeight = bodyBottoms.get(page!)! - page!.columns[0]!.y - used;
+              // A balancing candidate cannot make a fitting protected row oversized.
+              if (keepRow && (!fresh || height <= naturalHeight && height > available)) break;
               const split = splitPreparedTable(remaining, available, fresh);
               if (!split) break;
               parts.push(split.head);
@@ -651,14 +709,16 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
             candidate = prepareBody(++index);
           }
         }
-        if ((prepared.format.pageBreakBefore || requiredHeight > available) && cursorY > currentColumn.y) {
-          advanceColumn(section.properties);
+        const forcedPage = prepared.format.pageBreakBefore && page!.columns.some(column => column.lines.length || column.tables.length);
+        if (forcedPage || requiredHeight > available && cursorY > currentColumn.y) {
+          if (forcedPage) addPage(section.properties);
+          else advanceColumn(section.properties);
           if (page!.columns[columnIndex]!.width !== currentColumn.width) {
             pending.clear();
             prepared = prepareBody(bodyIndex)!;
           }
         }
-        const sequence = prepared.lines;
+        let sequence = prepared.lines;
         inKeepChain = prepared.format.keepNext;
         pending.delete(bodyIndex);
         // A previous paragraph's after-spacing belongs to the old column. At a fresh
@@ -667,7 +727,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
           ? document.paragraphFormat(block).spacingBeforeTwips : prepared.format.spacingBeforeTwips;
         cursorY += points(before);
         for (let lineIndex = 0; ; lineIndex += 1) {
-          const line = prepared.lines.get(lineIndex);
+          let line = prepared.lines.get(lineIndex);
           if (!line) break;
           let column = page!.columns[columnIndex]!;
           const lineHeight = line.ascent + line.descent;
@@ -675,14 +735,28 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
           const required = pairHeight <= column.height ? Math.max(lineHeight, pairHeight) : lineHeight;
           if (cursorY + required > column.y + column.height &&
             (column.lines.length > 0 || column.tables.length > 0 || column.unsupportedBlocks.length > 0)) {
+            const width = column.width;
             advanceColumn(section.properties);
             column = page!.columns[columnIndex]!;
+            if (column.width !== width) {
+              prepared = prepareParagraphFlow(document, block, column.width, measurer, listMarkers.get(block.elementId), preparation, line.startOffset);
+              sequence = prepared.lines;
+              lineIndex = 0;
+              line = sequence.get(0);
+              if (!line) break;
+            }
           }
-          const laidOut = placeLine(block, prepared.format, line, column, cursorY, budget, lineIndex === 0 ? prepared.marker : undefined);
+          const laidOut = placeLine(block, prepared.format, line, column, cursorY, budget, line.startOffset === 0 ? prepared.marker : undefined);
           column.lines.push(laidOut);
           cursorY += laidOut.height;
+          const width = column.width;
           if (line.breakAfter === "page") addPage(section.properties);
           else if (line.breakAfter === "column") advanceColumn(section.properties);
+          if (page!.columns[columnIndex]!.width !== width) {
+            prepared = prepareParagraphFlow(document, block, page!.columns[columnIndex]!.width, measurer, listMarkers.get(block.elementId), preparation, line.endOffset + 1);
+            sequence = prepared.lines;
+            lineIndex = -1;
+          }
           yield* progress();
         }
         cursorY += points(prepared.format.spacingAfterTwips);
@@ -778,7 +852,7 @@ function prepareTable(
   }
   const cellsByRow = rowHeights.map((): PreparedTableCell[] => []);
   for (const cell of preparedCells) cellsByRow[cell.resolved.row]!.push(cell);
-  const value = Object.freeze({ table, xOffset, width, columnOffsets: Object.freeze(columnOffsets), rowHeights: Object.freeze(rowHeights), cells: Object.freeze(preparedCells), cellsByRow: Object.freeze(cellsByRow.map(row => Object.freeze(row))) });
+  const value = Object.freeze({ table, xOffset, width, columnOffsets: Object.freeze(columnOffsets), rowHeights: Object.freeze(rowHeights), sourceRows: Object.freeze(rowHeights.map((_, index) => index)), cells: Object.freeze(preparedCells), cellsByRow: Object.freeze(cellsByRow.map(row => Object.freeze(row))) });
   if (document.cache) {
     const markers: [number, string][] = [];
     const collect = (blocks: readonly WordBlock[]) => {
@@ -849,6 +923,7 @@ function slicePreparedTable(prepared: PreparedTable, rows: readonly number[], ca
   const value = Object.freeze({
     ...prepared,
     rowHeights: Object.freeze(rows.map((row) => prepared.rowHeights[row]!)),
+    sourceRows: Object.freeze(rows.map(row => prepared.sourceRows[row]!)),
     cells: Object.freeze(cells),
     cellsByRow: Object.freeze(cellsByRow.map(row => Object.freeze(row))),
   });
@@ -970,11 +1045,12 @@ function prepareParagraphFlow(
   measurer: WordTextMeasurer,
   markerSource?: WordListMarker,
   preparation?: PreparationBudget,
+  startOffset = 0,
 ) {
   const wrapTrailSpaces = document.wrapTrailSpaces ?? false;
   const doNotExpandShiftReturn = document.doNotExpandShiftReturn ?? false;
   const markerKey = JSON.stringify(markerSource);
-  const cached = document.cache?.paragraphs.get(paragraph);
+  const cached = startOffset === 0 ? document.cache?.paragraphs.get(paragraph) : undefined;
   if (cached && cached.width === columnWidth && cached.marker === markerKey && cached.measurer === measurementIdentity(measurer) && cached.wrapTrailSpaces === wrapTrailSpaces && cached.doNotExpandShiftReturn === doNotExpandShiftReturn) return { ...cached.value, lines: new PreparedLineSequence(cached.value.lines.values()) };
   if (document.cache) document.cache.measuredParagraphs++;
   const computed = document.paragraphFormat(paragraph);
@@ -984,18 +1060,26 @@ function prepareParagraphFlow(
     hangingTwips: computed.hangingTwips !== 0 ? computed.hangingTwips : markerSource.hangingTwips ?? 360,
   });
   const width = Math.max(1, columnWidth - points(format.indentStartTwips + format.indentEndTwips));
-  const atoms = paragraphAtoms(document, paragraph, measurer, preparation);
+  let preceding: ParagraphAtom | undefined;
+  function* suffix() {
+    for (const atom of paragraphAtoms(document, paragraph, measurer, preparation)) {
+      if (atom.startOffset >= startOffset) yield atom;
+      else preceding = atom;
+    }
+  }
+  const atoms = suffix();
   const first = atoms.next();
   const emptyRun = first.done ? paragraph.inlines.find(inline => inline.kind === 'run') : undefined;
   function* remainingAtoms() { if (!first.done) yield first.value; yield* atoms; }
   const mark = validMeasurement(measurer.measure(' ', document.runFormat(paragraph, emptyRun)));
   // List hanging indents position the marker, not the first line of text.
-  const textFormat = markerSource ? { ...format, firstLineTwips: 0, hangingTwips: 0 } : format;
-  const iterator = breakLines(remainingAtoms(), width, textFormat, mark, wrapTrailSpaces, doNotExpandShiftReturn);
+  const textFormat = markerSource || startOffset > 0 ? { ...format, firstLineTwips: 0, hangingTwips: 0 } : format;
+  const terminalLine = preceding?.kind === "break" && preceding.breakType === "line" && preceding.endOffset === startOffset;
+  const iterator = startOffset > 0 && first.done && !terminalLine ? [][Symbol.iterator]() : breakLines(remainingAtoms(), width, textFormat, mark, wrapTrailSpaces, doNotExpandShiftReturn, startOffset);
   const marker = markerSource === undefined ? undefined : prepareMarker(document, paragraph, markerSource, measurer, preparation);
   const lines = new PreparedLineSequence(iterator, completed => {
     const value = Object.freeze({ paragraph, format, lines: completed, marker });
-    document.cache?.paragraphs.set(paragraph, { width: columnWidth, marker: markerKey, measurer: measurementIdentity(measurer), wrapTrailSpaces, doNotExpandShiftReturn, value });
+    if (startOffset === 0) document.cache?.paragraphs.set(paragraph, { width: columnWidth, marker: markerKey, measurer: measurementIdentity(measurer), wrapTrailSpaces, doNotExpandShiftReturn, value });
   });
   return { paragraph, format, lines, marker };
 }
@@ -1129,7 +1213,7 @@ function* resolvedParagraphAtoms(
   }
 }
 
-function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: ComputedWordParagraphFormat, mark: WordTextMeasurement, wrapTrailSpaces: boolean, doNotExpandShiftReturn = false): Generator<PreparedLine> {
+function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: ComputedWordParagraphFormat, mark: WordTextMeasurement, wrapTrailSpaces: boolean, doNotExpandShiftReturn = false, startOffset = 0): Generator<PreparedLine> {
   let lineCount = 0;
   let terminalLineBreak = false;
   const iterator: Iterator<ParagraphAtom, void> = source[Symbol.iterator]();
@@ -1159,7 +1243,7 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
   let line: Exclude<ParagraphAtom, BreakAtom>[] = [];
   let lineWidth = 0;
   let lastBreak = -1;
-  let offset = 0;
+  let offset = startOffset;
   const push = (breakAfter?: WordBreakType, justify = false): PreparedLine => {
     const logicalStart = line[0]?.startOffset ?? offset;
     const logicalEnd = line.at(-1)?.endOffset ?? offset;
@@ -1528,25 +1612,17 @@ function translateTable(table: WordLayoutTable, dx: number, dy: number): WordLay
   });
 }
 
-function createPage(section: WordSectionProperties, pages: MutablePage[], budget: LayoutBudget): MutablePage {
+function createPage(section: WordSectionProperties, pages: MutablePage[], budget: LayoutBudget, limits?: WordColumnLimits): MutablePage {
   if (pages.length >= budget.maxPages) throw new WordError("limit_exceeded", `Layout exceeds ${budget.maxPages} pages.`);
   const width = points(section.pageWidthTwips);
   const height = points(section.pageHeightTwips);
   const left = points(section.marginLeftTwips + section.gutterTwips);
   const top = points(section.marginTopTwips);
   const bodyWidth = Math.max(1, width - left - points(section.marginRightTwips));
-  const bodyHeight = Math.max(1, height - top - points(section.marginBottomTwips));
-  const gap = points(section.columnSpaceTwips);
-  const columnWidth = Math.max(1, (bodyWidth - gap * (section.columnCount - 1)) / section.columnCount);
-  const columns: MutableColumn[] = Array.from({ length: section.columnCount }, (_, index) => ({
-    index,
-    x: left + index * (columnWidth + gap),
-    y: top,
-    width: columnWidth,
-    height: bodyHeight,
-    lines: [],
-    tables: [],
-    unsupportedBlocks: [],
+  const bodyHeight = Math.min(Math.max(1, height - top - points(section.marginBottomTwips)), limits?.get(section)?.page === pages.length ? limits.get(section)!.height : Infinity);
+  const columns: MutableColumn[] = wordSectionColumns(section).map((column, index) => ({
+    section, index, x: column.x, y: top, width: column.width, height: bodyHeight,
+    lines: [], tables: [], unsupportedBlocks: [],
   }));
   const page: MutablePage = { index: pages.length, width, height, section, columns, headerLines: [], footerLines: [], headerTables: [], footerTables: [], noteLines: [], noteTables: [], noteSeparatorY: undefined };
   pages.push(page);
@@ -1578,7 +1654,7 @@ function freezePage(page: MutablePage, previous?: WordLayoutPage): WordLayoutPag
   const columns = page.columns.map((column, index): WordLayoutColumn => {
     const old = previous?.columns[index];
     if (old && old.index === column.index && old.x === column.x && old.y === column.y &&
-      old.width === column.width && old.height === column.height &&
+      old.width === column.width && old.height === column.height && old.section === column.section &&
       sameItems(old.lines, column.lines) && sameItems(old.tables, column.tables) &&
       sameItems(old.unsupportedBlocks, column.unsupportedBlocks)) return old;
     return Object.freeze({ ...column, lines: Object.freeze(column.lines), tables: Object.freeze(column.tables), unsupportedBlocks: Object.freeze(column.unsupportedBlocks) });

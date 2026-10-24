@@ -138,13 +138,13 @@ function compactRows(table: PreparedTable, heights: readonly number[], cells: re
     return [Object.freeze({ ...cell, resolved: Object.freeze({ ...cell.resolved,
       row: rowMap.get(covered[0]!)!, rowSpan: covered.length }) })];
   });
-  return withRows(table, rows.map(row => heights[row]!), nextCells);
+  return withRows(table, rows.map(row => heights[row]!), nextCells, rows.map(row => table.sourceRows[row]!));
 }
 
-function withRows(table: PreparedTable, rowHeights: readonly number[], cells: readonly PreparedTableCell[]): PreparedTable {
+function withRows(table: PreparedTable, rowHeights: readonly number[], cells: readonly PreparedTableCell[], sourceRows = table.sourceRows): PreparedTable {
   const cellsByRow = rowHeights.map((): PreparedTableCell[] => []);
   for (const cell of cells) cellsByRow[cell.resolved.row]!.push(cell);
-  return Object.freeze({ ...table, rowHeights: Object.freeze(rowHeights), cells: Object.freeze(cells),
+  return Object.freeze({ ...table, rowHeights: Object.freeze(rowHeights), sourceRows: Object.freeze(sourceRows), cells: Object.freeze(cells),
     cellsByRow: Object.freeze(cellsByRow.map(row => Object.freeze(row))) });
 }
 
@@ -160,14 +160,16 @@ export function joinPreparedTables(parts: readonly PreparedTable[]): PreparedTab
   }
   if (entry?.value) return entry.value;
   const rowHeights: number[] = [];
+  const sourceRows: number[] = [];
   const cells: PreparedTableCell[] = [];
   for (const part of parts) {
     const offset = rowHeights.length;
     cells.push(...part.cells.map(cell => Object.freeze({ ...cell,
       resolved: Object.freeze({ ...cell.resolved, row: cell.resolved.row + offset }) })));
     rowHeights.push(...part.rowHeights);
+    sourceRows.push(...part.sourceRows);
   }
-  const value = withRows(parts[0]!, rowHeights, cells);
+  const value = withRows(parts[0]!, rowHeights, cells, sourceRows);
   entry!.value = value;
   return value;
 }

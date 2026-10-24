@@ -1,3 +1,5 @@
+import { validateWordSectionReferences } from './section-format.ts';
+import { resolveWordSection, wordSectionFormat } from './section-format.ts';
 import { applyWordDocumentSettings, isWordDocumentSettings, type WordDocumentSettings } from './document-settings.ts';
 import { refreshUnchangedNumbering } from './content-numbering.ts';
 import { validateXmlText } from "./text-validation.ts";
@@ -118,7 +120,8 @@ export class NativeWordDocument implements WordLayoutSource {
   listMarkers: ReadonlyMap<number, WordListMarker> = new Map();
   readonly cache = new WordLayoutCache();
   private readonly editedStories = new Map<string, { target: string | WordStoryTarget; model: NativeWordDocument; blocks: readonly WordContentBlock[] }>();
-  readonly finalSection: WordSectionProperties;
+  finalSection: WordSectionProperties;
+  private readonly originalFinalSection: WordSectionProperties;
   readonly wrapTrailSpaces: boolean;
   private inheritedDoNotExpandShiftReturn?: boolean;
   get doNotExpandShiftReturn(): boolean {
@@ -131,7 +134,11 @@ export class NativeWordDocument implements WordLayoutSource {
   }
   updateSettings(settings: WordDocumentSettings) {
     if (!isWordDocumentSettings(settings)) throw new TypeError('Invalid document settings.');
+    if (JSON.stringify(this.settings) === JSON.stringify(settings)) return;
+    validateWordSectionReferences(settings.finalSection ?? {}, this.options.source ? wordSections(this.options.source.document) : []);
     this.settings = { ...settings };
+    this.finalSection = resolveWordSection(this.originalFinalSection, settings.finalSection ?? {});
+    if (this.authored.length) this.update(this.authored);
     this.exported = undefined;
   }
   private finishArtifact(artifact: WordArtifact) {
@@ -170,6 +177,7 @@ export class NativeWordDocument implements WordLayoutSource {
       headerReferences: [],
       footerReferences: [],
     };
+    this.originalFinalSection = this.finalSection;
     if (options[deferContent]) return;
     if (options.content) this.update(options.content);
     else if (this.compiled) {
@@ -271,17 +279,23 @@ export class NativeWordDocument implements WordLayoutSource {
       ? block.rows.some(row => row.some(cell => this.hasAuthoredInkEdits(cell.blocks)))
       : block.kind === 'paragraph' && block.runs.some(run => run.ink && (run.drawing || run.inkTraces?.length)));
   }
+  private exportContent(blocks: readonly WordContentBlock[]): readonly WordContentBlock[] {
+    return blocks.map(block => block.kind === 'table' ? { ...block, rows: block.rows.map(row => row.map(cell => ({ ...cell, blocks: this.exportContent(cell.blocks) }))) }
+      : block.kind === 'paragraph' && block.section && block.section.source === undefined
+        ? { ...block, section: { format: wordSectionFormat(resolveWordSection(this.finalSection, block.section.format)) } } : block);
+  }
   artifact() {
     if (this.exported) return this.exported;
+    const authored = this.exportContent(this.authored);
     const existingStories = [...this.editedStories.values()].flatMap(entry =>
       typeof entry.target === 'string' ? [{ partName: entry.target, blocks: entry.blocks }] : []);
     if (this.compiled && existingStories.length === this.editedStories.size)
-      return this.finishArtifact(reconcileWordContentAndStories(this.compiled.artifact, this.authored, existingStories));
+      return this.finishArtifact(reconcileWordContentAndStories(this.compiled.artifact, authored, existingStories));
     let result = this.compiled
-      ? reconcileWordContent(this.compiled.artifact, this.authored)
-       : this.hasAuthoredInkEdits(this.authored)
-        ? reconcileWordContent(createWordArtifact({ ...this.options, paragraphs: [] }), this.authored)
-        : createWordArtifact({ ...this.options, blocks: this.authored });
+      ? reconcileWordContent(this.compiled.artifact, authored)
+       : this.hasAuthoredInkEdits(authored)
+        ? reconcileWordContent(createWordArtifact({ ...this.options, paragraphs: [] }), authored)
+        : createWordArtifact({ ...this.options, blocks: authored });
     if (existingStories.length === this.editedStories.size)
       return this.finishArtifact(reconcileWordStories(result, existingStories));
     for (const entry of this.editedStories.values()) {
@@ -411,7 +425,8 @@ export class NativeWordDocument implements WordLayoutSource {
         const previous = this.records.get(key);
         const original = source.kind === 'paragraph' ? compiled?.paragraphs.get(source.source!) : undefined;
         const hasSection = source.kind === 'paragraph' && sectionOwners.get(`${source.sourceCopy ?? ''}:${source.source}`) === source;
-        const fingerprint = `${hasSection}:${signature(source, width)}`;
+        const sectionDefaults = source.kind === 'paragraph' && source.section && source.section.source === undefined ? JSON.stringify(this.finalSection) : '';
+        const fingerprint = `${hasSection}:${sectionDefaults}:${signature(source, width)}`;
         const descendantsStart = visited.length;
         let result: RecordBlock;
         if (this.options.immutableContent && previous?.signature === fingerprint && previous.subtree?.input === source && this.independent(source)) {
@@ -593,11 +608,15 @@ export class NativeWordDocument implements WordLayoutSource {
               return inherited?.owner.kind === 'hyperlink' || inherited?.owner.kind === 'insertion'
                 ? { ...inherited.owner, elementId: allocate(), runs: [run] } : run;
             });
+            if (authored.section) validateWordSectionReferences(authored.section.format, compiled ? wordSections(compiled.artifact.document) : []);
             const block: WordParagraph = {
               kind: 'paragraph',
               elementId: previous?.block.elementId ?? allocate(),
               propertiesElementId: undefined,
-              section: hasSection ? original?.block.section : undefined,
+              section: authored.section === null ? undefined : authored.section ? resolveWordSection(
+                authored.section.source === undefined ? this.finalSection : wordSections(compiled!.artifact.document).find(section => section.elementId === authored.section!.source) ?? (() => { throw new Error('Unknown source section.'); })(),
+                authored.section.format,
+              ) : hasSection ? original?.block.section : undefined,
               inlines,
             };
             const resetParagraph = authored.styleId !== undefined && (authored.styleId !== original?.format.styleId || authored.paragraph === undefined);
