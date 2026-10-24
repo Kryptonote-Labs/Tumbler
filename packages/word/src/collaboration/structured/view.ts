@@ -1,3 +1,4 @@
+import { anchorScopedSelection } from './selection.ts';
 import * as Y from "yjs";
 import {
   createWordCommands,
@@ -214,7 +215,11 @@ export class WordSharedText {
     if (operation.name === 'page-color') {
       const { selection: _placeholder, ...edit } = prepareWordScopedOperation(this.doc, { story: 'body', range: { start: 0, end: 0 } }, operation, context);
       let selection: WordScopedSelection | undefined;
-      try { selection = this.selection(range); } catch { /* A document-wide setting also accepts ranges across cells. */ }
+      try {
+        const candidate = this.selection(range);
+        anchorScopedSelection(this.doc, candidate);
+        selection = candidate;
+      } catch { /* A document-wide setting also accepts ranges across cells. */ }
       return { ...edit, ...(selection ? { selection } : {}), range };
     }
     if (this.conflict) throw this.conflict;

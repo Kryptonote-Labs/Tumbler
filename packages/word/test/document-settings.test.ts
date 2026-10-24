@@ -132,3 +132,21 @@ test('page colour preserves a representable scoped selection', () => {
   expect(view.commit(edit)).toEqual({ story: 'body', range: { start: 6, end: 12 } });
   session.destroy();
 });
+
+
+test('page colour omits scopes that cannot anchor across retained table content', () => {
+  const session = openWordOperationDocument(createWordArtifact({ blocks: [
+    { kind: 'paragraph', runs: [{ text: 'Before' }] },
+    { kind: 'table', rows: [[{ blocks: [{ kind: 'paragraph', runs: [{ text: 'Cell' }] }] }]] },
+    { kind: 'paragraph', runs: [{ text: 'After' }] },
+  ] }));
+  const view = wordSharedText(session.text);
+  view.commit(view.prepareMigration());
+  const range = { start: 3, end: view.text.length - 3 };
+  const edit = view.prepareOperation(range, { name: 'page-color', input: { color: '#123456' } });
+  expect(edit.range).toEqual(range);
+  if (edit.selection) expect(() => session.anchor(edit.selection!)).not.toThrow();
+  view.commit(edit);
+  expect(session.artifact().document.background).toBe('#123456');
+  session.destroy();
+});
