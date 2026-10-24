@@ -1,4 +1,5 @@
 import { reflowPreparedTable } from './table-reflow.ts';
+import { numberWordLayout } from './line-numbering.ts';
 import { balanceWordColumns, type WordColumnLimits } from './column-balance.ts';
 import { wordSectionColumns, sameWordColumns } from './section-columns.ts';
 import { widowGroupHeight, keepHeightUntil } from './paragraph-pagination.ts';
@@ -30,7 +31,7 @@ import type { WordDrawing } from "./drawings.ts";
 
 import { hasPageFields, type WordPageField } from './page-fields.ts';
 
-import { createPreparation, consumePreparation, measurementIdentity, type PreparationBudget } from './layout-preparation.ts';
+import { validMeasurement, createPreparation, consumePreparation, measurementIdentity, type PreparationBudget } from './layout-preparation.ts';
 
 const TWIPS_PER_POINT = 20;
 const CSS_PIXELS_PER_POINT = 4 / 3;
@@ -135,6 +136,7 @@ export interface WordLayoutTableCell {
 }
 
 export interface WordLayoutLine {
+  readonly lineNumber?: WordLayoutMarker;
   readonly paragraphDecoration?: { readonly x: number; readonly width: number; readonly shading?: string; readonly borders?: import('./table-format.ts').WordCellBorders };
   readonly paragraphElementId: number;
   readonly x: number;
@@ -218,6 +220,7 @@ interface MutablePage {
 }
 
 export interface WordLayoutSource {
+  readonly lineNumberFormat?: ComputedWordTextFormat;
   readonly background?: string | undefined;
   /** OOXML compatibility setting; absent/false lets trailing spaces hang past the margin. */
   readonly wrapTrailSpaces?: boolean;
@@ -407,6 +410,7 @@ export function layoutWordDocument(
   const markerBudget = new WordMarkerBudget(options.maxMarkerCharacters);
   return layoutWordSource({
     background: document.background === undefined ? undefined : resolveWordColour(document.background, document.styles.themeColors),
+    lineNumberFormat: document.styles.resolveStyledRun('Normal', 'LineNumber'),
     blocks: document.blocks, drawings: document.drawings, finalSection: document.finalSection, wrapTrailSpaces: document.wrapTrailSpaces, doNotExpandShiftReturn: document.doNotExpandShiftReturn,
     listMarkers: document.numbering.markers(document, {}, markerBudget),
     paragraphFormat: paragraph => document.styles.paragraphFormat(document, paragraph),
@@ -496,8 +500,8 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
         noteLines: [...page.noteLines], noteTables: [...page.noteTables] };
       completed.push(alignWordPageDrawings(freezePage(copy)));
     }
-    yield Object.freeze({ ...(document.background === undefined ? {} : { background: document.background }),
-      pages: Object.freeze([...completed]), fragmentCount: budget.fragments, truncated: true as const });
+    yield numberWordLayout(Object.freeze({ ...(document.background === undefined ? {} : { background: document.background }),
+      pages: Object.freeze([...completed]), fragmentCount: budget.fragments, truncated: true as const }), document, measurer);
   }
   const listMarkers = document.listMarkers;
   let page: MutablePage | undefined;
@@ -776,12 +780,12 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
   }
   const frozenPages = Object.freeze(pages.map((page, index) => alignWordPageDrawings(freezePage(page, document.cache?.pages[index]))));
   if (document.cache) document.cache.pages = frozenPages;
-  return Object.freeze({
+  return numberWordLayout(Object.freeze({
     ...(document.background === undefined ? {} : { background: document.background }),
     pages: frozenPages,
     fragmentCount: budget.fragments,
     ...(truncated ? { truncated: true as const } : {}),
-  });
+  }), document, measurer);
 }
 
 const TRUNCATED = Symbol("truncated");
@@ -1764,12 +1768,6 @@ function atomDescent(atom: Exclude<ParagraphAtom, BreakAtom>): number {
   return atom.kind === "tab" ? atom.format.fontSizePoints * 0.2 : atom.descent;
 }
 
-function validMeasurement(measurement: WordTextMeasurement): WordTextMeasurement {
-  if (![measurement.width, measurement.ascent, measurement.descent].every((value) => Number.isFinite(value) && value >= 0)) {
-    throw new TypeError("A Word text measurer must return finite non-negative geometry.");
-  }
-  return measurement;
-}
 
 function* graphemes(value: string, preparation?: PreparationBudget): Generator<string> {
   const Segmenter = Intl.Segmenter;

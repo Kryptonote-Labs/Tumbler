@@ -1,4 +1,5 @@
 import { xml } from './create-xml.ts';
+import { wordLineNumberingSchema } from './line-numbering.ts';
 import { z } from 'zod';
 import type { WordSectionProperties, WordHeaderFooterReference } from './document.ts';
 import { PackageXml } from './package-xml.ts';
@@ -19,6 +20,7 @@ export const wordSectionFormatSchema = z.object({
   columns: z.array(z.object({ widthTwips: twips.positive(), spaceTwips: twips }).strict()).min(1).nullable().optional(),
   columnSeparator: z.boolean().optional(),
   headerReferences: z.array(storyReference).optional(), footerReferences: z.array(storyReference).optional(),
+  lineNumbers: wordLineNumberingSchema.nullable().optional(),
   breakType: z.enum(['continuous', 'nextPage', 'nextColumn', 'evenPage', 'oddPage']).optional(),
 }).strict();
 export type WordSectionFormat = z.infer<typeof wordSectionFormatSchema>;
@@ -54,8 +56,9 @@ export function validateWordSectionReferences(format: { readonly headerReference
 /** Apply a semantic patch to imported section properties without losing references or opaque XML. */
 export function resolveWordSection(base: WordSectionProperties, format: WordSectionFormat): WordSectionProperties {
   const patch = wordSectionFormatSchema.parse(format);
-  const { columns, ...rest } = patch;
-  const result: WordSectionProperties = { ...base, ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined)),
+  const { columns, lineNumbers, ...rest } = patch;
+  const result: WordSectionProperties = { ...base,
+    ...(lineNumbers === undefined ? {} : { lineNumbers: lineNumbers ?? undefined }), ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined)),
     ...(columns === undefined ? {} : { columns: columns ?? undefined, columnCount: columns?.length ?? patch.columnCount ?? base.columnCount }),
   };
   const width = result.pageWidthTwips - result.marginLeftTwips - result.marginRightTwips - result.gutterTwips;
@@ -66,7 +69,7 @@ export function resolveWordSection(base: WordSectionProperties, format: WordSect
 }
 
 export function sectionFormatXml(format: WordSectionFormat, relationshipNamespace = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'): Map<string, string> {
-  wordSectionFormatSchema.parse(format);
+  format = wordSectionFormatSchema.parse(format);
   const result = new Map<string, string>();
   for (const [key, name] of [['headerReferences', 'headerReference'], ['footerReferences', 'footerReference']] as const) {
     const references = format[key];
@@ -78,6 +81,10 @@ export function sectionFormatXml(format: WordSectionFormat, relationshipNamespac
   if (size) result.set('pgSz', `<w:pgSz${size}/>`);
   const margins = attributes({ marginTopTwips: 'top', marginRightTwips: 'right', marginBottomTwips: 'bottom', marginLeftTwips: 'left', headerDistanceTwips: 'header', footerDistanceTwips: 'footer', gutterTwips: 'gutter' });
   if (margins) result.set('pgMar', `<w:pgMar${margins}/>`);
+  if (format.lineNumbers !== undefined) {
+    const n = format.lineNumbers;
+    result.set('lnNumType', n === null ? '' : `<w:lnNumType w:countBy="${n.countBy}" w:start="${n.start - 1}" w:restart="${n.restart}"${n.distanceTwips === undefined ? '' : ` w:distance="${n.distanceTwips}"`}/>`);
+  }
   if (format.breakType !== undefined) result.set('type', `<w:type w:val="${format.breakType}"/>`);
   if (['columns', 'columnCount', 'columnSpaceTwips', 'columnSeparator'].some(key => key in format)) {
     const separator = format.columnSeparator === undefined ? '' : ` w:sep="${format.columnSeparator ? 1 : 0}"`;

@@ -607,7 +607,7 @@
           >
             <!-- Canvas decoding owns its URLs until the asynchronous paint completes. -->
             <WordInkPageLayer {page} {scale} maxPixels={inkMaxPixels} background={layout.background} />
-            <WordPageLayoutDecorations {page} />
+            <WordPageLayoutDecorations {page} background={layout.background} />
             <WordParagraphDecorations lines={[...page.columns.flatMap(column => column.lines), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
             {#if page.noteSeparatorY !== undefined}
               <div class="note-separator" style={`left:${wordPointsToCssPixels(page.section.marginLeftTwips / 20)}px;top:${wordPointsToCssPixels(page.noteSeparatorY)}px`}></div>

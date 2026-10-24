@@ -1,5 +1,5 @@
 import { WordError } from './document.ts';
-import type { WordLayoutOptions, WordTextMeasurer } from './layout.ts';
+import type { WordLayoutOptions, WordTextMeasurer, WordTextMeasurement } from './layout.ts';
 
 const measurementSources = new WeakMap<WordTextMeasurer, WordTextMeasurer>();
 export function measurementIdentity(measurer: WordTextMeasurer): WordTextMeasurer {
@@ -41,4 +41,9 @@ export function createPreparation(measurer: WordTextMeasurer, options: Pick<Word
   } };
   measurementSources.set(bounded, measurementIdentity(measurer));
   return { budget, measurer: bounded };
+}
+
+export function validMeasurement(measurement: WordTextMeasurement): WordTextMeasurement {
+  if (![measurement.width, measurement.ascent, measurement.descent].every(value => Number.isFinite(value) && value >= 0)) throw new TypeError('A Word text measurer must return finite non-negative geometry.');
+  return measurement;
 }

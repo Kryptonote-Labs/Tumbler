@@ -216,6 +216,7 @@ function paintBorders<Image, Path>(context: WordCanvasContext<Image, Path>, bord
 }
 
 function paintLine<Image, Path>(context: WordCanvasContext<Image, Path>, line: WordLayoutLine, options: PaintOptions<Image, Path>): void {
+  if (line.lineNumber !== undefined) paintText(context, line.lineNumber, line.lineNumber.text);
   if (line.marker !== undefined) paintText(context, line.marker, line.marker.text.trimEnd());
   for (const fragment of line.fragments) {
     if (fragment.kind === "drawing") {

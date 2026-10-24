@@ -11,12 +11,13 @@ export interface WordParagraphFormat {
   readonly keepNext?: boolean;
   readonly keepLines?: boolean;
   readonly pageBreakBefore?: boolean;
+  readonly suppressLineNumbers?: boolean;
   readonly widowControl?: boolean;
   readonly contextualSpacing?: boolean;
   readonly shading?: WordColour;
   readonly borders?: WordCellBorders;
 }
-const toggles = ['keepNext', 'keepLines', 'pageBreakBefore', 'widowControl', 'contextualSpacing'] as const;
+const toggles = ['keepNext', 'keepLines', 'pageBreakBefore', 'suppressLineNumbers', 'widowControl', 'contextualSpacing'] as const;
 export function isWordParagraphFormat(value: unknown): value is WordParagraphFormat {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   return Object.entries(value).every(([key, item]) => {

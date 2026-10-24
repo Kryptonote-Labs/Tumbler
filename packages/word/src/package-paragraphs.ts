@@ -254,12 +254,12 @@ export function wordParagraphRenderer(
     if (paragraph.section !== undefined) replacements.set('sectPr', paragraph.section === null ? '' : sectionBoundaryXml(markup, paragraph.section));
     const styleChanged = paragraph.styleId !== undefined && paragraph.styleId !== original?.styleId;
     if (paragraph.styleId !== undefined && (styleChanged || paragraph.paragraph === undefined)) {
-      if (paragraph.paragraph === undefined) for (const key of ['spacing', 'keepNext', 'keepLines', 'pageBreakBefore', 'widowControl', 'contextualSpacing', 'pBdr', 'shd']) replacements.set(key, '');
+      if (paragraph.paragraph === undefined) for (const key of ['spacing', 'keepNext', 'keepLines', 'pageBreakBefore', 'suppressLineNumbers', 'widowControl', 'contextualSpacing', 'pBdr', 'shd']) replacements.set(key, '');
       if (paragraph.positioning === undefined) for (const key of ['ind', 'tabs']) replacements.set(key, '');
       if (paragraph.alignment === undefined) replacements.set('jc', '');
     }
     if (paragraph.resetParagraphFormat)
-      for (const key of ['spacing', 'keepNext', 'keepLines', 'pageBreakBefore', 'widowControl', 'contextualSpacing', 'pBdr', 'shd']) replacements.set(key, '');
+      for (const key of ['spacing', 'keepNext', 'keepLines', 'pageBreakBefore', 'suppressLineNumbers', 'widowControl', 'contextualSpacing', 'pBdr', 'shd']) replacements.set(key, '');
     if (styleChanged) replacements.set('pStyle', `<w:pStyle w:val="${xml(paragraph.styleId!)}"/>`);
     if (paragraph.alignment !== undefined && paragraph.alignment !== original?.alignment)
       replacements.set('jc', `<w:jc w:val="${paragraph.alignment === 'justify' ? 'both' : paragraph.alignment}"/>`);
