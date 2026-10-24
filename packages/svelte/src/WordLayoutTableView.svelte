@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { wordDisplayColour } from './word-display-colour.ts';
+  import { wordDisplaySurfaces } from './word-display-surfaces.ts';
+  import { wordDisplayInkSvg } from './word-display-ink.ts';
+  import { wordDisplayColour, wordDisplaySurface } from './word-display-colour.ts';
   import WordPictureView from "./WordPictureView.svelte";
   import WordContentClip from "./WordContentClip.svelte";
   import WordShapeView from "./WordShapeView.svelte";
@@ -21,6 +23,8 @@
   }
 
   let { table, drawingOrder, pageIndex, imageurl, onactivate, story, decorationsOnly = false, background = '#ffffff' }: Props = $props();
+
+  const lineSurfaces = $derived(wordDisplaySurfaces([], [table], background));
 
   function fragmentStyle(fragment: WordLayoutFragment, surface: string) {
     return `${wordTextCss(fragment.format, surface)};word-spacing:${wordPointsToCssPixels(fragment.wordSpacing ?? 0)}px;left:${wordPointsToCssPixels(fragment.x)}px;top:${wordPointsToCssPixels(wordTextTop(fragment))}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
@@ -58,7 +62,7 @@
     {#if !decorationsOnly}
       {#each cell.lines as line}
         {#if line.marker !== undefined}
-          <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format, line.paragraphDecoration?.shading ?? cell.shading ?? surface)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
+          <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format, wordDisplaySurface(line.paragraphDecoration?.shading, cell.shading, surface))};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
         {/if}
         {#if line.fragments.length === 0 || line.fragments.at(-1)?.endOffset !== line.endOffset}
           <span
@@ -75,15 +79,15 @@
           {#if fragment.kind === "drawing"}
             <!-- Drawings render separately so cell opt-outs can escape ancestor clips. -->
           {:else if fragment.hyperlink === undefined}
-            <span data-story={story} data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, line.paragraphDecoration?.shading ?? cell.shading ?? surface)}>{fragment.text}</span>
+            <span data-story={story} data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, wordDisplaySurface(line.paragraphDecoration?.shading, cell.shading, surface))}>{fragment.text}</span>
           {:else}
-            <button class="hyperlink" onkeydown={(event) => onactivate(event, fragment.hyperlink)} onclick={(event) => onactivate(event, fragment.hyperlink)} data-story={story} data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, line.paragraphDecoration?.shading ?? cell.shading ?? surface)}>{fragment.text}</button>
+            <button class="hyperlink" onkeydown={(event) => onactivate(event, fragment.hyperlink)} onclick={(event) => onactivate(event, fragment.hyperlink)} data-story={story} data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, wordDisplaySurface(line.paragraphDecoration?.shading, cell.shading, surface))}>{fragment.text}</button>
           {/if}
         {/each}
       {/each}
     {/if}
     {#each cell.tables as nested}
-      {@render renderTable(nested, cell.shading ?? surface)}
+      {@render renderTable(nested, wordDisplaySurface(cell.shading, surface))}
     {/each}
     </WordContentClip>
   {/each}
@@ -99,6 +103,8 @@
           {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
             {#if fragment.drawing.picture}
               <div class="document-drawing picture-drawing" style={drawingStyle(fragment)}><WordPictureView drawing={fragment.drawing} src={imageurl(fragment.drawing)} /></div>
+            {:else if wordDisplayInkSvg(fragment.drawing, lineSurfaces.get(line)) !== undefined}
+              <div class="document-drawing ink-vector" data-word-ink-rendering="vector" role="img" aria-label={fragment.drawing.altText ?? 'Ink'} style={drawingStyle(fragment)}>{@html wordDisplayInkSvg(fragment.drawing, lineSurfaces.get(line))!}</div>
             {:else}
               <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageurl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
             {/if}
@@ -116,6 +122,7 @@
 {/if}
 
 <style>
+  .ink-vector :global(svg) { display: block; width: 100%; height: 100%; }
   .document-table, .document-cell, .document-drawing, span, button { position: absolute; box-sizing: border-box; }
   .document-table { user-select: none; pointer-events: none; }
   .document-cell { overflow: hidden; }

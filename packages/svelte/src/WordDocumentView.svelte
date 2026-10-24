@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { wordDisplaySurfaces } from './word-display-surfaces.ts';
+  import { wordDisplayInkSvg } from './word-display-ink.ts';
   import { wordDisplayColour } from './word-display-colour.ts';
   import { wordDrawingStackOrder, wordDrawingOverlayOrder } from "./word-drawing-order.ts";
   import WordPictureView from "./WordPictureView.svelte";
@@ -56,11 +58,8 @@
   let paragraphText = $derived(new Map(paragraphs.map(paragraph => [paragraph.elementId, wordParagraphText(wordDocument, paragraph)])));
   // Body text includes flattened table lines; retain each line's original surface for contrast.
   const lineSurfaces = $derived.by(() => {
-    const result = new Map<number, string>();
-    const visit = (lines: readonly import('@tumblerjs/word').WordLayoutLine[], tables: readonly import('@tumblerjs/word').WordLayoutTable[], background: string) => {
-      for (const line of lines) result.set(line.paragraphElementId, line.paragraphDecoration?.shading ?? background);
-      for (const table of tables) for (const cell of table.cells) visit(cell.lines, cell.tables, cell.shading ?? background);
-    };
+    const result = new Map<import('@tumblerjs/word').WordLayoutLine, string>();
+    const visit = (lines: readonly import('@tumblerjs/word').WordLayoutLine[], tables: readonly import('@tumblerjs/word').WordLayoutTable[], background: string) => wordDisplaySurfaces(lines, tables, background, result);
     for (const page of layout?.pages ?? []) {
       const background = layout?.background ?? '#ffffff';
       for (const column of page.columns) visit(column.lines, column.tables, background);
@@ -543,7 +542,7 @@
     const fragment = line.fragments[index]!;
     const previous = line.fragments.slice(0, index).findLast(item => item.kind !== "drawing");
     const gap = fragment.x - (previous === undefined ? line.x : previous.x + previous.width);
-    return `${wordTextCss(fragment.format, lineSurfaces.get(line.paragraphElementId))};word-spacing:${wordPointsToCssPixels(fragment.wordSpacing ?? 0)}px;${fragment.format.verticalAlign === "baseline" ? "vertical-align:top;" : ""}margin-left:${wordPointsToCssPixels(gap)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - line.y)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
+    return `${wordTextCss(fragment.format, lineSurfaces.get(line))};word-spacing:${wordPointsToCssPixels(fragment.wordSpacing ?? 0)}px;${fragment.format.verticalAlign === "baseline" ? "vertical-align:top;" : ""}margin-left:${wordPointsToCssPixels(gap)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - line.y)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 
   function drawingStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0, paintImage = false, order?: ReadonlyMap<import('@tumblerjs/word').WordDrawing, number>, interactive = false) {
@@ -613,12 +612,14 @@
             {/if}
             {#each [...page.headerLines, ...page.footerLines, ...page.noteLines] as line}
               {#if line.marker !== undefined}
-                <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format, lineSurfaces.get(line.paragraphElementId))};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
+                <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format, lineSurfaces.get(line))};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
               {/if}
               {#each line.fragments as fragment}
                 {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
                   {#if fragment.drawing.picture}
                     <div class="document-drawing picture-drawing" style={drawingStyle(fragment, 0, 0, false, drawingOrder)}><WordPictureView drawing={fragment.drawing} src={imageUrl(fragment.drawing)} /></div>
+                  {:else if wordDisplayInkSvg(fragment.drawing, lineSurfaces.get(line)) !== undefined}
+                    <div class="document-drawing ink-vector" data-word-ink-rendering="vector" role="img" aria-label={fragment.drawing.altText ?? 'Ink'} style={drawingStyle(fragment, 0, 0, true, drawingOrder)}>{@html wordDisplayInkSvg(fragment.drawing, lineSurfaces.get(line))!}</div>
                   {:else}
                     <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment, 0, 0, true, drawingOrder)} />
                   {/if}
@@ -629,9 +630,9 @@
                 {:else if fragment.kind === "drawing"}
                   <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment, 0, 0, false, drawingOrder)}></div>
                 {:else if fragment.hyperlink === undefined}
-                  <span data-story="header-footer" data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, 0, 0, lineSurfaces.get(line.paragraphElementId))}>{fragment.text}</span>
+                  <span data-story="header-footer" data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, 0, 0, lineSurfaces.get(line))}>{fragment.text}</span>
                 {:else}
-                  <button class="hyperlink" onkeydown={(event) => activateHyperlink(event, fragment.hyperlink)} onclick={(event) => activateHyperlink(event, fragment.hyperlink)} data-story="header-footer" data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, 0, 0, lineSurfaces.get(line.paragraphElementId))}>{fragment.text}</button>
+                  <button class="hyperlink" onkeydown={(event) => activateHyperlink(event, fragment.hyperlink)} onclick={(event) => activateHyperlink(event, fragment.hyperlink)} data-story="header-footer" data-paragraph={line.paragraphElementId} data-start={fragment.startOffset} data-end={fragment.endOffset} style={fragmentStyle(fragment, 0, 0, lineSurfaces.get(line))}>{fragment.text}</button>
                 {/if}
               {/each}
             {/each}
@@ -646,7 +647,7 @@
             {#each bodyLines(page) as { line, clip }}
               {#each line.fragments as fragment}
                 {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
-                  <WordDrawingView drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, 0, 0, false, drawingOrder, true)} pageX={fragment.x} pageY={fragment.y} clip={wordDrawingCellClip(fragment.drawing, clip)} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
+                  <WordDrawingView background={lineSurfaces.get(line)} drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, 0, 0, false, drawingOrder, true)} pageX={fragment.x} pageY={fragment.y} clip={wordDrawingCellClip(fragment.drawing, clip)} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
                 {/if}
               {/each}
               <WordContentClip {clip} layer={1}>
@@ -654,7 +655,7 @@
                 <span
                   class="list-marker"
                   aria-hidden="true"
-                  style={`${wordTextCss(line.marker.format, lineSurfaces.get(line.paragraphElementId))};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}
+                  style={`${wordTextCss(line.marker.format, lineSurfaces.get(line))};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}
                 >{line.marker.text}</span>
               {/if}
 
@@ -702,6 +703,7 @@
 </div>
 
 <style>
+  .ink-vector :global(svg) { display: block; width: 100%; height: 100%; }
   @media print { .word-scroller { color-scheme: only light !important; } }
   .word-scroller { position: relative; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; background: var(--tumbler-document-workspace, #e7e8ea); color: light-dark(#000, #fff); }
   .word-surface { position: relative; min-width: 100%; }

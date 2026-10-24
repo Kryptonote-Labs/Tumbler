@@ -65,4 +65,4 @@ export { default as WordShapeView } from './WordShapeView.svelte';
 
 export type { ShapeTextEditor } from './word-shape-text-editor.ts';
 
-export { wordDarkColour, wordDisplayColour } from './word-display-colour.ts';
+export { wordDarkColour, wordDisplayColour, wordDisplaySurface } from './word-display-colour.ts';

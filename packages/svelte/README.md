@@ -189,3 +189,7 @@ paragraph shading. The helper accounts for run shading and highlights itself.
 `wordDarkColour` returns the mapped hex colour for non-CSS consumers. Transparent or
 unsupported colours pass through unchanged. The mapping approximates Word's unpublished
 viewing palette; it does not change document formatting, theme resolution or export.
+Use `wordDisplaySurface(shading, ancestorBackground)` to resolve explicitly transparent
+shading against its visible ancestor. `WordDrawingView` accepts an original `background`
+colour for readable vector ink, defaulting to white. The built-in document view supplies
+these backgrounds for body, header, footer, and note content.

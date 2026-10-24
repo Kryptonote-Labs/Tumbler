@@ -78,3 +78,8 @@ export function wordDisplayColour(colour: string, background?: string): string {
   if (!rgb(colour)) return colour;
   return `light-dark(${colour},${wordDarkColour(colour, background)})`;
 }
+
+/** Resolve transparent shading against the next visible ancestor surface. */
+export function wordDisplaySurface(...colours: readonly (string | undefined)[]): string {
+  return colours.find(colour => colour !== undefined && colour !== 'transparent') ?? '#ffffff';
+}
