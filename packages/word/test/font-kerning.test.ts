@@ -27,7 +27,7 @@ test('kerning positions consecutive text nodes within one run', () => {
   for (const layout of [layoutWordDocument(artifact.document, measurer), new NativeWordDocument({ source: artifact }).layout(measurer)]) {
   const line = layout.pages[0]!.columns[0]!.lines[0]!;
   expect(line.width).toBe(18);
-  expect(line.fragments.map(fragment => [fragment.x - line.x, fragment.width])).toEqual([[0, 10], [8, 10]]);
+  expect(line.fragments.map(fragment => [fragment.text, fragment.x - line.x, fragment.width])).toEqual([['AV', 0, 18]]);
   }
 });
 test('canvas measurement caches kerning modes separately', () => {
@@ -48,5 +48,17 @@ test('overlapping ligatures use consistent whole-prefix advances', () => {
     const lines = layout.pages[0]!.columns[0]!.lines;
     expect(lines.map(line => line.fragments.map(fragment => fragment.text).join(''))).toEqual(['ff', 'i']);
     expect(lines.every(line => line.width <= 12.2)).toBe(true);
+  }
+});
+
+test('compatible imported text nodes paint as one shaping span', () => {
+  const artifact = source('<w:t>f</w:t><w:t>f</w:t><w:t>i</w:t>', 20);
+  const widths: Record<string, number> = { f: 4.44140625, i: 3.837890625, ff: 8.525390625, ffi: 12.36328125 };
+  const measure = { measure(text: string) { return { width: widths[text] ?? text.length * 6, ascent: 8, descent: 2 }; } };
+  for (const layout of [layoutWordDocument(artifact.document, measure), new NativeWordDocument({ source: artifact }).layout(measure)]) {
+    const line = layout.pages[0]!.columns[0]!.lines[0]!;
+    expect(line.fragments).toHaveLength(1);
+    expect(line.fragments[0]!.text).toBe('ffi');
+    expect(line.fragments[0]!.width).toBeCloseTo(widths.ffi!);
   }
 });

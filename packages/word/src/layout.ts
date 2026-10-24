@@ -1129,7 +1129,7 @@ function* resolvedParagraphAtoms(
       const value = validMeasurement(measurer.measure(text, format));
       return { ...value, ascent: value.ascent - baselineShift, descent: value.descent + baselineShift };
     };
-    const shaping = wordFontKerning(format) === 'normal' ? { key: JSON.stringify([format.fontFamily, format.fontSizePoints, format.bold, format.italic, format.rightToLeft, format.characterSpacingPoints, baselineShift]), measure } : undefined;
+    const shaping = wordFontKerning(format) === 'normal' ? { key: JSON.stringify([format.fontFamily, format.fontSizePoints, format.bold, format.italic, format.rightToLeft, format.characterSpacingPoints, baselineShift, format.color, format.highlight, format.shading, format.underline, format.strike, hyperlink]), measure } : undefined;
     for (const content of run.contents) {
       if (content.kind !== 'text') consumePreparation(preparation, 'characters');
       if (!visible(content)) continue;
@@ -1382,12 +1382,14 @@ function placeLine(
   const wordSpacing = gaps.size ? (available - line.width) / gaps.size : 0;
   const fragments: WordLayoutFragment[] = [];
   let cursorX = x;
-  for (const atom of line.atoms) {
+  for (const [index, atom] of line.atoms.entries()) {
     const previous = fragments.at(-1);
+    const preceding = line.atoms[index - 1];
     const expanded = gaps.has(atom);
     const atomWidth = atomWidthValue(atom) + (expanded ? wordSpacing : 0);
     const canMerge = !expanded && !previous?.wordSpacing && atom.kind === "glyph" && previous?.kind === "text" &&
-      previous.runElementId === atom.runElementId && previous.contentElementId === atom.contentElementId &&
+      (previous.runElementId === atom.runElementId && previous.contentElementId === atom.contentElementId ||
+        atom.shaping && preceding?.kind === 'glyph' && preceding.shaping?.key === atom.shaping.key) &&
       previous.endOffset === atom.startOffset;
     if (canMerge) {
       fragments[fragments.length - 1] = Object.freeze({
