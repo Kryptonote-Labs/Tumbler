@@ -1754,10 +1754,16 @@ function tabAdvance(tab: TabAtom, followingAtoms: () => Iterable<ParagraphAtom>,
   } else target = stop ? points(stop.positionTwips) : Math.ceil((absoluteX + 0.001) / DEFAULT_TAB_POINTS) * DEFAULT_TAB_POINTS;
   let following = 0;
   if (alignment !== "start" && alignment !== "left") {
+    const segment: Exclude<ParagraphAtom, BreakAtom>[] = [];
     for (const atom of followingAtoms()) {
       if (atom.kind === "tab" || atom.kind === "break") break;
-      if (alignment === "decimal" && atom.kind === "glyph" && atom.text === ".") break;
-      following += atomWidthValue(atom);
+      const shaped = shapeLineAdvance(atom, segment);
+      if (alignment === "decimal" && shaped.kind === "glyph" && shaped.text === ".") {
+        following += shaped.width - (shaped.lineStartWidth ?? shaped.width);
+        break;
+      }
+      segment.push(shaped);
+      following += atomWidthValue(shaped);
     }
   }
   const shift = alignment === "center" ? following / 2 : following;

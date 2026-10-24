@@ -62,3 +62,15 @@ test('compatible imported text nodes paint as one shaping span', () => {
     expect(line.fragments[0]!.width).toBeCloseTo(widths.ffi!);
   }
 });
+
+for (const alignment of ['right', 'center', 'decimal'] as const) test(`${alignment} tab lookahead uses shaped advances`, () => {
+  const artifact = source('<w:tab/><w:t>AV</w:t>', 150);
+  const original = artifact.document.source.source;
+  const doc = openWordArtifact(buildWordDocumentFixture({ documentXml: original.replace('<w:p>', `<w:p><w:pPr><w:tabs><w:tab w:val="${alignment}" w:pos="2000"/></w:tabs></w:pPr>`) }));
+  for (const layout of [layoutWordDocument(doc.document, measurer), new NativeWordDocument({ source: doc }).layout(measurer)]) {
+    const line = layout.pages[0]!.columns[0]!.lines[0]!;
+    const text = line.fragments.find(fragment => fragment.kind === 'text')!;
+    const anchor = text.x - line.x + text.width * (alignment === 'center' ? 0.5 : 1);
+    expect(anchor).toBeCloseTo(100);
+  }
+});
