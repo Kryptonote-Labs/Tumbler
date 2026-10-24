@@ -1,4 +1,6 @@
 import { anchorScopedSelection } from './selection.ts';
+import { isWordLayoutOperation, applyWordLayoutOperation } from '../../operations/layout.ts';
+import { wordOperation } from '../../operations/definitions.ts';
 import * as Y from "yjs";
 import {
   createWordCommands,
@@ -224,6 +226,18 @@ export class WordSharedText {
     }
     if (this.conflict) throw this.conflict;
     if (!this.structured()) this.sync();
+    const parsed = wordOperation.parse(operation);
+    if (isWordLayoutOperation(parsed)) {
+      const selection = this.selection(parsed.name === 'section-layout' ? { start: range.start, end: range.start } : range);
+      let result = range;
+      const update = stageWordUpdate(this.doc, staged => {
+        const after = applyWordLayoutOperation(staged, selection, parsed, context.source);
+        const view = wordSharedText(staged.getText('body'));
+        if (parsed.name !== 'section-layout') result = view.range(after);
+        return after;
+      });
+      return { ...update, range: result };
+    }
     const cellId = "cellId" in operation.input ? operation.input.cellId : undefined;
     const target = cellId && tableParagraphs(this.text).find((p) => p.table?.cell === cellId);
     if (cellId && !target) throw new Error("The table cell changed. Read the document again.");

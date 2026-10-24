@@ -40,6 +40,9 @@ export function createWordOperations(commands = createWordCommands()) {
         return range;
       };
       switch (operation.name) {
+        case 'section-layout':
+        case 'section-break':
+        case 'remove-section-break':
         case 'page-color':
           throw new Error('Document settings require prepareWordScopedOperation or WordSharedText.prepareOperation.');
         case "fit-table": {

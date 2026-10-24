@@ -1,3 +1,4 @@
+import { sectionBoundaryXml } from './section-format.ts';
 import { wordBreakXml } from './breaks.ts';
 import { paragraphFormatXml } from './paragraph-format.ts';
 import { paragraphPositioningXml, positionalTabXml } from './positioning.ts';
@@ -250,6 +251,7 @@ export function wordParagraphRenderer(
       paragraphCopies.set(paragraphKey(paragraph), left);
       if (left > 0) replacements.set('sectPr', '');
     }
+    if (paragraph.section !== undefined) replacements.set('sectPr', paragraph.section === null ? '' : sectionBoundaryXml(markup, paragraph.section));
     const styleChanged = paragraph.styleId !== undefined && paragraph.styleId !== original?.styleId;
     if (paragraph.styleId !== undefined && (styleChanged || paragraph.paragraph === undefined)) {
       if (paragraph.paragraph === undefined) for (const key of ['spacing', 'keepNext', 'keepLines', 'pageBreakBefore', 'widowControl', 'contextualSpacing', 'pBdr', 'shd']) replacements.set(key, '');

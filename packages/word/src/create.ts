@@ -13,6 +13,8 @@ import { authoredContent, type WordContentBlock, type WordAuthoredImage } from '
 export type WordTextFormat = Partial<Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'underline' | 'strike' | 'highlight' | 'verticalAlign' | 'characterSpacingPoints'>> & { readonly color?: import('./theme-colours.ts').WordColour; readonly shading?: import('./theme-colours.ts').WordColour };
 export interface WordTextRun { /** Clear omitted direct run properties when reconciling source XML. */ readonly resetFormat?: boolean; readonly ink?: import('./authored-ink.ts').WordAuthoredInk; readonly inkTraces?: readonly import('./ink-overrides.ts').WordInkTraceOverride[]; readonly chartTitle?: string; readonly chartTitleText?: readonly WordTextParagraph[]; readonly drawing?: import('./drawing-geometry.ts').WordDrawingGeometry; readonly shape?: import('./shapes.ts').WordAuthoredShape; readonly breakType?: import('./breaks.ts').WordBreakType; readonly link?: string; readonly tab?: WordPositionalTab; readonly source?: number; readonly sourceCopy?: string; readonly text: string; readonly format?: WordTextFormat; readonly image?: WordAuthoredImage; readonly field?: WordPageField; }
 export interface WordTextParagraph {
+  /** A section ends at this paragraph mark. Null explicitly removes an imported boundary. */
+  readonly section?: import('./section-format.ts').WordSectionBoundary | null;
   /** Clear source direct paragraph formatting before applying the supplied properties. */
   readonly resetParagraphFormat?: boolean;
   readonly styleId?: string;

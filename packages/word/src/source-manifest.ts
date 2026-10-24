@@ -9,6 +9,7 @@ import { wordParagraphTextSegments } from './text.ts';
 export interface WordSourceManifest {
   readonly version: 1;
   readonly sectionCount?: number;
+  readonly sections?: readonly number[];
   readonly storyBindings?: readonly { readonly section: number; readonly kind: 'header' | 'footer'; readonly type: 'default' | 'first' | 'even'; readonly partName: string }[];
   readonly storyTypes?: readonly (readonly ('default' | 'first' | 'even')[])[];
   readonly stories?: Readonly<Record<string, WordSourceManifest>>;
@@ -47,5 +48,5 @@ export function createWordSourceManifest(artifact: WordArtifact): WordSourceMani
     }
     for (const binding of inherited.values()) storyBindings.push({ section, ...binding });
   }
-  return { version: 1, storyBindings, sectionCount: wordSections(artifact.document).length, storyTypes: wordSections(artifact.document).map(section => ['default' as const, ...(section.titlePage ? ['first' as const] : []), ...(artifact.document.evenAndOddHeaders ? ['even' as const] : [])]), ...(artifact.document.headerFooters.length ? { stories: Object.fromEntries(artifact.document.headerFooters.map(story => [story.part.name.value, createWordSourceManifest(wordStoryArtifact(artifact, story.part.name.value))])) } : {}), defaultTextFormat: wordDocumentDefaults(artifact.document).text, paragraphs, runs, tables, rows, cells, images: [...artifact.document.drawings.values()].flatMap(drawing => drawing.kind === 'image' ? [{ id: drawing.elementId, contentType: drawing.contentType }] : []) };
+  return { version: 1, sections: wordSections(artifact.document).map(section => section.elementId).filter(id => id >= 0), storyBindings, sectionCount: wordSections(artifact.document).length, storyTypes: wordSections(artifact.document).map(section => ['default' as const, ...(section.titlePage ? ['first' as const] : []), ...(artifact.document.evenAndOddHeaders ? ['even' as const] : [])]), ...(artifact.document.headerFooters.length ? { stories: Object.fromEntries(artifact.document.headerFooters.map(story => [story.part.name.value, createWordSourceManifest(wordStoryArtifact(artifact, story.part.name.value))])) } : {}), defaultTextFormat: wordDocumentDefaults(artifact.document).text, paragraphs, runs, tables, rows, cells, images: [...artifact.document.drawings.values()].flatMap(drawing => drawing.kind === 'image' ? [{ id: drawing.elementId, contentType: drawing.contentType }] : []) };
 }

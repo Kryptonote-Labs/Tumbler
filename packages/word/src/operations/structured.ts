@@ -1,3 +1,4 @@
+import { applyWordLayoutOperation, isWordLayoutOperation } from './layout.ts';
 import { writeWordDocumentSettings } from '../collaboration/document-settings.ts';
 import * as Y from "yjs";
 import { prepareWordOperation } from "./execute.ts";
@@ -32,6 +33,7 @@ function defined<T extends object>(value: T) {
   };
 }
 export type WordScopedOperationContext = {
+  source?: import('../artifact.ts').WordArtifact;
   availableWidthPoints?: number;
   prepareOperation?: typeof prepareWordOperation;
 };
@@ -56,6 +58,7 @@ export function applyWordScopedOperation(
   context: WordScopedOperationContext = {},
 ) {
   const operation = wordOperation.parse(input);
+  if (isWordLayoutOperation(operation)) return applyWordLayoutOperation(staged, selection, operation, context.source);
   if (operation.name === 'page-color') {
     writeWordDocumentSettings(staged, { background: operation.input.color });
     return selection;

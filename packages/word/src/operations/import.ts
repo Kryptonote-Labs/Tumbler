@@ -149,6 +149,7 @@ export function importOperationDelta(artifact: WordArtifact) {
           attributes: {
             ...emptyFormats,
             wordParagraph: block.source,
+            ...(block.section ? { wordSection: block.section } : {}),
             ...(block.styleId ? { styleId: block.styleId } : {}),
             ...(block.paragraph ? { paragraph: block.paragraph } : {}),
             ...(block.positioning ? { positioning: block.positioning } : {}),

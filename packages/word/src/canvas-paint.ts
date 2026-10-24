@@ -1,3 +1,4 @@
+import { wordColumnSeparators } from './section-columns.ts';
 import { paintWordPicture } from './picture-paint.ts';
 import { paintWordInk, type WordInkViewport, type WordInkPixelContext } from './ink-canvas.ts';
 import { wordDrawingCellClip, intersectWordContentBounds, type WordContentBounds } from './table-clipping.ts';
@@ -89,6 +90,7 @@ export function paintWordPage<Image, Path>(context: WordCanvasContext<Image, Pat
     const left = page.section.marginLeftTwips / 20;
     strokeLine(context, left, page.noteSeparatorY, left + 144, page.noteSeparatorY, { style: "single", widthPoints: 0.5, color: "#000000" });
   }
+  for (const separator of wordColumnSeparators(page)) strokeLine(context, separator.x, separator.y, separator.x, separator.y + separator.height, { style: 'single', widthPoints: 0.75, color: '#000000' });
   for (const line of lines) paintLine(context, line, paintOptions);
   for (const entry of floating.filter(({ fragment }) => !fragment.drawing?.anchor?.behindDocument)) paintFloatingDrawing(context, entry, paintOptions);
   context.restore();

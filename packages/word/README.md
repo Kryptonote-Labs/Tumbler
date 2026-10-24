@@ -1016,3 +1016,29 @@ settings and rejects this operation.
 
 Exports write ECMA-376 Part 1 §17.2.1 document backgrounds and §17.15.1.26
 `displayBackgroundShape`, preserving theme identities and unrelated package data.
+
+### Section layout
+
+`updateSettings({ finalSection: { ... } })` edits the final section's paper size,
+orientation, margins and columns. Measurements are twips, 20 per point. Authored
+paragraphs can end a section with `section: { format, source? }`. The optional
+source is an existing `sectPr` identity whose opaque properties and story links
+must be retained. `section: null` explicitly removes an imported boundary.
+
+Collaborative `section-layout` operations apply to the current section or the
+whole document. `section-break` inserts a continuous, next-page, next-column,
+odd-page or even-page boundary. `remove-section-break` joins it using the following
+section's properties. Pass the immutable source in the scoped operation context;
+`openWordOperationDocument` supplies it automatically. `inspectWordSections`
+returns the same section ranges and resolved settings used by these operations.
+Separate property registers preserve concurrent changes to different settings.
+
+Columns support equal widths or explicit `columns: [{ widthTwips, spaceTwips }]`,
+with optional `columnSeparator`. Set `columns: null` when switching back to equal
+widths. Continuous sections can change column geometry on the same page. The
+final column set balances by repaginating through the existing paragraph and
+table rules. `wordColumnSeparators` and `WordPageLayoutDecorations` expose the
+same geometry to canvas and Svelte consumers.
+
+These settings follow ECMA-376 Part 1 §§17.6.3–4, 17.6.11, 17.6.13 and 17.6.22.
+Hyphenation is unchanged.

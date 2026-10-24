@@ -1,3 +1,4 @@
+import { wordSectionColumns } from './section-columns.ts';
 import type { WordBlock, WordSectionProperties, WordTable } from './document.ts';
 
 /** Physical dimensions from the same section and table grid used by layout, in points. */
@@ -8,8 +9,9 @@ export function wordGeometryAt(blocks: readonly WordBlock[], finalSection: WordS
   const section = blocks.slice(index).find((block): block is Extract<WordBlock, { kind: 'paragraph' }> => block.kind === 'paragraph' && block.section !== undefined)?.section ?? finalSection;
   const pageWidthPoints = section.pageWidthTwips / 20;
   const bodyWidthPoints = Math.max(1, (section.pageWidthTwips - section.marginLeftTwips - section.marginRightTwips - section.gutterTwips) / 20);
-  const columnWidthPoints = Math.max(1, (bodyWidthPoints - section.columnSpaceTwips / 20 * (section.columnCount - 1)) / section.columnCount);
-  const page = { pageWidthPoints, pageHeightPoints: section.pageHeightTwips / 20, marginLeftPoints: section.marginLeftTwips / 20, marginRightPoints: section.marginRightTwips / 20, gutterPoints: section.gutterTwips / 20, bodyWidthPoints, columnCount: section.columnCount, columnWidthPoints };
+  const columnWidths = wordSectionColumns(section).map(column => column.width);
+  const columnWidthPoints = Math.min(...columnWidths);
+  const page = { pageWidthPoints, pageHeightPoints: section.pageHeightTwips / 20, marginLeftPoints: section.marginLeftTwips / 20, marginRightPoints: section.marginRightTwips / 20, gutterPoints: section.gutterTwips / 20, bodyWidthPoints, columnCount: columnWidths.length, columnWidthPoints, columnWidthsPoints: columnWidths };
   const metrics = (table: WordTable, containerWidth: number) => {
     const availableWidthPoints = Math.max(1, containerWidth - table.properties.indentTwips / 20);
     const columnWidthsPoints = table.gridColumnWidthsTwips.map(width => width / 20);

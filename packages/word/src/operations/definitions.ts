@@ -1,3 +1,4 @@
+import { wordSectionFormatSchema } from '../section-format.ts';
 import { isWordColour, type WordColour } from '../theme-colours.ts';
 import { objectPatch, ink } from "./schemas.ts";
 import { z } from "zod";
@@ -27,6 +28,12 @@ const search = {
   wholeWord: z.boolean().optional(),
 };
 export const wordOperations = {
+  'section-layout': operation('section-layout', 'Set page size, margins and columns for the current section or whole document. Measurements are twips, 20 per point.',
+    z.object({ scope: z.enum(['section', 'document']).default('section'), section: z.number().int().nonnegative().optional(), format: wordSectionFormatSchema }).strict(),
+    { scope: 'section', format: { columnCount: 2, columnSpaceTwips: 720 } }),
+  'section-break': operation('section-break', 'Split the current section at a body caret, preserving its properties and header/footer links.',
+    z.object({ type: z.enum(['continuous', 'nextPage', 'nextColumn', 'evenPage', 'oddPage']) }).strict(), { type: 'nextPage' }),
+  'remove-section-break': operation('remove-section-break', 'Delete the section break at the caret. The joined text uses the following section layout.', z.object({}).strict(), {}),
   'page-color': operation(
     'page-color',
     'Set the background of every page. Null removes the document background. Supports RGB or theme colours.',
@@ -207,6 +214,9 @@ export const wordOperations = {
   ),
 };
 export const wordOperation = z.discriminatedUnion("name", [
+  wordOperations["section-layout"].schema,
+  wordOperations["section-break"].schema,
+  wordOperations["remove-section-break"].schema,
   wordOperations["page-color"].schema,
   wordOperations["fit-table"].schema,
   wordOperations["edit-object"].schema,

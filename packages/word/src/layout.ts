@@ -1,3 +1,5 @@
+import { balanceWordColumns, type WordColumnLimits } from './column-balance.ts';
+import { wordSectionColumns, sameWordColumns } from './section-columns.ts';
 import { widowGroupHeight, keepHeightUntil } from './paragraph-pagination.ts';
 import { withParagraphSpacing } from './paragraph-spacing.ts';
 import { createFieldVisibility } from './field-visibility.ts';
@@ -93,6 +95,7 @@ export interface WordLayoutPage {
 }
 
 export interface WordLayoutColumn {
+  readonly section?: WordSectionProperties;
   readonly index: number;
   readonly x: number;
   readonly y: number;
@@ -184,6 +187,7 @@ interface LayoutBudget {
 }
 
 interface MutableColumn {
+  readonly section?: WordSectionProperties;
   readonly index: number;
   readonly x: number;
   readonly y: number;
@@ -437,7 +441,16 @@ export function* layoutWordSourceProgressively(
   let total = 1;
   const seen = new Set<number>();
   while (true) {
-    const layout = yield* layoutWordSourcePass(document, measurer, options, stories, total, emitProgress);
+    const initial = yield* layoutWordSourcePass(document, measurer, options, stories, total, emitProgress);
+    const layout = balanceWordColumns(initial, limits => {
+      const pass = layoutWordSourcePass(document, measurer, options, stories, total, false, limits);
+      let step = pass.next();
+      while (!step.done) step = pass.next();
+      return step.value;
+    }, id => {
+      const paragraph = document.blocks.find(block => block.kind === 'paragraph' && block.elementId === id);
+      return paragraph?.kind === 'paragraph' ? document.paragraphFormat(paragraph) : undefined;
+    });
     if (!needsTotal || layout.truncated || layout.pages.length === total) return layout;
     if (seen.has(layout.pages.length)) throw new WordError('invalid_document', 'Page count fields did not reach a stable layout.');
     seen.add(total);
@@ -445,7 +458,7 @@ export function* layoutWordSourceProgressively(
   }
 }
 
-function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeasurer, options: WordLayoutOptions, stories: WordLayoutStories | undefined, totalPages: number, emitProgress: boolean): Generator<WordLayout, WordLayout, void> {
+function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMeasurer, options: WordLayoutOptions, stories: WordLayoutStories | undefined, totalPages: number, emitProgress: boolean, columnLimits?: WordColumnLimits): Generator<WordLayout, WordLayout, void> {
   if (document.cache) document.cache.layoutRevision += 1;
   const prepared = createPreparation(measurer, options);
   const preparation = prepared.budget;
@@ -487,7 +500,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
   const appendPage = (section: WordSectionProperties) => {
     // Earlier pages can still change until the next one starts, so the limit allows one page more.
     if (pageLimit !== undefined && pages.length > pageLimit) throw TRUNCATED;
-    const created = createPage(section, pages, budget);
+    const created = createPage(section, pages, budget, columnLimits);
     const index = sectionPageCounts.get(section) ?? 0;
     sectionPageCounts.set(section, index + 1);
     if (stories) {
@@ -500,7 +513,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
       // Keep body content within its section margins and expose the collision to the host.
       // This is a layout fallback, not an authoring limit: all story content remains in the model/export.
       if (footerTop <= headerBottom) created.storyOverflow = true;
-      else for (const [columnIndex, column] of created.columns.entries()) created.columns[columnIndex] = { ...column, y: headerBottom, height: footerTop - headerBottom };
+      else for (const [columnIndex, column] of created.columns.entries()) created.columns[columnIndex] = { ...column, y: headerBottom, height: Math.max(1, Math.min(column.y + column.height, footerTop) - headerBottom) };
     }
     return created;
   };
@@ -530,7 +543,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
   for (const [index, section] of sections.entries()) {
     const previous = sections[index - 1]?.properties;
     if (!previous || section.properties.breakType !== "continuous" || !samePageGeometry(previous, section.properties) ||
-      previous.columnCount !== section.properties.columnCount || previous.columnSpaceTwips !== section.properties.columnSpaceTwips) {
+      !sameWordColumns(previous, section.properties)) {
       keepBoundaries.add(boundaryOffset);
     }
     boundaryOffset += section.blocks.length;
@@ -555,11 +568,31 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
       const isFirst = page === undefined;
       if (isFirst) addPage(section.properties);
       else if (section.properties.breakType === "nextColumn" && samePageGeometry(page!.section, section.properties) &&
-        page!.section.columnCount === section.properties.columnCount && page!.section.columnSpaceTwips === section.properties.columnSpaceTwips) {
+        sameWordColumns(page!.columns[columnIndex]!.section ?? page!.section, section.properties)) {
         advanceColumn(section.properties);
       }
       else if (section.properties.breakType === "continuous" && samePageGeometry(page!.section, section.properties)) {
-        // Continuous sections share the current page but can change the remaining column set only on the next page.
+        const current = page!;
+        const active = current.columns[columnIndex]!;
+        const previous = active.section ?? current.section;
+        if (!sameWordColumns(previous, section.properties)) {
+          const top = Math.max(cursorY, ...current.columns.filter(column => column.y === active.y)
+            .flatMap(column => [...column.lines.map(line => line.y + line.height), ...column.tables.map(table => table.y + table.height)]));
+          const bottom = current.height - points(section.properties.marginBottomTwips);
+          if (top >= bottom) addPage(section.properties);
+          else {
+            for (let i = 0; i < current.columns.length; i++) {
+              const column = current.columns[i]!;
+              if (column.y === active.y) current.columns[i] = { ...column, height: Math.max(0, top - column.y) };
+            }
+            columnIndex = current.columns.length;
+            current.columns.push(...wordSectionColumns(section.properties).map((column, i) => ({
+              section: section.properties, index: columnIndex + i, x: column.x, y: top, width: column.width, height: Math.min(bottom - top, columnLimits?.get(section.properties)?.page === current.index ? columnLimits.get(section.properties)!.height : Infinity),
+              lines: [], tables: [], unsupportedBlocks: [],
+            })));
+            cursorY = top;
+          }
+        }
       } else addPage(section.properties, section.properties.breakType === "evenPage" ? "even" : section.properties.breakType === "oddPage" ? "odd" : undefined);
 
       if (keepBoundaries.has(sectionBlockOffset)) {
@@ -651,8 +684,10 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
             candidate = prepareBody(++index);
           }
         }
-        if ((prepared.format.pageBreakBefore || requiredHeight > available) && cursorY > currentColumn.y) {
-          advanceColumn(section.properties);
+        const forcedPage = prepared.format.pageBreakBefore && page!.columns.some(column => column.lines.length || column.tables.length);
+        if (forcedPage || requiredHeight > available && cursorY > currentColumn.y) {
+          if (forcedPage) addPage(section.properties);
+          else advanceColumn(section.properties);
           if (page!.columns[columnIndex]!.width !== currentColumn.width) {
             pending.clear();
             prepared = prepareBody(bodyIndex)!;
@@ -1528,25 +1563,17 @@ function translateTable(table: WordLayoutTable, dx: number, dy: number): WordLay
   });
 }
 
-function createPage(section: WordSectionProperties, pages: MutablePage[], budget: LayoutBudget): MutablePage {
+function createPage(section: WordSectionProperties, pages: MutablePage[], budget: LayoutBudget, limits?: WordColumnLimits): MutablePage {
   if (pages.length >= budget.maxPages) throw new WordError("limit_exceeded", `Layout exceeds ${budget.maxPages} pages.`);
   const width = points(section.pageWidthTwips);
   const height = points(section.pageHeightTwips);
   const left = points(section.marginLeftTwips + section.gutterTwips);
   const top = points(section.marginTopTwips);
   const bodyWidth = Math.max(1, width - left - points(section.marginRightTwips));
-  const bodyHeight = Math.max(1, height - top - points(section.marginBottomTwips));
-  const gap = points(section.columnSpaceTwips);
-  const columnWidth = Math.max(1, (bodyWidth - gap * (section.columnCount - 1)) / section.columnCount);
-  const columns: MutableColumn[] = Array.from({ length: section.columnCount }, (_, index) => ({
-    index,
-    x: left + index * (columnWidth + gap),
-    y: top,
-    width: columnWidth,
-    height: bodyHeight,
-    lines: [],
-    tables: [],
-    unsupportedBlocks: [],
+  const bodyHeight = Math.min(Math.max(1, height - top - points(section.marginBottomTwips)), limits?.get(section)?.page === pages.length ? limits.get(section)!.height : Infinity);
+  const columns: MutableColumn[] = wordSectionColumns(section).map((column, index) => ({
+    section, index, x: column.x, y: top, width: column.width, height: bodyHeight,
+    lines: [], tables: [], unsupportedBlocks: [],
   }));
   const page: MutablePage = { index: pages.length, width, height, section, columns, headerLines: [], footerLines: [], headerTables: [], footerTables: [], noteLines: [], noteTables: [], noteSeparatorY: undefined };
   pages.push(page);
@@ -1578,7 +1605,7 @@ function freezePage(page: MutablePage, previous?: WordLayoutPage): WordLayoutPag
   const columns = page.columns.map((column, index): WordLayoutColumn => {
     const old = previous?.columns[index];
     if (old && old.index === column.index && old.x === column.x && old.y === column.y &&
-      old.width === column.width && old.height === column.height &&
+      old.width === column.width && old.height === column.height && old.section === column.section &&
       sameItems(old.lines, column.lines) && sameItems(old.tables, column.tables) &&
       sameItems(old.unsupportedBlocks, column.unsupportedBlocks)) return old;
     return Object.freeze({ ...column, lines: Object.freeze(column.lines), tables: Object.freeze(column.tables), unsupportedBlocks: Object.freeze(column.unsupportedBlocks) });
