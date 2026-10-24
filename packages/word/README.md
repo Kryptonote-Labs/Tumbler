@@ -1036,8 +1036,9 @@ Separate property registers preserve concurrent changes to different settings.
 Columns support equal widths or explicit `columns: [{ widthTwips, spaceTwips }]`,
 with optional `columnSeparator`. Set `columns: null` when switching back to equal
 widths. Continuous sections can change column geometry on the same page. The
-final column set balances by repaginating through the existing paragraph and
-table rules. `wordColumnSeparators` and `WordPageLayoutDecorations` expose the
+preceding section balances at a continuous section break by repaginating through
+the existing paragraph and table rules. Open final sections and page/column section
+breaks fill each column down to the available page height before moving across. `wordColumnSeparators` and `WordPageLayoutDecorations` expose the
 same geometry to canvas and Svelte consumers.
 
 These settings follow ECMA-376 Part 1 §§17.6.3–4, 17.6.11, 17.6.13 and 17.6.22.

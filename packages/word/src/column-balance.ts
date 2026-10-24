@@ -4,7 +4,7 @@ import type { WordLayout } from './layout.ts';
 
 export type WordColumnLimits = ReadonlyMap<WordSectionProperties, { readonly page: number; readonly height: number }>;
 
-/** Reuse pagination's keep/widow/table rules while finding the shortest final column set. */
+/** Reuse pagination's keep/widow/table rules at eligible continuous section boundaries. */
 export function balanceWordColumns(initial: WordLayout, run: (limits: WordColumnLimits) => WordLayout, format: (id: number) => ComputedWordParagraphFormat | undefined, excluded: ReadonlySet<WordSectionProperties> = new Set()): WordLayout {
   if (initial.truncated) return initial;
   const last = new Map<WordSectionProperties, { page: number; height: number; columns: number }>();

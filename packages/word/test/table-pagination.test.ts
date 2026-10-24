@@ -202,7 +202,7 @@ test.each([
 
 test('balancing keeps a row intact when it fits the natural column height', () => {
   const sect = '<w:sectPr><w:pgSz w:w="8000" w:h="4000"/><w:pgMar w:top="400" w:bottom="400" w:left="400" w:right="400"/><w:cols w:num="2" w:space="400"/></w:sectPr>';
-  const artifact = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${namespace}"><w:body>${table(row(cell(lines('Row', 6)), '<w:cantSplit/>'))}${sect}</w:body></w:document>` }));
+  const artifact = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${namespace}"><w:body>${table(row(cell(lines('Row', 6)), '<w:cantSplit/>'))}<w:p><w:pPr>${sect}</w:pPr></w:p>${paragraph('After')}${sect.replace('<w:sectPr>', '<w:sectPr><w:type w:val="continuous"/>').replace('<w:cols w:num="2" w:space="400"/>', '')}</w:body></w:document>` }));
   const result = layoutWordDocument(artifact.document, measure);
   const tables = result.pages.flatMap(page => page.columns.flatMap(column => column.tables));
   expect(tables).toHaveLength(1);

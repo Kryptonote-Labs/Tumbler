@@ -112,16 +112,62 @@ test('concurrent changes to different final-section properties merge and invalid
   session.destroy(); remote.destroy();
 });
 
-test('the final columns balance through the pagination engine without splitting widow pairs', () => {
-  const source = createWordArtifact({ paragraphs: Array.from({ length: 12 }, (_, i) => paragraph(`Line ${i + 1}`)) });
+test('columns balance when closed by a continuous section break', () => {
+  const source = createWordArtifact({ paragraphs: [
+    ...Array.from({ length: 12 }, (_, i) => ({ ...paragraph(`Line ${i + 1}`), ...(i === 11 ? { section: { format: { columnCount: 2 } } } : {}) })),
+    paragraph('Following section'),
+  ] });
   const native = new NativeWordDocument({ source });
-  native.updateSettings({ finalSection: { columnCount: 2 } });
+  native.updateSettings({ finalSection: { breakType: 'continuous' } });
   const layout = native.layout(measure);
   expect(layout.pages).toHaveLength(1);
-  expect(layout.pages[0]!.columns.map(column => column.lines.length)).toEqual([6, 6]);
+  expect(layout.pages[0]!.columns.slice(0, 2).map(column => column.lines.length)).toEqual([6, 6]);
   const exported = native.artifact();
-  expect(layoutWordDocument(exported.document, measure).pages[0]!.columns.map(column => column.lines.length)).toEqual([6, 6]);
+  expect(layoutWordDocument(exported.document, measure).pages[0]!.columns.slice(0, 2).map(column => column.lines.length)).toEqual([6, 6]);
 });
+
+for (const count of [1, 5]) test(`short three-column text stays in the first column: ${count} paragraphs`, () => {
+  const native = new NativeWordDocument({ page: { width: 600, height: 800, margin: 50 }, content:
+    Array.from({ length: count }, () => ({ kind: 'paragraph' as const, runs: [{ text: "Here's some text Here's some text Here's some text Here's some text" }] })),
+  });
+  native.updateSettings({ finalSection: { columnCount: 3 } });
+  const layout = native.layout(measure);
+  expect(layout.pages).toHaveLength(1);
+  expect(layout.pages[0]!.columns[0]!.lines.length).toBeGreaterThan(count);
+  expect(layout.pages[0]!.columns.slice(1).map(column => column.lines.length)).toEqual([0, 0]);
+  const exported = layoutWordDocument(native.artifact().document, measure);
+  expect(exported.pages[0]!.columns.map(column => column.lines.length)).toEqual(layout.pages[0]!.columns.map(column => column.lines.length));
+  const progressive = native.layoutProgressively(measure);
+  let step = progressive.next();
+  while (!step.done) step = progressive.next();
+  expect(step.value.pages[0]!.columns.map(column => column.lines.length)).toEqual(layout.pages[0]!.columns.map(column => column.lines.length));
+});
+
+for (const { count, expected } of [{ count: 8, expected: [[6, 2, 0]] }, { count: 19, expected: [[6, 6, 6], [1, 0, 0]] }]) {
+  test(`columns fill down before moving across and onto the next page: ${count} lines`, () => {
+    const native = new NativeWordDocument({ page: { width: 400, height: 100, margin: 10 }, content:
+      Array.from({ length: count }, (_, index) => ({ kind: 'paragraph' as const, runs: [{ text: `Line ${index + 1}` }] })),
+    });
+    native.updateSettings({ finalSection: { columnCount: 3 } });
+    expect(native.layout(measure).pages.map(page => page.columns.map(column => column.lines.length))).toEqual(expected);
+    expect(layoutWordDocument(native.artifact().document, measure).pages.map(page => page.columns.map(column => column.lines.length))).toEqual(expected);
+  });
+}
+
+for (const type of ['nextPage', 'nextColumn', 'evenPage', 'oddPage'] as const) {
+  test(`${type} section boundaries retain down-then-across column flow`, () => {
+    const native = new NativeWordDocument({ content: [
+      { kind: 'paragraph', runs: [{ text: 'First' }] },
+      { kind: 'paragraph', runs: [{ text: 'Second' }] },
+      { kind: 'paragraph', runs: [{ text: 'Third' }], section: { format: { columnCount: 3 } } },
+      { kind: 'paragraph', runs: [{ text: 'Following section' }] },
+    ] });
+    native.updateSettings({ finalSection: { columnCount: 3, breakType: type } });
+    const expected = type === 'nextColumn' ? [3, 1, 0] : [3, 0, 0];
+    expect(native.layout(measure).pages[0]!.columns.map(column => column.lines.length)).toEqual(expected);
+    expect(layoutWordDocument(native.artifact().document, measure).pages[0]!.columns.map(column => column.lines.length)).toEqual(expected);
+  });
+}
 
 test('paragraph continuations rewrap when flowing into narrower unequal columns', () => {
   const native = new NativeWordDocument({ content: [{ kind: 'paragraph', runs: [{ text: 'abcdef '.repeat(100) }] }], page: { width: 400, height: 150, margin: 20 } });
@@ -151,7 +197,7 @@ test('matching multi-column continuous sections balance before the next section 
   native.updateSettings({ finalSection: { columnCount: 2, breakType: 'continuous' } });
   const layout = native.layout(measure);
   expect(layout.pages).toHaveLength(1);
-  expect(layout.pages[0]!.columns.map(column => column.lines.length)).toEqual([3, 3, 1, 1]);
+  expect(layout.pages[0]!.columns.map(column => column.lines.length)).toEqual([3, 3, 2, 0]);
   expect(layout.pages[0]!.columns[2]!.y).toBeCloseTo(layout.pages[0]!.columns[0]!.y + 36, 0);
 });
 
