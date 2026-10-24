@@ -174,3 +174,22 @@ MIT licensed. See [LICENSE](LICENSE).
 
 Chart legends use measured SVG swatch/label bounds for horizontal centring and
 refresh their placement when fonts load or the chart dimensions change.
+
+### Word display colours
+
+`WordDocumentView` accepts `displayMode="light"` or `displayMode="dark"`, defaulting to light.
+The mode affects rendering only. Print styles force the original light appearance.
+Pictures, shapes and charts retain their original colours.
+
+Custom renderers can use `wordDisplayColour(resolvedColour, originalBackground?)` and
+`wordTextCss(format, originalBackground?)`. These emit CSS `light-dark()` values. Set
+`color-scheme: light` or `dark` on the paper, and `color-scheme: only light !important`
+for print. Pass the original background to text styling, including inherited cell and
+paragraph shading. The helper accounts for run shading and highlights itself.
+`wordDarkColour` returns the mapped hex colour for non-CSS consumers. Transparent or
+unsupported colours pass through unchanged. The mapping approximates Word's unpublished
+viewing palette; it does not change document formatting, theme resolution or export.
+Use `wordDisplaySurface(shading, ancestorBackground)` to resolve explicitly transparent
+shading against its visible ancestor. `WordDrawingView` accepts an original `background`
+colour for readable vector ink, defaulting to white. The built-in document view supplies
+these backgrounds for body, header, footer, and note content.

@@ -101,6 +101,7 @@
 
 <style>
   .shape {
+    color-scheme: only light;
     position: relative;
     width: 100%;
     height: 100%;

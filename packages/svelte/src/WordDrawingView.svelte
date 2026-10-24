@@ -1,14 +1,17 @@
 <script lang="ts">
+  import { wordDisplayInkSvg } from './word-display-ink.ts';
   import WordPictureView from "./WordPictureView.svelte";
   import { wordContentClipCss } from "./word-content-clip.ts";
   import WordInkPointEditor from "./WordInkPointEditor.svelte";
   import ChartTitleEditor from "./ChartTitleEditor.svelte";
   import WordShapeView from "./WordShapeView.svelte";
-  import { shapePlainText, wordInkSvg, wordImagePaintBounds, wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing, type WordShapeTextChange } from '@tumblerjs/word';
+  import { shapePlainText, wordImagePaintBounds, wordPointsToCssPixels, type WordTextPosition, type WordDrawing, type WordDrawingChange, type WordDrawingResize, type WordImageDrawing, type WordShapeTextChange } from '@tumblerjs/word';
   import OoxmlChart from './OoxmlChart.svelte';
   import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
 
-  let { drawing, width, height, position, clip, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo, oncharttitlechange, oncharttitletextchange, oninkchange }: {
+  let { drawing, background = '#ffffff', width, height, position, clip, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo, oncharttitlechange, oncharttitletextchange, oninkchange }: {
+    /** Original visible surface behind vector ink. */
+    background?: string;
     drawing: WordDrawing; width: number; height: number; position: string; scale: number;
     editable: boolean; selected: boolean;
     pageX: number; pageY: number;
@@ -45,7 +48,7 @@
   let preview = $state<WordDrawingBox>();
   let drag: { pointer: number; scale: number; target: HTMLElement | undefined; clientX: number; clientY: number; box: WordDrawingBox; handle?: Handle } | undefined;
   let currentLayout: NonNullable<WordDrawingChange['layout']> = $derived(drawing.placement === 'inline' ? 'inline' : drawing.anchor?.behindDocument ? 'behind' : 'front');
-  const inkSvg = $derived(wordInkSvg(drawing));
+  const inkSvg = $derived(wordDisplayInkSvg(drawing, background));
   const label = $derived(drawing.altText ?? drawing.name ?? (drawing.kind === 'chart' ? 'Chart' : 'Image'));
   let displayWidth = $derived(wordPointsToCssPixels(preview?.width ?? width));
   let displayHeight = $derived(wordPointsToCssPixels(preview?.height ?? height));
@@ -186,7 +189,7 @@
   {/if}
 {/snippet}
 
-<div class="drawing" class:moving={preview !== undefined} class:behind={currentLayout === 'behind'} class:selected={editable && selected} data-word-drawing={drawing.elementId} contenteditable="false" style={`${position};width:${displayWidth}px;height:${displayHeight}px;translate:${preview === undefined ? 'none' : `${wordPointsToCssPixels(preview.x - pageX)}px ${wordPointsToCssPixels(preview.y - pageY)}px`};--handle-size:${10 / scale}px;--outline-size:${1 / scale}px;--inverse-scale:${1 / scale}`}>
+<div class="drawing" class:ink={inkSvg !== undefined} class:moving={preview !== undefined} class:behind={currentLayout === 'behind'} class:selected={editable && selected} data-word-drawing={drawing.elementId} contenteditable="false" style={`${position};width:${displayWidth}px;height:${displayHeight}px;translate:${preview === undefined ? 'none' : `${wordPointsToCssPixels(preview.x - pageX)}px ${wordPointsToCssPixels(preview.y - pageY)}px`};--handle-size:${10 / scale}px;--outline-size:${1 / scale}px;--inverse-scale:${1 / scale}`}>
   {#if editingTitle && editable && drawing.kind === 'chart'}
     <ChartTitleEditor model={drawing.model} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} oncommit={(paragraphs) => { if (oncharttitletextchange) oncharttitletextchange(paragraphs); else oncharttitlechange?.(paragraphs.map(p => p.runs.map(r => r.text).join('')).join('\n')); }} oncancel={() => { editingTitle = false; onselect(drawing.elementId); }} />
   {/if}
@@ -225,9 +228,10 @@
 <style>
   /* Document lines preserve whitespace and may be as tall as an inline drawing. */
   /* Stationary wrappers do not stack. Points sit above composited ink; toolbars sit above expanded point hit areas. */
-  .drawing { --word-drawing-points-z-index: calc(var(--word-ink-layer-z-index, 3) + 1); --word-drawing-controls-z-index: calc(var(--word-ink-layer-z-index, 3) + 2); position: absolute; white-space: normal; line-height: normal; }
+  .drawing { color-scheme: only light; --word-drawing-points-z-index: calc(var(--word-ink-layer-z-index, 3) + 1); --word-drawing-controls-z-index: calc(var(--word-ink-layer-z-index, 3) + 2); position: absolute; white-space: normal; line-height: normal; }
   .drawing.moving { z-index: var(--word-drawing-controls-z-index); }
   .drawing.behind .content { z-index: var(--word-drawing-rank, 0); }
+  .drawing.ink { color-scheme: inherit; }
   .drawing.selected { outline: var(--outline-size) solid var(--tumbler-document-accent, #25a735); }
   .content { position: absolute; inset: 0; z-index: var(--word-drawing-rank, 2); display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; touch-action: none; }
   .content.movable { cursor: grab; }
