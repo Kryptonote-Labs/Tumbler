@@ -1,5 +1,5 @@
 import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlElement } from '@tumblerjs/ooxml';
-import { RelationshipsError, type OpcPart, type Relationships } from '@tumblerjs/opc';
+import { RelationshipsError, parseRelationships, type OpcPart, type Relationships } from '@tumblerjs/opc';
 import type { WordDocument } from './document.ts';
 
 export interface WordEmbeddedFont {
@@ -32,7 +32,7 @@ export function readWordEmbeddedFonts(document: WordDocument): readonly WordEmbe
   const ns = OOXML_NAMESPACES[conformance].wordprocessing;
   const rel = conformance === 'strict' ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
   const relationships = (part: OpcPart): Relationships | undefined => {
-    try { return pkg.relationships(part.name); }
+    try { return parseRelationships(pkg.archive, part.name); }
     catch (error) { if (!(error instanceof RelationshipsError) || error.code !== 'missing_item') throw error; }
   };
   const tableLink = relationships(document.part)?.byType(`${rel}/fontTable`)[0];

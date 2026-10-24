@@ -36,3 +36,10 @@ test('invalid keys and external font targets do not supply font data', () => {
   expect(readWordEmbeddedFonts(fixture('transitional', 'bad-key').document)).toEqual([]);
   expect(readWordEmbeddedFonts(fixture('transitional', undefined, true).document)).toEqual([]);
 });
+
+test('missing optional font parts retain the renderer fallback', () => {
+  const artifact = fixture('transitional');
+  const archive = openZipArchive(artifact.bytes());
+  const missing = openWordArtifact(writeZipArchiveChanges(archive, { removals: new Set(['word/font.odttf']) }));
+  expect(readWordEmbeddedFonts(missing.document)).toEqual([]);
+});
