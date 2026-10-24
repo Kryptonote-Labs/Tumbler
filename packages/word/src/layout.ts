@@ -657,7 +657,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
               // but even that row must flow across pages when it exceeds a full page.
               const keepRow = !continuation && group.some(row => block.rows[row]!.cantSplit || block.rows[row]!.heightRule === "exact");
               const fresh = atTop && parts.length === headerParts;
-              const naturalHeight = bodyBottoms.get(page!)! - target.y - used;
+              const naturalHeight = bodyBottoms.get(page!)! - page!.columns[0]!.y - used;
               // A balancing candidate cannot make a fitting protected row oversized.
               if (keepRow && (!fresh || height <= naturalHeight && height > available)) break;
               const split = splitPreparedTable(remaining, available, fresh);

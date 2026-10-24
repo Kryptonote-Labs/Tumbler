@@ -237,3 +237,16 @@ test('protected rows larger than the footer-adjusted body make progress across p
   expect(result.pages).toHaveLength(2);
   expect(texts(result)).toEqual(Array.from({ length: 6 }, (_, index) => `Row${index}`));
 });
+
+test('protected rows below continuous sections move intact to a fresh page', () => {
+  const box = '<w:pgSz w:w="4400" w:h="2400"/><w:pgMar w:top="200" w:bottom="200" w:left="200" w:right="200"/>';
+  const first = `<w:sectPr>${box}<w:cols w:num="2" w:space="200"/></w:sectPr>`;
+  let before = lines('Before', 10);
+  const mark = before.lastIndexOf('</w:pPr>');
+  before = before.slice(0, mark) + first + before.slice(mark);
+  const artifact = openWordArtifact(buildWordDocumentFixture({ documentXml: `<w:document xmlns:w="${namespace}"><w:body>${before}${table(row(cell(lines('Row', 6)), '<w:cantSplit/>'))}<w:sectPr>${box}<w:type w:val="continuous"/></w:sectPr></w:body></w:document>` }));
+  const result = layoutWordDocument(artifact.document, measure);
+  expect(result.pages).toHaveLength(2);
+  expect(result.pages[0]!.columns.flatMap(column => column.tables)).toHaveLength(0);
+  expect(result.pages[1]!.columns[0]!.tables[0]!.height).toBe(60);
+});
