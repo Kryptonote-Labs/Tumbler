@@ -25,12 +25,17 @@ export function balanceWordColumns(initial: WordLayout, run: (limits: WordColumn
         const lines = paragraphs.get(line.paragraphElementId) ?? [];
         lines.push(line); paragraphs.set(line.paragraphElementId, lines);
       }
-      let low = 0;
+      let low = 0, chain = 0;
       for (const [id, lines] of paragraphs) {
         const properties = format(id);
         const step = Math.max(...lines.map((line, index) => Math.max(line.height, index && line.y > lines[index - 1]!.y ? line.y - lines[index - 1]!.y : 0)));
         const kept = properties?.keepLines ? step * lines.length : properties?.widowControl !== false && lines.length > 1 ? step * 2 : step;
         if (kept <= group.height) low = Math.max(low, kept - 0.001);
+        chain += step * lines.length;
+        if (!properties?.keepNext) {
+          if (chain <= group.height) low = Math.max(low, chain - 0.001);
+          chain = 0;
+        }
       }
       return { section, page: group.page, low, high: group.height };
     });
