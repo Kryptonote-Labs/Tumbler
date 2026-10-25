@@ -1,4 +1,5 @@
 import { validateWordSectionReferences } from './section-format.ts';
+import { isWordParagraphFormat } from './paragraph-format.ts';
 import { resolveWordSection, wordSectionFormat } from './section-format.ts';
 import { applyWordDocumentSettings, isWordDocumentSettings, type WordDocumentSettings } from './document-settings.ts';
 import { refreshUnchangedNumbering } from './content-numbering.ts';
@@ -146,7 +147,9 @@ export class NativeWordDocument implements WordLayoutSource {
   }
 
   constructor(private readonly options: NativeWordOptions & { readonly [deferContent]?: true } = {}) {
-    this.namedStyles = wordAuthoringStyles(options.source?.document.styles, options.defaultFormat);
+    const paragraphDefaults = { lineSpacing: { rule: 'auto' as const, value: Math.round((options.lineSpacing ?? 1) * 240) }, ...options.defaultParagraphFormat };
+    if (!isWordParagraphFormat(paragraphDefaults)) throw new TypeError('Invalid paragraph formatting.');
+    this.namedStyles = wordAuthoringStyles(options.source?.document.styles, options.defaultFormat, paragraphDefaults);
     this.compiled = options.source ? new NativeWordSource(options.source) : undefined;
     const document = options.source?.document;
     this.wrapTrailSpaces = options.source?.document.wrapTrailSpaces ?? false;
@@ -629,12 +632,13 @@ export class NativeWordDocument implements WordLayoutSource {
               block,
               Object.freeze({
                 ...DEFAULT_PARAGRAPH,
+                ...(compiled ? {} : resolveWordPaintProperties(this.options.defaultParagraphFormat ?? {}, this.themeColours)),
                 ...compiled?.defaults.paragraph,
                 ...paragraphFormat,
                 ...authored.positioning,
                 ...resolveWordPaintProperties(authored.paragraph ?? {}, this.themeColours),
                 alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? (resetParagraph ? named?.paragraph.alignment : original?.format.alignment) ?? compiled?.defaults.paragraph.alignment ?? 'start',
-                lineSpacing: authored.paragraph?.lineSpacing ?? paragraphFormat?.lineSpacing ?? compiled?.defaults.paragraph.lineSpacing ?? {
+                lineSpacing: authored.paragraph?.lineSpacing ?? paragraphFormat?.lineSpacing ?? compiled?.defaults.paragraph.lineSpacing ?? this.options.defaultParagraphFormat?.lineSpacing ?? {
                   rule: 'auto' as const,
                   value: Math.round((this.options.lineSpacing ?? 1) * 240),
                 },
