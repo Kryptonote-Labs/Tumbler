@@ -2,6 +2,7 @@ import { validateXmlText } from "./text-validation.ts";
 import { WORD_HIGHLIGHTS } from './text-properties.ts';
 import { wordColourAttributes } from './theme-colour-xml.ts';
 import type { WordTextFormat } from './create.ts';
+import { wordKerningHalfPoints } from './font-kerning.ts';
 
 export function xml(value: string) {
   validateXmlText(value);
@@ -32,6 +33,7 @@ export function runProperties(format: WordTextFormat) {
     if (!Number.isFinite(format.characterSpacingPoints) || !Number.isInteger(format.characterSpacingPoints * 20) || format.characterSpacingPoints * 20 < -2147483648 || format.characterSpacingPoints * 20 > 2147483647) throw new RangeError('Character spacing must be an OOXML signed twip value.');
     output.push(`<w:spacing w:val="${format.characterSpacingPoints * 20}"/>`);
   }
+  if (format.kerningPoints !== undefined) output.push(`<w:kern w:val="${wordKerningHalfPoints(format.kerningPoints)}"/>`);
   if (format.fontSizePoints !== undefined) {
     if (!Number.isFinite(format.fontSizePoints) || format.fontSizePoints < 1 || format.fontSizePoints > 1638) throw new RangeError('Font size must be between 1 and 1638 points.');
     output.push(`<w:sz w:val="${Math.round(format.fontSizePoints * 2)}"/>`);

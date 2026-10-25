@@ -42,6 +42,7 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
           ...(computed.shading === undefined ? {} : { shading: computed.shadingColour ?? computed.shading }),
           verticalAlign: computed.verticalAlign,
           ...(computed.characterSpacingPoints === undefined ? {} : { characterSpacingPoints: computed.characterSpacingPoints }),
+          ...(computed.kerningPoints === undefined ? {} : { kerningPoints: computed.kerningPoints }),
         },
       };
     });

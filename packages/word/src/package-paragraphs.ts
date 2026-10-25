@@ -172,6 +172,7 @@ export function wordParagraphRenderer(
       shading: 'shd',
       verticalAlign: 'vertAlign',
       characterSpacingPoints: 'spacing',
+      kerningPoints: 'kern',
     } as const;
     for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[])
       if (run.format?.[key] !== undefined && run.format[key] !== original?.format?.[key])

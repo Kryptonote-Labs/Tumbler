@@ -31,6 +31,9 @@ test('Word text preserves unkerned advances under inherited browser typography',
       return range.getBoundingClientRect().width - expected;
     });
     const painted = span.getBoundingClientRect().width;
+    // The typographic measurer uses its own sampling size. Compare raw Canvas
+    // kerning at the size actually painted by the document.
+    context.font = `${format.bold ? 700 : 400} ${format.fontSizePoints * 4 / 3}px ${JSON.stringify(format.fontFamily)}`;
     context.fontKerning = 'normal';
     const kerned = context.measureText(title).width;
     return { width, painted, errors, kerned };

@@ -530,7 +530,10 @@ function computedParagraph(properties: WordParagraphProperties, styleId: string 
 }
 
 function mergeRun(base: WordRunProperties, overlay: WordRunProperties): WordRunProperties {
-  return Object.freeze({ ...base, ...overlay });
+  const merged = { ...base, ...overlay };
+  // A more specific literal face replaces the inherited theme reference.
+  if (overlay.fontFamily !== undefined && overlay.themeFont === undefined) delete merged.themeFont;
+  return Object.freeze(merged);
 }
 
 function mergeParagraph(base: WordParagraphProperties, overlay: WordParagraphProperties): WordParagraphProperties {

@@ -42,7 +42,7 @@ export { paintWordPage, wordPageImages, wordPageInkBounds } from "./canvas-paint
 export { wordImagePaintBounds } from './image-paint.ts';
 export { wordInkSvg } from './ink-svg.ts';
 export type { WordCanvasContext, WordPagePaintOptions } from "./canvas-paint.ts";
-export { canvasWordTextMeasurer, wordCanvasFont, wordFontFamily } from "./canvas-text.ts";
+export { canvasWordTextMeasurer, measureWordCanvasText, wordCanvasFont, wordFontFamily } from "./canvas-text.ts";
 export type { WordCanvasTextContext, WordLineMetrics } from "./canvas-text.ts";
 export { wordHighlightColor } from "./highlight.ts";
 export {
