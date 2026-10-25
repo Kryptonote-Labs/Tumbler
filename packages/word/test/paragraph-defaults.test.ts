@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { ThemeColorScheme } from '@tumblerjs/ooxml';
-import { createWordArtifact, importWordContent, NativeWordDocument, type CreateWordOptions, type WordContentBlock } from '../src/index.ts';
+import { createWordArtifact, importWordContent, NativeWordDocument, wordStoryArtifact, type CreateWordOptions, type WordContentBlock } from '../src/index.ts';
 
 test('paragraph defaults agree between native layout and DOCX and allow direct overrides', () => {
   const content: readonly WordContentBlock[] = [
@@ -76,6 +76,37 @@ test('named and unstyled paragraph defaults resolve the authored theme in layout
     for (const format of [model.paragraphFormat(block), artifact.document.styles.paragraphFormat(artifact.document, exported)]) {
       expect(format.shading).toBe('#FF0000');
       expect(format.borders?.bottom?.color).toBe('#FF0000');
+    }
+  }
+});
+
+test('new headers and footers inherit the imported document formatting without host overrides', () => {
+  for (const kind of ['header', 'footer'] as const) {
+    const source = createWordArtifact({
+      defaultFormat: { fontFamily: 'Cambria', fontSizePoints: 15 },
+      defaultParagraphFormat: { spacingAfterTwips: 400 },
+      lineSpacing: 2,
+    });
+    const model = new NativeWordDocument({ source, defaultParagraphFormat: { spacingAfterTwips: 160, shading: '#FFFF00' } });
+    const story = model.updateStory({ section: 0, kind, type: 'default' }, [
+      { kind: 'paragraph', runs: [{ text: 'Unstyled' }] },
+      { kind: 'paragraph', styleId: 'Normal', runs: [{ text: 'Normal' }] },
+      { kind: 'paragraph', styleId: 'Normal', paragraph: { spacingAfterTwips: 0 }, runs: [{ text: 'Override' }] },
+    ]);
+    const artifact = model.artifact();
+    const part = artifact.document.headerFooters.find(item => item.kind === kind);
+    if (!part) throw new Error('Expected story');
+    const exported = wordStoryArtifact(artifact, part.part.name.value).document;
+    for (const [index, block] of story.blocks.entries()) {
+      if (block.kind !== 'paragraph') throw new Error('Expected paragraph');
+      const format = story.paragraphFormat(block);
+      expect(format).toMatchObject({ spacingAfterTwips: index === 2 ? 0 : 400, lineSpacing: { rule: 'auto', value: 480 } });
+      expect(format.shading).toBeUndefined();
+      expect(story.runFormat(block, undefined)).toMatchObject({ fontFamily: 'Cambria', fontSizePoints: 15 });
+      const paragraph = exported.blocks[index];
+      if (paragraph?.kind !== 'paragraph') throw new Error('Expected exported paragraph');
+      expect(exported.styles.paragraphFormat(exported, paragraph)).toEqual(format);
+      expect(exported.styles.runFormat(exported, paragraph)).toMatchObject({ fontFamily: 'Cambria', fontSizePoints: 15 });
     }
   }
 });
