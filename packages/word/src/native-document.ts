@@ -149,7 +149,7 @@ export class NativeWordDocument implements WordLayoutSource {
   constructor(private readonly options: NativeWordOptions & { readonly [deferContent]?: true } = {}) {
     const paragraphDefaults = { lineSpacing: { rule: 'auto' as const, value: Math.round((options.lineSpacing ?? 1) * 240) }, ...options.defaultParagraphFormat };
     if (!isWordParagraphFormat(paragraphDefaults)) throw new TypeError('Invalid paragraph formatting.');
-    this.namedStyles = wordAuthoringStyles(options.source?.document.styles, options.defaultFormat, paragraphDefaults);
+    this.namedStyles = wordAuthoringStyles(options.source?.document.styles, options.defaultFormat, paragraphDefaults, options.source ? undefined : options.themeColours);
     this.compiled = options.source ? new NativeWordSource(options.source) : undefined;
     const document = options.source?.document;
     this.wrapTrailSpaces = options.source?.document.wrapTrailSpaces ?? false;

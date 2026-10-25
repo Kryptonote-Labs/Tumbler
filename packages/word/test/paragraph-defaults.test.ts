@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { ThemeColorScheme } from '@tumblerjs/ooxml';
 import { createWordArtifact, importWordContent, NativeWordDocument, type CreateWordOptions, type WordContentBlock } from '../src/index.ts';
 
 test('paragraph defaults agree between native layout and DOCX and allow direct overrides', () => {
@@ -53,4 +54,28 @@ test('invalid paragraph defaults fail before native layout or DOCX creation', ()
   const defaults = { spacingAfterTwips: -1 };
   expect(() => new NativeWordDocument({ defaultParagraphFormat: defaults })).toThrow('Invalid paragraph formatting');
   expect(() => createWordArtifact({ defaultParagraphFormat: defaults })).toThrow('Invalid paragraph formatting');
+});
+
+test('named and unstyled paragraph defaults resolve the authored theme in layout and DOCX', () => {
+  const model = new NativeWordDocument({
+    themeColours: new ThemeColorScheme('Custom', new Map([['accent1', 'FF0000']])),
+    defaultParagraphFormat: {
+      shading: { theme: 'accent1', fallback: '#156082' },
+      borders: { bottom: { style: 'single', color: { theme: 'accent1', fallback: '#156082' }, widthPoints: 1 } },
+    },
+    content: [
+      { kind: 'paragraph', runs: [{ text: 'Unstyled' }] },
+      { kind: 'paragraph', styleId: 'Normal', runs: [{ text: 'Normal' }] },
+    ],
+  });
+  const artifact = model.artifact();
+  for (const [index, block] of model.blocks.entries()) {
+    if (block.kind !== 'paragraph') throw new Error('Expected paragraph');
+    const exported = artifact.document.blocks[index];
+    if (exported?.kind !== 'paragraph') throw new Error('Expected exported paragraph');
+    for (const format of [model.paragraphFormat(block), artifact.document.styles.paragraphFormat(artifact.document, exported)]) {
+      expect(format.shading).toBe('#FF0000');
+      expect(format.borders?.bottom?.color).toBe('#FF0000');
+    }
+  }
 });

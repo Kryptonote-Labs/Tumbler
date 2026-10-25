@@ -18,13 +18,14 @@ export function builtinStyleXml(style: WordStyle): string {
 }
 export const builtinWordStyles = new WordStyles({ styles: WORD_BUILTIN_STYLES });
 
-export function wordAuthoringStyles(source?: WordStyles, defaults: import('./create.ts').WordTextFormat = { fontFamily: 'Aptos', fontSizePoints: 12 }, paragraphDefaults: import('./paragraph-format.ts').WordParagraphFormat = {}) {
+export function wordAuthoringStyles(source?: WordStyles, defaults: import('./create.ts').WordTextFormat = { fontFamily: 'Aptos', fontSizePoints: 12 }, paragraphDefaults: import('./paragraph-format.ts').WordParagraphFormat = {}, themeColours?: import('@tumblerjs/ooxml').ThemeColorScheme) {
   const { color, highlight, ...run } = defaults;
+  const scheme = source?.themeColors ?? themeColours;
   return new WordStyles({
     styles: [...(source?.styles ?? []), ...WORD_BUILTIN_STYLES.filter(style => !source?.style(style.styleId))],
-    documentRunDefaults: source?.documentRunDefaults ?? { ...run, ...(highlight === undefined ? {} : { highlight }), ...(color ? { color: { type: 'rgb' as const, value: resolveWordColour(color, source?.themeColors ?? DEFAULT_WORD_THEME).slice(1) } } : {}) },
+    documentRunDefaults: source?.documentRunDefaults ?? { ...run, ...(highlight === undefined ? {} : { highlight }), ...(color ? { color: { type: 'rgb' as const, value: resolveWordColour(color, scheme ?? DEFAULT_WORD_THEME).slice(1) } } : {}) },
     documentParagraphDefaults: source?.documentParagraphDefaults ?? paragraphDefaults,
-    ...(source?.themeColors ? { themeColors: source.themeColors } : {}),
+    ...(scheme ? { themeColors: scheme } : {}),
     ...(source?.themeFonts ? { themeFonts: source.themeFonts } : {}),
   });
 }
