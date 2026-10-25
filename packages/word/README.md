@@ -32,6 +32,11 @@ Creation defaults to A4 with one-inch margins and modern Word compatibility.
 other named styles. For example, `{ spacingAfterTwips: 160 }` adds 8 pt after
 paragraphs. `lineSpacing: 1.15` sets the default line multiplier. Direct paragraph
 formatting overrides these defaults; opening a source document retains its defaults.
+`defaultFormat.kerningPoints` sets the minimum font size for kerning, in half-point
+increments. For example, `kerningPoints: 1` enables kerning for text at 1 pt and
+above. Individual runs can override the threshold. It is retained through import,
+native layout and DOCX export. Explicit font names in styles and runs replace
+inherited theme-font references; a theme reference on the same level takes priority.
 
 ### Sample text
 

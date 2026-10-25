@@ -1,4 +1,5 @@
 import { validateWordSectionReferences } from './section-format.ts';
+import { wordKerningHalfPoints } from './font-kerning.ts';
 import { isWordParagraphFormat } from './paragraph-format.ts';
 import { resolveWordSection, wordSectionFormat } from './section-format.ts';
 import { applyWordDocumentSettings, isWordDocumentSettings, type WordDocumentSettings } from './document-settings.ts';
@@ -389,6 +390,7 @@ export class NativeWordDocument implements WordLayoutSource {
     collectSections(input);
     const format = (patch: WordTextParagraph['runs'][number]['format'], inherited?: ComputedWordTextFormat): ComputedWordTextFormat => {
       const value = { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }), ...defaults?.text, ...inherited, ...patch };
+      if (value.kerningPoints !== undefined) wordKerningHalfPoints(value.kerningPoints);
       if (
         !Number.isFinite(value.fontSizePoints) ||
         value.fontSizePoints < 1 ||

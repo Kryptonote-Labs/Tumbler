@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { NativeWordDocument, canvasWordTextMeasurer, layoutWordDocument, openWordArtifact, wordFontKerning } from '../src/index.ts';
+import { NativeWordDocument, canvasWordTextMeasurer, createWordArtifact, importWordContent, layoutWordDocument, openWordArtifact, wordFontKerning } from '../src/index.ts';
 import { buildWordDocumentFixture } from './document-fixture.ts';
 
 function source(text: string, width: number, threshold = 24) {
@@ -9,6 +9,38 @@ const measurer = { measure(text: string, format: Parameters<typeof wordFontKerni
   const pairs = wordFontKerning(format) === 'normal' ? [...text.matchAll(/(?=AV|VA)/g)].length : 0;
   return { width: text.length * 10 - pairs * 2, ascent: 8, descent: 2 };
 } };
+
+test('authored kerning defaults and run overrides survive native editing and Word export', () => {
+  const content = [{ kind: 'paragraph' as const, styleId: 'Normal', runs: [
+    { text: 'AVA' }, { text: 'AVA', format: { kerningPoints: 20 } },
+  ] }];
+  const options = { defaultFormat: { fontFamily: 'Arial', fontSizePoints: 12, kerningPoints: 1 }, blocks: content };
+  const source = createWordArtifact(options);
+  const native = new NativeWordDocument({ defaultFormat: options.defaultFormat, content });
+  for (const artifact of [source, native.artifact(), new NativeWordDocument({ source, content: importWordContent(source) }).artifact()]) {
+    const reopened = openWordArtifact(artifact.bytes());
+    expect(importWordContent(reopened)[0]).toMatchObject({ runs: [
+      { format: { kerningPoints: 1 } }, { format: { kerningPoints: 20 } },
+    ] });
+    const line = layoutWordDocument(reopened.document, measurer).pages[0]!.columns[0]!.lines[0]!;
+    expect(line.fragments.map(fragment => fragment.width)).toEqual([26, 30]);
+  }
+  expect(native.layout(measurer).pages[0]!.columns[0]!.lines[0]!.width).toBe(56);
+  const edited = new NativeWordDocument({ source });
+  const imported = importWordContent(source)[0]!;
+  if (imported.kind !== 'paragraph') throw new Error('Expected paragraph.');
+  edited.update([{ ...imported, runs: imported.runs.map(run => ({ ...run, format: { ...run.format, kerningPoints: 0 } })) }]);
+  expect(importWordContent(edited.artifact())[0]).toMatchObject({ runs: [
+    { format: { kerningPoints: 0 } }, { format: { kerningPoints: 0 } },
+  ] });
+  expect(edited.layout(measurer).pages[0]!.columns[0]!.lines[0]!.width).toBe(60);
+});
+
+test.each([-1, 0.25, Infinity, NaN, 2_147_483_648])('rejects kerning thresholds outside OOXML half-points: %s', kerningPoints => {
+  const defaultFormat = { kerningPoints };
+  expect(() => createWordArtifact({ defaultFormat })).toThrow('Kerning');
+  expect(() => new NativeWordDocument({ defaultFormat, content: [{ kind: 'paragraph', runs: [{ text: 'A' }] }] })).toThrow('Kerning');
+});
 for (const { threshold, expected } of [{ threshold: 24, expected: ['AVA'] }, { threshold: 26, expected: ['AV', 'A'] }, { threshold: 0, expected: ['AV', 'A'] }]) {
   test(`kerning threshold ${threshold} controls wrapping in package and native layout`, () => {
     const artifact = source('<w:t>AVA</w:t>', 26, threshold);
