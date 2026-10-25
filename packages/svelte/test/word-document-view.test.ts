@@ -53,20 +53,23 @@ describe("owned Svelte Word document head", () => {
     const context = {
       font: "",
       direction: "ltr" as CanvasDirection,
-      measureText: () => ({
-        width: 40,
-        fontBoundingBoxAscent: 12,
-        fontBoundingBoxDescent: 4,
-        actualBoundingBoxAscent: 10,
-        actualBoundingBoxDescent: 2,
-      }) as TextMetrics,
+      measureText: () => {
+        const scale = Number(/([\d.]+)px/.exec(context.font)?.[1]) / 16;
+        return {
+          width: 40 * scale,
+          fontBoundingBoxAscent: 12 * scale,
+          fontBoundingBoxDescent: 4 * scale,
+          actualBoundingBoxAscent: 10,
+          actualBoundingBoxDescent: 2,
+        } as TextMetrics;
+      },
     };
     const format = {
       fontFamily: "Aptos", fontSizePoints: 12, bold: true, italic: false, underline: "single" as const,
       strike: false, color: "#123456", highlight: undefined, verticalAlign: "baseline" as const, rightToLeft: false,
     };
     expect(browserWordTextMeasurer(context).measure("Hello", format)).toEqual({ width: 30, ascent: 9, descent: 3 });
-    expect(context.font).toContain("700 16px");
+    expect(context.font).toContain("700 1000px");
     expect(wordTextCss(format)).toContain("text-decoration-line:underline");
   });
 
@@ -75,13 +78,16 @@ describe("owned Svelte Word document head", () => {
     const context = {
       font: "",
       direction: "ltr" as CanvasDirection,
-      measureText: () => ({
-        width: 8,
-        fontBoundingBoxAscent: 13,
-        fontBoundingBoxDescent: 4,
-        actualBoundingBoxAscent: glyph === "T" ? 12 : 8,
-        actualBoundingBoxDescent: glyph === "T" ? 0 : 3,
-      }) as TextMetrics,
+      measureText: () => {
+        const scale = Number(/([\d.]+)px/.exec(context.font)?.[1]) / 16;
+        return {
+          width: 8 * scale,
+          fontBoundingBoxAscent: 13 * scale,
+          fontBoundingBoxDescent: 4 * scale,
+          actualBoundingBoxAscent: glyph === "T" ? 12 : 8,
+          actualBoundingBoxDescent: glyph === "T" ? 0 : 3,
+        } as TextMetrics;
+      },
     };
     const format = {
       fontFamily: "Aptos", fontSizePoints: 12, bold: false, italic: false, underline: "none" as const,

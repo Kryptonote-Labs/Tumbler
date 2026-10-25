@@ -37,6 +37,9 @@ increments. For example, `kerningPoints: 1` enables kerning for text at 1 pt and
 above. Individual runs can override the threshold. It is retained through import,
 native layout and DOCX export. Explicit font names in styles and runs replace
 inherited theme-font references; a theme reference on the same level takes priority.
+Canvas-backed layout measures shaped text at an exact 1000px em and scales the
+advance into document points. This avoids small-font rounding changing line breaks
+at fractional display scales. Painting still uses the document's original font size.
 
 ### Sample text
 

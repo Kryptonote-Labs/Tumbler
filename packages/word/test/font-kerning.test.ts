@@ -63,13 +63,13 @@ test('kerning positions consecutive text nodes within one run', () => {
   }
 });
 test('canvas measurement caches kerning modes separately', () => {
-  const context = { font: '', direction: 'ltr' as const, fontKerning: 'none' as 'none' | 'normal', measureText: () => ({ width: context.fontKerning === 'normal' ? 18 : 20 }) };
+  const context = { font: '', direction: 'ltr' as const, fontKerning: 'none' as 'none' | 'normal', measureText: () => ({ width: (context.fontKerning === 'normal' ? 18 : 20) * Number(/([\d.]+)px/.exec(context.font)?.[1]) / 16 }) };
   const artifact = source('<w:t>AV</w:t>', 30);
   const format = artifact.document.styles.resolveStyledRun('Normal');
   const measure = canvasWordTextMeasurer(context);
-  expect(measure.measure('AV', format).width).toBe(15);
-  expect(measure.measure('AV', { ...format, kerningPoints: 1 }).width).toBe(13.5);
-  expect(measure.measure('AV', { ...format, kerningPoints: 20 }).width).toBe(15);
+  expect(measure.measure('AV', format).width).toBe(13.75);
+  expect(measure.measure('AV', { ...format, kerningPoints: 1 }).width).toBe(12.375);
+  expect(measure.measure('AV', { ...format, kerningPoints: 20 }).width).toBe(13.75);
 });
 
 test('overlapping ligatures use consistent whole-prefix advances', () => {
