@@ -1,4 +1,5 @@
 import { validateWordSectionReferences } from './section-format.ts';
+import { isWordParagraphFormat } from './paragraph-format.ts';
 import { resolveWordSection, wordSectionFormat } from './section-format.ts';
 import { applyWordDocumentSettings, isWordDocumentSettings, type WordDocumentSettings } from './document-settings.ts';
 import { refreshUnchangedNumbering } from './content-numbering.ts';
@@ -82,11 +83,13 @@ function cellContent(blocks: readonly WordContentBlock[]): readonly WordContentB
 
 // Story models receive their final content with the shared numbering context.
 const deferContent = Symbol('defer story content');
+const storyFormatting = Symbol('owning document formatting');
 
 export class NativeWordDocument implements WordLayoutSource {
   private readonly namedStyles: ReturnType<typeof wordAuthoringStyles>;
   private nextId = -1;
   private readonly compiled: NativeWordSource | undefined;
+  private readonly defaults: NativeWordSource['defaults'] | undefined;
   private exported: WordArtifact | undefined;
   private records = new Map<string, RecordBlock>();
   private authored: readonly WordContentBlock[] = [];
@@ -145,9 +148,15 @@ export class NativeWordDocument implements WordLayoutSource {
     return this.exported = applyWordDocumentSettings(artifact, this.settings);
   }
 
-  constructor(private readonly options: NativeWordOptions & { readonly [deferContent]?: true } = {}) {
-    this.namedStyles = wordAuthoringStyles(options.source?.document.styles, options.defaultFormat);
+  constructor(private readonly options: NativeWordOptions & {
+    readonly [deferContent]?: true;
+    readonly [storyFormatting]?: { readonly styles: ReturnType<typeof wordAuthoringStyles>; readonly defaults: NativeWordSource['defaults'] | undefined };
+  } = {}) {
+    const paragraphDefaults = { lineSpacing: { rule: 'auto' as const, value: Math.round((options.lineSpacing ?? 1) * 240) }, ...options.defaultParagraphFormat };
+    if (!isWordParagraphFormat(paragraphDefaults)) throw new TypeError('Invalid paragraph formatting.');
+    this.namedStyles = wordAuthoringStyles(options.source?.document.styles ?? options[storyFormatting]?.styles, options.defaultFormat, paragraphDefaults, options.source ? undefined : options.themeColours);
     this.compiled = options.source ? new NativeWordSource(options.source) : undefined;
+    this.defaults = this.compiled?.defaults ?? options[storyFormatting]?.defaults;
     const document = options.source?.document;
     this.wrapTrailSpaces = options.source?.document.wrapTrailSpaces ?? false;
     const { width = 595.3, height = 841.9, margin = 72 } = options.page ?? {};
@@ -193,7 +202,7 @@ export class NativeWordDocument implements WordLayoutSource {
   }
   runFormat(paragraph: WordParagraph, run: WordRun | undefined) {
     const { shading, ...defaults } = this.options.defaultFormat ?? { fontFamily: "Aptos", fontSizePoints: 12 };
-    return (run && this.runFormats.get(run)) ?? this.paragraphTextFormats.get(paragraph) ?? this.compiled?.defaults.text ?? { ...DEFAULT_TEXT, ...defaults, color: resolveWordColour(this.options.defaultFormat?.color ?? DEFAULT_TEXT.color, this.themeColours), ...(shading === undefined ? {} : { shading: resolveWordColour(shading, this.themeColours) }) };
+    return (run && this.runFormats.get(run)) ?? this.paragraphTextFormats.get(paragraph) ?? this.defaults?.text ?? { ...DEFAULT_TEXT, ...defaults, color: resolveWordColour(this.options.defaultFormat?.color ?? DEFAULT_TEXT.color, this.themeColours), ...(shading === undefined ? {} : { shading: resolveWordColour(shading, this.themeColours) }) };
   }
   removeStory(target: string | WordStoryTarget) {
     const key = typeof target === 'string' ? target : `${target.section}:${target.kind}:${target.type}`;
@@ -214,7 +223,7 @@ export class NativeWordDocument implements WordLayoutSource {
         .find(story => story.relationshipId === reference?.relationshipId)?.part.name.value;
       const source = partName && this.options.source ? wordStoryArtifact(this.options.source, partName) : undefined;
       const { source: _bodySource, content: _bodyContent, ...options } = this.options;
-      entry = { target, blocks, model: new NativeWordDocument({ ...options, [deferContent]: true, ...(source ? { source } : {}) }) };
+      entry = { target, blocks, model: new NativeWordDocument({ ...options, [deferContent]: true, [storyFormatting]: { styles: this.namedStyles, defaults: this.defaults }, ...(source ? { source } : {}) }) };
       entry.model.inheritedDoNotExpandShiftReturn = this.doNotExpandShiftReturn;
     }
     validateContentText(blocks, entry.model.compiled);
@@ -366,6 +375,7 @@ export class NativeWordDocument implements WordLayoutSource {
     const counters = new Map<string, { levels: Map<number, WordAuthoredList>; values: number[] }>();
     const allocate = () => this.nextId--;
     const compiled = this.compiled;
+    const defaults = this.defaults;
     const numbering: { elementId: number; reference: WordParagraphNumbering }[] = [];
     // A split paragraph owns its section break only at its final continuation.
     const sectionOwners = new Map<string, WordTextParagraph>();
@@ -378,7 +388,7 @@ export class NativeWordDocument implements WordLayoutSource {
     };
     collectSections(input);
     const format = (patch: WordTextParagraph['runs'][number]['format'], inherited?: ComputedWordTextFormat): ComputedWordTextFormat => {
-      const value = { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }), ...this.compiled?.defaults.text, ...inherited, ...patch };
+      const value = { ...DEFAULT_TEXT, ...(this.options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 }), ...defaults?.text, ...inherited, ...patch };
       if (
         !Number.isFinite(value.fontSizePoints) ||
         value.fontSizePoints < 1 ||
@@ -622,19 +632,20 @@ export class NativeWordDocument implements WordLayoutSource {
             };
             const resetParagraph = authored.styleId !== undefined && (authored.styleId !== original?.format.styleId || authored.paragraph === undefined);
             const paragraphFormat = authored.resetParagraphFormat && original && !resetParagraph
-              ? resetDirectParagraphFormat(original.format, named?.paragraph ?? compiled?.defaults.paragraph ?? DEFAULT_PARAGRAPH)
+              ? resetDirectParagraphFormat(original.format, named?.paragraph ?? defaults?.paragraph ?? DEFAULT_PARAGRAPH)
               : resetParagraph ? named?.paragraph : original?.format;
             this.paragraphTextFormats.set(block, format(undefined, resetParagraph ? named?.text : original?.textFormat ?? named?.text));
             this.paragraphFormats.set(
               block,
               Object.freeze({
                 ...DEFAULT_PARAGRAPH,
-                ...compiled?.defaults.paragraph,
+                ...(defaults ? {} : resolveWordPaintProperties(this.options.defaultParagraphFormat ?? {}, this.themeColours)),
+                ...defaults?.paragraph,
                 ...paragraphFormat,
                 ...authored.positioning,
                 ...resolveWordPaintProperties(authored.paragraph ?? {}, this.themeColours),
-                alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? (resetParagraph ? named?.paragraph.alignment : original?.format.alignment) ?? compiled?.defaults.paragraph.alignment ?? 'start',
-                lineSpacing: authored.paragraph?.lineSpacing ?? paragraphFormat?.lineSpacing ?? compiled?.defaults.paragraph.lineSpacing ?? {
+                alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? (resetParagraph ? named?.paragraph.alignment : original?.format.alignment) ?? defaults?.paragraph.alignment ?? 'start',
+                lineSpacing: authored.paragraph?.lineSpacing ?? paragraphFormat?.lineSpacing ?? defaults?.paragraph.lineSpacing ?? this.options.defaultParagraphFormat?.lineSpacing ?? {
                   rule: 'auto' as const,
                   value: Math.round((this.options.lineSpacing ?? 1) * 240),
                 },

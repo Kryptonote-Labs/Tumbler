@@ -1,4 +1,5 @@
 import { wordThemeXml } from './theme-colour-xml.ts';
+import { paragraphFormatXml, type WordParagraphFormat } from './paragraph-format.ts';
 import { WORD_BUILTIN_STYLES, builtinStyleXml } from './authored-styles.ts';
 import type { WordParagraphPositioning } from './positioning.ts';
 import type { WordPositionalTab } from './document.ts';
@@ -36,6 +37,8 @@ export interface CreateWordOptions {
   /** Structured content. Mutually exclusive with paragraphs. */
   readonly blocks?: readonly WordContentBlock[];
   readonly defaultFormat?: WordTextFormat;
+  /** Document paragraph defaults, inherited by named styles and unformatted paragraphs. */
+  readonly defaultParagraphFormat?: WordParagraphFormat;
   /** Multiple of ordinary line height. Defaults to 1. */
   readonly lineSpacing?: number;
   /** Defaults to A4 with one-inch margins. Dimensions are in points. */
@@ -55,6 +58,8 @@ export function createWordArtifact(options: CreateWordOptions = {}): WordArtifac
   if (page.margin * 2 >= Math.min(page.width, page.height)) throw new RangeError('Page margins leave no content area.');
   const lineSpacing = Math.round((options.lineSpacing ?? 1) * 240);
   if (lineSpacing < 1 || lineSpacing > 2147483647) throw new RangeError('Line spacing is outside the WordprocessingML range.');
+  const paragraphDefaults = [...paragraphFormatXml({ spacingBeforeTwips: 0, spacingAfterTwips: 0,
+    lineSpacing: { rule: 'auto', value: lineSpacing }, ...options.defaultParagraphFormat }).values()].join('');
   if (options.blocks !== undefined && options.paragraphs !== undefined) throw new TypeError('Supply blocks or paragraphs, not both.');
   const authored = authoredContent(options.blocks ?? (options.paragraphs ?? [{ runs: [] }]).map(paragraph => ({ kind: 'paragraph', ...paragraph })), page.width - page.margin * 2, {
     pageWidthTwips: Math.round(page.width * 20), pageHeightTwips: Math.round(page.height * 20),
@@ -68,7 +73,7 @@ export function createWordArtifact(options: CreateWordOptions = {}): WordArtifac
     ['_rels/.rels', `<Relationships xmlns="${relationships}"><Relationship Id="document" Type="${office}officeDocument" Target="word/document.xml"/><Relationship Id="properties" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>`],
     ['word/_rels/document.xml.rels', `<Relationships xmlns="${relationships}"><Relationship Id="styles" Type="${office}styles" Target="styles.xml"/><Relationship Id="settings" Type="${office}settings" Target="settings.xml"/><Relationship Id="theme" Type="${office}theme" Target="theme/theme1.xml"/>${authored.relationships}</Relationships>`],
     ['word/document.xml', `<w:document xmlns:w="${namespace}" xmlns:r="${office.slice(0, -1)}" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${content}<w:sectPr><w:pgSz w:w="${Math.round(page.width * 20)}" w:h="${Math.round(page.height * 20)}"/><w:pgMar w:top="${Math.round(page.margin * 20)}" w:right="${Math.round(page.margin * 20)}" w:bottom="${Math.round(page.margin * 20)}" w:left="${Math.round(page.margin * 20)}" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr></w:body></w:document>`],
-    ['word/styles.xml', `<w:styles xmlns:w="${namespace}"><w:docDefaults><w:rPrDefault><w:rPr>${runProperties(options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 })}</w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="0" w:line="${lineSpacing}" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>${WORD_BUILTIN_STYLES.map(builtinStyleXml).join('')}</w:styles>`],
+    ['word/styles.xml', `<w:styles xmlns:w="${namespace}"><w:docDefaults><w:rPrDefault><w:rPr>${runProperties(options.defaultFormat ?? { fontFamily: 'Aptos', fontSizePoints: 12 })}</w:rPr></w:rPrDefault><w:pPrDefault><w:pPr>${paragraphDefaults}</w:pPr></w:pPrDefault></w:docDefaults>${WORD_BUILTIN_STYLES.map(builtinStyleXml).join('')}</w:styles>`],
     ['word/settings.xml', `<w:settings xmlns:w="${namespace}"><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`],
     ['docProps/core.xml', `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">${options.author === undefined ? '' : `<dc:creator>${xml(options.author)}</dc:creator>`}${options.lastModifiedBy === undefined ? '' : `<cp:lastModifiedBy>${xml(options.lastModifiedBy)}</cp:lastModifiedBy>`}</cp:coreProperties>`],
   ];

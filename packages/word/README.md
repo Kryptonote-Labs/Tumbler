@@ -28,6 +28,10 @@ const bytes = artifact.bytes();
 ```
 
 Creation defaults to A4 with one-inch margins and modern Word compatibility.
+`defaultParagraphFormat` sets document paragraph defaults inherited by Normal and
+other named styles. For example, `{ spacingAfterTwips: 160 }` adds 8 pt after
+paragraphs. `lineSpacing: 1.15` sets the default line multiplier. Direct paragraph
+formatting overrides these defaults; opening a source document retains its defaults.
 
 ### Sample text
 
