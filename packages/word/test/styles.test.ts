@@ -8,6 +8,46 @@ const relationships = "http://schemas.openxmlformats.org/officeDocument/2006/rel
 const drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
 describe("WordprocessingML style cascade", () => {
+  test("specific literal fonts replace inherited theme fonts without changing same-level theme priority", () => {
+    const document = openWordDocument(openOpcPackage(buildWordDocumentFixture({
+      relationships: [
+        { id: "styles", type: `${relationships}/styles`, target: "styles.xml" },
+        { id: "theme", type: `${relationships}/theme`, target: "theme/theme1.xml" },
+      ],
+      parts: [
+        {
+          itemName: "word/styles.xml",
+          contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml",
+          xml: `<w:styles xmlns:w="${word}">
+            <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:asciiTheme="minorHAnsi"/></w:rPr></w:rPrDefault></w:docDefaults>
+            <w:style w:type="paragraph" w:styleId="Normal" w:default="1"/>
+            <w:style w:type="paragraph" w:styleId="Literal"><w:basedOn w:val="Normal"/><w:rPr><w:rFonts w:ascii="Arial"/></w:rPr></w:style>
+            <w:style w:type="paragraph" w:styleId="Themed"><w:basedOn w:val="Literal"/><w:rPr><w:rFonts w:asciiTheme="majorHAnsi"/></w:rPr></w:style>
+            <w:style w:type="character" w:styleId="Code"><w:rPr><w:rFonts w:ascii="Courier New"/></w:rPr></w:style>
+          </w:styles>`,
+        },
+        { itemName: "word/theme/theme1.xml", contentType: "application/vnd.openxmlformats-officedocument.theme+xml", xml: theme() },
+      ],
+      documentXml: `<w:document xmlns:w="${word}"><w:body><w:p>
+        <w:r><w:t>Inherited</w:t></w:r>
+        <w:r><w:rPr><w:rFonts w:ascii="Arial"/></w:rPr><w:t>Direct</w:t></w:r>
+        <w:r><w:rPr><w:rStyle w:val="Code"/></w:rPr><w:t>Character style</w:t></w:r>
+        <w:r><w:rPr><w:rFonts w:ascii="Arial" w:asciiTheme="majorHAnsi"/></w:rPr><w:t>Same level</w:t></w:r>
+        <w:r><w:rPr><w:b/></w:rPr><w:t>Unrelated override</w:t></w:r>
+      </w:p><w:p><w:pPr><w:rPr><w:rFonts w:ascii="Arial"/></w:rPr></w:pPr></w:p></w:body></w:document>`,
+    })));
+    expect(document.styles.resolveParagraphStyle("Literal").text.fontFamily).toBe("Arial");
+    expect(document.styles.resolveParagraphStyle("Themed").text.fontFamily).toBe("Cambria");
+    const paragraph = document.blocks[0];
+    const blank = document.blocks[1];
+    if (paragraph?.kind !== "paragraph" || blank?.kind !== "paragraph") throw new Error("Expected paragraphs.");
+    expect(paragraph.inlines.map(run => {
+      if (run.kind !== "run") throw new Error("Expected run.");
+      return document.styles.runFormat(document, paragraph, run).fontFamily;
+    })).toEqual(["Aptos", "Arial", "Courier New", "Cambria", "Aptos"]);
+    expect(document.styles.runFormat(document, blank).fontFamily).toBe("Arial");
+  });
+
   test("keeps specified styles separate while resolving defaults, basedOn, character styles, theme values, and direct formatting", () => {
     const document = openWordDocument(openOpcPackage(buildWordDocumentFixture({
       relationships: [
