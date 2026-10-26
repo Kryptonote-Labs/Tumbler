@@ -1,5 +1,5 @@
 import { fileRegion, fileRegions } from "./file-regions.ts";
-import { inspectWordObjects, inspectWordStyles } from "@tumblerjs/word/operations";
+import { inspectWordObjects, inspectWordStyles, readWordImage } from "@tumblerjs/word/operations";
 import { NativeWordDocument } from "@tumblerjs/word";
 import { openWordOperationDocument, prepareWordOperation } from "@tumblerjs/word/operations";
 import { tableParagraphs } from "@tumblerjs/word/collaboration";
@@ -220,6 +220,18 @@ export function createFileHost(): OperationHost {
     }
   }
   return {
+    async readImage(path, input) {
+      checkExtension(path);
+      const source = fileRegion(open(readFileSync(path)), input.region);
+      const session = openWordOperationDocument(source);
+      try {
+        const { image, bytes } = readWordImage(session.text, source, input.id);
+        if (!bytes) throw new Error('Image bytes unavailable.');
+        return { image, type: image.type, data: Buffer.from(bytes).toString('base64') };
+      } finally {
+        session.destroy();
+      }
+    },
     async inspect(path, input) {
       checkExtension(path);
       const main = open(readFileSync(path));

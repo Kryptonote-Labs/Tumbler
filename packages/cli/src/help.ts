@@ -95,6 +95,7 @@ export function tumblerOperationHelp(name: string, commandName = 'tumbler'): str
     throw new Error(`Unknown operation: ${name}. Use --help to list operations.`);
   const op = operations[name as keyof typeof operations];
   const usage = {
+    'read-image': `${prefix} read-image --input '{"id":"<image.id>","region":"body"}'\nUse image.id from read or inspect, in the same region. File hosts return original image bytes as base64 data with their MIME type; visual hosts may deliver image input separately. This reads the image itself, not its rendered page appearance.`,
     read: `${prefix} read [--offset <UTF-16 offset>] [--region body] [--target '{"start":"<anchor>","end":"<anchor>"}']\nReturns bounded content and a page handle; continue at the returned next offset.`,
     inspect: `${prefix} inspect --input '{"what":"objects","region":"body","offset":0}'\nwhat: objects|styles|regions|geometry. Objects include start/end and editable attributes; follow next for more. Geometry describes available widths, not proof of rendered text wrapping.`,
     select: `${prefix} select --input '{"target":{"text":"exact text"}}'\n${targets}`,
