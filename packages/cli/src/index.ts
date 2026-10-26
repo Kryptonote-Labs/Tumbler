@@ -68,9 +68,9 @@ export async function runTumbler(
     if (!document || !name || !Object.hasOwn(operations, name))
       throw new Error('Specify a document and operation. Use --help.');
     const operation = operations[name as keyof typeof operations];
-    if (['inspect', 'select', 'unselect'].includes(name)) {
+    if (['inspect', 'select', 'unselect', 'read-image'].includes(name)) {
       if (rest.length && (rest.length !== 2 || rest[0] !== '--input'))
-        throw new Error('Use inspect --input JSON.');
+        throw new Error(`Use ${name} --input JSON.`);
       options.stdout(
         JSON.stringify(
           await operation.execute(options.host, document, JSON.parse(rest[1] ?? '{}')),

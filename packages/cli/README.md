@@ -33,6 +33,13 @@ text, character attributes and table/cell identities. Targets are unique text ma
 optional surrounding `within` text, UTF-16 ranges, or table/cell identities. Unknown inputs,
 ambiguous matches and stale pages fail before writing.
 
+Use `read-image --input '{"id":"<image.id>","region":"body"}'` with an ID from read or
+object inspection to read an embedded image. The file host returns the original bytes as
+base64 `data`, their MIME `type` and image properties. Injected hosts implement optional
+`readImage` and can deliver pixels separately to a visual model. `readWordImage` resolves a
+live image reference and any retained package bytes; hosts resolve uploaded assets themselves.
+Image reads describe the image itself, without page layout, cropping or overlaid objects.
+
 ## Files and stories
 
 ```sh

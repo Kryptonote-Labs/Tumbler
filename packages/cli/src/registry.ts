@@ -32,6 +32,10 @@ export const formatInput = edit
   .strict();
 export const replaceInput = edit.extend({ value: z.string() }).strict();
 export type ReadInput = z.infer<typeof readInput>;
+export const readImageInput = z
+  .object({ id: z.string().min(1), region: z.string().default('body') })
+  .strict();
+export type ReadImageInput = z.infer<typeof readImageInput>;
 export type FormatInput = z.infer<typeof formatInput>;
 export type ReplaceInput = z.infer<typeof replaceInput>;
 export const operationInput = z
@@ -41,6 +45,7 @@ export type OperationInput = z.infer<typeof operationInput>;
 export const selectInput = z.object({ page: z.string().optional(), target: targetSchema }).strict();
 export type SelectInput = z.infer<typeof selectInput>;
 export interface OperationHost {
+  readImage?(document: string, input: ReadImageInput): Promise<unknown>;
   select?(document: string, input: SelectInput): Promise<unknown>;
   unselect?(document: string): Promise<unknown>;
   inspect?(document: string, input: InspectInput): Promise<unknown>;
@@ -63,6 +68,16 @@ export function defineOperation<S extends z.ZodType>(definition: {
   };
 }
 export const operations = {
+  'read-image': defineOperation({
+    name: 'read-image',
+    summary: 'Read the actual image identified by an inspected image.id. --input JSON.',
+    access: 'read',
+    input: readImageInput,
+    run: (host, document, input) => {
+      if (!host.readImage) throw new Error('Image reading is unavailable on this host.');
+      return host.readImage(document, input);
+    },
+  }),
   select: defineOperation({
     name: "select",
     summary: "Select an exact text, range, cell or table target from a read page. --input JSON.",
