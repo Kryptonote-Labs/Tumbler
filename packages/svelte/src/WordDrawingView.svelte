@@ -1,4 +1,5 @@
 <script lang="ts">
+  import "./controls.css";
   import { wordDisplayInkSvg } from './word-display-ink.ts';
   import WordPictureView from "./WordPictureView.svelte";
   import { wordContentClipCss } from "./word-content-clip.ts";
@@ -208,7 +209,7 @@
         <div class="controls" role="toolbar" aria-label="Drawing controls">
           <button aria-label="Move drawing" title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)}>✥</button>
           {#if layoutControl}
-            <select aria-label="Drawing layout" value={currentLayout} onchange={(event) => { const layout = event.currentTarget.value; if (layout === 'inline' || layout === 'front' || layout === 'behind') commit(box(), layout); }}>
+            <select class="tumbler-select" aria-label="Drawing layout" value={currentLayout} onchange={(event) => { const layout = event.currentTarget.value; if (layout === 'inline' || layout === 'front' || layout === 'behind') commit(box(), layout); }}>
               <option value="inline">In line with text</option><option value="front">In front of text</option><option value="behind">Behind text</option>
             </select>
           {/if}
@@ -242,7 +243,7 @@
   img { display: block; width: 100%; height: 100%; }
   .resize { position: absolute; z-index: var(--word-drawing-controls-z-index); translate: -50% -50%; width: var(--handle-size); height: var(--handle-size); min-width: 0; min-height: 0; box-sizing: border-box; line-height: 0; padding: 0; border: var(--outline-size) solid var(--tumbler-document-accent, #25a735); border-radius: 50%; background: white; touch-action: none; }
   .controls { position: absolute; z-index: var(--word-drawing-controls-z-index); right: 0; bottom: calc(100% + 10px * var(--inverse-scale)); display: flex; gap: 4px; padding: 4px; border: 1px solid #3b483e; border-radius: 6px; background: #181b18; color: #e2fee7; font: 13px/1.4 system-ui, sans-serif; transform: scale(var(--inverse-scale)); transform-origin: bottom right; }
-  .controls button, select { position: static; padding: 5px 8px; border: 1px solid #3b483e; border-radius: 4px; background: #202521; color: inherit; font: inherit; }
+  .controls button { position: static; padding: 5px 8px; border: 1px solid #3b483e; border-radius: 4px; background: #202521; color: inherit; font: inherit; }
   .ink-controls { position:absolute; z-index:var(--word-drawing-controls-z-index); left:0; top:calc(100% + 8px); transform:scale(var(--inverse-scale)); transform-origin:top left; }
   .ink-controls button { padding:4px 8px; border:1px solid #3b483e; border-radius:4px; background:#202521; color:#e2fee7; font:13px/1.4 system-ui; }
   .controls button { cursor: move; touch-action: none; }

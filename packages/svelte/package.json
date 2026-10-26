@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./slides": "./src/slides.ts"
+    "./slides": "./src/slides.ts",
+    "./controls.css": "./src/controls.css"
   },
   "files": [
     "src",

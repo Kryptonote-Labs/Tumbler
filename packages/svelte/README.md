@@ -215,3 +215,18 @@ resolves a document family to its private alias, and `ready` resolves after all
 font loads settle. Failed faces keep the supplied fallback available. Use the same
 resolver for layout measurements, text CSS and baseline probes. The loader does
 not install fonts on the system or affect another document's font family.
+
+## Themed native controls
+
+The drawing layout picker and spreadsheet filter checkboxes use `controls.css`.
+Hosts can also import `@tumblerjs/svelte/controls.css` for native checkboxes outside
+these components and add `class="tumbler-select"` to native selects. Inputs with
+`role="switch"` retain their host styling. Native keyboard, form and disabled behavior
+is preserved, with a system appearance in forced-colors mode.
+
+Set `--tumbler-control-bg`, `--tumbler-control-text`, `--tumbler-control-border`,
+`--tumbler-control-hover`, `--tumbler-control-accent` and `--tumbler-control-accent-ink`
+to match the host theme. These fall back to `--surface`, `--text`, `--border-strong`,
+`--surface-hover`, `--accent` and `--accent-ink`. Unchecked checkboxes use
+`--text-faint` for a visible outline when no control border is supplied. Browsers without customizable select
+support retain their native popup.
