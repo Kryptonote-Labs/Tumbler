@@ -1,0 +1,128 @@
+/* Keep native input semantics. Switches retain the host's separate styling. */
+input[type='checkbox']:not([role='switch']) {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  vertical-align: middle;
+  border: 1px solid var(--tumbler-control-border, var(--text-faint, #78877a));
+  border-radius: 4px;
+  background: var(--tumbler-control-bg, var(--surface, #181818));
+  color: var(--tumbler-control-accent-ink, var(--accent-ink, #121212));
+  cursor: pointer;
+}
+input[type='checkbox']:not([role='switch'])::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3 8 3.2 3.2L13 4.5' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  visibility: hidden;
+}
+input[type='checkbox']:not([role='switch']):checked,
+input[type='checkbox']:not([role='switch']):indeterminate {
+  background: var(--tumbler-control-accent, var(--accent, #4fe519));
+  border-color: var(--tumbler-control-accent, var(--accent, #4fe519));
+}
+input[type='checkbox']:not([role='switch']):checked::before,
+input[type='checkbox']:not([role='switch']):indeterminate::before {
+  visibility: visible;
+}
+input[type='checkbox']:not([role='switch']):indeterminate::before {
+  mask: none;
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+}
+input[type='checkbox']:not([role='switch']):hover:enabled {
+  border-color: var(--tumbler-control-accent, var(--accent, #4fe519));
+}
+input[type='checkbox']:not([role='switch']):focus-visible,
+select.tumbler-select:focus-visible {
+  outline: 2px solid var(--tumbler-control-accent, var(--accent, #4fe519));
+  outline-offset: 3px;
+}
+input[type='checkbox']:not([role='switch']):disabled,
+select.tumbler-select:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* Standalone hosts get a themed picker in browsers with base-select support.
+   Other browsers keep a native popup and a themed closed control. */
+select.tumbler-select {
+  appearance: none;
+  font: inherit;
+  color: var(--tumbler-control-text, var(--text, #e2fee7));
+  background: var(--tumbler-control-bg, var(--surface, #181818));
+  border: 1px solid var(--tumbler-control-border, var(--border-strong, #526057));
+  border-radius: 5px;
+  padding: 6px 30px 6px 9px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%239baa9d' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 8px center;
+  background-size: 14px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+@supports (appearance: base-select) {
+  select.tumbler-select,
+  select.tumbler-select::picker(select) {
+    appearance: base-select;
+  }
+  select.tumbler-select {
+    background-image: none;
+    padding-inline-end: 9px;
+    gap: 16px;
+  }
+  select.tumbler-select::picker-icon {
+    content: '';
+    width: 14px;
+    height: 14px;
+    background: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+    color: var(--tumbler-control-text, var(--text-soft, #9baa9d));
+  }
+  select.tumbler-select::picker(select) {
+    padding: 4px;
+    margin-block: 5px;
+    border: 1px solid var(--tumbler-control-border, var(--border, #303030));
+    border-radius: 7px;
+    background: var(--tumbler-control-bg, var(--bg, #121212));
+    color: var(--tumbler-control-text, var(--text, #e2fee7));
+    box-shadow: 0 8px 24px #0004;
+  }
+  select.tumbler-select option {
+    padding: 7px 9px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  select.tumbler-select option:hover,
+  select.tumbler-select option:focus {
+    background: var(--tumbler-control-hover, var(--surface-hover, #252825));
+  }
+  select.tumbler-select option:focus-visible {
+    outline: 1px solid var(--tumbler-control-accent, var(--accent, #4fe519));
+    outline-offset: -1px;
+  }
+  select.tumbler-select option::checkmark {
+    color: var(--tumbler-control-accent, var(--accent, #4fe519));
+  }
+}
+@media (forced-colors: active) {
+  input[type='checkbox']:not([role='switch']),
+  select.tumbler-select,
+  select.tumbler-select::picker(select) {
+    appearance: auto;
+  }
+  input[type='checkbox']:not([role='switch'])::before {
+    content: none;
+  }
+  select.tumbler-select {
+    background-image: none;
+  }
+}

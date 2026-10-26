@@ -1,4 +1,5 @@
 <script lang="ts">
+  import "./controls.css";
   import { tick } from "svelte";
   import { createGridSelection, moveGridSelection, type GridDirection, type GridSelection } from "@tumblerjs/core";
   import type { ChartModel } from "@tumblerjs/charts";
