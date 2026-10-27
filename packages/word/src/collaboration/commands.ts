@@ -279,9 +279,22 @@ function formatWordDelta(
     throw new Error('Use table operations to change cell structure.');
   const value = text.toString();
   const { align, styleId, paragraph, positioning, tab: _tab, list, table: _table, image: _image, field: _field, ...inline } = attributes;
+  // Yjs consumes null attributes. Retain explicit unlink intent in its existing sentinel.
+  if (inline.link === null) inline.link = '';
   // A font ID and a literal family are alternative ways to specify the same property.
   if (attributes.fontFamily !== undefined && attributes.font === undefined) inline.font = null;
   if (attributes.font !== undefined && attributes.fontFamily === undefined) inline.fontFamily = null;
+  // Read boundary attributes once for a bulk partial positioning edit.
+  const positioningByEnd = new Map<number, TextAttributes['positioning']>();
+  if (positioning && !positioning.reset && Object.keys(positioning).length) {
+    let offset = 0;
+    const parts: { insert: string; attributes?: TextAttributes }[] = text.toDelta();
+    for (const part of parts) {
+      for (let at = part.insert.indexOf('\n'); at >= 0; at = part.insert.indexOf('\n', at + 1))
+        positioningByEnd.set(offset + at, part.attributes?.positioning);
+      offset += part.insert.length;
+    }
+  }
   const delta: WordDelta = [];
   let cursor = 0;
   const append = (start: number, length: number, attributes: Record<string, unknown>) => {
@@ -304,7 +317,10 @@ function formatWordDelta(
       append(end, 1, {
         ...(align !== undefined ? { align: align === 'left' ? null : align } : {}),
         ...(list !== undefined ? { list } : {}),
-        ...(positioning !== undefined ? { positioning } : {}),
+        ...(positioning === null ? { positioning: { reset: true as const } }
+          : positioning && Object.keys(positioning).length
+            ? { positioning: positioning.reset ? positioning : { ...positioningByEnd.get(end), ...positioning } }
+            : {}),
         ...(styleId !== undefined ? { styleId } : {}),
         ...(paragraph !== undefined ? paragraphPropertyPatch(paragraph) : {}),
         ...(paragraph === null ? { paragraph: null } : {}),

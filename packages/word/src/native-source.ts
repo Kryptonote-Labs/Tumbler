@@ -1,3 +1,5 @@
+import { OOXML_NAMESPACES } from '@tumblerjs/ooxml';
+import { parseParagraphProperties, type WordTabStop } from './styles.ts';
 import { wordDocumentDefaults } from './document-defaults.ts';
 import { resolveWordTableGrid } from './table-grid.ts';
 import type { WordArtifact } from './artifact.ts';
@@ -15,6 +17,7 @@ export class NativeWordSource {
     textFormat: ComputedWordTextFormat;
     numbering: WordParagraphNumbering | undefined;
     directNumbering: Partial<WordParagraphNumbering>;
+    directTabs: readonly WordTabStop[] | undefined;
   }>();
   readonly leaves = new Map<number, {
     run: WordRun;
@@ -27,6 +30,7 @@ export class NativeWordSource {
   readonly tableWidths = new Map<number, readonly number[]>();
   readonly rows = new Map<number, WordTableRow>();
   readonly cells = new Map<number, WordTableCell>();
+  readonly positioning = new Map<number, WordTextParagraph['positioning']>();
   readonly lists = new Map<number, WordTextParagraph['list']>();
   readonly original;
   readonly defaults;
@@ -48,12 +52,14 @@ export class NativeWordSource {
             }
           }
         } else if (block.kind === 'paragraph') {
+          const properties = block.propertiesElementId === undefined ? undefined : document.source.element(block.propertiesElementId);
           this.paragraphs.set(block.elementId, {
             block,
             format: document.styles.paragraphFormat(document, block),
             textFormat: document.styles.runFormat(document, block),
             numbering: document.numbering.paragraphReference(document, block),
             directNumbering: document.numbering.paragraphProperties(document, block),
+            directTabs: properties ? parseParagraphProperties(properties, OOXML_NAMESPACES[document.conformance].wordprocessing).tabs : undefined,
           });
           for (const owner of block.inlines) {
             const runs = owner.kind === 'run' ? [owner] : owner.kind === 'hyperlink' || owner.kind === 'insertion' ? owner.runs : [];
@@ -70,7 +76,10 @@ export class NativeWordSource {
     visit(document.blocks);
     const lists = (blocks: typeof this.original) => {
       for (const block of blocks) {
-        if (block.kind === 'paragraph' && block.source !== undefined) this.lists.set(block.source, block.list);
+        if (block.kind === 'paragraph' && block.source !== undefined) {
+          this.lists.set(block.source, block.list);
+          this.positioning.set(block.source, block.positioning);
+        }
         else if (block.kind === 'table') for (const row of block.rows) for (const cell of row) lists([...cell.blocks]);
       }
     };

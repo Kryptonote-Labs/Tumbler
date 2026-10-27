@@ -25,7 +25,8 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
         ...(drawing?.kind === 'shape' ? { shape: drawing.shape } : {}),
         source: segment.elementId,
         ...(segment.breakType ? { breakType: segment.breakType } : {}),
-        ...(links.has(segment.runElementId) ? { link: links.get(segment.runElementId)! } : {}),
+        // Empty-target wrappers are source markup, not the explicit unlink sentinel.
+        ...(links.get(segment.runElementId) ? { link: links.get(segment.runElementId)! } : {}),
         ...(segment.tab ? { tab: segment.tab } : {}),
         ...(segment.field ? { field: segment.field } : {}),
         // Soft line breaks are distinct from paragraph boundaries in a collaborative text stream.
