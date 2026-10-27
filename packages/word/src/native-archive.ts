@@ -1,4 +1,4 @@
-import { deflateSync, inflateSync } from 'fflate';
+import { deflateRaw, inflateRaw } from '@tumblerjs/opc/compression';
 import { crc32 } from '@tumblerjs/opc';
 import { z } from 'zod';
 import { WordArtifact } from './artifact.ts';
@@ -28,29 +28,38 @@ export function createWordNativeArchive(artifact: WordArtifact): WordNativeArchi
     nativeWordSource(wordStoryArtifact(artifact, story.part.name.value)))];
   const { graph, resources: original } = writeNativeGraph({ artifact, compiled }, wordNativeCodecs);
   const entries = original.map(bytes => {
-    const compressed = deflateSync(bytes, { level: 6 });
+    const compressed = deflateRaw(bytes);
     const compression = compressed.byteLength + 16 < bytes.byteLength ? 'deflate' as const : 'raw' as const;
     const stored = compression === 'deflate' ? compressed : bytes;
     return { stored, metadata: { length: bytes.byteLength, crc32: crc32(bytes), compression,
       storedLength: stored.byteLength, storedCrc32: crc32(stored) } };
   });
-  const model = deflateSync(encoder.encode(JSON.stringify({ version: 1, graph,
+  const rawModel = encoder.encode(JSON.stringify({ version: 1, graph,
     resources: entries.map(entry => entry.metadata),
-  })), { level: 6 });
+  }));
+  const compressedModel = deflateRaw(rawModel);
+  const model = new Uint8Array(8 + compressedModel.byteLength);
+  new DataView(model.buffer).setFloat64(0, rawModel.byteLength, true);
+  model.set(compressedModel, 8);
   return { version: 1, model, resources: entries.map(entry => entry.stored) };
 }
 
 /** Reopen compiled Word semantics without parsing XML, inflating OPC parts or reading a DOCX. */
 export function openWordNativeArchive(archive: WordNativeArchive): WordArtifact {
   if (archive.version !== 1) throw new TypeError('Unsupported native Word version.');
-  const data = metadata.parse(JSON.parse(decoder.decode(inflateSync(archive.model))));
+  if (archive.model.byteLength < 8) throw new TypeError('Truncated native Word model.');
+  const modelLength = new DataView(archive.model.buffer, archive.model.byteOffset, archive.model.byteLength).getFloat64(0, true);
+  if (!Number.isSafeInteger(modelLength) || modelLength < 1) throw new TypeError('Invalid native Word model length.');
+  const model = inflateRaw(archive.model.subarray(8), modelLength);
+  if (model.byteLength !== modelLength) throw new TypeError('Native Word model length mismatch.');
+  const data = metadata.parse(JSON.parse(decoder.decode(model)));
   if (data.resources.length !== archive.resources.length || data.resources.some((resource, index) => {
     const bytes = archive.resources[index];
     return !bytes || bytes.byteLength !== resource.storedLength || crc32(bytes) !== resource.storedCrc32;
   })) throw new TypeError('Native Word resource integrity check failed.');
   const resources = data.resources.map((resource, index) => {
     const stored = archive.resources[index]!;
-    const bytes = resource.compression === 'deflate' ? inflateSync(stored, { out: new Uint8Array(resource.length) }) : stored;
+    const bytes = resource.compression === 'deflate' ? inflateRaw(stored, resource.length) : stored;
     if (bytes.byteLength !== resource.length || crc32(bytes) !== resource.crc32)
       throw new TypeError('Native Word resource integrity check failed.');
     return bytes;

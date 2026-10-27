@@ -60,6 +60,11 @@ test('native archives reject missing, corrupted and truncated resources', () => 
   const corrupted = archive.resources.map(bytes => bytes.slice());
   corrupted[0]![0] = corrupted[0]![0]! ^ 1;
   expect(() => openWordNativeArchive({ ...archive, resources: corrupted })).toThrow('integrity');
+  for (const length of [1, Number.NaN]) {
+    const model = archive.model.slice();
+    new DataView(model.buffer, model.byteOffset, model.byteLength).setFloat64(0, length, true);
+    expect(() => openWordNativeArchive({ ...archive, model })).toThrow();
+  }
   const bytes = encodeWordNativeArchive(archive);
   expect(() => decodeWordNativeArchive(bytes.subarray(0, bytes.length - 1))).toThrow();
   const wrongModel = bytes.slice();
@@ -164,3 +169,19 @@ for (const endian of ['utf16le', 'utf16be'] as const) {
     expect(native(exported).document.source.encoding).toEqual(exported.document.source.encoding);
   });
 }
+
+test('browser and native hosts exchange native archives without native browser dependencies', async () => {
+  const build = await Bun.build({
+    entrypoints: [new URL('../src/native-archive.ts', import.meta.url).pathname], target: 'browser',
+  });
+  expect(build.success).toBe(true);
+  const script = await build.outputs[0]!.text();
+  expect(script).not.toContain('node:zlib');
+  const browser = await import(`data:text/javascript;base64,${Buffer.from(script).toString('base64')}`) as typeof import('../src/native-archive.ts');
+  const original = createWordArtifact({ paragraphs: [{ runs: [{ text: 'Cross-host Ελληνικά 中文 😀' }] }] });
+  const restored = browser.openWordNativeArchive(createWordNativeArchive(original));
+  expect(restored.bytes()).toEqual(original.bytes());
+  const returned = openWordNativeArchive(browser.createWordNativeArchive(restored));
+  expect(returned.bytes()).toEqual(original.bytes());
+  expect(importWordContent(returned)).toEqual(importWordContent(original));
+});

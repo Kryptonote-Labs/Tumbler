@@ -29,8 +29,7 @@
     "@tumblerjs/ooxml": "0.1.0-alpha.26",
     "@tumblerjs/opc": "0.1.0-alpha.26",
     "@tumblerjs/ink": "0.1.0-alpha.26",
-    "zod": "^4.6.5",
-    "fflate": "^0.8.2"
+    "zod": "^4.6.5"
   },
   "peerDependencies": {
     "yjs": "^13.6.0"

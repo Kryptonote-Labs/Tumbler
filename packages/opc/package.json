@@ -3,7 +3,14 @@
   "version": "0.1.0-alpha.26",
   "description": "OPC package primitives for browser-first Office document tooling.",
   "type": "module",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./compression": {
+      "bun": "./src/zip/codec-node.ts",
+      "node": "./src/zip/codec-node.ts",
+      "default": "./src/zip/codec.ts"
+    }
+  },
   "files": [
     "src",
     "README.md",
