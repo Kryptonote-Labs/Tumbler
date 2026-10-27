@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test';
-import { openZipArchive } from '@tumblerjs/opc';
+import { openZipArchive, writeZipArchiveChanges } from '@tumblerjs/opc';
 import {
   createWordArtifact, openWordArtifact, createWordNativeArchive, openWordNativeArchive, encodeWordNativeArchive,
   decodeWordNativeArchive, NativeWordDocument, importWordContent, wordParagraphText,
 } from '../src/index.ts';
 import { buildWordDocumentFixture } from './document-fixture.ts';
-import { preservationScenarios } from '../../../tools/word-compatibility/preservation/scenarios.ts';
+import { scenarios } from '../../../tools/word-compatibility/scenarios.ts';
 
 const native = (artifact: ReturnType<typeof createWordArtifact>) =>
   openWordNativeArchive(decodeWordNativeArchive(encodeWordNativeArchive(createWordNativeArchive(artifact))));
@@ -22,6 +22,7 @@ test('native storage owns package members and compiled semantics after the origi
   const original = artifact.bytes().slice();
   const encoded = encodeWordNativeArchive(createWordNativeArchive(artifact));
   const restored = openWordNativeArchive(decodeWordNativeArchive(encoded));
+  expect(restored.bytes()).toEqual(original);
   sameParts(original, restored.bytes());
   expect(importWordContent(restored)).toEqual(importWordContent(artifact));
   const model = new NativeWordDocument({ source: restored });
@@ -42,6 +43,7 @@ test('native resources retain unknown blocks, inline markup, attributes, XML enc
     parts: [{ itemName: 'customXml/item1.xml', contentType: 'application/xml', xml: '<unknown xmlns="urn:opaque"> retained bytes </unknown>' }],
   });
   const restored = native(openWordArtifact(original));
+  expect(restored.bytes()).toEqual(original);
   sameParts(original, restored.bytes());
   const model = new NativeWordDocument({ source: restored, content: importWordContent(restored).map(block => block.kind === 'paragraph'
     ? { ...block, runs: block.runs.map(run => ({ ...run, text: run.text.replace('Hello', 'Edited') })) } : block) });
@@ -66,16 +68,17 @@ test('native archives reject missing, corrupted and truncated resources', () => 
   expect(() => decodeWordNativeArchive(wrongModel)).toThrow();
 });
 
-for (const scenario of preservationScenarios) {
+for (const scenario of scenarios) {
   test(`native roundtrip and native reconciliation: ${scenario.id}`, async () => {
     const result = await scenario.run();
     for (const fixture of result.fixtures) {
       const restored = native(openWordArtifact(fixture.bytes));
       fixture.verify?.(restored);
+      expect(restored.bytes()).toEqual(fixture.bytes);
       sameParts(fixture.bytes, restored.bytes());
       const reconciled = new NativeWordDocument({ source: restored, content: importWordContent(restored) }).artifact();
       fixture.verify?.(reconciled);
-      sameParts(fixture.bytes, reconciled.bytes(), new Set(['word/document.xml']));
+      sameParts(fixture.bytes, reconciled.bytes(), new Set([restored.document.part.name.value.slice(1)]));
     }
   });
 }
@@ -123,3 +126,41 @@ test('fresh native models edit and lay out without materializing preservation XM
   expect(restored.document.source.isParsed).toBe(false);
   expect(model.paragraphs()[0]?.text).toBe('Native edit');
 });
+
+for (const endian of ['utf16le', 'utf16be'] as const) {
+  test(`native preservation retains ${endian} XML, annotations and binary parts through neighbouring edits`, () => {
+    const word = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const relationships = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const protectedParagraph = '<w:p><w:commentRangeStart w:id="3"/><w:ins w:id="1" w:author="Author"><w:r><w:t>Inserted</w:t></w:r></w:ins><w:del w:id="2" w:author="Author"><w:r><w:delText>Deleted</w:delText></w:r></w:del><w:r><w:footnoteReference w:id="7"/></w:r><w:commentRangeEnd w:id="3"/><w:r><w:commentReference w:id="3"/></w:r><w:hyperlink r:id="external"><w:r><w:t>External</w:t></w:r></w:hyperlink></w:p>';
+    const xml = `<?xml version="1.0" encoding="UTF-16"?><w:document xmlns:w="${word}" xmlns:r="${relationships}"><w:body>${protectedParagraph}<w:p><w:r><w:t>Neighbour</w:t></w:r></w:p></w:body></w:document>`;
+    const fixture = buildWordDocumentFixture({ documentXml: xml,
+      relationships: [
+        { id: 'external', type: `${relationships}/hyperlink`, target: 'https://example.com/?x=1&amp;y=2', targetMode: 'External' },
+        { id: 'comments', type: `${relationships}/comments`, target: 'comments.xml' },
+        { id: 'footnotes', type: `${relationships}/footnotes`, target: 'footnotes.xml' },
+      ],
+      parts: [
+        { itemName: 'word/comments.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml', xml: `<w:comments xmlns:w="${word}"><w:comment w:id="3" w:author="Author"><w:p><w:r><w:t>Comment</w:t></w:r></w:p></w:comment></w:comments>` },
+        { itemName: 'word/footnotes.xml', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml', xml: `<w:footnotes xmlns:w="${word}"><w:footnote w:id="7"><w:p><w:r><w:t>Footnote</w:t></w:r></w:p></w:footnote></w:footnotes>` },
+        { itemName: 'customXml/opaque.xml', contentType: 'application/xml', xml: '<opaque><![CDATA[unknown]]></opaque>' },
+      ],
+    });
+    const encoded = Buffer.from('\uFEFF' + xml, 'utf16le');
+    if (endian === 'utf16be') encoded.swap16();
+    const zip = openZipArchive(fixture);
+    const original = writeZipArchiveChanges(zip, { replacements: new Map([
+      ['word/document.xml', encoded],
+      ['customXml/opaque.xml', Uint8Array.from({ length: 256 }, (_, i) => i)],
+    ]) });
+    const restored = native(native(openWordArtifact(original)));
+    expect(restored.bytes()).toEqual(original);
+  sameParts(original, restored.bytes());
+    const model = new NativeWordDocument({ source: restored, content: importWordContent(restored).map(block => block.kind === 'paragraph'
+      ? { ...block, runs: block.runs.map(run => ({ ...run, text: run.text.replace('Neighbour', 'Edited neighbour') })) } : block) });
+    const exported = model.artifact();
+    expect(exported.document.source.source).toContain(protectedParagraph);
+    expect(exported.document.source.source).toContain('Edited neighbour');
+    sameParts(original, exported.bytes(), new Set(['word/document.xml']));
+    expect(native(exported).document.source.encoding).toEqual(exported.document.source.encoding);
+  });
+}

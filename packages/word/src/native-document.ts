@@ -1,3 +1,4 @@
+import { nativeTableRowGrids } from './native-table-grid.ts';
 import { validateWordSectionReferences } from './section-format.ts';
 import { wordKerningHalfPoints } from './font-kerning.ts';
 import { isWordParagraphFormat } from './paragraph-format.ts';
@@ -497,7 +498,9 @@ export class NativeWordDocument implements WordLayoutSource {
           const originalTable = compiled?.tables.get(source.source!);
           const widthsChanged = source.columnWidths !== undefined && JSON.stringify(source.columnWidths.map(w => Math.round(w * 20))) !== JSON.stringify(originalTable?.gridColumnWidthsTwips);
           const layoutWidths = originalTable && !widthsChanged ? compiled?.tableWidths.get(originalTable.elementId) : source.columnWidths;
-          const grid = authoredTableGrid(source.rows, layoutWidths, width, source.rowGrids);
+          const rowGrids = !widthsChanged && originalTable && layoutWidths
+            ? nativeTableRowGrids(source, originalTable, compiled?.rows, layoutWidths.length) : source.rowGrids;
+          const grid = authoredTableGrid(source.rows, layoutWidths, width, rowGrids);
           const widths = grid.widths;
           const rows = grid.rows.map((row, rowIndex) => ({
             ...compiled?.rows.get(source.rowSources?.[rowIndex]!),

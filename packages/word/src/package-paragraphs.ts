@@ -198,7 +198,7 @@ export function wordParagraphRenderer(
     let content =
       run.breakType ? markup.word(wordBreakXml(run.breakType, run.text)) :
       run.tab ? markup.word(positionalTabXml(run.tab, run.text)) :
-      element && original?.text === run.text && (element.localName !== 't' || /[\r\n]/.test(run.text))
+      element && original?.text === run.text
         ? sourceMarkup
         : element && original?.text === '\uFFFC'
           ? run.text.split('\uFFFC').map(text).join(sourceMarkup)
