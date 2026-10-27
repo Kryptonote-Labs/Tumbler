@@ -18,10 +18,12 @@ import { renderWordBlocks } from './package-blocks.ts';
 import { wordParagraphTextSegments } from './text.ts';
 import { isWordColour } from './theme-colours.ts';
 
-function usesThemeColour(value: unknown): boolean {
-  if (!value || typeof value !== 'object' || value instanceof Uint8Array) return false;
-  if (isWordColour(value) && typeof value !== 'string') return true;
-  return Object.values(value).some(usesThemeColour);
+function themeColours(value: unknown, found = new Set<string>()): Set<string> {
+  if (!value || typeof value !== 'object' || value instanceof Uint8Array) return found;
+  if (isWordColour(value) && typeof value !== 'string')
+    found.add(JSON.stringify([value.theme, value.fallback.toLowerCase(), value.tint ?? 255, value.shade ?? 255]));
+  else for (const child of Object.values(value)) themeColours(child, found);
+  return found;
 }
 
 export function wordContentParagraphs(
@@ -142,7 +144,8 @@ export function prepareWordContent(
   blocks = normalize(blocks);
   const document = source.document;
   const markup = new PackageXml(document);
-  const originals = wordContentParagraphs(importWordContent(source));
+  const originalBlocks = importWordContent(source);
+  const originals = wordContentParagraphs(originalBlocks);
   const originalRuns = new Map(originals.flatMap(p => p.runs.map(run => [run.source!, run] as const)));
   const originalParagraphs = new Map(originals.map((p) => [p.source!, p]));
   const paragraphs = wordContentParagraphs(blocks);
@@ -182,7 +185,11 @@ export function prepareWordContent(
   const relationships = generated.document.package.relationships(
     generated.document.part.name,
   ).items;
-  const needsTheme = !document.styles.themeColors && usesThemeColour(blocks);
+  // Retained theme references without a theme use their original fallback. Adding
+  // a default theme during an unrelated edit would change those existing colours.
+  const retainedColours = document.styles.themeColors ? undefined : themeColours(originalBlocks);
+  const needsTheme = retainedColours !== undefined &&
+    [...themeColours(blocks)].some(colour => !retainedColours.has(colour));
   // Stories must not add shared resources. The body may append media/numbering,
   // provided story numbering already resolves. New styles/themes and drawing
   // transforms require the sequential path so later edits see their effects.
