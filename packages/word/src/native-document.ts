@@ -3,7 +3,7 @@ import { wordKerningHalfPoints } from './font-kerning.ts';
 import { isWordParagraphFormat } from './paragraph-format.ts';
 import { resolveWordSection, wordSectionFormat } from './section-format.ts';
 import { applyWordDocumentSettings, isWordDocumentSettings, type WordDocumentSettings } from './document-settings.ts';
-import { refreshUnchangedFormatting } from './content-numbering.ts';
+import { refreshUnchangedNumbering } from './content-numbering.ts';
 import { validateXmlText } from "./text-validation.ts";
 import { withWordInkTraces } from './ink-overrides.ts';
 import { chartTitleFromWord } from './chart-title.ts';
@@ -325,7 +325,7 @@ export class NativeWordDocument implements WordLayoutSource {
       const current = wordStoryArtifact(result, partName);
       const original = this.options.source?.document.headerFooters.some(story => story.part.name.value === partName)
         ? wordStoryArtifact(this.options.source, partName) : undefined;
-      const edited = reconcileWordContent(current, original ? refreshUnchangedFormatting(original, current, entry.blocks) : entry.blocks);
+      const edited = reconcileWordContent(current, original ? refreshUnchangedNumbering(original, current, entry.blocks) : entry.blocks);
       result = storyMainArtifact(edited);
     }
     return this.finishArtifact(result);
@@ -664,7 +664,7 @@ export class NativeWordDocument implements WordLayoutSource {
                 ...paragraphFormat,
                 ...nativeParagraphPositioning(
                   positioningStyles, authored.styleId ?? original?.format.styleId ?? defaults?.paragraph.styleId,
-                  authored.positioning, compiled?.positioning.get(authored.source!), original?.directTabs, resetParagraph,
+                  authored.positioning, original?.positioning, resetParagraph,
                 ),
                 ...resolveWordPaintProperties(authored.paragraph ?? {}, this.themeColours),
                 alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? (resetParagraph ? named?.paragraph.alignment : original?.format.alignment) ?? defaults?.paragraph.alignment ?? 'start',

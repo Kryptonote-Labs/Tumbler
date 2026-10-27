@@ -1,5 +1,5 @@
 import { sectionBoundaryXml } from './section-format.ts';
-import { resetPositioningMarkup } from './package-positioning.ts';
+import { indentAttributeNames, patchPositioningMarkup } from './package-positioning.ts';
 import { wordBreakXml } from './breaks.ts';
 import { paragraphFormatXml } from './paragraph-format.ts';
 import { paragraphPositioningXml, positionalTabXml } from './positioning.ts';
@@ -287,18 +287,22 @@ export function wordParagraphRenderer(
         replacements.set('pBdr', markup.properties(borders, 'pBdr', edges));
       }
     }
-    if (paragraph.positioning?.reset) {
-      for (const name of ['ind', 'tabs'] as const)
-        replacements.set(name, '');
-    }
-    if (paragraph.positioning && JSON.stringify(paragraph.positioning) !== JSON.stringify(original?.positioning)) {
-      const positioning = paragraphPositioningXml({ ...(paragraph.positioning.reset ? {} : original?.positioning), ...paragraph.positioning }, document.conformance);
-      if (paragraph.positioning.tabs !== undefined) replacements.set('tabs', positioning.tabs ?? '');
-      if (positioning.ind !== undefined) replacements.set('ind', positioning.ind);
-    }
-    if (paragraph.positioning?.reset) {
-      for (const name of ['ind', 'tabs'] as const)
-        replacements.set(name, resetPositioningMarkup(markup, markup.children(properties, name)[0], name, replacements.get(name)));
+    if (paragraph.positioning) {
+      const positioning = paragraph.positioning;
+      const changedIndents = (['indentStartTwips', 'indentEndTwips', 'firstLineTwips', 'hangingTwips'] as const)
+        .filter(key => positioning[key] !== undefined && (positioning.reset || positioning[key] !== original?.positioning?.[key]));
+      const changedTabs = positioning.tabs !== undefined && (positioning.reset || JSON.stringify(positioning.tabs) !== JSON.stringify(original?.positioning?.tabs));
+      const generated = paragraphPositioningXml({
+        ...Object.fromEntries(changedIndents.map(key => [key, positioning[key]])),
+        ...(changedTabs ? { tabs: positioning.tabs! } : {}),
+      }, document.conformance);
+      if (positioning.reset || changedIndents.length) replacements.set('ind', patchPositioningMarkup(
+        markup, markup.children(properties, 'ind')[0], 'ind', generated.ind,
+        positioning.reset ? undefined : new Set(changedIndents.flatMap(key => [...indentAttributeNames[key]])),
+      ));
+      if (positioning.reset || changedTabs) replacements.set('tabs', patchPositioningMarkup(
+        markup, markup.children(properties, 'tabs')[0], 'tabs', generated.tabs,
+      ));
     }
     const generatedP = generatedParagraphs[indexByParagraph.get(paragraph)!]!;
     if (JSON.stringify(paragraph.list) !== JSON.stringify(original?.list)) {
@@ -330,7 +334,7 @@ export function wordParagraphRenderer(
     return markup.wrap(
       element,
       'p',
-      markup.properties(properties, 'pPr', replacements, paragraph.positioning?.reset ? new Set(['ind', 'tabs']) : undefined) + content,
+      markup.properties(properties, 'pPr', replacements, paragraph.positioning ? new Set(['ind', 'tabs']) : undefined) + content,
     );
   };
   return renderParagraph;

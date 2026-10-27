@@ -40,7 +40,10 @@ for (const prefix of ['x:', '']) test(`reset plus replacement preserves extensio
   const edited = importWordContent(output)[0]!;
   if (edited.kind !== 'paragraph') throw Error('paragraph');
   expect(edited.positioning?.indentEndTwips).toBe(360);
-  expect(edited.positioning?.indentStartTwips).toBe(0);
+  expect(edited.positioning?.indentStartTwips).toBeUndefined();
+  const native = model.blocks[0]!;
+  if (native.kind !== 'paragraph') throw Error('paragraph');
+  expect(model.paragraphFormat(native).indentStartTwips).toBe(0);
 });
 
 test('empty-target hyperlinks survive no-op but explicit null and empty-string unlink remove them', async () => {

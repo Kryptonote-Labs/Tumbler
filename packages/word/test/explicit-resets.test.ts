@@ -106,10 +106,12 @@ for (const conformance of ['transitional', 'strict'] as const) test(`${conforman
   const session = openWordOperationDocument(source);
   try {
     session.text.applyDelta(prepareWordOperation(session.text, { start: 0, end: 5 }, { name: 'paragraph', input: { positioning: null } }).delta);
-    const reset = importWordContent(session.artifact())[0]!;
+    const exported = session.artifact().document;
+    const reset = exported.blocks[0]!;
     if (reset.kind !== 'paragraph') throw new Error('Expected paragraph');
-    expect(reset.positioning?.indentStartTwips).toBe(240);
-    expect(reset.positioning?.tabs?.map(tab => tab.positionTwips)).toEqual([2880]);
+    expect(exported.styles.paragraphFormat(exported, reset).indentStartTwips).toBe(240);
+    expect(exported.styles.paragraphFormat(exported, reset).tabs.map(tab => tab.positionTwips)).toEqual([2880]);
+    expect(importWordContent(session.artifact())[0]).not.toHaveProperty('positioning');
   } finally { session.destroy(); }
 });
 

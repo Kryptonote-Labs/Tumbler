@@ -1,4 +1,4 @@
-import { refreshUnchangedFormatting } from './content-numbering.ts';
+import { refreshUnchangedNumbering } from './content-numbering.ts';
 import { beginPackageTransaction } from '@tumblerjs/opc';
 import { openWordArtifact, type WordArtifact } from './artifact.ts';
 import { prepareWordContent, reconcileWordContent } from './content-export.ts';
@@ -16,11 +16,11 @@ export function reconcileWordStories(
   const transaction = beginPackageTransaction(source.document.package);
   const seen = new Set<string>();
   for (const update of updates) {
-    if (seen.has(update.partName) || !prepareWordContent(wordStoryArtifact(source, update.partName), refreshUnchangedFormatting(wordStoryArtifact(originalSource, update.partName), wordStoryArtifact(source, update.partName), update.blocks), transaction)) {
+    if (seen.has(update.partName) || !prepareWordContent(wordStoryArtifact(source, update.partName), refreshUnchangedNumbering(wordStoryArtifact(originalSource, update.partName), wordStoryArtifact(source, update.partName), update.blocks), transaction)) {
       // Discard all staged changes; every edit below sees its predecessor's resources.
       transaction.rollback();
       return updates.reduce((current, next) => storyMainArtifact(reconcileWordContent(
-        wordStoryArtifact(current, next.partName), refreshUnchangedFormatting(wordStoryArtifact(originalSource, next.partName), wordStoryArtifact(current, next.partName), next.blocks),
+        wordStoryArtifact(current, next.partName), refreshUnchangedNumbering(wordStoryArtifact(originalSource, next.partName), wordStoryArtifact(current, next.partName), next.blocks),
       )), source);
     }
     seen.add(update.partName);

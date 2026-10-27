@@ -1132,6 +1132,13 @@ including ligatures, and reshapes carried text at a new line.
 
 ### Explicit positioning and hyperlink resets
 
+`importWordContent` returns direct paragraph positioning, including tab-clear
+entries. Inherited values remain in their styles instead of becoming edit
+attributes. Use `WordStyles.paragraphFormat(document, paragraph)` or the native
+model's `paragraphFormat` for effective positioning. `WordStyles.paragraphPositioning`
+returns only direct source declarations. This distinction lets an indent-only edit
+preserve source tab clears while an explicit replacement tab array replaces them.
+
 For `paragraph` operations, omitting `positioning` or supplying `{}` preserves the
 current positioning. Partial objects update their supplied members. `positioning:
 null` removes direct paragraph indents and tabs, allowing paragraph styles and

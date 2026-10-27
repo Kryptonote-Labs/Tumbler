@@ -1,4 +1,5 @@
 import { mergeWordTabStops } from './tab-stops.ts';
+import type { WordParagraphPositioning } from './positioning.ts';
 import { wordThemeSlot } from './theme-colour-xml.ts';
 import { resolveWordColour, resolveWordPaintProperties, DEFAULT_WORD_THEME, type WordThemeColour } from './theme-colours.ts';
 import {
@@ -216,6 +217,19 @@ export class WordStyles {
 
   style(id: string): WordStyle | undefined {
     return this.#byId.get(id);
+  }
+
+  /** Direct declarations for editing; paragraphFormat returns their inherited result. */
+  paragraphPositioning(document: WordDocumentLike, paragraph: WordParagraph): WordParagraphPositioning | undefined {
+    const direct = this.paragraphProperties(document, paragraph).direct;
+    const positioning = {
+      ...(direct.tabs === undefined ? {} : { tabs: direct.tabs }),
+      ...(direct.indentStartTwips === undefined ? {} : { indentStartTwips: direct.indentStartTwips }),
+      ...(direct.indentEndTwips === undefined ? {} : { indentEndTwips: direct.indentEndTwips }),
+      ...(direct.firstLineTwips === undefined ? {} : { firstLineTwips: direct.firstLineTwips }),
+      ...(direct.hangingTwips === undefined ? {} : { hangingTwips: direct.hangingTwips }),
+    };
+    return Object.keys(positioning).length ? Object.freeze(positioning) : undefined;
   }
 
   /** Resolve a named paragraph style without reading document XML. */

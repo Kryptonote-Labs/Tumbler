@@ -1,14 +1,20 @@
 import type { LosslessXmlElement } from '@tumblerjs/ooxml';
 import type { PackageXml } from './package-xml.ts';
 
-const indentNames = new Set(['left', 'right', 'start', 'end', 'firstLine', 'hanging', 'leftChars', 'rightChars', 'startChars', 'endChars', 'firstLineChars', 'hangingChars']);
+export const indentAttributeNames = {
+  indentStartTwips: ['left', 'start', 'leftChars', 'startChars'],
+  indentEndTwips: ['right', 'end', 'rightChars', 'endChars'],
+  firstLineTwips: ['firstLine', 'firstLineChars'],
+  hangingTwips: ['hanging', 'hangingChars'],
+} as const;
+const indentNames = new Set<string>(Object.values(indentAttributeNames).flat());
 
-/** Reset direct positioning without changing the namespace scope of opaque markup. */
-export function resetPositioningMarkup(markup: PackageXml, element: LosslessXmlElement | undefined, name: 'ind' | 'tabs', replacement = ''): string {
+/** Replace edited positioning members while retaining unrelated XML and namespace scope. */
+export function patchPositioningMarkup(markup: PackageXml, element: LosslessXmlElement | undefined, name: 'ind' | 'tabs', replacement = '', removedIndentNames: ReadonlySet<string> = indentNames): string {
   if (!element) return markup.word(replacement);
   // A reset removes the tab declarations and metadata owned by those declarations.
   if (name === 'tabs' && !replacement) return '';
-  const removed = element.attributes.filter(attribute => name === 'ind' && attribute.namespaceUri === element.namespaceUri && indentNames.has(attribute.localName));
+  const removed = element.attributes.filter(attribute => name === 'ind' && attribute.namespaceUri === element.namespaceUri && removedIndentNames.has(attribute.localName));
   const attributes = element.attributes.filter(attribute => !removed.includes(attribute));
   const children = element.children.filter(child => !(name === 'tabs' && child.kind === 'element' && child.namespaceUri === element.namespaceUri && child.localName === 'tab'));
   if (!replacement && !attributes.some(attribute => attribute.prefix !== 'xmlns' && attribute.qualified !== 'xmlns') && children.every(child => child.kind === 'text' && !child.value.trim())) return '';
