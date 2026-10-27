@@ -299,3 +299,37 @@ test('synchronizing a view does not mutate deltas received by later source obser
   expect(inserted).toEqual({ bold: true });
   view.destroy(); doc.destroy();
 });
+
+test('plain views resynchronize independent projection edits and retain source attributes', () => {
+  const doc = new Y.Doc();
+  const source = doc.getText('body');
+  source.insert(0, 'Source\n', { bold: true, wordSource: 12 });
+  const view = new WordSharedText(doc, 'body');
+  try {
+    source.insert(2, 'new', { italic: true });
+    view.sync();
+    expect(view.text.toDelta()).toEqual(source.toDelta());
+    view.text.insert(0, 'independent');
+    view.text.format(0, view.text.length, { bold: null });
+    view.sync();
+    expect(view.text.toDelta()).toEqual(source.toDelta());
+    view.sync();
+    expect(view.text.toDelta()).toEqual(source.toDelta());
+  } finally { view.destroy(); doc.destroy(); }
+});
+
+test('synchronizing inside a source transaction does not apply its delta twice', () => {
+  const doc = new Y.Doc();
+  const source = doc.getText('body');
+  source.insert(0, 'Original\n');
+  const view = new WordSharedText(doc, 'body');
+  try {
+    doc.transact(() => {
+      source.insert(0, 'First ');
+      view.sync();
+      expect(view.text.toString()).toBe(source.toString());
+      source.insert(0, 'Second ');
+    });
+    expect(view.text.toDelta()).toEqual(source.toDelta());
+  } finally { view.destroy(); doc.destroy(); }
+});

@@ -54,18 +54,27 @@ export class WordSharedText {
   private readonly projection = new Y.Doc();
   private spans: WordViewSpan[] = [];
   private tables: WordViewTable[] = [];
+  private synchronized = false;
+  private projectedTransaction: Y.Transaction | null = null;
+  private readonly projectionChanged = () => { this.synchronized = false; };
   conflict: Error | undefined;
   private structured(doc = this.doc) {
     return [...doc.share.keys()].some((name) => name.startsWith("word-table-v2:"));
   }
   private readonly sourceChanged = (event: Y.YTextEvent) => {
+    if (this.projectedTransaction === event.transaction) {
+      this.projectedTransaction = null;
+      this.synchronized = false;
+      this.sync();
+      return;
+    }
     if (!this.structured()) {
       // Y.Text fills missing formatting keys in the supplied delta. Other source observers
       // must receive the original event, including incremental validation and history.
-      this.text.applyDelta(event.delta.map(part => ({
+      this.updateProjection(() => this.text.applyDelta(event.delta.map(part => ({
         ...part,
         ...(part.attributes ? { attributes: { ...part.attributes } } : {}),
-      })));
+      }))));
       this.spans = this.text.length
         ? [{ start: 0, end: this.text.length, root: this.story, offset: 0 }]
         : [];
@@ -94,6 +103,7 @@ export class WordSharedText {
     this.sourceText = doc.getText(story);
     wordParagraphIdentity(this.sourceText, this.sourceText.length);
     this.projectedText = this.projection.getText(story);
+    this.projectedText.observe(this.projectionChanged);
     views.set(this.sourceText, this);
     views.set(this.text, this);
     owners.set(this.projection, doc);
@@ -122,14 +132,27 @@ export class WordSharedText {
     for (const key of target.keys()) if (!source.has(key)) target.delete(key);
     for (const [key, value] of source) if (target.get(key) !== value) target.set(key, value);
   }
+  private updateProjection(update: () => void) {
+    this.synchronized = false;
+    update();
+    this.synchronized = true;
+  }
   sync() {
+    // Plain stories already mirror source deltas in sourceChanged. Reproject only
+    // after an independent view edit or before the source's active transaction fires.
+    if (this.synchronized && !this.structured() &&
+        (!this.doc._transaction || ![...this.doc._transaction.changed.keys()].some(root => root instanceof Y.Text && root === this.sourceText))) {
+      this.projection.transact(() => this.syncMetadata());
+      return;
+    }
+    this.projectedTransaction = this.doc._transaction;
     const next = projectWordSharedText(this.doc, this.story);
     this.spans = next.spans;
     this.tables = next.tables;
-    this.projection.transact(() => {
+    this.updateProjection(() => this.projection.transact(() => {
       this.syncMetadata();
       syncWordView(this.text, next.delta);
-    });
+    }));
   }
   anchor(range: WordRange) {
     return anchorWordView(this.doc, this.spans, range);
@@ -357,6 +380,7 @@ export class WordSharedText {
     this.doc.off("afterTransaction", this.refresh);
     this.doc.off("destroy", this.disposed);
     this.sourceText.unobserve(this.sourceChanged);
+    this.projectedText.unobserve(this.projectionChanged);
     views.delete(this.sourceText);
     views.delete(this.projectedText);
     this.projection.destroy();
