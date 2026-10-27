@@ -1,7 +1,6 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { pathToFileURL } from 'node:url';
 import { expect, test } from 'bun:test';
 import { openZipArchive, writeZipArchiveChanges } from '@tumblerjs/opc';
 import {
@@ -175,21 +174,31 @@ for (const endian of ['utf16le', 'utf16be'] as const) {
 }
 
 test('browser and native hosts exchange native archives without native browser dependencies', async () => {
-  const build = await Bun.build({
-    entrypoints: [new URL('../src/native-archive.ts', import.meta.url).pathname], target: 'browser',
-  });
-  expect(build.success).toBe(true);
-  const script = await build.outputs[0]!.text();
-  expect(script).not.toContain('node:zlib');
   const directory = await mkdtemp(join(tmpdir(), 'tumbler-native-browser-'));
   try {
-    const path = join(directory, 'native-browser.mjs');
-    await Bun.write(path, script);
-    const browser = await import(pathToFileURL(path).href) as typeof import('../src/native-archive.ts');
     const original = createWordArtifact({ paragraphs: [{ runs: [{ text: 'Cross-host Ελληνικά 中文 😀' }] }] });
-    const restored = browser.openWordNativeArchive(createWordNativeArchive(original));
-    expect(restored.bytes()).toEqual(original.bytes());
-    const returned = openWordNativeArchive(browser.createWordNativeArchive(restored));
+    const input = join(directory, 'input.native'), output = join(directory, 'output.native');
+    await Bun.write(input, Uint8Array.from(encodeWordNativeArchive(createWordNativeArchive(original))));
+    const runner = join(directory, 'exchange.mjs');
+    await Bun.write(runner, `
+      const build = await Bun.build({ entrypoints: [process.argv[4]], target: 'browser' });
+      if (!build.success) throw new AggregateError(build.logs, 'Browser archive build failed');
+      await Bun.write(new URL('./native-browser.mjs', import.meta.url), await build.outputs[0].text());
+      const { decodeWordNativeArchive, openWordNativeArchive, createWordNativeArchive, encodeWordNativeArchive } = await import('./native-browser.mjs');
+      const artifact = openWordNativeArchive(decodeWordNativeArchive(new Uint8Array(await Bun.file(process.argv[2]).arrayBuffer())));
+      await Bun.write(process.argv[3], encodeWordNativeArchive(createWordNativeArchive(artifact)));
+      await Bun.write(process.argv[3] + '.docx', artifact.bytes());
+    `);
+    // Bun 1.3 cannot bundle the same CJS parser twice in one process. Isolate this
+    // build so the independent OPC browser-bundle test keeps a fresh module cache.
+    const entry = new URL('../src/native-archive.ts', import.meta.url).pathname;
+    const child = Bun.spawn([process.execPath, runner, input, output, entry], { stdout: 'pipe', stderr: 'pipe' });
+    const exit = await child.exited;
+    const error = await new Response(child.stderr).text();
+    expect({ exit, error }).toEqual({ exit: 0, error: '' });
+    expect(await Bun.file(join(directory, 'native-browser.mjs')).text()).not.toContain('node:zlib');
+    expect(original.bytes()).toEqual(new Uint8Array(await Bun.file(output + '.docx').arrayBuffer()));
+    const returned = openWordNativeArchive(decodeWordNativeArchive(new Uint8Array(await Bun.file(output).arrayBuffer())));
     expect(returned.bytes()).toEqual(original.bytes());
     expect(importWordContent(returned)).toEqual(importWordContent(original));
   } finally { await rm(directory, { recursive: true, force: true }); }
