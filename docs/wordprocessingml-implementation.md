@@ -193,3 +193,13 @@ shapes and text-wrapped shapes remain opaque source drawings. Neighbouring edits
 original markup; they are not flattened into the simpler editable shape model.
 
 When assigning a style through `NativeWordDocument.update`, omit `paragraph` and each run's `format` to reset direct formatting to the style. Properties explicitly retained in the update remain overrides, including the effective formatting returned by `importWordContent`. Kryptonote's style action clears those overrides. Unknown imported style references retain Word's default-style fallback.
+
+
+### Paragraph and character style toggles
+
+Bold, italic and strike use the nearest declaration within each `basedOn` chain.
+The resolved paragraph and character levels then combine as toggles, with absent
+levels taking their document-default value as described in
+[MS-OI29500 §2.1.230](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/f7130225-2368-48f3-acae-a9d278d0fb25).
+Direct run formatting remains absolute. Table-style run formatting and other
+unsupported toggle properties are outside this implementation.
