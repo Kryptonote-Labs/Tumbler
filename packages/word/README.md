@@ -1185,8 +1185,9 @@ The archive owns every original package member, relationships, content types, lo
 and lexical source bytes, including unknown extensions and binary parts. Original XML identities
 remain preservation references; they are not a dependency on an original ZIP or file. Editing uses
 the compiled model. Export materializes a package from the retained resources and current content.
-Unchanged member payloads and compressed member data survive native reopening. ZIP container
-headers are regenerated when a native archive is exported; this does not promise byte-identical ZIP
+Unchanged member payloads, compressed member data and opaque ZIP headers survive native reopening.
+An unedited native source reconstructs the exact uploaded ZIP bytes, including directory records,
+comments and metadata. Edited exports can regenerate ZIP headers; this does not promise byte-identical ZIP
 container metadata. Opaque OOXML and package payloads remain exact.
 
 `encodeWordNativeArchive` and `decodeWordNativeArchive` provide a portable binary envelope for

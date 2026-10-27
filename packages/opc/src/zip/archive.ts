@@ -88,6 +88,8 @@ export interface ZipArchiveSnapshot {
   readonly entries: readonly ZipEntry[];
   readonly comment: string;
   readonly payloads: ReadonlyMap<string, Uint8Array>;
+  /** Headers, descriptors, extra fields, directory records and comments between payloads. */
+  readonly layout: readonly Uint8Array[];
 }
 
 export class ZipArchive {
@@ -96,6 +98,7 @@ export class ZipArchive {
   readonly #source: Uint8Array;
   readonly #byName: ReadonlyMap<string, ZipEntry>;
   readonly #payloads: ReadonlyMap<string, Uint8Array> | undefined;
+  readonly #layout: readonly Uint8Array[] | undefined;
   #materialized: Uint8Array | undefined;
 
   constructor(
@@ -103,25 +106,40 @@ export class ZipArchive {
     entries: readonly ZipEntry[],
     comment: string,
     payloads?: ReadonlyMap<string, Uint8Array>,
+    layout?: readonly Uint8Array[],
   ) {
     this.#source = source;
     this.entries = Object.freeze([...entries]);
     this.comment = comment;
     this.#byName = new Map(entries.map((entry) => [entry.name, entry]));
     this.#payloads = payloads;
+    this.#layout = layout;
   }
 
   snapshot(): ZipArchiveSnapshot {
-    return { entries: this.entries, comment: this.comment,
+    let offset = 0;
+    const layout = this.#layout ?? [...this.entries].sort((a, b) => a.compressedDataOffset - b.compressedDataOffset).map(entry => {
+      const header = this.#source.subarray(offset, entry.compressedDataOffset);
+      offset = entry.compressedDataOffset + entry.compressedSize;
+      return header;
+    }).concat([this.#source.subarray(offset)]);
+    return { entries: this.entries, comment: this.comment, layout,
       payloads: new Map(this.entries.map(entry => [entry.name, this.compressedBytes(entry)])) };
   }
 
   static fromSnapshot(snapshot: ZipArchiveSnapshot): ZipArchive {
     if (new Set(snapshot.entries.map(entry => entry.name)).size !== snapshot.entries.length ||
         snapshot.payloads.size !== snapshot.entries.length || snapshot.entries.some(entry =>
-          snapshot.payloads.get(entry.name)?.byteLength !== entry.compressedSize))
+          snapshot.payloads.get(entry.name)?.byteLength !== entry.compressedSize) ||
+        snapshot.layout.length !== snapshot.entries.length + 1)
       throw new TypeError('Invalid native ZIP member resources.');
-    return new ZipArchive(new Uint8Array(), snapshot.entries, snapshot.comment, snapshot.payloads);
+    let offset = 0;
+    for (const [index, entry] of [...snapshot.entries].sort((a, b) => a.compressedDataOffset - b.compressedDataOffset).entries()) {
+      offset += snapshot.layout[index]!.byteLength;
+      if (offset !== entry.compressedDataOffset) throw new TypeError('Invalid native ZIP layout.');
+      offset += entry.compressedSize;
+    }
+    return new ZipArchive(new Uint8Array(), snapshot.entries, snapshot.comment, snapshot.payloads, snapshot.layout);
   }
 
   get(name: string): ZipEntry | undefined {
@@ -133,8 +151,29 @@ export class ZipArchive {
   /** Returns the original archive bytes. Callers must treat them as immutable. */
   originalBytes(): Uint8Array {
     return this.#payloads
-      ? this.#materialized ??= writeZipArchiveChanges(this, { rebuild: true })
+      ? this.#materialized ??= this.#restoreBytes()
       : this.#source;
+  }
+
+  #restoreBytes(): Uint8Array {
+    if (!this.#layout) return writeZipArchiveChanges(this, { rebuild: true });
+    const entries = [...this.entries].sort((a, b) => a.compressedDataOffset - b.compressedDataOffset);
+    const length = this.#layout.reduce((sum, bytes) => sum + bytes.byteLength, 0) +
+      entries.reduce((sum, entry) => sum + entry.compressedSize, 0);
+    const result = new Uint8Array(length);
+    let offset = 0;
+    for (let index = 0; index < this.#layout.length; index++) {
+      const header = this.#layout[index]!;
+      result.set(header, offset);
+      offset += header.byteLength;
+      const entry = entries[index];
+      if (entry) {
+        const payload = this.compressedBytes(entry);
+        result.set(payload, offset);
+        offset += payload.byteLength;
+      }
+    }
+    return result;
   }
 
   /** Returns the exact compressed payload stored for an entry without inflating it. */
