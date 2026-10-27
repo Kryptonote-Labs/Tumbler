@@ -16,6 +16,13 @@ import { wordParagraphRenderer } from './package-paragraphs.ts';
 import { contentCopyScopes } from './package-copies.ts';
 import { renderWordBlocks } from './package-blocks.ts';
 import { wordParagraphTextSegments } from './text.ts';
+import { isWordColour } from './theme-colours.ts';
+
+function usesThemeColour(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || value instanceof Uint8Array) return false;
+  if (isWordColour(value) && typeof value !== 'string') return true;
+  return Object.values(value).some(usesThemeColour);
+}
 
 export function wordContentParagraphs(
   blocks: readonly WordContentBlock[],
@@ -175,6 +182,7 @@ export function prepareWordContent(
   const relationships = generated.document.package.relationships(
     generated.document.part.name,
   ).items;
+  const needsTheme = !document.styles.themeColors && usesThemeColour(blocks);
   // Stories must not add shared resources. The body may append media/numbering,
   // provided story numbering already resolves. New styles/themes and drawing
   // transforms require the sequential path so later edits see their effects.
@@ -182,7 +190,7 @@ export function prepareWordContent(
     (batchRole === 'story' && generated.document.numbering.partName) ||
     missingAuthoredStyles(document, paragraphs.flatMap(p => p.styleId ? [p.styleId] : [])).length ||
     relationships.some(rel => rel.targetMode === 'Internal' &&
-      ((batchRole === 'story' && /\/(image|numbering|customXml)$/.test(rel.type)) || (/\/theme$/.test(rel.type) && !document.styles.themeColors))) ||
+      ((batchRole === 'story' && /\/(image|numbering|customXml)$/.test(rel.type)) || (/\/theme$/.test(rel.type) && needsTheme))) ||
     paragraphs.some(p => p.runs.some(run => {
       const drawing = document.drawings.get(run.source!);
       const geometry = run.drawing ?? run.image;
@@ -260,7 +268,7 @@ export function prepareWordContent(
       continue;
     }
     if (rel.targetMode !== 'Internal' || !/\/(image|numbering|theme|customXml)$/.test(rel.type)) continue;
-    if (/\/theme$/.test(rel.type) && document.styles.themeColors) continue;
+    if (/\/theme$/.test(rel.type) && !needsTheme) continue;
     const part = generated.document.package.getPart(rel.targetPartName)!;
     const name = PartName.parse(`/word/${prefix}${part.name.value.split('/').at(-1)}`);
     if (/\/numbering$/.test(rel.type)) {
