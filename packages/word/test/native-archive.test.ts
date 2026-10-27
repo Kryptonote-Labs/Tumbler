@@ -1,3 +1,7 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 import { expect, test } from 'bun:test';
 import { openZipArchive, writeZipArchiveChanges } from '@tumblerjs/opc';
 import {
@@ -177,11 +181,16 @@ test('browser and native hosts exchange native archives without native browser d
   expect(build.success).toBe(true);
   const script = await build.outputs[0]!.text();
   expect(script).not.toContain('node:zlib');
-  const browser = await import(`data:text/javascript;base64,${Buffer.from(script).toString('base64')}`) as typeof import('../src/native-archive.ts');
-  const original = createWordArtifact({ paragraphs: [{ runs: [{ text: 'Cross-host Ελληνικά 中文 😀' }] }] });
-  const restored = browser.openWordNativeArchive(createWordNativeArchive(original));
-  expect(restored.bytes()).toEqual(original.bytes());
-  const returned = openWordNativeArchive(browser.createWordNativeArchive(restored));
-  expect(returned.bytes()).toEqual(original.bytes());
-  expect(importWordContent(returned)).toEqual(importWordContent(original));
+  const directory = await mkdtemp(join(tmpdir(), 'tumbler-native-browser-'));
+  try {
+    const path = join(directory, 'native-browser.mjs');
+    await Bun.write(path, script);
+    const browser = await import(pathToFileURL(path).href) as typeof import('../src/native-archive.ts');
+    const original = createWordArtifact({ paragraphs: [{ runs: [{ text: 'Cross-host Ελληνικά 中文 😀' }] }] });
+    const restored = browser.openWordNativeArchive(createWordNativeArchive(original));
+    expect(restored.bytes()).toEqual(original.bytes());
+    const returned = openWordNativeArchive(browser.createWordNativeArchive(restored));
+    expect(returned.bytes()).toEqual(original.bytes());
+    expect(importWordContent(returned)).toEqual(importWordContent(original));
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
