@@ -25,6 +25,11 @@ reused for the lifetime of the package. Call `pkg.clearReadCache()` to release
 both caches early. Saving edits creates a new package rather than mutating these
 cached source parts.
 
+Bun and Node select native, bounded raw-deflate codecs through package import
+conditions. Browser bundles keep the JavaScript codec; native hosts avoid its
+eager compression-table initialization. Both retain the archive size and CRC
+checks.
+
 Tumbler is developed at
 [Kryptonote-Labs/Tumbler](https://github.com/Kryptonote-Labs/Tumbler).
 

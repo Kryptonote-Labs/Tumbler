@@ -1,4 +1,4 @@
-import { inflateSync } from "fflate";
+import { inflateRaw } from "#zip-codec";
 import { crc32 } from "./crc32.ts";
 
 const END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
@@ -129,9 +129,7 @@ export class ZipArchive {
       output = compressed.slice();
     } else {
       try {
-        output = inflateSync(compressed, {
-          out: new Uint8Array(entry.uncompressedSize),
-        });
+        output = inflateRaw(compressed, entry.uncompressedSize);
       } catch (cause) {
         throw new ZipArchiveError(
           "decompression_failed",
