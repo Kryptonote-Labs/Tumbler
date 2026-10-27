@@ -1,6 +1,6 @@
 import { deflateRaw, inflateRaw } from '@tumblerjs/opc/compression';
 import { crc32 } from '@tumblerjs/opc';
-import { z } from 'zod';
+import * as z from 'zod';
 import { WordArtifact } from './artifact.ts';
 import { WordDocument } from './document.ts';
 import { NativeWordSource, nativeWordSource } from './native-source.ts';
@@ -44,7 +44,7 @@ export function createWordNativeArchive(artifact: WordArtifact): WordNativeArchi
   return { version: 1, model, resources: entries.map(entry => entry.stored) };
 }
 
-/** Reopen compiled Word semantics without parsing XML, inflating OPC parts or reading a DOCX. */
+/** Reopen compiled Word semantics without parsing XML or reading a DOCX. */
 export function openWordNativeArchive(archive: WordNativeArchive): WordArtifact {
   if (archive.version !== 1) throw new TypeError('Unsupported native Word version.');
   if (archive.model.byteLength < 8) throw new TypeError('Truncated native Word model.');

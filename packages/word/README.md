@@ -1171,7 +1171,7 @@ for explicit unlinking.
 `createWordNativeArchive(artifact)` converts an imported Word package into compiled document
 semantics and immutable binary resources. Hosts can store `model` and each resource as separate
 SQLite blobs, outside the collaboration state and operation log. `openWordNativeArchive(archive)`
-restores the engine without reading a DOCX, parsing XML or inflating package members. The compiled
+restores the engine without reading a DOCX or parsing XML. The compiled
 body and header/footer models retain their resolved formatting and source identities.
 
 ```ts
