@@ -203,3 +203,8 @@ levels taking their document-default value as described in
 [MS-OI29500 §2.1.230](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/f7130225-2368-48f3-acae-a9d278d0fb25).
 Direct run formatting remains absolute. Table-style run formatting and other
 unsupported toggle properties are outside this implementation.
+
+Retained headers, footers and notes resolve against the same added style
+definitions as native paragraph positioning and DOCX export. Their layout caches
+are scoped to both style and numbering catalogs, so a style addition or removal
+cannot reuse a story compiled against earlier definitions.

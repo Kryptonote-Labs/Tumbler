@@ -280,6 +280,7 @@ export class NativeWordDocument implements WordLayoutSource {
       ...(maxCharacters === undefined ? {} : { maxCharacters }),
       headerFooterOverrides,
       ...(this.effectiveNumbering ? { numbering: this.effectiveNumbering } : {}),
+      styles: this.positioningStyles,
     }) : { headerFooters: [], notes: [] };
     const headerFooters = [...original.headerFooters];
     const bindings: { section: number; kind: 'header' | 'footer'; type: 'default' | 'first' | 'even'; relationshipId: string }[] = [];
