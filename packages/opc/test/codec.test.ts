@@ -23,5 +23,30 @@ test("native ZIP inflation bounds output before allocating a larger entry", () =
 
 test("native ZIP inflation rejects a truncated stream", () => {
   const compressed = browser.deflateRaw(fixtures[1]!);
-  expect(() => native.inflateRaw(compressed.subarray(0, compressed.length - 2), fixtures[1]!.length)).toThrow();
+  expect(() =>
+    native.inflateRaw(compressed.subarray(0, compressed.length - 2), fixtures[1]!.length),
+  ).toThrow();
+});
+
+test("the browser OPC entrypoint bundles without native runtime dependencies", async () => {
+  const build = await Bun.build({
+    entrypoints: [new URL("../src/index.ts", import.meta.url).pathname],
+    target: "browser",
+  });
+  expect(build.success).toBe(true);
+  const output = await build.outputs[0]!.text();
+  expect(output).not.toContain("node:zlib");
+  expect(output).not.toContain("inflateRawSync");
+});
+
+test("native codec byte slices remain independent like browser Uint8Arrays", () => {
+  const encoded = native.deflateRaw(new Uint8Array([1, 2, 3]));
+  const decoded = native.inflateRaw(encoded, 3);
+  for (const bytes of [encoded, decoded]) {
+    const original = bytes[0];
+    const copy = bytes.slice();
+    copy[0] = copy[0]! ^ 0xff;
+    expect(bytes[0]).toBe(original);
+    expect(bytes.buffer.byteLength).toBe(bytes.byteLength);
+  }
 });
