@@ -6,8 +6,11 @@ editing in migrated cells. They also exercise undo/redo and peer updates.
 
 At main `768a9e2`, the unchanged `explicit-resets.test.ts` and
 `explicit-reset-operations.test.ts` reproduce 15 failures and one passing no-op
-case. Both files pass with the fix. The final repository suite has 2,031 passing
-tests and zero failures; `bun run check` passes on Bun 1.4.4.
+case. Both files pass with the fix. The final repository suite has 2,035 passing
+tests and zero failures; `bun run check` passes on Bun 1.4.4. The eight focused reset
+suites pass 56 tests and 524 assertions after review fixes. The partial-edit suite
+reproduces four failures on the first reviewed head `e3a2c72` and passes after
+direct declarations are separated from inherited positioning.
 
 ## Schema checks
 
