@@ -61,15 +61,24 @@ const inlineAttributes = new Set([
   'fontSize',
 ]);
 
+const visualAttributes = new Set([
+  'bold', 'italic', 'underline', 'strike', 'fontFamily', 'wordUnderline', 'highlight',
+  'shading', 'verticalAlign', 'characterSpacingPoints', 'link', 'color', 'font', 'fontSize',
+]);
+
 /** Prove that a delta on an already validated region preserves its structural invariants.
  * Read deletions from an untouched replica of the pre-edit text. False requires full validation.
  * Hosts must still check source references, custom attributes, metadata and update completeness.
+ * With allowFormatting, validate host-specific values in retain patches as well as insertions.
  */
-export function isWordTextOnlyEdit(delta: Y.YTextEvent['delta'], previous: Y.Text): boolean {
+export function isWordTextOnlyEdit(delta: Y.YTextEvent['delta'], previous: Y.Text, allowFormatting = false): boolean {
   let offset = 0;
   for (const part of delta) {
     if (part.retain) {
-      if (part.attributes) return false;
+      if (part.attributes) {
+        if (!allowFormatting || Object.keys(part.attributes).some(key => !visualAttributes.has(key))) return false;
+        validateAttributes(Object.fromEntries(Object.entries(part.attributes).filter(([, value]) => value !== null)));
+      }
       offset += part.retain;
     }
     if (part.delete) {

@@ -280,6 +280,10 @@ export class WordSharedText {
         } finally { after.destroy(); }
       }
       const after = applyWordScopedOperation(staged, selection, operation, context);
+      if (operation.name === 'format' && after && 'story' in after && !this.structured(staged)) {
+        result = after.range;
+        return after;
+      }
       const view = new WordSharedText(staged, this.story);
       try {
         if (after) result = view.range(after);

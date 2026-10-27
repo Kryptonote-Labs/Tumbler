@@ -78,3 +78,17 @@ test('ordinary edit proof rejects invalid inserted text and inline attributes', 
   ).toThrow('formatting');
   doc.destroy();
 });
+
+test('optional inline formatting proofs validate values and exclude structural or source changes', () => {
+  const doc = new Y.Doc();
+  const text = doc.getText('body');
+  text.insert(0, 'Text\n');
+  try {
+    const format = [{ retain: 4, attributes: { bold: true, color: '#123456', italic: null } }];
+    expect(isWordTextOnlyEdit(format, text)).toBe(false);
+    expect(isWordTextOnlyEdit(format, text, true)).toBe(true);
+    for (const attributes of [{ wordSource: 12 }, { wordSource: null }, { paragraph: null }, { table: null }, { wordSection: null }])
+      expect(isWordTextOnlyEdit([{ retain: 1, attributes }], text, true)).toBe(false);
+    expect(() => isWordTextOnlyEdit([{ retain: 1, attributes: { bold: 'invalid' } }], text, true)).toThrow();
+  } finally { doc.destroy(); }
+});

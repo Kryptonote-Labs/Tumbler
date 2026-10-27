@@ -107,7 +107,7 @@ export function observeInlineEdit(candidate: Y.Doc, previous: Y.Doc) {
       for (const [name, root] of roots) {
         if (!(root instanceof Y.Text)) continue;
         const delta = events.get(root);
-        if (delta && (delta.length > 3 || !isWordTextOnlyEdit(delta, previous.getText(name)))) return false;
+        if (delta && (delta.length > 3 || !isWordTextOnlyEdit(delta, previous.getText(name), true))) return false;
       }
       return true;
     },
