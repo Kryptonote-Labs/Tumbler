@@ -17,7 +17,7 @@ function fixture(profile: 'strict' | 'transitional', limit: string | undefined, 
   const namespace = profile === 'strict' ? 'http://purl.oclc.org/ooxml/wordprocessingml/main' : 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   const source = openWordArtifact(buildWordDocumentFixture({ conformance: profile,
     documentXml: `<w:document xmlns:w="${namespace}"><w:body><w:p/></w:body></w:document>` }));
-  const authored = reconcileWordContent(source, [{ kind: 'paragraph', runs: [{ text: 'Theme' }] }]);
+  const authored = reconcileWordContent(source, [{ kind: 'paragraph', paragraph: { shading: { theme: 'accent1', fallback: '#156082' } }, runs: [{ text: 'Theme' }] }]);
   const pkg = authored.document.package;
   const theme = pkg.parts.find(part => part.contentType === 'application/vnd.openxmlformats-officedocument.theme+xml');
   assert.ok(theme);
