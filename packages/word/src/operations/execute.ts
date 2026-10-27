@@ -34,6 +34,13 @@ export function createWordOperations(commands = createWordCommands()) {
     const operation = wordOperation.parse(unvalidated);
     // This also validates UTF-16/grapheme boundaries before a structural helper runs.
     commands.anchorWordRange(text, range);
+    // Character formatting already has a pure delta builder. Validate that delta once;
+    // rehearsing it with positionedWordEdit first would clone and scan the same text twice.
+    if (operation.name === 'format') {
+      const delta = commands.formatWordDelta(text, range, defined(operation.input));
+      commands.validateWordDelta(text, delta);
+      return { delta, selection: range };
+    }
     const edit = positionedWordEdit(text, (staged) => {
       const format = (patch: Parameters<typeof commands.formatWordDelta>[2], target = range) => {
         staged.applyDelta(commands.formatWordDelta(staged, target, patch));
@@ -124,8 +131,6 @@ export function createWordOperations(commands = createWordCommands()) {
           return { start, end: start + 1 };
         }
 
-        case "format":
-          return format(defined(operation.input));
         case "paragraph":
           return format(defined(operation.input));
         case "clear-formatting":
