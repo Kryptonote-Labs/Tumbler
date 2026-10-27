@@ -1,4 +1,4 @@
-import { inflateSync } from "fflate";
+import { inflateRaw } from "#zip-codec";
 import { crc32 } from "./crc32.ts";
 import { writeZipArchiveChanges } from "./writer.ts";
 
@@ -196,9 +196,7 @@ export class ZipArchive {
       output = compressed.slice();
     } else {
       try {
-        output = inflateSync(compressed, {
-          out: new Uint8Array(entry.uncompressedSize),
-        });
+        output = inflateRaw(compressed, entry.uncompressedSize);
       } catch (cause) {
         throw new ZipArchiveError(
           "decompression_failed",

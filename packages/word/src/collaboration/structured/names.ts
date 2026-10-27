@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from 'zod';
 import { id, storyId, type CellAddress } from "./schema.ts";
 
 const cellPrefix = "word-cell-v2:";

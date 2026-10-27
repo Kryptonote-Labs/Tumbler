@@ -1,4 +1,4 @@
-import { deflateSync } from "fflate";
+import { deflateRaw } from "#zip-codec";
 import { crc32 } from "./crc32.ts";
 import type { ZipArchive, ZipEntry } from "./archive.ts";
 
@@ -138,7 +138,7 @@ export function writeZipArchiveChanges(
         ? archive.compressedBytes(entry)
         : entry.compressionMethod === 0
           ? replacement
-          : deflateSync(replacement, { level: 6 }),
+          : deflateRaw(replacement),
       uncompressedSize: replacement?.byteLength ?? entry.uncompressedSize,
       checksum: replacement === undefined ? entry.crc32 : crc32(replacement),
     });
@@ -151,7 +151,7 @@ export function writeZipArchiveChanges(
       compressionMethod,
       compressed: compressionMethod === 0
         ? addition.data
-        : deflateSync(addition.data, { level: 6 }),
+        : deflateRaw(addition.data),
       uncompressedSize: addition.data.byteLength,
       checksum: crc32(addition.data),
     });

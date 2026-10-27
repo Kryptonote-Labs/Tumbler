@@ -22,5 +22,12 @@
   "dependencies": {
     "fflate": "^0.8.3",
     "saxes": "^6.0.0"
+  },
+  "imports": {
+    "#zip-codec": {
+      "bun": "./src/zip/codec-node.ts",
+      "node": "./src/zip/codec-node.ts",
+      "default": "./src/zip/codec.ts"
+    }
   }
 }

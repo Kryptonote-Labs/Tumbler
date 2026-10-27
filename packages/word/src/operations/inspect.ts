@@ -1,6 +1,6 @@
 import { wordChartTitleText } from "../chart-title.ts";
 import type * as Y from "yjs";
-import { z } from "zod";
+import * as z from 'zod';
 import type { WordArtifact } from "../artifact.ts";
 import type { TextAttributes } from "../collaboration/formatting.ts";
 import { WORD_BUILTIN_STYLES } from "../authored-styles.ts";

@@ -51,6 +51,8 @@ export interface WordPagePaintOptions<Image, Path = unknown> {
   readonly path?: (d: string) => Path;
   /** Lays out shape text; pass the page's measurer so both agree. Defaults to measuring with `context`. */
   readonly measurer?: WordTextMeasurer;
+  /** Make document and chart fonts available before canvas measures or paints them. */
+  readonly prepareFont?: (family: string) => void;
 }
 
 type PaintOptions<Image, Path> = WordPagePaintOptions<Image, Path> & { readonly clip?: WordContentBounds };
@@ -217,13 +219,13 @@ function paintBorders<Image, Path>(context: WordCanvasContext<Image, Path>, bord
 }
 
 function paintLine<Image, Path>(context: WordCanvasContext<Image, Path>, line: WordLayoutLine, options: PaintOptions<Image, Path>): void {
-  if (line.lineNumber !== undefined) paintText(context, line.lineNumber, line.lineNumber.text);
-  if (line.marker !== undefined) paintText(context, line.marker, line.marker.text.trimEnd());
+  if (line.lineNumber !== undefined) paintText(context, line.lineNumber, line.lineNumber.text, options);
+  if (line.marker !== undefined) paintText(context, line.marker, line.marker.text.trimEnd(), options);
   for (const fragment of line.fragments) {
     if (fragment.kind === "drawing") {
       if (fragment.drawing?.placement !== "anchor") paintDrawing(context, fragment, options);
     }
-    else if (fragment.kind !== "tab") paintText(context, fragment, fragment.text);
+    else if (fragment.kind !== "tab") paintText(context, fragment, fragment.text, options);
   }
 }
 
@@ -251,6 +253,7 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
     const pixels = 4 / 3;
     const scene = layoutChartScene(drawing.model, fragment.width * pixels, fragment.height * pixels, {
       measureText: (text, font) => {
+        options.prepareFont?.(font);
         context.font = font;
         return context.measureText(text).width;
       },
@@ -258,6 +261,7 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
     context.save();
     context.translate(fragment.x, fragment.y);
     context.scale(1 / pixels, 1 / pixels);
+    for (const mark of scene.marks) if (mark.kind === 'text') options.prepareFont?.(mark.font.family);
     paintChartScene(context, scene, options.path);
     context.restore();
     return;
@@ -299,7 +303,7 @@ function paintShape<Image, Path>(context: WordCanvasContext<Image, Path>, shape:
   context.restore();
 }
 
-function paintText<Image, Path>(context: WordCanvasContext<Image, Path>, item: WordLayoutFragment | WordLayoutMarker, text: string): void {
+function paintText<Image, Path>(context: WordCanvasContext<Image, Path>, item: WordLayoutFragment | WordLayoutMarker, text: string, options: WordPagePaintOptions<Image, Path>): void {
   const { format } = item;
   const highlight = wordHighlightColor(format.highlight);
   const background = highlight === "transparent" ? format.shading ?? "transparent" : highlight;
@@ -309,6 +313,7 @@ function paintText<Image, Path>(context: WordCanvasContext<Image, Path>, item: W
   }
   if (text.trim() === "" && !("wordSpacing" in item)) return;
   // The context is already scaled to points, so the font is sized in points.
+  options.prepareFont?.(format.fontFamily);
   context.font = wordCanvasFont(format, 1);
   context.fontKerning = wordFontKerning(format);
   context.direction = format.rightToLeft ? "rtl" : "ltr";

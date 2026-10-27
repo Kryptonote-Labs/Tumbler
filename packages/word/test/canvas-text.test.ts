@@ -49,3 +49,21 @@ test('normalising font size preserves point-based character spacing per grapheme
   expect(measure.measure('a\u0301b', format).width).toBeCloseTo(12.4);
   expect(measure.measure('a\u0301b', { ...format, fontSizePoints: 24 }).width).toBeCloseTo(24.4);
 });
+
+test('a host can load a font before its first canvas measurement', () => {
+  const events: string[] = [];
+  const context = { font: '', direction: 'inherit' as const, measureText() {
+    events.push('measure');
+    expect(events[0]).toBe('prepare:Arial');
+    return { width: 8 };
+  } };
+  const source = createWordArtifact({ defaultFormat: { fontFamily: 'Arial', fontSizePoints: 12 } });
+  const format = source.document.styles.resolveStyledRun('Normal');
+  const measurer = canvasWordTextMeasurer(context, {
+    prepare(family) { events.push('prepare:' + JSON.parse(family.split(',')[0]!)); },
+    measure() { return { ascent: 9, descent: 3 }; },
+  });
+  expect(measurer.measure('x', format)).toEqual({ width: 0.096, ascent: 9, descent: 3 });
+  measurer.measure('x', format);
+  expect(events).toEqual(['prepare:Arial', 'measure']);
+});
