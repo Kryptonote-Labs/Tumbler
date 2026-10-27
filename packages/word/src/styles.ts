@@ -193,6 +193,7 @@ export class WordStyles {
   // Source and paragraph identities keep revisions and story parts separate, even when IDs repeat.
   readonly #paragraphs = new WeakMap<WordDocumentLike, WeakMap<WordParagraph, ParagraphStyleCache>>();
   readonly #byId: ReadonlyMap<string, WordStyle>;
+  readonly #resolvedStyles = new Map<string | undefined, { paragraph: WordParagraphProperties; run: WordRunProperties }>();
   readonly #defaultParagraphStyleId: string | undefined;
   readonly #defaultCharacterStyleId: string | undefined;
 
@@ -305,19 +306,25 @@ export class WordStyles {
 
   // A basedOn chain uses its nearest declaration; toggles combine only across levels.
   private resolvedStyle(styleId: string | undefined, type: "paragraph" | "character") {
-    const chain = this.styleChain(styleId, type);
-    return {
+    const selectedId = styleId !== undefined && this.#byId.get(styleId)?.type === type ? styleId
+      : type === 'paragraph' ? this.#defaultParagraphStyleId : this.#defaultCharacterStyleId;
+    const cached = this.#resolvedStyles.get(selectedId);
+    if (cached) return cached;
+    const chain = this.styleChain(selectedId, type);
+    const resolved = {
       paragraph: chain.reduce((value, style) => mergeParagraph(value, style.paragraph), this.documentParagraphDefaults),
       run: chain.reduce<WordRunProperties>((value, style) => mergeRun(value, style.run), {}),
     };
+    // Missing references share the default entry, keeping retention bounded by named styles.
+    this.#resolvedStyles.set(selectedId, resolved);
+    return resolved;
   }
 
   private styleChain(styleId: string | undefined, expectedType: "paragraph" | "character"): readonly WordStyle[] {
     const reversed: WordStyle[] = [];
     const seen = new Set<string>();
     // Only the selected style falls back. A missing basedOn target ends its chain.
-    let current = styleId !== undefined && this.#byId.get(styleId)?.type === expectedType ? styleId
-      : expectedType === 'paragraph' ? this.#defaultParagraphStyleId : this.#defaultCharacterStyleId;
+    let current = styleId;
     while (current !== undefined) {
       if (seen.has(current)) throw new WordError("invalid_document", `Style ${JSON.stringify(current)} has a basedOn cycle.`);
       if (reversed.length >= MAX_STYLE_CHAIN) throw new WordError("limit_exceeded", `Style chain exceeds ${MAX_STYLE_CHAIN} entries.`);

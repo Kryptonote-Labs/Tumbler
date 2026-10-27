@@ -1,0 +1,35 @@
+{
+  "runtime": "1.4.4",
+  "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+  "logicalCpus": 4,
+  "depth": 80,
+  "width": 256,
+  "operations": 10000,
+  "warmups": 3,
+  "samples": 9,
+  "timingsMs": [
+    8.726668000000004,
+    8.675448000000003,
+    9.055194,
+    8.540019000000001,
+    8.869025999999991,
+    8.763163999999989,
+    8.63928900000002,
+    8.936195999999995,
+    10.478041999999988
+  ],
+  "medianMs": 8.763163999999989,
+  "heapDeltasBytes": [
+    5860,
+    4820,
+    4820,
+    4820,
+    4820,
+    4820,
+    4820,
+    4820,
+    5568
+  ],
+  "checksum": 26376960,
+  "note": "Heap deltas are retained heap before forced GC, not allocated bytes. No allocation profiler."
+}
