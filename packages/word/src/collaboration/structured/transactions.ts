@@ -1,4 +1,4 @@
-import { inheritWordLayoutSource, validateWordLayout, wordLayoutSource } from '../layout-validation.ts';
+import { inheritWordLayoutSource, validateWordLayout } from '../layout-validation.ts';
 import { readWordDocumentSettings } from '../document-settings.ts';
 import * as Y from "yjs";
 import { validateWordText } from "../validation.ts";
@@ -22,15 +22,10 @@ export {
 } from "./selection.ts";
 export { editDerivedText, applyStructuredChange } from "./edits.ts";
 
-// Only locally prepared objects carry this proof. Received updates always use full validation.
-// Snapshots include deletions; state vectors alone cannot detect a delete-only intervening edit.
-const validatedPreparations = new WeakMap<PreparedWordUpdate, {
-  doc: Y.Doc;
-  snapshot: Y.Snapshot;
-  roots: Map<string, unknown>;
-  source: ReturnType<typeof wordLayoutSource>;
-  update: Uint8Array;
-}>();
+import {
+  checkpoint, takeReplica, discardReplica, provePreparation, consumePreparation,
+  retainCommittedReplica, observeInlineEdit,
+} from './preparation-cache.ts';
 export function validateWordSharedDocument(doc: Y.Doc) {
   readWordDocumentSettings(doc);
   for (const address of tableAddresses(doc)) doc.getText(address.story);
@@ -63,31 +58,35 @@ export function stageWordUpdate(
   doc: Y.Doc,
   edit: (replica: Y.Doc) => WordScopedSelection | undefined,
 ): PreparedWordUpdate {
-  const snapshot = Y.snapshot(doc);
-  const roots = new Map(doc.share);
-  const source = wordLayoutSource(doc);
-  const replica = new Y.Doc();
+  const before = checkpoint(doc);
+  const { replica: retained, validated } = takeReplica(doc);
+  const replica = retained.doc;
   try {
-    Y.applyUpdate(replica, Y.encodeStateAsUpdate(doc));
-    inheritWordLayoutSource(doc, replica);
-    // Restore root constructors after decoding. Yjs initially represents unknown roots generically.
-    for (const [name, value] of doc.share)
-      if (value instanceof Y.Text) replica.getText(name);
-      else if (value instanceof Y.Map) replica.getMap(name);
+    if (!validated) {
+      // Rich-text roots must exist before decoding so Yjs installs formatting state.
+      // Upgrading a generic root afterward loses Y.Text's formatting seek flags.
+      for (const [name, value] of doc.share)
+        if (value instanceof Y.Text) replica.getText(name);
+        else if (value instanceof Y.Map) replica.getMap(name);
+      Y.applyUpdate(replica, Y.encodeStateAsUpdate(doc));
+      inheritWordLayoutSource(doc, replica);
+    }
     const vector = Y.encodeStateVector(replica);
+    const inline = validated ? observeInlineEdit(replica, doc) : undefined;
     let selection: WordScopedSelection | undefined;
-    replica.transact(() => {
-      selection = edit(replica);
-    });
-    validateWordSharedDocument(replica);
+    try {
+      replica.transact(() => { selection = edit(replica); });
+    } finally { inline?.stop(); }
+    if (!inline?.valid()) validateWordSharedDocument(replica);
     const prepared = {
       update: Y.encodeStateAsUpdate(replica, vector),
       ...(selection ? { selection } : {}),
     };
-    validatedPreparations.set(prepared, { doc, snapshot, roots, source, update: prepared.update.slice() });
+    provePreparation(doc, before, prepared.update, retained);
     return prepared;
-  } finally {
-    replica.destroy();
+  } catch (error) {
+    discardReplica(retained);
+    throw error;
   }
 }
 /** Revalidate against the current document before the one atomic local commit. */
@@ -96,30 +95,23 @@ export function commitWordUpdate(
   prepared: PreparedWordUpdate,
   origin: unknown = null,
 ) {
-  const validated = validatedPreparations.get(prepared);
-  validatedPreparations.delete(prepared);
-  if (validated?.doc === doc &&
-      !doc.store.pendingStructs && !doc.store.pendingDs &&
-      validated.source === wordLayoutSource(doc) &&
-      validated.roots.size === doc.share.size &&
-      [...validated.roots].every(([name, value]) => doc.share.get(name) === value) &&
-      validated.update.length === prepared.update.length &&
-      validated.update.every((value, index) => value === prepared.update[index]) &&
-      Y.equalSnapshots(validated.snapshot, Y.snapshot(doc))) {
+  const validated = consumePreparation(doc, prepared.update);
+  if (validated) {
     Y.applyUpdate(doc, prepared.update, origin);
     // New cells were validated in the prepared replica and need concrete root constructors.
     for (const name of doc.share.keys())
       if (name.startsWith("word-cell-v2:")) doc.getText(name);
+    retainCommittedReplica(doc, validated);
     return prepared.selection;
   }
   const candidate = new Y.Doc();
   try {
-    Y.applyUpdate(candidate, Y.encodeStateAsUpdate(doc));
-    inheritWordLayoutSource(doc, candidate);
-    Y.applyUpdate(candidate, prepared.update);
     for (const [name, value] of doc.share)
       if (value instanceof Y.Text) candidate.getText(name);
       else if (value instanceof Y.Map) candidate.getMap(name);
+    Y.applyUpdate(candidate, Y.encodeStateAsUpdate(doc));
+    inheritWordLayoutSource(doc, candidate);
+    Y.applyUpdate(candidate, prepared.update);
     for (const address of tableAddresses(candidate)) {
       candidate.getText(address.story);
       for (const name of candidate.share.keys())
