@@ -18,6 +18,8 @@ export interface WordCanvasTextContext {
 
 /** Font ascent and descent in points. Hosts that can observe CSS line boxes supply leading here. */
 export interface WordLineMetrics {
+  /** Synchronously make a family available before canvas measures its glyphs. */
+  prepare?(family: string): void;
   measure(format: Pick<ComputedWordTextFormat, "fontSizePoints" | "bold" | "italic">, family: string): { readonly ascent: number; readonly descent: number } | undefined;
 }
 
@@ -57,6 +59,7 @@ export function canvasWordTextMeasurer(context: WordCanvasTextContext, lineMetri
       const key = `${kerning}\u0000${font}\u0000${direction}\u0000${format.characterSpacingPoints ?? 0}\u0000${text}`;
       const cached = measured.get(key);
       if (cached !== undefined) return cached;
+      lineMetrics?.prepare?.(wordFontFamily(format.fontFamily));
       const metrics = measureWordCanvasText(context, text, format);
       const line = lineMetrics?.measure(format, wordFontFamily(format.fontFamily));
       const measurement = Object.freeze({
