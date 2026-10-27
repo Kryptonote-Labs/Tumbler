@@ -41,7 +41,7 @@ export const characterFormat = z
       )
       .nullable()
       .optional(),
-    link: z.string().refine(isWordHyperlink).nullable().optional(),
+    link: z.string().refine(isWordHyperlink).nullable().optional().describe('Omit to preserve the link; null or an empty string unlinks.'),
   })
   .strict();
 export const paragraphFormat = z
@@ -49,7 +49,7 @@ export const paragraphFormat = z
     positioning: z
       .custom<import('../positioning.ts').WordParagraphPositioning>(isWordParagraphPositioning)
       .describe(
-        'Optional indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips; tabs:[{positionTwips,alignment:start|center|end|decimal|bar|clear,leader:none|dot|hyphen|underscore|heavy|middleDot}]. 20 twips per point.',
+        'Optional indentStartTwips, indentEndTwips, firstLineTwips, hangingTwips; tabs:[{positionTwips,alignment:start|center|end|decimal|bar|clear,leader:none|dot|hyphen|underscore|heavy|middleDot}]. 20 twips per point. Omit or pass {} to preserve positioning; null removes direct positioning and inherits styles. reset:true removes direct positioning before applying supplied members.',
       )
       .nullable()
       .optional(),

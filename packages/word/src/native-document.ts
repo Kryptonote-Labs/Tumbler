@@ -20,6 +20,8 @@ import { nativeShapeDrawing, validateShapeRun } from './shapes.ts';
 import { isWordCellFormat, isWordRowFormat } from './table-format.ts';
 import { isWordParagraphPositioning, positionalTabXml } from './positioning.ts';
 import { wordGeometryAt } from './geometry.ts';
+import { WordStyles } from './styles.ts';
+import { nativeParagraphPositioning } from './native-positioning.ts';
 import { createWordStory, wordStoryArtifact, storyMainArtifact, wordSections, type WordStoryTarget } from './stories.ts';
 import { NativeWordSource, retainOpaqueBlocks } from './native-source.ts';
 import type { WordArtifact } from './artifact.ts';
@@ -88,6 +90,8 @@ const storyFormatting = Symbol('owning document formatting');
 
 export class NativeWordDocument implements WordLayoutSource {
   private readonly namedStyles: ReturnType<typeof wordAuthoringStyles>;
+  private positioningStyles: WordStyles;
+  private positioningRevision = 0;
   private nextId = -1;
   private readonly compiled: NativeWordSource | undefined;
   private readonly defaults: NativeWordSource['defaults'] | undefined;
@@ -156,6 +160,7 @@ export class NativeWordDocument implements WordLayoutSource {
     const paragraphDefaults = { lineSpacing: { rule: 'auto' as const, value: Math.round((options.lineSpacing ?? 1) * 240) }, ...options.defaultParagraphFormat };
     if (!isWordParagraphFormat(paragraphDefaults)) throw new TypeError('Invalid paragraph formatting.');
     this.namedStyles = wordAuthoringStyles(options.source?.document.styles ?? options[storyFormatting]?.styles, options.defaultFormat, paragraphDefaults, options.source ? undefined : options.themeColours);
+    this.positioningStyles = options.source?.document.styles ?? options[storyFormatting]?.styles ?? this.namedStyles;
     this.compiled = options.source ? new NativeWordSource(options.source) : undefined;
     this.defaults = this.compiled?.defaults ?? options[storyFormatting]?.defaults;
     const document = options.source?.document;
@@ -232,7 +237,7 @@ export class NativeWordDocument implements WordLayoutSource {
     entry.blocks = blocks;
     const numbering = this.numberingFor(this.authored);
     // Update the edited story once, then refresh other models only if shared styles changed.
-    entry.model.updateContent(blocks, numbering);
+    entry.model.updateContent(blocks, numbering, this.positioningStyles);
     this.shareNumbering(numbering);
     this.exported = undefined;
     return entry.model;
@@ -329,7 +334,7 @@ export class NativeWordDocument implements WordLayoutSource {
   update(input: readonly WordContentBlock[]) {
     validateContentText(input, this.compiled);
     const numbering = this.numberingFor(input);
-    this.updateContent(input, numbering);
+    this.updateContent(input, numbering, this.positioningStyles);
     this.shareNumbering(numbering);
   }
 
@@ -350,17 +355,30 @@ export class NativeWordDocument implements WordLayoutSource {
     const key = JSON.stringify(missing.map(style => style.styleId));
     if (this.numberingStylesKey === key) return this.effectiveNumbering;
     this.numberingStylesKey = key;
+    this.positioningStyles = new WordStyles({
+      styles: [...document.styles.styles, ...missing],
+      documentRunDefaults: document.styles.documentRunDefaults,
+      documentParagraphDefaults: document.styles.documentParagraphDefaults,
+      ...(document.styles.themeColors ? { themeColors: document.styles.themeColors } : {}),
+      ...(document.styles.themeFonts ? { themeFonts: document.styles.themeFonts } : {}),
+    });
     return document.numbering.withParagraphStyles(missing);
   }
 
   private shareNumbering(numbering: WordNumbering | undefined): void {
-    if (this.effectiveNumbering !== numbering) this.updateContent(this.authored, numbering);
+    if (this.effectiveNumbering !== numbering || this.positioningStyles !== this.appliedPositioningStyles) this.updateContent(this.authored, numbering, this.positioningStyles);
     for (const entry of this.editedStories.values()) {
-      if (entry.model.effectiveNumbering !== numbering) entry.model.updateContent(entry.blocks, numbering);
+      if (entry.model.effectiveNumbering !== numbering || entry.model.appliedPositioningStyles !== this.positioningStyles) entry.model.updateContent(entry.blocks, numbering, this.positioningStyles);
     }
   }
 
-  private updateContent(input: readonly WordContentBlock[], numberingContext?: WordNumbering) {
+  private appliedPositioningStyles: WordStyles | undefined;
+  private updateContent(input: readonly WordContentBlock[], numberingContext?: WordNumbering, positioningStyles = this.positioningStyles) {
+    if (this.appliedPositioningStyles !== positioningStyles) {
+      this.appliedPositioningStyles = positioningStyles;
+      this.positioningRevision++;
+      this.independentBlocks = new WeakMap();
+    }
     if (this.effectiveNumbering !== numberingContext) {
       this.effectiveNumbering = numberingContext;
       this.independentBlocks = new WeakMap();
@@ -439,7 +457,7 @@ export class NativeWordDocument implements WordLayoutSource {
         const original = source.kind === 'paragraph' ? compiled?.paragraphs.get(source.source!) : undefined;
         const hasSection = source.kind === 'paragraph' && sectionOwners.get(`${source.sourceCopy ?? ''}:${source.source}`) === source;
         const sectionDefaults = source.kind === 'paragraph' && source.section && source.section.source === undefined ? JSON.stringify(this.finalSection) : '';
-        const fingerprint = `${hasSection}:${sectionDefaults}:${signature(source, width)}`;
+        const fingerprint = `${this.positioningRevision}:${hasSection}:${sectionDefaults}:${signature(source, width)}`;
         const descendantsStart = visited.length;
         let result: RecordBlock;
         if (this.options.immutableContent && previous?.signature === fingerprint && previous.subtree?.input === source && this.independent(source)) {
@@ -644,7 +662,10 @@ export class NativeWordDocument implements WordLayoutSource {
                 ...(defaults ? {} : resolveWordPaintProperties(this.options.defaultParagraphFormat ?? {}, this.themeColours)),
                 ...defaults?.paragraph,
                 ...paragraphFormat,
-                ...authored.positioning,
+                ...nativeParagraphPositioning(
+                  positioningStyles, authored.styleId ?? original?.format.styleId ?? defaults?.paragraph.styleId,
+                  authored.positioning, original?.positioning, resetParagraph,
+                ),
                 ...resolveWordPaintProperties(authored.paragraph ?? {}, this.themeColours),
                 alignment: authored.alignment === 'justify' && original?.format.alignment === 'distribute' ? 'distribute' : authored.alignment ?? (resetParagraph ? named?.paragraph.alignment : original?.format.alignment) ?? defaults?.paragraph.alignment ?? 'start',
                 lineSpacing: authored.paragraph?.lineSpacing ?? paragraphFormat?.lineSpacing ?? defaults?.paragraph.lineSpacing ?? this.options.defaultParagraphFormat?.lineSpacing ?? {

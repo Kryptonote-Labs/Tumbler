@@ -1,0 +1,216 @@
+{
+  "beforeRef": "b227a79248013e28892ff21bd352e4ea94bd23cb",
+  "afterCodeRef": "7b430bcb740e4620e691b1013f407313e33be00b",
+  "mainRef": "768a9e2d6298b08d9f47c14a8a507794c33ef73f",
+  "script": "tools/word-reset-validation/native-reset.bench.ts",
+  "protocol": "One sequential before/after pair under the shared advisory lock. Same script, fixtures, runtime and host. Five warmups and nine measured samples per revision; each sample constructs one native model, applies 100 updates across 20 paragraphs and exports once.",
+  "limits": [
+    "Before is the previous published PR head, not main: main does not support explicit native resets. Both benchmark revisions must produce the expected inherited positioning.",
+    "The advisory lock serializes participating heavy jobs but does not isolate other host activity. No speedup claim.",
+    "RSS and heap deltas are GC-sensitive retained memory, not total allocation."
+  ],
+  "before": {
+    "runtime": "1.4.4",
+    "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+    "logicalCpus": 4,
+    "paragraphs": 20,
+    "updates": 100,
+    "paragraphUpdates": 2000,
+    "exportsPerSample": 1,
+    "warmups": 5,
+    "samples": [
+      {
+        "ms": 83.23666300000002,
+        "cpuMs": 129.834,
+        "rssDeltaBytes": 4587520,
+        "heapDeltaBytes": 517804,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 77.96684600000003,
+        "cpuMs": 110.226,
+        "rssDeltaBytes": 2752512,
+        "heapDeltaBytes": 461006,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 76.49309599999992,
+        "cpuMs": 88.235,
+        "rssDeltaBytes": 786432,
+        "heapDeltaBytes": 561302,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 74.35444000000007,
+        "cpuMs": 106.338,
+        "rssDeltaBytes": 1441792,
+        "heapDeltaBytes": 356436,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 80.9018789999999,
+        "cpuMs": 136.922,
+        "rssDeltaBytes": 5242880,
+        "heapDeltaBytes": 349575,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 78.91223799999989,
+        "cpuMs": 106.297,
+        "rssDeltaBytes": 1179648,
+        "heapDeltaBytes": 363017,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 74.1609249999999,
+        "cpuMs": 93.618,
+        "rssDeltaBytes": 1835008,
+        "heapDeltaBytes": 387317,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 84.62336200000004,
+        "cpuMs": 156.781,
+        "rssDeltaBytes": 4325376,
+        "heapDeltaBytes": 416187,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 70.11791500000004,
+        "cpuMs": 76.258,
+        "rssDeltaBytes": 655360,
+        "heapDeltaBytes": 419162,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      }
+    ]
+  },
+  "after": {
+    "runtime": "1.4.4",
+    "cpu": "Intel(R) Celeron(R) N5095 @ 2.00GHz",
+    "logicalCpus": 4,
+    "paragraphs": 20,
+    "updates": 100,
+    "paragraphUpdates": 2000,
+    "exportsPerSample": 1,
+    "warmups": 5,
+    "samples": [
+      {
+        "ms": 94.65264000000002,
+        "cpuMs": 140.311,
+        "rssDeltaBytes": 2138112,
+        "heapDeltaBytes": 403122,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 82.36592300000007,
+        "cpuMs": 106.069,
+        "rssDeltaBytes": 1572864,
+        "heapDeltaBytes": 469926,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 84.5049939999999,
+        "cpuMs": 116.488,
+        "rssDeltaBytes": 1372160,
+        "heapDeltaBytes": 481789,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 82.15341400000011,
+        "cpuMs": 113.343,
+        "rssDeltaBytes": 1572864,
+        "heapDeltaBytes": 572000,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 86.97117400000002,
+        "cpuMs": 148.406,
+        "rssDeltaBytes": 6422528,
+        "heapDeltaBytes": 509983,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 79.79787399999987,
+        "cpuMs": 106.894,
+        "rssDeltaBytes": 1572864,
+        "heapDeltaBytes": 583710,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 80.93497200000002,
+        "cpuMs": 122.2,
+        "rssDeltaBytes": 3014656,
+        "heapDeltaBytes": 398923,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 84.69202499999983,
+        "cpuMs": 130.598,
+        "rssDeltaBytes": 3538944,
+        "heapDeltaBytes": 467530,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      },
+      {
+        "ms": 77.28265799999986,
+        "cpuMs": 90.605,
+        "rssDeltaBytes": -319488,
+        "heapDeltaBytes": 471907,
+        "checksum": 19200,
+        "stops": 20,
+        "outputXmlBytes": 2477,
+        "outputSha256": "26de44faeb3bfca74a4352b360f35056d100b98ef57481a7852dcdf6a0aca30e"
+      }
+    ]
+  }
+}

@@ -137,6 +137,7 @@ export class PackageXml {
     element: LosslessXmlElement | undefined,
     name: string,
     replacements: ReadonlyMap<string, string>,
+    sourceScoped?: ReadonlySet<string>,
   ) {
     if (!replacements.size) return element ? this.raw(element) : '';
     const order = propertyOrder[name] ?? [];
@@ -158,7 +159,8 @@ export class PackageXml {
       const next = rank < 0 ? -1 : parts.findIndex((part) => order.indexOf(part.name) > rank);
       parts.splice(next < 0 ? parts.length : next, 0, {
         name: key,
-        markup: this.word(value),
+        // Source-scoped fragments already retain their original namespace bindings.
+        markup: sourceScoped?.has(key) ? value : this.word(value),
       });
     }
     const content = parts.map((part) => part.markup).join('');

@@ -1,3 +1,5 @@
+import { mergeWordTabStops } from './tab-stops.ts';
+import type { WordParagraphPositioning } from './positioning.ts';
 import { wordThemeSlot } from './theme-colour-xml.ts';
 import { resolveWordColour, resolveWordPaintProperties, DEFAULT_WORD_THEME, type WordThemeColour } from './theme-colours.ts';
 import {
@@ -217,6 +219,19 @@ export class WordStyles {
     return this.#byId.get(id);
   }
 
+  /** Direct declarations for editing; paragraphFormat returns their inherited result. */
+  paragraphPositioning(document: WordDocumentLike, paragraph: WordParagraph): WordParagraphPositioning | undefined {
+    const direct = this.paragraphProperties(document, paragraph).direct;
+    const positioning = {
+      ...(direct.tabs === undefined ? {} : { tabs: direct.tabs }),
+      ...(direct.indentStartTwips === undefined ? {} : { indentStartTwips: direct.indentStartTwips }),
+      ...(direct.indentEndTwips === undefined ? {} : { indentEndTwips: direct.indentEndTwips }),
+      ...(direct.firstLineTwips === undefined ? {} : { firstLineTwips: direct.firstLineTwips }),
+      ...(direct.hangingTwips === undefined ? {} : { hangingTwips: direct.hangingTwips }),
+    };
+    return Object.keys(positioning).length ? Object.freeze(positioning) : undefined;
+  }
+
   /** Resolve a named paragraph style without reading document XML. */
   resolveParagraphStyle(styleId: string) {
     const chain = this.styleChain(styleId, 'paragraph');
@@ -298,10 +313,11 @@ export class WordStyles {
   }
 
   private styleChain(styleId: string | undefined, expectedType: "paragraph" | "character"): readonly WordStyle[] {
-    if (styleId === undefined) return [];
     const reversed: WordStyle[] = [];
     const seen = new Set<string>();
-    let current: string | undefined = styleId;
+    // Only the selected style falls back. A missing basedOn target ends its chain.
+    let current = styleId !== undefined && this.#byId.get(styleId)?.type === expectedType ? styleId
+      : expectedType === 'paragraph' ? this.#defaultParagraphStyleId : this.#defaultCharacterStyleId;
     while (current !== undefined) {
       if (seen.has(current)) throw new WordError("invalid_document", `Style ${JSON.stringify(current)} has a basedOn cycle.`);
       if (reversed.length >= MAX_STYLE_CHAIN) throw new WordError("limit_exceeded", `Style chain exceeds ${MAX_STYLE_CHAIN} entries.`);
@@ -537,7 +553,7 @@ function mergeRun(base: WordRunProperties, overlay: WordRunProperties): WordRunP
 }
 
 function mergeParagraph(base: WordParagraphProperties, overlay: WordParagraphProperties): WordParagraphProperties {
-  return freezeParagraph({ ...base, ...overlay });
+  return freezeParagraph({ ...base, ...overlay, ...(base.tabs === undefined && overlay.tabs === undefined ? {} : { tabs: mergeWordTabStops(base.tabs ?? [], overlay.tabs ?? []) }) });
 }
 
 function freezeParagraph(properties: WordParagraphProperties): WordParagraphProperties {

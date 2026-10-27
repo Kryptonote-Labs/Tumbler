@@ -1129,3 +1129,39 @@ Imported `w:kern` thresholds are inherited through run styles. Kerning applies a
 or above that point size, with zero disabling it. Canvas measurement, painting and
 Svelte text CSS use the same rule. Layout measures compatible text as a consistent shaped prefix on each line,
 including ligatures, and reshapes carried text at a new line.
+
+### Explicit positioning and hyperlink resets
+
+`importWordContent` returns direct paragraph positioning, including tab-clear
+entries. Inherited values remain in their styles instead of becoming edit
+attributes. Use `WordStyles.paragraphFormat(document, paragraph)` or the native
+model's `paragraphFormat` for effective positioning. `WordStyles.paragraphPositioning`
+returns only direct source declarations. This distinction lets an indent-only edit
+preserve source tab clears while an explicit replacement tab array replaces them.
+
+For `paragraph` operations, omitting `positioning` or supplying `{}` preserves the
+current positioning. Partial objects update their supplied members. `positioning:
+null` removes direct paragraph indents and tabs, allowing paragraph styles and
+document defaults to apply. Yjs consumes null attributes, so commands store this
+intent as `positioning: { reset: true }`. The same object works in authored content
+and `NativeWordDocument`; it can include replacement positioning members. The
+marker survives projection, undo and collaborative updates, and is not written to
+OOXML. Unrelated source XML remains preserved.
+
+For `format` operations, omitting `link` preserves it; `link: null` and `link: ''`
+both unlink. Commands store the existing empty-string sentinel so native projection
+and source-aware export cannot restore the old hyperlink. In authored content,
+use `link: ''` to unlink and omit `link` to preserve the source wrapper.
+
+Resetting tabs removes the old stops and metadata attached to those stops. Without
+replacement stops, export removes the entire direct `w:tabs` property, including
+its attached extension markup. With replacements, container-level extensions and
+namespace bindings remain; metadata owned by removed stops is removed with them.
+Unknown indent attributes and children remain when recognized indent attributes
+are reset. Omitted or empty positioning patches retain all original metadata.
+Style and default tabs still apply, following
+[ECMA-376 §17.3.1.38](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.tabs).
+
+Imported targetless hyperlink wrappers omit the public `link` attribute and retain
+their source identity. This keeps no-op exports intact while reserving `link: ''`
+for explicit unlinking.
