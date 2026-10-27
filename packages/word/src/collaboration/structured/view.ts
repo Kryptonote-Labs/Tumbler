@@ -1,3 +1,4 @@
+import { legacyTables } from './legacy-tables.ts';
 import { anchorScopedSelection } from './selection.ts';
 import { bindWordLayoutSource } from '../layout-validation.ts';
 import { isWordLayoutOperation, applyWordLayoutOperation } from '../../operations/layout.ts';
@@ -361,14 +362,10 @@ export class WordSharedText {
     let migrated = false;
     for (const [name, value] of doc.share) {
       if (!(value instanceof Y.Text)) continue;
-      const seen = new Set<string>();
-      for (const p of tableParagraphs(value))
-        for (const ref of [...(p.table?.parents ?? []), ...(p.table ? [p.table] : [])])
-          if (ref.schema !== 2 && !seen.has(ref.id)) {
-            migrateTable(doc, { story: name, table: ref.id });
-            migrated = true;
-            seen.add(ref.id);
-          }
+      for (const ref of legacyTables(value).values()) {
+        migrateTable(doc, { story: name, table: ref.id });
+        migrated = true;
+      }
     }
     return migrated;
   }
