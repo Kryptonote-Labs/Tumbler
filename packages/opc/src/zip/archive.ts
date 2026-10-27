@@ -1,5 +1,6 @@
 import { inflateSync } from "fflate";
 import { crc32 } from "./crc32.ts";
+import { writeZipArchiveChanges } from "./writer.ts";
 
 const END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
 const CENTRAL_DIRECTORY_ENTRY_SIGNATURE = 0x02014b50;
@@ -82,37 +83,64 @@ export interface ZipEntry {
   readonly compressedDataOffset: number;
 }
 
+/** Durable member resources, independent of the original ZIP byte sequence. */
+export interface ZipArchiveSnapshot {
+  readonly entries: readonly ZipEntry[];
+  readonly comment: string;
+  readonly payloads: ReadonlyMap<string, Uint8Array>;
+}
+
 export class ZipArchive {
   readonly entries: readonly ZipEntry[];
   readonly comment: string;
-  readonly byteLength: number;
   readonly #source: Uint8Array;
   readonly #byName: ReadonlyMap<string, ZipEntry>;
+  readonly #payloads: ReadonlyMap<string, Uint8Array> | undefined;
+  #materialized: Uint8Array | undefined;
 
   constructor(
     source: Uint8Array,
     entries: readonly ZipEntry[],
     comment: string,
+    payloads?: ReadonlyMap<string, Uint8Array>,
   ) {
     this.#source = source;
     this.entries = Object.freeze([...entries]);
     this.comment = comment;
-    this.byteLength = source.byteLength;
     this.#byName = new Map(entries.map((entry) => [entry.name, entry]));
+    this.#payloads = payloads;
+  }
+
+  snapshot(): ZipArchiveSnapshot {
+    return { entries: this.entries, comment: this.comment,
+      payloads: new Map(this.entries.map(entry => [entry.name, this.compressedBytes(entry)])) };
+  }
+
+  static fromSnapshot(snapshot: ZipArchiveSnapshot): ZipArchive {
+    if (new Set(snapshot.entries.map(entry => entry.name)).size !== snapshot.entries.length ||
+        snapshot.payloads.size !== snapshot.entries.length || snapshot.entries.some(entry =>
+          snapshot.payloads.get(entry.name)?.byteLength !== entry.compressedSize))
+      throw new TypeError('Invalid native ZIP member resources.');
+    return new ZipArchive(new Uint8Array(), snapshot.entries, snapshot.comment, snapshot.payloads);
   }
 
   get(name: string): ZipEntry | undefined {
     return this.#byName.get(name);
   }
 
+  get byteLength(): number { return this.originalBytes().byteLength; }
+
   /** Returns the original archive bytes. Callers must treat them as immutable. */
   originalBytes(): Uint8Array {
-    return this.#source;
+    return this.#payloads
+      ? this.#materialized ??= writeZipArchiveChanges(this, { rebuild: true })
+      : this.#source;
   }
 
   /** Returns the exact compressed payload stored for an entry without inflating it. */
   compressedBytes(entry: ZipEntry): Uint8Array {
     this.#assertEntry(entry);
+    if (this.#payloads) return this.#payloads.get(entry.name)!;
     return this.#source.subarray(
       entry.compressedDataOffset,
       entry.compressedDataOffset + entry.compressedSize,

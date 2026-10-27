@@ -49,7 +49,7 @@
         "tumbler": "./src/bin.ts",
       },
       "dependencies": {
-        "@tumblerjs/word": "workspace:*",
+        "@tumblerjs/word": "0.1.0-alpha.26",
         "yjs": "^13.6.0",
         "zod": "^4.6.5",
       },
@@ -154,6 +154,7 @@
         "@tumblerjs/ink": "0.1.0-alpha.26",
         "@tumblerjs/ooxml": "0.1.0-alpha.26",
         "@tumblerjs/opc": "0.1.0-alpha.26",
+        "fflate": "^0.8.2",
         "zod": "^4.6.5",
       },
       "devDependencies": {

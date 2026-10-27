@@ -79,51 +79,54 @@ export class LosslessXmlError extends Error {
   }
 }
 
-export class LosslessXmlDocument {
+interface ParsedXmlSource {
   readonly source: string;
   readonly encoding: XmlEncoding;
   readonly hasByteOrderMark: boolean;
   readonly root: LosslessXmlElement;
+  readonly elements: ReadonlyMap<number, LosslessXmlElement>;
+}
+
+export class LosslessXmlDocument {
   readonly #originalBytes: Uint8Array;
-  readonly #elementsById: ReadonlyMap<number, LosslessXmlElement>;
+  #parsed: ParsedXmlSource | undefined;
 
-  constructor(
-    source: string,
-    encoding: XmlEncoding,
-    hasByteOrderMark: boolean,
-    root: LosslessXmlElement,
-    originalBytes: Uint8Array,
-  ) {
-    this.source = source;
-    this.encoding = encoding;
-    this.hasByteOrderMark = hasByteOrderMark;
-    this.root = root;
-    this.#originalBytes = originalBytes;
-    const elements = new Map<number, LosslessXmlElement>();
-    visitElements(root, (element) => elements.set(element.id, element));
-    this.#elementsById = elements;
+  /** One byte argument retains immutable preservation data and parses only on lexical access. */
+  constructor(...input: [Uint8Array] | [string, XmlEncoding, boolean, LosslessXmlElement, Uint8Array]) {
+    if (input.length === 1) this.#originalBytes = input[0];
+    else {
+      const [source, encoding, hasByteOrderMark, root, originalBytes] = input;
+      this.#originalBytes = originalBytes;
+      const elements = new Map<number, LosslessXmlElement>();
+      visitElements(root, element => elements.set(element.id, element));
+      this.#parsed = { source, encoding, hasByteOrderMark, root, elements };
+    }
   }
 
-  originalBytes(): Uint8Array {
-    return this.#originalBytes;
+  get isParsed(): boolean { return this.#parsed !== undefined; }
+  private get parsed(): ParsedXmlSource {
+    return this.#parsed ??= parseLosslessXml(this.#originalBytes).#parsed!;
   }
+  get source(): string { return this.parsed.source; }
+  get encoding(): XmlEncoding { return this.parsed.encoding; }
+  get hasByteOrderMark(): boolean { return this.parsed.hasByteOrderMark; }
+  get root(): LosslessXmlElement { return this.parsed.root; }
+
+  originalBytes(): Uint8Array { return this.#originalBytes; }
 
   element(id: number): LosslessXmlElement | undefined {
-    return this.#elementsById.get(id);
+    return this.parsed.elements.get(id);
   }
 
   elements(namespaceUri?: string, localName?: string): readonly LosslessXmlElement[] {
-    return [...this.#elementsById.values()].filter(
-      (element) =>
-        (namespaceUri === undefined || element.namespaceUri === namespaceUri) &&
-        (localName === undefined || element.localName === localName),
-    );
+    return [...this.parsed.elements.values()].filter(element =>
+      (namespaceUri === undefined || element.namespaceUri === namespaceUri) &&
+      (localName === undefined || element.localName === localName));
   }
 
   textContent(element: LosslessXmlElement): string {
-    if (this.#elementsById.get(element.id) !== element) {
+    if (this.parsed.elements.get(element.id) !== element)
       throw new TypeError("The XML element does not belong to this document.");
-    }
     return collectText(element);
   }
 }

@@ -1165,3 +1165,37 @@ Style and default tabs still apply, following
 Imported targetless hyperlink wrappers omit the public `link` attribute and retain
 their source identity. This keeps no-op exports intact while reserving `link: ''`
 for explicit unlinking.
+
+### Native document archives
+
+`createWordNativeArchive(artifact)` converts an imported Word package into compiled document
+semantics and immutable binary resources. Hosts can store `model` and each resource as separate
+SQLite blobs, outside the collaboration state and operation log. `openWordNativeArchive(archive)`
+restores the engine without reading a DOCX, parsing XML or inflating package members. The compiled
+body and header/footer models retain their resolved formatting and source identities.
+
+```ts
+const native = createWordNativeArchive(openWordArtifact(uploadedBytes));
+// Persist native.model and native.resources, then discard the uploaded DOCX.
+const source = openWordNativeArchive(native);
+const document = new NativeWordDocument({ source });
+```
+
+The archive owns every original package member, relationships, content types, lossless XML bytes
+and lexical source bytes, including unknown extensions and binary parts. Original XML identities
+remain preservation references; they are not a dependency on an original ZIP or file. Editing uses
+the compiled model. Export materializes a package from the retained resources and current content.
+Unchanged member payloads and compressed member data survive native reopening. ZIP container
+headers are regenerated when a native archive is exported; this does not promise byte-identical ZIP
+container metadata. Opaque OOXML and package payloads remain exact.
+
+`encodeWordNativeArchive` and `decodeWordNativeArchive` provide a portable binary envelope for
+transport. Model and resource integrity checks reject missing, truncated or corrupted data. Native
+archives are versioned engine state produced by Tumbler, not an additional untrusted user import
+format. Do not put these immutable resources into each collaborative edit or flatten unrecognized
+objects into JSON: the codec deliberately rejects object types it cannot preserve.
+
+Locally prepared collaborative updates carry a validation proof tied to their owner, full CRDT
+snapshot, root identities and layout baseline. An unchanged local preparation can commit without
+building another validation replica. Received, modified and stale updates still validate the full
+composed document. Snapshot freshness includes deletion-only changes.

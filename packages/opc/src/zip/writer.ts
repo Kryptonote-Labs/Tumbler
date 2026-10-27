@@ -49,6 +49,8 @@ export interface ZipEntryAddition {
 }
 
 export interface ZipArchiveChanges {
+  /** Serialize member-backed native archives without requiring an original ZIP. */
+  readonly rebuild?: boolean;
   readonly replacements?: ReadonlyMap<string, Uint8Array>;
   readonly additions?: readonly ZipEntryAddition[];
   readonly removals?: ReadonlySet<string>;
@@ -72,11 +74,12 @@ export function writeZipArchiveChanges(
   const replacements = changes.replacements ?? new Map();
   const additions = changes.additions ?? [];
   const removals = new Set(changes.removals);
-  if (replacements.size === 0 && additions.length === 0 && removals.size === 0) {
+  if (!changes.rebuild && replacements.size === 0 && additions.length === 0 && removals.size === 0) {
     return archive.originalBytes();
   }
   // OPC directory records are consumed but are not parts; omit them on edited saves.
-  for (const entry of archive.entries) if (entry.name.endsWith("/")) removals.add(entry.name);
+  if (replacements.size || additions.length || removals.size)
+    for (const entry of archive.entries) if (entry.name.endsWith("/")) removals.add(entry.name);
   for (const name of replacements.keys()) {
     if (archive.get(name) === undefined) {
       throw new ZipWriterError(

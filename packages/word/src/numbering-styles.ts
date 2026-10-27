@@ -8,12 +8,26 @@ interface NumberingStyle {
   readonly basedOn: string | undefined;
   readonly numId: number | undefined;
 }
+export interface WordNumberingStylesSnapshot {
+  readonly styles: readonly NumberingStyle[];
+  readonly defaultStyle: string | undefined;
+}
 
 /** Numbering metadata is separate from the text-format cascade. Style ilvl is ignored. */
 export class WordNumberingStyles {
   readonly #styles = new Map<string, NumberingStyle>();
   readonly #cache = new Map<string, { numId: number | undefined; ids: readonly string[] }>();
   #default: string | undefined;
+
+  snapshot(): WordNumberingStylesSnapshot {
+    return { styles: [...this.#styles.values()], defaultStyle: this.#default };
+  }
+  static fromSnapshot(snapshot: WordNumberingStylesSnapshot): WordNumberingStyles {
+    const result = new WordNumberingStyles();
+    for (const style of snapshot.styles) result.#styles.set(style.id, style);
+    result.#default = snapshot.defaultStyle;
+    return result;
+  }
 
   constructor(root?: LosslessXmlElement, ns = '') {
     if (!root) return;

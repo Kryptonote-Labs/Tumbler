@@ -23,7 +23,7 @@ import { wordGeometryAt } from './geometry.ts';
 import { WordStyles } from './styles.ts';
 import { nativeParagraphPositioning } from './native-positioning.ts';
 import { createWordStory, wordStoryArtifact, storyMainArtifact, wordSections, type WordStoryTarget } from './stories.ts';
-import { NativeWordSource, retainOpaqueBlocks } from './native-source.ts';
+import { NativeWordSource, nativeWordSource, retainOpaqueBlocks } from './native-source.ts';
 import type { WordArtifact } from './artifact.ts';
 import { reconcileWordContent } from './content-export.ts';
 import { wordParagraphText, wordParagraphTextSegments } from './text.ts';
@@ -161,7 +161,7 @@ export class NativeWordDocument implements WordLayoutSource {
     if (!isWordParagraphFormat(paragraphDefaults)) throw new TypeError('Invalid paragraph formatting.');
     this.namedStyles = wordAuthoringStyles(options.source?.document.styles ?? options[storyFormatting]?.styles, options.defaultFormat, paragraphDefaults, options.source ? undefined : options.themeColours);
     this.positioningStyles = options.source?.document.styles ?? options[storyFormatting]?.styles ?? this.namedStyles;
-    this.compiled = options.source ? new NativeWordSource(options.source) : undefined;
+    this.compiled = options.source ? nativeWordSource(options.source) : undefined;
     this.defaults = this.compiled?.defaults ?? options[storyFormatting]?.defaults;
     const document = options.source?.document;
     this.wrapTrailSpaces = options.source?.document.wrapTrailSpaces ?? false;

@@ -14,6 +14,15 @@ export interface WordStoryTarget {
 // Story views share a parsed package revision with their main-document view.
 // Weak keys let both views be collected when a caller releases the story.
 const mainArtifacts = new WeakMap<WordArtifact, WordArtifact>();
+const storyArtifacts = new WeakMap<WordArtifact, Map<string, WordArtifact>>();
+
+/** Native archives restore story identities together with their compiled models. */
+export function bindWordStoryArtifact(main: WordArtifact, partName: string, story: WordArtifact) {
+  const stories = storyArtifacts.get(main) ?? new Map<string, WordArtifact>();
+  storyArtifacts.set(main, stories);
+  stories.set(partName, story);
+  mainArtifacts.set(story, main);
+}
 
 /** Recover the main view without parsing the same immutable package revision again. */
 export function storyMainArtifact(artifact: WordArtifact): WordArtifact {
@@ -24,6 +33,8 @@ export function storyMainArtifact(artifact: WordArtifact): WordArtifact {
 /** A story uses the same content, formatting and native editing APIs as the main body.
  * Element IDs are local to this part, so callers must retain the story identity with positions. */
 export function wordStoryArtifact(artifact: WordArtifact, partName: string): WordArtifact {
+  const cached = storyArtifacts.get(artifact)?.get(partName);
+  if (cached) return cached;
   const document = artifact.document;
   const story = document.headerFooters.find(item => item.part.name.value === partName);
   if (!story) throw new Error('Unknown header or footer part.');
@@ -35,7 +46,7 @@ export function wordStoryArtifact(artifact: WordArtifact, partName: string): Wor
     conformance: document.conformance, styles: document.styles, numbering: document.numbering,
     finalSection: document.finalSection, headerFooters: [], notes: [], evenAndOddHeaders: document.evenAndOddHeaders, wrapTrailSpaces: document.wrapTrailSpaces, doNotExpandShiftReturn: document.doNotExpandShiftReturn,
   }));
-  mainArtifacts.set(view, artifact);
+  bindWordStoryArtifact(artifact, partName, view);
   return view;
 }
 
