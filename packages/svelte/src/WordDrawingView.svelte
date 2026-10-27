@@ -247,5 +247,12 @@
   .ink-controls { position:absolute; z-index:var(--word-drawing-controls-z-index); left:0; top:calc(100% + 8px); transform:scale(var(--inverse-scale)); transform-origin:top left; }
   .ink-controls button { padding:4px 8px; border:1px solid #3b483e; border-radius:4px; background:#202521; color:#e2fee7; font:13px/1.4 system-ui; }
   .controls button { cursor: move; touch-action: none; }
+  /* Fingers need about 44px to land on a handle; keep the drawn handle small and enlarge its hit area. */
+  @media (pointer: coarse) {
+    .resize::before, .controls button::before { content: ""; position: absolute; }
+    .resize::before { inset: calc(var(--handle-size) * -1.7); border-radius: 50%; }
+    .controls button { position: relative; }
+    .controls button::before { inset: -7px; }
+  }
   .fallback { width: 100%; height: 100%; background: #eee; }
 </style>
