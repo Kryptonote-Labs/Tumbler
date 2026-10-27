@@ -18,6 +18,7 @@ const encoder = new TextEncoder(), decoder = new TextDecoder('utf-8', { fatal: t
 const magic = encoder.encode('TMBWORD1');
 const metadata = z.object({ version: z.literal(1), graph: z.unknown(), resources: z.array(z.object({
   length: z.number().int().nonnegative(), crc32: z.number().int().nonnegative(),
+  compression: z.enum(['raw', 'deflate']), storedLength: z.number().int().nonnegative(), storedCrc32: z.number().int().nonnegative(),
 })) }).strict();
 const root = z.object({ artifact: z.instanceof(WordArtifact), compiled: z.array(z.instanceof(NativeWordSource)) });
 
@@ -25,11 +26,18 @@ const root = z.object({ artifact: z.instanceof(WordArtifact), compiled: z.array(
 export function createWordNativeArchive(artifact: WordArtifact): WordNativeArchive {
   const compiled = [nativeWordSource(artifact), ...artifact.document.headerFooters.map(story =>
     nativeWordSource(wordStoryArtifact(artifact, story.part.name.value)))];
-  const { graph, resources } = writeNativeGraph({ artifact, compiled }, wordNativeCodecs);
+  const { graph, resources: original } = writeNativeGraph({ artifact, compiled }, wordNativeCodecs);
+  const entries = original.map(bytes => {
+    const compressed = deflateSync(bytes, { level: 6 });
+    const compression = compressed.byteLength + 16 < bytes.byteLength ? 'deflate' as const : 'raw' as const;
+    const stored = compression === 'deflate' ? compressed : bytes;
+    return { stored, metadata: { length: bytes.byteLength, crc32: crc32(bytes), compression,
+      storedLength: stored.byteLength, storedCrc32: crc32(stored) } };
+  });
   const model = deflateSync(encoder.encode(JSON.stringify({ version: 1, graph,
-    resources: resources.map(bytes => ({ length: bytes.byteLength, crc32: crc32(bytes) })),
+    resources: entries.map(entry => entry.metadata),
   })), { level: 6 });
-  return { version: 1, model, resources };
+  return { version: 1, model, resources: entries.map(entry => entry.stored) };
 }
 
 /** Reopen compiled Word semantics without parsing XML, inflating OPC parts or reading a DOCX. */
@@ -38,9 +46,16 @@ export function openWordNativeArchive(archive: WordNativeArchive): WordArtifact 
   const data = metadata.parse(JSON.parse(decoder.decode(inflateSync(archive.model))));
   if (data.resources.length !== archive.resources.length || data.resources.some((resource, index) => {
     const bytes = archive.resources[index];
-    return !bytes || bytes.byteLength !== resource.length || crc32(bytes) !== resource.crc32;
+    return !bytes || bytes.byteLength !== resource.storedLength || crc32(bytes) !== resource.storedCrc32;
   })) throw new TypeError('Native Word resource integrity check failed.');
-  const restored = root.parse(readNativeGraph(data.graph, archive.resources, wordNativeCodecs));
+  const resources = data.resources.map((resource, index) => {
+    const stored = archive.resources[index]!;
+    const bytes = resource.compression === 'deflate' ? inflateSync(stored, { out: new Uint8Array(resource.length) }) : stored;
+    if (bytes.byteLength !== resource.length || crc32(bytes) !== resource.crc32)
+      throw new TypeError('Native Word resource integrity check failed.');
+    return bytes;
+  });
+  const restored = root.parse(readNativeGraph(data.graph, resources, wordNativeCodecs));
   if (!(restored.artifact.document instanceof WordDocument)) throw new TypeError('Invalid native Word document.');
   for (const source of restored.compiled) {
     if (source.artifact === restored.artifact) continue;
