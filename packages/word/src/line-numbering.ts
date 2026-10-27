@@ -1,5 +1,5 @@
 import { validMeasurement } from './layout-preparation.ts';
-import { z } from 'zod';
+import * as z from 'zod';
 import type { WordBlock, WordParagraph, WordSectionProperties } from './document.ts';
 import type { WordLayout, WordLayoutSource, WordTextMeasurer } from './layout.ts';
 import { DEFAULT_TEXT } from './styles.ts';

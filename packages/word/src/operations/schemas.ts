@@ -3,7 +3,7 @@ import { isWordDrawingGeometry } from '../drawing-geometry.ts';
 import { isWordAuthoredInk } from '../authored-ink.ts';
 import { isWordInkTraceOverrides } from '../ink-overrides.ts';
 import { isShapeTextBody } from '../shape-text.ts';
-import { z } from 'zod';
+import * as z from 'zod';
 import { TEXT_FORMATS, isFontSize } from '../collaboration/formatting.ts';
 import { isWordColour } from '../theme-colours.ts';
 import { WORD_HIGHLIGHTS } from '../text-properties.ts';

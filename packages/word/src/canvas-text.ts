@@ -23,7 +23,7 @@ export interface WordLineMetrics {
 
 type CanvasTextFormat = Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'rightToLeft' | 'kerningPoints' | 'characterSpacingPoints'>;
 const measurementPixels = 1000;
-const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+let graphemes: Intl.Segmenter | undefined;
 
 /** Measure typographic advances, independent of display-scale rounding at small font sizes.
  * An exact 1000px em also stays below browsers' large-font clamps. Hosts may supply a CSS
@@ -36,7 +36,7 @@ export function measureWordCanvasText(context: WordCanvasTextContext, text: stri
   const scale = format.fontSizePoints / measurementPixels;
   const spacing = format.characterSpacingPoints ?? 0;
   return {
-    width: Math.max(0, metrics.width * scale + (spacing ? [...graphemes.segment(text)].length * spacing : 0)),
+    width: Math.max(0, metrics.width * scale + (spacing ? [...(graphemes ??= new Intl.Segmenter(undefined, { granularity: 'grapheme' })).segment(text)].length * spacing : 0)),
     ascent: (metrics.fontBoundingBoxAscent || metrics.emHeightAscent || measurementPixels * 0.8) * scale,
     descent: (metrics.fontBoundingBoxDescent || metrics.emHeightDescent || measurementPixels * 0.2) * scale,
   };

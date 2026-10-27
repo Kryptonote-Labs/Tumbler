@@ -5,9 +5,7 @@ export function validateXmlText(value: string): void {
 }
 
 // Reuse ICU's segmenter, without retaining paragraph strings or boundary sets.
-const graphemeSegmenter = typeof Intl.Segmenter === 'undefined'
-  ? undefined
-  : new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+let graphemeSegmenter: Intl.Segmenter | undefined;
 
 /** Text edits and direct formatting share UTF-16 grapheme boundaries. */
 export function validateWordTextOffset(text: string, offset: number): void {
@@ -16,6 +14,8 @@ export function validateWordTextOffset(text: string, offset: number): void {
   // Check the preceding cluster's end with one lookup, without enumerating clusters.
   // Bun 1.3.14 can misreport containing(offset) at a leading surrogate.
   // Keep the existing scalar-boundary fallback on runtimes without Segmenter.
+  graphemeSegmenter ??= typeof Intl.Segmenter === 'undefined'
+    ? undefined : new Intl.Segmenter(undefined, { granularity: 'grapheme' });
   const previous = graphemeSegmenter?.segment(text).containing(offset - 1);
   const boundary = graphemeSegmenter === undefined
     ? !(text.charCodeAt(offset - 1) >= 0xd800 && text.charCodeAt(offset - 1) <= 0xdbff &&

@@ -1,5 +1,5 @@
 import * as Y from "yjs";
-import { z } from "zod";
+import * as z from 'zod';
 import { validateAttributes } from "../formatting.ts";
 import { tableParagraphs } from "../tables.ts";
 import { structuredGrid } from "./grid.ts";

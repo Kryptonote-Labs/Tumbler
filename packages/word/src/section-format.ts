@@ -1,6 +1,6 @@
 import { xml } from './create-xml.ts';
 import { wordLineNumberingSchema } from './line-numbering.ts';
-import { z } from 'zod';
+import * as z from 'zod';
 import type { WordSectionProperties, WordHeaderFooterReference } from './document.ts';
 import { PackageXml } from './package-xml.ts';
 import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
