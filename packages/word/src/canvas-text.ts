@@ -18,12 +18,14 @@ export interface WordCanvasTextContext {
 
 /** Font ascent and descent in points. Hosts that can observe CSS line boxes supply leading here. */
 export interface WordLineMetrics {
+  /** Synchronously make a family available before canvas measures its glyphs. */
+  prepare?(family: string): void;
   measure(format: Pick<ComputedWordTextFormat, "fontSizePoints" | "bold" | "italic">, family: string): { readonly ascent: number; readonly descent: number } | undefined;
 }
 
 type CanvasTextFormat = Pick<ComputedWordTextFormat, 'fontFamily' | 'fontSizePoints' | 'bold' | 'italic' | 'rightToLeft' | 'kerningPoints' | 'characterSpacingPoints'>;
 const measurementPixels = 1000;
-const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+let graphemes: Intl.Segmenter | undefined;
 
 /** Measure typographic advances, independent of display-scale rounding at small font sizes.
  * An exact 1000px em also stays below browsers' large-font clamps. Hosts may supply a CSS
@@ -36,7 +38,7 @@ export function measureWordCanvasText(context: WordCanvasTextContext, text: stri
   const scale = format.fontSizePoints / measurementPixels;
   const spacing = format.characterSpacingPoints ?? 0;
   return {
-    width: Math.max(0, metrics.width * scale + (spacing ? [...graphemes.segment(text)].length * spacing : 0)),
+    width: Math.max(0, metrics.width * scale + (spacing ? [...(graphemes ??= new Intl.Segmenter(undefined, { granularity: 'grapheme' })).segment(text)].length * spacing : 0)),
     ascent: (metrics.fontBoundingBoxAscent || metrics.emHeightAscent || measurementPixels * 0.8) * scale,
     descent: (metrics.fontBoundingBoxDescent || metrics.emHeightDescent || measurementPixels * 0.2) * scale,
   };
@@ -57,6 +59,7 @@ export function canvasWordTextMeasurer(context: WordCanvasTextContext, lineMetri
       const key = `${kerning}\u0000${font}\u0000${direction}\u0000${format.characterSpacingPoints ?? 0}\u0000${text}`;
       const cached = measured.get(key);
       if (cached !== undefined) return cached;
+      lineMetrics?.prepare?.(wordFontFamily(format.fontFamily));
       const metrics = measureWordCanvasText(context, text, format);
       const line = lineMetrics?.measure(format, wordFontFamily(format.fontFamily));
       const measurement = Object.freeze({
