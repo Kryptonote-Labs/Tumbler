@@ -9,6 +9,18 @@ import {
 const encoder = new TextEncoder();
 
 describe("lossless XML source documents", () => {
+  test('normalizes literal XML line ends before references while preserving original spans and text', () => {
+    const source = '<root>A\r\nB\rC\nD&#13;E&#10;F<![CDATA[G\r\nH\rI]]></root>';
+    const doc = parseLosslessXml(encoder.encode(source));
+    expect(doc.textContent(doc.root)).toBe('A\nB\nC\nD\rE\nFG\nH\nI');
+    const origins = doc.textContentOrigins(doc.root);
+    expect(origins.map(part => part.original).join('')).toBe('A\r\nB\rC\nD\rE\nFG\r\nH\rI');
+    expect(origins.map(part => part.value).join('')).toBe(doc.textContent(doc.root));
+    expect(doc.source).toBe(source);
+    expect(doc.originalBytes()).toEqual(encoder.encode(source));
+    const other = parseLosslessXml(encoder.encode('<root/>'));
+    expect(() => doc.textContentOrigins(other.root)).toThrow(TypeError);
+  });
   test("retains lexical spans while exposing namespace-aware semantics", () => {
     const source = `<?xml version="1.0" encoding="UTF-8"?>\n<r:root xmlns:r="urn:root" xmlns:x="urn:extension" x:flag='yes'>\n  <!-- keep -->\n  <r:item code = "A&amp;B">before &lt; after<![CDATA[ + raw]]></r:item>\n  <?producer keep?>\n</r:root>`;
     const document = parseLosslessXml(encoder.encode(source));
