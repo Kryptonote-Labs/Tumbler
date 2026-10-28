@@ -65,6 +65,12 @@ export function applyWordScopedOperation(
     writeWordDocumentSettings(staged, { background: operation.input.color });
     return selection;
   }
+  // This function already runs inside a staged transaction. The pure formatter and
+  // outer validation suffice; the general operation adapter would stage it again.
+  if (operation.name === "format" && !context.prepareOperation)
+    return applyStructuredChange(staged, {
+      kind: "format", selection, patch: defined(operation.input),
+    });
   if ("cell" in selection) {
     const cell = selection.cell;
     if (operation.name === "insert-table") {
@@ -100,12 +106,6 @@ export function applyWordScopedOperation(
         });
       return result;
     }
-    if (operation.name === "format" && !context.prepareOperation)
-      return applyStructuredChange(staged, {
-        kind: "format",
-        selection,
-        patch: defined(operation.input),
-      });
     if (operation.name === "format-table") {
       applyStructuredChange(staged, {
         kind: "table-format",

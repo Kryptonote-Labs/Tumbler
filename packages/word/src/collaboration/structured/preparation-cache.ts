@@ -113,3 +113,6 @@ export function observeInlineEdit(candidate: Y.Doc, previous: Y.Doc) {
     },
   };
 }
+
+/** A retained replica proves validity only at its exact committed checkpoint. */
+export function validatedCheckpoint(doc: Y.Doc) { return replicas.get(doc)?.checkpoint; }

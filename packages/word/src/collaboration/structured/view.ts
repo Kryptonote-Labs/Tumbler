@@ -1,3 +1,4 @@
+import { applyInlineWordDelta } from './inline-delta.ts';
 import { legacyTables } from './legacy-tables.ts';
 import { anchorScopedSelection } from './selection.ts';
 import { bindWordLayoutSource } from '../layout-validation.ts';
@@ -223,6 +224,13 @@ export class WordSharedText {
       this.migrate(staged);
       return undefined;
     });
+  }
+  /** Apply synchronous input with inline preflight, staging structural edits atomically. */
+  applyDelta(delta: WordDelta, origin?: unknown) {
+    if (this.conflict) throw this.conflict;
+    if (!this.structured()) this.sync();
+    if (applyInlineWordDelta(this.doc, this.story, delta, origin)) return;
+    this.commit(this.prepareDelta(delta), origin);
   }
   prepareDelta(delta: WordDelta): PreparedWordUpdate {
     if (this.conflict) throw this.conflict;

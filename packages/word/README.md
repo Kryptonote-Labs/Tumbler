@@ -1010,6 +1010,14 @@ Scoped and linear nested-table insertion use the same cell-local operation path.
 Both source and canonical cells retain the preceding paragraph and exactly one
 trailing parent paragraph after inserting into their final paragraph.
 
+`applyDelta(delta, origin)` applies synchronous editor input. Plain-story typing,
+backspace and visual formatting use inline preflight against an exactly validated
+baseline. It checks text, attributes and UTF-16 boundaries before writing once.
+Checkpoints are captured before observers run, so unrelated observer writes or
+received changes cannot become trusted state. Structural edits and table edits
+fall back to staged preparation and atomic commit. Hosts still validate custom
+attributes, package provenance and permissions.
+
 `prepareDelta(delta)` translates existing editor deltas into payload-local edits.
 It retains source cell boundaries, rich pasted text and virtual paragraph
 formatting. Pasted tables migrate in the same update. `prepareChanges(changes)`
