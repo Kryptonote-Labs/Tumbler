@@ -1,5 +1,6 @@
+import { wordTextDelta } from './text-events.ts';
 import type * as Y from 'yjs';
-import { wordParagraphIdentity } from './paragraph-identity.ts';
+import { wordParagraphIdentity, wordParagraphIdentityRevision } from './paragraph-identity.ts';
 
 export interface WordParagraphPart {
   readonly insert: string;
@@ -21,19 +22,37 @@ export class WordParagraphProjection<T> {
   private slices: readonly WordParagraphSlice[] = [];
   private readonly projected = new WeakMap<WordParagraphSlice, T>();
   private output: readonly T[] | undefined;
+  private identityRevision: number | undefined;
+  private rebuild = false;
   private readonly observe = (event: Y.YTextEvent) => {
-    this.slices = this.apply(event.delta);
+    if (!this.rebuild) {
+      const updated = this.apply(wordTextDelta(event));
+      if (updated) this.slices = updated;
+      else this.rebuild = true;
+    }
     this.output = undefined;
   };
 
   constructor(readonly text: Y.Text, private readonly project: (paragraph: WordParagraphSlice) => T) {
     // Register identity tracking before our observer reads the new terminator positions.
     wordParagraphIdentity(text, text.length);
-    this.slices = this.apply(text.toDelta());
+    this.slices = this.apply(text.toDelta())!;
     text.observe(this.observe);
   }
 
   get paragraphs(): readonly T[] {
+    if (this.rebuild) {
+      // Yjs omits retained surrogate repairs from its delta. Read the source,
+      // including queued observer edits, until the document is quiescent again.
+      this.slices = [];
+      this.slices = this.apply(this.text.toDelta())!;
+      this.output = undefined;
+      const doc = this.text.doc;
+      this.rebuild = Boolean(doc?._transaction || doc?._transactionCleanups.length);
+    }
+    const revision = wordParagraphIdentityRevision(this.text);
+    if (revision !== undefined && revision === this.identityRevision && this.output) return this.output;
+    this.identityRevision = revision;
     let offset = 0;
     const slices = this.slices.map(slice => {
       offset += slice.length;
@@ -54,13 +73,14 @@ export class WordParagraphProjection<T> {
 
   destroy() { this.text.unobserve(this.observe); }
 
-  private apply(delta: Y.YTextEvent['delta']): readonly WordParagraphSlice[] {
+  private apply(delta: Y.YTextEvent['delta']): readonly WordParagraphSlice[] | undefined {
     const result: WordParagraphSlice[] = [];
     let pending: WordParagraphPart[] = [];
     let pendingLength = 0;
     let outputOffset = 0;
     let index = 0;
     let offset = 0;
+    let repaired = false;
     const finish = (terminated: boolean) => {
       const id = terminated ? wordParagraphIdentity(this.text, outputOffset - 1) : 'end';
       const previous = this.slices[index] ?? this.slices[index - 1];
@@ -108,6 +128,10 @@ export class WordParagraphProjection<T> {
             const from = Math.max(offset - partOffset, 0);
             const to = Math.min(offset + count - partOffset, part.insert.length);
             if (to > from) {
+              const boundary = (at: number) => !(part.insert.charCodeAt(at - 1) >= 0xd800 &&
+                part.insert.charCodeAt(at - 1) <= 0xdbff && part.insert.charCodeAt(at) >= 0xdc00 &&
+                part.insert.charCodeAt(at) <= 0xdfff);
+              if (!boundary(from) || !boundary(to)) repaired = true;
               let format = part.attributes;
               if (attributes && attributesChange(format, attributes)) {
                 const patched = { ...format };
@@ -143,7 +167,7 @@ export class WordParagraphProjection<T> {
       else { index++; offset = 0; }
     }
     if (pendingLength || !result.length) finish(false);
-    return Object.freeze(result);
+    return repaired ? undefined : Object.freeze(result);
   }
 }
 
@@ -151,12 +175,19 @@ function equalAttributes(left?: Readonly<Record<string, unknown>>, right?: Reado
   if (left === right) return true;
   const keys = Object.keys(left ?? {});
   return keys.length === Object.keys(right ?? {}).length &&
-    keys.every(key => JSON.stringify(left![key]) === JSON.stringify(right?.[key]));
+    keys.every(key => Object.hasOwn(right ?? {}, key) && equalValue(left![key], right?.[key]));
 }
 
 /** Removing an absent key and assigning an equal structured value are semantic no-ops. */
 function attributesChange(current: Readonly<Record<string, unknown>> | undefined, patch: Readonly<Record<string, unknown>>) {
   return Object.entries(patch).some(([key, value]) => value === null
     ? current !== undefined && Object.hasOwn(current, key)
-    : JSON.stringify(current?.[key]) !== JSON.stringify(value));
+    : !equalValue(current?.[key], value));
+}
+
+function equalValue(left: unknown, right: unknown) {
+  if (left === right) return true;
+  if (typeof left === typeof right && (typeof left === 'string' || typeof left === 'boolean' ||
+    typeof left === 'number' && Number.isFinite(left) && Number.isFinite(right))) return false;
+  return JSON.stringify(left) === JSON.stringify(right);
 }

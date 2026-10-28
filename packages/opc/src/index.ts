@@ -1,3 +1,4 @@
+export { crc32 } from './zip/crc32.ts';
 export {
   DEFAULT_ZIP_LIMITS,
   openZipArchive,

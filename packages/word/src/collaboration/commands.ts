@@ -1,12 +1,15 @@
+import { wordTextString, validateWordTextReplacement } from './text-index.ts';
+import { isWordParagraphPositioning } from '../positioning.ts';
+import { wordTextRange } from './text-range.ts';
 import { hasWordParagraphReset, paragraphPropertyPatch, readWordParagraphFormat } from './paragraph-attributes.ts';
 import { wordColoursEqual } from '../theme-colours.ts';
 import { formatTableDelta, type WordTableFormatPatch } from './table-format.ts';
 import { editTableDelta, type TableAction } from './table-edits.ts';
 import { isDocumentImage, normalizeImage, imagePositions, type DocumentImage } from './images.ts';
-import { insertTableDelta, protectTableBoundaries, tableParagraphs, type TableCell } from './tables.ts';
+import { insertTableDelta, protectTableBoundaries, tableParagraphs, isTableCell, type TableCell } from './tables.ts';
 import * as Y from 'yjs';
 import { validateText, validateWordText } from './validation.ts';
-import { validateAttributes as validateWordAttributes, type TextAttributes } from './formatting.ts';
+import { validateAttributes as validateWordAttributes, isList, type TextAttributes } from './formatting.ts';
 
 export type WordFormatPatch = { [Key in keyof TextAttributes]: TextAttributes[Key] | null };
 export type WordRange = { start: number; end: number };
@@ -59,7 +62,7 @@ export function createWordCommands({ defaultFontSize = 12, defaultAttributes, va
   validateDocument?: (staged: Y.Doc, original: Y.Doc) => void;
 } = {}) {
 function bodyLength(text: Y.Text) {
-  return Math.max(0, text.length - (text.toString().endsWith('\n') ? 1 : 0));
+  return Math.max(0, text.length - (wordTextString(text).endsWith('\n') ? 1 : 0));
 }
 
 // Durable references identify collaborative characters, not revision-local XML elements.
@@ -92,7 +95,7 @@ function checkRange(text: Y.Text, range: WordRange) {
     range.end > bodyLength(text)
   )
     throw new Error('The edit range is outside the document.');
-  const value = text.toString();
+  const value = wordTextString(text);
   const segments = new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value);
   const boundary = (at: number) => {
     if (at === 0 || at === value.length) return true;
@@ -104,43 +107,28 @@ function checkRange(text: Y.Text, range: WordRange) {
 }
 
 function linkAt(text: Y.Text, index: number): string | undefined {
-  let offset = 0;
-  for (const part of text.toDelta()) {
-    const length = typeof part.insert === 'string' ? part.insert.length : 1;
-    if (index >= offset && index < offset + length) return part.attributes?.link || undefined;
-    offset += length;
-  }
-  return undefined;
+  if (index < 0) return undefined;
+  const link = wordTextRange(text, index, index + 1)[0]?.attributes?.link;
+  return typeof link === 'string' ? link : undefined;
 }
 
 function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
   const defaults = defaultAttributes?.(text, range) ?? {};
   const formats: TextAttributes[] = [];
   const sizes: number[] = [];
-  let offset = 0;
   const collapsed = range.start === range.end;
   const at = collapsed
-    ? Math.max(
-        0,
-        range.start - (range.start > 0 && text.toString()[range.start - 1] !== '\n' ? 1 : 0),
-      )
+    ? Math.max(0, range.start - (range.start > 0 && wordTextString(text)[range.start - 1] !== '\n' ? 1 : 0))
     : range.start;
-  for (const part of text.toDelta()) {
-    if (typeof part.insert !== 'string') continue;
-    const end = offset + part.insert.length;
-    if (end > at && offset < (collapsed ? at + 1 : range.end)) {
-      const from = Math.max(0, at - offset);
-      const to = Math.min(part.insert.length, collapsed ? at + 1 - offset : range.end - offset);
-      let position = offset + from;
-      for (const segment of part.insert.slice(from, to).match(/[^\n]*\n|[^\n]+/g) ?? []) {
-        const inherited = defaultAttributes?.(text, { start: position, end: position }) ?? defaults;
-        formats.push({ ...inherited, ...part.attributes });
-        if (collapsed || segment.replace(/\n/g, '').length)
-          sizes.push(part.attributes?.fontSize ?? inherited.fontSize ?? defaultFontSize);
-        position += segment.length;
-      }
+  let position = at;
+  for (const part of wordTextRange(text, at, collapsed ? at + 1 : range.end)) {
+    for (const segment of part.insert.match(/[^\n]*\n|[^\n]+/g) ?? []) {
+      const inherited = defaultAttributes?.(text, { start: position, end: position }) ?? defaults;
+      formats.push({ ...inherited, ...part.attributes });
+      if (collapsed || segment.replace(/\n/g, '').length)
+        sizes.push(typeof part.attributes?.fontSize === 'number' ? part.attributes.fontSize : inherited.fontSize ?? defaultFontSize);
+      position += segment.length;
     }
-    offset = end;
   }
   const first = formats[0] ?? defaults;
   const result: TextAttributes = {};
@@ -171,22 +159,17 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
   // appearance and its source run (which may sit inside an imported hyperlink) behind.
   if (collapsed && result.link && (linkAt(text, range.start - 1) !== result.link || linkAt(text, range.start) !== result.link))
     for (const key of ['link', 'underline', 'wordUnderline', 'color', 'wordSource', 'wordCopy'] as const) delete result[key];
-  const value = text.toString();
+  const value = wordTextString(text);
   const last = value.indexOf('\n', range.start);
-  offset = 0;
-  for (const part of text.toDelta()) {
-    if (typeof part.insert !== 'string') continue;
-    if (last >= offset && last < offset + part.insert.length) {
-      if (part.attributes?.wordParagraph) result.wordParagraph = part.attributes.wordParagraph;
-      if (part.attributes?.styleId) result.styleId = part.attributes.styleId;
+  for (const part of last < 0 ? [] : wordTextRange(text, last, last + 1)) {
+      if (typeof part.attributes?.wordParagraph === 'number') result.wordParagraph = part.attributes.wordParagraph;
+      if (typeof part.attributes?.styleId === 'string') result.styleId = part.attributes.styleId;
       const paragraph = readWordParagraphFormat(part.attributes);
       if (paragraph !== undefined) result.paragraph = paragraph;
-      if (part.attributes?.positioning) result.positioning = part.attributes.positioning;
-      if (part.attributes?.align) result.align = part.attributes.align;
-      if (part.attributes?.list) result.list = part.attributes.list;
-      if (part.attributes?.table) result.table = part.attributes.table;
-    }
-    offset += part.insert.length;
+      if (isWordParagraphPositioning(part.attributes?.positioning)) result.positioning = part.attributes.positioning;
+      if (part.attributes?.align === 'left' || part.attributes?.align === 'right' || part.attributes?.align === 'center' || part.attributes?.align === 'justify') result.align = part.attributes.align;
+      if (isList(part.attributes?.list)) result.list = part.attributes.list;
+      if (isTableCell(part.attributes?.table)) result.table = part.attributes.table;
   }
   return result;
 }
@@ -200,7 +183,7 @@ function replaceWordDelta(
   checkRange(text, range);
   protectTableBoundaries(text, range.start, range.end);
   value = value.replace(/\r\n?/g, '\n');
-  validateText(text.toString().slice(0, range.start) + value + text.toString().slice(range.end));
+  validateWordTextReplacement(text, range.start, range.end, value);
   validateAttributes(attributes);
   const { align, styleId, paragraph, positioning, tab: _tab, list, table: inheritedTable, wordParagraph, image: _image, field: _field, ...inline } = attributes;
   let table = inheritedTable;
@@ -219,7 +202,7 @@ function replaceWordDelta(
   let paragraphReset = false;
   if (value.includes('\n')) {
     let offset = 0;
-    const terminator = text.toString().indexOf('\n', range.start);
+    const terminator = wordTextString(text).indexOf('\n', range.start);
     for (const part of text.toDelta()) {
       const length = typeof part.insert === 'string' ? part.insert.length : 1;
       if (terminator >= offset && terminator < offset + length) {
@@ -277,7 +260,7 @@ function formatWordDelta(
   if (attributes.image !== undefined) throw new Error('Use image operations to change images.');
   if (attributes.table !== undefined)
     throw new Error('Use table operations to change cell structure.');
-  const value = text.toString();
+  const value = wordTextString(text);
   const { align, styleId, paragraph, positioning, tab: _tab, list, table: _table, image: _image, field: _field, ...inline } = attributes;
   // Yjs consumes null attributes. Retain explicit unlink intent in its existing sentinel.
   if (inline.link === null) inline.link = '';

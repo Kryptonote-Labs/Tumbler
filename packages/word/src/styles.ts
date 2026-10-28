@@ -193,6 +193,8 @@ export class WordStyles {
   // Source and paragraph identities keep revisions and story parts separate, even when IDs repeat.
   readonly #paragraphs = new WeakMap<WordDocumentLike, WeakMap<WordParagraph, ParagraphStyleCache>>();
   readonly #byId: ReadonlyMap<string, WordStyle>;
+  readonly #paragraphStyles = new Map<string, { paragraph: ComputedWordParagraphFormat; text: ComputedWordTextFormat }>();
+  readonly #styledRuns = new Map<string, Map<string | undefined, ComputedWordTextFormat>>();
   readonly #resolvedStyles = new Map<string | undefined, { paragraph: WordParagraphProperties; run: WordRunProperties }>();
   readonly #defaultParagraphStyleId: string | undefined;
   readonly #defaultCharacterStyleId: string | undefined;
@@ -235,17 +237,28 @@ export class WordStyles {
 
   /** Resolve a named paragraph style without reading document XML. */
   resolveParagraphStyle(styleId: string) {
-    const resolved = this.resolvedStyle(styleId, 'paragraph');
-    return {
-      paragraph: computedParagraph(resolved.paragraph, styleId, this.themeColors),
-      text: this.computedRun(mergeRun(this.documentRunDefaults, resolved.run)),
-    };
+    let result = this.#paragraphStyles.get(styleId);
+    if (!result) {
+      const resolved = this.resolvedStyle(styleId, 'paragraph');
+      result = {
+        paragraph: computedParagraph(resolved.paragraph, styleId, this.themeColors),
+        text: this.computedRun(mergeRun(this.documentRunDefaults, resolved.run)),
+      };
+      this.#paragraphStyles.set(styleId, result);
+    }
+    return { ...result };
   }
 
   /** Resolve inherited run formatting while retaining an imported character style. */
   resolveStyledRun(paragraphStyleId: string, characterStyleId?: string): ComputedWordTextFormat {
+    const characterStyles = this.#styledRuns.get(paragraphStyleId) ?? new Map<string | undefined, ComputedWordTextFormat>();
+    const cached = characterStyles.get(characterStyleId);
+    if (cached) return cached;
     const paragraph = mergeRun(this.documentRunDefaults, this.resolvedStyle(paragraphStyleId, 'paragraph').run);
-    return this.computedRun(mergeStyleLevels(paragraph, this.resolvedStyle(characterStyleId, 'character').run, this.documentRunDefaults));
+    const value = this.computedRun(mergeStyleLevels(paragraph, this.resolvedStyle(characterStyleId, 'character').run, this.documentRunDefaults));
+    characterStyles.set(characterStyleId, value);
+    this.#styledRuns.set(paragraphStyleId, characterStyles);
+    return value;
   }
 
   runCharacterStyle(document: WordDocumentLike, run: WordRun): string | undefined {

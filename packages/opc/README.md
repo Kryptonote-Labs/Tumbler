@@ -34,3 +34,8 @@ Tumbler is developed at
 [Kryptonote-Labs/Tumbler](https://github.com/Kryptonote-Labs/Tumbler).
 
 MIT licensed. See [LICENSE](LICENSE).
+
+`@tumblerjs/opc/compression` exposes the same `deflateRaw(bytes)` and bounded
+`inflateRaw(bytes, expectedLength)` primitives for other engine archives. Package conditions
+select native codecs on Bun/Node and fflate for browser bundles. Callers must check the
+returned length against the declared length; returned bytes are independently owned.

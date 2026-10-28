@@ -4,8 +4,33 @@ import type { WordArtifact } from './artifact.ts';
 import type { WordBlock, WordParagraph, WordRun, WordRunContent, WordInline, WordTable, WordTableRow, WordTableCell } from './document.ts';
 import { importWordContent } from './import-content.ts';
 import type { WordTextParagraph } from './create.ts';
+import type { WordContentBlock } from './create-content.ts';
 import type { ComputedWordParagraphFormat, ComputedWordTextFormat } from './styles.ts';
 import type { WordParagraphNumbering } from './numbering.ts';
+import { rememberImportedWordContent } from './import-content-cache.ts';
+
+function formatInterner<T extends object>() {
+  const values = new Map<string, T>();
+  return (value: T): T => {
+    const key = JSON.stringify(Object.entries(value));
+    const previous = values.get(key);
+    if (previous) return previous;
+    values.set(key, value);
+    return value;
+  };
+}
+
+const compiledSources = new WeakMap<WordArtifact, NativeWordSource>();
+
+/** Source properties are immutable and shared by all models of the same native revision. */
+export function nativeWordSource(artifact: WordArtifact) {
+  let source = compiledSources.get(artifact);
+  if (!source) {
+    source = new NativeWordSource(artifact);
+    compiledSources.set(artifact, source);
+  }
+  return source;
+}
 
 /** Compiled once at import. Editing resolves semantic properties by identity, never by XML. */
 export class NativeWordSource {
@@ -29,10 +54,41 @@ export class NativeWordSource {
   readonly rows = new Map<number, WordTableRow>();
   readonly cells = new Map<number, WordTableCell>();
   readonly lists = new Map<number, WordTextParagraph['list']>();
-  readonly original;
-  readonly defaults;
+  readonly original: ReturnType<typeof importWordContent>;
+  readonly defaults: ReturnType<typeof wordDocumentDefaults>;
 
-  constructor(readonly artifact: WordArtifact) {
+  snapshot() {
+    // Resolved formats are immutable values. Word often repeats the same declaration
+    // on thousands of distinct runs; native storage needs only one copy of each value.
+    const textFormat = formatInterner<ComputedWordTextFormat>();
+    const paragraphFormat = formatInterner<ComputedWordParagraphFormat>();
+    const authoredText = formatInterner<NonNullable<WordTextParagraph['runs'][number]['format']>>();
+    const authoredParagraph = formatInterner<NonNullable<WordTextParagraph['paragraph']>>();
+    const content = (blocks: readonly WordContentBlock[]): WordContentBlock[] => blocks.map(block =>
+      block.kind === 'table' ? { ...block, rows: block.rows.map(row => row.map(cell => ({ ...cell, blocks: content(cell.blocks) }))) }
+        : block.kind === 'paragraph' ? { ...block, ...(block.paragraph ? { paragraph: authoredParagraph(block.paragraph) } : {}),
+            runs: block.runs.map(run => ({ ...run, ...(run.format ? { format: authoredText(run.format) } : {}) })) } : block);
+    return { artifact: this.artifact, defaults: this.defaults, original: content(this.original),
+      paragraphs: [...this.paragraphs].map(([id, value]) => [id, { ...value, format: paragraphFormat(value.format), textFormat: textFormat(value.textFormat) }] as const),
+      leaves: [...this.leaves].map(([id, value]) => [id, { ...value, format: textFormat(value.format) }] as const), tables: [...this.tables],
+      tableWidths: [...this.tableWidths], rows: [...this.rows], cells: [...this.cells], lists: [...this.lists] };
+  }
+
+  constructor(readonly artifact: WordArtifact, snapshot?: NativeWordSourceSnapshot) {
+    if (snapshot) {
+      this.defaults = snapshot.defaults;
+      this.original = snapshot.original;
+      rememberImportedWordContent(artifact, this.original);
+      for (const [id, value] of snapshot.paragraphs) this.paragraphs.set(id, value);
+      for (const [id, value] of snapshot.leaves) this.leaves.set(id, value);
+      for (const [id, value] of snapshot.tables) this.tables.set(id, value);
+      for (const [id, value] of snapshot.tableWidths) this.tableWidths.set(id, value);
+      for (const [id, value] of snapshot.rows) this.rows.set(id, value);
+      for (const [id, value] of snapshot.cells) this.cells.set(id, value);
+      for (const [id, value] of snapshot.lists) this.lists.set(id, value);
+      compiledSources.set(artifact, this);
+      return;
+    }
     const document = artifact.document;
     this.defaults = wordDocumentDefaults(document);
     this.original = importWordContent(artifact);
@@ -79,6 +135,8 @@ export class NativeWordSource {
     lists(this.original);
   }
 }
+
+export type NativeWordSourceSnapshot = ReturnType<NativeWordSource['snapshot']>;
 
 /** Opaque blocks keep their source reading order while supported neighbours are edited or removed. */
 export function retainOpaqueBlocks(input: readonly { source?: number }[], output: WordBlock[], original: readonly WordBlock[]): WordBlock[] {

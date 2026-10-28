@@ -6,7 +6,7 @@ export function generate(conformance: 'strict' | 'transitional') {
   const namespace = conformance === 'strict' ? 'http://purl.oclc.org/ooxml/wordprocessingml/main' : 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   const source = openWordArtifact(buildWordDocumentFixture({ conformance, documentXml: `<w:document xmlns:w="${namespace}"><w:body><w:p/></w:body></w:document>` }));
   return reconcileWordContent(source, [
-    { kind: 'paragraph', list: { id: 'new', kind: 'decimal' }, runs: [{ text: 'new list' }] },
+    { kind: 'paragraph', list: { id: 'new', kind: 'decimal' }, runs: [{ text: 'new list', format: { color: { theme: 'accent1', fallback: '#156082' } } }] },
     ...fixtures.cell,
   ]);
 }

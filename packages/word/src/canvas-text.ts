@@ -31,9 +31,12 @@ let graphemes: Intl.Segmenter | undefined;
  * An exact 1000px em also stays below browsers' large-font clamps. Hosts may supply a CSS
  * family stack so embedded fonts and fallback faces match their renderer. */
 export function measureWordCanvasText(context: WordCanvasTextContext, text: string, format: CanvasTextFormat, family = wordFontFamily(format.fontFamily)): WordTextMeasurement {
-  context.font = `${format.italic ? 'italic' : 'normal'} normal ${format.bold ? 700 : 400} ${measurementPixels}px ${family}`;
-  context.fontKerning = wordFontKerning(format);
-  context.direction = format.rightToLeft ? 'rtl' : 'ltr';
+  const font = `${format.italic ? 'italic' : 'normal'} normal ${format.bold ? 700 : 400} ${measurementPixels}px ${family}`;
+  const kerning = wordFontKerning(format);
+  const direction = format.rightToLeft ? 'rtl' : 'ltr';
+  if (context.font !== font) context.font = font;
+  if (context.fontKerning !== kerning) context.fontKerning = kerning;
+  if (context.direction !== direction) context.direction = direction;
   const metrics = context.measureText(text);
   const scale = format.fontSizePoints / measurementPixels;
   const spacing = format.characterSpacingPoints ?? 0;
@@ -50,18 +53,28 @@ export function measureWordCanvasText(context: WordCanvasTextContext, text: stri
  * Results are memoised for the measurer's lifetime, so create a new one when fonts change.
  */
 export function canvasWordTextMeasurer(context: WordCanvasTextContext, lineMetrics?: WordLineMetrics): WordTextMeasurer {
-  const measured = new Map<string, WordTextMeasurement>();
+  const measured = new Map<string, Map<string, WordTextMeasurement>>();
+  const formats = new WeakMap<ComputedWordTextFormat, { family: string; values: Map<string, WordTextMeasurement> }>();
+  const measurements = (format: ComputedWordTextFormat) => {
+    const previous = formats.get(format);
+    if (previous) return previous;
+    const family = wordFontFamily(format.fontFamily);
+    const key = `${wordFontKerning(format)}\u0000${wordCanvasFont(format)}\u0000${format.rightToLeft ? 'rtl' : 'ltr'}\u0000${format.characterSpacingPoints ?? 0}`;
+    let values = measured.get(key);
+    if (!values) measured.set(key, values = new Map());
+    const result = { family, values };
+    // Public callers may mutate formats. Only immutable engine formats can use identity.
+    if (Object.isFrozen(format)) formats.set(format, result);
+    return result;
+  };
   return Object.freeze({
     measure(text: string, format: ComputedWordTextFormat) {
-      const font = wordCanvasFont(format);
-      const direction = format.rightToLeft ? "rtl" : "ltr";
-      const kerning = wordFontKerning(format);
-      const key = `${kerning}\u0000${font}\u0000${direction}\u0000${format.characterSpacingPoints ?? 0}\u0000${text}`;
-      const cached = measured.get(key);
+      const { family, values } = measurements(format);
+      const cached = values.get(text);
       if (cached !== undefined) return cached;
-      lineMetrics?.prepare?.(wordFontFamily(format.fontFamily));
-      const metrics = measureWordCanvasText(context, text, format);
-      const line = lineMetrics?.measure(format, wordFontFamily(format.fontFamily));
+      lineMetrics?.prepare?.(family);
+      const metrics = measureWordCanvasText(context, text, format, family);
+      const line = lineMetrics?.measure(format, family);
       const measurement = Object.freeze({
         width: metrics.width,
         // Font boxes stay constant for every glyph in a run. Painted glyph boxes do not:
@@ -69,7 +82,7 @@ export function canvasWordTextMeasurer(context: WordCanvasTextContext, lineMetri
         ascent: line?.ascent ?? metrics.ascent,
         descent: line?.descent ?? metrics.descent,
       });
-      measured.set(key, measurement);
+      values.set(text, measurement);
       return measurement;
     },
   });

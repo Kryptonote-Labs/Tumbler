@@ -7,7 +7,7 @@ import { buildWordDocumentFixture } from './document-fixture.ts';
 
 const image = { bytes: Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=', 'base64')), contentType: 'image/png' as const, width: 20, height: 30 };
 const content = (styleId: string): WordContentBlock[] => [{ kind: 'paragraph', styleId, runs: [
-  { text: 'Story link', link: 'https://example.com/story' }, { text: '\uFFFC', image },
+  { text: 'Story link', link: 'https://example.com/story', format: { color: { theme: 'accent1', fallback: '#156082' } } }, { text: '\uFFFC', image },
 ] }];
 
 for (const conformance of ['strict', 'transitional'] as const) {

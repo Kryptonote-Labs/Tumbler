@@ -6,7 +6,12 @@ export interface WordSectionBaseline {
   readonly finalSection: WordSectionProperties;
   readonly sections: readonly { readonly paragraph: number; readonly properties: WordSectionProperties }[];
 }
+const baselines = new WeakMap<WordArtifact, WordSectionBaseline>();
 export function wordSectionBaseline(source: WordArtifact): WordSectionBaseline {
-  return { finalSection: source.document.finalSection, sections: source.document.blocks.flatMap(block =>
+  const found = baselines.get(source);
+  if (found) return found;
+  const baseline = { finalSection: source.document.finalSection, sections: source.document.blocks.flatMap(block =>
     block.kind === 'paragraph' && block.section ? [{ paragraph: block.elementId, properties: block.section }] : []) };
+  baselines.set(source, baseline);
+  return baseline;
 }

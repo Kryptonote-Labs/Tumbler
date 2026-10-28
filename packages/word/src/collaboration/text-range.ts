@@ -1,4 +1,5 @@
-import * as Y from 'yjs';
+import { wordTextIndex } from './text-index.ts';
+import type * as Y from 'yjs';
 import { validateAttributes } from './formatting.ts';
 import { validateText } from './validation.ts';
 
@@ -7,37 +8,16 @@ export interface WordTextRangePart {
   attributes?: Record<string, unknown>;
 }
 
-/** Read a UTF-16 range without materializing unchanged text. Walks CRDT items, not characters.
+/** Read a UTF-16 range from the incremental index, with fresh reads during unfinished writes.
  * The returned parts and attribute objects are copies. The document must contain text only.
  */
 export function wordTextRange(text: Y.Text, start = 0, end = text.length): WordTextRangePart[] {
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start)
     throw new Error('Invalid text range.');
-  const result: WordTextRangePart[] = [];
-  const attributes: Record<string, unknown> = {};
-  let offset = 0;
-  // Y.Text exposes its linked items; inspecting ContentString avoids getContent(),
-  // which splits an entire unchanged string into individual characters.
-  for (let item = text._start; item && offset < end; item = item.right) {
-    if (item.deleted) continue;
-    const content = item.content;
-    if (content instanceof Y.ContentFormat) {
-      if (content.value === null) delete attributes[content.key];
-      else attributes[content.key] = content.value;
-    } else if (item.countable) {
-      const from = Math.max(0, start - offset);
-      const to = Math.min(item.length, end - offset);
-      if (to > from) {
-        if (!(content instanceof Y.ContentString)) throw new Error('Only text is supported.');
-        result.push({
-          insert: content.str.slice(from, to),
-          ...(Object.keys(attributes).length ? { attributes: { ...attributes } } : {}),
-        });
-      }
-      offset += item.length;
-    }
-  }
-  return result;
+  return wordTextIndex(text).range(start, end).map(part => ({
+    insert: part.insert,
+    ...(part.attributes && Object.keys(part.attributes).length ? { attributes: { ...part.attributes } } : {}),
+  }));
 }
 
 const inlineAttributes = new Set([
@@ -61,15 +41,24 @@ const inlineAttributes = new Set([
   'fontSize',
 ]);
 
+const visualAttributes = new Set([
+  'bold', 'italic', 'underline', 'strike', 'fontFamily', 'wordUnderline', 'highlight',
+  'shading', 'verticalAlign', 'characterSpacingPoints', 'link', 'color', 'font', 'fontSize',
+]);
+
 /** Prove that a delta on an already validated region preserves its structural invariants.
  * Read deletions from an untouched replica of the pre-edit text. False requires full validation.
  * Hosts must still check source references, custom attributes, metadata and update completeness.
+ * With allowFormatting, validate host-specific values in retain patches as well as insertions.
  */
-export function isWordTextOnlyEdit(delta: Y.YTextEvent['delta'], previous: Y.Text): boolean {
+export function isWordTextOnlyEdit(delta: Y.YTextEvent['delta'], previous: Y.Text, allowFormatting = false): boolean {
   let offset = 0;
   for (const part of delta) {
     if (part.retain) {
-      if (part.attributes) return false;
+      if (part.attributes) {
+        if (!allowFormatting || Object.keys(part.attributes).some(key => !visualAttributes.has(key))) return false;
+        validateAttributes(Object.fromEntries(Object.entries(part.attributes).filter(([, value]) => value !== null)));
+      }
       offset += part.retain;
     }
     if (part.delete) {

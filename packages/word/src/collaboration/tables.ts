@@ -1,3 +1,4 @@
+import { wordTextIndex } from './text-index.ts';
 import { isWordCellFormat, isWordRowFormat, type WordCellFormat, type WordRowFormat } from '../table-format.ts';
 import type * as Y from 'yjs';
 
@@ -87,21 +88,10 @@ export function isTableCell(value: unknown): value is TableCell {
   );
 }
 
-export function tableParagraphs(text: Y.Text) {
-  const result: { start: number; end: number; table?: TableCell }[] = [];
-  let start = 0,
-    offset = 0;
-  for (const part of text.toDelta()) {
-    if (typeof part.insert !== 'string') continue;
-    for (let i = 0; i < part.insert.length; i++) {
-      if (part.insert[i] === '\n') {
-        result.push({ start, end: offset + i + 1, table: part.attributes?.table });
-        start = offset + i + 1;
-      }
-    }
-    offset += part.insert.length;
-  }
-  return result;
+export function tableParagraphs(text: Y.Text): { start: number; end: number; table?: TableCell }[] {
+  return wordTextIndex(text).paragraphs().map(({ start, end, attributes }) => ({
+    start, end, ...(attributes?.table ? { table: attributes.table as TableCell } : {}),
+  }));
 }
 
 function isTableSource(value: unknown): value is NonNullable<TableCell['source']> {

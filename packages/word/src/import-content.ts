@@ -1,4 +1,5 @@
 import { WORD_LIST_KINDS } from './authored-list.ts';
+import { restoredWordContent } from './import-content-cache.ts';
 import type { WordArtifact } from './artifact.ts';
 import type { WordBlock, WordParagraph, WordRun } from './document.ts';
 import type { WordContentBlock } from './create-content.ts';
@@ -8,6 +9,8 @@ import { wordParagraphTextSegments } from './text.ts';
 /** Editable content plus references to its immutable package. References retain properties that
  * an authoring UI does not expose, including styles, hyperlinks, sections and drawing markup. */
 export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
+  const restored = restoredWordContent(artifact);
+  if (restored) return restored;
   const document = artifact.document;
   const paragraph = (block: WordParagraph): WordContentBlock => {
     const runs = new Map<number, WordRun>();

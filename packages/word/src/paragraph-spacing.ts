@@ -15,6 +15,8 @@ export function paragraphGap(previous: ComputedWordParagraphFormat | undefined, 
     - (sameStyle && current.contextualSpacing ? before : 0));
 }
 
+const adjusted = new WeakMap<ComputedWordParagraphFormat, { before: number; after: number; value: ComputedWordParagraphFormat }>();
+
 /** Assign an adjacent gap to the following paragraph, once, before measuring or placing it.
  * Copy the format, leaving cached paragraph preparation and authored properties untouched.
  */
@@ -29,5 +31,10 @@ export function withParagraphSpacing<T extends Pick<PreparedParagraph, 'format'>
   const before = paragraphGap(previous?.kind === 'paragraph' ? format(previous) : undefined, prepared.format);
   const after = next?.kind === 'paragraph' ? 0 : prepared.format.spacingAfterTwips;
   if (before === prepared.format.spacingBeforeTwips && after === prepared.format.spacingAfterTwips) return prepared;
-  return { ...prepared, spacingBeforeAtStartTwips: prepared.format.spacingBeforeTwips, format: { ...prepared.format, spacingBeforeTwips: before, spacingAfterTwips: after } };
+  const immutable = Object.isFrozen(prepared.format);
+  const previousFormat = immutable ? adjusted.get(prepared.format) : undefined;
+  const value = previousFormat?.before === before && previousFormat.after === after ? previousFormat.value :
+    Object.freeze({ ...prepared.format, spacingBeforeTwips: before, spacingAfterTwips: after });
+  if (immutable && value !== previousFormat?.value) adjusted.set(prepared.format, { before, after, value });
+  return { ...prepared, spacingBeforeAtStartTwips: prepared.format.spacingBeforeTwips, format: value };
 }

@@ -1,3 +1,4 @@
+import { wordTextIndex } from '../collaboration/text-index.ts';
 import { wordSectionBaseline, type WordSectionBaseline } from '../section-baseline.ts';
 import type * as Y from 'yjs';
 import type { WordArtifact } from '../artifact.ts';
@@ -27,31 +28,23 @@ export function inspectWordSections(text: Y.Text, source?: WordArtifact | WordSe
   const sourceParagraphs = new Map(baseline?.sections.map(section => [section.paragraph, section.properties] as const));
   const result: { start: number; end: number; boundary?: WordSectionBoundary; properties: WordSectionProperties }[] = [];
   const lastSource = new Map<number, number>();
-  let cursor = 0;
-  for (const part of text.toDelta()) {
-    if (typeof part.insert !== 'string') continue;
-    for (let i = 0; i < part.insert.length; i++) if (part.insert[i] === '\n' && part.attributes?.wordParagraph !== undefined) lastSource.set(part.attributes.wordParagraph, cursor + i);
-    cursor += part.insert.length;
-  }
-  let offset = 0, start = 0;
-  for (const part of text.toDelta()) {
-    if (typeof part.insert !== 'string') continue;
-    const attributes = part.attributes ?? {};
-    for (let i = 0; i < part.insert.length; i++) {
-      if (part.insert[i] !== '\n' || attributes.table) continue;
-      let boundary = readWordSectionBoundary(attributes);
-      if (boundary === undefined && attributes.wordParagraph !== undefined && lastSource.get(attributes.wordParagraph) === offset + i) {
-        const original = sourceParagraphs.get(attributes.wordParagraph);
-        if (original) boundary = { source: original.elementId, format: {} };
-      }
-      if (boundary) {
-        const base = boundary.source === undefined ? finalSection : imported.find(section => section.elementId === boundary.source);
-        if (!base) throw new Error('Unknown source section.');
-        result.push({ start, end: offset + i + 1, boundary, properties: resolveWordSection(base, boundary.format) });
-        start = offset + i + 1;
-      }
+  const paragraphs = wordTextIndex(text).paragraphs();
+  for (const { end, attributes } of paragraphs)
+    if (typeof attributes?.wordParagraph === 'number') lastSource.set(attributes.wordParagraph, end - 1);
+  let start = 0;
+  for (const { end, attributes = {} } of paragraphs) {
+    if (attributes.table) continue;
+    let boundary = readWordSectionBoundary(attributes);
+    if (boundary === undefined && typeof attributes.wordParagraph === 'number' && lastSource.get(attributes.wordParagraph) === end - 1) {
+      const original = sourceParagraphs.get(attributes.wordParagraph);
+      if (original) boundary = { source: original.elementId, format: {} };
     }
-    offset += part.insert.length;
+    if (boundary) {
+      const base = boundary.source === undefined ? finalSection : imported.find(section => section.elementId === boundary.source);
+      if (!base) throw new Error('Unknown source section.');
+      result.push({ start, end, boundary, properties: resolveWordSection(base, boundary.format) });
+      start = end;
+    }
   }
   result.push({ start, end: text.length, properties: finalSection });
   return result;

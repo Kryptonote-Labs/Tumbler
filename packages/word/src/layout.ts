@@ -1,3 +1,5 @@
+import { CachedLineSequence, PreparedLineSequence } from './paragraph-lines.ts';
+import { wordShapeGroups } from './shape-groups.ts';
 import { wordFontKerning } from './font-kerning.ts';
 import { reflowPreparedTable } from './table-reflow.ts';
 import { numberWordLayout } from './line-numbering.ts';
@@ -282,7 +284,7 @@ export class WordLayoutCache {
   pages: readonly WordLayoutPage[] = [];
   readonly translated = new WeakMap<WordLayoutLine, { dx: number; dy: number; value: WordLayoutLine }>();
   readonly lines = new WeakMap<PreparedLine, { marker: PreparedMarker | undefined; value: WordLayoutLine }>();
-  readonly paragraphs = new WeakMap<WordParagraph, { width: number; marker: string; measurer: WordTextMeasurer; wrapTrailSpaces: boolean; doNotExpandShiftReturn: boolean; value: PreparedParagraph }>();
+  readonly paragraphs = new WeakMap<WordParagraph, { width: number; marker: string; measurer: WordTextMeasurer; wrapTrailSpaces: boolean; doNotExpandShiftReturn: boolean; value: PreparedParagraph; flow?: Omit<PreparedParagraph, 'lines'> & { lines: CachedLineSequence<PreparedLine> } }>();
   readonly tables = new WeakMap<WordTable, {
     width: number;
     wrapTrailSpaces: boolean;
@@ -320,6 +322,9 @@ interface AtomBase {
 interface GlyphAtom extends AtomBase {
   /** Advance with no preceding glyph, used when a kerned pair crosses a line boundary. */
   readonly lineStartWidth?: number;
+  /** Prefix already shaped on this line, discarded when carrying glyphs across a wrap. */
+  readonly shapedPrefix?: { readonly text: string; readonly advance: number };
+  readonly split?: () => Iterable<GlyphAtom>;
   readonly shaping?: { readonly key: string; readonly measure: (text: string) => WordTextMeasurement };
   readonly field?: WordPageField;
   readonly kind: "glyph";
@@ -690,7 +695,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
               cursorY += used;
             }
             if (groupIndex < groups.length) advanceColumn(section.properties);
-            yield* progress();
+            if (emitProgress) yield* progress();
           }
           continue;
         }
@@ -769,7 +774,7 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
             sequence = prepared.lines;
             lineIndex = -1;
           }
-          yield* progress();
+          if (emitProgress) yield* progress();
         }
         cursorY += points(prepared.format.spacingAfterTwips);
       }
@@ -1018,37 +1023,6 @@ function prepareParagraph(
   return Object.freeze({ ...flow, lines: Object.freeze([...flow.lines]) });
 }
 
-/** Bounded lookahead shared by body pagination and keep/widow policies. */
-class PreparedLineSequence implements Iterable<PreparedLine> {
-  private readonly values: PreparedLine[] = [];
-  private done = false;
-  constructor(private readonly iterator: Iterator<PreparedLine>, private readonly completed?: (lines: readonly PreparedLine[]) => void) {}
-  get(index: number): PreparedLine | undefined {
-    while (!this.done && this.values.length <= index) {
-      const next = this.iterator.next();
-      if (next.done) {
-        this.done = true;
-        this.completed?.(Object.freeze(this.values));
-      } else this.values.push(next.value);
-    }
-    return this.values[index];
-  }
-  heightUntil(maxHeight: number): number {
-    let height = 0;
-    for (const line of this) {
-      height += line.ascent + line.descent;
-      if (height > maxHeight) break;
-    }
-    return height;
-  }
-  *[Symbol.iterator](): Generator<PreparedLine> {
-    for (let index = 0; ; index++) {
-      const line = this.get(index);
-      if (!line) return;
-      yield line;
-    }
-  }
-}
 
 function prepareParagraphFlow(
   document: WordLayoutDocumentContext,
@@ -1063,7 +1037,7 @@ function prepareParagraphFlow(
   const doNotExpandShiftReturn = document.doNotExpandShiftReturn ?? false;
   const markerKey = JSON.stringify(markerSource);
   const cached = startOffset === 0 ? document.cache?.paragraphs.get(paragraph) : undefined;
-  if (cached && cached.width === columnWidth && cached.marker === markerKey && cached.measurer === measurementIdentity(measurer) && cached.wrapTrailSpaces === wrapTrailSpaces && cached.doNotExpandShiftReturn === doNotExpandShiftReturn) return { ...cached.value, lines: new PreparedLineSequence(cached.value.lines.values()) };
+  if (cached && cached.width === columnWidth && cached.marker === markerKey && cached.measurer === measurementIdentity(measurer) && cached.wrapTrailSpaces === wrapTrailSpaces && cached.doNotExpandShiftReturn === doNotExpandShiftReturn) return cached.flow ??= { ...cached.value, lines: new CachedLineSequence(cached.value.lines) };
   if (document.cache) document.cache.measuredParagraphs++;
   const computed = document.paragraphFormat(paragraph);
   const format = markerSource === undefined ? computed : Object.freeze({
@@ -1076,7 +1050,12 @@ function prepareParagraphFlow(
   function* suffix() {
     for (const atom of paragraphAtoms(document, paragraph, measurer, preparation)) {
       if (atom.startOffset >= startOffset) yield atom;
-      else preceding = atom;
+      else if (atom.kind === 'glyph' && atom.split && atom.endOffset > startOffset) {
+        for (const part of atom.split()) {
+          if (part.startOffset >= startOffset) yield part;
+          else preceding = part;
+        }
+      } else preceding = atom;
     }
   }
   const atoms = suffix();
@@ -1153,28 +1132,24 @@ function* resolvedParagraphAtoms(
           text: content.value, width: measurement.width, ascent: measurement.ascent - baselineShift, descent: measurement.descent + baselineShift,
           baselineShift, breakAfter: false, whitespace: false, startOffset, endOffset: logicalOffset, format: symbolFormat, hyperlink });
       } else if (content.kind === "text") {
-        for (const grapheme of graphemes(content.value, preparation)) {
-          consumePreparation(preparation, 'atoms');
-          const measurement = measure(grapheme);
-          const startOffset = logicalOffset;
-          logicalOffset += grapheme.length;
-          yield Object.freeze({
-            kind: "glyph",
-            runElementId: run.elementId,
-            contentElementId: content.elementId,
-            text: grapheme,
-            width: measurement.width,
-            ...(shaping ? { shaping } : {}),
-            ascent: measurement.ascent,
-            descent: measurement.descent,
-            baselineShift,
-            breakAfter: isBreakOpportunity(grapheme),
-            whitespace: isBreakableSpace(grapheme),
-            startOffset,
-            endOffset: logicalOffset,
-            format,
-            hyperlink,
-          });
+        const glyph = (text: string, startOffset: number): GlyphAtom => Object.freeze({
+          kind: 'glyph', runElementId: run.elementId, contentElementId: content.elementId,
+          text, ...measure(text), ...(shaping ? { shaping } : {}), baselineShift,
+          breakAfter: isBreakOpportunity(text), whitespace: isBreakableSpace(text),
+          startOffset, endOffset: startOffset + text.length, format, hyperlink,
+        });
+        for (const group of wordShapeGroups(graphemes(content.value, preparation), !!shaping, preparation)) {
+          const start = logicalOffset;
+          const atom = glyph(group.text, start);
+          logicalOffset += group.text.length;
+          if (group.count === 1) yield atom;
+          else yield Object.freeze({ ...atom, split: function* () {
+            let offset = start;
+            for (const text of graphemes(group.text)) {
+              yield glyph(text, offset);
+              offset += text.length;
+            }
+          } });
         }
       } else if (content.kind === "tab") {
         yield { ...controlAtom("tab", run, content.elementId, logicalOffset, format, hyperlink), ...(content.position ? { position: content.position } : {}) };
@@ -1233,7 +1208,13 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
   const iterator: Iterator<ParagraphAtom, void> = source[Symbol.iterator]();
   let pending: ParagraphAtom[] = [];
   let pendingIndex = 0;
+  let expanding: Iterator<GlyphAtom> | undefined;
   const take = (): ParagraphAtom | undefined => {
+    if (expanding) {
+      const next = expanding.next();
+      if (!next.done) return next.value;
+      expanding = undefined;
+    }
     if (pendingIndex < pending.length) return pending[pendingIndex++];
     pending = [];
     pendingIndex = 0;
@@ -1315,6 +1296,13 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
     // Keep their logical offsets; push() removes only their painted advance.
     materialized = shapeLineAdvance(materialized, line);
     const hangingSpace = !wrapTrailSpaces && materialized.kind === "glyph" && materialized.text === " ";
+    // Fitting words need one shaping measurement. Expand only a candidate that
+    // reaches the line boundary, preserving grapheme-level wrapping and carries.
+    if (lastBreak < 0 && materialized.kind === 'glyph' && materialized.split && !hangingSpace &&
+      lineWidth + atomWidthValue(materialized) > Math.max(1, width - (lineCount === 0 ? points(format.firstLineTwips - format.hangingTwips) : 0))) {
+      expanding = materialized.split()[Symbol.iterator]();
+      continue;
+    }
     if (!hangingSpace && line.length > 0 && lineWidth + atomWidthValue(materialized) > Math.max(1, width - (lineCount === 0 ? points(format.firstLineTwips - format.hangingTwips) : 0))) {
       if (lastBreak >= 0) {
         const carry = line.splice(lastBreak + 1);
@@ -1326,6 +1314,11 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
       } else yield push(undefined, true);
       if (atom.kind === "tab") materialized = Object.freeze({ ...atom, width: Math.max(0, tabAdvance(atom, following, lineWidth, width, format, lineCount === 0)) });
       materialized = shapeLineAdvance(materialized, line);
+      if (materialized.kind === 'glyph' && materialized.split &&
+        lineWidth + atomWidthValue(materialized) > Math.max(1, width - (lineCount === 0 ? points(format.firstLineTwips - format.hangingTwips) : 0))) {
+        expanding = materialized.split()[Symbol.iterator]();
+        continue;
+      }
     }
     line.push(materialized);
     lineWidth += atomWidthValue(materialized);
@@ -1339,16 +1332,14 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
  * cannot represent overlapping ligatures; reset the prefix when wrapping. */
 function shapeLineAdvance(atom: Exclude<ParagraphAtom, BreakAtom>, line: readonly Exclude<ParagraphAtom, BreakAtom>[]): Exclude<ParagraphAtom, BreakAtom> {
   if (atom.kind !== 'glyph' || !atom.shaping) return atom;
-  let prefix = '', advance = 0;
-  for (let index = line.length - 1; index >= 0; index--) {
-    const previous = line[index]!;
-    if (previous.kind !== 'glyph' || previous.shaping?.key !== atom.shaping.key) break;
-    prefix = previous.text + prefix;
-    advance += previous.width;
-  }
+  const previous = line.at(-1);
+  const prefix = previous?.kind === 'glyph' && previous.shaping?.key === atom.shaping.key
+    ? previous.shapedPrefix : undefined;
+  const text = (prefix?.text ?? '') + atom.text;
   const standalone = atom.lineStartWidth ?? atom.width;
-  const width = prefix ? Math.max(0, atom.shaping.measure(prefix + atom.text).width - advance) : standalone;
-  return { ...atom, width, lineStartWidth: standalone };
+  const width = prefix ? Math.max(0, atom.shaping.measure(text).width - prefix.advance) : standalone;
+  return { ...atom, width, lineStartWidth: standalone,
+    shapedPrefix: { text, advance: (prefix?.advance ?? 0) + width } };
 }
 
 function placeLine(
@@ -1370,7 +1361,7 @@ function placeLine(
     budget.fragments += cached.value.fragments.length;
     if (budget.fragments > budget.maxFragments) throw new WordError("limit_exceeded", `Layout exceeds ${budget.maxFragments} fragments.`);
     const value = cached.value.x === x && cached.value.y === y ? cached.value : translateLine(cached.value, x - cached.value.x, y - cached.value.y);
-    budget.cache!.lines.set(line, { marker, value });
+    if (value !== cached.value) budget.cache!.lines.set(line, { marker, value });
     return value;
   }
   // Stretch only ordinary spaces between words, after the final tab stop.
@@ -1538,6 +1529,7 @@ function compileStory(document: WordDocument, story: WordHeaderFooterStory | Wor
 }
 
 function decorateNotes(document: WordLayoutStories, pages: MutablePage[], measurer: WordTextMeasurer, budget: LayoutBudget): void {
+  if (!document.notes.length) return;
   const endnotes = new Set<number>();
   for (const page of pages) {
     const footnotes = new Set<number>();

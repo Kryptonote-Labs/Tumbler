@@ -1010,6 +1010,21 @@ Scoped and linear nested-table insertion use the same cell-local operation path.
 Both source and canonical cells retain the preceding paragraph and exactly one
 trailing parent paragraph after inserting into their final paragraph.
 
+`applyDelta(delta, origin)` applies synchronous editor input. Plain-story typing,
+backspace and visual formatting use inline preflight against an exactly validated
+baseline. It checks text, attributes and UTF-16 boundaries before writing once.
+Checkpoints are captured before observers run, so unrelated observer writes or
+received changes cannot become trusted state. Structural edits and table edits
+fall back to staged preparation and atomic commit. Hosts still validate custom
+attributes, package provenance and permissions.
+
+Local edits wholly inside one formatted string use Yjs item integration with the
+same identifiers and wire updates as `Y.Text`. Formatting boundaries retain the
+general Yjs path. `wordTextDelta(event)` supplies an equivalent normalized local
+delta only while the document exactly matches that write's checkpoint. Other
+events use `event.delta`. Raw Yjs events are unchanged. Checkpoints incrementally
+retain transaction deletion ranges and include unfinished and queued writes.
+
 `prepareDelta(delta)` translates existing editor deltas into payload-local edits.
 It retains source cell boundaries, rich pasted text and virtual paragraph
 formatting. Pasted tables migrate in the same update. `prepareChanges(changes)`
@@ -1017,6 +1032,17 @@ executes anchored batches, including table structure, cell formatting, object
 moves and expected-text checks. All prepare methods leave the owner unchanged
 and return complete updates, which `commit` revalidates before one atomic write.
 Hosts still validate package provenance, asset access and editing authority.
+
+`wordTextRange(text, start, end)` and `wordTextString(text)` share an incremental
+text index for formatting, table and section reads. Edits copy boundary chunks
+instead of the complete list of retained source runs. Unfinished writes and reads
+before the index's observer use current CRDT items, so an earlier observer cannot
+see stale cached text. Source formatting identities remain intact.
+
+Layout reuses completed paragraph lines, immutable block fingerprints and style
+resolution. Shaping batches fitting ASCII word spans and expands them back into
+graphemes when a line must break inside a word. Long words, unequal column widths
+and preview preparation budgets retain their existing behavior.
 
 `anchor` and `resolve` use authoritative character identities and cell addresses,
 so a selection in a new empty cell survives other peers inserting columns before
@@ -1165,3 +1191,38 @@ Style and default tabs still apply, following
 Imported targetless hyperlink wrappers omit the public `link` attribute and retain
 their source identity. This keeps no-op exports intact while reserving `link: ''`
 for explicit unlinking.
+
+### Native document archives
+
+`createWordNativeArchive(artifact)` converts an imported Word package into compiled document
+semantics and immutable binary resources. Hosts can store `model` and each resource as separate
+SQLite blobs, outside the collaboration state and operation log. `openWordNativeArchive(archive)`
+restores the engine without reading a DOCX or parsing XML. The compiled
+body and header/footer models retain their resolved formatting and source identities.
+
+```ts
+const native = createWordNativeArchive(openWordArtifact(uploadedBytes));
+// Persist native.model and native.resources, then discard the uploaded DOCX.
+const source = openWordNativeArchive(native);
+const document = new NativeWordDocument({ source });
+```
+
+The archive owns every original package member, relationships, content types, lossless XML bytes
+and lexical source bytes, including unknown extensions and binary parts. Original XML identities
+remain preservation references; they are not a dependency on an original ZIP or file. Editing uses
+the compiled model. Export materializes a package from the retained resources and current content.
+Unchanged member payloads, compressed member data and opaque ZIP headers survive native reopening.
+An unedited native source reconstructs the exact uploaded ZIP bytes, including directory records,
+comments and metadata. Edited exports can regenerate ZIP headers; this does not promise byte-identical ZIP
+container metadata. Opaque OOXML and package payloads remain exact.
+
+`encodeWordNativeArchive` and `decodeWordNativeArchive` provide a portable binary envelope for
+transport. Model and resource integrity checks reject missing, truncated or corrupted data. Native
+archives are versioned engine state produced by Tumbler, not an additional untrusted user import
+format. Do not put these immutable resources into each collaborative edit or flatten unrecognized
+objects into JSON: the codec deliberately rejects object types it cannot preserve.
+
+Locally prepared collaborative updates carry a validation proof tied to their owner, full CRDT
+snapshot, root identities and layout baseline. An unchanged local preparation can commit without
+building another validation replica. Received, modified and stale updates still validate the full
+composed document. Snapshot freshness includes deletion-only changes.

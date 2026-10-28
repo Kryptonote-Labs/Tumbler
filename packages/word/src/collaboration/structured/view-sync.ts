@@ -3,6 +3,15 @@ import type { WordDelta } from "../commands.ts";
 
 /** Preserve unchanged view characters, then update only attributes that actually differ. */
 export function syncWordView(text: Y.Text, next: WordDelta) {
+  // New views already have attributed content available. Applying it in order avoids
+  // seeking from the beginning for every source run's formatting.
+  if (!text.length) {
+    text.applyDelta(next.map(part => ({
+      ...part,
+      ...(part.attributes ? { attributes: { ...part.attributes } } : {}),
+    })));
+    return;
+  }
   const before = text.toString();
   const after = next.map((part) => (typeof part.insert === "string" ? part.insert : "")).join("");
   let start = 0,
@@ -23,6 +32,7 @@ export function syncWordView(text: Y.Text, next: WordDelta) {
     const old: { insert: string; attributes?: Record<string, unknown> }[] = text.toDelta();
     let oldIndex = 0,
       oldEnd = old[0]?.insert.length ?? 0;
+    const formatting: WordDelta = [];
     for (const part of next) {
       if (typeof part.insert !== "string") throw new Error("Only text can be projected.");
       const end = at + part.insert.length;
@@ -36,9 +46,14 @@ export function syncWordView(text: Y.Text, next: WordDelta) {
         for (const key of new Set([...Object.keys(previous), ...Object.keys(attributes)]))
           if (JSON.stringify(previous[key]) !== JSON.stringify(attributes[key]))
             patch[key] = attributes[key] ?? null;
-        if (Object.keys(patch).length) text.format(at, count, patch);
+        const previousRetain = formatting.at(-1);
+        if (Object.keys(patch).length) formatting.push({ retain: count, attributes: patch });
+        else if (previousRetain?.retain !== undefined && !previousRetain.attributes) previousRetain.retain += count;
+        else formatting.push({ retain: count });
         at += count;
       }
     }
+    // One delta advances through the CRDT once, retaining unchanged character identities.
+    if (formatting.some(part => part.attributes)) text.applyDelta(formatting);
   });
 }

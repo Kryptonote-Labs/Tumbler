@@ -1,3 +1,4 @@
+import { wordColoursEqual, type WordColour } from './theme-colours.ts';
 import { sectionBoundaryXml } from './section-format.ts';
 import { indentAttributeNames, patchPositioningMarkup } from './package-positioning.ts';
 import { wordBreakXml } from './breaks.ts';
@@ -10,6 +11,13 @@ import type { WordArtifact } from './artifact.ts';
 import { PackageXml } from './package-xml.ts';
 import type { contentCopyScopes } from './package-copies.ts';
 import { xml, runProperties } from './create-xml.ts';
+
+/** Fallbacks also matter when a source has no theme or a consumer cannot resolve it. */
+function sameColourDeclaration(left: WordColour | undefined, right: WordColour | undefined) {
+  if (!wordColoursEqual(left, right)) return false;
+  return !left || !right || typeof left === 'string' || typeof right === 'string' ||
+    left.fallback.toLowerCase() === right.fallback.toLowerCase();
+}
 
 /** Rebuild paragraph text while retaining source wrappers and zero-width Word markup. */
 export function wordParagraphRenderer(
@@ -175,9 +183,13 @@ export function wordParagraphRenderer(
       characterSpacingPoints: 'spacing',
       kerningPoints: 'kern',
     } as const;
-    for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[])
-      if (run.format?.[key] !== undefined && run.format[key] !== original?.format?.[key])
-        replacements.set(propertyNames[key], runProperties({ [key]: run.format[key] }));
+    for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[]) {
+      if (run.format?.[key] === undefined) continue;
+      const unchanged = key === 'color' || key === 'shading'
+        ? sameColourDeclaration(run.format[key], original?.format?.[key])
+        : run.format[key] === original?.format?.[key];
+      if (!unchanged) replacements.set(propertyNames[key], runProperties({ [key]: run.format[key] }));
+    }
     if (resetStyle || run.resetFormat) for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[]) if (run.format?.[key] === undefined) replacements.set(propertyNames[key], '');
     if (resetStyle || run.resetFormat) {
       if (run.format?.fontSizePoints === undefined) replacements.set('szCs', '');
@@ -198,7 +210,7 @@ export function wordParagraphRenderer(
     let content =
       run.breakType ? markup.word(wordBreakXml(run.breakType, run.text)) :
       run.tab ? markup.word(positionalTabXml(run.tab, run.text)) :
-      element && original?.text === run.text && (element.localName !== 't' || /[\r\n]/.test(run.text))
+      element && original?.text === run.text
         ? sourceMarkup
         : element && original?.text === '\uFFFC'
           ? run.text.split('\uFFFC').map(text).join(sourceMarkup)

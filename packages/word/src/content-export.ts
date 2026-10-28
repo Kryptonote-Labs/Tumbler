@@ -16,6 +16,15 @@ import { wordParagraphRenderer } from './package-paragraphs.ts';
 import { contentCopyScopes } from './package-copies.ts';
 import { renderWordBlocks } from './package-blocks.ts';
 import { wordParagraphTextSegments } from './text.ts';
+import { isWordColour } from './theme-colours.ts';
+
+function themeColours(value: unknown, found = new Set<string>()): Set<string> {
+  if (!value || typeof value !== 'object' || value instanceof Uint8Array) return found;
+  if (isWordColour(value) && typeof value !== 'string')
+    found.add(JSON.stringify([value.theme, value.fallback.toLowerCase(), value.tint ?? 255, value.shade ?? 255]));
+  else for (const child of Object.values(value)) themeColours(child, found);
+  return found;
+}
 
 export function wordContentParagraphs(
   blocks: readonly WordContentBlock[],
@@ -135,7 +144,8 @@ export function prepareWordContent(
   blocks = normalize(blocks);
   const document = source.document;
   const markup = new PackageXml(document);
-  const originals = wordContentParagraphs(importWordContent(source));
+  const originalBlocks = importWordContent(source);
+  const originals = wordContentParagraphs(originalBlocks);
   const originalRuns = new Map(originals.flatMap(p => p.runs.map(run => [run.source!, run] as const)));
   const originalParagraphs = new Map(originals.map((p) => [p.source!, p]));
   const paragraphs = wordContentParagraphs(blocks);
@@ -175,6 +185,11 @@ export function prepareWordContent(
   const relationships = generated.document.package.relationships(
     generated.document.part.name,
   ).items;
+  // Retained theme references without a theme use their original fallback. Adding
+  // a default theme during an unrelated edit would change those existing colours.
+  const retainedColours = document.styles.themeColors ? undefined : themeColours(originalBlocks);
+  const needsTheme = retainedColours !== undefined &&
+    [...themeColours(blocks)].some(colour => !retainedColours.has(colour));
   // Stories must not add shared resources. The body may append media/numbering,
   // provided story numbering already resolves. New styles/themes and drawing
   // transforms require the sequential path so later edits see their effects.
@@ -182,7 +197,7 @@ export function prepareWordContent(
     (batchRole === 'story' && generated.document.numbering.partName) ||
     missingAuthoredStyles(document, paragraphs.flatMap(p => p.styleId ? [p.styleId] : [])).length ||
     relationships.some(rel => rel.targetMode === 'Internal' &&
-      ((batchRole === 'story' && /\/(image|numbering|customXml)$/.test(rel.type)) || (/\/theme$/.test(rel.type) && !document.styles.themeColors))) ||
+      ((batchRole === 'story' && /\/(image|numbering|customXml)$/.test(rel.type)) || (/\/theme$/.test(rel.type) && needsTheme))) ||
     paragraphs.some(p => p.runs.some(run => {
       const drawing = document.drawings.get(run.source!);
       const geometry = run.drawing ?? run.image;
@@ -260,7 +275,7 @@ export function prepareWordContent(
       continue;
     }
     if (rel.targetMode !== 'Internal' || !/\/(image|numbering|theme|customXml)$/.test(rel.type)) continue;
-    if (/\/theme$/.test(rel.type) && document.styles.themeColors) continue;
+    if (/\/theme$/.test(rel.type) && !needsTheme) continue;
     const part = generated.document.package.getPart(rel.targetPartName)!;
     const name = PartName.parse(`/word/${prefix}${part.name.value.split('/').at(-1)}`);
     if (/\/numbering$/.test(rel.type)) {

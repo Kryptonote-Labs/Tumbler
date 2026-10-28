@@ -1,17 +1,25 @@
 import type { WordDrawingAnchor } from './drawings.ts';
 import type { WordLayoutLine, WordLayoutPage, WordLayoutTable } from './layout.ts';
 
+const alignedPages = new WeakMap<WordLayoutPage, WordLayoutPage>();
+const unalignedLines = new WeakSet<WordLayoutLine>();
 const alignedLines = new WeakMap<WordLayoutLine, { key: string; value: WordLayoutLine }>();
 
 /** Resolve horizontal alignment after pagination, when the page and column bounds are known.
  * This also avoids translating page-relative alignment with cached paragraph/table geometry.
  */
 export function alignWordPageDrawings(page: WordLayoutPage): WordLayoutPage {
+  const previous = alignedPages.get(page);
+  if (previous) return previous;
   const left = (page.section.marginLeftTwips + page.section.gutterTwips) / 20;
   const right = page.width - page.section.marginRightTwips / 20;
   const even = page.index % 2 === 1;
   const lines = (items: readonly WordLayoutLine[], columnX: number, columnWidth: number) => items.map(line => {
-    if (!line.fragments.some(f => f.drawing?.placement === 'anchor' && f.drawing.anchor?.horizontalAlignment)) return line;
+    if (unalignedLines.has(line)) return line;
+    if (!line.fragments.some(f => f.drawing?.placement === 'anchor' && f.drawing.anchor?.horizontalAlignment)) {
+      unalignedLines.add(line);
+      return line;
+    }
     const key = `${page.width}:${left}:${right}:${even}:${columnX}:${columnWidth}`;
     const cached = alignedLines.get(line);
     if (cached?.key === key) return cached.value;
@@ -45,8 +53,11 @@ export function alignWordPageDrawings(page: WordLayoutPage): WordLayoutPage {
     headerLines: lines(page.headerLines, left, right - left), footerLines: lines(page.footerLines, left, right - left), noteLines: lines(page.noteLines, left, right - left),
     headerTables: tables(page.headerTables, left, right - left), footerTables: tables(page.footerTables, left, right - left), noteTables: tables(page.noteTables, left, right - left),
   };
-  if (same(page.columns, columns) && same(page.headerLines, stories.headerLines) && same(page.footerLines, stories.footerLines) && same(page.noteLines, stories.noteLines) && same(page.headerTables, stories.headerTables) && same(page.footerTables, stories.footerTables) && same(page.noteTables, stories.noteTables)) return page;
-  return Object.freeze({ ...page, ...stories, columns: Object.freeze(columns) });
+  const value = same(page.columns, columns) && same(page.headerLines, stories.headerLines) && same(page.footerLines, stories.footerLines) && same(page.noteLines, stories.noteLines) && same(page.headerTables, stories.headerTables) && same(page.footerTables, stories.footerTables) && same(page.noteTables, stories.noteTables)
+    ? page : Object.freeze({ ...page, ...stories, columns: Object.freeze(columns) });
+  alignedPages.set(page, value);
+  alignedPages.set(value, value);
+  return value;
 }
 function same<T>(a: readonly T[], b: readonly T[]) { return a.length === b.length && a.every((v, i) => v === b[i]); }
 function physicalAlignment(alignment: NonNullable<WordDrawingAnchor['horizontalAlignment']>, even: boolean) {

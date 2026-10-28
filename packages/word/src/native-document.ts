@@ -1,3 +1,4 @@
+import { nativeTableRowGrids } from './native-table-grid.ts';
 import { validateWordSectionReferences } from './section-format.ts';
 import { wordKerningHalfPoints } from './font-kerning.ts';
 import { isWordParagraphFormat } from './paragraph-format.ts';
@@ -23,7 +24,7 @@ import { wordGeometryAt } from './geometry.ts';
 import { WordStyles } from './styles.ts';
 import { nativeParagraphPositioning } from './native-positioning.ts';
 import { createWordStory, wordStoryArtifact, storyMainArtifact, wordSections, type WordStoryTarget } from './stories.ts';
-import { NativeWordSource, retainOpaqueBlocks } from './native-source.ts';
+import { NativeWordSource, nativeWordSource, retainOpaqueBlocks } from './native-source.ts';
 import type { WordArtifact } from './artifact.ts';
 import { reconcileWordContent } from './content-export.ts';
 import { wordParagraphText, wordParagraphTextSegments } from './text.ts';
@@ -105,7 +106,11 @@ export class NativeWordDocument implements WordLayoutSource {
   // Media identity follows immutable image bytes, independent of drawing geometry.
   private readonly imagePartNames = new WeakMap<Uint8Array, WordImageDrawing['partName']>();
   private nextImageId = 0;
+  private readonly fingerprints = new WeakMap<WordContentBlock, {
+    width: number; revision: number; section: boolean; defaults: string; value: string;
+  }>();
   private readonly signatures = new WeakMap<WordContentBlock, string>();
+  private readonly validatedText = new WeakSet<WordContentBlock>();
   private readonly paragraphTexts = new WeakMap<WordParagraph, string>();
   private effectiveNumbering: WordNumbering | undefined;
   private numberingStylesKey: string | undefined;
@@ -161,7 +166,7 @@ export class NativeWordDocument implements WordLayoutSource {
     if (!isWordParagraphFormat(paragraphDefaults)) throw new TypeError('Invalid paragraph formatting.');
     this.namedStyles = wordAuthoringStyles(options.source?.document.styles ?? options[storyFormatting]?.styles, options.defaultFormat, paragraphDefaults, options.source ? undefined : options.themeColours);
     this.positioningStyles = options.source?.document.styles ?? options[storyFormatting]?.styles ?? this.namedStyles;
-    this.compiled = options.source ? new NativeWordSource(options.source) : undefined;
+    this.compiled = options.source ? nativeWordSource(options.source) : undefined;
     this.defaults = this.compiled?.defaults ?? options[storyFormatting]?.defaults;
     const document = options.source?.document;
     this.wrapTrailSpaces = options.source?.document.wrapTrailSpaces ?? false;
@@ -232,7 +237,7 @@ export class NativeWordDocument implements WordLayoutSource {
       entry = { target, blocks, model: new NativeWordDocument({ ...options, [deferContent]: true, [storyFormatting]: { styles: this.namedStyles, defaults: this.defaults }, ...(source ? { source } : {}) }) };
       entry.model.inheritedDoNotExpandShiftReturn = this.doNotExpandShiftReturn;
     }
-    validateContentText(blocks, entry.model.compiled);
+    validateContentText(blocks, entry.model.compiled, entry.model.options.immutableContent ? entry.model.validatedText : undefined);
     this.editedStories.set(key, entry);
     entry.blocks = blocks;
     const numbering = this.numberingFor(this.authored);
@@ -333,7 +338,7 @@ export class NativeWordDocument implements WordLayoutSource {
   }
 
   update(input: readonly WordContentBlock[]) {
-    validateContentText(input, this.compiled);
+    validateContentText(input, this.compiled, this.options.immutableContent ? this.validatedText : undefined);
     const numbering = this.numberingFor(input);
     this.updateContent(input, numbering, this.positioningStyles);
     this.shareNumbering(numbering);
@@ -458,7 +463,12 @@ export class NativeWordDocument implements WordLayoutSource {
         const original = source.kind === 'paragraph' ? compiled?.paragraphs.get(source.source!) : undefined;
         const hasSection = source.kind === 'paragraph' && sectionOwners.get(`${source.sourceCopy ?? ''}:${source.source}`) === source;
         const sectionDefaults = source.kind === 'paragraph' && source.section && source.section.source === undefined ? JSON.stringify(this.finalSection) : '';
-        const fingerprint = `${this.positioningRevision}:${hasSection}:${sectionDefaults}:${signature(source, width)}`;
+        const cached = this.options.immutableContent ? this.fingerprints.get(source) : undefined;
+        const fingerprint = cached && cached.width === width && cached.revision === this.positioningRevision &&
+          cached.section === hasSection && cached.defaults === sectionDefaults ? cached.value :
+          `${this.positioningRevision}:${hasSection}:${sectionDefaults}:${signature(source, width)}`;
+        if (this.options.immutableContent && fingerprint !== cached?.value)
+          this.fingerprints.set(source, { width, revision: this.positioningRevision, section: hasSection, defaults: sectionDefaults, value: fingerprint });
         const descendantsStart = visited.length;
         let result: RecordBlock;
         if (this.options.immutableContent && previous?.signature === fingerprint && previous.subtree?.input === source && this.independent(source)) {
@@ -497,7 +507,9 @@ export class NativeWordDocument implements WordLayoutSource {
           const originalTable = compiled?.tables.get(source.source!);
           const widthsChanged = source.columnWidths !== undefined && JSON.stringify(source.columnWidths.map(w => Math.round(w * 20))) !== JSON.stringify(originalTable?.gridColumnWidthsTwips);
           const layoutWidths = originalTable && !widthsChanged ? compiled?.tableWidths.get(originalTable.elementId) : source.columnWidths;
-          const grid = authoredTableGrid(source.rows, layoutWidths, width, source.rowGrids);
+          const rowGrids = !widthsChanged && originalTable && layoutWidths
+            ? nativeTableRowGrids(source, originalTable, compiled?.rows, layoutWidths.length) : source.rowGrids;
+          const grid = authoredTableGrid(source.rows, layoutWidths, width, rowGrids);
           const widths = grid.widths;
           const rows = grid.rows.map((row, rowIndex) => ({
             ...compiled?.rows.get(source.rowSources?.[rowIndex]!),
@@ -808,10 +820,11 @@ function resetDirectParagraphFormat(format: ComputedWordParagraphFormat, inherit
 }
 
 /** Validate text before update allocates identities or changes source caches. */
-function validateContentText(blocks: readonly WordContentBlock[], source: NativeWordSource | undefined): void {
+function validateContentText(blocks: readonly WordContentBlock[], source: NativeWordSource | undefined, validated?: WeakSet<WordContentBlock>): void {
   for (const block of blocks) {
+    if (validated?.has(block)) continue;
     if (block.kind === 'table') {
-      for (const row of block.rows) for (const cell of row) validateContentText(cell.blocks, source);
+      for (const row of block.rows) for (const cell of row) validateContentText(cell.blocks, source, validated);
     } else if (block.kind === 'paragraph') {
       for (const run of block.runs) {
         validateXmlText(run.text);
@@ -820,5 +833,6 @@ function validateContentText(blocks: readonly WordContentBlock[], source: Native
           throw new TypeError('Use separate paragraphs for line-feed text.');
       }
     }
+    validated?.add(block);
   }
 }

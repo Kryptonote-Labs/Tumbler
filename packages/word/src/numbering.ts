@@ -84,6 +84,10 @@ export class WordNumbering {
   readonly #styles: WordNumberingStyles;
   readonly #resolved = new Map<number, readonly WordNumberingLevel[]>();
 
+  snapshot() {
+    return { styles: this.#styles, partName: this.partName, abstracts: this.abstracts, instances: this.instances };
+  }
+
   constructor(input: { styles?: WordNumberingStyles; partName?: PartName; abstracts?: readonly WordAbstractNumbering[]; instances?: readonly WordNumberingInstance[] } = {}) {
     this.#styles = input.styles ?? new WordNumberingStyles();
     this.partName = input.partName;

@@ -232,6 +232,9 @@ export function applyWordViewDelta(
       editDerivedText(doc, span.cell, value.text, () => ({ delta: local }));
     else value.text.applyDelta([...(value.start ? [{ retain: value.start }] : []), ...local]);
   }
+  // Migration ran before this edit. Only newly supplied table references can introduce
+  // another legacy table; ordinary typing need not rediscover every story's tables.
+  if (!ordered.some(part => part.attributes?.table)) return;
   // Pasted tables join the same protocol as tables inserted through the operation registry.
   for (const [story, value] of doc.share)
     if (value instanceof Y.Text) {

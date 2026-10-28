@@ -67,3 +67,20 @@ test('a host can load a font before its first canvas measurement', () => {
   measurer.measure('x', format);
   expect(events).toEqual(['prepare:Arial', 'measure']);
 });
+
+test('measurement caches follow mutable public formats and external canvas state changes', () => {
+  const context = { font: '', direction: 'inherit' as 'inherit' | 'ltr' | 'rtl', fontKerning: 'auto' as 'auto' | 'normal' | 'none', measureText(text: string) {
+    const size = Number(/([\d.]+)px/.exec(context.font)?.[1]);
+    return { width: text.length * size };
+  } };
+  const format = { ...createWordArtifact().document.styles.resolveStyledRun('Normal'), fontSizePoints: 12 };
+  const measure = canvasWordTextMeasurer(context);
+  expect(measure.measure('a', format).width).toBe(12);
+  format.fontSizePoints = 24;
+  expect(measure.measure('a', format).width).toBe(24);
+  context.font = 'normal 10px serif';
+  context.direction = 'rtl';
+  context.fontKerning = 'auto';
+  expect(measure.measure('bb', format).width).toBe(48);
+  expect(context).toHaveProperty('direction', 'ltr');
+});
