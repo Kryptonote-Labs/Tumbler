@@ -1018,6 +1018,11 @@ moves and expected-text checks. All prepare methods leave the owner unchanged
 and return complete updates, which `commit` revalidates before one atomic write.
 Hosts still validate package provenance, asset access and editing authority.
 
+`wordTextRange(text, start, end)` and `wordTextString(text)` share an incremental
+text index for formatting, table and section reads. Unfinished writes and reads
+before the index's observer use current CRDT items, so an earlier observer cannot
+see stale cached text. Source formatting identities remain intact.
+
 `anchor` and `resolve` use authoritative character identities and cell addresses,
 so a selection in a new empty cell survives other peers inserting columns before
 it. Paragraph identities also come from shared terminators, not the local

@@ -1,4 +1,5 @@
-import * as Y from 'yjs';
+import { wordTextIndex } from './text-index.ts';
+import type * as Y from 'yjs';
 import { validateAttributes } from './formatting.ts';
 import { validateText } from './validation.ts';
 
@@ -7,37 +8,16 @@ export interface WordTextRangePart {
   attributes?: Record<string, unknown>;
 }
 
-/** Read a UTF-16 range without materializing unchanged text. Walks CRDT items, not characters.
+/** Read a UTF-16 range from the incremental index, with fresh reads during unfinished writes.
  * The returned parts and attribute objects are copies. The document must contain text only.
  */
 export function wordTextRange(text: Y.Text, start = 0, end = text.length): WordTextRangePart[] {
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start)
     throw new Error('Invalid text range.');
-  const result: WordTextRangePart[] = [];
-  const attributes: Record<string, unknown> = {};
-  let offset = 0;
-  // Y.Text exposes its linked items; inspecting ContentString avoids getContent(),
-  // which splits an entire unchanged string into individual characters.
-  for (let item = text._start; item && offset < end; item = item.right) {
-    if (item.deleted) continue;
-    const content = item.content;
-    if (content instanceof Y.ContentFormat) {
-      if (content.value === null) delete attributes[content.key];
-      else attributes[content.key] = content.value;
-    } else if (item.countable) {
-      const from = Math.max(0, start - offset);
-      const to = Math.min(item.length, end - offset);
-      if (to > from) {
-        if (!(content instanceof Y.ContentString)) throw new Error('Only text is supported.');
-        result.push({
-          insert: content.str.slice(from, to),
-          ...(Object.keys(attributes).length ? { attributes: { ...attributes } } : {}),
-        });
-      }
-      offset += item.length;
-    }
-  }
-  return result;
+  return wordTextIndex(text).range(start, end).map(part => ({
+    insert: part.insert,
+    ...(part.attributes && Object.keys(part.attributes).length ? { attributes: { ...part.attributes } } : {}),
+  }));
 }
 
 const inlineAttributes = new Set([

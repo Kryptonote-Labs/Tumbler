@@ -1,3 +1,4 @@
+import { wordTextString } from './text-index.ts';
 import { isWordParagraphPositioning } from '../positioning.ts';
 import { wordTextRange } from './text-range.ts';
 import { hasWordParagraphReset, paragraphPropertyPatch, readWordParagraphFormat } from './paragraph-attributes.ts';
@@ -61,7 +62,7 @@ export function createWordCommands({ defaultFontSize = 12, defaultAttributes, va
   validateDocument?: (staged: Y.Doc, original: Y.Doc) => void;
 } = {}) {
 function bodyLength(text: Y.Text) {
-  return Math.max(0, text.length - (text.toString().endsWith('\n') ? 1 : 0));
+  return Math.max(0, text.length - (wordTextString(text).endsWith('\n') ? 1 : 0));
 }
 
 // Durable references identify collaborative characters, not revision-local XML elements.
@@ -94,7 +95,7 @@ function checkRange(text: Y.Text, range: WordRange) {
     range.end > bodyLength(text)
   )
     throw new Error('The edit range is outside the document.');
-  const value = text.toString();
+  const value = wordTextString(text);
   const segments = new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value);
   const boundary = (at: number) => {
     if (at === 0 || at === value.length) return true;
@@ -117,7 +118,7 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
   const sizes: number[] = [];
   const collapsed = range.start === range.end;
   const at = collapsed
-    ? Math.max(0, range.start - (range.start > 0 && text.toString()[range.start - 1] !== '\n' ? 1 : 0))
+    ? Math.max(0, range.start - (range.start > 0 && wordTextString(text)[range.start - 1] !== '\n' ? 1 : 0))
     : range.start;
   let position = at;
   for (const part of wordTextRange(text, at, collapsed ? at + 1 : range.end)) {
@@ -158,7 +159,7 @@ function wordFormats(text: Y.Text, range: WordRange): TextAttributes {
   // appearance and its source run (which may sit inside an imported hyperlink) behind.
   if (collapsed && result.link && (linkAt(text, range.start - 1) !== result.link || linkAt(text, range.start) !== result.link))
     for (const key of ['link', 'underline', 'wordUnderline', 'color', 'wordSource', 'wordCopy'] as const) delete result[key];
-  const value = text.toString();
+  const value = wordTextString(text);
   const last = value.indexOf('\n', range.start);
   for (const part of last < 0 ? [] : wordTextRange(text, last, last + 1)) {
       if (typeof part.attributes?.wordParagraph === 'number') result.wordParagraph = part.attributes.wordParagraph;
@@ -182,7 +183,7 @@ function replaceWordDelta(
   checkRange(text, range);
   protectTableBoundaries(text, range.start, range.end);
   value = value.replace(/\r\n?/g, '\n');
-  validateText(text.toString().slice(0, range.start) + value + text.toString().slice(range.end));
+  validateText(wordTextString(text).slice(0, range.start) + value + wordTextString(text).slice(range.end));
   validateAttributes(attributes);
   const { align, styleId, paragraph, positioning, tab: _tab, list, table: inheritedTable, wordParagraph, image: _image, field: _field, ...inline } = attributes;
   let table = inheritedTable;
@@ -201,7 +202,7 @@ function replaceWordDelta(
   let paragraphReset = false;
   if (value.includes('\n')) {
     let offset = 0;
-    const terminator = text.toString().indexOf('\n', range.start);
+    const terminator = wordTextString(text).indexOf('\n', range.start);
     for (const part of text.toDelta()) {
       const length = typeof part.insert === 'string' ? part.insert.length : 1;
       if (terminator >= offset && terminator < offset + length) {
@@ -259,7 +260,7 @@ function formatWordDelta(
   if (attributes.image !== undefined) throw new Error('Use image operations to change images.');
   if (attributes.table !== undefined)
     throw new Error('Use table operations to change cell structure.');
-  const value = text.toString();
+  const value = wordTextString(text);
   const { align, styleId, paragraph, positioning, tab: _tab, list, table: _table, image: _image, field: _field, ...inline } = attributes;
   // Yjs consumes null attributes. Retain explicit unlink intent in its existing sentinel.
   if (inline.link === null) inline.link = '';

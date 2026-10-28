@@ -92,3 +92,51 @@ test('optional inline formatting proofs validate values and exclude structural o
     expect(() => isWordTextOnlyEdit([{ retain: 1, attributes: { bold: 'invalid' } }], text, true)).toThrow();
   } finally { doc.destroy(); }
 });
+
+test('indexed reads agree during nested writes, earlier observers, remote updates and undo', () => {
+  const doc = new Y.Doc();
+  const text = doc.getText('body');
+  const other = new Y.Doc();
+  const reads = () => {
+    const actual = wordTextRange(text);
+    expect(actual.map(part => part.insert).join('')).toBe(text.toString());
+    const expand = (parts: { insert: string; attributes?: Record<string, unknown> }[]) =>
+      parts.flatMap(part => Array.from({ length: part.insert.length }, (_, i) =>
+        ({ text: part.insert[i], attributes: part.attributes ?? {} })));
+    expect(expand(actual)).toEqual(expand(text.toDelta()));
+    expect(wordTextRange(text, 2, 2)).toEqual([]);
+  };
+  text.insert(0, 'first\nsecond\n');
+  // This observer runs before the index observer. It must read this transaction's data.
+  text.observe(reads);
+  reads();
+  const undo = new Y.UndoManager(text);
+  doc.transact(() => {
+    text.insert(3, 'new', { italic: true });
+    reads();
+    text.format(0, 4, { bold: true });
+    reads();
+    text.delete(1, 3);
+    reads();
+  });
+  reads();
+  undo.undo(); reads();
+  undo.redo(); reads();
+  Y.applyUpdate(other, Y.encodeStateAsUpdate(doc));
+  other.getText('body').insert(5, 'remote', { underline: true });
+  Y.applyUpdate(doc, Y.encodeStateAsUpdate(other));
+  reads();
+  doc.destroy(); other.destroy();
+});
+
+test('an index first read during a write is not advanced twice by that write', () => {
+  const doc = new Y.Doc();
+  const text = doc.getText('body');
+  doc.transact(() => {
+    text.insert(0, 'first');
+    expect(wordTextRange(text).map(part => part.insert).join('')).toBe('first');
+    text.insert(5, ' second\n');
+  });
+  expect(wordTextRange(text).map(part => part.insert).join('')).toBe('first second\n');
+  doc.destroy();
+});
