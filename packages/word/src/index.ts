@@ -1,4 +1,5 @@
 /** WordprocessingML reading, layout, and editing model. */
+export { wordLiteralText } from './literal-text.ts';
 export {
   openWordDocument,
   WordDocument,

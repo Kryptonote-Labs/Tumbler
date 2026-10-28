@@ -1,12 +1,13 @@
 import { deflateRaw, inflateRaw } from '@tumblerjs/opc/compression';
 import { crc32 } from '@tumblerjs/opc';
 import * as z from 'zod';
-import { WordArtifact } from './artifact.ts';
+import { WordArtifact, openWordArtifact } from './artifact.ts';
 import { WordDocument } from './document.ts';
 import { NativeWordSource, nativeWordSource } from './native-source.ts';
 import { bindWordStoryArtifact, wordStoryArtifact } from './stories.ts';
 import { wordNativeCodecs } from './native-codecs.ts';
 import { readNativeGraph, writeNativeGraph } from './native-graph.ts';
+import type { WordContentBlock } from './create-content.ts';
 
 /** Immutable native semantics and preservation resources. Hosts store these outside the edit log. */
 export interface WordNativeArchive {
@@ -66,6 +67,13 @@ export function openWordNativeArchive(archive: WordNativeArchive): WordArtifact 
   });
   const restored = root.parse(readNativeGraph(data.graph, resources, wordNativeCodecs));
   if (!(restored.artifact.document instanceof WordDocument)) throw new TypeError('Invalid native Word document.');
+  // Early v1 archives compiled literal XML line ends as paragraph separators.
+  // Rebuild those known affected projections from their verified preservation bytes.
+  const legacyWhitespace = (blocks: readonly WordContentBlock[]): boolean => blocks.some(block =>
+    block.kind === 'table' ? block.rows.some(row => row.some(cell => legacyWhitespace(cell.blocks)))
+      : block.kind === 'paragraph' && block.runs.some(run => /[\r\n]/.test(run.text)));
+  if (restored.compiled.some(source => legacyWhitespace(source.original)))
+    return openWordArtifact(restored.artifact.bytes(), restored.artifact.document.openOptions);
   for (const source of restored.compiled) {
     if (source.artifact === restored.artifact) continue;
     bindWordStoryArtifact(restored.artifact, source.artifact.document.part.name.value, source.artifact);

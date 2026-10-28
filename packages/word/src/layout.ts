@@ -1140,6 +1140,10 @@ function* resolvedParagraphAtoms(
         });
         for (const group of wordShapeGroups(graphemes(content.value, preparation), !!shaping, preparation)) {
           const start = logicalOffset;
+          if (group.text === '\u2028') {
+            yield Object.freeze({ ...controlAtom('break', run, content.elementId, logicalOffset++, format, hyperlink), breakType: 'line' as const });
+            continue;
+          }
           const atom = glyph(group.text, start);
           logicalOffset += group.text.length;
           if (group.count === 1) yield atom;

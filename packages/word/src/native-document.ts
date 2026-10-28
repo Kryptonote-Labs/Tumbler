@@ -622,7 +622,7 @@ export class NativeWordDocument implements WordLayoutSource {
                   }
                   media.push({ ...updated, elementId: id });
                 }
-              } else if (inherited?.content.kind === 'text' && inherited.content.value === authoredRun.text && /[\r\n]/.test(authoredRun.text)) {
+              } else if (inherited?.content.kind === 'text' && inherited.content.value === authoredRun.text && /[\r\n\u2028]/.test(authoredRun.text)) {
                 contents.push({ ...inherited.content, elementId: allocate() });
               } else {
                 for (const part of authoredRun.text.split(/([\t\n\u2028])/)) {

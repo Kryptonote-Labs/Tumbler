@@ -25,3 +25,4 @@ export { bindWordLayoutSource, validateWordLayout } from './layout-validation.ts
 export { wordTextString } from './text-index.ts';
 
 export { wordTextDelta } from './text-events.ts';
+export { restoreWordSourceWhitespace } from './source-whitespace.ts';
