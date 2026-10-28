@@ -44,11 +44,13 @@ for (const conformance of ['strict', 'transitional'] as const) {
     const opaque = '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:x="urn:opaque">' +
       '<mc:Choice Requires="x"><w:ins w:id="1" w:author="Keep"><w:r><w:t>Choice</w:t></w:r></w:ins></mc:Choice>' +
       '<mc:Fallback><w:ins w:id="1" w:author="Keep"><w:r><w:t>Fallback</w:t></w:r></w:ins></mc:Fallback></mc:AlternateContent>';
+    const retained = ['del', 'moveFrom', 'moveTo'].map(kind => `<w:${kind} w:id="6" w:author="Opaque"><w:ins w:id="1" w:author="Keep"><w:r><w:t>Retained</w:t></w:r></w:ins></w:${kind}>`).join('');
     const input = source();
-    const xml = input.document.source.source.replace('</w:body>', '<w:p>' + opaque + '</w:p></w:body>');
+    const xml = input.document.source.source.replace('</w:body>', '<w:p>' + opaque + retained + '</w:p></w:body>');
     const artifact = openWordArtifact(buildWordDocumentFixture({ conformance, documentXml: xml }));
     const model = new NativeWordDocument({ source: artifact });
     model.update([...importWordContent(artifact), { kind: 'paragraph', runs: [{ text: 'Neighbour' }] }]);
     expect(model.artifact().document.source.source).toContain(opaque);
+    expect(model.artifact().document.source.source).toContain(retained);
   });
 }

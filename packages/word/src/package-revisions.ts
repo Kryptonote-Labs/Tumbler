@@ -1,7 +1,8 @@
 import { parseLosslessXml, type LosslessXmlElement } from '@tumblerjs/ooxml';
 import type { WordDocument } from './document.ts';
 
-const containers = new Set(['ins', 'del', 'moveFrom', 'moveTo']);
+// Insertions are projected into editable leaves. Deletions and moves remain opaque.
+const containers = new Set(['ins']);
 const modeled = new Set(['body', 'hdr', 'ftr', 'p', 'tbl', 'tr', 'tc', 'r', 'hyperlink', ...containers]);
 const decimal = (value: string) => /^[+-]?\d+$/.test(value) ? BigInt(value).toString() : value;
 
