@@ -1,4 +1,4 @@
-import { wordTextDelta } from './text-events.ts';
+import { hasQueuedWordTextChanges, wordTextChanged, wordTextDelta } from './text-events.ts';
 import * as Y from "yjs";
 
 const identities = new WeakMap<Y.Text, Map<number, string>>();
@@ -30,6 +30,11 @@ export function wordParagraphIdentity(text: Y.Text, at: number): string {
     revisions.set(text, revision);
     text.observe((event) => {
       revision.version++;
+      if (hasQueuedWordTextChanges(event)) {
+        positions!.clear();
+        revision.applied.add(event.transaction);
+        return;
+      }
       const previous = [...positions!.entries()].sort((a, b) => a[0] - b[0]);
       positions!.clear();
       let item = 0,
@@ -59,6 +64,12 @@ export function wordParagraphIdentity(text: Y.Text, at: number): string {
       }
       revision.applied.add(event.transaction);
     });
+  }
+  const revision = revisions.get(text), doc = text.doc;
+  if (doc && revision && (doc._transaction && wordTextChanged(doc._transaction, text) || doc._transactionCleanups.some(transaction =>
+    wordTextChanged(transaction, text) && !revision.applied.has(transaction)))) {
+    const identity = Y.createRelativePositionFromTypeIndex(text, at).item;
+    return identity ? `${identity.client}:${identity.clock}` : 'end';
   }
   let id = positions.get(at);
   if (id === undefined) {

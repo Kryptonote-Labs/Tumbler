@@ -12,6 +12,21 @@ interface RecordedEdit {
 const edits = new WeakMap<Y.Transaction, Map<Y.Text, RecordedEdit>>();
 const observed = new WeakMap<Y.YTextEvent, Delta>();
 
+export function wordTextChanged(transaction: Y.Transaction, text: Y.Text): boolean {
+  for (const root of transaction.changed.keys()) if (root instanceof Y.Text && root === text) return true;
+  return false;
+}
+
+/** Earlier observers can queue writes whose structs are already visible to event.delta.
+ * Incremental consumers must rebuild instead of applying that mixed-state delta twice.
+ */
+export function hasQueuedWordTextChanges(event: Y.YTextEvent): boolean {
+  const queued = event.target.doc?._transactionCleanups;
+  if (!queued) return false;
+  const current = queued.indexOf(event.transaction);
+  return current >= 0 && queued.slice(current + 1).some(transaction => wordTextChanged(transaction, event.target));
+}
+
 /** Reuse a normalized, equivalent local delta at the exact state produced by that write.
  * This leaves Yjs events and their public getters untouched. Other transactions,
  * earlier observer writes and combined edits use Yjs's general delta calculation.

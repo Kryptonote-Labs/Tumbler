@@ -1,4 +1,4 @@
-import { applyTrackedWordDelta, wordTextDelta } from '../text-events.ts';
+import { applyTrackedWordDelta, hasQueuedWordTextChanges, wordTextDelta } from '../text-events.ts';
 import { applyInlineWordDelta } from './inline-delta.ts';
 import { legacyTables } from './legacy-tables.ts';
 import { anchorScopedSelection } from './selection.ts';
@@ -59,6 +59,7 @@ export class WordSharedText {
   private tables: WordViewTable[] = [];
   private synchronized = false;
   private projectedTransaction: Y.Transaction | null = null;
+  private rebuildPlain = false;
   private readonly projectionChanged = () => { this.synchronized = false; };
   conflict: Error | undefined;
   private structured(doc = this.doc) {
@@ -69,9 +70,17 @@ export class WordSharedText {
       this.projectedTransaction = null;
       this.synchronized = false;
       this.sync();
+      this.rebuildPlain = !this.structured() && hasQueuedWordTextChanges(event);
       return;
     }
     if (!this.structured()) {
+      const queued = hasQueuedWordTextChanges(event);
+      if (this.rebuildPlain || queued) {
+        this.synchronized = false;
+        this.sync();
+        this.rebuildPlain = queued;
+        return;
+      }
       // Y.Text fills missing formatting keys in the supplied delta. Other source observers
       // must receive the original event, including incremental validation and history.
       this.updateProjection(() => applyTrackedWordDelta(this.text, wordTextDelta(event)));
