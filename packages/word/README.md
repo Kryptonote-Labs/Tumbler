@@ -1233,6 +1233,9 @@ Hosts with older collaborative imports should run `restoreWordSourceWhitespace(t
 the collaboration API in their durable migration path, before restoring cached field results.
 It repairs only exact, unchanged source leaves and preserves formatting, adjacent edits and copied
 leaves. XML text-origin segments distinguish literal CRLF from CR followed by a character reference.
+Retained deleted table content records exact migration proofs outside deletion records, preserving
+conflict detection and concurrent selective undo. This migration is owned by the durable host;
+competing editor replicas must not independently migrate the same source text.
 `wordLiteralText` exposes the same canonical text interpretation for cached source-field results.
 
 Incremental text and paragraph readers detect queued observer writes and pending transactions.

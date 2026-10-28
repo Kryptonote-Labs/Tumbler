@@ -4,10 +4,11 @@ import { openWordArtifact } from '../src/index.ts';
 import { openWordOperationDocument } from '../src/operations/index.ts';
 import { restoreWordSourceWhitespace } from '../src/collaboration/source-whitespace.ts';
 import { tableParagraphs } from '../src/collaboration/tables.ts';
-import { structuredGrid, validateWordSharedDocument } from '../src/collaboration/structured/index.ts';
+import { structuredGrid, validateWordSharedDocument, WordStructuredUndo, prepareWordUpdate, commitWordUpdate } from '../src/collaboration/structured/index.ts';
 import { tableAddresses, tableName, type TableRecord } from '../src/collaboration/structured/state.ts';
 import { apply } from './structured-table-fixtures.ts';
 import { buildWordDocumentFixture } from './document-fixture.ts';
+import { clone, sync } from './structured-table-fixtures.ts';
 
 function fixture(story: string, nested: boolean) {
   const paragraph = '<w:p><w:r><w:t>A&#13;B</w:t></w:r></w:p>';
@@ -65,4 +66,28 @@ test('source whitespace migration does not accept an edit to previously deleted 
     expect(restoreWordSourceWhitespace(text, artifact)).toBeGreaterThan(0);
     expect(() => validateWordSharedDocument(doc)).toThrow('Deleted axis');
   } finally { session.destroy(); }
+});
+
+for (const concurrent of [false, true]) test(`migration preserves selective deletion undo and redo, concurrent=${concurrent}`, () => {
+  const { doc, text, artifact, table, session } = fixture('body', true);
+  const undo = new WordStructuredUndo(doc);
+  let peer: Y.Doc | undefined;
+  try {
+    const row = structuredGrid(doc, table)[0]!.id;
+    commitWordUpdate(doc, prepareWordUpdate(doc, [{ kind: 'delete-axis', table, dimension: 'row', id: row }]), undo.origin);
+    if (concurrent) {
+      peer = clone(doc);
+      restoreWordSourceWhitespace(peer.getText('body'), artifact);
+    } else restoreWordSourceWhitespace(text, artifact);
+    expect(undo.undo()).toBe(true);
+    if (peer) sync(doc, peer);
+    expect(structuredGrid(doc, table)).toHaveLength(2);
+    expect(undo.redo()).toBe(true);
+    if (peer) sync(doc, peer);
+    expect(structuredGrid(doc, table)).toHaveLength(1);
+    expect(() => validateWordSharedDocument(doc)).not.toThrow();
+    expect(undo.undo()).toBe(true);
+    if (peer) sync(doc, peer);
+    expect(structuredGrid(doc, table)).toHaveLength(2);
+  } finally { undo.destroy(); peer?.destroy(); session.destroy(); }
 });
