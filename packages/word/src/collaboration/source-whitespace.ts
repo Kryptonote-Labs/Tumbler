@@ -2,6 +2,7 @@ import type * as Y from 'yjs';
 import type { WordArtifact } from '../artifact.ts';
 import { wordLiteralText } from '../literal-text.ts';
 import { wordTextRange } from './text-range.ts';
+import { migrateRetainedTablePayloads } from './structured/migration.ts';
 
 /** Repair unchanged source leaves in older collaborative imports. User edits and copied
  * source leaves are left alone. Hosts run this once in their durable migration path.
@@ -42,7 +43,8 @@ export function restoreWordSourceWhitespace(text: Y.Text, artifact: WordArtifact
       offset += part.original.length;
     }
   }
-  text.doc?.transact(() => {
+  if (!changes.length || !text.doc) return 0;
+  migrateRetainedTablePayloads(text.doc, () => {
     for (const change of changes.toReversed()) {
       const attributes = wordTextRange(text, change.at, change.at + 1)[0]?.attributes;
       text.applyDelta([...(change.at ? [{ retain: change.at }] : []), { delete: change.count }, { insert: change.value, attributes }]);
