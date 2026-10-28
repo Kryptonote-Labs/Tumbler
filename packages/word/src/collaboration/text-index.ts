@@ -91,6 +91,14 @@ class TextIndex {
     return result;
   }
   apply(delta: Y.YTextEvent['delta']) {
+    // Yjs replaces both halves when an item split cuts a surrogate pair. Its
+    // event delta omits those retained-character repairs, so read the actual items.
+    let position = 0;
+    for (const part of delta) {
+      if (!this.boundary(position)) return undefined;
+      position += (part.retain ?? 0) + (part.delete ?? 0);
+      if (!this.boundary(position)) return undefined;
+    }
     const chunks: Chunk[] = [];
     const append = (value: Chunk) => {
       const last = chunks.at(-1);
@@ -190,10 +198,19 @@ export function wordTextIndex(text: Y.Text): TextIndex {
   entry = { index: current(text), applied: new WeakSet() };
   indexes.set(text, entry);
   const cached = entry;
-  text.observe(event => {
-    cached.index = cached.index.apply(wordTextDelta(event));
+  const observe = (event: Y.YTextEvent) => {
+    const updated = cached.index.apply(wordTextDelta(event));
+    if (!updated) {
+      // An earlier observer may already have queued more writes. Seed a fresh
+      // index only after those transactions finish, so they cannot apply twice.
+      indexes.delete(text);
+      text.unobserve(observe);
+      return;
+    }
+    cached.index = updated;
     cached.applied.add(event.transaction);
-  });
+  };
+  text.observe(observe);
   return entry.index;
 }
 
