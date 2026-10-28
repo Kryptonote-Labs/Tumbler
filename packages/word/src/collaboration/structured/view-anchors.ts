@@ -34,7 +34,7 @@ export function resolveWordView(
       relative.tname ??
       (absolute && Y.createRelativePositionFromTypeIndex(absolute.type as Y.Text, 0).tname);
     const index = absolute?.index ?? (relative.item === null ? 0 : undefined);
-    if (!root || index === undefined) throw new Error("The edit target no longer exists.");
+    if (root == null || index === undefined) throw new Error("The edit target no longer exists.");
     const span =
       spans.find(
         (span) =>
