@@ -70,7 +70,7 @@ function anchorWordRange(text: Y.Text, range: WordRange): WordAnchor {
   checkRange(text, range);
   const start = Y.createRelativePositionFromTypeIndex(text, range.start);
   const end = range.end === range.start
-    ? Y.createRelativePositionFromJSON(Y.relativePositionToJSON(start))
+    ? Y.createRelativePositionFromJSON(start)
     : Y.createRelativePositionFromTypeIndex(text, range.end);
   return { start, end };
 }

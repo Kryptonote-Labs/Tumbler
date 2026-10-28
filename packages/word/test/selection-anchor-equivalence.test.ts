@@ -2,6 +2,24 @@ import { expect, test } from 'bun:test';
 import * as Y from 'yjs';
 import { createWordCommands } from '../src/collaboration/commands.ts';
 import { wordSharedText } from '../src/collaboration/structured/view.ts';
+import { anchorWordView, resolveWordView } from '../src/collaboration/structured/view-anchors.ts';
+
+test('collapsed anchors preserve the default empty root name, including its end boundary', () => {
+  const doc = new Y.Doc(), text = doc.getText(), commands = createWordCommands();
+  try {
+    for (const value of ['', 'text']) {
+      text.insert(0, value);
+      const range = { start: text.length, end: text.length };
+      const spans = [{ root: '', start: 0, end: text.length, offset: 0 }];
+      for (const anchor of [commands.anchorWordRange(text, range), anchorWordView(doc, spans, range)]) {
+        expect(anchor.start.tname).toBe('');
+        expect(anchor.end.tname).toBe('');
+        expect(commands.resolveWordRange(text, anchor)).toEqual(range);
+        expect(resolveWordView(doc, spans, anchor)).toEqual(range);
+      }
+    }
+  } finally { doc.destroy(); }
+});
 
 test('collapsed and ranged anchors retain standard Yjs identities through edits and undo', () => {
   const doc = new Y.Doc(), text = doc.getText('body');

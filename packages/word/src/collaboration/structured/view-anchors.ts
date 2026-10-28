@@ -18,7 +18,7 @@ export function anchorWordView(
   };
   const start = position(range.start);
   const end = range.end === range.start
-    ? Y.createRelativePositionFromJSON(Y.relativePositionToJSON(start))
+    ? Y.createRelativePositionFromJSON(start)
     : position(range.end);
   return { start, end };
 }
