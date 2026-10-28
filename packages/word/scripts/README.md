@@ -2,6 +2,7 @@ Run the deterministic multi-client stress test with:
 
 ```sh
 RUNS=1000 SEED=20261028 bun packages/word/scripts/stress-collaboration.ts
+bunx tsc --noEmit -p packages/word/scripts/tsconfig.json
 ```
 
 Each sequence uses three clients and a mirrored network using standard Yjs writes. It varies

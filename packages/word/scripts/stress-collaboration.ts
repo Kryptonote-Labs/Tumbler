@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import * as fc from 'fast-check';
 import * as Y from 'yjs';
 import { applyTrackedWordDelta } from '../src/collaboration/text-events.ts';
@@ -10,6 +11,10 @@ import type { WordDelta } from '../src/collaboration/commands.ts';
 const runs = Number(process.env.RUNS ?? 1000);
 const seed = Number(process.env.SEED ?? 20261028);
 assert(Number.isSafeInteger(runs) && runs > 0 && Number.isSafeInteger(seed));
+const engineFiles = ['text-events.ts', 'text-index.ts', 'text-edit.ts', 'snapshot.ts', 'paragraph-identity.ts',
+  'paragraph-projection.ts', 'checkpoint.ts', 'structured/view.ts', 'structured/legacy-tables.ts'];
+const sources = Object.fromEntries(await Promise.all(engineFiles.map(async name => [name,
+  createHash('sha256').update(new Uint8Array(await Bun.file(new URL('../src/collaboration/' + name, import.meta.url)).arrayBuffer())).digest('hex')])));
 const action = fc.record({
   kind: fc.constantFrom('insert', 'delete', 'format', 'undo', 'redo', 'deliver', 'batch'),
   peer: fc.nat(2), at: fc.nat(10_000), count: fc.integer({ min: 1, max: 9 }),
@@ -119,8 +124,9 @@ const property = fc.property(fc.boolean(), fc.array(action, { minLength: 30, max
 });
 const start = performance.now();
 const result = fc.check(property, { numRuns: runs, seed, endOnFailure: true });
-const evidence = { runs: result.numRuns, seed: result.seed, failed: result.failed, operations, deliveries, assertions,
+const evidence = { bun: Bun.version, sources, runs: result.numRuns, seed: result.seed, failed: result.failed, operations, deliveries, assertions,
   seconds: (performance.now() - start) / 1000,
-  ...(result.failed ? { path: result.counterexamplePath, counterexample: result.counterexample, error: result.errorInstance?.stack } : {}) };
+  ...(result.failed ? { path: result.counterexamplePath, counterexample: result.counterexample,
+    error: result.errorInstance instanceof Error ? result.errorInstance.stack : String(result.errorInstance) } : {}) };
 console.log(JSON.stringify(evidence, null, 2));
 if (result.failed) process.exitCode = 1;
