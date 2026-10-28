@@ -1231,11 +1231,29 @@ still fail closed.
 
 Hosts with older collaborative imports should run `restoreWordSourceWhitespace(text, source)` from
 the collaboration API in their durable migration path, before restoring cached field results.
-It repairs only exact, unchanged source leaves and preserves formatting, adjacent edits and copied
-leaves. XML text-origin segments distinguish literal CRLF from CR followed by a character reference.
-Retained deleted table content records exact migration proofs outside deletion records, preserving
-conflict detection and concurrent selective undo. This migration is owned by the durable host;
-competing editor replicas must not independently migrate the same source text.
+It binds canonical display only for exact, unchanged source leaves. Stored characters and attributes
+remain intact, so older pending updates keep their insertion, deletion and formatting targets.
+XML text-origin segments distinguish literal CRLF from CR followed by a character reference.
+The shared view maps two stored CRLF characters to one displayed space. Existing table baselines
+retain their original payload ownership; new migrations can use semantic source paragraphs.
+Deletion witnesses cover the same physical payloads that their table baseline owns.
+
+`bindWordSourceReplacement(text, start, count, value, attributes)` similarly represents an untouched
+cached field result as one displayed object. A partial edit leaves the result as literal text;
+only its complete original character group can display the object. `hasWordSourceReplacement`
+lets hosts avoid restoring that same source field twice. Store whitespace/replacement bindings
+in the durable migration before serving clients, and reject client changes to `wordSourceTextRoot`
+and `wordSourceReplacementRoot`.
+
+`createWordUndoManager` transmits explicit source provenance for reinserted characters. Hosts
+call `validateWordSourceTextUndo(candidate, previous)` before accepting updates and reject
+rewrites of prior provenance. It also rejects ambiguous raw whitespace replacements from older
+clients that cannot supply undo provenance. Hosts must retain those unacknowledged updates for
+explicit recovery rather than infer whether they were undo or newly authored text. Hosts publishing one accepted undo operation must coalesce its
+character and provenance updates.
+Do not infer undo from insertion anchors: an ordinary insertion can have the same right origin.
+This migration is owned by the durable host; competing editor replicas must not independently
+bind the same source text. Clients must support the projection-aware coordinate mapping.
 `wordLiteralText` exposes the same canonical text interpretation for cached source-field results.
 
 Incremental text and paragraph readers detect queued observer writes and pending transactions.

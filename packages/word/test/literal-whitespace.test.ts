@@ -3,7 +3,9 @@ import * as Y from 'yjs';
 import { createWordNativeArchive, decodeWordNativeArchive, encodeWordNativeArchive, importWordContent,
   NativeWordDocument, openWordArtifact, openWordNativeArchive, wordParagraphText } from '../src/index.ts';
 import { restoreWordSourceWhitespace } from '../src/collaboration/source-whitespace.ts';
+import { wordSharedText } from '../src/collaboration/structured/view.ts';
 import { buildWordDocumentFixture } from './document-fixture.ts';
+import { openWordOperationDocument } from '../src/operations/document.ts';
 
 const w = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const spellings = ['literalLF A\nB', 'literalCRLF A\r\nB', 'literalCR A\rB', 'entityLF A&#xA;B',
@@ -56,8 +58,10 @@ test('old shared source text repairs only unchanged originals, preserving format
       text.insert(text.length, '\n', { wordParagraph: index + 100 });
     }
     const beforeSource = artifact.bytes().slice();
+    const originalText = text.toDelta();
     expect(restoreWordSourceWhitespace(text, artifact)).toBe(13);
-    expect(text.toString()).toBe(expected.join('\n') + '\n');
+    expect(text.toDelta()).toEqual(originalText);
+    expect(wordSharedText(text).text.toString()).toBe(expected.join('\n') + '\n');
     for (const part of text.toDelta()) if (part.attributes?.wordSource)
       expect(part.attributes.bold).toBe(elements.findIndex(element => element.id === part.attributes.wordSource) % 2 === 0);
     expect(artifact.bytes()).toEqual(beforeSource);
@@ -72,4 +76,21 @@ test('old shared source text repairs only unchanged originals, preserving format
       expect(target.toDelta()).toEqual(before);
     } finally { changed.destroy(); }
   } finally { doc.destroy(); }
+});
+
+test('canonical source display keeps complete lexical leaves intact on an edited export', () => {
+  const artifact = source(), session = openWordOperationDocument(artifact), text = session.text;
+  try {
+    const parts: { insert: string; attributes?: Record<string, unknown> }[] = text.toDelta();
+    text.delete(0, text.length);
+    text.applyDelta(parts.map(part => {
+      const element = typeof part.attributes?.wordSource === 'number' ? artifact.document.source.element(part.attributes.wordSource) : undefined;
+      return { ...part, insert: element?.localName === 't'
+        ? artifact.document.source.textContentOrigins(element).map(value => value.original).join('') : part.insert };
+    }));
+    restoreWordSourceWhitespace(text, artifact);
+    text.insert(0, 'User edit ', {});
+    const exported = session.artifact().document.source.source;
+    for (const spelling of spellings) expect(exported).toContain(`<w:t xml:space="preserve">${spelling}</w:t>`);
+  } finally { session.destroy(); }
 });

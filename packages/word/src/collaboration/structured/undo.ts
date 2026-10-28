@@ -1,6 +1,7 @@
 import { inheritWordLayoutSource } from '../layout-validation.ts';
 import * as Y from "yjs";
 import { validateWordSharedDocument } from "./transactions.ts";
+import { retainWordSourceTextUndo } from '../source-text-undo.ts';
 
 const filters = new WeakMap<Y.UndoManager, Y.UndoManager["deleteFilter"]>();
 
@@ -14,6 +15,7 @@ export function createWordUndoManager(
     captureTimeout: options.captureTimeout,
   });
   filters.set(manager, manager.deleteFilter);
+  manager.on('stack-item-popped', () => retainWordSourceTextUndo(doc));
   return manager;
 }
 
@@ -53,6 +55,7 @@ export function preflightWordUndo(
     history.undoStack = [...manager.undoStack];
     history.redoStack = [...manager.redoStack];
     const item = redo ? history.redo() : history.undo();
+    if (item) retainWordSourceTextUndo(candidate);
     if (item) validate(candidate);
     return !!item;
   } finally {

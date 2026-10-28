@@ -8,6 +8,7 @@ import { validateAttributes } from './formatting.ts';
 import { groupTableParagraphs, tableParagraphs } from './tables.ts';
 import { validateStructuredTables } from './structured/state.ts';
 import { documentImageRefs } from './images.ts';
+import { sourceTableParagraphs } from './source-text.ts';
 
 /** Structural invariants apply equally to local, remote and headless operations. */
 export function validateWordText(text: Y.Text) {
@@ -32,7 +33,7 @@ export function validateWordText(text: Y.Text) {
     }
   }
   validateText(text.toString());
-  groupTableParagraphs(tableParagraphs(text), { retainedBaseline: true });
+  groupTableParagraphs(sourceTableParagraphs(text) ?? tableParagraphs(text), { retainedBaseline: true });
   if (text.doc) validateStructuredTables(text.doc);
   documentImageRefs(text);
 }

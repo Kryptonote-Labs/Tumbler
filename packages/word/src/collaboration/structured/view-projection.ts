@@ -1,4 +1,5 @@
 import type * as Y from "yjs";
+import { wordSourceTextParts, sourceTextParagraphs, type WordSourceTextPart } from '../source-text.ts';
 import { tableParagraphs, type TableCell } from "../tables.ts";
 import type { WordDelta } from "../commands.ts";
 import { structuredGrid } from "./grid.ts";
@@ -24,6 +25,7 @@ export type WordViewSpan = {
   end: number;
   root: string;
   offset: number;
+  sourceEnd?: number;
   cell?: CellAddress;
   virtual?: boolean;
 };
@@ -45,9 +47,20 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
   const tables: WordViewTable[] = [];
   const cells: WordViewCell[] = [];
   const paragraphs = new Map<string, ReturnType<typeof tableParagraphs>>();
+  const sourceParts = new WeakMap<Y.Text, WordSourceTextPart[] | undefined>();
+  const normalizedParts = (text: Y.Text) => {
+    if (!sourceParts.has(text)) sourceParts.set(text, wordSourceTextParts(text));
+    return sourceParts.get(text);
+  };
+  const semanticParagraphs = (text: Y.Text) => {
+    const normalized = normalizedParts(text);
+    return normalized ? sourceTextParagraphs(normalized).map(({ start, end, attributes }) => ({
+      start, end, ...(attributes?.table ? { table: attributes.table as TableCell } : {}),
+    })) : tableParagraphs(text);
+  };
   const rootParts = new WeakMap<
     Y.Text,
-    { insert: string; attributes?: Record<string, unknown>; offset: number; end: number }[]
+    WordSourceTextPart[]
   >();
   let length = 0;
   const append = (
@@ -56,7 +69,14 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
     span: Omit<WordViewSpan, "start" | "end">,
   ) => {
     if (!insert) return;
-    delta.push({ insert, ...(attributes && Object.keys(attributes).length ? { attributes } : {}) });
+    const previous = delta.at(-1);
+    const keys = Object.keys(attributes ?? {});
+    const same = typeof previous?.insert === 'string' && typeof attributes?.wordSource === 'number' && previous.attributes?.wordSource === attributes.wordSource &&
+      previous.attributes?.wordCopy === attributes?.wordCopy && keys.length === Object.keys(previous.attributes ?? {}).length &&
+      keys.every(key => Object.hasOwn(previous.attributes ?? {}, key) &&
+        (previous.attributes?.[key] === attributes![key] || JSON.stringify(previous.attributes?.[key]) === JSON.stringify(attributes![key])));
+    if (same && typeof previous?.insert === 'string') previous.insert += insert;
+    else delta.push({ insert, ...(attributes && Object.keys(attributes).length ? { attributes } : {}) });
     spans.push({ ...span, start: length, end: length + insert.length });
     length += insert.length;
   };
@@ -64,7 +84,7 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
     let indexed = rootParts.get(text);
     if (!indexed) {
       let offset = 0;
-      indexed = (text.toDelta() as { insert: string; attributes?: Record<string, unknown> }[]).map(
+      indexed = normalizedParts(text) ?? (text.toDelta() as { insert: string; attributes?: Record<string, unknown> }[]).map(
         (part) => {
           const start = offset;
           offset += part.insert.length;
@@ -80,7 +100,7 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
       if (indexed[middle]!.end <= start) low = middle + 1;
       else high = middle;
     }
-    const result: { insert: string; attributes?: Record<string, unknown>; offset: number }[] = [];
+    const result: WordSourceTextPart[] = [];
     for (let index = low; index < indexed.length && indexed[index]!.offset < end; index++) {
       const part = indexed[index]!,
         from = Math.max(start, part.offset),
@@ -91,8 +111,9 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
         if (boundary > cursor)
           result.push({
             ...part,
-            insert: part.insert.slice(cursor - part.offset, boundary - part.offset),
+            insert: part.normalized ? part.insert : part.insert.slice(cursor - part.offset, boundary - part.offset),
             offset: cursor,
+            end: boundary,
           });
         cursor = boundary + 1;
       }
@@ -109,7 +130,7 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
     const text = existingText(doc, root);
     if (!text) return;
     let rows = paragraphs.get(root);
-    if (!rows) paragraphs.set(root, (rows = tableParagraphs(text)));
+    if (!rows) paragraphs.set(root, (rows = semanticParagraphs(text)));
     let cursor = start;
     for (const p of rows) {
       if (p.end <= cursor || p.start >= end) continue;
@@ -167,6 +188,7 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
         append(part.insert, attributes, {
           root,
           offset: part.offset,
+          ...(part.normalized ? { sourceEnd: part.end } : {}),
           ...(cell || legacy ? { cell: cell ?? legacy! } : {}),
         });
       }
@@ -177,6 +199,7 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
         append(part.insert, part.attributes, {
           root,
           offset: part.offset,
+          ...(part.normalized ? { sourceEnd: part.end } : {}),
           ...(cell ? { cell } : {}),
         });
   };

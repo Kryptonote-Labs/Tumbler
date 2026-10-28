@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import type { WordAnchor, WordRange } from "../commands.ts";
 import type { WordViewSpan } from "./view-projection.ts";
+import { sourcePosition, sourceSpanEnd, viewPosition } from './view-coordinates.ts';
 
 export function anchorWordView(
   doc: Y.Doc,
@@ -11,7 +12,7 @@ export function anchorWordView(
     const span = spans.find((span) => at >= span.start && at < span.end) ?? spans.at(-1);
     if (!span) return Y.createRelativePositionFromTypeIndex(doc.getText("body"), 0);
     const index =
-      span.offset + (span.virtual ? 0 : Math.min(span.end - span.start, at - span.start));
+      sourcePosition(span, at);
     if (!doc.share.has(span.root))
       return Y.createRelativePositionFromJSON({ tname: span.root, assoc: 0 });
     return Y.createRelativePositionFromTypeIndex(doc.getText(span.root), index);
@@ -40,14 +41,14 @@ export function resolveWordView(
         (span) =>
           span.root === root &&
           index >= span.offset &&
-          index < span.offset + (span.virtual ? 1 : span.end - span.start),
+          index < (span.virtual ? span.offset + 1 : sourceSpanEnd(span)),
       ) ??
       spans.findLast(
         (span) =>
-          span.root === root && index === span.offset + (span.virtual ? 0 : span.end - span.start),
+          span.root === root && index === sourceSpanEnd(span),
       );
     if (!span) throw new Error("The edit target is no longer visible.");
-    return span.start + (span.virtual ? 0 : index - span.offset);
+    return viewPosition(span, index);
   };
   const start = position(anchor.start),
     end = Y.compareRelativePositions(anchor.start, anchor.end) ? start : position(anchor.end);

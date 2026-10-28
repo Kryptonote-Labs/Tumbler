@@ -26,3 +26,6 @@ export { wordTextString } from './text-index.ts';
 
 export { wordTextDelta } from './text-events.ts';
 export { restoreWordSourceWhitespace } from './source-whitespace.ts';
+export { wordSourceTextRoot, wordSourceTextRedoneRoot } from './source-text.ts';
+export { validateWordSourceTextUndo } from './source-text-undo.ts';
+export { bindWordSourceReplacement, hasWordSourceReplacement, wordSourceReplacementRoot } from './source-replacement.ts';

@@ -1,11 +1,10 @@
 import type * as Y from 'yjs';
 import type { WordArtifact } from '../artifact.ts';
 import { wordLiteralText } from '../literal-text.ts';
-import { wordTextRange } from './text-range.ts';
-import { migrateRetainedTablePayloads } from './structured/migration.ts';
+import { bindWordSourceText } from './source-text.ts';
 
-/** Repair unchanged source leaves in older collaborative imports. User edits and copied
- * source leaves are left alone. Hosts run this once in their durable migration path.
+/** Bind canonical display for unchanged leaves in older collaborative imports, preserving
+ * synchronized characters and offline edit targets. Hosts run this in their durable migration.
  */
 export function restoreWordSourceWhitespace(text: Y.Text, artifact: WordArtifact): number {
   const groups: { source: number; start: number; value: string }[] = [];
@@ -20,7 +19,7 @@ export function restoreWordSourceWhitespace(text: Y.Text, artifact: WordArtifact
     }
     offset += part.insert.length;
   }
-  const changes: { at: number; count: number; value: string }[] = [];
+  const changes: { at: number; count: number; value: string; source: number }[] = [];
   for (const group of groups) {
     if (!/[\r\n]/.test(group.value)) continue;
     const element = artifact.document.source.element(group.source);
@@ -37,18 +36,11 @@ export function restoreWordSourceWhitespace(text: Y.Text, artifact: WordArtifact
         const count = part.original.slice(from, from + 2) === '\r\n' && canonical[to] === ' ' ? 2 : 1;
         if (!/[\r\n]/.test(part.original[from]!) || ![' ', '\u2028'].includes(canonical[to]!))
           throw new Error('Unexpected source whitespace migration.');
-        changes.push({ at: offset + from, count, value: canonical[to]! });
+        changes.push({ at: offset + from, count, value: canonical[to]!, source: group.source });
         from += count;
       }
       offset += part.original.length;
     }
   }
-  if (!changes.length || !text.doc) return 0;
-  migrateRetainedTablePayloads(text.doc, () => {
-    for (const change of changes.toReversed()) {
-      const attributes = wordTextRange(text, change.at, change.at + 1)[0]?.attributes;
-      text.applyDelta([...(change.at ? [{ retain: change.at }] : []), { delete: change.count }, { insert: change.value, attributes }]);
-    }
-  });
-  return changes.length;
+  return bindWordSourceText(text, changes);
 }

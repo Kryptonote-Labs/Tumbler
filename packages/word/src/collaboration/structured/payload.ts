@@ -11,6 +11,7 @@ import {
 } from "./state.ts";
 import { WordTableConflict, type CellAddress, type TableAddress } from "./schema.ts";
 import { structuredReadCache } from "./read-cache.ts";
+import { wordSourceTextParts, sourceTextParagraphs } from '../source-text.ts';
 export function sourceCell(doc: Y.Doc, address: CellAddress) {
   const cache = structuredReadCache(doc),
     key = JSON.stringify(address);
@@ -45,12 +46,16 @@ export function sourceCell(doc: Y.Doc, address: CellAddress) {
 export function payload(
   doc: Y.Doc,
   address: CellAddress,
+  raw = false,
 ): { text: Y.Text; start: number; end: number; source?: TableCell } | undefined {
   const source = sourceCell(doc, address);
   if (source) {
     const text = existingText(doc, address.story)!;
     const cache = structuredReadCache(doc);
-    let paragraphs = !cache.active && cache.paragraphs.get(text);
+    const projected = !raw && tableBase(doc, address).sourceText && wordSourceTextParts(text);
+    let paragraphs = projected ? sourceTextParagraphs(projected).map(({ start, end, attributes }) => ({
+      start, end, ...(attributes?.table ? { table: attributes.table as TableCell } : {}),
+    })) : !cache.active && cache.paragraphs.get(text);
     if (!paragraphs) {
       paragraphs = tableParagraphs(text);
       if (!cache.active) cache.paragraphs.set(text, paragraphs);
@@ -76,8 +81,8 @@ export function payload(
   const text = existingText(doc, cellName(address));
   return text ? { text, start: 0, end: text.length } : undefined;
 }
-export function payloadDelta(doc: Y.Doc, address: CellAddress, projection = false) {
-  const value = payload(doc, address);
+export function payloadDelta(doc: Y.Doc, address: CellAddress, projection = false, raw = false) {
+  const value = payload(doc, address, raw);
   if (!value)
     return projection
       ? [
@@ -141,6 +146,12 @@ export function stableStringify(value: unknown): string {
       : part,
   );
 }
+
+function sourceProjectionSignature(text: Y.Text, start: number, end: number) {
+  const parts = wordSourceTextParts(text)?.filter(part => part.fallback && part.offset < end && part.end > start);
+  return parts?.length ? parts.map(part => ({ start: Math.max(start, part.offset) - start,
+    end: Math.min(end, part.end) - start, kind: part.fallback })) : undefined;
+}
 export function isTableRemoved(doc: Y.Doc, address: TableAddress) {
   return tableRecords(doc, address).some((r) => r.value.kind === "remove-table");
 }
@@ -181,7 +192,7 @@ export function payloadSignature(doc: Y.Doc, address: CellAddress, removed?: "ro
         const records = tableRecords(doc, { story, table: nested.id }).sort((a, b) =>
           a.key < b.key ? -1 : 1,
         );
-        const roots: { name: string; value: unknown }[] = [];
+        const roots: { name: string; value: unknown; sourceProjection?: ReturnType<typeof sourceProjectionSignature> }[] = [];
         descendants.set(key, { records, roots });
         for (const name of [...doc.share.keys()].sort()) {
           if (!name.startsWith("word-cell-v2:") && !name.startsWith("word-cell-format-v2:"))
@@ -190,7 +201,8 @@ export function payloadSignature(doc: Y.Doc, address: CellAddress, removed?: "ro
           if (owner.story !== story || owner.table !== nested.id) continue;
           if (name.startsWith("word-cell-v2:")) {
             const root = existingText(doc, name)!;
-            roots.push({ name, value: root.toDelta() });
+            const sourceProjection = sourceProjectionSignature(root, 0, root.length);
+            roots.push({ name, value: root.toDelta(), ...(sourceProjection ? { sourceProjection } : {}) });
             visit(root, 0, root.length);
           } else
             roots.push({
@@ -215,6 +227,7 @@ export function payloadSignature(doc: Y.Doc, address: CellAddress, removed?: "ro
     }
   } else if (doc.share.has(cellFormatName(address)))
     terminal = Object.fromEntries(doc.getMap<unknown>(cellFormatName(address)));
+  const sourceProjection = value && sourceProjectionSignature(value.text, value.start, value.end);
   return stableStringify({
     content: payloadDelta(doc, address),
     terminal,
@@ -226,5 +239,6 @@ export function payloadSignature(doc: Y.Doc, address: CellAddress, removed?: "ro
       ? columnFormatting(doc, address)
       : undefined,
     descendants: Object.fromEntries([...descendants].sort(([a], [b]) => (a < b ? -1 : 1))),
+    ...(sourceProjection ? { sourceProjection } : {}),
   });
 }

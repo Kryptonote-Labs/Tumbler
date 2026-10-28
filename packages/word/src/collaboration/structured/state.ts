@@ -18,6 +18,7 @@ import {
 } from "./schema.ts";
 import { stableStringify } from "./payload.ts";
 import { structuredReadCache } from "./read-cache.ts";
+import { sourceTableParagraphs } from '../source-text.ts';
 export {
   WordTableConflict,
   type TableAddress,
@@ -95,7 +96,8 @@ export function tableBase(doc: Y.Doc, address: TableAddress): TableBase {
 export function migrateTable(doc: Y.Doc, address: TableAddress) {
   const text = existingText(doc, address.story);
   if (!text) throw new WordTableConflict(address, "migration", "Missing source story.");
-  const paragraphs = tableParagraphs(text);
+  const rawParagraphs = tableParagraphs(text);
+  const paragraphs = sourceTableParagraphs(text) ?? rawParagraphs;
   groupTableParagraphs(paragraphs, { retainedBaseline: true });
   const cells = new Map<string, TableCell>();
   for (const p of paragraphs)
@@ -112,6 +114,10 @@ export function migrateTable(doc: Y.Doc, address: TableAddress) {
     columns: Array.from({ length: values[0]!.columns }, (_, i) => `base-${i}`),
     cells: values,
   };
+  const members = (parts: typeof paragraphs) => parts.filter(p => p.table?.id === address.table || p.table?.parents?.some(parent => parent.id === address.table));
+  const rawMembers = members(rawParagraphs), semanticMembers = members(paragraphs);
+  if (rawMembers.length !== semanticMembers.length || semanticMembers.some((part, index) =>
+    part.start !== rawMembers[index]?.start || part.end !== rawMembers[index]?.end)) base.sourceText = true;
   const records = doc.getMap<TableRecord>(tableName(address));
   // The complete canonical baseline is the key: no hash collision or competing text seed.
   records.set("base:" + stableStringify(base), base);

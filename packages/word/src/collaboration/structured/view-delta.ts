@@ -6,6 +6,7 @@ import { cellName, migrateTable, type TableAddress } from "./state.ts";
 import { removeWordTable } from "./boundaries.ts";
 import { selectionText } from "./selection.ts";
 import type { WordViewCell, WordViewSpan, WordViewTable } from "./view-projection.ts";
+import { sourcePosition } from './view-coordinates.ts';
 
 type Part = WordDelta[number];
 type Edit = {
@@ -38,11 +39,11 @@ export function applyWordViewDelta(
       if (to <= from) continue;
       edits.push({
         span,
-        offset: span.offset + (span.virtual ? 0 : from - span.start),
+        offset: sourcePosition(span, from),
         start: from,
         part: part.delete
-          ? { delete: to - from }
-          : { retain: to - from, ...(part.attributes ? { attributes: part.attributes } : {}) },
+          ? { delete: span.virtual ? to - from : sourcePosition(span, to) - sourcePosition(span, from) }
+          : { retain: span.virtual ? to - from : sourcePosition(span, to) - sourcePosition(span, from), ...(part.attributes ? { attributes: part.attributes } : {}) },
       });
     }
   };
@@ -86,8 +87,8 @@ export function applyWordViewDelta(
         spans.find((span) => cursor >= span.start && cursor < span.end) ??
         spans.at(-1) ?? { root: story, offset: 0, start: 0, end: 0 };
       const insertionOffset = scopedEnd
-        ? span.offset + (span.virtual ? 0 : span.end - span.start)
-        : span.offset + (span.virtual ? 0 : Math.min(cursor - span.start, span.end - span.start));
+        ? sourcePosition(span, span.end)
+        : sourcePosition(span, cursor);
       if (typeof ordered[index - 1]?.insert !== "string") {
         if (scopedEnd && span.virtual) {
           let at = 0;

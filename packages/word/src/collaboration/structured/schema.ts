@@ -43,6 +43,7 @@ const axisSchema = z
 const baseSchema = z
   .object({
     kind: z.literal("base"),
+    sourceText: z.literal(true).optional(),
     rows: z.array(id),
     columns: z.array(id),
     cells: z.array(z.custom<TableCell>(isTableCell)),

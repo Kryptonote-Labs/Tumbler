@@ -26,6 +26,8 @@ import { applyWordViewDelta } from "./view-delta.ts";
 import { applyWordViewOperation } from "./view-operations.ts";
 import { applyStructuredChange } from "./edits.ts";
 import { wordParagraphIdentity, setWordParagraphIdentity } from "../paragraph-identity.ts";
+import { hasWordSourceText } from '../source-text.ts';
+import { sourcePosition } from './view-coordinates.ts';
 
 const views = new WeakMap<Y.Text, WordSharedText>();
 const owners = new WeakMap<Y.Doc, Y.Doc>();
@@ -65,15 +67,16 @@ export class WordSharedText {
   private structured(doc = this.doc) {
     return [...doc.share.keys()].some((name) => name.startsWith("word-table-v2:"));
   }
+  private mapped(doc = this.doc) { return this.structured(doc) || hasWordSourceText(doc, this.story); }
   private readonly sourceChanged = (event: Y.YTextEvent) => {
     if (this.projectedTransaction === event.transaction) {
       this.projectedTransaction = null;
       this.synchronized = false;
       this.sync();
-      this.rebuildPlain = !this.structured() && hasQueuedWordTextChanges(event);
+      this.rebuildPlain = !this.mapped() && hasQueuedWordTextChanges(event);
       return;
     }
-    if (!this.structured()) {
+    if (!this.mapped()) {
       const queued = hasQueuedWordTextChanges(event);
       if (this.rebuildPlain || queued) {
         this.synchronized = false;
@@ -93,7 +96,7 @@ export class WordSharedText {
   private readonly refresh = () => {
     this.conflict = undefined;
     try {
-      if (this.structured()) this.sync();
+      if (this.mapped()) this.sync();
       else {
         this.syncMetadata();
         this.spans = this.text.length
@@ -118,7 +121,7 @@ export class WordSharedText {
     owners.set(this.projection, doc);
     this.sync();
     setWordParagraphIdentity(this.text, (at) => {
-      if (!this.structured()) return wordParagraphIdentity(this.sourceText, at);
+      if (!this.mapped()) return wordParagraphIdentity(this.sourceText, at);
       let low = 0, high = this.spans.length;
       while (low < high) {
         const middle = (low + high) >>> 1;
@@ -129,8 +132,8 @@ export class WordSharedText {
       if (!span) return `${this.story}:end`;
       return span.virtual
         ? `${span.root}:end`
-        : wordParagraphIdentity(doc.getText(span.root), span.offset + at - span.start);
-    }, () => this.structured() ? undefined : this.sourceText);
+        : wordParagraphIdentity(doc.getText(span.root), sourcePosition(span, at));
+    }, () => this.mapped() ? undefined : this.sourceText);
     this.sourceText.observe(this.sourceChanged);
     doc.on("afterTransaction", this.refresh);
     doc.on("destroy", this.disposed);
@@ -149,7 +152,7 @@ export class WordSharedText {
   sync() {
     // Plain stories already mirror source deltas in sourceChanged. Reproject only
     // after an independent view edit or before the source's active transaction fires.
-    if (this.synchronized && !this.structured() &&
+    if (this.synchronized && !this.mapped() &&
         (!this.doc._transaction || ![...this.doc._transaction.changed.keys()].some(root => root instanceof Y.Text && root === this.sourceText))) {
       this.projection.transact(() => this.syncMetadata());
       return;
@@ -198,7 +201,7 @@ export class WordSharedText {
     if (JSON.stringify(span.cell) !== JSON.stringify(last.cell) || span.root !== last.root)
       throw new Error("This operation needs a selection within one cell or story.");
     const offset = (at: number, side: WordViewSpan) =>
-      side.offset + (side.virtual ? 0 : at - side.start);
+      sourcePosition(side, at);
     if (span.cell) {
       const reference = tableParagraphs(this.text).find(
         (p) => range.start >= p.start && range.start < p.end,
@@ -236,7 +239,7 @@ export class WordSharedText {
   applyDelta(delta: WordDelta, origin?: unknown) {
     if (this.conflict) throw this.conflict;
     if (!this.structured()) this.sync();
-    if (applyInlineWordDelta(this.doc, this.story, delta, origin)) return;
+    if (!hasWordSourceText(this.doc, this.story) && applyInlineWordDelta(this.doc, this.story, delta, origin)) return;
     this.commit(this.prepareDelta(delta), origin);
   }
   prepareDelta(delta: WordDelta): PreparedWordUpdate {
@@ -286,7 +289,7 @@ export class WordSharedText {
     let result = range;
     const migration = stageWordUpdate(this.doc, (staged) => {
       this.migrate(staged);
-      if (!cellId && operation.name !== "fit-table" && this.structured(staged)) {
+      if (!cellId && operation.name !== "fit-table" && this.mapped(staged)) {
         result = applyWordViewOperation(staged, this.story, this.text, selection, range, operation, context);
         const after = new WordSharedText(staged, this.story);
         try {
@@ -295,7 +298,7 @@ export class WordSharedText {
         } finally { after.destroy(); }
       }
       const after = applyWordScopedOperation(staged, selection, operation, context);
-      if (operation.name === 'format' && after && 'story' in after && !this.structured(staged)) {
+      if (operation.name === 'format' && after && 'story' in after && !this.mapped(staged)) {
         result = after.range;
         return after;
       }
