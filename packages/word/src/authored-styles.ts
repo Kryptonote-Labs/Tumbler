@@ -18,16 +18,28 @@ export function builtinStyleXml(style: WordStyle): string {
 }
 export const builtinWordStyles = new WordStyles({ styles: WORD_BUILTIN_STYLES });
 
+const authoringStyles = new WeakMap<WordStyles, Map<import('@tumblerjs/ooxml').ThemeColorScheme | undefined, WordStyles>>();
+
 export function wordAuthoringStyles(source?: WordStyles, defaults: import('./create.ts').WordTextFormat = { fontFamily: 'Aptos', fontSizePoints: 12 }, paragraphDefaults: import('./paragraph-format.ts').WordParagraphFormat = {}, themeColours?: import('@tumblerjs/ooxml').ThemeColorScheme) {
   const { color, highlight, ...run } = defaults;
   const scheme = source?.themeColors ?? themeColours;
-  return new WordStyles({
+  // Source defaults and declarations are immutable. Supplied authoring defaults
+  // apply only when there is no source style collection.
+  const cached = source && authoringStyles.get(source)?.get(scheme);
+  if (cached) return cached;
+  const result = new WordStyles({
     styles: [...(source?.styles ?? []), ...WORD_BUILTIN_STYLES.filter(style => !source?.style(style.styleId))],
     documentRunDefaults: source?.documentRunDefaults ?? { ...run, ...(highlight === undefined ? {} : { highlight }), ...(color ? { color: { type: 'rgb' as const, value: resolveWordColour(color, scheme ?? DEFAULT_WORD_THEME).slice(1) } } : {}) },
     documentParagraphDefaults: source?.documentParagraphDefaults ?? paragraphDefaults,
     ...(scheme ? { themeColors: scheme } : {}),
     ...(source?.themeFonts ? { themeFonts: source.themeFonts } : {}),
   });
+  if (source) {
+    const schemes = authoringStyles.get(source) ?? new Map();
+    schemes.set(scheme, result);
+    authoringStyles.set(source, schemes);
+  }
+  return result;
 }
 
 export function validateWordStyleId(styleId: string | undefined): void {

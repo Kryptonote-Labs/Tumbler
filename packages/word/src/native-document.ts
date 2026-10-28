@@ -106,6 +106,9 @@ export class NativeWordDocument implements WordLayoutSource {
   // Media identity follows immutable image bytes, independent of drawing geometry.
   private readonly imagePartNames = new WeakMap<Uint8Array, WordImageDrawing['partName']>();
   private nextImageId = 0;
+  private readonly fingerprints = new WeakMap<WordContentBlock, {
+    width: number; revision: number; section: boolean; defaults: string; value: string;
+  }>();
   private readonly signatures = new WeakMap<WordContentBlock, string>();
   private readonly validatedText = new WeakSet<WordContentBlock>();
   private readonly paragraphTexts = new WeakMap<WordParagraph, string>();
@@ -460,7 +463,12 @@ export class NativeWordDocument implements WordLayoutSource {
         const original = source.kind === 'paragraph' ? compiled?.paragraphs.get(source.source!) : undefined;
         const hasSection = source.kind === 'paragraph' && sectionOwners.get(`${source.sourceCopy ?? ''}:${source.source}`) === source;
         const sectionDefaults = source.kind === 'paragraph' && source.section && source.section.source === undefined ? JSON.stringify(this.finalSection) : '';
-        const fingerprint = `${this.positioningRevision}:${hasSection}:${sectionDefaults}:${signature(source, width)}`;
+        const cached = this.options.immutableContent ? this.fingerprints.get(source) : undefined;
+        const fingerprint = cached && cached.width === width && cached.revision === this.positioningRevision &&
+          cached.section === hasSection && cached.defaults === sectionDefaults ? cached.value :
+          `${this.positioningRevision}:${hasSection}:${sectionDefaults}:${signature(source, width)}`;
+        if (this.options.immutableContent && fingerprint !== cached?.value)
+          this.fingerprints.set(source, { width, revision: this.positioningRevision, section: hasSection, defaults: sectionDefaults, value: fingerprint });
         const descendantsStart = visited.length;
         let result: RecordBlock;
         if (this.options.immutableContent && previous?.signature === fingerprint && previous.subtree?.input === source && this.independent(source)) {
