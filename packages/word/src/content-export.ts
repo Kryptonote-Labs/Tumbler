@@ -15,6 +15,7 @@ import { PackageXml } from './package-xml.ts';
 import { wordParagraphRenderer } from './package-paragraphs.ts';
 import { contentCopyScopes } from './package-copies.ts';
 import { renderWordBlocks } from './package-blocks.ts';
+import { reconcileRevisionContainers } from './package-revisions.ts';
 import { wordParagraphTextSegments } from './text.ts';
 import { isWordColour } from './theme-colours.ts';
 
@@ -321,7 +322,7 @@ export function prepareWordContent(
     renderWordBlocks(markup, blocks, renderParagraph),
   );
   // Bind generated prefixes before validating the source edit; preserve the source encoding.
-  const output = bind(content);
+  const output = reconcileRevisionContainers(bind(content), document);
   edit.replaceElementMarkup(body, output);
   transaction.replacePart(document.part.name, edit.commit().bytes);
   for (const rel of relationships) if (usedHyperlinks.has(rel.id) && rel.targetMode === 'External' && /\/hyperlink$/.test(rel.type))
