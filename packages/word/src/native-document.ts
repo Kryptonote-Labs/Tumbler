@@ -107,6 +107,7 @@ export class NativeWordDocument implements WordLayoutSource {
   private readonly imagePartNames = new WeakMap<Uint8Array, WordImageDrawing['partName']>();
   private nextImageId = 0;
   private readonly signatures = new WeakMap<WordContentBlock, string>();
+  private readonly validatedText = new WeakSet<WordContentBlock>();
   private readonly paragraphTexts = new WeakMap<WordParagraph, string>();
   private effectiveNumbering: WordNumbering | undefined;
   private numberingStylesKey: string | undefined;
@@ -233,7 +234,7 @@ export class NativeWordDocument implements WordLayoutSource {
       entry = { target, blocks, model: new NativeWordDocument({ ...options, [deferContent]: true, [storyFormatting]: { styles: this.namedStyles, defaults: this.defaults }, ...(source ? { source } : {}) }) };
       entry.model.inheritedDoNotExpandShiftReturn = this.doNotExpandShiftReturn;
     }
-    validateContentText(blocks, entry.model.compiled);
+    validateContentText(blocks, entry.model.compiled, entry.model.options.immutableContent ? entry.model.validatedText : undefined);
     this.editedStories.set(key, entry);
     entry.blocks = blocks;
     const numbering = this.numberingFor(this.authored);
@@ -334,7 +335,7 @@ export class NativeWordDocument implements WordLayoutSource {
   }
 
   update(input: readonly WordContentBlock[]) {
-    validateContentText(input, this.compiled);
+    validateContentText(input, this.compiled, this.options.immutableContent ? this.validatedText : undefined);
     const numbering = this.numberingFor(input);
     this.updateContent(input, numbering, this.positioningStyles);
     this.shareNumbering(numbering);
@@ -811,10 +812,11 @@ function resetDirectParagraphFormat(format: ComputedWordParagraphFormat, inherit
 }
 
 /** Validate text before update allocates identities or changes source caches. */
-function validateContentText(blocks: readonly WordContentBlock[], source: NativeWordSource | undefined): void {
+function validateContentText(blocks: readonly WordContentBlock[], source: NativeWordSource | undefined, validated?: WeakSet<WordContentBlock>): void {
   for (const block of blocks) {
+    if (validated?.has(block)) continue;
     if (block.kind === 'table') {
-      for (const row of block.rows) for (const cell of row) validateContentText(cell.blocks, source);
+      for (const row of block.rows) for (const cell of row) validateContentText(cell.blocks, source, validated);
     } else if (block.kind === 'paragraph') {
       for (const run of block.runs) {
         validateXmlText(run.text);
@@ -823,5 +825,6 @@ function validateContentText(blocks: readonly WordContentBlock[], source: Native
           throw new TypeError('Use separate paragraphs for line-feed text.');
       }
     }
+    validated?.add(block);
   }
 }

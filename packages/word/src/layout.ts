@@ -320,6 +320,8 @@ interface AtomBase {
 interface GlyphAtom extends AtomBase {
   /** Advance with no preceding glyph, used when a kerned pair crosses a line boundary. */
   readonly lineStartWidth?: number;
+  /** Prefix already shaped on this line, discarded when carrying glyphs across a wrap. */
+  readonly shapedPrefix?: { readonly text: string; readonly advance: number };
   readonly shaping?: { readonly key: string; readonly measure: (text: string) => WordTextMeasurement };
   readonly field?: WordPageField;
   readonly kind: "glyph";
@@ -1339,16 +1341,14 @@ function* breakLines(source: Iterable<ParagraphAtom>, width: number, format: Com
  * cannot represent overlapping ligatures; reset the prefix when wrapping. */
 function shapeLineAdvance(atom: Exclude<ParagraphAtom, BreakAtom>, line: readonly Exclude<ParagraphAtom, BreakAtom>[]): Exclude<ParagraphAtom, BreakAtom> {
   if (atom.kind !== 'glyph' || !atom.shaping) return atom;
-  let prefix = '', advance = 0;
-  for (let index = line.length - 1; index >= 0; index--) {
-    const previous = line[index]!;
-    if (previous.kind !== 'glyph' || previous.shaping?.key !== atom.shaping.key) break;
-    prefix = previous.text + prefix;
-    advance += previous.width;
-  }
+  const previous = line.at(-1);
+  const prefix = previous?.kind === 'glyph' && previous.shaping?.key === atom.shaping.key
+    ? previous.shapedPrefix : undefined;
+  const text = (prefix?.text ?? '') + atom.text;
   const standalone = atom.lineStartWidth ?? atom.width;
-  const width = prefix ? Math.max(0, atom.shaping.measure(prefix + atom.text).width - advance) : standalone;
-  return { ...atom, width, lineStartWidth: standalone };
+  const width = prefix ? Math.max(0, atom.shaping.measure(text).width - prefix.advance) : standalone;
+  return { ...atom, width, lineStartWidth: standalone,
+    shapedPrefix: { text, advance: (prefix?.advance ?? 0) + width } };
 }
 
 function placeLine(
@@ -1538,6 +1538,7 @@ function compileStory(document: WordDocument, story: WordHeaderFooterStory | Wor
 }
 
 function decorateNotes(document: WordLayoutStories, pages: MutablePage[], measurer: WordTextMeasurer, budget: LayoutBudget): void {
+  if (!document.notes.length) return;
   const endnotes = new Set<number>();
   for (const page of pages) {
     const footnotes = new Set<number>();
