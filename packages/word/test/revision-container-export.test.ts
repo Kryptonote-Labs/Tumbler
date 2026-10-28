@@ -40,4 +40,15 @@ for (const conformance of ['strict', 'transitional'] as const) {
     expect(xml.elements(w, 'bookmarkStart')).toHaveLength(1);
     expect(xml.elements(w, 'bookmarkEnd')).toHaveLength(1);
   });
+  test(`${conformance} opaque alternative revisions remain exact beside rendered revisions`, () => {
+    const opaque = '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:x="urn:opaque">' +
+      '<mc:Choice Requires="x"><w:ins w:id="1" w:author="Keep"><w:r><w:t>Choice</w:t></w:r></w:ins></mc:Choice>' +
+      '<mc:Fallback><w:ins w:id="1" w:author="Keep"><w:r><w:t>Fallback</w:t></w:r></w:ins></mc:Fallback></mc:AlternateContent>';
+    const input = source();
+    const xml = input.document.source.source.replace('</w:body>', '<w:p>' + opaque + '</w:p></w:body>');
+    const artifact = openWordArtifact(buildWordDocumentFixture({ conformance, documentXml: xml }));
+    const model = new NativeWordDocument({ source: artifact });
+    model.update([...importWordContent(artifact), { kind: 'paragraph', runs: [{ text: 'Neighbour' }] }]);
+    expect(model.artifact().document.source.source).toContain(opaque);
+  });
 }
