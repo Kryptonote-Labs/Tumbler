@@ -1,3 +1,4 @@
+import { wordLiteralText } from './literal-text.ts';
 import { tableMeasurementTwips } from './strict-resources.ts';
 import { wordInkChoice } from './ink-fallback.ts';
 import { readWordColour } from "./theme-colour-xml.ts";
@@ -757,7 +758,8 @@ function parseRunContent(
   if (wordInkChoice(element)) return Object.freeze({ kind: "drawing", elementId: element.id });
   if (element.namespaceUri !== namespace) return unsupportedRunContent(element);
   if (element.localName === "t" || element.localName === "delText" || element.localName === "instrText") {
-    const value = source.textContent(element);
+    const decoded = source.textContent(element);
+    const value = element.localName === 't' ? wordLiteralText(decoded) : decoded;
     budget.textCharacters += value.length;
     if (budget.textCharacters > budget.maxTextCharacters) limit("text character", budget.maxTextCharacters);
     return Object.freeze({

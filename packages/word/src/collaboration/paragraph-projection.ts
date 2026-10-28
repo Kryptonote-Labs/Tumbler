@@ -1,4 +1,4 @@
-import { wordTextDelta } from './text-events.ts';
+import { hasQueuedWordTextChanges, wordTextChanged, wordTextDelta } from './text-events.ts';
 import type * as Y from 'yjs';
 import { wordParagraphIdentity, wordParagraphIdentityRevision } from './paragraph-identity.ts';
 
@@ -24,12 +24,14 @@ export class WordParagraphProjection<T> {
   private output: readonly T[] | undefined;
   private identityRevision: number | undefined;
   private rebuild = false;
+  private readonly applied = new WeakSet<Y.Transaction>();
   private readonly observe = (event: Y.YTextEvent) => {
     if (!this.rebuild) {
-      const updated = this.apply(wordTextDelta(event));
+      const updated = hasQueuedWordTextChanges(event) ? undefined : this.apply(wordTextDelta(event));
       if (updated) this.slices = updated;
       else this.rebuild = true;
     }
+    this.applied.add(event.transaction);
     this.output = undefined;
   };
 
@@ -37,18 +39,26 @@ export class WordParagraphProjection<T> {
     // Register identity tracking before our observer reads the new terminator positions.
     wordParagraphIdentity(text, text.length);
     this.slices = this.apply(text.toDelta())!;
+    this.rebuild = this.pending();
     text.observe(this.observe);
   }
 
+  private pending(): boolean {
+    const doc = this.text.doc;
+    return !!doc && (!!doc._transaction && wordTextChanged(doc._transaction, this.text) ||
+      doc._transactionCleanups.some(transaction => wordTextChanged(transaction, this.text) && !this.applied.has(transaction)));
+  }
+
   get paragraphs(): readonly T[] {
+    const pending = this.pending();
+    if (pending) this.rebuild = true;
     if (this.rebuild) {
       // Yjs omits retained surrogate repairs from its delta. Read the source,
       // including queued observer edits, until the document is quiescent again.
       this.slices = [];
       this.slices = this.apply(this.text.toDelta())!;
       this.output = undefined;
-      const doc = this.text.doc;
-      this.rebuild = Boolean(doc?._transaction || doc?._transactionCleanups.length);
+      this.rebuild = pending;
     }
     const revision = wordParagraphIdentityRevision(this.text);
     if (revision !== undefined && revision === this.identityRevision && this.output) return this.output;

@@ -68,16 +68,17 @@ function bodyLength(text: Y.Text) {
 // Durable references identify collaborative characters, not revision-local XML elements.
 function anchorWordRange(text: Y.Text, range: WordRange): WordAnchor {
   checkRange(text, range);
-  return {
-    start: Y.createRelativePositionFromTypeIndex(text, range.start),
-    end: Y.createRelativePositionFromTypeIndex(text, range.end),
-  };
+  const start = Y.createRelativePositionFromTypeIndex(text, range.start);
+  const end = range.end === range.start
+    ? Y.createRelativePositionFromJSON(start)
+    : Y.createRelativePositionFromTypeIndex(text, range.end);
+  return { start, end };
 }
 
 function resolveWordRange(text: Y.Text, anchor: WordAnchor): WordRange {
   if (!text.doc) throw new Error('The document is not attached.');
   const start = Y.createAbsolutePositionFromRelativePosition(anchor.start, text.doc);
-  const end = Y.createAbsolutePositionFromRelativePosition(anchor.end, text.doc);
+  const end = Y.compareRelativePositions(anchor.start, anchor.end) ? start : Y.createAbsolutePositionFromRelativePosition(anchor.end, text.doc);
   if (!start || !end || start.type !== text || end.type !== text)
     throw new Error('The edit target no longer exists.');
   return {

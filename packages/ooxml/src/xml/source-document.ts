@@ -129,6 +129,35 @@ export class LosslessXmlDocument {
       throw new TypeError("The XML element does not belong to this document.");
     return collectText(element);
   }
+
+  /** Pair pre-normalization text with XML semantic text, keeping character references
+   * separate from literal chunks. Compatibility migrations need that provenance.
+   */
+  textContentOrigins(element: LosslessXmlElement): readonly { original: string; value: string }[] {
+    if (this.parsed.elements.get(element.id) !== element)
+      throw new TypeError("The XML element does not belong to this document.");
+    const result: { original: string; value: string }[] = [];
+    const literal = (original: string) => { if (original) result.push({ original, value: normalizeLineEnds(original) }); };
+    const collect = (element: LosslessXmlElement) => {
+      for (const child of element.children) {
+        if (child.kind === 'element') collect(child);
+        else if (child.kind === 'cdata') literal(this.source.slice(child.span.start + 9, child.span.end - 3));
+        else if (child.kind === 'text') {
+          const raw = this.source.slice(child.span.start, child.span.end);
+          let cursor = 0;
+          for (const match of raw.matchAll(/&(?:#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos);/g)) {
+            literal(raw.slice(cursor, match.index));
+            const value = decodeEntities(match[0]);
+            result.push({ original: value, value });
+            cursor = match.index + match[0].length;
+          }
+          literal(raw.slice(cursor));
+        }
+      }
+    };
+    collect(element);
+    return result;
+  }
 }
 
 interface LexicalAttribute {
@@ -318,6 +347,9 @@ function validateSemantics(
   return tags;
 }
 
+// XML 1.0 §2.11 normalizes literal line ends before resolving character references.
+function normalizeLineEnds(value: string) { return value.replace(/\r\n?/g, '\n'); }
+
 function scanXml(source: string): readonly LexicalToken[] {
   const tokens: LexicalToken[] = [];
   let cursor = 0;
@@ -325,12 +357,12 @@ function scanXml(source: string): readonly LexicalToken[] {
     const open = source.indexOf("<", cursor);
     if (open < 0) {
       if (cursor < source.length) {
-        tokens.push({ kind: "text", span: { start: cursor, end: source.length }, value: decodeEntities(source.slice(cursor)) });
+        tokens.push({ kind: "text", span: { start: cursor, end: source.length }, value: decodeEntities(normalizeLineEnds(source.slice(cursor))) });
       }
       break;
     }
     if (open > cursor) {
-      tokens.push({ kind: "text", span: { start: cursor, end: open }, value: decodeEntities(source.slice(cursor, open)) });
+      tokens.push({ kind: "text", span: { start: cursor, end: open }, value: decodeEntities(normalizeLineEnds(source.slice(cursor, open))) });
     }
     if (source.startsWith("<!--", open)) {
       const end = requireTerminator(source, "-->", open + 4) + 3;
@@ -340,7 +372,7 @@ function scanXml(source: string): readonly LexicalToken[] {
     }
     if (source.startsWith("<![CDATA[", open)) {
       const end = requireTerminator(source, "]]>", open + 9) + 3;
-      tokens.push({ kind: "cdata", span: { start: open, end }, value: source.slice(open + 9, end - 3) });
+      tokens.push({ kind: "cdata", span: { start: open, end }, value: normalizeLineEnds(source.slice(open + 9, end - 3)) });
       cursor = end;
       continue;
     }

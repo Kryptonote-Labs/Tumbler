@@ -16,7 +16,11 @@ export function anchorWordView(
       return Y.createRelativePositionFromJSON({ tname: span.root, assoc: 0 });
     return Y.createRelativePositionFromTypeIndex(doc.getText(span.root), index);
   };
-  return { start: position(range.start), end: position(range.end) };
+  const start = position(range.start);
+  const end = range.end === range.start
+    ? Y.createRelativePositionFromJSON(start)
+    : position(range.end);
+  return { start, end };
 }
 
 export function resolveWordView(
@@ -30,7 +34,7 @@ export function resolveWordView(
       relative.tname ??
       (absolute && Y.createRelativePositionFromTypeIndex(absolute.type as Y.Text, 0).tname);
     const index = absolute?.index ?? (relative.item === null ? 0 : undefined);
-    if (!root || index === undefined) throw new Error("The edit target no longer exists.");
+    if (root == null || index === undefined) throw new Error("The edit target no longer exists.");
     const span =
       spans.find(
         (span) =>
@@ -46,6 +50,6 @@ export function resolveWordView(
     return span.start + (span.virtual ? 0 : index - span.offset);
   };
   const start = position(anchor.start),
-    end = position(anchor.end);
+    end = Y.compareRelativePositions(anchor.start, anchor.end) ? start : position(anchor.end);
   return { start: Math.min(start, end), end: Math.max(start, end) };
 }

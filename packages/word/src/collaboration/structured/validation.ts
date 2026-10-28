@@ -19,6 +19,7 @@ import {
 import { payload, sourceCell, payloadDelta, payloadSignature, cellFormatting, stableStringify, rowFormatting, columnFormatting } from "./payload.ts";
 import { structuredReadCache } from "./read-cache.ts";
 import { retainedParagraphBoundaries } from "./boundaries.ts";
+import { migratedRemovalSignature } from './migration.ts';
 /** Check hidden content too: deletion and structural undo must not silently detach edits. */
 export function validateStructuredTables(doc: Y.Doc) {
   const cache = structuredReadCache(doc);
@@ -73,12 +74,13 @@ export function validateStructuredTables(doc: Y.Doc) {
       if ((value.kind === "row-format" && !allRows.includes(value.row)) ||
           (value.kind === "width" && !allColumns.includes(value.column)))
         throw new WordTableConflict(address, "deleted-content", "Undo would detach retained row or column formatting.");
-    for (const { value } of tableRecords(doc, address))
+    for (const { key: removal, value } of tableRecords(doc, address))
       if (value.kind === "remove" || value.kind === "remove-table") {
         const witnessed = Object.keys(value.witnesses).map(key => z.tuple([id, id]).parse(JSON.parse(key)));
         const witnessedRows = new Set(witnessed.map(([row]) => row));
         const witnessedColumns = new Set(witnessed.map(([, column]) => column));
-        for (const [key, signature] of Object.entries(value.witnesses)) {
+        for (const [key, original] of Object.entries(value.witnesses)) {
+          const signature = migratedRemovalSignature(doc, address, removal, key, original);
           const [row, column] = z.tuple([id, id]).parse(JSON.parse(key));
           const source = sourceCell(doc, { ...address, row, column });
           if (

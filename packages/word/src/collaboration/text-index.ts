@@ -1,5 +1,5 @@
 import { validateText } from './text-validation.ts';
-import { wordTextDelta } from './text-events.ts';
+import { hasQueuedWordTextChanges, wordTextDelta } from './text-events.ts';
 import * as Y from 'yjs';
 
 interface Part {
@@ -199,7 +199,7 @@ export function wordTextIndex(text: Y.Text): TextIndex {
   indexes.set(text, entry);
   const cached = entry;
   const observe = (event: Y.YTextEvent) => {
-    const updated = cached.index.apply(wordTextDelta(event));
+    const updated = hasQueuedWordTextChanges(event) ? undefined : cached.index.apply(wordTextDelta(event));
     if (!updated) {
       // An earlier observer may already have queued more writes. Seed a fresh
       // index only after those transactions finish, so they cannot apply twice.

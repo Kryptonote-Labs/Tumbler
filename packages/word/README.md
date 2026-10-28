@@ -1222,6 +1222,26 @@ archives are versioned engine state produced by Tumbler, not an additional untru
 format. Do not put these immutable resources into each collaborative edit or flatten unrecognized
 objects into JSON: the codec deliberately rejects object types it cannot preserve.
 
+Literal XML CR/CRLF are normalized before character references are decoded. Word text then
+projects LF as spaces and referenced CR as inline line separators, matching the tested Writer
+reference. The original XML spelling, encodings and ZIP bytes remain preservation data. Known early
+v1 archives whose compiled runs contain the old literal-line-end projection rebuild that projection
+from their verified package resources. The archive shape/version is unchanged; unknown versions
+still fail closed.
+
+Hosts with older collaborative imports should run `restoreWordSourceWhitespace(text, source)` from
+the collaboration API in their durable migration path, before restoring cached field results.
+It repairs only exact, unchanged source leaves and preserves formatting, adjacent edits and copied
+leaves. XML text-origin segments distinguish literal CRLF from CR followed by a character reference.
+Retained deleted table content records exact migration proofs outside deletion records, preserving
+conflict detection and concurrent selective undo. This migration is owned by the durable host;
+competing editor replicas must not independently migrate the same source text.
+`wordLiteralText` exposes the same canonical text interpretation for cached source-field results.
+
+Incremental text and paragraph readers detect queued observer writes and pending transactions.
+When an earlier observer has already changed the visible structs, affected projections rebuild from
+the source until they have caught up, rather than applying an ambiguous event delta twice.
+
 Locally prepared collaborative updates carry a validation proof tied to their owner, full CRDT
 snapshot, root identities and layout baseline. An unchanged local preparation can commit without
 building another validation replica. Received, modified and stale updates still validate the full
