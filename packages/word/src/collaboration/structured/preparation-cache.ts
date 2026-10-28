@@ -1,14 +1,10 @@
+import { matchesCheckpoint, type Checkpoint } from '../checkpoint.ts';
+export { checkpoint, matchesCheckpoint } from '../checkpoint.ts';
 import { wordSnapshot } from '../snapshot.ts';
 import { wordTextDelta } from '../text-events.ts';
 import * as Y from 'yjs';
-import { wordLayoutSource } from '../layout-validation.ts';
 import { isWordTextOnlyEdit } from '../text-range.ts';
 
-interface Checkpoint {
-  snapshot: Y.Snapshot;
-  roots: Map<string, unknown>;
-  source: ReturnType<typeof wordLayoutSource>;
-}
 export interface PreparedReplica {
   doc: Y.Doc;
   checkpoint?: Checkpoint;
@@ -23,16 +19,6 @@ const replicas = new WeakMap<Y.Doc, PreparedReplica>();
 // Key the original bytes, so wrappers adding a selection or range retain their proof.
 const proofs = new WeakMap<Uint8Array, PreparationProof>();
 
-export function checkpoint(doc: Y.Doc): Checkpoint {
-  return { snapshot: wordSnapshot(doc), roots: new Map(doc.share), source: wordLayoutSource(doc) };
-}
-export function matchesCheckpoint(doc: Y.Doc, value: Checkpoint) {
-  return !doc.store.pendingStructs && !doc.store.pendingDs &&
-    value.source === wordLayoutSource(doc) &&
-    value.roots.size === doc.share.size &&
-    [...value.roots].every(([name, root]) => doc.share.get(name) === root) &&
-    Y.equalSnapshots(value.snapshot, wordSnapshot(doc));
-}
 export function discardReplica(replica: PreparedReplica) {
   if (replica.destroyed) return;
   replica.destroyed = true;

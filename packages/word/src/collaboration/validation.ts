@@ -1,3 +1,5 @@
+import { validateText } from './text-validation.ts';
+export { validateText } from './text-validation.ts';
 import { isSectionPropertyAttribute } from './section-attributes.ts';
 import { isParagraphPropertyAttribute } from './paragraph-attributes.ts';
 import { registerWordListLevel, type WordAuthoredList } from '../authored-list.ts';
@@ -6,11 +8,6 @@ import { validateAttributes } from './formatting.ts';
 import { groupTableParagraphs, tableParagraphs } from './tables.ts';
 import { validateStructuredTables } from './structured/state.ts';
 import { documentImageRefs } from './images.ts';
-export function validateText(text: string) {
-  if (!text.isWellFormed()) throw new Error('This document contains an incomplete character.');
-  if (/[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]/.test(text))
-    throw new Error('This document contains unsupported control characters.');
-}
 
 /** Structural invariants apply equally to local, remote and headless operations. */
 export function validateWordText(text: Y.Text) {

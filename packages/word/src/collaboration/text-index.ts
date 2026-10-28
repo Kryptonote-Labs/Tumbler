@@ -1,4 +1,4 @@
-import { validateText } from './validation.ts';
+import { validateText } from './text-validation.ts';
 import { wordTextDelta } from './text-events.ts';
 import * as Y from 'yjs';
 

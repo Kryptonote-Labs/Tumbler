@@ -1,6 +1,6 @@
 import { editWordTextItem } from './text-edit.ts';
 import * as Y from 'yjs';
-import { checkpoint, matchesCheckpoint } from './structured/preparation-cache.ts';
+import { checkpoint, matchesCheckpoint } from './checkpoint.ts';
 import { wordTextIndex } from './text-index.ts';
 import type { WordDelta } from './commands.ts';
 
