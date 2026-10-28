@@ -1,3 +1,4 @@
+import { applyTrackedWordDelta, wordTextDelta } from '../text-events.ts';
 import { applyInlineWordDelta } from './inline-delta.ts';
 import { legacyTables } from './legacy-tables.ts';
 import { anchorScopedSelection } from './selection.ts';
@@ -73,10 +74,7 @@ export class WordSharedText {
     if (!this.structured()) {
       // Y.Text fills missing formatting keys in the supplied delta. Other source observers
       // must receive the original event, including incremental validation and history.
-      this.updateProjection(() => this.text.applyDelta(event.delta.map(part => ({
-        ...part,
-        ...(part.attributes ? { attributes: { ...part.attributes } } : {}),
-      }))));
+      this.updateProjection(() => applyTrackedWordDelta(this.text, wordTextDelta(event)));
       this.spans = this.text.length
         ? [{ start: 0, end: this.text.length, root: this.story, offset: 0 }]
         : [];
@@ -123,7 +121,7 @@ export class WordSharedText {
       return span.virtual
         ? `${span.root}:end`
         : wordParagraphIdentity(doc.getText(span.root), span.offset + at - span.start);
-    });
+    }, () => this.structured() ? undefined : this.sourceText);
     this.sourceText.observe(this.sourceChanged);
     doc.on("afterTransaction", this.refresh);
     doc.on("destroy", this.disposed);

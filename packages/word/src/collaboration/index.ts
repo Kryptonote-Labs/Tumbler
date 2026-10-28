@@ -23,3 +23,5 @@ export { readWordSectionBoundary, sectionPropertyPatch } from './section-attribu
 export { bindWordLayoutSource, validateWordLayout } from './layout-validation.ts';
 
 export { wordTextString } from './text-index.ts';
+
+export { wordTextDelta } from './text-events.ts';

@@ -1,4 +1,4 @@
-import { wordTextString } from './text-index.ts';
+import { wordTextString, validateWordTextReplacement } from './text-index.ts';
 import { isWordParagraphPositioning } from '../positioning.ts';
 import { wordTextRange } from './text-range.ts';
 import { hasWordParagraphReset, paragraphPropertyPatch, readWordParagraphFormat } from './paragraph-attributes.ts';
@@ -183,7 +183,7 @@ function replaceWordDelta(
   checkRange(text, range);
   protectTableBoundaries(text, range.start, range.end);
   value = value.replace(/\r\n?/g, '\n');
-  validateText(wordTextString(text).slice(0, range.start) + value + wordTextString(text).slice(range.end));
+  validateWordTextReplacement(text, range.start, range.end, value);
   validateAttributes(attributes);
   const { align, styleId, paragraph, positioning, tab: _tab, list, table: inheritedTable, wordParagraph, image: _image, field: _field, ...inline } = attributes;
   let table = inheritedTable;

@@ -1,3 +1,5 @@
+import { wordSnapshot } from '../snapshot.ts';
+import { wordTextDelta } from '../text-events.ts';
 import * as Y from 'yjs';
 import { wordLayoutSource } from '../layout-validation.ts';
 import { isWordTextOnlyEdit } from '../text-range.ts';
@@ -22,14 +24,14 @@ const replicas = new WeakMap<Y.Doc, PreparedReplica>();
 const proofs = new WeakMap<Uint8Array, PreparationProof>();
 
 export function checkpoint(doc: Y.Doc): Checkpoint {
-  return { snapshot: Y.snapshot(doc), roots: new Map(doc.share), source: wordLayoutSource(doc) };
+  return { snapshot: wordSnapshot(doc), roots: new Map(doc.share), source: wordLayoutSource(doc) };
 }
 export function matchesCheckpoint(doc: Y.Doc, value: Checkpoint) {
   return !doc.store.pendingStructs && !doc.store.pendingDs &&
     value.source === wordLayoutSource(doc) &&
     value.roots.size === doc.share.size &&
     [...value.roots].every(([name, root]) => doc.share.get(name) === root) &&
-    Y.equalSnapshots(value.snapshot, Y.snapshot(doc));
+    Y.equalSnapshots(value.snapshot, wordSnapshot(doc));
 }
 export function discardReplica(replica: PreparedReplica) {
   if (replica.destroyed) return;
@@ -71,7 +73,7 @@ export function retainCommittedReplica(owner: Y.Doc, proof: PreparationProof) {
   // Observers may change the owner while committing. Trust the validated replica's
   // snapshot, never the owner's resulting state, and compare them at the next preparation.
   replica.checkpoint = {
-    snapshot: Y.snapshot(replica.doc), roots: new Map(owner.share), source: proof.source,
+    snapshot: wordSnapshot(replica.doc), roots: new Map(owner.share), source: proof.source,
   };
 }
 
@@ -85,7 +87,7 @@ export function observeInlineEdit(candidate: Y.Doc, previous: Y.Doc) {
     if (!(root instanceof Y.Text)) continue;
     const observe = (event: Y.YTextEvent) => {
       if (event.keysChanged.size || events.has(root)) ordinary = false;
-      events.set(root, event.delta);
+      events.set(root, wordTextDelta(event));
     };
     root.observe(observe);
     stops.push(() => root.unobserve(observe));

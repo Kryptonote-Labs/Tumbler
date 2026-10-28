@@ -1,5 +1,6 @@
+import { wordTextDelta } from './text-events.ts';
 import type * as Y from 'yjs';
-import { wordParagraphIdentity } from './paragraph-identity.ts';
+import { wordParagraphIdentity, wordParagraphIdentityRevision } from './paragraph-identity.ts';
 
 export interface WordParagraphPart {
   readonly insert: string;
@@ -21,8 +22,9 @@ export class WordParagraphProjection<T> {
   private slices: readonly WordParagraphSlice[] = [];
   private readonly projected = new WeakMap<WordParagraphSlice, T>();
   private output: readonly T[] | undefined;
+  private identityRevision: number | undefined;
   private readonly observe = (event: Y.YTextEvent) => {
-    this.slices = this.apply(event.delta);
+    this.slices = this.apply(wordTextDelta(event));
     this.output = undefined;
   };
 
@@ -34,6 +36,9 @@ export class WordParagraphProjection<T> {
   }
 
   get paragraphs(): readonly T[] {
+    const revision = wordParagraphIdentityRevision(this.text);
+    if (revision !== undefined && revision === this.identityRevision && this.output) return this.output;
+    this.identityRevision = revision;
     let offset = 0;
     const slices = this.slices.map(slice => {
       offset += slice.length;
@@ -151,12 +156,19 @@ function equalAttributes(left?: Readonly<Record<string, unknown>>, right?: Reado
   if (left === right) return true;
   const keys = Object.keys(left ?? {});
   return keys.length === Object.keys(right ?? {}).length &&
-    keys.every(key => JSON.stringify(left![key]) === JSON.stringify(right?.[key]));
+    keys.every(key => Object.hasOwn(right ?? {}, key) && equalValue(left![key], right?.[key]));
 }
 
 /** Removing an absent key and assigning an equal structured value are semantic no-ops. */
 function attributesChange(current: Readonly<Record<string, unknown>> | undefined, patch: Readonly<Record<string, unknown>>) {
   return Object.entries(patch).some(([key, value]) => value === null
     ? current !== undefined && Object.hasOwn(current, key)
-    : JSON.stringify(current?.[key]) !== JSON.stringify(value));
+    : !equalValue(current?.[key], value));
+}
+
+function equalValue(left: unknown, right: unknown) {
+  if (left === right) return true;
+  if (typeof left === typeof right && (typeof left === 'string' || typeof left === 'boolean' ||
+    typeof left === 'number' && Number.isFinite(left) && Number.isFinite(right))) return false;
+  return JSON.stringify(left) === JSON.stringify(right);
 }

@@ -140,3 +140,47 @@ test('an index first read during a write is not advanced twice by that write', (
   expect(wordTextRange(text).map(part => part.insert).join('')).toBe('first second\n');
   doc.destroy();
 });
+
+test('fragmented ranges preserve every attribute across chunk boundaries, remote edits and undo', () => {
+  const doc = new Y.Doc(), remote = new Y.Doc(), text = doc.getText('body');
+  const undo = new Y.UndoManager(text, { captureTimeout: 0 });
+  try {
+    for (let index = 0; index < 210; index++)
+      text.insert(text.length, `${index}xy\n`, { wordSource: index, bold: index % 2 === 0 });
+    undo.clear();
+    const expand = (parts: readonly { insert: string; attributes?: Readonly<Record<string, unknown>> }[]) =>
+      parts.flatMap(part => Array.from({ length: part.insert.length }, (_, i) => ({ text: part.insert[i], attributes: part.attributes ?? {} })));
+    const check = () => {
+      const expected = expand(text.toDelta());
+      expect(expand(wordTextRange(text))).toEqual(expected);
+      for (const at of [0, 240, 260, 272, 500, 700, text.length - 4])
+        expect(expand(wordTextRange(text, at, at + 4))).toEqual(expected.slice(at, at + 4));
+    };
+    check();
+    text.delete(250, 50); check();
+    text.insert(260, 'inserted', { wordSource: 500, italic: true }); check();
+    text.format(260, 400, { bold: null, color: '#123456' }); check();
+    Y.applyUpdate(remote, Y.encodeStateAsUpdate(doc));
+    remote.getText('body').delete(270, 250);
+    remote.getText('body').insert(270, 'remote', { wordSource: 800 });
+    Y.applyUpdate(doc, Y.encodeStateAsUpdate(remote), 'remote'); check();
+    undo.undo(); check(); undo.redo(); check();
+  } finally { undo.destroy(); doc.destroy(); remote.destroy(); }
+});
+
+test('cached text validation rejects invalid remote text and still allows repairing it', async () => {
+  const { createWordCommands, wordSharedText } = await import('../src/collaboration/index.ts');
+  const doc = new Y.Doc(), commands = createWordCommands();
+  const text = doc.getText('body');
+  text.insert(0, 'valid\n');
+  const view = wordSharedText(text);
+  try {
+    view.applyDelta(commands.replaceWordDelta(view.text, { start: 1, end: 1 }, 'x'));
+    text.insert(0, '\u0001');
+    expect(() => commands.replaceWordDelta(view.text, { start: 2, end: 2 }, 'a')).toThrow('control characters');
+    const repair = commands.replaceWordDelta(view.text, { start: 0, end: 1 }, '');
+    view.commit(view.prepareDelta(repair));
+    expect(view.text.toString()).toBe('vxalid\n');
+    expect(() => commands.replaceWordDelta(view.text, { start: 0, end: 0 }, '\ud800')).toThrow('incomplete character');
+  } finally { doc.destroy(); }
+});

@@ -1,3 +1,4 @@
+import { wordTextDelta } from '../text-events.ts';
 import * as Y from 'yjs';
 import { tableParagraphs, type TableCell } from '../tables.ts';
 
@@ -11,7 +12,7 @@ export function legacyTables(text: Y.Text) {
     cached.set(text, state);
     const current = state;
     text.observe(event => {
-      if (event.keysChanged.size || event.delta.some(part =>
+      if (event.keysChanged.size || wordTextDelta(event).some(part =>
         part.attributes && 'table' in part.attributes || part.delete && current.tables.size > 0))
         current.dirty = true;
     });
