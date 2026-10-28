@@ -1018,6 +1018,13 @@ received changes cannot become trusted state. Structural edits and table edits
 fall back to staged preparation and atomic commit. Hosts still validate custom
 attributes, package provenance and permissions.
 
+Local edits wholly inside one formatted string use Yjs item integration with the
+same identifiers and wire updates as `Y.Text`. Formatting boundaries retain the
+general Yjs path. `wordTextDelta(event)` supplies an equivalent normalized local
+delta only while the document exactly matches that write's checkpoint. Other
+events use `event.delta`. Raw Yjs events are unchanged. Checkpoints incrementally
+retain transaction deletion ranges and include unfinished and queued writes.
+
 `prepareDelta(delta)` translates existing editor deltas into payload-local edits.
 It retains source cell boundaries, rich pasted text and virtual paragraph
 formatting. Pasted tables migrate in the same update. `prepareChanges(changes)`
@@ -1027,9 +1034,15 @@ and return complete updates, which `commit` revalidates before one atomic write.
 Hosts still validate package provenance, asset access and editing authority.
 
 `wordTextRange(text, start, end)` and `wordTextString(text)` share an incremental
-text index for formatting, table and section reads. Unfinished writes and reads
+text index for formatting, table and section reads. Edits copy boundary chunks
+instead of the complete list of retained source runs. Unfinished writes and reads
 before the index's observer use current CRDT items, so an earlier observer cannot
 see stale cached text. Source formatting identities remain intact.
+
+Layout reuses completed paragraph lines, immutable block fingerprints and style
+resolution. Shaping batches fitting ASCII word spans and expands them back into
+graphemes when a line must break inside a word. Long words, unequal column widths
+and preview preparation budgets retain their existing behavior.
 
 `anchor` and `resolve` use authoritative character identities and cell addresses,
 so a selection in a new empty cell survives other peers inserting columns before
