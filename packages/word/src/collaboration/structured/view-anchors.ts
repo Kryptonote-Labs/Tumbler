@@ -16,7 +16,11 @@ export function anchorWordView(
       return Y.createRelativePositionFromJSON({ tname: span.root, assoc: 0 });
     return Y.createRelativePositionFromTypeIndex(doc.getText(span.root), index);
   };
-  return { start: position(range.start), end: position(range.end) };
+  const start = position(range.start);
+  const end = range.end === range.start
+    ? Y.createRelativePositionFromJSON(Y.relativePositionToJSON(start))
+    : position(range.end);
+  return { start, end };
 }
 
 export function resolveWordView(
@@ -46,6 +50,6 @@ export function resolveWordView(
     return span.start + (span.virtual ? 0 : index - span.offset);
   };
   const start = position(anchor.start),
-    end = position(anchor.end);
+    end = Y.compareRelativePositions(anchor.start, anchor.end) ? start : position(anchor.end);
   return { start: Math.min(start, end), end: Math.max(start, end) };
 }
