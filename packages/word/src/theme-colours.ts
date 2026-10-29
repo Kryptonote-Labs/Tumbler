@@ -23,29 +23,8 @@ const slots = [
   "hlink",
   "folHlink",
 ] as const;
-/** Office's current default document colours. Imported documents supply their own scheme. */
-export const DEFAULT_WORD_THEME = new ThemeColorScheme(
-  "Office",
-  new Map(
-    slots.map((slot, index) => [
-      slot,
-      [
-        "FFFFFF",
-        "000000",
-        "E8E8E8",
-        "0E2841",
-        "156082",
-        "E97132",
-        "196B24",
-        "0F9ED5",
-        "A02B93",
-        "4EA72E",
-        "467886",
-        "96607D",
-      ][index],
-    ]),
-  ),
-);
+export { DEFAULT_OFFICE_THEME as DEFAULT_WORD_THEME } from '@tumblerjs/ooxml';
+import { DEFAULT_OFFICE_THEME as DEFAULT_WORD_THEME } from '@tumblerjs/ooxml';
 export function isWordColour(value: unknown): value is WordColour {
   if (typeof value === "string") return /^#[0-9a-f]{6}$/i.test(value);
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
