@@ -1,3 +1,4 @@
+import { cssFontFamily } from "./font-family.ts";
 export interface EmbeddedFontContext {
   family: (name: string) => string;
 }
@@ -15,12 +16,13 @@ interface LoadedFonts extends EmbeddedFontContext {
 const documents = new WeakMap<Document, WeakMap<readonly EmbeddedFont[], LoadedFonts>>();
 let serial = 0;
 /** Share document-scoped font faces with private family names; never install document fonts globally. */
-export function loadEmbeddedFonts(
-  fonts: readonly EmbeddedFont[],
-) {
+export function loadEmbeddedFonts(fonts: readonly EmbeddedFont[]) {
   const owner = document;
   let cache = documents.get(owner);
-  if (!cache) { cache = new WeakMap(); documents.set(owner, cache); }
+  if (!cache) {
+    cache = new WeakMap();
+    documents.set(owner, cache);
+  }
   let loaded = cache.get(fonts);
   if (!loaded) {
     const families = new Map<string, string>();
@@ -36,12 +38,12 @@ export function loadEmbeddedFonts(
     });
     loaded = {
       references: 0,
-      ready: Promise.allSettled(faces.map(face => face.load())).then(() => {}),
+      ready: Promise.allSettled(faces.map((face) => face.load())).then(() => {}),
       faces,
       family: (name) =>
         families.has(name.toLowerCase())
-          ? `"${families.get(name.toLowerCase())}", ${JSON.stringify(name)}`
-          : JSON.stringify(name),
+          ? `"${families.get(name.toLowerCase())}", ${cssFontFamily(name)}`
+          : cssFontFamily(name),
     };
     cache.set(fonts, loaded);
   }
