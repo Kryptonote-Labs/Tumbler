@@ -1,3 +1,6 @@
+import { runPresentation } from './presentations.ts';
+export { presentationHelp } from './presentations.ts';
+export type { PresentationOperationHost } from './presentations.ts';
 import { replacementValue } from './replacement-value.ts';
 import { wordOperations, wordOperation, targetSchema } from '@tumblerjs/word/operations';
 import { z } from 'zod';
@@ -25,6 +28,7 @@ export async function runTumbler(
   },
 ): Promise<number> {
   try {
+    if(argv[1] === 'slides'){await runPresentation(argv,options);return 0;}
     if (!argv.length || argv.includes('--help')) {
       const name =
         argv[0] === 'create' ? 'create' : argv[1] && argv[1] !== '--help' ? argv[1] : undefined;

@@ -107,3 +107,19 @@ with page-fixed or text-relative positioning. `read`, `inspect`, `select`, and
 Embedders can use `tumblerCapabilities()` for a registry-derived capability
 overview and `tumblerOperationHelp(name, commandName)` for detailed help. Host
 permissions and supported document types still apply.
+
+## Presentations
+
+```sh
+tumbler create deck.pptx
+tumbler deck.pptx slides read
+tumbler deck.pptx slides insert-object --help
+tumbler deck.pptx slides insert-object --page '<read-handle>' --input '{"slideId":"256","bounds":{"x":80,"y":100,"width":400,"height":100},"object":{"kind":"shape","text":"Quarterly review"}}'
+```
+
+`slides read --slide <id>` selects a slide. Editing commands are generated from
+the slides package's validated command union; help does not open a document.
+File reads return a content-hash page handle. Writes require that handle, retain
+the sibling-lock convention and replace the file atomically. Hosted integrations
+implement `readPresentation` and `operatePresentation` on `OperationHost` to use
+the same syntax with their own permissions, revisions and durable receipts.
