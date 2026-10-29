@@ -91,8 +91,13 @@ export function tableParagraphs(
     .map((paragraph) => {
       const props = children(paragraph).find((e) => e.localName === "pPr");
       const level = Number(props?.attributes.find((a) => a.localName === "lvl")?.value ?? 0);
-      const defaults = list && children(list).find((e) => e.localName === `lvl${level + 1}pPr`);
-      if (!defaults) return portable(paragraph);
+      const defaults = list
+        ? [
+            children(list).find((e) => e.localName === "defPPr"),
+            children(list).find((e) => e.localName === `lvl${level + 1}pPr`),
+          ].filter((node): node is LosslessXmlElement => !!node)
+        : [];
+      if (!defaults.length) return portable(paragraph);
       const raw = portable(paragraph);
       const start = raw.indexOf(">") + 1;
       const content = children(paragraph)
@@ -101,7 +106,7 @@ export function tableParagraphs(
         .join("");
       return (
         raw.slice(0, start) +
-        merge("pPr", [defaults, ...(props ? [props] : [])]) +
+        merge("pPr", [...defaults, ...(props ? [props] : [])]) +
         content +
         `</${paragraph.qualified}>`
       );

@@ -185,3 +185,24 @@ test("merge preserves donor list defaults and untouched column identifiers", asy
     new TextDecoder().decode(b.document.package.readPart(part)).match(/a16:colId/g),
   ).toHaveLength(2);
 });
+
+test("merge retains generic paragraph defaults from each source cell", async () => {
+  const { a, slideId, objectKey } = await imported((xml) =>
+    xml.replace(/<a:lstStyle\/>/g, '<a:lstStyle><a:defPPr marR="12700"/></a:lstStyle>'),
+  );
+  const result = run(a, {
+    name: "edit-table",
+    slideId,
+    objectKey,
+    action: "merge",
+    row: 0,
+    column: 0,
+    endColumn: 1,
+  });
+  const part = result.document.package.getPart(result.document.slides[0]!.part)!;
+  expect(
+    new TextDecoder()
+      .decode(result.document.package.readPart(part))
+      .match(/<a:pPr[^>]*marR="12700"/g),
+  ).toHaveLength(2);
+});
