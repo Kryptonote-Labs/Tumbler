@@ -70,7 +70,7 @@ Hosts enforce permissions, revisions, asset resolution, receipts and commit boun
 `createWordOperations` accepts host-specific command validation. `openWordOperationDocument`
 adapts DOCX files to the same operations and reconciles against their source package.
 
-Sheets, slides and document section-layout authoring are not implemented by this registry.
+The Word registry does not include sheets or document section-layout authoring. Presentation commands use the separate `slides` namespace below.
 
 ## Replacement text
 

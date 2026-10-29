@@ -866,6 +866,10 @@
                 </foreignObject>
               {/if}
             </g>
+            {#if editable && object.layer === 'slide' && object.textEditable && !slideTextValue(object) && editing !== object.key}
+              <rect width={w} height={h} fill="none" stroke="#82928a" stroke-width="1" stroke-dasharray="5 4" pointer-events="none"/>
+              <text x={w/2} y={Math.min(h/2+6,30)} text-anchor="middle" fill="#77857d" font-size="16" pointer-events="none" aria-hidden="true">Double-click to add text</text>
+            {/if}
             {#if editable && editing !== object.key && !object.table}<rect
                 class="hit"
                 width={Math.max(w, 8)}
