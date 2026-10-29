@@ -2,6 +2,7 @@ import {
   closeSync,
   openSync,
   readFileSync,
+  realpathSync,
   renameSync,
   statSync,
   unlinkSync,
@@ -46,6 +47,7 @@ export function presentationFileHost(): Required<PresentationOperationHost> {
     },
     async operatePresentation(path, input) {
       check(path);
+      path = realpathSync(path);
       if (!input.page) throw new Error("Read the presentation and supply --page before editing.");
       const lock = path + ".tumbler-lock",
         descriptor = openSync(lock, "wx"),

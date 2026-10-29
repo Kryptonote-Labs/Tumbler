@@ -57,3 +57,42 @@ test("presentation CLI creates, reads, edits and rejects stale file handles", as
     await rm(dir, { recursive: true, force: true });
   }
 });
+test("presentation read help works without opening a document", async () => {
+  let stdout = "";
+  expect(
+    await runTumbler(["missing.pptx", "slides", "read", "--help"], {
+      host: createFileHost(),
+      stdout: (s) => (stdout += s),
+      stderr: () => {},
+    }),
+  ).toBe(0);
+  expect(stdout).toContain("--slide");
+});
+test("presentation edits through symlinks retain the alias and update its target", async () => {
+  const { symlink, lstat } = await import("node:fs/promises");
+  const dir = await mkdtemp(join(tmpdir(), "tumbler-slides-alias-"));
+  try {
+    const target = join(dir, "target.pptx"),
+      alias = join(dir, "alias.pptx"),
+      host = createFileHost();
+    await host.create(target);
+    await symlink(target, alias);
+    const read = (await host.readPresentation!(alias)) as { page: string; slide: { id: string } };
+    await host.operatePresentation!(alias, {
+      page: read.page,
+      command: {
+        name: "insert-object",
+        slideId: read.slide.id,
+        bounds: { x: 10, y: 10, width: 100, height: 100 },
+        object: { kind: "shape", text: "Through alias" },
+      },
+    });
+    expect((await lstat(alias)).isSymbolicLink()).toBe(true);
+    expect(await Bun.file(alias).bytes()).toEqual(await Bun.file(target).bytes());
+    expect(await host.readPresentation!(target)).toMatchObject({
+      slide: { objects: [{ text: "Through alias" }] },
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

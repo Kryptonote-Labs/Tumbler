@@ -1,3 +1,5 @@
+import { materializeClipboardText } from "./clipboard-appearance.ts";
+import { presentationClipboardTheme } from "./reader.ts";
 import { beginLosslessXmlEdit, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { beginPackageTransaction, relationshipItemName } from "@tumblerjs/opc";
 import { openPresentationArtifact, type PresentationArtifact } from "./artifact.ts";
@@ -16,9 +18,15 @@ export function pastePresentationObject(
   editable(destination);
   if (source.document.conformance !== destination.document.conformance)
     throw new Error("Clipboard objects must use the destination presentation conformance.");
+  source = materializeClipboardText(source, sourceSlideId, objectKey);
   const target = slideById(destination, slideId),
     targetSource = partXml(destination, target.part);
-  const { source: sourceXml, element, slide } = objectTarget(source, sourceSlideId, objectKey);
+  const {
+    source: sourceXml,
+    element,
+    slide,
+    object: sourceObject,
+  } = objectTarget(source, sourceSlideId, objectKey);
   const sourceTree = children(children(sourceXml.root).find((e) => e.localName === "cSld")!).find(
     (e) => e.localName === "spTree",
   )!;
@@ -56,6 +64,52 @@ export function pastePresentationObject(
   };
   find(sourceXml.root);
   const edit = beginLosslessXmlEdit(sourceXml);
+  const theme = presentationClipboardTheme(source.document, sourceSlideId);
+  visit(element, (node) => {
+    if (node.localName === "schemeClr") {
+      const color = theme.color(node.attributes.find((a) => a.localName === "val")?.value ?? "");
+      if (color) {
+        const q = node.prefix ? node.prefix + ":" : "",
+          attribute = node.attributes.find((a) => a.localName === "val")!;
+        let open = sourceXml.source.slice(node.startTagSpan.start, node.startTagSpan.end);
+        open = open
+          .replace(
+            sourceXml.source.slice(attribute.span.start, attribute.span.end),
+            `val="${color}"`,
+          )
+          .replace("<" + node.qualified, "<" + q + "srgbClr");
+        const inner = node.endTagSpan
+          ? sourceXml.source.slice(node.startTagSpan.end, node.endTagSpan.start) + `</${q}srgbClr>`
+          : "";
+        edit.replaceElementMarkup(node, open + inner);
+      }
+    }
+    for (const attr of node.attributes)
+      if (attr.localName === "typeface") {
+        const face = theme.font(attr.value);
+        if (face) edit.setAttribute(attr, face);
+      }
+  });
+  const shapeProps = children(element).find((e) => e.localName === "spPr");
+  if (shapeProps && !children(shapeProps).some((e) => e.localName === "xfrm")) {
+    const t = sourceObject.transform,
+      namespace =
+        source.document.conformance === "strict"
+          ? "http://purl.oclc.org/ooxml/drawingml/main"
+          : "http://schemas.openxmlformats.org/drawingml/2006/main";
+    const transform = `<a:xfrm xmlns:a="${namespace}" rot="${Math.round(t.rotation * 60000)}" flipH="${t.flipH ? 1 : 0}" flipV="${t.flipV ? 1 : 0}"><a:off x="${Math.round(t.x * 9525)}" y="${Math.round(t.y * 9525)}"/><a:ext cx="${Math.round(t.width * 9525)}" cy="${Math.round(t.height * 9525)}"/></a:xfrm>`;
+    if (shapeProps.selfClosing)
+      edit.replaceElementMarkup(
+        shapeProps,
+        sourceXml.source
+          .slice(shapeProps.startTagSpan.start, shapeProps.startTagSpan.end)
+          .replace(/\/\s*>$/, ">") +
+          transform +
+          `</${shapeProps.qualified}>`,
+      );
+    else if (children(shapeProps)[0]) edit.insertMarkupBefore(children(shapeProps)[0]!, transform);
+    else edit.appendMarkup(shapeProps, transform);
+  }
   for (const [name, value] of declarations)
     if (!element.attributes.some((a) => a.qualified === name))
       edit.insertAttribute(element, name, value);

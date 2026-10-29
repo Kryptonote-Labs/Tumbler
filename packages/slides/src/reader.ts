@@ -114,11 +114,33 @@ interface ReadCache {
     { colors: ThemeColorScheme; fonts: ThemeFontScheme }
   >;
 }
+const slideContexts = new WeakMap<PresentationSlide, Context>();
 const readCaches = new WeakMap<PresentationDocument, ReadCache>();
 const slideCosts = new WeakMap<
   PresentationSlide,
   { objects: number; characters: number }
 >();
+
+/** Internal clipboard context for materializing source theme references. */
+export function presentationClipboardTheme(document: PresentationDocument, slideId: string) {
+  const slide = document.slides.find((s) => s.id === slideId),
+    context = slide && slideContexts.get(slide);
+  return {
+    color: (name: string) => {
+      const slot = context?.colorMap.get(name) ?? name;
+      const known = THEME_COLOR_SLOTS.find((value) => value === slot);
+      return known ? context?.colors?.color(known) : undefined;
+    },
+    font: (name: string) => {
+      const match = /^\+(mj|mn)-(lt|ea|cs)$/.exec(name);
+      if (!match) return undefined;
+      return context?.fonts?.typeface(
+        match[1] === "mj" ? "major" : "minor",
+        match[2] === "ea" ? "eastAsian" : match[2] === "cs" ? "complexScript" : "latin",
+      );
+    },
+  };
+}
 
 /** Internal edit path: only slide XML changes; relationships and assets are unchanged. */
 export function readPresentationPart(
@@ -620,7 +642,7 @@ class Reader {
           paragraph.runs.map((run) => run.text).join(""),
         )
         .join(" ") || `Slide ${index + 1}`;
-    return {
+    const result: PresentationSlide = {
       id,
       animations: playback.animations,
       transition: playback.transition,
@@ -641,6 +663,8 @@ class Reader {
       objects,
       diagnostics: context.diagnostics,
     };
+    slideContexts.set(result,context);
+    return result;
   }
   slideNotes(slide: PartSource): string {
     const notes = this.relatedXml(slide, "notesSlide");

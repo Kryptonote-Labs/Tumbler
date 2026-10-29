@@ -11,7 +11,7 @@ export function presentationHelp(commandName = "tumbler", name?: string) {
   const schema = name
     ? presentationCommand.options.find((option) => option.shape.name.value === name)
     : undefined;
-  if (name && !schema) throw new Error(`Unknown presentation command: ${name}`);
+  if (name && name !== "read" && !schema) throw new Error(`Unknown presentation command: ${name}`);
   return (
     [
       `Usage: ${commandName} <document> slides read [--slide <slide-id>]`,
