@@ -1,3 +1,4 @@
+import { presentationFileHost, createPresentationFile } from './presentation-file-host.ts';
 import { fileRegion, fileRegions } from "./file-regions.ts";
 import { inspectWordObjects, inspectWordStyles, readWordImage } from "@tumblerjs/word/operations";
 import { NativeWordDocument } from "@tumblerjs/word";
@@ -220,6 +221,7 @@ export function createFileHost(): OperationHost {
     }
   }
   return {
+    ...presentationFileHost(),
     async readImage(path, input) {
       checkExtension(path);
       const source = fileRegion(open(readFileSync(path)), input.region);
@@ -257,6 +259,7 @@ export function createFileHost(): OperationHost {
       return page(fileRegion(source, input.region), input.offset, input.region);
     },
     async create(path) {
+      if(extname(path).toLowerCase() === '.pptx')return createPresentationFile(path);
       checkExtension(path);
       const artifact = createWordArtifact();
       writeFileSync(path, artifact.bytes(), { flag: "wx" });

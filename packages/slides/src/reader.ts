@@ -114,11 +114,38 @@ interface ReadCache {
     { colors: ThemeColorScheme; fonts: ThemeFontScheme }
   >;
 }
+const clipboardLines=new WeakMap<SlideObject,{xml:LosslessXmlDocument;element:Element;placeholder:string | undefined}>();
+const slideContexts = new WeakMap<PresentationSlide, Context>();
 const readCaches = new WeakMap<PresentationDocument, ReadCache>();
 const slideCosts = new WeakMap<
   PresentationSlide,
   { objects: number; characters: number }
 >();
+
+export function presentationClipboardLine(document:PresentationDocument,slideId:string,objectKey:string){
+  const object=document.slides.find(s=>s.id===slideId)?.objects.find(o=>o.key===objectKey);
+  return object && clipboardLines.get(object);
+}
+/** Internal clipboard context for materializing source theme references. */
+export function presentationClipboardTheme(document: PresentationDocument, slideId: string) {
+  const slide = document.slides.find((s) => s.id === slideId),
+    context = slide && slideContexts.get(slide);
+  return {
+    color: (name: string) => {
+      const slot = context?.colorMap.get(name) ?? name;
+      const known = THEME_COLOR_SLOTS.find((value) => value === slot);
+      return known ? context?.colors?.color(known) : undefined;
+    },
+    font: (name: string) => {
+      const match = /^\+(mj|mn)-(lt|ea|cs)$/.exec(name);
+      if (!match) return undefined;
+      return context?.fonts?.typeface(
+        match[1] === "mj" ? "major" : "minor",
+        match[2] === "ea" ? "eastAsian" : match[2] === "cs" ? "complexScript" : "latin",
+      );
+    },
+  };
+}
 
 /** Internal edit path: only slide XML changes; relationships and assets are unchanged. */
 export function readPresentationPart(
@@ -620,7 +647,7 @@ class Reader {
           paragraph.runs.map((run) => run.text).join(""),
         )
         .join(" ") || `Slide ${index + 1}`;
-    return {
+    const result: PresentationSlide = {
       id,
       animations: playback.animations,
       transition: playback.transition,
@@ -641,6 +668,8 @@ class Reader {
       objects,
       diagnostics: context.diagnostics,
     };
+    slideContexts.set(result,context);
+    return result;
   }
   slideNotes(slide: PartSource): string {
     const notes = this.relatedXml(slide, "notesSlide");
@@ -1440,6 +1469,8 @@ class Reader {
           ? inkTransforms.map((item) => item.id)
           : [],
       });
+      const lineOwner=line && this.owners.get(line);
+      if(line && lineOwner)clipboardLines.set(result.at(-1)!,{xml:lineOwner.xml,element:line,placeholder:this.color(lineRef,context)});
     }
     return result;
   }
@@ -1892,6 +1923,7 @@ class Reader {
             bold: ["1", "true", "on"].includes(runAttr("b") ?? ""),
             italic: ["1", "true", "on"].includes(runAttr("i") ?? ""),
             underline: !!runAttr("u") && runAttr("u") !== "none",
+            underlineStyle: runAttr("u"),
             strike: !!runAttr("strike") && runAttr("strike") !== "noStrike",
             baseline: percentage(runAttr("baseline")),
             spacing: ((numeric(runAttr("spc"), 0) / 100) * 4) / 3,

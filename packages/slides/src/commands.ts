@@ -1,3 +1,5 @@
+import { pastePresentationObject } from "./clipboard.ts";
+import { openPresentationArtifact } from "./artifact.ts";
 import { z } from "zod";
 import { normalizeFormattingPatch, type FormattingPatch } from "@tumblerjs/core";
 import { type PresentationArtifact } from "./artifact.ts";
@@ -58,6 +60,15 @@ const patch = z
   .strict()
   .transform((value) => normalizeFormattingPatch(value as FormattingPatch));
 export const presentationCommand = z.discriminatedUnion("name", [
+  z
+    .object({
+      name: z.literal("paste-object"),
+      slideId: id,
+      source: z.string(),
+      sourceSlideId: id,
+      objectKey: id,
+    })
+    .strict(),
   z
     .object({
       name: z.literal("layout"),
@@ -208,6 +219,17 @@ export function applyPresentationCommand(
 ): PresentationArtifact {
   const command = presentationCommand.parse(input);
   switch (command.name) {
+    case "paste-object":
+      return pastePresentationObject(
+        artifact,
+        command.slideId,
+        openPresentationArtifact(
+          Uint8Array.from(atob(command.source), (c) => c.charCodeAt(0)),
+          artifact.options,
+        ),
+        command.sourceSlideId,
+        command.objectKey,
+      );
     case "layout":
       return applyPresentationLayout(artifact, command.slideId, command.layout);
     case "insert-slide":

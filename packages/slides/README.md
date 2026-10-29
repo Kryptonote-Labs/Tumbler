@@ -118,3 +118,16 @@ New decks include a master, blank layout and shared Office theme. Imported Stric
 and Transitional decks retain their existing conformance. Structural commands
 retain unrelated package part payloads. Detached parts are retained when deleting
 slides so existing package relationships never become dangling.
+
+`paste-object` accepts a base64 source PPTX plus `sourceSlideId`, `objectKey`, and
+the destination `slideId`. It preserves the selected top-level object's markup,
+formatting, resource bytes and relationships. Source and destination must use the
+same Strict/Transitional conformance. Keep the source snapshot before deleting
+an object to implement cut/paste safely. `inspectPresentation` returns compact
+slide/object addresses, text, table cells and geometry for agents.
+
+Hosts can set `toolbar={false}` on `PresentationSlideView` to supply a ribbon.
+Bind the component instance and call `applyFormatting(patch)` to retain caret
+formatting and selected text ranges. `currentSelection()` returns the active
+object, cell and range for paragraph commands. `onselectionchange` reports the
+active text target and resolved formatting state, including pending caret styles.

@@ -56,3 +56,4 @@ export { createPresentation } from './authoring-xml.ts';
 export { applyPresentationCommand, presentationCommand } from './commands.ts';
 export type { PresentationCommand } from './commands.ts';
 export type { NewSlideObject, ObjectBounds, ShapeGeometry } from './authoring-objects.ts';
+export { inspectPresentation } from './inspect.ts';

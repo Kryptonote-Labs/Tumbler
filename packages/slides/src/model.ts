@@ -31,6 +31,7 @@ export interface SlideTextRun {
   readonly bold: boolean;
   readonly italic: boolean;
   readonly underline: boolean;
+  readonly underlineStyle?: string | undefined;
   readonly strike?: boolean;
   readonly baseline?: number;
   readonly spacing?: number;

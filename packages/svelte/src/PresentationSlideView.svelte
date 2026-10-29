@@ -15,7 +15,7 @@
     type PresentationShapeStyle,
     type SlideText,
   } from "@tumblerjs/slides";
-  import type { FormattingPatch } from "@tumblerjs/core";
+  import type { FormattingPatch, FormattingState } from "@tumblerjs/core";
   import { onDestroy, onMount, tick, setContext } from "svelte";
   import type {
     PresentationDocument,
@@ -44,6 +44,8 @@
     presentation,
     slide,
     thumbnail = false,
+    toolbar = true,
+    onselectionchange,
     editable = false,
     scale = $bindable(1),
     selectedKey = $bindable<string | undefined>(),
@@ -58,6 +60,8 @@
     presentation: PresentationDocument;
     slide: PresentationSlide;
     thumbnail?: boolean;
+    toolbar?: boolean;
+    onselectionchange?: (selection: {object:SlideObject | undefined;state:FormattingState}) => void;
     editable?: boolean;
     scale?: number;
     selectedKey?: string;
@@ -197,6 +201,12 @@
       text.color = { state: "value", value: p.color.set };
     return { ...state, text };
   });
+  export function applyFormatting(patch: FormattingPatch) { format(patch); }
+  export function currentSelection() {
+    if(!selected || !textTarget) return {start:0,end:0};
+    return {objectKey:selected.key, ...(cellAddress ? {cell:cellAddress} : {}), ...(editing ? textRange : {start:0,end:slideTextValue(textTarget).length})};
+  }
+  $effect(() => {onselectionchange?.({object:textTarget,state:formattingState});});
   function format(patch: FormattingPatch) {
     if (!selected || !textTarget?.textEditable) return;
     if (editing && textRange.start === textRange.end && !patch.block) {
@@ -545,7 +555,7 @@
 
 <svelte:window onpointerup={finish} onpointercancel={cancel} />
 <div class="presentation-surface">
-  {#if editable && (onformat || onshapechange)}<PresentationFormattingToolbar
+  {#if toolbar && editable && (onformat || onshapechange)}<PresentationFormattingToolbar
       object={textTarget}
       state={formattingState}
       onformat={format}
