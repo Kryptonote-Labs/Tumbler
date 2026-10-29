@@ -238,6 +238,12 @@ MIT licensed. See [LICENSE](LICENSE).
 
 ### Structured authoring
 
+`wordHeadingOutline(nativeDocument)` returns body heading text, levels and UTF-16
+positions for navigation. It uses semantic outline levels, including inherited
+custom styles, and excludes headings inside tables. Paragraph `outlineLevel`
+values 0–8 are heading levels 1–9; 9 is body text. These values survive native
+editing and DOCX export. Built-in heading styles carry their corresponding levels.
+
 `createWordArtifact({ blocks })` accepts paragraph, table and image blocks. A paragraph has
 formatted `runs`, optional alignment and optional `list: { id, kind, level, start }` metadata.
 Reuse a list ID to continue numbering; use a new ID to restart it. Levels range from zero to eight.

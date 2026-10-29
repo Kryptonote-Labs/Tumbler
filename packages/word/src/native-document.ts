@@ -814,7 +814,7 @@ function resetDirectParagraphFormat(format: ComputedWordParagraphFormat, inherit
   const {
     spacingBeforeTwips, spacingAfterTwips, lineSpacing, keepNext, keepLines,
     pageBreakBefore, suppressLineNumbers, widowControl, contextualSpacing, shading, shadingColour,
-    borders, borderColours, ...retained
+    borders, borderColours, outlineLevel, ...retained
   } = format;
   return { ...inherited, ...retained };
 }

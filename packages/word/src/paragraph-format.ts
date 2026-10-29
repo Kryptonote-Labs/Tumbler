@@ -5,6 +5,7 @@ import { isWordCellFormat, borderXml, type WordCellBorders } from './table-forma
 
 /** Direct paragraph properties. Measurements use OOXML twips, 20 per point. */
 export interface WordParagraphFormat {
+  readonly outlineLevel?: number;
   readonly spacingBeforeTwips?: number;
   readonly spacingAfterTwips?: number;
   readonly lineSpacing?: WordLineSpacing;
@@ -21,6 +22,7 @@ const toggles = ['keepNext', 'keepLines', 'pageBreakBefore', 'suppressLineNumber
 export function isWordParagraphFormat(value: unknown): value is WordParagraphFormat {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   return Object.entries(value).every(([key, item]) => {
+    if (key === 'outlineLevel') return Number.isInteger(item) && item >= 0 && item <= 9;
     if (toggles.some(name => name === key)) return typeof item === 'boolean';
     if (key === 'spacingBeforeTwips' || key === 'spacingAfterTwips') return Number.isInteger(item) && item >= 0 && item <= 2147483647;
     if (key === 'shading' || key === 'borders') return isWordCellFormat({ [key]: item });
@@ -43,5 +45,6 @@ export function paragraphFormatXml(format: WordParagraphFormat): Map<string, str
   const spacing = [format.spacingBeforeTwips === undefined ? '' : `w:before="${format.spacingBeforeTwips}"`, format.spacingAfterTwips === undefined ? '' : `w:after="${format.spacingAfterTwips}"`, format.lineSpacing ? `w:line="${format.lineSpacing.value}" w:lineRule="${format.lineSpacing.rule}"` : ''].filter(Boolean);
   if (spacing.length) output.set('spacing', `<w:spacing ${spacing.join(' ')}/>`);
   if (format.contextualSpacing !== undefined) output.set('contextualSpacing', `<w:contextualSpacing w:val="${format.contextualSpacing ? 1 : 0}"/>`);
+  if (format.outlineLevel !== undefined) output.set('outlineLvl', `<w:outlineLvl w:val="${format.outlineLevel}"/>`);
   return output;
 }

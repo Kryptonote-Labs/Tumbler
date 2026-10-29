@@ -201,3 +201,4 @@ export { createWordNativeArchive, openWordNativeArchive, encodeWordNativeArchive
 export type { WordNativeArchive } from './native-archive.ts';
 export { wordTableAvailableWidth } from './geometry.ts';
 export { wordParagraphById } from './text.ts';
+export { wordHeadingOutline } from './outline.ts';
