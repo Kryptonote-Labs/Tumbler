@@ -20,22 +20,22 @@ export interface PresentationTextRange {
   readonly end: number;
 }
 export interface PresentationTextEdit extends PresentationTextRange {
-  readonly cell?: PresentationTableCellAddress;
+  readonly cell?: PresentationTableCellAddress | undefined;
   readonly slideId: string;
   readonly objectKey: string;
   readonly value: string;
-  readonly formatting?: FormattingPatch;
+  readonly formatting?: FormattingPatch | undefined;
 }
 export interface PresentationFormatChange extends PresentationTextRange {
-  readonly cell?: PresentationTableCellAddress;
+  readonly cell?: PresentationTableCellAddress | undefined;
   readonly slideId: string;
   readonly objectKey: string;
   readonly patch: FormattingPatch;
 }
 export interface PresentationShapeStyle {
-  readonly fill?: string;
-  readonly stroke?: string;
-  readonly strokeWidth?: number;
+  readonly fill?: string | undefined;
+  readonly stroke?: string | undefined;
+  readonly strokeWidth?: number | undefined;
 }
 export interface PresentationShapeChange extends PresentationShapeStyle {
   readonly slideId: string;

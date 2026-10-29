@@ -8,7 +8,8 @@
     "@tumblerjs/core": "0.1.0-alpha.26",
     "@tumblerjs/ooxml": "0.1.0-alpha.26",
     "@tumblerjs/opc": "0.1.0-alpha.26",
-    "mtx-decompressor": "1.6.0"
+    "mtx-decompressor": "1.6.0",
+    "zod": "^4.6.5"
   },
   "description": "Headless PresentationML reading, rendering models, preservation, and editing for Tumbler.",
   "files": [

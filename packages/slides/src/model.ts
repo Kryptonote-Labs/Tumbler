@@ -66,7 +66,7 @@ export interface SlideText {
   readonly anchor: "top" | "center" | "bottom";
   readonly wrap: boolean;
   readonly direction?: string;
-  readonly rotation?: number;
+  readonly rotation?: number | undefined;
   readonly columns?: number;
   readonly columnGap?: number;
   readonly tabSize?: number;
@@ -196,7 +196,7 @@ export interface OpenPresentationOptions {
 }
 export interface PresentationObjectChange {
   /** Clockwise degrees; omitted values preserve the current rotation. */
-  readonly rotation?: number;
+  readonly rotation?: number | undefined;
   readonly slideId: string;
   readonly objectKey: string;
   readonly x: number;

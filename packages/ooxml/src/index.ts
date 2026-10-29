@@ -70,3 +70,5 @@ export type {
   XmlEditResult,
   XmlEditorStatus,
 } from "./xml/editor.ts";
+
+export { DEFAULT_OFFICE_THEME, officeThemeXml } from './office-theme.ts';
