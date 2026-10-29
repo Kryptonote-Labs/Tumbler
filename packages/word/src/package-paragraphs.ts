@@ -12,6 +12,20 @@ import { PackageXml } from './package-xml.ts';
 import type { contentCopyScopes } from './package-copies.ts';
 import { xml, runProperties } from './create-xml.ts';
 
+const propertyNames = {
+  fontFamily: 'rFonts',
+  fontSizePoints: 'sz',
+  bold: 'b',
+  italic: 'i',
+  underline: 'u',
+  color: 'color',
+  strike: 'strike',
+  highlight: 'highlight',
+  shading: 'shd',
+  verticalAlign: 'vertAlign',
+  characterSpacingPoints: 'spacing',
+  kerningPoints: 'kern',
+} as const;
 /** Fallbacks also matter when a source has no theme or a consumer cannot resolve it. */
 function sameColourDeclaration(left: WordColour | undefined, right: WordColour | undefined) {
   if (!wordColoursEqual(left, right)) return false;
@@ -169,20 +183,6 @@ export function wordParagraphRenderer(
     const runElement = parent;
     const properties = runElement && markup.children(runElement, 'rPr')[0];
     const replacements = new Map<string, string>();
-    const propertyNames = {
-      fontFamily: 'rFonts',
-      fontSizePoints: 'sz',
-      bold: 'b',
-      italic: 'i',
-      underline: 'u',
-      color: 'color',
-      strike: 'strike',
-      highlight: 'highlight',
-      shading: 'shd',
-      verticalAlign: 'vertAlign',
-      characterSpacingPoints: 'spacing',
-      kerningPoints: 'kern',
-    } as const;
     for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[]) {
       if (run.format?.[key] === undefined) continue;
       const unchanged = key === 'color' || key === 'shading'
@@ -267,6 +267,20 @@ export function wordParagraphRenderer(
     }
     if (paragraph.section !== undefined) replacements.set('sectPr', paragraph.section === null ? '' : sectionBoundaryXml(markup, paragraph.section));
     const styleChanged = paragraph.styleId !== undefined && paragraph.styleId !== original?.styleId;
+    const markFormat = paragraph.runs.every(run => !run.text) ? paragraph.runs[0]?.format : undefined;
+    if (markFormat) {
+      const originalFormat = original?.runs.every(run => !run.text) ? original.runs[0]?.format : undefined;
+      const markChanges = new Map<string, string>();
+      for (const key of Object.keys(propertyNames) as (keyof typeof propertyNames)[]) {
+        if (markFormat[key] === undefined) continue;
+        const unchanged = key === 'color' || key === 'shading'
+          ? sameColourDeclaration(markFormat[key], originalFormat?.[key])
+          : markFormat[key] === originalFormat?.[key];
+        if (styleChanged || !unchanged) markChanges.set(propertyNames[key], runProperties({ [key]: markFormat[key] }));
+      }
+      if (markChanges.size) replacements.set('rPr', markup.properties(markup.children(properties, 'rPr')[0], 'rPr', markChanges));
+    }
+
     if (paragraph.styleId !== undefined && (styleChanged || paragraph.paragraph === undefined)) {
       if (paragraph.paragraph === undefined) for (const key of ['spacing', 'keepNext', 'keepLines', 'pageBreakBefore', 'suppressLineNumbers', 'widowControl', 'contextualSpacing', 'pBdr', 'shd', 'outlineLvl']) replacements.set(key, '');
       if (paragraph.positioning === undefined) for (const key of ['ind', 'tabs']) replacements.set(key, '');

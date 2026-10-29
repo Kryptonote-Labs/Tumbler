@@ -244,6 +244,13 @@ custom styles, and excludes headings inside tables. Paragraph `outlineLevel`
 values 0–8 are heading levels 1–9; 9 is body text. These values survive native
 editing and DOCX export. Built-in heading styles carry their corresponding levels.
 
+`wordFormatPainterSample(nativeDocument, offset, { defaultStyleId, positioning })`
+samples supported character appearance and paragraph formatting as separate patches.
+Pass the source paragraph's direct positioning to retain tab-clear declarations and
+indent overrides. The sample does not copy links, list identities or object content.
+Empty paragraphs retain character formatting on their paragraph mark for later
+typing, native layout and DOCX export.
+
 `createWordArtifact({ blocks })` accepts paragraph, table and image blocks. A paragraph has
 formatted `runs`, optional alignment and optional `list: { id, kind, level, start }` metadata.
 Reuse a list ID to continue numbering; use a new ID to restart it. Levels range from zero to eight.

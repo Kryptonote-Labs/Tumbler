@@ -667,7 +667,7 @@ export class NativeWordDocument implements WordLayoutSource {
             const paragraphFormat = authored.resetParagraphFormat && original && !resetParagraph
               ? resetDirectParagraphFormat(original.format, named?.paragraph ?? defaults?.paragraph ?? DEFAULT_PARAGRAPH)
               : resetParagraph ? named?.paragraph : original?.format;
-            this.paragraphTextFormats.set(block, format(undefined, resetParagraph ? named?.text : original?.textFormat ?? named?.text));
+            this.paragraphTextFormats.set(block, format(authored.runs.every(run => !run.text) ? authored.runs[0]?.format : undefined, resetParagraph ? named?.text : original?.textFormat ?? named?.text));
             this.paragraphFormats.set(
               block,
               Object.freeze({
