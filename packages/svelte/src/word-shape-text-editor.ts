@@ -15,6 +15,7 @@ import {
 import { renderShapeText } from './word-shape-text-render.ts';
 
 export interface ShapeTextEditor {
+  insertText(value: string): void;
   format(patch: WordFormatPatch, focus?: boolean): void;
   formats(): TextAttributes;
   focus(): void;
@@ -83,6 +84,9 @@ export class ShapeTextEditorView implements ShapeTextEditor {
   }
   formats() {
     return this.story.formats(this.editing ? this.range : { start: 0, end: this.story.length });
+  }
+  insertText(value: string) {
+    this.replace(value, this.editing ? this.range : { start: this.story.length, end: this.story.length });
   }
   format(patch: WordFormatPatch, focus = true) {
     this.story.format(this.editing ? this.range : { start: 0, end: this.story.length }, patch);
