@@ -39,7 +39,11 @@ export function paragraphFormat(
     )
       continue;
     const props = children(para).find((e) => e.localName === "pPr");
-    const attrs = new Map(props?.attributes.map((a) => [a.qualified, a.value]) ?? []);
+    const attrs = new Map(
+      props?.attributes
+        .filter((a) => a.qualified !== "xmlns:a")
+        .map((a) => [a.qualified, a.value]) ?? [],
+    );
     if (command.level !== undefined) attrs.set("lvl", String(command.level));
     const remove = new Set<string>();
     const additions: { name: string; markup: string }[] = [];
@@ -104,7 +108,9 @@ export function paragraphFormat(
     else edit.replaceElementMarkup(para, `<${para.qualified}>${markup}</${para.qualified}>`);
   }
   if (command.verticalAlignment !== undefined) {
-    const props = children(body).find((e) => e.localName === "bodyPr")!;
+    const props = command.cell
+      ? children(shape).find((e) => e.localName === "tcPr")!
+      : children(body).find((e) => e.localName === "bodyPr")!;
     const attr = props.attributes.find((a) => !a.namespaceUri && a.localName === "anchor");
     const v = { top: "t", center: "ctr", bottom: "b" }[command.verticalAlignment];
     if (attr) edit.setAttribute(attr, v);

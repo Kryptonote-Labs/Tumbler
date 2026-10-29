@@ -129,7 +129,7 @@ export function moveSlide(artifact: PresentationArtifact, id: string, index: num
   const edit = beginLosslessXmlEdit(source);
   edit.replaceElementMarkup(
     list,
-    `<${list.qualified}>${items.map((e) => raw(source, e)).join("")}</${list.qualified}>`,
+    `${source.source.slice(list.startTagSpan.start, list.startTagSpan.end)}${items.map((e) => raw(source, e)).join("")}</${list.qualified}>`,
   );
   return commitXml(artifact, main, edit.commit().bytes);
 }

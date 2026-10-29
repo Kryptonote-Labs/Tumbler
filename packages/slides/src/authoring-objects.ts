@@ -33,11 +33,15 @@ export function objectTarget(artifact: PresentationArtifact, slideId: string, ke
     element = source.element(object.elementId)!;
   return { slide, object, source, element };
 }
-function validateBounds(bounds: ObjectBounds) {
+function validateBounds(bounds: ObjectBounds, line: boolean) {
   for (const n of Object.values(bounds))
     if (!Number.isFinite(n) || Math.abs(emu(n)) > 2147483647)
       throw new RangeError("Object bounds exceed DrawingML coordinates.");
-  if (bounds.width <= 0 || bounds.height <= 0)
+  if (
+    line
+      ? bounds.width < 0 || bounds.height < 0 || bounds.width + bounds.height <= 0
+      : bounds.width <= 0 || bounds.height <= 0
+  )
     throw new RangeError("Object dimensions must be positive.");
 }
 function color(value: string) {
@@ -63,7 +67,7 @@ export function insertObject(
   input: NewSlideObject,
 ) {
   editable(artifact);
-  validateBounds(bounds);
+  validateBounds(bounds, input.kind === "shape" && input.geometry === "line");
   const slide = slideById(artifact, slideId),
     source = partXml(artifact, slide.part);
   const tree = children(children(source.root).find((e) => e.localName === "cSld")!).find(
@@ -138,8 +142,19 @@ export function duplicateObject(artifact: PresentationArtifact, slideId: string,
     )
   )
     throw new Error("Duplicate the containing group instead.");
-  const ids = slide.objects.map((o) => Number(o.shapeId));
-  const id = Math.max(1, ...ids) + 1;
+  let maxId = 1;
+  const visit = (node: typeof element) => {
+    for (const child of children(node)) {
+      if (child.localName === "cNvPr")
+        maxId = Math.max(
+          maxId,
+          Number(child.attributes.find((a) => a.localName === "id" && !a.namespaceUri)?.value ?? 1),
+        );
+      visit(child);
+    }
+  };
+  visit(source.root);
+  const id = maxId + 1;
   // Only rewrite the root object's identity, preserving relationship ids and all other markup.
   const identity = children(children(element).find((e) => e.localName.startsWith("nv"))!).find(
     (e) => e.localName === "cNvPr",

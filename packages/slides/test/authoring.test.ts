@@ -248,3 +248,100 @@ test("authoring commands preserve Strict namespaces on newly created slide parts
   expect(reopen(a).document.conformance).toBe("strict");
   expect(slideTextValue(reopen(a).document.slides[1]!.objects[0]!)).toBe("Strict");
 });
+test("successive paragraph actions retain valid namespace declarations and previous settings", () => {
+  const { a, slideId, objectKey } = textDeck("Repeated actions");
+  let b = run(a, { name: "paragraph", slideId, objectKey, start: 0, end: 16, bullet: "bullet" });
+  b = run(b, { name: "paragraph", slideId, objectKey, start: 0, end: 16, before: 3 });
+  b = run(b, { name: "paragraph", slideId, objectKey, start: 0, end: 16, after: 6 });
+  expect(reopen(b).document.slides[0]!.objects[0]!.text!.paragraphs[0]).toMatchObject({
+    bullet: "•",
+    before: 4,
+    after: 8,
+  });
+});
+test("table cell vertical alignment writes the cell properties", () => {
+  let a = createPresentation();
+  const slideId = a.document.slides[0]!.id;
+  a = run(a, {
+    name: "insert-object",
+    slideId,
+    bounds: { x: 0, y: 0, width: 300, height: 100 },
+    object: { kind: "table", rows: 1, columns: 1 },
+  });
+  a = run(a, {
+    name: "paragraph",
+    slideId,
+    objectKey: a.document.slides[0]!.objects[0]!.key,
+    cell: { row: 0, column: 0 },
+    start: 0,
+    end: 0,
+    verticalAlignment: "bottom",
+  });
+  expect(reopen(a).document.slides[0]!.objects[0]!.table!.cells[0]!.text!.anchor).toBe("bottom");
+});
+test("duplication allocates identities beyond hidden shapes", async () => {
+  const { beginPackageTransaction } = await import("@tumblerjs/opc");
+  const { a, slideId, objectKey } = textDeck();
+  const slide = a.document.slides[0]!,
+    pkg = a.document.package,
+    part = pkg.getPart(slide.part)!;
+  const content = new TextDecoder().decode(pkg.readPart(part));
+  const shape = content.match(/<p:sp\s[\s\S]*?<\/p:sp>/)![0].replace('id="2"', 'id="3" hidden="1"');
+  const hidden = openPresentationArtifact(
+    beginPackageTransaction(pkg)
+      .replacePart(
+        part.name,
+        new TextEncoder().encode(content.replace("</p:spTree>", shape + "</p:spTree>")),
+      )
+      .commit(),
+  );
+  const b = run(hidden, { name: "duplicate-object", slideId, objectKey });
+  expect(reopen(b).document.slides[0]!.objects.map((o) => o.shapeId)).toEqual(["2", "4"]);
+});
+test("slide reordering retains namespace bindings declared on the slide list", async () => {
+  const { beginPackageTransaction } = await import("@tumblerjs/opc");
+  let a = createPresentation();
+  a = run(a, { name: "insert-slide", index: 1 });
+  const pkg = a.document.package,
+    main = pkg.mainOfficeDocumentPart();
+  const content = new TextDecoder()
+    .decode(pkg.readPart(main))
+    .replace(
+      "<p:sldIdLst>",
+      '<p:sldIdLst xmlns:x="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+    )
+    .replace(/r:id="(rId1|rIdSlide2)"/g, 'x:id="$1"');
+  a = openPresentationArtifact(
+    beginPackageTransaction(pkg).replacePart(main.name, new TextEncoder().encode(content)).commit(),
+  );
+  const second = a.document.slides[1]!.id;
+  expect(
+    reopen(run(a, { name: "move-slide", slideId: second, index: 0 })).document.slides[0]!.id,
+  ).toBe(second);
+});
+test("horizontal lines remain movable through the validated command API", () => {
+  let a = createPresentation();
+  const slideId = a.document.slides[0]!.id;
+  a = run(a, {
+    name: "insert-object",
+    slideId,
+    bounds: { x: 10, y: 20, width: 300, height: 0 },
+    object: { kind: "shape", geometry: "line" },
+  });
+  const object = a.document.slides[0]!.objects[0]!;
+  a = run(a, {
+    name: "update-object",
+    slideId,
+    objectKey: object.key,
+    x: 50,
+    y: 60,
+    width: 300,
+    height: 0,
+  });
+  expect(reopen(a).document.slides[0]!.objects[0]!.transform).toMatchObject({
+    x: 50,
+    y: 60,
+    width: 300,
+    height: 0,
+  });
+});
