@@ -1,3 +1,4 @@
+import { tableParagraphs } from "./table-paragraphs.ts";
 import { beginLosslessXmlEdit, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import type { PresentationArtifact } from "./artifact.ts";
 import { objectTarget } from "./authoring-objects.ts";
@@ -10,7 +11,6 @@ type Cell = {
   rowSpan: number;
   columnSpan: number;
   element: LosslessXmlElement;
-  empty?: boolean;
   paragraphs?: string;
 };
 /** Structural edits operate on anchor rectangles and retain content when a spanning anchor moves. */
@@ -142,13 +142,7 @@ export function editPresentationTable(artifact: PresentationArtifact, input: Tab
     )
       throw new Error("Select complete merged cells.");
     const anchor = selected.find((cell) => cell.row === input.row && cell.column === input.column)!;
-    const paragraphs = selected
-      .flatMap((cell) =>
-        children(children(cell.element).find((e) => e.localName === "txBody")!)
-          .filter((e) => e.localName === "p")
-          .map(portable),
-      )
-      .join("");
+    const paragraphs = selected.flatMap((cell) => tableParagraphs(cell.element, portable)).join("");
     cells = cells.filter((cell) => !selected.includes(cell));
     cells.push({
       ...anchor,
@@ -219,26 +213,36 @@ export function editPresentationTable(artifact: PresentationArtifact, input: Tab
       hMerge: covered && c > owner!.column ? "1" : undefined,
       vMerge: covered && r > owner!.row ? "1" : undefined,
     };
-    const body = children(sourceCell).find((e) => e.localName === "txBody")!;
+    const body = children(sourceCell).find((e) => e.localName === "txBody");
     const paragraphs =
       anchor && owner!.paragraphs !== undefined
         ? owner!.paragraphs
         : empty
-          ? `<a:p xmlns:a="${body.namespaceUri}"/>`
+          ? `<a:p xmlns:a="${table.namespaceUri}"/>`
           : undefined;
-    const inner = children(sourceCell)
-      .map((child) =>
-        child !== body || paragraphs === undefined
-          ? raw(source, child)
-          : opening(body) +
-            children(body)
-              .filter((e) => e.localName !== "p")
-              .map((e) => raw(source, e))
-              .join("") +
-            paragraphs +
-            `</${body.qualified}>`,
-      )
-      .join("");
+    const missingBody =
+      !body && paragraphs !== undefined
+        ? `<a:txBody xmlns:a="${table.namespaceUri}"><a:bodyPr/><a:lstStyle/>${paragraphs || "<a:p/>"}</a:txBody>`
+        : "";
+    const inner =
+      missingBody +
+      children(sourceCell)
+        .map((child) =>
+          child !== body || paragraphs === undefined
+            ? raw(source, child)
+            : opening(body) +
+              children(body)
+                .filter((e) => e.localName !== "p")
+                .map((e) =>
+                  anchor && owner!.paragraphs !== undefined && e.localName === "lstStyle"
+                    ? `<a:lstStyle xmlns:a="${table.namespaceUri}"/>`
+                    : raw(source, e),
+                )
+                .join("") +
+              paragraphs +
+              `</${body.qualified}>`,
+        )
+        .join("");
     return opening(sourceCell, attributes) + inner + `</${sourceCell.qualified}>`;
   };
   const namespace = table.namespaceUri;
@@ -258,7 +262,18 @@ export function editPresentationTable(artifact: PresentationArtifact, input: Tab
         : `<a:tr xmlns:a="${namespace}" h="${height}">${content}</a:tr>`;
     })
     .join("");
-  const gridMarkup = `<a:tblGrid xmlns:a="${namespace}">${widths.map((w) => `<a:gridCol w="${w}"/>`).join("")}</a:tblGrid>`;
+  const gridColumns = children(grid);
+  const gridMarkup =
+    opening(grid) +
+    widths
+      .map((width, column) => {
+        const previous = oldColumn(column);
+        return previous === undefined
+          ? `<a:gridCol xmlns:a="${namespace}" w="${width}"/>`
+          : portable(gridColumns[previous]!);
+      })
+      .join("") +
+    `</${grid.qualified}>`;
   const content =
     children(table)
       .filter((e) => e.localName !== "tr" && e.localName !== "tblGrid")

@@ -114,3 +114,74 @@ test("inserting through a merge expands it, and removing its anchor row retains 
   expect(values(reopen(b))[0]).toBe("A\nC");
   expect(b.document.slides[0]!.objects[0]!.table!.cells[0]).toMatchObject({ rowSpan: 2 });
 });
+
+async function imported(transform: (xml: string) => string) {
+  const { beginPackageTransaction } = await import("@tumblerjs/opc");
+  const { a, slideId, objectKey } = fixture();
+  const slide = a.document.slides[0]!,
+    pkg = a.document.package,
+    part = pkg.getPart(slide.part)!;
+  const tx = beginPackageTransaction(pkg);
+  tx.replacePart(
+    part.name,
+    new TextEncoder().encode(transform(new TextDecoder().decode(pkg.readPart(part)))),
+  );
+  return { a: openPresentationArtifact(tx.commit()), slideId, objectKey };
+}
+test("structural edits support valid blank cells without text bodies", async () => {
+  const { a, slideId, objectKey } = await imported((xml) =>
+    xml.replace(/<a:txBody>.*?<\/a:txBody>/g, ""),
+  );
+  for (const action of ["insert-row", "insert-column", "merge"] as const) {
+    const result = run(a, {
+      name: "edit-table",
+      slideId,
+      objectKey,
+      action,
+      row: 0,
+      column: 0,
+      ...(action === "merge" ? { endRow: 1, endColumn: 1 } : {}),
+    });
+    expect(reopen(result).document.slides[0]!.objects[0]!.table!.cells.length).toBeGreaterThan(0);
+  }
+});
+test("merge preserves donor list defaults and untouched column identifiers", async () => {
+  let cell = 0;
+  const { a, slideId, objectKey } = await imported((xml) =>
+    xml
+      .replace(
+        /<a:lstStyle\/>/g,
+        () =>
+          `<a:lstStyle><a:lvl1pPr><a:defRPr sz="${++cell === 2 ? "3600" : "1800"}" b="${cell === 2 ? "1" : "0"}"/></a:lvl1pPr></a:lstStyle>`,
+      )
+      .replace(/<a:rPr[^>]*\/>/g, "")
+      .replace(
+        /<a:gridCol w="(\d+)"\/>/g,
+        (_, width) =>
+          `<a:gridCol w="${width}"><a:extLst><a:ext uri="{DEL-TEST}"><a16:colId xmlns:a16="http://schemas.microsoft.com/office/drawing/2014/main" val="123"/></a:ext></a:extLst></a:gridCol>`,
+      ),
+  );
+  const before = a.document.slides[0]!.objects[0]!.table!.cells.flatMap((c) =>
+    c.text!.paragraphs.flatMap((p) => p.runs),
+  );
+  const b = run(a, {
+    name: "edit-table",
+    slideId,
+    objectKey,
+    action: "merge",
+    row: 0,
+    column: 0,
+    endRow: 0,
+    endColumn: 1,
+  });
+  const merged = reopen(
+    b,
+  ).document.slides[0]!.objects[0]!.table!.cells[0]!.text!.paragraphs.flatMap((p) => p.runs);
+  expect(merged.map((r) => [r.text, r.fontSize, r.bold])).toEqual(
+    before.slice(0, 2).map((r) => [r.text, r.fontSize, r.bold]),
+  );
+  const part = b.document.package.getPart(b.document.slides[0]!.part)!;
+  expect(
+    new TextDecoder().decode(b.document.package.readPart(part)).match(/a16:colId/g),
+  ).toHaveLength(2);
+});
