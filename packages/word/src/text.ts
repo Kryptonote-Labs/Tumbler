@@ -1,5 +1,16 @@
 import { createFieldVisibility } from './field-visibility.ts';
-import type { WordDocument, WordInline, WordParagraph, WordRun } from "./document.ts";
+import type { WordBlock, WordDocument, WordInline, WordParagraph, WordRun } from "./document.ts";
+
+export function wordParagraphById(blocks: readonly WordBlock[], elementId: number): WordParagraph | undefined {
+  for (const block of blocks) {
+    if (block.kind === 'paragraph' && block.elementId === elementId) return block;
+    if (block.kind === 'table')
+      for (const row of block.rows) for (const cell of row.cells) {
+        const found = wordParagraphById(cell.blocks, elementId);
+        if (found) return found;
+      }
+  }
+}
 
 export interface WordTextPosition {
   readonly paragraphElementId: number;

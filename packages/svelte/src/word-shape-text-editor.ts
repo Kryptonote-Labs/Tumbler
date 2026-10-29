@@ -12,10 +12,12 @@ import {
   type WordRange,
   type TextAttributes,
 } from '@tumblerjs/word/collaboration';
+import type { WordTabStop } from '@tumblerjs/word';
 import { renderShapeText } from './word-shape-text-render.ts';
 
 export interface ShapeTextEditor {
   insertText(value: string): void;
+  setTabStop(stop: WordTabStop, previousPosition?: number): void;
   format(patch: WordFormatPatch, focus?: boolean): void;
   formats(): TextAttributes;
   focus(): void;
@@ -87,6 +89,10 @@ export class ShapeTextEditorView implements ShapeTextEditor {
   }
   insertText(value: string) {
     this.replace(value, this.editing ? this.range : { start: this.story.length, end: this.story.length });
+  }
+  setTabStop(stop: WordTabStop, previousPosition?: number) {
+    this.story.setTabStop(this.editing ? this.range : { start: 0, end: this.story.length }, stop, previousPosition);
+    this.commit();
   }
   format(patch: WordFormatPatch, focus = true) {
     this.story.format(this.editing ? this.range : { start: 0, end: this.story.length }, patch);

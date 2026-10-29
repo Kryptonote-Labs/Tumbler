@@ -435,7 +435,7 @@ function validateWordDelta(text: Y.Text, delta: WordDelta) {
   }
 }
 
-return { bodyLength, anchorWordRange, resolveWordRange, wordFormats, replaceWordDelta, formatWordDelta, wordTransaction, validateWordDelta };
+return { bodyLength, validateWordRange: checkRange, anchorWordRange, resolveWordRange, wordFormats, replaceWordDelta, formatWordDelta, wordTransaction, validateWordDelta };
 }
 
 /** Resolve the text scope before staging operations; positions never cross document stories. */
