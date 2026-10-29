@@ -63,7 +63,7 @@
         title="Outline width in points"
         type="number"
         min="0"
-        max="100"
+        max="1584"
         step="0.25"
         value={((object?.strokeWidth ?? 0) * 3) / 4}
         onchange={(e) =>

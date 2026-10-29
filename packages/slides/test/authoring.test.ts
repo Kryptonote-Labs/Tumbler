@@ -459,3 +459,9 @@ test("paragraph formatting preserves local namespaces on an empty imported parag
   });
   expect(reopen(b).document.slides[0]!.objects[0]!.text!.paragraphs[0]!.bullet).toBe("•");
 });
+test('presentation font sizes use DrawingML limits instead of the spreadsheet ceiling',()=>{
+ const {a,slideId,objectKey}=textDeck('Large');
+ const b=run(a,{name:'format-text',slideId,objectKey,start:0,end:5,patch:{text:{fontSize:{set:800}}}});
+ expect(reopen(b).document.slides[0]!.objects[0]!.text!.paragraphs[0]!.runs[0]!.fontSize).toBeCloseTo(800*4/3);
+ expect(()=>run(a,{name:'format-text',slideId,objectKey,start:0,end:5,patch:{text:{fontSize:{set:4001}}}})).toThrow();
+});

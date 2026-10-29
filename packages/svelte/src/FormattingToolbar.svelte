@@ -91,11 +91,11 @@
       aria-label="Font size"
       title="Font size"
       disabled={disabled}
-      onchange={(event) => apply(fontSizeFormatting(event.currentTarget.value))}
+      onchange={(event) => apply(fontSizeFormatting(event.currentTarget.value, capabilities.text.fontSize))}
       onkeydown={(event) => {
         if (event.key !== "Enter") return;
         event.preventDefault();
-        apply(fontSizeFormatting(event.currentTarget.value));
+        apply(fontSizeFormatting(event.currentTarget.value, capabilities.text.fontSize));
       }}
     />
   {/if}

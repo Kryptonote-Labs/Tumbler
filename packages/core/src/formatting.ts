@@ -110,8 +110,8 @@ function change<T>(input: FormattingChange<T>, validate: (value: T) => T): Forma
 }
 
 function fontSize(value: number): number {
-  if (!Number.isFinite(value) || value < 1 || value > 409) {
-    throw new RangeError("Font size must be between 1 and 409 points.");
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new RangeError("Font size must be a finite positive number.");
   }
   return value;
 }

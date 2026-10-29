@@ -1,3 +1,4 @@
+import type { OpenPresentationOptions } from "./model.ts";
 import { beginPackageTransaction, openZipArchive, writeZipArchiveChanges } from "@tumblerjs/opc";
 import { openPresentationArtifact, type PresentationArtifact } from "./artifact.ts";
 import { officeThemeXml, parseLosslessXml } from "@tumblerjs/ooxml";
@@ -30,9 +31,12 @@ export function commitXml(artifact: PresentationArtifact, part: string, bytes: U
   tx.replacePart(part, bytes);
   return openPresentationArtifact(tx.commit(), artifact.options);
 }
-export function createPresentation(options: { width?: number; height?: number } = {}) {
-  const width = options.width ?? 1280,
-    height = options.height ?? 720;
+export function createPresentation(
+  options: { width?: number; height?: number } & OpenPresentationOptions = {},
+) {
+  const { width: requestedWidth, height: requestedHeight, ...openOptions } = options;
+  const width = requestedWidth ?? 1280,
+    height = requestedHeight ?? 720;
   for (const n of [width, height])
     if (!Number.isFinite(n) || n <= 0 || emu(n) > 2147483647)
       throw new RangeError("Slide dimensions must be positive DrawingML coordinates.");
@@ -68,5 +72,6 @@ export function createPresentation(options: { width?: number; height?: number } 
         data: encoder.encode(data),
       })),
     }),
+    openOptions,
   );
 }

@@ -181,3 +181,8 @@ function fixture(): Uint8Array {
     }],
   });
 }
+
+test('spreadsheet font validation keeps its own Excel range',()=>{
+ const workbook=openSpreadsheet(openOpcPackage(fixture())),sheet=workbook.sheets[0]!;
+ expect(()=>formatSpreadsheetCells(workbook,sheet,'A1',{text:{fontSize:{set:800}}})).toThrow('409');
+});

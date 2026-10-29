@@ -1525,8 +1525,6 @@ class Reader {
       [...columns, ...heights].some((value) => value <= 0)
     )
       throw new PresentationError("invalid_document", "Invalid table grid.");
-    if (columns.length * rows.length > 10000)
-      throw new PresentationError("limit_exceeded", "Too many table cells.");
     const properties = this.child(element, "tblPr");
     const style = this.tableStyle(properties);
     if (this.child(properties, "tableStyleId") && !style)

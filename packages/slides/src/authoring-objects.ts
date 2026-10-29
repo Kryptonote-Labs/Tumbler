@@ -50,8 +50,8 @@ function color(value: string) {
   return `<a:solidFill><a:srgbClr val="${value.slice(1)}"/></a:solidFill>`;
 }
 function textBody(value: string, fontSize = 24) {
-  if (!Number.isFinite(fontSize) || fontSize < 1 || fontSize > 409)
-    throw new RangeError("Font size must be between 1 and 409 points.");
+  if (!Number.isFinite(fontSize) || fontSize < 1 || fontSize > 4000)
+    throw new RangeError("DrawingML font size must be between 1 and 4000 points.");
   return `<a:bodyPr/><a:lstStyle/>${value
     .split("\n")
     .map(
@@ -118,7 +118,13 @@ export function insertObject(
       input.columns < 1
     )
       throw new RangeError("Table rows and columns must be positive integers.");
-    const cell = `<a:tc><a:txBody>${textBody("", 18)}</a:txBody><a:tcPr>${color("#FFFFFF")}</a:tcPr></a:tc>`;
+    const borders = ["lnL", "lnR", "lnT", "lnB"]
+      .map(
+        (side) =>
+          `<a:${side} w="9525"><a:solidFill><a:srgbClr val="B4B4B4"/></a:solidFill></a:${side}>`,
+      )
+      .join("");
+    const cell = `<a:tc><a:txBody>${textBody("", 18)}</a:txBody><a:tcPr>${borders}${color("#FFFFFF")}</a:tcPr></a:tc>`;
     markup = `<p:graphicFrame ${ns}><p:nvGraphicFramePr><p:cNvPr id="${id}" name="Table ${id}"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${emu(bounds.x)}" y="${emu(bounds.y)}"/><a:ext cx="${emu(bounds.width)}" cy="${emu(bounds.height)}"/></p:xfrm><a:graphic><a:graphicData uri="${A}/table"><a:tbl><a:tblPr firstRow="1" bandRow="1"/><a:tblGrid>${Array.from({ length: input.columns }, () => `<a:gridCol w="${emu(bounds.width / input.columns)}"/>`).join("")}</a:tblGrid>${Array.from({ length: input.rows }, () => `<a:tr h="${emu(bounds.height / input.rows)}">${cell.repeat(input.columns)}</a:tr>`).join("")}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
   }
   const edit = beginLosslessXmlEdit(source);

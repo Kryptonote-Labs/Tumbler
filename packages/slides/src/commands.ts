@@ -1,3 +1,4 @@
+import { editPresentationTable } from "./table-edit.ts";
 import { pastePresentationObject } from "./clipboard.ts";
 import { openPresentationArtifact } from "./artifact.ts";
 import { z } from "zod";
@@ -33,7 +34,7 @@ const patch = z
   .object({
     text: z
       .object({
-        fontSize: change(z.number().min(1).max(409)).optional(),
+        fontSize: change(z.number().min(1).max(4000)).optional(),
         fontFamily: change(z.string().trim().min(1).max(255)).optional(),
         bold: change(z.boolean()).optional(),
         italic: change(z.boolean()).optional(),
@@ -60,6 +61,24 @@ const patch = z
   .strict()
   .transform((value) => normalizeFormattingPatch(value as FormattingPatch));
 export const presentationCommand = z.discriminatedUnion("name", [
+  z
+    .object({
+      name: z.literal("edit-table"),
+      ...target,
+      action: z.enum([
+        "insert-row",
+        "delete-row",
+        "insert-column",
+        "delete-column",
+        "merge",
+        "split",
+      ]),
+      row: z.number().int().nonnegative(),
+      column: z.number().int().nonnegative(),
+      endRow: z.number().int().nonnegative().optional(),
+      endColumn: z.number().int().nonnegative().optional(),
+    })
+    .strict(),
   z
     .object({
       name: z.literal("paste-object"),
@@ -119,7 +138,7 @@ export const presentationCommand = z.discriminatedUnion("name", [
             text: z.string().optional(),
             fill: color.optional(),
             stroke: color.optional(),
-            fontSize: number.min(1).max(409).optional(),
+            fontSize: number.min(1).max(4000).optional(),
           })
           .strict(),
         z
@@ -219,6 +238,8 @@ export function applyPresentationCommand(
 ): PresentationArtifact {
   const command = presentationCommand.parse(input);
   switch (command.name) {
+    case "edit-table":
+      return editPresentationTable(artifact, command);
     case "paste-object":
       return pastePresentationObject(
         artifact,
