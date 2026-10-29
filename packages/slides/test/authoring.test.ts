@@ -420,3 +420,42 @@ test("changing a bullet level advances its authored indentation", () => {
     previous * 3,
   );
 });
+test("changing bullet type retains an existing nested level", () => {
+  const { a, slideId, objectKey } = textDeck();
+  let b = run(a, {
+    name: "paragraph",
+    slideId,
+    objectKey,
+    start: 0,
+    end: 11,
+    bullet: "bullet",
+    level: 2,
+  });
+  const margin = b.document.slides[0]!.objects[0]!.text!.paragraphs[0]!.marginLeft;
+  b = run(b, { name: "paragraph", slideId, objectKey, start: 0, end: 11, bullet: "number" });
+  expect(reopen(b).document.slides[0]!.objects[0]!.text!.paragraphs[0]!.marginLeft).toBe(margin);
+});
+test("paragraph formatting preserves local namespaces on an empty imported paragraph", async () => {
+  const { beginPackageTransaction } = await import("@tumblerjs/opc");
+  const { a, slideId, objectKey } = textDeck(""),
+    pkg = a.document.package,
+    part = pkg.getPart(a.document.slides[0]!.part)!;
+  const content = new TextDecoder()
+    .decode(pkg.readPart(part))
+    .replace(
+      /<a:p>[\s\S]*?<\/a:p>/,
+      '<d:p xmlns:d="http://schemas.openxmlformats.org/drawingml/2006/main"/>',
+    );
+  const empty = openPresentationArtifact(
+    beginPackageTransaction(pkg).replacePart(part.name, new TextEncoder().encode(content)).commit(),
+  );
+  const b = run(empty, {
+    name: "paragraph",
+    slideId,
+    objectKey,
+    start: 0,
+    end: 0,
+    bullet: "bullet",
+  });
+  expect(reopen(b).document.slides[0]!.objects[0]!.text!.paragraphs[0]!.bullet).toBe("•");
+});

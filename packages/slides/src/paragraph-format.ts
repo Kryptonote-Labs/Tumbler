@@ -64,7 +64,9 @@ export function paragraphFormat(
       });
       attrs.set(
         "marL",
-        command.bullet === "none" ? "0" : String(342900 * ((command.level ?? 0) + 1)),
+        command.bullet === "none"
+          ? "0"
+          : String(342900 * ((command.level ?? Number(attrs.get("lvl") ?? 0)) + 1)),
       );
       attrs.set("indent", command.bullet === "none" ? "0" : "-285750");
     }
@@ -109,7 +111,11 @@ export function paragraphFormat(
     const markup = `<a:pPr xmlns:a="${a}" ${[...attrs].map(([key, value]) => `${key}="${xml(value)}"`).join(" ")}>${nodes.map((n) => n.markup).join("")}</a:pPr>`;
     if (props) edit.replaceElementMarkup(props, markup);
     else if (children(para)[0]) edit.insertMarkupBefore(children(para)[0]!, markup);
-    else edit.replaceElementMarkup(para, `<${para.qualified}>${markup}</${para.qualified}>`);
+    else
+      edit.replaceElementMarkup(
+        para,
+        `${source.source.slice(para.startTagSpan.start, para.startTagSpan.end).replace(/\/\s*>$/, ">")}${markup}</${para.qualified}>`,
+      );
   }
   if (command.verticalAlignment !== undefined) {
     const props = command.cell
