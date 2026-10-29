@@ -61,3 +61,11 @@ but remain responsible for their own inheritance and package-preservation rules.
 Format-specific features such as cell fills, paragraph spacing, and shape fills
 will extend typed adapter capabilities without weakening the shared text and
 block vocabulary.
+
+Font ranges belong to the format adapter, not the shared patch normalizer. The
+normalizer accepts finite positive sizes. Word accepts half-point steps through
+1638 pt; spreadsheet cells retain Excel's 1–409 pt range; presentations use
+DrawingML `ST_TextFontSize`, 100–400000 hundredths of a point. The shared Svelte
+controls use the active adapter's capabilities instead of applying the spreadsheet
+range to every document. DrawingML outlines use `ST_LineWidth`, 0–20116800 EMUs,
+equivalent to 0–1584 pt.

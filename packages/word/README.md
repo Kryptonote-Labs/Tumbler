@@ -238,6 +238,19 @@ MIT licensed. See [LICENSE](LICENSE).
 
 ### Structured authoring
 
+`wordHeadingOutline(nativeDocument)` returns body heading text, levels and UTF-16
+positions for navigation. It uses semantic outline levels, including inherited
+custom styles, and excludes headings inside tables. Paragraph `outlineLevel`
+values 0–8 are heading levels 1–9; 9 is body text. These values survive native
+editing and DOCX export. Built-in heading styles carry their corresponding levels.
+
+`wordFormatPainterSample(nativeDocument, offset, { defaultStyleId, positioning })`
+samples supported character appearance and paragraph formatting as separate patches.
+Pass the source paragraph's direct positioning to retain tab-clear declarations and
+indent overrides. The sample does not copy links, list identities or object content.
+Empty paragraphs retain character formatting on their paragraph mark for later
+typing, native layout and DOCX export.
+
 `createWordArtifact({ blocks })` accepts paragraph, table and image blocks. A paragraph has
 formatted `runs`, optional alignment and optional `list: { id, kind, level, start }` metadata.
 Reuse a list ID to continue numbering; use a new ID to restart it. Levels range from zero to eight.
@@ -604,6 +617,13 @@ Nested general fields project stored results in order without evaluating instruc
 Section numbering restarts and numeral formats are not yet evaluated by this API.
 
 ### Editable table formatting
+
+`wordTableAvailableWidth(layout, blocks, tableElementId, story?, pageIndex?)` resolves
+the width available to a rendered table from its actual column or containing cell.
+For header/footer tables, pass the active story kind and page index. This uses the
+owning page's section, including its current margins and gutter, rather than the
+story model's original page settings. Use this width as the `availableWidthPoints`
+context for the `fit-table` operation.
 
 Authored table cells accept `format` with `shading` (`#RRGGBB` or `transparent`),
 `borders` (`top`, `right`, `bottom`, `left`), `verticalAlignment` and `margins` in

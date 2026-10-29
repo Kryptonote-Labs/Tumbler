@@ -21,6 +21,8 @@ describe("formatting toolbar commands", () => {
     expect(toggleUnderlineFormatting({ state: "mixed" })).toEqual({ text: { underline: { set: "single" } } });
     expect(fontSizeFormatting("14.5")).toEqual({ text: { fontSize: { set: 14.5 } } });
     expect(fontSizeFormatting("0")).toBeUndefined();
+    expect(fontSizeFormatting("800", {minimum:1,maximum:4000})).toEqual({text:{fontSize:{set:800}}});
+    expect(fontSizeFormatting("800", {minimum:1,maximum:409})).toBeUndefined();
     expect(fontFamilyFormatting(" Aptos Display ")).toEqual({ text: { fontFamily: { set: "Aptos Display" } } });
     expect(fontFamilyFormatting("   ")).toBeUndefined();
     expect(colorFormatting("#12abEF")).toEqual({ text: { color: { set: { type: "rgb", value: "#12abEF" } } } });

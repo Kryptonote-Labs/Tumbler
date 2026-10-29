@@ -7,6 +7,8 @@ import { validateAttributes, type TextAttributes } from './formatting.ts';
 import type { WordTextParagraph, WordTextFormat } from '../create.ts';
 import { shapeTextParagraphs, isShapeTextBody } from '../shape-text.ts';
 import type { WordAuthoredShape } from '../shapes.ts';
+import { wordTabStopPatches } from './tab-stops.ts';
+import type { WordTabStop } from '../styles.ts';
 
 const commands = createWordCommands({
   defaultAttributes: (text, range) => {
@@ -77,6 +79,10 @@ export class WordShapeText {
   }
   resetTyping() {
     this.typing = {};
+  }
+  setTabStop(range: WordRange, stop: WordTabStop, previousPosition?: number) {
+    for (const patch of wordTabStopPatches(this.text, range, stop, previousPosition))
+      this.format(patch.range, { positioning: patch.positioning });
   }
   replace(range: WordRange, value: string) {
     this.text.applyDelta(

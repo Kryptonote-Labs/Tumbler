@@ -77,11 +77,65 @@ and package parts, including supported Office extension metadata.
 Slide-local objects can remain editable with inherited geometry or inside
 transformed groups. Shared master/layout objects, fields, signed packages,
 SmartArt cached drawings, and unknown alternate representations remain restricted.
-Table row/column operations and full Office layout and animation fidelity are
-not supported.
+Full Office layout and animation fidelity remain incomplete.
 
 Use [the compatibility guide](https://tumbler.alexco.dev/docs/compatibility#powerpoint)
 for feature coverage, and [the implementation notes](../../docs/presentationml-implementation.md)
 for preservation rules and validation commands.
 
 See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for font and image decoder notices.
+
+## Author a deck
+
+```ts
+import { createPresentation, PresentationEditingSession } from '@tumblerjs/slides';
+const session = new PresentationEditingSession(createPresentation());
+const slideId = session.artifact.document.slides[0]!.id;
+session.execute({ name: 'layout', slideId, layout: 'title-content' });
+session.execute({ name: 'insert-slide', index: 1 });
+const output = session.artifact.bytes();
+```
+
+`presentationCommand` validates the serializable command union used by
+`applyPresentationCommand` and `session.execute`. Commands include slide insertion,
+duplication, movement and deletion; non-destructive text-frame layouts; text boxes,
+preset shapes, PNG/JPEG images and tables; object duplication, deletion, alignment
+and stacking order; paragraph bullets, numbering, level, spacing and vertical
+alignment; background colour and literal find/replace across editable text boxes.
+Existing text, formatting, object transforms and fills use the same commands.
+A complete command is one undo step. Images carry original bytes as base64.
+
+Coordinates are CSS pixels at 96 DPI. Text font sizes and paragraph before/after
+spacing are points; line spacing is a multiplier. Table insertion creates an
+editable rectangular grid. Layouts
+position existing editable text frames and add missing ones without deleting
+other content or rewriting shared masters. Duplicated slides share immutable
+resources and start without notes. Group children can be edited or deleted;
+object duplication and arrange commands currently require top-level objects.
+
+New decks include a master, blank layout and shared Office theme. Imported Strict
+and Transitional decks retain their existing conformance. Structural commands
+retain unrelated package part payloads. Detached parts are retained when deleting
+slides so existing package relationships never become dangling.
+
+`paste-object` accepts a base64 source PPTX plus `sourceSlideId`, `objectKey`, and
+the destination `slideId`. It preserves the selected top-level object's markup,
+formatting, resource bytes and relationships. Source and destination must use the
+same Strict/Transitional conformance. Keep the source snapshot before deleting
+an object to implement cut/paste safely. `inspectPresentation` returns compact
+slide/object addresses, text, table cells and geometry for agents.
+
+Hosts can set `toolbar={false}` on `PresentationSlideView` to supply a ribbon.
+Bind the component instance and call `applyFormatting(patch)` to retain caret
+formatting and selected text ranges. `currentSelection()` returns the active
+object, cell and range for paragraph commands. `onselectionchange` reports the
+active text target and resolved formatting state, including pending caret styles.
+
+`edit-table` inserts/deletes rows or columns and merges/splits rectangular cell
+ranges. `row` and `column` are zero-based; merge also accepts `endRow` and
+`endColumn`. Inserting through a merged region expands it. Deleting an anchor
+row/column keeps its text when the merge still has surviving cells. Merging
+retains visible cell paragraphs in reading order; splitting keeps that content
+in the anchor and creates empty cells. Partial selections of merged cells are
+rejected. Tables retain at least one row and column. New tables include visible
+cell borders; existing table styles and unrelated package parts are retained.

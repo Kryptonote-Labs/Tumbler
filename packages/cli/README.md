@@ -70,7 +70,7 @@ Hosts enforce permissions, revisions, asset resolution, receipts and commit boun
 `createWordOperations` accepts host-specific command validation. `openWordOperationDocument`
 adapts DOCX files to the same operations and reconciles against their source package.
 
-Sheets, slides and document section-layout authoring are not implemented by this registry.
+The Word registry does not include sheets or document section-layout authoring. Presentation commands use the separate `slides` namespace below.
 
 ## Replacement text
 
@@ -112,3 +112,19 @@ Visual hosts can implement `render(document, {page})` for `tumbler <document> re
 Page numbers are 1-based and default to 1. Rendering is read-only. Hosts own the renderer and
 image delivery; file hosts without one report that rendering is unavailable. A rendered page
 shows the document layout, whereas `read-image` reads an embedded image's original pixels.
+
+## Presentations
+
+```sh
+tumbler create deck.pptx
+tumbler deck.pptx slides read
+tumbler deck.pptx slides insert-object --help
+tumbler deck.pptx slides insert-object --page '<read-handle>' --input '{"slideId":"256","bounds":{"x":80,"y":100,"width":400,"height":100},"object":{"kind":"shape","text":"Quarterly review"}}'
+```
+
+`slides read --slide <id>` selects a slide. Editing commands are generated from
+the slides package's validated command union; help does not open a document.
+File reads return a content-hash page handle. Writes require that handle, retain
+the sibling-lock convention and replace the file atomically. Hosted integrations
+implement `readPresentation` and `operatePresentation` on `OperationHost` to use
+the same syntax with their own permissions, revisions and durable receipts.

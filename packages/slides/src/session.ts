@@ -1,3 +1,4 @@
+import { applyPresentationCommand, type PresentationCommand } from './commands.ts';
 import type {
   PresentationTextEdit,
   PresentationFormatChange,
@@ -41,6 +42,10 @@ export class PresentationEditingSession {
   }
   get dirty() {
     return editingHistoryIsDirty(this.#history);
+  }
+  execute(command: PresentationCommand) {
+    this.#history = commitEditingHistory(this.#history, applyPresentationCommand(this.artifact, command));
+    return this.artifact;
   }
   updateObject(change: PresentationObjectChange) {
     this.#history = commitEditingHistory(

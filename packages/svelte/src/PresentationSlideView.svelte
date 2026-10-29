@@ -15,7 +15,7 @@
     type PresentationShapeStyle,
     type SlideText,
   } from "@tumblerjs/slides";
-  import type { FormattingPatch } from "@tumblerjs/core";
+  import type { FormattingPatch, FormattingState } from "@tumblerjs/core";
   import { onDestroy, onMount, tick, setContext } from "svelte";
   import type {
     PresentationDocument,
@@ -44,6 +44,8 @@
     presentation,
     slide,
     thumbnail = false,
+    toolbar = true,
+    onselectionchange,
     editable = false,
     scale = $bindable(1),
     selectedKey = $bindable<string | undefined>(),
@@ -58,6 +60,8 @@
     presentation: PresentationDocument;
     slide: PresentationSlide;
     thumbnail?: boolean;
+    toolbar?: boolean;
+    onselectionchange?: (selection: {object:SlideObject | undefined;state:FormattingState}) => void;
     editable?: boolean;
     scale?: number;
     selectedKey?: string;
@@ -94,9 +98,16 @@
   let activeCell = $state<
     PresentationTableCellAddress & { objectKey: string }
   >();
-  let cellAddress = $derived(
-    activeCell?.objectKey === selectedKey ? activeCell : undefined,
-  );
+  let cellAddress = $derived.by(() => {
+    if (activeCell?.objectKey !== selectedKey || !selected?.table) return undefined;
+    // Structural edits can remove a cell or make it part of a larger merged cell.
+    const cells = selected.table.cells;
+    const cell = cells.find((cell) =>
+      activeCell!.row >= cell.row && activeCell!.row < cell.row + cell.rowSpan &&
+      activeCell!.column >= cell.column && activeCell!.column < cell.column + cell.columnSpan,
+    ) ?? cells.at(-1);
+    return cell ? { row: cell.row, column: cell.column } : undefined;
+  });
   let textTarget = $derived(
     selected ? presentationTextTarget(selected, cellAddress) : undefined,
   );
@@ -197,6 +208,12 @@
       text.color = { state: "value", value: p.color.set };
     return { ...state, text };
   });
+  export function applyFormatting(patch: FormattingPatch) { format(patch); }
+  export function currentSelection() {
+    if(!selected || !textTarget) return {start:0,end:0};
+    return {objectKey:selected.key, editing:!!editing, ...(cellAddress ? {cell:cellAddress} : {}), ...(editing ? textRange : {start:0,end:slideTextValue(textTarget).length})};
+  }
+  $effect(() => {onselectionchange?.({object:textTarget,state:formattingState});});
   function format(patch: FormattingPatch) {
     if (!selected || !textTarget?.textEditable) return;
     if (editing && textRange.start === textRange.end && !patch.block) {
@@ -545,7 +562,7 @@
 
 <svelte:window onpointerup={finish} onpointercancel={cancel} />
 <div class="presentation-surface">
-  {#if editable && (onformat || onshapechange)}<PresentationFormattingToolbar
+  {#if toolbar && editable && (onformat || onshapechange)}<PresentationFormattingToolbar
       object={textTarget}
       state={formattingState}
       onformat={format}
@@ -856,6 +873,10 @@
                 </foreignObject>
               {/if}
             </g>
+            {#if editable && object.layer === 'slide' && object.textEditable && !slideTextValue(object) && editing !== object.key}
+              <rect width={w} height={h} fill="none" stroke="#82928a" stroke-width="1" stroke-dasharray="5 4" pointer-events="none"/>
+              <text x={w/2} y={Math.min(h/2+6,30)} text-anchor="middle" fill="#77857d" font-size="16" pointer-events="none" aria-hidden="true">Double-click to add text</text>
+            {/if}
             {#if editable && editing !== object.key && !object.table}<rect
                 class="hit"
                 width={Math.max(w, 8)}

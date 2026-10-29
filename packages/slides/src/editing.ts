@@ -20,22 +20,22 @@ export interface PresentationTextRange {
   readonly end: number;
 }
 export interface PresentationTextEdit extends PresentationTextRange {
-  readonly cell?: PresentationTableCellAddress;
+  readonly cell?: PresentationTableCellAddress | undefined;
   readonly slideId: string;
   readonly objectKey: string;
   readonly value: string;
-  readonly formatting?: FormattingPatch;
+  readonly formatting?: FormattingPatch | undefined;
 }
 export interface PresentationFormatChange extends PresentationTextRange {
-  readonly cell?: PresentationTableCellAddress;
+  readonly cell?: PresentationTableCellAddress | undefined;
   readonly slideId: string;
   readonly objectKey: string;
   readonly patch: FormattingPatch;
 }
 export interface PresentationShapeStyle {
-  readonly fill?: string;
-  readonly stroke?: string;
-  readonly strokeWidth?: number;
+  readonly fill?: string | undefined;
+  readonly stroke?: string | undefined;
+  readonly strokeWidth?: number | undefined;
 }
 export interface PresentationShapeChange extends PresentationShapeStyle {
   readonly slideId: string;
@@ -66,7 +66,7 @@ export function presentationTextTarget(
 export const presentationFormattingCapabilities: FormattingCapabilities = {
   text: {
     fontFamily: true,
-    fontSize: { minimum: 1, maximum: 409 },
+    fontSize: { minimum: 1, maximum: 4000 },
     bold: true,
     italic: true,
     underline: ["none", "single"],
@@ -323,11 +323,13 @@ export function editPresentationText(
     throw new RangeError("Text ranges must follow grapheme boundaries.");
   if (
     value !== undefined &&
-    (value.length + plain.length - (range.end - range.start) > 100000 ||
-      /[\u0000-\u0008\u000b\u000c\u000e-\u001f\r]/u.test(value))
+    (!value.isWellFormed() || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\r\uFFFE\uFFFF]/u.test(value))
   )
     throw new RangeError("Invalid presentation text.");
   const normalized = patch ? normalizeFormattingPatch(patch) : undefined;
+  // DrawingML ST_TextFontSize uses hundredths of a point, from 100 to 400000.
+  const size=normalized?.text?.fontSize;
+  if(size && 'set' in size && (size.set<1 || size.set>4000 || Math.abs(size.set*100-Math.round(size.set*100))>1e-7))throw new RangeError('Presentation font sizes use hundredth-point steps from 1 to 4000 points.');
   if (normalized?.block?.verticalAlignment)
     throw new RangeError(
       "Vertical alignment is not supported by this text command.",
@@ -515,9 +517,9 @@ export function editPresentationShape(
     patch.strokeWidth !== undefined &&
     (!Number.isFinite(patch.strokeWidth) ||
       patch.strokeWidth < 0 ||
-      patch.strokeWidth > 100)
+      patch.strokeWidth > 1584)
   )
-    throw new RangeError("Outline width must be between 0 and 100 points.");
+    throw new RangeError("DrawingML outline width must be between 0 and 1584 points.");
   const shape = source.element(object.elementId)!;
   const props = elements(shape).find((e) => e.localName === "spPr")!;
   const drawing =

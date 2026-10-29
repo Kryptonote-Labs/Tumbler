@@ -26,3 +26,4 @@ export { wordTextString } from './text-index.ts';
 
 export { wordTextDelta } from './text-events.ts';
 export { restoreWordSourceWhitespace } from './source-whitespace.ts';
+export { wordTabStopPatches } from './tab-stops.ts';

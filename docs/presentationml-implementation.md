@@ -26,7 +26,7 @@ Edits reparse only the changed slide and share unchanged scenes, images, and dec
 
 The legacy replaceText command requires one ordinary text run. Range-based editText and formatText commands support ordinary rich-text paragraphs, preserving unaffected run properties. Hyperlinks, explicit line breaks, autofit settings, animation timing, and Office extension metadata are preserved during edits.
 
-Fields, shared master/layout objects, signed packages, SmartArt cached drawings, and unknown alternate representations remain read-only. Table row/column insertion and deletion, SmartArt relayout, exact Office text layout, 3D effects, uncommon patterns, and advanced animation timing need further work.
+Fields, shared master/layout objects, signed packages, SmartArt cached drawings, and unknown alternate representations remain read-only. SmartArt relayout, exact Office text layout, 3D effects, uncommon patterns, and advanced animation timing need further work.
 
 Text rendering includes common numbered bullets, baseline offsets, character spacing, capitalization, fixed line spacing, and safe external/internal hyperlinks. Notes are exposed on each slide. Vertical and multi-column text use browser layout and require further Office comparison. Consult each slide's diagnostics and each object's capabilities instead of assuming an object is editable.
 
@@ -69,3 +69,22 @@ Run `bun run compatibility:presentation-rendering` to regenerate `rendering-chec
 Validate generated decks with `bun run compatibility:openxml apps/docs/static/samples/rendering-checks.pptx` using .NET 8 and the Microsoft Open XML SDK. This checks semantic constraints, including the single animation timing root, that the XSD-only validator misses. Passing either validator does not replace opening the deck in PowerPoint.
 
 The rendering deck uses a six-second H.264/MP4 motion clip with a matching poster. Regenerate it with `bash scripts/generate-presentation-video.sh` using FFmpeg and DejaVu Sans, then regenerate the deck. The tiny green WebM remains a separate browser playback test fixture.
+
+## Hosted authoring commands
+
+The slides package now exposes `createPresentation`, `presentationCommand`,
+`applyPresentationCommand`, and `PresentationEditingSession.execute`. The validated
+serializable union supplies slide and object lifecycle, layouts, paragraph formatting,
+backgrounds and literal replacement. Hosts own authority, durable operation identities,
+stale-read checks and transport. The command API does not itself provide collaboration.
+
+Blank decks include a valid master/layout/theme graph. Office theme serialization
+and the default palette now live in `@tumblerjs/ooxml`; Word retains its existing
+exports and generated theme bytes. See the package README for commands and limitations.
+
+Table authoring now supports row/column insertion and deletion, rectangular merge,
+and split through `edit-table`. Operations retain spanning anchor content, native
+grid sizes and direct cell formatting. The former fixed table-cell and per-frame
+text budgets are removed; configured reader budgets remain caller-owned resource
+controls. `createPresentation` also accepts those reader options. Empty editable
+text frames show a canvas hint that is absent from previews and exported files.

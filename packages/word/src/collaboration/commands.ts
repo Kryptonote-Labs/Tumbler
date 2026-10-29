@@ -9,7 +9,7 @@ import { isDocumentImage, normalizeImage, imagePositions, type DocumentImage } f
 import { insertTableDelta, protectTableBoundaries, tableParagraphs, isTableCell, type TableCell } from './tables.ts';
 import * as Y from 'yjs';
 import { validateText, validateWordText } from './validation.ts';
-import { validateAttributes as validateWordAttributes, isList, type TextAttributes } from './formatting.ts';
+import { TEXT_FORMATS, validateAttributes as validateWordAttributes, isList, type TextAttributes } from './formatting.ts';
 
 export type WordFormatPatch = { [Key in keyof TextAttributes]: TextAttributes[Key] | null };
 export type WordRange = { start: number; end: number };
@@ -297,8 +297,13 @@ function formatWordDelta(
       const to = Math.min(end, range.end);
       if (to > from) append(from, to - from, inline);
     }
-    if (align !== undefined || list !== undefined || positioning !== undefined || paragraph !== undefined || styleId !== undefined)
+    // Empty paragraph marks retain character formatting for future typing.
+    const mark = start === end ? Object.fromEntries(Object.entries(inline).filter(([key]) =>
+      [...TEXT_FORMATS, 'font', 'fontFamily', 'fontSize', 'color', 'wordUnderline', 'highlight', 'shading', 'verticalAlign', 'characterSpacingPoints'].includes(key)
+    )) : {};
+    if (Object.keys(mark).length || align !== undefined || list !== undefined || positioning !== undefined || paragraph !== undefined || styleId !== undefined)
       append(end, 1, {
+        ...mark,
         ...(align !== undefined ? { align: align === 'left' ? null : align } : {}),
         ...(list !== undefined ? { list } : {}),
         ...(positioning === null ? { positioning: { reset: true as const } }
@@ -435,7 +440,7 @@ function validateWordDelta(text: Y.Text, delta: WordDelta) {
   }
 }
 
-return { bodyLength, anchorWordRange, resolveWordRange, wordFormats, replaceWordDelta, formatWordDelta, wordTransaction, validateWordDelta };
+return { bodyLength, validateWordRange: checkRange, anchorWordRange, resolveWordRange, wordFormats, replaceWordDelta, formatWordDelta, wordTransaction, validateWordDelta };
 }
 
 /** Resolve the text scope before staging operations; positions never cross document stories. */

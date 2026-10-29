@@ -116,3 +116,10 @@ function first(artifact: ReturnType<typeof openWordArtifact>): WordParagraph {
 function selection(paragraphElementId: number, anchor: number, focus: number) {
   return { anchor: { paragraphElementId, offset: anchor }, focus: { paragraphElementId, offset: focus } } as const;
 }
+
+test('shared formatting accepts Word font sizes beyond the spreadsheet ceiling',()=>{
+ const source=open('<w:p><w:r><w:t>Word</w:t></w:r></w:p>'),paragraph=first(source);
+ const edited=source.applyFormatting(selection(paragraph.elementId,0,4),{text:{fontSize:{set:800}}});
+ expect(edited.formattingState(selection(first(edited).elementId,0,4)).text.fontSize).toMatchObject({value:800});
+ expect(()=>source.applyFormatting(selection(paragraph.elementId,0,4),{text:{fontSize:{set:1638.5}}})).toThrow();
+});
