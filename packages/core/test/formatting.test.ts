@@ -36,6 +36,10 @@ describe("format-neutral formatting", () => {
     expect(Object.isFrozen(normalizeFormattingPatch(input).text)).toBeTrue();
   });
 
+  test('leaves format-specific font limits to the document adapter', () => {
+    expect(normalizeFormattingPatch({text:{fontSize:{set:1638}}})).toEqual({text:{fontSize:{set:1638}}});
+  });
+
   test("distinguishes omission, explicit false, and inheritance", () => {
     expect(normalizeFormattingPatch({ text: {} })).toEqual({ text: {} });
     expect(normalizeFormattingPatch({ text: { bold: { set: false } } })).toEqual({ text: { bold: { set: false } } });
@@ -44,7 +48,7 @@ describe("format-neutral formatting", () => {
 
   test.each([
     { text: { fontSize: { set: 0 } } },
-    { text: { fontSize: { set: 410 } } },
+    { text: { fontSize: { set: Infinity } } },
     { text: { fontFamily: { set: "   " } } },
     { text: { color: { set: { type: "rgb", value: "red" } } } },
     { text: { underline: { set: "wavy" } } },

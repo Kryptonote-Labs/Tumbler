@@ -1,4 +1,4 @@
-import type { FormattingPatch, FormattingValue, OfficeColor, TextUnderline } from "@tumblerjs/core";
+import type { FormattingPatch, FormattingValue, OfficeColor, TextUnderline, FormattingCapabilities } from "@tumblerjs/core";
 
 export function toggleBooleanFormatting(
   property: "bold" | "italic",
@@ -13,9 +13,9 @@ export function toggleUnderlineFormatting(state: FormattingValue<TextUnderline>)
   return { text: { underline: { set: enabled ? "none" : "single" } } };
 }
 
-export function fontSizeFormatting(value: string): FormattingPatch | undefined {
+export function fontSizeFormatting(value: string, capability:FormattingCapabilities["text"]["fontSize"]={minimum:1,maximum:409}): FormattingPatch | undefined {
   const size = Number(value);
-  return Number.isFinite(size) && size >= 1 && size <= 409
+  return Number.isFinite(size) && capability !== false && size >= capability.minimum && size <= capability.maximum
     ? { text: { fontSize: { set: size } } }
     : undefined;
 }

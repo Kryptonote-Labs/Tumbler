@@ -85,7 +85,7 @@ export function materializeClipboardText(
           patch: {
             text: {
               fontFamily: { set: run.fontFamily },
-              ...(size >= 1 && size <= 409 ? { fontSize: { set: size } } : {}),
+              ...(size >= 1 && size <= 4000 ? { fontSize: { set: size } } : {}),
               bold: { set: run.bold },
               italic: { set: run.italic },
               ...(ownUnderline

@@ -90,6 +90,8 @@ export function formatSpreadsheetCells(
   const range = normalizeRange(target);
   validateRangeSize(range);
   const patch = normalizeFormattingPatch(input);
+  const size=patch.text?.fontSize;
+  if(size && 'set' in size && (size.set<1 || size.set>409))throw new RangeError('Spreadsheet font sizes must be between 1 and 409 points.');
   if (patch.text === undefined && patch.block === undefined) return workbook.package.archive.originalBytes();
 
   const worksheet = openWorksheet(workbook, sheet);

@@ -18,7 +18,7 @@ import { wordParagraphText, wordParagraphTextSegments, type WordTextSelection } 
 
 export const WORD_FORMATTING_CAPABILITIES: FormattingCapabilities = Object.freeze({
   text: Object.freeze({
-    fontSize: Object.freeze({ minimum: 1, maximum: 409 }),
+    fontSize: Object.freeze({ minimum: 1, maximum: 1638 }),
     fontFamily: true,
     bold: true,
     italic: true,
@@ -76,9 +76,8 @@ export function formatWordSelection(document: WordDocument, target: WordFormatti
   const fontSize = input.text?.fontSize;
   if (fontSize && 'set' in fontSize && !(fontSize.set >= 1 && fontSize.set <= 1638 && Number.isInteger(fontSize.set * 2)))
     throw new RangeError('Word font sizes use half-point steps from 1 to 1638 points.');
-  const { fontSize: _size, ...text } = input.text ?? {};
-  const normalized = normalizeFormattingPatch({ ...input, ...(input.text ? { text } : {}) });
-  const patch: WordFormattingPatch = { ...normalized, ...(input.text ? { text: { ...normalized.text, ...(fontSize ? { fontSize } : {}), ...(strike ? { strike } : {}) } } : {}) };
+  const normalized = normalizeFormattingPatch(input);
+  const patch: WordFormattingPatch = { ...normalized, ...(input.text ? { text: { ...normalized.text, ...(strike ? { strike } : {}) } } : {}) };
   if (patch.text === undefined && patch.block === undefined) return document.bytes();
   const ranges = selectedRanges(document, target);
   const editor = beginLosslessXmlEdit(document.source);
