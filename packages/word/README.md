@@ -605,6 +605,13 @@ Section numbering restarts and numeral formats are not yet evaluated by this API
 
 ### Editable table formatting
 
+`wordTableAvailableWidth(layout, blocks, tableElementId, story?, pageIndex?)` resolves
+the width available to a rendered table from its actual column or containing cell.
+For header/footer tables, pass the active story kind and page index. This uses the
+owning page's section, including its current margins and gutter, rather than the
+story model's original page settings. Use this width as the `availableWidthPoints`
+context for the `fit-table` operation.
+
 Authored table cells accept `format` with `shading` (`#RRGGBB` or `transparent`),
 `borders` (`top`, `right`, `bottom`, `left`), `verticalAlignment` and `margins` in
 Twips. Tables accept `rowFormats`, parallel to `rows`, with `heightTwips` and

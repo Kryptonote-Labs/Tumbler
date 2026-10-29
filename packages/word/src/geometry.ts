@@ -1,5 +1,51 @@
 import { wordSectionColumns } from './section-columns.ts';
 import type { WordBlock, WordSectionProperties, WordTable } from './document.ts';
+import type { WordLayout, WordLayoutTable } from './layout.ts';
+
+/** Resolve a table's actual container, including unequal columns and nested story tables. */
+export function wordTableAvailableWidth(
+  layout: WordLayout,
+  blocks: readonly WordBlock[],
+  tableElementId: number,
+  story?: 'header' | 'footer',
+  pageIndex = 0,
+): number | undefined {
+  const sources = new Map<number, WordTable>();
+  const collect = (items: readonly WordBlock[]) => {
+    for (const block of items) {
+      if (block.kind !== 'table') continue;
+      sources.set(block.elementId, block);
+      for (const row of block.rows) for (const cell of row.cells) collect(cell.blocks);
+    }
+  };
+  collect(blocks);
+  function find(tables: readonly WordLayoutTable[], width: number): number | undefined {
+    for (const table of tables) {
+      const source = sources.get(table.tableElementId);
+      if (!source) continue;
+      if (table.tableElementId === tableElementId)
+        return Math.max(1, width - (source.properties.alignment === 'center' || source.properties.alignment === 'end' ? 0 : source.properties.indentTwips / 20));
+      for (const cell of table.cells) {
+        const original = source.rows.flatMap(row => row.cells).find(item => item.elementId === cell.cellElementId);
+        if (!original) continue;
+        const margins = original.margins ?? source.properties.cellMargins;
+        const found = find(cell.tables, Math.max(1, cell.width - (margins.startTwips + margins.endTwips) / 20));
+        if (found !== undefined) return found;
+      }
+    }
+  }
+  for (const page of layout.pages) {
+    if (story) {
+      if (page.index !== pageIndex) continue;
+      const width = (page.section.pageWidthTwips - page.section.marginLeftTwips - page.section.marginRightTwips - page.section.gutterTwips) / 20;
+      return find(story === 'header' ? page.headerTables : page.footerTables, width);
+    }
+    for (const column of page.columns) {
+      const found = find(column.tables, column.width);
+      if (found !== undefined) return found;
+    }
+  }
+}
 
 /** Physical dimensions from the same section and table grid used by layout, in points. */
 export function wordGeometryAt(blocks: readonly WordBlock[], finalSection: WordSectionProperties, paragraphId: number, tableDepth = 0) {
