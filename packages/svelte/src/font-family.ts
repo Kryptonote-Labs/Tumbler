@@ -1,11 +1,13 @@
-/** Missing Office fonts should keep their font class instead of falling back to the browser's serif default. */
+/** Give common Office fonts an appropriate generic fallback without replacing embedded aliases. */
 export function cssFontFamily(name: string): string {
-  const generic = /mono|consolas|courier|menlo|terminal/i.test(name)
+  const generic = /(?:^|[ -])mono(?:$|[ -])|monospace|consolas|courier|menlo|terminal/i.test(name)
     ? "monospace"
-    : /comic|cursive|script|handwriting/i.test(name)
+    : /comic|cursive|corsiva|script|handwriting/i.test(name)
       ? "cursive"
-      : /times|cambria|georgia|garamond|palatino|baskerville|(?:^|\s)serif(?:$|\s)/i.test(name)
-        ? "serif"
-        : "sans-serif";
+      : /sans|arial|aptos|calibri|candara|corbel|helvetica|verdana|tahoma|segoe|trebuchet|franklin gothic|century gothic|gill|roboto|(?:^|\s)inter(?:$|\s)/i.test(
+            name,
+          )
+        ? "sans-serif"
+        : "serif";
   return `${JSON.stringify(name)}, ${generic}`;
 }
