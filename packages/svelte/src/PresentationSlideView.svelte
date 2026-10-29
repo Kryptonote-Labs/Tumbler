@@ -211,7 +211,7 @@
   export function applyFormatting(patch: FormattingPatch) { format(patch); }
   export function currentSelection() {
     if(!selected || !textTarget) return {start:0,end:0};
-    return {objectKey:selected.key, ...(cellAddress ? {cell:cellAddress} : {}), ...(editing ? textRange : {start:0,end:slideTextValue(textTarget).length})};
+    return {objectKey:selected.key, editing:!!editing, ...(cellAddress ? {cell:cellAddress} : {}), ...(editing ? textRange : {start:0,end:slideTextValue(textTarget).length})};
   }
   $effect(() => {onselectionchange?.({object:textTarget,state:formattingState});});
   function format(patch: FormattingPatch) {
