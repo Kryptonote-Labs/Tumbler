@@ -3,7 +3,7 @@ import { isWordParagraphFormat, type WordParagraphFormat } from '../paragraph-fo
 const prefix = 'wordParagraphFormat:';
 const properties = [
   'spacingBeforeTwips', 'spacingAfterTwips', 'lineSpacing', 'keepNext', 'keepLines',
-  'pageBreakBefore', 'suppressLineNumbers', 'widowControl', 'contextualSpacing', 'shading', 'borders',
+  'pageBreakBefore', 'suppressLineNumbers', 'widowControl', 'contextualSpacing', 'shading', 'borders', 'outlineLevel',
 ] as const satisfies readonly (keyof WordParagraphFormat)[];
 
 export function isParagraphPropertyAttribute(key: string): boolean {

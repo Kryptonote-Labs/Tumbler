@@ -199,3 +199,7 @@ export { readWordEmbeddedFonts, type WordEmbeddedFont } from './embedded-fonts.t
 export { wordFontKerning } from './font-kerning.ts';
 export { createWordNativeArchive, openWordNativeArchive, encodeWordNativeArchive, decodeWordNativeArchive, isWordNativeArchive } from './native-archive.ts';
 export type { WordNativeArchive } from './native-archive.ts';
+export { wordTableAvailableWidth } from './geometry.ts';
+export { wordParagraphById } from './text.ts';
+export { wordHeadingOutline } from './outline.ts';
+export { wordFormatPainterSample, type WordFormatPainterSample } from './format-painter.ts';
