@@ -108,6 +108,11 @@ Embedders can use `tumblerCapabilities()` for a registry-derived capability
 overview and `tumblerOperationHelp(name, commandName)` for detailed help. Host
 permissions and supported document types still apply.
 
+Visual hosts can implement `render(document, {page})` for `tumbler <document> render --page 3`.
+Page numbers are 1-based and default to 1. Rendering is read-only. Hosts own the renderer and
+image delivery; file hosts without one report that rendering is unavailable. A rendered page
+shows the document layout, whereas `read-image` reads an embedded image's original pixels.
+
 ## Presentations
 
 ```sh

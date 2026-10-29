@@ -84,7 +84,9 @@ export async function runTumbler(
     }
     const flags: Record<string, unknown> = {};
     const allowed = new Set(
-      name === 'read'
+      name === 'render'
+        ? ['page']
+        : name === 'read'
         ? ['offset', 'region', 'target']
         : name === 'create'
           ? []
@@ -130,7 +132,7 @@ export async function runTumbler(
               : value === 'false'
                 ? false
                 : value
-            : ['start', 'end', 'offset', 'fontSize', 'characterSpacingPoints'].includes(key)
+            : (name === 'render' && key === 'page') || ['start', 'end', 'offset', 'fontSize', 'characterSpacingPoints'].includes(key)
               ? value.trim() === ''
                 ? NaN
                 : Number(value)

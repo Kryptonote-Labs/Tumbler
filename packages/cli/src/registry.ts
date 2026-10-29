@@ -36,6 +36,8 @@ export type ReadInput = z.infer<typeof readInput>;
 export const readImageInput = z
   .object({ id: z.string().min(1), region: z.string().default('body') })
   .strict();
+export const renderInput = z.object({ page: z.number().int().positive().safe().default(1) }).strict();
+export type RenderInput = z.infer<typeof renderInput>;
 export type ReadImageInput = z.infer<typeof readImageInput>;
 export type FormatInput = z.infer<typeof formatInput>;
 export type ReplaceInput = z.infer<typeof replaceInput>;
@@ -46,6 +48,7 @@ export type OperationInput = z.infer<typeof operationInput>;
 export const selectInput = z.object({ page: z.string().optional(), target: targetSchema }).strict();
 export type SelectInput = z.infer<typeof selectInput>;
 export interface OperationHost extends PresentationOperationHost {
+  render?(document: string, input: RenderInput): Promise<unknown>;
   readImage?(document: string, input: ReadImageInput): Promise<unknown>;
   select?(document: string, input: SelectInput): Promise<unknown>;
   unselect?(document: string): Promise<unknown>;
@@ -69,6 +72,16 @@ export function defineOperation<S extends z.ZodType>(definition: {
   };
 }
 export const operations = {
+  render: defineOperation({
+    name: 'render',
+    summary: 'Render a document page as image input. --page is a 1-based page number, default 1.',
+    access: 'read',
+    input: renderInput,
+    run: (host, document, input) => {
+      if (!host.render) throw new Error('Page rendering is unavailable on this host.');
+      return host.render(document, input);
+    },
+  }),
   'read-image': defineOperation({
     name: 'read-image',
     summary: 'Read the actual image identified by an inspected image.id. --input JSON.',

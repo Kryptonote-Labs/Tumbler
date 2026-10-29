@@ -96,6 +96,8 @@ export function tumblerOperationHelp(name: string, commandName = 'tumbler'): str
     throw new Error(`Unknown operation: ${name}. Use --help to list operations.`);
   const op = operations[name as keyof typeof operations];
   const usage = {
+    render: `${prefix} render --page 3
+Render the numbered document page, starting at 1. Defaults to page 1. Visual hosts deliver page pixels separately from stdout. This does not change the document or cursor. Hosts without a renderer report that rendering is unavailable.`,
     'read-image': `${prefix} read-image --input '{"id":"<image.id>","region":"body"}'\nUse image.id from read or inspect, in the same region. File hosts return original image bytes as base64 data with their MIME type; visual hosts may deliver image input separately. This reads the image itself, not its rendered page appearance.`,
     read: `${prefix} read [--offset <UTF-16 offset>] [--region body] [--target '{"start":"<anchor>","end":"<anchor>"}']\nReturns bounded content and a page handle; continue at the returned next offset.`,
     inspect: `${prefix} inspect --input '{"what":"objects","region":"body","offset":0}'\nwhat: objects|styles|regions|geometry. Objects include start/end and editable attributes; follow next for more. Geometry describes available widths, not proof of rendered text wrapping.`,
