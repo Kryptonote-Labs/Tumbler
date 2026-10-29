@@ -114,6 +114,7 @@ interface ReadCache {
     { colors: ThemeColorScheme; fonts: ThemeFontScheme }
   >;
 }
+const clipboardLines=new WeakMap<SlideObject,{xml:LosslessXmlDocument;element:Element;placeholder:string | undefined}>();
 const slideContexts = new WeakMap<PresentationSlide, Context>();
 const readCaches = new WeakMap<PresentationDocument, ReadCache>();
 const slideCosts = new WeakMap<
@@ -121,6 +122,10 @@ const slideCosts = new WeakMap<
   { objects: number; characters: number }
 >();
 
+export function presentationClipboardLine(document:PresentationDocument,slideId:string,objectKey:string){
+  const object=document.slides.find(s=>s.id===slideId)?.objects.find(o=>o.key===objectKey);
+  return object && clipboardLines.get(object);
+}
 /** Internal clipboard context for materializing source theme references. */
 export function presentationClipboardTheme(document: PresentationDocument, slideId: string) {
   const slide = document.slides.find((s) => s.id === slideId),
@@ -1464,6 +1469,8 @@ class Reader {
           ? inkTransforms.map((item) => item.id)
           : [],
       });
+      const lineOwner=line && this.owners.get(line);
+      if(line && lineOwner)clipboardLines.set(result.at(-1)!,{xml:lineOwner.xml,element:line,placeholder:this.color(lineRef,context)});
     }
     return result;
   }

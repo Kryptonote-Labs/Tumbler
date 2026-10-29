@@ -111,14 +111,34 @@ test("pasting a layout-inherited text frame into a blank slide keeps its positio
       new URL("../../../apps/docs/static/samples/workspace-brief.pptx", import.meta.url),
     ).bytes(),
   );
-  const {beginPackageTransaction}=await import('@tumblerjs/opc');
-  const pkg=source.document.package,part=pkg.getPart('/ppt/slides/slide1.xml')!,layout=pkg.getPart('/ppt/slideLayouts/slideLayout2.xml')!;
-  const content=new TextDecoder().decode(pkg.readPart(part)),original=content.match(/<p:sp>[\s\S]*?<\/p:sp>/)![0];
-  const placeholder=original.replace('<p:nvPr></p:nvPr>','<p:nvPr><p:ph type="title" idx="7"/></p:nvPr>');
-  const inherited=placeholder.replace(/<p:cNvPr id="\d+"/,'<p:cNvPr id="99"').replace('<a:lstStyle/>','<a:lstStyle><a:lvl1pPr><a:defRPr sz="3600" b="1"/></a:lvl1pPr></a:lstStyle>');
-  const local=placeholder.replace(/<a:xfrm[\s\S]*?<\/a:xfrm>/,'').replace(/ sz="\d+"/g,'');
-  const tx=beginPackageTransaction(pkg).replacePart(part.name,new TextEncoder().encode(content.replace(original,local))).replacePart(layout.name,new TextEncoder().encode(new TextDecoder().decode(pkg.readPart(layout)).replace('</p:spTree>',inherited+'</p:spTree>')));
-  source=openPresentationArtifact(tx.commit());
+  const { beginPackageTransaction } = await import("@tumblerjs/opc");
+  const pkg = source.document.package,
+    part = pkg.getPart("/ppt/slides/slide1.xml")!,
+    layout = pkg.getPart("/ppt/slideLayouts/slideLayout2.xml")!;
+  const content = new TextDecoder().decode(pkg.readPart(part)),
+    original = content.match(/<p:sp>[\s\S]*?<\/p:sp>/)![0];
+  const placeholder = original.replace(
+    "<p:nvPr></p:nvPr>",
+    '<p:nvPr><p:ph type="title" idx="7"/></p:nvPr>',
+  );
+  const inherited = placeholder
+    .replace(/<p:cNvPr id="\d+"/, '<p:cNvPr id="99"')
+    .replace(
+      "<a:lstStyle/>",
+      '<a:lstStyle><a:lvl1pPr><a:defRPr sz="3600" b="1" u="sng"/></a:lvl1pPr></a:lstStyle>',
+    );
+  const local = placeholder.replace(/<a:xfrm[\s\S]*?<\/a:xfrm>/, "").replace(/ sz="\d+"/g, "");
+  const tx = beginPackageTransaction(pkg)
+    .replacePart(part.name, new TextEncoder().encode(content.replace(original, local)))
+    .replacePart(
+      layout.name,
+      new TextEncoder().encode(
+        new TextDecoder()
+          .decode(pkg.readPart(layout))
+          .replace("</p:spTree>", inherited + "</p:spTree>"),
+      ),
+    );
+  source = openPresentationArtifact(tx.commit());
   const slide = source.document.slides[0]!,
     object = slide.objects.find((o) => o.layer === "slide" && o.textEditable)!;
   let destination = createPresentation();
@@ -133,8 +153,104 @@ test("pasting a layout-inherited text frame into a blank slide keeps its positio
   expect(copy.transform).toEqual(object.transform);
   expect(slideTextValue(copy)).toBe(slideTextValue(object));
   expect(
-    copy.text!.paragraphs.flatMap((p) => p.runs).map((r) => [r.fontSize, r.fontFamily, r.color]),
+    copy
+      .text!.paragraphs.flatMap((p) => p.runs)
+      .map((r) => [r.fontSize, r.fontFamily, r.color, r.underline]),
   ).toEqual(
-    object.text!.paragraphs.flatMap((p) => p.runs).map((r) => [r.fontSize, r.fontFamily, r.color]),
+    object
+      .text!.paragraphs.flatMap((p) => p.runs)
+      .map((r) => [r.fontSize, r.fontFamily, r.color, r.underline]),
   );
+});
+test("clipboard retains a theme-inherited outline width, dash and cap", async () => {
+  const { beginPackageTransaction } = await import("@tumblerjs/opc");
+  let source = createPresentation();
+  const slideId = source.document.slides[0]!.id;
+  source = run(source, {
+    name: "insert-object",
+    slideId,
+    bounds: { x: 10, y: 20, width: 200, height: 100 },
+    object: { kind: "shape", geometry: "rect" },
+  });
+  const pkg = source.document.package,
+    part = pkg.getPart(source.document.slides[0]!.part)!,
+    theme = pkg.getPart("/ppt/theme/theme1.xml")!;
+  const content = new TextDecoder()
+    .decode(pkg.readPart(part))
+    .replace(/<a:ln>[\s\S]*?<\/a:ln>/, "")
+    .replace(
+      "</p:spPr>",
+      '</p:spPr><p:style><a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="0"><a:schemeClr val="accent1"/></a:fillRef><a:effectRef idx="0"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="dk1"/></a:fontRef></p:style>',
+    );
+  source = openPresentationArtifact(
+    beginPackageTransaction(pkg)
+      .replacePart(part.name, new TextEncoder().encode(content))
+      .replacePart(
+        theme.name,
+        new TextEncoder().encode(
+          new TextDecoder()
+            .decode(pkg.readPart(theme))
+            .replaceAll('w="6350" cap="flat"', 'w="38100" cap="rnd"')
+            .replaceAll('<a:prstDash val="solid"/>', '<a:prstDash val="dash"/>'),
+        ),
+      )
+      .commit(),
+  );
+  const original = source.document.slides[0]!.objects[0]!;
+  let destination = createPresentation();
+  destination = run(destination, {
+    name: "paste-object",
+    slideId: destination.document.slides[0]!.id,
+    source: encode(source),
+    sourceSlideId: slideId,
+    objectKey: original.key,
+  });
+  const copy = destination.document.slides[0]!.objects[0]!;
+  expect([copy.strokeWidth, copy.strokeDash, copy.strokeCap, copy.stroke]).toEqual([
+    original.strokeWidth,
+    original.strokeDash,
+    original.strokeCap,
+    original.stroke,
+  ]);
+});
+test("clipboard retains distributed paragraph alignment", async () => {
+  const { beginPackageTransaction } = await import("@tumblerjs/opc");
+  let source = createPresentation();
+  const slideId = source.document.slides[0]!.id;
+  source = run(source, {
+    name: "insert-object",
+    slideId,
+    bounds: { x: 10, y: 20, width: 300, height: 100 },
+    object: { kind: "shape", text: "Distributed text" },
+  });
+  const key = source.document.slides[0]!.objects[0]!.key;
+  source = run(source, {
+    name: "format-text",
+    slideId,
+    objectKey: key,
+    start: 0,
+    end: 16,
+    patch: { block: { horizontalAlignment: { set: "justify" } } },
+  });
+  const pkg = source.document.package,
+    part = pkg.getPart(source.document.slides[0]!.part)!;
+  source = openPresentationArtifact(
+    beginPackageTransaction(pkg)
+      .replacePart(
+        part.name,
+        new TextEncoder().encode(
+          new TextDecoder().decode(pkg.readPart(part)).replace('algn="just"', 'algn="dist"'),
+        ),
+      )
+      .commit(),
+  );
+  let destination = createPresentation();
+  destination = run(destination, {
+    name: "paste-object",
+    slideId: destination.document.slides[0]!.id,
+    source: encode(source),
+    sourceSlideId: slideId,
+    objectKey: key,
+  });
+  expect(destination.document.slides[0]!.objects[0]!.text!.paragraphs[0]!.distributed).toBe(true);
 });
