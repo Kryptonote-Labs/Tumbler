@@ -1923,6 +1923,7 @@ class Reader {
             bold: ["1", "true", "on"].includes(runAttr("b") ?? ""),
             italic: ["1", "true", "on"].includes(runAttr("i") ?? ""),
             underline: !!runAttr("u") && runAttr("u") !== "none",
+            underlineStyle: runAttr("u"),
             strike: !!runAttr("strike") && runAttr("strike") !== "noStrike",
             baseline: percentage(runAttr("baseline")),
             spacing: ((numeric(runAttr("spc"), 0) / 100) * 4) / 3,

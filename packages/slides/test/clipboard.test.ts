@@ -125,7 +125,7 @@ test("pasting a layout-inherited text frame into a blank slide keeps its positio
     .replace(/<p:cNvPr id="\d+"/, '<p:cNvPr id="99"')
     .replace(
       "<a:lstStyle/>",
-      '<a:lstStyle><a:lvl1pPr><a:defRPr sz="3600" b="1" u="sng"/></a:lvl1pPr></a:lstStyle>',
+      '<a:lstStyle><a:lvl1pPr algn="dist"><a:defRPr sz="3600" b="1" u="dbl"/></a:lvl1pPr></a:lstStyle>',
     );
   const local = placeholder.replace(/<a:xfrm[\s\S]*?<\/a:xfrm>/, "").replace(/ sz="\d+"/g, "");
   const tx = beginPackageTransaction(pkg)
@@ -151,15 +151,16 @@ test("pasting a layout-inherited text frame into a blank slide keeps its positio
   });
   const copy = destination.document.slides[0]!.objects[0]!;
   expect(copy.transform).toEqual(object.transform);
+  expect(copy.text!.paragraphs[0]!.distributed).toBe(object.text!.paragraphs[0]!.distributed);
   expect(slideTextValue(copy)).toBe(slideTextValue(object));
   expect(
     copy
       .text!.paragraphs.flatMap((p) => p.runs)
-      .map((r) => [r.fontSize, r.fontFamily, r.color, r.underline]),
+      .map((r) => [r.fontSize, r.fontFamily, r.color, r.underline, r.underlineStyle]),
   ).toEqual(
     object
       .text!.paragraphs.flatMap((p) => p.runs)
-      .map((r) => [r.fontSize, r.fontFamily, r.color, r.underline]),
+      .map((r) => [r.fontSize, r.fontFamily, r.color, r.underline, r.underlineStyle]),
   );
 });
 test("clipboard retains a theme-inherited outline width, dash and cap", async () => {

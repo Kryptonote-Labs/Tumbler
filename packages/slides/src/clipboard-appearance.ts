@@ -1,6 +1,9 @@
+import { beginLosslessXmlEdit } from "@tumblerjs/ooxml";
+import { commitXml } from "./authoring-xml.ts";
 import { materializeClipboardLine } from "./clipboard-line.ts";
 import type { PresentationArtifact } from "./artifact.ts";
 import { slideColorHex } from "./editing.ts";
+import { presentationTextTarget } from "./editing.ts";
 import { objectTarget } from "./authoring-objects.ts";
 import { children } from "./authoring-slides.ts";
 /** Freeze inherited text styling before the object leaves its source layout. */
@@ -94,10 +97,40 @@ export function materializeClipboardText(
             },
           },
         });
+        if (!ownUnderline && run.underlineStyle && run.text.length) {
+          const current = objectTarget(result, slideId, objectKey),
+            textTarget = presentationTextTarget(current.object, target.cell);
+          const container = current.source.element(textTarget.elementId)!,
+            tx = children(container).find((e) => e.localName === "txBody")!,
+            para = children(tx).filter((e) => e.localName === "p")[paragraphIndex]!;
+          let at = 0;
+          const node = children(para)
+            .filter((e) => e.localName === "r" || e.localName === "br")
+            .find((e) => {
+              const text = children(e).find((c) => c.localName === "t");
+              const length = text
+                ? text.children.reduce(
+                    (n, c) => n + (c.kind === "text" || c.kind === "cdata" ? c.value.length : 0),
+                    0,
+                  )
+                : 1;
+              const contains = runOffset >= at && runOffset < at + length;
+              at += length;
+              return contains;
+            });
+          const props = node && children(node).find((e) => e.localName === "rPr");
+          if (props) {
+            const edit = beginLosslessXmlEdit(current.source),
+              attr = props.attributes.find((a) => a.localName === "u");
+            if (attr) edit.setAttribute(attr, run.underlineStyle);
+            else edit.insertAttribute(props, "u", run.underlineStyle);
+            result = commitXml(result, current.slide.part, edit.commit().bytes);
+          }
+        }
         offset += run.text.length;
         runOffset += run.text.length;
       }
-      if (!ownAlignment && !paragraph.distributed)
+      if (!ownAlignment)
         result = result.formatText({
           slideId,
           objectKey,
@@ -117,6 +150,19 @@ export function materializeClipboardText(
             },
           },
         });
+      if (!ownAlignment && paragraph.distributed) {
+        const current = objectTarget(result, slideId, objectKey),
+          textTarget = presentationTextTarget(current.object, target.cell),
+          container = current.source.element(textTarget.elementId)!;
+        const tx = children(container).find((e) => e.localName === "txBody")!,
+          para = children(tx).filter((e) => e.localName === "p")[paragraphIndex]!,
+          props = children(para).find((e) => e.localName === "pPr")!;
+        const edit = beginLosslessXmlEdit(current.source),
+          attr = props.attributes.find((a) => a.localName === "algn");
+        if (attr) edit.setAttribute(attr, "dist");
+        else edit.insertAttribute(props, "algn", "dist");
+        result = commitXml(result, current.slide.part, edit.commit().bytes);
+      }
       offset++;
     }
   }
