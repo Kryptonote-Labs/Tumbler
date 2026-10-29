@@ -345,3 +345,78 @@ test("horizontal lines remain movable through the validated command API", () => 
     height: 0,
   });
 });
+test("new lines have a visible outline", () => {
+  let a = createPresentation();
+  a = run(a, {
+    name: "insert-object",
+    slideId: a.document.slides[0]!.id,
+    bounds: { x: 10, y: 20, width: 300, height: 0 },
+    object: { kind: "shape", geometry: "line" },
+  });
+  expect(a.document.slides[0]!.objects[0]!.stroke).not.toBe("none");
+});
+test("new shapes and duplicates precede the shape-tree extension list", async () => {
+  const { beginPackageTransaction } = await import("@tumblerjs/opc");
+  const { a, slideId, objectKey } = textDeck(),
+    pkg = a.document.package,
+    part = pkg.getPart(a.document.slides[0]!.part)!;
+  const bytes = new TextEncoder().encode(
+    new TextDecoder().decode(pkg.readPart(part)).replace("</p:spTree>", "<p:extLst/></p:spTree>"),
+  );
+  let b = openPresentationArtifact(
+    beginPackageTransaction(pkg).replacePart(part.name, bytes).commit(),
+  );
+  b = run(b, { name: "duplicate-object", slideId, objectKey });
+  b = run(b, {
+    name: "insert-object",
+    slideId,
+    bounds: { x: 1, y: 1, width: 10, height: 10 },
+    object: { kind: "shape", geometry: "rect" },
+  });
+  const content = new TextDecoder().decode(
+    b.document.package.readPart(b.document.package.getPart(part.name)!),
+  );
+  expect(content).toContain("</p:sp><p:extLst/></p:spTree>");
+});
+test("vertical alignment creates optional table cell properties when absent", async () => {
+  const { beginPackageTransaction } = await import("@tumblerjs/opc");
+  let a = createPresentation();
+  const slideId = a.document.slides[0]!.id;
+  a = run(a, {
+    name: "insert-object",
+    slideId,
+    bounds: { x: 0, y: 0, width: 300, height: 100 },
+    object: { kind: "table", rows: 1, columns: 1 },
+  });
+  const pkg = a.document.package,
+    part = pkg.getPart(a.document.slides[0]!.part)!;
+  a = openPresentationArtifact(
+    beginPackageTransaction(pkg)
+      .replacePart(
+        part.name,
+        new TextEncoder().encode(
+          new TextDecoder().decode(pkg.readPart(part)).replace(/<a:tcPr>[\s\S]*?<\/a:tcPr>/, ""),
+        ),
+      )
+      .commit(),
+  );
+  a = run(a, {
+    name: "paragraph",
+    slideId,
+    objectKey: a.document.slides[0]!.objects[0]!.key,
+    cell: { row: 0, column: 0 },
+    start: 0,
+    end: 0,
+    verticalAlignment: "bottom",
+  });
+  expect(reopen(a).document.slides[0]!.objects[0]!.table!.cells[0]!.text!.anchor).toBe("bottom");
+});
+test("changing a bullet level advances its authored indentation", () => {
+  const { a, slideId, objectKey } = textDeck();
+  let b = run(a, { name: "paragraph", slideId, objectKey, start: 0, end: 11, bullet: "bullet" });
+  const previous = b.document.slides[0]!.objects[0]!.text!.paragraphs[0]!.marginLeft;
+  b = run(b, { name: "paragraph", slideId, objectKey, start: 0, end: 11, level: 2 });
+  expect(reopen(b).document.slides[0]!.objects[0]!.text!.paragraphs[0]!.marginLeft).toBe(
+    previous * 3,
+  );
+});

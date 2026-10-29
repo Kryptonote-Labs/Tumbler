@@ -44,7 +44,11 @@ export function paragraphFormat(
         .filter((a) => a.qualified !== "xmlns:a")
         .map((a) => [a.qualified, a.value]) ?? [],
     );
-    if (command.level !== undefined) attrs.set("lvl", String(command.level));
+    if (command.level !== undefined) {
+      attrs.set("lvl", String(command.level));
+      attrs.set("marL", String(342900 * (command.level + 1)));
+      attrs.set("indent", "-285750");
+    }
     const remove = new Set<string>();
     const additions: { name: string; markup: string }[] = [];
     if (command.bullet !== undefined) {
@@ -111,8 +115,15 @@ export function paragraphFormat(
     const props = command.cell
       ? children(shape).find((e) => e.localName === "tcPr")!
       : children(body).find((e) => e.localName === "bodyPr")!;
-    const attr = props.attributes.find((a) => !a.namespaceUri && a.localName === "anchor");
     const v = { top: "t", center: "ctr", bottom: "b" }[command.verticalAlignment];
+    if (!props) {
+      const extension = children(shape).find((e) => e.localName === "extLst");
+      const markup = `<a:tcPr xmlns:a="${a}" anchor="${v}"/>`;
+      if (extension) edit.insertMarkupBefore(extension, markup);
+      else edit.appendMarkup(shape, markup);
+      return commitXml(artifact, slide.part, edit.commit().bytes);
+    }
+    const attr = props.attributes.find((a) => !a.namespaceUri && a.localName === "anchor");
     if (attr) edit.setAttribute(attr, v);
     else edit.insertAttribute(props, "anchor", v);
   }

@@ -88,7 +88,7 @@ export function insertObject(
   const tx = beginPackageTransaction(artifact.document.package);
   let markup: string;
   if (input.kind === "shape") {
-    markup = `<p:sp ${ns}><p:nvSpPr><p:cNvPr id="${id}" name="${input.geometry ? "Shape" : "Text Box"} ${id}"/><p:cNvSpPr${input.geometry ? "" : ' txBox="1"'}/><p:nvPr/></p:nvSpPr><p:spPr>${transform}<a:prstGeom prst="${input.geometry ?? "rect"}"><a:avLst/></a:prstGeom>${color(input.fill ?? (input.geometry ? "#4472C4" : "none"))}<a:ln>${color(input.stroke ?? "none")}</a:ln></p:spPr><p:txBody>${textBody(input.text ?? "", input.fontSize)}</p:txBody></p:sp>`;
+    markup = `<p:sp ${ns}><p:nvSpPr><p:cNvPr id="${id}" name="${input.geometry ? "Shape" : "Text Box"} ${id}"/><p:cNvSpPr${input.geometry ? "" : ' txBox="1"'}/><p:nvPr/></p:nvSpPr><p:spPr>${transform}<a:prstGeom prst="${input.geometry ?? "rect"}"><a:avLst/></a:prstGeom>${color(input.fill ?? (input.geometry && input.geometry !== "line" ? "#4472C4" : "none"))}<a:ln>${color(input.stroke ?? (input.geometry === "line" ? "#4472C4" : "none"))}</a:ln></p:spPr><p:txBody>${textBody(input.text ?? "", input.fontSize)}</p:txBody></p:sp>`;
   } else if (input.kind === "image") {
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(input.data) || input.data.length % 4)
       throw new TypeError("Image data must be base64.");
@@ -122,7 +122,9 @@ export function insertObject(
     markup = `<p:graphicFrame ${ns}><p:nvGraphicFramePr><p:cNvPr id="${id}" name="Table ${id}"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${emu(bounds.x)}" y="${emu(bounds.y)}"/><a:ext cx="${emu(bounds.width)}" cy="${emu(bounds.height)}"/></p:xfrm><a:graphic><a:graphicData uri="${A}/table"><a:tbl><a:tblPr firstRow="1" bandRow="1"/><a:tblGrid>${Array.from({ length: input.columns }, () => `<a:gridCol w="${emu(bounds.width / input.columns)}"/>`).join("")}</a:tblGrid>${Array.from({ length: input.rows }, () => `<a:tr h="${emu(bounds.height / input.rows)}">${cell.repeat(input.columns)}</a:tr>`).join("")}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
   }
   const edit = beginLosslessXmlEdit(source);
-  edit.appendMarkup(tree, markup);
+  const extension = children(tree).find((e) => e.localName === "extLst");
+  if (extension) edit.insertMarkupBefore(extension, markup);
+  else edit.appendMarkup(tree, markup);
   tx.replacePart(slide.part, edit.commit().bytes);
   return openPresentationArtifact(tx.commit(), artifact.options);
 }
@@ -164,12 +166,13 @@ export function duplicateObject(artifact: PresentationArtifact, slideId: string,
     start = idAttr.valueSpan.start - element.span.start,
     end = idAttr.valueSpan.end - element.span.start;
   const edit = beginLosslessXmlEdit(source);
-  edit.appendMarkup(
-    children(children(source.root).find((e) => e.localName === "cSld")!).find(
-      (e) => e.localName === "spTree",
-    )!,
-    fragment.slice(0, start) + id + fragment.slice(end),
-  );
+  const tree = children(children(source.root).find((e) => e.localName === "cSld")!).find(
+    (e) => e.localName === "spTree",
+  )!;
+  const extension = children(tree).find((e) => e.localName === "extLst");
+  const markup = fragment.slice(0, start) + id + fragment.slice(end);
+  if (extension) edit.insertMarkupBefore(extension, markup);
+  else edit.appendMarkup(tree, markup);
   let next = commitXml(artifact, slide.part, edit.commit().bytes);
   const copy = slideById(next, slideId).objects.find((o) => o.shapeId === String(id))!;
   return next.updateObject({
