@@ -22,7 +22,7 @@ const cell = z
   .strict()
   .optional();
 const bounds = z
-  .object({ x: number, y: number, width: number.nonnegative(), height: number.positive() })
+  .object({ x: number, y: number, width: number.nonnegative(), height: number.nonnegative() })
   .strict();
 const color = z.string().regex(/^(#[a-f\d]{6}|none)$/i);
 const change = <T extends z.ZodType>(value: T) =>
