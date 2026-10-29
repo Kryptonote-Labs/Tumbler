@@ -69,3 +69,15 @@ Run `bun run compatibility:presentation-rendering` to regenerate `rendering-chec
 Validate generated decks with `bun run compatibility:openxml apps/docs/static/samples/rendering-checks.pptx` using .NET 8 and the Microsoft Open XML SDK. This checks semantic constraints, including the single animation timing root, that the XSD-only validator misses. Passing either validator does not replace opening the deck in PowerPoint.
 
 The rendering deck uses a six-second H.264/MP4 motion clip with a matching poster. Regenerate it with `bash scripts/generate-presentation-video.sh` using FFmpeg and DejaVu Sans, then regenerate the deck. The tiny green WebM remains a separate browser playback test fixture.
+
+## Hosted authoring commands
+
+The slides package now exposes `createPresentation`, `presentationCommand`,
+`applyPresentationCommand`, and `PresentationEditingSession.execute`. The validated
+serializable union supplies slide and object lifecycle, layouts, paragraph formatting,
+backgrounds and literal replacement. Hosts own authority, durable operation identities,
+stale-read checks and transport. The command API does not itself provide collaboration.
+
+Blank decks include a valid master/layout/theme graph. Office theme serialization
+and the default palette now live in `@tumblerjs/ooxml`; Word retains its existing
+exports and generated theme bytes. See the package README for commands and limitations.
