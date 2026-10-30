@@ -1,6 +1,7 @@
 import { presentationCommand, type PresentationCommand } from "@tumblerjs/slides";
 import { z } from "zod";
 export interface PresentationOperationHost {
+  renderPresentation?(document: string, slideId?: string): Promise<unknown>;
   readPresentation?(document: string, slideId?: string): Promise<unknown>;
   operatePresentation?(
     document: string,
@@ -11,10 +12,11 @@ export function presentationHelp(commandName = "tumbler", name?: string) {
   const schema = name
     ? presentationCommand.options.find((option) => option.shape.name.value === name)
     : undefined;
-  if (name && name !== "read" && !schema) throw new Error(`Unknown presentation command: ${name}`);
+  if (name && name !== "read" && name !== "render" && !schema) throw new Error(`Unknown presentation command: ${name}`);
   return (
     [
       `Usage: ${commandName} <document> slides read [--slide <slide-id>]`,
+      `${commandName} <document> slides render [--slide <slide-id>]`,
       `${commandName} <document> slides <command> --input JSON [--page <read-handle>]`,
       "Read the slide before editing. Commands use slideId and objectKey from that read. One command is one undo step.",
       "Without --slide, read returns the first slide. To read another slide, use its id from slides, not its number or title. An empty slide has empty:true, objectCount:0 and objects:[]; notes and background are reported separately.",
@@ -53,9 +55,14 @@ export async function runPresentation(
       throw new Error("Use --input JSON, --page, or --slide once.");
     values[key] = value;
   }
-  if (name === "read") {
+  if (name === "read" || name === "render") {
     if (values["--input"] || values["--page"])
       throw new Error("Presentation reads accept only --slide.");
+    if (name === "render") {
+      if (!options.host.renderPresentation) throw new Error("Slide rendering is unavailable on this host.");
+      options.stdout(JSON.stringify(await options.host.renderPresentation(document, values["--slide"])) + "\n");
+      return;
+    }
     if (!options.host.readPresentation)
       throw new Error("Presentation reading is unavailable on this host.");
     options.stdout(

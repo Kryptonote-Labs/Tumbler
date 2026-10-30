@@ -9,3 +9,5 @@ export { wordDrawingChanges } from "./drawing.ts";
 
 export { prepareWordScopedOperation } from "./structured.ts";
 export { inspectWordSections } from './layout.ts';
+export { createWordAutoformat } from './autoformat.ts';
+export { createWordParagraphBreak } from './paragraph-break.ts';

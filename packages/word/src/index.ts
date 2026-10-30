@@ -203,3 +203,4 @@ export { wordTableAvailableWidth } from './geometry.ts';
 export { wordParagraphById } from './text.ts';
 export { wordHeadingOutline } from './outline.ts';
 export { wordFormatPainterSample, type WordFormatPainterSample } from './format-painter.ts';
+export { wordVerticalTextMetrics } from './vertical-align.ts';

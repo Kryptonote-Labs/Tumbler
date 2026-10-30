@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { onDestroy, tick } from "svelte";
-  import type { PresentationDocument } from "@tumblerjs/slides";
+  import { onDestroy, tick, type Snippet } from "svelte";
+  import type { PresentationDocument, PresentationSlide } from "@tumblerjs/slides";
   import PresentationSlideView from "./PresentationSlideView.svelte";
   let {
     presentation,
+    indicator,
     index = $bindable(0),
-  }: { presentation: PresentationDocument; index?: number } = $props();
+  }: { presentation: PresentationDocument; index?: number; indicator?: Snippet<[PresentationSlide]> } = $props();
   let rail = $state<HTMLElement>();
   let visible = $state<Record<string, boolean>>({});
   let rendered = $state<Record<string, boolean>>({});
@@ -105,6 +106,7 @@
             />{/if}</span
         >
       </span>
+      {#if indicator}<span class="indicator">{@render indicator(slide)}</span>{/if}
     </button>
   {/each}
 </nav>
@@ -119,7 +121,9 @@
     border-right: 1px solid #333a35;
     box-sizing: border-box;
   }
+  .indicator { position: absolute; right: 7px; top: 9px; pointer-events: none; }
   button {
+    position: relative;
     display: flex;
     gap: 7px;
     align-items: flex-start;

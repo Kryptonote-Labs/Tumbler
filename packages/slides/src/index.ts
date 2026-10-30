@@ -57,3 +57,5 @@ export { applyPresentationCommand, presentationCommand } from './commands.ts';
 export type { PresentationCommand } from './commands.ts';
 export type { NewSlideObject, ObjectBounds, ShapeGeometry } from './authoring-objects.ts';
 export { inspectPresentation } from './inspect.ts';
+export { paintPresentationSlide, presentationSlideImages } from './canvas.ts';
+export type { SlideCanvasContext, SlideCanvasOptions } from './canvas.ts';

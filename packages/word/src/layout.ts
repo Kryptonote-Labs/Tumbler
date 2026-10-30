@@ -1,3 +1,4 @@
+import { wordVerticalTextMetrics } from './vertical-align.ts';
 import { CachedLineSequence, PreparedLineSequence } from './paragraph-lines.ts';
 import { wordShapeGroups } from './shape-groups.ts';
 import { wordFontKerning } from './font-kerning.ts';
@@ -1105,9 +1106,8 @@ function* resolvedParagraphAtoms(
   function* addRun(run: WordRun, hyperlink: string | undefined): Generator<ParagraphAtom> {
     const sourceFormat = resolveFormat(run);
     const shifted = sourceFormat.verticalAlign === "superscript" || sourceFormat.verticalAlign === "subscript";
-    const baselineShift = sourceFormat.verticalAlign === "superscript" ? -sourceFormat.fontSizePoints * 0.3
-      : sourceFormat.verticalAlign === "subscript" ? sourceFormat.fontSizePoints * 0.15 : 0;
-    const format = shifted ? Object.freeze({ ...sourceFormat, fontSizePoints: sourceFormat.fontSizePoints * 0.65 }) : sourceFormat;
+    const { fontSizePoints, baselineShift } = wordVerticalTextMetrics(sourceFormat.fontSizePoints, sourceFormat.verticalAlign);
+    const format = shifted ? Object.freeze({ ...sourceFormat, fontSizePoints }) : sourceFormat;
     const measure = (text: string) => {
       const value = validMeasurement(measurer.measure(text, format));
       return { ...value, ascent: value.ascent - baselineShift, descent: value.descent + baselineShift };

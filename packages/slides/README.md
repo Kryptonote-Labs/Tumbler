@@ -139,3 +139,16 @@ retains visible cell paragraphs in reading order; splitting keeps that content
 in the anchor and creates empty cells. Partial selections of merged cells are
 rejected. Tables retain at least one row and column. New tables include visible
 cell borders; existing table styles and unrelated package parts are retained.
+
+### Canvas previews
+
+`paintPresentationSlide(context, document, slide, { path, image, prepareFont, scale })`
+paints static slide content on browser or server Canvas 2D. Hosts provide their Path2D
+constructor, decode the pictures returned by `presentationSlideImages(slide)`, and encode
+the resulting canvas. Backgrounds, object transforms, shape geometry, styled text,
+tables and supported chart scenes share the headless document model. Empty placeholders
+paint no editor prompts. The painter does not change the document.
+
+This preview path has basic paragraph wrapping and anchoring. It does not yet reproduce
+all browser text layout, decorative effects, picture tiling or pattern fills. Interactive
+editing and playback remain in the Svelte view.
