@@ -96,3 +96,17 @@ test("presentation edits through symlinks retain the alias and update its target
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('presentation rendering forwards the selected slide to a visual host', async () => {
+  let selected: unknown;
+  let stdout = '';
+  const code = await runTumbler(['deck.pptx', 'slides', 'render', '--slide', 'second-slide'], {
+    host: { ...createFileHost(), renderPresentation: async (document, slideId) => {
+      selected = { document, slideId }; return { imageDelivered: true };
+    } },
+    stdout: text => { stdout += text; }, stderr: () => {},
+  });
+  expect(code).toBe(0);
+  expect(selected).toEqual({ document: 'deck.pptx', slideId: 'second-slide' });
+  expect(JSON.parse(stdout)).toEqual({ imageDelivered: true });
+});
