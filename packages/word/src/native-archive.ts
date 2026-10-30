@@ -45,7 +45,7 @@ export function createWordNativeArchive(artifact: WordArtifact): WordNativeArchi
   return { version: 1, model, resources: entries.map(entry => entry.stored) };
 }
 
-/** Reopen compiled Word semantics without parsing XML or reading a DOCX. */
+/** Reopen compiled semantics, rebuilding legacy projections from preservation bytes when needed. */
 export function openWordNativeArchive(archive: WordNativeArchive): WordArtifact {
   if (archive.version !== 1) throw new TypeError('Unsupported native Word version.');
   if (archive.model.byteLength < 8) throw new TypeError('Truncated native Word model.');
@@ -67,13 +67,20 @@ export function openWordNativeArchive(archive: WordNativeArchive): WordArtifact 
   });
   const restored = root.parse(readNativeGraph(data.graph, resources, wordNativeCodecs));
   if (!(restored.artifact.document instanceof WordDocument)) throw new TypeError('Invalid native Word document.');
-  // Early v1 archives compiled literal XML line ends as paragraph separators.
-  // Rebuild those known affected projections from their verified preservation bytes.
+  // Early v1 archives omitted w:next from compiled styles and treated literal XML line ends
+  // as paragraph separators. Recover their semantics from the verified preservation bytes.
+  const legacyStyleNext = restored.compiled.some(({ artifact }) => {
+    const styles = artifact.document.styles;
+    return styles.partName !== undefined && styles.styles.some(style => !Object.hasOwn(style, 'next'));
+  });
   const legacyWhitespace = (blocks: readonly WordContentBlock[]): boolean => blocks.some(block =>
     block.kind === 'table' ? block.rows.some(row => row.some(cell => legacyWhitespace(cell.blocks)))
       : block.kind === 'paragraph' && block.runs.some(run => /[\r\n]/.test(run.text)));
-  if (restored.compiled.some(source => legacyWhitespace(source.original)))
-    return openWordArtifact(restored.artifact.bytes(), restored.artifact.document.openOptions);
+  if (legacyStyleNext || restored.compiled.some(source => legacyWhitespace(source.original))) {
+    const reopened = openWordArtifact(restored.artifact.bytes(), restored.artifact.document.openOptions);
+    const partName = restored.artifact.document.part.name.value;
+    return partName === reopened.document.part.name.value ? reopened : wordStoryArtifact(reopened, partName);
+  }
   for (const source of restored.compiled) {
     if (source.artifact === restored.artifact) continue;
     bindWordStoryArtifact(restored.artifact, source.artifact.document.part.name.value, source.artifact);

@@ -4,7 +4,7 @@ import { xml, runProperties } from './create-xml.ts';
 import { paragraphFormatXml } from './paragraph-format.ts';
 
 const definition = (styleId: string, name: string, size?: number, level?: number): WordStyle => ({
-  styleId, name, type: 'paragraph', basedOn: styleId === 'Normal' ? undefined : 'Normal', linked: undefined, isDefault: false,
+  styleId, name, type: 'paragraph', basedOn: styleId === 'Normal' ? undefined : 'Normal', linked: undefined, next: 'Normal', isDefault: false,
   run: size === undefined ? {} : { fontSizePoints: size, ...(level === undefined ? {} : { bold: true }) },
   paragraph: level === undefined ? {} : { outlineLevel: level, keepNext: true, keepLines: true, spacingBeforeTwips: 240, spacingAfterTwips: 120 },
 });

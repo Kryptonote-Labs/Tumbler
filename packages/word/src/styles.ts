@@ -132,6 +132,8 @@ export interface WordStyle {
   readonly name: string | undefined;
   readonly basedOn: string | undefined;
   readonly linked: string | undefined;
+  /** Paragraph style to use after Enter at the end of this style. */
+  readonly next?: string | undefined;
   readonly isDefault: boolean;
   readonly paragraph: WordParagraphProperties;
   readonly run: WordRunProperties;
@@ -435,6 +437,7 @@ export function readWordStyles(document: WordDocumentLike): WordStyles {
       name: valueChild(element, namespace, "name"),
       basedOn: valueChild(element, namespace, "basedOn"),
       linked: valueChild(element, namespace, "link"),
+      next: valueChild(element, namespace, "next"),
       isDefault: onOffAttr(element, namespace, "default") ?? false,
       paragraph: pPr === undefined ? Object.freeze({}) : parseParagraphProperties(pPr, namespace),
       run: rPr === undefined ? Object.freeze({}) : parseRunProperties(rPr, namespace),
