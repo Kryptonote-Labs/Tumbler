@@ -36,6 +36,7 @@
   import PresentationPictureFill from "./PresentationPictureFill.svelte";
   import PresentationMedia from "./PresentationMedia.svelte";
   import PresentationText from "./PresentationText.svelte";
+  import { placeholderPrompt } from "./presentation-prompt.ts";
   import PresentationTable from "./PresentationTable.svelte";
   import OoxmlChart from "./OoxmlChart.svelte";
   import { zoomGesture } from "./zoom-gesture.ts";
@@ -836,7 +837,8 @@
                   height={Math.max(0, (rect[3] - rect[1]) * sy)}
                 >
                   <PresentationText
-                    text={object.text}
+                    text={(editable && editing !== object.key && placeholderPrompt(object)) ||
+                      object.text}
                     linksEnabled={!editable}
                     onheight={(height) => {
                       if (object.text?.autoFit === "shape")
@@ -875,7 +877,7 @@
             </g>
             {#if editable && object.layer === 'slide' && object.textEditable && !slideTextValue(object) && editing !== object.key}
               <rect width={w} height={h} fill="none" stroke="#82928a" stroke-width="1" stroke-dasharray="5 4" pointer-events="none"/>
-              <text x={w/2} y={Math.min(h/2+6,30)} text-anchor="middle" fill="#77857d" font-size="16" pointer-events="none" aria-hidden="true">Double-click to add text</text>
+              {#if !object.placeholder}<text x={w/2} y={Math.min(h/2+6,30)} text-anchor="middle" fill="#77857d" font-size="16" pointer-events="none" aria-hidden="true">Double-click to add text</text>{/if}
             {/if}
             {#if editable && editing !== object.key && !object.table}<rect
                 class="hit"
