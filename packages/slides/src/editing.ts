@@ -103,7 +103,10 @@ export function presentationFormattingState(
         selected.push(r);
       position = end;
     }
-    if (!range || (range.start <= position && range.end >= begin))
+    const touched = !range || (range.start <= position && range.end >= begin);
+    // An empty paragraph reports the formatting typing will produce, as PowerPoint does.
+    if (touched && p.endRun) selected.push(p.endRun);
+    if (touched)
       aligns.push(
         p.align === "left" ? "start" : p.align === "right" ? "end" : p.align,
       );
@@ -364,10 +367,13 @@ export function editPresentationText(
     format?: FormattingPatch,
   ) => {
     const q = (n: string) => tag(p, n);
-    const pr = r ? child(r.element, "rPr") : undefined;
-    const props = format
-      ? properties(source, p, pr, "rPr", format)
-      : raw(source, pr);
+    // New text in an empty paragraph takes the end mark's formatting, as in PowerPoint.
+    const pr = r ? child(r.element, "rPr") : child(p, "endParaRPr");
+    const props = (
+      format ? properties(source, p, pr, "rPr", format) : raw(source, pr)
+    )
+      .replace(/^<((?:[\w.-]+:)?)endParaRPr\b/, "<$1rPr")
+      .replace(/<\/((?:[\w.-]+:)?)endParaRPr>$/, "</$1rPr>");
     if (r?.element.localName === "br" && text === "\n")
       return markup(source, r.element, {}, props);
     const content = `${props}<${q("t")}>${escape(text)}</${q("t")}>`;

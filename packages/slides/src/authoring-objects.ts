@@ -68,22 +68,7 @@ export function insertObject(
 ) {
   editable(artifact);
   validateBounds(bounds, input.kind === "shape" && input.geometry === "line");
-  const slide = slideById(artifact, slideId),
-    source = partXml(artifact, slide.part);
-  const tree = children(children(source.root).find((e) => e.localName === "cSld")!).find(
-    (e) => e.localName === "spTree",
-  )!;
-  let maxId = 1;
-  const visit = (element: typeof tree) => {
-    for (const e of children(element)) {
-      if (e.localName === "cNvPr")
-        maxId = Math.max(maxId, Number(e.attributes.find((a) => a.localName === "id")?.value ?? 0));
-      visit(e);
-    }
-  };
-  visit(tree);
-  const id = maxId + 1;
-  const ns = `xmlns:p="${source.root.namespaceUri}" xmlns:a="${artifact.document.conformance === "strict" ? "http://purl.oclc.org/ooxml/drawingml/main" : A}" xmlns:r="${artifact.document.conformance === "strict" ? "http://purl.oclc.org/ooxml/officeDocument/relationships" : R}"`;
+  const { slide, source, tree, id, ns } = slideTree(artifact, slideId);
   const transform = `<a:xfrm><a:off x="${emu(bounds.x)}" y="${emu(bounds.y)}"/><a:ext cx="${emu(bounds.width)}" cy="${emu(bounds.height)}"/></a:xfrm>`;
   const tx = beginPackageTransaction(artifact.document.package);
   let markup: string;
@@ -127,12 +112,40 @@ export function insertObject(
     const cell = `<a:tc><a:txBody>${textBody("", 18)}</a:txBody><a:tcPr>${borders}${color("#FFFFFF")}</a:tcPr></a:tc>`;
     markup = `<p:graphicFrame ${ns}><p:nvGraphicFramePr><p:cNvPr id="${id}" name="Table ${id}"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${emu(bounds.x)}" y="${emu(bounds.y)}"/><a:ext cx="${emu(bounds.width)}" cy="${emu(bounds.height)}"/></p:xfrm><a:graphic><a:graphicData uri="${A}/table"><a:tbl><a:tblPr firstRow="1" bandRow="1"/><a:tblGrid>${Array.from({ length: input.columns }, () => `<a:gridCol w="${emu(bounds.width / input.columns)}"/>`).join("")}</a:tblGrid>${Array.from({ length: input.rows }, () => `<a:tr h="${emu(bounds.height / input.rows)}">${cell.repeat(input.columns)}</a:tr>`).join("")}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
   }
+  tx.replacePart(slide.part, appendToTree(source, tree, markup));
+  return openPresentationArtifact(tx.commit(), artifact.options);
+}
+/** Finds a slide's shape tree, the next free shape id and the namespaces new markup declares. */
+export function slideTree(artifact: PresentationArtifact, slideId: string) {
+  const slide = slideById(artifact, slideId),
+    source = partXml(artifact, slide.part);
+  const tree = children(children(source.root).find((e) => e.localName === "cSld")!).find(
+    (e) => e.localName === "spTree",
+  )!;
+  let maxId = 1;
+  const visit = (element: typeof tree) => {
+    for (const e of children(element)) {
+      if (e.localName === "cNvPr")
+        maxId = Math.max(maxId, Number(e.attributes.find((a) => a.localName === "id")?.value ?? 0));
+      visit(e);
+    }
+  };
+  visit(tree);
+  const strict = artifact.document.conformance === "strict";
+  const ns = `xmlns:p="${source.root.namespaceUri}" xmlns:a="${strict ? "http://purl.oclc.org/ooxml/drawingml/main" : A}" xmlns:r="${strict ? "http://purl.oclc.org/ooxml/officeDocument/relationships" : R}"`;
+  return { slide, source, tree, id: maxId + 1, ns };
+}
+/** Adds drawing markup to the end of a shape tree, before any extension list. */
+export function appendToTree(
+  source: ReturnType<typeof partXml>,
+  tree: ReturnType<typeof slideTree>["tree"],
+  markup: string,
+) {
   const edit = beginLosslessXmlEdit(source);
   const extension = children(tree).find((e) => e.localName === "extLst");
   if (extension) edit.insertMarkupBefore(extension, markup);
   else edit.appendMarkup(tree, markup);
-  tx.replacePart(slide.part, edit.commit().bytes);
-  return openPresentationArtifact(tx.commit(), artifact.options);
+  return edit.commit().bytes;
 }
 export function deleteObject(artifact: PresentationArtifact, slideId: string, key: string) {
   editable(artifact);

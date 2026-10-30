@@ -4,6 +4,7 @@ import {
   createPresentation,
   openPresentationArtifact,
   PresentationEditingSession,
+  presentationFormattingState,
   slideTextValue,
 } from "../src/index.ts";
 
@@ -209,12 +210,54 @@ test("invalid commands fail before changing the input document", () => {
   ).toThrow();
   expect(a.bytes()).toEqual(bytes);
 });
-test("layout changes keep existing text and pictures instead of deleting content", () => {
-  const { a, slideId } = textDeck("Keep this text");
-  const b = run(a, { name: "layout", slideId, layout: "two-content" });
-  expect(b.document.slides[0]!.objects).toHaveLength(3);
-  expect(slideTextValue(b.document.slides[0]!.objects[0]!)).toBe("Keep this text");
-  expect(reopen(b).document.slides[0]!.objects[2]!.textEditable).toBe(true);
+test("layout changes add placeholders around existing content instead of moving it", () => {
+  const { a, slideId, objectKey } = textDeck("Keep this text");
+  const b = reopen(run(a, { name: "layout", slideId, layout: "two-content" }));
+  const [box, ...placeholders] = b.document.slides[0]!.objects;
+  expect(box!.key).toBe(objectKey);
+  expect(slideTextValue(box!)).toBe("Keep this text");
+  expect(box!.transform.x).toBe(80);
+  expect(placeholders.map((o) => o.placeholder)).toEqual(["title", "obj", "obj"]);
+  expect(placeholders.every((o) => o.textEditable)).toBe(true);
+});
+test("title slides centre their placeholders and new text keeps that formatting", () => {
+  let a = createPresentation();
+  const slideId = a.document.slides[0]!.id;
+  a = run(a, { name: "layout", slideId, layout: "title" });
+  const [title, subtitle] = a.document.slides[0]!.objects;
+  expect([title!.placeholder, subtitle!.placeholder]).toEqual(["ctrTitle", "subTitle"]);
+  expect([title!.text!.anchor, subtitle!.text!.anchor]).toEqual(["bottom", "top"]);
+  expect(title!.text!.paragraphs[0]!.align).toBe("center");
+  const empty = presentationFormattingState(title);
+  expect(empty.text.fontSize).toEqual({ state: "value", value: 60 });
+  expect(empty.text.fontFamily.state).toBe("value");
+  a = run(a, {
+    name: "edit-text",
+    slideId,
+    objectKey: title!.key,
+    start: 0,
+    end: 0,
+    value: "Quarterly review",
+  });
+  const typed = reopen(a).document.slides[0]!.objects[0]!;
+  expect(slideTextValue(typed)).toBe("Quarterly review");
+  expect(typed.text!.paragraphs[0]!.align).toBe("center");
+  expect(presentationFormattingState(typed).text).toEqual(empty.text);
+});
+test("switching layouts moves placeholders into new roles and drops only empty ones", () => {
+  let a = createPresentation();
+  const slideId = a.document.slides[0]!.id;
+  a = run(a, { name: "layout", slideId, layout: "title" });
+  const title = a.document.slides[0]!.objects[0]!;
+  a = run(a, { name: "edit-text", slideId, objectKey: title.key, start: 0, end: 0, value: "Agenda" });
+  a = run(a, { name: "layout", slideId, layout: "title-content" });
+  const [heading, body] = a.document.slides[0]!.objects;
+  expect(heading!.key).toBe(title.key);
+  expect(heading!.placeholder).toBe("title");
+  expect(heading!.text!.paragraphs[0]!.align).toBe("left");
+  expect(body!.placeholder).toBe("obj");
+  a = run(a, { name: "layout", slideId, layout: "blank" });
+  expect(a.document.slides[0]!.objects.map(slideTextValue)).toEqual(["Agenda"]);
 });
 test("replace all treats punctuation literally and retains Unicode offsets", () => {
   const { a } = textDeck("İ [a.b] [aXb] [a.b]");
