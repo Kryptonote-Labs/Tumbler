@@ -59,3 +59,5 @@ export type { NewSlideObject, ObjectBounds, ShapeGeometry } from './authoring-ob
 export { inspectPresentation } from './inspect.ts';
 export { paintPresentationSlide, presentationSlideImages } from './canvas.ts';
 export type { SlideCanvasContext, SlideCanvasOptions } from './canvas.ts';
+
+export { slideObjectEnclosed, translateSlideObject, type SlideSelectionRect } from "./selection.ts";

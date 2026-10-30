@@ -60,7 +60,7 @@ const patch = z
   })
   .strict()
   .transform((value) => normalizeFormattingPatch(value as FormattingPatch));
-export const presentationCommand = z.discriminatedUnion("name", [
+const singlePresentationCommand = z.discriminatedUnion("name", [
   z
     .object({
       name: z.literal("edit-table"),
@@ -229,6 +229,11 @@ export const presentationCommand = z.discriminatedUnion("name", [
     })
     .strict(),
 ]);
+/** A group is applied and persisted as one undoable edit. Nested groups are unnecessary. */
+export const presentationCommand = z.discriminatedUnion("name", [
+  ...singlePresentationCommand.options,
+  z.object({ name: z.literal("batch"), commands: z.array(singlePresentationCommand).min(1) }).strict(),
+]);
 export type PresentationCommand = z.infer<typeof presentationCommand>;
 
 /** The same validated semantic commands serve a local editor, hosted service, and CLI. */
@@ -238,6 +243,8 @@ export function applyPresentationCommand(
 ): PresentationArtifact {
   const command = presentationCommand.parse(input);
   switch (command.name) {
+    case "batch":
+      return command.commands.reduce(applyPresentationCommand, artifact);
     case "edit-table":
       return editPresentationTable(artifact, command);
     case "paste-object":
