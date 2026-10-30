@@ -24,6 +24,7 @@
   let artifact = $state(untrack(() => session.artifact));
   let index = $state(0);
   let selectedKey = $state<string>();
+  let selectedKeys = $state<string[]>([]);
   let canUndo = $state(false),
     canRedo = $state(false);
   let slide = $derived(artifact.document.slides[index]);
@@ -87,12 +88,19 @@
           {editable}
           bind:scale
           bind:selectedKey
+          bind:selectedKeys
           ontextedit={(change) => apply(() => session.editText(change))}
           onformat={(change) => apply(() => session.formatText(change))}
           onshapechange={(change) => apply(() => session.styleShape(change))}
           onundo={(redo) =>
             apply(() => (redo ? session.redo() : session.undo()))}
-          onobjectchange={(change) => apply(() => session.updateObject(change))}
+          onobjectschange={(changes) => apply(() => session.execute({
+            name: "batch",
+            commands: changes.map(({slideId, objectKey, x, y, width, height, rotation}) => ({
+              name: "update-object", slideId, objectKey, x, y, width, height,
+              ...(rotation === undefined ? {} : {rotation}),
+            })),
+          }))}
           ontextchange={(change) =>
             apply(() =>
               session.replaceText(
@@ -106,7 +114,7 @@
     </div>
   </div>
   {#if editable}<div class="selection-status" aria-live="polite">
-      {selected?.restriction ??
+      {selectedKeys.length > 1 ? `${selectedKeys.length} objects selected · Drag to move · Arrow keys nudge` : selected?.restriction ??
         (selected?.table
           ? "Double-click a cell to edit · Tab moves between cells · Drag the border to move or handles to resize"
           : selected?.textEditable

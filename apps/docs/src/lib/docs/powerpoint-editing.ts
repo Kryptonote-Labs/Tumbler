@@ -41,7 +41,13 @@ export const powerpointEditingDoc: Doc = {
       presentation={artifact.document}
       slide={artifact.document.slides[index]!}
       editable
-      onobjectchange={(change) => apply(() => session.updateObject(change))}
+      onobjectschange={(changes) => apply(() => session.execute({
+        name: 'batch',
+        commands: changes.map(({slideId, objectKey, x, y, width, height, rotation}) => ({
+          name: 'update-object', slideId, objectKey, x, y, width, height,
+          ...(rotation === undefined ? {} : {rotation}),
+        })),
+      }))}
       ontextedit={(change) => apply(() => session.editText(change))}
       onformat={(change) => apply(() => session.formatText(change))}
       onshapechange={(change) => apply(() => session.styleShape(change))}
@@ -53,7 +59,8 @@ export const powerpointEditingDoc: Doc = {
     ] },
     { id: 'controls', title: 'Use the editor', blocks: [
         { kind: 'table', headers: ['Action', 'Control'], rows: [
-          ['Move an object', 'Drag it, or select it and use the arrow keys.'],
+          ['Select several objects', 'Drag from empty canvas space to enclose objects. Shift-click adds or removes an object; Shift-drag adds enclosed objects. Escape clears the selection.'],
+          ['Move selected objects', 'Drag it, or select it and use the arrow keys.'],
           ['Resize or rotate', 'Drag an edge or corner handle to resize. Use the handle above the object to rotate; hold Shift to snap to 15° increments.'],
           ['Edit text', 'Double-click a text box, or select it and press Enter. Select words to apply formatting with the toolbar.'],
           ['Edit a table', 'Double-click a cell. Tab and Shift+Tab move between cells.'],

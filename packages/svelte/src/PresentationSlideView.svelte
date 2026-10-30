@@ -1,6 +1,9 @@
 <script lang="ts">
   import PresentationFormattingToolbar from "./PresentationFormattingToolbar.svelte";
   import {
+    slideObjectEnclosed,
+    translateSlideObject,
+    type SlideSelectionRect,
     presentationFormattingState,
     presentationTextTarget,
     type PresentationTableCellAddress,
@@ -16,7 +19,7 @@
     type SlideText,
   } from "@tumblerjs/slides";
   import type { FormattingPatch, FormattingState } from "@tumblerjs/core";
-  import { onDestroy, onMount, tick, setContext, type Snippet } from "svelte";
+  import { onDestroy, onMount, tick, setContext, untrack, type Snippet } from "svelte";
   import type {
     PresentationDocument,
     PresentationObjectChange,
@@ -50,6 +53,8 @@
     editable = false,
     scale = $bindable(1),
     selectedKey = $bindable<string | undefined>(),
+    selectedKeys = $bindable<string[]>([]),
+    onobjectschange,
     onobjectchange,
     ontextchange,
     ontextedit,
@@ -69,6 +74,8 @@
     editable?: boolean;
     scale?: number;
     selectedKey?: string;
+    selectedKeys?: string[];
+    onobjectschange?: (changes: PresentationObjectChange[]) => void;
     onslide?: (part: string) => void;
     ontextedit?: (change: PresentationTextEdit) => void;
     onformat?: (change: PresentationFormatChange) => void;
@@ -99,6 +106,33 @@
   let selected = $derived(
     slide.objects.find((item) => item.key === selectedKey),
   );
+  let selectedObjects = $derived(slide.objects.filter(object => selectedKeys.includes(object.key)));
+  let lastSelectedKey: string | undefined;
+  let lastSelectedKeys: string[] | undefined;
+  function select(keys: string[]) {
+    selectedKeys = keys;
+    selectedKey = keys.at(-1);
+    lastSelectedKey = keys.at(-1);
+    lastSelectedKeys = untrack(() => selectedKeys);
+  }
+  // Accept host updates through either binding without overwriting the other with stale state.
+  $effect(() => {
+    const keys = selectedKeys;
+    const key = selectedKey;
+    if (lastSelectedKeys === undefined)
+      select(keys.length ? keys : key ? [key] : []);
+    else if (keys !== lastSelectedKeys) select(keys);
+    else if (key !== lastSelectedKey) select(key ? [key] : []);
+  });
+  $effect(() => {
+    const remaining = selectedKeys.filter(key => slide.objects.some(object => object.key === key));
+    if (remaining.length !== selectedKeys.length) select(remaining);
+  });
+  function commit(changes: PresentationObjectChange[]) {
+    if (!changes.length) return;
+    if (onobjectschange) onobjectschange(changes);
+    else for (const change of changes) onobjectchange?.(change);
+  }
   let activeCell = $state<
     PresentationTableCellAddress & { objectKey: string }
   >();
@@ -113,7 +147,7 @@
     return cell ? { row: cell.row, column: cell.column } : undefined;
   });
   let textTarget = $derived(
-    selected ? presentationTextTarget(selected, cellAddress) : undefined,
+    selected && selectedKeys.length === 1 ? presentationTextTarget(selected, cellAddress) : undefined,
   );
   function selectCell(
     object: SlideObject,
@@ -126,7 +160,7 @@
         cellAddress?.column !== address.column)
     )
       editing = undefined;
-    selectedKey = object.key;
+    select([object.key]);
     if (
       activeCell?.objectKey !== object.key ||
       activeCell.row !== address.row ||
@@ -174,9 +208,19 @@
     { x: 1, y: 1, name: "bottom right", cursor: "nwse-resize" },
   ] as const;
   type Handle = (typeof handles)[number];
-  let preview = $state<PresentationObjectChange>();
+  let previews = $state<PresentationObjectChange[]>([]);
+  let marquee = $state<{
+    pointer: number;
+    start: { x: number; y: number };
+    rect: SlideSelectionRect;
+    base: string[];
+    clientX: number;
+    clientY: number;
+    moved: boolean;
+  }>();
   let drag:
     | {
+        objects: SlideObject[];
         pointer: number;
         x: number;
         y: number;
@@ -302,6 +346,12 @@
   let fittedHeights = $state.raw<
     Record<string, { text: SlideText; height: number }>
   >({});
+  function objectHeight(object: SlideObject) {
+    const fitted = fittedHeights[object.key];
+    return fitted && fitted.text === object.text
+      ? Math.max(object.transform.height, fitted.height)
+      : object.transform.height;
+  }
   const images = new Map<Uint8Array, string>();
   function imageUrl(object: SlideObject) {
     if (!mounted || !object.image) return "";
@@ -332,7 +382,7 @@
   $effect(() => {
     const id = slideId;
     void id;
-    selectedKey = undefined;
+    select([]);
     editing = undefined;
     activeCell = undefined;
     cancel();
@@ -340,7 +390,7 @@
   $effect(() => {
     if (!editable) {
       editing = undefined;
-      selectedKey = undefined;
+      select([]);
       cancel();
     }
   });
@@ -356,8 +406,16 @@
       pendingFormat = undefined;
     }
     event.stopPropagation();
-    selectedKey = object.key;
-    if (!object.movable || !onobjectchange) return;
+    if (event.shiftKey && mode === "move") {
+      event.preventDefault();
+      select(selectedKeys.includes(object.key)
+        ? selectedKeys.filter(key => key !== object.key)
+        : [...selectedKeys, object.key]);
+      svg?.focus({ preventScroll: true });
+      return;
+    }
+    if (mode !== "move" || !selectedKeys.includes(object.key)) select([object.key]);
+    if (!object.movable || !(onobjectchange || onobjectschange)) return;
     event.preventDefault();
     const matrix = svg?.getScreenCTM();
     if (!matrix) return;
@@ -378,6 +436,7 @@
       inverse,
     );
     drag = {
+      objects: mode === "move" ? selectedObjects.filter(item => item.movable) : [object],
       pointer: event.pointerId,
       x: point.x,
       y: point.y,
@@ -392,6 +451,22 @@
     svg?.focus({ preventScroll: true });
   }
   function move(event: PointerEvent) {
+    if (marquee && marquee.pointer === event.pointerId) {
+      const matrix = svg?.getScreenCTM();
+      if (!matrix) return;
+      const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+      const start = marquee.start;
+      marquee.rect = {
+        x: Math.min(start.x, point.x), y: Math.min(start.y, point.y),
+        width: Math.abs(point.x - start.x), height: Math.abs(point.y - start.y),
+      };
+      marquee.moved ||= Math.hypot(event.clientX - marquee.clientX, event.clientY - marquee.clientY) >= 4;
+      if (marquee.moved) select([...new Set([...marquee.base, ...slide.objects
+        .filter(object => object.movable && slideObjectEnclosed(object, marquee!.rect,
+          objectHeight(object)))
+        .map(object => object.key)])]);
+      return;
+    }
     if (!drag || event.pointerId !== drag.pointer) return;
     const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(
       drag.inverse,
@@ -400,7 +475,7 @@
       dy = point.y - drag.y;
     const { transform, key } = drag.object;
     if (Math.hypot(dx, dy) < 5 / factor) {
-      preview = undefined;
+      previews = [];
       return;
     }
     svg?.setPointerCapture(event.pointerId);
@@ -421,7 +496,12 @@
     } else if (drag.mode === "move")
       next = { ...transform, x: transform.x + dx, y: transform.y + dy };
     else next = resizeSlideTransform(transform, drag.mode, dx, dy);
-    preview = { slideId: slide.id, objectKey: key, ...next };
+    if (drag.mode === "move") {
+      const parent = drag.object.parentMatrix ?? [1, 0, 0, 1, 0, 0];
+      const sx = parent[0] * dx + parent[2] * dy;
+      const sy = parent[1] * dx + parent[3] * dy;
+      previews = drag.objects.map(object => ({ slideId: slide.id, objectKey: object.key, ...translateSlideObject(object, sx, sy) }));
+    } else previews = [{ slideId: slide.id, objectKey: key, ...next }];
   }
   function resizeKey(
     event: KeyboardEvent,
@@ -441,23 +521,28 @@
     const delta = new DOMPoint(dx * step, dy * step, 0, 0).matrixTransform(
       inverse,
     );
-    onobjectchange?.({
+    commit([{
       slideId: slide.id,
       objectKey: object.key,
       ...resizeSlideTransform(object.transform, handle, delta.x, delta.y),
-    });
+    }]);
   }
 
   function finish(event: PointerEvent) {
+    if (event.pointerId === marquee?.pointer) {
+      marquee = undefined;
+      return;
+    }
     if (event.pointerId !== drag?.pointer) return;
-    const change = preview;
+    const changes = previews;
     cancel();
-    if (change) onobjectchange?.(change);
+    commit(changes);
   }
   function cancel() {
     const pointer = drag?.pointer;
     drag = undefined;
-    preview = undefined;
+    previews = [];
+    marquee = undefined;
     if (pointer !== undefined && svg?.hasPointerCapture(pointer))
       svg.releasePointerCapture(pointer);
   }
@@ -465,7 +550,7 @@
     if (!editable || !object.textEditable || !(ontextedit || ontextchange))
       return;
     cancel();
-    selectedKey = object.key;
+    select([object.key]);
     editPoint = event ? { x: event.clientX, y: event.clientY } : undefined;
     textRange = { start: 0, end: slideTextValue(object).length };
     pendingFormat = undefined;
@@ -475,11 +560,11 @@
     if (editing) return;
     if (event.key === "Escape") {
       cancel();
-      selectedKey = undefined;
+      select([]);
       return;
     }
     if (!editable || !selected) return;
-    if (event.key === "Enter") {
+    if (event.key === "Enter" && selectedKeys.length === 1) {
       event.preventDefault();
       if (selected.table) {
         const cell = cellAddress ?? selected.table.cells[0];
@@ -487,31 +572,17 @@
       } else void edit(selected);
       return;
     }
-    if (
-      !selected.movable ||
-      !onobjectchange ||
-      !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
-    )
-      return;
+    if (!(onobjectchange || onobjectschange) ||
+      !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
     event.preventDefault();
     const step = event.shiftKey ? 10 : 1;
-    const parent = new DOMMatrix(
-      selected.parentMatrix ? [...selected.parentMatrix] : undefined,
-    ).inverse();
-    const delta = new DOMPoint(
-      event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0,
-      event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0,
-      0,
-      0,
-    ).matrixTransform(parent);
-    onobjectchange({
-      slideId: slide.id,
-      objectKey: selected.key,
-      ...selected.transform,
-      x: selected.transform.x + delta.x,
-      y: selected.transform.y + delta.y,
-    });
+    const dx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
+    const dy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
+    commit(selectedObjects.filter(object => object.movable).map(object => ({
+      slideId: slide.id, objectKey: object.key, ...translateSlideObject(object, dx, dy),
+    })));
   }
+
   function blankSelection(node: HTMLElement) {
     const pointerdown = (event: PointerEvent) => {
       if (
@@ -526,7 +597,15 @@
       activeCell = undefined;
       pendingFormat = undefined;
       textRange = { start: 0, end: 0 };
-      selectedKey = undefined;
+      const matrix = svg?.getScreenCTM();
+      if (!matrix) return;
+      event.preventDefault();
+      const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+      const base = event.shiftKey ? [...selectedKeys] : [];
+      select(base);
+      marquee = { pointer: event.pointerId, start: point,
+        rect: { x: point.x, y: point.y, width: 0, height: 0 }, base,
+        clientX: event.clientX, clientY: event.clientY, moved: false };
       const selection = window.getSelection();
       if (selection?.anchorNode && node.contains(selection.anchorNode))
         selection.removeAllRanges();
@@ -564,7 +643,7 @@
   }
 </script>
 
-<svelte:window onpointerup={finish} onpointercancel={cancel} />
+<svelte:window onpointermove={move} onpointerup={finish} onpointercancel={cancel} onblur={cancel} />
 <div class="presentation-surface">
   {#if toolbar && editable && (onformat || onshapechange)}<PresentationFormattingToolbar
       object={textTarget}
@@ -616,7 +695,6 @@
         width={presentation.width * factor}
         height={presentation.height * factor}
         viewBox={`0 0 ${presentation.width} ${presentation.height}`}
-        onpointermove={move}
         onpointerup={finish}
         onpointercancel={cancel}
         onlostpointercapture={cancel}
@@ -659,14 +737,9 @@
         />
         {#each slide.objects as object (object.key)}
           {@const change =
-            preview?.objectKey === object.key ? preview : undefined}
+            previews.find(change => change.objectKey === object.key)}
           {@const w = change?.width ?? object.transform.width}
-          {@const fitted = fittedHeights[object.key]}
-          {@const h =
-            change?.height ??
-            (fitted && fitted.text === object.text
-              ? Math.max(object.transform.height, fitted.height)
-              : object.transform.height)}
+          {@const h = change?.height ?? objectHeight(object)}
           {@const matrix = change
             ? multiply(
                 object.parentMatrix ?? [1, 0, 0, 1, 0, 0],
@@ -687,7 +760,13 @@
               : undefined}
             class:movable={editable && object.movable}
             onfocus={() => {
-              if (editable) selectedKey = object.key;
+              if (editable && !selectedKeys.includes(object.key)) select([object.key]);
+            }}
+            onpointerdowncapture={(event) => {
+              if (object.table && editing !== object.key &&
+                (event.shiftKey || (selectedKeys.length > 1 && selectedKeys.includes(object.key))) &&
+                event.target instanceof Element && event.target.closest("[data-table-cell]"))
+                start(event, object);
             }}
             onpointerdown={(event) => start(event, object)}
             ondblclick={(event) => {
@@ -699,7 +778,7 @@
                 !editing &&
                 (event.key === "Enter" || event.key === " ")
               ) {
-                selectedKey = object.key;
+                select([object.key]);
                 event.preventDefault();
                 event.stopPropagation();
                 if (event.key === "Enter") {
@@ -887,7 +966,7 @@
                 height={Math.max(h, 8)}
                 fill="transparent"
               />{/if}
-            {#if editable && selectedKey === object.key}
+            {#if editable && selectedKeys.includes(object.key)}
               <rect
                 width={w}
                 height={h}
@@ -899,7 +978,7 @@
                   : "none"}
                 class:table-outline={!!object.table}
               />
-              {#if object.movable && onobjectchange && editing !== object.key}
+              {#if selectedKeys.length === 1 && object.movable && (onobjectchange || onobjectschange) && editing !== object.key}
                 <line
                   x1={w / 2}
                   y1="0"
@@ -934,7 +1013,7 @@
                       event.preventDefault();
                       event.stopPropagation();
                       const step = event.shiftKey ? 15 : 1;
-                      onobjectchange?.({
+                      commit([{
                         slideId: slide.id,
                         objectKey: object.key,
                         ...object.transform,
@@ -945,7 +1024,7 @@
                               (["ArrowLeft", "ArrowDown"].includes(event.key)
                                 ? -step
                                 : step),
-                      });
+                      }]);
                     }
                   }}
                   ><title
@@ -978,6 +1057,9 @@
         {#if !thumbnail}{@render overlay?.()}{/if}
       </svg>
     </div>
+    {#if marquee?.moved && svg && host}
+      <div class="marquee" style={`left:${svg.getBoundingClientRect().left - host.getBoundingClientRect().left + host.scrollLeft + marquee.rect.x * factor}px;top:${svg.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop + marquee.rect.y * factor}px;width:${marquee.rect.width * factor}px;height:${marquee.rect.height * factor}px`}></div>
+    {/if}
   </div>
 </div>
 
@@ -1014,7 +1096,15 @@
   .thumbnail .slide {
     box-shadow: none;
   }
+  .marquee {
+    position: absolute;
+    pointer-events: none;
+    border: 1px solid #278044;
+    background: #27804422;
+    box-sizing: border-box;
+  }
   .presentation-view {
+    position: relative;
     flex: 1;
     width: 100%;
     height: 100%;

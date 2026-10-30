@@ -170,6 +170,16 @@ Bind `PresentationSlideRail` to the active slide index for thumbnail navigation.
 In edit mode, connect object, text, formatting, and shape callbacks to a
 `PresentationEditingSession`, then pass the updated document back to the view.
 
+Bind `selectedKeys` for multi-object selection. Drag from empty canvas space or the
+surrounding workspace to enclose objects; Shift-click toggles objects and Shift-drag
+adds to the selection. Drag a selected object or use arrow keys to move the selection.
+Escape clears it. Resize and rotation handles appear for a single selected object.
+`selectedKey` remains available for existing single-selection hosts.
+
+Use `onobjectschange` to receive a group move as one array of object changes. Hosts can
+apply these through a `batch` presentation command to persist and undo the move together.
+Without this callback, the view calls `onobjectchange` for each changed object.
+
 The [PowerPoint guide](https://tumbler.alexco.dev/docs/powerpoint) provides complete
 examples, including undo, redo, and downloading edits. The same guide describes
 text editing, table-cell navigation, resize handles, and rotation controls.
