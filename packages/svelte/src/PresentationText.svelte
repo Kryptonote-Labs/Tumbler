@@ -93,6 +93,8 @@
               JSON.stringify(paragraph.bulletFont)}
             style:color={paragraph.bulletColor}
             style:font-size={`${paragraph.bulletSize ?? 24}px`}
+            style:display="inline-block"
+            style:min-width={`${Math.max(0, -paragraph.indent)}px`}
             >{paragraph.bullet}
           </span>{/if}{#each paragraph.runs as run}<span
             data-text-run

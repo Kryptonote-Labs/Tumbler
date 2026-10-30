@@ -1418,6 +1418,7 @@ class Reader {
         key: `${source.part.name.value}#${shapeId}`,
         shapeId,
         elementId: element.id,
+        ...(ph ? { placeholder: role } : {}),
         sourcePart: source.part.name.value,
         layer,
         name:
@@ -1840,22 +1841,10 @@ class Reader {
           .map((item) => attr(item, name))
           .find((value) => value !== undefined);
       const alignment = prop("algn");
-      const runs: SlideTextRun[] = [];
-      for (const run of this.children(paragraph)) {
-        if (run.localName === "br") {
-          runs.push({
-            text: "\n",
-            fontFamily: "Arial",
-            fontSize: 24,
-            color: "#222",
-            bold: false,
-            italic: false,
-            underline: false,
-          });
-          continue;
-        }
-        if (!["r", "fld"].includes(run.localName)) continue;
-        const rpr = this.child(run, "rPr");
+      const runStyle = (
+        rpr: Element | undefined,
+        value: string,
+      ): SlideTextRun[] => {
         const defaults = [
           rpr,
           ...cascade
@@ -1883,18 +1872,52 @@ class Reader {
           const authored = defaults
             .map((item) => attr(this.child(item, tag), "typeface"))
             .find((value) => !!value);
-          const role =
+          const fontRole =
             authored?.startsWith("+mj") ||
-            (!authored && ["title", "ctrTitle"].includes(roleName))
+            (!authored && ["title", "ctrTitle"].includes(role))
               ? "major"
               : "minor";
           return authored && !authored.startsWith("+")
             ? authored
-            : (context.fonts?.typeface(role, kind, script) ??
-                context.fonts?.typeface(role, "latin") ??
+            : (context.fonts?.typeface(fontRole, kind, script) ??
+                context.fonts?.typeface(fontRole, "latin") ??
                 "Arial");
         };
-        const roleName = role;
+        const hyperlink = this.hyperlink(this.child(rpr, "hlinkClick"));
+        return scriptSegments(value, runAttr("lang")).map((segment) => ({
+          text: segment.text,
+          fontFamily: font(segment.kind, segment.script),
+          fontSize: (((numeric(runAttr("sz"), 1800) / 100) * 4) / 3) * fontScale,
+          color:
+            defaults
+              .map((item) => this.fill(item, context) ?? this.color(item, context))
+              .find((value) => value !== undefined) ?? "#222222",
+          bold: ["1", "true", "on"].includes(runAttr("b") ?? ""),
+          italic: ["1", "true", "on"].includes(runAttr("i") ?? ""),
+          underline: !!runAttr("u") && runAttr("u") !== "none",
+          underlineStyle: runAttr("u"),
+          strike: !!runAttr("strike") && runAttr("strike") !== "noStrike",
+          baseline: percentage(runAttr("baseline")),
+          spacing: ((numeric(runAttr("spc"), 0) / 100) * 4) / 3,
+          capitals: runAttr("cap") ?? "none",
+          ...(hyperlink ? { hyperlink } : {}),
+        }));
+      };
+      const runs: SlideTextRun[] = [];
+      for (const run of this.children(paragraph)) {
+        if (run.localName === "br") {
+          runs.push({
+            text: "\n",
+            fontFamily: "Arial",
+            fontSize: 24,
+            color: "#222",
+            bold: false,
+            italic: false,
+            underline: false,
+          });
+          continue;
+        }
+        if (!["r", "fld"].includes(run.localName)) continue;
         const value =
           run.localName === "fld" && attr(run, "type") === "slidenum"
             ? String(context.slideNumber)
@@ -1905,53 +1928,21 @@ class Reader {
             "limit_exceeded",
             "Too much presentation text.",
           );
-        for (const segment of scriptSegments(value, runAttr("lang")))
-          runs.push({
-            text: segment.text,
-            fontFamily: font(segment.kind, segment.script),
-            fontSize:
-              (((numeric(runAttr("sz"), 1800) / 100) * 4) / 3) * fontScale,
-            color:
-              defaults
-                .map(
-                  (item) =>
-                    this.fill(item, context) ?? this.color(item, context),
-                )
-                .find((value) => value !== undefined) ?? "#222222",
-            bold: ["1", "true", "on"].includes(runAttr("b") ?? ""),
-            italic: ["1", "true", "on"].includes(runAttr("i") ?? ""),
-            underline: !!runAttr("u") && runAttr("u") !== "none",
-            underlineStyle: runAttr("u"),
-            strike: !!runAttr("strike") && runAttr("strike") !== "noStrike",
-            baseline: percentage(runAttr("baseline")),
-            spacing: ((numeric(runAttr("spc"), 0) / 100) * 4) / 3,
-            capitals: runAttr("cap") ?? "none",
-            ...(this.hyperlink(this.child(rpr, "hlinkClick"))
-              ? { hyperlink: this.hyperlink(this.child(rpr, "hlinkClick"))! }
-              : {}),
-          });
+        runs.push(...runStyle(this.child(run, "rPr"), value));
       }
+      // The end mark carries the formatting that new text in an empty paragraph receives.
+      const endRun = runs.length
+        ? undefined
+        : runStyle(this.child(paragraph, "endParaRPr"), " ")[0];
       const bulletOwner = cascade.find(
         (item) =>
           this.child(item, "buNone") ||
           this.child(item, "buChar") ||
           this.child(item, "buAutoNum"),
       );
-      const emptySize =
-        (((numeric(
-          attr(this.child(paragraph, "endParaRPr"), "sz") ??
-            cascade
-              .map((item) => attr(this.child(item, "defRPr"), "sz"))
-              .find((value) => value !== undefined),
-          1800,
-        ) /
-          100) *
-          4) /
-          3) *
-        fontScale;
       const largest = runs.length
         ? Math.max(1, ...runs.map((run) => run.fontSize))
-        : emptySize;
+        : endRun!.fontSize;
       const spacing = (name: string) => {
         const item = cascade
           .map((entry) => this.child(entry, name))
@@ -2026,6 +2017,7 @@ class Reader {
         distributed: ["dist", "thaiDist", "justLow"].includes(alignment ?? ""),
         marginRight: numeric(prop("marR"), 0) / EMUS_PER_PIXEL,
         runs,
+        ...(endRun ? { endRun } : {}),
         fontSize: largest,
         align:
           alignment === "ctr"

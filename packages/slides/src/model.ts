@@ -45,6 +45,8 @@ export interface SlideParagraph {
   readonly marginRight?: number;
   readonly fontSize?: number;
   readonly runs: readonly SlideTextRun[];
+  /** Formatting that new text receives in a paragraph with no runs. */
+  readonly endRun?: SlideTextRun;
   readonly align: "left" | "center" | "right" | "justify";
   readonly bullet: string;
   readonly marginLeft: number;
@@ -124,6 +126,8 @@ export interface SlideObject {
   readonly strokeWidth: number;
   readonly cornerRadius: number;
   readonly text: SlideText | undefined;
+  /** The PresentationML placeholder type, such as `ctrTitle` or `body`, when the object is one. */
+  readonly placeholder?: string;
   readonly effects?: readonly import("./appearance.ts").DrawingEffect[];
   readonly reflection?: import("./appearance.ts").DrawingReflection | undefined;
   readonly pattern?: import("./appearance.ts").DrawingPattern | undefined;
