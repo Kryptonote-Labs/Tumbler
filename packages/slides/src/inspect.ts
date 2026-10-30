@@ -3,14 +3,24 @@ import { slideTextValue } from "./editing.ts";
 /** Compact agent reads retain stable slide/object addresses and actual authoring geometry. */
 export function inspectPresentation(artifact: PresentationArtifact, slideId?: string) {
   const doc = artifact.document,
-    slide = slideId ? doc.slides.find((s) => s.id === slideId) : doc.slides[0];
+    slide = slideId !== undefined ? doc.slides.find((s) => s.id === slideId) : doc.slides[0];
   if (!slide) throw new Error("Slide not found.");
   return {
     width: doc.width,
     height: doc.height,
-    slides: doc.slides.map((s) => ({ id: s.id, title: s.title, hidden: s.hidden })),
+    slides: doc.slides.map((s, index) => ({
+      id: s.id,
+      number: index + 1,
+      title: s.title,
+      hidden: s.hidden,
+      empty: s.objects.length === 0,
+      objectCount: s.objects.length,
+    })),
     slide: {
       id: slide.id,
+      number: doc.slides.indexOf(slide) + 1,
+      empty: slide.objects.length === 0,
+      objectCount: slide.objects.length,
       title: slide.title,
       notes: slide.notes,
       background: slide.background,
