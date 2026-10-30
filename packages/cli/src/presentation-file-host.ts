@@ -35,7 +35,7 @@ export function createPresentationFile(path: string) {
   return { page: revision(artifact.bytes()), ...inspectPresentation(artifact) };
 }
 /** Same sibling-lock convention as Word; reads never alter the input file. */
-export function presentationFileHost(): Required<PresentationOperationHost> {
+export function presentationFileHost(): Required<Pick<PresentationOperationHost, "readPresentation" | "operatePresentation">> {
   return {
     async readPresentation(path, slideId) {
       check(path);

@@ -877,7 +877,6 @@
             </g>
             {#if editable && object.placeholder && object.layer === 'slide' && object.textEditable && !slideTextValue(object) && editing !== object.key}
               <rect width={w} height={h} fill="none" stroke="#82928a" stroke-width="1" stroke-dasharray="5 4" pointer-events="none"/>
-              
             {/if}
             {#if editable && editing !== object.key && !object.table}<rect
                 class="hit"
