@@ -17,6 +17,7 @@ export function presentationHelp(commandName = "tumbler", name?: string) {
       `Usage: ${commandName} <document> slides read [--slide <slide-id>]`,
       `${commandName} <document> slides <command> --input JSON [--page <read-handle>]`,
       "Read the slide before editing. Commands use slideId and objectKey from that read. One command is one undo step.",
+      "Without --slide, read returns the first slide. To read another slide, use its id from slides, not its number or title. An empty slide has empty:true, objectCount:0 and objects:[]; notes and background are reported separately.",
       "Commands: " +
         presentationCommand.options.map((option) => option.shape.name.value).join(", "),
       ...(schema
