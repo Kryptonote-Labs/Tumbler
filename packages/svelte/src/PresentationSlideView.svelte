@@ -16,7 +16,7 @@
     type SlideText,
   } from "@tumblerjs/slides";
   import type { FormattingPatch, FormattingState } from "@tumblerjs/core";
-  import { onDestroy, onMount, tick, setContext } from "svelte";
+  import { onDestroy, onMount, tick, setContext, type Snippet } from "svelte";
   import type {
     PresentationDocument,
     PresentationObjectChange,
@@ -57,10 +57,13 @@
     onshapechange,
     onundo,
     onslide,
+    overlay,
   }: {
     presentation: PresentationDocument;
     slide: PresentationSlide;
     thumbnail?: boolean;
+    /** Host decorations in slide coordinates, excluded from thumbnail views. */
+    overlay?: Snippet;
     toolbar?: boolean;
     onselectionchange?: (selection: {object:SlideObject | undefined;state:FormattingState}) => void;
     editable?: boolean;
@@ -972,6 +975,7 @@
             {/if}
           </g>
         {/each}
+        {#if !thumbnail}{@render overlay?.()}{/if}
       </svg>
     </div>
   </div>
