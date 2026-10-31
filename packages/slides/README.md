@@ -161,11 +161,11 @@ editing and playback remain in the Svelte view.
 on a newer artifact. It returns canonical commands and the resulting artifact. It
 keeps generated slide/object identities consistent through the branch, follows slide
 order anchors, preserves independent geometry properties, and translates text ranges
-through the changed prefix/suffix region. Same-property writes follow acceptance order.
+through unchanged text spans. Same-property writes follow acceptance order.
 Overlapping text replacements, missing targets and destructive structural overlaps
 throw `PresentationRebaseConflict`; the host must keep the original branch for recovery.
-This is conservative three-way rebasing, not character-identity collaboration. Multiple
-remote changes within one text object can form a single ambiguous changed region.
+This is conservative three-way rebasing, not character-identity collaboration. Equivalent insertion positions in repeated text use the earliest matching boundary.
+Replace-all retains the original branch's match set, excluding matches added remotely.
 
 Only rebase after the host knows a write was rejected. An interrupted response may
 have been accepted and must first replay its original operation ID and intent.
