@@ -1,3 +1,4 @@
+import { PresentationTypingHistory } from "./presentation-typing-history.ts";
 import { tick } from "svelte";
 import type { PresentationTextRange } from "@tumblerjs/slides";
 export interface SlideTextEditorOptions {
@@ -7,7 +8,7 @@ export interface SlideTextEditorOptions {
   paragraphs: readonly string[];
   point?: { x: number; y: number };
   onselect?: (range: PresentationTextRange) => void;
-  onreplace?: (range: PresentationTextRange, value: string) => void;
+  onreplace?: (range: PresentationTextRange, value: string, undoGroup?: string) => void;
   onfinish?: () => void;
   onundo?: (redo: boolean) => void;
   onnavigate?: (backward: boolean) => boolean;
@@ -23,6 +24,7 @@ export function presentationTextEdit(
     composing = false,
     range: PresentationTextRange = { start: 0, end: 0 },
     restorePending = false;
+  const history = new PresentationTypingHistory();
   const text = () => options.paragraphs.join("\n");
   function offset(container: Node, offset: number) {
     const ps = Array.from(
@@ -60,6 +62,7 @@ export function presentationTextEdit(
       b = offset(s.focusNode, s.focusOffset);
     const next = { start: Math.min(a, b), end: Math.max(a, b) };
     if (next.start !== range.start || next.end !== range.end) {
+      history.break();
       range = next;
       options.onselect?.(range);
     }
@@ -106,8 +109,9 @@ export function presentationTextEdit(
     s?.addRange(r);
     options.onselect?.(range);
   }
-  async function replace(value: string, target = range) {
-    options.onreplace?.(target, value);
+  async function replace(value: string, target = range, kind = "") {
+    const undoGroup = history.group(kind, target, value);
+    options.onreplace?.(target, value, undoGroup);
     range = {
       start: target.start + value.length,
       end: target.start + value.length,
@@ -139,6 +143,7 @@ export function presentationTextEdit(
       event.inputType === "historyUndo" ||
       event.inputType === "historyRedo"
     ) {
+      history.break();
       options.onundo?.(event.inputType === "historyRedo");
       return;
     }
@@ -146,7 +151,7 @@ export function presentationTextEdit(
       event.inputType === "insertText" ||
       event.inputType === "insertReplacementText"
     )
-      void replace(event.data ?? "");
+      void replace(event.data ?? "", range, range.start === range.end ? event.inputType : "");
     else if (
       event.inputType === "insertParagraph" ||
       event.inputType === "insertLineBreak"
@@ -176,7 +181,7 @@ export function presentationTextEdit(
               end: boundaries.find((n) => n > target.end) ?? value.length,
             };
       }
-      void replace("", target);
+      void replace("", target, range.start === range.end ? event.inputType : "");
     }
   }
   function paste(event: ClipboardEvent) {
@@ -204,6 +209,7 @@ export function presentationTextEdit(
   function keydown(event: KeyboardEvent) {
     if (!active) return;
     event.stopPropagation();
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", "Tab", "Escape"].includes(event.key) || event.ctrlKey || event.metaKey) history.break();
     if (event.key === "Tab" && options.onnavigate?.(event.shiftKey)) {
       event.preventDefault();
       return;
@@ -277,6 +283,7 @@ export function presentationTextEdit(
     void replace(current.slice(start, tail), { start, end });
   }
   function pointer(event: PointerEvent) {
+    history.break();
     if (active) event.stopPropagation();
   }
   function drop(event: DragEvent) {
@@ -284,6 +291,8 @@ export function presentationTextEdit(
   }
   document.addEventListener("selectionchange", capture);
   node.addEventListener("beforeinput", before);
+  const blur = () => history.break();
+  node.addEventListener("blur", blur);
   node.addEventListener("paste", paste);
   node.addEventListener("cut", cut);
   node.addEventListener("keydown", keydown);
@@ -307,6 +316,7 @@ export function presentationTextEdit(
       options.paragraphs.join("\n") !== next.paragraphs.join("\n");
     options = next;
     active = next.active;
+    if (leaving || entering) history.break();
     if (leaving) clearSelection();
     if (entering) {
       await tick();
@@ -349,6 +359,7 @@ export function presentationTextEdit(
       clearSelection();
       document.removeEventListener("selectionchange", capture);
       node.removeEventListener("beforeinput", before);
+      node.removeEventListener("blur", blur);
       node.removeEventListener("paste", paste);
       node.removeEventListener("cut", cut);
       node.removeEventListener("keydown", keydown);
