@@ -154,3 +154,18 @@ all browser text layout, decorative effects, picture tiling or pattern fills. In
 editing and playback remain in the Svelte view.
 
 `findVisibleSlideIndex(slides, start, direction)` finds a non-hidden slide at or beyond `start` in either direction (`1` or `-1`). It returns `undefined` at the deck boundary, including empty or all-hidden decks. Use it for slideshow entry and navigation; editing still includes hidden slides.
+
+### Rebasing hosted edits
+
+`rebasePresentationCommands(base, current, commands)` reapplies a pending local branch
+on a newer artifact. It returns canonical commands and the resulting artifact. It
+keeps generated slide/object identities consistent through the branch, follows slide
+order anchors, preserves independent geometry properties, and translates text ranges
+through the changed prefix/suffix region. Same-property writes follow acceptance order.
+Overlapping text replacements, missing targets and destructive structural overlaps
+throw `PresentationRebaseConflict`; the host must keep the original branch for recovery.
+This is conservative three-way rebasing, not character-identity collaboration. Multiple
+remote changes within one text object can form a single ambiguous changed region.
+
+Only rebase after the host knows a write was rejected. An interrupted response may
+have been accepted and must first replay its original operation ID and intent.
