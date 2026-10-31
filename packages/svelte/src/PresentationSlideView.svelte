@@ -34,7 +34,7 @@
     presentationFontContext,
     type PresentationFontContext,
   } from "./presentation-fonts.ts";
-  import { presentationPlayback } from "./presentation-playback.ts";
+  import { presentationPlayback, nextPresentationAnimationStep } from "./presentation-playback.ts";
   import PresentationPattern from "./PresentationPattern.svelte";
   import PresentationPictureFill from "./PresentationPictureFill.svelte";
   import PresentationMedia from "./PresentationMedia.svelte";
@@ -48,6 +48,7 @@
     presentation,
     slide,
     thumbnail = false,
+    playing = false,
     toolbar = true,
     onselectionchange,
     editable = false,
@@ -67,6 +68,8 @@
     presentation: PresentationDocument;
     slide: PresentationSlide;
     thumbnail?: boolean;
+    /** Play existing slide effects without showing playback controls. */
+    playing?: boolean;
     /** Host decorations in slide coordinates, excluded from thumbnail views. */
     overlay?: Snippet;
     toolbar?: boolean;
@@ -330,16 +333,20 @@
     loadedFonts = loaded;
     return loaded.destroy;
   });
-  let playing = $state(false),
-    playbackStep = $state(0);
-  let playbackSteps = $derived(
-    Math.max(0, ...(slide.animations ?? []).map((effect) => effect.step)),
-  );
+  let playbackStep = $state(0);
   $effect(() => {
     slide.part;
-    playing = false;
+    playing;
     playbackStep = 0;
   });
+  /** Consume the next click group; false lets the host advance to another slide. */
+  export function advanceAnimation() {
+    if (!playing || editable || thumbnail) return false;
+    const next = nextPresentationAnimationStep(slide, playbackStep);
+    if (next === undefined) return false;
+    playbackStep = next;
+    return true;
+  }
   let mounted = $state(false);
   onMount(() => {
     mounted = true;
@@ -656,20 +663,6 @@
       onformat={format}
       onshape={shapeStyle}
     />{/if}
-  {#if !thumbnail && !editable && slide.animations?.length}
-    <div class="playback-controls">
-      <button
-        onclick={() => {
-          playing = !playing;
-          playbackStep = 0;
-        }}>{playing ? "Stop playback" : "Play animations"}</button
-      >
-      {#if playing}<button
-          disabled={playbackStep >= playbackSteps}
-          onclick={() => playbackStep++}>Next animation</button
-        >{/if}
-    </div>
-  {/if}
   <div
     class="presentation-view"
     bind:this={host}
@@ -1069,20 +1062,6 @@
 </div>
 
 <style>
-  .playback-controls {
-    display: flex;
-    gap: 8px;
-    padding: 8px;
-    border-bottom: 1px solid #333;
-  }
-  .playback-controls button {
-    font: inherit;
-    color: inherit;
-    background: transparent;
-    border: 1px solid #555;
-    border-radius: 4px;
-    padding: 5px 10px;
-  }
   .presentation-surface {
     height: 100%;
     width: 100%;
