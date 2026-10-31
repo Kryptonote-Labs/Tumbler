@@ -128,6 +128,7 @@ export function presentationTextEdit(
   function before(event: InputEvent) {
     if (!active || composing || event.isComposing) return;
     capture();
+    const collapsed = range.start === range.end;
     const target = event.getTargetRanges?.()[0];
     if (
       target &&
@@ -151,7 +152,7 @@ export function presentationTextEdit(
       event.inputType === "insertText" ||
       event.inputType === "insertReplacementText"
     )
-      void replace(event.data ?? "", range, range.start === range.end ? event.inputType : "");
+      void replace(event.data ?? "", range, collapsed ? event.inputType : "");
     else if (
       event.inputType === "insertParagraph" ||
       event.inputType === "insertLineBreak"
@@ -181,7 +182,7 @@ export function presentationTextEdit(
               end: boundaries.find((n) => n > target.end) ?? value.length,
             };
       }
-      void replace("", target, range.start === range.end ? event.inputType : "");
+      void replace("", target, collapsed ? event.inputType : "");
     }
   }
   function paste(event: ClipboardEvent) {
