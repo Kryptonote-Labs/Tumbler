@@ -43,3 +43,6 @@ export type {
   TextUnderline,
   VerticalAlignment,
 } from "./formatting.ts";
+
+export { findTextMatches } from './search.ts';
+export type { TextMatch, TextSearchOptions } from './search.ts';

@@ -104,7 +104,7 @@ const output = session.artifact.bytes();
 duplication, movement and deletion; non-destructive text-frame layouts; text boxes,
 preset shapes, PNG/JPEG images and tables; object duplication, deletion, alignment
 and stacking order; paragraph bullets, numbering, level, spacing and vertical
-alignment; background colour and literal find/replace across editable text boxes.
+alignment; background colour and literal find/replace across editable text boxes and table cells.
 Existing text, formatting, object transforms and fills use the same commands.
 A complete command is one undo step. Images carry original bytes as base64.
 
@@ -176,3 +176,10 @@ Replace-all retains the original branch's match set, excluding matches added rem
 
 Only rebase after the host knows a write was rejected. An interrupted response may
 have been accepted and must first replay its original operation ID and intent.
+## Finding text
+
+`findPresentationMatches(document, query, { matchCase, wholeWord, locale })` returns individual occurrences with slide ID, object key, optional table cell, UTF-16 start/end offsets and editability. It uses the same Unicode normalization, grapheme boundaries and word segmentation as Word. Master content can be found without making it editable.
+
+The `replace-all` command accepts `wholeWord` alongside `caseSensitive`. Replacements address each editable text box or cell and apply in reverse offset order, preserving unaffected formatting.
+
+`PresentationSlideView` accepts `searchMatches` and `currentSearchMatch` from that API. It paints occurrences through the CSS Highlight API without changing slide markup, selection or formatting. The current match is distinguished from the other occurrences.

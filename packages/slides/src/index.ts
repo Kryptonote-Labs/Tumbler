@@ -64,3 +64,6 @@ export { slideObjectEnclosed, translateSlideObject, type SlideSelectionRect } fr
 
 export { findVisibleSlideIndex } from "./slideshow.ts";
 export { rebasePresentationCommands, PresentationRebaseConflict } from './collaboration.ts';
+
+export { findPresentationMatches } from './search.ts';
+export type { PresentationSearchMatch } from './search.ts';

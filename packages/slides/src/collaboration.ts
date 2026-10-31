@@ -1,3 +1,4 @@
+import { findPresentationMatches } from './search.ts';
 import { diffChars } from 'diff';
 import { applyPresentationCommand, type PresentationCommand } from './commands.ts';
 import type { PresentationArtifact } from './artifact.ts';
@@ -63,22 +64,10 @@ export function rebasePresentationCommands(
     }
     if (input.name === 'replace-all') {
       const expanded: Exclude<PresentationCommand, { name: 'batch' }>[] = [];
-      const escaped = input.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const expression = new RegExp(escaped, input.caseSensitive ? 'gu' : 'giu');
-      for (const slide of base.document.slides)
-        for (const object of slide.objects) {
-          if (!object.textEditable) continue;
-          const matches = [...slideTextValue(object).matchAll(expression)];
-          for (const match of matches.reverse())
-            expanded.push({
-              name: 'edit-text',
-              slideId: slide.id,
-              objectKey: object.key,
-              start: match.index,
-              end: match.index + match[0].length,
-              value: input.value,
-            });
-        }
+      for (const { editable, ...target } of findPresentationMatches(base.document, input.find, {
+        matchCase: input.caseSensitive, wholeWord: input.wholeWord ?? false,
+      }).reverse())
+        if (editable) expanded.push({ name: 'edit-text', ...target, value: input.value });
       if (!expanded.length) conflict();
       return {
         name: 'batch',

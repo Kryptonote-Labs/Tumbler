@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { presentationSearchHighlights } from './presentation-search-highlights.ts';
+  import type { PresentationSearchMatch } from '@tumblerjs/slides';
   import PresentationFormattingToolbar from "./PresentationFormattingToolbar.svelte";
   import {
     slideObjectEnclosed,
@@ -45,6 +47,8 @@
   import { zoomGesture } from "./zoom-gesture.ts";
 
   let {
+    searchMatches = [],
+    currentSearchMatch,
     presentation,
     slide,
     thumbnail = false,
@@ -65,6 +69,8 @@
     onslide,
     overlay,
   }: {
+    searchMatches?: readonly PresentationSearchMatch[];
+    currentSearchMatch?: PresentationSearchMatch | undefined;
     presentation: PresentationDocument;
     slide: PresentationSlide;
     thumbnail?: boolean;
@@ -678,6 +684,7 @@
   <div
     class="presentation-view"
     bind:this={host}
+    use:presentationSearchHighlights={{slide, matches: thumbnail ? [] : searchMatches, current: currentSearchMatch}}
     bind:clientWidth={width}
     bind:clientHeight={height}
     use:gestures
@@ -1074,6 +1081,9 @@
 </div>
 
 <style>
+  :global(::highlight(tumbler-slide-search)) { background-color: #ffe47a; color: #111; }
+  :global(::highlight(tumbler-slide-search-current)) { background-color: #ffbd49; color: #111; }
+
   .presentation-surface {
     height: 100%;
     width: 100%;

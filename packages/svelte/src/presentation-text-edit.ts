@@ -1,3 +1,4 @@
+import { presentationTextPosition } from "./presentation-text-position.ts";
 import { PresentationTypingHistory } from "./presentation-typing-history.ts";
 import { tick } from "svelte";
 import type { PresentationTextRange } from "@tumblerjs/slides";
@@ -67,35 +68,7 @@ export function presentationTextEdit(
       options.onselect?.(range);
     }
   }
-  function locate(position: number): [Node, number] {
-    const ps = Array.from(
-      node.querySelectorAll<HTMLElement>("[data-text-paragraph]"),
-    );
-    let base = 0;
-    for (let i = 0; i < ps.length; i++) {
-      const length = options.paragraphs[i]?.length ?? 0;
-      if (position <= base + length || i === ps.length - 1) {
-        const p = ps[i]!;
-        let left = Math.max(0, Math.min(length, position - base));
-        const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, {
-          acceptNode(n) {
-            return n.parentElement?.closest("[data-bullet]")
-              ? NodeFilter.FILTER_REJECT
-              : NodeFilter.FILTER_ACCEPT;
-          },
-        });
-        let n = walker.nextNode();
-        while (n) {
-          if (left <= n.textContent!.length) return [n, left];
-          left -= n.textContent!.length;
-          n = walker.nextNode();
-        }
-        return [p, p.childNodes.length];
-      }
-      base += length + 1;
-    }
-    return [node, 0];
-  }
+  const locate = (position: number) => presentationTextPosition(node, options.paragraphs, position);
   function restore() {
     if (!active) return;
     node.focus({ preventScroll: true });
