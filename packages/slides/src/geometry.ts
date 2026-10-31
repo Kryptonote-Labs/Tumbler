@@ -41,24 +41,42 @@ export function transformPoint(matrix: Matrix, x: number, y: number) {
   };
 }
 
-/** Resize along local axes while keeping the opposite edge/corner fixed in slide space. */
+/** Resize along local axes, fixing the opposite edge/corner. Aspect locking applies only to corners. */
 export function resizeSlideTransform(
   transform: SlideTransform,
   handle: { readonly x: -1 | 0 | 1; readonly y: -1 | 0 | 1 },
   dx: number,
   dy: number,
+  options: { readonly preserveAspectRatio?: boolean } = {},
 ): SlideTransform {
   const [a, b, c, d] = shapeMatrix(transform);
   const localX = a * dx + b * dy,
     localY = c * dx + d * dy;
-  const width =
+  let width =
     handle.x === 0
       ? transform.width
       : Math.max(8, transform.width + handle.x * localX);
-  const height =
+  let height =
     handle.y === 0
       ? transform.height
       : Math.max(8, transform.height + handle.y * localY);
+  if (
+    options.preserveAspectRatio &&
+    handle.x !== 0 &&
+    handle.y !== 0 &&
+    transform.width > 0 &&
+    transform.height > 0
+  ) {
+    // Project the dragged corner onto the original diagonal in local space.
+    const { width: w, height: h } = transform;
+    const scale = Math.max(
+      8 / w,
+      8 / h,
+      1 + (handle.x * localX * w + handle.y * localY * h) / (w * w + h * h),
+    );
+    width = w * scale;
+    height = h * scale;
+  }
   const dw = width - transform.width,
     dh = height - transform.height;
   const cx = (handle.x * dw) / 2,

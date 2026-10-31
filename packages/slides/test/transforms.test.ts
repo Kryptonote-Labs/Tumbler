@@ -14,38 +14,46 @@ const fixture = () =>
     ),
   ).bytes();
 test("resizing rotated and flipped shapes fixes the opposite corner or edge", () => {
-  for (const rotation of [0, 18, 90, 179, 270])
-    for (const flipH of [false, true])
-      for (const flipV of [false, true])
-        for (const x of [-1, 0, 1] as const)
-          for (const y of [-1, 0, 1] as const) {
-            if (x === 0 && y === 0) continue;
-            const original = {
-              x: 100,
-              y: 150,
-              width: 180,
-              height: 100,
-              rotation,
-              flipH,
-              flipV,
-            };
-            const resized = resizeSlideTransform(original, { x, y }, 40, 25);
-            const before = transformPoint(
-              shapeMatrix(original),
-              ((1 - x) * original.width) / 2,
-              ((1 - y) * original.height) / 2,
-            );
-            const after = transformPoint(
-              shapeMatrix(resized),
-              ((1 - x) * resized.width) / 2,
-              ((1 - y) * resized.height) / 2,
-            );
-            expect(after.x).toBeCloseTo(before.x, 8);
-            expect(after.y).toBeCloseTo(before.y, 8);
-            expect(resized.rotation).toBe(rotation);
-            expect(resized.flipH).toBe(flipH);
-            expect(resized.flipV).toBe(flipV);
-          }
+  for (const preserveAspectRatio of [false, true])
+    for (const rotation of [0, 18, 90, 179, 270])
+      for (const flipH of [false, true])
+        for (const flipV of [false, true])
+          for (const x of [-1, 0, 1] as const)
+            for (const y of [-1, 0, 1] as const) {
+              if (x === 0 && y === 0) continue;
+              const original = {
+                x: 100,
+                y: 150,
+                width: 180,
+                height: 100,
+                rotation,
+                flipH,
+                flipV,
+              };
+              const resized = resizeSlideTransform(original, { x, y }, 40, 25, {
+                preserveAspectRatio,
+              });
+              if (preserveAspectRatio && x !== 0 && y !== 0)
+                expect(resized.width / resized.height).toBeCloseTo(
+                  original.width / original.height,
+                  10,
+                );
+              const before = transformPoint(
+                shapeMatrix(original),
+                ((1 - x) * original.width) / 2,
+                ((1 - y) * original.height) / 2,
+              );
+              const after = transformPoint(
+                shapeMatrix(resized),
+                ((1 - x) * resized.width) / 2,
+                ((1 - y) * resized.height) / 2,
+              );
+              expect(after.x).toBeCloseTo(before.x, 8);
+              expect(after.y).toBeCloseTo(before.y, 8);
+              expect(resized.rotation).toBe(rotation);
+              expect(resized.flipH).toBe(flipH);
+              expect(resized.flipV).toBe(flipV);
+            }
 });
 test("rotation and rotated resizing survive reopening and undo without touching other parts", async () => {
   const original = await fixture(),
@@ -210,4 +218,42 @@ test("moving and resizing ink updates its native bounds and padded picture fallb
     emu((t.width - 10) * 2),
   );
   expect(xml.source).toContain('r:id="ink"');
+});
+
+test("corner aspect locking follows either axis and clamps both dimensions together", () => {
+  const original = {
+    x: 10,
+    y: 20,
+    width: 200,
+    height: 100,
+    rotation: 0,
+    flipH: false,
+    flipV: false,
+  };
+  for (const [dx, dy, width, height] of [
+    [50, 0, 240, 120],
+    [0, 50, 220, 110],
+    [-50, -25, 150, 75],
+    [-1000, -1000, 16, 8],
+  ] as const) {
+    const resized = resizeSlideTransform(original, { x: 1, y: 1 }, dx, dy, {
+      preserveAspectRatio: true,
+    });
+    expect(resized.width).toBeCloseTo(width, 8);
+    expect(resized.height).toBeCloseTo(height, 8);
+    expect(resized.x).toBe(original.x);
+    expect(resized.y).toBe(original.y);
+  }
+  for (const handle of [
+    { x: 1, y: 0 },
+    { x: 0, y: -1 },
+  ] as const)
+    expect(
+      resizeSlideTransform(original, handle, 40, 25, {
+        preserveAspectRatio: true,
+      }),
+    ).toEqual(resizeSlideTransform(original, handle, 40, 25));
+  const free = resizeSlideTransform(original, { x: 1, y: 1 }, 40, 25);
+  expect(free.width).toBe(240);
+  expect(free.height).toBe(125);
 });
