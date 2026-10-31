@@ -569,6 +569,18 @@
       return;
     }
     if (!editable || !selected) return;
+    if (
+      onformat && textTarget?.textEditable &&
+      (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey
+    ) {
+      const key = event.key.toLowerCase();
+      if (key === "b" || key === "i" || key === "u") {
+        event.preventDefault();
+        event.stopPropagation();
+        shortcut(key === "b" ? "bold" : key === "i" ? "italic" : "underline");
+        return;
+      }
+    }
     if (event.key === "Enter" && selectedKeys.length === 1) {
       event.preventDefault();
       if (selected.table) {
