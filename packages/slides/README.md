@@ -157,8 +157,12 @@ editing and playback remain in the Svelte view.
 
 ### Rebasing hosted edits
 
-`rebasePresentationCommands(base, current, commands)` reapplies a pending local branch
-on a newer artifact. It returns canonical commands and the resulting artifact. It
+`rebasePresentationCommands(base, current, commands, intervening)` reapplies a pending local branch
+on a newer artifact. The host must supply all accepted intervening commands from the
+base revision through the current revision, including commands inside batches. This
+provenance prevents edits from targeting deleted objects whose numeric OOXML keys were reused.
+If history includes snapshot-restoring undo, retain a conflict rather than guess its lineage.
+It returns canonical commands and the resulting artifact. It
 keeps generated slide/object identities consistent through the branch, follows slide
 order anchors, preserves independent geometry properties, and translates text ranges
 through unchanged text spans. Same-property writes follow acceptance order.

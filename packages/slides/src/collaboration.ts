@@ -15,7 +15,27 @@ export function rebasePresentationCommands(
   base: PresentationArtifact,
   current: PresentationArtifact,
   commands: readonly PresentationCommand[],
+  intervening: readonly PresentationCommand[],
 ): { commands: PresentationCommand[]; artifact: PresentationArtifact } {
+  const removedSlides = new Set<string>();
+  const removedObjects = new Set<string>();
+  const removedTables = new Set<string>();
+  const visit = (command: PresentationCommand) => {
+    if (command.name === 'batch') {
+      command.commands.forEach(visit);
+      return;
+    }
+    if (command.name === 'delete-slide') removedSlides.add(command.slideId);
+    if (command.name === 'delete-object')
+      removedObjects.add(`${command.slideId}:${command.objectKey}`);
+    if (command.name === 'edit-table') removedTables.add(`${command.slideId}:${command.objectKey}`);
+    if (command.name === 'layout') {
+      const slide = base.document.slides.find((s) => s.id === command.slideId);
+      for (const object of slide?.objects ?? [])
+        if (object.placeholder) removedObjects.add(`${command.slideId}:${object.key}`);
+    }
+  };
+  intervening.forEach(visit);
   const slideIds = new Map<string, string>();
   const objectIds = new Map<string, string>();
   const semantic = (value: unknown) =>
@@ -29,6 +49,13 @@ export function rebasePresentationCommands(
   };
   const rebase = (input: PresentationCommand): PresentationCommand => {
     if (input.name === 'batch') throw new Error('Groups must be rebased sequentially.');
+    if (
+      'sourceId' in input &&
+      input.sourceId &&
+      removedSlides.has(input.sourceId) &&
+      !slideIds.has(input.sourceId)
+    )
+      conflict();
     if (input.name === 'replace-all') {
       const expanded: Exclude<PresentationCommand, { name: 'batch' }>[] = [];
       const escaped = input.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -61,6 +88,12 @@ export function rebasePresentationCommands(
       command.sourceId = slideIds.get(command.sourceId) ?? command.sourceId;
     const inputSlideId = 'slideId' in input ? input.slideId : undefined;
     const inputObjectKey = 'objectKey' in input ? input.objectKey : undefined;
+    if (inputSlideId && removedSlides.has(inputSlideId) && !slideIds.has(inputSlideId)) conflict();
+    const identity = `${inputSlideId}:${inputObjectKey}`;
+    if (input.name !== 'paste-object' && removedObjects.has(identity) && !objectIds.has(identity))
+      conflict();
+    if ('cell' in input && input.cell && removedTables.has(identity) && !objectIds.has(identity))
+      conflict();
     const oldSlide = base.document.slides.find((s) => s.id === inputSlideId);
     const targetSlideId = 'slideId' in command ? command.slideId : undefined;
     const slide = current.document.slides.find((s) => s.id === targetSlideId);

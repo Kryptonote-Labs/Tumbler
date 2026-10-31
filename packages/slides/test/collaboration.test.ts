@@ -2,9 +2,15 @@ import { expect, test } from 'bun:test';
 import {
   createPresentation,
   applyPresentationCommand,
-  rebasePresentationCommands,
+  rebasePresentationCommands as rebase,
   slideTextValue,
 } from '../src/index.ts';
+const rebasePresentationCommands = (
+  base: Parameters<typeof rebase>[0],
+  current: Parameters<typeof rebase>[1],
+  commands: Parameters<typeof rebase>[2],
+  intervening: Parameters<typeof rebase>[3] = [],
+) => rebase(base, current, commands, intervening);
 function fixture() {
   let base = createPresentation();
   const slideId = base.document.slides[0]!.id;
@@ -220,4 +226,27 @@ test('replace-all does not touch matches added by another author', () => {
     'Hello everyone',
     'world',
   ]);
+});
+
+test('deleted objects cannot redirect stale edits onto replacement objects with reused keys', () => {
+  const { base, slideId, objectKey } = fixture();
+  const intervening = [
+    { name: 'delete-object' as const, slideId, objectKey },
+    {
+      name: 'insert-object' as const,
+      slideId,
+      bounds: { x: 10, y: 10, width: 100, height: 50 },
+      object: { kind: 'shape' as const, text: 'Replacement' },
+    },
+  ];
+  const remote = intervening.reduce(applyPresentationCommand, base);
+  expect(remote.document.slides[0]!.objects.at(-1)!.key).toBe(objectKey);
+  expect(() =>
+    rebasePresentationCommands(
+      base,
+      remote,
+      [{ name: 'style-shape', slideId, objectKey, fill: '#FF0000' }],
+      intervening,
+    ),
+  ).toThrow('local edits are retained');
 });
