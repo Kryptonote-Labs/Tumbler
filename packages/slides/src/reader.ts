@@ -23,7 +23,8 @@ import {
   type LosslessXmlDocument,
   type LosslessXmlElement as Element,
   type MarkupCompatibilityView,
-  type ThemeColorScheme,
+  ThemeColorScheme,
+  DEFAULT_OFFICE_THEME,
   type ThemeFontScheme,
 } from "@tumblerjs/ooxml";
 import { openOpcPackage, type OpcPart } from "@tumblerjs/opc";
@@ -126,6 +127,20 @@ export function presentationClipboardLine(document:PresentationDocument,slideId:
   const object=document.slides.find(s=>s.id===slideId)?.objects.find(o=>o.key===objectKey);
   return object && clipboardLines.get(object);
 }
+/** Effective palette for a slide, including its theme overrides and colour-map remapping. */
+export function presentationThemeColours(document: PresentationDocument, slideId: string): ThemeColorScheme {
+  const slide = document.slides.find(slide => slide.id === slideId);
+  if (!slide) throw new Error('Slide not found.');
+  const context = slideContexts.get(slide);
+  const scheme = context?.colors ?? DEFAULT_OFFICE_THEME;
+  const aliases = new Map([['lt1', 'bg1'], ['dk1', 'tx1'], ['lt2', 'bg2'], ['dk2', 'tx2']]);
+  return new ThemeColorScheme(scheme.name, new Map(THEME_COLOR_SLOTS.map(slot => {
+    const name = context?.colorMap.get(aliases.get(slot) ?? slot) ?? slot;
+    const mapped = THEME_COLOR_SLOTS.find(candidate => candidate === name) ?? slot;
+    return [slot, scheme.color(mapped)] as const;
+  })));
+}
+
 /** Internal clipboard context for materializing source theme references. */
 export function presentationClipboardTheme(document: PresentationDocument, slideId: string) {
   const slide = document.slides.find((s) => s.id === slideId),

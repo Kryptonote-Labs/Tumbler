@@ -67,3 +67,5 @@ export { rebasePresentationCommands, PresentationRebaseConflict } from './collab
 
 export { findPresentationMatches } from './search.ts';
 export type { PresentationSearchMatch } from './search.ts';
+
+export { presentationThemeColours } from './reader.ts';

@@ -183,3 +183,5 @@ have been accepted and must first replay its original operation ID and intent.
 The `replace-all` command accepts `wholeWord` alongside `caseSensitive`. Replacements address each editable text box or cell and apply in reverse offset order, preserving unaffected formatting.
 
 `PresentationSlideView` accepts `searchMatches` and `currentSearchMatch` from that API. It paints occurrences through the CSS Highlight API without changing slide markup, selection or formatting. The current match is distinguished from the other occurrences.
+
+`presentationThemeColours(document, slideId)` exposes the selected slide's effective palette, including layout/slide theme overrides and colour-map remapping. Use it for colour pickers so previews and applied palette colours agree with slide rendering. It returns the default Office palette for presentations without a theme and rejects unknown slide IDs.
