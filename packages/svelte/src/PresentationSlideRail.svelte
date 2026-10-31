@@ -84,6 +84,7 @@
     <button
       data-index={i}
       class:active={index === i}
+      class:hidden={slide.hidden}
       aria-current={index === i ? "true" : undefined}
       aria-label={`Slide ${i + 1}: ${slide.title}${slide.hidden ? " (hidden)" : ""}`}
       tabindex={index === i ? 0 : -1}
@@ -159,6 +160,12 @@
   .preview-surface {
     position: absolute;
     inset: 0;
+  }
+  .hidden .preview-surface {
+    opacity: 0.45;
+  }
+  .hidden .number {
+    text-decoration: line-through;
   }
   .active .preview {
     border-color: #82b68e;
