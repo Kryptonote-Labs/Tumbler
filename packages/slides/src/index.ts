@@ -63,3 +63,4 @@ export type { SlideCanvasContext, SlideCanvasOptions } from './canvas.ts';
 export { slideObjectEnclosed, translateSlideObject, type SlideSelectionRect } from "./selection.ts";
 
 export { findVisibleSlideIndex } from "./slideshow.ts";
+export { rebasePresentationCommands, PresentationRebaseConflict } from './collaboration.ts';
