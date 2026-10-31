@@ -52,7 +52,7 @@
     presentation,
     slide,
     thumbnail = false,
-    playing = false,
+    playing: controlledPlaying,
     toolbar = true,
     onselectionchange,
     editable = false,
@@ -339,6 +339,9 @@
     loadedFonts = loaded;
     return loaded.destroy;
   });
+  let manualPlaying = $state(false);
+  const playing = $derived(controlledPlaying ?? manualPlaying);
+  $effect(() => { slide.part; manualPlaying = false; });
   let playbackStep = $state(0);
   $effect(() => {
     slide.part;
@@ -681,6 +684,16 @@
       onformat={format}
       onshape={shapeStyle}
     />{/if}
+  {#if controlledPlaying === undefined && !thumbnail && !editable && slide.animations?.length}
+    <div class="playback-controls">
+      <button onclick={() => { manualPlaying = !manualPlaying; }}>
+        {playing ? "Stop playback" : "Play animations"}
+      </button>
+      {#if playing}<button
+          disabled={nextPresentationAnimationStep(slide, playbackStep) === undefined}
+          onclick={() => advanceAnimation()}>Next animation</button>{/if}
+    </div>
+  {/if}
   <div
     class="presentation-view"
     bind:this={host}
@@ -1081,6 +1094,9 @@
 </div>
 
 <style>
+  .playback-controls { display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid #333; }
+  .playback-controls button { font: inherit; color: inherit; background: transparent; border: 1px solid #555; border-radius: 4px; padding: 5px 10px; }
+
   :global(::highlight(tumbler-slide-search)) { background-color: #ffe47a; color: #111; }
   :global(::highlight(tumbler-slide-search-current)) { background-color: #ffbd49; color: #111; }
 
