@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 for (const modifier of ["ctrlKey", "metaKey"] as const) {
   test(`selected-box formatting shortcuts use ${modifier} and consume the event`, async ({ page }) => {
-    await page.goto("/playground/slides-brief");
+    await page.goto("/playground/slides-brief", { waitUntil: "domcontentloaded" });
     const stage = page.locator(".slide-stage");
     const slide = stage.locator("svg.slide");
     const object = stage.locator("[data-slide-object]").filter({ hasText: "A quieter workspace" });
