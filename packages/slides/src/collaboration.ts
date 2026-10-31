@@ -184,7 +184,12 @@ export function rebasePresentationCommands(
         }
         if (hunk) remember(hunk);
         for (const change of hunks)
-          if (command.start < change.end && command.end > change.start) conflict();
+          if (
+            command.start < change.end &&
+            command.end > change.start &&
+            (command.name === 'edit-text' || change.end > change.start)
+          )
+            conflict();
         const offset = (value: number, right: boolean) =>
           value +
           hunks.reduce(

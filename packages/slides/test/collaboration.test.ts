@@ -273,3 +273,34 @@ test('duplicating a changed source cannot remap a pending deletion to the wrong 
     ),
   ).toThrow('local edits are retained');
 });
+
+test('formatting a range containing concurrent typing preserves and formats the inserted text', () => {
+  const { base, slideId, objectKey } = fixture();
+  const remoteEdit = {
+    name: 'edit-text' as const,
+    slideId,
+    objectKey,
+    start: 5,
+    end: 5,
+    value: ' Alice',
+  };
+  const remote = applyPresentationCommand(base, remoteEdit);
+  const result = rebasePresentationCommands(
+    base,
+    remote,
+    [
+      {
+        name: 'format-text',
+        slideId,
+        objectKey,
+        start: 0,
+        end: 11,
+        patch: { text: { bold: { set: true } } },
+      },
+    ],
+    [remoteEdit],
+  );
+  const object = result.artifact.document.slides[0]!.objects.at(-1)!;
+  expect(slideTextValue(object)).toBe('Hello Alice world');
+  expect(object.text!.paragraphs.flatMap((p) => p.runs).every((run) => run.bold)).toBe(true);
+});
