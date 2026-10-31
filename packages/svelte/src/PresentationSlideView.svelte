@@ -77,7 +77,7 @@
     selectedKeys?: string[];
     onobjectschange?: (changes: PresentationObjectChange[]) => void;
     onslide?: (part: string) => void;
-    ontextedit?: (change: PresentationTextEdit) => void;
+    ontextedit?: (change: PresentationTextEdit, undoGroup?: string) => void;
     onformat?: (change: PresentationFormatChange) => void;
     onshapechange?: (change: PresentationShapeChange) => void;
     onundo?: (redo: boolean) => void;
@@ -301,6 +301,7 @@
     object: SlideObject,
     range: PresentationTextRange,
     value: string,
+    undoGroup?: string,
   ) {
     if (ontextedit)
       ontextedit({
@@ -310,7 +311,7 @@
         ...range,
         value,
         formatting: pendingFormat,
-      });
+      }, undoGroup);
     else {
       const old = slideTextValue(object);
       ontextchange?.({
@@ -873,7 +874,7 @@
                         pendingFormat = undefined;
                       }
                     },
-                    onreplace: (range, value) => replace(object, range, value),
+                    onreplace: (range, value, undoGroup) => replace(object, range, value, undoGroup),
                     onfinish: () => {
                       editing = undefined;
                       pendingFormat = undefined;
@@ -947,8 +948,8 @@
                           pendingFormat = undefined;
                         }
                       },
-                      onreplace: (range, value) =>
-                        replace(object, range, value),
+                      onreplace: (range, value, undoGroup) =>
+                        replace(object, range, value, undoGroup),
                       onfinish: () => {
                         editing = undefined;
                         pendingFormat = undefined;

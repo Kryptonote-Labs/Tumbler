@@ -240,3 +240,5 @@ to match the host theme. These fall back to `--surface`, `--text`, `--border-str
 `--surface-hover`, `--accent` and `--accent-ink`. Unchecked checkboxes use
 `--text-faint` for a visible outline when no control border is supplied. Browsers without customizable select
 support retain their native popup.
+
+Presentation text callbacks receive an optional second `undoGroup` argument. Adjacent typing or deletion in one direction shares a group until a one-second pause, caret movement, focus change or shortcut. Paste, selection replacement, paragraph breaks and composition commits use separate groups. Hosts may use this hint to group undo while retaining a separate durable operation identity for every edit. They must close groups when accepting remote edits and check all grouped operations before undoing them.
