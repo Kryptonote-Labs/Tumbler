@@ -152,3 +152,5 @@ paint no editor prompts. The painter does not change the document.
 This preview path has basic paragraph wrapping and anchoring. It does not yet reproduce
 all browser text layout, decorative effects, picture tiling or pattern fills. Interactive
 editing and playback remain in the Svelte view.
+
+`findVisibleSlideIndex(slides, start, direction)` finds a non-hidden slide at or beyond `start` in either direction (`1` or `-1`). It returns `undefined` at the deck boundary, including empty or all-hidden decks. Use it for slideshow entry and navigation; editing still includes hidden slides.
