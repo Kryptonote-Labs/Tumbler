@@ -14,6 +14,16 @@ function fixture() {
   return doc;
 }
 
+// Equivalent Y.Text values can split identical formatting into different adjacent runs.
+function characters(text: Y.Text) {
+  return text.toDelta().flatMap((part: { insert: unknown; attributes?: Record<string, unknown> }) => {
+    const value: unknown = part.insert;
+    if (typeof value !== 'string') throw new Error('Expected plain Word text.');
+    const attributes: Record<string, unknown> = part.attributes ?? {};
+    return value.split('').map(character => ({ character, attributes }));
+  });
+}
+
 test('inline input and fully staged edits agree across generated rich-text sequences', () => {
   fc.assert(fc.property(fc.array(fc.record({
     kind: fc.constantFrom('insert', 'delete', 'format'), at: fc.nat(100),
@@ -47,8 +57,8 @@ test('inline input and fully staged edits agree across generated rich-text seque
           }
         });
         expect(outcomes[0]).toBe(outcomes[1]);
-        expect(direct.getText('body').toDelta()).toEqual(staged.getText('body').toDelta());
-        expect(views[0]!.text.toDelta()).toEqual(views[1]!.text.toDelta());
+        expect(characters(direct.getText('body'))).toEqual(characters(staged.getText('body')));
+        expect(characters(views[0]!.text)).toEqual(characters(views[1]!.text));
       }
     } finally { views.forEach(view => view.destroy()); direct.destroy(); staged.destroy(); }
   }), { numRuns: 80 });
