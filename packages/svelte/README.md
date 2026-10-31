@@ -242,3 +242,10 @@ to match the host theme. These fall back to `--surface`, `--text`, `--border-str
 support retain their native popup.
 
 Presentation text callbacks receive an optional second `undoGroup` argument. Adjacent typing or deletion in one direction shares a group until a one-second pause, caret movement, focus change or shortcut. Paste, selection replacement, paragraph breaks and composition commits use separate groups. Hosts may use this hint to group undo while retaining a separate durable operation identity for every edit. They must close groups when accepting remote edits and check all grouped operations before undoing them.
+
+For a slideshow, pass `playing={true}` to `PresentationSlideView`. Automatic
+animations start on slide entry. Call the component's `advanceAnimation()` method
+on forward navigation; it returns `true` when it consumes a click group and
+`false` when the host should move to the next slide. Changing slides or leaving
+playback resets the effects. Editing and thumbnails remain static. Playback adds
+no animation authoring controls.

@@ -138,19 +138,24 @@ test("animation playback hides entrance targets until their click step, then res
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     buffer: Buffer.from(tx.commit()),
   });
-  await page
-    .getByRole("button", { name: "Play animations", exact: true })
-    .click();
+  await expect(page.locator(".playback-controls")).toHaveCount(0);
   const target = page.locator('.slide-stage [data-animation-target="2"]');
   await expect(target).toHaveCSS("opacity", "0");
   await page
-    .getByRole("button", { name: "Next animation", exact: true })
+    .getByRole("button", { name: "Next slide", exact: true })
     .click();
   await expect(target).toHaveCSS("opacity", "1");
+  await expect(page.getByLabel("Slide", { exact: true })).toHaveValue("0");
   await page
-    .getByRole("button", { name: "Stop playback", exact: true })
+    .getByRole("button", { name: "Edit", exact: true })
     .click();
   await expect(target).toHaveCSS("opacity", "1");
+  await page.getByRole("button", { name: "View", exact: true }).click();
+  await expect(target).toHaveCSS("opacity", "0");
+  await page.getByRole("button", { name: "Next slide", exact: true }).click();
+  await expect(target).toHaveCSS("opacity", "1");
+  await page.getByRole("button", { name: "Next slide", exact: true }).click();
+  await expect(page.getByLabel("Slide", { exact: true })).toHaveValue("1");
 });
 test("Windows metafiles decode lazily into SVG pictures", async ({ page }) => {
   const data = new Uint8Array(132),
@@ -259,9 +264,8 @@ test("rendering example shows decimal tabs, drawings, charts and playback togeth
   await page.getByLabel("Slide", { exact: true }).selectOption("4");
   await expect(stage.locator("video")).toBeVisible();
   await page.getByLabel("Slide", { exact: true }).selectOption("5");
-  await expect(
-    page.getByRole("button", { name: "Play animations", exact: true }),
-  ).toBeVisible();
+  await expect(page.locator(".playback-controls")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Next slide", exact: true })).toBeEnabled();
   expect(errors).toEqual([]);
 });
 

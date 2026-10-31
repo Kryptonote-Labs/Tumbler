@@ -5,6 +5,14 @@ export interface PlaybackOptions {
   step: number;
   editable: boolean;
 }
+/** Steps are click groups; automatic, with and after effects share their group's step. */
+export function nextPresentationAnimationStep(
+  slide: Pick<PresentationSlide, "animations">,
+  step: number,
+): number | undefined {
+  const steps = (slide.animations ?? []).map((effect) => effect.step).filter((next) => next > step);
+  return steps.length ? Math.min(...steps) : undefined;
+}
 const wipe = (direction: string) =>
   direction === "right"
     ? "inset(0 0 0 100%)"
