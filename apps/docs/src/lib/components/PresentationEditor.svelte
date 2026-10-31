@@ -23,6 +23,11 @@
   } = $props();
   let artifact = $state(untrack(() => session.artifact));
   let index = $state(0);
+  let slideView = $state<{ advanceAnimation: () => boolean }>();
+  function advance() {
+    if (slideView?.advanceAnimation()) return;
+    index = Math.min(index + 1, artifact.document.slides.length - 1);
+  }
   let selectedKey = $state<string>();
   let selectedKeys = $state<string[]>([]);
   let canUndo = $state(false),
@@ -61,8 +66,8 @@
     >
     <button
       aria-label="Next slide"
-      disabled={index >= artifact.document.slides.length - 1}
-      onclick={() => index++}>→</button
+      disabled={editable && index >= artifact.document.slides.length - 1}
+      onclick={advance}>→</button
     >
     {#if editable}<span class="spacer"></span><button
         disabled={!canUndo}
@@ -77,6 +82,8 @@
     </aside>
     <div class="slide-stage">
       {#if slide}<PresentationSlideView
+          bind:this={slideView}
+          playing={!editable}
           onslide={(part) => {
             const next = artifact.document.slides.findIndex(
               (slide) => slide.part === part,
