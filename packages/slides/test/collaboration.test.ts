@@ -250,3 +250,26 @@ test('deleted objects cannot redirect stale edits onto replacement objects with 
     ),
   ).toThrow('local edits are retained');
 });
+
+test('duplicating a changed source cannot remap a pending deletion to the wrong cloned object', () => {
+  const { base: initial, slideId, objectKey } = fixture();
+  const base = applyPresentationCommand(initial, {
+    name: 'insert-object',
+    slideId,
+    bounds: { x: 200, y: 10, width: 100, height: 50 },
+    object: { kind: 'shape', text: 'Second' },
+  });
+  const duplicate = { name: 'insert-slide' as const, index: 1, sourceId: slideId };
+  const branch = applyPresentationCommand(base, duplicate);
+  const cloned = branch.document.slides[1]!;
+  const deletion = { name: 'delete-object' as const, slideId, objectKey };
+  const remote = applyPresentationCommand(base, deletion);
+  expect(() =>
+    rebasePresentationCommands(
+      base,
+      remote,
+      [duplicate, { name: 'delete-object', slideId: cloned.id, objectKey: cloned.objects[0]!.key }],
+      [deletion],
+    ),
+  ).toThrow('local edits are retained');
+});

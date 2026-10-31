@@ -56,6 +56,11 @@ export function rebasePresentationCommands(
       !slideIds.has(input.sourceId)
     )
       conflict();
+    if (input.name === 'insert-slide' && input.sourceId && !slideIds.has(input.sourceId)) {
+      const original = base.document.slides.find((slide) => slide.id === input.sourceId);
+      const source = current.document.slides.find((slide) => slide.id === input.sourceId);
+      if (semantic(original) !== semantic(source)) conflict();
+    }
     if (input.name === 'replace-all') {
       const expanded: Exclude<PresentationCommand, { name: 'batch' }>[] = [];
       const escaped = input.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -206,7 +211,9 @@ export function rebasePresentationCommands(
     )
       conflict();
     if (
-      (command.name === 'edit-table' || command.name === 'delete-object') &&
+      (command.name === 'edit-table' ||
+        command.name === 'delete-object' ||
+        command.name === 'duplicate-object') &&
       oldObject &&
       !objectIds.has(`${inputSlideId}:${inputObjectKey}`) &&
       semantic(oldObject) !== semantic(object)
