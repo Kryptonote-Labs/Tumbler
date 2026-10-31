@@ -1,3 +1,4 @@
+import { findPresentationMatches } from "./search.ts";
 import { editPresentationTable } from "./table-edit.ts";
 import { pastePresentationObject } from "./clipboard.ts";
 import { openPresentationArtifact } from "./artifact.ts";
@@ -13,7 +14,6 @@ import {
 } from "./authoring-slides.ts";
 import { arrangeObject, deleteObject, duplicateObject, insertObject } from "./authoring-objects.ts";
 import { applyPresentationLayout } from "./authoring-layout.ts";
-import { slideTextValue } from "./editing.ts";
 import { paragraphFormat } from "./paragraph-format.ts";
 
 const number = z.number().finite();
@@ -226,6 +226,7 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
       find: z.string().min(1),
       value: z.string(),
       caseSensitive: z.boolean().default(false),
+      wholeWord: z.boolean().optional(),
     })
     .strict(),
 ]);
@@ -288,22 +289,11 @@ export function applyPresentationCommand(
       return paragraphFormat(artifact, command);
     case "replace-all": {
       let result = artifact;
-      const literal = command.find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const expression = new RegExp(literal, command.caseSensitive ? "gu" : "giu");
-      for (const slide of artifact.document.slides)
-        for (const object of slide.objects) {
-          if (!object.textEditable) continue;
-          const value = slideTextValue(object);
-          const positions = [...value.matchAll(expression)].map((match) => match.index);
-          for (const start of positions.reverse())
-            result = result.editText({
-              slideId: slide.id,
-              objectKey: object.key,
-              start,
-              end: start + command.find.length,
-              value: command.value,
-            });
-        }
+      const matches = findPresentationMatches(artifact.document, command.find, {
+        matchCase: command.caseSensitive, wholeWord: command.wholeWord ?? false,
+      });
+      for (const { editable, ...target } of matches.reverse())
+        if (editable) result = result.editText({ ...target, value: command.value });
       return result;
     }
   }
