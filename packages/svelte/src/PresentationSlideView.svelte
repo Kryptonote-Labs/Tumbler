@@ -495,7 +495,9 @@
         360;
     } else if (drag.mode === "move")
       next = { ...transform, x: transform.x + dx, y: transform.y + dy };
-    else next = resizeSlideTransform(transform, drag.mode, dx, dy);
+    else next = resizeSlideTransform(transform, drag.mode, dx, dy, {
+      preserveAspectRatio: drag.object.kind === "picture" || event.shiftKey,
+    });
     if (drag.mode === "move") {
       const parent = drag.object.parentMatrix ?? [1, 0, 0, 1, 0, 0];
       const sx = parent[0] * dx + parent[2] * dy;
@@ -524,7 +526,9 @@
     commit([{
       slideId: slide.id,
       objectKey: object.key,
-      ...resizeSlideTransform(object.transform, handle, delta.x, delta.y),
+      ...resizeSlideTransform(object.transform, handle, delta.x, delta.y, {
+        preserveAspectRatio: object.kind === "picture" || event.shiftKey,
+      }),
     }]);
   }
 

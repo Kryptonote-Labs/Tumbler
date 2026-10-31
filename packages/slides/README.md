@@ -58,6 +58,9 @@ Import `PresentationSlideView`, `PresentationSlideRail`, and
 `PresentationFormattingToolbar` from `@tumblerjs/svelte/slides`.
 The view emits edit callbacks; your application applies them to the session.
 The rail provides thumbnail navigation through a bindable `index`.
+Corner resizing preserves picture proportions; Shift preserves proportions for
+other objects. Side handles resize freely. `resizeSlideTransform` exposes the
+same corner constraint through `{ preserveAspectRatio: true }` as its fifth argument.
 
 See the [PowerPoint guide](https://tumbler.alexco.dev/docs/powerpoint) for complete
 viewer, navigation, editing, and download examples.
