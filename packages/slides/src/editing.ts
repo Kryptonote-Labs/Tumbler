@@ -561,19 +561,23 @@ export function editPresentationShape(
   }));
   if (patch.cornerRadius !== undefined) {
     const geometry = elements(props).find(e => e.localName === "prstGeom" && e.namespaceUri === drawing);
-    if (!geometry || geometry.attributes.find(a => a.localName === "prst")?.value !== "roundRect")
+    if (object.geometry !== "roundRect" || geometry && geometry.attributes.find(a => a.localName === "prst")?.value !== "roundRect")
       throw new PresentationError("unsupported_edit", "Corner radius applies to rounded rectangles.");
     const size = Math.min(object.transform.width, object.transform.height);
     if (size <= 0) throw new RangeError("Rounded rectangles must have positive dimensions.");
     const adjustment = Math.round(Math.min(.5, patch.cornerRadius / size) * 100000);
-    const list = child(geometry, "avLst");
+    const list = geometry ? child(geometry, "avLst") : undefined;
     const guide = `<a:gd name="adj" fmla="val ${adjustment}"/>`;
     const existing = list ? elements(list).filter(e => e.localName !== "gd" ||
       e.attributes.find(a => a.localName === "name")?.value !== "adj").map(e => raw(source, e)).join("") : "";
-    const inner = elements(geometry).filter(e => e !== list).map(e => raw(source, e)).join("");
+    const inner = geometry ? elements(geometry).filter(e => e !== list).map(e => raw(source, e)).join("") : "";
     const index = nodes.findIndex(n => n.name === "prstGeom");
-    nodes[index] = { name: "prstGeom", xml: markup(source, geometry, {},
-      (list ? markup(source, list, {}, existing + guide) : `<a:avLst>${guide}</a:avLst>`) + inner) };
+    const values = list ? markup(source, list, {}, existing + guide) : `<a:avLst>${guide}</a:avLst>`;
+    // Placeholders may inherit their geometry; materialize only this shape's override.
+    const updated = { name: "prstGeom", xml: geometry ? markup(source, geometry, {}, values + inner) :
+      `<a:prstGeom prst="roundRect">${values}</a:prstGeom>` };
+    if (index >= 0) nodes[index] = updated;
+    else nodes.push(updated);
   }
   if (patch.fill !== undefined) {
     for (let i = nodes.length - 1; i >= 0; i--)
