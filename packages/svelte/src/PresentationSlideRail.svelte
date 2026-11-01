@@ -51,6 +51,12 @@
   }
   function startPointer(event: PointerEvent, id: string) {
     if (!onreorder || event.button !== 0 || !event.isPrimary) return;
+    // Touch swipes on the preview scroll the rail. Only the number/grip starts a touch drag.
+    if (
+      event.pointerType === 'touch' &&
+      !(event.target instanceof Element && event.target.closest('.number'))
+    )
+      return;
     const node = event.currentTarget as HTMLButtonElement;
     pending = { id, x: event.clientX, y: event.clientY, pointerId: event.pointerId, node };
     node.setPointerCapture(event.pointerId);
@@ -252,8 +258,26 @@
   }
   .reorderable {
     cursor: grab;
-    touch-action: none;
+    touch-action: pan-y;
     user-select: none;
+  }
+  .reorderable .number {
+    touch-action: none;
+  }
+  @media (any-pointer: coarse) {
+    .reorderable .number {
+      min-width: 24px;
+      min-height: 44px;
+    }
+    .reorderable .number::after {
+      content: '';
+      display: block;
+      width: 10px;
+      height: 14px;
+      margin: 6px auto 0;
+      background: radial-gradient(circle, currentColor 1px, transparent 1.5px) 0 0 / 5px 5px;
+      opacity: 0.6;
+    }
   }
   .dragging {
     opacity: 0.3;

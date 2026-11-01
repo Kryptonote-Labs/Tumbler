@@ -172,7 +172,8 @@ keyboard reordering. The index is the slide's final, zero-based position. Apply 
 `move-slide` command and pass the updated presentation back to the rail. Preserve
 the active slide by ID when updating its index. Omit the callback for read-only
 navigation. Dragging shows an insertion marker, scrolls at the rail edges, and
-cancels on Escape or a drop outside the rail.
+cancels on Escape or a drop outside the rail. On touchscreens, swipe thumbnails to
+scroll and drag the grip beside the slide number to reorder.
 In edit mode, connect object, text, formatting, and shape callbacks to a
 `PresentationEditingSession`, then pass the updated document back to the view.
 
