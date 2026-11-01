@@ -78,7 +78,16 @@
   </div>
   <div class="slide-workspace">
     <aside>
-      <PresentationSlideRail presentation={artifact.document} bind:index />
+      <PresentationSlideRail
+        presentation={artifact.document}
+        bind:index
+        onreorder={editable ? (slideId, target) => {
+          const selectedId = slide?.id;
+          apply(() => session.execute({ name: "move-slide", slideId, index: target }));
+          const next = artifact.document.slides.findIndex(item => item.id === selectedId);
+          if (next >= 0) index = next;
+        } : undefined}
+      />
     </aside>
     <div class="slide-stage">
       {#if slide}<PresentationSlideView
