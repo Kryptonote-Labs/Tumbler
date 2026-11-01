@@ -1,3 +1,4 @@
+import { insertPresentationInk } from "./ink-authoring.ts";
 import { findPresentationMatches } from "./search.ts";
 import { editPresentationTable } from "./table-edit.ts";
 import { pastePresentationObject } from "./clipboard.ts";
@@ -158,6 +159,12 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
       ]),
     })
     .strict(),
+  z.object({
+    name: z.literal("insert-ink"), slideId: id,
+    points: z.array(z.tuple([number, number, number.min(0).max(1)])).min(1),
+    color: z.string().regex(/^#[a-f\d]{6}$/i), size: number.positive(),
+    highlighter: z.boolean().optional(),
+  }).strict(),
   z.object({ name: z.literal("delete-object"), ...target }).strict(),
   z.object({ name: z.literal("duplicate-object"), ...target }).strict(),
   z
@@ -271,6 +278,8 @@ export function applyPresentationCommand(
       return slideBackground(artifact, command.slideId, command.color);
     case "insert-object":
       return insertObject(artifact, command.slideId, command.bounds, command.object);
+    case "insert-ink":
+      return insertPresentationInk(artifact, command);
     case "delete-object":
       return deleteObject(artifact, command.slideId, command.objectKey);
     case "duplicate-object":

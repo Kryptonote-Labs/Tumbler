@@ -185,3 +185,19 @@ The `replace-all` command accepts `wholeWord` alongside `caseSensitive`. Replace
 `PresentationSlideView` accepts `searchMatches` and `currentSearchMatch` from that API. It paints occurrences through the CSS Highlight API without changing slide markup, selection or formatting. The current match is distinguished from the other occurrences.
 
 `presentationThemeColours(document, slideId)` exposes the selected slide's effective palette, including layout/slide theme overrides and colour-map remapping. Use it for colour pickers so previews and applied palette colours agree with slide rendering. It returns the default Office palette for presentations without a theme and rejects unknown slide IDs.
+
+### Native ink
+
+`insert-ink` accepts `slideId`, `points` as `[x, y, pressure]` samples in slide CSS
+pixels, a `#RRGGBB` `color`, positive pen `size` in points, and optional `highlighter`.
+Pressure ranges from zero to one. A command creates one independently selectable
+ink object, including stationary taps and horizontal or vertical strokes.
+
+The shared `@tumblerjs/ink` engine supplies the same calibrated Office InkML and
+pressure interpretation as Word. Slides store an InkML content part and an
+`mc:AlternateContent` picture fallback. Supported ink paired with a picture fallback
+renders as vectors. Unsupported ink retains its original cached picture and source.
+Moving, resizing, rotating, arranging, duplicating and copying operate on the whole
+alternate-content object. Resizing refreshes its cached PNG without modifying a
+sibling's shared resource. `presentationInkPoints(object)` returns sample centres
+in slide coordinates for hit testing, and `inspectPresentation` exposes traces to agents.

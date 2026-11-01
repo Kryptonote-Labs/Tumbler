@@ -8,3 +8,4 @@ export { inkChannelScale, createOfficeInkScene, type InkShape, type InkPaint, ty
 export { renderOfficeInkRaster, type InkRasterOptions, type InkRasterResult } from './raster.ts';
 export { encodeInkPng } from './png.ts';
 export { readOfficeInkRecognition, type OfficeInkRecognition } from './recognition.ts';
+export { authoredOfficeInkXml, type AuthoredInkStroke } from './authoring.ts';

@@ -113,10 +113,15 @@ export function pastePresentationObject(
   for (const [name, value] of declarations)
     if (!element.attributes.some((a) => a.qualified === name))
       edit.insertAttribute(element, name, value);
+  const identities = new Map<string, string>();
   visit(element, (node) => {
     if (node.localName === "cNvPr") {
       const id = node.attributes.find((a) => !a.namespaceUri && a.localName === "id");
-      if (id) edit.setAttribute(id, String(++maxId));
+      if (id) {
+        let next = identities.get(id.value);
+        if (!next) { next = String(++maxId); identities.set(id.value, next); }
+        edit.setAttribute(id, next);
+      }
     }
   });
   let rootNumber = 1;
