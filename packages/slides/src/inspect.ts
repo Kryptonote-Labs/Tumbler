@@ -30,6 +30,7 @@ export function inspectPresentation(artifact: PresentationArtifact, slideId?: st
         name: o.name,
         kind: o.kind,
         geometry: o.geometry,
+        ink: o.ink && { partName: o.ink.partName, traces: o.ink.document.traces, sampleMatrix: o.ink.sampleMatrix },
         transform: o.transform,
         fill: o.fill,
         stroke: o.stroke,

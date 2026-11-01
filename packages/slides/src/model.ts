@@ -101,6 +101,7 @@ export interface SlideTable {
   readonly cells: readonly SlideTableCell[];
 }
 export interface SlideObject {
+  readonly ink?: import("./ink.ts").PresentationInk;
   readonly media?: import("./media.ts").PresentationMedia | undefined;
   readonly key: string;
   readonly shapeId: string;

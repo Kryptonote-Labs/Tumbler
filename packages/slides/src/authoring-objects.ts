@@ -30,7 +30,8 @@ export function objectTarget(artifact: PresentationArtifact, slideId: string, ke
   if (!object || object.layer !== "slide" || !object.movable)
     throw new Error(object?.restriction ?? "Select an editable slide object.");
   const source = partXml(artifact, slide.part),
-    element = source.element(object.elementId)!;
+    original = source.element(object.elementId)!,
+    element = source.elements("http://schemas.openxmlformats.org/markup-compatibility/2006", "AlternateContent").find(e => e.span.start < original.span.start && e.span.end > original.span.end) ?? original;
   return { slide, object, source, element };
 }
 function validateBounds(bounds: ObjectBounds, line: boolean) {
@@ -176,20 +177,24 @@ export function duplicateObject(artifact: PresentationArtifact, slideId: string,
   };
   visit(source.root);
   const id = maxId + 1;
-  // Only rewrite the root object's identity, preserving relationship ids and all other markup.
-  const identity = children(children(element).find((e) => e.localName.startsWith("nv"))!).find(
-    (e) => e.localName === "cNvPr",
-  )!;
-  const idAttr = identity.attributes.find((a) => a.localName === "id" && !a.namespaceUri)!;
-  const fragment = raw(source, element),
-    start = idAttr.valueSpan.start - element.span.start,
-    end = idAttr.valueSpan.end - element.span.start;
+  // Every alternate representation is the same object and must retain the same identity.
+  const identityEdit = beginLosslessXmlEdit(source);
+  function rename(node: typeof element) {
+    if (node.localName === 'cNvPr') {
+      const attr = node.attributes.find(a => a.localName === 'id' && !a.namespaceUri);
+      if (attr) identityEdit.setAttribute(attr, String(id));
+    }
+    for (const child of children(node)) rename(child);
+  }
+  rename(element);
+  const renamed = identityEdit.commit().document;
+  const fragment = raw(renamed, renamed.element(element.id)!);
   const edit = beginLosslessXmlEdit(source);
   const tree = children(children(source.root).find((e) => e.localName === "cSld")!).find(
     (e) => e.localName === "spTree",
   )!;
   const extension = children(tree).find((e) => e.localName === "extLst");
-  const markup = fragment.slice(0, start) + id + fragment.slice(end);
+  const markup = fragment;
   if (extension) edit.insertMarkupBefore(extension, markup);
   else edit.appendMarkup(tree, markup);
   let next = commitXml(artifact, slide.part, edit.commit().bytes);

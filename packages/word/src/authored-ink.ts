@@ -1,3 +1,4 @@
+import { authoredOfficeInkXml } from '@tumblerjs/ink';
 import { createWordArtifact } from './create.ts';
 import { imagePlacement, type WordImagePosition } from './image-placement.ts';
 import type { WordImageDrawing } from './drawings.ts';
@@ -45,9 +46,7 @@ export function isWordAuthoredInk(value: unknown): value is WordAuthoredInk {
 export function authoredInkXml(ink: WordAuthoredInk): string {
   if (!isWordAuthoredInk(ink)) throw new TypeError('Invalid authored ink.');
   const strokes = ink.strokes ?? [ink];
-  const brushes = strokes.map((stroke, i) => `<brush xml:id="pen${i}"><brushProperty name="width" value="${stroke.size}" units="pt"/><brushProperty name="height" value="${stroke.size}" units="pt"/><brushProperty name="color" value="${stroke.color}"/><brushProperty name="tip" value="${stroke.highlighter ? 'rectangle' : 'ellipse'}"/><brushProperty name="transparency" value="${stroke.highlighter ? 128 : 0}"/><brushProperty name="ignorePressure" value="${stroke.highlighter ? 'true' : 'false'}"/><brushProperty name="fitToCurve" value="false"/></brush>`).join('');
-  const traces = strokes.map((stroke, i) => `<trace xml:id="stroke${i}" contextRef="#context" brushRef="#pen${i}">${stroke.points.map(p => [Math.round(p[0] * 2540 / 72), Math.round(p[1] * 2540 / 72), Math.round(p[2] * 1023)].join(' ')).join(', ')}</trace>`).join('');
-  return `<ink xmlns="http://www.w3.org/2003/InkML"><definitions><context xml:id="context"><inkSource xml:id="device"><traceFormat><channel name="X" type="integer" units="cm"/><channel name="Y" type="integer" units="cm"/><channel name="F" type="integer" units="dev" min="0" max="1023"/></traceFormat><channelProperties><channelProperty channel="X" name="resolution" value="1000" units="1/cm"/><channelProperty channel="Y" name="resolution" value="1000" units="1/cm"/></channelProperties></inkSource></context>${brushes}</definitions>${traces}</ink>`;
+  return authoredOfficeInkXml(strokes);
 }
 
 export function authoredInkMarkup(ink: WordAuthoredInk, id: number, availableWidth: number) {

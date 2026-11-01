@@ -1,3 +1,4 @@
+import { readPresentationInk } from "./ink.ts";
 import { PresentationPackageState } from "./package-state.ts";
 import { readSlideTiming } from "./timing.ts";
 import { readPresentationMedia } from "./media.ts";
@@ -1414,6 +1415,9 @@ class Reader {
         element.localName === "pic" &&
         choices.length > 0 &&
         inkTransforms.length === choices.length;
+      const content = choices.flatMap(choice => choice.kind === 'element' ? choice.children.filter(c => c.kind === 'element' && c.localName === 'contentPart') : [])[0];
+      const nativeInk = content?.kind === 'element' ? readPresentationInk(this.pkg, source.part.name.value, content, transform) : undefined;
+      if (nativeInk) image = nativeInk.image;
       const restriction = this.signed
         ? "Signed presentations are read-only."
         : layer !== "slide"
@@ -1430,6 +1434,7 @@ class Reader {
           message,
         });
       result.push({
+        ...(nativeInk ? { ink: nativeInk.ink } : {}),
         key: `${source.part.name.value}#${shapeId}`,
         shapeId,
         elementId: element.id,

@@ -6,6 +6,7 @@
   "dependencies": {
     "@tumblerjs/charts": "0.1.0-alpha.26",
     "@tumblerjs/core": "0.1.0-alpha.26",
+    "@tumblerjs/ink": "0.1.0-alpha.26",
     "@tumblerjs/ooxml": "0.1.0-alpha.26",
     "@tumblerjs/opc": "0.1.0-alpha.26",
     "diff": "^9.0.0",

@@ -1,3 +1,4 @@
+import { refreshPresentationInkFallback } from "./ink-authoring.ts";
 import { refreshModificationId } from "./modification-id.ts";
 import {
   editPresentationText,
@@ -318,11 +319,10 @@ export class PresentationArtifact {
         });
       }
     }
-    return this.commitPart(
-      object.sourcePart,
-      editor.commit().bytes,
-      object.shapeId,
-    );
+    const edited = this.commitPart(object.sourcePart, editor.commit().bytes, object.shapeId);
+    return object.ink && (change.width !== object.transform.width || change.height !== object.transform.height)
+      ? refreshPresentationInkFallback(edited, change.slideId, change.objectKey)
+      : edited;
   }
   replaceText(
     slideId: string,
