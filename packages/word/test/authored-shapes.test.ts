@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { createWordArtifact, importWordContent, NativeWordDocument, WORD_SHAPE_PRESETS, type WordAuthoredShape } from '../src/index.ts';
+import { createWordArtifact, importWordContent, NativeWordDocument, wordShapePath, WORD_SHAPE_PRESETS, type WordAuthoredShape } from '../src/index.ts';
 test('editable shapes retain geometry, fill, outline and text through authored and imported edits', () => {
   for (const preset of WORD_SHAPE_PRESETS) {
     const shape: WordAuthoredShape = { preset, width: 120, height: 60, fill: '#CCDDEE', outline: '#112233', outlineWidth: 1, text: 'Hello' };
@@ -66,5 +66,21 @@ test('new shapes default to fixed/front placement while explicit imported placem
     document.update(content.map(block => block.kind === 'paragraph' ? { ...block, runs: block.runs.map(run => run.shape ? { ...run, shape: { ...run.shape, width: 140 } } : run) } : block));
     expect([...document.drawings.values()][0]?.anchor).toEqual(original.anchor);
     expect([...document.artifact().document.drawings.values()][0]?.anchor).toEqual(original.anchor);
+  }
+});
+
+test('chevron and star preview points follow the default DrawingML geometry', async () => {
+  const { resolveDrawingGeometry } = await import('../../slides/src/drawing-geometry.ts');
+  const points = (path: string) => [...path.matchAll(/[ML]\s*(-?[\d.e+-]+)[, ]+(-?[\d.e+-]+)/gi)].map(match => [Number(match[1]), Number(match[2])] as const);
+  for (const preset of ['chevron', 'star5'] as const) {
+    for (const [width, height] of [[120,60],[60,120],[120,120]] as const) {
+      const actual = points(wordShapePath({preset,width,height}));
+      const geometry = resolveDrawingGeometry(preset, undefined, width - 2, height - 2)!;
+      const expected = points(geometry.paths[0]!.d).map(([x,y])=>[x+1,y+1] as const);
+      expect(actual).toHaveLength(preset === 'chevron' ? 6 : 10);
+      expect(expected).toHaveLength(actual.length);
+      for (const [x,y] of expected)
+        expect(actual.some(([ax,ay])=>Math.abs(ax-x)<0.001 && Math.abs(ay-y)<0.001)).toBe(true);
+    }
   }
 });

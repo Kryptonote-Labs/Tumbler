@@ -8,7 +8,7 @@ import { imagePlacement } from './image-placement.ts';
 import { xmlAttribute } from './create-xml.ts';
 import type { WordShapeDrawing } from './drawings.ts';
 import { isWordShapeTextInsets, wordShapeTextInsetsXml, type WordShapeTextInsets } from './shape-text-insets.ts';
-export const WORD_SHAPE_PRESETS = ['rect', 'roundRect', 'ellipse', 'triangle', 'diamond', 'rightArrow', 'line'] as const;
+export const WORD_SHAPE_PRESETS = ['rect', 'roundRect', 'ellipse', 'triangle', 'diamond', 'rightArrow', 'chevron', 'star5', 'line'] as const;
 export interface WordAuthoredShape extends WordImagePosition {
   readonly preset: typeof WORD_SHAPE_PRESETS[number];
   readonly width: number;
@@ -58,6 +58,20 @@ export function wordShapePath(shape: Pick<WordAuthoredShape, 'preset' | 'width' 
     case 'triangle': return `M${w / 2} 1 L${right} ${bottom} L1 ${bottom} Z`;
     case 'diamond': return `M${w / 2} 1 L${right} ${h / 2} L${w / 2} ${bottom} L1 ${h / 2} Z`;
     case 'rightArrow': return `M1 ${h * .3} H${w * .6} V1 L${right} ${h / 2} L${w * .6} ${bottom} V${h * .7} H1 Z`;
+    case 'chevron': {
+      const notch = Math.min(Math.max(0, w - 2), Math.max(0, h - 2)) / 2;
+      return `M1 1 L${right - notch} 1 L${right} ${h / 2} L${right - notch} ${bottom} L1 ${bottom} L${1 + notch} ${h / 2} Z`;
+    }
+    case 'star5': {
+      // DrawingML star5 defaults fit the outer pentagon to the full shape bounds.
+      const rx = Math.max(0, w - 2) / 2 * 1.05146;
+      const ry = Math.max(0, h - 2) / 2 * 1.10557;
+      return Array.from({ length: 10 }, (_, index) => {
+        const angle = -Math.PI / 2 + index * Math.PI / 5;
+        const radius = index % 2 === 0 ? 1 : 19098 / 50000;
+        return `${index ? 'L' : 'M'}${w / 2 + Math.cos(angle) * rx * radius} ${1 + ry + Math.sin(angle) * ry * radius}`;
+      }).join(' ') + ' Z';
+    }
     case 'line': return `M1 ${bottom} L${right} 1`;
   }
 }

@@ -1266,3 +1266,5 @@ Locally prepared collaborative updates carry a validation proof tied to their ow
 snapshot, root identities and layout baseline. An unchanged local preparation can commit without
 building another validation replica. Received, modified and stale updates still validate the full
 composed document. Snapshot freshness includes deletion-only changes.
+
+Word authored shapes include chevron and five-point star presets alongside the existing rectangle, rounded rectangle, oval, triangle, diamond, arrow and line. Both presets retain editable geometry, colours and text when exported and reopened. SVG and canvas use their default DrawingML outlines.
