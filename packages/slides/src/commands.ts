@@ -138,6 +138,7 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
               ])
               .optional(),
             text: z.string().optional(),
+            cornerRadius: number.nonnegative().optional(),
             fill: color.optional(),
             stroke: color.optional(),
             fontSize: number.min(1).max(4000).optional(),
@@ -212,6 +213,7 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
       fill: color.optional(),
       stroke: color.optional(),
       strokeWidth: number.nonnegative().optional(),
+      cornerRadius: number.nonnegative().optional(),
     })
     .strict(),
   z

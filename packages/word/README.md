@@ -1268,3 +1268,5 @@ building another validation replica. Received, modified and stale updates still 
 composed document. Snapshot freshness includes deletion-only changes.
 
 Word authored shapes include chevron and five-point star presets alongside the existing rectangle, rounded rectangle, oval, triangle, diamond, arrow and line. Both presets retain editable geometry, colours and text when exported and reopened. SVG and canvas use their default DrawingML outlines.
+
+Rounded rectangles accept optional `cornerRadius` in points. Omission uses the DrawingML default, 16.667% of the shorter side. Rendering and DOCX export clamp the radius to half that side. Explicit `roundRect` adjustment values import as editable radii, including zero; unsupported geometry formulas remain preserved as opaque drawings.

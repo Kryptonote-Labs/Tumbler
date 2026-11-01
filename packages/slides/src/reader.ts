@@ -1472,7 +1472,7 @@ class Reader {
         strokeWidth: px(line, "w", 1),
         cornerRadius:
           preset === "roundRect"
-            ? Math.min(transform.width, transform.height) * 0.16667
+            ? Math.min(transform.width, transform.height) * Math.min(50000, Math.max(0, drawingGeometry?.adjustments.adj ?? 16667)) / 100000
             : 0,
         text: parsedText,
         image,

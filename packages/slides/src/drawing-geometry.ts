@@ -21,6 +21,7 @@ export interface DrawingGeometry {
     readonly fill: string;
     readonly stroke: boolean;
   }[];
+  readonly adjustments: Readonly<Record<string, number>>;
   readonly textRect: readonly [number, number, number, number];
 }
 const turn = Math.PI / 10800000;
@@ -276,7 +277,7 @@ export function evaluateGeometry(
   const [l, t, r, b] = definition.rect.map(
     (value) => read(value) / EMUS_PER_PIXEL,
   );
-  return { paths, textRect: [l ?? 0, t ?? 0, r ?? width, b ?? height] };
+  return { paths, adjustments: Object.fromEntries(definition.adjustments.map(([name]) => [name, values.get(name)!])), textRect: [l ?? 0, t ?? 0, r ?? width, b ?? height] };
 }
 export function resolveDrawingGeometry(
   preset: string,

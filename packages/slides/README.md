@@ -208,3 +208,5 @@ Moving, resizing, rotating, arranging, duplicating and copying operate on the wh
 alternate-content object. Resizing refreshes its cached PNG without modifying a
 sibling's shared resource. `presentationInkPoints(object)` returns sample centres
 in slide coordinates for hit testing, and `inspectPresentation` exposes traces to agents.
+
+Rounded rectangles accept `cornerRadius` in CSS pixels on `insert-object` shapes and `style-shape` commands. Radii are stored as native DrawingML `adj` values, clamped to half the shorter side. Omission on insertion uses the preset default of 16.667%. `SlideObject.cornerRadius` reflects the evaluated adjustment, and resizing scales the stored proportion. Other shape geometries reject radius edits.

@@ -148,6 +148,11 @@ function parseDrawing(
     const props = nodes.find(element => element.localName === 'spPr');
     const geometry = props && descendants(props).find(element => element.localName === 'prstGeom');
     const preset = attribute(geometry, 'prst');
+    const adjustments = geometry ? descendants(geometry).filter(node => node.localName === 'gd') : [];
+    const radiusFormula = adjustments.length === 1 && attribute(adjustments[0], 'name') === 'adj'
+      ? attribute(adjustments[0], 'fmla')?.trim().match(/^val\s+([+-]?\d+)$/) : undefined;
+    const radiusAdjustment = radiusFormula ? Number(radiusFormula[1]) : undefined;
+    const supportedRadius = preset === 'roundRect' && radiusAdjustment !== undefined && Number.isSafeInteger(radiusAdjustment);
     // Keep complex imported drawings opaque until their complete appearance is modeled.
     const transform = props && descendants(props).find(element => element.localName === 'xfrm');
     const unsupportedLuminance = nodes.some(node => {
@@ -159,7 +164,7 @@ function parseDrawing(
     });
     if (unsupportedLuminance || nodes.some(node => node.localName === 'schemeClr' && (!wordThemeSlot(attribute(node, 'val') ?? '') || node.children.some(c => c.kind === 'element' && !['lumMod', 'lumOff'].includes(c.localName)))) || nodes.some(node => ['gradFill', 'pattFill', 'blipFill', 'alpha', 'style', 'effectLst', 'effectDag'].includes(node.localName)) ||
       ['rot', 'flipH', 'flipV'].some(name => attribute(transform, name) !== undefined) ||
-      geometry && descendants(geometry).some(node => node.localName === 'gd') ||
+      adjustments.length > 0 && !supportedRadius ||
       anchor && anchor.wrap !== 'none')
       return unsupported(drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, 'This shape uses appearance or wrapping properties that are retained in the source document.');
     const color = (parent: LosslessXmlElement | undefined): WordColour => {
@@ -188,7 +193,7 @@ function parseDrawing(
     const body = nodes.find(n => n.localName === 'bodyPr');
     const textInsets = readWordShapeTextInsets(name => attribute(body, name));
     const textAnchor = attribute(body, 'anchor') === 'ctr' ? 'center' : attribute(body, 'anchor') === 'b' ? 'bottom' : 'top';
-    const shape = { preset, textAnchor, ...(textInsets ? { textInsets } : {}), ...(textBody ? { textBody } : {}), width: widthPoints, height: heightPoints, fill: color(props), outline: color(line), outlineWidth: Number(attribute(line, 'w') ?? 0) / EMUS_PER_POINT, ...(text ? { text } : {}), ...(altText ? { alt: altText } : {}), layout: placement === 'inline' ? 'inline' : anchor?.behindDocument ? 'behind' : 'front', ...(anchor ? { x: anchor.horizontalOffsetPoints ?? 0, y: anchor.verticalOffsetPoints ?? 0, moveWithText: anchor.verticalRelativeTo !== 'page', ...(anchor.horizontalRelativeTo === 'page' || anchor.horizontalRelativeTo === 'column' ? { horizontalRelativeTo: anchor.horizontalRelativeTo } : {}), ...(['page', 'line', 'paragraph'].includes(anchor.verticalRelativeTo ?? '') ? { verticalRelativeTo: anchor.verticalRelativeTo } : {}) } : {}) };
+    const shape = { preset, ...(supportedRadius ? { cornerRadius: Math.min(widthPoints, heightPoints) * Math.min(50000, Math.max(0, radiusAdjustment!)) / 100000 } : {}), textAnchor, ...(textInsets ? { textInsets } : {}), ...(textBody ? { textBody } : {}), width: widthPoints, height: heightPoints, fill: color(props), outline: color(line), outlineWidth: Number(attribute(line, 'w') ?? 0) / EMUS_PER_POINT, ...(text ? { text } : {}), ...(altText ? { alt: altText } : {}), layout: placement === 'inline' ? 'inline' : anchor?.behindDocument ? 'behind' : 'front', ...(anchor ? { x: anchor.horizontalOffsetPoints ?? 0, y: anchor.verticalOffsetPoints ?? 0, moveWithText: anchor.verticalRelativeTo !== 'page', ...(anchor.horizontalRelativeTo === 'page' || anchor.horizontalRelativeTo === 'column' ? { horizontalRelativeTo: anchor.horizontalRelativeTo } : {}), ...(['page', 'line', 'paragraph'].includes(anchor.verticalRelativeTo ?? '') ? { verticalRelativeTo: anchor.verticalRelativeTo } : {}) } : {}) };
     if (isWordAuthoredShape(shape)) return { kind: 'shape', elementId: drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, shape };
   }
   const relationshipNs = input.conformance === "strict" ? "http://purl.oclc.org/ooxml/officeDocument/relationships" : "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
