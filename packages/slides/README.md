@@ -210,3 +210,5 @@ sibling's shared resource. `presentationInkPoints(object)` returns sample centre
 in slide coordinates for hit testing, and `inspectPresentation` exposes traces to agents.
 
 Rounded rectangles accept `cornerRadius` in CSS pixels on `insert-object` shapes and `style-shape` commands. Radii are stored as native DrawingML `adj` values, clamped to half the shorter side. Omission on insertion uses the preset default of 16.667%. `SlideObject.cornerRadius` reflects the evaluated adjustment, and resizing scales the stored proportion. Other shape geometries reject radius edits.
+
+The rounded-rectangle default and radius bounds follow `roundRect` in `presetShapeDefinitions.xml`, distributed with [ECMA-376 Part 1](https://ecma-international.org/wp-content/uploads/ECMA-376-1_5th_edition_december_2016.zip).
