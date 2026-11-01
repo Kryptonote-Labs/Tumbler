@@ -57,6 +57,10 @@ export function rebasePresentationCommands(
       !slideIds.has(input.sourceId)
     )
       conflict();
+    if (
+      input.name === 'insert-slide' && input.layoutSourceId &&
+      removedSlides.has(input.layoutSourceId) && !slideIds.has(input.layoutSourceId)
+    ) conflict();
     if (input.name === 'insert-slide' && input.sourceId && !slideIds.has(input.sourceId)) {
       const original = base.document.slides.find((slide) => slide.id === input.sourceId);
       const source = current.document.slides.find((slide) => slide.id === input.sourceId);
@@ -80,6 +84,8 @@ export function rebasePresentationCommands(
     if ('slideId' in command) command.slideId = slideIds.get(command.slideId) ?? command.slideId;
     if ('sourceId' in command && command.sourceId)
       command.sourceId = slideIds.get(command.sourceId) ?? command.sourceId;
+    if (command.name === 'insert-slide' && command.layoutSourceId)
+      command.layoutSourceId = slideIds.get(command.layoutSourceId) ?? command.layoutSourceId;
     const inputSlideId = 'slideId' in input ? input.slideId : undefined;
     const inputObjectKey = 'objectKey' in input ? input.objectKey : undefined;
     if (inputSlideId && removedSlides.has(inputSlideId) && !slideIds.has(inputSlideId)) conflict();

@@ -1,3 +1,5 @@
+import { newSlideLayout } from "./new-slide-layout.ts";
+import { applyPresentationLayout } from "./authoring-layout.ts";
 import { beginPackageTransaction } from "@tumblerjs/opc";
 import { beginLosslessXmlEdit, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { openPresentationArtifact, type PresentationArtifact } from "./artifact.ts";
@@ -21,7 +23,12 @@ export function children(element: LosslessXmlElement) {
 export function raw(source: { source: string }, element: LosslessXmlElement) {
   return source.source.slice(element.span.start, element.span.end);
 }
-export function insertSlide(artifact: PresentationArtifact, index: number, sourceId?: string) {
+export function insertSlide(
+  artifact: PresentationArtifact,
+  index: number,
+  sourceId?: string,
+  layoutSourceId?: string,
+) {
   editable(artifact);
   if (!Number.isInteger(index) || index < 0 || index > artifact.document.slides.length)
     throw new RangeError("Invalid slide position.");
@@ -46,7 +53,11 @@ export function insertSlide(artifact: PresentationArtifact, index: number, sourc
     ) + 1;
   if (id >= 2147483648) throw new RangeError("No slide identifiers remain.");
   const tx = beginPackageTransaction(pkg);
+  if (sourceId && layoutSourceId)
+    throw new Error("Choose duplication or a layout source, not both.");
   const original = sourceId ? slideById(artifact, sourceId) : undefined;
+  const donorId = layoutSourceId ?? artifact.document.slides[Math.max(0, index - 1)]?.id;
+  const layout = !original && donorId ? newSlideLayout(artifact, donorId) : undefined;
   tx.addPart(
     part,
     type("slide"),
@@ -54,18 +65,16 @@ export function insertSlide(artifact: PresentationArtifact, index: number, sourc
       ? pkg.readPart(pkg.getPart(original.part)!)
       : encoder.encode(
           artifact.document.conformance === "strict"
-            ? slideXml()
+            ? slideXml(layout?.objects)
                 .replaceAll(P, "http://purl.oclc.org/ooxml/presentationml/main")
                 .replaceAll(A, "http://purl.oclc.org/ooxml/drawingml/main")
                 .replaceAll(R, "http://purl.oclc.org/ooxml/officeDocument/relationships")
-            : slideXml(),
+            : slideXml(layout?.objects),
         ),
   );
-  const donor = original ?? artifact.document.slides[0];
-  if (donor)
-    for (const rel of pkg.relationships(pkg.getPart(donor.part)!.name).items) {
-      if (!original && !rel.type.endsWith("/slideLayout")) continue;
-      // Notes belong to one slide; copied slides start with no notes rather than aliasing the original.
+  if (original)
+    for (const rel of pkg.relationships(pkg.getPart(original.part)!.name).items) {
+      // Notes belong to one slide; copies must not alias the original's notes.
       if (rel.type.endsWith("/notesSlide")) continue;
       tx.addRelationship(
         part,
@@ -79,6 +88,12 @@ export function insertSlide(artifact: PresentationArtifact, index: number, sourc
             },
       );
     }
+  else if (layout?.part)
+    tx.addRelationship(part, {
+      id: "rIdLayout",
+      type: `${artifact.document.conformance === "strict" ? "http://purl.oclc.org/ooxml/officeDocument/relationships" : R}/slideLayout`,
+      target: layout.part,
+    });
   tx.addRelationship(main, {
     id: rid,
     type: `${artifact.document.conformance === "strict" ? "http://purl.oclc.org/ooxml/officeDocument/relationships" : R}/slide`,
@@ -89,7 +104,8 @@ export function insertSlide(artifact: PresentationArtifact, index: number, sourc
   if (ids[index]) edit.insertMarkupBefore(ids[index]!, markup);
   else edit.appendMarkup(list, markup);
   tx.replacePart(main, edit.commit().bytes);
-  return openPresentationArtifact(tx.commit(), artifact.options);
+  const result = openPresentationArtifact(tx.commit(), artifact.options);
+  return layout?.fallback ? applyPresentationLayout(result, String(id), layout.fallback) : result;
 }
 export function deleteSlide(artifact: PresentationArtifact, id: string) {
   editable(artifact);

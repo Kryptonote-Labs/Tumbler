@@ -1,3 +1,4 @@
+import { attachAuthoredLayout } from "./authored-layout-part.ts";
 import { beginLosslessXmlEdit } from "@tumblerjs/ooxml";
 import type { PresentationArtifact } from "./artifact.ts";
 import { appendToTree, deleteObject, objectTarget, slideTree } from "./authoring-objects.ts";
@@ -46,7 +47,8 @@ const STYLES: Record<Role, { anchor: "t" | "ctr" | "b"; levels: string }> = {
   ctrTitle: { anchor: "b", levels: '<a:lvl1pPr algn="ctr"><a:defRPr sz="6000"/></a:lvl1pPr>' },
   subTitle: {
     anchor: "t",
-    levels: '<a:lvl1pPr marL="0" indent="0" algn="ctr"><a:buNone/><a:defRPr sz="2400"/></a:lvl1pPr>',
+    levels:
+      '<a:lvl1pPr marL="0" indent="0" algn="ctr"><a:buNone/><a:defRPr sz="2400"/></a:lvl1pPr>',
   },
   title: { anchor: "ctr", levels: '<a:lvl1pPr><a:defRPr sz="4400"/></a:lvl1pPr>' },
   body: { anchor: "t", levels: bodyLevels },
@@ -85,17 +87,37 @@ export function applyPresentationLayout(
     );
     if (match) {
       used.add(match);
-      result = restyle(result, slideId, match.key, slot).updateObject({
+      result = result.updateObject({
         slideId,
         objectKey: match.key,
         ...bounds,
       });
+      result = restyle(result, slideId, match.key, slot);
     } else result = insertPlaceholder(result, slideId, slot, bounds);
   }
   for (const object of existing)
     if (!used.has(object) && !slideTextValue(object))
       result = deleteObject(result, slideId, object.key);
-  return result;
+  return attachAuthoredLayout(
+    result,
+    slideId,
+    layout,
+    LAYOUTS[layout]
+      .map((slot, i) =>
+        placeholderMarkup(
+          slot,
+          {
+            x: width * slot.x,
+            y: height * slot.y,
+            width: width * slot.width,
+            height: height * slot.height,
+          },
+          i + 2,
+          "",
+        ),
+      )
+      .join(""),
+  );
 }
 
 function insertPlaceholder(
@@ -105,10 +127,27 @@ function insertPlaceholder(
   bounds: { x: number; y: number; width: number; height: number },
 ) {
   const { slide, source, tree, id, ns } = slideTree(artifact, slideId);
+  return commitXml(
+    artifact,
+    slide.part,
+    appendToTree(source, tree, placeholderMarkup(slot, bounds, id, ns)),
+  );
+}
+
+function placeholderMarkup(
+  slot: Slot,
+  bounds: { x: number; y: number; width: number; height: number },
+  id: number,
+  ns: string,
+) {
   const { anchor, levels } = STYLES[slot.role];
-  const name = isTitle(slot.role) ? "Title" : slot.role === "subTitle" ? "Subtitle" : "Content Placeholder";
+  const name = isTitle(slot.role)
+    ? "Title"
+    : slot.role === "subTitle"
+      ? "Subtitle"
+      : "Content Placeholder";
   const markup = `<p:sp ${ns}><p:nvSpPr><p:cNvPr id="${id}" name="${name} ${id}"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr>${placeholder(slot)}</p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="${emu(bounds.x)}" y="${emu(bounds.y)}"/><a:ext cx="${emu(bounds.width)}" cy="${emu(bounds.height)}"/></a:xfrm></p:spPr><p:txBody><a:bodyPr anchor="${anchor}"><a:normAutofit/></a:bodyPr><a:lstStyle>${levels}</a:lstStyle><a:p><a:endParaRPr lang="en-US"/></a:p></p:txBody></p:sp>`;
-  return commitXml(artifact, slide.part, appendToTree(source, tree, markup));
+  return markup;
 }
 
 /** Moves an existing placeholder into a new role, replacing its role formatting but not its text. */
@@ -130,6 +169,10 @@ function restyle(artifact: PresentationArtifact, slideId: string, key: string, s
   else edit.insertAttribute(properties, "anchor", anchor);
   const style = `<a:lstStyle xmlns:a="${a}">${levels}</a:lstStyle>`;
   if (list) edit.replaceElementMarkup(list, style);
-  else edit.insertMarkupBefore(children(body).find((e) => e.localName === "p")!, style);
+  else
+    edit.insertMarkupBefore(
+      children(body).find((e) => e.localName === "p")!,
+      style,
+    );
   return commitXml(artifact, slide.part, edit.commit().bytes);
 }
