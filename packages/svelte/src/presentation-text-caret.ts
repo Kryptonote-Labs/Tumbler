@@ -3,8 +3,12 @@ function textMatrix(node: Element) {
   let matrix = new DOMMatrix();
   let element: Element | null = node;
   while (element && !(element instanceof SVGGraphicsElement)) {
-    const transform = getComputedStyle(element).transform;
-    if (transform !== 'none') matrix = new DOMMatrix(transform).multiply(matrix);
+    const style = getComputedStyle(element);
+    if (style.transform !== 'none') matrix = new DOMMatrix(style.transform).multiply(matrix);
+    // Autofit uses CSS zoom on .paragraphs, inside the foreignObject's SVG matrix.
+    const zoom = Number.parseFloat(style.zoom);
+    if (Number.isFinite(zoom) && zoom > 0 && zoom !== 1)
+      matrix = new DOMMatrix().scale(zoom).multiply(matrix);
     element = element.parentElement;
   }
   const screen = element instanceof SVGGraphicsElement ? element.getScreenCTM() : undefined;
@@ -32,6 +36,7 @@ function emptyCaret(range: Range) {
     top: '0',
     margin: '0',
     transform: 'none',
+    zoom: '1',
     visibility: 'hidden',
     pointerEvents: 'none',
     transition: 'none',

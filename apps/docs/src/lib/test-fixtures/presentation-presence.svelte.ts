@@ -227,25 +227,29 @@ export async function checkPresentationPresence() {
       const target = [...containers[1]!.querySelectorAll<SVGGElement>('[data-slide-object]')].find(
         (element) => element.dataset.slideObject === key,
       )!;
-      const paragraph = target.querySelector<HTMLElement>('[data-text-paragraph]')!;
-      const marker = document.createElement('span');
-      marker.textContent = '\u200b';
-      paragraph.insertBefore(marker, paragraph.querySelector('br'));
-      const glyph = marker.getBoundingClientRect();
-      marker.remove();
-      const origin = containers[1]!.querySelector('.presentation-view')!.getBoundingClientRect();
-      const points = overlay
-        .querySelectorAll('polygon')[1]!
-        .getAttribute('points')!
-        .split(' ')
-        .map((point) => point.split(',').map(Number));
-      const cx = (points[0]![0]! + points[1]![0]!) / 2 + origin.left;
-      const cy = (points[0]![1]! + points[1]![1]!) / 2 + origin.top;
-      assert(
-        Math.abs(cx - (glyph.left + glyph.width / 2)) < 1 &&
-          Math.abs(cy - (glyph.top + glyph.height / 2)) < 1,
-        'Empty aligned paragraph caret differs from native text layout',
-      );
+      for (const textZoom of [1, 0.5]) {
+        target.querySelector<HTMLElement>('.paragraphs')!.style.zoom = String(textZoom);
+        await settle();
+        const paragraph = target.querySelector<HTMLElement>('[data-text-paragraph]')!;
+        const marker = document.createElement('span');
+        marker.textContent = '\u200b';
+        paragraph.insertBefore(marker, paragraph.querySelector('br'));
+        const glyph = marker.getBoundingClientRect();
+        marker.remove();
+        const origin = containers[1]!.querySelector('.presentation-view')!.getBoundingClientRect();
+        const points = overlay
+          .querySelectorAll('polygon')[1]!
+          .getAttribute('points')!
+          .split(' ')
+          .map((point) => point.split(',').map(Number));
+        const cx = (points[0]![0]! + points[1]![0]!) / 2 + origin.left;
+        const cy = (points[0]![1]! + points[1]![1]!) / 2 + origin.top;
+        assert(
+          Math.abs(cx - (glyph.left + glyph.width / 2)) < 1 &&
+            Math.abs(cy - (glyph.top + glyph.height / 2)) < 1,
+          'Empty aligned paragraph caret differs from native text layout',
+        );
+      }
     }
     state.peers = [];
     await settle();
@@ -262,6 +266,7 @@ export async function checkPresentationPresence() {
       'presence cleanup',
       'multiple object selection',
       'empty aligned and rotated carets',
+      'autofit scaled empty carets',
     ];
   } finally {
     await unmount(sender);

@@ -18,6 +18,7 @@ test('remote presentation selections follow text layout and session activity', a
     'presence cleanup',
     'multiple object selection',
     'empty aligned and rotated carets',
+    'autofit scaled empty carets',
   ]);
   expect(errors).toEqual([]);
 });
