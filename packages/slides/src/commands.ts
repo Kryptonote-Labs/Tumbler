@@ -100,6 +100,7 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
       name: z.literal("insert-slide"),
       index: z.number().int().nonnegative(),
       sourceId: id.optional(),
+      layoutSourceId: id.optional(),
     })
     .strict(),
   z.object({ name: z.literal("delete-slide"), slideId: id }).strict(),
@@ -233,7 +234,9 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
 /** A group is applied and persisted as one undoable edit. Nested groups are unnecessary. */
 export const presentationCommand = z.discriminatedUnion("name", [
   ...singlePresentationCommand.options,
-  z.object({ name: z.literal("batch"), commands: z.array(singlePresentationCommand).min(1) }).strict(),
+  z
+    .object({ name: z.literal("batch"), commands: z.array(singlePresentationCommand).min(1) })
+    .strict(),
 ]);
 export type PresentationCommand = z.infer<typeof presentationCommand>;
 
@@ -262,7 +265,7 @@ export function applyPresentationCommand(
     case "layout":
       return applyPresentationLayout(artifact, command.slideId, command.layout);
     case "insert-slide":
-      return insertSlide(artifact, command.index, command.sourceId);
+      return insertSlide(artifact, command.index, command.sourceId, command.layoutSourceId);
     case "delete-slide":
       return deleteSlide(artifact, command.slideId);
     case "move-slide":
@@ -290,7 +293,8 @@ export function applyPresentationCommand(
     case "replace-all": {
       let result = artifact;
       const matches = findPresentationMatches(artifact.document, command.find, {
-        matchCase: command.caseSensitive, wholeWord: command.wholeWord ?? false,
+        matchCase: command.caseSensitive,
+        wholeWord: command.wholeWord ?? false,
       });
       for (const { editable, ...target } of matches.reverse())
         if (editable) result = result.editText({ ...target, value: command.value });
