@@ -11,6 +11,7 @@ import {
   insertSlide,
   moveSlide,
   slideBackground,
+  setSlideHidden,
   slideById,
 } from "./authoring-slides.ts";
 import { arrangeObject, deleteObject, duplicateObject, insertObject } from "./authoring-objects.ts";
@@ -105,6 +106,7 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
     })
     .strict(),
   z.object({ name: z.literal("delete-slide"), slideId: id }).strict(),
+  z.object({ name: z.literal("set-slide-hidden"), slideId: id, hidden: z.boolean() }).strict(),
   z
     .object({ name: z.literal("move-slide"), slideId: id, index: z.number().int().nonnegative() })
     .strict(),
@@ -277,6 +279,8 @@ export function applyPresentationCommand(
       return insertSlide(artifact, command.index, command.sourceId, command.layoutSourceId);
     case "delete-slide":
       return deleteSlide(artifact, command.slideId);
+    case "set-slide-hidden":
+      return setSlideHidden(artifact, command.slideId, command.hidden);
     case "move-slide":
       return moveSlide(artifact, command.slideId, command.index);
     case "background":

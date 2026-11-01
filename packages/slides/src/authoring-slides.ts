@@ -163,3 +163,16 @@ export function slideBackground(artifact: PresentationArtifact, id: string, colo
   else edit.insertMarkupBefore(tree, markup);
   return commitXml(artifact, slide.part, edit.commit().bytes);
 }
+
+/** Keep a slide editable while excluding it from the slideshow. */
+export function setSlideHidden(artifact: PresentationArtifact, id: string, hidden: boolean) {
+  editable(artifact);
+  const slide = slideById(artifact, id);
+  if (slide.hidden === hidden) return artifact;
+  const source = partXml(artifact, slide.part);
+  const show = source.root.attributes.find((a) => a.localName === "show" && !a.namespaceUri);
+  const edit = beginLosslessXmlEdit(source);
+  if (show) edit.setAttribute(show, hidden ? "0" : "1");
+  else edit.insertAttribute(source.root, "show", hidden ? "0" : "1");
+  return commitXml(artifact, slide.part, edit.commit().bytes);
+}

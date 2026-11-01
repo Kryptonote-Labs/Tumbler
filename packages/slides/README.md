@@ -101,11 +101,14 @@ const output = session.artifact.bytes();
 
 `presentationCommand` validates the serializable command union used by
 `applyPresentationCommand` and `session.execute`. Commands include slide insertion,
-duplication, movement and deletion; non-destructive text-frame layouts; text boxes,
+duplication, movement, deletion and visibility; non-destructive text-frame layouts; text boxes,
 preset shapes, PNG/JPEG images and tables; object duplication, deletion, alignment
 and stacking order; paragraph bullets, numbering, level, spacing and vertical
 alignment; background colour and literal find/replace across editable text boxes and table cells.
 Existing text, formatting, object transforms and fills use the same commands.
+`set-slide-hidden` accepts `slideId` and `hidden: boolean`. Hidden slides remain
+editable and retain their content, but slideshow navigation skips them. The state
+is saved in the PPTX slide's native `show` attribute.
 A complete command is one undo step. Images carry original bytes as base64.
 
 Coordinates are CSS pixels at 96 DPI. Text font sizes and paragraph before/after
