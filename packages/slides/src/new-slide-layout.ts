@@ -61,7 +61,13 @@ export function newSlideLayout(artifact: PresentationArtifact, sourceId: string)
   // Older authoring commands put layout placeholders directly on a blank-layout slide.
   // Preserve that layout choice without copying slide content or arbitrary authored shapes.
   let fallback: PresentationLayout | undefined;
-  if (!placeholders.length && (!layout || attr(layout.root, "type") === "blank")) {
+  const common = child(layout?.root, "cSld");
+  const authoredBlank = common && attr(common, "name") === "blank";
+  if (
+    !authoredBlank &&
+    !placeholders.length &&
+    (!layout || attr(layout.root, "type") === "blank")
+  ) {
     const roles = slide.objects
       .filter((o) => o.layer === "slide" && o.placeholder)
       .map((o) => o.placeholder);

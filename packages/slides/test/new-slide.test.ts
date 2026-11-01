@@ -184,3 +184,22 @@ test("changing an imported slide layout controls subsequent slides and reuses th
     result.document.package.readPart(result.document.package.getPart(originalLayout.name)!),
   ).toEqual(base.document.package.readPart(originalLayout));
 });
+
+test("new slides respect an explicit Blank layout while preserving the source title", () => {
+  let base = createPresentation();
+  const slideId = base.document.slides[0]!.id;
+  base = run(base, { name: "layout", slideId, layout: "title-content" });
+  const title = base.document.slides[0]!.objects.find((o) => o.placeholder === "title")!;
+  base = run(base, {
+    name: "edit-text",
+    slideId,
+    objectKey: title.key,
+    start: 0,
+    end: 0,
+    value: "Keep this title",
+  });
+  base = reopen(run(base, { name: "layout", slideId, layout: "blank" }));
+  const result = reopen(run(base, { name: "insert-slide", index: 1, layoutSourceId: slideId }));
+  expect(result.document.slides[0]!.title).toBe("Keep this title");
+  expect(result.document.slides[1]!.objects.filter((o) => o.layer === "slide")).toHaveLength(0);
+});
