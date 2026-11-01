@@ -251,3 +251,16 @@ playback resets the effects. Editing and thumbnails remain static. Playback adds
 no animation authoring controls.
 
 Hosts that omit `PresentationSlideView.playing` retain its built-in read-only playback controls. Passing an explicit `playing` boolean opts into host-controlled playback and hides those controls; forward navigation can call `advanceAnimation()` before changing slides. No animation authoring controls are provided.
+
+
+`PresentationSlideView.onselectionchange` includes `range`, the same object returned
+by `currentSelection()`. It reports text offsets, the caret endpoint for backward selections, editing state and an optional
+table cell address, including caret moves that do not change formatting. Hosts
+can pass `remoteSelections` with session IDs, names, colours, selected object keys
+and optional text ranges. Text offsets count paragraph separators but exclude
+bullets. The view draws object outlines and named carets, and uses CSS Custom
+Highlights for text ranges. Rotation, zoom, font layout and table cells use the
+rendered document geometry. Remote decorations are absent from thumbnails and
+playback and never change the document or browser selection. Hosts own
+transport, permissions, visibility and revision reconciliation; supply ranges
+only for the document revision currently rendered.

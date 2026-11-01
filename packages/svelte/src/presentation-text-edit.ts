@@ -8,7 +8,7 @@ export interface SlideTextEditorOptions {
   focusToken?: number;
   paragraphs: readonly string[];
   point?: { x: number; y: number };
-  onselect?: (range: PresentationTextRange) => void;
+  onselect?: (range: PresentationTextRange, head?: number) => void;
   onreplace?: (range: PresentationTextRange, value: string, undoGroup?: string) => void;
   onfinish?: () => void;
   onundo?: (redo: boolean) => void;
@@ -24,7 +24,8 @@ export function presentationTextEdit(
     active = false,
     composing = false,
     range: PresentationTextRange = { start: 0, end: 0 },
-    restorePending = false;
+    restorePending = false,
+    head = 0;
   const history = new PresentationTypingHistory();
   const text = () => options.paragraphs.join("\n");
   function offset(container: Node, offset: number) {
@@ -62,10 +63,11 @@ export function presentationTextEdit(
     const a = offset(s.anchorNode, s.anchorOffset),
       b = offset(s.focusNode, s.focusOffset);
     const next = { start: Math.min(a, b), end: Math.max(a, b) };
-    if (next.start !== range.start || next.end !== range.end) {
+    if (next.start !== range.start || next.end !== range.end || b !== head) {
       history.break();
       range = next;
-      options.onselect?.(range);
+      head = b;
+      options.onselect?.(range, head);
     }
   }
   const locate = (position: number) => presentationTextPosition(node, options.paragraphs, position);
@@ -80,7 +82,8 @@ export function presentationTextEdit(
     const s = window.getSelection();
     s?.removeAllRanges();
     s?.addRange(r);
-    options.onselect?.(range);
+    head = range.end;
+    options.onselect?.(range, head);
   }
   async function replace(value: string, target = range, kind = "") {
     const undoGroup = history.group(kind, target, value);
