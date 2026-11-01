@@ -95,7 +95,7 @@ import { createPresentation, PresentationEditingSession } from '@tumblerjs/slide
 const session = new PresentationEditingSession(createPresentation());
 const slideId = session.artifact.document.slides[0]!.id;
 session.execute({ name: 'layout', slideId, layout: 'title-content' });
-session.execute({ name: 'insert-slide', index: 1 });
+session.execute({ name: 'insert-slide', index: 1, layoutSourceId: slideId });
 const output = session.artifact.bytes();
 ```
 
@@ -185,3 +185,10 @@ The `replace-all` command accepts `wholeWord` alongside `caseSensitive`. Replace
 `PresentationSlideView` accepts `searchMatches` and `currentSearchMatch` from that API. It paints occurrences through the CSS Highlight API without changing slide markup, selection or formatting. The current match is distinguished from the other occurrences.
 
 `presentationThemeColours(document, slideId)` exposes the selected slide's effective palette, including layout/slide theme overrides and colour-map remapping. Use it for colour pickers so previews and applied palette colours agree with slide rendering. It returns the default Office palette for presentations without a theme and rejects unknown slide IDs.
+
+New slides use the referenced slide's layout and master, with empty editable placeholders and
+inherited formatting. Without `layoutSourceId`, insertion uses the preceding slide, or the first
+slide when inserting at the beginning. A title layout advances to the master's second layout;
+when no different layout is available, it uses Title and Content. Blank layouts stay blank.
+Use `sourceId` instead to duplicate the slide and its content. The two source options are mutually
+exclusive. Applying a built-in authoring layout also saves its reusable layout relationship.
