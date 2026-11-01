@@ -1,6 +1,8 @@
 <script lang="ts">
   import { presentationSearchHighlights } from './presentation-search-highlights.ts';
   import type { PresentationSearchMatch } from '@tumblerjs/slides';
+  import PresentationRemoteSelections from './PresentationRemoteSelections.svelte';
+  import type { PresentationRemoteSelection } from './presentation-presence.ts';
   import PresentationFormattingToolbar from "./PresentationFormattingToolbar.svelte";
   import {
     slideObjectEnclosed,
@@ -68,6 +70,7 @@
     onundo,
     onslide,
     overlay,
+    remoteSelections = [],
   }: {
     searchMatches?: readonly PresentationSearchMatch[];
     currentSearchMatch?: PresentationSearchMatch | undefined;
@@ -78,8 +81,10 @@
     playing?: boolean;
     /** Host decorations in slide coordinates, excluded from thumbnail views. */
     overlay?: Snippet;
+    /** Named remote selections. Hosts resolve document revisions before providing them. */
+    remoteSelections?: readonly PresentationRemoteSelection[];
     toolbar?: boolean;
-    onselectionchange?: (selection: {object:SlideObject | undefined;state:FormattingState}) => void;
+    onselectionchange?: (selection: {object:SlideObject | undefined;state:FormattingState; range: ReturnType<typeof currentSelection>}) => void;
     editable?: boolean;
     scale?: number;
     selectedKey?: string;
@@ -240,6 +245,7 @@
       }
     | undefined;
   let editing = $state<string>();
+  let textHead = $state(0);
   let textRange = $state<PresentationTextRange>({ start: 0, end: 0 });
   let editPoint = $state<{ x: number; y: number }>();
   let focusToken = $state(0);
@@ -266,11 +272,13 @@
     return { ...state, text };
   });
   export function applyFormatting(patch: FormattingPatch) { format(patch); }
-  export function currentSelection() {
+  export function currentSelection(): PresentationTextRange & {
+    objectKey?: string; editing?: boolean; head?: number; cell?: PresentationTableCellAddress;
+  } {
     if(!selected || !textTarget) return {start:0,end:0};
-    return {objectKey:selected.key, editing:!!editing, ...(cellAddress ? {cell:cellAddress} : {}), ...(editing ? textRange : {start:0,end:slideTextValue(textTarget).length})};
+    return {objectKey:selected.key, editing:!!editing, ...(editing ? {head:textHead} : {}), ...(cellAddress ? {cell:cellAddress} : {}), ...(editing ? textRange : {start:0,end:slideTextValue(textTarget).length})};
   }
-  $effect(() => {onselectionchange?.({object:textTarget,state:formattingState});});
+  $effect(() => {onselectionchange?.({object:textTarget,state:formattingState,range:currentSelection()});});
   function format(patch: FormattingPatch) {
     if (!selected || !textTarget?.textEditable) return;
     if (editing && textRange.start === textRange.end && !patch.block) {
@@ -574,6 +582,7 @@
     select([object.key]);
     editPoint = event ? { x: event.clientX, y: event.clientY } : undefined;
     textRange = { start: 0, end: slideTextValue(object).length };
+    textHead = textRange.end;
     pendingFormat = undefined;
     editing = object.key;
   }
@@ -784,6 +793,8 @@
             tabindex={editable ? 0 : undefined}
             aria-label={object.name}
             data-slide-object={object.key}
+            data-object-width={w}
+            data-object-height={h}
             data-animation-target={object.layer === "slide" &&
             object.sourcePart === slide.part
               ? object.shapeId
@@ -890,7 +901,8 @@
                   editor={{
                     point: editPoint,
                     focusToken,
-                    onselect: (range) => {
+                    onselect: (range, head) => {
+                      textHead = head ?? range.end;
                       if (
                         textRange.start !== range.start ||
                         textRange.end !== range.end
@@ -964,7 +976,8 @@
                       active: editing === object.key,
                       point: editPoint,
                       focusToken,
-                      onselect: (range) => {
+                      onselect: (range, head) => {
+                      textHead = head ?? range.end;
                         if (
                           textRange.start !== range.start ||
                           textRange.end !== range.end
@@ -1087,6 +1100,9 @@
         {#if !thumbnail}{@render overlay?.()}{/if}
       </svg>
     </div>
+    {#if !thumbnail && !playing && host && svg}
+      <PresentationRemoteSelections {host} {svg} {slide} selections={remoteSelections} />
+    {/if}
     {#if marquee?.moved && svg && host}
       <div class="marquee" style={`left:${svg.getBoundingClientRect().left - host.getBoundingClientRect().left + host.scrollLeft + marquee.rect.x * factor}px;top:${svg.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop + marquee.rect.y * factor}px;width:${marquee.rect.width * factor}px;height:${marquee.rect.height * factor}px`}></div>
     {/if}
