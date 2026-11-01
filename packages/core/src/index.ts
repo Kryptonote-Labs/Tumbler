@@ -46,3 +46,5 @@ export type {
 
 export { findTextMatches } from './search.ts';
 export type { TextMatch, TextSearchOptions } from './search.ts';
+
+export { textReplacement } from './text-replacement.ts';
