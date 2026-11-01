@@ -5,6 +5,7 @@ import {
   readOfficeInk,
   renderInkSceneSvg,
   type OfficeInkDocument,
+  type InkSceneResult,
 } from '@tumblerjs/ink';
 import { LosslessXmlError, type LosslessXmlElement } from '@tumblerjs/ooxml';
 import type { OpcPackage } from '@tumblerjs/opc';
@@ -14,6 +15,7 @@ import { multiply, shapeMatrix, transformPoint } from './geometry.ts';
 
 export interface PresentationInk {
   readonly document: OfficeInkDocument;
+  readonly scene: Extract<InkSceneResult, { supported: true }>;
   readonly partName: string;
   /** Samples in physical points mapped into the picture's local CSS pixels. */
   readonly sampleMatrix: Matrix;
@@ -106,7 +108,12 @@ export function readPresentationInk(
       crop: [0, 0, 0, 0],
     };
     return {
-      ink: { document, partName: part.name.value, sampleMatrix } satisfies PresentationInk,
+      ink: {
+        document,
+        scene: projected,
+        partName: part.name.value,
+        sampleMatrix,
+      } satisfies PresentationInk,
       image,
     };
   } catch (error) {
@@ -133,7 +140,6 @@ export function presentationInkPoints(object: SlideObject) {
             {
               ...transformPoint(matrix, p[xi] * sx, p[yi] * sy),
               traceElementId: trace.elementId,
-              radius: Math.max(trace.brush.widthPoints, trace.brush.heightPoints) / 0.75,
             },
           ],
     );
@@ -159,23 +165,58 @@ export function hitPresentationInk(
   };
   const cross = (a: typeof from, b: typeof from, c: typeof from) =>
     (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-  const points = presentationInkPoints(object);
-  return points.some((p, i) => {
-    const previous = i && points[i - 1]!.traceElementId === p.traceElementId ? points[i - 1]! : p;
+  const touches = (a: typeof from, b: typeof from) => {
     const opposite = (a: number, b: number) => (a < 0 && b > 0) || (a > 0 && b < 0);
-    if (
-      opposite(cross(from, to, p), cross(from, to, previous)) &&
-      opposite(cross(p, previous, from), cross(p, previous, to))
-    )
-      return true;
     return (
+      (opposite(cross(from, to, a), cross(from, to, b)) &&
+        opposite(cross(a, b, from), cross(a, b, to))) ||
       Math.min(
-        distance(from, previous, p),
-        distance(to, previous, p),
-        distance(p, from, to),
-        distance(previous, from, to),
-      ) <=
-      radius + p.radius
+        distance(from, a, b),
+        distance(to, a, b),
+        distance(a, from, to),
+        distance(b, from, to),
+      ) <= radius
     );
-  });
+  };
+  const matrix = multiply(object.matrix, [1 / 0.75, 0, 0, 1 / 0.75, 0, 0]);
+  return object.ink.scene.strokes.some(
+    (stroke) =>
+      stroke.brush.transparency < 255 &&
+      stroke.brush.rasterOp !== 'noOperation' &&
+      stroke.shapes.some((shape) => {
+        // Flatten ellipses to the same physical tolerance used for shared ink geometry.
+        const count =
+          shape.kind === 'ellipse'
+            ? Math.max(16, Math.ceil(Math.PI * Math.sqrt(Math.max(shape.rx, shape.ry) / 0.05)))
+            : 0;
+        const vertices =
+          shape.kind === 'polygon'
+            ? shape.points
+            : Array.from({ length: count }, (_, i) => {
+                const angle = (i * 2 * Math.PI) / count,
+                  x = shape.rx * Math.cos(angle),
+                  y = shape.ry * Math.sin(angle);
+                return {
+                  x: shape.x + Math.cos(shape.angle) * x - Math.sin(shape.angle) * y,
+                  y: shape.y + Math.sin(shape.angle) * x + Math.cos(shape.angle) * y,
+                };
+              });
+        const polygon = vertices.map((p) => transformPoint(matrix, p.x, p.y));
+        const contains = (p: typeof from) => {
+          let positive = false,
+            negative = false;
+          for (let i = 0; i < polygon.length; i++) {
+            const side = cross(polygon[i]!, polygon[(i + 1) % polygon.length]!, p);
+            if (side > 0) positive = true;
+            if (side < 0) negative = true;
+          }
+          return polygon.length >= 3 && !(positive && negative);
+        };
+        return (
+          contains(from) ||
+          contains(to) ||
+          polygon.some((p, i) => touches(p, polygon[(i + 1) % polygon.length]!))
+        );
+      }),
+  );
 }

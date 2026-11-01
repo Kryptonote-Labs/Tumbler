@@ -10,6 +10,7 @@ import { beginPackageTransaction } from '@tumblerjs/opc';
 import { openPresentationArtifact, type PresentationArtifact } from './artifact.ts';
 import { appendToTree, slideTree } from './authoring-objects.ts';
 import { editable } from './authoring-slides.ts';
+import { shapeMatrix, transformPoint } from './geometry.ts';
 import { emu, R } from './authoring-xml.ts';
 import type { PresentationCommand } from './commands.ts';
 
@@ -115,22 +116,22 @@ export function refreshPresentationInkFallback(
   const relation = rid && artifact.document.package.relationships(part.name).get(rid);
   if (!relation || relation.targetMode !== 'Internal') return artifact;
   const [a, b, c, d, e, f] = object.ink.sampleMatrix;
-  const bounds = {
-    x: 0,
-    y: 0,
-    width: object.transform.width * 0.75,
-    height: object.transform.height * 0.75,
-  };
-  const scale = Math.min(4 / 3, Math.sqrt(1_000_000 / Math.max(1, bounds.width * bounds.height)));
-  const raster = renderOfficeInkRaster(object.ink.document, {
+  const options = {
     renderingProfile: 'word',
     maxPoints: Infinity,
-    maxPixels: Infinity,
-    scale,
-    bounds,
     sampleTransform: [a * 0.75, b * 0.75, c * 0.75, d * 0.75, e * 0.75, f * 0.75],
     brushRotation: Math.atan2(b, a),
     brushReflection: a * d - b * c < 0,
+  } as const;
+  const projected = createOfficeInkScene(object.ink.document, options);
+  if (!projected.supported) return artifact;
+  const bounds = projected.bounds;
+  const scale = Math.min(4 / 3, Math.sqrt(1_000_000 / Math.max(1, bounds.width * bounds.height)));
+  const raster = renderOfficeInkRaster(object.ink.document, {
+    ...options,
+    maxPixels: Infinity,
+    scale,
+    bounds,
   });
   if (!raster.supported) return artifact;
   // Duplicates may share the original fallback part; give this object its own cached image.
@@ -145,6 +146,30 @@ export function refreshPresentationInkFallback(
   const id = `rIdInkEdit${relId}`;
   tx.addRelationship(part.name, { id, type: relation.type, target: image });
   const edit = beginLosslessXmlEdit(source);
+  // Pen dimensions stay physical when samples resize. Fit the picture around the
+  // projected paint, rather than shrinking its padding and clipping the nib.
+  const center = transformPoint(
+    shapeMatrix(object.transform),
+    (bounds.x + bounds.width / 2) / 0.75,
+    (bounds.y + bounds.height / 2) / 0.75,
+  );
+  const width = bounds.width / 0.75,
+    height = bounds.height / 0.75;
+  const xfrm = source.element(object.transformElementId!)!;
+  for (const node of xfrm.children)
+    if (node.kind === 'element') {
+      const values =
+        node.localName === 'off'
+          ? { x: emu(center.x - width / 2), y: emu(center.y - height / 2) }
+          : node.localName === 'ext'
+            ? { cx: emu(width), cy: emu(height) }
+            : {};
+      for (const [name, value] of Object.entries(values))
+        edit.setAttribute(
+          node.attributes.find((a) => a.localName === name)!,
+          String(value),
+        );
+    }
   edit.setAttribute(
     find(picture)!.attributes.find((a) => a.localName === 'embed')!,
     id,

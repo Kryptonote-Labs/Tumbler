@@ -7,6 +7,7 @@ import {
   PresentationEditingSession,
   rebasePresentationCommands,
   presentationInkPoints,
+  hitPresentationInk,
 } from '../src/index.ts';
 
 function deck(
@@ -142,4 +143,65 @@ test('a stroke is one undo step and simultaneous strokes retain distinct object 
   const points = presentationInkPoints(objects[1]!);
   expect(points[0]!.x).toBeCloseTo(40, 1);
   expect(points[0]!.y).toBeCloseTo(50, 1);
+});
+
+test('shrinking a horizontal stroke or tap retains its full physical nib in the picture frame', () => {
+  for (const points of [
+    [
+      [100, 100, 0.5],
+      [200, 100, 0.5],
+    ],
+    [[100, 100, 0.5]],
+  ] satisfies [number, number, number][][]) {
+    let a = createPresentation();
+    const slideId = a.document.slides[0]!.id;
+    a = run(a, { name: 'insert-ink', slideId, points, color: '#123456', size: 8 });
+    const object = a.document.slides[0]!.objects[0]!;
+    a = run(a, {
+      name: 'update-object',
+      slideId,
+      objectKey: object.key,
+      x: object.transform.x,
+      y: object.transform.y,
+      width: object.transform.width * 0.1,
+      height: object.transform.height * 0.1,
+      rotation: 35,
+    });
+    const resized = openPresentationArtifact(a.bytes()).document.slides[0]!.objects[0]!;
+    const bounds = resized.ink!.scene.bounds;
+    expect(bounds.x).toBeGreaterThan(-0.001);
+    expect(bounds.y).toBeGreaterThan(-0.001);
+    expect(bounds.x + bounds.width).toBeLessThan(resized.transform.width * 0.75 + 0.001);
+    expect(bounds.y + bounds.height).toBeLessThan(resized.transform.height * 0.75 + 0.001);
+    expect(resized.transform.height).toBeGreaterThan(10);
+    const png = a.document.package.parts.find((p) =>
+      p.name.value.startsWith('/ppt/media/inkEdit'),
+    )!;
+    const bytes = a.document.package.readPart(png);
+    expect(new DataView(bytes.buffer, bytes.byteOffset).getUint32(20)).toBeGreaterThan(10);
+  }
+});
+
+test('stroke erasing respects painted highlighter and pressure-sensitive pen coverage', () => {
+  const base = createPresentation(),
+    slideId = base.document.slides[0]!.id;
+  const make = (highlighter: boolean, pressure: number) =>
+    run(base, {
+      name: 'insert-ink',
+      slideId,
+      points: [
+        [100, 100, pressure],
+        [200, 100, pressure],
+      ],
+      size: 24,
+      color: '#ffff00',
+      highlighter,
+    }).document.slides[0]!.objects[0]!;
+  const highlighter = make(true, 0.5);
+  expect(hitPresentationInk(highlighter, { x: 150, y: 135 })).toBe(false);
+  expect(hitPresentationInk(highlighter, { x: 150, y: 120 })).toBe(true);
+  expect(hitPresentationInk(highlighter, { x: 150, y: 50 }, { x: 150, y: 150 })).toBe(true);
+  const pen = make(false, 0);
+  expect(hitPresentationInk(pen, { x: 150, y: 120 })).toBe(false);
+  expect(hitPresentationInk(pen, { x: 150, y: 100 })).toBe(true);
 });
