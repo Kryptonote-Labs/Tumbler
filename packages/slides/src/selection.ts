@@ -39,10 +39,13 @@ export function resizeSlideSelection(
   const sx = active.transform.width > 0 ? resized.width / active.transform.width : 1;
   const sy = active.transform.height > 0 ? resized.height / active.transform.height : 1;
   return objects.filter(object => object.movable).map(object => {
+    if (object.key === active.key) return { objectKey: object.key, ...resized };
     const transform = object.transform;
     const [a, b, c, d] = shapeMatrix(transform);
-    const localX = handle.x * transform.width * (sx - 1);
-    const localY = handle.y * transform.height * (sy - 1);
+    const localX = handle.x * (transform.width > 0 && active.transform.width > 0
+      ? transform.width * (sx - 1) : resized.width - active.transform.width);
+    const localY = handle.y * (transform.height > 0 && active.transform.height > 0
+      ? transform.height * (sy - 1) : resized.height - active.transform.height);
     return {
       objectKey: object.key,
       ...resizeSlideTransform(transform, handle, a * localX + c * localY, b * localX + d * localY, {

@@ -159,3 +159,16 @@ test('multi-selection corner resize locks aspect ratios and clamps small sizes',
     }
   }
 });
+
+
+test('resizing horizontal and vertical lines retains movement along zero-sized axes', () => {
+  const objects = fixture().objects.slice(1);
+  for (const dimensions of [{ width: 160, height: 0 }, { width: 0, height: 160 }]) {
+    const lines = objects.map(object => ({ ...object, transform: { ...object.transform, ...dimensions } }));
+    const resized = resizeSlideSelection(lines, lines[0]!, { x: 1, y: 1 }, 40, 40);
+    for (const next of resized) {
+      expect(next.width).toBe(dimensions.width + 40);
+      expect(next.height).toBe(dimensions.height + 40);
+    }
+  }
+});
