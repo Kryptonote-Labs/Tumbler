@@ -47,6 +47,7 @@
   import PresentationTable from "./PresentationTable.svelte";
   import OoxmlChart from "./OoxmlChart.svelte";
   import { zoomGesture } from "./zoom-gesture.ts";
+  import { snappedZoom, type SnappedZoom } from "./zoom-snap.ts";
 
   let {
     searchMatches = [],
@@ -666,6 +667,7 @@
   function gestures(node: HTMLElement) {
     return thumbnail ? {} : zoomGesture(node, zoom);
   }
+  let zoomLevel: SnappedZoom = { raw: scale, scale };
   async function zoom(gesture: {
     factor: number;
     x: number;
@@ -678,7 +680,8 @@
     if (!bounds) return;
     const x = (gesture.x - bounds.left) / factor,
       y = (gesture.y - bounds.top) / factor;
-    scale = Math.max(0.25, Math.min(3, scale * gesture.factor));
+    zoomLevel = snappedZoom(zoomLevel, scale, gesture.factor);
+    scale = zoomLevel.scale;
     await tick();
     const next = svg?.getBoundingClientRect();
     if (next) {
@@ -1176,6 +1179,11 @@
   .stage {
     overflow: hidden;
     background: #000;
+  }
+  /* Selection only: text stays in the accessibility tree for screen readers. */
+  .stage :global(*) {
+    -webkit-user-select: none !important;
+    user-select: none !important;
   }
   .stage .slide-space {
     padding: 0;
