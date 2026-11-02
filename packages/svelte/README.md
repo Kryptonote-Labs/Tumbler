@@ -174,6 +174,9 @@ the active slide by ID when updating its index. Omit the callback for read-only
 navigation. Dragging shows an insertion marker, scrolls at the rail edges, and
 cancels on Escape or a drop outside the rail. On touchscreens, swipe thumbnails to
 scroll and drag the grip beside the slide number to reorder.
+Pass a `reorderHint` attachment to use the host's tooltip on each thumbnail button
+instead of the native reorder hint. It attaches only when reordering is enabled
+and no drag is active.
 In edit mode, connect object, text, formatting, and shape callbacks to a
 `PresentationEditingSession`, then pass the updated document back to the view.
 
