@@ -221,3 +221,18 @@ Renderers do not shrink overflowing text again to fit its box. Oversized text
 retains its authored size and vertical alignment, matching PowerPoint's saved
 layout even when that places text outside the slide. Explicit horizontal and
 vertical clipping still constrain their respective axes to the text box.
+
+### Slide backgrounds
+
+`set-background` writes native slide fills. Use `fill.kind` of `solid`, `gradient`,
+`picture`, `pattern`, or `inherit`. Gradient stops have offsets in [0, 1], RGB
+colours and optional opacity. Linear gradients accept an angle in degrees and
+`scaled`; radial gradients accept a normalized `center`. Pictures accept base64
+PNG/JPEG bytes, opacity, normalized crop edges and optional tile scale/offset/flip.
+`backgroundPatterns` lists authorable presets. `inherit` removes the slide override
+and restores the layout/master background. The existing `background` colour command
+remains supported. Group commands in a `batch` to apply to all slides in one undo.
+
+These fills use ECMA-376-1 §19.3.1.2 and §§20.1.8.14, 20.1.8.33, 20.1.8.47.
+Unrelated slide XML and package parts are preserved. Rectangular/shape path gradients,
+advanced picture effects and uncommon pattern presets remain outside authoring coverage.

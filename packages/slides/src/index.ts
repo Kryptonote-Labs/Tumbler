@@ -73,3 +73,6 @@ export { presentationThemeColours } from './reader.ts';
 export type { PresentationInk } from './ink.ts';
 export { presentationInkPoints } from './ink.ts';
 export { hitPresentationInk } from './ink.ts';
+
+export { backgroundFill, backgroundPatterns } from "./background-authoring.ts";
+export type { BackgroundFill } from "./background-authoring.ts";

@@ -108,6 +108,7 @@
 >
   {#each Array.from( { length: flipY ? 2 : 1 }, ) as _, row}{#each Array.from( { length: flipX ? 2 : 1 }, ) as _, col}
       <g
+        opacity={picture.opacity ?? 1}
         transform={`translate(${col ? 2 * w : 0} ${row ? 2 * h : 0}) scale(${col ? -1 : 1} ${row ? -1 : 1})`}
       >
         <svg width={w} height={h} overflow="hidden"

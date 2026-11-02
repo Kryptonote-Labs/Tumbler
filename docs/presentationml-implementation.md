@@ -88,3 +88,10 @@ grid sizes and direct cell formatting. The former fixed table-cell and per-frame
 text budgets are removed; configured reader budgets remain caller-owned resource
 controls. `createPresentation` also accepts those reader options. Empty editable
 text frames show a canvas hint that is absent from previews and exported files.
+
+Background authoring supports native solid, multi-stop linear/circular gradient,
+picture/texture and common pattern fills through `set-background`. Opacity, picture
+cropping/tiling and reset to inherited backgrounds round-trip through PPTX. Batch
+commands supply one undo step for applying a fill to all slides. Legacy solid
+`background` commands remain valid. Background tests cover export/reopen, inheritance,
+undo/redo, media relationships and unrelated-part preservation.

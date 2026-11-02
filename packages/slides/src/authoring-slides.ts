@@ -149,21 +149,6 @@ export function moveSlide(artifact: PresentationArtifact, id: string, index: num
   );
   return commitXml(artifact, main, edit.commit().bytes);
 }
-export function slideBackground(artifact: PresentationArtifact, id: string, color: string) {
-  editable(artifact);
-  if (!/^#[a-f\d]{6}$/i.test(color)) throw new TypeError("Use a #RRGGBB background.");
-  const slide = slideById(artifact, id),
-    source = partXml(artifact, slide.part),
-    common = children(source.root).find((e) => e.localName === "cSld")!;
-  const bg = children(common).find((e) => e.localName === "bg"),
-    tree = children(common).find((e) => e.localName === "spTree")!;
-  const edit = beginLosslessXmlEdit(source),
-    markup = `<p:bg xmlns:p="${source.root.namespaceUri}" xmlns:a="${artifact.document.conformance === "strict" ? "http://purl.oclc.org/ooxml/drawingml/main" : "http://schemas.openxmlformats.org/drawingml/2006/main"}"><p:bgPr><a:solidFill><a:srgbClr val="${xml(color.slice(1))}"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>`;
-  if (bg) edit.replaceElementMarkup(bg, markup);
-  else edit.insertMarkupBefore(tree, markup);
-  return commitXml(artifact, slide.part, edit.commit().bytes);
-}
-
 /** Keep a slide editable while excluding it from the slideshow. */
 export function setSlideHidden(artifact: PresentationArtifact, id: string, hidden: boolean) {
   editable(artifact);
