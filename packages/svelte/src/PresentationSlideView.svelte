@@ -56,6 +56,7 @@
     slide,
     thumbnail = false,
     playing: controlledPlaying,
+    stage: fullStage = false,
     toolbar = true,
     onselectionchange,
     editable = false,
@@ -80,6 +81,8 @@
     thumbnail?: boolean;
     /** Play existing slide effects without showing playback controls. */
     playing?: boolean;
+    /** Render as a slideshow stage: edge to edge on black, with unselectable text. */
+    stage?: boolean;
     /** Host decorations in slide coordinates, excluded from thumbnail views. */
     overlay?: Snippet;
     /** Named remote selections. Hosts resolve document revisions before providing them. */
@@ -108,8 +111,8 @@
   let svg = $state<SVGSVGElement>();
   let width = $state(800),
     height = $state(500);
-  // A host-controlled show is edge to edge; the editing gutter would letterbox every slide.
-  const stage = $derived(!thumbnail && controlledPlaying === true);
+  // The editing gutter would letterbox every slide of a fullscreen show.
+  const stage = $derived(!thumbnail && fullStage);
   const gutter = $derived(thumbnail || stage ? 0 : 32);
   let fit = $derived(
     Math.max(
