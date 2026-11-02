@@ -76,14 +76,14 @@ function picture<Path, Image>(
       h = Math.max(1, decoded.height * tile.scaleY);
     const ox =
       tile.x +
-      (tile.align.includes('r')
+      (['r', 'tr', 'br'].includes(tile.align)
         ? width - w
         : ['ctr', 't', 'b'].includes(tile.align)
           ? (width - w) / 2
           : 0);
     const oy =
       tile.y +
-      (tile.align.includes('b')
+      (['b', 'bl', 'br'].includes(tile.align)
         ? height - h
         : ['ctr', 'l', 'r'].includes(tile.align)
           ? (height - h) / 2

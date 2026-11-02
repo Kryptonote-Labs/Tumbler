@@ -157,65 +157,76 @@ for (const anchor of ['top', 'center', 'bottom'] as const) {
   });
 }
 
-test('background picture tiling covers the slide with source crops, alternating flips and opacity', () => {
-  let deck = createPresentation({ width: 100, height: 60 });
-  const slideId = deck.document.slides[0]!.id;
-  deck = applyPresentationCommand(deck, {
-    name: 'set-background',
-    slideId,
-    fill: {
-      kind: 'picture',
-      contentType: 'image/png',
-      data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=',
-      opacity: 0.5,
-      tile: { scaleX: 1, scaleY: 1, flip: 'xy' },
-    },
+for (const { align, columns, count, flip } of [
+  { align: 'tl' as const, columns: [0, 80], count: 6, flip: 'xy' as const },
+  { align: 'ctr' as const, columns: [-10, 30, 70], count: 9, flip: 'none' as const },
+  { align: 'tr' as const, columns: [-20, 20, 60], count: 6, flip: 'none' as const },
+]) {
+  test(`background picture tiling preserves ${align} alignment and opacity`, () => {
+    let deck = createPresentation({ width: 100, height: 60 });
+    const slideId = deck.document.slides[0]!.id;
+    deck = applyPresentationCommand(deck, {
+      name: 'set-background',
+      slideId,
+      fill: {
+        kind: 'picture',
+        contentType: 'image/png',
+        data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=',
+        opacity: 0.5,
+        tile: { scaleX: 1, scaleY: 1, align, flip },
+      },
+    });
+    const images: number[][] = [],
+      scales: number[][] = [],
+      alphas: number[] = [],
+      translations: number[][] = [];
+    const noop = () => {};
+    const ctx: SlideCanvasContext<string, string> = {
+      font: '',
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 1,
+      globalAlpha: 1,
+      textAlign: 'left',
+      textBaseline: 'alphabetic',
+      save: noop,
+      restore: noop,
+      translate: (...values) => {
+        translations.push(values);
+      },
+      rotate: noop,
+      scale: (...s) => {
+        scales.push(s);
+      },
+      beginPath: noop,
+      rect: noop,
+      arc: noop,
+      moveTo: noop,
+      lineTo: noop,
+      clip: noop,
+      fill: noop,
+      stroke: noop,
+      setLineDash: noop,
+      transform: noop,
+      fillRect: noop,
+      measureText: () => ({ width: 0 }),
+      fillText: noop,
+      createLinearGradient: () => ({ addColorStop: noop }),
+      createRadialGradient: () => ({ addColorStop: noop }),
+      drawImage: (_image, ...args) => {
+        images.push(args);
+        alphas.push(ctx.globalAlpha);
+      },
+    };
+    paintPresentationSlide(ctx, deck.document, deck.document.slides[0]!, {
+      path: (d) => d,
+      image: () => ({ image: 'decoded', width: 40, height: 30 }),
+    });
+    expect(images).toHaveLength(count);
+    expect([...new Set(translations.map(([x]) => x))]).toEqual(columns);
+    expect(images.every((args) => args[6] === 40 && args[7] === 30)).toBe(true);
+    expect(alphas.every((alpha) => alpha === 0.5)).toBe(true);
+    if (flip === 'xy') expect(scales).toContainEqual([-1, -1]);
+    else expect(scales.every(([x, y]) => x === 1 && y === 1)).toBe(true);
   });
-  const images: number[][] = [],
-    scales: number[][] = [],
-    alphas: number[] = [];
-  const noop = () => {};
-  const ctx: SlideCanvasContext<string, string> = {
-    font: '',
-    fillStyle: '',
-    strokeStyle: '',
-    lineWidth: 1,
-    globalAlpha: 1,
-    textAlign: 'left',
-    textBaseline: 'alphabetic',
-    save: noop,
-    restore: noop,
-    translate: noop,
-    rotate: noop,
-    scale: (...s) => {
-      scales.push(s);
-    },
-    beginPath: noop,
-    rect: noop,
-    arc: noop,
-    moveTo: noop,
-    lineTo: noop,
-    clip: noop,
-    fill: noop,
-    stroke: noop,
-    setLineDash: noop,
-    transform: noop,
-    fillRect: noop,
-    measureText: () => ({ width: 0 }),
-    fillText: noop,
-    createLinearGradient: () => ({ addColorStop: noop }),
-    createRadialGradient: () => ({ addColorStop: noop }),
-    drawImage: (_image, ...args) => {
-      images.push(args);
-      alphas.push(ctx.globalAlpha);
-    },
-  };
-  paintPresentationSlide(ctx, deck.document, deck.document.slides[0]!, {
-    path: (d) => d,
-    image: () => ({ image: 'decoded', width: 40, height: 30 }),
-  });
-  expect(images).toHaveLength(6);
-  expect(images.every((args) => args[6] === 40 && args[7] === 30)).toBe(true);
-  expect(alphas.every((alpha) => alpha === 0.5)).toBe(true);
-  expect(scales).toContainEqual([-1, -1]);
-});
+}

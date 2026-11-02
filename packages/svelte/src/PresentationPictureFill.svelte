@@ -82,7 +82,7 @@
   );
   let x = $derived(
     (tile?.x ?? 0) +
-      (tile?.align.includes("r")
+      (tile && ["r", "tr", "br"].includes(tile.align)
         ? width - w
         : tile?.align === "ctr" || tile?.align === "t" || tile?.align === "b"
           ? (width - w) / 2
@@ -90,7 +90,7 @@
   );
   let y = $derived(
     (tile?.y ?? 0) +
-      (tile?.align.includes("b")
+      (tile && ["b", "bl", "br"].includes(tile.align)
         ? height - h
         : tile?.align === "ctr" || tile?.align === "l" || tile?.align === "r"
           ? (height - h) / 2
