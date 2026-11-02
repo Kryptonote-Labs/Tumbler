@@ -1,8 +1,6 @@
 import { expect, test } from "bun:test";
-import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
-import { compile } from "svelte/compiler";
 import { beginPackageTransaction } from "../../../packages/opc/src/index.ts";
 import {
   applyPresentationCommand,
@@ -57,53 +55,20 @@ test("saved PowerPoint text sizes survive overflow in the editor and scaled thum
   expect(texts.map((text) => text.autoFit)).toEqual(["normal", "normal"]);
   expect(texts[0]!.paragraphs[0]!.runs[0]!.fontSize).toBeCloseTo((64 * 4) / 3);
   expect(texts[1]!.paragraphs[0]!.runs[0]!.fontSize).toBeCloseTo(((64 * 4) / 3) * 0.8);
-  const root = resolve(import.meta.dir, "../../..");
-  const result = await Bun.build({
-    entrypoints: ["presentation-fitting-fixture"],
-    target: "browser",
-    format: "iife",
-    conditions: ["browser"],
-    plugins: [
-      {
-        name: "presentation-fitting",
-        setup(builder) {
-          builder.onResolve({ filter: /^presentation-fitting-fixture$/ }, () => ({
-            path: "entry",
-            namespace: "fixture",
-          }));
-          builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({
-            contents: `import {mount, flushSync} from 'svelte';
-            import Text from '${root}/packages/svelte/src/PresentationText.svelte';
-            const texts = ${JSON.stringify(texts)};
-            for (const text of texts) for (const scale of [1, 0.2]) {
-              const host = document.createElement('div');
-              host.style.cssText = 'width:1104px;height:139px;position:relative;margin:200px;transform-origin:top left';
-              host.style.transform = 'scale(' + scale + ')';
-              host.dataset.scale = scale;
-              document.body.append(host);
-              flushSync(() => mount(Text, {target:host,props:{text}}));
-            }`,
-            loader: "js",
-          }));
-          builder.onResolve({ filter: /^svelte(\/.*)?$/ }, ({ path }) => ({
-            path:
-              path === "svelte"
-                ? realpathSync(resolve(root, "apps/docs/node_modules/svelte/src/index-client.js"))
-                : Bun.resolveSync(path, resolve(root, "apps/docs")),
-          }));
-          builder.onLoad({ filter: /\.svelte$/ }, async ({ path }) => ({
-            contents: compile(await Bun.file(path).text(), {
-              filename: path,
-              generate: "client",
-              css: "injected",
-            }).js.code,
-            loader: "js",
-          }));
-        },
-      },
-    ],
-  });
-  if (!result.success) throw new Error(result.logs.map(String).join("\n"));
+  const build = Bun.spawn(
+    [process.execPath, resolve(import.meta.dir, "presentation-text-fixture.ts")],
+    {
+      stdin: new Response(JSON.stringify(texts)),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  const [exitCode, script, buildError] = await Promise.all([
+    build.exited,
+    new Response(build.stdout).text(),
+    new Response(build.stderr).text(),
+  ]);
+  if (exitCode !== 0) throw new Error(buildError);
   const browser = await chromium.launch({
     headless: true,
     ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
@@ -111,7 +76,7 @@ test("saved PowerPoint text sizes survive overflow in the editor and scaled thum
   try {
     const page = await browser.newPage();
     await page.setContent("<!doctype html><body></body>");
-    await page.addScriptTag({ content: await result.outputs[0]!.text() });
+    await page.addScriptTag({ content: script });
     await page.evaluate(() => document.fonts.ready);
     await page.evaluate(
       () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
