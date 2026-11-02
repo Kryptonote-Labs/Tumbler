@@ -8,9 +8,7 @@ const fixture = new URL(
   "../static/samples/workspace-brief.pptx",
   import.meta.url,
 );
-test("normal autofit fits dense text and explicit overflow remains visible", async ({
-  page,
-}) => {
+test("normal autofit without saved reduction preserves overflowing text", async ({ page }) => {
   const pkg = openOpcPackage(new Uint8Array(await readFile(fixture))),
     tx = beginPackageTransaction(pkg);
   const part = pkg.getPart("/ppt/slides/slide1.xml")!;
@@ -18,7 +16,7 @@ test("normal autofit fits dense text and explicit overflow remains visible", asy
     .decode(pkg.readPart(part))
     .replaceAll(
       "A quieter workspace",
-      "A very long title that must shrink to fit its original text box without clipping any words",
+      "A very long title that exceeds its original text box and retains its saved font size",
     )
     .replace(
       /<a:bodyPr[^>]*(?:\/>|>[\s\S]*?<\/a:bodyPr>)/g,
@@ -27,35 +25,23 @@ test("normal autofit fits dense text and explicit overflow remains visible", asy
   tx.replacePart(part.name, new TextEncoder().encode(xml));
   await page.goto("/playground/slides-brief");
   await expect(
-    page
-      .locator(".slide-stage")
-      .getByText("A quieter workspace", { exact: true })
-      .last(),
+    page.locator(".slide-stage").getByText("A quieter workspace", { exact: true }).last(),
   ).toBeVisible();
   await page.locator("input[type=file]").setInputFiles({
     name: "autofit.pptx",
-    mimeType:
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     buffer: Buffer.from(tx.commit()),
   });
-  const text = page
-    .locator(".slide-stage .slide-text")
-    .filter({ hasText: "A very long title" });
+  const text = page.locator(".slide-stage .slide-text").filter({ hasText: "A very long title" });
   await expect(text).toBeVisible();
   await expect
     .poll(() =>
-      text
-        .locator(".paragraphs")
-        .evaluate((e) => Number((e as HTMLElement).style.zoom)),
+      text.evaluate((e) => {
+        const content = e.querySelector<HTMLElement>(".paragraphs")!;
+        return content.getBoundingClientRect().height / e.getBoundingClientRect().height;
+      }),
     )
-    .toBeLessThan(1);
-  const fitted = await text.evaluate((e) => {
-    const p = e.querySelector<HTMLElement>(".paragraphs")!;
-    return (
-      p.getBoundingClientRect().height <= e.getBoundingClientRect().height + 1
-    );
-  });
-  expect(fitted).toBe(true);
+    .toBeGreaterThan(1);
 });
 test("embedded video exposes browser playback controls and loads its metadata", async ({
   page,
@@ -318,29 +304,20 @@ test("reflections mirror the source shape and fade below it", async ({
   await page.screenshot({ path: "/tmp/tumbler-reflection.png" });
 });
 
-test("autofit keeps every text fragment inside the original box at different zoom levels", async ({
-  page,
-}) => {
+test("saved autofit scale keeps text inside its box at different zoom levels", async ({ page }) => {
   await page.goto("/playground/slides-rendering");
-  const text = page
-    .locator(".slide-stage .slide-text")
-    .filter({ hasText: "This long heading" });
+  const text = page.locator(".slide-stage .slide-text").filter({ hasText: "This long heading" });
   await expect(text).toBeVisible();
-  await expect
-    .poll(() =>
-      text
-        .locator(".paragraphs")
-        .evaluate(
-          (body) =>
-            body.getBoundingClientRect().height /
-            body.parentElement!.getBoundingClientRect().height,
-        ),
-    )
-    .toBeGreaterThan(0.5);
   for (const zoom of ["100%", "50%", "125%"]) {
-    await page
-      .getByLabel("Zoom", { exact: true })
-      .selectOption({ label: zoom });
+    await page.getByLabel("Zoom", { exact: true }).selectOption({ label: zoom });
+    await expect
+      .poll(() =>
+        text
+          .locator("[data-text-run]")
+          .first()
+          .evaluate((run) => parseFloat(getComputedStyle(run).fontSize)),
+      )
+      .toBeCloseTo(((34 * 4) / 3) * 0.4, 3);
     await expect
       .poll(() =>
         text.evaluate((node) => {

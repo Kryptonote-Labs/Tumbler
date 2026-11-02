@@ -215,3 +215,9 @@ in slide coordinates for hit testing, and `inspectPresentation` exposes traces t
 Rounded rectangles accept `cornerRadius` in CSS pixels on `insert-object` shapes and `style-shape` commands. Radii are stored as native DrawingML `adj` values, clamped to half the shorter side. Omission on insertion uses the preset default of 16.667%. `SlideObject.cornerRadius` reflects the evaluated adjustment, and resizing scales the stored proportion. Other shape geometries reject radius edits.
 
 The rounded-rectangle default and radius bounds follow `roundRect` in `presetShapeDefinitions.xml`, distributed with [ECMA-376 Part 1](https://ecma-international.org/wp-content/uploads/ECMA-376-1_5th_edition_december_2016.zip).
+
+Normal text autofit uses the font scale and line spacing saved in the PPTX.
+Renderers do not shrink overflowing text again to fit its box. Oversized text
+retains its authored size and vertical alignment, matching PowerPoint's saved
+layout even when that places text outside the slide. Explicit horizontal and
+vertical clipping still constrain their respective axes to the text box.

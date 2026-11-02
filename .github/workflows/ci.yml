@@ -26,6 +26,10 @@ jobs:
       - name: Typecheck
         run: bun run check
 
+      - name: Install Chromium for browser regression tests
+        working-directory: apps/docs
+        run: bunx --no-install playwright install --with-deps --only-shell chromium
+
       - name: Test
         run: bun test
 
