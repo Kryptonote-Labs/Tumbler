@@ -7,13 +7,13 @@
   import {
     slideObjectEnclosed,
     translateSlideObject,
+    resizeSlideSelection,
     type SlideSelectionRect,
     presentationFormattingState,
     presentationTextTarget,
     type PresentationTableCellAddress,
     shapeMatrix,
     multiply,
-    resizeSlideTransform,
     slideTextValue,
     type PresentationTextRange,
     type PresentationTextEdit,
@@ -446,7 +446,7 @@
       svg?.focus({ preventScroll: true });
       return;
     }
-    if (mode !== "move" || !selectedKeys.includes(object.key)) select([object.key]);
+    if (mode === "rotate" || !selectedKeys.includes(object.key)) select([object.key]);
     if (!object.movable || !(onobjectchange || onobjectschange)) return;
     event.preventDefault();
     const matrix = svg?.getScreenCTM();
@@ -468,7 +468,7 @@
       inverse,
     );
     drag = {
-      objects: mode === "move" ? selectedObjects.filter(item => item.movable) : [object],
+      objects: mode === "rotate" ? [object] : selectedObjects.filter(item => item.movable),
       pointer: event.pointerId,
       x: point.x,
       y: point.y,
@@ -525,16 +525,17 @@
       next.rotation =
         (((event.shiftKey ? Math.round(angle / 15) * 15 : angle) % 360) + 360) %
         360;
-    } else if (drag.mode === "move")
-      next = { ...transform, x: transform.x + dx, y: transform.y + dy };
-    else next = resizeSlideTransform(transform, drag.mode, dx, dy, {
-      preserveAspectRatio: drag.object.kind === "picture" || event.shiftKey,
-    });
+    }
+
     if (drag.mode === "move") {
       const parent = drag.object.parentMatrix ?? [1, 0, 0, 1, 0, 0];
       const sx = parent[0] * dx + parent[2] * dy;
       const sy = parent[1] * dx + parent[3] * dy;
       previews = drag.objects.map(object => ({ slideId: slide.id, objectKey: object.key, ...translateSlideObject(object, sx, sy) }));
+    } else if (drag.mode !== "rotate") {
+      previews = resizeSlideSelection(drag.objects, drag.object, drag.mode, dx, dy, {
+        preserveAspectRatio: event.shiftKey,
+      }).map(change => ({ slideId: slide.id, ...change }));
     } else previews = [{ slideId: slide.id, objectKey: key, ...next }];
   }
   function resizeKey(
@@ -555,13 +556,10 @@
     const delta = new DOMPoint(dx * step, dy * step, 0, 0).matrixTransform(
       inverse,
     );
-    commit([{
-      slideId: slide.id,
-      objectKey: object.key,
-      ...resizeSlideTransform(object.transform, handle, delta.x, delta.y, {
-        preserveAspectRatio: object.kind === "picture" || event.shiftKey,
-      }),
-    }]);
+    commit(resizeSlideSelection(
+      selectedObjects.filter(item => item.movable), object, handle, delta.x, delta.y,
+      { preserveAspectRatio: event.shiftKey },
+    ).map(change => ({ slideId: slide.id, ...change })));
   }
 
   function finish(event: PointerEvent) {
@@ -1031,60 +1029,62 @@
                   : "none"}
                 class:table-outline={!!object.table}
               />
-              {#if selectedKeys.length === 1 && object.movable && (onobjectchange || onobjectschange) && editing !== object.key}
-                <line
-                  x1={w / 2}
-                  y1="0"
-                  x2={w / 2}
-                  y2={-26 / factor}
-                  stroke="#278044"
-                  stroke-width={1 / factor}
-                  pointer-events="none"
-                />
-                <circle
-                  role="button"
-                  tabindex="0"
-                  aria-label={`Rotate ${object.name}`}
-                  cx={w / 2}
-                  cy={-26 / factor}
-                  r={7 / factor}
-                  fill="white"
-                  stroke="#278044"
-                  stroke-width={1.5 / factor}
-                  class="rotate"
-                  onpointerdown={(event) => start(event, object, "rotate")}
-                  onkeydown={(event) => {
-                    if (
-                      [
-                        "ArrowLeft",
-                        "ArrowRight",
-                        "ArrowUp",
-                        "ArrowDown",
-                        "Home",
-                      ].includes(event.key)
-                    ) {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      const step = event.shiftKey ? 15 : 1;
-                      commit([{
-                        slideId: slide.id,
-                        objectKey: object.key,
-                        ...object.transform,
-                        rotation:
-                          event.key === "Home"
-                            ? 0
-                            : object.transform.rotation +
-                              (["ArrowLeft", "ArrowDown"].includes(event.key)
-                                ? -step
-                                : step),
-                      }]);
-                    }
-                  }}
-                  ><title
-                    >Drag to rotate. Hold Shift to snap to 15°. Arrow keys
-                    rotate; Home resets.</title
-                  ></circle
-                >
+              {#if object.movable && (onobjectchange || onobjectschange) && editing !== object.key}
+                {#if selectedKeys.length === 1}
+                  <line
+                    x1={w / 2}
+                    y1="0"
+                    x2={w / 2}
+                    y2={-26 / factor}
+                    stroke="#278044"
+                    stroke-width={1 / factor}
+                    pointer-events="none"
+                  />
+                  <circle
+                    role="button"
+                    tabindex="0"
+                    aria-label={`Rotate ${object.name}`}
+                    cx={w / 2}
+                    cy={-26 / factor}
+                    r={7 / factor}
+                    fill="white"
+                    stroke="#278044"
+                    stroke-width={1.5 / factor}
+                    class="rotate"
+                    onpointerdown={(event) => start(event, object, "rotate")}
+                    onkeydown={(event) => {
+                      if (
+                        [
+                          "ArrowLeft",
+                          "ArrowRight",
+                          "ArrowUp",
+                          "ArrowDown",
+                          "Home",
+                        ].includes(event.key)
+                      ) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const step = event.shiftKey ? 15 : 1;
+                        commit([{
+                          slideId: slide.id,
+                          objectKey: object.key,
+                          ...object.transform,
+                          rotation:
+                            event.key === "Home"
+                              ? 0
+                              : object.transform.rotation +
+                                (["ArrowLeft", "ArrowDown"].includes(event.key)
+                                  ? -step
+                                  : step),
+                        }]);
+                      }
+                    }}
+                    ><title
+                      >Drag to rotate. Hold Shift to snap to 15°. Arrow keys
+                      rotate; Home resets.</title
+                    ></circle
+                  >
+                {/if}
                 {#each handles as handle}
                   <rect
                     role="button"
