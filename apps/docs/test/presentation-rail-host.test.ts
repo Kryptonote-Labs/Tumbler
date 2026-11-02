@@ -74,7 +74,7 @@ test('slide drag previews follow viewport coordinates outside transformed panes 
     const preview = page.locator('.drag-preview');
     expect(await first.getAttribute('title')).toBeNull();
     expect(await first.getAttribute('data-host-hint')).toBe('true');
-    expect(await page.evaluate('window.hints')).toBe(2);
+    expect(await page.evaluate<number>('window.hints')).toBe(2);
     const startDrag = async () => {
       await first.hover();
       await page.mouse.down();
@@ -122,7 +122,7 @@ test('slide drag previews follow viewport coordinates outside transformed panes 
     await page.evaluate('window.destroy()');
     await preview.waitFor({ state: 'detached' });
     await page.mouse.up();
-    expect(await page.evaluate('window.hints')).toBe(0);
+    expect(await page.evaluate<number>('window.hints')).toBe(0);
   } finally {
     await browser.close();
   }
