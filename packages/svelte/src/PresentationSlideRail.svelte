@@ -1,17 +1,20 @@
 <script lang="ts">
   import { onDestroy, tick, type Snippet } from 'svelte';
+  import type { Attachment } from 'svelte/attachments';
   import type { PresentationDocument, PresentationSlide } from '@tumblerjs/slides';
   import PresentationSlideView from './PresentationSlideView.svelte';
   let {
     presentation,
     indicator,
     onreorder,
+    reorderHint,
     index = $bindable(0),
   }: {
     presentation: PresentationDocument;
     index?: number;
     indicator?: Snippet<[PresentationSlide]>;
     onreorder?: (slideId: string, index: number) => void;
+    reorderHint?: Attachment<HTMLButtonElement>;
   } = $props();
   let rail = $state<HTMLElement>();
   let visible = $state<Record<string, boolean>>({});
@@ -35,6 +38,12 @@
     cursor.textContent = '* { cursor: grabbing !important; }';
     document.head.append(cursor);
     return { destroy: () => cursor.remove() };
+  }
+
+  // Viewport coordinates must stay independent of transformed or clipped editor panes.
+  function attachDragPreview(node: HTMLDivElement) {
+    node.ownerDocument.body.append(node);
+    return { destroy: () => node.remove() };
   }
 
   function updateDrop() {
@@ -213,7 +222,8 @@
       class:dragging={drag?.id === slide.id}
       onpointerdown={(event) => startPointer(event, slide.id)}
       ondragstart={(event) => event.preventDefault()}
-      title={onreorder ? 'Drag to reorder · Alt + ↑ / ↓' : undefined}
+      title={onreorder && !reorderHint ? 'Drag to reorder · Alt + ↑ / ↓' : undefined}
+      {@attach onreorder && !drag ? reorderHint : undefined}
       class:hidden={slide.hidden}
       aria-current={index === i ? 'true' : undefined}
       aria-label={`Slide ${i + 1}: ${slide.title}${slide.hidden ? ' (hidden)' : ''}`}
@@ -268,6 +278,7 @@
   <div
     class="drag-preview"
     use:attachDragCursor
+    use:attachDragPreview
     aria-hidden="true"
     style:left={`${drag.x + 14}px`}
     style:top={`${drag.y + 12}px`}
