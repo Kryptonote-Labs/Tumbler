@@ -21,7 +21,7 @@ test("presentations navigate, edit, move, resize, undo, and reopen downloaded by
   const object = stage
     .locator("[data-slide-object]")
     .filter({ hasText: "A quieter workspace" });
-  await object.dblclick();
+  await object.click();
   const input = page.getByRole("textbox", { name: "Edit slide text" });
   await input.fill("A better workspace");
   await input.press("Control+Enter");
@@ -33,6 +33,8 @@ test("presentations navigate, edit, move, resize, undo, and reopen downloaded by
     .filter({ hasText: "A better workspace" });
   const before = (await updated.getAttribute("transform"))!;
   await updated.click();
+  await expect(input).toBeFocused();
+  await input.press("Escape");
   await page.locator(".slide-stage svg.slide").press("ArrowRight");
   await expect(updated).not.toHaveAttribute("transform", before);
   await page.getByRole("button", { name: "Undo", exact: true }).click();
@@ -163,7 +165,7 @@ test("slide thumbnails switch with keyboard and reflect edits without changing z
   await page
     .locator(".slide-stage [data-slide-object]")
     .filter({ hasText: "A quieter workspace" })
-    .dblclick();
+    .click();
   await page.getByLabel("Edit slide text").fill("Thumbnail updates too");
   await page.getByLabel("Edit slide text").press("Control+Enter");
   await expect(
@@ -212,7 +214,7 @@ test("DrawingML shapes, theme tables, notes, and internal links render together"
   await stage
     .locator("[data-slide-object]")
     .filter({ hasText: "Back to the shape gallery" })
-    .dblclick();
+    .click();
   await expect(
     page.getByRole("textbox", { name: "Edit slide text" }),
   ).toBeVisible();
@@ -242,7 +244,7 @@ test("in-place text keeps its layout and selected-word formatting and shape styl
     const s = getComputedStyle(n);
     return [s.fontFamily, s.fontSize, s.fontWeight, s.color];
   });
-  await object.dblclick();
+  await object.click();
   const editor = page.getByRole("textbox", { name: "Edit slide text" });
   await expect(editor).toBeVisible();
   const after = await span.boundingBox();
@@ -319,7 +321,7 @@ test("caret formatting and plain-text paste work at reduced zoom without moving 
   await expect(object).toBeVisible();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByLabel("Zoom", { exact: true }).selectOption("0.75");
-  await object.dblclick();
+  await object.click();
   const editor = page.getByRole("textbox", { name: "Edit slide text" });
   await expect(editor).toBeVisible();
   const transform = await object.getAttribute("transform");
@@ -484,7 +486,7 @@ test("table cells edit in place, format, navigate with Tab, and resize without s
   const cell = table.locator('[data-table-cell="1:1"]');
   const span = cell.locator("[data-text-run]").first();
   const before = await span.boundingBox();
-  await cell.dblclick();
+  await cell.click();
   let editor = page.getByRole("textbox", { name: "Edit slide text" });
   await expect(editor).toBeVisible();
   const after = await span.boundingBox();
@@ -602,7 +604,7 @@ test("blank slide and surrounding canvas clear text selection without breaking t
     stage.locator("svg.slide > rect").first(),
     stage.locator(".slide-space"),
   ]) {
-    await title.dblclick();
+    await title.click();
     await editor.press("Control+Home");
     await editor.press("Control+Shift+ArrowRight");
     await expect

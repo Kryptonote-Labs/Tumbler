@@ -17,6 +17,8 @@ for (const modifier of ["ctrlKey", "metaKey"] as const) {
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     expect(await dispatch("u")).toBe(true);
     await object.click();
+    await expect(page.getByRole("textbox", { name: "Edit slide text" })).toBeFocused();
+    await page.keyboard.press("Escape");
     await expect(slide).toBeFocused();
     expect(await dispatch("u", { altKey: true })).toBe(true);
     expect(await dispatch("u", { shiftKey: true })).toBe(true);
@@ -37,7 +39,7 @@ for (const modifier of ["ctrlKey", "metaKey"] as const) {
     }
 
     // Leaving a partial text edit must switch the shortcut back to the whole box.
-    await object.dblclick();
+    await object.click();
     const editor = page.getByRole("textbox", { name: "Edit slide text" });
     await editor.press("Control+Home");
     for (let i = 0; i < 9; i++) await editor.press("Shift+ArrowRight");
@@ -46,6 +48,8 @@ for (const modifier of ["ctrlKey", "metaKey"] as const) {
     await expect(object.locator("[data-text-run]").last()).toHaveCSS("font-style", "normal");
     await editor.press("Control+Enter");
     await object.click();
+    await expect(page.getByRole("textbox", { name: "Edit slide text" })).toBeFocused();
+    await page.keyboard.press("Escape");
     expect(await dispatch("i")).toBe(false);
     for (const span of await object.locator("[data-text-run]").all()) {
       await expect(span).toHaveCSS("font-style", "italic");

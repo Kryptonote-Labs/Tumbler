@@ -74,7 +74,7 @@
       onfocus={() => {
         if (editable && !active) oncellselect?.(cell);
       }}
-      ondblclick={(event) => {
+      onclick={(event) => {
         if (editable) {
           event.stopPropagation();
           if (!active) oncellactivate?.(cell, event);
