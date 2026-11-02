@@ -251,6 +251,7 @@
         inverse: DOMMatrix;
       }
     | undefined;
+  let textClick: { pointer: number; object: SlideObject; x: number; y: number } | undefined;
   let editing = $state<string>();
   let textHead = $state(0);
   let textRange = $state<PresentationTextRange>({ start: 0, end: 0 });
@@ -432,7 +433,9 @@
     mode: "move" | "rotate" | Handle = "move",
   ) {
     if (!editable || event.button !== 0) return;
-    if (editing === object.key) return;
+    const outline = event.target instanceof Element && event.target.closest('.selection-outline');
+    if (editing === object.key && mode === "move" && !outline) return;
+    textClick = undefined;
     if (editing) {
       editing = undefined;
       pendingFormat = undefined;
@@ -447,6 +450,8 @@
       return;
     }
     if (mode !== "move" || !selectedKeys.includes(object.key)) select([object.key]);
+    if (mode === "move" && !outline && !object.table && object.textEditable && selectedKeys.length === 1)
+      textClick = { pointer: event.pointerId, object, x: event.clientX, y: event.clientY };
     if (!object.movable || !(onobjectchange || onobjectschange)) return;
     event.preventDefault();
     const matrix = svg?.getScreenCTM();
@@ -483,6 +488,9 @@
     svg?.focus({ preventScroll: true });
   }
   function move(event: PointerEvent) {
+    if (textClick?.pointer === event.pointerId &&
+      Math.hypot(event.clientX - textClick.x, event.clientY - textClick.y) >= 5)
+      textClick = undefined;
     if (marquee && marquee.pointer === event.pointerId) {
       const matrix = svg?.getScreenCTM();
       if (!matrix) return;
@@ -510,6 +518,7 @@
       previews = [];
       return;
     }
+    textClick = undefined;
     svg?.setPointerCapture(event.pointerId);
     let next = { ...transform };
     if (drag.mode === "rotate") {
@@ -565,16 +574,22 @@
   }
 
   function finish(event: PointerEvent) {
+    const clicked = textClick?.pointer === event.pointerId ? textClick : undefined;
+    if (clicked) textClick = undefined;
     if (event.pointerId === marquee?.pointer) {
       marquee = undefined;
       return;
     }
-    if (event.pointerId !== drag?.pointer) return;
-    const changes = previews;
-    cancel();
-    commit(changes);
+    if (event.pointerId === drag?.pointer) {
+      const changes = previews;
+      cancel();
+      commit(changes);
+    }
+    if (clicked && Math.hypot(event.clientX - clicked.x, event.clientY - clicked.y) < 5)
+      void edit(clicked.object, event);
   }
   function cancel() {
+    textClick = undefined;
     const pointer = drag?.pointer;
     drag = undefined;
     previews = [];
@@ -820,9 +835,6 @@
                 start(event, object);
             }}
             onpointerdown={(event) => start(event, object)}
-            ondblclick={(event) => {
-              if (editing !== object.key) void edit(object, event);
-            }}
             onkeydown={(event) => {
               if (
                 editable &&
@@ -905,8 +917,10 @@
                     : undefined}
                   editing={editing === object.key}
                   oncellselect={(cell) => selectCell(object, cell)}
-                  oncellactivate={(cell, event) =>
-                    editCell(object, cell, event)}
+                  oncellactivate={(cell, event) => {
+                    if (!event || (!event.shiftKey && selectedKeys.length === 1))
+                      editCell(object, cell, event);
+                  }}
                   onnavigate={navigateCell}
                   editor={{
                     point: editPoint,
@@ -1026,12 +1040,11 @@
                 fill="none"
                 stroke="#278044"
                 stroke-width={1.5 / factor}
-                pointer-events={object.table && editing !== object.key
-                  ? "stroke"
-                  : "none"}
+                class="selection-outline"
+                pointer-events="stroke"
                 class:table-outline={!!object.table}
               />
-              {#if selectedKeys.length === 1 && object.movable && (onobjectchange || onobjectschange) && editing !== object.key}
+              {#if selectedKeys.length === 1 && object.movable && (onobjectchange || onobjectschange)}
                 <line
                   x1={w / 2}
                   y1="0"
