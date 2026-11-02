@@ -60,7 +60,7 @@ export { inspectPresentation } from './inspect.ts';
 export { paintPresentationSlide, presentationSlideImages } from './canvas.ts';
 export type { SlideCanvasContext, SlideCanvasOptions } from './canvas.ts';
 
-export { slideObjectEnclosed, translateSlideObject, type SlideSelectionRect } from "./selection.ts";
+export { slideObjectEnclosed, translateSlideObject, resizeSlideSelection, type SlideSelectionRect } from "./selection.ts";
 
 export { findVisibleSlideIndex } from "./slideshow.ts";
 export { rebasePresentationCommands, PresentationRebaseConflict } from './collaboration.ts';

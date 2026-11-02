@@ -5,6 +5,8 @@ import {
   openPresentationArtifact,
   PresentationEditingSession,
   shapeMatrix,
+  transformPoint,
+  resizeSlideSelection,
   slideObjectEnclosed,
   translateSlideObject,
 } from '../src/index.ts';
@@ -106,4 +108,67 @@ test('a batch move creates one undo and redo step in the shared editing session'
   expect(session.canUndo).toBe(false);
   session.redo();
   expect(session.artifact.document.slides[0]!.objects.slice(1).map(object => object.transform.x)).toEqual([130, 230]);
+});
+
+test('multi-selection resize applies size ratios and fixes each opposite corner', () => {
+  const objects = fixture().objects.slice(1);
+  const active = objects[0]!;
+  const other = {
+    ...objects[1]!,
+    transform: { ...objects[1]!.transform, width: 160, height: 80, rotation: 35, flipH: true },
+  };
+  const resized = resizeSlideSelection([active, other], active, { x: 1, y: 1 }, 40, 20);
+  for (const [index, object] of [active, other].entries()) {
+    const next = resized[index]!;
+    expect(next.width).toBeCloseTo(object.transform.width * 1.5);
+    expect(next.height).toBeCloseTo(object.transform.height * 1.5);
+    const before = transformPoint(shapeMatrix(object.transform), 0, 0);
+    const after = transformPoint(shapeMatrix(next), 0, 0);
+    expect(after.x).toBeCloseTo(before.x);
+    expect(after.y).toBeCloseTo(before.y);
+  }
+});
+
+test('multi-selection edge resize leaves height unchanged and skips immovable objects', () => {
+  const objects = fixture().objects.slice(1);
+  const active = objects[0]!;
+  const resized = resizeSlideSelection(
+    [active, { ...objects[1]!, movable: false }],
+    active,
+    { x: -1, y: 0 },
+    20,
+    100,
+  );
+  expect(resized).toHaveLength(1);
+  expect(resized[0]!.width).toBe(60);
+  expect(resized[0]!.height).toBe(40);
+  expect(resized[0]!.x + resized[0]!.width).toBe(active.transform.x + active.transform.width);
+});
+
+test('multi-selection corner resize locks aspect ratios and clamps small sizes', () => {
+  const objects = fixture().objects.slice(1);
+  const active = objects[0]!;
+  for (const dx of [40, -1000]) {
+    const resized = resizeSlideSelection(objects, active, { x: 1, y: 1 }, dx, 0, {
+      preserveAspectRatio: true,
+    });
+    for (const next of resized) {
+      expect(next.width / next.height).toBeCloseTo(2);
+      expect(next.width).toBeGreaterThanOrEqual(8);
+      expect(next.height).toBeGreaterThanOrEqual(8);
+    }
+  }
+});
+
+
+test('resizing horizontal and vertical lines retains movement along zero-sized axes', () => {
+  const objects = fixture().objects.slice(1);
+  for (const dimensions of [{ width: 160, height: 0 }, { width: 0, height: 160 }]) {
+    const lines = objects.map(object => ({ ...object, transform: { ...object.transform, ...dimensions } }));
+    const resized = resizeSlideSelection(lines, lines[0]!, { x: 1, y: 1 }, 40, 40);
+    for (const next of resized) {
+      expect(next.width).toBe(dimensions.width + 40);
+      expect(next.height).toBe(dimensions.height + 40);
+    }
+  }
 });
