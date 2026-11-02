@@ -47,6 +47,7 @@
   import PresentationTable from "./PresentationTable.svelte";
   import OoxmlChart from "./OoxmlChart.svelte";
   import { zoomGesture } from "./zoom-gesture.ts";
+  import { snappedZoom, type SnappedZoom } from "./zoom-snap.ts";
 
   let {
     searchMatches = [],
@@ -55,6 +56,7 @@
     slide,
     thumbnail = false,
     playing: controlledPlaying,
+    stage: fullStage = false,
     toolbar = true,
     onselectionchange,
     editable = false,
@@ -79,6 +81,8 @@
     thumbnail?: boolean;
     /** Play existing slide effects without showing playback controls. */
     playing?: boolean;
+    /** Render as a slideshow stage: edge to edge on black, with unselectable text. */
+    stage?: boolean;
     /** Host decorations in slide coordinates, excluded from thumbnail views. */
     overlay?: Snippet;
     /** Named remote selections. Hosts resolve document revisions before providing them. */
@@ -107,12 +111,15 @@
   let svg = $state<SVGSVGElement>();
   let width = $state(800),
     height = $state(500);
+  // The editing gutter would letterbox every slide of a fullscreen show.
+  const stage = $derived(!thumbnail && fullStage);
+  const gutter = $derived(thumbnail || stage ? 0 : 32);
   let fit = $derived(
     Math.max(
       0.001,
       Math.min(
-        (width - (thumbnail ? 0 : 32)) / presentation.width,
-        (height - (thumbnail ? 0 : 32)) / presentation.height,
+        (width - gutter) / presentation.width,
+        (height - gutter) / presentation.height,
       ),
     ),
   );
@@ -663,6 +670,7 @@
   function gestures(node: HTMLElement) {
     return thumbnail ? {} : zoomGesture(node, zoom);
   }
+  let zoomLevel: SnappedZoom = { raw: scale, scale };
   async function zoom(gesture: {
     factor: number;
     x: number;
@@ -675,7 +683,8 @@
     if (!bounds) return;
     const x = (gesture.x - bounds.left) / factor,
       y = (gesture.y - bounds.top) / factor;
-    scale = Math.max(0.25, Math.min(3, scale * gesture.factor));
+    zoomLevel = snappedZoom(zoomLevel, scale, gesture.factor);
+    scale = zoomLevel.scale;
     await tick();
     const next = svg?.getBoundingClientRect();
     if (next) {
@@ -712,10 +721,11 @@
     use:gestures
     use:blankSelection
     class:thumbnail
+    class:stage
   >
     <div
       class="slide-space"
-      style={`width:${Math.max(width, presentation.width * factor + (thumbnail ? 0 : 32))}px;min-height:${Math.max(height, presentation.height * factor + (thumbnail ? 0 : 32))}px`}
+      style={`width:${Math.max(width, presentation.width * factor + gutter)}px;min-height:${Math.max(height, presentation.height * factor + gutter)}px`}
     >
       <!-- The slide surface handles keyboard manipulation only in Edit mode. -->
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -739,7 +749,7 @@
         onlostpointercapture={cancel}
         onkeydown={keydown}
       >
-        <title>{slide.title}</title>
+        {#if !stage}<title>{slide.title}</title>{/if}
         {#if slide.backgroundPattern}<defs
             ><PresentationPattern
               pattern={slide.backgroundPattern}
@@ -1168,6 +1178,22 @@
   }
   .slide:focus-visible {
     outline: 2px solid #278044;
+  }
+  .stage {
+    overflow: hidden;
+    background: #000;
+  }
+  /* Selection only: text stays in the accessibility tree for screen readers. */
+  .stage :global(*) {
+    -webkit-user-select: none !important;
+    user-select: none !important;
+  }
+  .stage .slide-space {
+    padding: 0;
+  }
+  .stage .slide {
+    box-shadow: none;
+    touch-action: none;
   }
   .movable {
     cursor: move;
