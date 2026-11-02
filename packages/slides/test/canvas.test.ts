@@ -67,7 +67,8 @@ test('portable painter retains background, authored text styles and object trans
     path: (d) => d,
     prepareFont: () => 'Host font',
   });
-  expect(fills[0]).toBe('rgba(255,204,136,1)');
+  expect(fills[0]).toBe('#ffffff');
+  expect(fills[1]).toBe('rgba(255,204,136,1)');
   expect(painted.map((p) => p.text).join('')).toBe('A real slide');
   expect(painted.every((p) => p.font.includes('80px') && p.font.includes('Host font'))).toBe(true);
   expect(transforms[0]).toEqual([...slide.objects[0]!.matrix]);
@@ -76,8 +77,7 @@ test('portable painter retains background, authored text styles and object trans
 
 for (const anchor of ['top', 'center', 'bottom'] as const) {
   test(`normal autofit preserves saved sizes and ${anchor} anchoring when text overflows`, async () => {
-    const { paintSlideText } =
-      await import('../src/canvas-text.ts');
+    const { paintSlideText } = await import('../src/canvas-text.ts');
     let scaleY = 1,
       offsetY = 0;
     const painted: { text: string; size: number; y: number }[] = [];
@@ -156,3 +156,66 @@ for (const anchor of ['top', 'center', 'bottom'] as const) {
     expect(painted.at(-1)!.y - painted[0]!.y).toBe(160);
   });
 }
+
+test('background picture tiling covers the slide with source crops, alternating flips and opacity', () => {
+  let deck = createPresentation({ width: 100, height: 60 });
+  const slideId = deck.document.slides[0]!.id;
+  deck = applyPresentationCommand(deck, {
+    name: 'set-background',
+    slideId,
+    fill: {
+      kind: 'picture',
+      contentType: 'image/png',
+      data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=',
+      opacity: 0.5,
+      tile: { scaleX: 1, scaleY: 1, flip: 'xy' },
+    },
+  });
+  const images: number[][] = [],
+    scales: number[][] = [],
+    alphas: number[] = [];
+  const noop = () => {};
+  const ctx: SlideCanvasContext<string, string> = {
+    font: '',
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    globalAlpha: 1,
+    textAlign: 'left',
+    textBaseline: 'alphabetic',
+    save: noop,
+    restore: noop,
+    translate: noop,
+    rotate: noop,
+    scale: (...s) => {
+      scales.push(s);
+    },
+    beginPath: noop,
+    rect: noop,
+    arc: noop,
+    moveTo: noop,
+    lineTo: noop,
+    clip: noop,
+    fill: noop,
+    stroke: noop,
+    setLineDash: noop,
+    transform: noop,
+    fillRect: noop,
+    measureText: () => ({ width: 0 }),
+    fillText: noop,
+    createLinearGradient: () => ({ addColorStop: noop }),
+    createRadialGradient: () => ({ addColorStop: noop }),
+    drawImage: (_image, ...args) => {
+      images.push(args);
+      alphas.push(ctx.globalAlpha);
+    },
+  };
+  paintPresentationSlide(ctx, deck.document, deck.document.slides[0]!, {
+    path: (d) => d,
+    image: () => ({ image: 'decoded', width: 40, height: 30 }),
+  });
+  expect(images).toHaveLength(6);
+  expect(images.every((args) => args[6] === 40 && args[7] === 30)).toBe(true);
+  expect(alphas.every((alpha) => alpha === 0.5)).toBe(true);
+  expect(scales).toContainEqual([-1, -1]);
+});
