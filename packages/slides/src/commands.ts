@@ -1,3 +1,4 @@
+import { backgroundFill, setSlideBackground } from "./background-authoring.ts";
 import { insertPresentationInk } from "./ink-authoring.ts";
 import { findPresentationMatches } from "./search.ts";
 import { editPresentationTable } from "./table-edit.ts";
@@ -10,7 +11,6 @@ import {
   deleteSlide,
   insertSlide,
   moveSlide,
-  slideBackground,
   setSlideHidden,
   slideById,
 } from "./authoring-slides.ts";
@@ -110,6 +110,7 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
   z
     .object({ name: z.literal("move-slide"), slideId: id, index: z.number().int().nonnegative() })
     .strict(),
+  z.object({ name: z.literal("set-background"), slideId: id, fill: backgroundFill }).strict(),
   z
     .object({
       name: z.literal("background"),
@@ -284,7 +285,9 @@ export function applyPresentationCommand(
     case "move-slide":
       return moveSlide(artifact, command.slideId, command.index);
     case "background":
-      return slideBackground(artifact, command.slideId, command.color);
+      return setSlideBackground(artifact, command.slideId, { kind: "solid", color: command.color });
+    case "set-background":
+      return setSlideBackground(artifact, command.slideId, command.fill);
     case "insert-object":
       return insertObject(artifact, command.slideId, command.bounds, command.object);
     case "insert-ink":

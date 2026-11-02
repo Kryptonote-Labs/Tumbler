@@ -20,6 +20,7 @@ export interface DrawingLineEnd {
   readonly length: number;
 }
 export interface DrawingPictureFill {
+  readonly opacity?: number;
   readonly bytes: Uint8Array;
   readonly contentType: string;
   readonly crop: readonly [number, number, number, number];
