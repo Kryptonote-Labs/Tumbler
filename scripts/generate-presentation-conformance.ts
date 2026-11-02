@@ -229,7 +229,7 @@ for (const part of pkg.parts.filter((p) => p.name.value.endsWith(".xml"))) {
       if (block.includes('name="Autofit"'))
         return block.replace(
           /<a:bodyPr[^>]*(?:\/>|>[\s\S]*?<\/a:bodyPr>)/,
-          '<a:bodyPr><a:normAutofit fontScale="100000" lnSpcReduction="10000"/></a:bodyPr>',
+          '<a:bodyPr><a:normAutofit fontScale="40000" lnSpcReduction="10000"/></a:bodyPr>',
         );
       if (block.includes('name="Decimal tabs"'))
         return block.replace(/<a:pPr[^>]*>[\s\S]*?<\/a:pPr>/g, (p) =>
