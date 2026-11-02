@@ -15,6 +15,7 @@ test('slide text and table cells edit on one click while manipulation stays avai
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1100, height: 750 } });
+    page.setDefaultTimeout(10_000);
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.route('https://fixture.local/**', (route) =>
