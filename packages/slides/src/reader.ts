@@ -885,6 +885,7 @@ class Reader {
       bytes,
       contentType: part.contentType,
       crop,
+      opacity: percentage(attr(this.child(blip, "alphaModFix"), "amt"), 1),
       stretch: rect(this.child(this.child(element, "stretch"), "fillRect")),
       ...(tile
         ? {
@@ -930,7 +931,7 @@ class Reader {
         color: this.color(stop, context, placeholder) ?? "transparent",
       }))
       .sort((a, b) => a.offset - b.offset);
-    if (stops.length < 2 || stops.length > 256) {
+    if (stops.length < 2) {
       context.diagnostics.push({
         part: context.slide.part.name.value,
         message: "Unsupported gradient stop count.",
