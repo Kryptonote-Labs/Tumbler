@@ -257,7 +257,7 @@ on forward navigation; it returns `true` when it consumes a click group and
 playback resets the effects. Editing and thumbnails remain static. Playback adds
 no animation authoring controls.
 
-Hosts that omit `PresentationSlideView.playing` retain its built-in read-only playback controls. Passing an explicit `playing` boolean opts into host-controlled playback and hides those controls; forward navigation can call `advanceAnimation()` before changing slides. No animation authoring controls are provided.
+Hosts that omit `PresentationSlideView.playing` retain its built-in read-only playback controls. Passing an explicit `playing` boolean opts into host-controlled playback and hides those controls; while `true`, the slide also fills the view edge to edge on black, with no gutter or hover title; forward navigation can call `advanceAnimation()` before changing slides. No animation authoring controls are provided.
 
 
 `PresentationSlideView.onselectionchange` includes `range`, the same object returned

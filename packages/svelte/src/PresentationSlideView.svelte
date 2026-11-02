@@ -107,12 +107,15 @@
   let svg = $state<SVGSVGElement>();
   let width = $state(800),
     height = $state(500);
+  // A host-controlled show is edge to edge; the editing gutter would letterbox every slide.
+  const stage = $derived(!thumbnail && controlledPlaying === true);
+  const gutter = $derived(thumbnail || stage ? 0 : 32);
   let fit = $derived(
     Math.max(
       0.001,
       Math.min(
-        (width - (thumbnail ? 0 : 32)) / presentation.width,
-        (height - (thumbnail ? 0 : 32)) / presentation.height,
+        (width - gutter) / presentation.width,
+        (height - gutter) / presentation.height,
       ),
     ),
   );
@@ -712,10 +715,11 @@
     use:gestures
     use:blankSelection
     class:thumbnail
+    class:stage
   >
     <div
       class="slide-space"
-      style={`width:${Math.max(width, presentation.width * factor + (thumbnail ? 0 : 32))}px;min-height:${Math.max(height, presentation.height * factor + (thumbnail ? 0 : 32))}px`}
+      style={`width:${Math.max(width, presentation.width * factor + gutter)}px;min-height:${Math.max(height, presentation.height * factor + gutter)}px`}
     >
       <!-- The slide surface handles keyboard manipulation only in Edit mode. -->
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -739,7 +743,7 @@
         onlostpointercapture={cancel}
         onkeydown={keydown}
       >
-        <title>{slide.title}</title>
+        {#if !stage}<title>{slide.title}</title>{/if}
         {#if slide.backgroundPattern}<defs
             ><PresentationPattern
               pattern={slide.backgroundPattern}
@@ -1168,6 +1172,16 @@
   }
   .slide:focus-visible {
     outline: 2px solid #278044;
+  }
+  .stage {
+    overflow: hidden;
+    background: #000;
+  }
+  .stage .slide-space {
+    padding: 0;
+  }
+  .stage .slide {
+    box-shadow: none;
   }
   .movable {
     cursor: move;
