@@ -28,6 +28,15 @@
   let suppressClick = false;
   const draggedSlide = $derived(presentation.slides.find((slide) => slide.id === drag?.id));
 
+  // Keep the drag cursor over other slides and outside the rail, too.
+  function attachDragCursor(node: HTMLDivElement) {
+    const document = node.ownerDocument;
+    const cursor = document.createElement('style');
+    cursor.textContent = '* { cursor: grabbing !important; }';
+    document.head.append(cursor);
+    return { destroy: () => cursor.remove() };
+  }
+
   function updateDrop() {
     const moving = drag;
     if (!rail || !moving) return;
@@ -258,6 +267,7 @@
 {#if drag && draggedSlide}
   <div
     class="drag-preview"
+    use:attachDragCursor
     aria-hidden="true"
     style:left={`${drag.x + 14}px`}
     style:top={`${drag.y + 12}px`}
