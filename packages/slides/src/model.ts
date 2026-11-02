@@ -60,6 +60,7 @@ export interface SlideParagraph {
   readonly bulletSize?: number;
 }
 export interface SlideText {
+  /** Authored fitting mode. Normal fitting is reflected in the saved run sizes and spacing. */
   readonly autoFit?: "none" | "normal" | "shape";
   readonly horizontalOverflow?: "overflow" | "clip";
   readonly verticalOverflow?: "overflow" | "clip" | "ellipsis";

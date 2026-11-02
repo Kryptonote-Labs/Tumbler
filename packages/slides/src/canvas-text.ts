@@ -97,18 +97,18 @@ export function paintSlideText<Path, Image>(
   }
   const total = lines.reduce((sum, line) => sum + line.before + line.height + line.after, 0);
   const innerHeight = Math.max(1, height - top - bottom);
-  const fit = text.autoFit === 'normal' ? Math.min(1, innerHeight / Math.max(1, total)) : 1;
+  // Run sizes already include the saved normAutofit fontScale.
+  // Preserve overflow and anchoring instead of applying another display-only fit.
   ctx.save();
   ctx.translate(
     left,
     top +
       (text.anchor === 'center'
-        ? Math.max(0, (innerHeight - total * fit) / 2)
+        ? (innerHeight - total) / 2
         : text.anchor === 'bottom'
-          ? Math.max(0, innerHeight - total * fit)
+          ? innerHeight - total
           : 0),
   );
-  ctx.scale(fit, fit);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   let y = 0;
@@ -116,9 +116,9 @@ export function paintSlideText<Path, Image>(
     let x =
       line.x +
       (line.align === 'center'
-        ? (available / fit - line.width) / 2
+        ? (available - line.width) / 2
         : line.align === 'right'
-          ? available / fit - line.width
+          ? available - line.width
           : 0);
     y += line.before + line.height;
     for (const fragment of line.fragments) {
