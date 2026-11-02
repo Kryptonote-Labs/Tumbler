@@ -1,74 +1,24 @@
 /// <reference types="bun" />
 import { expect, test } from 'bun:test';
-import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { chromium } from '@playwright/test';
-import { compile } from 'svelte/compiler';
 
 test('slide drag previews follow viewport coordinates outside transformed panes and clean up', async () => {
-  const root = resolve(import.meta.dir, '../../..');
-  const railPath = resolve(root, 'packages/svelte/src/PresentationSlideRail.svelte');
-  const built = await Bun.build({
-    entrypoints: ['slide-drag-fixture'],
-    target: 'browser',
-    format: 'iife',
-    conditions: ['browser'],
-    plugins: [
-      {
-        name: 'slide-drag-fixture',
-        setup(builder) {
-          builder.onResolve({ filter: /^slide-drag-fixture$/ }, () => ({
-            path: 'entry',
-            namespace: 'fixture',
-          }));
-          builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({
-            contents: `import { mount, flushSync, unmount } from 'svelte';
-            import Rail from '${railPath}';
-            const host = document.createElement('div');
-            host.style.cssText = 'position:absolute;left:100px;top:120px;width:160px;height:400px;overflow:hidden;transform:translateX(0)';
-            document.body.append(host);
-            window.moves = [];
-            window.hints = 0;
-            let app;
-            flushSync(() => app = mount(Rail, {target:host, props:{
-              presentation:{width:1280,height:720,slides:[
-                {id:'first',title:'First slide'}, {id:'second',title:'Second slide'}
-              ]},
-              onreorder:(id,index) => window.moves.push({id,index}),
-              reorderHint:(button) => {window.hints++;button.dataset.hostHint='true';return ()=>{window.hints--;delete button.dataset.hostHint;};}
-            }}));
-            window.destroy = () => unmount(app);`,
-            loader: 'js',
-          }));
-          builder.onResolve({ filter: /^svelte(\/.*)?$/ }, ({ path }) => ({
-            path:
-              path === 'svelte'
-                ? realpathSync(resolve(root, 'apps/docs/node_modules/svelte/src/index-client.js'))
-                : Bun.resolveSync(path, resolve(root, 'apps/docs')),
-          }));
-          builder.onLoad({ filter: /\.svelte$/ }, async ({ path }) => ({
-            contents: compile(
-              path.endsWith('/PresentationSlideView.svelte')
-                ? '<script>let {slide} = $props();</script><div>{slide.title}</div>'
-                : await Bun.file(path).text(),
-              {
-                filename: path,
-                generate: 'client',
-                css: 'injected',
-              },
-            ).js.code,
-            loader: 'js',
-          }));
-        },
-      },
-    ],
-  });
-  if (!built.success) throw new Error(built.logs.map(String).join('\n'));
+  const build = Bun.spawn(
+    [process.execPath, resolve(import.meta.dir, 'presentation-rail-fixture.ts')],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+  const [code, script, error] = await Promise.all([
+    build.exited,
+    new Response(build.stdout).text(),
+    new Response(build.stderr).text(),
+  ]);
+  if (code !== 0) throw new Error(error);
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
     await page.setContent('<!doctype html><body></body>');
-    await page.addScriptTag({ content: await built.outputs[0]!.text() });
+    await page.addScriptTag({ content: script });
     const first = page.locator('button[data-index="0"]');
     const second = page.locator('button[data-index="1"]');
     const preview = page.locator('.drag-preview');
