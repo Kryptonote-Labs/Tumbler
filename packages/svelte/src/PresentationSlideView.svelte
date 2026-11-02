@@ -1190,6 +1190,7 @@
   }
   .stage .slide {
     box-shadow: none;
+    touch-action: none;
   }
   .movable {
     cursor: move;
