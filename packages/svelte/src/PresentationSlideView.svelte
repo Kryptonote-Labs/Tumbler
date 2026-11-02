@@ -749,7 +749,7 @@
         onlostpointercapture={cancel}
         onkeydown={keydown}
       >
-        {#if !stage}<title>{slide.title}</title>{/if}
+        {#if thumbnail}<title>{slide.title}</title>{/if}
         {#if slide.backgroundPattern}<defs
             ><PresentationPattern
               pattern={slide.backgroundPattern}
