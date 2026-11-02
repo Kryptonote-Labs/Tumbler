@@ -21,6 +21,7 @@ const result = await Bun.build({
         builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({
           contents: `import {mount, flushSync} from 'svelte';
             import Text from '${root}/packages/svelte/src/PresentationText.svelte';
+            import {paintSlideText} from '${root}/packages/slides/src/canvas-text.ts';
             const texts = ${texts};
             for (const text of texts) for (const scale of [1, 0.2]) {
               const host = document.createElement('div');
@@ -29,7 +30,23 @@ const result = await Bun.build({
               host.dataset.scale = scale;
               document.body.append(host);
               flushSync(() => mount(Text, {target:host,props:{text}}));
-            }`,
+            }
+
+            for (const autoFit of ['normal', 'none']) for (const clipX of [false, true]) for (const clipY of [false, true]) {
+              const canvas = document.createElement('canvas');
+              canvas.width = 320; canvas.height = 200;
+              canvas.className = 'canvas-overflow';
+              canvas.dataset.clipX = String(clipX); canvas.dataset.clipY = String(clipY);
+              const ctx = canvas.getContext('2d'); ctx.translate(40, 40);
+              const paragraph = texts[0].paragraphs[0];
+              const text = {...texts[0], autoFit, anchor:'top', wrap:false, inset:[0,0,0,0],
+                horizontalOverflow: clipX ? 'clip' : 'overflow', verticalOverflow: clipY ? 'clip' : 'overflow',
+                paragraphs:[{...paragraph, align:'left', fontSize:64, lineHeight:1, before:0, after:0, marginLeft:0, indent:0,
+                  runs:[{...paragraph.runs[0], text:'MMMMMMMM', fontFamily:'Arial', fontSize:64, color:'#000000'}]}]};
+              paintSlideText(ctx, text, 50, 20, {path:d=>new Path2D(d)});
+              document.body.append(canvas);
+            }
+            `,
           loader: "js",
         }));
         builder.onResolve({ filter: /^svelte(\/.*)?$/ }, ({ path }) => ({

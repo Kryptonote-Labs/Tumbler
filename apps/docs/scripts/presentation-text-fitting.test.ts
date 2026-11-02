@@ -103,6 +103,38 @@ test("saved PowerPoint text sizes survive overflow in the editor and scaled thum
     }
     expect(rendered[0]!.height).toBeCloseTo(rendered[1]!.height, 3);
     expect(rendered[2]!.height).toBeCloseTo(rendered[3]!.height, 3);
+
+    const clipped = await page.locator(".canvas-overflow").evaluateAll((canvases) =>
+      canvases.map((canvas) => {
+        if (!(canvas instanceof HTMLCanvasElement)) throw new Error("Expected canvas fixture");
+        const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
+        let inside = 0,
+          right = 0,
+          below = 0;
+        for (let y = 0; y < canvas.height; y++)
+          for (let x = 0; x < canvas.width; x++) {
+            if (!data[(y * canvas.width + x) * 4 + 3]) continue;
+            if (x >= 40 && x < 90 && y >= 40 && y < 60) inside++;
+            if (x >= 90) right++;
+            if (y >= 60) below++;
+          }
+        return {
+          inside,
+          right,
+          below,
+          clipX: canvas.dataset.clipX === "true",
+          clipY: canvas.dataset.clipY === "true",
+        };
+      }),
+    );
+    expect(clipped).toHaveLength(8);
+    for (const canvas of clipped) {
+      expect(canvas.inside).toBeGreaterThan(0);
+      if (canvas.clipX) expect(canvas.right).toBe(0);
+      else expect(canvas.right).toBeGreaterThan(0);
+      if (canvas.clipY) expect(canvas.below).toBe(0);
+      else expect(canvas.below).toBeGreaterThan(0);
+    }
   } finally {
     await browser.close();
   }

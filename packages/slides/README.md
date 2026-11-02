@@ -219,4 +219,5 @@ The rounded-rectangle default and radius bounds follow `roundRect` in `presetSha
 Normal text autofit uses the font scale and line spacing saved in the PPTX.
 Renderers do not shrink overflowing text again to fit its box. Oversized text
 retains its authored size and vertical alignment, matching PowerPoint's saved
-layout even when that places text outside the slide.
+layout even when that places text outside the slide. Explicit horizontal and
+vertical clipping still constrain their respective axes to the text box.
