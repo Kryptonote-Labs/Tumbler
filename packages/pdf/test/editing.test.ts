@@ -65,3 +65,12 @@ test('undoing local text in a new region retains a remote contribution',()=>{
  a.replace('new',0,0,'Alex');const b=new PdfTextModel();Y.applyUpdate(b.doc,Y.encodeStateAsUpdate(a.doc));b.replace('new',4,4,' Codex');Y.applyUpdate(a.doc,Y.encodeStateAsUpdate(b.doc));
  a.undo.undo();expect(a.text('new').toString()).toBe(' Codex');
 });
+test('continued paragraphs push later text and create real PDF pages without losing the final line',()=>{
+ const pdf=openPdfDocument(positionedPage('BT /F 12 Tf 20 150 Td (Heading) Tj ET BT /F 12 Tf 20 100 Td (Following paragraph) Tj ET'));
+ const model=new PdfTextModel();model.initialize(importPdfText(pdf));const first=model.ids()[0]!;
+ const lines=Array.from({length:40},(_,i)=>`Line ${i+1}`).join('\n');model.replace(first,7,7,'\n'+lines);
+ const reopened=openPdfDocument(exportEditedPdf(pdf,model,fonts));expect(reopened.pages.length).toBeGreaterThan(1);
+ const interpreter=new PdfInterpreter(reopened),text=reopened.pages.map(p=>interpreter.page(p.index).text).join('\n');
+ expect(text).toContain('Line 40');expect(text).toContain('Following paragraph');
+ for(const page of reopened.pages)for(const glyph of interpreter.page(page.index).elements.filter(e=>e.kind==='glyph')){expect(glyph.textMatrix[5]).toBeGreaterThanOrEqual(0);expect(glyph.textMatrix[5]).toBeLessThanOrEqual(page.height);}
+});

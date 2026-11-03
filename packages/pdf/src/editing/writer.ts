@@ -4,7 +4,7 @@ import { PdfSyntax } from '../syntax.ts';
 import { readContentToken, isOperator } from '../content-syntax.ts';
 import { inverse, multiply } from '../matrix.ts';
 import { pageViewport } from '../scene.ts';
-import { layoutPdfText } from './layout.ts';
+import { layoutPdfTextFlow } from './layout.ts';
 import type { PdfEditingFonts, PdfEditingFont } from './fonts.ts';
 import type { PdfTextModel, PdfTextSeed } from './model.ts';
 const enc = new TextEncoder();
@@ -58,7 +58,8 @@ const utf16 = (text: string) => { const out = new Uint8Array(text.length * 2); f
 type Embedded = { resource: string; face: PdfEditingFont; codes: Map<string, { cid: number; glyph: number; text: string; width: number }> };
 /** ISO 32000-1 §7.5.6 incremental export. Unchanged objects retain their original bytes. */
 export function exportEditedPdf(document: PdfDocument, model: PdfTextModel, fonts: PdfEditingFonts) {
-  const dirty = model.ids().filter(id => model.dirty(id));
+  const flow=layoutPdfTextFlow(model,fonts,document.pages);
+  const dirty=[...new Set(flow.regions.filter(region=>region.render).map(region=>region.id))];
   if (!dirty.length) return document.bytes();
   if (document.source.trailer.has('Encrypt')) unsupported('Encrypted PDF editing requires an encryption-aware writer.');
   const writer = new PdfWriter(document), embedded = new Map<string, Embedded>();
@@ -68,11 +69,11 @@ export function exportEditedPdf(document: PdfDocument, model: PdfTextModel, font
     return font;
   };
   const pageContent = new Map<number,string>();
-  for (const id of dirty) {
-    const seed = model.seed(id), page = document.pages[seed.page]!;
-    let content = pageContent.get(seed.page) ?? '';
+  for (const layout of flow.regions.filter(region=>region.render)) {
+    const page = flow.pages[layout.page]!.source;
+    let content = pageContent.get(layout.page) ?? '';
     const viewport = inverse(pageViewport(page));
-    for (const glyph of layoutPdfText(model,id,fonts).glyphs) {
+    for (const glyph of layout.glyphs) {
       if (glyph.text === '\n') continue;
       const style = glyph.style, face = fonts.get(style), embeddedFont = fontFor(face), shaped = face.font.layout(glyph.text);
       const scale = style.size / face.font.unitsPerEm;
@@ -97,7 +98,7 @@ export function exportEditedPdf(document: PdfDocument, model: PdfTextModel, font
       }
       content += 'Q\n';
     }
-    pageContent.set(seed.page,content);
+    pageContent.set(layout.page,content);
   }
   const fontRefs = new Map<string,PdfReference>();
   for (const font of embedded.values()) {
@@ -114,26 +115,38 @@ export function exportEditedPdf(document: PdfDocument, model: PdfTextModel, font
     unicode += 'endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend';
     fontRefs.set(font.resource,writer.value(new Map<string,PdfValue>([['Type',new PdfName('Font')],['Subtype',new PdfName('Type0')],['BaseFont',name],['Encoding',new PdfName('Identity-H')],['DescendantFonts',[descendant]],['ToUnicode',writer.stream(bytes(unicode))]])));
   }
-  for (const [pageIndex, content] of pageContent) {
-    const page = document.pages[pageIndex]!, seeds = dirty.filter(id => model.seed(id).page === pageIndex).map(id => model.seed(id));
-    const resources = new Map(page.resources), resourceFonts = new Map(dictionary(document.source.resolve(resources.get('Font') ?? new Map())));
-    // Resource names are scoped to the appended stream's Form, avoiding collisions with imported names.
-    const formResources = new Map<string,PdfValue>([['Font',new Map(fontRefs)]]);
-    const overlay = writer.stream(bytes(content),new Map<string,PdfValue>([['Type',new PdfName('XObject')],['Subtype',new PdfName('Form')],['BBox',[...page.mediaBox]],['Resources',formResources]]));
-    const xobjects = new Map(dictionary(document.source.resolve(resources.get('XObject') ?? new Map())));
-    let overlayName = 'KNText'; while (xobjects.has(overlayName)) overlayName += '_';
-    xobjects.set(overlayName,overlay); resources.set('XObject',xobjects); resources.set('Font',resourceFonts);
-    const original = document.source.resolve(page.dictionary.get('Contents'));
-    const streams = original === null ? [] : Array.isArray(original) ? original : [original];
-    const rewritten = streams.map(value => {
-      const stream = document.source.resolve(value);
-      if (!(stream instanceof PdfStream)) throw new Error('Invalid page content stream.');
-      return rewrite(stream,`page:${page.id}:stream:${stream.object.key}`,resources,seeds);
-    });
-    // Isolate the overlay from the original page's persistent CTM and text state.
-    const prefix = writer.stream(bytes('q\n')), suffix = writer.stream(bytes(`Q\nq /${overlayName} Do Q\n`));
-    const info = new Map(page.dictionary); info.set('Contents',[prefix,...rewritten,suffix]); info.set('Resources',resources);
-    writer.value(info,page.reference);
+  const hasContinuations=flow.pages.length!==document.pages.length;
+  const parent=hasContinuations?writer.value(new Map<string,PdfValue>([['Type',new PdfName('Pages')]])):undefined;
+  const pageRefs:PdfReference[]=[];
+  for(const outputPage of flow.pages){
+    const page=outputPage.source, pageIndex=outputPage.index, content=pageContent.get(pageIndex)??'';
+    const continuation=outputPage.continuation>0;
+    const seeds=dirty.filter(id=>model.seed(id).page===page.index).map(id=>model.seed(id));
+    const resources=continuation?new Map<string,PdfValue>():new Map(page.resources);
+    const info=continuation?new Map<string,PdfValue>([['Type',new PdfName('Page')]]):new Map(page.dictionary);
+    if(content||(!continuation&&seeds.length)){
+      // Resource names are scoped to a Form, avoiding collisions with imported font names.
+      const overlay=writer.stream(bytes(content),new Map<string,PdfValue>([['Type',new PdfName('XObject')],['Subtype',new PdfName('Form')],['BBox',[...page.mediaBox]],['Resources',new Map<string,PdfValue>([['Font',new Map(fontRefs)]])]]));
+      const xobjects=new Map(dictionary(document.source.resolve(resources.get('XObject')??new Map())));
+      let overlayName='KNText';while(xobjects.has(overlayName))overlayName+='_';xobjects.set(overlayName,overlay);resources.set('XObject',xobjects);
+      const original=continuation?null:document.source.resolve(page.dictionary.get('Contents'));
+      const streams=original===null?[]:Array.isArray(original)?original:[original];
+      const rewritten=streams.map(value=>{const stream=document.source.resolve(value);if(!(stream instanceof PdfStream))throw new Error('Invalid page content stream.');return rewrite(stream,`page:${page.id}:stream:${stream.object.key}`,resources,seeds);});
+      // Isolate appended content from the original page's persistent graphics and text state.
+      info.set('Contents',[writer.stream(bytes('q\n')),...rewritten,writer.stream(bytes(`Q\nq /${overlayName} Do Q\n`))]);
+    }
+    if(parent||continuation){
+      if(parent)info.set('Parent',parent);
+      info.set('MediaBox',[...page.mediaBox]);info.set('CropBox',[...page.cropBox]);info.set('Rotate',page.rotation);info.set('UserUnit',page.userUnit);
+    }
+    info.set('Resources',resources);
+    if(continuation)pageRefs.push(writer.value(info));
+    else {pageRefs.push(page.reference);if(parent||pageContent.has(pageIndex)||seeds.length)writer.value(info,page.reference);}
+  }
+  if(parent){
+    writer.value(new Map<string,PdfValue>([['Type',new PdfName('Pages')],['Count',pageRefs.length],['Kids',pageRefs]]),parent);
+    const catalog=new Map(document.source.catalog);catalog.set('Pages',parent);
+    const root=document.source.trailer.get('Root');if(!(root instanceof PdfReference))throw new Error('Invalid PDF catalog reference.');writer.value(catalog,root);
   }
   function rewrite(stream: PdfStream, instance: string, resources: PdfDictionary, seeds: PdfTextSeed[]): PdfReference {
     const source = document.source, data = source.stream(stream), patches = new Map<number,{end:number; text:string}>();
