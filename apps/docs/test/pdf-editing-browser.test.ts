@@ -49,7 +49,7 @@ test('PDF arrow selection crosses continuation pages and newly placed text stays
     await input.press('Control+End');
     await page.getByRole('button', { name: 'Mono', exact: true }).click();
     await input.pressSequentially('X');
-    expect(await page.evaluate('window.lastFace()')).toBe('Mono-Regular');
+    expect(await page.evaluate<string>('window.lastFace()')).toBe('Mono-Regular');
     await page.getByRole('button', { name: 'Add text', exact: true }).click();
     const continuation = page.locator('[data-pdf-page="2"]');
     await continuation.scrollIntoViewIfNeeded();
@@ -70,7 +70,9 @@ test('PDF arrow selection crosses continuation pages and newly placed text stays
     await input.press('Control+Home');
     await input.press('Delete');
     expect(await input.inputValue()).toBe('AA');
-    expect(await page.evaluate('window.colours()')).toEqual([{ insert: 'AA', color: '#0000ff' }]);
+    expect(await page.evaluate<{ insert: string; color: string }[]>('window.colours()')).toEqual([
+      { insert: 'AA', color: '#0000ff' },
+    ]);
     await page.getByRole('button', { name: 'Repeated text', exact: true }).click();
     const replacement = (await page.locator('[data-pdf-page="1"] .glyph').first().boundingBox())!;
     await page.mouse.click(replacement.x + 2, replacement.y + replacement.height * 0.6);
@@ -80,7 +82,7 @@ test('PDF arrow selection crosses continuation pages and newly placed text stays
     await input.press('Shift+ArrowRight');
     await input.pressSequentially('X');
     expect(await input.inputValue()).toBe('AX');
-    expect(await page.evaluate('window.colours()')).toEqual([
+    expect(await page.evaluate<{ insert: string; color: string }[]>('window.colours()')).toEqual([
       { insert: 'A', color: '#ff0000' },
       { insert: 'X', color: '#0000ff' },
     ]);
@@ -107,7 +109,7 @@ test('PDF arrow selection crosses continuation pages and newly placed text stays
       element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: 'Z' })),
     );
     expect(await input.inputValue()).toBe('BZAAA');
-    expect(await page.evaluate('window.colours()')).toEqual([
+    expect(await page.evaluate<{ insert: string; color: string }[]>('window.colours()')).toEqual([
       { insert: 'B', color: '#00ff00' },
       { insert: 'ZA', color: '#ff0000' },
       { insert: 'AA', color: '#0000ff' },
