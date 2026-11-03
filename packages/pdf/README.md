@@ -42,6 +42,9 @@ ligatures and embedded OCR text remain available without altering page rendering
 `PdfDocumentView` overlays those items with a transparent, selectable `PdfTextLayer`. Drag to
 select, double-click to select a word, then use browser Copy or the platform copy shortcut.
 The copy handler writes plain text locally and excludes page controls and layout whitespace.
+`PdfTextSelectionIndex` resolves viewport points to the nearest line and glyph boundary, including
+interline gaps. Drag endpoints use this source geometry before paint while the browser supplies
+highlighting, copying and autoscroll. Caret offsets stay at Unicode grapheme boundaries.
 Selection follows page rotation and zoom. Selected text nodes remain mounted while their
 offscreen canvases are released, allowing selection across pages.
 
