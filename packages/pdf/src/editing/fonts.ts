@@ -23,6 +23,11 @@ export const defaultPdfTextStyle: PdfTextStyle = {
 };
 export const pdfFontKey = (style: Pick<PdfTextStyle, 'family' | 'bold' | 'italic'>) =>
   `${style.family}-${style.bold ? 'Bold' : ''}${style.italic ? 'Italic' : ''}${!style.bold && !style.italic ? 'Regular' : ''}`;
+/** Resolve a family change without carrying an incompatible named source font into new text. */
+export function pdfTextStylePatch(style: PdfTextStyle, patch: Partial<PdfTextStyle>) {
+  if (patch.family === undefined || patch.font !== undefined) return patch;
+  return { ...patch, font: pdfFontKey({ ...style, ...patch }) };
+}
 export type PdfEditingFont = {
   key: string;
   name: string;

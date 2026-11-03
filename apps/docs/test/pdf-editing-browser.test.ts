@@ -46,6 +46,10 @@ test('PDF arrow selection crosses continuation pages and newly placed text stays
     expect(selected.start).toBeLessThanOrEqual(boundary);
     expect(selected.end).toBe(next);
     expect(selected.direction).toBe('backward');
+    await input.press('Control+End');
+    await page.getByRole('button', { name: 'Mono', exact: true }).click();
+    await input.pressSequentially('X');
+    expect(await page.evaluate('window.lastFace()')).toBe('Mono-Regular');
     await page.getByRole('button', { name: 'Add text', exact: true }).click();
     const continuation = page.locator('[data-pdf-page="2"]');
     await continuation.scrollIntoViewIfNeeded();

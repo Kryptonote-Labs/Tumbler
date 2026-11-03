@@ -13,6 +13,7 @@
     pdfContinuationHeight,
     hitPdfText,
     defaultPdfTextStyle,
+    pdfTextStylePatch,
     type PdfDocument,
     type PdfTextStyle,
   } from '@tumblerjs/pdf';
@@ -74,7 +75,7 @@
     if (!editable || !active) return;
     model.undo.stopCapturing();
     if (start !== end) model.format(active, start, end, patch);
-    else pending = { ...pending, ...patch };
+    else pending = { ...pending, ...pdfTextStylePatch(currentStyle, patch) };
     input?.focus({ preventScroll: true });
   }
   export function toggle(key: 'bold' | 'italic' | 'underline') {

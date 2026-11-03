@@ -1,6 +1,6 @@
 import { pdfSourceAttribute, pdfStyleAttributes } from './source-spacing.ts';
 import * as Y from 'yjs';
-import { pdfFontKey, type PdfTextStyle } from './fonts.ts';
+import { pdfTextStylePatch, type PdfTextStyle } from './fonts.ts';
 import type { PdfTextSeed } from './import-text.ts';
 export { importPdfText, pdfSourceKey, type PdfTextSeed } from './import-text.ts';
 
@@ -109,10 +109,7 @@ export class PdfTextModel {
   format(id: string, start: number, end: number, patch: Partial<PdfTextStyle>) {
     if (start < 0 || end < start || end > this.text(id).length)
       throw new Error('Invalid PDF text range.');
-    const attributes =
-      patch.family !== undefined && patch.font === undefined
-        ? { ...patch, font: pdfFontKey({ ...this.styleAt(id, start), ...patch }) }
-        : patch;
+    const attributes = pdfTextStylePatch(this.styleAt(id, start), patch);
     this.doc.transact(() => this.text(id).format(start, end - start, attributes), this.origin);
   }
   anchor(id: string, offset: number) {
