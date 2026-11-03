@@ -1,5 +1,5 @@
 import type { PdfTextModel } from './model.ts';
-import { pdfSourceSpacing } from './source-spacing.ts';
+import { pdfSourceSpacing, pdfSourceAttribute, pdfStyleAttributes } from './source-spacing.ts';
 import type { PdfPage } from '../document.ts';
 import { type PdfTextStyle, type PdfEditingFonts } from './fonts.ts';
 export type PdfLayoutGlyph = {
@@ -43,20 +43,24 @@ export function layoutPdfText(
     runStart = 0;
   const entries = [...segmenter.segment(text)];
   const styles: PdfTextStyle[] = [],
-    widths: number[] = [];
+    widths: number[] = [],
+    originals: (number | undefined)[] = [];
   for (const entry of entries) {
     while (runIndex < runs.length - 1 && entry.index >= runStart + runs[runIndex]!.insert.length) {
       runStart += runs[runIndex]!.insert.length;
       runIndex++;
     }
-    const style = { ...seed.style, ...runs[runIndex]?.attributes };
+    const attributes = runs[runIndex]?.attributes;
+    const source = attributes?.[pdfSourceAttribute];
+    originals.push(typeof source === 'number' ? source : undefined);
+    const style = { ...seed.style, ...pdfStyleAttributes(attributes) };
     styles.push(style);
     widths.push(entry.segment === '\n' ? 0 : fonts.measure(entry.segment, style));
   }
   const kern = pdfSourceSpacing(
-    model,
-    id,
-    entries.map((entry) => entry.index),
+    seed,
+    entries.map((entry) => entry.segment),
+    originals,
     styles,
     widths,
   );

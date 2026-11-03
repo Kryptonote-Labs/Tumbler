@@ -1,4 +1,3 @@
-import type * as Y from 'yjs';
 import { PdfInterpreter } from '../interpreter.ts';
 import { pdfTextContent, type PdfTextItem } from '../text-content.ts';
 import type { PdfDocument } from '../document.ts';
@@ -29,10 +28,6 @@ export type PdfTextSeed = {
     right: number;
     gap: number;
     advance?: number;
-    anchors?: [
-      ReturnType<typeof Y.relativePositionToJSON>,
-      ReturnType<typeof Y.relativePositionToJSON>,
-    ];
   }[];
   delta: { insert: string; attributes: PdfTextStyle }[];
 };

@@ -37,7 +37,13 @@ test('import, continue, format and export existing text with an independent sour
   const output = exportEditedPdf(pdf, model, fonts);
   expect(output.subarray(0, source.length)).toEqual(source);
   const reopened = openPdfDocument(output);
-  expect(new PdfInterpreter(reopened).page(0).text).toContain('A new line with café.');
+  const reader = new PdfInterpreter(reopened);
+  expect(
+    reopened.pages
+      .map((page) => reader.page(page.index).text)
+      .join(' ')
+      .replace(/\s+/g, ' '),
+  ).toContain('A new line with café.');
   expect(layoutPdfText(model, id, fonts).carets.at(-1)!.y).toBeGreaterThan(model.seed(id).y);
 });
 test('concurrent text and formatting converge, including selective undo', () => {

@@ -1,3 +1,4 @@
+import { pdfSourceAttribute, pdfStyleAttributes } from './source-spacing.ts';
 import * as Y from 'yjs';
 import { pdfFontKey, type PdfTextStyle } from './fonts.ts';
 import type { PdfTextSeed } from './import-text.ts';
@@ -24,32 +25,16 @@ export class PdfTextModel {
         this.regions.set(seed.id, region);
         const text = new Y.Text();
         region.set('text', text);
-        text.applyDelta(seed.delta);
-        let offset = 0;
-        const offsets = seed.delta.map((run) => {
-          const at = offset;
-          offset += run.insert.length;
-          return at;
-        });
-        region.set(
-          'seed',
-          seed.spacing
-            ? {
-                ...seed,
-                spacing: seed.spacing.map((gap) => ({
-                  ...gap,
-                  anchors: [
-                    Y.relativePositionToJSON(
-                      Y.createRelativePositionFromTypeIndex(text, offsets[gap.left]!),
-                    ),
-                    Y.relativePositionToJSON(
-                      Y.createRelativePositionFromTypeIndex(text, offsets[gap.right]!),
-                    ),
-                  ],
-                })),
-              }
-            : seed,
+        const original = new Set(seed.spacing?.flatMap((gap) => [gap.left, gap.right]));
+        text.applyDelta(
+          seed.delta.map((run, index) => ({
+            ...run,
+            attributes: original.has(index)
+              ? { ...run.attributes, [pdfSourceAttribute]: index }
+              : run.attributes,
+          })),
         );
+        region.set('seed', seed);
       },
       local ? 'create' : 'import',
     );
@@ -82,7 +67,7 @@ export class PdfTextModel {
       const result: { insert: string; attributes: PdfTextStyle }[] = [];
       for (const run of delta) {
         if (typeof run.insert !== 'string') return '';
-        const attributes = { ...seed.style, ...run.attributes },
+        const attributes = { ...seed.style, ...pdfStyleAttributes(run.attributes) },
           previous = result.at(-1);
         if (previous && JSON.stringify(previous.attributes) === JSON.stringify(attributes))
           previous.insert += run.insert;
@@ -104,7 +89,11 @@ export class PdfTextModel {
       throw new Error('Invalid PDF text range.');
     this.doc.transact(() => {
       if (end > start) text.delete(start, end - start);
-      if (value) text.insert(start, value, style ?? this.styleAt(id, start));
+      if (value)
+        text.insert(start, value, {
+          ...(style ?? this.styleAt(id, start)),
+          [pdfSourceAttribute]: null,
+        });
     }, this.origin);
   }
   styleAt(id: string, offset: number): PdfTextStyle {
@@ -112,7 +101,8 @@ export class PdfTextModel {
     for (const run of this.text(id).toDelta()) {
       if (typeof run.insert !== 'string') continue;
       at += run.insert.length;
-      if (at >= Math.max(1, offset)) return { ...this.seed(id).style, ...run.attributes };
+      if (at >= Math.max(1, offset))
+        return { ...this.seed(id).style, ...pdfStyleAttributes(run.attributes) };
     }
     return this.seed(id).style;
   }

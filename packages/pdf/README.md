@@ -116,7 +116,10 @@ the RGB host image decoder cannot apply PDF sample transformations correctly.
 Initialize it once on the authoritative host with `importPdfText(document)`, persist the encoded
 Yjs state, and send that state to peers. Independently importing the same PDF on each peer would
 create different CRDT identities. Human input and headless callers use the same `replace`, `format`,
-`add`, relative anchors and selective undo operations.
+`add`, relative anchors and selective undo operations. Imported seeds retain per-occurrence spacing;
+the model reserves the `pdf-source` text attribute so those positions survive edits and collaborative
+undo. Hosts must retain this metadata when persisting or validating CRDT updates. Newly placed text
+on a continuation uses the optional `continuation` anchor; the Svelte editor supplies it automatically.
 
 Hosts supply full editing fonts to `PdfEditingFonts`. Use `fonts.fork(document)` for a
 document-scoped registry, or `fonts.importDocument(document)` before headless layout. The registry

@@ -215,6 +215,12 @@ test('source spacing stays with each surviving letter occurrence through concurr
   );
   model.undo.undo();
   expect(layoutPdfText(model, id, fonts).glyphs).toEqual(layout.glyphs);
+  model.undo.stopCapturing();
+  model.replace(id, 3, 4, '');
+  model.undo.undo();
+  expect(layoutPdfText(model, id, fonts).glyphs).toEqual(layout.glyphs);
+  Y.applyUpdate(peer.doc, Y.encodeStateAsUpdate(model.doc));
+  expect(layoutPdfText(peer, id, fonts).glyphs).toEqual(layout.glyphs);
   model.doc.destroy();
   peer.doc.destroy();
 });
