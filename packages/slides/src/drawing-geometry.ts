@@ -16,6 +16,9 @@ export interface GeometryDefinition {
   }[];
 }
 export interface DrawingGeometry {
+  /** Retained so resize previews use the same guides as the committed shape. */
+  readonly definition: GeometryDefinition;
+  readonly overrides: readonly (readonly [string, string])[];
   readonly paths: readonly {
     readonly d: string;
     readonly fill: string;
@@ -277,7 +280,7 @@ export function evaluateGeometry(
   const [l, t, r, b] = definition.rect.map(
     (value) => read(value) / EMUS_PER_PIXEL,
   );
-  return { paths, adjustments: Object.fromEntries(definition.adjustments.map(([name]) => [name, values.get(name)!])), textRect: [l ?? 0, t ?? 0, r ?? width, b ?? height] };
+  return { definition, overrides, paths, adjustments: Object.fromEntries(definition.adjustments.map(([name]) => [name, values.get(name)!])), textRect: [l ?? 0, t ?? 0, r ?? width, b ?? height] };
 }
 export function resolveDrawingGeometry(
   preset: string,
@@ -299,4 +302,13 @@ export function resolveDrawingGeometry(
           : [],
       )
     : undefined;
+}
+
+/** Re-evaluate paths at their displayed size without scaling strokes or effects. */
+export function resizeDrawingGeometry(
+  geometry: DrawingGeometry,
+  width: number,
+  height: number,
+): DrawingGeometry {
+  return evaluateGeometry(geometry.definition, width, height, geometry.overrides);
 }

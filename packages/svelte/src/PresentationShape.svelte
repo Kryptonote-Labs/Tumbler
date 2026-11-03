@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SlideObject } from "@tumblerjs/slides";
+  import { resizeDrawingGeometry, type SlideObject } from "@tumblerjs/slides";
   import PresentationEffects from "./PresentationEffects.svelte";
   import PresentationPattern from "./PresentationPattern.svelte";
   import PresentationPictureFill from "./PresentationPictureFill.svelte";
@@ -11,6 +11,13 @@
     id,
   }: { object: SlideObject; width: number; height: number; id: string } =
     $props();
+  let geometry = $derived(
+    object.drawingGeometry && (
+      width === object.transform.width && height === object.transform.height
+        ? object.drawingGeometry
+        : resizeDrawingGeometry(object.drawingGeometry, width, height)
+    ),
+  );
   let fill = $derived(
     object.pattern
       ? `url(#${id}-pattern)`
@@ -26,14 +33,14 @@
   {#if object.pictureFill}<PresentationPictureFill
       picture={object.pictureFill}
       id={`${id}-picture`}
-      width={object.transform.width}
-      height={object.transform.height}
+      width={width}
+      height={height}
     />{/if}
   {#if object.gradient}<PresentationGradient
       gradient={object.gradient}
       id={`${id}-fill`}
-      width={object.transform.width}
-      height={object.transform.height}
+      width={width}
+      height={height}
     />{/if}
   {#if object.pattern}<PresentationPattern
       pattern={object.pattern}
@@ -80,12 +87,11 @@
   {/each}
 </defs>
 <g
-  transform={`scale(${object.transform.width === 0 ? 1 : width / object.transform.width} ${object.transform.height === 0 ? 1 : height / object.transform.height})`}
   filter={object.shadow || object.effects?.length
     ? `url(#${id}-shadow)`
     : undefined}
 >
-  {#each object.drawingGeometry?.paths ?? [] as path}
+  {#each geometry?.paths ?? [] as path}
     <path
       d={path.d}
       fill={path.fill === "none" ? "none" : fill}

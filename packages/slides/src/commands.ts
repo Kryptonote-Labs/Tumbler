@@ -1,3 +1,4 @@
+import { gradientFill } from './gradient-authoring.ts';
 import { backgroundFill, setSlideBackground } from "./background-authoring.ts";
 import { insertPresentationInk } from "./ink-authoring.ts";
 import { findPresentationMatches } from "./search.ts";
@@ -213,7 +214,7 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
     .object({
       name: z.literal("style-shape"),
       ...target,
-      fill: color.optional(),
+      fill: z.union([color, gradientFill]).optional(),
       stroke: color.optional(),
       strokeWidth: number.nonnegative().optional(),
       cornerRadius: number.nonnegative().optional(),

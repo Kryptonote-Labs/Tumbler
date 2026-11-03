@@ -171,7 +171,7 @@
 
 {#snippet content()}
   {#if drawing.kind === 'shape'}
-    <WordShapeView shape={drawing.shape} {selected} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} editing={editingText !== undefined} initialText={editingText} oncommit={finishText} />
+    <WordShapeView shape={drawing.shape} width={preview?.width ?? width} height={preview?.height ?? height} {selected} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} editing={editingText !== undefined} initialText={editingText} oncommit={finishText} />
   {:else if drawing.kind === 'image'}
     {@const painted = wordImagePaintBounds(drawing)}
     {#if drawing.picture}

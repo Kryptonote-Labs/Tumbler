@@ -1,3 +1,4 @@
+import { gradientFill, gradientFillMarkup } from './gradient-authoring.ts';
 import { z } from 'zod';
 import { beginPackageTransaction } from '@tumblerjs/opc';
 import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
@@ -47,16 +48,7 @@ const rect = z
 export const backgroundFill = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('inherit') }).strict(),
   z.object({ kind: z.literal('solid'), color, opacity: ratio.optional() }).strict(),
-  z
-    .object({
-      kind: z.literal('gradient'),
-      type: z.enum(['linear', 'radial']),
-      angle: z.number().finite().optional(),
-      scaled: z.boolean().optional(),
-      center: z.tuple([ratio, ratio]).optional(),
-      stops: z.array(z.object({ offset: ratio, color, opacity: ratio.optional() }).strict()).min(2),
-    })
-    .strict(),
+  gradientFill,
   z
     .object({
       kind: z.literal('pattern'),
@@ -111,16 +103,7 @@ export function setSlideBackground(
   if (fill.kind === 'solid')
     markup = `<a:solidFill>${colour(fill.color, fill.opacity)}</a:solidFill>`;
   if (fill.kind === 'gradient') {
-    const stops = [...fill.stops]
-      .sort((a, b) => a.offset - b.offset)
-      .map((s) => `<a:gs pos="${percent(s.offset)}">${colour(s.color, s.opacity)}</a:gs>`)
-      .join('');
-    const [x, y] = fill.center ?? [0.5, 0.5];
-    const shade =
-      fill.type === 'linear'
-        ? `<a:lin ang="${Math.round(((((fill.angle ?? 0) % 360) + 360) % 360) * 60000) % 21600000}" scaled="${fill.scaled === false ? 0 : 1}"/>`
-        : `<a:path path="circle"><a:fillToRect l="${percent(x)}" t="${percent(y)}" r="${percent(1 - x)}" b="${percent(1 - y)}"/></a:path>`;
-    markup = `<a:gradFill><a:gsLst>${stops}</a:gsLst>${shade}</a:gradFill>`;
+    markup = gradientFillMarkup(fill);
   }
   if (fill.kind === 'pattern')
     markup = `<a:pattFill prst="${fill.preset}"><a:fgClr>${colour(fill.foreground)}</a:fgClr><a:bgClr>${colour(fill.background)}</a:bgClr></a:pattFill>`;

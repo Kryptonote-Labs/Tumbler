@@ -116,6 +116,7 @@ in-front-of-text, or behind-text placement. Corners preserve proportions; edges
 resize one dimension. Dragging an inline drawing moves it within the text flow without changing its layout.
 Arrow keys nudge a focused floating drawing, Shift increases the step, and Escape cancels
 a drag. Changing the document zoom also cancels an active drawing drag or resize.
+Shape resize previews recalculate paths at the current size, keeping outline thickness consistent throughout the drag.
 `session.updateDrawing(change)` records the position and dimensions as one
 undoable revision and saves them in the DOCX. Square and tight wrapping are not
 exposed. Hosts needing only the bottom-right resize handle can still use
@@ -185,6 +186,8 @@ surrounding workspace to enclose objects; Shift-click toggles objects and Shift-
 adds to the selection. Drag a selected object or use arrow keys to move the selection.
 Escape clears it. Resize and rotation handles appear for a single selected object.
 `selectedKey` remains available for existing single-selection hosts.
+Shape resize previews retain their outline width, dash spacing, and arrowhead dimensions.
+Preset adjustments and custom geometry guides are evaluated at the preview size.
 
 Use `onobjectschange` to receive a group move as one array of object changes. Hosts can
 apply these through a `batch` presentation command to persist and undo the move together.
@@ -280,3 +283,7 @@ PDF pages are available through `@tumblerjs/svelte/pdf`. `PdfDocumentView` accep
 stable while rendering nearby canvases, releases offscreen bitmap storage, and paints at the
 screen's pixel density. `goToPage(index)` scrolls to a zero-based page index. Product navigation,
 authorization, uploads and download controls belong to the host application.
+
+Hosts can call `PresentationSlideView.editText(objectKey)` after rendering an inserted
+text box to select it and focus its text editor. The method ignores missing objects
+and read-only views.

@@ -71,9 +71,21 @@ test('slide text and table cells edit on one click while manipulation stays avai
     await page.keyboard.type('Second cell');
     expect(await cells.nth(1).textContent()).toContain('Second cell');
 
+    await page.keyboard.press('Escape');
+    await page.evaluate('window.editMissing()');
+    expect(await active.count()).toBe(0);
+    await page.getByRole('button', { name: 'Insert text box' }).click();
+    await active.waitFor();
+    expect(await active.evaluate(node => document.activeElement === node)).toBe(true);
+    await page.keyboard.type('Immediately editable');
+    expect(await active.innerText()).toBe('Immediately editable');
+    await page.keyboard.press('Escape');
+    expect(await active.count()).toBe(0);
+
     await page.evaluate('window.readOnly()');
     await page.waitForFunction(() => !document.querySelector('[contenteditable="true"]'));
     await shape.click({ position: { x: 40, y: 30 } });
+    await page.evaluate('window.editInserted()');
     expect(await active.count()).toBe(0);
     expect(errors).toEqual([]);
   } finally {

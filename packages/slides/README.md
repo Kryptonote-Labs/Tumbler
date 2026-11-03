@@ -236,3 +236,27 @@ remains supported. Group commands in a `batch` to apply to all slides in one und
 These fills use ECMA-376-1 §19.3.1.2 and §§20.1.8.14, 20.1.8.33, 20.1.8.47.
 Unrelated slide XML and package parts are preserved. Rectangular/shape path gradients,
 advanced picture effects and uncommon pattern presets remain outside authoring coverage.
+
+Shape fills accept a hex colour, `"none"`, or a native gradient through
+`style-shape` and `artifact.styleShape`:
+
+```ts
+session.execute({
+  name: "style-shape",
+  slideId,
+  objectKey,
+  fill: {
+    kind: "gradient",
+    type: "linear",
+    angle: 45,
+    stops: [
+      { offset: 0, color: "#172554" },
+      { offset: 1, color: "#fbcfe8", opacity: 0.5 },
+    ],
+  },
+});
+```
+
+Use `type: "radial"` with an optional `center: [x, y]` in the range 0–1.
+Stops are sorted by offset on write. Changing the fill replaces the previous
+fill while retaining geometry, text, and outline.
