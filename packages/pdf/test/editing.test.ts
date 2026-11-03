@@ -9,6 +9,7 @@ import {
   exportEditedPdf,
   PdfInterpreter,
   layoutPdfText,
+  pdfTextContent,
 } from '../src/index.ts';
 const fonts = new PdfEditingFonts();
 for (const family of ['Sans', 'Serif', 'Mono'])
@@ -183,13 +184,25 @@ test('source fonts without naming or post tables retain their encoding and origi
     if (tag === 'name' || tag === 'post')
       program.set(new TextEncoder().encode(tag === 'name' ? 'zz01' : 'zz02'), offset);
   }
+  const full = fonts.get({
+    bold: false,
+    italic: false,
+    underline: false,
+    size: 48,
+    family: 'Sans',
+    color: '#000000',
+  });
+  const widths = Array.from(
+    { length: 95 },
+    (_, i) => (full.font.glyphForCodePoint(i + 32).advanceWidth * 1000) / full.font.unitsPerEm,
+  );
   const pdf = openPdfDocument(
     pdfFixture([
       '<< /Type /Catalog /Pages 2 0 R >>',
       '<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
       '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 300] /Resources << /Font << /F 5 0 R >> >> /Contents 4 0 R >>',
-      pdfStream('BT /F 48 Tf 30 200 Td (Hello) Tj ET'),
-      '<< /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+LiberationSans-Regular /Encoding /WinAnsiEncoding /FontDescriptor 6 0 R >>',
+      pdfStream('BT /F 48 Tf 30 200 Td [(H) 75 (ello)] TJ ET'),
+      `<< /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+LiberationSans-Regular /Encoding /WinAnsiEncoding /FirstChar 32 /LastChar 126 /Widths [${widths.join(' ')}] /FontDescriptor 6 0 R >>`,
       '<< /Type /FontDescriptor /FontName /ABCDEF+LiberationSans-Regular /Flags 32 /FontBBox [-500 -500 2000 2000] /Ascent 900 /Descent -200 /CapHeight 700 /ItalicAngle 0 /StemV 80 /FontFile2 7 0 R >>',
       pdfStream(program),
     ]),
@@ -205,6 +218,11 @@ test('source fonts without naming or post tables retain their encoding and origi
   model.replace(id, 5, 5, 'W');
   const after = layoutPdfText(model, id, scoped);
   expect(after.glyphs.slice(0, 5)).toEqual(before.glyphs);
+  const positions = pdfTextContent(new PdfInterpreter(pdf).page(0)).items.filter(
+    (item) => item.kind === 'glyph',
+  );
+  for (let i = 0; i < 5; i++)
+    expect(before.glyphs[i]!.x).toBeCloseTo(positions[i]!.transform[4], 5);
   expect(scoped.shape('W', model.seed(id).style).face.source).toBeUndefined();
   const output = exportEditedPdf(pdf, model, scoped),
     scene = new PdfInterpreter(openPdfDocument(output)).page(0);
@@ -214,7 +232,7 @@ test('source fonts without naming or post tables retain their encoding and origi
   for (let i = 0; i < 5; i++) {
     expect(editedGlyphs[i]!.glyph.path).toBe(sourceGlyphs[i]!.glyph.path);
     expect(editedGlyphs[i]!.fontSize).toBe(sourceGlyphs[i]!.fontSize);
-    expect(editedGlyphs[i]!.glyph.width).toBe(sourceGlyphs[i]!.glyph.width);
+    expect(editedGlyphs[i]!.glyph.width).toBeCloseTo(sourceGlyphs[i]!.glyph.width, 5);
   }
   model.doc.destroy();
 });

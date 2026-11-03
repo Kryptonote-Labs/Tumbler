@@ -4,6 +4,7 @@ import { create, type Font, type Glyph } from 'fontkit';
 import { PdfInterpreter } from '../interpreter.ts';
 import type { PdfDocument } from '../document.ts';
 import type { PdfFont } from '../fonts.ts';
+import { pdfTextContent, type PdfTextItem } from '../text-content.ts';
 export type PdfTextStyle = {
   bold: boolean;
   italic: boolean;
@@ -32,6 +33,7 @@ export type PdfEditingFont = {
   bold: boolean;
   italic: boolean;
   source: PdfFont | undefined;
+  kerning?: Map<string, number>;
   sourceGlyphs?: Map<string, { id: number; width: number; code: number; length: number }>;
 };
 export type PdfEditingShape = {
@@ -77,6 +79,7 @@ export class PdfEditingFonts {
         if (!this.fonts.has(key)) {
           this.add(key, source.program!, source);
           this.fonts.get(key)!.sourceGlyphs = new Map();
+          this.fonts.get(key)!.kerning = new Map();
         }
         const face = this.fonts.get(key)!;
         if (element.glyph.unicode && !face.sourceGlyphs!.has(element.glyph.unicode))
@@ -86,6 +89,28 @@ export class PdfEditingFonts {
             length: element.glyph.codeLength,
             width: (element.glyph.width * face.font.unitsPerEm) / 1000,
           });
+      }
+      let previous: PdfTextItem | undefined;
+      for (const item of pdfTextContent(interpreter.page(page.index)).items) {
+        if (item.kind !== 'glyph') {
+          previous = undefined;
+          continue;
+        }
+        if (previous?.font.source && previous.font.source === item.font.source) {
+          const face = this.fonts.get(item.font.source)!;
+          const [a, b, , , x, y] = previous.transform,
+            em = Math.hypot(a, b);
+          const dx = item.transform[4] - x,
+            dy = item.transform[5] - y;
+          if (em && Math.abs(-b * dx + a * dy) / em < 0.01) {
+            const advance = (a * dx + b * dy) / em;
+            face.kerning!.set(
+              JSON.stringify([previous.text, item.text]),
+              (advance / em - previous.width) * face.font.unitsPerEm,
+            );
+          }
+        }
+        previous = item;
       }
       interpreter.releasePage(page.index);
     }
@@ -138,6 +163,20 @@ export class PdfEditingFonts {
       bold: style.bold && !face.bold,
       italic: style.italic && !face.italic,
     };
+  }
+  kerning(left: string, right: string, leftStyle: PdfTextStyle, rightStyle: PdfTextStyle) {
+    const a = this.get(leftStyle, left),
+      b = this.get(rightStyle, right);
+    if (
+      a.key !== b.key ||
+      leftStyle.size !== rightStyle.size ||
+      leftStyle.bold !== rightStyle.bold ||
+      leftStyle.italic !== rightStyle.italic
+    )
+      return 0;
+    return (
+      ((a.kerning?.get(JSON.stringify([left, right])) ?? 0) * rightStyle.size) / a.font.unitsPerEm
+    );
   }
   measure(text: string, style: PdfTextStyle) {
     const shaped = this.shape(text, style);

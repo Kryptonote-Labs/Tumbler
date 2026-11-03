@@ -52,6 +52,9 @@ export function layoutPdfText(
     styles.push(style);
     widths.push(entry.segment === '\n' ? 0 : fonts.measure(entry.segment, style));
   }
+  const kern = entries.map((entry, i) =>
+    i > 0 ? fonts.kerning(entries[i - 1]!.segment, entry.segment, styles[i - 1]!, styles[i]!) : 0,
+  );
   const line = () => {
     x = seed.x;
     y += Math.max(seed.lineHeight, seed.style.size * 1.25);
@@ -64,10 +67,11 @@ export function layoutPdfText(
     if (x > seed.x && !/\s/u.test(segment) && (i === 0 || /\s/u.test(entries[i - 1]!.segment))) {
       let wordWidth = 0;
       for (let j = i; j < entries.length && !/\s/u.test(entries[j]!.segment); j++)
-        wordWidth += widths[j]!;
-      if (wordWidth <= seed.width && x + wordWidth > seed.x + seed.width) line();
+        wordWidth += widths[j]! + (j > i ? kern[j]! : 0);
+      if (wordWidth <= seed.width && x + kern[i]! + wordWidth > seed.x + seed.width) line();
     }
-    if (x > seed.x && x + width > seed.x + seed.width) line();
+    if (x > seed.x && x + kern[i]! + width > seed.x + seed.width) line();
+    if (x > seed.x) x += kern[i]!;
     carets.push({ offset: index, x, y, height: style.size });
     glyphs.push({ text: segment, start: index, end: index + segment.length, x, y, width, style });
     if (segment === '\n') line();
