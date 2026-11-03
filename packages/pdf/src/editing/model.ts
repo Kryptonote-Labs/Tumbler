@@ -91,7 +91,7 @@ export class PdfTextModel {
       if (end > start) text.delete(start, end - start);
       if (value)
         text.insert(start, value, {
-          ...(style ?? this.styleAt(id, start)),
+          ...(style ?? this.styleAt(id, start + (end > start ? 1 : 0))),
           [pdfSourceAttribute]: null,
         });
     }, this.origin);

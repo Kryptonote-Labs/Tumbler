@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pdfTextInputChange, type PdfInputSelection } from './text-input.ts';
   import { paintEditablePdfPage } from './paint-editable-page.ts';
   import PdfEditableText from './PdfEditableText.svelte';
   import { onMount, tick } from 'svelte';
@@ -52,6 +53,8 @@
     pending = $state<Partial<PdfTextStyle>>({});
   let input: HTMLTextAreaElement, root: HTMLDivElement;
   let compositionBase: PdfTextModel | undefined;
+  let beforeSelection: PdfInputSelection | undefined,
+    compositionSelection: PdfInputSelection | undefined;
   let value = $state(''),
     composing = false,
     dragging: { id: string; anchor: number; page: number } | undefined;
@@ -68,7 +71,9 @@
     | undefined;
   const currentStyle = $derived.by(() => {
     void revision;
-    return active ? { ...model.styleAt(active, start), ...pending } : defaultPdfTextStyle;
+    return active
+      ? { ...model.styleAt(active, start + (end > start ? 1 : 0)), ...pending }
+      : defaultPdfTextStyle;
   });
   $effect(() => onstyle?.(currentStyle));
   export function format(patch: Partial<PdfTextStyle>) {
@@ -117,23 +122,18 @@
     const base = compositionBase ?? model;
     const text = base.text(active).toString(),
       next = input.value;
-    let first = 0;
-    while (first < text.length && first < next.length && text[first] === next[first]) first++;
-    // A UTF-16 prefix must never split a surrogate pair.
-    if (first > 0 && /[\ud800-\udbff]/.test(text[first - 1]!)) first--;
-    let tail = 0;
-    while (
-      tail < text.length - first &&
-      tail < next.length - first &&
-      text[text.length - tail - 1] === next[next.length - tail - 1]
-    )
-      tail++;
+    const operation = pdfTextInputChange(text, next, compositionSelection ?? beforeSelection, {
+      start: input.selectionStart,
+      end: input.selectionEnd,
+    });
+    beforeSelection = undefined;
+    compositionSelection = undefined;
+    const first = operation.start;
     const selection = [input.selectionStart, input.selectionEnd];
     const resolvedStart = model.resolve(base.anchor(active, first))?.offset ?? first;
-    const resolvedEnd =
-      model.resolve(base.anchor(active, text.length - tail))?.offset ?? resolvedStart;
-    model.replace(active, resolvedStart, resolvedEnd, next.slice(first, next.length - tail), {
-      ...model.styleAt(active, first),
+    const resolvedEnd = model.resolve(base.anchor(active, operation.end))?.offset ?? resolvedStart;
+    model.replace(active, resolvedStart, resolvedEnd, operation.insert, {
+      ...base.styleAt(active, first + (operation.end > first ? 1 : 0)),
       ...pending,
     });
     value = model.text(active).toString();
@@ -144,8 +144,17 @@
     compositionBase = undefined;
     publish();
   }
+  function beforeInput(event: InputEvent) {
+    if (composing) return;
+    if (event.inputType === 'historyUndo' || event.inputType === 'historyRedo') {
+      event.preventDefault();
+      undo(event.inputType === 'historyRedo');
+      return;
+    }
+    if (!composing) beforeSelection = { start: input.selectionStart, end: input.selectionEnd };
+  }
   function key(event: KeyboardEvent) {
-    if (!active) return;
+    if (!active || composing || event.isComposing) return;
     const mod = event.metaKey || event.ctrlKey;
     if (event.key === 'Tab') {
       const ids = model.ids(),
@@ -389,12 +398,14 @@
     aria-label="Edit PDF text"
     readonly={!editable}
     {value}
+    onbeforeinput={beforeInput}
     oninput={changed}
     onselect={publish}
     onkeyup={publish}
     onkeydown={key}
     oncompositionstart={() => {
       composing = true;
+      compositionSelection = { start: input.selectionStart, end: input.selectionEnd };
       compositionBase = new PdfTextModel();
       Y.applyUpdate(compositionBase.doc, Y.encodeStateAsUpdate(model.doc));
     }}

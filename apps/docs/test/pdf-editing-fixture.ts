@@ -41,11 +41,15 @@ const host = `<script>
   model.replace(id,0,model.text(id).length,Array.from({length:30},(_,i)=>'Line '+i).join('\\n'));
   window.lastCaret=()=>layoutPdfTextFlow(model,fonts,pdf.pages).regions.find(region=>region.id===id&&region.page===0).carets.at(-1).offset;
   window.lastFace=()=>fonts.shape('X',model.styleAt(id,model.text(id).length)).face.key;
+  window.remotePrefix=()=>model.replace(id,0,0,'B',{...model.styleAt(id,0),color:'#00ff00'});
+  window.colours=()=>{const result=[];for(const run of model.text(id).toDelta()){const color=run.attributes?.color,last=result.at(-1);if(last?.color===color)last.insert+=run.insert;else result.push({insert:run.insert,color});}return result;};
+  function repeated(){model.replace(id,0,model.text(id).length,'AAA');model.format(id,0,1,{color:'#ff0000'});model.format(id,1,3,{color:'#0000ff'});}
   let view;
   let adding=$state(false);
 </script>
 <button onclick={()=>adding=true}>Add text</button>
 <button style="left:80px" onclick={()=>view.format({family:'Mono'})}>Mono</button>
+<button style="left:150px" onclick={repeated}>Repeated text</button>
 <PdfEditableDocument bind:this={view} document={pdf} {model} {fonts} scale={2} {adding} onadded={()=>adding=false}/>
 <style>:global(body){margin:0;}button{position:fixed;top:0;left:0;z-index:1;}</style>`;
 const built = await Bun.build({
