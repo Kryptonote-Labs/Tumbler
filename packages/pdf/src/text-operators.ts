@@ -31,6 +31,7 @@ export function createTextOperators(
     instance: string,
   ) => void,
   instance: string,
+  step: () => void,
 ) {
   const moveText = (x: number, y: number, line = false) => {
     if (line) context.lineMatrix = multiply(context.lineMatrix, [1, 0, 0, 1, x, y]);
@@ -45,7 +46,7 @@ export function createTextOperators(
       font = state.font!;
     if (state.mode >= 4)
       unsupported("Text clipping requires a glyph clipping path implementation.");
-    for (const glyph of font.decode(value.bytes)) {
+    for (const glyph of font.glyphs(value.bytes, step)) {
       const tx = font.vertical ? (-(glyph.vertical?.[1] ?? 0) / 1000) * state.fontSize : 0;
       const ty = font.vertical ? (-(glyph.vertical?.[2] ?? 0) / 1000) * state.fontSize : 0;
       const fontScale =

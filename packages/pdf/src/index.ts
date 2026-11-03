@@ -15,3 +15,5 @@ export type {
   PdfPathElement,
   PdfPaintState,
 } from "./scene.ts";
+
+export type { PdfExecutionLimits } from "./execution-budget.ts";

@@ -35,7 +35,12 @@ export class PdfStream {
 export class PdfError extends Error {
   override readonly name = "PdfError";
   constructor(
-    readonly code: "invalid_pdf" | "unsupported_feature" | "password_required" | "invalid_password",
+    readonly code:
+      | "invalid_pdf"
+      | "unsupported_feature"
+      | "password_required"
+      | "invalid_password"
+      | "resource_limit",
     message: string,
     readonly offset?: number,
   ) {

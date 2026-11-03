@@ -1,3 +1,4 @@
+import { PdfExecutionBudget, type PdfExecutionLimits } from "./execution-budget.ts";
 import { createTextOperators } from "./text-operators.ts";
 import { createGraphicsOperators } from "./graphics-operators.ts";
 import { initialState, execution, rectangle, type Execution } from "./graphics-state.ts";
@@ -47,10 +48,15 @@ export class PdfInterpreter {
   private readonly fonts = new WeakMap<PdfDictionary, PdfFont>();
   private readonly scenes = new Map<number, PdfPageScene>();
   private readonly activeForms = new Set<PdfStream>();
-  constructor(readonly document: PdfDocument) {}
+  private budget = new PdfExecutionBudget();
+  constructor(
+    readonly document: PdfDocument,
+    private limits: PdfExecutionLimits = {},
+  ) {}
   page(index: number): PdfPageScene {
     const cached = this.scenes.get(index);
     if (cached) return cached;
+    this.budget = new PdfExecutionBudget(this.limits);
     const page = this.document.pages[index];
     if (!page) return invalid("PDF page index is outside this document.");
     const elements: PdfSceneElement[] = [],
@@ -109,7 +115,15 @@ export class PdfInterpreter {
     }
     return font;
   }
-  private execute(
+  private execute(...args: Parameters<PdfInterpreter["executeContent"]>) {
+    this.budget.enter();
+    try {
+      return this.executeContent(...args);
+    } finally {
+      this.budget.leave();
+    }
+  }
+  private executeContent(
     bytes: Uint8Array,
     resources: PdfDictionary,
     context: Execution,
@@ -122,11 +136,14 @@ export class PdfInterpreter {
     let operands: PdfValue[] = [],
       start = 0;
     const emitSource = (): PdfSceneSource => ({ object, instance, start, end: syntax.position });
-    const base = () => ({
-      id: `${instance}:${object.key}:${start}:${elements.length}`,
-      source: emitSource(),
-      state: { ...context.state },
-    });
+    const base = () => {
+      this.budget.element();
+      return {
+        id: `${instance}:${object.key}:${start}:${elements.length}`,
+        source: emitSource(),
+        state: { ...context.state },
+      };
+    };
     const textOperators = createTextOperators(
       context,
       source,
@@ -136,6 +153,7 @@ export class PdfInterpreter {
       (key) => this.font(resources, key),
       (...args) => this.execute(...args),
       instance,
+      () => this.budget.step(),
     );
     const graphicsOperators = createGraphicsOperators(
       context,
@@ -146,6 +164,7 @@ export class PdfInterpreter {
       (category, key) => this.resource(resources, category, key),
     );
     while (syntax.position < bytes.length) {
+      this.budget.step();
       syntax.skip();
       if (syntax.position >= bytes.length) break;
       if (!operands.length) start = syntax.position;
