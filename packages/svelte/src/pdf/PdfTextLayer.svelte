@@ -8,9 +8,16 @@
   // Large local font size avoids tiny-font measurement rounding. The source em matrix positions the result.
   const items = $derived.by(() => {
     const canvas = typeof document === 'undefined' ? undefined : document.createElement('canvas'), measure = canvas?.getContext('2d');
+    const widths = new Map<string, number>();
     return content.items.map(item => {
-      if (measure) measure.font = `${item.font.style} ${item.font.weight} 100px ${item.font.family}`;
-      const natural = measure?.measureText(item.text === '\n' ? ' ' : item.text).width ?? 100;
+      const font = `${item.font.style} ${item.font.weight} 100px ${item.font.family}`;
+      const text = item.text === '\n' ? ' ' : item.text, key = font + '\0' + text;
+      let natural = widths.get(key);
+      if (natural === undefined) {
+        if (measure) measure.font = font;
+        natural = measure?.measureText(text).width ?? 100;
+        widths.set(key, natural);
+      }
       const fit = natural > 0 ? Math.max(0,item.width) / natural : 0;
       const [a,b,c,d,e,f] = item.transform;
       return {item,transform:`matrix(${a*fit},${b*fit},${c/100},${d/100},${e-c*item.ascent},${f-d*item.ascent})`};
