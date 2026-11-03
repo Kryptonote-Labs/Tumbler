@@ -21,3 +21,9 @@ export { pdfTextContent } from "./text-content.ts";
 export type { PdfTextContent, PdfTextItem } from "./text-content.ts";
 export { PdfTextSelectionIndex } from "./text-hit-test.ts";
 export type { PdfTextCaret } from "./text-hit-test.ts";
+
+export * from "./editing/fonts.ts";
+export * from "./editing/model.ts";
+export * from "./editing/layout.ts";
+
+export { exportEditedPdf } from "./editing/writer.ts";

@@ -72,7 +72,7 @@ export class PdfInterpreter {
         context,
         elements,
         stream.object,
-        `page:${page.id}`,
+        `page:${page.id}:stream:${stream.object.key}`,
       );
     }
     if (context.stack.length || context.inText || context.compatibility)

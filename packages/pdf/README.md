@@ -109,3 +109,37 @@ PDF-format authoring constraints. Run untrusted parsing and interpretation in an
 cancellable worker as well; a work counter cannot interrupt an individual font or filter codec.
 JPEGs with non-default `/Decode`, masks or decoder parameters currently reject explicitly;
 the RGB host image decoder cannot apply PDF sample transformations correctly.
+
+## Collaborative text editing
+
+`PdfTextModel` stores recovered paragraphs and explicitly placed text regions in a Yjs document.
+Initialize it once on the authoritative host with `importPdfText(document)`, persist the encoded
+Yjs state, and send that state to peers. Independently importing the same PDF on each peer would
+create different CRDT identities. Human input and headless callers use the same `replace`, `format`,
+`add`, relative anchors and selective undo operations. Imported seeds retain per-occurrence spacing;
+the model reserves the `pdf-source` text attribute so those positions survive edits and collaborative
+undo. Hosts must retain this metadata when persisting or validating CRDT updates. Newly placed text
+on a continuation uses the optional `continuation` anchor; the Svelte editor supplies it automatically.
+
+Hosts supply full editing fonts to `PdfEditingFonts`. Use `fonts.fork(document)` for a
+document-scoped registry, or `fonts.importDocument(document)` before headless layout. The registry
+retains embedded source glyphs, PDF widths and encoding mappings. A full matching family extends
+subset programs for new characters; fallback is limited to glyphs absent from available source
+and matching faces. `fonts.shape` supplies the same outlines and advances to the UI and writer. `layoutPdfTextFlow` supplies the browser and
+exporter with the same glyph positions, wrapping, paragraph displacement and continuation pages.
+`PdfEditableDocument` in `@tumblerjs/svelte/pdf` handles selection, native textarea input, composition,
+formatting, page virtualization, remote selections and carets. Hosts supply authenticated presence
+and update transport rather than coupling the engine to accounts or servers.
+
+`exportEditedPdf(document, model, fonts)` appends an ISO 32000-1 §7.5.6 revision. It preserves untouched
+source objects and graphics. Replaced text-showing operations become equivalent TJ displacements,
+including numeric kerning and quote-operator side effects. Modified Form instances are cloned.
+Existing source glyphs reuse their original font resources, including subset and CFF programs.
+New text uses embedded TrueType/CID fonts and ToUnicode mappings, and long continuations create real
+PDF pages. An unchanged export returns the original bytes. Historical revisions remain recoverable;
+this API does not implement secure redaction.
+
+Paragraph recovery and columns use geometry. New characters absent from a subset need a full matching face or fallback, and
+complex columns, rotated text, bidi shaping and tagged structure updates need further qualification.
+Encrypted editing is not implemented. Missing editing glyphs fail explicitly. None of these boundaries
+is a document-authoring size limit.

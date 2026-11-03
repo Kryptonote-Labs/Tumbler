@@ -70,6 +70,8 @@ export interface PdfGlyphElement extends Element {
   readonly fontSize: number;
   readonly mode: number;
   readonly advance: readonly [number, number];
+  /** Equivalent TJ displacement, preserving position when this glyph is removed. */
+  readonly textDisplacement: number;
   /** Advance in page user space, including text spacing and the current transformation. */
   readonly advanceVector: readonly [number, number];
 }

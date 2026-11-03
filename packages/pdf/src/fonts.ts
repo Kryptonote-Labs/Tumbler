@@ -1,9 +1,10 @@
-import "./buffer-runtime.ts";
-import { winAnsi, glyphText, standardName } from "./font-encodings.ts";
-import { Buffer } from "buffer";
-import { create, type Font as OutlineFont } from "fontkit";
-import { Encodings, Font } from "@pdf-lib/standard-fonts";
-import { PdfCMap, type PdfCode } from "./cmap.ts";
+import { sha256 } from '@noble/hashes/sha2.js';
+import './buffer-runtime.ts';
+import { winAnsi, glyphText, standardName } from './font-encodings.ts';
+import { Buffer } from 'buffer';
+import { create, type Font as OutlineFont } from 'fontkit';
+import { Encodings, Font } from '@pdf-lib/standard-fonts';
+import { PdfCMap, type PdfCode } from './cmap.ts';
 import {
   array,
   dictionary,
@@ -16,10 +17,10 @@ import {
   type PdfDictionary,
   type PdfValue,
   unsupported,
-} from "./objects.ts";
-import type { PdfSource } from "./source.ts";
-import { matrix, type PdfMatrix } from "./matrix.ts";
-import { cffOpenType } from "./cff-container.ts";
+} from './objects.ts';
+import type { PdfSource } from './source.ts';
+import { matrix, type PdfMatrix } from './matrix.ts';
+import { cffOpenType } from './cff-container.ts';
 
 export interface PdfGlyph {
   readonly code: number;
@@ -35,6 +36,8 @@ export interface PdfGlyph {
 }
 /** Font decoding preserves source codes, CIDs, glyph ids and extracted Unicode separately. */
 export class PdfFont {
+  readonly program: Uint8Array | undefined = undefined;
+  readonly sourceId: string | undefined = undefined;
   readonly kind: string;
   readonly baseName: string;
   readonly fontMatrix: PdfMatrix;
@@ -62,37 +65,37 @@ export class PdfFont {
     readonly source: PdfSource,
     readonly dictionary: PdfDictionary,
   ) {
-    this.kind = name(dictionary.get("Subtype"));
-    this.baseName = name(dictionary.get("BaseFont"), "Helvetica");
-    const encoding = source.resolve(dictionary.get("Encoding"));
+    this.kind = name(dictionary.get('Subtype'));
+    this.baseName = name(dictionary.get('BaseFont'), 'Helvetica');
+    const encoding = source.resolve(dictionary.get('Encoding'));
     this.mapping =
       encoding instanceof PdfStream ? new PdfCMap(source.stream(encoding)) : new PdfCMap();
     if (
-      this.kind === "Type0" &&
+      this.kind === 'Type0' &&
       encoding instanceof PdfName &&
-      !["Identity-H", "Identity-V"].includes(encoding.value)
+      !['Identity-H', 'Identity-V'].includes(encoding.value)
     )
       unsupported(`Predefined font CMap /${encoding.value} needs its registered CMap resource.`);
     this.vertical =
-      encoding instanceof PdfName ? encoding.value.endsWith("-V") : this.mapping.vertical;
-    const unicode = source.resolve(dictionary.get("ToUnicode"));
+      encoding instanceof PdfName ? encoding.value.endsWith('-V') : this.mapping.vertical;
+    const unicode = source.resolve(dictionary.get('ToUnicode'));
     this.unicode =
       unicode instanceof PdfStream ? new PdfCMap(source.stream(unicode)) : new PdfCMap();
     this.fontMatrix = matrix(
-      source.resolve(dictionary.get("FontMatrix")),
+      source.resolve(dictionary.get('FontMatrix')),
       [0.001, 0, 0, 0.001, 0, 0],
     );
-    this.resources = dictionary.has("Resources")
-      ? this.sourceDictionary(dictionary.get("Resources"))
+    this.resources = dictionary.has('Resources')
+      ? this.sourceDictionary(dictionary.get('Resources'))
       : new Map();
     const metrics =
-      this.kind === "Type0"
-        ? this.sourceDictionary(array(source.resolve(dictionary.get("DescendantFonts")))[0])
+      this.kind === 'Type0'
+        ? this.sourceDictionary(array(source.resolve(dictionary.get('DescendantFonts')))[0])
         : dictionary;
-    const descriptor = metrics.has("FontDescriptor")
-      ? this.sourceDictionary(metrics.get("FontDescriptor"))
+    const descriptor = metrics.has('FontDescriptor')
+      ? this.sourceDictionary(metrics.get('FontDescriptor'))
       : new Map<string, PdfValue>();
-    const embedded = ["FontFile2", "FontFile3", "FontFile"]
+    const embedded = ['FontFile2', 'FontFile3', 'FontFile']
       .map((key) => source.resolve(descriptor.get(key)))
       .find((value) => value instanceof PdfStream);
     let outline: OutlineFont | undefined;
@@ -100,12 +103,22 @@ export class PdfFont {
       try {
         const program = source.stream(embedded);
         this.rawCff = program[0] === 1 && program[2]! >= 4;
-        const decoded = create(Buffer.from(this.rawCff ? cffOpenType(program) : program));
-        if ("fonts" in decoded)
-          unsupported("A PDF font resource must reference one font, not a font collection.");
+        this.program = this.rawCff ? cffOpenType(program) : program;
+        const identity = JSON.stringify(dictionary, (_key, value: unknown) =>
+          value instanceof Map
+            ? [...value.entries()].sort(([a], [b]) => String(a)<String(b)?-1:String(a)>String(b)?1:0)
+            : value,
+        );
+        const digest = Array.from(sha256(new TextEncoder().encode(identity)), (byte) =>
+          byte.toString(16).padStart(2, '0'),
+        ).join('');
+        this.sourceId = `pdf:${source.fingerprint}:${digest}`;
+        const decoded = create(Buffer.from(this.program));
+        if ('fonts' in decoded)
+          unsupported('A PDF font resource must reference one font, not a font collection.');
         outline = decoded;
       } catch (error) {
-        if (error instanceof Error && error.name === "PdfError") throw error;
+        if (error instanceof Error && error.name === 'PdfError') throw error;
         unsupported(
           `Embedded /${this.kind} font ${this.baseName} needs an outline decoder for its font program.`,
         );
@@ -115,13 +128,13 @@ export class PdfFont {
     this.unitsPerEm = outline?.unitsPerEm ?? 1000;
     const standard = standardName(this.baseName);
     this.standard = standard ? Font.load(standard) : undefined;
-    const rawBox = source.resolve(dictionary.get("FontBBox") ?? descriptor.get("FontBBox"));
+    const rawBox = source.resolve(dictionary.get('FontBBox') ?? descriptor.get('FontBBox'));
     const box = Array.isArray(rawBox) ? rawBox : [];
     const fallbackAscent = number(
-      source.resolve(descriptor.get("Ascent") ?? box[3] ?? this.standard?.Ascender ?? 800),
+      source.resolve(descriptor.get('Ascent') ?? box[3] ?? this.standard?.Ascender ?? 800),
     );
     const fallbackDescent = number(
-      source.resolve(descriptor.get("Descent") ?? box[1] ?? this.standard?.Descender ?? -200),
+      source.resolve(descriptor.get('Descent') ?? box[1] ?? this.standard?.Descender ?? -200),
     );
     this.ascent =
       outline && outline.ascent > 0 ? outline.ascent : (fallbackAscent / 1000) * this.unitsPerEm;
@@ -133,20 +146,20 @@ export class PdfFont {
         : /Courier/i.test(this.baseName)
           ? '"Courier New", "Liberation Mono", monospace'
           : 'Arial, "Liberation Sans", sans-serif',
-      weight: /bold/i.test(this.baseName) ? "bold" : "normal",
-      style: /italic|oblique/i.test(this.baseName) ? "italic" : "normal",
+      weight: /bold/i.test(this.baseName) ? 'bold' : 'normal',
+      style: /italic|oblique/i.test(this.baseName) ? 'italic' : 'normal',
     };
     this.defaultWidth = number(
-      metrics.get(this.kind === "Type0" ? "DW" : "MissingWidth") ??
-        descriptor.get("MissingWidth") ??
-        (this.kind === "Type0" ? 1000 : 0),
+      metrics.get(this.kind === 'Type0' ? 'DW' : 'MissingWidth') ??
+        descriptor.get('MissingWidth') ??
+        (this.kind === 'Type0' ? 1000 : 0),
     );
-    const vertical = metrics.has("DW2")
-      ? array(source.resolve(metrics.get("DW2"))).map((value) => number(value))
+    const vertical = metrics.has('DW2')
+      ? array(source.resolve(metrics.get('DW2'))).map((value) => number(value))
       : [880, -1000];
     this.defaultVertical = [vertical[0]!, vertical[1]!];
-    if (this.kind === "Type0") {
-      const widths = metrics.has("W") ? array(source.resolve(metrics.get("W"))) : [];
+    if (this.kind === 'Type0') {
+      const widths = metrics.has('W') ? array(source.resolve(metrics.get('W'))) : [];
       for (let i = 0; i < widths.length;) {
         const first = integer(widths[i++]),
           next = source.resolve(widths[i++]);
@@ -155,16 +168,16 @@ export class PdfFont {
         else {
           const last = integer(next),
             width = number(widths[i++]);
-          if (last < first || last - first > 65535) invalid("Invalid CID width range.");
+          if (last < first || last - first > 65535) invalid('Invalid CID width range.');
           for (let cid = first; cid <= last; cid++) this.widths.set(cid, width);
         }
       }
-      const vertical = metrics.has("W2") ? array(source.resolve(metrics.get("W2"))) : [];
+      const vertical = metrics.has('W2') ? array(source.resolve(metrics.get('W2'))) : [];
       for (let i = 0; i < vertical.length;) {
         const first = integer(vertical[i++]),
           next = source.resolve(vertical[i++]);
         if (Array.isArray(next)) {
-          if (next.length % 3) invalid("Invalid vertical CID metrics.");
+          if (next.length % 3) invalid('Invalid vertical CID metrics.');
           for (let offset = 0; offset < next.length; offset += 3)
             this.verticalWidths.set(first + offset / 3, [
               number(next[offset]),
@@ -178,24 +191,24 @@ export class PdfFont {
               number(vertical[i++]),
               number(vertical[i++]),
             ];
-          if (last < first || last - first > 65535) invalid("Invalid vertical CID range.");
+          if (last < first || last - first > 65535) invalid('Invalid vertical CID range.');
           for (let cid = first; cid <= last; cid++) this.verticalWidths.set(cid, metrics);
         }
       }
-      const cidMap = source.resolve(metrics.get("CIDToGIDMap"));
+      const cidMap = source.resolve(metrics.get('CIDToGIDMap'));
       this.cidMap = cidMap instanceof PdfStream ? source.stream(cidMap) : undefined;
     } else {
       const encodingName =
         encoding instanceof Map
-          ? name(encoding.get("BaseEncoding"), "StandardEncoding")
+          ? name(encoding.get('BaseEncoding'), 'StandardEncoding')
           : encoding instanceof PdfName
             ? encoding.value
-            : this.baseName === "Symbol"
-              ? "Symbol"
-              : this.baseName === "ZapfDingbats"
-                ? "ZapfDingbats"
-                : "StandardEncoding";
-      if (encodingName === "Symbol" || encodingName === "ZapfDingbats") {
+            : this.baseName === 'Symbol'
+              ? 'Symbol'
+              : this.baseName === 'ZapfDingbats'
+                ? 'ZapfDingbats'
+                : 'StandardEncoding';
+      if (encodingName === 'Symbol' || encodingName === 'ZapfDingbats') {
         const selected = Encodings[encodingName];
         for (const point of selected.supportedCodePoints) {
           const encoded = selected.encodeUnicodeCodePoint(point);
@@ -206,92 +219,92 @@ export class PdfFont {
         }
       } else {
         for (const [code, value] of winAnsi) this.simple.set(code, value);
-        if (encodingName === "MacRomanEncoding")
+        if (encodingName === 'MacRomanEncoding')
           for (let code = 0; code < 256; code++)
             this.simple.set(code, {
-              unicode: new TextDecoder("macintosh").decode(Uint8Array.of(code)),
-              glyph: "",
+              unicode: new TextDecoder('macintosh').decode(Uint8Array.of(code)),
+              glyph: '',
             });
-        else if (encodingName === "StandardEncoding") {
+        else if (encodingName === 'StandardEncoding') {
           const extra: Record<number, string> = {
-            39: "quoteright",
-            96: "quoteleft",
-            161: "exclamdown",
-            162: "cent",
-            163: "sterling",
-            164: "fraction",
-            165: "yen",
-            166: "florin",
-            167: "section",
-            168: "currency",
-            169: "quotesingle",
-            170: "quotedblleft",
-            171: "guillemotleft",
-            172: "guilsinglleft",
-            173: "guilsinglright",
-            174: "fi",
-            175: "fl",
-            177: "endash",
-            178: "dagger",
-            179: "daggerdbl",
-            180: "periodcentered",
-            182: "paragraph",
-            183: "bullet",
-            184: "quotesinglbase",
-            185: "quotedblbase",
-            186: "quotedblright",
-            187: "guillemotright",
-            188: "ellipsis",
-            189: "perthousand",
-            191: "questiondown",
-            193: "grave",
-            194: "acute",
-            195: "circumflex",
-            196: "tilde",
-            197: "macron",
-            198: "breve",
-            199: "dotaccent",
-            200: "dieresis",
-            202: "ring",
-            203: "cedilla",
-            205: "hungarumlaut",
-            206: "ogonek",
-            207: "caron",
-            208: "emdash",
-            225: "AE",
-            227: "ordfeminine",
-            232: "Lslash",
-            233: "Oslash",
-            234: "OE",
-            235: "ordmasculine",
-            241: "ae",
-            245: "dotlessi",
-            248: "lslash",
-            249: "oslash",
-            250: "oe",
-            251: "germandbls",
+            39: 'quoteright',
+            96: 'quoteleft',
+            161: 'exclamdown',
+            162: 'cent',
+            163: 'sterling',
+            164: 'fraction',
+            165: 'yen',
+            166: 'florin',
+            167: 'section',
+            168: 'currency',
+            169: 'quotesingle',
+            170: 'quotedblleft',
+            171: 'guillemotleft',
+            172: 'guilsinglleft',
+            173: 'guilsinglright',
+            174: 'fi',
+            175: 'fl',
+            177: 'endash',
+            178: 'dagger',
+            179: 'daggerdbl',
+            180: 'periodcentered',
+            182: 'paragraph',
+            183: 'bullet',
+            184: 'quotesinglbase',
+            185: 'quotedblbase',
+            186: 'quotedblright',
+            187: 'guillemotright',
+            188: 'ellipsis',
+            189: 'perthousand',
+            191: 'questiondown',
+            193: 'grave',
+            194: 'acute',
+            195: 'circumflex',
+            196: 'tilde',
+            197: 'macron',
+            198: 'breve',
+            199: 'dotaccent',
+            200: 'dieresis',
+            202: 'ring',
+            203: 'cedilla',
+            205: 'hungarumlaut',
+            206: 'ogonek',
+            207: 'caron',
+            208: 'emdash',
+            225: 'AE',
+            227: 'ordfeminine',
+            232: 'Lslash',
+            233: 'Oslash',
+            234: 'OE',
+            235: 'ordmasculine',
+            241: 'ae',
+            245: 'dotlessi',
+            248: 'lslash',
+            249: 'oslash',
+            250: 'oe',
+            251: 'germandbls',
           };
           for (let code = 127; code < 256; code++) this.simple.delete(code);
           for (const [code, glyph] of Object.entries(extra))
             this.simple.set(Number(code), { glyph, unicode: glyphText(glyph) });
         }
       }
-      if (encoding instanceof Map && encoding.has("Differences")) {
+      if (encoding instanceof Map && encoding.has('Differences')) {
         let code = 0;
-        for (const value of array(source.resolve(encoding.get("Differences")))) {
-          if (typeof value === "number") code = integer(value);
+        for (const value of array(source.resolve(encoding.get('Differences')))) {
+          if (typeof value === 'number') code = integer(value);
           else {
             const glyph = name(value);
             this.simple.set(code++, { glyph, unicode: glyphText(glyph) });
           }
         }
       }
-      if (dictionary.has("Widths"))
-        array(source.resolve(dictionary.get("Widths"))).forEach((width, i) =>
-          this.widths.set(integer(dictionary.get("FirstChar")) + i, number(width)),
+      if (dictionary.has('Widths'))
+        array(source.resolve(dictionary.get('Widths'))).forEach((width, i) =>
+          this.widths.set(integer(dictionary.get('FirstChar')) + i, number(width)),
         );
     }
-    if (!outline && !this.standard && this.kind !== "Type3")
+    if (!outline && !this.standard && this.kind !== 'Type3')
       unsupported(`Unembedded font ${this.baseName} needs an explicit host fallback font.`);
   }
   private sourceDictionary(value: PdfValue | undefined) {
@@ -301,7 +314,7 @@ export class PdfFont {
     return [...this.glyphs(bytes)];
   }
   *glyphs(bytes: Uint8Array, step: () => void = () => {}): Generator<PdfGlyph> {
-    for (const code of this.mapping.codes(bytes, this.kind === "Type0" ? 2 : 1)) {
+    for (const code of this.mapping.codes(bytes, this.kind === 'Type0' ? 2 : 1)) {
       step();
       yield this.glyph(code);
     }
@@ -310,9 +323,9 @@ export class PdfFont {
     const key = this.mapping.key(value),
       cid = this.mapping.cids.get(key) ?? value.code;
     const simple = this.simple.get(value.code);
-    const unicode = this.unicode.unicode.get(key) ?? simple?.unicode ?? "\ufffd";
+    const unicode = this.unicode.unicode.get(key) ?? simple?.unicode ?? '\ufffd';
     let namedGlyph: number | undefined;
-    if (this.rawCff && this.outline && this.kind !== "Type0") {
+    if (this.rawCff && this.outline && this.kind !== 'Type0') {
       if (!this.outlineNames) {
         this.outlineNames = new Map();
         for (let i = 0; i < this.outline.numGlyphs; i++) {
@@ -323,7 +336,7 @@ export class PdfFont {
       namedGlyph = simple ? this.outlineNames.get(simple.glyph) : undefined;
     }
     let glyphId =
-      this.kind === "Type0"
+      this.kind === 'Type0'
         ? this.cidMap
           ? (this.cidMap[cid * 2] ?? 0) * 256 + (this.cidMap[cid * 2 + 1] ?? 0)
           : cid
@@ -342,22 +355,22 @@ export class PdfFont {
       }
     }
     const width =
-      this.widths.get(this.kind === "Type0" ? cid : value.code) ??
-      this.standard?.getWidthOfGlyph(simple?.glyph ?? "") ??
+      this.widths.get(this.kind === 'Type0' ? cid : value.code) ??
+      this.standard?.getWidthOfGlyph(simple?.glyph ?? '') ??
       this.defaultWidth;
     const procedures =
-      this.kind === "Type3" ? this.sourceDictionary(this.dictionary.get("CharProcs")) : undefined;
+      this.kind === 'Type3' ? this.sourceDictionary(this.dictionary.get('CharProcs')) : undefined;
     const procedure =
       procedures && simple ? this.source.resolve(procedures.get(simple.glyph)) : undefined;
-    if (this.kind === "Type3" && !(procedure instanceof PdfStream))
-      invalid("Type 3 glyph has no character procedure.");
+    if (this.kind === 'Type3' && !(procedure instanceof PdfStream))
+      invalid('Type 3 glyph has no character procedure.');
     return {
       code: value.code,
       codeLength: value.length,
       cid,
       glyphId,
       unicode,
-      renderText: simple?.unicode ?? "\ufffd",
+      renderText: simple?.unicode ?? '\ufffd',
       width,
       path,
       procedure: procedure instanceof PdfStream ? procedure : undefined,

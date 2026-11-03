@@ -10,7 +10,7 @@ export interface PdfTextItem {
   readonly width: number;
   readonly ascent: number;
   readonly height: number;
-  readonly font: { readonly family: string; readonly weight: string; readonly style: string };
+  readonly font: { readonly family: string; readonly weight: string; readonly style: string; readonly source?:string; readonly name?:string };
   readonly source: PdfSceneSource;
 }
 export interface PdfTextContent {
@@ -61,7 +61,7 @@ export function pdfTextContent(scene: PdfPageScene): PdfTextContent {
         width: element.glyph.width / (font.kind === "Type3" ? units : 1000),
         ascent,
         height,
-        font: font.css,
+        font: {...font.css,name:font.baseName,...(font.sourceId?{source:font.sourceId}:{})},
         source: element.source,
       },
       direction: [flow[0] / length, flow[1] / length],
