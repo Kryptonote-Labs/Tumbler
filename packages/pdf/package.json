@@ -24,9 +24,7 @@
     "@pdf-lib/standard-fonts": "^1.0.0",
     "buffer": "^6.0.3",
     "fflate": "^0.8.3",
-    "fontkit": "^2.0.4"
-  },
-  "devDependencies": {
+    "fontkit": "^2.0.4",
     "@types/fontkit": "^2.0.9"
   },
   "publishConfig": {
