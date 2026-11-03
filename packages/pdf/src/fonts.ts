@@ -1,3 +1,4 @@
+import "./buffer-runtime.ts";
 import { winAnsi, glyphText, standardName } from "./font-encodings.ts";
 import { Buffer } from "buffer";
 import { create, type Font as OutlineFont } from "fontkit";

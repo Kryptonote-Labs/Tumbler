@@ -1,3 +1,4 @@
+import "./buffer-runtime.ts";
 import { cbc, ecb } from "@noble/ciphers/aes.js";
 import { md5 } from "@noble/hashes/legacy.js";
 import { sha256, sha384, sha512 } from "@noble/hashes/sha2.js";
