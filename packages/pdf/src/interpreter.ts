@@ -90,6 +90,10 @@ export class PdfInterpreter {
     this.scenes.set(index, scene);
     return scene;
   }
+  /** Drop a rebuildable page projection when its viewer leaves the viewport. */
+  releasePage(index: number) {
+    this.scenes.delete(index);
+  }
   private resource(resources: PdfDictionary, category: string, key: string) {
     const source = this.document.source,
       values = dictionary(source.resolve(resources.get(category)));

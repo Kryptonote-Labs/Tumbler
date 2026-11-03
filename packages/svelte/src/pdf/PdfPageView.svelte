@@ -25,7 +25,7 @@
     return () => { observer.disconnect(); position.disconnect(); };
   });
   $effect(() => {
-    if (!visible) { canvas.width = 0; canvas.height = 0; return; }
+    if (!visible) { canvas.width = 0; canvas.height = 0; interpreter.releasePage(index); return; }
     const current = interpreter, pageIndex = index, displayScale = scale;
     const controller = new AbortController();
     const host = browserPdfPaintHost();
