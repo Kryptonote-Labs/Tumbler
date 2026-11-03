@@ -17,12 +17,22 @@
     const observer = new IntersectionObserver(entries => {
       visible = entries.some(entry => entry.isIntersecting);
     }, { rootMargin: '600px 0px' });
-    const position = new IntersectionObserver(entries => {
-      if (entries.some(entry => entry.isIntersecting)) onvisible?.(index);
-    }, { rootMargin: '-45% 0px -45% 0px' });
+    let root = host.parentElement;
+    while (root && !/(auto|scroll)/.test(getComputedStyle(root).overflowY)) root = root.parentElement;
+    let position: IntersectionObserver;
+    const trackPosition = () => {
+      position?.disconnect();
+      const margin = Math.floor((root?.clientHeight ?? window.innerHeight) * 0.45);
+      position = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) onvisible?.(index);
+      }, { root, rootMargin: `-${margin}px 0px -${margin}px 0px` });
+      position.observe(host);
+    };
+    const resize = new ResizeObserver(trackPosition);
+    resize.observe(root ?? document.documentElement);
+    trackPosition();
     observer.observe(host);
-    position.observe(host);
-    return () => { observer.disconnect(); position.disconnect(); };
+    return () => { observer.disconnect(); position.disconnect(); resize.disconnect(); };
   });
   $effect(() => {
     if (!visible) { canvas.width = 0; canvas.height = 0; interpreter.releasePage(index); return; }
