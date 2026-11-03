@@ -120,6 +120,11 @@ export function trackPdfSelection(host: HTMLElement) {
     }
     stop();
   };
+  // Starting a new selection inside the previous highlight must not become an HTML text drag.
+  const drag = (event: DragEvent) => {
+    if (anchor) event.preventDefault();
+  };
+  host.addEventListener("dragstart", drag);
   host.addEventListener("mousedown", down);
   document.addEventListener("mousemove", move);
   document.addEventListener("mouseup", up);
@@ -128,6 +133,7 @@ export function trackPdfSelection(host: HTMLElement) {
   window.addEventListener("blur", stop);
   return () => {
     stop();
+    host.removeEventListener("dragstart", drag);
     host.removeEventListener("mousedown", down);
     document.removeEventListener("mousemove", move);
     document.removeEventListener("mouseup", up);
