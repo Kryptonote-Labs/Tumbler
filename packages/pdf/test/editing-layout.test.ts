@@ -265,3 +265,36 @@ test('editing text separated by an inferred space preserves the original visible
   expect(output.items.find((item) => item.text === 'V')!.transform[4]).toBeCloseTo(90, 5);
   model.doc.destroy();
 });
+
+test('headless replacement inherits the original selected character style before deleting it', () => {
+  const pdf = document('BT /F 12 Tf 20 150 Td (AAA) Tj ET'),
+    model = new PdfTextModel();
+  model.initialize(importPdfText(pdf));
+  const id = model.ids()[0]!;
+  model.format(id, 0, 1, { color: '#ff0000' });
+  model.format(id, 1, 3, { color: '#0000ff' });
+  model.undo.stopCapturing();
+  model.replace(id, 0, 1, 'Z');
+  expect(layoutPdfText(model, id, fonts).glyphs.map((glyph) => glyph.style.color)).toEqual([
+    '#ff0000',
+    '#0000ff',
+    '#0000ff',
+  ]);
+  model.undo.stopCapturing();
+  model.replace(id, 1, 3, 'XY');
+  expect(model.text(id).toString()).toBe('ZXY');
+  expect(layoutPdfText(model, id, fonts).glyphs.map((glyph) => glyph.style.color)).toEqual([
+    '#ff0000',
+    '#0000ff',
+    '#0000ff',
+  ]);
+  model.undo.undo();
+  model.undo.undo();
+  expect(model.text(id).toString()).toBe('AAA');
+  expect(layoutPdfText(model, id, fonts).glyphs.map((glyph) => glyph.style.color)).toEqual([
+    '#ff0000',
+    '#0000ff',
+    '#0000ff',
+  ]);
+  model.doc.destroy();
+});

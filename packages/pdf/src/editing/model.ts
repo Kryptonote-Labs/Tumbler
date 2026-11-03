@@ -87,11 +87,12 @@ export class PdfTextModel {
       end > text.length
     )
       throw new Error('Invalid PDF text range.');
+    const attributes = style ?? this.styleAt(id, start + (end > start ? 1 : 0));
     this.doc.transact(() => {
       if (end > start) text.delete(start, end - start);
       if (value)
         text.insert(start, value, {
-          ...(style ?? this.styleAt(id, start + (end > start ? 1 : 0))),
+          ...attributes,
           [pdfSourceAttribute]: null,
         });
     }, this.origin);
