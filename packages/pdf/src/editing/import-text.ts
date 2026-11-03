@@ -7,6 +7,8 @@ import { defaultPdfTextStyle, type PdfTextStyle } from './fonts.ts';
 export type PdfTextSeed = {
   id: string;
   page: number;
+  /** Explicit continuation anchor for newly placed text; y includes its logical page offset. */
+  continuation?: number;
   x: number;
   y: number;
   width: number;

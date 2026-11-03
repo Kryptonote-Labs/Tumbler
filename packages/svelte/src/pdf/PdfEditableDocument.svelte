@@ -239,6 +239,7 @@
       model.add({
         id,
         page: targetPage.source.index,
+        continuation: targetPage.continuation,
         x,
         y: y + targetPage.continuation * pdfContinuationHeight(targetPage.source),
         width: Math.max(24, targetPage.source.width - x - 24),

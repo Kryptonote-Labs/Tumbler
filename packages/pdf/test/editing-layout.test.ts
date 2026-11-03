@@ -9,6 +9,7 @@ import {
   PdfInterpreter,
   layoutPdfText,
   layoutPdfTextFlow,
+  defaultPdfTextStyle,
 } from '../src/index.ts';
 const fonts = new PdfEditingFonts();
 fonts.add(
@@ -67,5 +68,54 @@ test('larger text increases line spacing, paragraph height and following paragra
   expect(output.pages.map((page) => interpreter.page(page.index).text).join('\n')).toContain(
     'Following',
   );
+  model.doc.destroy();
+});
+
+test('text placed near the top of a continuation page stays visible on that page in layout and export', () => {
+  const pdf = document('BT /F 12 Tf 20 150 Td (Original) Tj ET'),
+    model = new PdfTextModel();
+  model.initialize(importPdfText(pdf));
+  for (const continuation of [1, 2])
+    model.add({
+      id: 'placed-' + continuation,
+      page: 0,
+      continuation,
+      x: 20,
+      y: 40 + continuation * 104,
+      width: 200,
+      lineHeight: 15,
+      style: defaultPdfTextStyle,
+      sources: [],
+      delta: [{ insert: 'Placed ' + continuation, attributes: defaultPdfTextStyle }],
+    });
+  // Older headless callers may supply an off-page logical baseline without an explicit anchor.
+  model.add({
+    id: 'legacy',
+    page: 0,
+    x: 20,
+    y: 260,
+    width: 200,
+    lineHeight: 15,
+    style: defaultPdfTextStyle,
+    sources: [],
+    delta: [{ insert: 'Legacy', attributes: defaultPdfTextStyle }],
+  });
+  const flow = layoutPdfTextFlow(model, fonts, pdf.pages);
+  for (const continuation of [1, 2]) {
+    const fragment = flow.regions.find((region) => region.id === 'placed-' + continuation)!;
+    expect(fragment.page).toBe(continuation);
+    expect(fragment.glyphs[0]!.y).toBe(40);
+  }
+  expect(flow.regions.find((region) => region.id === 'legacy')!.page).toBe(1);
+  const output = openPdfDocument(exportEditedPdf(pdf, model, fonts)),
+    interpreter = new PdfInterpreter(output);
+  expect(output.pages.length).toBe(3);
+  for (const continuation of [1, 2])
+    expect(interpreter.page(continuation).text).toContain('Placed ' + continuation);
+  for (const page of output.pages)
+    for (const glyph of interpreter.page(page.index).elements.filter((e) => e.kind === 'glyph')) {
+      expect(glyph.textMatrix[5]).toBeGreaterThanOrEqual(0);
+      expect(glyph.textMatrix[5]).toBeLessThanOrEqual(page.height);
+    }
   model.doc.destroy();
 });

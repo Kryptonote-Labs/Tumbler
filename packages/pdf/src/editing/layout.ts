@@ -151,14 +151,16 @@ export function layoutPdfTextFlow(
         });
       const height = pdfContinuationHeight(page),
         bottom = page.height - Math.min(48, page.height * 0.1);
+      const firstContinuation = imported ? 0 : (seed.continuation ?? 0);
+      const localStart = seed.y - firstContinuation * height;
+      const edge = imported || localStart <= page.height ? Math.max(bottom, localStart) : bottom;
       const project = (y: number) => {
         const absolute = y + shift,
           continuation =
             !dirty && shift === 0
               ? 0
-              : absolute > Math.max(bottom, seed.y)
-                ? Math.ceil((absolute - Math.max(bottom, seed.y)) / height)
-                : 0;
+              : firstContinuation +
+                Math.max(0, Math.ceil((absolute - firstContinuation * height - edge) / height));
         count = Math.max(count, continuation);
         return { y: absolute - continuation * height, continuation };
       };
