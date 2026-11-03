@@ -52,7 +52,6 @@
 </script>
 
 {#each layouts as layout (layout.id + ':' + layout.page)}
-  {@const dirty = layout.render}
   <button
     class="region-focus"
     aria-label={model.text(layout.id).toString() || 'Empty text region'}
@@ -76,7 +75,7 @@
           y={glyph.style.size}
           font-family={`PDF-${pdfFontKey(glyph.style)}`}
           font-size={glyph.style.size}
-          fill={dirty ? glyph.style.color : 'transparent'}
+          fill="transparent"
           text-decoration={glyph.style.underline ? 'underline' : 'none'}>{glyph.text}</text
         ></svg
       >{/if}

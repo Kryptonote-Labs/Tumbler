@@ -25,6 +25,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
   let visible = false;
   let disposed = false,
     controller: AbortController | undefined;
+  fonts.importDocument(pdf);
   const render = () => {
     controller?.abort();
     if (!visible) {
@@ -61,6 +62,44 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     })
       .then(() => {
         if (disposed || signal.aborted) return;
+        const context = staging.getContext('2d')!;
+        context.setTransform(scale * ratio, 0, 0, scale * ratio, 0, 0);
+        for (const region of currentFlow.regions.filter(
+          (region) => region.render && region.page === options.index,
+        ))
+          for (const glyph of region.glyphs) {
+            if (glyph.text === '\n') continue;
+            const shaped = fonts.shape(glyph.text, glyph.style),
+              em = glyph.style.size / shaped.face.font.unitsPerEm;
+            let x = glyph.x;
+            for (let i = 0; i < shaped.glyphs.length; i++) {
+              const position = shaped.positions[i]!,
+                outline = shaped.glyphs[i]!;
+              context.save();
+              context.translate(x + position.xOffset * em, glyph.y - position.yOffset * em);
+              context.scale(em, -em);
+              if (shaped.italic) context.transform(1, 0, 0.2, 1, 0, 0);
+              context.fillStyle = glyph.style.color;
+              const path = new Path2D(outline.path.toSVG());
+              context.fill(path);
+              if (shaped.bold) {
+                context.strokeStyle = glyph.style.color;
+                context.lineWidth = shaped.face.font.unitsPerEm * 0.025;
+                context.stroke(path);
+              }
+              context.restore();
+              x += position.xAdvance * em;
+            }
+            if (glyph.style.underline) {
+              context.strokeStyle = glyph.style.color;
+              context.lineWidth = glyph.style.size / 16;
+              context.beginPath();
+              context.moveTo(glyph.x, glyph.y + glyph.style.size * 0.12);
+              context.lineTo(glyph.x + glyph.width, glyph.y + glyph.style.size * 0.12);
+              context.stroke();
+            }
+          }
+        // Publish background removal and replacement text in one canvas swap.
         canvas.width = staging.width;
         canvas.height = staging.height;
         canvas.getContext('2d')!.drawImage(staging, 0, 0);
@@ -81,7 +120,9 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
   model.doc.on('afterTransaction', render);
   return {
     update(value: PdfPagePaintOptions) {
+      options = value;
       ({ interpreter, model, fonts, pdf, scale } = value);
+      fonts.importDocument(pdf);
       page = value.source;
       continuation = value.continuation;
       render();

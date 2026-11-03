@@ -55,6 +55,7 @@
   const interpreter = $derived(new PdfInterpreter(pdf));
   const flow = $derived.by(() => {
     void revision;
+    fonts.importDocument(pdf);
     return layoutPdfTextFlow(model, fonts, pdf.pages);
   });
   const layouts = $derived(flow.regions);

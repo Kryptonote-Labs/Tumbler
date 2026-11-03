@@ -36,6 +36,7 @@ export function exportEditedPdf(
   model: PdfTextModel,
   fonts: PdfEditingFonts,
 ) {
+  fonts.importDocument(document);
   const flow = layoutPdfTextFlow(model, fonts, document.pages);
   const dirty = [
     ...new Set(flow.regions.filter((region) => region.render).map((region) => region.id)),
@@ -63,8 +64,8 @@ export function exportEditedPdf(
     for (const glyph of layout.glyphs) {
       if (glyph.text === '\n') continue;
       const style = glyph.style,
-        face = fonts.get(style),
-        shaped = face.font.layout(glyph.text);
+        shaped = fonts.shape(glyph.text, style),
+        face = shaped.face;
       let embeddedFont = fontFor(face);
       const scale = style.size / face.font.unitsPerEm;
       let x = glyph.x;
@@ -95,12 +96,13 @@ export function exportEditedPdf(
         const tm = multiply(viewport, [
           1,
           0,
-          0,
+          shaped.italic ? -0.2 : 0,
           -1,
           x + p.xOffset * scale,
           glyph.y - p.yOffset * scale,
         ]);
-        content += `BT /${embeddedFont.resource} ${n(style.size)} Tf ${tm.map(n).join(' ')} Tm <${code.cid.toString(16).padStart(4, '0')}> Tj ET\n`;
+        if (shaped.bold) content += `${n(style.size * 0.025)} w\n`;
+        content += `BT /${embeddedFont.resource} ${n(style.size)} Tf ${shaped.bold ? '2 Tr ' : ''}${tm.map(n).join(' ')} Tm <${code.cid.toString(16).padStart(4, '0')}> Tj ET\n`;
         x += p.xAdvance * scale;
       }
       if (style.underline) {
@@ -116,7 +118,7 @@ export function exportEditedPdf(
     const face = font.face.font,
       scale = 1000 / face.unitsPerEm;
     const program = writer.stream(font.face.bytes, new Map([['Length1', font.face.bytes.length]]));
-    const name = new PdfName(`Liberation${font.face.key.replace('-', '')}`);
+    const name = new PdfName(font.face.font.postscriptName.replace(/^[A-Z]{6}\+/, ''));
     const descriptor = writer.value(
       new Map<string, PdfValue>([
         ['Type', new PdfName('FontDescriptor')],

@@ -35,6 +35,7 @@ function styleOf(item: PdfTextItem, color: string): PdfTextStyle {
         .join('');
   return {
     ...defaultPdfTextStyle,
+    ...(item.font.source?{font:item.font.source}:{}),
     size: Math.hypot(item.transform[0], item.transform[1]),
     bold: item.font.weight === 'bold',
     italic: item.font.style === 'italic',
