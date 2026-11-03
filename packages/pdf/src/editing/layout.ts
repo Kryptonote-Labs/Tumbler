@@ -103,6 +103,17 @@ export function hitPdfText(layout: PdfTextLayout, x: number, y: number) {
     return distance(caret) < distance(best) ? caret : best;
   });
 }
+/** Move to the adjacent logical line before pagination, preserving the visual column. */
+export function movePdfTextCaret(layout: PdfTextLayout, offset: number, direction: -1 | 1) {
+  const caret = layout.carets.find((c) => c.offset === offset);
+  if (!caret) return;
+  let next: PdfLayoutCaret | undefined;
+  for (const candidate of layout.carets) {
+    const distance = (candidate.y - caret.y) * direction;
+    if (distance > 0.1 && (!next || distance < (next.y - caret.y) * direction)) next = candidate;
+  }
+  return next ? hitPdfText(layout, caret.x, next.y) : caret;
+}
 export type PdfFlowPage = { index: number; source: PdfPage; continuation: number };
 export type PdfFlowRegion = PdfTextLayout & {
   page: number;

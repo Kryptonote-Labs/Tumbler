@@ -8,6 +8,8 @@
     PdfTextModel,
     PdfEditingFonts,
     layoutPdfTextFlow,
+    layoutPdfText,
+    movePdfTextCaret,
     pdfContinuationHeight,
     hitPdfText,
     defaultPdfTextStyle,
@@ -198,25 +200,14 @@
       onselection?.(null);
     }
     if (['ArrowUp', 'ArrowDown'].includes(event.key)) {
-      const layout = layouts.find(
-          (l) =>
-            l.id === active &&
-            l.carets.some(
-              (c) => c.offset === (input.selectionDirection === 'backward' ? start : end),
-            ),
-        ),
-        caret = layout?.carets.find(
-          (c) => c.offset === (input.selectionDirection === 'backward' ? start : end),
-        );
-      if (layout && caret) {
+      const layout = layoutPdfText(model, active, fonts);
+      const next = movePdfTextCaret(
+        layout,
+        input.selectionDirection === 'backward' ? start : end,
+        event.key === 'ArrowUp' ? -1 : 1,
+      );
+      if (next) {
         event.preventDefault();
-        const next = hitPdfText(
-          layout,
-          caret.x,
-          caret.y +
-            (event.key === 'ArrowUp' ? -1 : 1) *
-              Math.max(model.seed(layout.id).lineHeight, caret.height * 1.25),
-        );
         const anchor = event.shiftKey
           ? input.selectionDirection === 'backward'
             ? end

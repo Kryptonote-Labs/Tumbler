@@ -10,6 +10,7 @@ import {
   layoutPdfText,
   layoutPdfTextFlow,
   defaultPdfTextStyle,
+  movePdfTextCaret,
 } from '../src/index.ts';
 const fonts = new PdfEditingFonts();
 fonts.add(
@@ -117,5 +118,35 @@ test('text placed near the top of a continuation page stays visible on that page
       expect(glyph.textMatrix[5]).toBeGreaterThanOrEqual(0);
       expect(glyph.textMatrix[5]).toBeLessThanOrEqual(page.height);
     }
+  model.doc.destroy();
+});
+
+test('vertical caret navigation crosses continuation boundaries in both directions', () => {
+  const pdf = document('BT /F 12 Tf 20 150 Td (Start) Tj ET'),
+    model = new PdfTextModel();
+  model.initialize(importPdfText(pdf));
+  const id = model.ids()[0]!;
+  model.replace(
+    id,
+    0,
+    model.text(id).length,
+    Array.from({ length: 30 }, (_, i) => 'Line ' + i).join('\n'),
+  );
+  const layout = layoutPdfText(model, id, fonts),
+    flow = layoutPdfTextFlow(model, fonts, pdf.pages);
+  const first = flow.regions.find((region) => region.id === id && region.page === 0)!;
+  const last = first.carets.at(-1)!;
+  const next = movePdfTextCaret(layout, last.offset, 1)!;
+  expect(next.offset).toBeGreaterThan(last.offset);
+  expect(
+    flow.regions
+      .find((region) => region.id === id && region.page === 1)!
+      .carets.some((c) => c.offset === next.offset),
+  ).toBe(true);
+  const previous = movePdfTextCaret(layout, next.offset, -1)!;
+  expect(first.carets.some((c) => c.offset === previous.offset)).toBe(true);
+  model.replace(id, 0, model.text(id).length, 'Small\nLarge');
+  model.format(id, 6, 11, { size: 48 });
+  expect(movePdfTextCaret(layoutPdfText(model, id, fonts), 0, 1)!.offset).toBe(6);
   model.doc.destroy();
 });
