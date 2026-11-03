@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PdfTextContent } from '@tumblerjs/pdf';
+  import { selectPdfWord } from './selection.ts';
   let { content, scale = 1, label = 'PDF text' }: {
     content: PdfTextContent;
     scale?: number;
@@ -25,7 +26,7 @@
   });
 </script>
 
-<div class="text-layer" data-pdf-text-layer role="document" aria-label={label}
+<div class="text-layer" data-pdf-text-layer ondblclick={event => selectPdfWord(event, content, event.currentTarget)} role="document" aria-label={label}
   style:width={`${content.width}px`} style:height={`${content.height}px`} style:transform={`scale(${scale})`}>
   {#each items as {item,transform} (item.id)}
     <span data-pdf-text={item.kind} data-pdf-glyph={item.kind === 'glyph' ? item.id : undefined}
