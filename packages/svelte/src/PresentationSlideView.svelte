@@ -279,6 +279,11 @@
       text.color = { state: "value", value: p.color.set };
     return { ...state, text };
   });
+  /** Select a text object and focus its editor, for example after inserting a text box. */
+  export function editText(objectKey: string) {
+    const object = slide.objects.find(object => object.key === objectKey && object.layer === 'slide');
+    if (object) void edit(object);
+  }
   export function applyFormatting(patch: FormattingPatch) { format(patch); }
   export function currentSelection(): PresentationTextRange & {
     objectKey?: string; editing?: boolean; head?: number; cell?: PresentationTableCellAddress;

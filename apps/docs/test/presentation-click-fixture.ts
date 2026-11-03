@@ -30,6 +30,15 @@ import { compile } from "svelte/compiler";
             contents: compile(
               `
             <script>
+              import {tick} from 'svelte';
+              let view;
+              window.editMissing = () => view.editText('missing');
+              window.editInserted = () => view.editText(deck.document.slides[0].objects.at(-1).key);
+              async function insertTextBox() {
+                change({name:'insert-object',slideId,bounds:{x:100,y:100,width:450,height:120},object:{kind:'shape',text:''}});
+                await tick();
+                window.editInserted();
+              }
               import View from '${root}/packages/svelte/src/PresentationSlideView.svelte';
               import {createPresentation, applyPresentationCommand as apply} from '${root}/packages/slides/src/index.ts';
               let initial = createPresentation();
@@ -43,8 +52,9 @@ import { compile } from "svelte/compiler";
               window.changes = [];
               const change = command => deck=apply(deck,command);
             </script>
+            <button onclick={insertTextBox}>Insert text box</button>
             <div style="width:1000px;height:650px">
-              <View presentation={deck.document} slide={deck.document.slides[0]} {editable} toolbar={false}
+              <View bind:this={view} presentation={deck.document} slide={deck.document.slides[0]} {editable} toolbar={false}
                 onobjectschange={changes=>{window.changes.push(...changes);change({name:'batch',commands:changes.map(({slideId,objectKey,x,y,width,height,rotation})=>({name:'update-object',slideId,objectKey,x,y,width,height,rotation}))});}}
                 ontextedit={edit=>change({name:'edit-text',...edit})}/>
             </div>`,
