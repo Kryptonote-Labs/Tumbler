@@ -118,10 +118,10 @@ export class PdfFont {
     const rawBox = source.resolve(dictionary.get("FontBBox") ?? descriptor.get("FontBBox"));
     const box = Array.isArray(rawBox) ? rawBox : [];
     const fallbackAscent = number(
-      descriptor.get("Ascent") ?? box[3] ?? this.standard?.Ascender ?? 800,
+      source.resolve(descriptor.get("Ascent") ?? box[3] ?? this.standard?.Ascender ?? 800),
     );
     const fallbackDescent = number(
-      descriptor.get("Descent") ?? box[1] ?? this.standard?.Descender ?? -200,
+      source.resolve(descriptor.get("Descent") ?? box[1] ?? this.standard?.Descender ?? -200),
     );
     this.ascent =
       outline && outline.ascent > 0 ? outline.ascent : (fallbackAscent / 1000) * this.unitsPerEm;

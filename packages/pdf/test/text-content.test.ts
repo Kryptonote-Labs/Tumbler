@@ -58,3 +58,21 @@ test("rotated and cropped pages retain their viewport geometry in the selection 
   expect(item.transform[2]).toBe(-14);
   expect(item.transform[3]).toBe(0);
 });
+
+test("selection resolves indirect font metrics", () => {
+  const document = openPdfDocument(
+    pdfFixture([
+      "<< /Type /Catalog /Pages 2 0 R >>",
+      "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 240 160] /Resources << /Font << /F 5 0 R >> >> /Contents 4 0 R >>",
+      pdfStream("BT /F 14 Tf 24 110 Td (A) Tj ET"),
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding /FontDescriptor 6 0 R >>",
+      "<< /Type /FontDescriptor /FontName /Helvetica /Ascent 7 0 R /Descent 8 0 R >>",
+      "900",
+      "-250",
+    ]),
+  );
+  const item = pdfTextContent(new PdfInterpreter(document).page(0)).items[0]!;
+  expect(item.ascent).toBe(0.9);
+  expect(item.height).toBe(1.15);
+});
