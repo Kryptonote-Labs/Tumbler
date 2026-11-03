@@ -1,4 +1,8 @@
-import { linearGradientLine, drawingPatternGeometry } from './fill-geometry.ts';
+import {
+  linearGradientLine,
+  rectangularGradientFaces,
+  drawingPatternGeometry,
+} from './fill-geometry.ts';
 import { layoutChartScene, paintChartScene } from '@tumblerjs/charts';
 import type { DrawingGradient, DrawingPictureFill, DrawingPattern } from './appearance.ts';
 import type { PresentationDocument, PresentationSlide } from './model.ts';
@@ -35,6 +39,32 @@ function gradient<Path, Image>(
   for (const stop of value.stops)
     result.addColorStop(Math.max(0, Math.min(1, stop.offset)), stop.color);
   return result;
+}
+/**
+ * Canvas has no rectangular paint either; paint the shaded faces into the current clip. Opaque
+ * faces overlap to hide anti-aliased seams. Translucent faces stay exact: overlapping would darken
+ * the diagonals, so they keep a faint anti-aliasing hairline that only an offscreen layer avoids.
+ */
+function rectangular<Path, Image>(
+  ctx: SlideCanvasContext<Path, Image>,
+  value: DrawingGradient,
+  w: number,
+  h: number,
+) {
+  const opaque = value.stops.every(({ color }) => {
+    const alpha = /^rgba\(.*,\s*([\d.]+)\)$/.exec(color)?.[1];
+    return color !== 'transparent' && (alpha === undefined || Number(alpha) >= 1);
+  });
+  for (const face of rectangularGradientFaces(value.center, opaque ? 0.002 : 0)) {
+    const [x1, y1, x2, y2] = face.line;
+    const fill = ctx.createLinearGradient(x1 * w, y1 * h, x2 * w, y2 * h);
+    for (const stop of value.stops)
+      fill.addColorStop(Math.max(0, Math.min(1, stop.offset)), stop.color);
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    face.points.forEach(([x, y], i) => (i ? ctx.lineTo(x * w, y * h) : ctx.moveTo(x * w, y * h)));
+    ctx.fill();
+  }
 }
 function picture<Path, Image>(
   ctx: SlideCanvasContext<Path, Image>,
@@ -160,7 +190,9 @@ export function paintPresentationSlide<Path, Image>(
     ctx.fillStyle = fill;
     ctx.fillRect(0, 0, 1, 1);
     ctx.restore();
-  } else {
+  } else if (background?.kind === 'rectangular')
+    rectangular(ctx, background, document.width, document.height);
+  else {
     ctx.fillStyle = gradient(ctx, background, slide.background, document.width, document.height);
     ctx.fillRect(0, 0, document.width, document.height);
   }
@@ -181,7 +213,14 @@ export function paintPresentationSlide<Path, Image>(
     );
     for (const path of object.drawingGeometry?.paths ?? []) {
       const geometry = options.path(path.d);
-      if (path.fill !== 'none' && object.fill !== 'none') ctx.fill(geometry);
+      if (path.fill !== 'none' && object.fill !== 'none') {
+        if (object.gradient?.kind === 'rectangular') {
+          ctx.save();
+          ctx.clip(geometry);
+          rectangular(ctx, object.gradient, width, height);
+          ctx.restore();
+        } else ctx.fill(geometry);
+      }
       if (path.stroke && object.stroke !== 'none' && object.strokeWidth > 0) ctx.stroke(geometry);
     }
     picture(ctx, object.image ?? object.pictureFill, width, height, options);

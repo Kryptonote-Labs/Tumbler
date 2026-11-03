@@ -12,6 +12,34 @@ export function linearGradientLine(value: DrawingGradient, width: number, height
     height / 2 + (gy * length) / 2,
   ] as const;
 }
+/**
+ * DrawingML `rect` path shading in unit space: four faces meet at the focus and each shades from
+ * the focus (offset 0) to its own edge, so contours are rectangles. `bleed` grows each face so
+ * anti-aliased renderers show no seams; only use it with opaque stops, since overlaps composite
+ * translucent colour twice. Hosts clip to the filled area.
+ */
+export function rectangularGradientFaces([cx, cy]: readonly [number, number], bleed = 0) {
+  const faces = [
+    { points: [[0, 0], [1, 0]], line: [cx, cy, cx, 0] },
+    { points: [[1, 0], [1, 1]], line: [cx, cy, 1, cy] },
+    { points: [[1, 1], [0, 1]], line: [cx, cy, cx, 1] },
+    { points: [[0, 1], [0, 0]], line: [cx, cy, 0, cy] },
+  ] as const;
+  return faces
+    .filter(({ line: [x1, y1, x2, y2] }) => x1 !== x2 || y1 !== y2)
+    .map(({ points, line }) => {
+      const triangle = [...points, [cx, cy] as const];
+      const mx = (triangle[0]![0] + triangle[1]![0] + cx) / 3,
+        my = (triangle[0]![1] + triangle[1]![1] + cy) / 3;
+      return {
+        points: triangle.map(([x, y]) => {
+          const d = Math.hypot(x - mx, y - my) || 1;
+          return [x + ((x - mx) / d) * bleed, y + ((y - my) / d) * bleed] as const;
+        }),
+        line,
+      };
+    });
+}
 const bayer = [
   0, 32, 8, 40, 2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26, 12, 44, 4, 36, 14, 46, 6, 38, 60, 28,
   52, 20, 62, 30, 54, 22, 3, 35, 11, 43, 1, 33, 9, 41, 51, 19, 59, 27, 49, 17, 57, 25, 15, 47, 7,
