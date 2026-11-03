@@ -246,9 +246,29 @@ export async function paintPdfPage<Image, Path>(
             mask.fillRect(0, 0, element.image.width, element.image.height);
             image = surface.image;
           }
-          context.setTransform(...multiply(viewport, state.transform));
+          let imageTransform = multiply(viewport, state.transform);
+          // Image scan conversion covers the enclosing device pixels; source geometry stays intact.
+          if (Math.abs(imageTransform[1]) < 1e-7 && Math.abs(imageTransform[2]) < 1e-7) {
+            const [a, , , d, e, f] = imageTransform;
+            const left = Math.floor(Math.min(e, e + a)),
+              right = Math.ceil(Math.max(e, e + a));
+            const top = Math.floor(Math.min(f, f + d)),
+              bottom = Math.ceil(Math.max(f, f + d));
+            imageTransform = [
+              Math.sign(a) * (right - left),
+              0,
+              0,
+              Math.sign(d) * (bottom - top),
+              a < 0 ? right : left,
+              d < 0 ? bottom : top,
+            ];
+          }
+          context.setTransform(...imageTransform);
           context.globalAlpha = state.fillAlpha;
-          context.imageSmoothingEnabled = element.image.interpolate;
+          context.imageSmoothingEnabled =
+            element.image.interpolate ||
+            element.image.width > Math.hypot(imageTransform[0], imageTransform[1]) ||
+            element.image.height > Math.hypot(imageTransform[2], imageTransform[3]);
           context.transform(1 / element.image.width, 0, 0, -1 / element.image.height, 0, 1);
           context.drawImage(image, 0, 0, element.image.width, element.image.height);
         } else {
