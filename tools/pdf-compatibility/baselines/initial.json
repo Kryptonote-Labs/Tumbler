@@ -1,0 +1,816 @@
+{
+  "pdfium": "156.0.8076.0",
+  "metric": "Changed non-font pixels divided by non-font page pixels at 72 DPI; antialiasing excluded; text origins/effective sizes checked within 1% of em; filled-path/image counts and bounds independently checked.",
+  "limit": 0.01,
+  "results": [
+    {
+      "id": "basic-text",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37452,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000007568359364995558,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 5.405970974996827e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "escaped-strings",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 35501,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000024902343710664354,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 0.0000017787388364760254,
+            "maxRelativeSizeError": 0,
+            "characters": 31
+          }
+        }
+      ]
+    },
+    {
+      "id": "compressed-content",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37452,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000007568359364995558,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 5.405970974996827e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "positioned-text",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37452,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000007568359364995558,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 5.405970974996827e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 9
+          }
+        }
+      ]
+    },
+    {
+      "id": "inherited-page",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 31406,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000009277343764324542,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 6.626674117374673e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 15
+          }
+        }
+      ]
+    },
+    {
+      "id": "shared-form",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 36972,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000003662109378410605,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 3.051757815342171e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 12
+          }
+        }
+      ]
+    },
+    {
+      "id": "split-content-state",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 38400,
+          "nonFontInkPixels": 3500,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 0,
+            "maxRelativeSizeError": 0,
+            "characters": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "graphics",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 38400,
+          "nonFontInkPixels": 7800,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 0,
+            "maxRelativeSizeError": 0,
+            "characters": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "unicode-map",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37112,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0000015258789005656581,
+            "maxSizeError": 3.552713678800501e-15,
+            "maxRelativeOriginError": 5.8687650021756084e-8,
+            "maxRelativeSizeError": 1.3664283380001927e-16,
+            "characters": 6
+          }
+        }
+      ]
+    },
+    {
+      "id": "tagged-order",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 36729,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0000051269531127218215,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 3.6621093662298723e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 11
+          }
+        }
+      ]
+    },
+    {
+      "id": "annotation",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 35480,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000006835937512050805,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 4.882812508607717e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 9
+          }
+        }
+      ]
+    },
+    {
+      "id": "image-only",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 38400,
+          "nonFontInkPixels": 1008,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 0,
+            "maxRelativeSizeError": 0,
+            "characters": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "hidden-ocr",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37747,
+          "nonFontInkPixels": 861,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0000012512207021586619,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 8.937290729704728e-8,
+            "maxRelativeSizeError": 0,
+            "characters": 4
+          }
+        }
+      ]
+    },
+    {
+      "id": "inline-image",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 38400,
+          "nonFontInkPixels": 10000,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 0,
+            "maxRelativeSizeError": 0,
+            "characters": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "incremental-revision",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 36203,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000019531249989768185,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 0.0000013950892849834418,
+            "maxRelativeSizeError": 0,
+            "characters": 16
+          }
+        }
+      ]
+    },
+    {
+      "id": "page-sequence",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37256,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000004150390623181011,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 2.964564730843579e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 8
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37202,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0000050048828086346475,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 3.574916291881891e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 8
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 36991,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0000050048828086346475,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 3.574916291881891e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "many-pages",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37649,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000004150390623181011,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 2.964564730843579e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 6
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37612,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000004150390623181011,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 2.964564730843579e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 6
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37586,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000004150390623181011,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 2.964564730843579e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 6
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37598,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000004150390623181011,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 2.964564730843579e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 6
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37601,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000004150390623181011,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 2.964564730843579e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 6
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37586,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000004150390623181011,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 2.964564730843579e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 6
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37598,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000004150390623181011,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 2.964564730843579e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 6
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37586,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000004150390623181011,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 2.964564730843579e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 6
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37601,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000004150390623181011,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 2.964564730843579e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 6
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37498,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000004150390623181011,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 2.964564730843579e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 7
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37537,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000004150390623181011,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 2.964564730843579e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 7
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37509,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000004150390623181011,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 2.964564730843579e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 7
+          }
+        }
+      ]
+    },
+    {
+      "id": "object-streams",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37452,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000007568359364995558,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 5.405970974996827e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "linearized",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37452,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000007568359364995558,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 5.405970974996827e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "encrypted-aes256",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37452,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000007568359364995558,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 5.405970974996827e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "reordered-deleted",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 36991,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0000050048828086346475,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 3.574916291881891e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 10
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 37256,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000004150390623181011,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 2.964564730843579e-7,
+            "maxRelativeSizeError": 0,
+            "characters": 8
+          }
+        }
+      ]
+    },
+    {
+      "id": "chromium-typography",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 311,
+          "nonFontPixels": 79726,
+          "nonFontInkPixels": 507,
+          "inkErrorRatio": 0.6134122287968442,
+          "errorRatio": 0.0039008604470310813,
+          "pageErrorRatio": 0.003599537037037037,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.04499395861915291,
+            "maxSizeError": 7.500000016591457e-7,
+            "maxRelativeOriginError": 0.0024996643677307174,
+            "maxRelativeSizeError": 4.166666675884143e-8,
+            "characters": 63
+          }
+        },
+        {
+          "passed": true,
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 81724,
+          "nonFontInkPixels": 6210,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.05188355734235569,
+            "maxSizeError": 7.500000016591457e-7,
+            "maxRelativeOriginError": 0.00368296529617724,
+            "maxRelativeSizeError": 4.166666675884143e-8,
+            "characters": 45
+          }
+        }
+      ]
+    },
+    {
+      "id": "broken-xref",
+      "failures": [],
+      "pages": []
+    },
+    {
+      "id": "truncated",
+      "failures": [],
+      "pages": []
+    }
+  ],
+  "passed": true
+}

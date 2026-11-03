@@ -2,16 +2,20 @@
   "name": "@tumblerjs/pdf",
   "version": "0.0.0",
   "description": "Source-preserving PDF documents, page scenes and rendering for Tumbler.",
-  "type": "module",
-  "exports": {
-    ".": "./src/index.ts"
-  },
-  "files": ["src", "README.md", "LICENSE"],
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Kryptonote-Labs/Tumbler.git",
     "directory": "packages/pdf"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
   },
   "dependencies": {
     "@mongodb-js/saslprep": "^1.6.1",
