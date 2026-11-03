@@ -2,9 +2,24 @@ import '../buffer-runtime.ts';
 import { Buffer } from 'buffer';
 import { create, type Font } from 'fontkit';
 
-export type PdfTextStyle = { bold: boolean; italic: boolean; underline: boolean; size: number; family: 'Sans' | 'Serif' | 'Mono'; color: string };
-export const defaultPdfTextStyle: PdfTextStyle = { bold: false, italic: false, underline: false, size: 12, family: 'Sans', color: '#000000' };
-export const pdfFontKey = (style: Pick<PdfTextStyle, 'family' | 'bold' | 'italic'>) => `${style.family}-${style.bold ? 'Bold' : ''}${style.italic ? 'Italic' : ''}${!style.bold && !style.italic ? 'Regular' : ''}`;
+export type PdfTextStyle = {
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  size: number;
+  family: 'Sans' | 'Serif' | 'Mono';
+  color: string;
+};
+export const defaultPdfTextStyle: PdfTextStyle = {
+  bold: false,
+  italic: false,
+  underline: false,
+  size: 12,
+  family: 'Sans',
+  color: '#000000',
+};
+export const pdfFontKey = (style: Pick<PdfTextStyle, 'family' | 'bold' | 'italic'>) =>
+  `${style.family}-${style.bold ? 'Bold' : ''}${style.italic ? 'Italic' : ''}${!style.bold && !style.italic ? 'Regular' : ''}`;
 export type PdfEditingFont = { key: string; bytes: Uint8Array; font: Font };
 /** The same full fonts supply browser geometry and exported glyphs. Hosts own font acquisition. */
 export class PdfEditingFonts {
@@ -21,6 +36,9 @@ export class PdfEditingFonts {
   }
   measure(text: string, style: PdfTextStyle) {
     const { font } = this.get(style);
-    return font.layout(text).positions.reduce((sum, p) => sum + p.xAdvance, 0) * style.size / font.unitsPerEm;
+    return (
+      (font.layout(text).positions.reduce((sum, p) => sum + p.xAdvance, 0) * style.size) /
+      font.unitsPerEm
+    );
   }
 }
