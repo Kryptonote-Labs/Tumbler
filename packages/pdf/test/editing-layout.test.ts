@@ -218,3 +218,27 @@ test('source spacing stays with each surviving letter occurrence through concurr
   model.doc.destroy();
   peer.doc.destroy();
 });
+
+test('changing an imported font family selects the requested face and undo restores the source font', async () => {
+  fonts.add(
+    'Mono-Regular',
+    await Bun.file(
+      new URL('./fixtures/editing-fonts/LiberationMono-Regular.ttf', import.meta.url),
+    ).bytes(),
+  );
+  const pdf = embeddedText('BT /F 24 Tf 30 200 Td (AV) Tj ET'),
+    model = new PdfTextModel();
+  fonts.importDocument(pdf);
+  model.initialize(importPdfText(pdf));
+  const id = model.ids()[0]!,
+    source = fonts.shape('A', model.styleAt(id, 0)).face;
+  model.format(id, 0, 2, { family: 'Mono' });
+  expect(fonts.shape('A', model.styleAt(id, 0)).face.key).toBe('Mono-Regular');
+  const glyphs = new PdfInterpreter(openPdfDocument(exportEditedPdf(pdf, model, fonts)))
+    .page(0)
+    .elements.filter((e) => e.kind === 'glyph');
+  expect(glyphs.every((glyph) => glyph.font.baseName === 'LiberationMono')).toBe(true);
+  model.undo.undo();
+  expect(fonts.shape('A', model.styleAt(id, 0)).face.key).toBe(source.key);
+  model.doc.destroy();
+});
