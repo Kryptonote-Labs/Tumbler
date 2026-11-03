@@ -12,6 +12,8 @@
   import { ShapeTextEditorView, type ShapeTextEditor } from './word-shape-text-editor.ts';
   let {
     shape,
+    width = shape.width,
+    height = shape.height,
     editing = false,
     selected = false,
     initialText,
@@ -21,6 +23,9 @@
     onundo,
   }: {
     shape: WordAuthoredShape;
+    /** Current preview size in document points, independent of page zoom. */
+    width?: number;
+    height?: number;
     /** Edits the shape's text in place, as Word does after a double-click. */
     editing?: boolean;
     selected?: boolean;
@@ -32,6 +37,7 @@
     /** Receives rich text on each edit. Escape leaves the shape selected. */
     oncommit?: (textBody: readonly WordTextParagraph[], reason: 'input' | 'escape') => void;
   } = $props();
+  const geometry = $derived({ ...shape, width, height });
   let view = $state.raw<ShapeTextEditorView>();
   const inset = $derived(resolveWordShapeTextInsets(shape));
   function mount(root: HTMLDivElement) {
@@ -70,8 +76,8 @@
   role={editing ? 'group' : 'img'}
   aria-label={shape.alt ?? (shapePlainText(shape) || shape.preset)}
 >
-  <svg viewBox={`0 0 ${shape.width} ${shape.height}`} preserveAspectRatio="none" aria-hidden="true">
-    <path d={wordShapePath(shape)} fill={resolveWordColour(shape.fill)} stroke={resolveWordColour(shape.outline)} stroke-width={shape.outlineWidth} />
+  <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
+    <path d={wordShapePath(geometry)} fill={resolveWordColour(shape.fill)} stroke={resolveWordColour(shape.outline)} stroke-width={shape.outlineWidth} />
   </svg>
   <div
     class="text"

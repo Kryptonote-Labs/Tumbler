@@ -78,3 +78,5 @@ export { backgroundFill, backgroundPatterns } from "./background-authoring.ts";
 export type { BackgroundFill } from "./background-authoring.ts";
 
 export { linearGradientLine, drawingPatternGeometry } from "./fill-geometry.ts";
+
+export { resizeDrawingGeometry } from "./drawing-geometry.ts";
