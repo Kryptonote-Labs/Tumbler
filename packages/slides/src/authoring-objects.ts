@@ -50,14 +50,14 @@ function color(value: string) {
   if (!/^#[a-f\d]{6}$/i.test(value)) throw new TypeError("Use #RRGGBB colors or none.");
   return `<a:solidFill><a:srgbClr val="${value.slice(1)}"/></a:solidFill>`;
 }
-function textBody(value: string, fontSize = 24) {
+function textBody(value: string, fontSize = 24, centered = false) {
   if (!Number.isFinite(fontSize) || fontSize < 1 || fontSize > 4000)
     throw new RangeError("DrawingML font size must be between 1 and 4000 points.");
-  return `<a:bodyPr/><a:lstStyle/>${value
+  return `<a:bodyPr${centered ? ' anchor="ctr"' : ""}/><a:lstStyle/>${value
     .split("\n")
     .map(
       (text) =>
-        `<a:p><a:r><a:rPr lang="en-US" sz="${Math.round(fontSize * 100)}"/><a:t>${xml(text)}</a:t></a:r><a:endParaRPr lang="en-US" sz="${Math.round(fontSize * 100)}"/></a:p>`,
+        `<a:p>${centered ? '<a:pPr algn="ctr"/>' : ""}<a:r><a:rPr lang="en-US" sz="${Math.round(fontSize * 100)}"/><a:t>${xml(text)}</a:t></a:r><a:endParaRPr lang="en-US" sz="${Math.round(fontSize * 100)}"/></a:p>`,
     )
     .join("")}`;
 }
@@ -79,7 +79,7 @@ export function insertObject(
       throw new RangeError("Corner radius requires a rounded rectangle and a finite nonnegative value.");
     const adjustment = input.cornerRadius === undefined ? "" :
       `<a:gd name="adj" fmla="val ${Math.round(Math.min(.5, input.cornerRadius / Math.min(bounds.width, bounds.height)) * 100000)}"/>`;
-    markup = `<p:sp ${ns}><p:nvSpPr><p:cNvPr id="${id}" name="${input.geometry ? "Shape" : "Text Box"} ${id}"/><p:cNvSpPr${input.geometry ? "" : ' txBox="1"'}/><p:nvPr/></p:nvSpPr><p:spPr>${transform}<a:prstGeom prst="${input.geometry ?? "rect"}"><a:avLst>${adjustment}</a:avLst></a:prstGeom>${color(input.fill ?? (input.geometry && input.geometry !== "line" ? "#4472C4" : "none"))}<a:ln>${color(input.stroke ?? (input.geometry === "line" ? "#4472C4" : "none"))}</a:ln></p:spPr><p:txBody>${textBody(input.text ?? "", input.fontSize)}</p:txBody></p:sp>`;
+    markup = `<p:sp ${ns}><p:nvSpPr><p:cNvPr id="${id}" name="${input.geometry ? "Shape" : "Text Box"} ${id}"/><p:cNvSpPr${input.geometry ? "" : ' txBox="1"'}/><p:nvPr/></p:nvSpPr><p:spPr>${transform}<a:prstGeom prst="${input.geometry ?? "rect"}"><a:avLst>${adjustment}</a:avLst></a:prstGeom>${color(input.fill ?? (input.geometry && input.geometry !== "line" ? "#4472C4" : "none"))}<a:ln>${color(input.stroke ?? (input.geometry === "line" ? "#4472C4" : "none"))}</a:ln></p:spPr><p:txBody>${textBody(input.text ?? "", input.fontSize, !!input.geometry && input.geometry !== "line")}</p:txBody></p:sp>`;
   } else if (input.kind === "image") {
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(input.data) || input.data.length % 4)
       throw new TypeError("Image data must be base64.");
