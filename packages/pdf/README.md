@@ -41,9 +41,13 @@ source hashes. The 1% gate measures changed non-font page pixels at 72 DPI, with
 pixel threshold of 0.1. Non-font antialiasing counts toward the error. Separate checks require
 text origins and effective em sizes within 1%, and filled-path
 and image counts/bounds within 0.05 pt. Font pixels are masked only for raster comparison.
-Fault tests ensure moved text and missing small objects fail independently of pixel coverage.
+A second bitmap check compares painted text shapes per glyph region, using a one-pixel
+neighborhood and normalized ink colour to tolerate rasterisation differences. It permits at
+most 25% unmatched ink samples, with a three-sample allowance for tiny punctuation. A blank
+text render and the wrong visible glyph fail even when their scene metadata is unchanged.
+Fault tests also ensure moved text and missing small objects fail independently of pixel coverage.
 
-The initial 22 positive files contain 37 pages, including browser-generated embedded fonts,
+The 23 positive files contain 38 pages, including browser-generated embedded fonts,
 tables and gradients. All pass; the largest measured pixel error is 0.3145%. This is evidence
 for those fixtures, not a claim that every PDF renders within 1%. Expand the corpus before
 claiming support for additional content. Two malformed files must reject.
@@ -64,3 +68,14 @@ Install the matching Playwright Chromium before running that mode.
 
 The oracle uses PDFium's matrix render API at exactly one pixel per point. Filled rectangles and
 axis-aligned images retain device-pixel coverage without changing their source-space geometry.
+
+## Execution policy
+
+`PdfInterpreter` shares a per-page work budget across nested Forms and Type 3 procedures.
+Defaults allow 200,000 content tokens/glyphs, 50,000 scene elements and 128 execution levels;
+exceeding these raises `PdfError` with code `resource_limit`. Hosts can configure these
+execution limits through the interpreter's second argument. They are processing policy, not
+PDF-format authoring constraints. Run untrusted parsing and interpretation in an isolated,
+cancellable worker as well; a work counter cannot interrupt an individual font or filter codec.
+JPEGs with non-default `/Decode`, masks or decoder parameters currently reject explicitly;
+the RGB host image decoder cannot apply PDF sample transformations correctly.

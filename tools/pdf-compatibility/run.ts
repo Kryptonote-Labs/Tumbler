@@ -124,7 +124,7 @@ async function main() {
           pages.push(metrics);
           if (!result.passed)
             failures.push(
-              `Page ${index + 1}: ${(result.errorRatio * 100).toFixed(4)}% non-font page pixels differ. ${result.geometry.errors.join(" ")}`,
+              `Page ${index + 1}: ${(result.errorRatio * 100).toFixed(4)}% non-font page pixels differ. ${result.geometry.errors.join(" ")} ${"textPaint" in result ? result.textPaint.errors.slice(0, 3).join(" ") : ""}`,
             );
         }
       }

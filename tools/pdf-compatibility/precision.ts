@@ -1,3 +1,4 @@
+import { compareTextPaint, type TextRegion } from "./text-paint.ts";
 import { comparePrimitives } from "./primitive-geometry.ts";
 import sharp from "sharp";
 import pixelmatch from "pixelmatch";
@@ -129,6 +130,7 @@ export async function comparePrecision(
       diff: reference,
     };
   const ignored = new Uint8Array(width * height);
+  const textRegions: TextRegion[] = [];
   const exclude = (left: number, bottom: number, right: number, top: number) => {
     const corners = [
       [left, bottom],
@@ -140,6 +142,7 @@ export async function comparePrecision(
       x1 = Math.min(width, Math.ceil(Math.max(...corners.map((point) => point[0])) + 2));
     const y0 = Math.max(0, Math.floor(Math.min(...corners.map((point) => point[1])) - 2)),
       y1 = Math.min(height, Math.ceil(Math.max(...corners.map((point) => point[1])) + 2));
+    textRegions.push([x0, y0, x1, y1]);
     for (let y = y0; y < y1; y++) ignored.fill(1, y * width + x0, y * width + x1);
   };
   for (const box of oracle.boxes) if (box[2] > box[0] && box[3] > box[1]) exclude(...box);
@@ -161,6 +164,7 @@ export async function comparePrecision(
         Math.max(...points.map((point) => point[1])),
       );
     }
+  const textPaint = compareTextPaint(a.data, b.data, width, height, textRegions);
   const left = Buffer.from(a.data),
     right = Buffer.from(b.data);
   let ink = 0,
@@ -183,7 +187,9 @@ export async function comparePrecision(
   const errorRatio = nonFontPixels ? changedPixels / nonFontPixels : changedPixels ? 1 : 0;
   const inkErrorRatio = ink ? changedPixels / ink : changedPixels ? 1 : 0;
   return {
-    passed: !geometry.errors.length && errorRatio <= NON_FONT_ERROR_LIMIT,
+    passed:
+      !geometry.errors.length && !textPaint.errors.length && errorRatio <= NON_FONT_ERROR_LIMIT,
+    textPaint,
     dimensionsMatch: true,
     changedPixels,
     nonFontPixels,

@@ -269,9 +269,9 @@
           "width": 240,
           "height": 160,
           "text": [
-            "Ω",
+            "\u03a9",
             "ffi",
-            "😀"
+            "\ud83d\ude00"
           ],
           "absent": [],
           "annotations": [],
@@ -744,10 +744,10 @@
           "height": 240,
           "text": [
             "Typography and tables",
-            "Café",
-            "naïve",
+            "Caf\u00e9",
+            "na\u00efve",
             "office",
-            "Ω",
+            "\u03a9",
             "Cell alpha"
           ],
           "absent": [],
@@ -814,6 +814,13 @@
       ],
       "structural": "reject",
       "deterministic": true
+    },
+    {
+      "id": "truetype-extraction",
+      "file": "truetype-extraction.pdf",
+      "sha256": "6b73802be3c54c9901123700af47eb527c41dd6bb843dc85b3fde1e4bd71f96d",
+      "structural": "clean",
+      "description": "Embedded simple TrueType font paints T while ToUnicode extracts e."
     }
   ]
 }

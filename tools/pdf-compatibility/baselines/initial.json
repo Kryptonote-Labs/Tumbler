@@ -11,6 +11,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 10,
+            "maxError": 0,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37452,
@@ -36,6 +41,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 31,
+            "maxError": 0.0425531914893617,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 35501,
@@ -61,6 +71,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 10,
+            "maxError": 0,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37452,
@@ -86,6 +101,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 9,
+            "maxError": 0,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37452,
@@ -111,6 +131,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 15,
+            "maxError": 0.12280701754385964,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 31406,
@@ -136,6 +161,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 12,
+            "maxError": 0.01834862385321101,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 36972,
@@ -161,6 +191,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 0,
+            "maxError": 0,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 38400,
@@ -186,6 +221,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 0,
+            "maxError": 0,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 38400,
@@ -211,6 +251,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 6,
+            "maxError": 0,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37112,
@@ -236,6 +281,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 11,
+            "maxError": 0.07692307692307693,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 36729,
@@ -261,6 +311,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 18,
+            "maxError": 0.06976744186046512,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 35480,
@@ -286,6 +341,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 0,
+            "maxError": 0,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 38400,
@@ -311,6 +371,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 4,
+            "maxError": 0,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37747,
@@ -336,6 +401,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 0,
+            "maxError": 0,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 38400,
@@ -361,6 +431,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 16,
+            "maxError": 0.07228915662650602,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 36203,
@@ -386,6 +461,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 8,
+            "maxError": 0.05309734513274336,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37256,
@@ -404,6 +484,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 8,
+            "maxError": 0.061855670103092786,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37202,
@@ -422,6 +507,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 10,
+            "maxError": 0.058823529411764705,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 36991,
@@ -447,6 +537,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 6,
+            "maxError": 0.25,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37649,
@@ -465,6 +560,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 6,
+            "maxError": 0.05309734513274336,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37612,
@@ -483,6 +583,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 6,
+            "maxError": 0.05309734513274336,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37586,
@@ -501,6 +606,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 6,
+            "maxError": 0.05309734513274336,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37598,
@@ -519,6 +629,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 6,
+            "maxError": 0.05309734513274336,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37601,
@@ -537,6 +652,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 6,
+            "maxError": 0.05309734513274336,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37586,
@@ -555,6 +675,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 6,
+            "maxError": 0.05309734513274336,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37598,
@@ -573,6 +698,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 6,
+            "maxError": 0.05309734513274336,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37586,
@@ -591,6 +721,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 6,
+            "maxError": 0.05309734513274336,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37601,
@@ -609,6 +744,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 7,
+            "maxError": 0.25,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37498,
@@ -627,6 +767,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 7,
+            "maxError": 0.25,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37537,
@@ -645,6 +790,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 7,
+            "maxError": 0.25,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37509,
@@ -670,6 +820,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 10,
+            "maxError": 0,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37452,
@@ -695,6 +850,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 10,
+            "maxError": 0,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37452,
@@ -720,6 +880,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 10,
+            "maxError": 0,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37452,
@@ -745,6 +910,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 10,
+            "maxError": 0.058823529411764705,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 36991,
@@ -763,6 +933,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 8,
+            "maxError": 0.05309734513274336,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 0,
           "nonFontPixels": 37256,
@@ -788,6 +963,11 @@
       "pages": [
         {
           "passed": true,
+          "textPaint": {
+            "checked": 63,
+            "maxError": 0,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 3,
           "nonFontPixels": 79726,
@@ -806,6 +986,11 @@
         },
         {
           "passed": true,
+          "textPaint": {
+            "checked": 45,
+            "maxError": 0,
+            "errors": []
+          },
           "dimensionsMatch": true,
           "changedPixels": 257,
           "nonFontPixels": 81724,
@@ -835,7 +1020,38 @@
       "sha256": "a5b85ea1e96d33e5a208c0af3a30b8e9dded6a2de44470f13ecad00994c24212",
       "failures": [],
       "pages": []
+    },
+    {
+      "id": "truetype-extraction",
+      "sha256": "6b73802be3c54c9901123700af47eb527c41dd6bb843dc85b3fde1e4bd71f96d",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 1,
+            "maxError": 0,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 7635,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0,
+            "maxSizeError": 0,
+            "maxRelativeOriginError": 0,
+            "maxRelativeSizeError": 0,
+            "characters": 1
+          }
+        }
+      ]
     }
   ],
-  "passed": true
+  "passed": true,
+  "textPaintMetric": "Per-region bidirectional ink-shape check: 1 px neighborhood, normalized colour, 25% unmatched ink limit with 3-sample punctuation allowance; missing ink fails."
 }
