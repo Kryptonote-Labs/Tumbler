@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { browserPdfPaintHost, paintPdfPage, type PdfInterpreter } from '@tumblerjs/pdf';
+  import { browserPdfPaintHost, paintPdfPage, PdfError, type PdfInterpreter } from '@tumblerjs/pdf';
   let { interpreter, index, scale, onerror, onvisible }: {
     interpreter: PdfInterpreter;
     index: number;
@@ -57,7 +57,9 @@
     };
     void render().catch(cause => {
       if (controller.signal.aborted) return;
-      error = cause instanceof Error ? cause.message : 'Could not render this page.';
+      error = cause instanceof PdfError && cause.code === 'unsupported_feature'
+        ? "This page uses a PDF feature we haven't added yet."
+        : 'Could not render this page.';
       onerror?.(cause instanceof Error ? cause : new Error(error), pageIndex);
     }).finally(() => host.close());
     return () => controller.abort();
