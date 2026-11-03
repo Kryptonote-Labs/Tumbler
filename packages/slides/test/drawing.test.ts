@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { parseLosslessXml } from "@tumblerjs/ooxml";
 import {
   evaluateGeometry,
+  resizeDrawingGeometry,
   resolveDrawingGeometry,
 } from "../src/drawing-geometry.ts";
 import { presetGeometries } from "../src/preset-geometries.ts";
@@ -125,4 +126,21 @@ test("standards deck resolves table styles, notes, gradients, and links without 
   expect(table.cells[0]!.text!.paragraphs[0]!.runs[0]!.bold).toBe(true);
   expect(table.cells[0]!.fill).not.toBe(table.cells[3]!.fill);
   expect(table.cells[3]!.fill).not.toBe(table.cells[6]!.fill);
+});
+
+test("resize previews match geometry resolved at the committed dimensions", () => {
+  const adjusted = xml('<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 40000"/></a:avLst></a:prstGeom>').elements(
+    "http://schemas.openxmlformats.org/drawingml/2006/main", "prstGeom",
+  )[0]!;
+  const custom = xml('<a:custGeom><a:avLst/><a:gdLst/><a:rect l="0" t="0" r="w" b="h"/><a:pathLst><a:path w="10" h="10"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="10" y="10"/></a:lnTo></a:path></a:pathLst></a:custGeom>').elements(
+    "http://schemas.openxmlformats.org/drawingml/2006/main", "custGeom",
+  )[0]!;
+  for (const [preset, element] of [["ellipse", undefined], ["roundRect", adjusted], ["", custom]] as const) {
+    const original = resolveDrawingGeometry(preset, element, 100, 100)!;
+    for (const [width, height] of [[400, 50], [50, 400], [100, 100]] as const) {
+      expect(resizeDrawingGeometry(original, width, height)).toEqual(
+        resolveDrawingGeometry(preset, element, width, height)!,
+      );
+    }
+  }
 });
