@@ -50,6 +50,10 @@
     const mod=event.metaKey||event.ctrlKey;
     if (mod && ['b','i','u'].includes(event.key.toLowerCase())) { event.preventDefault();toggle(({b:'bold',i:'italic',u:'underline'} as const)[event.key.toLowerCase() as 'b'|'i'|'u']); }
     if (mod && event.key.toLowerCase()==='z') { event.preventDefault();undo(event.shiftKey); }
+    if (event.key === 'Home' || event.key === 'End') {
+      const layout=layouts.find(l=>l.id===active),offset=input.selectionDirection==='backward'?start:end,caret=layout?.carets.find(c=>c.offset===offset);
+      if(layout&&caret){event.preventDefault();const line=layout.carets.filter(c=>Math.abs(c.y-caret.y)<.1),next=mod?(event.key==='Home'?0:model.text(layout.id).length):(event.key==='Home'?line[0]!.offset:line.at(-1)!.offset);void select(layout.id,event.shiftKey?(input.selectionDirection==='backward'?end:start):next,next);}
+    }
     if (event.key==='Escape') {active=undefined;onselection?.(null);}
     if (['ArrowUp','ArrowDown'].includes(event.key)) {
       const layout=layouts.find(l=>l.id===active), caret=layout?.carets.find(c=>c.offset===(input.selectionDirection==='backward'?start:end));
@@ -80,18 +84,21 @@
     for(const segment of segments.segment(text))if(start>=segment.index&&start<=segment.index+segment.segment.length){void select(active,segment.index,segment.index+segment.segment.length);break;}
     event.preventDefault();
   }
-  function paint(canvas: HTMLCanvasElement, page: number) {
+  function paint(canvas: HTMLCanvasElement, options: {index:number;scale:number}) {
+    let page=options.index;
+    let visible=false;
     let disposed=false,controller:AbortController|undefined;
     const render=()=>{
-      controller?.abort();controller=new AbortController(); const signal=controller.signal;
+      controller?.abort();if(!visible){canvas.width=0;canvas.height=0;interpreter.releasePage(page);return;}controller=new AbortController(); const signal=controller.signal;
       const scene=interpreter.page(page), hidden=new Set(model.ids(page).filter(id=>model.dirty(id)).flatMap(id=>model.seed(id).sources.map(s=>`${s.instance}/${s.object}/${s.start}`)));
       const projected={...scene,elements:scene.elements.filter(e=>!hidden.has(pdfSourceKey(e.source)))};
       const host=browserPdfPaintHost(),ratio=window.devicePixelRatio||1,staging=window.document.createElement('canvas');
       staging.width=Math.ceil(scene.width*scale*ratio);staging.height=Math.ceil(scene.height*scale*ratio);
       void paintPdfPage(staging.getContext('2d')!,projected,pdf.source,host,{scale:scale*ratio,signal}).then(()=>{if(disposed||signal.aborted)return;canvas.width=staging.width;canvas.height=staging.height;canvas.getContext('2d')!.drawImage(staging,0,0);}).catch(error=>{if(!signal.aborted)console.error(error);}).finally(()=>host.close());
     };
-    render();model.doc.on('afterTransaction',render);
-    return {update(){render();},destroy(){disposed=true;controller?.abort();model.doc.off('afterTransaction',render);}};
+    const observer=new IntersectionObserver(entries=>{visible=entries.some(e=>e.isIntersecting);render();},{rootMargin:'600px 0px'});observer.observe(canvas);
+    model.doc.on('afterTransaction',render);
+    return {update(value: {index:number;scale:number}){page=value.index;render();},destroy(){disposed=true;observer.disconnect();controller?.abort();model.doc.off('afterTransaction',render);}};
   }
   function peerRange(peer: typeof peers[number], layout: PdfTextLayout) {
     try {if(!peer.selection||peer.selection.region!==layout.id)return;const resolve=(data:number[])=>Y.createAbsolutePositionFromRelativePosition(Y.decodeRelativePosition(new Uint8Array(data)),model.doc);const a=resolve(peer.selection.anchor),b=resolve(peer.selection.head);if(!a||!b)return;return {start:Math.min(a.index,b.index),end:Math.max(a.index,b.index),caret:layout.carets.find(c=>c.offset===b.index)};}catch{return;}
@@ -105,13 +112,13 @@
 </script>
 <div class="pdf-editable" bind:this={root}>
   {#each pdf.pages as page}
-    <div class="pdf-page" data-pdf-page={page.index+1} style:width={`${page.width*scale}px`} style:height={`${page.height*scale}px`} onpointerdown={e=>pointer(e,page.index)} onpointermove={move} onpointerup={()=>dragging=undefined} onpointercancel={()=>dragging=undefined} ondblclick={e=>double(e,page.index)} role="group" aria-label={`Page ${page.index+1}`}>
-      <canvas use:paint={page.index} aria-label={`Page ${page.index+1}`} style:width="100%" style:height="100%"></canvas>
+    <div class="pdf-page" data-pdf-page={page.index+1} style:width={`${page.width*scale}px`} style:height={`${page.height*scale}px`} onpointerdown={e=>pointer(e,page.index)} onpointermove={move} onpointerup={()=>dragging=undefined} onpointercancel={()=>dragging=undefined} ondblclick={e=>double(e,page.index)} role="group" aria-label="PDF page">
+      <canvas use:paint={{index:page.index,scale}} aria-label={`Page ${page.index+1}`} style:width="100%" style:height="100%"></canvas>
       <div class="text-layer" style:transform={`scale(${scale})`}>
         {#each layouts.filter(l=>model.seed(l.id).page===page.index) as layout (layout.id)}
           {@const dirty=model.dirty(layout.id)}
           {#each layout.glyphs as glyph}
-            {#if glyph.text!=='\n'}<span class="glyph" aria-hidden="true" style:left={`${glyph.x}px`} style:top={`${glyph.y-glyph.style.size}px`} style:font-family={`PDF-${pdfFontKey(glyph.style)}`} style:font-size={`${glyph.style.size}px`} style:color={dirty?glyph.style.color:'transparent'} style:text-decoration={glyph.style.underline?'underline':'none'}>{glyph.text}</span>{/if}
+            {#if glyph.text!=='\n'}<svg class="glyph" aria-hidden="true" width={Math.max(1,glyph.width+glyph.style.size)} height={glyph.style.size*2} style:left={`${glyph.x}px`} style:top={`${glyph.y-glyph.style.size}px`} style:overflow="visible"><text x="0" y={glyph.style.size} font-family={`PDF-${pdfFontKey(glyph.style)}`} font-size={glyph.style.size} fill={dirty?glyph.style.color:'transparent'} text-decoration={glyph.style.underline?'underline':'none'}>{glyph.text}</text></svg>{/if}
             {#if active===layout.id&&glyph.end>start&&glyph.start<end}<span class="selection" style:left={`${glyph.x}px`} style:top={`${glyph.y-glyph.style.size*.85}px`} style:width={`${Math.max(1,glyph.width)}px`} style:height={`${glyph.style.size*1.15}px`}></span>{/if}
           {/each}
           {#if active===layout.id&&start===end}
@@ -129,7 +136,7 @@
       </div>
     </div>
   {/each}
-  <textarea bind:this={input} aria-label="Edit PDF text" disabled={!editable} value={value} oninput={changed} onselect={publish} onkeyup={publish} onkeydown={key} oncompositionstart={()=>composing=true} oncompositionend={()=>{composing=false;changed();}} onblur={()=>onselection?.(null)} spellcheck="false" style:left={`${(active?layouts.find(l=>l.id===active)?.carets.find(c=>c.offset===start)?.x:0)??0}px`}></textarea>
+  <textarea wrap="off" bind:this={input} aria-label="Edit PDF text" disabled={!editable} value={value} oninput={changed} onselect={publish} onkeyup={publish} onkeydown={key} oncompositionstart={()=>composing=true} oncompositionend={()=>{composing=false;changed();}} onblur={()=>onselection?.(null)} spellcheck="false" style:left={`${(active?layouts.find(l=>l.id===active)?.carets.find(c=>c.offset===start)?.x:0)??0}px`}></textarea>
 </div>
 <style>
   .pdf-editable{position:relative;display:flex;flex-direction:column;align-items:center;gap:20px;padding:24px;min-width:min-content;}
