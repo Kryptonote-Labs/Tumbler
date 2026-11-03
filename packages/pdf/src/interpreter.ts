@@ -300,8 +300,7 @@ export class PdfInterpreter {
     elements: PdfSceneElement[],
     instance: string,
   ) {
-    if (this.activeForms.has(stream) || this.activeForms.size >= 128)
-      return invalid("Cyclic or excessively nested Form XObject.");
+    if (this.activeForms.has(stream)) return invalid("Cyclic Form XObject.");
     const source = this.document.source,
       info = stream.dictionary,
       state = {

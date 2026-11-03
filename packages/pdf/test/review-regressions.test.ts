@@ -1,7 +1,6 @@
 import { extractionFixture } from "./extraction-fixture.ts";
 import { expect, test } from "bun:test";
-import { openPdfDocument, PdfInterpreter, PdfStream, PdfError } from "../src/index.ts";
-import { dictionary } from "../src/objects.ts";
+import { openPdfDocument, PdfInterpreter, PdfError } from "../src/index.ts";
 import { createCanvas } from "@napi-rs/canvas";
 import { pdfFixture, pdfStream, formExpansion } from "./pdf-fixture.ts";
 
