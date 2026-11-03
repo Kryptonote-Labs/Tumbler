@@ -1,0 +1,826 @@
+{
+  "version": 1,
+  "generatedBy": {
+    "qpdf": "qpdf version 11.9.0\nRun qpdf --copyright to see copyright and license information.",
+    "chromium": "156.0.8078.4",
+    "inter-latin-400-normal.woff2": "8909904ab6c872eb994093482a88a28eca2cd95912d7b6fecd72103b0dc07edc",
+    "inter-greek-400-normal.woff2": "c15ddd00a9927b56f5c655a41f976f79bd848a20cce91fc14227751872a1cc27"
+  },
+  "fixtures": [
+    {
+      "id": "basic-text",
+      "file": "basic-text.pdf",
+      "sha256": "b2c92b36e0286543bd3d29fb48e5896eea7e7c92413b8112187c988d4e5696de",
+      "purpose": "Simple text with a standard font.",
+      "features": [
+        "classic-xref",
+        "type1-font"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "Hello Alex"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "escaped-strings",
+      "file": "escaped-strings.pdf",
+      "sha256": "f914de40de5cf92d614c1d9b064bbb91081f391971520cf0282e710b4c43fbd9",
+      "purpose": "Escapes and keywords inside strings must not become tokens.",
+      "features": [
+        "literal-string",
+        "escaped-parentheses"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "Hello (Alex)",
+            "endstream endobj"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "compressed-content",
+      "file": "compressed-content.pdf",
+      "sha256": "b3919eca1083d93b6d7483b1370e72736f2477e4d324930170e83344b1085fc5",
+      "purpose": "Flate content must decode to the same page.",
+      "features": [
+        "flate"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "Hello Alex"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "equivalentTo": "basic-text",
+      "deterministic": true
+    },
+    {
+      "id": "positioned-text",
+      "file": "positioned-text.pdf",
+      "sha256": "6366251e9cff0717a7179fb4c8331f8832b4c8483454d8ca9a74670a87b64176",
+      "purpose": "A word split across Tj and TJ operations remains readable.",
+      "features": [
+        "tj-array",
+        "character-spacing"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "Hello",
+            "Alex"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "inherited-page",
+      "file": "inherited-page.pdf",
+      "sha256": "d65bfbb7236850284ba47aa169fe6d0608037ded14adad1227fc869c57870b91",
+      "purpose": "Inherited resources, media box, crop box and rotation.",
+      "features": [
+        "page-inheritance",
+        "crop-box",
+        "rotate"
+      ],
+      "pages": [
+        {
+          "width": 140,
+          "height": 240,
+          "text": [
+            "CROPPED ROTATED"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "shared-form",
+      "file": "shared-form.pdf",
+      "sha256": "362f020c65ca0306b01d877efceeca78736962a48b0d59ab4d06449bc4e02492",
+      "purpose": "Two placements reference one reusable Form XObject.",
+      "features": [
+        "form-xobject",
+        "shared-resource"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "SHARED"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "split-content-state",
+      "file": "split-content-state.pdf",
+      "sha256": "eb54b3361dcc37074aac6ebf3a04c133706228071f06057abc72beb472aa1a98",
+      "purpose": "Graphics state continues across a Contents array.",
+      "features": [
+        "contents-array",
+        "graphics-state"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [],
+          "absent": [],
+          "empty": true,
+          "annotations": [],
+          "probes": [
+            {
+              "x": 30,
+              "y": 130,
+              "rgb": [
+                0,
+                0,
+                255
+              ],
+              "tolerance": 8
+            },
+            {
+              "x": 100,
+              "y": 130,
+              "rgb": [
+                255,
+                255,
+                255
+              ],
+              "tolerance": 8
+            }
+          ]
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "graphics",
+      "file": "graphics.pdf",
+      "sha256": "9b25ac752057501cdaf181fe75136c771c01a5ac9b566cb602c75749e769ac58",
+      "purpose": "Clipping, alpha and affine transforms have visible checks.",
+      "features": [
+        "clipping",
+        "transparency",
+        "transform"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [],
+          "absent": [],
+          "empty": true,
+          "annotations": [],
+          "probes": [
+            {
+              "x": 30,
+              "y": 130,
+              "rgb": [
+                0,
+                0,
+                255
+              ],
+              "tolerance": 8
+            },
+            {
+              "x": 100,
+              "y": 130,
+              "rgb": [
+                255,
+                255,
+                255
+              ],
+              "tolerance": 8
+            },
+            {
+              "x": 140,
+              "y": 130,
+              "rgb": [
+                255,
+                127,
+                127
+              ],
+              "tolerance": 8
+            }
+          ]
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "unicode-map",
+      "file": "unicode-map.pdf",
+      "sha256": "5bb69c3b183fa2d99a3e326eec377213d62f08729c3421a15df441f3c6c8ce2c",
+      "purpose": "ToUnicode may map one code to multiple UTF-16 units.",
+      "features": [
+        "type3-font",
+        "to-unicode",
+        "ligature",
+        "surrogate-pair"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "\u03a9",
+            "ffi",
+            "\ud83d\ude00"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "tagged-order",
+      "file": "tagged-order.pdf",
+      "sha256": "74ff8db2362271c90cb3b450d2cdb0119b37b47927d01d2ddba1a92754069fc4",
+      "purpose": "Logical tag order differs from the content-stream order.",
+      "features": [
+        "marked-content",
+        "structure-tree"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "FIRST",
+            "SECOND"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "annotation",
+      "file": "annotation.pdf",
+      "sha256": "43e1c09d6aa3ccbe12c7a5fa88a463b54dee06bd3ebe81e10e6c744514cbfc5b",
+      "purpose": "Added text is an annotation with its own appearance and contents.",
+      "features": [
+        "free-text",
+        "appearance-stream"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "BODY TEXT"
+          ],
+          "absent": [],
+          "annotations": [
+            "ADDED NOTE"
+          ],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "image-only",
+      "file": "image-only.pdf",
+      "sha256": "c726ca13d0c9639fbb3d5996daebf8ba86eea7b0dae0076198bbe44888db31e2",
+      "purpose": "Image-only text needs OCR; extraction must not invent content.",
+      "features": [
+        "image",
+        "scan"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [],
+          "absent": [],
+          "empty": true,
+          "annotations": [],
+          "probes": [
+            {
+              "x": 35,
+              "y": 42,
+              "rgb": [
+                0,
+                0,
+                0
+              ],
+              "tolerance": 8
+            }
+          ]
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "hidden-ocr",
+      "file": "hidden-ocr.pdf",
+      "sha256": "fb5990b191352d919f9b6726b90cc327a0b82776291de24599e6c55633a55464",
+      "purpose": "An invisible text layer accompanies the identical scan.",
+      "features": [
+        "image",
+        "invisible-text"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "SCAN"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "inline-image",
+      "file": "inline-image.pdf",
+      "sha256": "c09dcce97bca32674ab62813ea1503ad5def4f70cd76879433d1ca293b2e60dd",
+      "purpose": "Inline image data includes a false EI delimiter.",
+      "features": [
+        "inline-image",
+        "binary-delimiter"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [],
+          "absent": [],
+          "empty": true,
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "incremental-revision",
+      "file": "incremental-revision.pdf",
+      "sha256": "33583fcf788291b704786650a98d0676d275bc464ed2b647206d2480829372f2",
+      "purpose": "The latest xref revision must win over stale source text.",
+      "features": [
+        "incremental-update",
+        "prev-chain"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "CURRENT REVISION"
+          ],
+          "absent": [
+            "OLD REVISION"
+          ],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "page-sequence",
+      "file": "page-sequence.pdf",
+      "sha256": "586a6571d4650f695550ef7cfbcf1fe2f9d50f4cd120cabdad561d99f281d85e",
+      "purpose": "Page order and identity are independently observable.",
+      "features": [
+        "multiple-pages"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE ONE"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE TWO"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE THREE"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "many-pages",
+      "file": "many-pages.pdf",
+      "sha256": "240e5c002a32e5e8d4818e9dcdbb829df453ce9a21686489a5758762f2bd8a97",
+      "purpose": "A modest multipage fixture exercises iteration and cleanup.",
+      "features": [
+        "multiple-pages"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE 1"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE 2"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE 3"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE 4"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE 5"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE 6"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE 7"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE 8"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE 9"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE 10"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE 11"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE 12"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "object-streams",
+      "file": "object-streams.pdf",
+      "sha256": "0bcaf5228b629a5d18a741d423421777f33cd5b8d750b697819f173e1d86193e",
+      "purpose": "Independent qpdf encoding of the basic page.",
+      "features": [
+        "object-stream",
+        "xref-stream"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "Hello Alex"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "equivalentTo": "basic-text",
+      "deterministic": true
+    },
+    {
+      "id": "linearized",
+      "file": "linearized.pdf",
+      "sha256": "aa7bd7bbaaa5aa7ade6f20609e2c7411a964bb7e4150f5605b6b48baf8e1e06b",
+      "purpose": "Independent qpdf encoding of the basic page.",
+      "features": [
+        "linearized"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "Hello Alex"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "equivalentTo": "basic-text",
+      "deterministic": true
+    },
+    {
+      "id": "encrypted-aes256",
+      "file": "encrypted-aes256.pdf",
+      "sha256": "e4b6e5344ac92d2f01447760bc849ed468b319140c48945db52e5ded18714579",
+      "purpose": "Independent qpdf encoding of the basic page.",
+      "features": [
+        "aes256",
+        "password"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "Hello Alex"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "password": "fixture-password",
+      "structural": "clean",
+      "equivalentTo": "basic-text",
+      "deterministic": false
+    },
+    {
+      "id": "reordered-deleted",
+      "file": "reordered-deleted.pdf",
+      "sha256": "030fc613b14e7c91efee32c6f164790b8541ab7d645c56ca603d3131f8bd9a87",
+      "purpose": "Oracle export moves page three first and deletes page two.",
+      "features": [
+        "reordered",
+        "deleted"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE THREE"
+          ],
+          "absent": [
+            "PAGE TWO"
+          ],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "PAGE ONE"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": true
+    },
+    {
+      "id": "chromium-typography",
+      "file": "chromium-typography.pdf",
+      "sha256": "7850fe896cdfa41840d447038986c680067b6b18ca1a1b2abce34cb8bcc3a726",
+      "purpose": "An independent producer supplies embedded fonts, tags, tables and a gradient.",
+      "features": [
+        "chromium",
+        "embedded-subset-font",
+        "unicode",
+        "tagged",
+        "shading"
+      ],
+      "pages": [
+        {
+          "width": 360,
+          "height": 240,
+          "text": [
+            "Typography and tables",
+            "Caf\u00e9",
+            "na\u00efve",
+            "office",
+            "\u03a9",
+            "Cell alpha"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        },
+        {
+          "width": 360,
+          "height": 240,
+          "text": [
+            "Second page",
+            "Embedded fonts"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "clean",
+      "deterministic": false
+    },
+    {
+      "id": "broken-xref",
+      "file": "broken-xref.pdf",
+      "sha256": "ee46e558f96b1ebba58735f87f6d93031b3736dc11861bbf38d40c9cee1499fe",
+      "purpose": "Repair by permissive readers must not count as structural validity.",
+      "features": [
+        "malformed",
+        "repair"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [
+            "Hello Alex"
+          ],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "reject",
+      "deterministic": true
+    },
+    {
+      "id": "truncated",
+      "file": "truncated.pdf",
+      "sha256": "a5b85ea1e96d33e5a208c0af3a30b8e9dded6a2de44470f13ecad00994c24212",
+      "purpose": "A truncated object graph is not a conforming input.",
+      "features": [
+        "malformed",
+        "truncated"
+      ],
+      "pages": [
+        {
+          "width": 240,
+          "height": 160,
+          "text": [],
+          "absent": [],
+          "annotations": [],
+          "probes": []
+        }
+      ],
+      "structural": "reject",
+      "deterministic": true
+    },
+    {
+      "id": "truetype-extraction",
+      "file": "truetype-extraction.pdf",
+      "sha256": "6b73802be3c54c9901123700af47eb527c41dd6bb843dc85b3fde1e4bd71f96d",
+      "structural": "clean",
+      "description": "Embedded simple TrueType font paints T while ToUnicode extracts e."
+    }
+  ]
+}

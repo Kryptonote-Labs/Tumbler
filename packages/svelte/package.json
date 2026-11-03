@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./slides": "./src/slides.ts",
-    "./controls.css": "./src/controls.css"
+    "./controls.css": "./src/controls.css",
+    "./pdf": "./src/pdf.ts"
   },
   "files": [
     "src",
@@ -28,7 +29,8 @@
     "@tumblerjs/core": "0.1.0-alpha.26",
     "@tumblerjs/sheets": "0.1.0-alpha.26",
     "@tumblerjs/word": "0.1.0-alpha.26",
-    "rtf.js": "3.0.9"
+    "rtf.js": "3.0.9",
+    "@tumblerjs/pdf": "0.1.0-alpha.26"
   },
   "peerDependencies": {
     "svelte": "^5.0.0",

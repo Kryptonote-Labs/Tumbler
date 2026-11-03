@@ -18,6 +18,7 @@ describe("public package release graph", () => {
       "@tumblerjs/sheets",
       "@tumblerjs/word",
       "@tumblerjs/slides",
+      "@tumblerjs/pdf",
       "@tumblerjs/svelte",
       "@tumblerjs/cli",
     ]);

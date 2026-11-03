@@ -274,3 +274,9 @@ rendered document geometry. Remote decorations are absent from thumbnails and
 playback and never change the document or browser selection. Hosts own
 transport, permissions, visibility and revision reconciliation; supply ranges
 only for the document revision currently rendered.
+
+PDF pages are available through `@tumblerjs/svelte/pdf`. `PdfDocumentView` accepts an
+`@tumblerjs/pdf` document, a display scale and page/error callbacks. It keeps page dimensions
+stable while rendering nearby canvases, releases offscreen bitmap storage, and paints at the
+screen's pixel density. `goToPage(index)` scrolls to a zero-based page index. Product navigation,
+authorization, uploads and download controls belong to the host application.

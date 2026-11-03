@@ -1,0 +1,503 @@
+{
+  "pdfium": "156.0.8076.0",
+  "renderer": "native canvas",
+  "metric": "Changed non-font pixels divided by non-font page pixels at 72 DPI; non-font antialiasing counted, perceptual threshold 0.1; text origins/effective sizes checked within 1% of em; filled-path/image counts and bounds independently checked.",
+  "limit": 0.01,
+  "results": [
+    {
+      "id": "iso-sample",
+      "sha256": "c4475e2bb7ffa2ff286f58203eea1681ee53f8dee2866f348bc1b62ce2601c00",
+      "failures": [],
+      "pages": [
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 152,
+            "maxError": 0,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 487362,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 6.571756582168168e-05,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 5.9852066085147395e-06,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 137
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 1608,
+            "maxError": 0.057692307692307696,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 1,
+          "nonFontPixels": 428133,
+          "nonFontInkPixels": 1492,
+          "inkErrorRatio": 0.0006702412868632708,
+          "errorRatio": 2.3357227777349564e-06,
+          "pageErrorRatio": 1.9960478253058943e-06,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.00039472554753883633,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 4.385839417098182e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 1381
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 3387,
+            "maxError": 0.15254237288135594,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 328358,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0006119142695361011,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 6.14371754209296e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 2877
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 2923,
+            "maxError": 0.11764705882352941,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 3,
+          "nonFontPixels": 371255,
+          "nonFontInkPixels": 5992,
+          "inkErrorRatio": 0.0005006675567423231,
+          "errorRatio": 8.080699249841752e-06,
+          "pageErrorRatio": 5.988143475917683e-06,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.00028918568185757606,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 3.213174242861956e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 2502
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 2701,
+            "maxError": 0.5,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 3,
+          "nonFontPixels": 376863,
+          "nonFontInkPixels": 5476,
+          "inkErrorRatio": 0.000547845142439737,
+          "errorRatio": 7.960452472118516e-06,
+          "pageErrorRatio": 5.988143475917683e-06,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.00021494984109974127,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 2.388331567774903e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 2280
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 3404,
+            "maxError": 0.20833333333333334,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 4,
+          "nonFontPixels": 339103,
+          "nonFontInkPixels": 3926,
+          "inkErrorRatio": 0.0010188487009679063,
+          "errorRatio": 1.1795826046953285e-05,
+          "pageErrorRatio": 7.984191301223577e-06,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0003069872755775174,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 3.082201550218382e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 2899
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 3505,
+            "maxError": 0.1,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 325279,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000426111567746138,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 4.5889091705710436e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 2995
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 3023,
+            "maxError": 0.11764705882352941,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 359769,
+          "nonFontInkPixels": 5395,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0003101241001309447,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 3.4458233347882745e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 2539
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 2304,
+            "maxError": 0.21739130434782608,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 681,
+          "nonFontPixels": 385502,
+          "nonFontInkPixels": 8890,
+          "inkErrorRatio": 0.0766029246344207,
+          "errorRatio": 0.0017665278001151746,
+          "pageErrorRatio": 0.001359308569033314,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0005018146140532217,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 5.038299318586979e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 1974
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 3336,
+            "maxError": 0.12121212121212122,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 332176,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0003418050785347757,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 3.797834205941953e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 2834
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 2321,
+            "maxError": 0.12162162162162163,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 382149,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000608427145979579,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 6.108706261539081e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 1969
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 2703,
+            "maxError": 0.5,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 365355,
+          "nonFontInkPixels": 8048,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0005126520975123576,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 5.147109393061157e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 2296
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 3555,
+            "maxError": 0.5,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 336280,
+          "nonFontInkPixels": 6231,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.00017052106531112275,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 1.712058882108676e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 2984
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 2574,
+            "maxError": 0.09333333333333334,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 3,
+          "nonFontPixels": 373458,
+          "nonFontInkPixels": 3516,
+          "inkErrorRatio": 0.0008532423208191126,
+          "errorRatio": 8.033031826872098e-06,
+          "pageErrorRatio": 5.988143475917683e-06,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0002782218025661589,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 2.7933915813309697e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 2172
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 2807,
+            "maxError": 0.08974358974358974,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 366708,
+          "nonFontInkPixels": 4883,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0007900285077649812,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 7.932013099790746e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 2364
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 3198,
+            "maxError": 0.2,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 4,
+          "nonFontPixels": 341389,
+          "nonFontInkPixels": 3018,
+          "inkErrorRatio": 0.0013253810470510272,
+          "errorRatio": 1.1716839148302963e-05,
+          "pageErrorRatio": 7.984191301223577e-06,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.000258886973275154,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 2.5992667899961084e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 2741
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 1633,
+            "maxError": 0.16666666666666666,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 3,
+          "nonFontPixels": 414268,
+          "nonFontInkPixels": 13340,
+          "inkErrorRatio": 0.00022488755622188905,
+          "errorRatio": 7.241688954976006e-06,
+          "pageErrorRatio": 5.988143475917683e-06,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.00010735937613980809,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 1.0779053788014037e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 1443
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 2620,
+            "maxError": 0.25,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 6,
+          "nonFontPixels": 370422,
+          "nonFontInkPixels": 9377,
+          "inkErrorRatio": 0.0006398634957875654,
+          "errorRatio": 1.6197742034760356e-05,
+          "pageErrorRatio": 1.1976286951835366e-05,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 0.0003689638865464243,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 3.7044566780450426e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 2197
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 457,
+            "maxError": 0.11904761904761904,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 3872,
+          "nonFontPixels": 479087,
+          "nonFontInkPixels": 103995,
+          "inkErrorRatio": 0.03723255925765662,
+          "errorRatio": 0.008082039379068937,
+          "pageErrorRatio": 0.0077286971795844225,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 6.571756582168168e-05,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 6.6619263845735824e-06,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 430
+          }
+        },
+        {
+          "passed": true,
+          "textPaint": {
+            "checked": 74,
+            "maxError": 0,
+            "errors": []
+          },
+          "dimensionsMatch": true,
+          "changedPixels": 0,
+          "nonFontPixels": 495832,
+          "nonFontInkPixels": 0,
+          "inkErrorRatio": 0,
+          "errorRatio": 0,
+          "pageErrorRatio": 0,
+          "geometry": {
+            "errors": [],
+            "maxOriginError": 9.075587742264578e-05,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 8.265562951395284e-06,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
+            "characters": 65
+          }
+        }
+      ]
+    }
+  ],
+  "passed": true,
+  "source": {
+    "url": "https://opensource.adobe.com/dc-acrobat-sdk-docs/standards/pdfstandards/pdf/PDF32000_2008.pdf",
+    "sha256": "9de0ca9e8570d6209e8bd48a355be8eb6ec376acfc3fc3ae97cd8730351417ff",
+    "pages": [
+      1,
+      2,
+      26,
+      51,
+      76,
+      101,
+      151,
+      201,
+      251,
+      301,
+      351,
+      401,
+      451,
+      501,
+      551,
+      601,
+      651,
+      701,
+      751,
+      756
+    ]
+  },
+  "textPaintMetric": "Per-region bidirectional ink-shape check: 1 px neighborhood, normalized colour, 25% unmatched ink limit with 3-sample punctuation allowance; missing ink fails."
+}
