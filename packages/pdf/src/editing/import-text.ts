@@ -35,7 +35,7 @@ function styleOf(item: PdfTextItem, color: string): PdfTextStyle {
         .join('');
   return {
     ...defaultPdfTextStyle,
-    ...(item.font.source?{font:item.font.source}:{}),
+    ...(item.font.source ? { font: item.font.source } : {}),
     size: Math.hypot(item.transform[0], item.transform[1]),
     bold: item.font.weight === 'bold',
     italic: item.font.style === 'italic',
@@ -87,10 +87,13 @@ export function importPdfText(document: PdfDocument): PdfTextSeed[] {
       }
       const sources = [...sourceMap.values()];
 
-      const delta = line.map((item) => ({
-        insert: item.text,
-        attributes: styleOf(item, style.color),
-      }));
+      const delta = line.map((item) => {
+        const fill = glyphs.get(item.id)?.state.fill;
+        return {
+          insert: item.text,
+          attributes: styleOf(item, typeof fill === 'string' ? fill : style.color),
+        };
+      });
       const gap = previous ? y - previous.y : 0;
       const previousLines =
         previous?.delta
