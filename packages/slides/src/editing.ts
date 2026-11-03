@@ -1,3 +1,4 @@
+import { gradientFillMarkup, type GradientFill } from './gradient-authoring.ts';
 import {
   normalizeFormattingPatch,
   type FormattingPatch,
@@ -33,7 +34,7 @@ export interface PresentationFormatChange extends PresentationTextRange {
   readonly patch: FormattingPatch;
 }
 export interface PresentationShapeStyle {
-  readonly fill?: string | undefined;
+  readonly fill?: string | GradientFill | undefined;
   readonly stroke?: string | undefined;
   readonly strokeWidth?: number | undefined;
   /** Rounded-rectangle radius in CSS pixels; clamped to half the shorter side. */
@@ -516,7 +517,7 @@ export function editPresentationShape(
     );
   for (const color of [patch.fill, patch.stroke])
     if (
-      color !== undefined &&
+      typeof color === "string" &&
       color !== "none" &&
       !/^#[\da-f]{6}$/i.test(color)
     )
@@ -582,7 +583,10 @@ export function editPresentationShape(
   if (patch.fill !== undefined) {
     for (let i = nodes.length - 1; i >= 0; i--)
       if (fillNames.includes(nodes[i]!.name)) nodes.splice(i, 1);
-    nodes.push({ name: "solidFill", xml: fill(patch.fill) });
+    nodes.push({
+      name: typeof patch.fill === "string" ? "solidFill" : "gradFill",
+      xml: typeof patch.fill === "string" ? fill(patch.fill) : gradientFillMarkup(patch.fill),
+    });
   }
   if (patch.stroke !== undefined || patch.strokeWidth !== undefined) {
     const line =
