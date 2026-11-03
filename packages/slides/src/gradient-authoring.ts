@@ -4,7 +4,7 @@ const ratio = z.number().finite().min(0).max(1);
 export const gradientFill = z
   .object({
     kind: z.literal("gradient"),
-    type: z.enum(["linear", "radial"]),
+    type: z.enum(["linear", "radial", "rectangular"]),
     angle: z.number().finite().optional(),
     scaled: z.boolean().optional(),
     center: z.tuple([ratio, ratio]).optional(),
@@ -28,6 +28,6 @@ export function gradientFillMarkup(input: GradientFill) {
   const shade =
     fill.type === "linear"
       ? `<a:lin ang="${Math.round(((((fill.angle ?? 0) % 360) + 360) % 360) * 60000) % 21600000}" scaled="${fill.scaled === false ? 0 : 1}"/>`
-      : `<a:path path="circle"><a:fillToRect l="${percent(x)}" t="${percent(y)}" r="${percent(1 - x)}" b="${percent(1 - y)}"/></a:path>`;
+      : `<a:path path="${fill.type === "radial" ? "circle" : "rect"}"><a:fillToRect l="${percent(x)}" t="${percent(y)}" r="${percent(1 - x)}" b="${percent(1 - y)}"/></a:path>`;
   return `<a:gradFill><a:gsLst>${stops}</a:gsLst>${shade}</a:gradFill>`;
 }

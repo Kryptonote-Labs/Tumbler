@@ -227,14 +227,15 @@ vertical clipping still constrain their respective axes to the text box.
 `set-background` writes native slide fills. Use `fill.kind` of `solid`, `gradient`,
 `picture`, `pattern`, or `inherit`. Gradient stops have offsets in [0, 1], RGB
 colours and optional opacity. Linear gradients accept an angle in degrees and
-`scaled`; radial gradients accept a normalized `center`. Pictures accept base64
+`scaled`; radial and rectangular gradients accept a normalized `center`, the point
+where the first stop sits. Pictures accept base64
 PNG/JPEG bytes, opacity, normalized crop edges and optional tile scale/offset/flip.
 `backgroundPatterns` lists authorable presets. `inherit` removes the slide override
 and restores the layout/master background. The existing `background` colour command
 remains supported. Group commands in a `batch` to apply to all slides in one undo.
 
 These fills use ECMA-376-1 §19.3.1.2 and §§20.1.8.14, 20.1.8.33, 20.1.8.47.
-Unrelated slide XML and package parts are preserved. Rectangular/shape path gradients,
+Unrelated slide XML and package parts are preserved. Shape-path gradients are read and drawn as rectangular;
 advanced picture effects and uncommon pattern presets remain outside authoring coverage.
 
 Shape fills accept a hex colour, `"none"`, or a native gradient through
@@ -257,6 +258,6 @@ session.execute({
 });
 ```
 
-Use `type: "radial"` with an optional `center: [x, y]` in the range 0–1.
+Use `type: "radial"` or `"rectangular"` with an optional `center: [x, y]` in the range 0–1.
 Stops are sorted by offset on write. Changing the fill replaces the previous
 fill while retaining geometry, text, and outline.

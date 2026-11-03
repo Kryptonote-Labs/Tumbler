@@ -46,6 +46,15 @@ const fills: BackgroundFill[] = [
     contentType: 'image/png',
     tile: { scaleX: 2, scaleY: 3, x: 5, y: 6, align: 'ctr', flip: 'xy' },
   },
+  {
+    kind: 'gradient',
+    type: 'rectangular',
+    center: [1, 0],
+    stops: [
+      { offset: 0, color: '#ffffff' },
+      { offset: 1, color: '#000000' },
+    ],
+  },
 ];
 function reopen(a: ReturnType<typeof createPresentation>) {
   return openPresentationArtifact(a.bytes());
@@ -62,12 +71,12 @@ for (const fill of fills)
     expect(slide.objects).toEqual(a.document.slides[0]!.objects);
     if (fill.kind === 'gradient') {
       expect(slide.backgroundGradient).toMatchObject({
-        kind: fill.type === 'linear' ? 'linear' : 'radial',
+        kind: fill.type,
         stops: expect.arrayContaining([
           { offset: 1, color: fill.type === 'linear' ? 'rgba(255,255,255,1)' : 'rgba(0,0,0,1)' },
         ]),
       });
-      if (fill.type === 'radial') expect(slide.backgroundGradient!.center).toEqual(fill.center!);
+      if (fill.type !== 'linear') expect(slide.backgroundGradient!.center).toEqual(fill.center!);
     } else if (fill.kind === 'pattern')
       expect(slide.backgroundPattern).toMatchObject({
         preset: fill.preset,
