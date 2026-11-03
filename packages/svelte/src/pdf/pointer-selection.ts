@@ -52,12 +52,13 @@ function caretAt(host: HTMLElement, x: number, y: number): Caret | undefined {
 export function trackPdfSelection(host: HTMLElement) {
   const document = host.ownerDocument,
     window = document.defaultView!;
+  let dragging = false;
   let anchor: Caret | undefined,
     point: { x: number; y: number } | undefined,
     frame: number | undefined;
   const update = () => {
     frame = undefined;
-    if (!anchor?.node.isConnected || !point) return;
+    if (!dragging || !anchor?.node.isConnected || !point) return;
     const focus = caretAt(host, point.x, point.y),
       selection = window.getSelection();
     if (!focus || !selection) return;
@@ -71,11 +72,12 @@ export function trackPdfSelection(host: HTMLElement) {
     selection.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
   };
   const schedule = () => {
-    if (anchor && frame === undefined) frame = window.requestAnimationFrame(update);
+    if (dragging && anchor && frame === undefined) frame = window.requestAnimationFrame(update);
   };
   const stop = () => {
     anchor = undefined;
     point = undefined;
+    dragging = false;
     if (frame !== undefined) window.cancelAnimationFrame(frame);
     frame = undefined;
   };
@@ -83,7 +85,6 @@ export function trackPdfSelection(host: HTMLElement) {
     stop();
     if (
       event.button !== 0 ||
-      event.detail > 1 ||
       event.altKey ||
       event.metaKey ||
       event.ctrlKey ||
@@ -97,6 +98,7 @@ export function trackPdfSelection(host: HTMLElement) {
         ? { node: selection.anchorNode, offset: selection.anchorOffset }
         : caretAt(host, event.clientX, event.clientY);
     point = { x: event.clientX, y: event.clientY };
+    dragging = event.shiftKey;
     schedule();
   };
   const move = (event: MouseEvent) => {
@@ -104,12 +106,14 @@ export function trackPdfSelection(host: HTMLElement) {
       stop();
       return;
     }
-    if (!anchor) return;
+    if (!anchor || !point) return;
+    if (!dragging && Math.hypot(event.clientX - point.x, event.clientY - point.y) < 3) return;
+    dragging = true;
     point = { x: event.clientX, y: event.clientY };
     schedule();
   };
   const up = (event: MouseEvent) => {
-    if (anchor) {
+    if (anchor && dragging) {
       if (frame !== undefined) window.cancelAnimationFrame(frame);
       point = { x: event.clientX, y: event.clientY };
       update();
