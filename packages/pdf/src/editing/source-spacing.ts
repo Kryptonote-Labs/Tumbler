@@ -10,6 +10,7 @@ export function pdfSourceSpacing(
   id: string,
   offsets: number[],
   styles: PdfTextStyle[],
+  widths: number[],
 ) {
   const seed = model.seed(id),
     text = model.text(id),
@@ -54,7 +55,8 @@ export function pdfSourceSpacing(
       sameFace(b, after.attributes) &&
       Math.abs(ratio - b.size / after.attributes.size) < 1e-9
     )
-      result[index] = gap.gap * ratio;
+      result[index] =
+        gap.advance === undefined ? gap.gap * ratio : gap.advance * ratio - widths[index - 1]!;
   }
   return result;
 }

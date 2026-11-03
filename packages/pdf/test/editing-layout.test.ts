@@ -242,3 +242,20 @@ test('changing an imported font family selects the requested face and undo resto
   expect(fonts.shape('A', model.styleAt(id, 0)).face.key).toBe(source.key);
   model.doc.destroy();
 });
+
+test('editing text separated by an inferred space preserves the original visible gap', () => {
+  const pdf = embeddedText('BT /F 24 Tf 30 200 Td (A) Tj 60 0 Td (V) Tj ET'),
+    model = new PdfTextModel();
+  fonts.importDocument(pdf);
+  model.initialize(importPdfText(pdf));
+  const id = model.ids()[0]!;
+  expect(model.text(id).toString()).toBe('A V');
+  model.replace(id, 3, 3, '!');
+  const layout = layoutPdfText(model, id, fonts);
+  expect(layout.glyphs.find((g) => g.text === 'V')!.x).toBe(90);
+  const output = pdfTextContent(
+    new PdfInterpreter(openPdfDocument(exportEditedPdf(pdf, model, fonts))).page(0),
+  );
+  expect(output.items.find((item) => item.text === 'V')!.transform[4]).toBeCloseTo(90, 5);
+  model.doc.destroy();
+});

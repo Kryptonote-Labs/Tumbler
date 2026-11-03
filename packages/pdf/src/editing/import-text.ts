@@ -28,6 +28,7 @@ export type PdfTextSeed = {
     left: number;
     right: number;
     gap: number;
+    advance?: number;
     anchors?: [
       ReturnType<typeof Y.relativePositionToJSON>,
       ReturnType<typeof Y.relativePositionToJSON>,
@@ -111,14 +112,15 @@ export function importPdfText(document: PdfDocument): PdfTextSeed[] {
       for (let i = 1; i < line.length; i++) {
         const left = line[i - 1]!,
           right = line[i]!;
-        if (left.kind !== 'glyph' || right.kind !== 'glyph') continue;
         const [a, b, , , x, y] = left.transform,
           em = Math.hypot(a, b);
         const dx = right.transform[4] - x,
           dy = right.transform[5] - y;
         if (!em || Math.abs(-b * dx + a * dy) / em >= 0.01) continue;
         const gap = (a * dx + b * dy) / em - left.width * em;
-        if (Math.abs(gap) > 1e-6) spacing.push({ left: i - 1, right: i, gap });
+        if (left.kind === 'separator')
+          spacing.push({ left: i - 1, right: i, gap: 0, advance: (a * dx + b * dy) / em });
+        else if (Math.abs(gap) > 1e-6) spacing.push({ left: i - 1, right: i, gap });
       }
       const gap = previous ? y - previous.y : 0;
       const previousLines =

@@ -58,6 +58,7 @@ export function layoutPdfText(
     id,
     entries.map((entry) => entry.index),
     styles,
+    widths,
   );
   const line = () => {
     x = seed.x;
