@@ -171,3 +171,50 @@ test('continued paragraphs push later text and create real PDF pages without los
       expect(glyph.textMatrix[5]).toBeLessThanOrEqual(page.height);
     }
 });
+
+test('source fonts without naming or post tables retain their encoding and original glyph metrics', async () => {
+  const program = await Bun.file(
+    new URL('./fixtures/editing-fonts/LiberationSans-Regular.ttf', import.meta.url),
+  ).bytes();
+  const table = new DataView(program.buffer, program.byteOffset, program.byteLength);
+  for (let i = 0; i < table.getUint16(4); i++) {
+    const offset = 12 + i * 16,
+      tag = new TextDecoder().decode(program.subarray(offset, offset + 4));
+    if (tag === 'name' || tag === 'post')
+      program.set(new TextEncoder().encode(tag === 'name' ? 'zz01' : 'zz02'), offset);
+  }
+  const pdf = openPdfDocument(
+    pdfFixture([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 300] /Resources << /Font << /F 5 0 R >> >> /Contents 4 0 R >>',
+      pdfStream('BT /F 48 Tf 30 200 Td (Hello) Tj ET'),
+      '<< /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+LiberationSans-Regular /Encoding /WinAnsiEncoding /FontDescriptor 6 0 R >>',
+      '<< /Type /FontDescriptor /FontName /ABCDEF+LiberationSans-Regular /Flags 32 /FontBBox [-500 -500 2000 2000] /Ascent 900 /Descent -200 /CapHeight 700 /ItalicAngle 0 /StemV 80 /FontFile2 7 0 R >>',
+      pdfStream(program),
+    ]),
+  );
+  const scoped = fonts.fork(pdf),
+    model = new PdfTextModel();
+  model.initialize(importPdfText(pdf));
+  const id = model.ids()[0]!,
+    before = layoutPdfText(model, id, scoped);
+  const original = scoped.shape('H', model.seed(id).style);
+  expect(original.face.source).toBeDefined();
+  expect(original.face.family).toBe('liberationsans');
+  model.replace(id, 5, 5, 'W');
+  const after = layoutPdfText(model, id, scoped);
+  expect(after.glyphs.slice(0, 5)).toEqual(before.glyphs);
+  expect(scoped.shape('W', model.seed(id).style).face.source).toBeUndefined();
+  const output = exportEditedPdf(pdf, model, scoped),
+    scene = new PdfInterpreter(openPdfDocument(output)).page(0);
+  expect(scene.text).toBe('HelloW');
+  const sourceGlyphs = new PdfInterpreter(pdf).page(0).elements.filter((e) => e.kind === 'glyph');
+  const editedGlyphs = scene.elements.filter((e) => e.kind === 'glyph');
+  for (let i = 0; i < 5; i++) {
+    expect(editedGlyphs[i]!.glyph.path).toBe(sourceGlyphs[i]!.glyph.path);
+    expect(editedGlyphs[i]!.fontSize).toBe(sourceGlyphs[i]!.fontSize);
+    expect(editedGlyphs[i]!.glyph.width).toBe(sourceGlyphs[i]!.glyph.width);
+  }
+  model.doc.destroy();
+});

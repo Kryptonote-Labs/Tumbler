@@ -1,3 +1,4 @@
+import { sha256 } from '@noble/hashes/sha2.js';
 import './buffer-runtime.ts';
 import { winAnsi, glyphText, standardName } from './font-encodings.ts';
 import { Buffer } from 'buffer';
@@ -103,7 +104,15 @@ export class PdfFont {
         const program = source.stream(embedded);
         this.rawCff = program[0] === 1 && program[2]! >= 4;
         this.program = this.rawCff ? cffOpenType(program) : program;
-        this.sourceId = `pdf:${source.fingerprint}:${embedded.object.key}`;
+        const identity = JSON.stringify(dictionary, (_key, value: unknown) =>
+          value instanceof Map
+            ? [...value.entries()].sort(([a], [b]) => String(a)<String(b)?-1:String(a)>String(b)?1:0)
+            : value,
+        );
+        const digest = Array.from(sha256(new TextEncoder().encode(identity)), (byte) =>
+          byte.toString(16).padStart(2, '0'),
+        ).join('');
+        this.sourceId = `pdf:${source.fingerprint}:${digest}`;
         const decoded = create(Buffer.from(this.program));
         if ('fonts' in decoded)
           unsupported('A PDF font resource must reference one font, not a font collection.');

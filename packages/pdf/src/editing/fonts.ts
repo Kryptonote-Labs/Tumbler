@@ -3,6 +3,7 @@ import { Buffer } from 'buffer';
 import { create, type Font, type Glyph } from 'fontkit';
 import { PdfInterpreter } from '../interpreter.ts';
 import type { PdfDocument } from '../document.ts';
+import type { PdfFont } from '../fonts.ts';
 export type PdfTextStyle = {
   bold: boolean;
   italic: boolean;
@@ -24,12 +25,14 @@ export const pdfFontKey = (style: Pick<PdfTextStyle, 'family' | 'bold' | 'italic
   `${style.family}-${style.bold ? 'Bold' : ''}${style.italic ? 'Italic' : ''}${!style.bold && !style.italic ? 'Regular' : ''}`;
 export type PdfEditingFont = {
   key: string;
+  name: string;
   bytes: Uint8Array;
   font: Font;
   family: string;
   bold: boolean;
   italic: boolean;
-  sourceGlyphs?: Map<string, { id: number; width: number }>;
+  source: PdfFont | undefined;
+  sourceGlyphs?: Map<string, { id: number; width: number; code: number; length: number }>;
 };
 export type PdfEditingShape = {
   face: PdfEditingFont;
@@ -49,16 +52,18 @@ const familyKey = (family: string) =>
 export class PdfEditingFonts {
   private fonts = new Map<string, PdfEditingFont>();
   private documents = new WeakSet<PdfDocument>();
-  add(key: string, bytes: Uint8Array) {
+  add(key: string, bytes: Uint8Array, source?: PdfFont) {
     const font = create(Buffer.from(bytes));
     if ('fonts' in font) throw new Error('Supply a single editing font.');
     this.fonts.set(key, {
       key,
+      name: font.postscriptName ?? source?.baseName ?? key,
       bytes,
       font,
-      family: familyKey(font.familyName),
-      bold: /bold/i.test(font.subfamilyName),
-      italic: /italic|oblique/i.test(font.subfamilyName),
+      source,
+      family: familyKey(font.familyName ?? source?.baseName ?? key),
+      bold: /bold/i.test(font.subfamilyName ?? source?.baseName ?? key),
+      italic: /italic|oblique/i.test(font.subfamilyName ?? source?.baseName ?? key),
     });
   }
   importDocument(document: PdfDocument) {
@@ -70,13 +75,15 @@ export class PdfEditingFonts {
         const source = element.font,
           key = source.sourceId!;
         if (!this.fonts.has(key)) {
-          this.add(key, source.program!);
+          this.add(key, source.program!, source);
           this.fonts.get(key)!.sourceGlyphs = new Map();
         }
         const face = this.fonts.get(key)!;
         if (element.glyph.unicode && !face.sourceGlyphs!.has(element.glyph.unicode))
           face.sourceGlyphs!.set(element.glyph.unicode, {
             id: element.glyph.glyphId,
+            code: element.glyph.code,
+            length: element.glyph.codeLength,
             width: (element.glyph.width * face.font.unitsPerEm) / 1000,
           });
       }

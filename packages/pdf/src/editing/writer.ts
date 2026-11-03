@@ -86,7 +86,7 @@ export function exportEditedPdf(
         if (!code) {
           if (embeddedFont.codes.size >= 65535) embeddedFont = fontFor(face);
           code = {
-            cid: embeddedFont.codes.size + 1,
+            cid: face.sourceGlyphs?.get(glyph.text)?.code ?? embeddedFont.codes.size + 1,
             glyph: g.id,
             text,
             width: (g.advanceWidth * 1000) / face.font.unitsPerEm,
@@ -102,7 +102,7 @@ export function exportEditedPdf(
           glyph.y - p.yOffset * scale,
         ]);
         if (shaped.bold) content += `${n(style.size * 0.025)} w\n`;
-        content += `BT /${embeddedFont.resource} ${n(style.size)} Tf ${shaped.bold ? '2 Tr ' : ''}${tm.map(n).join(' ')} Tm <${code.cid.toString(16).padStart(4, '0')}> Tj ET\n`;
+        content += `BT /${embeddedFont.resource} ${n(style.size)} Tf ${shaped.bold ? '2 Tr ' : ''}${tm.map(n).join(' ')} Tm <${code.cid.toString(16).padStart((face.sourceGlyphs?.get(glyph.text)?.length ?? 2) * 2, '0')}> Tj ET\n`;
         x += p.xAdvance * scale;
       }
       if (style.underline) {
@@ -115,10 +115,15 @@ export function exportEditedPdf(
   }
   const fontRefs = new Map<string, PdfReference>();
   for (const font of embedded.values()) {
+    if (font.face.source) {
+      // Retain the original encoding, subset program and descriptors, including CFF fonts.
+      fontRefs.set(font.resource, writer.value(font.face.source.dictionary));
+      continue;
+    }
     const face = font.face.font,
       scale = 1000 / face.unitsPerEm;
     const program = writer.stream(font.face.bytes, new Map([['Length1', font.face.bytes.length]]));
-    const name = new PdfName(font.face.font.postscriptName.replace(/^[A-Z]{6}\+/, ''));
+    const name = new PdfName(font.face.name.replace(/^[A-Z]{6}\+/, ''));
     const descriptor = writer.value(
       new Map<string, PdfValue>([
         ['Type', new PdfName('FontDescriptor')],
