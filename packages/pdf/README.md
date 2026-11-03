@@ -32,6 +32,25 @@ shadings, PostScript calculator functions, filtered inline images and JPX/JBIG2/
 ICCBased spaces currently use their standard alternate space, not a colour-managed ICC engine.
 An unchanged download is always the original source, including unsupported content.
 
+## Text selection and copying
+
+`pdfTextContent(scene)` projects each glyph's extraction Unicode onto the same source matrices
+used to paint it. It returns positioned items, source identities, font metrics and concatenated
+text. `/ToUnicode` determines copied characters independently of visible glyph selection, so
+ligatures and embedded OCR text remain available without altering page rendering.
+
+`PdfDocumentView` overlays those items with a transparent, selectable `PdfTextLayer`. Drag to
+select, double-click to select a word, then use browser Copy or the platform copy shortcut.
+The copy handler writes plain text locally and excludes page controls and layout whitespace.
+Selection follows page rotation and zoom. Selected text nodes remain mounted while their
+offscreen canvases are released, allowing selection across pages.
+
+Consecutive baseline groups retain content-flow order. Ordinary LTR glyphs within each group
+follow their source positions; positioning gaps and baseline changes supply spaces and newlines.
+This is a geometric reading-order heuristic, not complete tagged-PDF, `/ActualText` or bidi
+reconstruction. Image-only scans need OCR before they contain selectable text. Existing hidden
+OCR text is selectable. Selection does not edit the source PDF.
+
 ## Rendering verification
 
 Run `bun run compatibility:pdf <corpus> <new-report-directory>` with Python `pypdfium2`

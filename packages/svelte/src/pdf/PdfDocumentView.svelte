@@ -13,6 +13,7 @@
   let host: HTMLDivElement;
   onMount(() => {
     const copy = (event: ClipboardEvent) => {
+      if (event.target instanceof Element && event.target.closest('input,textarea,[contenteditable]')) return;
       if (!host.getClientRects().length || host.closest('[inert],[hidden]')) return;
       const text = selectedPdfText(window.getSelection(), host);
       if (text === undefined || !event.clipboardData) return;
@@ -28,9 +29,11 @@
 </script>
 
 <div class="pdf-document" bind:this={host}>
+  {#key document}
   {#each document.pages as page, index (page.id)}
     <PdfPageView {interpreter} {index} {scale} onvisible={onpagechange} {onerror} />
   {/each}
+  {/key}
 </div>
 
 <style>
