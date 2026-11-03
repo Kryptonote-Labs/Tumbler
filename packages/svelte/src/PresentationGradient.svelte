@@ -27,7 +27,8 @@
     {@render stops()}
   </linearGradient>
 {:else if gradient.kind === 'rectangular'}
-  <!-- SVG has no rectangular paint server; a bounding-box pattern of shaded faces stands in. -->
+  <!-- SVG has no rectangular paint server; a bounding-box pattern of shaded faces stands in.
+       Crisp edges tile the faces without seams; colour is continuous across them. -->
   <pattern {id} width="1" height="1" patternContentUnits="objectBoundingBox">
     {#each faces as face, i}
       <linearGradient
@@ -39,7 +40,11 @@
         y2={face.line[3]}
         color-interpolation="sRGB">{@render stops()}</linearGradient
       >
-      <polygon points={face.points.join(' ')} fill={`url(#${id}-${i})`} />
+      <polygon
+        points={face.points.join(' ')}
+        fill={`url(#${id}-${i})`}
+        shape-rendering="crispEdges"
+      />
     {/each}
   </pattern>
 {:else}

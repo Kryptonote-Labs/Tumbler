@@ -14,10 +14,11 @@ export function linearGradientLine(value: DrawingGradient, width: number, height
 }
 /**
  * DrawingML `rect` path shading in unit space: four faces meet at the focus and each shades from
- * the focus (offset 0) to its own edge, so contours are rectangles. Faces overlap slightly so
- * anti-aliased renderers show no seams; hosts clip to the filled area.
+ * the focus (offset 0) to its own edge, so contours are rectangles. `bleed` grows each face so
+ * anti-aliased renderers show no seams; only use it with opaque stops, since overlaps composite
+ * translucent colour twice. Hosts clip to the filled area.
  */
-export function rectangularGradientFaces([cx, cy]: readonly [number, number]) {
+export function rectangularGradientFaces([cx, cy]: readonly [number, number], bleed = 0) {
   const faces = [
     { points: [[0, 0], [1, 0]], line: [cx, cy, cx, 0] },
     { points: [[1, 0], [1, 1]], line: [cx, cy, 1, cy] },
@@ -33,7 +34,7 @@ export function rectangularGradientFaces([cx, cy]: readonly [number, number]) {
       return {
         points: triangle.map(([x, y]) => {
           const d = Math.hypot(x - mx, y - my) || 1;
-          return [x + ((x - mx) / d) * 0.002, y + ((y - my) / d) * 0.002] as const;
+          return [x + ((x - mx) / d) * bleed, y + ((y - my) / d) * bleed] as const;
         }),
         line,
       };

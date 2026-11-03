@@ -22,3 +22,14 @@ test('rectangular gradients shade outward from the focus to each edge', () => {
 test('a focus on an edge drops that face', () => {
   expect(rectangularGradientFaces([1, 0])).toHaveLength(2);
 });
+
+test('faces tile the square exactly unless asked to bleed', () => {
+  const area = (bleed?: number) =>
+    rectangularGradientFaces([0.3, 0.6], bleed).reduce((sum, { points: [a, b, c] }) => {
+      return (
+        sum + Math.abs((b![0] - a![0]) * (c![1] - a![1]) - (c![0] - a![0]) * (b![1] - a![1])) / 2
+      );
+    }, 0);
+  expect(area()).toBeCloseTo(1, 10);
+  expect(area(0.002)).toBeGreaterThan(1);
+});

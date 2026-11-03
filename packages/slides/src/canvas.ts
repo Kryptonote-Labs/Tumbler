@@ -40,14 +40,21 @@ function gradient<Path, Image>(
     result.addColorStop(Math.max(0, Math.min(1, stop.offset)), stop.color);
   return result;
 }
-/** Canvas has no rectangular paint either; paint the shaded faces into the current clip. */
+/**
+ * Canvas has no rectangular paint either; paint the shaded faces into the current clip. Opaque
+ * faces overlap to hide anti-aliased seams; translucent ones can't without darkening the overlap.
+ */
 function rectangular<Path, Image>(
   ctx: SlideCanvasContext<Path, Image>,
   value: DrawingGradient,
   w: number,
   h: number,
 ) {
-  for (const face of rectangularGradientFaces(value.center)) {
+  const opaque = value.stops.every(({ color }) => {
+    const alpha = /^rgba\(.*,\s*([\d.]+)\)$/.exec(color)?.[1];
+    return color !== 'transparent' && (alpha === undefined || Number(alpha) >= 1);
+  });
+  for (const face of rectangularGradientFaces(value.center, opaque ? 0.002 : 0)) {
     const [x1, y1, x2, y2] = face.line;
     const fill = ctx.createLinearGradient(x1 * w, y1 * h, x2 * w, y2 * h);
     for (const stop of value.stops)
