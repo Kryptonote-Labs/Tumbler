@@ -39,7 +39,7 @@
       staging.height = Math.ceil(scene.height * displayScale * ratio);
       const context = staging.getContext('2d');
       if (!context) throw new Error('Canvas rendering is unavailable.');
-      await paintPdfPage(current.document.source, scene, context, host, { scale: displayScale * ratio, signal: controller.signal });
+      await paintPdfPage(context, scene, current.document.source, host, { scale: displayScale * ratio, signal: controller.signal });
       controller.signal.throwIfAborted();
       canvas.width = staging.width; canvas.height = staging.height;
       canvas.getContext('2d')?.drawImage(staging, 0, 0);
@@ -55,7 +55,7 @@
 </script>
 
 <div bind:this={host} class="pdf-page" data-pdf-page={index + 1} style:width={`${page.width * scale}px`} style:height={`${page.height * scale}px`}>
-  <canvas bind:this={canvas} aria-label={`Page ${index + 1}`} role="img"></canvas>
+  <canvas bind:this={canvas} aria-label={`Page ${index + 1}`}></canvas>
   {#if error}<div class="page-error" role="alert">{error}</div>{/if}
 </div>
 
