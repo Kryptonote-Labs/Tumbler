@@ -40,6 +40,8 @@ export class PdfFont {
   readonly fontMatrix: PdfMatrix;
   readonly resources: PdfDictionary;
   readonly unitsPerEm: number;
+  readonly ascent: number;
+  readonly descent: number;
   readonly css: { family: string; weight: string; style: string };
   readonly vertical: boolean;
   private readonly mapping: PdfCMap;
@@ -113,6 +115,18 @@ export class PdfFont {
     this.unitsPerEm = outline?.unitsPerEm ?? 1000;
     const standard = standardName(this.baseName);
     this.standard = standard ? Font.load(standard) : undefined;
+    const rawBox = source.resolve(dictionary.get("FontBBox") ?? descriptor.get("FontBBox"));
+    const box = Array.isArray(rawBox) ? rawBox : [];
+    const fallbackAscent = number(
+      descriptor.get("Ascent") ?? box[3] ?? this.standard?.Ascender ?? 800,
+    );
+    const fallbackDescent = number(
+      descriptor.get("Descent") ?? box[1] ?? this.standard?.Descender ?? -200,
+    );
+    this.ascent =
+      outline && outline.ascent > 0 ? outline.ascent : (fallbackAscent / 1000) * this.unitsPerEm;
+    this.descent =
+      outline && outline.descent < 0 ? outline.descent : (fallbackDescent / 1000) * this.unitsPerEm;
     this.css = {
       family: /Times/i.test(this.baseName)
         ? '"Times New Roman", "Liberation Serif", serif'
