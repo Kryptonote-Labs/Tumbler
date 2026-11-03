@@ -26,7 +26,8 @@ export function pdfSourceSpacing(
     const gap = gaps.get(left + ':' + right),
       before = seed.delta[left],
       after = seed.delta[right];
-    if (!gap || text[i - 1] !== before?.insert || text[i] !== after?.insert) continue;
+    if (!gap || !before || !after || text[i - 1] !== before.insert || text[i] !== after.insert)
+      continue;
     const a = styles[i - 1]!,
       b = styles[i]!,
       ratio = a.size / before.attributes.size;
