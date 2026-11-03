@@ -178,7 +178,7 @@ export async function comparePrecision(
   const diff = Buffer.alloc(width * height * 4);
   const changedPixels = pixelmatch(left, right, diff, width, height, {
     threshold: 0.1,
-    includeAA: false,
+    includeAA: true,
   });
   const errorRatio = nonFontPixels ? changedPixels / nonFontPixels : changedPixels ? 1 : 0;
   const inkErrorRatio = ink ? changedPixels / ink : changedPixels ? 1 : 0;

@@ -1,6 +1,7 @@
 {
   "pdfium": "156.0.8076.0",
-  "metric": "Changed non-font pixels divided by non-font page pixels at 72 DPI; antialiasing excluded; text origins/effective sizes checked within 1% of em; filled-path/image counts and bounds independently checked.",
+  "renderer": "Chromium canvas",
+  "metric": "Changed non-font pixels divided by non-font page pixels at 72 DPI; non-font antialiasing counted, perceptual threshold 0.1; text origins/effective sizes checked within 1% of em; filled-path/image counts and bounds independently checked.",
   "limit": 0.01,
   "results": [
     {
@@ -806,12 +807,12 @@
         {
           "passed": true,
           "dimensionsMatch": true,
-          "changedPixels": 1,
+          "changedPixels": 256,
           "nonFontPixels": 81724,
           "nonFontInkPixels": 6210,
-          "inkErrorRatio": 0.00016103059581320451,
-          "errorRatio": 1.2236307571827126e-05,
-          "pageErrorRatio": 1.1574074074074073e-05,
+          "inkErrorRatio": 0.041223832528180356,
+          "errorRatio": 0.003132494738387744,
+          "pageErrorRatio": 0.002962962962962963,
           "geometry": {
             "errors": [],
             "maxOriginError": 0.05188355734235569,
@@ -836,6 +837,5 @@
       "pages": []
     }
   ],
-  "passed": true,
-  "renderer": "Chromium canvas"
+  "passed": true
 }

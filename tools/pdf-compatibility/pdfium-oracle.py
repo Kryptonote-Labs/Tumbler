@@ -2,6 +2,7 @@
 
 import ctypes
 import json
+import math
 import pathlib
 import struct
 import sys
@@ -105,8 +106,15 @@ def inspect(source, output, password):
                                            'matrix': [matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f]})
                 finally:
                     textpage.close()
-                bitmap = page.render(scale=1, rev_byteorder=True, force_bitmap_format=raw.FPDFBitmap_BGR,
-                                     draw_annots=True)
+                # Keep exactly one pixel per point. The convenience render() API stretches
+                # fractional page sizes to the rounded bitmap dimensions.
+                bitmap = pdfium.PdfBitmap.new_native(math.ceil(page.get_width()), math.ceil(page.get_height()),
+                                                     format=raw.FPDFBitmap_BGR, rev_byteorder=True)
+                bitmap.fill_rect((255, 255, 255, 255), 0, 0, bitmap.width, bitmap.height)
+                matrix = raw.FS_MATRIX(1, 0, 0, 1, 0, 0)
+                clipping = raw.FS_RECTF(0, 0, bitmap.width, bitmap.height)
+                raw.FPDF_RenderPageBitmapWithMatrix(bitmap, page, ctypes.byref(matrix), ctypes.byref(clipping),
+                                                    raw.FPDF_ANNOT | raw.FPDF_REVERSE_BYTE_ORDER)
                 try:
                     image = f'page-{index + 1:03d}.png'
                     write_png(bitmap, output / image)

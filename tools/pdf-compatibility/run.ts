@@ -140,7 +140,7 @@ async function main() {
     pdfium,
     renderer: renderer === "--browser" ? "Chromium canvas" : "native canvas",
     metric:
-      "Changed non-font pixels divided by non-font page pixels at 72 DPI; antialiasing excluded; text origins/effective sizes checked within 1% of em; filled-path/image counts and bounds independently checked.",
+      "Changed non-font pixels divided by non-font page pixels at 72 DPI; non-font antialiasing counted, perceptual threshold 0.1; text origins/effective sizes checked within 1% of em; filled-path/image counts and bounds independently checked.",
     limit: 0.01,
     results,
     passed: results.every((result) => !result.failures.length),

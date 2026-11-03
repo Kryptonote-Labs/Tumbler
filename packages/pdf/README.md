@@ -37,13 +37,14 @@ An unchanged download is always the original source, including unsupported conte
 Run `bun run compatibility:pdf <corpus> <new-report-directory>` with Python `pypdfium2`
 installed. PDFium is an independent test oracle, never a production dependency. The bundled
 corpus is `packages/pdf/test/fixtures`. Reports retain native/reference/difference images and
-source hashes. The 1% gate measures changed non-font page pixels at 72 DPI, with antialiasing
-excluded. Separate checks require text origins and effective em sizes within 1%, and filled-path
+source hashes. The 1% gate measures changed non-font page pixels at 72 DPI, with a perceptual
+pixel threshold of 0.1. Non-font antialiasing counts toward the error. Separate checks require
+text origins and effective em sizes within 1%, and filled-path
 and image counts/bounds within 0.05 pt. Font pixels are masked only for raster comparison.
 Fault tests ensure moved text and missing small objects fail independently of pixel coverage.
 
 The initial 22 positive files contain 37 pages, including browser-generated embedded fonts,
-tables and gradients. All pass; the largest measured pixel error is 0.0038%. This is evidence
+tables and gradients. All pass; the largest measured pixel error is 0.3145%. This is evidence
 for those fixtures, not a claim that every PDF renders within 1%. Expand the corpus before
 claiming support for additional content. Two malformed files must reject.
 
@@ -52,7 +53,7 @@ A second, externally authored check uses PDF 32000-1:2008 itself, downloaded fro
 The interpreter compiles 749 of its 756 pages. The seven explicit failures require CCITT images,
 Tahoma fallback or tiling patterns. A fixed 20-page sample at original page numbers
 1, 2, 26, 51, 76, 101, 151, 201, 251, 301, 351, 401, 451, 501, 551, 601, 651, 701, 751 and 756
-passes the same independent pixel, text and object gates. Its maximum non-font error is 0.6561%.
+passes the same independent pixel, text and object gates. Its maximum non-font error is 0.8083%.
 The numerical baseline is `tools/pdf-compatibility/baselines/iso-32000-1-sample.json`.
 PDFium's discretionary-hyphen sentinel is normalized to its visible hyphen for the geometry check;
 unpainted whitespace is excluded because PDFium removes some source spaces from its text page.
@@ -60,3 +61,6 @@ Glyph positions following those spaces remain checked.
 
 Append `--browser` to the comparison command to exercise the production browser painter in Chromium.
 Install the matching Playwright Chromium before running that mode.
+
+The oracle uses PDFium's matrix render API at exactly one pixel per point. Filled rectangles and
+axis-aligned images retain device-pixel coverage without changing their source-space geometry.

@@ -1,10 +1,12 @@
 {
   "pdfium": "156.0.8076.0",
-  "metric": "Changed non-font pixels divided by non-font page pixels at 72 DPI; antialiasing excluded; text origins/effective sizes checked within 1% of em; filled-path/image counts and bounds independently checked.",
+  "renderer": "native canvas",
+  "metric": "Changed non-font pixels divided by non-font page pixels at 72 DPI; non-font antialiasing counted, perceptual threshold 0.1; text origins/effective sizes checked within 1% of em; filled-path/image counts and bounds independently checked.",
   "limit": 0.01,
   "results": [
     {
       "id": "iso-sample",
+      "sha256": "c4475e2bb7ffa2ff286f58203eea1681ee53f8dee2866f348bc1b62ce2601c00",
       "failures": [],
       "pages": [
         {
@@ -334,12 +336,12 @@
         {
           "passed": true,
           "dimensionsMatch": true,
-          "changedPixels": 3143,
+          "changedPixels": 3872,
           "nonFontPixels": 479087,
-          "nonFontInkPixels": 104004,
-          "inkErrorRatio": 0.030219991538786968,
-          "errorRatio": 0.00656039508481758,
-          "pageErrorRatio": 0.006273578314936426,
+          "nonFontInkPixels": 103995,
+          "inkErrorRatio": 0.03723255925765662,
+          "errorRatio": 0.008082039379068937,
+          "pageErrorRatio": 0.0077286971795844225,
           "geometry": {
             "errors": [],
             "maxOriginError": 6.571756582168168e-05,
@@ -367,12 +369,10 @@
             "characters": 65
           }
         }
-      ],
-      "sha256": "c4475e2bb7ffa2ff286f58203eea1681ee53f8dee2866f348bc1b62ce2601c00"
+      ]
     }
   ],
   "passed": true,
-  "renderer": "native canvas",
   "source": {
     "url": "https://opensource.adobe.com/dc-acrobat-sdk-docs/standards/pdfstandards/pdf/PDF32000_2008.pdf",
     "sha256": "9de0ca9e8570d6209e8bd48a355be8eb6ec376acfc3fc3ae97cd8730351417ff",

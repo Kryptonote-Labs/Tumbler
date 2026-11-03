@@ -1,10 +1,12 @@
 {
   "pdfium": "156.0.8076.0",
-  "metric": "Changed non-font pixels divided by non-font page pixels at 72 DPI; antialiasing excluded; text origins/effective sizes checked within 1% of em; filled-path/image counts and bounds independently checked.",
+  "renderer": "native canvas",
+  "metric": "Changed non-font pixels divided by non-font page pixels at 72 DPI; non-font antialiasing counted, perceptual threshold 0.1; text origins/effective sizes checked within 1% of em; filled-path/image counts and bounds independently checked.",
   "limit": 0.01,
   "results": [
     {
       "id": "basic-text",
+      "sha256": "b2c92b36e0286543bd3d29fb48e5896eea7e7c92413b8112187c988d4e5696de",
       "failures": [],
       "pages": [
         {
@@ -25,11 +27,11 @@
             "characters": 9
           }
         }
-      ],
-      "sha256": "b2c92b36e0286543bd3d29fb48e5896eea7e7c92413b8112187c988d4e5696de"
+      ]
     },
     {
       "id": "escaped-strings",
+      "sha256": "f914de40de5cf92d614c1d9b064bbb91081f391971520cf0282e710b4c43fbd9",
       "failures": [],
       "pages": [
         {
@@ -50,11 +52,11 @@
             "characters": 27
           }
         }
-      ],
-      "sha256": "f914de40de5cf92d614c1d9b064bbb91081f391971520cf0282e710b4c43fbd9"
+      ]
     },
     {
       "id": "compressed-content",
+      "sha256": "b3919eca1083d93b6d7483b1370e72736f2477e4d324930170e83344b1085fc5",
       "failures": [],
       "pages": [
         {
@@ -75,11 +77,11 @@
             "characters": 9
           }
         }
-      ],
-      "sha256": "b3919eca1083d93b6d7483b1370e72736f2477e4d324930170e83344b1085fc5"
+      ]
     },
     {
       "id": "positioned-text",
+      "sha256": "6366251e9cff0717a7179fb4c8331f8832b4c8483454d8ca9a74670a87b64176",
       "failures": [],
       "pages": [
         {
@@ -100,11 +102,11 @@
             "characters": 9
           }
         }
-      ],
-      "sha256": "6366251e9cff0717a7179fb4c8331f8832b4c8483454d8ca9a74670a87b64176"
+      ]
     },
     {
       "id": "inherited-page",
+      "sha256": "d65bfbb7236850284ba47aa169fe6d0608037ded14adad1227fc869c57870b91",
       "failures": [],
       "pages": [
         {
@@ -125,11 +127,11 @@
             "characters": 14
           }
         }
-      ],
-      "sha256": "d65bfbb7236850284ba47aa169fe6d0608037ded14adad1227fc869c57870b91"
+      ]
     },
     {
       "id": "shared-form",
+      "sha256": "362f020c65ca0306b01d877efceeca78736962a48b0d59ab4d06449bc4e02492",
       "failures": [],
       "pages": [
         {
@@ -150,11 +152,11 @@
             "characters": 12
           }
         }
-      ],
-      "sha256": "362f020c65ca0306b01d877efceeca78736962a48b0d59ab4d06449bc4e02492"
+      ]
     },
     {
       "id": "split-content-state",
+      "sha256": "eb54b3361dcc37074aac6ebf3a04c133706228071f06057abc72beb472aa1a98",
       "failures": [],
       "pages": [
         {
@@ -175,11 +177,11 @@
             "characters": 0
           }
         }
-      ],
-      "sha256": "eb54b3361dcc37074aac6ebf3a04c133706228071f06057abc72beb472aa1a98"
+      ]
     },
     {
       "id": "graphics",
+      "sha256": "9b25ac752057501cdaf181fe75136c771c01a5ac9b566cb602c75749e769ac58",
       "failures": [],
       "pages": [
         {
@@ -200,11 +202,11 @@
             "characters": 0
           }
         }
-      ],
-      "sha256": "9b25ac752057501cdaf181fe75136c771c01a5ac9b566cb602c75749e769ac58"
+      ]
     },
     {
       "id": "unicode-map",
+      "sha256": "5bb69c3b183fa2d99a3e326eec377213d62f08729c3421a15df441f3c6c8ce2c",
       "failures": [],
       "pages": [
         {
@@ -225,11 +227,11 @@
             "characters": 6
           }
         }
-      ],
-      "sha256": "5bb69c3b183fa2d99a3e326eec377213d62f08729c3421a15df441f3c6c8ce2c"
+      ]
     },
     {
       "id": "tagged-order",
+      "sha256": "74ff8db2362271c90cb3b450d2cdb0119b37b47927d01d2ddba1a92754069fc4",
       "failures": [],
       "pages": [
         {
@@ -250,11 +252,11 @@
             "characters": 11
           }
         }
-      ],
-      "sha256": "74ff8db2362271c90cb3b450d2cdb0119b37b47927d01d2ddba1a92754069fc4"
+      ]
     },
     {
       "id": "annotation",
+      "sha256": "43e1c09d6aa3ccbe12c7a5fa88a463b54dee06bd3ebe81e10e6c744514cbfc5b",
       "failures": [],
       "pages": [
         {
@@ -275,11 +277,11 @@
             "characters": 8
           }
         }
-      ],
-      "sha256": "43e1c09d6aa3ccbe12c7a5fa88a463b54dee06bd3ebe81e10e6c744514cbfc5b"
+      ]
     },
     {
       "id": "image-only",
+      "sha256": "c726ca13d0c9639fbb3d5996daebf8ba86eea7b0dae0076198bbe44888db31e2",
       "failures": [],
       "pages": [
         {
@@ -300,11 +302,11 @@
             "characters": 0
           }
         }
-      ],
-      "sha256": "c726ca13d0c9639fbb3d5996daebf8ba86eea7b0dae0076198bbe44888db31e2"
+      ]
     },
     {
       "id": "hidden-ocr",
+      "sha256": "fb5990b191352d919f9b6726b90cc327a0b82776291de24599e6c55633a55464",
       "failures": [],
       "pages": [
         {
@@ -325,11 +327,11 @@
             "characters": 4
           }
         }
-      ],
-      "sha256": "fb5990b191352d919f9b6726b90cc327a0b82776291de24599e6c55633a55464"
+      ]
     },
     {
       "id": "inline-image",
+      "sha256": "c09dcce97bca32674ab62813ea1503ad5def4f70cd76879433d1ca293b2e60dd",
       "failures": [],
       "pages": [
         {
@@ -350,11 +352,11 @@
             "characters": 0
           }
         }
-      ],
-      "sha256": "c09dcce97bca32674ab62813ea1503ad5def4f70cd76879433d1ca293b2e60dd"
+      ]
     },
     {
       "id": "incremental-revision",
+      "sha256": "33583fcf788291b704786650a98d0676d275bc464ed2b647206d2480829372f2",
       "failures": [],
       "pages": [
         {
@@ -375,11 +377,11 @@
             "characters": 15
           }
         }
-      ],
-      "sha256": "33583fcf788291b704786650a98d0676d275bc464ed2b647206d2480829372f2"
+      ]
     },
     {
       "id": "page-sequence",
+      "sha256": "586a6571d4650f695550ef7cfbcf1fe2f9d50f4cd120cabdad561d99f281d85e",
       "failures": [],
       "pages": [
         {
@@ -436,11 +438,11 @@
             "characters": 9
           }
         }
-      ],
-      "sha256": "586a6571d4650f695550ef7cfbcf1fe2f9d50f4cd120cabdad561d99f281d85e"
+      ]
     },
     {
       "id": "many-pages",
+      "sha256": "240e5c002a32e5e8d4818e9dcdbb829df453ce9a21686489a5758762f2bd8a97",
       "failures": [],
       "pages": [
         {
@@ -659,11 +661,11 @@
             "characters": 6
           }
         }
-      ],
-      "sha256": "240e5c002a32e5e8d4818e9dcdbb829df453ce9a21686489a5758762f2bd8a97"
+      ]
     },
     {
       "id": "object-streams",
+      "sha256": "0bcaf5228b629a5d18a741d423421777f33cd5b8d750b697819f173e1d86193e",
       "failures": [],
       "pages": [
         {
@@ -684,11 +686,11 @@
             "characters": 9
           }
         }
-      ],
-      "sha256": "0bcaf5228b629a5d18a741d423421777f33cd5b8d750b697819f173e1d86193e"
+      ]
     },
     {
       "id": "linearized",
+      "sha256": "aa7bd7bbaaa5aa7ade6f20609e2c7411a964bb7e4150f5605b6b48baf8e1e06b",
       "failures": [],
       "pages": [
         {
@@ -709,11 +711,11 @@
             "characters": 9
           }
         }
-      ],
-      "sha256": "aa7bd7bbaaa5aa7ade6f20609e2c7411a964bb7e4150f5605b6b48baf8e1e06b"
+      ]
     },
     {
       "id": "encrypted-aes256",
+      "sha256": "e4b6e5344ac92d2f01447760bc849ed468b319140c48945db52e5ded18714579",
       "failures": [],
       "pages": [
         {
@@ -734,11 +736,11 @@
             "characters": 9
           }
         }
-      ],
-      "sha256": "e4b6e5344ac92d2f01447760bc849ed468b319140c48945db52e5ded18714579"
+      ]
     },
     {
       "id": "reordered-deleted",
+      "sha256": "030fc613b14e7c91efee32c6f164790b8541ab7d645c56ca603d3131f8bd9a87",
       "failures": [],
       "pages": [
         {
@@ -777,11 +779,11 @@
             "characters": 7
           }
         }
-      ],
-      "sha256": "030fc613b14e7c91efee32c6f164790b8541ab7d645c56ca603d3131f8bd9a87"
+      ]
     },
     {
       "id": "chromium-typography",
+      "sha256": "7850fe896cdfa41840d447038986c680067b6b18ca1a1b2abce34cb8bcc3a726",
       "failures": [],
       "pages": [
         {
@@ -805,12 +807,12 @@
         {
           "passed": true,
           "dimensionsMatch": true,
-          "changedPixels": 1,
+          "changedPixels": 257,
           "nonFontPixels": 81724,
           "nonFontInkPixels": 6210,
-          "inkErrorRatio": 0.00016103059581320451,
-          "errorRatio": 1.2236307571827126e-05,
-          "pageErrorRatio": 1.1574074074074073e-05,
+          "inkErrorRatio": 0.04138486312399356,
+          "errorRatio": 0.0031447310459595712,
+          "pageErrorRatio": 0.0029745370370370373,
           "geometry": {
             "errors": [],
             "maxOriginError": 0.05188355734235569,
@@ -820,22 +822,20 @@
             "characters": 40
           }
         }
-      ],
-      "sha256": "7850fe896cdfa41840d447038986c680067b6b18ca1a1b2abce34cb8bcc3a726"
+      ]
     },
     {
       "id": "broken-xref",
+      "sha256": "ee46e558f96b1ebba58735f87f6d93031b3736dc11861bbf38d40c9cee1499fe",
       "failures": [],
-      "pages": [],
-      "sha256": "ee46e558f96b1ebba58735f87f6d93031b3736dc11861bbf38d40c9cee1499fe"
+      "pages": []
     },
     {
       "id": "truncated",
+      "sha256": "a5b85ea1e96d33e5a208c0af3a30b8e9dded6a2de44470f13ecad00994c24212",
       "failures": [],
-      "pages": [],
-      "sha256": "a5b85ea1e96d33e5a208c0af3a30b8e9dded6a2de44470f13ecad00994c24212"
+      "pages": []
     }
   ],
-  "passed": true,
-  "renderer": "native canvas"
+  "passed": true
 }
