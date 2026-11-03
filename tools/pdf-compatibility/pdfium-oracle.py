@@ -98,7 +98,7 @@ def inspect(source, output, password):
                         matrix = raw.FS_MATRIX()
                         if not raw.FPDFText_GetMatrix(textpage, i, ctypes.byref(matrix)):
                             raise RuntimeError('PDFium failed to return a text matrix')
-                        characters.append({'code': raw.FPDFText_GetUnicode(textpage, i),
+                        characters.append({'code': 45 if raw.FPDFText_IsHyphen(textpage, i) == 1 else raw.FPDFText_GetUnicode(textpage, i),
                                            'generated': raw.FPDFText_IsGenerated(textpage, i) == 1,
                                            'origin': [x.value, y.value],
                                            'fontSize': raw.FPDFText_GetFontSize(textpage, i),

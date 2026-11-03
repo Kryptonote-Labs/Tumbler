@@ -28,12 +28,15 @@ export function rectangleCoverage(element: PdfPathElement, viewport: PdfMatrix) 
   const right = Math.max(...points.map((p) => p[0])),
     bottom = Math.max(...points.map((p) => p[1]));
   if (right <= left || bottom <= top) return;
-  const area = Math.abs(points.reduce((sum, point, i) => {
-    const next = points[(i + 1) % points.length]!;
-    return sum + point[0] * next[1] - next[0] * point[1];
-  }, 0)) / 2;
+  const area =
+    Math.abs(
+      points.reduce((sum, point, i) => {
+        const next = points[(i + 1) % points.length]!;
+        return sum + point[0] * next[1] - next[0] * point[1];
+      }, 0),
+    ) / 2;
   if (Math.abs(area - (right - left) * (bottom - top)) > 1e-7) return;
-  const x = Math.floor(left + 1e-7),
-    y = Math.floor(top + 1e-7);
-  return [x, y, Math.ceil(right - 1e-7) - x, Math.ceil(bottom - 1e-7) - y] as const;
+  const x = right - left < 1 ? Math.floor((left + right) / 2) : Math.round(left);
+  const y = bottom - top < 1 ? Math.floor((top + bottom) / 2) : Math.round(top);
+  return [x, y, Math.max(1, Math.round(right) - x), Math.max(1, Math.round(bottom) - y)] as const;
 }

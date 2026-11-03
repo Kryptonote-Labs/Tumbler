@@ -46,3 +46,14 @@ The initial 22 positive files contain 37 pages, including browser-generated embe
 tables and gradients. All pass; the largest measured pixel error is 0.3901%. This is evidence
 for those fixtures, not a claim that every PDF renders within 1%. Expand the corpus before
 claiming support for additional content. Two malformed files must reject.
+
+A second, externally authored check uses PDF 32000-1:2008 itself, downloaded from
+[Adobe's standards archive](https://opensource.adobe.com/dc-acrobat-sdk-docs/standards/pdfstandards/pdf/PDF32000_2008.pdf).
+The interpreter compiles 749 of its 756 pages. The seven explicit failures require CCITT images,
+Tahoma fallback or tiling patterns. A fixed 20-page sample at original page numbers
+1, 2, 26, 51, 76, 101, 151, 201, 251, 301, 351, 401, 451, 501, 551, 601, 651, 701, 751 and 756
+passes the same independent pixel, text and object gates. Its maximum non-font error is 0.6561%.
+The numerical baseline is `tools/pdf-compatibility/baselines/iso-32000-1-sample.json`.
+PDFium's discretionary-hyphen sentinel is normalized to its visible hyphen for the geometry check;
+unpainted whitespace is excluded because PDFium removes some source spaces from its text page.
+Glyph positions following those spaces remain checked.
