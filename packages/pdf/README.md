@@ -91,6 +91,14 @@ Install the matching Playwright Chromium before running that mode.
 The oracle uses PDFium's matrix render API at exactly one pixel per point. Filled rectangles and
 axis-aligned images retain device-pixel coverage without changing their source-space geometry.
 
+## CMap recovery
+
+CMap metadata dictionaries are skipped without executing PostScript. This tolerates
+producer output that mixes `<< >>` with per-entry `def` commands while leaving PDF
+object parsing strict. Unpaired UTF-16 surrogates in ToUnicode destinations decode
+to U+FFFD, so unused broken mappings do not block page rendering. Odd-length Unicode
+destinations, invalid mapping ranges and unbalanced dictionary delimiters still reject.
+
 ## Execution policy
 
 `PdfInterpreter` shares a per-page work budget across nested Forms and Type 3 procedures.

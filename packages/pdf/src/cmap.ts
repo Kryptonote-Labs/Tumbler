@@ -21,7 +21,8 @@ function code(value: PdfValue): PdfCode {
 export function utf16(bytes: Uint8Array): string {
   if (bytes.length % 2)
     return invalid("CMap Unicode destination must contain complete UTF-16BE code units.");
-  return new TextDecoder("utf-16be", { fatal: true }).decode(bytes);
+  // Broken destinations must not prevent valid entries in the same font from rendering.
+  return new TextDecoder("utf-16be").decode(bytes);
 }
 
 /** Character codes remain separate from CIDs and Unicode sequences, including ligature expansion. */
@@ -37,10 +38,25 @@ export class PdfCMap {
     if (!bytes) return;
     const syntax = new PdfSyntax(bytes);
     let count = 0;
+    let dictionaryDepth = 0;
     while (syntax.position < bytes.length) {
       syntax.skip();
       if (syntax.position >= bytes.length) break;
+      // CMap metadata is PostScript, not PDF object syntax. Ignore dictionary bodies,
+      // including producer output that mixes << >> with per-entry def operators.
+      if (syntax.bytes[syntax.position] === 60 && syntax.bytes[syntax.position + 1] === 60) {
+        syntax.position += 2;
+        dictionaryDepth++;
+        continue;
+      }
+      if (syntax.bytes[syntax.position] === 62 && syntax.bytes[syntax.position + 1] === 62) {
+        syntax.position += 2;
+        if (!dictionaryDepth) return invalid("Unbalanced CMap dictionary.");
+        dictionaryDepth--;
+        continue;
+      }
       const value = readContentToken(syntax);
+      if (dictionaryDepth) continue;
       if (!isOperator(value)) {
         if (typeof value === "number") count = integer(value);
         continue;
@@ -105,6 +121,7 @@ export class PdfCMap {
       syntax.expect(value.operator.replace("begin", "end"));
       count = 0;
     }
+    if (dictionaryDepth) return invalid("Unterminated CMap dictionary.");
   }
   decode(bytes: Uint8Array, defaultLength: number): PdfCode[] {
     return [...this.codes(bytes, defaultLength)];
