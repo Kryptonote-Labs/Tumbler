@@ -1,0 +1,36 @@
+<script lang="ts">
+  import type { PdfTextContent } from '@tumblerjs/pdf';
+  let { content, scale = 1, label = 'PDF text' }: {
+    content: PdfTextContent;
+    scale?: number;
+    label?: string;
+  } = $props();
+  // Large local font size avoids tiny-font measurement rounding. The source em matrix positions the result.
+  const items = $derived.by(() => {
+    const canvas = typeof document === 'undefined' ? undefined : document.createElement('canvas'), measure = canvas?.getContext('2d');
+    return content.items.map(item => {
+      if (measure) measure.font = `${item.font.style} ${item.font.weight} 100px ${item.font.family}`;
+      const natural = measure?.measureText(item.text === '\n' ? ' ' : item.text).width ?? 100;
+      const fit = natural > 0 ? Math.max(0,item.width) / natural : 0;
+      const [a,b,c,d,e,f] = item.transform;
+      return {item,transform:`matrix(${a*fit},${b*fit},${c/100},${d/100},${e-c*item.ascent},${f-d*item.ascent})`};
+    });
+  });
+</script>
+
+<div class="text-layer" data-pdf-text-layer role="document" aria-label={label}
+  style:width={`${content.width}px`} style:height={`${content.height}px`} style:transform={`scale(${scale})`}>
+  {#each items as {item,transform} (item.id)}
+    <span data-pdf-text={item.kind} data-pdf-glyph={item.kind === 'glyph' ? item.id : undefined}
+      dir="auto" style:transform style:height={`${item.height*100}px`} style:line-height={`${item.height*100}px`}
+      style:font-family={item.font.family} style:font-weight={item.font.weight} style:font-style={item.font.style}
+    >{item.text}</span>
+  {/each}
+</div>
+
+<style>
+  .text-layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: clip; user-select: text; -webkit-user-select: text; color: transparent; }
+  span { position: absolute; left: 0; top: 0; display: inline-block; font-size: 100px; white-space: pre; transform-origin: 0 0; cursor: text; color: transparent; -webkit-text-fill-color: transparent; unicode-bidi: isolate; }
+  span[data-pdf-text='separator'] { pointer-events: none; }
+  span::selection { background: rgb(64 128 255 / .35); color: transparent; }
+</style>
