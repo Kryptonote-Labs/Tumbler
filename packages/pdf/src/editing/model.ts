@@ -8,6 +8,8 @@ import { defaultPdfTextStyle, type PdfTextStyle } from './fonts.ts';
 export type PdfTextSeed = { id: string; page: number; x: number; y: number; width: number; lineHeight: number; style: PdfTextStyle; sources: { instance: string; object: string; start: number; end: number; mode: number; displacement: number }[]; delta: { insert: string; attributes: PdfTextStyle }[] };
 export const pdfSourceKey = (s: Pick<PdfSceneSource, 'instance' | 'object' | 'start'>) => `${s.instance}/${s.object.key}/${s.start}`;
 function styleOf(item: PdfTextItem, color: string): PdfTextStyle {
+  const rgb = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(color);
+  if (rgb) color = '#' + rgb.slice(1).map(n => Number(n).toString(16).padStart(2,'0')).join('');
   return { ...defaultPdfTextStyle, size: Math.hypot(item.transform[0], item.transform[1]), bold: item.font.weight === 'bold', italic: item.font.style === 'italic', family: /serif/i.test(item.font.family) && !/sans/i.test(item.font.family) ? 'Serif' : /mono/i.test(item.font.family) ? 'Mono' : 'Sans', color };
 }
 /** Geometric paragraph recovery preserves source ownership. Shared showing operators never split between regions. */

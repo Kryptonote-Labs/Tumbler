@@ -53,7 +53,7 @@
     if (event.key==='Escape') {active=undefined;onselection?.(null);}
     if (['ArrowUp','ArrowDown'].includes(event.key)) {
       const layout=layouts.find(l=>l.id===active), caret=layout?.carets.find(c=>c.offset===(input.selectionDirection==='backward'?start:end));
-      if(layout&&caret) {event.preventDefault();const next=hitPdfText(layout,caret.x,caret.y+(event.key==='ArrowUp'?-1:1)*Math.max(model.seed(active).lineHeight,caret.height*1.25));const anchor=event.shiftKey?(input.selectionDirection==='backward'?end:start):next.offset;void select(active,anchor,next.offset);}
+      if(layout&&caret) {event.preventDefault();const next=hitPdfText(layout,caret.x,caret.y+(event.key==='ArrowUp'?-1:1)*Math.max(model.seed(layout.id).lineHeight,caret.height*1.25));const anchor=event.shiftKey?(input.selectionDirection==='backward'?end:start):next.offset;void select(layout.id,anchor,next.offset);}
     }
   }
   function pointer(event: PointerEvent, page: number) {
