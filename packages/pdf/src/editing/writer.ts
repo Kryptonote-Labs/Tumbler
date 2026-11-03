@@ -128,7 +128,7 @@ export function exportEditedPdf(document: PdfDocument, model: PdfTextModel, font
     const rewritten = streams.map(value => {
       const stream = document.source.resolve(value);
       if (!(stream instanceof PdfStream)) throw new Error('Invalid page content stream.');
-      return rewrite(stream,`page:${page.id}`,resources,seeds);
+      return rewrite(stream,`page:${page.id}:stream:${stream.object.key}`,resources,seeds);
     });
     // Isolate the overlay from the original page's persistent CTM and text state.
     const prefix = writer.stream(bytes('q\n')), suffix = writer.stream(bytes(`Q\nq /${overlayName} Do Q\n`));
@@ -145,7 +145,7 @@ export function exportEditedPdf(document: PdfDocument, model: PdfTextModel, font
       while (syntax.position < syntax.bytes.length) { const token = readContentToken(syntax); if (isOperator(token)) { operator = token.operator; break; } operands.push(token); }
       const prefix = operator === "'" ? 'T* ' : operator === '"' ? `${serializePdfValue(operands[0]!)} Tw ${serializePdfValue(operands[1]!)} Tc T* ` : '';
       // Replace glyph codes with their exact displacement. Deleted text is absent from extraction.
-      patches.set(target.start,{ end:target.end, text:`${prefix}[${n(target.displacement)}] TJ` });
+      patches.set(target.start,{ end:target.end, text:`${prefix}[${n(target.displacement + (operator === 'TJ' && Array.isArray(operands[0]) ? operands[0].reduce<number>((sum, value) => sum + (typeof value === 'number' ? value : 0),0) : 0))}] TJ` });
     }
     const children = [...new Set(targets.filter(t => t.instance.startsWith(instance + ':form:')).map(t => t.instance.slice(instance.length + 6).split(':')[0]!))];
     for (const offset of children) {

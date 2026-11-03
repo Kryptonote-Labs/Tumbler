@@ -77,7 +77,7 @@ export class PdfTextModel {
       const text = new Y.Text();
       region.set('text', text);
       text.applyDelta(seed.delta);
-    }, local ? this.origin : 'import');
+    }, local ? 'create' : 'import');
     return seed.id;
   }
   seed(id: string): PdfTextSeed {
@@ -90,8 +90,17 @@ export class PdfTextModel {
     if (!(text instanceof Y.Text)) throw new Error('Unknown PDF text region.');
     return text;
   }
-  ids(page?: number) { return [...this.regions.keys()].filter(id => page === undefined || this.seed(id).page === page).sort(); }
-  dirty(id: string) { const seed = this.seed(id); return !seed.sources.length || JSON.stringify(this.text(id).toDelta()) !== JSON.stringify(seed.delta); }
+  ids(page?: number) { return [...this.regions.keys()].filter(id => page === undefined || this.seed(id).page === page).sort((a,b) => { const x=this.seed(a),y=this.seed(b); return x.page-y.page || x.y-y.y || x.x-y.x || a.localeCompare(b); }); }
+  dirty(id: string) {
+    const seed = this.seed(id);
+    if (!seed.sources.length) return true;
+    const normalize = (delta: {insert: unknown; attributes?: Record<string,unknown>}[]) => {
+      const result: {insert:string;attributes:PdfTextStyle}[]=[];
+      for (const run of delta) { if(typeof run.insert !== 'string') return ''; const attributes={...seed.style,...run.attributes}, previous=result.at(-1); if(previous && JSON.stringify(previous.attributes)===JSON.stringify(attributes))previous.insert+=run.insert;else result.push({insert:run.insert,attributes}); }
+      return JSON.stringify(result);
+    };
+    return normalize(this.text(id).toDelta()) !== normalize(seed.delta);
+  }
   replace(id: string, start: number, end: number, value: string, style?: PdfTextStyle) {
     const text = this.text(id);
     if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end > text.length) throw new Error('Invalid PDF text range.');
