@@ -141,6 +141,7 @@
       "dependencies": {
         "@tumblerjs/charts": "0.1.0-alpha.26",
         "@tumblerjs/core": "0.1.0-alpha.26",
+        "@tumblerjs/pdf": "workspace:*",
         "@tumblerjs/sheets": "0.1.0-alpha.26",
         "@tumblerjs/word": "0.1.0-alpha.26",
         "rtf.js": "3.0.9",
