@@ -36,6 +36,7 @@
     "@typescript/native": "npm:typescript@^7.0.2",
     "fast-check": "^4.9.0",
     "pixelmatch": "8.0.0",
+    "playwright-core": "1.64.0",
     "pptxgenjs": "^4.0.1",
     "sharp": "0.35.5",
     "typescript": "npm:@typescript/typescript6@^6.0.2",

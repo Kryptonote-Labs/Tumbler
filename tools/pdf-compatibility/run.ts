@@ -1,3 +1,4 @@
+import { renderBrowserPdf } from "./browser-paint.ts";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,7 +62,9 @@ async function command(args: string[]) {
   }
 }
 async function main() {
-  const [directory, outputDirectory] = process.argv.slice(2);
+  const [directory, outputDirectory, renderer] = process.argv.slice(2);
+  if (renderer !== undefined && renderer !== "--browser")
+    throw new Error("Unknown PDF renderer option.");
   if (!directory || !outputDirectory)
     throw new Error("Usage: bun tools/pdf-compatibility/run.ts <corpus> <new-report-directory>");
   const corpus = resolve(directory),
@@ -101,7 +104,10 @@ async function main() {
         );
         pdfium = oracle.pdfium;
         await writeFile(join(folder, "oracle.json"), JSON.stringify(oracle, null, 2));
-        const native = await renderNativePdf(bytes, fixture.password);
+        const native = await (renderer === "--browser" ? renderBrowserPdf : renderNativePdf)(
+          bytes,
+          fixture.password,
+        );
         if (native.length !== oracle.pages.length)
           throw new Error("Rendered page count differs from PDFium.");
         for (const [index, page] of native.entries()) {
@@ -125,13 +131,14 @@ async function main() {
     } catch (error) {
       failures.push(error instanceof Error ? error.message : String(error));
     }
-    results.push({ id: fixture.id, failures, pages });
+    results.push({ id: fixture.id, sha256: fixture.sha256, failures, pages });
     console.log(
       `${failures.length ? "FAIL" : "PASS"} ${fixture.id}${failures.length ? `: ${failures.join(" ")}` : ""}`,
     );
   }
   const report = {
     pdfium,
+    renderer: renderer === "--browser" ? "Chromium canvas" : "native canvas",
     metric:
       "Changed non-font pixels divided by non-font page pixels at 72 DPI; antialiasing excluded; text origins/effective sizes checked within 1% of em; filled-path/image counts and bounds independently checked.",
     limit: 0.01,

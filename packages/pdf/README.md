@@ -43,7 +43,7 @@ and image counts/bounds within 0.05 pt. Font pixels are masked only for raster c
 Fault tests ensure moved text and missing small objects fail independently of pixel coverage.
 
 The initial 22 positive files contain 37 pages, including browser-generated embedded fonts,
-tables and gradients. All pass; the largest measured pixel error is 0.3901%. This is evidence
+tables and gradients. All pass; the largest measured pixel error is 0.0038%. This is evidence
 for those fixtures, not a claim that every PDF renders within 1%. Expand the corpus before
 claiming support for additional content. Two malformed files must reject.
 
@@ -57,3 +57,6 @@ The numerical baseline is `tools/pdf-compatibility/baselines/iso-32000-1-sample.
 PDFium's discretionary-hyphen sentinel is normalized to its visible hyphen for the geometry check;
 unpainted whitespace is excluded because PDFium removes some source spaces from its text page.
 Glyph positions following those spaces remain checked.
+
+Append `--browser` to the comparison command to exercise the production browser painter in Chromium.
+Install the matching Playwright Chromium before running that mode.

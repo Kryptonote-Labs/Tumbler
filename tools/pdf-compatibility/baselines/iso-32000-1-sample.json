@@ -18,10 +18,10 @@
           "pageErrorRatio": 0,
           "geometry": {
             "errors": [],
-            "maxOriginError": 0.00006571756582168168,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.0000059852066085147395,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxOriginError": 6.571756582168168e-05,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 5.9852066085147395e-06,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 137
           }
         },
@@ -32,14 +32,14 @@
           "nonFontPixels": 428133,
           "nonFontInkPixels": 1492,
           "inkErrorRatio": 0.0006702412868632708,
-          "errorRatio": 0.0000023357227777349564,
-          "pageErrorRatio": 0.0000019960478253058943,
+          "errorRatio": 2.3357227777349564e-06,
+          "pageErrorRatio": 1.9960478253058943e-06,
           "geometry": {
             "errors": [],
             "maxOriginError": 0.00039472554753883633,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.00004385839417098182,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 4.385839417098182e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 1381
           }
         },
@@ -55,9 +55,9 @@
           "geometry": {
             "errors": [],
             "maxOriginError": 0.0006119142695361011,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.0000614371754209296,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 6.14371754209296e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 2877
           }
         },
@@ -68,14 +68,14 @@
           "nonFontPixels": 371255,
           "nonFontInkPixels": 5992,
           "inkErrorRatio": 0.0005006675567423231,
-          "errorRatio": 0.000008080699249841752,
-          "pageErrorRatio": 0.000005988143475917683,
+          "errorRatio": 8.080699249841752e-06,
+          "pageErrorRatio": 5.988143475917683e-06,
           "geometry": {
             "errors": [],
             "maxOriginError": 0.00028918568185757606,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.00003213174242861956,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 3.213174242861956e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 2502
           }
         },
@@ -86,14 +86,14 @@
           "nonFontPixels": 376863,
           "nonFontInkPixels": 5476,
           "inkErrorRatio": 0.000547845142439737,
-          "errorRatio": 0.000007960452472118516,
-          "pageErrorRatio": 0.000005988143475917683,
+          "errorRatio": 7.960452472118516e-06,
+          "pageErrorRatio": 5.988143475917683e-06,
           "geometry": {
             "errors": [],
             "maxOriginError": 0.00021494984109974127,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.00002388331567774903,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 2.388331567774903e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 2280
           }
         },
@@ -104,14 +104,14 @@
           "nonFontPixels": 339103,
           "nonFontInkPixels": 3926,
           "inkErrorRatio": 0.0010188487009679063,
-          "errorRatio": 0.000011795826046953285,
-          "pageErrorRatio": 0.000007984191301223577,
+          "errorRatio": 1.1795826046953285e-05,
+          "pageErrorRatio": 7.984191301223577e-06,
           "geometry": {
             "errors": [],
             "maxOriginError": 0.0003069872755775174,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.00003082201550218382,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 3.082201550218382e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 2899
           }
         },
@@ -127,9 +127,9 @@
           "geometry": {
             "errors": [],
             "maxOriginError": 0.000426111567746138,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.000045889091705710436,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 4.5889091705710436e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 2995
           }
         },
@@ -145,9 +145,9 @@
           "geometry": {
             "errors": [],
             "maxOriginError": 0.0003101241001309447,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.000034458233347882745,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 3.4458233347882745e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 2539
           }
         },
@@ -163,9 +163,9 @@
           "geometry": {
             "errors": [],
             "maxOriginError": 0.0005018146140532217,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.00005038299318586979,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 5.038299318586979e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 1974
           }
         },
@@ -181,9 +181,9 @@
           "geometry": {
             "errors": [],
             "maxOriginError": 0.0003418050785347757,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.00003797834205941953,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 3.797834205941953e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 2834
           }
         },
@@ -199,9 +199,9 @@
           "geometry": {
             "errors": [],
             "maxOriginError": 0.000608427145979579,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.00006108706261539081,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 6.108706261539081e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 1969
           }
         },
@@ -217,9 +217,9 @@
           "geometry": {
             "errors": [],
             "maxOriginError": 0.0005126520975123576,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.00005147109393061157,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 5.147109393061157e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 2296
           }
         },
@@ -235,9 +235,9 @@
           "geometry": {
             "errors": [],
             "maxOriginError": 0.00017052106531112275,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.00001712058882108676,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 1.712058882108676e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 2984
           }
         },
@@ -248,14 +248,14 @@
           "nonFontPixels": 373458,
           "nonFontInkPixels": 3516,
           "inkErrorRatio": 0.0008532423208191126,
-          "errorRatio": 0.000008033031826872098,
-          "pageErrorRatio": 0.000005988143475917683,
+          "errorRatio": 8.033031826872098e-06,
+          "pageErrorRatio": 5.988143475917683e-06,
           "geometry": {
             "errors": [],
             "maxOriginError": 0.0002782218025661589,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.000027933915813309697,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 2.7933915813309697e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 2172
           }
         },
@@ -271,9 +271,9 @@
           "geometry": {
             "errors": [],
             "maxOriginError": 0.0007900285077649812,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.00007932013099790746,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 7.932013099790746e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 2364
           }
         },
@@ -284,14 +284,14 @@
           "nonFontPixels": 341389,
           "nonFontInkPixels": 3018,
           "inkErrorRatio": 0.0013253810470510272,
-          "errorRatio": 0.000011716839148302963,
-          "pageErrorRatio": 0.000007984191301223577,
+          "errorRatio": 1.1716839148302963e-05,
+          "pageErrorRatio": 7.984191301223577e-06,
           "geometry": {
             "errors": [],
             "maxOriginError": 0.000258886973275154,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.000025992667899961084,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 2.5992667899961084e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 2741
           }
         },
@@ -302,14 +302,14 @@
           "nonFontPixels": 414268,
           "nonFontInkPixels": 13340,
           "inkErrorRatio": 0.00022488755622188905,
-          "errorRatio": 0.000007241688954976006,
-          "pageErrorRatio": 0.000005988143475917683,
+          "errorRatio": 7.241688954976006e-06,
+          "pageErrorRatio": 5.988143475917683e-06,
           "geometry": {
             "errors": [],
             "maxOriginError": 0.00010735937613980809,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.000010779053788014037,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 1.0779053788014037e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 1443
           }
         },
@@ -320,14 +320,14 @@
           "nonFontPixels": 370422,
           "nonFontInkPixels": 9377,
           "inkErrorRatio": 0.0006398634957875654,
-          "errorRatio": 0.000016197742034760356,
-          "pageErrorRatio": 0.000011976286951835366,
+          "errorRatio": 1.6197742034760356e-05,
+          "pageErrorRatio": 1.1976286951835366e-05,
           "geometry": {
             "errors": [],
             "maxOriginError": 0.0003689638865464243,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.000037044566780450426,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 3.7044566780450426e-05,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 2197
           }
         },
@@ -342,10 +342,10 @@
           "pageErrorRatio": 0.006273578314936426,
           "geometry": {
             "errors": [],
-            "maxOriginError": 0.00006571756582168168,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.0000066619263845735824,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxOriginError": 6.571756582168168e-05,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 6.6619263845735824e-06,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 430
           }
         },
@@ -360,15 +360,43 @@
           "pageErrorRatio": 0,
           "geometry": {
             "errors": [],
-            "maxOriginError": 0.00009075587742264578,
-            "maxSizeError": 4.5776367230132564e-7,
-            "maxRelativeOriginError": 0.000008265562951395284,
-            "maxRelativeSizeError": 4.1690682275574265e-8,
+            "maxOriginError": 9.075587742264578e-05,
+            "maxSizeError": 4.5776367230132564e-07,
+            "maxRelativeOriginError": 8.265562951395284e-06,
+            "maxRelativeSizeError": 4.1690682275574265e-08,
             "characters": 65
           }
         }
-      ]
+      ],
+      "sha256": "c4475e2bb7ffa2ff286f58203eea1681ee53f8dee2866f348bc1b62ce2601c00"
     }
   ],
-  "passed": true
+  "passed": true,
+  "renderer": "native canvas",
+  "source": {
+    "url": "https://opensource.adobe.com/dc-acrobat-sdk-docs/standards/pdfstandards/pdf/PDF32000_2008.pdf",
+    "sha256": "9de0ca9e8570d6209e8bd48a355be8eb6ec376acfc3fc3ae97cd8730351417ff",
+    "pages": [
+      1,
+      2,
+      26,
+      51,
+      76,
+      101,
+      151,
+      201,
+      251,
+      301,
+      351,
+      401,
+      451,
+      501,
+      551,
+      601,
+      651,
+      701,
+      751,
+      756
+    ]
+  }
 }
