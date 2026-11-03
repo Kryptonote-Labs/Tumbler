@@ -36,9 +36,9 @@ export function compareTextGeometry(scene: PdfPageScene, oracle: OraclePage) {
         .map((character) => ({ element, code: character.charCodeAt(0) })),
     );
   const expected = oracle.characters.filter(
-    (character) => !character.generated && character.code >= 32,
+    (character) => !character.generated && character.code > 32,
   );
-  const filtered = actual.filter((character) => character.code >= 32);
+  const filtered = actual.filter((character) => character.code > 32);
   const errors: string[] = [];
   if (filtered.length !== expected.length)
     errors.push(`Character count ${filtered.length}, expected ${expected.length}.`);

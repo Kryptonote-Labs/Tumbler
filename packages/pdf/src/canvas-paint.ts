@@ -1,3 +1,4 @@
+import { rectangleCoverage } from "./rectangle-coverage.ts";
 import { identity, multiply, type PdfMatrix } from "./matrix.ts";
 import { invalid } from "./objects.ts";
 import type { PdfSource } from "./source.ts";
@@ -117,6 +118,12 @@ function geometry<Image, Path>(
   context.setLineDash([...state.dash]);
   context.lineDashOffset = state.dashPhase;
   if (element.kind === "path") {
+    const coverage = !stroke ? rectangleCoverage(element, viewport) : undefined;
+    if (coverage) {
+      context.setTransform(...identity);
+      context.fillRect(...coverage);
+      return;
+    }
     path(context, element.path, viewport, state.transform);
     context.setTransform(...multiply(viewport, state.transform));
     if (stroke) context.stroke();
