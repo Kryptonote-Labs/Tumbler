@@ -1,6 +1,6 @@
 {
   "name": "@tumblerjs/pdf",
-  "version": "0.0.0",
+  "version": "0.1.0-alpha.26",
   "description": "Source-preserving PDF documents, page scenes and rendering for Tumbler.",
   "license": "MIT",
   "repository": {
@@ -28,5 +28,9 @@
   },
   "devDependencies": {
     "@types/fontkit": "^2.0.9"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "latest"
   }
 }

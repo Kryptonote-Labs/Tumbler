@@ -11,6 +11,7 @@ export const RELEASE_PACKAGE_DIRECTORIES = [
   "sheets",
   "word",
   "slides",
+  "pdf",
   "svelte",
   "cli",
 ] as const;
