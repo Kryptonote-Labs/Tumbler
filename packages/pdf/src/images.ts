@@ -37,6 +37,22 @@ export function decodePdfImage(
   const names = filters.map((item) => name(item));
   const terminal = names[names.length - 1];
   if (terminal === "DCTDecode" || terminal === "DCT") {
+    const space = colourSpace(source, info.get("ColorSpace"), resources);
+    if (info.has("Decode")) {
+      const decode = array(source.resolve(info.get("Decode"))).map((value) => number(value));
+      if (decode.length !== space.components * 2)
+        invalid("Image Decode array does not match component count.");
+      if (decode.some((value, index) => value !== index % 2))
+        unsupported("JPEG sample Decode transformations need a component-aware JPEG decoder.");
+    }
+    if (info.has("Mask") || info.has("SMask") || stencil)
+      unsupported("JPEG image masks need component-aware decoding before composition.");
+    const params = source.resolve(info.get("DecodeParms"));
+    const terminalParams = Array.isArray(params)
+      ? source.resolve(params[params.length - 1])
+      : params;
+    if (terminalParams instanceof Map && terminalParams.size)
+      unsupported("JPEG decoding parameters need a component-aware JPEG decoder.");
     const prefix = new Map(info);
     prefix.set("Filter", filters.slice(0, -1));
     const parameters = source.resolve(info.get("DecodeParms"));
