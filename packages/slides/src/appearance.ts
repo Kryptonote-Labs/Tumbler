@@ -1,5 +1,6 @@
+/** `rectangular` covers DrawingML `rect` and `shape` paths, which match on rectangular fills. */
 export interface DrawingGradient {
-  readonly kind: "linear" | "radial";
+  readonly kind: "linear" | "radial" | "rectangular";
   readonly angle: number;
   readonly scaled: boolean;
   readonly center: readonly [number, number];

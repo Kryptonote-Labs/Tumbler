@@ -6,6 +6,7 @@ export interface SlideCanvasContext<Path, Image> extends ChartCanvasContext<Path
   transform(a: number, b: number, c: number, d: number, e: number, f: number): void;
   scale(x: number, y: number): void;
   fillRect(x: number, y: number, width: number, height: number): void;
+  clip(path?: Path): void;
   setLineDash(segments: number[]): void;
   measureText(text: string): { width: number };
   createLinearGradient(

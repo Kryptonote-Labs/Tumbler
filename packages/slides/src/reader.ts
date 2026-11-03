@@ -941,15 +941,12 @@ class Reader {
     const linear = this.child(gradient, "lin"),
       path = this.child(gradient, "path"),
       rect = this.child(path, "fillToRect");
-    if (path && attr(path, "path") !== "circle") {
-      context.diagnostics.push({
-        part: context.slide.part.name.value,
-        message: "Only linear and circular gradients are rendered.",
-      });
-      return;
-    }
     return {
-      kind: path ? "radial" : "linear",
+      kind: !path
+        ? "linear"
+        : attr(path, "path") === "circle"
+          ? "radial"
+          : "rectangular",
       angle: number(linear, "ang") / 60000,
       scaled: !["0", "false"].includes(attr(linear, "scaled") ?? "1"),
       center: [
