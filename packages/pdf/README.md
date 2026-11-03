@@ -109,3 +109,29 @@ PDF-format authoring constraints. Run untrusted parsing and interpretation in an
 cancellable worker as well; a work counter cannot interrupt an individual font or filter codec.
 JPEGs with non-default `/Decode`, masks or decoder parameters currently reject explicitly;
 the RGB host image decoder cannot apply PDF sample transformations correctly.
+
+## Collaborative text editing
+
+`PdfTextModel` stores recovered paragraphs and explicitly placed text regions in a Yjs document.
+Initialize it once on the authoritative host with `importPdfText(document)`, persist the encoded
+Yjs state, and send that state to peers. Independently importing the same PDF on each peer would
+create different CRDT identities. Human input and headless callers use the same `replace`, `format`,
+`add`, relative anchors and selective undo operations.
+
+Hosts supply full editing fonts to `PdfEditingFonts`. `layoutPdfTextFlow` supplies the browser and
+exporter with the same glyph positions, wrapping, paragraph displacement and continuation pages.
+`PdfEditableDocument` in `@tumblerjs/svelte/pdf` handles selection, native textarea input, composition,
+formatting, page virtualization, remote selections and carets. Hosts supply authenticated presence
+and update transport rather than coupling the engine to accounts or servers.
+
+`exportEditedPdf(document, model, fonts)` appends an ISO 32000-1 §7.5.6 revision. It preserves untouched
+source objects and graphics. Replaced text-showing operations become equivalent TJ displacements,
+including numeric kerning and quote-operator side effects. Modified Form instances are cloned.
+New text uses embedded TrueType/CID fonts and ToUnicode mappings, and long continuations create real
+PDF pages. An unchanged export returns the original bytes. Historical revisions remain recoverable;
+this API does not implement secure redaction.
+
+Paragraph recovery and columns use geometry. Imported typefaces may need replacement fonts, and
+complex columns, rotated text, bidi shaping and tagged structure updates need further qualification.
+Encrypted editing is not implemented. Missing editing glyphs fail explicitly. None of these boundaries
+is a document-authoring size limit.
