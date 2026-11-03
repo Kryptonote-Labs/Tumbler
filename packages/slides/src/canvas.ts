@@ -42,7 +42,8 @@ function gradient<Path, Image>(
 }
 /**
  * Canvas has no rectangular paint either; paint the shaded faces into the current clip. Opaque
- * faces overlap to hide anti-aliased seams; translucent ones can't without darkening the overlap.
+ * faces overlap to hide anti-aliased seams. Translucent faces stay exact: overlapping would darken
+ * the diagonals, so they keep a faint anti-aliasing hairline that only an offscreen layer avoids.
  */
 function rectangular<Path, Image>(
   ctx: SlideCanvasContext<Path, Image>,
