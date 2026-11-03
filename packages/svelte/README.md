@@ -283,3 +283,7 @@ PDF pages are available through `@tumblerjs/svelte/pdf`. `PdfDocumentView` accep
 stable while rendering nearby canvases, releases offscreen bitmap storage, and paints at the
 screen's pixel density. `goToPage(index)` scrolls to a zero-based page index. Product navigation,
 authorization, uploads and download controls belong to the host application.
+
+Hosts can call `PresentationSlideView.editText(objectKey)` after rendering an inserted
+text box to select it and focus its text editor. The method ignores missing objects
+and read-only views.
