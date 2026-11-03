@@ -208,6 +208,7 @@
     if (event.key === 'Escape') {
       active = undefined;
       onselection?.(null);
+      return;
     }
     if (['ArrowUp', 'ArrowDown'].includes(event.key)) {
       const layout = layoutPdfText(model, active, fonts);
