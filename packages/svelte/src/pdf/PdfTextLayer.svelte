@@ -1,11 +1,14 @@
 <script lang="ts">
   import type { PdfTextContent } from '@tumblerjs/pdf';
+  import { registerPdfTextLayer } from './pointer-selection.ts';
   import { selectPdfWord } from './selection.ts';
   let { content, scale = 1, label = 'PDF text' }: {
     content: PdfTextContent;
     scale?: number;
     label?: string;
   } = $props();
+  let layer: HTMLDivElement;
+  $effect(() => registerPdfTextLayer(layer, content));
   const items = $derived.by(() => {
     const canvas = typeof document === 'undefined' ? undefined : document.createElement('canvas'), measure = canvas?.getContext('2d');
     const widths = new Map<string, number>();
@@ -28,10 +31,10 @@
   });
 </script>
 
-<div class="text-layer" data-pdf-text-layer ondblclick={event => selectPdfWord(event, content, event.currentTarget)} role="document" aria-label={label}
+<div bind:this={layer} class="text-layer" data-pdf-text-layer ondblclick={event => selectPdfWord(event, content, event.currentTarget)} role="document" aria-label={label}
   style:width={`${content.width}px`} style:height={`${content.height}px`} style:transform={`scale(${scale})`}>
   {#each items as {item,size,left,top,transform} (item.id)}
-    <span data-pdf-text={item.kind} data-pdf-glyph={item.kind === 'glyph' ? item.id : undefined}
+    <span data-pdf-text-id={item.id} data-pdf-text={item.kind} data-pdf-glyph={item.kind === 'glyph' ? item.id : undefined}
       dir="auto" style:transform style:left={`${left}px`} style:top={`${top}px`} style:font-size={`${size}px`}
       style:height={`${item.height*size}px`} style:line-height={`${item.height*size}px`}
       style:font-family={item.font.family} style:font-weight={item.font.weight} style:font-style={item.font.style}

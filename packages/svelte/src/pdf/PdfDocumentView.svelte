@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { trackPdfSelection } from './pointer-selection.ts';
   import { selectedPdfText } from './selection.ts';
   import { PdfInterpreter, type PdfDocument } from '@tumblerjs/pdf';
   import PdfPageView from './PdfPageView.svelte';
@@ -12,6 +13,7 @@
   const interpreter = $derived(new PdfInterpreter(document));
   let host: HTMLDivElement;
   onMount(() => {
+    const stopSelection = trackPdfSelection(host);
     const copy = (event: ClipboardEvent) => {
       if (event.target instanceof Element && event.target.closest('input,textarea,[contenteditable]')) return;
       if (!host.getClientRects().length || host.closest('[inert],[hidden]')) return;
@@ -21,7 +23,7 @@
       event.preventDefault();
     };
     host.ownerDocument.addEventListener('copy', copy);
-    return () => host.ownerDocument.removeEventListener('copy', copy);
+    return () => { stopSelection(); host.ownerDocument.removeEventListener('copy', copy); };
   });
   export function goToPage(index: number) {
     host.querySelector(`[data-pdf-page="${index + 1}"]`)?.scrollIntoView({ block: 'start' });
