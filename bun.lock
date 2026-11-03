@@ -107,6 +107,7 @@
         "buffer": "^6.0.3",
         "fflate": "^0.8.3",
         "fontkit": "^2.0.4",
+        "yjs": "^13.6.0",
       },
     },
     "packages/sheets": {

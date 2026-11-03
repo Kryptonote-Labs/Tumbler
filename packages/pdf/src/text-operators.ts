@@ -86,6 +86,7 @@ export function createTextOperators(
         fontSize: state.fontSize,
         mode: state.mode,
         advance: [dx, dy],
+        textDisplacement: font.vertical ? -dy / state.fontSize * 1000 : -dx / (state.fontSize * state.horizontalScale) * 1000,
         advanceVector: [
           textToUser[0] * dx + textToUser[2] * dy,
           textToUser[1] * dx + textToUser[3] * dy,
