@@ -139,8 +139,8 @@ function geometry<Image, Path>(
       context.scale(1, -1);
       context.font = `${element.font.css.style} ${element.font.css.weight} ${element.font.unitsPerEm}px ${element.font.css.family}`;
       context.textBaseline = "alphabetic";
-      if (stroke) context.strokeText(element.glyph.unicode, 0, 0);
-      else context.fillText(element.glyph.unicode, 0, 0);
+      if (stroke) context.strokeText(element.glyph.renderText, 0, 0);
+      else context.fillText(element.glyph.renderText, 0, 0);
     }
   }
 }

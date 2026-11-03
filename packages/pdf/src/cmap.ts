@@ -107,10 +107,12 @@ export class PdfCMap {
     }
   }
   decode(bytes: Uint8Array, defaultLength: number): PdfCode[] {
+    return [...this.codes(bytes, defaultLength)];
+  }
+  *codes(bytes: Uint8Array, defaultLength: number): Generator<PdfCode> {
     const spaces = this.spaces.length
       ? this.spaces
       : [{ length: defaultLength, start: 0, end: 2 ** (8 * defaultLength) - 1 }];
-    const result: PdfCode[] = [];
     for (let at = 0; at < bytes.length;) {
       let matched = false,
         value = 0;
@@ -122,13 +124,12 @@ export class PdfCMap {
           )
         )
           continue;
-        result.push({ code: value, length });
+        yield { code: value, length };
         at += length;
         matched = true;
         break;
       }
       if (!matched) return invalid("Text string contains a code outside its font CMap.");
     }
-    return result;
   }
 }

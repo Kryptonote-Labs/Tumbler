@@ -27,6 +27,7 @@ export interface PdfGlyph {
   readonly cid: number;
   readonly glyphId: number;
   readonly unicode: string;
+  readonly renderText: string;
   readonly width: number;
   readonly path: string | undefined;
   readonly procedure: PdfStream | undefined;
@@ -283,8 +284,13 @@ export class PdfFont {
     return dictionary(this.source.resolve(value));
   }
   decode(bytes: Uint8Array): PdfGlyph[] {
-    const codes = this.mapping.decode(bytes, this.kind === "Type0" ? 2 : 1);
-    return codes.map((value) => this.glyph(value));
+    return [...this.glyphs(bytes)];
+  }
+  *glyphs(bytes: Uint8Array, step: () => void = () => {}): Generator<PdfGlyph> {
+    for (const code of this.mapping.codes(bytes, this.kind === "Type0" ? 2 : 1)) {
+      step();
+      yield this.glyph(code);
+    }
   }
   private glyph(value: PdfCode): PdfGlyph {
     const key = this.mapping.key(value),
@@ -308,7 +314,9 @@ export class PdfFont {
           ? (this.cidMap[cid * 2] ?? 0) * 256 + (this.cidMap[cid * 2 + 1] ?? 0)
           : cid
         : (namedGlyph ??
-          (this.rawCff ? 0 : this.outline?.glyphForCodePoint(unicode.codePointAt(0) ?? 0).id) ??
+          (this.rawCff
+            ? 0
+            : this.outline?.glyphForCodePoint(simple?.unicode.codePointAt(0) ?? value.code).id) ??
           value.code);
     if (glyphId < 0 || (this.outline && glyphId >= this.outline.numGlyphs)) glyphId = 0;
     let path: string | undefined;
@@ -335,6 +343,7 @@ export class PdfFont {
       cid,
       glyphId,
       unicode,
+      renderText: simple?.unicode ?? "\ufffd",
       width,
       path,
       procedure: procedure instanceof PdfStream ? procedure : undefined,
