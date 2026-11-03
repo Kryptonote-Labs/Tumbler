@@ -11,7 +11,7 @@ const valid = ['basic-text', 'escaped-strings', 'compressed-content', 'positione
 
 describe('source graph and page tree', () => {
   for (const name of valid) test(`${name}: untouched source reconstructs exactly and owns its input`, () => {
-    const bytes = fixture(name), expected = bytes.slice(), document = openPdfDocument(bytes);
+    const bytes = fixture(name), expected = bytes.slice(), document = openPdfDocument(bytes, name === 'encrypted-aes256' ? { password: 'fixture-password' } : {});
     expect(document.pages.length).toBeGreaterThan(0);
     expect(document.bytes()).toEqual(expected);
     bytes.fill(0);
@@ -42,6 +42,26 @@ describe('source graph and page tree', () => {
   for (const name of ['broken-xref', 'truncated']) test(`${name}: refuses implicit repair`, () => {
     expect(() => openPdfDocument(fixture(name))).toThrow(PdfError);
   });
+});
+
+test('standard AES-256 handler authenticates user and owner passwords before decoding content', () => {
+  const bytes = fixture('encrypted-aes256');
+  expect(() => openPdfDocument(bytes)).toThrow('requires a password');
+  expect(() => openPdfDocument(bytes, { password: 'wrong' })).toThrow('incorrect');
+  for (const password of ['fixture-password', 'fixture-owner']) {
+    const document = openPdfDocument(bytes, { password });
+    expect(new TextDecoder().decode(document.contents(document.pages[0]!))).toContain('Hello Alex');
+  }
+});
+for (const name of ['encrypted-rc4', 'encrypted-aes128']) test(`${name}: legacy security handlers decode user and owner access`, () => {
+  const bytes = fixture(name);
+  expect(() => openPdfDocument(bytes)).toThrow('requires a password');
+  expect(() => openPdfDocument(bytes, { password: 'wrong' })).toThrow('incorrect');
+  for (const password of ['fixture-password', 'fixture-owner']) {
+    const document = openPdfDocument(bytes, { password });
+    expect(new TextDecoder().decode(document.contents(document.pages[0]!))).toContain('Hello Alex');
+    expect(document.bytes()).toEqual(bytes);
+  }
 });
 
 test('byte syntax preserves escapes, binary strings and typed references', () => {

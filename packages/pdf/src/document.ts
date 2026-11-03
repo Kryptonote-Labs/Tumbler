@@ -72,4 +72,8 @@ export class PdfDocument {
     return bytes;
   }
 }
-export function openPdfDocument(bytes: Uint8Array) { return new PdfDocument(new PdfSource(bytes)); }
+export function openPdfDocument(bytes: Uint8Array, options: { password?: string } = {}) {
+  const source = new PdfSource(bytes);
+  source.authenticate(options.password);
+  return new PdfDocument(source);
+}

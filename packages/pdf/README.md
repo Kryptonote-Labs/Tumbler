@@ -13,3 +13,7 @@ const unchanged = document.bytes();
 The source reader follows ISO 32000-1 object syntax, classic and stream cross-references,
 incremental revisions, compressed object streams, content filters and page-tree inheritance.
 It does not replace malformed cross-reference data with a heuristic repair scan.
+
+Standard security handlers authenticate before content decoding. Legacy RC4, AES-128 and
+AES-256 revisions retain their original encrypted source bytes. Supply `{ password }` to open
+a protected document; password-required and invalid-password errors are distinct.

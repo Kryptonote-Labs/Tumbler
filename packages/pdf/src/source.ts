@@ -1,6 +1,7 @@
 import { decodePdfStream } from './filters.ts';
-import { array, bytesText, dictionary, integer, invalid, name, PdfReference, PdfStream, type PdfDictionary, type PdfValue } from './objects.ts';
+import { array, bytesText, dictionary, integer, invalid, name, PdfError, PdfReference, PdfStream, PdfString, type PdfDictionary, type PdfValue } from './objects.ts';
 import { PdfSyntax } from './syntax.ts';
+import { PdfSecurity } from './security.ts';
 
 type XrefEntry = { kind: 'free'; generation: number } | { kind: 'offset'; offset: number; generation: number } | { kind: 'compressed'; stream: number; index: number };
 interface Section { trailer: PdfDictionary; entries: Map<number, XrefEntry> }
@@ -12,6 +13,7 @@ export class PdfSource {
   private readonly original: Uint8Array;
   private readonly xref = new Map<number, XrefEntry>();
   private readonly objects = new Map<string, PdfValue>();
+  private security: PdfSecurity | undefined;
   private readonly decoding = new Set<string>();
   private readonly decoded = new WeakMap<PdfStream, Uint8Array>();
   private readonly objectStreams = new Map<number, { ids: number[]; offsets: number[]; first: number; bytes: Uint8Array }>();
@@ -53,6 +55,11 @@ export class PdfSource {
   bytes() { return this.original.slice(); }
   get catalog() { return dictionary(this.resolve(this.trailer.get('Root')), 'catalog'); }
   get encrypted() { return this.trailer.has('Encrypt'); }
+  authenticate(password?: string) {
+    if (!this.encrypted) return;
+    this.security = PdfSecurity.open(this, password);
+    this.objects.clear();
+  }
 
   resolve(value: PdfValue | undefined): PdfValue {
     let current = value ?? null;
@@ -74,7 +81,11 @@ export class PdfSource {
     this.decoding.add(reference.key);
     try {
       let value: PdfValue;
-      if (entry.kind === 'offset') value = this.indirect(entry.offset, reference).value;
+      if (entry.kind === 'offset') {
+        value = this.indirect(entry.offset, reference).value;
+        const encryption = this.trailer.get('Encrypt');
+        if (this.security && (!(encryption instanceof PdfReference) || encryption.key !== reference.key)) value = this.decryptValues(value, reference);
+      }
       else {
         const stream = this.objectStream(entry.stream);
         if (stream.ids[entry.index] !== reference.object) return invalid('Compressed object does not match its cross-reference index.');
@@ -93,8 +104,24 @@ export class PdfSource {
     const stream = this.resolve(value);
     if (!(stream instanceof PdfStream)) return invalid('Expected a PDF stream.');
     let decoded = this.decoded.get(stream);
-    if (!decoded) { decoded = decodePdfStream(stream.encoded, stream.dictionary, value => this.resolve(value)); this.decoded.set(stream, decoded); }
+    if (!decoded) { decoded = decodePdfStream(this.encodedStream(stream), stream.dictionary, value => this.resolve(value)); this.decoded.set(stream, decoded); }
     return decoded;
+  }
+  encodedStream(stream: PdfStream) {
+    if (!this.encrypted || name(stream.dictionary.get('Type')) === 'XRef') return stream.encoded;
+    if (!this.security) throw new PdfError('password_required', 'Authenticate this PDF before decoding its content.');
+    if (name(stream.dictionary.get('Type')) === 'Metadata' && this.security.dictionary.get('EncryptMetadata') === false) return stream.encoded;
+    return this.security.decrypt(stream.encoded, stream.object, true);
+  }
+  private decryptValues(value: PdfValue, reference: PdfReference): PdfValue {
+    if (value instanceof PdfString) return new PdfString(this.security!.decrypt(value.bytes, reference, false));
+    if (Array.isArray(value)) return value.map(item => this.decryptValues(item, reference));
+    if (value instanceof Map) return new Map([...value].map(([key, item]) => [key, this.decryptValues(item, reference)]));
+    if (value instanceof PdfStream) {
+      if (name(value.dictionary.get('Type')) === 'XRef') return value;
+      return new PdfStream(dictionary(this.decryptValues(value.dictionary, reference)), value.encoded, reference);
+    }
+    return value;
   }
   private indirect(offset: number, expected?: PdfReference): { reference: PdfReference; value: PdfValue } {
     const syntax = new PdfSyntax(this.original, offset);
