@@ -70,6 +70,8 @@ export interface PdfGlyphElement extends Element {
   readonly fontSize: number;
   readonly mode: number;
   readonly advance: readonly [number, number];
+  /** Advance in page user space, including text spacing and the current transformation. */
+  readonly advanceVector: readonly [number, number];
 }
 export interface PdfImageData {
   readonly width: number;

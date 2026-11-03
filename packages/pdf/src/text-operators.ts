@@ -75,6 +75,7 @@ export function createTextOperators(
       const dy = font.vertical
         ? (glyph.vertical![0] / 1000) * state.fontSize + state.charSpace + wordSpace
         : 0;
+      const textToUser = multiply(state.transform, context.textMatrix);
       elements.push({
         ...base(),
         kind: "glyph",
@@ -85,6 +86,10 @@ export function createTextOperators(
         fontSize: state.fontSize,
         mode: state.mode,
         advance: [dx, dy],
+        advanceVector: [
+          textToUser[0] * dx + textToUser[2] * dy,
+          textToUser[1] * dx + textToUser[3] * dy,
+        ],
       });
       if (glyph.procedure && state.mode !== 3 && state.mode !== 7) {
         const nested = execution({ ...state, transform });

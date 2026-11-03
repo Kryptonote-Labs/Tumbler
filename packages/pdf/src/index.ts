@@ -17,3 +17,7 @@ export type {
 } from "./scene.ts";
 
 export type { PdfExecutionLimits } from "./execution-budget.ts";
+export { pdfTextContent } from "./text-content.ts";
+export type { PdfTextContent, PdfTextItem } from "./text-content.ts";
+export { PdfTextSelectionIndex } from "./text-hit-test.ts";
+export type { PdfTextCaret } from "./text-hit-test.ts";
