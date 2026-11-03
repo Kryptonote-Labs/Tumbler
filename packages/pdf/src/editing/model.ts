@@ -22,10 +22,34 @@ export class PdfTextModel {
       () => {
         const region = new Y.Map<unknown>();
         this.regions.set(seed.id, region);
-        region.set('seed', seed);
         const text = new Y.Text();
         region.set('text', text);
         text.applyDelta(seed.delta);
+        let offset = 0;
+        const offsets = seed.delta.map((run) => {
+          const at = offset;
+          offset += run.insert.length;
+          return at;
+        });
+        region.set(
+          'seed',
+          seed.spacing
+            ? {
+                ...seed,
+                spacing: seed.spacing.map((gap) => ({
+                  ...gap,
+                  anchors: [
+                    Y.relativePositionToJSON(
+                      Y.createRelativePositionFromTypeIndex(text, offsets[gap.left]!),
+                    ),
+                    Y.relativePositionToJSON(
+                      Y.createRelativePositionFromTypeIndex(text, offsets[gap.right]!),
+                    ),
+                  ],
+                })),
+              }
+            : seed,
+        );
       },
       local ? 'create' : 'import',
     );

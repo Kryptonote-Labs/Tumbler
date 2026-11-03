@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import * as Y from 'yjs';
 import { pdfFixture, pdfStream } from './pdf-fixture.ts';
 import {
   openPdfDocument,
@@ -11,6 +12,7 @@ import {
   layoutPdfTextFlow,
   defaultPdfTextStyle,
   movePdfTextCaret,
+  pdfTextContent,
 } from '../src/index.ts';
 const fonts = new PdfEditingFonts();
 fonts.add(
@@ -149,4 +151,70 @@ test('vertical caret navigation crosses continuation boundaries in both directio
   model.format(id, 6, 11, { size: 48 });
   expect(movePdfTextCaret(layoutPdfText(model, id, fonts), 0, 1)!.offset).toBe(6);
   model.doc.destroy();
+});
+
+function embeddedText(content: string) {
+  const full = fonts.get(defaultPdfTextStyle),
+    widths = Array.from(
+      { length: 95 },
+      (_, i) => (full.font.glyphForCodePoint(i + 32).advanceWidth * 1000) / full.font.unitsPerEm,
+    );
+  return openPdfDocument(
+    pdfFixture([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 300] /Resources << /Font << /F 5 0 R >> >> /Contents 4 0 R >>',
+      pdfStream(content),
+      `<< /Type /Font /Subtype /TrueType /BaseFont /LiberationSans-Regular /Encoding /WinAnsiEncoding /FirstChar 32 /LastChar 126 /Widths [${widths.join(' ')}] /FontDescriptor 6 0 R >>`,
+      '<< /Type /FontDescriptor /FontName /LiberationSans-Regular /Flags 32 /FontBBox [-500 -500 2000 2000] /Ascent 900 /Descent -200 /CapHeight 700 /ItalicAngle 0 /StemV 80 /FontFile2 7 0 R >>',
+      pdfStream(full.bytes),
+    ]),
+  );
+}
+test('source spacing stays with each surviving letter occurrence through concurrent edits and undo', () => {
+  const pdf = embeddedText('BT /F 24 Tf 30 200 Td [(A) 100 (V A) 300 (V)] TJ ET'),
+    model = new PdfTextModel(),
+    peer = new PdfTextModel();
+  fonts.importDocument(pdf);
+  model.initialize(importPdfText(pdf));
+  Y.applyUpdate(peer.doc, Y.encodeStateAsUpdate(model.doc));
+  const id = model.ids()[0]!,
+    original = pdfTextContent(new PdfInterpreter(pdf).page(0)).items.filter(
+      (item) => item.kind === 'glyph',
+    );
+  model.replace(id, 5, 5, '!');
+  peer.replace(id, 0, 0, 'P ');
+  const a = Y.encodeStateAsUpdate(model.doc),
+    b = Y.encodeStateAsUpdate(peer.doc);
+  Y.applyUpdate(model.doc, b);
+  Y.applyUpdate(peer.doc, a);
+  const layout = layoutPdfText(model, id, fonts);
+  expect(layout.glyphs).toEqual(layoutPdfText(peer, id, fonts).glyphs);
+  const retained = layout.glyphs.slice(2, 7);
+  for (let i = 0; i < 5; i++)
+    expect(retained[i]!.x - retained[0]!.x).toBeCloseTo(
+      original[i]!.transform[4] - original[0]!.transform[4],
+      5,
+    );
+  const exported = pdfTextContent(
+    new PdfInterpreter(openPdfDocument(exportEditedPdf(pdf, model, fonts))).page(0),
+  )
+    .items.filter((item) => item.kind === 'glyph')
+    .slice(2, 7);
+  for (let i = 0; i < 5; i++)
+    expect(exported[i]!.transform[4] - exported[0]!.transform[4]).toBeCloseTo(
+      original[i]!.transform[4] - original[0]!.transform[4],
+      5,
+    );
+  model.undo.stopCapturing();
+  model.replace(id, 3, 3, 'X');
+  const split = layoutPdfText(model, id, fonts).glyphs;
+  expect(split[4]!.x - split[2]!.x).toBeCloseTo(
+    fonts.measure('A', split[2]!.style) + fonts.measure('X', split[3]!.style),
+    5,
+  );
+  model.undo.undo();
+  expect(layoutPdfText(model, id, fonts).glyphs).toEqual(layout.glyphs);
+  model.doc.destroy();
+  peer.doc.destroy();
 });

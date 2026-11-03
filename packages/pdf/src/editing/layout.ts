@@ -1,4 +1,5 @@
 import type { PdfTextModel } from './model.ts';
+import { pdfSourceSpacing } from './source-spacing.ts';
 import type { PdfPage } from '../document.ts';
 import { type PdfTextStyle, type PdfEditingFonts } from './fonts.ts';
 export type PdfLayoutGlyph = {
@@ -52,8 +53,11 @@ export function layoutPdfText(
     styles.push(style);
     widths.push(entry.segment === '\n' ? 0 : fonts.measure(entry.segment, style));
   }
-  const kern = entries.map((entry, i) =>
-    i > 0 ? fonts.kerning(entries[i - 1]!.segment, entry.segment, styles[i - 1]!, styles[i]!) : 0,
+  const kern = pdfSourceSpacing(
+    model,
+    id,
+    entries.map((entry) => entry.index),
+    styles,
   );
   const line = () => {
     x = seed.x;

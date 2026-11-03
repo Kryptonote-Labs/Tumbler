@@ -1,3 +1,4 @@
+import type * as Y from 'yjs';
 import { PdfInterpreter } from '../interpreter.ts';
 import { pdfTextContent, type PdfTextItem } from '../text-content.ts';
 import type { PdfDocument } from '../document.ts';
@@ -21,6 +22,16 @@ export type PdfTextSeed = {
     end: number;
     mode: number;
     displacement: number;
+  }[];
+  /** Original neighbouring delta entries and their occurrence-specific spacing. */
+  spacing?: {
+    left: number;
+    right: number;
+    gap: number;
+    anchors?: [
+      ReturnType<typeof Y.relativePositionToJSON>,
+      ReturnType<typeof Y.relativePositionToJSON>,
+    ];
   }[];
   delta: { insert: string; attributes: PdfTextStyle }[];
 };
@@ -96,6 +107,19 @@ export function importPdfText(document: PdfDocument): PdfTextSeed[] {
           attributes: styleOf(item, typeof fill === 'string' ? fill : style.color),
         };
       });
+      const spacing: NonNullable<PdfTextSeed['spacing']> = [];
+      for (let i = 1; i < line.length; i++) {
+        const left = line[i - 1]!,
+          right = line[i]!;
+        if (left.kind !== 'glyph' || right.kind !== 'glyph') continue;
+        const [a, b, , , x, y] = left.transform,
+          em = Math.hypot(a, b);
+        const dx = right.transform[4] - x,
+          dy = right.transform[5] - y;
+        if (!em || Math.abs(-b * dx + a * dy) / em >= 0.01) continue;
+        const gap = (a * dx + b * dy) / em - left.width * em;
+        if (Math.abs(gap) > 1e-6) spacing.push({ left: i - 1, right: i, gap });
+      }
       const gap = previous ? y - previous.y : 0;
       const previousLines =
         previous?.delta
@@ -114,6 +138,10 @@ export function importPdfText(document: PdfDocument): PdfTextSeed[] {
         gap > 0 &&
         gap / previousLines < style.size * 1.7;
       if (previous && (sameOperator || follows)) {
+        const first = previous.delta.length + 1;
+        (previous.spacing ??= []).push(
+          ...spacing.map((gap) => ({ ...gap, left: gap.left + first, right: gap.right + first })),
+        );
         previous.delta.push({ insert: '\n', attributes: style }, ...delta);
         for (const source of sources) {
           const existing = previous.sources.find(
@@ -137,6 +165,7 @@ export function importPdfText(document: PdfDocument): PdfTextSeed[] {
           style,
           sources,
           delta,
+          spacing,
         };
         blocks.push(previous);
       }
