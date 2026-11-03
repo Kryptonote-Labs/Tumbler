@@ -51,7 +51,7 @@
   }
 </script>
 
-{#each layouts.filter((l) => l.page === page.index) as layout (layout.id + ':' + layout.page)}
+{#each layouts as layout (layout.id + ':' + layout.page)}
   {@const dirty = layout.render}
   <button
     class="region-focus"
