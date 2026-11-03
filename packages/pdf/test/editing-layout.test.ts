@@ -7,6 +7,8 @@ import {
   PdfEditingFonts,
   exportEditedPdf,
   PdfInterpreter,
+  layoutPdfText,
+  layoutPdfTextFlow,
 } from '../src/index.ts';
 const fonts = new PdfEditingFonts();
 fonts.add(
@@ -39,5 +41,31 @@ test('editing a mixed-colour paragraph preserves the colour of every unchanged g
   expect(edited.map((e) => e.glyph.unicode).join('')).toBe('RedBlue!');
   expect(edited.slice(0, 7).map((e) => e.state.fill)).toEqual(original.map((e) => e.state.fill));
   expect(edited[7]!.state.fill).toBe(original[6]!.state.fill);
+  model.doc.destroy();
+});
+
+test('larger text increases line spacing, paragraph height and following paragraph displacement', () => {
+  const pdf = document(
+      'BT /F 12 Tf 20 150 Td (First) Tj 0 -15 Td (Second) Tj ET BT /F 12 Tf 20 80 Td (Following) Tj ET',
+    ),
+    model = new PdfTextModel();
+  model.initialize(importPdfText(pdf));
+  const [id, following] = model.ids();
+  const before = layoutPdfText(model, id!, fonts);
+  model.format(id!, 0, model.text(id!).length, { size: 48 });
+  const after = layoutPdfText(model, id!, fonts);
+  const first = after.glyphs.find((g) => g.text === 'F')!,
+    second = after.glyphs.find((g) => g.text === 'S')!;
+  expect(second.y - first.y).toBe(60);
+  expect(after.height).toBe(120);
+  const flow = layoutPdfTextFlow(model, fonts, pdf.pages);
+  const tail = flow.regions.find((region) => region.id === following)!;
+  const logicalY = tail.glyphs[0]!.y + flow.pages[tail.page]!.continuation * 104;
+  expect(logicalY).toBeCloseTo(model.seed(following!).y + after.height - before.height, 6);
+  const output = openPdfDocument(exportEditedPdf(pdf, model, fonts)),
+    interpreter = new PdfInterpreter(output);
+  expect(output.pages.map((page) => interpreter.page(page.index).text).join('\n')).toContain(
+    'Following',
+  );
   model.doc.destroy();
 });

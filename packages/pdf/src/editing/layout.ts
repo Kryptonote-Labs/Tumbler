@@ -79,7 +79,23 @@ export function layoutPdfText(
     offset = index + segment.length;
   }
   carets.push({ offset, x, y, height: model.styleAt(id, offset).size });
-  return { id, glyphs, carets, height: y - seed.y + seed.style.size * 1.25 };
+  // Resolve each line from both adjacent run heights, including an empty final line.
+  const sizes = new Map<number, number>();
+  for (const caret of carets) sizes.set(caret.y, Math.max(sizes.get(caret.y) ?? 0, caret.height));
+  const baselines = new Map<number, number>();
+  let baseline = seed.y,
+    previousSize: number | undefined,
+    lastSize = seed.style.size;
+  for (const [original, size] of sizes) {
+    if (previousSize !== undefined)
+      baseline += Math.max(seed.lineHeight, previousSize * 1.25, size * 1.25);
+    baselines.set(original, baseline);
+    previousSize = size;
+    lastSize = size;
+  }
+  for (const glyph of glyphs) glyph.y = baselines.get(glyph.y)!;
+  for (const caret of carets) caret.y = baselines.get(caret.y)!;
+  return { id, glyphs, carets, height: baseline - seed.y + lastSize * 1.25 };
 }
 export function hitPdfText(layout: PdfTextLayout, x: number, y: number) {
   return layout.carets.reduce((best, caret) => {
