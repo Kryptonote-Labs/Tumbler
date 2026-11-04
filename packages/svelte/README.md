@@ -289,7 +289,8 @@ text box or table to focus its text editor. Tables start in the first editable c
 The method ignores missing objects and read-only views. Typing on a selected text
 shape starts editing; double-clicking text selects its word. Tab navigates table
 cells, and Up/Down moves between rows at the first or last text line. Ctrl/Cmd+Z
-undoes; Ctrl+Y and Ctrl/Cmd+Shift+Z redo inside text editing.
+undoes; Ctrl+Y and Ctrl/Cmd+Shift+Z redo inside text editing. Home and
+Shift+Home keep the selection in editable text, excluding bullet markers.
 
 `PresentationSlideView.contentBounds()` returns rendered text bounds keyed by object
 key, in slide coordinates. Hosts can use them to place new content in free space;

@@ -68,6 +68,13 @@ export function presentationTextEdit(
       return;
     const a = offset(s.anchorNode, s.anchorOffset),
       b = offset(s.focusNode, s.focusOffset);
+    // Native Home can place a DOM selection inside a non-editable bullet.
+    const inBullet = (point: Node) => (point instanceof HTMLElement ? point : point.parentElement)?.closest('[data-bullet]');
+    if (inBullet(s.anchorNode) || inBullet(s.focusNode)) {
+      const anchor = locate(a), focus = locate(b);
+      node.focus({preventScroll: true});
+      s.setBaseAndExtent(anchor[0], anchor[1], focus[0], focus[1]);
+    }
     const next = { start: Math.min(a, b), end: Math.max(a, b) };
     if (next.start !== range.start || next.end !== range.end || b !== head) {
       history.break();
@@ -213,6 +220,7 @@ export function presentationTextEdit(
   }
   function keydown(event: KeyboardEvent) {
     if (!active) return;
+    capture();
     event.stopPropagation();
     if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", "Tab", "Escape"].includes(event.key) || event.ctrlKey || event.metaKey) history.break();
     if ((event.key === "ArrowUp" || event.key === "ArrowDown") &&
