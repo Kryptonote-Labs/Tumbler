@@ -285,8 +285,14 @@ screen's pixel density. `goToPage(index)` scrolls to a zero-based page index. Pr
 authorization, uploads and download controls belong to the host application.
 
 Hosts can call `PresentationSlideView.editText(objectKey)` after rendering an inserted
-text box to select it and focus its text editor. The method ignores missing objects
-and read-only views.
+text box or table to focus its text editor. Tables start in the first editable cell.
+The method ignores missing objects and read-only views. Typing on a selected text
+shape starts editing; double-clicking text selects its word. Tab navigates table
+cells, and Up/Down moves between rows at the first or last text line.
+
+`PresentationSlideView.contentBounds()` returns rendered text bounds keyed by object
+key, in slide coordinates. Hosts can use them to place new content in free space;
+these measurements do not change saved object geometry.
 
 `PresentationSlideRail` accepts `oninsert(index)` to enable insertion points before,
 between and after slide thumbnails. Clicking a gap selects its line; Enter calls
