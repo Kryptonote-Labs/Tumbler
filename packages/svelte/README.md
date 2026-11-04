@@ -294,3 +294,19 @@ between and after slide thumbnails. Clicking a gap selects its line; Enter calls
 so repeated Enter presses add slides in sequence. `oninsertionfocus()` lets the
 host clear object or text editing when a gap receives focus. Omit `oninsert` for a
 read-only rail. Hosts own the insertion command, layout choice and saving.
+
+`PresentationShapePlacement`, exported from `@tumblerjs/svelte/slides`, mounts in
+`PresentationSlideView`'s `overlay` snippet. Supply `shape: ShapeGeometry`, slide
+`width` and `height`, `oninsert(placement)`, and `oncancel()`. It draws the actual
+Tumbler preset geometry while dragging, converts zoomed pointer positions into
+slide coordinates, and captures the active pointer. Shift constrains proportions
+or snaps lines to 45-degree angles. A click inserts the default size at the chosen
+point; Enter or Space requests a default-size insertion at the slide centre.
+Escape, pointer cancellation, and window blur call `oncancel` without an edit.
+
+The component does not mutate a document. Pass its result to
+`placedShapeCommand` from `@tumblerjs/slides` and execute the returned command once.
+Hosts own menus, touch insertion policy, permissions, saving, error display, and
+selection after a successful command. Unmount the placement component when the
+active slide, tool or editing permission changes. After pointerup, keep it mounted
+through the following click event before removing it to avoid click-through.

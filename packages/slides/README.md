@@ -261,3 +261,21 @@ session.execute({
 Use `type: "radial"` or `"rectangular"` with an optional `center: [x, y]` in the range 0–1.
 Stops are sorted by offset on write. Changing the fill replaces the previous
 fill while retaining geometry, text, and outline.
+
+## Place shapes from pointer gestures
+
+`shapePlacement(start, end, shape, constrain, frame)` resolves a drag in slide
+coordinates into `{ bounds, rotation }`. Points should be clamped to the slide.
+It supports every authored `ShapeGeometry`, reverse drags, equal proportions for
+shapes, and 45-degree angle snapping for lines. Constrained drags stay within the
+supplied slide frame.
+
+`placedShapeCommand(artifact, slideId, shape, placement)` returns a validated
+`{ command, objectKey }` without changing the artifact. Execute `command` once and
+select `objectKey` after success. Rotated lines use a batch so insertion is one
+undoable edit and no intermediate unrotated line is published. Command preparation
+can throw for invalid targets, invalid dimensions, or signed presentations; hosts
+should display these errors through the same path as other editing failures.
+
+The optional Svelte `PresentationShapePlacement` component handles pointer input
+and previews through the slide view's overlay hook.

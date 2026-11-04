@@ -5,3 +5,5 @@ export { default as PresentationSlideRail } from "./PresentationSlideRail.svelte
 export { default as PresentationFormattingToolbar } from "./PresentationFormattingToolbar.svelte";
 
 export type { PresentationRemoteSelection } from "./presentation-presence.ts";
+
+export { default as PresentationShapePlacement } from "./PresentationShapePlacement.svelte";
