@@ -369,6 +369,9 @@
     touch-action: pan-y;
     user-select: none;
   }
+  .reorderable:active {
+    cursor: grabbing;
+  }
   .reorderable .number {
     touch-action: none;
   }
