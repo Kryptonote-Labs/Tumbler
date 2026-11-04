@@ -46,8 +46,10 @@ export function paragraphFormat(
     );
     if (command.level !== undefined) {
       attrs.set("lvl", String(command.level));
-      attrs.set("marL", String(342900 * (command.level + 1)));
-      attrs.set("indent", "-285750");
+      const peer = target.text!.paragraphs.find(p => p.bullet && p.level === command.level);
+      const base = text.bullet ? text.marginLeft - (text.level ?? 0) * 36 : 36;
+      attrs.set("marL", String(Math.round((peer?.marginLeft ?? base + command.level * 36) * 9525)));
+      attrs.set("indent", String(Math.round((peer?.indent ?? (text.bullet ? text.indent : -30)) * 9525)));
     }
     const remove = new Set<string>();
     const additions: { name: string; markup: string }[] = [];

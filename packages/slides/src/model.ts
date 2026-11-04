@@ -39,6 +39,7 @@ export interface SlideTextRun {
   readonly hyperlink?: { readonly href?: string; readonly slidePart?: string };
 }
 export interface SlideParagraph {
+  readonly level?: number;
   readonly tabs?: readonly { position: number; alignment: string }[];
   readonly defaultTabSize?: number;
   readonly distributed?: boolean;

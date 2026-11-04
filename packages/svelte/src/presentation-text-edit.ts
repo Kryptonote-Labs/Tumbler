@@ -1,9 +1,13 @@
+import { presentationTextCaret } from "./presentation-text-caret.ts";
 import { presentationTextPosition } from "./presentation-text-position.ts";
 import { PresentationTypingHistory } from "./presentation-typing-history.ts";
 import { tick } from "svelte";
 import type { PresentationTextRange } from "@tumblerjs/slides";
 export interface SlideTextEditorOptions {
   active: boolean;
+  initialText?: string;
+  selection?: PresentationTextRange & { head?: number };
+  keepCaretVisible?: boolean;
   revision?: object;
   focusToken?: number;
   paragraphs: readonly string[];
@@ -13,6 +17,8 @@ export interface SlideTextEditorOptions {
   onfinish?: () => void;
   onundo?: (redo: boolean) => void;
   onnavigate?: (backward: boolean) => boolean;
+  onvertical?: (direction: -1 | 1, x: number) => boolean;
+  onindent?: (amount: -1 | 1) => boolean;
   onshortcut?: (key: "bold" | "italic" | "underline") => void;
 }
 /** The browser owns caret movement; document commands own text mutations. */
@@ -62,16 +68,41 @@ export function presentationTextEdit(
       return;
     const a = offset(s.anchorNode, s.anchorOffset),
       b = offset(s.focusNode, s.focusOffset);
+    // Native Home can place a DOM selection inside a non-editable bullet.
+    const inBullet = (point: Node) => (point instanceof HTMLElement ? point : point.parentElement)?.closest('[data-bullet]');
+    if (inBullet(s.anchorNode) || inBullet(s.focusNode)) {
+      const anchor = locate(a), focus = locate(b);
+      node.focus({preventScroll: true});
+      s.setBaseAndExtent(anchor[0], anchor[1], focus[0], focus[1]);
+    }
     const next = { start: Math.min(a, b), end: Math.max(a, b) };
     if (next.start !== range.start || next.end !== range.end || b !== head) {
       history.break();
       range = next;
       head = b;
       options.onselect?.(range, head);
+      revealCaret();
     }
   }
   const locate = (position: number) => presentationTextPosition(node, options.paragraphs, position);
-  function restore() {
+  function revealCaret() {
+    if (!options.keepCaretVisible || document.activeElement !== node) return;
+    const viewport = node.closest<HTMLElement>('.presentation-view');
+    const selection = window.getSelection();
+    if (!viewport || !selection?.rangeCount) return;
+    const range = selection.getRangeAt(0).cloneRange();
+    range.collapse(selection.focusNode === range.startContainer && selection.focusOffset === range.startOffset);
+    const caret = presentationTextCaret(node, range);
+    if (!caret) return;
+    const bounds = viewport.getBoundingClientRect();
+    const left = Math.min(caret.start.x, caret.end.x), right = Math.max(caret.start.x, caret.end.x);
+    const top = Math.min(caret.start.y, caret.end.y), bottom = Math.max(caret.start.y, caret.end.y);
+    const dx = left < bounds.left + 16 ? left - bounds.left - 16 : right > bounds.right - 16 ? right - bounds.right + 16 : 0;
+    const dy = top < bounds.top + 16 ? top - bounds.top - 16 : bottom > bounds.bottom - 16 ? bottom - bounds.bottom + 16 : 0;
+    viewport.scrollLeft += dx;
+    viewport.scrollTop += dy;
+  }
+  function restore(restoredHead = range.end) {
     if (!active) return;
     node.focus({ preventScroll: true });
     const r = document.createRange(),
@@ -82,8 +113,11 @@ export function presentationTextEdit(
     const s = window.getSelection();
     s?.removeAllRanges();
     s?.addRange(r);
-    head = range.end;
+    if (restoredHead === range.start && range.start !== range.end)
+      s?.setBaseAndExtent(b[0], b[1], a[0], a[1]);
+    head = restoredHead;
     options.onselect?.(range, head);
+    revealCaret();
   }
   async function replace(value: string, target = range, kind = "") {
     const undoGroup = history.group(kind, target, value);
@@ -102,7 +136,8 @@ export function presentationTextEdit(
     restore();
   }
   function before(event: InputEvent) {
-    if (!active || composing || event.isComposing) return;
+    if (!active) { event.preventDefault(); return; }
+    if (composing || event.isComposing) return;
     capture();
     const collapsed = range.start === range.end;
     const target = event.getTargetRanges?.()[0];
@@ -185,10 +220,29 @@ export function presentationTextEdit(
   }
   function keydown(event: KeyboardEvent) {
     if (!active) return;
+    capture();
     event.stopPropagation();
     if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", "Tab", "Escape"].includes(event.key) || event.ctrlKey || event.metaKey) history.break();
-    if (event.key === "Tab" && options.onnavigate?.(event.shiftKey)) {
+    if ((event.key === "ArrowUp" || event.key === "ArrowDown") &&
+      !event.shiftKey && !event.ctrlKey && !event.metaKey && options.onvertical) {
+      capture();
+      const selection = window.getSelection();
+      if (range.start === range.end && selection?.rangeCount) {
+        const caret = selection.getRangeAt(0).getClientRects()[0];
+        const edge = (event.key === "ArrowUp" ? node.firstElementChild : node.lastElementChild)?.getBoundingClientRect();
+        const boundary = caret && edge && (event.key === "ArrowUp"
+          ? caret.top < edge.top + caret.height : caret.bottom > edge.bottom - caret.height);
+        if (boundary && options.onvertical(event.key === "ArrowUp" ? -1 : 1, caret.left)) {
+          event.preventDefault();
+          return;
+        }
+      }
+    }
+    if (event.key === "Tab") {
       event.preventDefault();
+      capture();
+      if (options.onnavigate) options.onnavigate(event.shiftKey);
+      else if (!options.onindent?.(event.shiftKey ? -1 : 1) && !event.shiftKey) void replace("\t");
       return;
     }
     if (
@@ -211,10 +265,10 @@ export function presentationTextEdit(
       );
     } else if (
       (event.ctrlKey || event.metaKey) &&
-      event.key.toLowerCase() === "z"
+      !event.altKey && ["z", "y"].includes(event.key.toLowerCase())
     ) {
       event.preventDefault();
-      options.onundo?.(event.shiftKey);
+      options.onundo?.(event.key.toLowerCase() === "y" || event.shiftKey);
     }
   }
   function compositionStart() {
@@ -263,6 +317,19 @@ export function presentationTextEdit(
     history.break();
     if (active) event.stopPropagation();
   }
+  function doubleClick(event: MouseEvent) {
+    if (!active) return;
+    const caret = document.caretRangeFromPoint?.(event.clientX, event.clientY);
+    if (!caret || !node.contains(caret.startContainer)) return;
+    const index = offset(caret.startContainer, caret.startOffset);
+    const word = Array.from(new Intl.Segmenter(undefined, {granularity: "word"}).segment(text()))
+      .find(part => index >= part.index && index < part.index + part.segment.length);
+    if (!word) return;
+    event.preventDefault();
+    event.stopPropagation();
+    range = {start: word.index, end: word.index + word.segment.length};
+    restore();
+  }
   function drop(event: DragEvent) {
     if (active) event.preventDefault();
   }
@@ -276,6 +343,7 @@ export function presentationTextEdit(
   node.addEventListener("compositionstart", compositionStart);
   node.addEventListener("compositionend", compositionEnd);
   node.addEventListener("pointerdown", pointer);
+  node.addEventListener("dblclick", doubleClick);
   node.addEventListener("drop", drop);
   function clearSelection() {
     const selection = window.getSelection();
@@ -288,6 +356,7 @@ export function presentationTextEdit(
     const leaving = active && !next.active;
     const revised = next.revision !== options.revision;
     const refocus = next.focusToken !== options.focusToken;
+    const requested = next.selection !== options.selection ? next.selection : undefined;
     const focused = document.activeElement === node;
     const changed =
       options.paragraphs.join("\n") !== next.paragraphs.join("\n");
@@ -299,6 +368,16 @@ export function presentationTextEdit(
       await tick();
       if (!active) return;
       node.focus({ preventScroll: true });
+      if (options.selection) {
+        range = { start: Math.min(options.selection.start, text().length), end: Math.min(options.selection.end, text().length) };
+        restore(Math.min(options.selection.head ?? range.end, text().length));
+        return;
+      }
+      if (options.initialText !== undefined) {
+        range = { start: 0, end: text().length };
+        await replace(options.initialText);
+        return;
+      }
       const point = options.point;
       const caret = point
         ? document.caretRangeFromPoint?.(point.x, point.y)
@@ -308,24 +387,27 @@ export function presentationTextEdit(
         s?.removeAllRanges();
         s?.addRange(caret);
         capture();
+        revealCaret();
       } else {
         range = { start: 0, end: text().length };
         restore();
       }
     } else if (
       active &&
-      ((focused && revised) || refocus) &&
+      ((focused && revised) || refocus || requested) &&
       !restorePending &&
       !composing
     ) {
       await tick();
-      if (changed) {
+      if (requested && requested !== options.selection) return;
+      if (requested) range = {start: requested.start, end: requested.end};
+      if (changed || requested) {
         range = {
           start: Math.min(range.start, text().length),
           end: Math.min(range.end, text().length),
         };
       }
-      restore();
+      restore(requested ? Math.min(requested.head ?? range.end, text().length) : range.end);
     }
   }
   void update(initial);
@@ -343,6 +425,7 @@ export function presentationTextEdit(
       node.removeEventListener("compositionstart", compositionStart);
       node.removeEventListener("compositionend", compositionEnd);
       node.removeEventListener("pointerdown", pointer);
+      node.removeEventListener("dblclick", doubleClick);
       node.removeEventListener("drop", drop);
     },
   };

@@ -410,6 +410,7 @@ export function editPresentationText(
     p: (typeof data)[number],
     runs: string,
     format?: FormattingPatch,
+    endProperties = raw(source, child(p.element, "endParaRPr")),
   ) => {
     const pr = child(p.element, "pPr");
     let props = raw(source, pr);
@@ -436,7 +437,7 @@ export function editPresentationText(
       source,
       p.element,
       {},
-      props + runs + raw(source, child(p.element, "endParaRPr")),
+      props + runs + endProperties,
     );
   };
   const editor = beginLosslessXmlEdit(source);
@@ -495,6 +496,15 @@ export function editPresentationText(
             (i === pieces.length - 1
               ? slice(last, range.end - last.start, last.end - last.start)
               : ""),
+          undefined,
+          // Empty paragraphs use their end mark as the donor for subsequent typing.
+          i > 0 && !piece && range.end === last.end
+            ? properties(source, first.element,
+                donor ? child(donor.element, "rPr") : child(first.element, "endParaRPr"),
+                "endParaRPr", normalized ?? {})
+                .replace(/^<((?:[\w.-]+:)?)rPr\b/, "<$1endParaRPr")
+                .replace(/<\/((?:[\w.-]+:)?)rPr>$/, "</$1endParaRPr>")
+            : undefined,
         );
       })
       .join("");

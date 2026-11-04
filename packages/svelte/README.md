@@ -166,7 +166,7 @@ import {
 } from "@tumblerjs/svelte/slides";
 ```
 
-Pass a presentation document and its active slide to `PresentationSlideView`.
+Pass a presentation document and its active slide to `PresentationSlideView`. Its optional `minimumEditingTextSize` prop zooms small text to that screen-pixel size when text editing starts, up to the existing 3× zoom ceiling. It preserves the clicked caret position, keeps the caret visible during entry and typing, and changes only viewing scale. Omit it to retain the current zoom.
 Bind `PresentationSlideRail` to the active slide index for thumbnail navigation.
 Pass `onreorder(slideId, index)` to enable dragging thumbnails and Alt + Up/Down
 keyboard reordering. The index is the slide's final, zero-based position. Apply a
@@ -285,8 +285,20 @@ screen's pixel density. `goToPage(index)` scrolls to a zero-based page index. Pr
 authorization, uploads and download controls belong to the host application.
 
 Hosts can call `PresentationSlideView.editText(objectKey)` after rendering an inserted
-text box to select it and focus its text editor. The method ignores missing objects
-and read-only views.
+text box or table to focus its text editor. Tables start in the first editable cell.
+The method ignores missing objects and read-only views. Typing on a selected text
+shape starts editing; double-clicking text selects its word. Tab navigates table
+cells, and Up/Down moves between rows at the first or last text line. Ctrl/Cmd+Z
+undoes; Ctrl+Y and Ctrl/Cmd+Shift+Z redo inside text editing. Home and
+Shift+Home keep the selection in editable text, excluding bullet markers.
+
+`PresentationSlideView.contentBounds()` returns rendered text bounds keyed by object
+key, in slide coordinates. Hosts can use them to place new content in free space;
+these measurements do not change saved object geometry.
+
+`PresentationSlideView.restoreSelection({objectKey, start, end, head?, cell?})` waits for
+the current render and restores a text selection, including its caret direction.
+Hosts can record selections beside history groups and restore them with undo/redo.
 
 `PresentationSlideRail` accepts `oninsert(index)` to enable insertion points before,
 between and after slide thumbnails. Clicking a gap selects its line; Enter calls

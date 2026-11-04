@@ -2020,6 +2020,7 @@ class Reader {
         .map((entry) => this.child(entry, "tabLst"))
         .find(Boolean);
       paragraphs.push({
+        level,
         tabs: this.children(tabs)
           .filter((tab) => tab.localName === "tab")
           .map((tab) => ({

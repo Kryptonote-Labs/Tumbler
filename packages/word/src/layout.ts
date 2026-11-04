@@ -53,6 +53,8 @@ export interface WordTextMeasurer {
 }
 
 export interface WordLayoutOptions {
+  /** Reflow into a single column of this width in points without changing saved page settings. */
+  readonly reflowWidth?: number;
   /** Cumulative derived marker UTF-16 units across body and stories, including suffixes. */
   readonly maxMarkerCharacters?: number;
   readonly maxPages?: number;
@@ -499,7 +501,20 @@ function* layoutWordSourcePass(document: WordLayoutSource, measurer: WordTextMea
   const pages: MutablePage[] = [];
   const pageLimit = options.pageLimit === undefined ? undefined : limit(options.pageLimit, budget.maxPages, "page");
   let truncated = false;
-  const sections = documentSections(document.blocks, document.finalSection);
+  const originalSections = documentSections(document.blocks, document.finalSection);
+  if (options.reflowWidth !== undefined && (!Number.isFinite(options.reflowWidth) || options.reflowWidth <= 0))
+    throw new RangeError('Reflow width must be a positive finite number.');
+  const sections = options.reflowWidth === undefined ? originalSections : originalSections.map(section => ({
+    ...section,
+    properties: {
+      ...section.properties,
+      pageWidthTwips: options.reflowWidth! * 20,
+      marginTopTwips: 180, marginBottomTwips: 180,
+      headerDistanceTwips: 90, footerDistanceTwips: 90,
+      marginLeftTwips: 180, marginRightTwips: 180, gutterTwips: 0,
+      columnCount: 1, columns: undefined, columnSeparator: false,
+    },
+  }));
   const completed: WordLayoutPage[] = [];
   function* progress(): Generator<WordLayout, void, void> {
     // Keep the current page mutable for widow control, tables and continuous sections.

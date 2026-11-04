@@ -25,6 +25,7 @@
   import type { FormattingPatch, FormattingState } from "@tumblerjs/core";
   import { onDestroy, onMount, tick, setContext, untrack, type Snippet } from "svelte";
   import type {
+    PresentationCommand,
     PresentationDocument,
     PresentationObjectChange,
     PresentationSlide,
@@ -46,6 +47,7 @@
   import { placeholderPrompt } from "./presentation-prompt.ts";
   import PresentationTable from "./PresentationTable.svelte";
   import OoxmlChart from "./OoxmlChart.svelte";
+  import { cssFontFamily } from "./font-family.ts";
   import { zoomGesture } from "./zoom-gesture.ts";
   import { snappedZoom, type SnappedZoom } from "./zoom-snap.ts";
 
@@ -60,6 +62,7 @@
     toolbar = true,
     onselectionchange,
     editable = false,
+    minimumEditingTextSize,
     scale = $bindable(1),
     selectedKey = $bindable<string | undefined>(),
     selectedKeys = $bindable<string[]>([]),
@@ -67,6 +70,7 @@
     onobjectchange,
     ontextchange,
     ontextedit,
+    onparagraph,
     onformat,
     onshapechange,
     onundo,
@@ -90,12 +94,15 @@
     toolbar?: boolean;
     onselectionchange?: (selection: {object:SlideObject | undefined;state:FormattingState; range: ReturnType<typeof currentSelection>}) => void;
     editable?: boolean;
+    /** Optional minimum screen text size when entering text editing, using viewport zoom only. */
+    minimumEditingTextSize?: number;
     scale?: number;
     selectedKey?: string;
     selectedKeys?: string[];
     onobjectschange?: (changes: PresentationObjectChange[]) => void;
     onslide?: (part: string) => void;
     ontextedit?: (change: PresentationTextEdit, undoGroup?: string) => void;
+    onparagraph?: (command: Extract<PresentationCommand, { name: "paragraph" }>) => void;
     onformat?: (change: PresentationFormatChange) => void;
     onshapechange?: (change: PresentationShapeChange) => void;
     onundo?: (redo: boolean) => void;
@@ -198,7 +205,7 @@
   function editCell(
     object: SlideObject,
     address: PresentationTableCellAddress,
-    event?: MouseEvent,
+    event?: Pick<MouseEvent, "clientX" | "clientY">,
   ) {
     selectCell(object, address);
     void edit(presentationTextTarget(object, address), event);
@@ -216,6 +223,20 @@
       return false;
     }
     editCell(selected, next);
+    return true;
+  }
+  function verticalCell(direction: -1 | 1, x: number) {
+    if (!selected?.table || !cellAddress || !svg) return false;
+    const current = selected.table.cells.find(cell => cell.row === cellAddress.row && cell.column === cellAddress.column);
+    if (!current) return false;
+    const row = direction === 1 ? current.row + current.rowSpan : current.row - 1;
+    const next = selected.table.cells.find(cell => cell.text?.editable && row >= cell.row &&
+      row < cell.row + cell.rowSpan && current.column >= cell.column && current.column < cell.column + cell.columnSpan);
+    if (!next) return false;
+    const body = svg.querySelector(`[data-slide-object="${CSS.escape(selected.key)}"] [data-table-cell="${next.row}:${next.column}"] .paragraphs`);
+    const edge = (direction === 1 ? body?.firstElementChild : body?.lastElementChild)?.getBoundingClientRect();
+    if (!edge) return false;
+    editCell(selected, next, {clientX: x, clientY: direction === 1 ? edge.top + 2 : edge.bottom - 2});
     return true;
   }
   const handles = [
@@ -255,6 +276,7 @@
   let editing = $state<string>();
   let textHead = $state(0);
   let textRange = $state<PresentationTextRange>({ start: 0, end: 0 });
+  let restoredRange = $state.raw<PresentationTextRange & {head?: number}>();
   let editPoint = $state<{ x: number; y: number }>();
   let focusToken = $state(0);
   let pendingFormat = $state<FormattingPatch>();
@@ -282,7 +304,28 @@
   /** Select a text object and focus its editor, for example after inserting a text box. */
   export function editText(objectKey: string) {
     const object = slide.objects.find(object => object.key === objectKey && object.layer === 'slide');
-    if (object) void edit(object);
+    if (object?.table) {
+      const first = object.table.cells[0];
+      if (first) editCell(object, first);
+    } else if (object) void edit(object);
+  }
+  /** Restore a semantic text selection after history changes, without changing document content. */
+  export async function restoreSelection(selection: PresentationTextRange & {
+    objectKey: string; head?: number; cell?: PresentationTableCellAddress;
+  }) {
+    await tick();
+    const object = slide.objects.find(object => object.key === selection.objectKey);
+    if (!editable || !object || !presentationTextTarget(object, selection.cell).textEditable) return;
+    if (object.table && selection.cell) selectCell(object, selection.cell);
+    else { select([object.key]); activeCell = undefined; }
+    editPoint = undefined;
+    initialText = undefined;
+    pendingFormat = undefined;
+    textRange = {start: selection.start, end: selection.end};
+    textHead = selection.head ?? selection.end;
+    restoredRange = {...textRange, head: textHead};
+    editing = object.key;
+    focusToken++;
   }
   export function applyFormatting(patch: FormattingPatch) { format(patch); }
   export function currentSelection(): PresentationTextRange & {
@@ -353,7 +396,7 @@
   }
   let loadedFonts = $state<ReturnType<typeof loadPresentationFonts>>();
   setContext<PresentationFontContext>(presentationFontContext, {
-    family: (name) => loadedFonts?.family(name) ?? JSON.stringify(name),
+    family: (name) => loadedFonts?.family(name) ?? cssFontFamily(name),
   });
   $effect(() => {
     const loaded = loadPresentationFonts(presentation.embeddedFonts ?? []);
@@ -384,6 +427,27 @@
   let fittedHeights = $state.raw<
     Record<string, { text: SlideText; height: number }>
   >({});
+  /** Visible text bounds, in slide coordinates, for placing content in unused space. */
+  export function contentBounds() {
+    const bounds = new Map<string, SlideSelectionRect>();
+    const inverse = svg?.getScreenCTM()?.inverse();
+    if (!inverse || !svg) return bounds;
+    for (const object of slide.objects) {
+      if (!object.text || !slideTextValue(object).trim()) continue;
+      const body = svg.querySelector(`[data-slide-object="${CSS.escape(object.key)}"] .paragraphs`);
+      if (!body) continue;
+      const rect = body.getBoundingClientRect();
+      const corners = [[rect.left, rect.top], [rect.right, rect.top],
+        [rect.left, rect.bottom], [rect.right, rect.bottom]]
+        .map(([x, y]) => new DOMPoint(x, y).matrixTransform(inverse));
+      const x = Math.min(...corners.map(p => p.x));
+      const y = Math.min(...corners.map(p => p.y));
+      bounds.set(object.key, {x, y,
+        width: Math.max(...corners.map(p => p.x)) - x,
+        height: Math.max(...corners.map(p => p.y)) - y});
+    }
+    return bounds;
+  }
   function objectHeight(object: SlideObject) {
     const fitted = fittedHeights[object.key];
     return fitted && fitted.text === object.text
@@ -600,16 +664,54 @@
     if (pointer !== undefined && svg?.hasPointerCapture(pointer))
       svg.releasePointerCapture(pointer);
   }
-  async function edit(object: SlideObject, event?: MouseEvent) {
+  let initialText = $state<string>();
+  async function edit(object: SlideObject, event?: Pick<MouseEvent, "clientX" | "clientY">, typed?: string) {
     if (!editable || !object.textEditable || !(ontextedit || ontextchange))
       return;
     cancel();
     select([object.key]);
-    editPoint = event ? { x: event.clientX, y: event.clientY } : undefined;
+    let point = event ? { x: event.clientX, y: event.clientY } : undefined;
+    if (minimumEditingTextSize && host && svg) {
+      const size = presentationFormattingState(object).text.fontSize;
+      const points = size.state === 'value' || size.state === 'inherited' ? size.value : undefined;
+      const screenSize = (points ?? 18) * factor;
+      if (screenSize < minimumEditingTextSize && scale < 3) {
+        const bounds = svg.getBoundingClientRect();
+        const area = host.getBoundingClientRect();
+        const x = event?.clientX ?? bounds.left + object.transform.x * factor;
+        const y = event?.clientY ?? bounds.top + object.transform.y * factor;
+        const local = { x: (x - bounds.left) / factor, y: (y - bounds.top) / factor };
+        await zoom({ factor: minimumEditingTextSize / screenSize, x, y,
+          targetX: event?.clientX ?? area.left + area.width / 2,
+          targetY: event?.clientY ?? area.top + area.height / 2 });
+        const next = svg.getBoundingClientRect();
+        if (point) point = { x: next.left + local.x * factor, y: next.top + local.y * factor };
+      }
+    }
+    if (!editable || selectedKey !== object.key) return;
+    restoredRange = undefined;
+    initialText = typed;
+    editPoint = point;
     textRange = { start: 0, end: slideTextValue(object).length };
     textHead = textRange.end;
     pendingFormat = undefined;
     editing = object.key;
+  }
+  function indentText(amount: -1 | 1) {
+    if (!onparagraph || !selected || !textTarget?.text) return false;
+    let offset = 0;
+    const paragraph = textTarget.text.paragraphs.find(p => {
+      const end = offset + p.runs.reduce((n, run) => n + run.text.length, 0);
+      const found = textRange.start <= end;
+      offset = end + 1;
+      return found;
+    });
+    if (!paragraph?.bullet) return false;
+    const level = Math.max(0, Math.min(8, (paragraph.level ?? 0) + amount));
+    onparagraph({ name: 'paragraph', slideId: slide.id, objectKey: selected.key, ...textRange,
+      ...(cellAddress ? { cell: cellAddress } : {}), level });
+    focusToken++;
+    return true;
   }
   function keydown(event: KeyboardEvent) {
     if (editing) return;
@@ -630,6 +732,13 @@
         shortcut(key === "b" ? "bold" : key === "i" ? "italic" : "underline");
         return;
       }
+    }
+    if (selectedKeys.length === 1 && selected.textEditable && !selected.table &&
+      event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
+      event.preventDefault();
+      event.stopPropagation();
+      void edit(selected, undefined, event.key);
+      return;
     }
     if (event.key === "Enter" && selectedKeys.length === 1) {
       event.preventDefault();
@@ -758,7 +867,7 @@
         class="slide"
         role="group"
         aria-label={slide.title}
-        tabindex={editable ? 0 : undefined}
+        tabindex={editable && !editing ? 0 : undefined}
         width={presentation.width * factor}
         height={presentation.height * factor}
         viewBox={`0 0 ${presentation.width} ${presentation.height}`}
@@ -818,7 +927,7 @@
           <g
             transform={`matrix(${matrix.join(" ")})`}
             role={editable ? "button" : "group"}
-            tabindex={editable ? 0 : undefined}
+            tabindex={editable && editing !== object.key ? 0 : undefined}
             aria-label={object.name}
             data-slide-object={object.key}
             data-object-width={w}
@@ -828,8 +937,18 @@
               ? object.shapeId
               : undefined}
             class:movable={editable && object.movable}
-            onfocus={() => {
-              if (editable && !selectedKeys.includes(object.key)) select([object.key]);
+            onfocus={(event) => {
+              if (editing === object.key) {
+                // Blink focuses SVG shapes around foreignObject text on mouse selection.
+                const text = event.currentTarget.querySelector<HTMLElement>('[contenteditable="true"]');
+                const selection = window.getSelection();
+                const ranges = selection ? Array.from({length: selection.rangeCount}, (_, i) => selection.getRangeAt(i).cloneRange()) : [];
+                text?.focus({preventScroll: true});
+                if (selection && ranges.every(range => text?.contains(range.commonAncestorContainer))) {
+                  selection.removeAllRanges();
+                  for (const range of ranges) selection.addRange(range);
+                }
+              } else if (editable && !selectedKeys.includes(object.key)) select([object.key]);
             }}
             onpointerdowncapture={(event) => {
               if (object.table && editing !== object.key &&
@@ -842,7 +961,7 @@
               if (
                 editable &&
                 !editing &&
-                (event.key === "Enter" || event.key === " ")
+                event.key === "Enter"
               ) {
                 select([object.key]);
                 event.preventDefault();
@@ -927,6 +1046,9 @@
                   onnavigate={navigateCell}
                   editor={{
                     point: editPoint,
+                    selection: restoredRange,
+                    keepCaretVisible: !!minimumEditingTextSize,
+                    onvertical: verticalCell,
                     focusToken,
                     onselect: (range, head) => {
                       textHead = head ?? range.end;
@@ -942,7 +1064,7 @@
                     onfinish: () => {
                       editing = undefined;
                       pendingFormat = undefined;
-                      svg?.focus();
+                      void tick().then(() => svg?.focus({preventScroll: true}));
                     },
                     onundo,
                     onshortcut: shortcut,
@@ -1001,7 +1123,10 @@
                     {onslide}
                     editor={{
                       active: editing === object.key,
+                      initialText,
                       point: editPoint,
+                      selection: restoredRange,
+                      keepCaretVisible: !!minimumEditingTextSize,
                       focusToken,
                       onselect: (range, head) => {
                       textHead = head ?? range.end;
@@ -1018,10 +1143,11 @@
                       onfinish: () => {
                         editing = undefined;
                         pendingFormat = undefined;
-                        svg?.focus();
+                        void tick().then(() => svg?.focus({preventScroll: true}));
                       },
                       onundo,
                       onshortcut: shortcut,
+                      onindent: indentText,
                     }}
                   />
                 </foreignObject>

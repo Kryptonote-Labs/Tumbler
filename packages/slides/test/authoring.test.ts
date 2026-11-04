@@ -508,3 +508,32 @@ test('presentation font sizes use DrawingML limits instead of the spreadsheet ce
  expect(reopen(b).document.slides[0]!.objects[0]!.text!.paragraphs[0]!.runs[0]!.fontSize).toBeCloseTo(800*4/3);
  expect(()=>run(a,{name:'format-text',slideId,objectKey,start:0,end:5,patch:{text:{fontSize:{set:4001}}}})).toThrow();
 });
+
+test('Enter carries character formatting into an empty paragraph and its next typed text', () => {
+  const seed = textDeck('First');
+  let a = run(seed.a, { name: 'format-text', slideId: seed.slideId, objectKey: seed.objectKey, start: 0, end: 5,
+    patch: { text: { bold: { set: true }, italic: { set: true }, fontFamily: { set: 'Arial' }, color: { set: { type: 'rgb', value: '#345678' } } } } });
+  a = run(a, { name: 'edit-text', slideId: seed.slideId, objectKey: seed.objectKey, start: 5, end: 5, value: '\n' });
+  a = run(a, { name: 'edit-text', slideId: seed.slideId, objectKey: seed.objectKey, start: 6, end: 6, value: 'Next' });
+  let object = reopen(a).document.slides[0]!.objects[0]!;
+  expect(object.text!.paragraphs[1]!.runs[0]).toMatchObject({ text: 'Next', bold: true, italic: true, fontFamily: 'Arial', color: 'rgba(52,86,120,1)' });
+  a = run(a, { name: 'edit-text', slideId: seed.slideId, objectKey: seed.objectKey, start: 10, end: 10, value: '\n', formatting: { text: { bold: { set: false } } } });
+  a = run(a, { name: 'edit-text', slideId: seed.slideId, objectKey: seed.objectKey, start: 11, end: 11, value: 'Regular' });
+  object = reopen(a).document.slides[0]!.objects[0]!;
+  expect(object.text!.paragraphs[2]!.runs[0]).toMatchObject({ text: 'Regular', bold: false, italic: true });
+});
+
+test("promoting a bullet restores the existing level's indentation", () => {
+  let a = createPresentation();
+  const slideId = a.document.slides[0]!.id;
+  a = run(a, {name: "layout", slideId, layout: "title-content"});
+  const objectKey = a.document.slides[0]!.objects[1]!.key;
+  a = run(a, {name: "edit-text", slideId, objectKey, start:0,end:0,value:"Original\nNested"});
+  const original = a.document.slides[0]!.objects[1]!.text!.paragraphs[0]!;
+  a = run(a, {name:"paragraph",slideId,objectKey,start:9,end:15,level:1});
+  expect(a.document.slides[0]!.objects[1]!.text!.paragraphs[1]!.level).toBe(1);
+  a = reopen(run(a, {name:"paragraph",slideId,objectKey,start:9,end:15,level:0}));
+  const promoted = a.document.slides[0]!.objects[1]!.text!.paragraphs[1]!;
+  expect(promoted.marginLeft).toBe(original.marginLeft);
+  expect(promoted.indent).toBe(original.indent);
+});

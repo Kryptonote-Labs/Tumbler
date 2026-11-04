@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { cssFontFamily } from "./font-family.ts";
   import { getContext } from "svelte";
   import {
     presentationFontContext,
@@ -86,11 +87,11 @@
         style:margin-bottom={`${paragraph.after}px`}
         style:line-height={paragraph.lineHeight}
       >
-        {#if paragraph.bullet}<span
+        {#if paragraph.bullet && (editor?.active || paragraph.runs.some(run => run.text.trim()))}<span
             data-bullet
             contenteditable="false"
             style:font-family={fonts?.family(paragraph.bulletFont ?? "Arial") ??
-              JSON.stringify(paragraph.bulletFont)}
+              cssFontFamily(paragraph.bulletFont ?? "Arial")}
             style:color={paragraph.bulletColor}
             style:font-size={`${paragraph.bulletSize ?? 24}px`}
             style:display="inline-block"
@@ -99,7 +100,7 @@
           </span>{/if}{#each paragraph.runs as run}<span
             data-text-run
             style:font-family={fonts?.family(run.fontFamily) ??
-              JSON.stringify(run.fontFamily)}
+              cssFontFamily(run.fontFamily)}
             style:font-size={`${run.fontSize}px`}
             style:font-weight={run.bold ? 700 : 400}
             style:font-style={run.italic ? "italic" : "normal"}

@@ -348,6 +348,8 @@ uses the font bounding box, which omits external leading. In a browser,
 
 ### Pointer hit testing
 
+`WordLayoutOptions.reflowWidth` lays out a single column at the supplied width in points, with narrow viewing margins and unchanged font sizes. This is a viewing option for mobile editors; it does not change stored sections or export geometry. Omit it for physical page layout and printing.
+
 `wordLineAtPoint(page, x, y)` selects a body text line from a `WordLayoutPage`.
 Coordinates are relative to the page origin in points, before zoom. Convert browser
 CSS pixels by removing the page offset and zoom, then dividing by `wordPointsToCssPixels(1)`.
