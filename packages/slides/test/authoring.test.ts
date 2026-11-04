@@ -522,3 +522,18 @@ test('Enter carries character formatting into an empty paragraph and its next ty
   object = reopen(a).document.slides[0]!.objects[0]!;
   expect(object.text!.paragraphs[2]!.runs[0]).toMatchObject({ text: 'Regular', bold: false, italic: true });
 });
+
+test("promoting a bullet restores the existing level's indentation", () => {
+  let a = createPresentation();
+  const slideId = a.document.slides[0]!.id;
+  a = run(a, {name: "layout", slideId, layout: "title-content"});
+  const objectKey = a.document.slides[0]!.objects[1]!.key;
+  a = run(a, {name: "edit-text", slideId, objectKey, start:0,end:0,value:"Original\nNested"});
+  const original = a.document.slides[0]!.objects[1]!.text!.paragraphs[0]!;
+  a = run(a, {name:"paragraph",slideId,objectKey,start:9,end:15,level:1});
+  expect(a.document.slides[0]!.objects[1]!.text!.paragraphs[1]!.level).toBe(1);
+  a = reopen(run(a, {name:"paragraph",slideId,objectKey,start:9,end:15,level:0}));
+  const promoted = a.document.slides[0]!.objects[1]!.text!.paragraphs[1]!;
+  expect(promoted.marginLeft).toBe(original.marginLeft);
+  expect(promoted.indent).toBe(original.indent);
+});
