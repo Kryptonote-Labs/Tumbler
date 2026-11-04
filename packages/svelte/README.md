@@ -287,3 +287,10 @@ authorization, uploads and download controls belong to the host application.
 Hosts can call `PresentationSlideView.editText(objectKey)` after rendering an inserted
 text box to select it and focus its text editor. The method ignores missing objects
 and read-only views.
+
+`PresentationSlideRail` accepts `oninsert(index)` to enable insertion points before,
+between and after slide thumbnails. Clicking a gap selects its line; Enter calls
+`oninsert` with a zero-based insertion index. Focus stays after the inserted slide
+so repeated Enter presses add slides in sequence. `oninsertionfocus()` lets the
+host clear object or text editing when a gap receives focus. Omit `oninsert` for a
+read-only rail. Hosts own the insertion command, layout choice and saving.

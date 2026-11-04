@@ -68,6 +68,27 @@ async function run() {
       { id: 'first', index: 1 },
     ]);
 
+    const gap = page.locator('button[data-insertion="1"]');
+    await gap.click();
+    assert.deepEqual(await page.evaluate<number[]>('window.insertions'), []);
+    await page.keyboard.press('Enter');
+    assert.deepEqual(await page.evaluate<number[]>('window.insertions'), [1]);
+    assert.equal(await gap.evaluate(node => node === document.activeElement), true);
+    await page.keyboard.down('Enter');
+    await page.keyboard.down('Enter');
+    await page.keyboard.up('Enter');
+    assert.deepEqual(await page.evaluate<number[]>('window.insertions'), [1, 1]);
+    await page.keyboard.press('ArrowUp');
+    assert.equal(await first.evaluate(node => node === document.activeElement), true);
+    await gap.click();
+    await page.keyboard.press('ArrowDown');
+    assert.equal(await second.evaluate(node => node === document.activeElement), true);
+    await page.locator('button[data-insertion="0"]').click();
+    await page.keyboard.press('Enter');
+    await page.locator('button[data-insertion="2"]').click();
+    await page.keyboard.press('Enter');
+    assert.deepEqual(await page.evaluate<number[]>('window.insertions'), [1, 1, 0, 2]);
+
     await startDrag();
     await page.evaluate('window.destroy()');
     await preview.waitFor({ state: 'detached' });

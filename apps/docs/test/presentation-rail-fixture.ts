@@ -25,6 +25,7 @@ const built = await Bun.build({
             host.style.cssText = 'position:absolute;left:100px;top:120px;width:160px;height:400px;overflow:hidden;transform:translateX(0)';
             document.body.append(host);
             window.moves = [];
+            window.insertions = [];
             window.hints = 0;
             let app;
             flushSync(() => app = mount(Rail, {target:host, props:{
@@ -32,6 +33,7 @@ const built = await Bun.build({
                 {id:'first',title:'First slide'}, {id:'second',title:'Second slide'}
               ]},
               onreorder:(id,index) => window.moves.push({id,index}),
+              oninsert:index => window.insertions.push(index),
               reorderHint:(button) => {window.hints++;button.dataset.hostHint='true';return ()=>{window.hints--;delete button.dataset.hostHint;};}
             }}));
             window.destroy = () => unmount(app);`,

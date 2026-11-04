@@ -7,6 +7,8 @@
     presentation,
     indicator,
     onreorder,
+    oninsert,
+    oninsertionfocus,
     reorderHint,
     index = $bindable(0),
   }: {
@@ -14,9 +16,12 @@
     index?: number;
     indicator?: Snippet<[PresentationSlide]>;
     onreorder?: (slideId: string, index: number) => void;
+    oninsert?: (index: number) => void;
+    oninsertionfocus?: () => void;
     reorderHint?: Attachment<HTMLButtonElement>;
   } = $props();
   let rail = $state<HTMLElement>();
+  let insertionSelected = $state(false);
   let visible = $state<Record<string, boolean>>({});
   let rendered = $state<Record<string, boolean>>({});
   let frame = 0;
@@ -179,6 +184,13 @@
       }
       return;
     }
+    if (oninsert && current === last && event.key === 'ArrowDown') {
+      event.preventDefault();
+      rail
+        ?.querySelector<HTMLButtonElement>(`button[data-insertion="${presentation.slides.length}"]`)
+        ?.focus();
+      return;
+    }
     const next =
       event.key === 'ArrowDown' || event.key === 'ArrowRight'
         ? Math.min(last, current + 1)
@@ -199,6 +211,58 @@
   }
 </script>
 
+{#snippet insertionPoint(target: number, trailing = false)}
+  <button
+    class="insertion-point"
+    class:trailing
+    data-insertion={target}
+    aria-label={trailing
+      ? 'Insert slide at end. Press Enter to create a slide.'
+      : `Insert slide before slide ${target + 1}. Press Enter to create a slide.`}
+    aria-keyshortcuts="Enter"
+    onfocus={() => {
+      insertionSelected = true;
+      oninsertionfocus?.();
+    }}
+    onblur={() => (insertionSelected = false)}
+    onclick={(event) => event.currentTarget.focus()}
+    onkeydown={async (event) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.repeat) return;
+        const button = event.currentTarget;
+        oninsert?.(target);
+        await tick();
+        if (button === button.ownerDocument.activeElement)
+          button.scrollIntoView({ block: 'nearest' });
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        rail?.querySelector<HTMLButtonElement>(`button[data-index="${index}"]`)?.focus();
+      } else {
+        const next =
+          event.key === 'ArrowUp' || event.key === 'ArrowLeft'
+            ? Math.max(0, target - 1)
+            : event.key === 'ArrowDown' || event.key === 'ArrowRight'
+              ? Math.min(presentation.slides.length - 1, target)
+              : event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                  ? presentation.slides.length - 1
+                  : undefined;
+        if (next !== undefined) {
+          event.preventDefault();
+          index = next;
+          await tick();
+          rail?.querySelector<HTMLButtonElement>(`button[data-index="${next}"]`)?.focus();
+        }
+      }
+    }}
+  ></button>
+{/snippet}
+
 <svelte:window
   onpointermove={movePointer}
   onpointerup={finishPointer}
@@ -215,9 +279,11 @@
 <span class="sr-only" aria-live="polite">{announcement}</span>
 <nav class="slide-rail" aria-label="Slides" bind:this={rail}>
   {#each presentation.slides as slide, i (slide.id)}
+    {#if oninsert}{@render insertionPoint(i)}{/if}
     <button
+      style:margin-bottom={oninsert ? '0' : undefined}
       data-index={i}
-      class:active={index === i}
+      class:active={index === i && !insertionSelected}
       class:reorderable={!!onreorder}
       class:dragging={drag?.id === slide.id}
       onpointerdown={(event) => startPointer(event, slide.id)}
@@ -225,7 +291,7 @@
       title={onreorder && !reorderHint ? 'Drag to reorder · Alt + ↑ / ↓' : undefined}
       {@attach onreorder && !drag ? reorderHint : undefined}
       class:hidden={slide.hidden}
-      aria-current={index === i ? 'true' : undefined}
+      aria-current={index === i && !insertionSelected ? 'true' : undefined}
       aria-label={`Slide ${i + 1}: ${slide.title}${slide.hidden ? ' (hidden)' : ''}`}
       tabindex={index === i ? 0 : -1}
       onclick={() => {
@@ -272,6 +338,7 @@
       {#if indicator}<span class="indicator">{@render indicator(slide)}</span>{/if}
     </button>
   {/each}
+  {#if oninsert}{@render insertionPoint(presentation.slides.length, true)}{/if}
   {#if drag}<span class="drop-line" style:top={`${line}px`} aria-hidden="true"></span>{/if}
 </nav>
 {#if drag && draggedSlide}
@@ -362,6 +429,8 @@
 
   .slide-rail {
     position: relative;
+    display: flex;
+    flex-direction: column;
     height: 100%;
     overflow: auto;
     padding: 12px 8px;
@@ -377,6 +446,7 @@
   }
   button {
     position: relative;
+    flex-shrink: 0;
     display: flex;
     gap: 7px;
     align-items: flex-start;
@@ -397,6 +467,27 @@
     padding-top: 3px;
     min-width: 16px;
     text-align: right;
+  }
+  .insertion-point {
+    flex: 0 0 12px;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+  }
+  .insertion-point.trailing {
+    flex: 1 0 40px;
+  }
+  .insertion-point:focus {
+    outline: none;
+  }
+  .insertion-point:focus::before {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 23px;
+    right: 3px;
+    height: 2px;
+    background: var(--accent, #82b68e);
   }
   .preview {
     position: relative;
