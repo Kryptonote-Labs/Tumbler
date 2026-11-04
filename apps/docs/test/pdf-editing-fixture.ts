@@ -5,6 +5,7 @@ import { compile } from 'svelte/compiler';
 import { pdfFixture, pdfStream } from '../../../packages/pdf/test/pdf-fixture.ts';
 import { PdfEditingFonts, defaultPdfTextStyle } from '../../../packages/pdf/src/index.ts';
 const root = resolve(import.meta.dir, '../../..');
+const textBox = process.argv.includes('--text-box');
 const program = await Bun.file(
   resolve(root, 'packages/pdf/test/fixtures/editing-fonts/LiberationSans-Regular.ttf'),
 ).bytes();
@@ -19,7 +20,7 @@ const source = pdfFixture([
   '<< /Type /Catalog /Pages 2 0 R >>',
   '<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
   '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F 5 0 R >> >> /Contents 4 0 R >>',
-  pdfStream('BT /F 12 Tf 20 150 Td (Start) Tj ET'),
+  pdfStream(`BT /F 12 Tf 20 150 Td (${textBox ? 'First second third' : 'Start'}) Tj ET`),
   `<< /Type /Font /Subtype /TrueType /BaseFont /LiberationSans-Regular /Encoding /WinAnsiEncoding /FirstChar 32 /LastChar 126 /Widths [${widths.join(' ')}] /FontDescriptor 6 0 R >>`,
   '<< /Type /FontDescriptor /FontName /LiberationSans-Regular /Flags 32 /FontBBox [-500 -500 2000 2000] /Ascent 900 /Descent -200 /CapHeight 700 /ItalicAngle 0 /StemV 80 /FontFile2 7 0 R >>',
   pdfStream(program),
@@ -38,7 +39,7 @@ const host = `<script>
   fonts.add('Mono-Regular',Uint8Array.from(atob(${JSON.stringify(mono)}),c=>c.charCodeAt(0)));
   model.initialize(importPdfText(pdf));
   const id=model.ids()[0];
-  model.replace(id,0,model.text(id).length,Array.from({length:30},(_,i)=>'Line '+i).join('\\n'));
+  if(!${textBox})model.replace(id,0,model.text(id).length,Array.from({length:30},(_,i)=>'Line '+i).join('\\n'));
   window.lastCaret=()=>layoutPdfTextFlow(model,fonts,pdf.pages).regions.find(region=>region.id===id&&region.page===0).carets.at(-1).offset;
   window.lastFace=()=>fonts.shape('X',model.styleAt(id,model.text(id).length)).face.key;
   window.remotePrefix=()=>model.replace(id,0,0,'B',{...model.styleAt(id,0),color:'#00ff00'});

@@ -297,6 +297,13 @@
     position: absolute;
     inset: -4px;
     border: 5px solid transparent;
+    /* Only the border moves the box; its interior must pass clicks through to the text. */
+    clip-path: polygon(
+      evenodd,
+      0 0, 100% 0, 100% 100%, 0 100%, 0 0,
+      5px 5px, calc(100% - 5px) 5px,
+      calc(100% - 5px) calc(100% - 5px), 5px calc(100% - 5px), 5px 5px
+    );
     pointer-events: auto;
     cursor: move;
   }
