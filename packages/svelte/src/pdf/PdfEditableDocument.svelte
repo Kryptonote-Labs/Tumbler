@@ -99,7 +99,7 @@
   export function place(patch: { x?: number; y?: number; width?: number }) {
     if (!editable || !active) return;
     model.undo.stopCapturing();
-    model.place(active, patch);
+    model.place(active, { ...origins.get(active), ...patch });
     model.undo.stopCapturing();
   }
   export function formatBox(patch: Partial<PdfTextStyle>) {
@@ -120,7 +120,7 @@
     if (!editable || !active) return;
     const id = crypto.randomUUID();
     model.undo.stopCapturing();
-    model.duplicate(active, id);
+    model.duplicate(active, id, origins.get(active));
     model.undo.stopCapturing();
     void select(id, 0);
   }
@@ -305,10 +305,7 @@
         const s = model.geometry(l.id);
         if (model.placement(l.id)?.hidden) return false;
         const seed = model.seed(l.id),
-          b =
-            model.sourcePreserved(l.id) && (!l.render || model.placement(l.id))
-              ? seed.bounds
-              : undefined;
+          b = l.preserveSource ? seed.bounds : undefined;
         return b
           ? x >= b.x + s.x - seed.x - 4 &&
               x <= b.x + s.x - seed.x + b.width + 4 &&

@@ -73,8 +73,11 @@ export function exportEditedPdf(
       ),
     ]),
   );
+  const preserved = new Set(
+    flow.regions.filter((region) => region.preserveSource).map((region) => region.id),
+  );
   const translations = new Map<string, readonly [number, number]>();
-  for (const id of dirty.filter((id) => model.placement(id) && model.sourcePreserved(id))) {
+  for (const id of dirty.filter((id) => model.placement(id) && preserved.has(id))) {
     const seed = model.seed(id),
       frame = model.geometry(id);
     const viewport = pageViewport(document.pages[seed.page]!);
@@ -92,9 +95,7 @@ export function exportEditedPdf(
       ]);
     }
   }
-  for (const layout of flow.regions.filter(
-    (region) => region.render && !(model.placement(region.id) && model.sourcePreserved(region.id)),
-  )) {
+  for (const layout of flow.regions.filter((region) => region.render && !region.preserveSource)) {
     const page = flow.pages[layout.page]!.source;
     let content = pageContent.get(layout.page) ?? '';
     const viewport = inverse(pageViewport(page));

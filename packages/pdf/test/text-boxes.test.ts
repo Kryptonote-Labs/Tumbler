@@ -386,3 +386,53 @@ test('detaching text pushed onto a continuation retains its page and exported te
   const output = openPdfDocument(exportEditedPdf(f.document, f.model, f.fonts));
   expect(new PdfInterpreter(output).page(after.page).text).toContain('Second');
 });
+
+test('nudging a long paragraph preserves all continuation pages and lines', () => {
+  const f = setup(original(text('Paragraph', 24, 130))),
+    id = f.model.ids()[0]!;
+  f.model.replace(id, 9, 9, '\n' + Array.from({ length: 20 }, (_, i) => `Line ${i}`).join('\n'));
+  const before = layoutPdfTextFlow(f.model, f.fonts, f.document.pages);
+  expect(before.pages.length).toBeGreaterThan(1);
+  f.model.move(id, 1, 0, before.regions[0]!.origin);
+  const after = layoutPdfTextFlow(f.model, f.fonts, f.document.pages);
+  expect(after.pages).toHaveLength(before.pages.length);
+  const output = openPdfDocument(exportEditedPdf(f.document, f.model, f.fonts)),
+    reader = new PdfInterpreter(output);
+  const visible = output.pages.map((p) => reader.page(p.index).text).join('\n');
+  expect([...visible.matchAll(/Line \d+/g)].map((m) => m[0])).toEqual(
+    Array.from({ length: 20 }, (_, i) => `Line ${i}`),
+  );
+});
+
+test('moving original multiline text across the page edge preserves every line', () => {
+  const f = setup(
+      original([text('First', 24, 90), text('Second', 24, 70), text('Third', 24, 50)].join('\n')),
+    ),
+    id = f.model.ids()[0]!;
+  expect(f.model.ids()).toHaveLength(1);
+  f.model.move(id, 0, 60);
+  const output = openPdfDocument(exportEditedPdf(f.document, f.model, f.fonts)),
+    reader = new PdfInterpreter(output);
+  expect(output.pages).toHaveLength(2);
+  expect(
+    output.pages
+      .map((p) => pdfTextContent(reader.page(p.index)).text)
+      .join('\n')
+      .replace(/\s+/g, ' '),
+  ).toContain('First Second Third');
+});
+
+test('duplicating a displaced paragraph uses its visible origin', () => {
+  const f = setup(original(`${text('First', 24, 130)}\n${text('Second', 24, 85)}`)),
+    [first, second] = f.model.ids();
+  f.model.replace(first!, 5, 5, '\nOne\nTwo\nThree');
+  const before = layoutPdfTextFlow(f.model, f.fonts, f.document.pages).regions.find(
+    (r) => r.id === second,
+  )!;
+  f.model.duplicate(second!, 'copy', before.origin);
+  const copy = layoutPdfTextFlow(f.model, f.fonts, f.document.pages).regions.find(
+    (r) => r.id === 'copy',
+  )!;
+  expect(copy.glyphs[0]!.y).toBe(before.glyphs[0]!.y + 12);
+  expect(copy.glyphs[0]!.x).toBe(before.glyphs[0]!.x + 12);
+});

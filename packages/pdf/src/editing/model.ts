@@ -103,8 +103,14 @@ export class PdfTextModel {
       ...(origin?.continuation === undefined ? {} : { continuation: origin.continuation }),
     });
   }
-  duplicate(id: string, nextId: string, dx = 12, dy = 12) {
-    const seed = this.geometry(id);
+  duplicate(
+    id: string,
+    nextId: string,
+    origin?: Pick<PdfTextPlacement, 'x' | 'y' | 'continuation'>,
+    dx = 12,
+    dy = 12,
+  ) {
+    const seed = { ...this.geometry(id), ...origin };
     this.add({
       id: nextId,
       page: seed.page,

@@ -79,10 +79,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
   }
   function edited(active: PdfPagePaintOptions) {
     return active.flow.regions.filter(
-      (region) =>
-        region.render &&
-        region.page === active.index &&
-        !(active.model.placement(region.id) && active.model.sourcePreserved(region.id)),
+      (region) => region.render && region.page === active.index && !region.preserveSource,
     );
   }
   async function paint(
@@ -202,7 +199,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
         .filter(
           (region) =>
             region.render &&
-            !(active.model.placement(region.id) && active.model.sourcePreserved(region.id)) &&
+            !region.preserveSource &&
             active.model.seed(region.id).page === active.source,
         )
         .flatMap((region) =>

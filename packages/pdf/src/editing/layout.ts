@@ -127,6 +127,8 @@ export type PdfFlowPage = { index: number; source: PdfPage; continuation: number
 export type PdfFlowRegion = PdfTextLayout & {
   page: number;
   render: boolean;
+  /** Original operators can be retained only when the whole region fits its original page. */
+  preserveSource: boolean;
   top: number;
   bottom: number;
   /** Logical page-space anchor after flow displacement, before continuation projection. */
@@ -150,6 +152,7 @@ export function layoutPdfTextFlow(
       layout: PdfTextLayout;
       continuation: number;
       render: boolean;
+      preserveSource: boolean;
       origin: { x: number; y: number; continuation: number };
     }[] = [];
     let count = 0;
@@ -179,15 +182,11 @@ export function layoutPdfTextFlow(
         });
       const height = pdfContinuationHeight(page),
         bottom = page.height - Math.min(48, page.height * 0.1);
-      const firstContinuation = imported ? 0 : (seed.continuation ?? 0);
+      const firstContinuation =
+        model.placement(layout.id)?.continuation ?? (imported ? 0 : (seed.continuation ?? 0));
       const localStart = seed.y - firstContinuation * height;
       const edge = imported || localStart <= page.height ? Math.max(bottom, localStart) : bottom;
       const project = (y: number) => {
-        if (model.placement(layout.id)) {
-          const continuation = seed.continuation ?? 0;
-          count = Math.max(count, continuation);
-          return { y: y - continuation * height, continuation };
-        }
         const absolute = y + shift,
           continuation =
             !dirty && shift === 0
@@ -224,6 +223,11 @@ export function layoutPdfTextFlow(
           continuation,
           origin: { x: seed.x, y: seed.y + shift, continuation: project(seed.y).continuation },
           render: dirty || shift !== 0 || continuation !== 0,
+          preserveSource:
+            model.sourcePreserved(layout.id) &&
+            groups.size === 1 &&
+            continuation === 0 &&
+            shift === 0,
         });
       }
     }
@@ -236,6 +240,7 @@ export function layoutPdfTextFlow(
         ...fragment.layout,
         page: first + fragment.continuation,
         render: fragment.render,
+        preserveSource: fragment.preserveSource,
         origin: fragment.origin,
         top: Math.min(...carets.map((c) => c.y - c.height)),
         bottom: Math.max(...carets.map((c) => c.y + c.height * 0.3)),
