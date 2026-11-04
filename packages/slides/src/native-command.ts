@@ -21,6 +21,7 @@ import {
 import { isPresentationBlock } from './native-block.ts';
 import { importNativePresentation } from './native-document.ts';
 import { openPresentationArtifact } from './artifact.ts';
+import { validatePresentationShapeStyle } from './authoring-validation.ts';
 type AtomicCommand = Exclude<PresentationCommand, { name: 'batch' | 'replace-all' }>;
 export function applyNativeModelCommand(
   state: Omit<NativePresentationState, 'changes'>,
@@ -87,15 +88,32 @@ export function applyNativeModelCommand(
       );
       break;
     }
-    case 'edit-table':
+    case 'edit-table': {
       if (!selected!.table) throw new Error('Select a table.');
-      patchObject({ ...selected!, table: editNativeTable(selected!.table, command) });
+      const object = selected!,
+        previous = object.table!,
+        table = editNativeTable(previous, command);
+      patchObject(
+        moveNativeObject(
+          { ...object, table },
+          {
+            name: 'update-object',
+            slideId: command.slideId,
+            objectKey: command.objectKey,
+            ...object.transform,
+            width: (object.transform.width * table.width) / previous.width,
+            height: (object.transform.height * table.height) / previous.height,
+          },
+        ),
+      );
       break;
+    }
     case 'update-object':
       if (!selected!.movable) throw new Error('This object cannot be moved.');
       patchObject(moveNativeObject(selected!, command));
       break;
     case 'style-shape': {
+      validatePresentationShapeStyle(selected!, command);
       if (command.cornerRadius !== undefined && selected!.geometry !== 'roundRect')
         throw new Error('Corner radius applies to rounded rectangles.');
       const size = Math.min(selected!.transform.width, selected!.transform.height);
@@ -109,8 +127,13 @@ export function applyNativeModelCommand(
         ...selected!,
         fill: typeof command.fill === 'string' ? nativeColour(command.fill) : selected!.fill,
         gradient,
+        pattern: command.fill === undefined ? selected!.pattern : undefined,
+        pictureFill: command.fill === undefined ? selected!.pictureFill : undefined,
         stroke: command.stroke === undefined ? selected!.stroke : nativeColour(command.stroke),
-        strokeWidth: command.strokeWidth ?? selected!.strokeWidth,
+        strokeWidth:
+          command.strokeWidth === undefined
+            ? selected!.strokeWidth
+            : Math.round(command.strokeWidth * 12700) / 9525,
         cornerRadius:
           command.cornerRadius === undefined
             ? selected!.cornerRadius
@@ -211,19 +234,15 @@ export function applyNativeModelCommand(
     }
     case 'insert-slide': {
       if (command.index > slides.length) throw new RangeError('Invalid slide position.');
-      const donor =
-        slides.find((s) => s.slide.id === (command.sourceId ?? command.layoutSourceId)) ??
-        slides[Math.max(0, command.index - 1)];
+      const donorId = command.sourceId ?? command.layoutSourceId;
+      const donor = donorId
+        ? slides.find((s) => s.slide.id === donorId)
+        : slides[Math.max(0, command.index - 1)];
       if ((command.sourceId || command.layoutSourceId) && !donor)
         throw new Error('Source slide not found.');
+      const source = command.sourceId ? donor : donor?.insertion;
       const id = nextId(),
-        template = command.sourceId
-          ? donor!.slide
-          : layoutTemplate(
-              command.layoutSourceId ? 'title-content' : 'blank',
-              state.width,
-              state.height,
-            );
+        template = source?.slide ?? layoutTemplate('blank', state.width, state.height);
       const part = `/native/${id}.xml`,
         objects = template.objects.map((o) => ({
           ...o,
@@ -239,13 +258,16 @@ export function applyNativeModelCommand(
         objects,
       };
       const next = {
+        ...source,
         slide,
-        themeFonts: donor?.themeFonts,
-        palette: donor?.palette ?? [],
-        inheritedBackground: donor?.inheritedBackground ?? {
-          background: '#FFFFFF',
-          backgroundGradient: undefined,
-        },
+        insertion: donor?.insertion,
+        themeFonts: source?.themeFonts ?? donor?.themeFonts,
+        palette: source?.palette ?? donor?.palette ?? [],
+        inheritedBackground: source?.inheritedBackground ??
+          donor?.inheritedBackground ?? {
+            background: '#FFFFFF',
+            backgroundGradient: undefined,
+          },
       };
       const order = [...slides];
       order.splice(command.index, 0, next);
@@ -278,7 +300,21 @@ export function applyNativeModelCommand(
       const kept = target!.slide.objects.filter(
         (o) => !placeholders.includes(o) || (!used.has(o) && !!slideTextValue(o)),
       );
-      patchSlide({ ...target!, slide: { ...target!.slide, objects: [...kept, ...objects] } });
+      patchSlide({
+        ...target!,
+        slide: { ...target!.slide, objects: [...kept, ...objects] },
+        insertion: {
+          themeFonts: target!.themeFonts,
+          fonts: target!.fonts,
+          palette: target!.palette,
+          inheritedBackground: target!.inheritedBackground,
+          slide: layoutTemplate(
+            command.layout === 'title' ? 'title-content' : command.layout,
+            state.width,
+            state.height,
+          ),
+        },
+      });
       addObjects(
         command.slideId,
         objects.filter((o) => !target!.slide.objects.some((p) => p.key === o.key)),

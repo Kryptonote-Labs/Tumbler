@@ -1,3 +1,4 @@
+import { compileNativeSlides } from './native-import.ts';
 import { compactNativeChanges } from './native-changes.ts';
 import { applyNativeModelCommand } from './native-command.ts';
 import type { OpcPackage } from '@tumblerjs/opc';
@@ -31,17 +32,10 @@ import {
 } from './native-archive.ts';
 import { isPresentationBlock } from './native-block.ts';
 import { openPresentationArtifact } from './artifact.ts';
-import {
-  presentationThemeColours,
-  presentationInheritedBackground,
-  presentationRunDefaults,
-  presentationRunFonts,
-  presentationNativeFonts,
-  bindPresentationThemeColours,
-} from './reader.ts';
+import { bindPresentationThemeColours } from './reader.ts';
 import { ThemeColorScheme, THEME_COLOR_SLOTS } from '@tumblerjs/ooxml';
 
-export type NativeSlide = {
+export type NativeSlideTemplate = {
   themeFonts?: import('@tumblerjs/ooxml').ThemeFontScheme | undefined;
   fonts?: PresentationDocument['embeddedFonts'];
   slide: PresentationSlide;
@@ -51,6 +45,7 @@ export type NativeSlide = {
     'background' | 'backgroundGradient' | 'backgroundPattern' | 'backgroundPicture'
   >;
 };
+export type NativeSlide = NativeSlideTemplate & { insertion?: NativeSlideTemplate | undefined };
 export type NativeChange = {
   before: string;
   command: PresentationCommand;
@@ -252,7 +247,7 @@ export class NativePresentationDocument extends PresentationArtifact {
       if (command.name === 'batch') throw new Error('Native changes must be atomic commands.');
       if ('slideId' in command)
         command = { ...command, slideId: slides.get(command.slideId) ?? command.slideId };
-      if ('objectKey' in command)
+      if ('objectKey' in command && command.name !== 'paste-object')
         command = { ...command, objectKey: objects.get(command.objectKey) ?? command.objectKey };
       if (command.name === 'insert-slide')
         command = {
@@ -369,67 +364,7 @@ export function importNativePresentation(
 ): NativePresentationDocument {
   if (artifact instanceof NativePresentationDocument) return artifact;
   const doc = artifact.document;
-  const nativeText = (text: SlideObject['text']) =>
-    text && {
-      ...text,
-      paragraphs: text.paragraphs.map((p) => ({
-        ...p,
-        runs: p.runs.map((run) => {
-          const inherited = presentationRunDefaults(run);
-          if (!inherited) return run;
-          const { text, ...nativeDefaults } = inherited;
-          return {
-            ...run,
-            nativeFonts: presentationRunFonts(run),
-            nativeDefaults: { ...nativeDefaults, nativeFonts: presentationRunFonts(inherited) },
-          };
-        }),
-        ...(p.endRun
-          ? {
-              endRun: {
-                ...p.endRun,
-                nativeFonts: presentationRunFonts(p.endRun),
-                nativeDefaults: presentationRunDefaults(p.endRun) ?? p.endRun,
-              },
-            }
-          : {}),
-      })),
-    };
-  const slides = doc.slides.map((original) => {
-    const slide = {
-      ...original,
-      objects: original.objects.map((o) => ({
-        ...o,
-        text: nativeText(o.text),
-        table: o.table && {
-          ...o.table,
-          cells: o.table.cells.map((c) => ({ ...c, text: nativeText(c.text) })),
-        },
-      })),
-    };
-    const scheme = presentationThemeColours(doc, slide.id);
-    return {
-      slide,
-      themeFonts: presentationNativeFonts(doc, original.id),
-      fonts: doc.embeddedFonts?.filter((font) =>
-        slide.objects.some((o) =>
-          [
-            ...(o.text?.paragraphs ?? []),
-            ...(o.table?.cells.flatMap((c) => c.text?.paragraphs ?? []) ?? []),
-          ].some((p) =>
-            [...p.runs, ...(p.endRun ? [p.endRun] : [])].some((r) => r.fontFamily === font.family),
-          ),
-        ),
-      ),
-      palette: THEME_COLOR_SLOTS.map((slot) => [slot, scheme.color(slot)] as const),
-      inheritedBackground: presentationInheritedBackground(original) ?? {
-        background: slide.background,
-        backgroundGradient: slide.backgroundGradient,
-        backgroundPattern: slide.backgroundPattern,
-        backgroundPicture: slide.backgroundPicture,
-      },
-    };
-  });
+  const slides = compileNativeSlides(artifact);
   return new NativePresentationDocument(
     {
       version: 1,

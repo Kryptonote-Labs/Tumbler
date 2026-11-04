@@ -51,7 +51,8 @@ manifest with only the selected entry in `slides` and `allowPendingResources: tr
 to render and edit that slide before media arrives. Other slide descriptors remain
 available for navigation, but their models must load before editing or searching
 their content. Load resources by `presentationSlideResources(model)` hashes and
-attach them with `native.hydrateResources(resources)`. This resolves pending handles
+attach them with `native.hydrateResources(resources, slideIds)` and use the returned
+artifact. This resolves pending handles
 without replacing current text or geometry. Export requires the complete preserved
 source; a partial view alone cannot generate a PPTX.
 

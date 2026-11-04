@@ -1,5 +1,6 @@
 import { nativeScriptRuns, nativeParagraphMetrics } from './native-fonts.ts';
 import { nativeColour } from './native-shape.ts';
+import { presentationFormattingPatch } from './authoring-validation.ts';
 import type { FormattingPatch } from '@tumblerjs/core';
 import type { SlideText, SlideTextRun, SlideParagraph } from './model.ts';
 import type { PresentationCommand } from './commands.ts';
@@ -172,7 +173,9 @@ export function editNativeText(
       }),
     };
   }
-  const patch = command.name === 'format-text' ? command.patch : command.formatting;
+  const patch = presentationFormattingPatch(
+    command.name === 'format-text' ? command.patch : command.formatting,
+  );
   function slice(
     p: SlideParagraph,
     start: number,

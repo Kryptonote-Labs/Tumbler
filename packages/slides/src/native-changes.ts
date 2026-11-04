@@ -24,6 +24,7 @@ export function compactNativeChanges(changes: readonly NativeChange[]): NativeCh
         b.start === b.end &&
         a.cell?.row === b.cell?.row &&
         a.cell?.column === b.cell?.column &&
+        JSON.stringify(a.formatting) === JSON.stringify(b.formatting) &&
         !/[\r\n]/.test(a.value + b.value) &&
         (b.start === a.start || b.start === a.start + a.value.length)
       ) {
