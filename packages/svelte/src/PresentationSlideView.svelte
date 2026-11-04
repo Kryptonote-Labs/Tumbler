@@ -46,6 +46,7 @@
   import { placeholderPrompt } from "./presentation-prompt.ts";
   import PresentationTable from "./PresentationTable.svelte";
   import OoxmlChart from "./OoxmlChart.svelte";
+  import { cssFontFamily } from "./font-family.ts";
   import { zoomGesture } from "./zoom-gesture.ts";
   import { snappedZoom, type SnappedZoom } from "./zoom-snap.ts";
 
@@ -356,7 +357,7 @@
   }
   let loadedFonts = $state<ReturnType<typeof loadPresentationFonts>>();
   setContext<PresentationFontContext>(presentationFontContext, {
-    family: (name) => loadedFonts?.family(name) ?? JSON.stringify(name),
+    family: (name) => loadedFonts?.family(name) ?? cssFontFamily(name),
   });
   $effect(() => {
     const loaded = loadPresentationFonts(presentation.embeddedFonts ?? []);
