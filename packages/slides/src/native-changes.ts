@@ -44,7 +44,16 @@ export function compactNativeChanges(changes: readonly NativeChange[]): NativeCh
         continue;
       }
       if (a.name === 'style-shape' && b.name === 'style-shape') {
-        output[output.length - 1] = { ...previous, command: { ...a, ...b } };
+        output[output.length - 1] = {
+          ...previous,
+          command: {
+            ...a,
+            fill: b.fill ?? a.fill,
+            stroke: b.stroke ?? a.stroke,
+            strokeWidth: b.strokeWidth ?? a.strokeWidth,
+            cornerRadius: b.cornerRadius ?? a.cornerRadius,
+          },
+        };
         continue;
       }
     }

@@ -487,3 +487,63 @@ test('native table structure preserves cell layout and text through merged row a
     expect(cells(native)).toEqual(cells(openPresentationArtifact(native.bytes())));
   }
 });
+
+test('native ink remains usable in a semantic first slide before compatibility media arrives', () => {
+  const source = importNativePresentation(createPresentation());
+  const slideId = source.document.slides[0]!.id;
+  const edited = applyPresentationCommand(source, {
+    name: 'insert-ink',
+    slideId,
+    color: '#123456',
+    size: 4,
+    points: [
+      [10, 20, 0.5],
+      [30, 40, 1],
+      [50, 20, 0.2],
+    ],
+  });
+  const archive = createPresentationNativeArchive(edited);
+  const partial = openPresentationNativeArchive({
+    version: 1,
+    manifest: archive.manifest,
+    slides: archive.slides,
+    allowPendingResources: true,
+  });
+  const object = partial.document.slides[0]!.objects[0]!;
+  expect(object.ink?.document.traces[0]!.points).toEqual(
+    edited.document.slides[0]!.objects[0]!.ink?.document.traces[0]!.points,
+  );
+  expect(object.movable).toBe(true);
+  const moved = applyPresentationCommand(partial, {
+    name: 'update-object',
+    slideId,
+    objectKey: object.key,
+    width: object.transform.width,
+    height: object.transform.height,
+    rotation: object.transform.rotation,
+    x: 200,
+    y: 150,
+  });
+  expect(moved.document.slides[0]!.objects[0]!.transform.x).toBe(200);
+});
+
+test('compacted shape changes retain earlier properties when later patches omit them', () => {
+  const f = fixture();
+  let native: PresentationArtifact = importNativePresentation(f.artifact);
+  native = applyPresentationCommand(native, {
+    name: 'style-shape',
+    slideId: f.slideId,
+    objectKey: f.objectKey,
+    fill: '#123456',
+  });
+  native = applyPresentationCommand(native, {
+    name: 'style-shape',
+    slideId: f.slideId,
+    objectKey: f.objectKey,
+    stroke: '#654321',
+    fill: undefined,
+  });
+  const output = openPresentationArtifact(native.bytes()).document.slides[0]!.objects[0]!;
+  expect(output.fill).toBe(native.document.slides[0]!.objects[0]!.fill);
+  expect(output.stroke).toBe(native.document.slides[0]!.objects[0]!.stroke);
+});
