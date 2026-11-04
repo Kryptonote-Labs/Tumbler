@@ -17,8 +17,10 @@ export function editNativeTable(
     { length: rowCount + 1 },
     (_, i) => table.cells.find((c) => c.row === i)?.y ?? (i === rowCount ? table.height : 0),
   );
-  const widths = x.slice(1).map((end, i) => end - x[i]!),
-    heights = y.slice(1).map((end, i) => end - y[i]!);
+  const widths = table.columnWidths
+      ? [...table.columnWidths]
+      : x.slice(1).map((end, i) => end - x[i]!),
+    heights = table.rowHeights ? [...table.rowHeights] : y.slice(1).map((end, i) => end - y[i]!);
   if (
     input.row >= rowCount + (input.action === 'insert-row' ? 1 : 0) ||
     input.column >= columnCount + (input.action === 'insert-column' ? 1 : 0)
@@ -131,18 +133,17 @@ export function editNativeTable(
     totalH = heights.reduce((n, h) => n + h, 0);
   return {
     ...table,
+    width: totalW,
+    height: totalH,
+    columnWidths: widths,
+    rowHeights: heights,
     cells: cells
       .map((c): SlideTableCell => ({
         ...c,
-        x: (widths.slice(0, c.column).reduce((n, w) => n + w, 0) * table.width) / totalW,
-        y: (heights.slice(0, c.row).reduce((n, h) => n + h, 0) * table.height) / totalH,
-        width:
-          (widths.slice(c.column, c.column + c.columnSpan).reduce((n, w) => n + w, 0) *
-            table.width) /
-          totalW,
-        height:
-          (heights.slice(c.row, c.row + c.rowSpan).reduce((n, h) => n + h, 0) * table.height) /
-          totalH,
+        x: widths.slice(0, c.column).reduce((n, w) => n + w, 0),
+        y: heights.slice(0, c.row).reduce((n, h) => n + h, 0),
+        width: widths.slice(c.column, c.column + c.columnSpan).reduce((n, w) => n + w, 0),
+        height: heights.slice(c.row, c.row + c.rowSpan).reduce((n, h) => n + h, 0),
       }))
       .sort((a, b) => a.row - b.row || a.column - b.column),
   };

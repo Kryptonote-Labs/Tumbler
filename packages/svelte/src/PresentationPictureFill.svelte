@@ -17,6 +17,7 @@
     natural = $state({ width: 1, height: 1 });
   $effect(() => {
     const current = picture;
+    if (!current.bytes.length) { url = ""; return; }
     let disposed = false,
       src = "";
     const image = current.tile ? new Image() : undefined;

@@ -72,6 +72,36 @@ export type NativePresentationState = {
 export type NativePreservationSource = (() => PresentationArtifact) & {
   package?: () => OpcPackage;
 };
+const embeddedFontSets = new WeakMap<
+  NativePreservationSource,
+  {
+    parts: readonly NonNullable<PresentationDocument['embeddedFonts']>[];
+    merged: NonNullable<PresentationDocument['embeddedFonts']>;
+  }
+>();
+function embeddedFonts(
+  state: Omit<NativePresentationState, 'changes'>,
+  source: NativePreservationSource,
+) {
+  const parts = [state.embeddedFonts, ...state.slides.map((slide) => slide.fonts)].filter(
+    (fonts): fonts is NonNullable<typeof fonts> => !!fonts?.length,
+  );
+  if (!parts.length) return;
+  const saved = embeddedFontSets.get(source);
+  if (
+    saved &&
+    parts.length === saved.parts.length &&
+    parts.every((part, i) => part === saved.parts[i])
+  )
+    return saved.merged;
+  const merged = [
+    ...new Map(
+      parts.flat().map((font) => [font.family + ':' + font.bold + ':' + font.italic, font]),
+    ).values(),
+  ];
+  embeddedFontSets.set(source, { parts, merged });
+  return merged;
+}
 type Chain = { previous: Chain | undefined; change: NativeChange };
 /** Immutable native authoring state. Source markup is resolved only for explicit export. */
 export class NativePresentationDocument extends PresentationArtifact {
@@ -99,13 +129,8 @@ export class NativePresentationDocument extends PresentationArtifact {
         return materialize().document.sources;
       },
     };
-    const fonts = state.slides.flatMap((s) => s.fonts ?? []);
-    if (fonts.length)
-      Object.assign(document, {
-        embeddedFonts: [
-          ...new Map(fonts.map((f) => [f.family + ':' + f.bold + ':' + f.italic, f])).values(),
-        ],
-      });
+    const fonts = embeddedFonts(state, source);
+    if (fonts) Object.assign(document, { embeddedFonts: fonts });
     super(document, options);
     materialize = () => this.exportArtifact();
     state.slides.forEach((s) =>
@@ -158,23 +183,21 @@ export class NativePresentationDocument extends PresentationArtifact {
   }
   withSource(source: () => PresentationArtifact): NativePresentationDocument {
     const base = source();
-    let chain = this.chain;
-    if (base instanceof NativePresentationDocument) {
-      if (base.state.revisionKey === this.state.revisionKey) chain = undefined;
-      else {
-        const suffix: NativeChange[] = [];
-        let cursor = chain;
-        while (cursor) {
-          suffix.push(cursor.change);
-          if (cursor.change.before === base.state.revisionKey) break;
-          cursor = cursor.previous;
-        }
-        if (!cursor) throw new Error('Native export source does not match this branch.');
-        chain = undefined;
-        for (const change of suffix.reverse()) chain = { previous: chain, change };
+    if (!(base instanceof NativePresentationDocument))
+      return new NativePresentationDocument(this.state, source, this.chain, this.options);
+    const suffix: NativeChange[] = [];
+    if (base.state.revisionKey !== this.state.revisionKey) {
+      let cursor = this.chain;
+      while (cursor) {
+        suffix.push(cursor.change);
+        if (cursor.change.before === base.state.revisionKey) break;
+        cursor = cursor.previous;
       }
+      if (!cursor) throw new Error('Native export source does not match this branch.');
     }
-    return new NativePresentationDocument(this.state, () => base, chain, this.options);
+    let chain = base.chain;
+    for (const change of suffix.reverse()) chain = { previous: chain, change };
+    return new NativePresentationDocument(this.state, base.source, chain, this.options);
   }
   /** Loading another slide preserves the local branch and its export provenance. */
   hydrate(other: NativePresentationDocument, ids: ReadonlySet<string>): NativePresentationDocument {

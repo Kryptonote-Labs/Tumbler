@@ -57,20 +57,6 @@ export function moveNativeObject(
   };
   const sx = transform.width / object.transform.width,
     sy = transform.height / object.transform.height;
-  const table = object.table
-    ? {
-        ...object.table,
-        width: object.table.width * sx,
-        height: object.table.height * sy,
-        cells: object.table.cells.map((c) => ({
-          ...c,
-          x: c.x * sx,
-          y: c.y * sy,
-          width: c.width * sx,
-          height: c.height * sy,
-        })),
-      }
-    : undefined;
   const ink = object.ink
     ? { ...object.ink, sampleMatrix: multiply([sx, 0, 0, sy, 0, 0], object.ink.sampleMatrix) }
     : undefined;
@@ -78,7 +64,7 @@ export function moveNativeObject(
     ...object,
     transform,
     matrix: multiply(object.parentMatrix ?? [1, 0, 0, 1, 0, 0], shapeMatrix(transform)),
-    table,
+    table: object.table,
     ...(ink ? { ink } : {}),
     cornerRadius:
       object.geometry === 'roundRect'
@@ -226,7 +212,14 @@ export function insertNativeObject(
     });
     result = {
       ...result,
-      table: { elementId: -1, width: bounds.width, height: bounds.height, cells },
+      table: {
+        elementId: -1,
+        width: bounds.width,
+        height: bounds.height,
+        columnWidths: Array.from({ length: input.columns }, () => bounds.width / input.columns),
+        rowHeights: Array.from({ length: input.rows }, () => bounds.height / input.rows),
+        cells,
+      },
     };
   }
   return result;

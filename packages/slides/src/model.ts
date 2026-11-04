@@ -105,6 +105,8 @@ export interface SlideTableCell {
   }[];
 }
 export interface SlideTable {
+  readonly columnWidths?: readonly number[] | undefined;
+  readonly rowHeights?: readonly number[] | undefined;
   readonly elementId: number;
   readonly width: number;
   readonly height: number;

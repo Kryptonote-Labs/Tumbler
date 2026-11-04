@@ -6,6 +6,7 @@ import {
   openPresentationArtifact,
   importNativePresentation,
   createPresentationNativeArchive,
+  createPresentationNativeView,
   openPresentationNativeArchive,
   encodePresentationNativeArchive,
   decodePresentationNativeArchive,
@@ -385,4 +386,104 @@ test('long typing histories compact export work without changing formatting or o
   const reopened = openPresentationNativeArchive(createPresentationNativeArchive(native));
   expect(reopened.state.revisionKey).toBe((native as NativePresentationDocument).state.revisionKey);
   expect(reopened.bytes()).toEqual(source.bytes());
+});
+
+test('attaching a complete native source retains provenance of newly created objects through another archive', () => {
+  const f = fixture();
+  const full = applyPresentationCommand(importNativePresentation(f.artifact), {
+    name: 'insert-object',
+    slideId: f.slideId,
+    object: { kind: 'shape', text: 'Native identity' },
+    bounds: { x: 1, y: 2, width: 100, height: 50 },
+  }) as NativePresentationDocument;
+  const view = createPresentationNativeView(full);
+  const partial = openPresentationNativeArchive(view);
+  const key = partial.document.slides[0]!.objects.at(-1)!.key;
+  const branch = applyPresentationCommand(partial, {
+    name: 'edit-text',
+    slideId: f.slideId,
+    objectKey: key,
+    start: 0,
+    end: 0,
+    value: 'Local ',
+  }) as NativePresentationDocument;
+  const restored = openPresentationNativeArchive(
+    createPresentationNativeArchive(branch.withSource(() => full)),
+  );
+  expect(restored.bytes()).toEqual(branch.withSource(() => full).bytes());
+  expect(text(openPresentationArtifact(restored.bytes())).at(-1)).toBe('Local Native identity');
+});
+
+test('native table structure preserves cell layout and text through merged row and column edits', () => {
+  const f = fixture();
+  const source = applyPresentationCommand(f.artifact, {
+    name: 'insert-object',
+    slideId: f.slideId,
+    object: { kind: 'table', rows: 3, columns: 3 },
+    bounds: { x: 20, y: 30, width: 600, height: 300 },
+  });
+  const key = source.document.slides[0]!.objects.at(-1)!.key;
+  let native: PresentationArtifact = importNativePresentation(source);
+  const commands: PresentationCommand[] = [
+    {
+      name: 'edit-text',
+      slideId: f.slideId,
+      objectKey: key,
+      cell: { row: 0, column: 0 },
+      start: 0,
+      end: 0,
+      value: 'Cell A',
+    },
+    {
+      name: 'edit-table',
+      slideId: f.slideId,
+      objectKey: key,
+      action: 'merge',
+      row: 0,
+      column: 0,
+      endRow: 1,
+      endColumn: 1,
+    },
+    {
+      name: 'edit-table',
+      slideId: f.slideId,
+      objectKey: key,
+      action: 'insert-row',
+      row: 1,
+      column: 0,
+    },
+    {
+      name: 'edit-table',
+      slideId: f.slideId,
+      objectKey: key,
+      action: 'insert-column',
+      row: 0,
+      column: 1,
+    },
+    { name: 'edit-table', slideId: f.slideId, objectKey: key, action: 'split', row: 0, column: 0 },
+    {
+      name: 'edit-table',
+      slideId: f.slideId,
+      objectKey: key,
+      action: 'delete-row',
+      row: 1,
+      column: 0,
+    },
+  ];
+  const cells = (a: PresentationArtifact) =>
+    a.document.slides[0]!.objects.at(-1)!.table!.cells.map((c) => ({
+      row: c.row,
+      column: c.column,
+      rowSpan: c.rowSpan,
+      columnSpan: c.columnSpan,
+      x: c.x,
+      y: c.y,
+      width: c.width,
+      height: c.height,
+      text: c.text?.paragraphs.map((p) => p.runs.map((r) => r.text).join('')).join('\n'),
+    }));
+  for (const command of commands) {
+    native = applyPresentationCommand(native, command);
+    expect(cells(native)).toEqual(cells(openPresentationArtifact(native.bytes())));
+  }
 });

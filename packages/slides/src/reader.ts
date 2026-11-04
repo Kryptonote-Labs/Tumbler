@@ -1801,6 +1801,8 @@ class Reader {
     });
     return {
       elementId: element.id,
+      columnWidths: columns,
+      rowHeights: heights,
       width: columns.reduce((a, b) => a + b, 0),
       height: y,
       cells,

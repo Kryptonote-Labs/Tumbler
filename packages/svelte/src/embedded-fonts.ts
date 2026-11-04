@@ -26,7 +26,7 @@ export function loadEmbeddedFonts(fonts: readonly EmbeddedFont[]) {
   let loaded = cache.get(fonts);
   if (!loaded) {
     const families = new Map<string, string>();
-    const faces = fonts.map((font) => {
+    const faces = fonts.filter(font => font.bytes.length > 0).map((font) => {
       const name = families.get(font.family.toLowerCase()) ?? `TumblerEmbedded${++serial}`;
       families.set(font.family.toLowerCase(), name);
       const face = new FontFace(name, Uint8Array.from(font.bytes).buffer, {

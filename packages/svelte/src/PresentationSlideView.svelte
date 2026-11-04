@@ -456,7 +456,7 @@
   }
   const images = new Map<Uint8Array, string>();
   function imageUrl(object: SlideObject) {
-    if (!mounted || !object.image) return "";
+    if (!mounted || !object.image?.bytes.length) return "";
     const existing = images.get(object.image.bytes);
     if (existing) return existing;
     const url = URL.createObjectURL(
