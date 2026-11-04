@@ -508,3 +508,17 @@ test('presentation font sizes use DrawingML limits instead of the spreadsheet ce
  expect(reopen(b).document.slides[0]!.objects[0]!.text!.paragraphs[0]!.runs[0]!.fontSize).toBeCloseTo(800*4/3);
  expect(()=>run(a,{name:'format-text',slideId,objectKey,start:0,end:5,patch:{text:{fontSize:{set:4001}}}})).toThrow();
 });
+
+test('Enter carries character formatting into an empty paragraph and its next typed text', () => {
+  const seed = textDeck('First');
+  let a = run(seed.a, { name: 'format-text', slideId: seed.slideId, objectKey: seed.objectKey, start: 0, end: 5,
+    patch: { text: { bold: { set: true }, italic: { set: true }, fontFamily: { set: 'Arial' }, color: { set: { type: 'rgb', value: '#345678' } } } } });
+  a = run(a, { name: 'edit-text', slideId: seed.slideId, objectKey: seed.objectKey, start: 5, end: 5, value: '\n' });
+  a = run(a, { name: 'edit-text', slideId: seed.slideId, objectKey: seed.objectKey, start: 6, end: 6, value: 'Next' });
+  let object = reopen(a).document.slides[0]!.objects[0]!;
+  expect(object.text!.paragraphs[1]!.runs[0]).toMatchObject({ text: 'Next', bold: true, italic: true, fontFamily: 'Arial', color: 'rgba(52,86,120,1)' });
+  a = run(a, { name: 'edit-text', slideId: seed.slideId, objectKey: seed.objectKey, start: 10, end: 10, value: '\n', formatting: { text: { bold: { set: false } } } });
+  a = run(a, { name: 'edit-text', slideId: seed.slideId, objectKey: seed.objectKey, start: 11, end: 11, value: 'Regular' });
+  object = reopen(a).document.slides[0]!.objects[0]!;
+  expect(object.text!.paragraphs[2]!.runs[0]).toMatchObject({ text: 'Regular', bold: false, italic: true });
+});
