@@ -276,6 +276,7 @@
   let editing = $state<string>();
   let textHead = $state(0);
   let textRange = $state<PresentationTextRange>({ start: 0, end: 0 });
+  let restoredRange = $state.raw<PresentationTextRange & {head?: number}>();
   let editPoint = $state<{ x: number; y: number }>();
   let focusToken = $state(0);
   let pendingFormat = $state<FormattingPatch>();
@@ -307,6 +308,24 @@
       const first = object.table.cells[0];
       if (first) editCell(object, first);
     } else if (object) void edit(object);
+  }
+  /** Restore a semantic text selection after history changes, without changing document content. */
+  export async function restoreSelection(selection: PresentationTextRange & {
+    objectKey: string; head?: number; cell?: PresentationTableCellAddress;
+  }) {
+    await tick();
+    const object = slide.objects.find(object => object.key === selection.objectKey);
+    if (!editable || !object || !presentationTextTarget(object, selection.cell).textEditable) return;
+    if (object.table && selection.cell) selectCell(object, selection.cell);
+    else { select([object.key]); activeCell = undefined; }
+    editPoint = undefined;
+    initialText = undefined;
+    pendingFormat = undefined;
+    textRange = {start: selection.start, end: selection.end};
+    textHead = selection.head ?? selection.end;
+    restoredRange = {...textRange, head: textHead};
+    editing = object.key;
+    focusToken++;
   }
   export function applyFormatting(patch: FormattingPatch) { format(patch); }
   export function currentSelection(): PresentationTextRange & {
@@ -670,6 +689,7 @@
       }
     }
     if (!editable || selectedKey !== object.key) return;
+    restoredRange = undefined;
     initialText = typed;
     editPoint = point;
     textRange = { start: 0, end: slideTextValue(object).length };
@@ -1026,6 +1046,8 @@
                   onnavigate={navigateCell}
                   editor={{
                     point: editPoint,
+                    selection: restoredRange,
+                    keepCaretVisible: !!minimumEditingTextSize,
                     onvertical: verticalCell,
                     focusToken,
                     onselect: (range, head) => {
@@ -1103,6 +1125,8 @@
                       active: editing === object.key,
                       initialText,
                       point: editPoint,
+                      selection: restoredRange,
+                      keepCaretVisible: !!minimumEditingTextSize,
                       focusToken,
                       onselect: (range, head) => {
                       textHead = head ?? range.end;
