@@ -13,6 +13,7 @@ export interface SlideTextEditorOptions {
   onfinish?: () => void;
   onundo?: (redo: boolean) => void;
   onnavigate?: (backward: boolean) => boolean;
+  onindent?: (amount: -1 | 1) => boolean;
   onshortcut?: (key: "bold" | "italic" | "underline") => void;
 }
 /** The browser owns caret movement; document commands own text mutations. */
@@ -102,7 +103,8 @@ export function presentationTextEdit(
     restore();
   }
   function before(event: InputEvent) {
-    if (!active || composing || event.isComposing) return;
+    if (!active) { event.preventDefault(); return; }
+    if (composing || event.isComposing) return;
     capture();
     const collapsed = range.start === range.end;
     const target = event.getTargetRanges?.()[0];
@@ -187,8 +189,11 @@ export function presentationTextEdit(
     if (!active) return;
     event.stopPropagation();
     if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", "Tab", "Escape"].includes(event.key) || event.ctrlKey || event.metaKey) history.break();
-    if (event.key === "Tab" && options.onnavigate?.(event.shiftKey)) {
+    if (event.key === "Tab") {
       event.preventDefault();
+      capture();
+      if (options.onnavigate) options.onnavigate(event.shiftKey);
+      else if (!options.onindent?.(event.shiftKey ? -1 : 1) && !event.shiftKey) void replace("\t");
       return;
     }
     if (

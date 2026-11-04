@@ -25,6 +25,7 @@
   import type { FormattingPatch, FormattingState } from "@tumblerjs/core";
   import { onDestroy, onMount, tick, setContext, untrack, type Snippet } from "svelte";
   import type {
+    PresentationCommand,
     PresentationDocument,
     PresentationObjectChange,
     PresentationSlide,
@@ -69,6 +70,7 @@
     onobjectchange,
     ontextchange,
     ontextedit,
+    onparagraph,
     onformat,
     onshapechange,
     onundo,
@@ -100,6 +102,7 @@
     onobjectschange?: (changes: PresentationObjectChange[]) => void;
     onslide?: (part: string) => void;
     ontextedit?: (change: PresentationTextEdit, undoGroup?: string) => void;
+    onparagraph?: (command: Extract<PresentationCommand, { name: "paragraph" }>) => void;
     onformat?: (change: PresentationFormatChange) => void;
     onshapechange?: (change: PresentationShapeChange) => void;
     onundo?: (redo: boolean) => void;
@@ -286,7 +289,10 @@
   /** Select a text object and focus its editor, for example after inserting a text box. */
   export function editText(objectKey: string) {
     const object = slide.objects.find(object => object.key === objectKey && object.layer === 'slide');
-    if (object) void edit(object);
+    if (object?.table) {
+      const first = object.table.cells[0];
+      if (first) editCell(object, first);
+    } else if (object) void edit(object);
   }
   export function applyFormatting(patch: FormattingPatch) { format(patch); }
   export function currentSelection(): PresentationTextRange & {
@@ -633,6 +639,22 @@
     textHead = textRange.end;
     pendingFormat = undefined;
     editing = object.key;
+  }
+  function indentText(amount: -1 | 1) {
+    if (!onparagraph || !selected || !textTarget?.text) return false;
+    let offset = 0;
+    const paragraph = textTarget.text.paragraphs.find(p => {
+      const end = offset + p.runs.reduce((n, run) => n + run.text.length, 0);
+      const found = textRange.start <= end;
+      offset = end + 1;
+      return found;
+    });
+    if (!paragraph?.bullet) return false;
+    const level = Math.max(0, Math.min(8, Math.round((paragraph.marginLeft ?? 36) / 36) - 1 + amount));
+    onparagraph({ name: 'paragraph', slideId: slide.id, objectKey: selected.key, ...textRange,
+      ...(cellAddress ? { cell: cellAddress } : {}), level });
+    focusToken++;
+    return true;
   }
   function keydown(event: KeyboardEvent) {
     if (editing) return;
@@ -1045,6 +1067,7 @@
                       },
                       onundo,
                       onshortcut: shortcut,
+                      onindent: indentText,
                     }}
                   />
                 </foreignObject>
