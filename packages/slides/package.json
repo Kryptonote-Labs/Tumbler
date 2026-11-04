@@ -4,6 +4,7 @@
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
+    "@noble/hashes": "^2.4.0",
     "@tumblerjs/charts": "0.1.0-alpha.26",
     "@tumblerjs/core": "0.1.0-alpha.26",
     "@tumblerjs/ink": "0.1.0-alpha.26",

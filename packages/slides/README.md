@@ -20,6 +20,47 @@ Slides are in presentation order. Each slide exposes its objects, notes, and
 diagnostics. Check object capabilities before enabling an editing control.
 Geometry uses CSS pixels at 96 DPI; saved transforms use native OOXML units.
 
+## Native authoring and incremental opening
+
+Compile a presentation once when importing it to keep ordinary edits independent
+of XML parsing and ZIP export:
+
+```ts
+import {
+  importNativePresentation,
+  createPresentationNativeArchive,
+  openPresentationNativeArchive,
+  PresentationEditingSession,
+} from "@tumblerjs/slides";
+
+const native = importNativePresentation(artifact);
+const session = new PresentationEditingSession(native);
+const archive = createPresentationNativeArchive(session.artifact);
+const restored = openPresentationNativeArchive(archive);
+```
+
+The archive separates its manifest, compiled slide blocks, content-addressed
+binary resources and lossless OPC preservation. Hosts can persist these blocks
+in their own database. Supported commands update immutable native models; calling
+`.bytes()` exports a PPTX through the lossless writers. Untouched export returns
+the original bytes. Unknown markup, transitions, animations and unrelated package
+members stay preserved without implying additional playback support.
+
+`createPresentationNativeView` omits export history and preservation. Open its
+manifest with only the selected entry in `slides` and `allowPendingResources: true`
+to render and edit that slide before media arrives. Other slide descriptors remain
+available for navigation, but their models must load before editing or searching
+their content. Load resources by `presentationSlideResources(model)` hashes and
+attach them with `native.hydrateResources(resources, slideIds)` and use the returned
+artifact. This resolves pending handles
+without replacing current text or geometry. Export requires the complete preserved
+source; a partial view alone cannot generate a PPTX.
+
+`encodePresentationNativeState` supports local branch recovery without forcing
+preservation to load; `{ includeResources: false }` retains resource references
+instead of repeating media in every baseline. Hosts remain responsible for
+authorization, block integrity, durable operation receipts and synchronization.
+
 ## Apply edits with undo and redo
 
 ```ts
@@ -67,10 +108,12 @@ viewer, navigation, editing, and download examples.
 
 ## Save
 
-Call `session.artifact.bytes()` when downloading or saving. Accessing
-`artifact.document.package` also materializes the ZIP, so avoid doing either
-after every keystroke or drag. Edits reparse the changed slide and reuse unchanged
-scenes, images, and decoded fonts. Undo history shares unchanged package data.
+Call `session.artifact.bytes()` when exporting a PPTX. For native persistence,
+store the native archive instead. Accessing `artifact.document.package` also
+materializes the package, so avoid doing either after every keystroke or drag.
+Native edits update compiled models. Editing an original OOXML artifact reparses
+the changed slide and reuses unchanged scenes, images, and decoded fonts.
+Undo history shares unchanged document data.
 
 No-op export returns the original bytes. Changed slides retain unrelated XML
 and package parts, including supported Office extension metadata.
@@ -124,7 +167,7 @@ and Transitional decks retain their existing conformance. Structural commands
 retain unrelated package part payloads. Detached parts are retained when deleting
 slides so existing package relationships never become dangling.
 
-`paste-object` accepts a base64 source PPTX plus `sourceSlideId`, `objectKey`, and
+`paste-object` accepts a base64 source PPTX or encoded native archive plus `sourceSlideId`, `objectKey`, and
 the destination `slideId`. It preserves the selected top-level object's markup,
 formatting, resource bytes and relationships. Source and destination must use the
 same Strict/Transitional conformance. Keep the source snapshot before deleting

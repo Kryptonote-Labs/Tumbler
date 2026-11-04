@@ -77,3 +77,6 @@ export type {
   Relationship,
   RelationshipsErrorCode,
 } from "./relationships.ts";
+
+export { nativeCodec, writeNativeGraph, readNativeGraph } from "./native-graph.ts";
+export type { NativeCodec, NativeGraph } from "./native-graph.ts";

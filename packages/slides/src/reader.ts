@@ -41,7 +41,10 @@ import {
   type SlideParagraph,
   type SlideText,
   type SlideTextRun,
+  type NativeTextFonts,
   type SlideTransform,
+  type NativeRunField,
+  type NativeParagraphField,
 } from "./model.ts";
 
 const DIAGRAM_DRAWING =
@@ -116,6 +119,28 @@ interface ReadCache {
     { colors: ThemeColorScheme; fonts: ThemeFontScheme }
   >;
 }
+type NativeBackground = Pick<PresentationSlide, 'background' | 'backgroundGradient' | 'backgroundPattern' | 'backgroundPicture'>;
+const nativeBackgrounds = new WeakMap<PresentationSlide, NativeBackground>();
+export function presentationInheritedBackground(slide: PresentationSlide) { return nativeBackgrounds.get(slide); }
+const nativeRunFonts=new WeakMap<SlideTextRun,NativeTextFonts>();
+export function presentationRunFonts(run:SlideTextRun){return nativeRunFonts.get(run);}
+export function presentationNativeFonts(document:PresentationDocument,id:string){const slide=document.slides.find(s=>s.id===id);return slide&&slideContexts.get(slide)?.fonts;}
+const nativeRunDefaults = new WeakMap<SlideTextRun,SlideTextRun>();
+export function presentationRunDefaults(run:SlideTextRun){return nativeRunDefaults.get(run);}
+const nativeRunAuthored = new WeakMap<SlideTextRun, {
+  fields: readonly NativeRunField[]; fonts: NativeTextFonts['authored']; language: string | undefined;
+}>();
+export function presentationRunAuthored(run: SlideTextRun) { return nativeRunAuthored.get(run); }
+const nativeParagraphAuthored = new WeakMap<SlideParagraph, readonly NativeParagraphField[]>();
+export function presentationParagraphAuthored(paragraph: SlideParagraph) { return nativeParagraphAuthored.get(paragraph); }
+const nativeTextLevels = new WeakMap<SlideText, () => readonly SlideParagraph[]>();
+export function presentationTextLevels(text: SlideText) { return nativeTextLevels.get(text)?.(); }
+const nativeTextReduction = new WeakMap<SlideText, number>();
+export function presentationLineReduction(text: SlideText) { return nativeTextReduction.get(text); }
+const nativePalettes = new WeakMap<PresentationDocument, Map<string, ThemeColorScheme>>();
+export function bindPresentationThemeColours(document: PresentationDocument, id: string, scheme: ThemeColorScheme) {
+  let palettes=nativePalettes.get(document); if(!palettes){palettes=new Map();nativePalettes.set(document,palettes);}palettes.set(id,scheme);
+}
 const clipboardLines=new WeakMap<SlideObject,{xml:LosslessXmlDocument;element:Element;placeholder:string | undefined}>();
 const slideContexts = new WeakMap<PresentationSlide, Context>();
 const readCaches = new WeakMap<PresentationDocument, ReadCache>();
@@ -130,6 +155,7 @@ export function presentationClipboardLine(document:PresentationDocument,slideId:
 }
 /** Effective palette for a slide, including its theme overrides and colour-map remapping. */
 export function presentationThemeColours(document: PresentationDocument, slideId: string): ThemeColorScheme {
+  const native=nativePalettes.get(document)?.get(slideId); if(native) return native;
   const slide = document.slides.find(slide => slide.id === slideId);
   if (!slide) throw new Error('Slide not found.');
   const context = slideContexts.get(slide);
@@ -218,6 +244,19 @@ class Reader {
   readonly builtinStyles = new Map<string, Element>();
   objects = 0;
   characters = 0;
+  private nativeDefaultParagraphs: readonly Element[] | undefined;
+  defaultParagraphs() {
+    if (!this.nativeDefaultParagraphs) {
+      const xml = parseLosslessXml(new TextEncoder().encode(
+        `<a:txBody xmlns:a="${this.ns.drawing}">${Array.from({ length: 9 }, (_, level) =>
+          `<a:p><a:pPr lvl="${level}"/></a:p>`).join('')}</a:txBody>`,
+      ));
+      const view = createMarkupCompatibilityView(xml, { understoodNamespaces: new Set([this.ns.drawing]) });
+      for (const element of xml.elements()) this.views.set(element, view);
+      this.nativeDefaultParagraphs = this.children(xml.root);
+    }
+    return this.nativeDefaultParagraphs;
+  }
   constructor(
     readonly pkg: PresentationPackageState,
     options: OpenPresentationOptions,
@@ -632,30 +671,8 @@ class Reader {
         ? []
         : this.shapes(this.tree(source), source, layer, context, IDENTITY, 0),
     );
-    const background = [slide, layout, master]
-      .map((source) => this.p(this.p(source?.xml.root, "cSld"), "bg"))
-      .find((item) => item !== undefined);
-    const bgProperties = this.p(background, "bgPr");
-    if (
-      bgProperties &&
-      this.children(bgProperties).some((item) =>
-        ["effectDag"].includes(item.localName),
-      )
-    )
-      context.diagnostics.push({
-        part: slide.part.name.value,
-        message:
-          "This slide background is approximated; advanced background fills are not rendered.",
-      });
-    const bgRef = this.p(background, "bgRef");
-    const bgStyle =
-      bgRef === undefined
-        ? undefined
-        : this.themeStyle(context, "fillStyleLst", number(bgRef, "idx"));
-    const backgroundColor =
-      this.fill(bgProperties ?? bgStyle, context, this.color(bgRef, context)) ??
-      this.color(bgRef, context) ??
-      "#ffffff";
+    const paint = this.slideBackground([slide, layout, master], context);
+    const inherited = this.slideBackground([layout, master], context);
     const title =
       objects
         .find((object) => object.layer === "slide" && object.text)
@@ -671,6 +688,40 @@ class Reader {
       title,
       hidden: ["0", "false"].includes(attr(slide.xml.root, "show") ?? ""),
       notes: this.slideNotes(slide),
+      ...paint,
+      objects,
+      diagnostics: context.diagnostics,
+    };
+    nativeBackgrounds.set(result, inherited);
+    slideContexts.set(result,context);
+    return result;
+  }
+  slideBackground(sources: readonly (PartSource | undefined)[], context: Context) {
+    const background = sources
+      .map((source) => this.p(this.p(source?.xml.root, "cSld"), "bg"))
+      .find((item) => item !== undefined);
+    const bgProperties = this.p(background, "bgPr");
+    if (
+      bgProperties &&
+      this.children(bgProperties).some((item) =>
+        ["effectDag"].includes(item.localName),
+      )
+    )
+      context.diagnostics.push({
+        part: context.slide.part.name.value,
+        message:
+          "This slide background is approximated; advanced background fills are not rendered.",
+      });
+    const bgRef = this.p(background, "bgRef");
+    const bgStyle =
+      bgRef === undefined
+        ? undefined
+        : this.themeStyle(context, "fillStyleLst", number(bgRef, "idx"));
+    const backgroundColor =
+      this.fill(bgProperties ?? bgStyle, context, this.color(bgRef, context)) ??
+      this.color(bgRef, context) ??
+      "#ffffff";
+    return {
       background: backgroundColor,
       backgroundPattern: this.pattern(bgProperties ?? bgStyle, context),
       backgroundPicture: this.pictureFill(
@@ -681,11 +732,7 @@ class Reader {
         context,
         this.color(bgRef, context),
       ),
-      objects,
-      diagnostics: context.diagnostics,
     };
-    slideContexts.set(result,context);
-    return result;
   }
   slideNotes(slide: PartSource): string {
     const notes = this.relatedXml(slide, "notesSlide");
@@ -1695,6 +1742,9 @@ class Reader {
                 textElementId: undefined,
               }
             : undefined;
+          const defaults = parsed && nativeTextLevels.get(parsed);
+          if (text && defaults) nativeTextLevels.set(text, defaults);
+          if (text && parsed) nativeTextReduction.set(text, nativeTextReduction.get(parsed) ?? 0);
           if (
             this.child(props, "gradFill") ||
             this.child(props, "blipFill") ||
@@ -1779,6 +1829,8 @@ class Reader {
     });
     return {
       elementId: element.id,
+      columnWidths: columns,
+      rowHeights: heights,
       width: columns.reduce((a, b) => a + b, 0),
       height: y,
       cells,
@@ -1791,6 +1843,7 @@ class Reader {
     context: Context,
     diagnostics: string[],
     tableTextStyles: Element[] = [],
+    paragraphOverride?: readonly Element[],
   ): SlideText {
     const bodies = [
       body,
@@ -1832,7 +1885,7 @@ class Reader {
     );
     const paragraphs: SlideParagraph[] = [];
     const numbering = new Map<number, { scheme: string; value: number }>();
-    for (const paragraph of this.children(body).filter(
+    for (const paragraph of (paragraphOverride ?? this.children(body)).filter(
       (item) => item.localName === "p" && item.namespaceUri === this.ns.drawing,
     )) {
       const ppr = this.child(paragraph, "pPr");
@@ -1862,6 +1915,7 @@ class Reader {
       const runStyle = (
         rpr: Element | undefined,
         value: string,
+        collectDefaults = true,
       ): SlideTextRun[] => {
         const defaults = [
           rpr,
@@ -1902,7 +1956,7 @@ class Reader {
                 "Arial");
         };
         const hyperlink = this.hyperlink(this.child(rpr, "hlinkClick"));
-        return scriptSegments(value, runAttr("lang")).map((segment) => ({
+        const result=scriptSegments(value, runAttr("lang")).map((segment) => ({
           text: segment.text,
           fontFamily: font(segment.kind, segment.script),
           fontSize: (((numeric(runAttr("sz"), 1800) / 100) * 4) / 3) * fontScale,
@@ -1920,6 +1974,26 @@ class Reader {
           capitals: runAttr("cap") ?? "none",
           ...(hyperlink ? { hyperlink } : {}),
         }));
+        const fontContext:NativeTextFonts={theme:context.fonts,authored:{latin:defaults.map(item=>attr(this.child(item,'latin'),'typeface')).find(v=>!!v),eastAsian:defaults.map(item=>attr(this.child(item,'ea'),'typeface')).find(v=>!!v),complexScript:defaults.map(item=>attr(this.child(item,'cs'),'typeface')).find(v=>!!v)},role:['title','ctrTitle'].includes(role)?'major':'minor',language:runAttr('lang'),scale:fontScale};
+        for(const run of result)nativeRunFonts.set(run,fontContext);
+        const owners = [rpr, this.child(ppr, 'defRPr')];
+        const ownAttr = (name: string) => owners.some(owner => attr(owner, name) !== undefined);
+        const authored: NativeRunField[] = [];
+        for (const [name, fields] of [
+          ['sz', ['fontSize']], ['b', ['bold']], ['i', ['italic']],
+          ['u', ['underline', 'underlineStyle']], ['strike', ['strike']],
+          ['baseline', ['baseline']], ['spc', ['spacing']], ['cap', ['capitals']],
+        ] as const) if (ownAttr(name)) authored.push(...fields);
+        if (owners.some(owner => this.children(owner).some(child => child.localName.endsWith('Fill')))) authored.push('color');
+        if (hyperlink) authored.push('hyperlink');
+        const ownFont = (tag: string) => owners.map(owner => attr(this.child(owner, tag), 'typeface')).find(value => value !== undefined);
+        const ownFonts = { latin: ownFont('latin'), eastAsian: ownFont('ea'), complexScript: ownFont('cs') };
+        for (const run of result) nativeRunAuthored.set(run, {
+          fields: authored, fonts: ownFonts,
+          language: owners.map(owner => attr(owner, 'lang')).find(value => value !== undefined),
+        });
+        if(collectDefaults)for(const run of result){const inherited=runStyle(undefined,run.text,false)[0];if(inherited)nativeRunDefaults.set(run,inherited);}
+        return result;
       };
       const runs: SlideTextRun[] = [];
       for (const run of this.children(paragraph)) {
@@ -1970,6 +2044,11 @@ class Reader {
           ? ((number(points, "val") / 100) * 4) / 3
           : percentage(attr(this.child(item, "spcPct"), "val")) * largest;
       };
+      const spacingScale = (name: string) => {
+        const item = cascade.map(entry => this.child(entry, name)).find(value => value !== undefined);
+        const percent = this.child(item, 'spcPct');
+        return !this.child(item, 'spcPts') && percent ? percentage(attr(percent, 'val')) : undefined;
+      };
       const lineSpacing = cascade
         .map((entry) => this.child(entry, "lnSpc"))
         .find((value) => value !== undefined);
@@ -2019,7 +2098,12 @@ class Reader {
       const tabs = cascade
         .map((entry) => this.child(entry, "tabLst"))
         .find(Boolean);
-      paragraphs.push({
+      const parsedParagraph: SlideParagraph = {
+        nativeBeforeScale: spacingScale('spcBef'),
+        nativeAfterScale: spacingScale('spcAft'),
+        bulletScale:bulletProp("buSzPts")?undefined:percentage(attr(bulletProp("buSzPct"),"val"),1),
+        bulletColorFromText:this.color(bulletProp("buClr"),context)===undefined,
+        bulletFontFromText:!attr(bulletProp("buFont"),"typeface"),
         level,
         tabs: this.children(tabs)
           .filter((tab) => tab.localName === "tab")
@@ -2064,7 +2148,21 @@ class Reader {
         before: spacing("spcBef"),
         after: spacing("spcAft"),
         lineHeight,
-      });
+      };
+      const authored: NativeParagraphField[] = [];
+      for (const [name, fields] of [
+        ['algn', ['align', 'distributed']], ['marL', ['marginLeft']], ['marR', ['marginRight']],
+        ['indent', ['indent']], ['rtl', ['rtl']], ['defTabSz', ['defaultTabSize']],
+      ] as const) if (attr(ppr, name) !== undefined) authored.push(...fields);
+      for (const [name, fields] of [
+        ['lnSpc', ['lineHeight']], ['spcBef', ['before', 'nativeBeforeScale']], ['spcAft', ['after', 'nativeAfterScale']],
+        ['tabLst', ['tabs']], ['buNone', ['bullet']], ['buChar', ['bullet']],
+        ['buAutoNum', ['bullet']], ['buFont', ['bulletFont', 'bulletFontFromText']],
+        ['buClr', ['bulletColor', 'bulletColorFromText']],
+        ['buSzPct', ['bulletScale']], ['buSzPts', ['bulletSize', 'bulletScale']],
+      ] as const) if (this.child(ppr, name)) authored.push(...fields);
+      nativeParagraphAuthored.set(parsedParagraph, authored);
+      paragraphs.push(parsedParagraph);
     }
     const texts = this.descendants(body).filter(
       (item) => item.namespaceUri === this.ns.drawing && item.localName === "t",
@@ -2089,7 +2187,7 @@ class Reader {
       numeric(bodyAttr("numCol"), 1) === 1 &&
       [undefined, "horz"].includes(bodyAttr("vert")) &&
       numeric(bodyAttr("rot"), 0) === 0;
-    return {
+    const result: SlideText = {
       paragraphs,
       autoFit:
         fitting?.localName === "normAutofit"
@@ -2129,5 +2227,13 @@ class Reader {
           ? texts[0]?.id
           : undefined,
     };
+    if (!paragraphOverride) {
+      let levels: readonly SlideParagraph[] | undefined;
+      nativeTextLevels.set(result, () => levels ??= this.parseText(
+        body, inherited, role, context, [], tableTextStyles, this.defaultParagraphs(),
+      ).paragraphs);
+    }
+    nativeTextReduction.set(result, reduction);
+    return result;
   }
 }

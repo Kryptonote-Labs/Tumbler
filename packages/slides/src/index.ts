@@ -88,3 +88,14 @@ export { resizeDrawingGeometry } from "./drawing-geometry.ts";
 export { gradientFill, type GradientFill } from './gradient-authoring.ts';
 
 export { shapePlacement, placedShapeCommand, type ShapePlacement } from './shape-placement.ts';
+
+export { NativePresentationDocument, importNativePresentation, restoreNativePresentation } from "./native-document.ts";
+export type { NativePresentationState, NativeSlide, NativeChange } from "./native-document.ts";
+export { encodePresentationBlock, decodePresentationBlock, isPresentationBlock } from "./native-block.ts";
+
+export { createPresentationNativeArchive, createPresentationNativeView, encodePresentationNativeState, openPresentationNativeArchive, encodePresentationNativeArchive, decodePresentationNativeArchive, readPresentationNativeManifest } from "./native-archive.ts";
+export type { NativePresentationArchive, NativePresentationManifest } from "./native-archive.ts";
+
+export {presentationSlideResources,presentationResourceHash} from "./native-resources.ts";
+
+export {presentationNativeContent} from "./native-archive.ts";
