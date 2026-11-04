@@ -87,7 +87,7 @@
         style:margin-bottom={`${paragraph.after}px`}
         style:line-height={paragraph.lineHeight}
       >
-        {#if paragraph.bullet}<span
+        {#if paragraph.bullet && (editor?.active || paragraph.runs.some(run => run.text.trim()))}<span
             data-bullet
             contenteditable="false"
             style:font-family={fonts?.family(paragraph.bulletFont ?? "Arial") ??
