@@ -50,6 +50,8 @@ export interface SlideTextRun {
 export type NativeRunField = Exclude<keyof SlideTextRun,
   'text' | 'nativeAuthored' | 'nativeOwnFonts' | 'nativeOwnLanguage' | 'nativeFonts' | 'nativeDefaults'>;
 export interface SlideParagraph {
+  readonly nativeBeforeScale?: number | undefined;
+  readonly nativeAfterScale?: number | undefined;
   readonly nativeAuthored?: readonly NativeParagraphField[] | undefined;
   readonly bulletScale?: number | undefined;
   readonly bulletColorFromText?: boolean;
@@ -78,6 +80,7 @@ export interface SlideParagraph {
 export type NativeParagraphField = Exclude<keyof SlideParagraph,
   'nativeAuthored' | 'runs' | 'endRun' | 'fontSize' | 'level'>;
 export interface SlideText {
+  readonly nativeLineReduction?: number | undefined;
   readonly nativeLevels?: readonly SlideParagraph[] | undefined;
   /** Authored fitting mode. Normal fitting is reflected in the saved run sizes and spacing. */
   readonly autoFit?: 'none' | 'normal' | 'shape';

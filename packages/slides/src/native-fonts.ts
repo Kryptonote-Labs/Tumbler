@@ -37,6 +37,12 @@ export function nativeParagraphMetrics(paragraph: SlideParagraph): SlideParagrap
   return {
     ...paragraph,
     fontSize: largest,
+    ...(paragraph.nativeBeforeScale === undefined
+      ? {}
+      : { before: largest * paragraph.nativeBeforeScale }),
+    ...(paragraph.nativeAfterScale === undefined
+      ? {}
+      : { after: largest * paragraph.nativeAfterScale }),
     ...(paragraph.bulletScale !== undefined ? { bulletSize: largest * paragraph.bulletScale } : {}),
     ...(paragraph.bulletColorFromText
       ? { bulletColor: paragraph.runs[0]?.color ?? paragraph.endRun?.color ?? '#222' }

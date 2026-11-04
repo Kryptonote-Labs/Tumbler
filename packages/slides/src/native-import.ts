@@ -14,6 +14,7 @@ import {
   presentationRunAuthored,
   presentationParagraphAuthored,
   presentationTextLevels,
+  presentationLineReduction,
   presentationRunFonts,
   presentationNativeFonts,
   presentationThemeColours,
@@ -53,6 +54,7 @@ export function compileNativeSlides(artifact: PresentationArtifact): NativeSlide
   const nativeText = (text: SlideObject['text']) =>
     text && {
       ...text,
+      nativeLineReduction: presentationLineReduction(text),
       paragraphs: text.paragraphs.map(nativeParagraph),
       nativeLevels: presentationTextLevels(text)?.map(nativeParagraph),
     };

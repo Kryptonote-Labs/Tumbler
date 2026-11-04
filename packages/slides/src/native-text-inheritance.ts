@@ -64,6 +64,11 @@ export function inheritNativeText(text: SlideText, template: SlideText): SlideTe
       if (!defaultRun) return paragraph;
       let result: SlideParagraph = {
         ...base,
+        lineHeight:
+          typeof base.lineHeight === 'number'
+            ? (base.lineHeight * (1 - (text.nativeLineReduction ?? 0))) /
+              (1 - (template.nativeLineReduction ?? 0) || 1)
+            : `${(parseFloat(base.lineHeight) * (1 - (text.nativeLineReduction ?? 0))) / (1 - (template.nativeLineReduction ?? 0) || 1)}px`,
         level: paragraph.level ?? 0,
         nativeAuthored: paragraph.nativeAuthored,
         runs: paragraph.runs.flatMap((current) => run(current, defaultRun)),

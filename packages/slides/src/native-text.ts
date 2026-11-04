@@ -189,8 +189,8 @@ export function editNativeText(
                 ? (['bullet', 'marginLeft', 'indent'] as const)
                 : []),
               ...(command.level !== undefined ? (['marginLeft', 'indent'] as const) : []),
-              ...(command.before !== undefined ? (['before'] as const) : []),
-              ...(command.after !== undefined ? (['after'] as const) : []),
+              ...(command.before !== undefined ? (['before', 'nativeBeforeScale'] as const) : []),
+              ...(command.after !== undefined ? (['after', 'nativeAfterScale'] as const) : []),
               ...(command.lineSpacing !== undefined ? (['lineHeight'] as const) : []),
             ]),
           ],
@@ -207,9 +207,15 @@ export function editNativeText(
                   indent: p.bullet ? p.indent : -30,
                 }
               : {}),
-          ...(command.lineSpacing !== undefined ? { lineHeight: command.lineSpacing } : {}),
-          ...(command.before !== undefined ? { before: (command.before * 4) / 3 } : {}),
-          ...(command.after !== undefined ? { after: (command.after * 4) / 3 } : {}),
+          ...(command.lineSpacing !== undefined
+            ? { lineHeight: command.lineSpacing * (1 - (text.nativeLineReduction ?? 0)) }
+            : {}),
+          ...(command.before !== undefined
+            ? { before: (command.before * 4) / 3, nativeBeforeScale: undefined }
+            : {}),
+          ...(command.after !== undefined
+            ? { after: (command.after * 4) / 3, nativeAfterScale: undefined }
+            : {}),
         };
       }),
     };

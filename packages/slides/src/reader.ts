@@ -135,6 +135,8 @@ const nativeParagraphAuthored = new WeakMap<SlideParagraph, readonly NativeParag
 export function presentationParagraphAuthored(paragraph: SlideParagraph) { return nativeParagraphAuthored.get(paragraph); }
 const nativeTextLevels = new WeakMap<SlideText, () => readonly SlideParagraph[]>();
 export function presentationTextLevels(text: SlideText) { return nativeTextLevels.get(text)?.(); }
+const nativeTextReduction = new WeakMap<SlideText, number>();
+export function presentationLineReduction(text: SlideText) { return nativeTextReduction.get(text); }
 const nativePalettes = new WeakMap<PresentationDocument, Map<string, ThemeColorScheme>>();
 export function bindPresentationThemeColours(document: PresentationDocument, id: string, scheme: ThemeColorScheme) {
   let palettes=nativePalettes.get(document); if(!palettes){palettes=new Map();nativePalettes.set(document,palettes);}palettes.set(id,scheme);
@@ -1742,6 +1744,7 @@ class Reader {
             : undefined;
           const defaults = parsed && nativeTextLevels.get(parsed);
           if (text && defaults) nativeTextLevels.set(text, defaults);
+          if (text && parsed) nativeTextReduction.set(text, nativeTextReduction.get(parsed) ?? 0);
           if (
             this.child(props, "gradFill") ||
             this.child(props, "blipFill") ||
@@ -2041,6 +2044,11 @@ class Reader {
           ? ((number(points, "val") / 100) * 4) / 3
           : percentage(attr(this.child(item, "spcPct"), "val")) * largest;
       };
+      const spacingScale = (name: string) => {
+        const item = cascade.map(entry => this.child(entry, name)).find(value => value !== undefined);
+        const percent = this.child(item, 'spcPct');
+        return !this.child(item, 'spcPts') && percent ? percentage(attr(percent, 'val')) : undefined;
+      };
       const lineSpacing = cascade
         .map((entry) => this.child(entry, "lnSpc"))
         .find((value) => value !== undefined);
@@ -2091,6 +2099,8 @@ class Reader {
         .map((entry) => this.child(entry, "tabLst"))
         .find(Boolean);
       const parsedParagraph: SlideParagraph = {
+        nativeBeforeScale: spacingScale('spcBef'),
+        nativeAfterScale: spacingScale('spcAft'),
         bulletScale:bulletProp("buSzPts")?undefined:percentage(attr(bulletProp("buSzPct"),"val"),1),
         bulletColorFromText:this.color(bulletProp("buClr"),context)===undefined,
         bulletFontFromText:!attr(bulletProp("buFont"),"typeface"),
@@ -2145,7 +2155,7 @@ class Reader {
         ['indent', ['indent']], ['rtl', ['rtl']], ['defTabSz', ['defaultTabSize']],
       ] as const) if (attr(ppr, name) !== undefined) authored.push(...fields);
       for (const [name, fields] of [
-        ['lnSpc', ['lineHeight']], ['spcBef', ['before']], ['spcAft', ['after']],
+        ['lnSpc', ['lineHeight']], ['spcBef', ['before', 'nativeBeforeScale']], ['spcAft', ['after', 'nativeAfterScale']],
         ['tabLst', ['tabs']], ['buNone', ['bullet']], ['buChar', ['bullet']],
         ['buAutoNum', ['bullet']], ['buFont', ['bulletFont', 'bulletFontFromText']],
         ['buClr', ['bulletColor', 'bulletColorFromText']],
@@ -2223,6 +2233,7 @@ class Reader {
         body, inherited, role, context, [], tableTextStyles, this.defaultParagraphs(),
       ).paragraphs);
     }
+    nativeTextReduction.set(result, reduction);
     return result;
   }
 }

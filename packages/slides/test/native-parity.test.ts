@@ -373,3 +373,55 @@ test('layout inheritance retains an explicitly authored language for script font
   )!.text!.paragraphs[0]!.runs;
   expect(runs.map((run) => run.fontFamily)).toEqual(exported.map((run) => run.fontFamily));
 });
+
+test('native layout metrics retain percentage spacing and the text body autofit reduction', () => {
+  for (const fitting of [false, true]) {
+    const base = createPresentation(),
+      slideId = base.document.slides[0]!.id,
+      title = apply(base, { name: 'layout', slideId, layout: 'title' }),
+      pkg = title.document.package,
+      part = title.document.slides[0]!.part;
+    let xml = new TextDecoder()
+      .decode(pkg.readPart(pkg.getPart(part)!))
+      .replaceAll(
+        '<a:p>',
+        '<a:p><a:pPr><a:spcBef><a:spcPct val="50000"/></a:spcBef><a:spcAft><a:spcPct val="25000"/></a:spcAft></a:pPr>',
+      );
+    if (fitting)
+      xml = xml.replaceAll(
+        '<a:normAutofit/>',
+        '<a:normAutofit fontScale="80000" lnSpcReduction="20000"/>',
+      );
+    const source = openPresentationArtifact(
+      beginPackageTransaction(pkg).replacePart(part, new TextEncoder().encode(xml)).commit(),
+    );
+    let native = importNativePresentation(source);
+    const objectKey = native.document.slides[0]!.objects.find(
+      (object) => object.placeholder === 'ctrTitle',
+    )!.key;
+    native = native
+      .nativeCommand({ name: 'edit-text', slideId, objectKey, start: 0, end: 0, value: 'Heading' })
+      .nativeCommand({ name: 'layout', slideId, layout: 'title-content' });
+    const metrics = (artifact: PresentationArtifact) =>
+      artifact.document.slides[0]!.objects.filter((object) => object.textEditable).flatMap(
+        (object) =>
+          object.text!.paragraphs.map((paragraph) => [
+            paragraph.before,
+            paragraph.after,
+            paragraph.lineHeight,
+          ]),
+      );
+    expect(metrics(native)).toEqual(metrics(openPresentationArtifact(native.bytes())));
+    native = native.nativeCommand({
+      name: 'paragraph',
+      slideId,
+      objectKey,
+      start: 0,
+      end: 7,
+      before: 6,
+      after: 8,
+      lineSpacing: 1.5,
+    });
+    expect(metrics(native)).toEqual(metrics(openPresentationArtifact(native.bytes())));
+  }
+});
