@@ -34,8 +34,10 @@ import { isPresentationBlock } from './native-block.ts';
 import { openPresentationArtifact } from './artifact.ts';
 import { bindPresentationThemeColours } from './reader.ts';
 import { ThemeColorScheme, THEME_COLOR_SLOTS } from '@tumblerjs/ooxml';
+import type { PresentationLayout } from './authoring-layout.ts';
 
 export type NativeSlideTemplate = {
+  backgroundOverride?: boolean | undefined;
   themeFonts?: import('@tumblerjs/ooxml').ThemeFontScheme | undefined;
   fonts?: PresentationDocument['embeddedFonts'];
   slide: PresentationSlide;
@@ -45,7 +47,19 @@ export type NativeSlideTemplate = {
     'background' | 'backgroundGradient' | 'backgroundPattern' | 'backgroundPicture'
   >;
 };
-export type NativeSlide = NativeSlideTemplate & { insertion?: NativeSlideTemplate | undefined };
+export type NativeLayoutContext = {
+  master: string;
+  hasSecond: boolean;
+  existing: readonly PresentationLayout[];
+  titleInsertion: NativeSlideTemplate;
+  authored: Readonly<Record<PresentationLayout, NativeSlideTemplate>>;
+};
+export type NativeSlide = NativeSlideTemplate & {
+  insertion?: NativeSlideTemplate | undefined;
+  insertionIsTitle?: boolean | undefined;
+  insertionLayout?: PresentationLayout | undefined;
+  layoutContext?: NativeLayoutContext | undefined;
+};
 export type NativeChange = {
   before: string;
   command: PresentationCommand;

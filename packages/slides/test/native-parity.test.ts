@@ -222,3 +222,54 @@ test('native authoring rejects values that lossless DrawingML writers cannot exp
   }
   expect(native.bytes()).toEqual(source.bytes());
 });
+
+test('native title insertion follows the master after successive authored layout changes', () => {
+  for (const importedLayout of [undefined, 'blank', 'two-content'] as const) {
+    let source = createPresentation();
+    const slideId = source.document.slides[0]!.id;
+    if (importedLayout) source = apply(source, { name: 'layout', slideId, layout: importedLayout });
+    let native = importNativePresentation(source);
+    for (const layout of ['blank', 'title', 'two-content', 'title'] as const) {
+      native = native.nativeCommand({ name: 'layout', slideId, layout });
+      native = openPresentationNativeArchive(createPresentationNativeArchive(native));
+      const added = native.nativeCommand({ name: 'insert-slide', index: 1 });
+      const exported = openPresentationArtifact(added.bytes());
+      const descriptors = (artifact: PresentationArtifact) =>
+        artifact.document.slides[1]!.objects.map((object) => [
+          object.placeholder,
+          object.transform,
+          object.text?.anchor,
+        ]);
+      expect(descriptors(added)).toEqual(descriptors(exported));
+    }
+  }
+});
+
+test('authored native layouts retain theme fonts and explicit backgrounds through insertion', () => {
+  const source = createPresentation(),
+    slideId = source.document.slides[0]!.id;
+  let native = importNativePresentation(source)
+    .nativeCommand({ name: 'background', slideId, color: '#123456' })
+    .nativeCommand({ name: 'layout', slideId, layout: 'title-content' })
+    .nativeCommand({ name: 'insert-slide', index: 1 });
+  const slide = native.document.slides[1]!,
+    object = slide.objects.find((object) => object.textEditable)!;
+  native = native.nativeCommand({
+    name: 'edit-text',
+    slideId: slide.id,
+    objectKey: object.key,
+    start: 0,
+    end: 0,
+    value: 'Heading',
+  });
+  const exported = openPresentationArtifact(native.bytes());
+  expect(native.document.slides[0]!.background).toBe(exported.document.slides[0]!.background);
+  expect(native.document.slides[1]!.background).toBe(exported.document.slides[1]!.background);
+  const runs = (artifact: PresentationArtifact) =>
+    artifact.document.slides[1]!.objects.filter((object) => object.textEditable).flatMap((object) =>
+      object.text!.paragraphs.flatMap((paragraph) =>
+        paragraph.runs.map((run) => [run.text, run.fontFamily, run.fontSize]),
+      ),
+    );
+  expect(runs(native)).toEqual(runs(exported));
+});

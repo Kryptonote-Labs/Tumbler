@@ -22,6 +22,12 @@ export function newSlideLayout(artifact: PresentationArtifact, sourceId: string)
   };
   let part = related(slide.part, "slideLayout");
   let layout = part ? partXml(artifact, part) : undefined;
+  const currentPart = part;
+  const titleLayout = !!layout && attr(layout.root, "type") === "title";
+  const masterPart = part ? related(part, "slideMaster") : undefined;
+  const master = masterPart ? partXml(artifact, masterPart) : undefined;
+  const masterLayouts = child(master?.root, "sldLayoutIdLst");
+  const hasSecondLayout = !!masterLayouts && children(masterLayouts).length > 1;
   let titleFallback = false;
   if (layout && attr(layout.root, "type") === "title") {
     const masterPart = related(part!, "slideMaster");
@@ -79,6 +85,10 @@ export function newSlideLayout(artifact: PresentationArtifact, sourceId: string)
           : "title-content";
   }
   return {
+    currentPart,
+    masterPart,
+    hasSecondLayout,
+    titleLayout,
     part,
     objects: titleFallback ? "" : objects,
     fallback: titleFallback ? ("title-content" as const) : fallback,

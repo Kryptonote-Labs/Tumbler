@@ -1,5 +1,30 @@
 import { insertNativeObject, nativeObjectText } from './native-shape.ts';
 import type { PresentationSlide, SlideObject } from './model.ts';
+import type { NativeLayoutContext, NativeSlide } from './native-document.ts';
+import type { PresentationLayout } from './authoring-layout.ts';
+
+/** Adding the master's second layout changes the successor of every title slide on that master. */
+export function nativeMasterLayout(
+  slides: readonly NativeSlide[],
+  context: NativeLayoutContext | undefined,
+  layout: PresentationLayout | undefined,
+) {
+  if (!context || !layout || context.hasSecond || context.existing.includes(layout)) return slides;
+  const next = {
+    ...context,
+    hasSecond: true,
+    titleInsertion: context.authored[layout === 'title' ? 'title-content' : layout],
+  };
+  return slides.map((slide) =>
+    slide.layoutContext?.master === context.master
+      ? {
+          ...slide,
+          layoutContext: next,
+          ...(slide.insertionIsTitle ? { insertion: next.titleInsertion } : {}),
+        }
+      : slide,
+  );
+}
 
 /** Office default layout slots are native geometry; applying a layout never creates a temporary PPTX. */
 export function nativeLayoutTemplate(

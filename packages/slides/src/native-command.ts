@@ -11,7 +11,7 @@ import {
   nativeColour,
 } from './native-shape.ts';
 import { editNativeTable } from './native-table.ts';
-import { nativeLayoutTemplate as layoutTemplate } from './native-layout.ts';
+import { nativeLayoutTemplate as layoutTemplate, nativeMasterLayout } from './native-layout.ts';
 import { nativePresetGeometry } from './drawing-geometry.ts';
 import { insertNativeInk } from './native-ink.ts';
 import {
@@ -240,7 +240,11 @@ export function applyNativeModelCommand(
         : slides[Math.max(0, command.index - 1)];
       if ((command.sourceId || command.layoutSourceId) && !donor)
         throw new Error('Source slide not found.');
-      const source = command.sourceId ? donor : donor?.insertion;
+      const source = command.sourceId
+        ? donor
+        : donor?.insertionIsTitle
+          ? (donor.layoutContext?.titleInsertion ?? donor.insertion)
+          : donor?.insertion;
       const id = nextId(),
         template = source?.slide ?? layoutTemplate('blank', state.width, state.height);
       const part = `/native/${id}.xml`,
@@ -260,7 +264,10 @@ export function applyNativeModelCommand(
       const next = {
         ...source,
         slide,
-        insertion: donor?.insertion,
+        insertion: command.sourceId ? donor?.insertion : source,
+        insertionIsTitle: command.sourceId ? donor?.insertionIsTitle : false,
+        insertionLayout: command.sourceId ? donor?.insertionLayout : undefined,
+        layoutContext: donor?.layoutContext,
         themeFonts: source?.themeFonts ?? donor?.themeFonts,
         palette: source?.palette ?? donor?.palette ?? [],
         inheritedBackground: source?.inheritedBackground ??
@@ -272,49 +279,63 @@ export function applyNativeModelCommand(
       const order = [...slides];
       order.splice(command.index, 0, next);
       slides = order;
+      if (!command.sourceId)
+        slides = nativeMasterLayout(slides, donor?.layoutContext, donor?.insertionLayout);
       createdSlides.push(id);
       addObjects(id, objects);
       break;
     }
     case 'layout': {
-      const template = layoutTemplate(command.layout, state.width, state.height),
+      const compiled = target!.layoutContext?.authored[command.layout];
+      const template = compiled?.slide ?? layoutTemplate(command.layout, state.width, state.height),
         placeholders = target!.slide.objects.filter(
           (o) => o.layer === 'slide' && o.placeholder && o.textEditable,
         ),
         used = new Set<SlideObject>();
       const title = (s: string) => s === 'title' || s === 'ctrTitle';
-      const objects = template.objects.map((o) => {
-        const match = placeholders.find(
-          (p) => !used.has(p) && title(p.placeholder!) === title(o.placeholder!),
-        );
-        if (match) used.add(match);
-        const key = match?.key ?? nextId();
-        return {
-          ...o,
-          key,
-          shapeId: match?.shapeId ?? key,
-          sourcePart: target!.slide.part,
-          text: match?.text ? { ...o.text!, paragraphs: match.text.paragraphs } : o.text,
-        };
-      });
+      const objects = template.objects
+        .filter((o) => o.layer === 'slide')
+        .map((o) => {
+          const match = placeholders.find(
+            (p) => !used.has(p) && title(p.placeholder!) === title(o.placeholder!),
+          );
+          if (match) used.add(match);
+          const key = match?.key ?? nextId();
+          return {
+            ...o,
+            key,
+            shapeId: match?.shapeId ?? key,
+            sourcePart: target!.slide.part,
+            text: match?.text ? { ...o.text!, paragraphs: match.text.paragraphs } : o.text,
+          };
+        });
       const kept = target!.slide.objects.filter(
-        (o) => !placeholders.includes(o) || (!used.has(o) && !!slideTextValue(o)),
+        (o) =>
+          o.layer === 'slide' && (!placeholders.includes(o) || used.has(o) || !!slideTextValue(o)),
       );
+      const inherited = template.objects.filter((o) => o.layer !== 'slide');
+      const replacements = new Map(objects.map((object) => [object.key, object]));
+      const originalKeys = new Set(target!.slide.objects.map((object) => object.key));
+      const changedObjects = [
+        ...inherited,
+        ...kept.map((object) => replacements.get(object.key) ?? object),
+        ...objects.filter((object) => !originalKeys.has(object.key)),
+      ];
+      const insertion =
+        command.layout === 'title' ? target!.layoutContext?.titleInsertion : compiled;
       patchSlide({
         ...target!,
-        slide: { ...target!.slide, objects: [...kept, ...objects] },
-        insertion: {
-          themeFonts: target!.themeFonts,
-          fonts: target!.fonts,
-          palette: target!.palette,
-          inheritedBackground: target!.inheritedBackground,
-          slide: layoutTemplate(
-            command.layout === 'title' ? 'title-content' : command.layout,
-            state.width,
-            state.height,
-          ),
+        slide: {
+          ...target!.slide,
+          ...(!target!.backgroundOverride && compiled ? compiled.inheritedBackground : {}),
+          objects: changedObjects,
         },
+        inheritedBackground: compiled?.inheritedBackground ?? target!.inheritedBackground,
+        insertion,
+        insertionIsTitle: command.layout === 'title',
+        insertionLayout: undefined,
       });
+      slides = nativeMasterLayout(slides, target!.layoutContext, command.layout);
       addObjects(
         command.slideId,
         objects.filter((o) => !target!.slide.objects.some((p) => p.key === o.key)),
@@ -411,7 +432,7 @@ export function applyNativeModelCommand(
               : {}),
           },
         };
-      patchSlide({ ...target!, slide });
+      patchSlide({ ...target!, slide, backgroundOverride: fill.kind !== 'inherit' });
       break;
     }
     default: {

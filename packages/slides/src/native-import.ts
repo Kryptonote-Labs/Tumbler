@@ -1,6 +1,7 @@
 import type { PresentationArtifact } from './artifact.ts';
 import type { PresentationDocument, PresentationSlide, SlideObject } from './model.ts';
-import type { NativeSlide, NativeSlideTemplate } from './native-document.ts';
+import type { NativeSlide, NativeSlideTemplate, NativeLayoutContext } from './native-document.ts';
+import { applyPresentationLayout, type PresentationLayout } from './authoring-layout.ts';
 import { insertSlide } from './authoring-slides.ts';
 import { newSlideLayout } from './new-slide-layout.ts';
 import {
@@ -56,7 +57,13 @@ export function compileNativeSlides(artifact: PresentationArtifact): NativeSlide
       })),
     };
     const scheme = presentationThemeColours(doc, slide.id);
+    const common = doc.sources
+      .get(original.part)
+      ?.root.children.find((element) => element.kind === 'element' && element.localName === 'cSld');
     return {
+      backgroundOverride:
+        common?.kind === 'element' &&
+        common.children.some((element) => element.kind === 'element' && element.localName === 'bg'),
       slide,
       themeFonts: presentationNativeFonts(doc, original.id),
       fonts: doc.embeddedFonts?.filter((font) =>
@@ -79,6 +86,7 @@ export function compileNativeSlides(artifact: PresentationArtifact): NativeSlide
     };
   };
   const layouts = new Map<string, NativeSlideTemplate>();
+  const contexts = new Map<string, NativeLayoutContext>();
   return artifact.document.slides.map((slide) => {
     const compiled = compileSlide(artifact.document, slide);
     if (artifact.document.signed) return compiled;
@@ -90,6 +98,61 @@ export function compileNativeSlides(artifact: PresentationArtifact): NativeSlide
       insertion = compileSlide(sample.document, sample.document.slides[0]!);
       layouts.set(key, insertion);
     }
-    return { ...compiled, insertion };
+    let context = layout.masterPart ? contexts.get(layout.masterPart) : undefined;
+    if (layout.masterPart && !context) {
+      const sample = insertSlide(artifact, 0, undefined, slide.id),
+        sampleId = sample.document.slides[0]!.id;
+      const existing: PresentationLayout[] = [];
+      const compileAuthored = (kind: PresentationLayout) => {
+        const changed = applyPresentationLayout(sample, sampleId, kind);
+        const part = newSlideLayout(changed, sampleId).currentPart!;
+        const markup = new TextDecoder().decode(
+          changed.document.package.readPart(changed.document.package.getPart(part)!),
+        );
+        if (
+          artifact.document.package
+            .relationships(artifact.document.package.getPart(layout.masterPart!)!.name)
+            .items.some(
+              (rel) =>
+                rel.type.endsWith('/slideLayout') &&
+                rel.targetMode === 'Internal' &&
+                new TextDecoder().decode(
+                  artifact.document.package.readPart(
+                    artifact.document.package.getPart(rel.targetPartName)!,
+                  ),
+                ) === markup,
+            )
+        )
+          existing.push(kind);
+        return compileSlide(changed.document, changed.document.slides[0]!);
+      };
+      const authored = {
+        blank: compileAuthored('blank'),
+        title: compileAuthored('title'),
+        'title-content': compileAuthored('title-content'),
+        'two-content': compileAuthored('two-content'),
+      };
+      let titleInsertion = authored['title-content'];
+      if (layout.hasSecondLayout) {
+        const title = applyPresentationLayout(artifact, slide.id, 'title');
+        const next = insertSlide(title, 0, undefined, slide.id);
+        titleInsertion = compileSlide(next.document, next.document.slides[0]!);
+      }
+      context = {
+        master: layout.masterPart,
+        hasSecond: layout.hasSecondLayout,
+        existing,
+        authored,
+        titleInsertion,
+      };
+      contexts.set(layout.masterPart, context);
+    }
+    return {
+      ...compiled,
+      insertion,
+      insertionIsTitle: layout.titleLayout,
+      insertionLayout: layout.fallback,
+      layoutContext: context,
+    };
   });
 }
