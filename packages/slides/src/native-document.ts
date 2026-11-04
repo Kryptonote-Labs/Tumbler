@@ -22,7 +22,12 @@ import type {
 } from './model.ts';
 import { PresentationError } from './model.ts';
 import { editNativeText } from './native-text.ts';
-import { insertNativeObject, moveNativeObject, nativeGradient } from './native-shape.ts';
+import {
+  insertNativeObject,
+  moveNativeObject,
+  nativeGradient,
+  nativeColour,
+} from './native-shape.ts';
 import { findPresentationMatches } from './search.ts';
 import { nativeLayoutTemplate as layoutTemplate } from './native-layout.ts';
 import { editNativeTable } from './native-table.ts';
@@ -307,7 +312,7 @@ export class NativePresentationDocument extends PresentationArtifact {
       throw new Error(selected?.restriction ?? 'Slide object not found.');
     let counter = this.state.counter,
       slides = this.state.slides;
-    const nextId = () => `native:${++counter}`;
+    const nextId = () => `native-${++counter}`;
     const patchSlide = (state: NativeSlide) => {
       slides = slides.map((s) => (s === target ? state : s));
     };
@@ -370,9 +375,9 @@ export class NativePresentationDocument extends PresentationArtifact {
               : undefined;
         patchObject({
           ...selected!,
-          fill: typeof command.fill === 'string' ? command.fill : selected!.fill,
+          fill: typeof command.fill === 'string' ? nativeColour(command.fill) : selected!.fill,
           gradient,
-          stroke: command.stroke ?? selected!.stroke,
+          stroke: command.stroke === undefined ? selected!.stroke : nativeColour(command.stroke),
           strokeWidth: command.strokeWidth ?? selected!.strokeWidth,
           cornerRadius: command.cornerRadius ?? selected!.cornerRadius,
         });
@@ -476,7 +481,7 @@ export class NativePresentationDocument extends PresentationArtifact {
           objects = template.objects.map((o) => ({
             ...o,
             key: nextId(),
-            shapeId: `native:${counter}`,
+            shapeId: `native-${counter}`,
             sourcePart: o.layer === 'slide' ? part : o.sourcePart,
           }));
         const slide = {
@@ -586,7 +591,8 @@ export class NativePresentationDocument extends PresentationArtifact {
           backgroundPicture: undefined,
         } as PresentationSlide;
         if (fill.kind === 'inherit') slide = { ...slide, ...target!.inheritedBackground };
-        if (fill.kind === 'solid') slide = { ...slide, background: fill.color };
+        if (fill.kind === 'solid')
+          slide = { ...slide, background: nativeColour(fill.color, fill.opacity ?? 1) };
         if (fill.kind === 'gradient')
           slide = { ...slide, background: 'none', backgroundGradient: nativeGradient(fill) };
         if (fill.kind === 'pattern')
@@ -595,8 +601,8 @@ export class NativePresentationDocument extends PresentationArtifact {
             background: 'none',
             backgroundPattern: {
               preset: fill.preset,
-              foreground: fill.foreground,
-              background: fill.background,
+              foreground: nativeColour(fill.foreground),
+              background: nativeColour(fill.background),
             },
           };
         if (fill.kind === 'picture')

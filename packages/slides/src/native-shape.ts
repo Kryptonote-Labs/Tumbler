@@ -5,6 +5,12 @@ import type { SlideObject, SlideText } from './model.ts';
 import type { DrawingGradient } from './appearance.ts';
 import type { GradientFill } from './gradient-authoring.ts';
 
+export function nativeColour(value: string, opacity = 1) {
+  return /^#[a-f0-9]{6}$/i.test(value)
+    ? `rgba(${parseInt(value.slice(1, 3), 16)},${parseInt(value.slice(3, 5), 16)},${parseInt(value.slice(5, 7), 16)},${opacity})`
+    : value;
+}
+
 export function nativeGradient(fill: GradientFill): DrawingGradient {
   return {
     kind: fill.type,
@@ -17,7 +23,7 @@ export function nativeGradient(fill: GradientFill): DrawingGradient {
         offset: s.offset,
         color:
           s.opacity === undefined || s.opacity === 1
-            ? s.color
+            ? nativeColour(s.color)
             : `rgba(${parseInt(s.color.slice(1, 3), 16)},${parseInt(s.color.slice(3, 5), 16)},${parseInt(s.color.slice(5, 7), 16)},${s.opacity})`,
       })),
   };
@@ -81,7 +87,7 @@ export function nativeObjectText(text = '', fontSize = 24, centered = false): Sl
     text: '',
     fontFamily: 'Aptos',
     fontSize: (fontSize * 4) / 3,
-    color: '#000000',
+    color: '#222222',
     bold: false,
     italic: false,
     underline: false,
@@ -89,19 +95,17 @@ export function nativeObjectText(text = '', fontSize = 24, centered = false): Sl
   return {
     editable: true,
     autoFit: 'none',
-    paragraphs: text
-      .split('\n')
-      .map((text) => ({
-        runs: text ? [{ ...run, text }] : [],
-        endRun: run,
-        align: centered ? 'center' : 'left',
-        bullet: '',
-        marginLeft: 0,
-        indent: 0,
-        before: 0,
-        after: 0,
-        lineHeight: 1,
-      })),
+    paragraphs: text.split('\n').map((text) => ({
+      runs: text ? [{ ...run, text }] : [],
+      endRun: run,
+      align: centered ? 'center' : 'left',
+      bullet: '',
+      marginLeft: 0,
+      indent: 0,
+      before: 0,
+      after: 0,
+      lineHeight: 1,
+    })),
     inset: [9.6, 4.8, 9.6, 4.8],
     anchor: centered ? 'center' : 'top',
     wrap: true,
@@ -146,14 +150,16 @@ export function insertNativeObject(
     ),
     transform: { x: 0, y: 0, width: 100, height: 100, rotation: 0, flipH: false, flipV: false },
     matrix: [1, 0, 0, 1, 0, 0],
-    fill: shape?.fill ?? (shape?.geometry && shape.geometry !== 'line' ? '#4472C4' : 'none'),
+    fill: nativeColour(
+      shape?.fill ?? (shape?.geometry && shape.geometry !== 'line' ? '#4472C4' : 'none'),
+    ),
     gradient: undefined,
     shadow: undefined,
     strokeDash: 'solid',
     strokeCap: 'butt',
     head: undefined,
     tail: undefined,
-    stroke: shape?.stroke ?? (shape?.geometry === 'line' ? '#4472C4' : 'none'),
+    stroke: nativeColour(shape?.stroke ?? (shape?.geometry === 'line' ? '#4472C4' : 'none')),
     strokeWidth: shape?.stroke && shape.stroke !== 'none' ? 1.3333333333333333 : 0,
     cornerRadius: shape?.cornerRadius ?? 0,
     text: shape
@@ -199,7 +205,7 @@ export function insertNativeObject(
         y: (row * bounds.height) / input.rows,
         width: bounds.width / input.columns,
         height: bounds.height / input.rows,
-        fill: row === 0 ? '#E8EEF7' : '#FFFFFF',
+        fill: nativeColour(row === 0 ? '#E8EEF7' : '#FFFFFF'),
         text: nativeObjectText('', 18),
         borders: ['left', 'right', 'top', 'bottom'].map(() => ({
           color: '#98A5B5',

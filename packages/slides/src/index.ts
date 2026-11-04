@@ -97,3 +97,5 @@ export { createPresentationNativeArchive, createPresentationNativeView, encodePr
 export type { NativePresentationArchive, NativePresentationManifest } from "./native-archive.ts";
 
 export {presentationSlideResources,presentationResourceHash} from "./native-resources.ts";
+
+export {presentationNativeContent} from "./native-archive.ts";

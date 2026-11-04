@@ -1,4 +1,9 @@
-import { encodeNativeSlide, decodeNativeSlide } from './native-resources.ts';
+import { LosslessXmlDocument } from '@tumblerjs/ooxml';
+import {
+  presentationResourceHash,
+  encodeNativeSlide,
+  decodeNativeSlide,
+} from './native-resources.ts';
 import { registerPresentationNativeReader } from './native-open.ts';
 import { ContentTypes, OpcPackage, PartName, ZipArchive, nativeCodec } from '@tumblerjs/opc';
 import { z } from 'zod';
@@ -72,7 +77,7 @@ const header = z.object({
   signed: z.boolean(),
   counter: z.number().int().nonnegative(),
   changes: z.array(z.custom<NativePresentationState['changes'][number]>()),
-  embeddedFonts: z.custom<NativePresentationState['embeddedFonts']>(),
+  embeddedFonts: z.custom<NativePresentationState['embeddedFonts']>().optional(),
   slides: z.array(
     z.object({ id: z.string(), part: z.string(), title: z.string(), hidden: z.boolean() }),
   ),
@@ -193,7 +198,11 @@ export function openPresentationNativeArchive(
     () => (source ??= openPresentationArtifact(packageSource().archive.originalBytes(), options)),
     { package: packageSource },
   );
-  return restoreNativePresentation({ ...metadata, slides }, sourceArtifact, options);
+  return restoreNativePresentation(
+    { ...metadata, embeddedFonts: metadata.embeddedFonts, slides },
+    sourceArtifact,
+    options,
+  );
 }
 
 /** Recovery stores the native branch without forcing export preservation to load. */
@@ -245,3 +254,21 @@ export function decodePresentationNativeArchive(bytes: Uint8Array): NativePresen
 registerPresentationNativeReader((bytes, options) =>
   openPresentationNativeArchive(decodePresentationNativeArchive(bytes), options),
 );
+
+/** Compare compiled authoring semantics independently of object sharing and source cache residency. */
+export function presentationNativeContent(artifact: PresentationArtifact): string {
+  const { width, height, conformance, signed, slides } = artifact.document;
+  return JSON.stringify({ width, height, conformance, signed, slides }, (key, value: unknown) => {
+    if (key === 'nativeDefaults') return undefined;
+    if (value instanceof Uint8Array)
+      return { binary: presentationResourceHash(value), length: value.length };
+    if (value instanceof LosslessXmlDocument)
+      return { xml: presentationResourceHash(value.originalBytes()) };
+    if (value instanceof Map) return [...value];
+    if (value && typeof value === 'object' && !Array.isArray(value))
+      return Object.fromEntries(
+        Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+      );
+    return value;
+  });
+}

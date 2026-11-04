@@ -1,3 +1,4 @@
+import { nativeColour } from './native-shape.ts';
 import type { FormattingPatch } from '@tumblerjs/core';
 import type { SlideText, SlideTextRun, SlideParagraph } from './model.ts';
 import type { PresentationCommand } from './commands.ts';
@@ -35,7 +36,8 @@ function formatRun(
         : base.underlineStyle;
   }
   if (t.color)
-    next.color = 'set' in t.color && t.color.set.type === 'rgb' ? t.color.set.value : base.color;
+    next.color =
+      'set' in t.color && t.color.set.type === 'rgb' ? nativeColour(t.color.set.value) : base.color;
   return next;
 }
 
