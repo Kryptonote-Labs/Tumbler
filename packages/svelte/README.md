@@ -166,7 +166,7 @@ import {
 } from "@tumblerjs/svelte/slides";
 ```
 
-Pass a presentation document and its active slide to `PresentationSlideView`.
+Pass a presentation document and its active slide to `PresentationSlideView`. Its optional `minimumEditingTextSize` prop zooms small text to that screen-pixel size when text editing starts, up to the existing 3× zoom ceiling. It preserves the clicked caret position and changes only viewing scale. Omit it to retain the current zoom.
 Bind `PresentationSlideRail` to the active slide index for thumbnail navigation.
 Pass `onreorder(slideId, index)` to enable dragging thumbnails and Alt + Up/Down
 keyboard reordering. The index is the slide's final, zero-based position. Apply a

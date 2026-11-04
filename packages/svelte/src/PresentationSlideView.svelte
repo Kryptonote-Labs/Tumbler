@@ -60,6 +60,7 @@
     toolbar = true,
     onselectionchange,
     editable = false,
+    minimumEditingTextSize,
     scale = $bindable(1),
     selectedKey = $bindable<string | undefined>(),
     selectedKeys = $bindable<string[]>([]),
@@ -90,6 +91,8 @@
     toolbar?: boolean;
     onselectionchange?: (selection: {object:SlideObject | undefined;state:FormattingState; range: ReturnType<typeof currentSelection>}) => void;
     editable?: boolean;
+    /** Optional minimum screen text size when entering text editing, using viewport zoom only. */
+    minimumEditingTextSize?: number;
     scale?: number;
     selectedKey?: string;
     selectedKeys?: string[];
@@ -605,7 +608,26 @@
       return;
     cancel();
     select([object.key]);
-    editPoint = event ? { x: event.clientX, y: event.clientY } : undefined;
+    let point = event ? { x: event.clientX, y: event.clientY } : undefined;
+    if (minimumEditingTextSize && host && svg) {
+      const size = presentationFormattingState(object).text.fontSize;
+      const points = size.state === 'value' || size.state === 'inherited' ? size.value : undefined;
+      const screenSize = (points ?? 18) * factor;
+      if (screenSize < minimumEditingTextSize && scale < 3) {
+        const bounds = svg.getBoundingClientRect();
+        const area = host.getBoundingClientRect();
+        const x = event?.clientX ?? bounds.left + object.transform.x * factor;
+        const y = event?.clientY ?? bounds.top + object.transform.y * factor;
+        const local = { x: (x - bounds.left) / factor, y: (y - bounds.top) / factor };
+        await zoom({ factor: minimumEditingTextSize / screenSize, x, y,
+          targetX: event?.clientX ?? area.left + area.width / 2,
+          targetY: event?.clientY ?? area.top + area.height / 2 });
+        const next = svg.getBoundingClientRect();
+        if (point) point = { x: next.left + local.x * factor, y: next.top + local.y * factor };
+      }
+    }
+    if (!editable || selectedKey !== object.key) return;
+    editPoint = point;
     textRange = { start: 0, end: slideTextValue(object).length };
     textHead = textRange.end;
     pendingFormat = undefined;
