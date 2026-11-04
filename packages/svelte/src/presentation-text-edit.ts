@@ -233,10 +233,10 @@ export function presentationTextEdit(
       );
     } else if (
       (event.ctrlKey || event.metaKey) &&
-      event.key.toLowerCase() === "z"
+      !event.altKey && ["z", "y"].includes(event.key.toLowerCase())
     ) {
       event.preventDefault();
-      options.onundo?.(event.shiftKey);
+      options.onundo?.(event.key.toLowerCase() === "y" || event.shiftKey);
     }
   }
   function compositionStart() {
