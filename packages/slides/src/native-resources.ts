@@ -93,25 +93,85 @@ export function decodeNativeSlide(
   return nativeSlide.parse(readNativeGraph(parsed.graph, bytes, presentationBlockCodecs));
 }
 
-/** Inspect resource handles without parsing preserved XML or changing unrelated model identities. */
-export function hasAvailablePresentationResources(
+/** Resolve only arriving binary handles; untouched text, geometry and shared theme objects keep their identity. */
+export function resolvePresentationResources<T>(
+  value: T,
+  resources: ReadonlyMap<string, Uint8Array>,
+): T;
+export function resolvePresentationResources(
   value: unknown,
   resources: ReadonlyMap<string, Uint8Array>,
-): boolean {
-  const seen = new WeakSet<object>();
-  function visit(value: unknown): boolean {
-    if (!value || typeof value !== 'object' || seen.has(value)) return false;
-    seen.add(value);
-    if (value instanceof Uint8Array) {
-      const reference = pendingResources.get(value);
-      return !!reference && resources.has(reference.hash);
-    }
-    if (value instanceof LosslessXmlDocument) return visit(value.originalBytes());
-    if (value instanceof Map) {
-      for (const [key, member] of value) if (visit(key) || visit(member)) return true;
+): unknown {
+  const available = new WeakMap<object, boolean>(),
+    ancestors = new WeakSet<object>(),
+    resolved = new WeakMap<object, unknown>();
+  let cyclic = false;
+  function has(value: unknown): boolean {
+    if (!value || typeof value !== 'object') return false;
+    const saved = available.get(value);
+    if (saved !== undefined) return saved;
+    if (ancestors.has(value)) {
+      cyclic = true;
       return false;
     }
-    return Object.values(value).some(visit);
+    ancestors.add(value);
+    let result: boolean;
+    if (value instanceof Uint8Array) {
+      const reference = pendingResources.get(value);
+      result = !!reference && resources.has(reference.hash);
+    } else if (value instanceof LosslessXmlDocument) result = has(value.originalBytes());
+    else if (value instanceof Map) {
+      result = false;
+      for (const [key, member] of value)
+        if (has(key) || has(member)) {
+          result = true;
+          break;
+        }
+    } else result = Object.values(value).some(has);
+    ancestors.delete(value);
+    if (!cyclic) available.set(value, result);
+    return result;
+  }
+  function visit(value: unknown): unknown {
+    if (!value || typeof value !== 'object' || !has(value)) return value;
+    if (resolved.has(value)) return resolved.get(value);
+    if (value instanceof Uint8Array) {
+      const reference = pendingResources.get(value)!;
+      const bytes = resources.get(reference.hash)!;
+      if (bytes.length !== reference.length || presentationResourceHash(bytes) !== reference.hash)
+        throw new Error('Native presentation resource checksum mismatch.');
+      resolved.set(value, bytes);
+      return bytes;
+    }
+    if (value instanceof LosslessXmlDocument) {
+      const bytes = visit(value.originalBytes());
+      if (!(bytes instanceof Uint8Array)) throw new Error('Invalid native XML resource.');
+      const document = new LosslessXmlDocument(bytes);
+      resolved.set(value, document);
+      return document;
+    }
+    if (Array.isArray(value)) {
+      const output: unknown[] = [];
+      resolved.set(value, output);
+      for (const member of value) output.push(visit(member));
+      return output;
+    }
+    if (value instanceof Map) {
+      const output = new Map<unknown, unknown>();
+      resolved.set(value, output);
+      for (const [key, member] of value) output.set(visit(key), visit(member));
+      return output;
+    }
+    const output: Record<string, unknown> = Object.create(Object.getPrototypeOf(value));
+    resolved.set(value, output);
+    for (const [key, member] of Object.entries(value))
+      Object.defineProperty(output, key, {
+        value: visit(member),
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
+    return output;
   }
   return visit(value);
 }

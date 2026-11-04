@@ -1,12 +1,7 @@
 import { compactNativeChanges } from './native-changes.ts';
 import { applyNativeModelCommand } from './native-command.ts';
 import type { OpcPackage } from '@tumblerjs/opc';
-import {
-  presentationResourceHash,
-  encodeNativeSlide,
-  decodeNativeSlide,
-  hasAvailablePresentationResources,
-} from './native-resources.ts';
+import { presentationResourceHash, resolvePresentationResources } from './native-resources.ts';
 import { PresentationArtifact } from './artifact.ts';
 import {
   applyPresentationCommand,
@@ -221,39 +216,9 @@ export class NativePresentationDocument extends PresentationArtifact {
     resources: ReadonlyMap<string, Uint8Array>,
     ids: ReadonlySet<string>,
   ): NativePresentationDocument {
-    const slides = this.state.slides.map((slide) => {
-      if (!ids.has(slide.slide.id) || !hasAvailablePresentationResources(slide, resources))
-        return slide;
-      const encoded = encodeNativeSlide(slide),
-        decoded = decodeNativeSlide(
-          encoded.model,
-          new Map([...encoded.resources, ...resources]),
-          true,
-        );
-      return {
-        ...slide,
-        fonts: hasAvailablePresentationResources(slide.fonts, resources)
-          ? decoded.fonts
-          : slide.fonts,
-        inheritedBackground: hasAvailablePresentationResources(slide.inheritedBackground, resources)
-          ? decoded.inheritedBackground
-          : slide.inheritedBackground,
-        slide: {
-          ...slide.slide,
-          backgroundPicture: hasAvailablePresentationResources(
-            slide.slide.backgroundPicture,
-            resources,
-          )
-            ? decoded.slide.backgroundPicture
-            : slide.slide.backgroundPicture,
-          objects: slide.slide.objects.map((object, i) =>
-            hasAvailablePresentationResources(object, resources)
-              ? decoded.slide.objects[i]!
-              : object,
-          ),
-        },
-      };
-    });
+    const slides = this.state.slides.map((slide) =>
+      ids.has(slide.slide.id) ? resolvePresentationResources(slide, resources) : slide,
+    );
     return slides.every((slide, i) => slide === this.state.slides[i])
       ? this
       : new NativePresentationDocument(
