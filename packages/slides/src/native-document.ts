@@ -1,3 +1,5 @@
+import type { OpcPackage } from '@tumblerjs/opc';
+import { presentationResourceHash } from './native-resources.ts';
 import { PresentationArtifact } from './artifact.ts';
 import {
   applyPresentationCommand,
@@ -39,6 +41,7 @@ import {
 import { ThemeColorScheme, THEME_COLOR_SLOTS } from '@tumblerjs/ooxml';
 
 export type NativeSlide = {
+  fonts?: PresentationDocument['embeddedFonts'];
   slide: PresentationSlide;
   palette: readonly (readonly [(typeof THEME_COLOR_SLOTS)[number], string | undefined])[];
   inheritedBackground: Pick<
@@ -47,12 +50,14 @@ export type NativeSlide = {
   >;
 };
 export type NativeChange = {
+  before: string;
   command: PresentationCommand;
   createdSlides: readonly string[];
   createdObjects: readonly { slideId: string; keys: readonly string[] }[];
 };
 export type NativePresentationState = {
   version: 1;
+  revisionKey: string;
   width: number;
   height: number;
   conformance: PresentationDocument['conformance'];
@@ -62,6 +67,9 @@ export type NativePresentationState = {
   counter: number;
   changes: readonly NativeChange[];
 };
+export type NativePreservationSource = (() => PresentationArtifact) & {
+  package?: () => OpcPackage;
+};
 type Chain = { previous: Chain | undefined; change: NativeChange };
 /** Immutable native authoring state. Source markup is resolved only for explicit export. */
 export class NativePresentationDocument extends PresentationArtifact {
@@ -70,7 +78,7 @@ export class NativePresentationDocument extends PresentationArtifact {
   private exportObjects = new Map<string, string>();
   constructor(
     readonly state: Omit<NativePresentationState, 'changes'>,
-    private readonly source: () => PresentationArtifact,
+    private readonly source: NativePreservationSource,
     private readonly chain: Chain | undefined = undefined,
     options: OpenPresentationOptions = {},
   ) {
@@ -89,6 +97,13 @@ export class NativePresentationDocument extends PresentationArtifact {
         return materialize().document.sources;
       },
     };
+    const fonts = state.slides.flatMap((s) => s.fonts ?? []);
+    if (fonts.length)
+      Object.assign(document, {
+        embeddedFonts: [
+          ...new Map(fonts.map((f) => [f.family + ':' + f.bold + ':' + f.italic, f])).values(),
+        ],
+      });
     super(document, options);
     materialize = () => this.exportArtifact();
     state.slides.forEach((s) =>
@@ -104,11 +119,60 @@ export class NativePresentationDocument extends PresentationArtifact {
     for (let node = this.chain; node; node = node.previous) changes.push(node.change);
     return { ...this.state, changes: changes.reverse() };
   }
-  advanceCounter(counter:number):NativePresentationDocument {
-    return counter===this.state.counter?this:new NativePresentationDocument({...this.state,counter},this.source,this.chain,this.options);
+  /** Unloaded slides retain commands for export without materializing their render model. */
+  recordCommand(command: PresentationCommand): NativePresentationDocument {
+    return new NativePresentationDocument(
+      {
+        ...this.state,
+        revisionKey: presentationResourceHash(
+          new TextEncoder().encode(
+            this.state.revisionKey + ':' + this.state.counter + ':' + JSON.stringify(command),
+          ),
+        ),
+      },
+      this.source,
+      {
+        previous: this.chain,
+        change: { command, before: this.state.revisionKey, createdSlides: [], createdObjects: [] },
+      },
+      this.options,
+    );
   }
-  withSource(source:()=>PresentationArtifact):NativePresentationDocument {
-    return new NativePresentationDocument(this.state,source,this.chain,this.options);
+  advanceCounter(counter: number): NativePresentationDocument {
+    return counter === this.state.counter
+      ? this
+      : new NativePresentationDocument(
+          { ...this.state, counter },
+          this.source,
+          this.chain,
+          this.options,
+        );
+  }
+  sourceRevisionKey(): string {
+    let node = this.chain;
+    if (!node) return this.state.revisionKey;
+    while (node.previous) node = node.previous;
+    return node.change.before;
+  }
+  withSource(source: () => PresentationArtifact): NativePresentationDocument {
+    const base = source();
+    let chain = this.chain;
+    if (base instanceof NativePresentationDocument) {
+      if (base.state.revisionKey === this.state.revisionKey) chain = undefined;
+      else {
+        const suffix: NativeChange[] = [];
+        let cursor = chain;
+        while (cursor) {
+          suffix.push(cursor.change);
+          if (cursor.change.before === base.state.revisionKey) break;
+          cursor = cursor.previous;
+        }
+        if (!cursor) throw new Error('Native export source does not match this branch.');
+        chain = undefined;
+        for (const change of suffix.reverse()) chain = { previous: chain, change };
+      }
+    }
+    return new NativePresentationDocument(this.state, () => base, chain, this.options);
   }
   /** Loading another slide preserves the local branch and its export provenance. */
   hydrate(other: NativePresentationDocument, ids: ReadonlySet<string>): NativePresentationDocument {
@@ -123,18 +187,14 @@ export class NativePresentationDocument extends PresentationArtifact {
     );
   }
   sameState(other: PresentationArtifact): boolean {
-    if (this === other) return true;
-    if (!(other instanceof NativePresentationDocument)) return false;
-    if (this.source === other.source && this.chain === other.chain) return true;
-    const a = this.snapshot(),
-      b = other.snapshot();
     return (
-      a.counter === b.counter &&
-      a.width === b.width &&
-      a.height === b.height &&
-      JSON.stringify(a.changes) === JSON.stringify(b.changes) &&
-      JSON.stringify(a.slides) === JSON.stringify(b.slides)
+      this === other ||
+      (other instanceof NativePresentationDocument &&
+        this.state.revisionKey === other.state.revisionKey)
     );
+  }
+  preservationPackage() {
+    return this.source.package?.() ?? this.source().document.package;
   }
   preservationSource() {
     return this.source();
@@ -580,9 +640,21 @@ export class NativePresentationDocument extends PresentationArtifact {
       }
     }
     return new NativePresentationDocument(
-      { ...this.state, slides, counter },
+      {
+        ...this.state,
+        slides,
+        counter,
+        revisionKey: presentationResourceHash(
+          new TextEncoder().encode(
+            this.state.revisionKey + ':' + this.state.counter + ':' + JSON.stringify(command),
+          ),
+        ),
+      },
       this.source,
-      { previous: this.chain, change: { command, createdSlides, createdObjects } },
+      {
+        previous: this.chain,
+        change: { command, before: this.state.revisionKey, createdSlides, createdObjects },
+      },
       this.options,
     );
   };
@@ -629,6 +701,16 @@ export function importNativePresentation(
     const scheme = presentationThemeColours(doc, slide.id);
     return {
       slide,
+      fonts: doc.embeddedFonts?.filter((font) =>
+        slide.objects.some((o) =>
+          [
+            ...(o.text?.paragraphs ?? []),
+            ...(o.table?.cells.flatMap((c) => c.text?.paragraphs ?? []) ?? []),
+          ].some((p) =>
+            [...p.runs, ...(p.endRun ? [p.endRun] : [])].some((r) => r.fontFamily === font.family),
+          ),
+        ),
+      ),
       palette: THEME_COLOR_SLOTS.map((slot) => [slot, scheme.color(slot)] as const),
       inheritedBackground: {
         background: slide.background,
@@ -641,11 +723,12 @@ export function importNativePresentation(
   return new NativePresentationDocument(
     {
       version: 1,
+      revisionKey: presentationResourceHash(artifact.bytes()),
       width: doc.width,
       height: doc.height,
       conformance: doc.conformance,
       signed: doc.signed,
-      embeddedFonts: doc.embeddedFonts,
+      embeddedFonts: undefined,
       slides,
       counter: 0,
     },
@@ -657,7 +740,7 @@ export function importNativePresentation(
 
 export function restoreNativePresentation(
   state: NativePresentationState,
-  source: () => PresentationArtifact,
+  source: NativePreservationSource,
   options: OpenPresentationOptions = {},
 ): NativePresentationDocument {
   let chain: Chain | undefined;
