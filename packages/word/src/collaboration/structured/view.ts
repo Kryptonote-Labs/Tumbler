@@ -25,6 +25,7 @@ import { syncWordView } from "./view-sync.ts";
 import { applyWordViewDelta } from "./view-delta.ts";
 import { applyWordViewOperation } from "./view-operations.ts";
 import { applyStructuredChange } from "./edits.ts";
+import { findWordMatches } from '../search.ts';
 import { wordParagraphIdentity, setWordParagraphIdentity } from "../paragraph-identity.ts";
 
 const views = new WeakMap<Y.Text, WordSharedText>();
@@ -268,6 +269,18 @@ export class WordSharedText {
     if (this.conflict) throw this.conflict;
     if (!this.structured()) this.sync();
     const parsed = wordOperation.parse(operation);
+    // Search the visible story, then anchor each replacement to its own paragraph or cell.
+    // A document-wide search range can span payloads even though an individual edit cannot.
+    if (parsed.name === 'replace-all') {
+      const { query, value, matchCase = false, wholeWord = false } = parsed.input;
+      const matches = findWordMatches(this.text.toString().slice(range.start, range.end), query, { matchCase, wholeWord });
+      const changes = matches.map(match => ({
+        kind: 'replace' as const,
+        target: this.anchor({ start: range.start + match.start, end: range.start + match.end }),
+        value,
+      }));
+      return { ...this.prepareChanges(changes), range: { start: range.start, end: range.start } };
+    }
     if (isWordLayoutOperation(parsed)) {
       const selection = this.selection(parsed.name === 'section-layout' ? { start: range.start, end: range.start } : range);
       let result = range;
