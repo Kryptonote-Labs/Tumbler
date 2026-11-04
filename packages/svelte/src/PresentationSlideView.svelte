@@ -847,7 +847,7 @@
         class="slide"
         role="group"
         aria-label={slide.title}
-        tabindex={editable && editing !== object.key ? 0 : undefined}
+        tabindex={editable ? 0 : undefined}
         width={presentation.width * factor}
         height={presentation.height * factor}
         viewBox={`0 0 ${presentation.width} ${presentation.height}`}
