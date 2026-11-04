@@ -1,11 +1,19 @@
 import type { PresentationArtifact } from './artifact.ts';
-import type { PresentationDocument, PresentationSlide, SlideObject } from './model.ts';
+import type {
+  PresentationDocument,
+  PresentationSlide,
+  SlideObject,
+  SlideTextRun,
+} from './model.ts';
 import type { NativeSlide, NativeSlideTemplate, NativeLayoutContext } from './native-document.ts';
 import { applyPresentationLayout, type PresentationLayout } from './authoring-layout.ts';
 import { insertSlide } from './authoring-slides.ts';
 import { newSlideLayout } from './new-slide-layout.ts';
 import {
   presentationRunDefaults,
+  presentationRunAuthored,
+  presentationParagraphAuthored,
+  presentationTextLevels,
   presentationRunFonts,
   presentationNativeFonts,
   presentationThemeColours,
@@ -15,31 +23,38 @@ import { THEME_COLOR_SLOTS } from '@tumblerjs/ooxml';
 
 /** Compile donor layouts during import; insertion never resolves XML or exports a package. */
 export function compileNativeSlides(artifact: PresentationArtifact): NativeSlide[] {
+  const nativeRun = (run: SlideTextRun): SlideTextRun => {
+    const inherited = presentationRunDefaults(run);
+    if (!inherited) return run;
+    const { text, ...defaults } = inherited;
+    const authored = presentationRunAuthored(run);
+    const inheritedAuthored = presentationRunAuthored(inherited);
+    return {
+      ...run,
+      nativeFonts: presentationRunFonts(run),
+      nativeDefaults: {
+        ...defaults,
+        nativeFonts: presentationRunFonts(inherited),
+        nativeAuthored: inheritedAuthored?.fields,
+        nativeOwnFonts: inheritedAuthored?.fonts,
+        nativeOwnLanguage: inheritedAuthored?.language,
+      },
+      nativeAuthored: authored?.fields,
+      nativeOwnFonts: authored?.fonts,
+      nativeOwnLanguage: authored?.language,
+    };
+  };
+  const nativeParagraph = (paragraph: import('./model.ts').SlideParagraph) => ({
+    ...paragraph,
+    nativeAuthored: presentationParagraphAuthored(paragraph),
+    runs: paragraph.runs.map(nativeRun),
+    ...(paragraph.endRun ? { endRun: nativeRun(paragraph.endRun) } : {}),
+  });
   const nativeText = (text: SlideObject['text']) =>
     text && {
       ...text,
-      paragraphs: text.paragraphs.map((p) => ({
-        ...p,
-        runs: p.runs.map((run) => {
-          const inherited = presentationRunDefaults(run);
-          if (!inherited) return run;
-          const { text, ...nativeDefaults } = inherited;
-          return {
-            ...run,
-            nativeFonts: presentationRunFonts(run),
-            nativeDefaults: { ...nativeDefaults, nativeFonts: presentationRunFonts(inherited) },
-          };
-        }),
-        ...(p.endRun
-          ? {
-              endRun: {
-                ...p.endRun,
-                nativeFonts: presentationRunFonts(p.endRun),
-                nativeDefaults: presentationRunDefaults(p.endRun) ?? p.endRun,
-              },
-            }
-          : {}),
-      })),
+      paragraphs: text.paragraphs.map(nativeParagraph),
+      nativeLevels: presentationTextLevels(text)?.map(nativeParagraph),
     };
   const compileSlide = (
     doc: PresentationDocument,

@@ -22,6 +22,7 @@ import { isPresentationBlock } from './native-block.ts';
 import { importNativePresentation } from './native-document.ts';
 import { openPresentationArtifact } from './artifact.ts';
 import { validatePresentationShapeStyle } from './authoring-validation.ts';
+import { inheritNativeText } from './native-text-inheritance.ts';
 type AtomicCommand = Exclude<PresentationCommand, { name: 'batch' | 'replace-all' }>;
 export function applyNativeModelCommand(
   state: Omit<NativePresentationState, 'changes'>,
@@ -306,7 +307,7 @@ export function applyNativeModelCommand(
             key,
             shapeId: match?.shapeId ?? key,
             sourcePart: target!.slide.part,
-            text: match?.text ? { ...o.text!, paragraphs: match.text.paragraphs } : o.text,
+          text: match?.text && o.text ? inheritNativeText(match.text, o.text) : o.text,
           };
         });
       const kept = target!.slide.objects.filter(

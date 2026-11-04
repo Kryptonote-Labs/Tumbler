@@ -273,3 +273,103 @@ test('authored native layouts retain theme fonts and explicit backgrounds throug
     );
   expect(runs(native)).toEqual(runs(exported));
 });
+
+test('layout changes refresh inherited text styles while retaining explicit overrides equal to old defaults', () => {
+  for (const explicit of [false, true]) {
+    const base = createPresentation(),
+      slideId = base.document.slides[0]!.id,
+      source = apply(base, { name: 'layout', slideId, layout: 'title' });
+    let native = importNativePresentation(source);
+    const objectKey = native.document.slides[0]!.objects.find(
+      (object) => object.placeholder === 'ctrTitle',
+    )!.key;
+    native = native.nativeCommand({
+      name: 'edit-text',
+      slideId,
+      objectKey,
+      start: 0,
+      end: 0,
+      value: 'Heading',
+    });
+    if (explicit)
+      native = native.nativeCommand({
+        name: 'format-text',
+        slideId,
+        objectKey,
+        start: 0,
+        end: 7,
+        patch: {
+          text: { fontSize: { set: 60 } },
+          block: { horizontalAlignment: { set: 'center' } },
+        },
+      });
+    native = openPresentationNativeArchive(createPresentationNativeArchive(native)).nativeCommand({
+      name: 'layout',
+      slideId,
+      layout: 'title-content',
+    });
+    const styles = (artifact: PresentationArtifact) =>
+      artifact.document.slides[0]!.objects.filter((object) => object.textEditable).flatMap(
+        (object) =>
+          object.text!.paragraphs.map((paragraph) => ({
+            align: paragraph.align,
+            bullet: paragraph.bullet,
+            runs: (paragraph.runs.length
+              ? paragraph.runs
+              : paragraph.endRun
+                ? [paragraph.endRun]
+                : []
+            ).map((run) => [run.text, run.fontSize, run.fontFamily, run.bold]),
+          })),
+      );
+    expect(styles(native)).toEqual(styles(openPresentationArtifact(native.bytes())));
+    if (explicit) {
+      native = native.nativeCommand({
+        name: 'format-text',
+        slideId,
+        objectKey,
+        start: 0,
+        end: 7,
+        patch: { text: { fontSize: { inherit: true } } },
+      });
+      expect(styles(native)).toEqual(styles(openPresentationArtifact(native.bytes())));
+      native = native.nativeCommand({
+        name: 'format-text',
+        slideId,
+        objectKey,
+        start: 0,
+        end: 7,
+        patch: { block: { horizontalAlignment: { inherit: true } } },
+      });
+      expect(styles(native)).toEqual(styles(openPresentationArtifact(native.bytes())));
+    }
+  }
+});
+
+test('layout inheritance retains an explicitly authored language for script font selection', () => {
+  const base = createPresentation(),
+    slideId = base.document.slides[0]!.id,
+    title = apply(base, { name: 'layout', slideId, layout: 'title' }),
+    pkg = title.document.package,
+    part = title.document.slides[0]!.part;
+  const xml = new TextDecoder()
+    .decode(pkg.readPart(pkg.getPart(part)!))
+    .replaceAll('lang="en-US"', 'lang="ja-JP"');
+  const source = openPresentationArtifact(
+    beginPackageTransaction(pkg).replacePart(part, new TextEncoder().encode(xml)).commit(),
+  );
+  let native = importNativePresentation(source);
+  const objectKey = native.document.slides[0]!.objects.find(
+    (object) => object.placeholder === 'ctrTitle',
+  )!.key;
+  native = native
+    .nativeCommand({ name: 'edit-text', slideId, objectKey, start: 0, end: 0, value: '日本語' })
+    .nativeCommand({ name: 'layout', slideId, layout: 'title-content' });
+  const runs = native.document.slides[0]!.objects.find((object) => object.key === objectKey)!.text!
+    .paragraphs[0]!.runs;
+  expect(runs[0]!.nativeFonts?.language).toBe('ja-JP');
+  const exported = openPresentationArtifact(native.bytes()).document.slides[0]!.objects.find(
+    (object) => slideTextValue(object) === '日本語',
+  )!.text!.paragraphs[0]!.runs;
+  expect(runs.map((run) => run.fontFamily)).toEqual(exported.map((run) => run.fontFamily));
+});

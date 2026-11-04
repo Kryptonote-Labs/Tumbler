@@ -27,6 +27,10 @@ export interface NativeTextFonts {
   readonly scale: number;
 }
 export interface SlideTextRun {
+  /** Direct overrides that survive replacing a placeholder's inherited list style. */
+  readonly nativeAuthored?: readonly NativeRunField[] | undefined;
+  readonly nativeOwnFonts?: NativeTextFonts['authored'] | undefined;
+  readonly nativeOwnLanguage?: string | undefined;
   readonly nativeFonts?: NativeTextFonts | undefined;
   readonly nativeDefaults?: Omit<SlideTextRun, 'text' | 'nativeDefaults'>;
   readonly text: string;
@@ -43,7 +47,10 @@ export interface SlideTextRun {
   readonly capitals?: string;
   readonly hyperlink?: { readonly href?: string; readonly slidePart?: string };
 }
+export type NativeRunField = Exclude<keyof SlideTextRun,
+  'text' | 'nativeAuthored' | 'nativeOwnFonts' | 'nativeOwnLanguage' | 'nativeFonts' | 'nativeDefaults'>;
 export interface SlideParagraph {
+  readonly nativeAuthored?: readonly NativeParagraphField[] | undefined;
   readonly bulletScale?: number | undefined;
   readonly bulletColorFromText?: boolean;
   readonly bulletFontFromText?: boolean;
@@ -68,7 +75,10 @@ export interface SlideParagraph {
   readonly bulletColor?: string;
   readonly bulletSize?: number;
 }
+export type NativeParagraphField = Exclude<keyof SlideParagraph,
+  'nativeAuthored' | 'runs' | 'endRun' | 'fontSize' | 'level'>;
 export interface SlideText {
+  readonly nativeLevels?: readonly SlideParagraph[] | undefined;
   /** Authored fitting mode. Normal fitting is reflected in the saved run sizes and spacing. */
   readonly autoFit?: 'none' | 'normal' | 'shape';
   readonly horizontalOverflow?: 'overflow' | 'clip';

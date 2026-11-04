@@ -1,6 +1,7 @@
 import { nativeScriptRuns, nativeParagraphMetrics } from './native-fonts.ts';
 import { nativeColour } from './native-shape.ts';
 import { presentationFormattingPatch } from './authoring-validation.ts';
+import type { NativeParagraphField } from './model.ts';
 import type { FormattingPatch } from '@tumblerjs/core';
 import type { SlideText, SlideTextRun, SlideParagraph } from './model.ts';
 import type { PresentationCommand } from './commands.ts';
@@ -71,7 +72,26 @@ function formatRun(
   if (t.color)
     next.color =
       'set' in t.color && t.color.set.type === 'rgb' ? nativeColour(t.color.set.value) : base.color;
-  return next;
+  const authored = new Set(run.nativeAuthored);
+  for (const [change, fields] of [
+    [t.bold, ['bold']],
+    [t.italic, ['italic']],
+    [t.fontSize, ['fontSize']],
+    [t.underline, ['underline', 'underlineStyle']],
+    [t.color, ['color']],
+  ] as const)
+    if (change)
+      for (const field of fields) {
+        if ('set' in change || base.nativeAuthored?.includes(field)) authored.add(field);
+        else authored.delete(field);
+      }
+  if (t.fontFamily)
+    next.nativeOwnFonts = {
+      latin: 'set' in t.fontFamily ? t.fontFamily.set : base.nativeOwnFonts?.latin,
+      eastAsian: run.nativeOwnFonts?.eastAsian,
+      complexScript: run.nativeOwnFonts?.complexScript,
+    };
+  return { ...next, nativeAuthored: [...authored] };
 }
 
 function formatParagraph(
@@ -83,6 +103,11 @@ function formatParagraph(
   if (!align) return p;
   return {
     ...p,
+    nativeAuthored:
+      'set' in align
+        ? [...new Set([...(p.nativeAuthored ?? []), 'align', 'distributed'] as const)]
+        : p.nativeAuthored?.filter((field) => field !== 'align' && field !== 'distributed'),
+    distributed: 'set' in align ? false : (base.distributed ?? false),
     align:
       'set' in align
         ? ({ start: 'left', center: 'center', end: 'right', justify: 'justify' } as const)[
@@ -127,7 +152,11 @@ export function editNativeText(
       paragraph,
       start,
       end: start + length,
-      base: baseline.paragraphs[i] ?? baseline.paragraphs[0] ?? paragraph,
+      base:
+        baseline.nativeLevels?.[paragraph.level ?? 0] ??
+        baseline.paragraphs[i] ??
+        baseline.paragraphs[0] ??
+        paragraph,
     };
   });
   if (command.name === 'paragraph') {
@@ -153,6 +182,18 @@ export function editNativeText(
                 : `${++number}.`;
         return {
           ...p,
+          nativeAuthored: [
+            ...new Set<NativeParagraphField>([
+              ...(p.nativeAuthored ?? []),
+              ...(command.bullet !== undefined
+                ? (['bullet', 'marginLeft', 'indent'] as const)
+                : []),
+              ...(command.level !== undefined ? (['marginLeft', 'indent'] as const) : []),
+              ...(command.before !== undefined ? (['before'] as const) : []),
+              ...(command.after !== undefined ? (['after'] as const) : []),
+              ...(command.lineSpacing !== undefined ? (['lineHeight'] as const) : []),
+            ]),
+          ],
           level,
           bullet,
           ...(command.bullet !== undefined
