@@ -1,7 +1,11 @@
 import { compactNativeChanges } from './native-changes.ts';
 import { applyNativeModelCommand } from './native-command.ts';
 import type { OpcPackage } from '@tumblerjs/opc';
-import { presentationResourceHash } from './native-resources.ts';
+import {
+  presentationResourceHash,
+  encodeNativeSlide,
+  decodeNativeSlide,
+} from './native-resources.ts';
 import { PresentationArtifact } from './artifact.ts';
 import {
   applyPresentationCommand,
@@ -204,6 +208,23 @@ export class NativePresentationDocument extends PresentationArtifact {
     const slides = this.state.slides.map((s) =>
       ids.has(s.slide.id) ? (other.state.slides.find((n) => n.slide.id === s.slide.id) ?? s) : s,
     );
+    return new NativePresentationDocument(
+      { ...this.state, slides },
+      this.source,
+      this.chain,
+      this.options,
+    );
+  }
+  /** Attach arriving media to the current branch, preserving edits accepted during its download. */
+  hydrateResources(
+    resources: ReadonlyMap<string, Uint8Array>,
+    ids: ReadonlySet<string>,
+  ): NativePresentationDocument {
+    const slides = this.state.slides.map((slide) => {
+      if (!ids.has(slide.slide.id)) return slide;
+      const encoded = encodeNativeSlide(slide);
+      return decodeNativeSlide(encoded.model, new Map([...encoded.resources, ...resources]), true);
+    });
     return new NativePresentationDocument(
       { ...this.state, slides },
       this.source,

@@ -22,6 +22,20 @@ const resource = z.object({
   hash: z.string().regex(/^[a-f0-9]{64}$/),
   length: z.number().int().nonnegative(),
 });
+const nativeSlide = z.custom<NativeSlide>(
+  (v: unknown) =>
+    !!v &&
+    typeof v === 'object' &&
+    'slide' in v &&
+    !!v.slide &&
+    typeof v.slide === 'object' &&
+    'id' in v.slide &&
+    typeof v.slide.id === 'string' &&
+    'objects' in v.slide &&
+    Array.isArray(v.slide.objects) &&
+    'palette' in v &&
+    Array.isArray(v.palette),
+);
 const pendingResources = new WeakMap<Uint8Array, z.infer<typeof resource>>();
 const root = z.object({ version: z.literal(1), graph: z.unknown(), resources: z.array(resource) });
 const cache = new WeakMap<
@@ -59,7 +73,7 @@ export function decodeNativeSlide(
   model: Uint8Array,
   resources: ReadonlyMap<string, Uint8Array>,
   allowPending = false,
-): unknown {
+): NativeSlide {
   const parsed = root.parse(decodePresentationBlock(model));
   const bytes = parsed.resources.map((reference) => {
     const bytes = resources.get(reference.hash);
@@ -75,5 +89,5 @@ export function decodeNativeSlide(
       throw new Error('Native presentation resource checksum mismatch.');
     return bytes;
   });
-  return readNativeGraph(parsed.graph, bytes, presentationBlockCodecs);
+  return nativeSlide.parse(readNativeGraph(parsed.graph, bytes, presentationBlockCodecs));
 }

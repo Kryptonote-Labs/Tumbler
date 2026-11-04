@@ -13,7 +13,6 @@ import {
   importNativePresentation,
   restoreNativePresentation,
   type NativePresentationState,
-  type NativeSlide,
 } from './native-document.ts';
 import { encodePresentationBlock, decodePresentationBlock } from './native-block.ts';
 import type { OpenPresentationOptions } from './model.ts';
@@ -54,20 +53,6 @@ function encodePreservation(pkg: OpcPackage) {
   return bytes;
 }
 const packageRoot = z.instanceof(OpcPackage);
-const slideRoot = z.custom<NativeSlide>(
-  (v: unknown) =>
-    !!v &&
-    typeof v === 'object' &&
-    'slide' in v &&
-    !!v.slide &&
-    typeof v.slide === 'object' &&
-    'id' in v.slide &&
-    typeof v.slide.id === 'string' &&
-    'objects' in v.slide &&
-    Array.isArray(v.slide.objects) &&
-    'palette' in v &&
-    Array.isArray(v.palette),
-);
 const header = z.object({
   version: z.literal(1),
   revisionKey: z.string().regex(/^[a-f0-9]{64}$/),
@@ -161,12 +146,10 @@ export function openPresentationNativeArchive(
   const slides = metadata.slides.map((descriptor) => {
     const block = archive.slides.get(descriptor.id);
     if (block) {
-      const result = slideRoot.parse(
-        decodeNativeSlide(
-          block,
-          archive.resources ?? new Map(),
-          archive.allowPendingResources ?? false,
-        ),
+      const result = decodeNativeSlide(
+        block,
+        archive.resources ?? new Map(),
+        archive.allowPendingResources ?? false,
       );
       if (result.slide.id !== descriptor.id || result.slide.part !== descriptor.part)
         throw new TypeError('Native slide identity mismatch.');
@@ -206,7 +189,10 @@ export function openPresentationNativeArchive(
 }
 
 /** Recovery stores the native branch without forcing export preservation to load. */
-export function encodePresentationNativeState(input: PresentationArtifact): Uint8Array {
+export function encodePresentationNativeState(
+  input: PresentationArtifact,
+  options: { includeResources?: boolean } = {},
+): Uint8Array {
   const model = importNativePresentation(input),
     { slides, ...metadata } = model.snapshot();
   const compiled = slides.map((slide) => ({ id: slide.slide.id, ...encodeNativeSlide(slide) }));
@@ -222,7 +208,10 @@ export function encodePresentationNativeState(input: PresentationArtifact): Uint
       })),
     }),
     slides: new Map(compiled.map((s) => [s.id, s.model])),
-    resources: new Map(compiled.flatMap((s) => [...s.resources])),
+    resources:
+      options.includeResources === false
+        ? new Map()
+        : new Map(compiled.flatMap((s) => [...s.resources])),
     allowPendingResources: true,
     preservation: new Uint8Array(),
   });

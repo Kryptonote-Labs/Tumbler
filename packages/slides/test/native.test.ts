@@ -547,3 +547,44 @@ test('compacted shape changes retain earlier properties when later patches omit 
   expect(output.fill).toBe(native.document.slides[0]!.objects[0]!.fill);
   expect(output.stroke).toBe(native.document.slides[0]!.objects[0]!.stroke);
 });
+
+test('arriving resources hydrate the current text revision without downloading an older slide model', () => {
+  const f = fixture();
+  const source = applyPresentationCommand(f.artifact, {
+    name: 'insert-object',
+    slideId: f.slideId,
+    object: {
+      kind: 'image',
+      contentType: 'image/png',
+      data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+c7z8AAAAASUVORK5CYII=',
+    },
+    bounds: { x: 0, y: 0, width: 100, height: 100 },
+  });
+  const archive = createPresentationNativeArchive(source);
+  const partial = openPresentationNativeArchive({
+    ...archive,
+    resources: new Map(),
+    allowPendingResources: true,
+  });
+  const branch = applyPresentationCommand(partial, {
+    name: 'edit-text',
+    slideId: f.slideId,
+    objectKey: f.objectKey,
+    start: 0,
+    end: 0,
+    value: 'Current ',
+  }) as NativePresentationDocument;
+  const hydrated = branch.hydrateResources(archive.resources!, new Set([f.slideId]));
+  expect(hydrated.sameState(branch)).toBe(true);
+  expect(text(hydrated)[0]).toStartWith('Current First');
+  expect(hydrated.document.slides[0]!.objects.at(-1)!.image?.bytes).toEqual(
+    source.document.slides[0]!.objects.at(-1)!.image?.bytes,
+  );
+  const recovery = decodePresentationNativeArchive(
+    encodePresentationNativeState(hydrated, { includeResources: false }),
+  );
+  expect(recovery.resources?.size).toBe(0);
+  expect(presentationSlideResources(recovery.slides.get(f.slideId)!)).toEqual(
+    presentationSlideResources(archive.slides.get(f.slideId)!),
+  );
+});
