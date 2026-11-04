@@ -34,7 +34,7 @@ export function moveNativeObject(
   object: SlideObject,
   command: Extract<PresentationCommand, { name: 'update-object' }>,
 ): SlideObject {
-  for (const number of [command.x, command.y, command.width, command.height, command.rotation ?? 0])
+  for (const number of [command.x, command.y, command.width, command.height])
     if (!Number.isFinite(number) || Math.abs(number * 9525) > 2147483647)
       throw new RangeError('Object bounds exceed DrawingML coordinates.');
   if (
@@ -43,13 +43,17 @@ export function moveNativeObject(
       : command.width <= 0 || command.height <= 0
   )
     throw new RangeError('Object dimensions must be positive.');
+  if (command.rotation !== undefined && !Number.isFinite(command.rotation))
+    throw new RangeError('Rotation must be finite.');
   const transform = {
     ...object.transform,
     x: Math.round(command.x * 9525) / 9525,
     y: Math.round(command.y * 9525) / 9525,
     width: Math.round(command.width * 9525) / 9525,
     height: Math.round(command.height * 9525) / 9525,
-    rotation: (((command.rotation ?? object.transform.rotation) % 360) + 360) % 360,
+    rotation:
+      Math.round(((((command.rotation ?? object.transform.rotation) % 360) + 360) % 360) * 60000) /
+      60000,
   };
   const sx = transform.width / object.transform.width,
     sy = transform.height / object.transform.height;
@@ -76,6 +80,12 @@ export function moveNativeObject(
     matrix: multiply(object.parentMatrix ?? [1, 0, 0, 1, 0, 0], shapeMatrix(transform)),
     table,
     ...(ink ? { ink } : {}),
+    cornerRadius:
+      object.geometry === 'roundRect'
+        ? (Math.min(transform.width, transform.height) *
+            Math.min(50000, Math.max(0, object.drawingGeometry?.adjustments.adj ?? 16667))) /
+          100000
+        : 0,
     drawingGeometry: object.drawingGeometry
       ? resizeDrawingGeometry(object.drawingGeometry, transform.width, transform.height)
       : undefined,

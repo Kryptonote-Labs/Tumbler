@@ -32,6 +32,7 @@ import { isPresentationBlock } from './native-block.ts';
 import { openPresentationArtifact } from './artifact.ts';
 import {
   presentationThemeColours,
+  presentationInheritedBackground,
   presentationRunDefaults,
   presentationRunFonts,
   presentationNativeFonts,
@@ -379,7 +380,7 @@ export function importNativePresentation(
         ),
       ),
       palette: THEME_COLOR_SLOTS.map((slot) => [slot, scheme.color(slot)] as const),
-      inheritedBackground: {
+      inheritedBackground: presentationInheritedBackground(original) ?? {
         background: slide.background,
         backgroundGradient: slide.backgroundGradient,
         backgroundPattern: slide.backgroundPattern,

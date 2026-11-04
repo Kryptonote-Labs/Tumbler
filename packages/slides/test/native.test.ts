@@ -11,6 +11,8 @@ import {
   decodePresentationNativeArchive,
   slideTextValue,
   NativePresentationDocument,
+  encodePresentationNativeState,
+  presentationSlideResources,
 } from '../src/index.ts';
 import type { PresentationArtifact, PresentationCommand } from '../src/index.ts';
 
@@ -247,4 +249,115 @@ test('native Unicode typing, theme font selection and scaled font formatting mat
       value: 'x',
     }),
   ).toThrow('grapheme');
+});
+
+test('recovery preserves unresolved media references while native text edits continue', () => {
+  const f = fixture();
+  const artifact = applyPresentationCommand(f.artifact, {
+    name: 'insert-object',
+    slideId: f.slideId,
+    bounds: { x: 0, y: 0, width: 20, height: 20 },
+    object: {
+      kind: 'image',
+      contentType: 'image/png',
+      data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+c7z8AAAAASUVORK5CYII=',
+    },
+  });
+  const archive = createPresentationNativeArchive(artifact);
+  const partial = openPresentationNativeArchive({
+    ...archive,
+    resources: new Map(),
+    allowPendingResources: true,
+  });
+  const edited = applyPresentationCommand(partial, {
+    name: 'edit-text',
+    slideId: f.slideId,
+    objectKey: f.objectKey,
+    start: 0,
+    end: 0,
+    value: 'Pending ',
+  });
+  const recovery = decodePresentationNativeArchive(encodePresentationNativeState(edited));
+  expect(recovery.resources?.size).toBe(0);
+  expect(presentationSlideResources(recovery.slides.get(f.slideId)!)).toEqual(
+    presentationSlideResources(archive.slides.get(f.slideId)!),
+  );
+  const restored = openPresentationNativeArchive({ ...recovery, resources: archive.resources });
+  expect(text(restored)[0]).toStartWith('Pending First');
+  expect(restored.document.slides[0]!.objects.at(-1)!.image?.bytes).toEqual(
+    artifact.document.slides[0]!.objects.at(-1)!.image?.bytes,
+  );
+});
+
+test('text edits retain unsupported slide timing, transitions and extension markup', () => {
+  const f = fixture(),
+    pkg = f.artifact.document.package,
+    part = pkg.getPart(f.artifact.document.slides[0]!.part)!;
+  const opaque =
+    '<p:transition advTm="1700"><p:fade/></p:transition><p:timing><p:tnLst><p:par><p:cTn id="41" dur="indefinite" nodeType="tmRoot"/></p:par></p:tnLst></p:timing><p:extLst><p:ext uri="kryptonote-test"><future:feature xmlns:future="urn:future" mode="opaque">keep me</future:feature></p:ext></p:extLst>';
+  const source = openPresentationArtifact(
+    beginPackageTransaction(pkg)
+      .replacePart(
+        part.name,
+        new TextEncoder().encode(
+          new TextDecoder().decode(pkg.readPart(part)).replace('</p:sld>', opaque + '</p:sld>'),
+        ),
+      )
+      .commit(),
+  );
+  const native = openPresentationNativeArchive(createPresentationNativeArchive(source));
+  const edited = applyPresentationCommand(native, {
+    name: 'edit-text',
+    slideId: f.slideId,
+    objectKey: f.objectKey,
+    start: 0,
+    end: 0,
+    value: 'Safe ',
+  });
+  const exported = openPresentationArtifact(edited.bytes());
+  expect(
+    new TextDecoder().decode(
+      exported.document.package.readPart(exported.document.package.getPart(part.name)!),
+    ),
+  ).toContain(opaque);
+  expect(exported.document.slides[0]!.transition).toEqual(source.document.slides[0]!.transition);
+  expect(exported.document.slides[0]!.animations).toEqual(source.document.slides[0]!.animations);
+});
+
+test('native shape radius, resize, rotation and inherited background match exported authoring', () => {
+  let source = createPresentation();
+  const slideId = source.document.slides[0]!.id;
+  source = applyPresentationCommand(source, {
+    name: 'insert-object',
+    slideId,
+    object: { kind: 'shape', geometry: 'roundRect', cornerRadius: 20 },
+    bounds: { x: 10, y: 10, width: 100, height: 80 },
+  });
+  source = applyPresentationCommand(source, { name: 'background', slideId, color: '#112233' });
+  const objectKey = source.document.slides[0]!.objects[0]!.key;
+  let native: PresentationArtifact = importNativePresentation(source);
+  const commands: PresentationCommand[] = [
+    { name: 'style-shape', slideId, objectKey, cornerRadius: 16 },
+    {
+      name: 'update-object',
+      slideId,
+      objectKey,
+      x: 2,
+      y: 3,
+      width: 200,
+      height: 120,
+      rotation: 721.234567,
+    },
+    { name: 'set-background', slideId, fill: { kind: 'inherit' } },
+  ];
+  for (const command of commands) {
+    native = applyPresentationCommand(native, command);
+    const output = openPresentationArtifact(native.bytes());
+    const actual = native.document.slides[0]!,
+      expected = output.document.slides[0]!;
+    expect(actual.background).toEqual(expected.background);
+    expect(actual.objects[0]!.cornerRadius).toEqual(expected.objects[0]!.cornerRadius);
+    expect(actual.objects[0]!.drawingGeometry).toEqual(expected.objects[0]!.drawingGeometry);
+    expect(actual.objects[0]!.transform).toEqual(expected.objects[0]!.transform);
+  }
 });

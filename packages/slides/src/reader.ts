@@ -117,6 +117,9 @@ interface ReadCache {
     { colors: ThemeColorScheme; fonts: ThemeFontScheme }
   >;
 }
+type NativeBackground = Pick<PresentationSlide, 'background' | 'backgroundGradient' | 'backgroundPattern' | 'backgroundPicture'>;
+const nativeBackgrounds = new WeakMap<PresentationSlide, NativeBackground>();
+export function presentationInheritedBackground(slide: PresentationSlide) { return nativeBackgrounds.get(slide); }
 const nativeRunFonts=new WeakMap<SlideTextRun,NativeTextFonts>();
 export function presentationRunFonts(run:SlideTextRun){return nativeRunFonts.get(run);}
 export function presentationNativeFonts(document:PresentationDocument,id:string){const slide=document.slides.find(s=>s.id===id);return slide&&slideContexts.get(slide)?.fonts;}
@@ -643,30 +646,8 @@ class Reader {
         ? []
         : this.shapes(this.tree(source), source, layer, context, IDENTITY, 0),
     );
-    const background = [slide, layout, master]
-      .map((source) => this.p(this.p(source?.xml.root, "cSld"), "bg"))
-      .find((item) => item !== undefined);
-    const bgProperties = this.p(background, "bgPr");
-    if (
-      bgProperties &&
-      this.children(bgProperties).some((item) =>
-        ["effectDag"].includes(item.localName),
-      )
-    )
-      context.diagnostics.push({
-        part: slide.part.name.value,
-        message:
-          "This slide background is approximated; advanced background fills are not rendered.",
-      });
-    const bgRef = this.p(background, "bgRef");
-    const bgStyle =
-      bgRef === undefined
-        ? undefined
-        : this.themeStyle(context, "fillStyleLst", number(bgRef, "idx"));
-    const backgroundColor =
-      this.fill(bgProperties ?? bgStyle, context, this.color(bgRef, context)) ??
-      this.color(bgRef, context) ??
-      "#ffffff";
+    const paint = this.slideBackground([slide, layout, master], context);
+    const inherited = this.slideBackground([layout, master], context);
     const title =
       objects
         .find((object) => object.layer === "slide" && object.text)
@@ -682,6 +663,40 @@ class Reader {
       title,
       hidden: ["0", "false"].includes(attr(slide.xml.root, "show") ?? ""),
       notes: this.slideNotes(slide),
+      ...paint,
+      objects,
+      diagnostics: context.diagnostics,
+    };
+    nativeBackgrounds.set(result, inherited);
+    slideContexts.set(result,context);
+    return result;
+  }
+  slideBackground(sources: readonly (PartSource | undefined)[], context: Context) {
+    const background = sources
+      .map((source) => this.p(this.p(source?.xml.root, "cSld"), "bg"))
+      .find((item) => item !== undefined);
+    const bgProperties = this.p(background, "bgPr");
+    if (
+      bgProperties &&
+      this.children(bgProperties).some((item) =>
+        ["effectDag"].includes(item.localName),
+      )
+    )
+      context.diagnostics.push({
+        part: context.slide.part.name.value,
+        message:
+          "This slide background is approximated; advanced background fills are not rendered.",
+      });
+    const bgRef = this.p(background, "bgRef");
+    const bgStyle =
+      bgRef === undefined
+        ? undefined
+        : this.themeStyle(context, "fillStyleLst", number(bgRef, "idx"));
+    const backgroundColor =
+      this.fill(bgProperties ?? bgStyle, context, this.color(bgRef, context)) ??
+      this.color(bgRef, context) ??
+      "#ffffff";
+    return {
       background: backgroundColor,
       backgroundPattern: this.pattern(bgProperties ?? bgStyle, context),
       backgroundPicture: this.pictureFill(
@@ -692,11 +707,7 @@ class Reader {
         context,
         this.color(bgRef, context),
       ),
-      objects,
-      diagnostics: context.diagnostics,
     };
-    slideContexts.set(result,context);
-    return result;
   }
   slideNotes(slide: PartSource): string {
     const notes = this.relatedXml(slide, "notesSlide");

@@ -223,6 +223,7 @@ export function encodePresentationNativeState(input: PresentationArtifact): Uint
     }),
     slides: new Map(compiled.map((s) => [s.id, s.model])),
     resources: new Map(compiled.flatMap((s) => [...s.resources])),
+    allowPendingResources: true,
     preservation: new Uint8Array(),
   });
 }

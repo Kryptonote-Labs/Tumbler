@@ -22,6 +22,7 @@ const resource = z.object({
   hash: z.string().regex(/^[a-f0-9]{64}$/),
   length: z.number().int().nonnegative(),
 });
+const pendingResources = new WeakMap<Uint8Array, z.infer<typeof resource>>();
 const root = z.object({ version: z.literal(1), graph: z.unknown(), resources: z.array(resource) });
 const cache = new WeakMap<
   NativeSlide,
@@ -33,13 +34,20 @@ export function encodeNativeSlide(slide: NativeSlide) {
   const saved = cache.get(slide);
   if (saved) return saved;
   const graph = writeNativeGraph(slide, presentationBlockCodecs, { canonical: true });
-  const references = graph.resources.map((bytes) => ({
-    hash: presentationResourceHash(bytes),
-    length: bytes.length,
-  }));
+  const references = graph.resources.map(
+    (bytes) =>
+      pendingResources.get(bytes) ?? {
+        hash: presentationResourceHash(bytes),
+        length: bytes.length,
+      },
+  );
   const result = {
     model: encodePresentationBlock({ version: 1, graph: graph.graph, resources: references }),
-    resources: new Map(graph.resources.map((bytes, i) => [references[i]!.hash, bytes])),
+    resources: new Map(
+      graph.resources.flatMap((bytes, i) =>
+        pendingResources.has(bytes) ? [] : [[references[i]!.hash, bytes] as const],
+      ),
+    ),
   };
   cache.set(slide, result);
   return result;
@@ -56,7 +64,11 @@ export function decodeNativeSlide(
   const bytes = parsed.resources.map((reference) => {
     const bytes = resources.get(reference.hash);
     if (!bytes) {
-      if (allowPending) return new Uint8Array();
+      if (allowPending) {
+        const placeholder = new Uint8Array();
+        pendingResources.set(placeholder, reference);
+        return placeholder;
+      }
       throw new Error('Native presentation resource has not loaded.');
     }
     if (bytes.length !== reference.length || presentationResourceHash(bytes) !== reference.hash)

@@ -9,6 +9,7 @@
     onreorder,
     oninsert,
     oninsertionfocus,
+    onsliderequest,
     reorderHint,
     index = $bindable(0),
   }: {
@@ -18,6 +19,7 @@
     onreorder?: (slideId: string, index: number) => void;
     oninsert?: (index: number) => void;
     oninsertionfocus?: () => void;
+    onsliderequest?: (id: string) => void;
     reorderHint?: Attachment<HTMLButtonElement>;
   } = $props();
   let rail = $state<HTMLElement>();
@@ -136,6 +138,7 @@
     const next = Object.keys(visible).find((id) => visible[id] && !rendered[id]);
     if (!next) return;
     rendered[next] = true;
+    onsliderequest?.(next);
     frame = requestAnimationFrame(revealNext);
   }
   onDestroy(() => {
@@ -316,7 +319,9 @@
             aria-hidden="true"
           >
             <path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8" />
-            <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c7 0 10 7 10 7a16.8 16.8 0 0 1-3 4M6.5 6.5A18.4 18.4 0 0 0 2 12s3 7 10 7a10.8 10.8 0 0 0 5.5-1.5" />
+            <path
+              d="M9.9 5.2A10.8 10.8 0 0 1 12 5c7 0 10 7 10 7a16.8 16.8 0 0 1-3 4M6.5 6.5A18.4 18.4 0 0 0 2 12s3 7 10 7a10.8 10.8 0 0 0 5.5-1.5"
+            />
           </svg>
         {/if}
       </span>

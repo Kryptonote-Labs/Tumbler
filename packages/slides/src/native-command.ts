@@ -12,6 +12,7 @@ import {
 } from './native-shape.ts';
 import { editNativeTable } from './native-table.ts';
 import { nativeLayoutTemplate as layoutTemplate } from './native-layout.ts';
+import { nativePresetGeometry } from './drawing-geometry.ts';
 import { insertNativeInk } from './native-ink.ts';
 import {
   openPresentationNativeArchive,
@@ -95,6 +96,9 @@ export function applyNativeModelCommand(
       patchObject(moveNativeObject(selected!, command));
       break;
     case 'style-shape': {
+      if (command.cornerRadius !== undefined && selected!.geometry !== 'roundRect')
+        throw new Error('Corner radius applies to rounded rectangles.');
+      const size = Math.min(selected!.transform.width, selected!.transform.height);
       const gradient =
         typeof command.fill === 'object'
           ? nativeGradient(command.fill)
@@ -107,7 +111,19 @@ export function applyNativeModelCommand(
         gradient,
         stroke: command.stroke === undefined ? selected!.stroke : nativeColour(command.stroke),
         strokeWidth: command.strokeWidth ?? selected!.strokeWidth,
-        cornerRadius: command.cornerRadius ?? selected!.cornerRadius,
+        cornerRadius:
+          command.cornerRadius === undefined
+            ? selected!.cornerRadius
+            : (Math.round(Math.min(0.5, command.cornerRadius / size) * 100000) / 100000) * size,
+        drawingGeometry:
+          command.cornerRadius === undefined
+            ? selected!.drawingGeometry
+            : nativePresetGeometry(
+                'roundRect',
+                selected!.transform.width,
+                selected!.transform.height,
+                [['adj', `val ${Math.round(Math.min(0.5, command.cornerRadius / size) * 100000)}`]],
+              ),
       });
       break;
     }
