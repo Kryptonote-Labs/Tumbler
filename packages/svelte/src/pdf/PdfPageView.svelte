@@ -43,16 +43,16 @@
       if (event.target instanceof Node && event.target.contains(host)) applyVisibility();
     };
     document.addEventListener('pdfzoomend', finishedZoom, true);
+    let root = host.parentElement;
+    while (root && !/(auto|scroll)/.test(getComputedStyle(root).overflowY))
+      root = root.parentElement;
     const observer = new IntersectionObserver(
       (entries) => {
         near = entries.some((entry) => entry.isIntersecting);
         if (!host.closest('[data-pdf-zooming]')) applyVisibility();
       },
-      { rootMargin: '128px' },
+      { root, rootMargin: '128px' },
     );
-    let root = host.parentElement;
-    while (root && !/(auto|scroll)/.test(getComputedStyle(root).overflowY))
-      root = root.parentElement;
     let position: IntersectionObserver;
     const trackPosition = () => {
       position?.disconnect();
