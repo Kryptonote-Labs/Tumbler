@@ -4,6 +4,14 @@ import { pdfTextStylePatch, type PdfTextStyle } from './fonts.ts';
 import type { PdfTextSeed } from './import-text.ts';
 export { importPdfText, pdfSourceKey, type PdfTextSeed } from './import-text.ts';
 
+export type PdfTextPlacement = {
+  x: number;
+  y: number;
+  width?: number;
+  hidden?: boolean;
+  continuation?: number;
+};
+
 export class PdfTextModel {
   readonly regions: Y.Map<Y.Map<unknown>>;
   readonly origin = {};
@@ -60,7 +68,91 @@ export class PdfTextModel {
         return x.page - y.page || x.y - y.y || x.x - y.x || a.localeCompare(b);
       });
   }
+  placement(id: string): PdfTextPlacement | undefined {
+    return this.regions.get(id)?.get('placement') as PdfTextPlacement | undefined;
+  }
+  geometry(id: string) {
+    return { ...this.seed(id), ...this.placement(id) };
+  }
+  /** Placement is independent of source ownership and collaborative text. One gesture is one undo step. */
+  place(id: string, patch: Partial<PdfTextPlacement>) {
+    const seed = this.seed(id),
+      previous = this.placement(id);
+    const value = { x: seed.x, y: seed.y, ...previous, ...patch };
+    if (
+      !Number.isFinite(value.x) ||
+      !Number.isFinite(value.y) ||
+      (value.width !== undefined && (!Number.isFinite(value.width) || value.width <= 0)) ||
+      (value.continuation !== undefined &&
+        (!Number.isSafeInteger(value.continuation) || value.continuation < 0))
+    )
+      throw new Error('Invalid PDF text placement.');
+    this.doc.transact(() => this.regions.get(id)!.set('placement', value), this.origin);
+  }
+  /** Supply the flow region's origin when detaching text already displaced by paragraph flow. */
+  move(
+    id: string,
+    dx: number,
+    dy: number,
+    origin?: Pick<PdfTextPlacement, 'x' | 'y' | 'continuation'>,
+  ) {
+    const frame = origin ?? this.geometry(id);
+    this.place(id, {
+      x: frame.x + dx,
+      y: frame.y + dy,
+      ...(origin?.continuation === undefined ? {} : { continuation: origin.continuation }),
+    });
+  }
+  duplicate(
+    id: string,
+    nextId: string,
+    origin?: Pick<PdfTextPlacement, 'x' | 'y' | 'continuation'>,
+    dx = 12,
+    dy = 12,
+  ) {
+    const seed = { ...this.geometry(id), ...origin };
+    this.add({
+      id: nextId,
+      page: seed.page,
+      ...(seed.continuation === undefined ? {} : { continuation: seed.continuation }),
+      x: seed.x + dx,
+      y: seed.y + dy,
+      width: seed.width,
+      lineHeight: seed.lineHeight,
+      style: seed.style,
+      sources: [],
+      delta: [],
+    });
+    this.doc.transact(() => {
+      const delta: { insert: unknown; attributes?: Record<string, unknown> }[] =
+        this.text(id).toDelta();
+      this.text(nextId).applyDelta(
+        delta.map((run) => ({
+          insert: run.insert,
+          attributes: pdfStyleAttributes(run.attributes),
+        })),
+      );
+    }, this.origin);
+    return nextId;
+  }
+  hide(id: string, hidden = true) {
+    this.place(id, { hidden });
+  }
+  /** A pure translation can retain the original PDF operators, fonts and glyph transforms. */
+  sourcePreserved(id: string) {
+    const p = this.placement(id);
+    return (
+      this.seed(id).sources.length > 0 &&
+      !this.contentDirty(id) &&
+      !p?.hidden &&
+      !(p?.continuation && p.continuation > 0) &&
+      (p?.width === undefined || p.width === this.seed(id).width)
+    );
+  }
   dirty(id: string) {
+    return this.placement(id) !== undefined || this.contentDirty(id);
+  }
+  contentDirty(id: string) {
     const seed = this.seed(id);
     if (!seed.sources.length) return true;
     const normalize = (delta: { insert: unknown; attributes?: Record<string, unknown> }[]) => {

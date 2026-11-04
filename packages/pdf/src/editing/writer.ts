@@ -12,6 +12,7 @@ import type { PdfDocument } from '../document.ts';
 import { PdfSyntax } from '../syntax.ts';
 import { readContentToken, isOperator } from '../content-syntax.ts';
 import { inverse, multiply } from '../matrix.ts';
+import { PdfInterpreter } from '../interpreter.ts';
 import { pageViewport } from '../scene.ts';
 import { layoutPdfTextFlow } from './layout.ts';
 import type { PdfEditingFonts, PdfEditingFont } from './fonts.ts';
@@ -57,7 +58,44 @@ export function exportEditedPdf(
     return font;
   };
   const pageContent = new Map<number, string>();
-  for (const layout of flow.regions.filter((region) => region.render)) {
+  const interpreter = new PdfInterpreter(document);
+  const glyphSources = new Map(
+    document.pages.map((page) => [
+      page.index,
+      new Map(
+        interpreter
+          .page(page.index)
+          .elements.flatMap((e) =>
+            e.kind === 'glyph'
+              ? [[`${e.source.instance}/${e.source.object.key}/${e.source.start}`, e] as const]
+              : [],
+          ),
+      ),
+    ]),
+  );
+  const preserved = new Set(
+    flow.regions.filter((region) => region.preserveSource).map((region) => region.id),
+  );
+  const translations = new Map<string, readonly [number, number]>();
+  for (const id of dirty.filter((id) => model.placement(id) && preserved.has(id))) {
+    const seed = model.seed(id),
+      frame = model.geometry(id);
+    const viewport = pageViewport(document.pages[seed.page]!);
+    for (const target of seed.sources) {
+      const glyph = glyphSources
+        .get(seed.page)
+        ?.get(`${target.instance}/${target.object}/${target.start}`);
+      if (!glyph || glyph.kind !== 'glyph') throw new Error('PDF text source was not found.');
+      const m = inverse(multiply(viewport, glyph.contentTransform));
+      const dx = frame.x - seed.x,
+        dy = frame.y - seed.y;
+      translations.set(`${target.instance}/${target.object}/${target.start}`, [
+        m[0] * dx + m[2] * dy,
+        m[1] * dx + m[3] * dy,
+      ]);
+    }
+  }
+  for (const layout of flow.regions.filter((region) => region.render && !region.preserveSource)) {
     const page = flow.pages[layout.page]!.source;
     let content = pageContent.get(layout.page) ?? '';
     const viewport = inverse(pageViewport(page));
@@ -306,6 +344,19 @@ export function exportEditedPdf(
             : operator === '"'
               ? `${serializePdfValue(operands[0]!)} Tw ${serializePdfValue(operands[1]!)} Tc T* `
               : '';
+        const translation = translations.get(`${target.instance}/${target.object}/${target.start}`);
+        if (translation) {
+          const showing =
+            operator === "'" || operator === '"'
+              ? `${serializePdfValue(operands.at(-1)!)} Tj`
+              : `${operands.map(serializePdfValue).join(' ')} ${operator}`;
+          // Restore the CTM with its inverse. q/Q inside BT restores text advances in PDFium.
+          patches.set(target.start, {
+            end: target.end,
+            text: `${prefix}1 0 0 1 ${n(translation[0])} ${n(translation[1])} cm ${showing} 1 0 0 1 ${n(-translation[0])} ${n(-translation[1])} cm`,
+          });
+          continue;
+        }
         // Replace glyph codes with their exact displacement. Deleted text is absent from extraction.
         patches.set(target.start, {
           end: target.end,

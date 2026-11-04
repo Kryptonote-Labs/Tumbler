@@ -110,6 +110,31 @@ cancellable worker as well; a work counter cannot interrupt an individual font o
 JPEGs with non-default `/Decode`, masks or decoder parameters currently reject explicitly;
 the RGB host image decoder cannot apply PDF sample transformations correctly.
 
+## Moving text boxes
+
+`PdfTextModel.move(id, dx, dy)` translates a recovered text region in viewport points.
+When detaching a paragraph displaced by earlier edits, pass its rendered flow anchor with
+`move(id, dx, dy, flowRegion.origin)`. `place(id, {x, y, width})` sets its position or wrapping width, `duplicate(id, newId)` copies
+its text and formatting, and `hide(id)` hides it. Use `duplicate(id, newId, flowRegion.origin)`
+to copy a displaced paragraph from its displayed location. Placement stays separate from immutable import
+seeds and collaborative text, so concurrent text changes and movement can merge independently.
+Moved boxes stay positioned instead of pushing neighbouring paragraphs. Placement and copied text
+support selective undo without removing a peer's contribution to a newly created region.
+
+Pure movement keeps the original showing operators, fonts, glyph transforms and spacing on export.
+Viewport offsets account for page rotation, crop and content matrices. Form instances are cloned
+independently. Resizing or editing uses paragraph layout instead. Geometric recovery separates
+large gutters and recovers interleaved columns; showing operators remain indivisible. Scanned
+or outlined content is not converted to text, hidden OCR stays hidden, annotation appearances remain
+part of their annotations, source clipping still
+applies, and encryption-aware export is not implemented. Movement stays on the source page.
+
+`PdfEditableDocument` shows a movable selection border. Shift-click selects more regions, arrows
+nudge by one point, and Shift uses ten points. Alt disables snapping; Escape cancels a drag.
+The right handle resizes wrapping width. Drag previews move cached ink and selection layers at
+animation-frame cadence and commit one collaborative position change on release. Page painters
+retain decoded images while visible and share document layout with the editor.
+
 ## Collaborative text editing
 
 `PdfTextModel` stores recovered paragraphs and explicitly placed text regions in a Yjs document.

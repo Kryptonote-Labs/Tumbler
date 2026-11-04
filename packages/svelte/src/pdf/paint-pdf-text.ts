@@ -1,0 +1,42 @@
+import type { PdfFlowRegion, PdfEditingFonts } from '@tumblerjs/pdf';
+
+/** Paint edited glyphs with the same metrics used by layout and PDF export. */
+export function paintPdfText(
+  context: CanvasRenderingContext2D,
+  regions: readonly PdfFlowRegion[],
+  fonts: PdfEditingFonts,
+) {
+  for (const region of regions)
+    for (const glyph of region.glyphs) {
+      if (glyph.text === '\n') continue;
+      const shaped = fonts.shape(glyph.text, glyph.style),
+        em = glyph.style.size / shaped.face.font.unitsPerEm;
+      let x = glyph.x;
+      for (let i = 0; i < shaped.glyphs.length; i++) {
+        const position = shaped.positions[i]!,
+          outline = shaped.glyphs[i]!;
+        context.save();
+        context.translate(x + position.xOffset * em, glyph.y - position.yOffset * em);
+        context.scale(em, -em);
+        if (shaped.italic) context.transform(1, 0, 0.2, 1, 0, 0);
+        context.fillStyle = glyph.style.color;
+        const path = new Path2D(outline.path.toSVG());
+        context.fill(path);
+        if (shaped.bold) {
+          context.strokeStyle = glyph.style.color;
+          context.lineWidth = shaped.face.font.unitsPerEm * 0.025;
+          context.stroke(path);
+        }
+        context.restore();
+        x += position.xAdvance * em;
+      }
+      if (glyph.style.underline) {
+        context.strokeStyle = glyph.style.color;
+        context.lineWidth = glyph.style.size / 16;
+        context.beginPath();
+        context.moveTo(glyph.x, glyph.y + glyph.style.size * 0.12);
+        context.lineTo(glyph.x + glyph.width, glyph.y + glyph.style.size * 0.12);
+        context.stroke();
+      }
+    }
+}

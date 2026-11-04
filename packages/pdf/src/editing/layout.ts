@@ -25,7 +25,7 @@ export function layoutPdfText(
   id: string,
   fonts: PdfEditingFonts,
 ): PdfTextLayout {
-  const seed = model.seed(id),
+  const seed = model.geometry(id),
     glyphs: PdfLayoutGlyph[] = [],
     carets: PdfLayoutCaret[] = [];
   let x = seed.x,
@@ -127,8 +127,12 @@ export type PdfFlowPage = { index: number; source: PdfPage; continuation: number
 export type PdfFlowRegion = PdfTextLayout & {
   page: number;
   render: boolean;
+  /** Original operators can be retained only when the whole region fits its original page. */
+  preserveSource: boolean;
   top: number;
   bottom: number;
+  /** Logical page-space anchor after flow displacement, before continuation projection. */
+  origin: { x: number; y: number; continuation: number };
 };
 export const pdfContinuationHeight = (page: PdfPage) =>
   Math.max(page.height * 0.5, page.height - 96);
@@ -144,17 +148,24 @@ export function layoutPdfTextFlow(
   for (const page of pages) {
     const layouts = model.ids(page.index).map((id) => layoutPdfText(model, id, fonts)),
       earlier: { x: number; size: number; growth: number }[] = [];
-    const fragments: { layout: PdfTextLayout; continuation: number; render: boolean }[] = [];
+    const fragments: {
+      layout: PdfTextLayout;
+      continuation: number;
+      render: boolean;
+      preserveSource: boolean;
+      origin: { x: number; y: number; continuation: number };
+    }[] = [];
     let count = 0;
     for (const layout of layouts) {
-      const seed = model.seed(layout.id),
+      const seed = model.geometry(layout.id),
         imported = seed.sources.length > 0,
         dirty = model.dirty(layout.id);
-      const shift = imported
-        ? earlier
-            .filter((p) => Math.abs(p.x - seed.x) <= Math.max(p.size, seed.style.size) * 2)
-            .reduce((sum, p) => sum + p.growth, 0)
-        : 0;
+      const shift =
+        imported && !model.placement(layout.id)
+          ? earlier
+              .filter((p) => Math.abs(p.x - seed.x) <= Math.max(p.size, seed.style.size) * 2)
+              .reduce((sum, p) => sum + p.growth, 0)
+          : 0;
       const originalHeight =
         (seed.delta
           .map((d) => d.insert)
@@ -163,7 +174,7 @@ export function layoutPdfTextFlow(
           1) *
           seed.lineHeight +
         seed.style.size * 1.25;
-      if (imported)
+      if (imported && !model.placement(layout.id))
         earlier.push({
           x: seed.x,
           size: seed.style.size,
@@ -171,7 +182,8 @@ export function layoutPdfTextFlow(
         });
       const height = pdfContinuationHeight(page),
         bottom = page.height - Math.min(48, page.height * 0.1);
-      const firstContinuation = imported ? 0 : (seed.continuation ?? 0);
+      const firstContinuation =
+        model.placement(layout.id)?.continuation ?? (imported ? 0 : (seed.continuation ?? 0));
       const localStart = seed.y - firstContinuation * height;
       const edge = imported || localStart <= page.height ? Math.max(bottom, localStart) : bottom;
       const project = (y: number) => {
@@ -193,7 +205,7 @@ export function layoutPdfTextFlow(
         }
         return value;
       };
-      for (const glyph of layout.glyphs) {
+      for (const glyph of model.placement(layout.id)?.hidden ? [] : layout.glyphs) {
         const p = project(glyph.y);
         group(p.continuation).glyphs.push({ ...glyph, y: p.y });
       }
@@ -209,7 +221,13 @@ export function layoutPdfTextFlow(
         fragments.push({
           layout: fragment,
           continuation,
+          origin: { x: seed.x, y: seed.y + shift, continuation: project(seed.y).continuation },
           render: dirty || shift !== 0 || continuation !== 0,
+          preserveSource:
+            model.sourcePreserved(layout.id) &&
+            groups.size === 1 &&
+            continuation === 0 &&
+            shift === 0,
         });
       }
     }
@@ -222,6 +240,8 @@ export function layoutPdfTextFlow(
         ...fragment.layout,
         page: first + fragment.continuation,
         render: fragment.render,
+        preserveSource: fragment.preserveSource,
+        origin: fragment.origin,
         top: Math.min(...carets.map((c) => c.y - c.height)),
         bottom: Math.max(...carets.map((c) => c.y + c.height * 0.3)),
       });

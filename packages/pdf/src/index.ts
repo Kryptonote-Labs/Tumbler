@@ -27,3 +27,4 @@ export * from "./editing/model.ts";
 export * from "./editing/layout.ts";
 
 export { exportEditedPdf } from "./editing/writer.ts";
+export { placePdfScene } from './editing/placement.ts';
