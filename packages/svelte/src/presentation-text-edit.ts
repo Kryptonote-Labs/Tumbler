@@ -4,6 +4,7 @@ import { tick } from "svelte";
 import type { PresentationTextRange } from "@tumblerjs/slides";
 export interface SlideTextEditorOptions {
   active: boolean;
+  initialText?: string;
   revision?: object;
   focusToken?: number;
   paragraphs: readonly string[];
@@ -13,6 +14,7 @@ export interface SlideTextEditorOptions {
   onfinish?: () => void;
   onundo?: (redo: boolean) => void;
   onnavigate?: (backward: boolean) => boolean;
+  onvertical?: (direction: -1 | 1, x: number) => boolean;
   onindent?: (amount: -1 | 1) => boolean;
   onshortcut?: (key: "bold" | "italic" | "underline") => void;
 }
@@ -189,6 +191,21 @@ export function presentationTextEdit(
     if (!active) return;
     event.stopPropagation();
     if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", "Tab", "Escape"].includes(event.key) || event.ctrlKey || event.metaKey) history.break();
+    if ((event.key === "ArrowUp" || event.key === "ArrowDown") &&
+      !event.shiftKey && !event.ctrlKey && !event.metaKey && options.onvertical) {
+      capture();
+      const selection = window.getSelection();
+      if (range.start === range.end && selection?.rangeCount) {
+        const caret = selection.getRangeAt(0).getClientRects()[0];
+        const edge = (event.key === "ArrowUp" ? node.firstElementChild : node.lastElementChild)?.getBoundingClientRect();
+        const boundary = caret && edge && (event.key === "ArrowUp"
+          ? caret.top < edge.top + caret.height : caret.bottom > edge.bottom - caret.height);
+        if (boundary && options.onvertical(event.key === "ArrowUp" ? -1 : 1, caret.left)) {
+          event.preventDefault();
+          return;
+        }
+      }
+    }
     if (event.key === "Tab") {
       event.preventDefault();
       capture();
@@ -304,6 +321,11 @@ export function presentationTextEdit(
       await tick();
       if (!active) return;
       node.focus({ preventScroll: true });
+      if (options.initialText !== undefined) {
+        range = { start: 0, end: text().length };
+        await replace(options.initialText);
+        return;
+      }
       const point = options.point;
       const caret = point
         ? document.caretRangeFromPoint?.(point.x, point.y)

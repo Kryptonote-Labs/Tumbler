@@ -205,7 +205,7 @@
   function editCell(
     object: SlideObject,
     address: PresentationTableCellAddress,
-    event?: MouseEvent,
+    event?: Pick<MouseEvent, "clientX" | "clientY">,
   ) {
     selectCell(object, address);
     void edit(presentationTextTarget(object, address), event);
@@ -223,6 +223,20 @@
       return false;
     }
     editCell(selected, next);
+    return true;
+  }
+  function verticalCell(direction: -1 | 1, x: number) {
+    if (!selected?.table || !cellAddress || !svg) return false;
+    const current = selected.table.cells.find(cell => cell.row === cellAddress.row && cell.column === cellAddress.column);
+    if (!current) return false;
+    const row = direction === 1 ? current.row + current.rowSpan : current.row - 1;
+    const next = selected.table.cells.find(cell => cell.text?.editable && row >= cell.row &&
+      row < cell.row + cell.rowSpan && current.column >= cell.column && current.column < cell.column + cell.columnSpan);
+    if (!next) return false;
+    const body = svg.querySelector(`[data-slide-object="${CSS.escape(selected.key)}"] [data-table-cell="${next.row}:${next.column}"] .paragraphs`);
+    const edge = (direction === 1 ? body?.firstElementChild : body?.lastElementChild)?.getBoundingClientRect();
+    if (!edge) return false;
+    editCell(selected, next, {clientX: x, clientY: direction === 1 ? edge.top + 2 : edge.bottom - 2});
     return true;
   }
   const handles = [
@@ -394,6 +408,27 @@
   let fittedHeights = $state.raw<
     Record<string, { text: SlideText; height: number }>
   >({});
+  /** Visible text bounds, in slide coordinates, for placing content in unused space. */
+  export function contentBounds() {
+    const bounds = new Map<string, SlideSelectionRect>();
+    const inverse = svg?.getScreenCTM()?.inverse();
+    if (!inverse || !svg) return bounds;
+    for (const object of slide.objects) {
+      if (!object.text || !slideTextValue(object).trim()) continue;
+      const body = svg.querySelector(`[data-slide-object="${CSS.escape(object.key)}"] .paragraphs`);
+      if (!body) continue;
+      const rect = body.getBoundingClientRect();
+      const corners = [[rect.left, rect.top], [rect.right, rect.top],
+        [rect.left, rect.bottom], [rect.right, rect.bottom]]
+        .map(([x, y]) => new DOMPoint(x, y).matrixTransform(inverse));
+      const x = Math.min(...corners.map(p => p.x));
+      const y = Math.min(...corners.map(p => p.y));
+      bounds.set(object.key, {x, y,
+        width: Math.max(...corners.map(p => p.x)) - x,
+        height: Math.max(...corners.map(p => p.y)) - y});
+    }
+    return bounds;
+  }
   function objectHeight(object: SlideObject) {
     const fitted = fittedHeights[object.key];
     return fitted && fitted.text === object.text
@@ -610,7 +645,8 @@
     if (pointer !== undefined && svg?.hasPointerCapture(pointer))
       svg.releasePointerCapture(pointer);
   }
-  async function edit(object: SlideObject, event?: MouseEvent) {
+  let initialText = $state<string>();
+  async function edit(object: SlideObject, event?: Pick<MouseEvent, "clientX" | "clientY">, typed?: string) {
     if (!editable || !object.textEditable || !(ontextedit || ontextchange))
       return;
     cancel();
@@ -634,6 +670,7 @@
       }
     }
     if (!editable || selectedKey !== object.key) return;
+    initialText = typed;
     editPoint = point;
     textRange = { start: 0, end: slideTextValue(object).length };
     textHead = textRange.end;
@@ -650,7 +687,7 @@
       return found;
     });
     if (!paragraph?.bullet) return false;
-    const level = Math.max(0, Math.min(8, Math.round((paragraph.marginLeft ?? 36) / 36) - 1 + amount));
+    const level = Math.max(0, Math.min(8, (paragraph.level ?? 0) + amount));
     onparagraph({ name: 'paragraph', slideId: slide.id, objectKey: selected.key, ...textRange,
       ...(cellAddress ? { cell: cellAddress } : {}), level });
     focusToken++;
@@ -675,6 +712,13 @@
         shortcut(key === "b" ? "bold" : key === "i" ? "italic" : "underline");
         return;
       }
+    }
+    if (selectedKeys.length === 1 && selected.textEditable && !selected.table &&
+      event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
+      event.preventDefault();
+      event.stopPropagation();
+      void edit(selected, undefined, event.key);
+      return;
     }
     if (event.key === "Enter" && selectedKeys.length === 1) {
       event.preventDefault();
@@ -803,7 +847,7 @@
         class="slide"
         role="group"
         aria-label={slide.title}
-        tabindex={editable ? 0 : undefined}
+        tabindex={editable && editing !== object.key ? 0 : undefined}
         width={presentation.width * factor}
         height={presentation.height * factor}
         viewBox={`0 0 ${presentation.width} ${presentation.height}`}
@@ -863,7 +907,7 @@
           <g
             transform={`matrix(${matrix.join(" ")})`}
             role={editable ? "button" : "group"}
-            tabindex={editable ? 0 : undefined}
+            tabindex={editable && editing !== object.key ? 0 : undefined}
             aria-label={object.name}
             data-slide-object={object.key}
             data-object-width={w}
@@ -887,7 +931,7 @@
               if (
                 editable &&
                 !editing &&
-                (event.key === "Enter" || event.key === " ")
+                event.key === "Enter"
               ) {
                 select([object.key]);
                 event.preventDefault();
@@ -972,6 +1016,7 @@
                   onnavigate={navigateCell}
                   editor={{
                     point: editPoint,
+                    onvertical: verticalCell,
                     focusToken,
                     onselect: (range, head) => {
                       textHead = head ?? range.end;
@@ -1046,6 +1091,7 @@
                     {onslide}
                     editor={{
                       active: editing === object.key,
+                      initialText,
                       point: editPoint,
                       focusToken,
                       onselect: (range, head) => {
