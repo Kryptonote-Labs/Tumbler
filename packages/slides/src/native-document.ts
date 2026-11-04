@@ -1,3 +1,4 @@
+import { compactNativeChanges } from './native-changes.ts';
 import { applyNativeModelCommand } from './native-command.ts';
 import type { OpcPackage } from '@tumblerjs/opc';
 import { presentationResourceHash } from './native-resources.ts';
@@ -118,7 +119,7 @@ export class NativePresentationDocument extends PresentationArtifact {
   snapshot(): NativePresentationState {
     const changes: NativeChange[] = [];
     for (let node = this.chain; node; node = node.previous) changes.push(node.change);
-    return { ...this.state, changes: changes.reverse() };
+    return { ...this.state, changes: compactNativeChanges(changes.reverse()) };
   }
   /** Unloaded slides retain commands for export without materializing their render model. */
   recordCommand(command: PresentationCommand): NativePresentationDocument {

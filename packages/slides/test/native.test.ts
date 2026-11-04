@@ -361,3 +361,28 @@ test('native shape radius, resize, rotation and inherited background match expor
     expect(actual.objects[0]!.transform).toEqual(expected.objects[0]!.transform);
   }
 });
+
+test('long typing histories compact export work without changing formatting or opaque preservation', () => {
+  const f = fixture();
+  let source = f.artifact,
+    native: PresentationArtifact = importNativePresentation(source);
+  for (const value of 'A long sentence typed one character at a time.') {
+    const command = {
+      name: 'edit-text',
+      slideId: f.slideId,
+      objectKey: f.objectKey,
+      start: 0,
+      end: 0,
+      value,
+    } as const;
+    source = applyPresentationCommand(source, command);
+    native = applyPresentationCommand(native, command);
+  }
+  expect(native).toBeInstanceOf(NativePresentationDocument);
+  expect((native as NativePresentationDocument).snapshot().changes).toHaveLength(1);
+  expect(text(native)).toEqual(text(source));
+  expect(native.bytes()).toEqual(source.bytes());
+  const reopened = openPresentationNativeArchive(createPresentationNativeArchive(native));
+  expect(reopened.state.revisionKey).toBe((native as NativePresentationDocument).state.revisionKey);
+  expect(reopened.bytes()).toEqual(source.bytes());
+});
