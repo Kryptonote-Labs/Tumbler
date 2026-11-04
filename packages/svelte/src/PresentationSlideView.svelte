@@ -917,8 +917,18 @@
               ? object.shapeId
               : undefined}
             class:movable={editable && object.movable}
-            onfocus={() => {
-              if (editable && !selectedKeys.includes(object.key)) select([object.key]);
+            onfocus={(event) => {
+              if (editing === object.key) {
+                // Blink focuses SVG shapes around foreignObject text on mouse selection.
+                const text = event.currentTarget.querySelector<HTMLElement>('[contenteditable="true"]');
+                const selection = window.getSelection();
+                const ranges = selection ? Array.from({length: selection.rangeCount}, (_, i) => selection.getRangeAt(i).cloneRange()) : [];
+                text?.focus({preventScroll: true});
+                if (selection && ranges.every(range => text?.contains(range.commonAncestorContainer))) {
+                  selection.removeAllRanges();
+                  for (const range of ranges) selection.addRange(range);
+                }
+              } else if (editable && !selectedKeys.includes(object.key)) select([object.key]);
             }}
             onpointerdowncapture={(event) => {
               if (object.table && editing !== object.key &&

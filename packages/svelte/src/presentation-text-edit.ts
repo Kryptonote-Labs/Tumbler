@@ -285,6 +285,19 @@ export function presentationTextEdit(
     history.break();
     if (active) event.stopPropagation();
   }
+  function doubleClick(event: MouseEvent) {
+    if (!active) return;
+    const caret = document.caretRangeFromPoint?.(event.clientX, event.clientY);
+    if (!caret || !node.contains(caret.startContainer)) return;
+    const index = offset(caret.startContainer, caret.startOffset);
+    const word = Array.from(new Intl.Segmenter(undefined, {granularity: "word"}).segment(text()))
+      .find(part => index >= part.index && index < part.index + part.segment.length);
+    if (!word) return;
+    event.preventDefault();
+    event.stopPropagation();
+    range = {start: word.index, end: word.index + word.segment.length};
+    restore();
+  }
   function drop(event: DragEvent) {
     if (active) event.preventDefault();
   }
@@ -298,6 +311,7 @@ export function presentationTextEdit(
   node.addEventListener("compositionstart", compositionStart);
   node.addEventListener("compositionend", compositionEnd);
   node.addEventListener("pointerdown", pointer);
+  node.addEventListener("dblclick", doubleClick);
   node.addEventListener("drop", drop);
   function clearSelection() {
     const selection = window.getSelection();
@@ -370,6 +384,7 @@ export function presentationTextEdit(
       node.removeEventListener("compositionstart", compositionStart);
       node.removeEventListener("compositionend", compositionEnd);
       node.removeEventListener("pointerdown", pointer);
+      node.removeEventListener("dblclick", doubleClick);
       node.removeEventListener("drop", drop);
     },
   };
