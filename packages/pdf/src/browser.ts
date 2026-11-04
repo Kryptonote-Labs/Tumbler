@@ -7,9 +7,14 @@ export function browserPdfPaintHost(): PdfPaintHost<ImageBitmap | OffscreenCanva
 } {
   const images = new WeakMap<PdfImageData, Promise<ImageBitmap>>(),
     decoded = new Set<ImageBitmap>();
+  const paths = new Map<string, Path2D>();
   let closed = false;
   return {
-    path: (svg) => new Path2D(svg),
+    path(svg) {
+      let path = paths.get(svg);
+      if (!path) { path = new Path2D(svg); paths.set(svg, path); }
+      return path;
+    },
     surface(width, height) {
       const image = new OffscreenCanvas(width, height),
         context = image.getContext("2d");
@@ -48,6 +53,7 @@ export function browserPdfPaintHost(): PdfPaintHost<ImageBitmap | OffscreenCanva
       closed = true;
       for (const image of decoded) image.close();
       decoded.clear();
+      paths.clear();
     },
   };
 }
