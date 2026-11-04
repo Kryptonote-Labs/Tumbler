@@ -60,15 +60,19 @@ export class PdfEditingFonts {
   add(key: string, bytes: Uint8Array, source?: PdfFont) {
     const font = create(Buffer.from(bytes));
     if ('fonts' in font) throw new Error('Supply a single editing font.');
+    // Subset/CFF programs may omit name tables or expose non-string localized names.
+    const name = typeof font.postscriptName === 'string' ? font.postscriptName : source?.baseName ?? key;
+    const family = typeof font.familyName === 'string' ? font.familyName : source?.baseName ?? key;
+    const subfamily = typeof font.subfamilyName === 'string' ? font.subfamilyName : source?.baseName ?? key;
     this.fonts.set(key, {
       key,
-      name: font.postscriptName ?? source?.baseName ?? key,
+      name,
       bytes,
       font,
       source,
-      family: familyKey(font.familyName ?? source?.baseName ?? key),
-      bold: /bold/i.test(font.subfamilyName ?? source?.baseName ?? key),
-      italic: /italic|oblique/i.test(font.subfamilyName ?? source?.baseName ?? key),
+      family: familyKey(family),
+      bold: /bold/i.test(subfamily),
+      italic: /italic|oblique/i.test(subfamily),
     });
   }
   importDocument(document: PdfDocument) {

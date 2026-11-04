@@ -1,6 +1,7 @@
 <script lang="ts">
   import { pdfTextInputChange, type PdfInputSelection } from './text-input.ts';
   import { paintEditablePdfPage } from './paint-editable-page.ts';
+  import PdfTextBox from './PdfTextBox.svelte';
   import PdfEditableText from './PdfEditableText.svelte';
   import { onMount, tick } from 'svelte';
   import * as Y from 'yjs';
@@ -32,6 +33,7 @@
     onpagechange,
     onpages,
     onstyle,
+    onbox,
   }: {
     document: PdfDocument;
     model: PdfTextModel;
@@ -45,9 +47,11 @@
     onpagechange?: (index: number) => void;
     onpages?: (count: number) => void;
     onstyle?: (style: PdfTextStyle) => void;
+    onbox?: (box: { x: number; y: number; width: number } | null) => void;
   } = $props();
   let revision = $state(0),
     active = $state<string>(),
+    selected = $state<string[]>([]),
     start = $state(0),
     end = $state(0),
     pending = $state<Partial<PdfTextStyle>>({});
@@ -78,10 +82,46 @@
   $effect(() => onstyle?.(currentStyle));
   export function format(patch: Partial<PdfTextStyle>) {
     if (!editable || !active) return;
+    if (window.document.activeElement !== input) {
+      formatBox(patch);
+      return;
+    }
     model.undo.stopCapturing();
     if (start !== end) model.format(active, start, end, patch);
     else pending = { ...pending, ...pdfTextStylePatch(currentStyle, patch) };
     input?.focus({ preventScroll: true });
+  }
+  $effect(() => {
+    void revision;
+    onbox?.(active && !model.placement(active)?.hidden ? model.geometry(active) : null);
+  });
+  export function place(patch: { x?: number; y?: number; width?: number }) {
+    if (!editable || !active) return;
+    model.undo.stopCapturing();
+    model.place(active, patch);
+    model.undo.stopCapturing();
+  }
+  export function formatBox(patch: Partial<PdfTextStyle>) {
+    if (!editable || !active) return;
+    model.undo.stopCapturing();
+    model.format(active, 0, model.text(active).length, patch);
+    model.undo.stopCapturing();
+  }
+  export function removeBox() {
+    if (!editable || !active) return;
+    model.undo.stopCapturing();
+    model.doc.transact(() => {
+      for (const id of selected) model.hide(id);
+    }, model.origin);
+    model.undo.stopCapturing();
+  }
+  export function duplicateBox() {
+    if (!editable || !active) return;
+    const id = crypto.randomUUID();
+    model.undo.stopCapturing();
+    model.duplicate(active, id);
+    model.undo.stopCapturing();
+    void select(id, 0);
   }
   export function toggle(key: 'bold' | 'italic' | 'underline') {
     format({ [key]: !currentStyle[key] });
@@ -106,7 +146,8 @@
       head: [...Y.encodeRelativePosition(Y.createRelativePositionFromJSON(anchors.last))],
     });
   }
-  async function select(id: string, first: number, last = first) {
+  async function select(id: string, first: number, last = first, extend = false) {
+    selected = extend ? [...new Set([...selected, id])] : [id];
     active = id;
     start = Math.min(first, last);
     end = Math.max(first, last);
@@ -207,6 +248,7 @@
     }
     if (event.key === 'Escape') {
       active = undefined;
+      selected = [];
       onselection?.(null);
       return;
     }
@@ -258,8 +300,19 @@
     const candidates = layouts.filter((l) => l.page === page);
     const layout = candidates
       .filter((l) => {
-        const s = model.seed(l.id);
-        return x >= s.x - 4 && x <= s.x + s.width + 4 && y >= l.top && y <= l.bottom;
+        const s = model.geometry(l.id);
+        if (model.placement(l.id)?.hidden) return false;
+        const seed = model.seed(l.id),
+          b =
+            model.sourcePreserved(l.id) && (!l.render || model.placement(l.id))
+              ? seed.bounds
+              : undefined;
+        return b
+          ? x >= b.x + s.x - seed.x - 4 &&
+              x <= b.x + s.x - seed.x + b.width + 4 &&
+              y >= b.y + s.y - seed.y - 4 &&
+              y <= b.y + s.y - seed.y + b.height + 4
+          : x >= s.x - 4 && x <= s.x + s.width + 4 && y >= l.top && y <= l.bottom;
       })
       .sort(
         (a, b) =>
@@ -268,6 +321,7 @@
       )[0];
     if (!layout) {
       active = undefined;
+      selected = [];
       onselection?.(null);
       return;
     }
@@ -275,7 +329,7 @@
     dragging = { id: layout.id, anchor: offset, page };
     host.setPointerCapture(event.pointerId);
     event.preventDefault();
-    void select(layout.id, offset);
+    void select(layout.id, offset, offset, event.shiftKey);
   }
   function move(event: PointerEvent) {
     if (!dragging) return;
@@ -306,8 +360,10 @@
     void start;
     void end;
     void revision;
-    void tick().then(() =>
-      root?.querySelector('.local')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
+    void tick().then(
+      () =>
+        window.document.activeElement === input &&
+        root?.querySelector('.local')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
     );
   });
   onMount(() => {
@@ -323,6 +379,7 @@
       revision++;
       if (active && !model.regions.has(active)) {
         active = undefined;
+        selected = [];
         value = '';
         onselection?.(null);
         return;
@@ -375,12 +432,24 @@
           model,
           fonts,
           pdf,
+          flow,
+          selected,
         }}
         aria-label={`Page ${page.index + 1}`}
         style:width="100%"
         style:height="100%"
       ></canvas>
       <div class="text-layer" style:transform={`scale(${scale})`}>
+        {#each layouts.filter((l) => l.page === page.index && selected.includes(l.id) && !adding && !model.placement(l.id)?.hidden) as layout (layout.id)}
+          <PdfTextBox
+            {model}
+            {layout}
+            {revision}
+            {editable}
+            group={selected}
+            onedit={() => void select(layout.id, start, end)}
+          />
+        {/each}
         <PdfEditableText
           {model}
           layouts={layouts.filter((l) => l.page === page.index)}

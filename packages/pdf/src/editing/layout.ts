@@ -25,7 +25,7 @@ export function layoutPdfText(
   id: string,
   fonts: PdfEditingFonts,
 ): PdfTextLayout {
-  const seed = model.seed(id),
+  const seed = model.geometry(id),
     glyphs: PdfLayoutGlyph[] = [],
     carets: PdfLayoutCaret[] = [];
   let x = seed.x,
@@ -147,14 +147,15 @@ export function layoutPdfTextFlow(
     const fragments: { layout: PdfTextLayout; continuation: number; render: boolean }[] = [];
     let count = 0;
     for (const layout of layouts) {
-      const seed = model.seed(layout.id),
+      const seed = model.geometry(layout.id),
         imported = seed.sources.length > 0,
         dirty = model.dirty(layout.id);
-      const shift = imported
-        ? earlier
-            .filter((p) => Math.abs(p.x - seed.x) <= Math.max(p.size, seed.style.size) * 2)
-            .reduce((sum, p) => sum + p.growth, 0)
-        : 0;
+      const shift =
+        imported && !model.placement(layout.id)
+          ? earlier
+              .filter((p) => Math.abs(p.x - seed.x) <= Math.max(p.size, seed.style.size) * 2)
+              .reduce((sum, p) => sum + p.growth, 0)
+          : 0;
       const originalHeight =
         (seed.delta
           .map((d) => d.insert)
@@ -163,7 +164,7 @@ export function layoutPdfTextFlow(
           1) *
           seed.lineHeight +
         seed.style.size * 1.25;
-      if (imported)
+      if (imported && !model.placement(layout.id))
         earlier.push({
           x: seed.x,
           size: seed.style.size,
@@ -175,6 +176,7 @@ export function layoutPdfTextFlow(
       const localStart = seed.y - firstContinuation * height;
       const edge = imported || localStart <= page.height ? Math.max(bottom, localStart) : bottom;
       const project = (y: number) => {
+        if (model.placement(layout.id)) return { y, continuation: 0 };
         const absolute = y + shift,
           continuation =
             !dirty && shift === 0
@@ -193,7 +195,7 @@ export function layoutPdfTextFlow(
         }
         return value;
       };
-      for (const glyph of layout.glyphs) {
+      for (const glyph of model.placement(layout.id)?.hidden ? [] : layout.glyphs) {
         const p = project(glyph.y);
         group(p.continuation).glyphs.push({ ...glyph, y: p.y });
       }

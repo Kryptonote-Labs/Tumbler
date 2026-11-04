@@ -83,6 +83,7 @@ export function createTextOperators(
         font,
         glyph,
         textMatrix: context.textMatrix,
+        contentTransform: state.transform,
         fontSize: state.fontSize,
         mode: state.mode,
         advance: [dx, dy],

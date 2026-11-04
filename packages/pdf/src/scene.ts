@@ -67,6 +67,8 @@ export interface PdfGlyphElement extends Element {
   readonly font: PdfFont;
   readonly glyph: PdfGlyph;
   readonly textMatrix: PdfMatrix;
+  /** Graphics CTM before the text and font transforms. Used for source-preserving movement. */
+  readonly contentTransform: PdfMatrix;
   readonly fontSize: number;
   readonly mode: number;
   readonly advance: readonly [number, number];

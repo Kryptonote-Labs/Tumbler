@@ -51,74 +51,81 @@
   }
 </script>
 
-{#each layouts as layout (layout.id + ':' + layout.page)}
-  <button
-    class="region-focus"
-    aria-label={model.text(layout.id).toString() || 'Empty text region'}
-    onfocus={() => onfocus(layout.id)}
-    style:left={`${model.seed(layout.id).x}px`}
-    style:top={`${layout.top}px`}
-    style:width={`${model.seed(layout.id).width}px`}
-    style:height={`${layout.bottom - layout.top}px`}
-  ></button>
-  {#each layout.glyphs as glyph}
-    {#if glyph.text !== '\n'}<svg
-        class="glyph"
-        aria-hidden="true"
-        width={Math.max(1, glyph.width + glyph.style.size)}
-        height={glyph.style.size * 2}
-        style:left={`${glyph.x}px`}
-        style:top={`${glyph.y - glyph.style.size}px`}
-        style:overflow="visible"
-        ><text
-          x="0"
-          y={glyph.style.size}
-          font-family={`PDF-${pdfFontKey(glyph.style)}`}
-          font-size={glyph.style.size}
-          fill="transparent"
-          text-decoration={glyph.style.underline ? 'underline' : 'none'}>{glyph.text}</text
-        ></svg
-      >{/if}
-    {#if active === layout.id && glyph.end > start && glyph.start < end}<span
-        class="selection"
-        style:left={`${glyph.x}px`}
-        style:top={`${glyph.y - glyph.style.size * 0.85}px`}
-        style:width={`${Math.max(1, glyph.width)}px`}
-        style:height={`${glyph.style.size * 1.15}px`}
-      ></span>{/if}
-  {/each}
-  {#if active === layout.id && start === end}
-    {@const caret = layout.carets.find((c) => c.offset === start)}
-    {#if caret}<span
-        class="caret local"
-        style:left={`${caret.x}px`}
-        style:top={`${caret.y - caret.height * 0.85}px`}
-        style:height={`${caret.height * 1.15}px`}
-      ></span>{/if}
-  {/if}
-  {#each peers as peer (peer.id)}
-    {@const range = peerRange(peer, layout)}
-    {#if range}
-      {#each layout.glyphs.filter((g) => g.end > range.start && g.start < range.end) as glyph}<span
+{#each layouts.filter((l) => !model.placement(l.id)?.hidden) as layout (layout.id + ':' + layout.page)}
+  <div class="text-region" data-pdf-text-region={layout.id}>
+    <button
+      class="region-focus"
+      aria-label={model.text(layout.id).toString() || 'Empty text region'}
+      onfocus={() => onfocus(layout.id)}
+      style:left={`${model.geometry(layout.id).x}px`}
+      style:top={`${layout.top}px`}
+      style:width={`${model.geometry(layout.id).width}px`}
+      style:height={`${layout.bottom - layout.top}px`}
+    ></button>
+    {#each layout.glyphs as glyph}
+      {#if glyph.text !== '\n'}<svg
+          class="glyph"
+          aria-hidden="true"
+          width={Math.max(1, glyph.width + glyph.style.size)}
+          height={glyph.style.size * 2}
+          style:left={`${glyph.x}px`}
+          style:top={`${glyph.y - glyph.style.size}px`}
+          style:overflow="visible"
+          ><text
+            x="0"
+            y={glyph.style.size}
+            font-family={`PDF-${pdfFontKey(glyph.style)}`}
+            font-size={glyph.style.size}
+            fill="transparent"
+            text-decoration={glyph.style.underline ? 'underline' : 'none'}>{glyph.text}</text
+          ></svg
+        >{/if}
+      {#if active === layout.id && glyph.end > start && glyph.start < end}<span
           class="selection"
-          style:background={peer.color}
           style:left={`${glyph.x}px`}
           style:top={`${glyph.y - glyph.style.size * 0.85}px`}
           style:width={`${Math.max(1, glyph.width)}px`}
           style:height={`${glyph.style.size * 1.15}px`}
-        ></span>{/each}
-      {#if range.caret}<span
-          class="caret remote"
-          style:--peer-color={peer.color}
-          style:left={`${range.caret.x}px`}
-          style:top={`${range.caret.y - range.caret.height * 0.85}px`}
-          style:height={`${range.caret.height * 1.15}px`}><span>{peer.name}</span></span
-        >{/if}
+        ></span>{/if}
+    {/each}
+    {#if active === layout.id && start === end}
+      {@const caret = layout.carets.find((c) => c.offset === start)}
+      {#if caret}<span
+          class="caret local"
+          style:left={`${caret.x}px`}
+          style:top={`${caret.y - caret.height * 0.85}px`}
+          style:height={`${caret.height * 1.15}px`}
+        ></span>{/if}
     {/if}
-  {/each}
+    {#each peers as peer (peer.id)}
+      {@const range = peerRange(peer, layout)}
+      {#if range}
+        {#each layout.glyphs.filter((g) => g.end > range.start && g.start < range.end) as glyph}<span
+            class="selection"
+            style:background={peer.color}
+            style:left={`${glyph.x}px`}
+            style:top={`${glyph.y - glyph.style.size * 0.85}px`}
+            style:width={`${Math.max(1, glyph.width)}px`}
+            style:height={`${glyph.style.size * 1.15}px`}
+          ></span>{/each}
+        {#if range.caret}<span
+            class="caret remote"
+            style:--peer-color={peer.color}
+            style:left={`${range.caret.x}px`}
+            style:top={`${range.caret.y - range.caret.height * 0.85}px`}
+            style:height={`${range.caret.height * 1.15}px`}><span>{peer.name}</span></span
+          >{/if}
+      {/if}
+    {/each}
+  </div>
 {/each}
 
 <style>
+  .text-region {
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
   .glyph {
     position: absolute;
     white-space: pre;
