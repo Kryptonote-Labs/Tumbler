@@ -292,6 +292,7 @@ export class NativePresentationDocument extends PresentationArtifact {
     return (this.exported = artifact);
   }
   override bytes() {
+    if (!this.chain) return this.preservationPackage().archive.originalBytes();
     return this.exportArtifact().bytes();
   }
   override editText(command: PresentationTextEdit) {
