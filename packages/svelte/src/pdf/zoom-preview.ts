@@ -28,6 +28,7 @@ export function pdfZoomPreview(
         transform: string;
         willChange: string;
         transformOrigin: string;
+        pages: { element: HTMLElement; translate: string }[];
         bounds: {
           left: number;
           top: number;
@@ -67,8 +68,16 @@ export function pdfZoomPreview(
   }
   function paint() {
     frame = undefined;
-    if (preview)
-      preview.root.style.transform = `translate(${preview.tx}px, ${preview.ty}px) scale(${preview.factor})`;
+    if (preview) {
+      const p = preview;
+      // Keep gaps in viewport pixels, matching the committed layout on every visible page.
+      const gapShift = p.bounds.gap * (1 - p.factor) / p.factor;
+      p.pages.forEach(({ element }, index) => {
+        element.style.translate = `0 ${index * gapShift}px`;
+      });
+      const y = p.ty - p.bounds.index * p.bounds.gap * (1 - p.factor);
+      p.root.style.transform = `translate(${p.tx}px, ${y}px) scale(${p.factor})`;
+    }
   }
   function schedule() {
     if (frame === undefined) frame = requestAnimationFrame(paint);
@@ -77,10 +86,11 @@ export function pdfZoomPreview(
   }
   function restore() {
     if (!preview) return;
-    const { root, transform, willChange, transformOrigin } = preview;
+    const { root, transform, willChange, transformOrigin, pages } = preview;
     root.style.transform = transform;
     root.style.willChange = willChange;
     root.style.transformOrigin = transformOrigin;
+    for (const { element, translate } of pages) element.style.translate = translate;
   }
   function finish() {
     clearTimeout(timer);
@@ -173,6 +183,7 @@ export function pdfZoomPreview(
         transform: root.style.transform,
         willChange: root.style.willChange,
         transformOrigin: root.style.transformOrigin,
+        pages: Array.from(pages, element => ({ element, translate: element.style.translate })),
       };
       viewport.setAttribute('data-pdf-zooming', '');
       viewport.dispatchEvent(new Event('pdfzoomstart'));
