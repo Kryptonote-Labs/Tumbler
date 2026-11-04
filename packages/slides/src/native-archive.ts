@@ -179,7 +179,7 @@ export function openPresentationNativeArchive(
     { ...metadata, slides },
     () => {
       if (source) return source;
-      if (!archive.preservation)
+      if (!archive.preservation?.length)
         throw new Error('Presentation preservation resources have not loaded.');
       const pkg = packageRoot.parse(
         decodePresentationBlock(archive.preservation, preservationCodecs),
@@ -188,6 +188,12 @@ export function openPresentationNativeArchive(
     },
     options,
   );
+}
+
+/** Recovery stores the native branch without forcing export preservation to load. */
+export function encodePresentationNativeState(input:PresentationArtifact):Uint8Array {
+ const model=importNativePresentation(input),{slides,...metadata}=model.snapshot();
+ return encodePresentationNativeArchive({version:1,manifest:encodePresentationBlock({...metadata,slides:slides.map(({slide})=>({id:slide.id,part:slide.part,title:slide.title,hidden:slide.hidden}))}),slides:new Map(slides.map(slide=>[slide.slide.id,encodeSlide(slide)])),preservation:new Uint8Array()});
 }
 
 /** Complete envelopes are for export workers and recovery, never a prerequisite for first slide paint. */

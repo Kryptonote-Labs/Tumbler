@@ -44,7 +44,7 @@ export interface NativeGraph {
 }
 
 /** Inline ordinary trees; only genuinely shared objects need graph references. */
-export function writeNativeGraph(input: unknown, codecs: readonly NativeCodec[]) {
+export function writeNativeGraph(input: unknown, codecs: readonly NativeCodec[], options: {canonical?:boolean} = {}) {
   const counts = new WeakMap<object, number>();
   const classes = new WeakMap<object, { codec: NativeCodec; data: unknown }>();
   const count = (input: unknown) => {
@@ -111,7 +111,7 @@ export function writeNativeGraph(input: unknown, codecs: readonly NativeCodec[])
     const type = classes.get(input);
     if (type) return { c: [type.codec.name, encode(type.data)] };
     return {
-      o: Object.fromEntries(Object.entries(input).map(([key, value]) => [key, encode(value)])),
+      o: Object.fromEntries(Object.entries(input).sort(([a],[b]) => options.canonical ? (a < b ? -1 : a > b ? 1 : 0) : 0).map(([key, value]) => [key, encode(value)])),
     };
   };
   return { graph: { root: encode(input), nodes } satisfies NativeGraph, resources };

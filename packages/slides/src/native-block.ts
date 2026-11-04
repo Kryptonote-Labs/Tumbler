@@ -25,7 +25,7 @@ export function encodePresentationBlock(
   value: unknown,
   codecs: readonly NativeCodec[] = [],
 ): Uint8Array {
-  const { graph, resources } = writeNativeGraph(value, [...commonCodecs, ...codecs]);
+  const { graph, resources } = writeNativeGraph(value, [...commonCodecs, ...codecs], {canonical:true});
   const json = encoder.encode(JSON.stringify({ graph, lengths: resources.map((r) => r.length) }));
   const raw = new Uint8Array(8 + json.length + resources.reduce((n, r) => n + r.length, 0));
   new DataView(raw.buffer).setFloat64(0, json.length, true);

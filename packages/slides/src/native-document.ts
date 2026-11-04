@@ -104,6 +104,12 @@ export class NativePresentationDocument extends PresentationArtifact {
     for (let node = this.chain; node; node = node.previous) changes.push(node.change);
     return { ...this.state, changes: changes.reverse() };
   }
+  advanceCounter(counter:number):NativePresentationDocument {
+    return counter===this.state.counter?this:new NativePresentationDocument({...this.state,counter},this.source,this.chain,this.options);
+  }
+  withSource(source:()=>PresentationArtifact):NativePresentationDocument {
+    return new NativePresentationDocument(this.state,source,this.chain,this.options);
+  }
   /** Loading another slide preserves the local branch and its export provenance. */
   hydrate(other: NativePresentationDocument, ids: ReadonlySet<string>): NativePresentationDocument {
     const slides = this.state.slides.map((s) =>

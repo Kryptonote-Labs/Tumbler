@@ -93,5 +93,5 @@ export { NativePresentationDocument, importNativePresentation, restoreNativePres
 export type { NativePresentationState, NativeSlide, NativeChange } from "./native-document.ts";
 export { encodePresentationBlock, decodePresentationBlock, isPresentationBlock } from "./native-block.ts";
 
-export { createPresentationNativeArchive, createPresentationNativeView, openPresentationNativeArchive, encodePresentationNativeArchive, decodePresentationNativeArchive, readPresentationNativeManifest } from "./native-archive.ts";
+export { createPresentationNativeArchive, createPresentationNativeView, encodePresentationNativeState, openPresentationNativeArchive, encodePresentationNativeArchive, decodePresentationNativeArchive, readPresentationNativeManifest } from "./native-archive.ts";
 export type { NativePresentationArchive, NativePresentationManifest } from "./native-archive.ts";
