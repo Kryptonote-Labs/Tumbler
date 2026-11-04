@@ -290,8 +290,9 @@ authorization, uploads and download controls belong to the host application.
 `pdfZoomPreview(viewport, getScale, commit)` separates gesture presentation from PDF rendering.
 Call `zoom(nextScale, clientPoint)` for gesture updates, `pan(dx, dy)` for touch movement, and
 `finish()` at gesture end. Wheel gestures also settle after 140 ms without input. The helper
-writes one compositor transform per animation frame and suspends full-resolution page painting during the gesture,
-and supplies the original page point under the final focal point to `commit`. That callback must
+updates compositor transforms on cached pages once per animation frame, preserves the page gaps,
+and suspends full-resolution page painting during the gesture. It supplies the original page point
+under the final focal point to `commit`. That callback must
 synchronously apply the new display scale, then adjust the viewport scroll using the supplied
 page element, `offsetX`, `offsetY`, `x` and `y`. Call `destroy()` when the viewport unmounts.
 The current bitmap can soften during a pinch; final tiles render at the exact device resolution.
@@ -302,10 +303,12 @@ viewport so its width stays stable when a vertical scrollbar appears or disappea
 
 The viewer requires module workers, OffscreenCanvas and a bundler that handles
 `new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' })`, such as Vite.
-Its worker must be allowed by the host's content security policy. The transparent selection
-layer groups affine glyphs into SVG text runs. Per-glyph positions, advances, Unicode node
-identity and the headless hit-test index still determine native selection and copying.
+Its worker must be allowed by the host's content security policy. When consuming vendored sources
+outside the app directory in development, include their directory in Vite's `server.fs.allow` so
+it can serve the worker module.
 
+The transparent selection layer groups affine glyphs into SVG text runs. Per-glyph positions, advances, Unicode node
+identity and the headless hit-test index still determine native selection and copying.
 
 Hosts can call `PresentationSlideView.editText(objectKey)` after rendering an inserted
 text box or table to focus its text editor. Tables start in the first editable cell.
