@@ -53,6 +53,8 @@ export class PdfInterpreter {
     readonly document: PdfDocument,
     private limits: PdfExecutionLimits = {},
   ) {}
+  /** Carry the same execution budget into isolated renderers. */
+  get executionLimits(): PdfExecutionLimits { return { ...this.limits }; }
   page(index: number): PdfPageScene {
     const cached = this.scenes.get(index);
     if (cached) return cached;

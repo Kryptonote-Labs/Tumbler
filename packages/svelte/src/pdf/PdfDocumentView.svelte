@@ -3,19 +3,35 @@
   import { trackPdfSelection } from './pointer-selection.ts';
   import { selectedPdfText } from './selection.ts';
   import { PdfInterpreter, type PdfDocument } from '@tumblerjs/pdf';
+  import { PdfPageRenderer } from './page-renderer.ts';
   import PdfPageView from './PdfPageView.svelte';
-  let { document, scale = 4 / 3, onpagechange, onerror }: {
+  let {
+    document,
+    scale = 4 / 3,
+    onpagechange,
+    onerror,
+  }: {
     document: PdfDocument;
     scale?: number;
     onpagechange?: (page: number) => void;
     onerror?: (error: Error, page: number) => void;
   } = $props();
+  let renderer = $state.raw<PdfPageRenderer>();
+  $effect(() => {
+    const current = new PdfPageRenderer(document);
+    renderer = current;
+    return () => current.destroy();
+  });
   const interpreter = $derived(new PdfInterpreter(document));
   let host: HTMLDivElement;
   onMount(() => {
     const stopSelection = trackPdfSelection(host);
     const copy = (event: ClipboardEvent) => {
-      if (event.target instanceof Element && event.target.closest('input,textarea,[contenteditable]')) return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest('input,textarea,[contenteditable]')
+      )
+        return;
       if (!host.getClientRects().length || host.closest('[inert],[hidden]')) return;
       const text = selectedPdfText(window.getSelection(), host);
       if (text === undefined || !event.clipboardData) return;
@@ -23,21 +39,38 @@
       event.preventDefault();
     };
     host.ownerDocument.addEventListener('copy', copy);
-    return () => { stopSelection(); host.ownerDocument.removeEventListener('copy', copy); };
+    return () => {
+      stopSelection();
+      host.ownerDocument.removeEventListener('copy', copy);
+    };
   });
   export function goToPage(index: number) {
     host.querySelector(`[data-pdf-page="${index + 1}"]`)?.scrollIntoView({ block: 'start' });
   }
 </script>
 
-<div class="pdf-document" bind:this={host}>
-  {#key document}
-  {#each document.pages as page, index (page.id)}
-    <PdfPageView {interpreter} {index} {scale} onvisible={onpagechange} {onerror} />
-  {/each}
-  {/key}
+<div
+  class="pdf-document"
+  data-pdf-document
+  data-pdf-max-width={document.pages.reduce((maximum, page) => Math.max(maximum, page.width), 0)}
+  bind:this={host}
+>
+  {#if renderer}
+    {#key document}
+      {#each document.pages as page, index (page.id)}
+        <PdfPageView {interpreter} {renderer} {index} {scale} onvisible={onpagechange} {onerror} />
+      {/each}
+    {/key}
+  {/if}
 </div>
 
 <style>
-  .pdf-document { display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 24px; min-width: min-content; }
+  .pdf-document {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 24px;
+    min-width: min-content;
+  }
 </style>

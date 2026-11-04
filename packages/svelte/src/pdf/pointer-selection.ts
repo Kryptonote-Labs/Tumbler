@@ -12,15 +12,22 @@ const layers = new WeakMap<
 /** Keep the headless hit-test index paired with the mounted browser text nodes. */
 export function registerPdfTextLayer(layer: HTMLElement, content: PdfTextContent) {
   const nodes = new Map<string, Node>();
-  for (const span of layer.querySelectorAll<HTMLElement>("[data-pdf-text]")) {
-    if (span.firstChild && span.dataset.pdfTextId)
-      nodes.set(span.dataset.pdfTextId, span.firstChild);
+  for (const span of layer.querySelectorAll<HTMLElement | SVGElement>("[data-pdf-text]")) {
+    const id = span.getAttribute("data-pdf-text-id");
+    if (span.firstChild && id) nodes.set(id, span.firstChild);
   }
   layers.set(layer, { content, index: new PdfTextSelectionIndex(content), nodes });
   return () => {
     layers.delete(layer);
   };
 }
+/** Resolve a screen point through the same geometry used by native drag endpoints. */
+export function pdfTextCaretAt(layer: HTMLElement, x: number, y: number) {
+  const entry = layers.get(layer), rect = layer.getBoundingClientRect();
+  if (!entry || !rect.width || !rect.height) return;
+  return entry.index.caretAt(((x-rect.left)*entry.content.width)/rect.width, ((y-rect.top)*entry.content.height)/rect.height);
+}
+
 function caretAt(host: HTMLElement, x: number, y: number): Caret | undefined {
   let closest: HTMLElement | undefined,
     best = Infinity;
@@ -38,12 +45,8 @@ function caretAt(host: HTMLElement, x: number, y: number): Caret | undefined {
     }
   }
   if (!closest) return;
-  const entry = layers.get(closest)!,
-    rect = closest.getBoundingClientRect();
-  const caret = entry.index.caretAt(
-    ((x - rect.left) * entry.content.width) / rect.width,
-    ((y - rect.top) * entry.content.height) / rect.height,
-  );
+  const entry = layers.get(closest)!;
+  const caret = pdfTextCaretAt(closest, x, y);
   const node = caret && entry.nodes.get(caret.id);
   return node && caret ? { node, offset: caret.offset } : undefined;
 }
