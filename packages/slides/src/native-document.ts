@@ -1,3 +1,4 @@
+import { applyNativeModelCommand } from './native-command.ts';
 import type { OpcPackage } from '@tumblerjs/opc';
 import { presentationResourceHash } from './native-resources.ts';
 import { PresentationArtifact } from './artifact.ts';
@@ -21,17 +22,8 @@ import type {
   OpenPresentationOptions,
 } from './model.ts';
 import { PresentationError } from './model.ts';
-import { editNativeText } from './native-text.ts';
-import {
-  insertNativeObject,
-  moveNativeObject,
-  nativeGradient,
-  nativeColour,
-} from './native-shape.ts';
+
 import { findPresentationMatches } from './search.ts';
-import { nativeLayoutTemplate as layoutTemplate } from './native-layout.ts';
-import { editNativeTable } from './native-table.ts';
-import { insertNativeInk } from './native-ink.ts';
 import {
   decodePresentationNativeArchive,
   openPresentationNativeArchive,
@@ -41,11 +33,14 @@ import { openPresentationArtifact } from './artifact.ts';
 import {
   presentationThemeColours,
   presentationRunDefaults,
+  presentationRunFonts,
+  presentationNativeFonts,
   bindPresentationThemeColours,
 } from './reader.ts';
 import { ThemeColorScheme, THEME_COLOR_SLOTS } from '@tumblerjs/ooxml';
 
 export type NativeSlide = {
+  themeFonts?: import('@tumblerjs/ooxml').ThemeFontScheme | undefined;
   fonts?: PresentationDocument['embeddedFonts'];
   slide: PresentationSlide;
   palette: readonly (readonly [(typeof THEME_COLOR_SLOTS)[number], string | undefined])[];
@@ -295,372 +290,32 @@ export class NativePresentationDocument extends PresentationArtifact {
         (model, cmd) => model.nativeCommand(cmd),
         this as NativePresentationDocument,
       );
-    const target =
-      'slideId' in command
-        ? this.state.slides.find((s) => s.slide.id === command.slideId)
-        : undefined;
-    if ('slideId' in command && !target) throw new Error('Slide not found.');
-    const selected =
-      'objectKey' in command && command.name !== 'paste-object'
-        ? target?.slide.objects.find((o) => o.key === command.objectKey)
-        : undefined;
-    if (
-      'objectKey' in command &&
-      command.name !== 'paste-object' &&
-      (!selected || selected.restriction)
-    )
-      throw new Error(selected?.restriction ?? 'Slide object not found.');
-    let counter = this.state.counter,
-      slides = this.state.slides;
-    const nextId = () => `native-${++counter}`;
-    const patchSlide = (state: NativeSlide) => {
-      slides = slides.map((s) => (s === target ? state : s));
-    };
-    const patchObject = (object: SlideObject) => {
-      if (!target || !selected) throw new Error('Select an object.');
-      patchSlide({
-        ...target,
-        slide: {
-          ...target.slide,
-          objects: target.slide.objects.map((o) => (o === selected ? object : o)),
-        },
-      });
-    };
-    const createdSlides: string[] = [],
-      createdObjects: { slideId: string; keys: string[] }[] = [];
-    const addObjects = (slideId: string, objects: readonly SlideObject[]) => {
-      createdObjects.push({
-        slideId,
-        keys: objects.filter((o) => o.layer === 'slide').map((o) => o.key),
-      });
-    };
-    switch (command.name) {
-      case 'edit-text':
-      case 'format-text':
-      case 'paragraph': {
-        const object = presentationTextTarget(selected!, command.cell);
-        if (!object.textEditable || !object.text) throw new Error('This text is read-only.');
-        const text = editNativeText(object.text, command);
-        patchObject(
-          command.cell
-            ? {
-                ...selected!,
-                table: {
-                  ...selected!.table!,
-                  cells: selected!.table!.cells.map((c) =>
-                    c.row === command.cell!.row && c.column === command.cell!.column
-                      ? { ...c, text }
-                      : c,
-                  ),
-                },
-              }
-            : { ...selected!, text },
-        );
-        break;
-      }
-      case 'edit-table':
-        if (!selected!.table) throw new Error('Select a table.');
-        patchObject({ ...selected!, table: editNativeTable(selected!.table, command) });
-        break;
-      case 'update-object':
-        if (!selected!.movable) throw new Error('This object cannot be moved.');
-        patchObject(moveNativeObject(selected!, command));
-        break;
-      case 'style-shape': {
-        const gradient =
-          typeof command.fill === 'object'
-            ? nativeGradient(command.fill)
-            : command.fill === undefined
-              ? selected!.gradient
-              : undefined;
-        patchObject({
-          ...selected!,
-          fill: typeof command.fill === 'string' ? nativeColour(command.fill) : selected!.fill,
-          gradient,
-          stroke: command.stroke === undefined ? selected!.stroke : nativeColour(command.stroke),
-          strokeWidth: command.strokeWidth ?? selected!.strokeWidth,
-          cornerRadius: command.cornerRadius ?? selected!.cornerRadius,
-        });
-        break;
-      }
-      case 'delete-object':
-        patchSlide({
-          ...target!,
-          slide: { ...target!.slide, objects: target!.slide.objects.filter((o) => o !== selected) },
-        });
-        break;
-      case 'duplicate-object': {
-        const key = nextId();
-        let object = { ...selected!, key, shapeId: key };
-        object = moveNativeObject(object, {
-          name: 'update-object',
-          slideId: command.slideId,
-          objectKey: key,
-          ...object.transform,
-          x: object.transform.x + 16,
-          y: object.transform.y + 16,
-        });
-        patchSlide({
-          ...target!,
-          slide: { ...target!.slide, objects: [...target!.slide.objects, object] },
-        });
-        addObjects(command.slideId, [object]);
-        break;
-      }
-      case 'insert-ink': {
-        const key = nextId(),
-          object = insertNativeInk(command, key, target!.slide.part);
-        patchSlide({
-          ...target!,
-          slide: { ...target!.slide, objects: [...target!.slide.objects, object] },
-        });
-        addObjects(command.slideId, [object]);
-        break;
-      }
-      case 'paste-object': {
-        const bytes = Uint8Array.from(atob(command.source), (c) => c.charCodeAt(0));
-        const source = isPresentationBlock(bytes)
-          ? openPresentationNativeArchive(decodePresentationNativeArchive(bytes))
-          : importNativePresentation(openPresentationArtifact(bytes));
-        const object = source.document.slides
-          .find((s) => s.id === command.sourceSlideId)
-          ?.objects.find((o) => o.key === command.objectKey);
-        if (!object || object.layer !== 'slide' || object.restriction)
-          throw new Error('Copy an editable slide object.');
-        if (source.state.conformance !== this.state.conformance)
-          throw new Error('Clipboard objects must use the destination presentation conformance.');
-        const key = nextId(),
-          copy = { ...object, key, shapeId: key, sourcePart: target!.slide.part };
-        patchSlide({
-          ...target!,
-          slide: { ...target!.slide, objects: [...target!.slide.objects, copy] },
-        });
-        addObjects(command.slideId, [copy]);
-        break;
-      }
-      case 'insert-object': {
-        const key = nextId(),
-          object = insertNativeObject(command, key, key, target!.slide.part);
-        patchSlide({
-          ...target!,
-          slide: { ...target!.slide, objects: [...target!.slide.objects, object] },
-        });
-        addObjects(command.slideId, [object]);
-        break;
-      }
-      case 'set-slide-hidden':
-        patchSlide({ ...target!, slide: { ...target!.slide, hidden: command.hidden } });
-        break;
-      case 'delete-slide':
-        if (slides.length <= 1) throw new Error('Keep at least one slide.');
-        slides = slides.filter((s) => s !== target);
-        break;
-      case 'move-slide': {
-        if (command.index >= slides.length) throw new RangeError('Invalid slide position.');
-        const order = slides.filter((s) => s !== target);
-        order.splice(command.index, 0, target!);
-        slides = order;
-        break;
-      }
-      case 'insert-slide': {
-        if (command.index > slides.length) throw new RangeError('Invalid slide position.');
-        const donor =
-          slides.find((s) => s.slide.id === (command.sourceId ?? command.layoutSourceId)) ??
-          slides[Math.max(0, command.index - 1)];
-        if ((command.sourceId || command.layoutSourceId) && !donor)
-          throw new Error('Source slide not found.');
-        const id = nextId(),
-          template = command.sourceId
-            ? donor!.slide
-            : layoutTemplate(
-                command.layoutSourceId ? 'title-content' : 'blank',
-                this.state.width,
-                this.state.height,
-              );
-        const part = `/native/${id}.xml`,
-          objects = template.objects.map((o) => ({
-            ...o,
-            key: nextId(),
-            shapeId: `native-${counter}`,
-            sourcePart: o.layer === 'slide' ? part : o.sourcePart,
-          }));
-        const slide = {
-          ...template,
-          id,
-          part,
-          notes: command.sourceId ? '' : template.notes,
-          objects,
-        };
-        const next = {
-          slide,
-          palette: donor?.palette ?? [],
-          inheritedBackground: donor?.inheritedBackground ?? {
-            background: '#FFFFFF',
-            backgroundGradient: undefined,
-          },
-        };
-        const order = [...slides];
-        order.splice(command.index, 0, next);
-        slides = order;
-        createdSlides.push(id);
-        addObjects(id, objects);
-        break;
-      }
-      case 'layout': {
-        const template = layoutTemplate(command.layout, this.state.width, this.state.height),
-          placeholders = target!.slide.objects.filter(
-            (o) => o.layer === 'slide' && o.placeholder && o.textEditable,
-          ),
-          used = new Set<SlideObject>();
-        const title = (s: string) => s === 'title' || s === 'ctrTitle';
-        const objects = template.objects.map((o) => {
-          const match = placeholders.find(
-            (p) => !used.has(p) && title(p.placeholder!) === title(o.placeholder!),
-          );
-          if (match) used.add(match);
-          const key = match?.key ?? nextId();
-          return {
-            ...o,
-            key,
-            shapeId: match?.shapeId ?? key,
-            sourcePart: target!.slide.part,
-            text: match?.text ? { ...o.text!, paragraphs: match.text.paragraphs } : o.text,
-          };
-        });
-        const kept = target!.slide.objects.filter(
-          (o) => !placeholders.includes(o) || (!used.has(o) && !!slideTextValue(o)),
-        );
-        patchSlide({ ...target!, slide: { ...target!.slide, objects: [...kept, ...objects] } });
-        addObjects(
-          command.slideId,
-          objects.filter((o) => !target!.slide.objects.some((p) => p.key === o.key)),
-        );
-        break;
-      }
-      case 'arrange': {
-        const object = selected!,
-          t = object.transform;
-        if (['left', 'center', 'right', 'top', 'middle', 'bottom'].includes(command.action))
-          return this.nativeCommand({
-            name: 'update-object',
-            slideId: command.slideId,
-            objectKey: command.objectKey,
-            ...t,
-            x:
-              command.action === 'left'
-                ? 0
-                : command.action === 'center'
-                  ? (this.state.width - t.width) / 2
-                  : command.action === 'right'
-                    ? this.state.width - t.width
-                    : t.x,
-            y:
-              command.action === 'top'
-                ? 0
-                : command.action === 'middle'
-                  ? (this.state.height - t.height) / 2
-                  : command.action === 'bottom'
-                    ? this.state.height - t.height
-                    : t.y,
-          });
-        const list = [...target!.slide.objects],
-          at = list.indexOf(object);
-        list.splice(at, 1);
-        const index =
-          command.action === 'front'
-            ? list.length
-            : command.action === 'back'
-              ? 0
-              : command.action === 'forward'
-                ? Math.min(at + 1, list.length)
-                : Math.max(at - 1, 0);
-        list.splice(index, 0, object);
-        patchSlide({ ...target!, slide: { ...target!.slide, objects: list } });
-        break;
-      }
-      case 'background':
-      case 'set-background': {
-        const fill =
-          command.name === 'background'
-            ? { kind: 'solid' as const, color: command.color }
-            : command.fill;
-        let slide = {
-          ...target!.slide,
-          backgroundGradient: undefined as PresentationSlide['backgroundGradient'],
-          backgroundPattern: undefined,
-          backgroundPicture: undefined,
-        } as PresentationSlide;
-        if (fill.kind === 'inherit') slide = { ...slide, ...target!.inheritedBackground };
-        if (fill.kind === 'solid')
-          slide = { ...slide, background: nativeColour(fill.color, fill.opacity ?? 1) };
-        if (fill.kind === 'gradient')
-          slide = { ...slide, background: 'none', backgroundGradient: nativeGradient(fill) };
-        if (fill.kind === 'pattern')
-          slide = {
-            ...slide,
-            background: 'none',
-            backgroundPattern: {
-              preset: fill.preset,
-              foreground: nativeColour(fill.foreground),
-              background: nativeColour(fill.background),
-            },
-          };
-        if (fill.kind === 'picture')
-          slide = {
-            ...slide,
-            background: 'none',
-            backgroundPicture: {
-              bytes: Uint8Array.from(atob(fill.data), (c) => c.charCodeAt(0)),
-              contentType: fill.contentType,
-              crop: fill.crop ?? [0, 0, 0, 0],
-              opacity: fill.opacity ?? 1,
-              ...(fill.tile
-                ? {
-                    tile: {
-                      ...fill.tile,
-                      x: fill.tile.x ?? 0,
-                      y: fill.tile.y ?? 0,
-                      align: fill.tile.align ?? 'tl',
-                      flip: fill.tile.flip ?? 'none',
-                    },
-                  }
-                : {}),
-            },
-          };
-        patchSlide({ ...target!, slide });
-        break;
-      }
-      case 'replace-all': {
-        let result: NativePresentationDocument = this;
-        for (const { editable, ...match } of findPresentationMatches(this.document, command.find, {
-          matchCase: command.caseSensitive,
-          wholeWord: command.wholeWord ?? false,
-        }).reverse())
-          if (editable)
-            result = result.nativeCommand({ name: 'edit-text', ...match, value: command.value });
-        return result;
-      }
-      default: {
-        const exhaustive: never = command;
-        throw new Error(`Unsupported native command: ${exhaustive}`);
-      }
+    if (command.name === 'replace-all') {
+      let result: NativePresentationDocument = this;
+      for (const { editable, ...match } of findPresentationMatches(this.document, command.find, {
+        matchCase: command.caseSensitive,
+        wholeWord: command.wholeWord ?? false,
+      }).reverse())
+        if (editable)
+          result = result.nativeCommand({ name: 'edit-text', ...match, value: command.value });
+      return result;
     }
+    const applied = applyNativeModelCommand(this.state, command);
     return new NativePresentationDocument(
       {
-        ...this.state,
-        slides,
-        counter,
+        ...applied.state,
         revisionKey: presentationResourceHash(
           new TextEncoder().encode(
-            this.state.revisionKey + ':' + this.state.counter + ':' + JSON.stringify(command),
+            this.state.revisionKey +
+              ':' +
+              this.state.counter +
+              ':' +
+              JSON.stringify(applied.change.command),
           ),
         ),
       },
       this.source,
-      {
-        previous: this.chain,
-        change: { command, before: this.state.revisionKey, createdSlides, createdObjects },
-      },
+      { previous: this.chain, change: applied.change },
       this.options,
     );
   };
@@ -680,12 +335,17 @@ export function importNativePresentation(
           const inherited = presentationRunDefaults(run);
           if (!inherited) return run;
           const { text, ...nativeDefaults } = inherited;
-          return { ...run, nativeDefaults };
+          return {
+            ...run,
+            nativeFonts: presentationRunFonts(run),
+            nativeDefaults: { ...nativeDefaults, nativeFonts: presentationRunFonts(inherited) },
+          };
         }),
         ...(p.endRun
           ? {
               endRun: {
                 ...p.endRun,
+                nativeFonts: presentationRunFonts(p.endRun),
                 nativeDefaults: presentationRunDefaults(p.endRun) ?? p.endRun,
               },
             }
@@ -707,6 +367,7 @@ export function importNativePresentation(
     const scheme = presentationThemeColours(doc, slide.id);
     return {
       slide,
+      themeFonts: presentationNativeFonts(doc, original.id),
       fonts: doc.embeddedFonts?.filter((font) =>
         slide.objects.some((o) =>
           [

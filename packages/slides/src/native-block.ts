@@ -1,4 +1,4 @@
-import { LosslessXmlDocument } from '@tumblerjs/ooxml';
+import { ThemeFontScheme, LosslessXmlDocument } from '@tumblerjs/ooxml';
 import { deflateRaw, inflateRaw } from '@tumblerjs/opc/compression';
 import {
   crc32,
@@ -9,6 +9,12 @@ import {
 } from '@tumblerjs/opc';
 
 export const presentationBlockCodecs = [
+  nativeCodec(
+    'theme-fonts',
+    (v): v is ThemeFontScheme => v instanceof ThemeFontScheme,
+    (v) => ({ name: v.name, major: v.major, minor: v.minor }),
+    (v) => new ThemeFontScheme(v.name, v.major, v.minor),
+  ),
   nativeCodec(
     'xml-source',
     (v): v is LosslessXmlDocument => v instanceof LosslessXmlDocument,

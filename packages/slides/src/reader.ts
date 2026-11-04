@@ -41,6 +41,7 @@ import {
   type SlideParagraph,
   type SlideText,
   type SlideTextRun,
+  type NativeTextFonts,
   type SlideTransform,
 } from "./model.ts";
 
@@ -116,6 +117,9 @@ interface ReadCache {
     { colors: ThemeColorScheme; fonts: ThemeFontScheme }
   >;
 }
+const nativeRunFonts=new WeakMap<SlideTextRun,NativeTextFonts>();
+export function presentationRunFonts(run:SlideTextRun){return nativeRunFonts.get(run);}
+export function presentationNativeFonts(document:PresentationDocument,id:string){const slide=document.slides.find(s=>s.id===id);return slide&&slideContexts.get(slide)?.fonts;}
 const nativeRunDefaults = new WeakMap<SlideTextRun,SlideTextRun>();
 export function presentationRunDefaults(run:SlideTextRun){return nativeRunDefaults.get(run);}
 const nativePalettes = new WeakMap<PresentationDocument, Map<string, ThemeColorScheme>>();
@@ -1928,6 +1932,8 @@ class Reader {
           capitals: runAttr("cap") ?? "none",
           ...(hyperlink ? { hyperlink } : {}),
         }));
+        const fontContext:NativeTextFonts={theme:context.fonts,authored:{latin:defaults.map(item=>attr(this.child(item,'latin'),'typeface')).find(v=>!!v),eastAsian:defaults.map(item=>attr(this.child(item,'ea'),'typeface')).find(v=>!!v),complexScript:defaults.map(item=>attr(this.child(item,'cs'),'typeface')).find(v=>!!v)},role:['title','ctrTitle'].includes(role)?'major':'minor',language:runAttr('lang'),scale:fontScale};
+        for(const run of result)nativeRunFonts.set(run,fontContext);
         if(collectDefaults)for(const run of result){const inherited=runStyle(undefined,run.text,false)[0];if(inherited)nativeRunDefaults.set(run,inherited);}
         return result;
       };
@@ -2030,6 +2036,9 @@ class Reader {
         .map((entry) => this.child(entry, "tabLst"))
         .find(Boolean);
       paragraphs.push({
+        bulletScale:bulletProp("buSzPts")?undefined:percentage(attr(bulletProp("buSzPct"),"val"),1),
+        bulletColorFromText:this.color(bulletProp("buClr"),context)===undefined,
+        bulletFontFromText:!attr(bulletProp("buFont"),"typeface"),
         level,
         tabs: this.children(tabs)
           .filter((tab) => tab.localName === "tab")

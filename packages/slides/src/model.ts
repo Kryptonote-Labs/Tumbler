@@ -1,12 +1,8 @@
-import type {
-  DrawingGradient,
-  DrawingShadow,
-  DrawingLineEnd,
-} from "./appearance.ts";
-import type { DrawingGeometry } from "./drawing-geometry.ts";
-import type { ChartModel } from "@tumblerjs/charts";
-import type { LosslessXmlDocument } from "@tumblerjs/ooxml";
-import type { OpcPackage } from "@tumblerjs/opc";
+import type { DrawingGradient, DrawingShadow, DrawingLineEnd } from './appearance.ts';
+import type { DrawingGeometry } from './drawing-geometry.ts';
+import type { ChartModel } from '@tumblerjs/charts';
+import type { LosslessXmlDocument } from '@tumblerjs/ooxml';
+import type { OpcPackage } from '@tumblerjs/opc';
 
 export type Matrix = readonly [number, number, number, number, number, number];
 export interface SlideTransform {
@@ -23,8 +19,16 @@ export interface PresentationDiagnostic {
   readonly shapeId?: string;
   readonly message: string;
 }
+export interface NativeTextFonts {
+  readonly theme: import('@tumblerjs/ooxml').ThemeFontScheme | undefined;
+  readonly authored: Readonly<Record<'latin' | 'eastAsian' | 'complexScript', string | undefined>>;
+  readonly role: 'major' | 'minor';
+  readonly language: string | undefined;
+  readonly scale: number;
+}
 export interface SlideTextRun {
-  readonly nativeDefaults?: Omit<SlideTextRun,"text"|"nativeDefaults">;
+  readonly nativeFonts?: NativeTextFonts | undefined;
+  readonly nativeDefaults?: Omit<SlideTextRun, 'text' | 'nativeDefaults'>;
   readonly text: string;
   readonly fontFamily: string;
   readonly fontSize: number;
@@ -40,6 +44,9 @@ export interface SlideTextRun {
   readonly hyperlink?: { readonly href?: string; readonly slidePart?: string };
 }
 export interface SlideParagraph {
+  readonly bulletScale?: number | undefined;
+  readonly bulletColorFromText?: boolean;
+  readonly bulletFontFromText?: boolean;
   readonly level?: number;
   readonly tabs?: readonly { position: number; alignment: string }[];
   readonly defaultTabSize?: number;
@@ -48,8 +55,8 @@ export interface SlideParagraph {
   readonly fontSize?: number;
   readonly runs: readonly SlideTextRun[];
   /** Formatting that new text receives in a paragraph with no runs. */
-  readonly endRun?: SlideTextRun;
-  readonly align: "left" | "center" | "right" | "justify";
+  readonly endRun?: SlideTextRun | undefined;
+  readonly align: 'left' | 'center' | 'right' | 'justify';
   readonly bullet: string;
   readonly marginLeft: number;
   readonly indent: number;
@@ -63,13 +70,13 @@ export interface SlideParagraph {
 }
 export interface SlideText {
   /** Authored fitting mode. Normal fitting is reflected in the saved run sizes and spacing. */
-  readonly autoFit?: "none" | "normal" | "shape";
-  readonly horizontalOverflow?: "overflow" | "clip";
-  readonly verticalOverflow?: "overflow" | "clip" | "ellipsis";
+  readonly autoFit?: 'none' | 'normal' | 'shape';
+  readonly horizontalOverflow?: 'overflow' | 'clip';
+  readonly verticalOverflow?: 'overflow' | 'clip' | 'ellipsis';
   readonly editable?: boolean;
   readonly paragraphs: readonly SlideParagraph[];
   readonly inset: readonly [number, number, number, number];
-  readonly anchor: "top" | "center" | "bottom";
+  readonly anchor: 'top' | 'center' | 'bottom';
   readonly wrap: boolean;
   readonly direction?: string;
   readonly rotation?: number | undefined;
@@ -104,15 +111,15 @@ export interface SlideTable {
   readonly cells: readonly SlideTableCell[];
 }
 export interface SlideObject {
-  readonly ink?: import("./ink.ts").PresentationInk;
-  readonly media?: import("./media.ts").PresentationMedia | undefined;
+  readonly ink?: import('./ink.ts').PresentationInk;
+  readonly media?: import('./media.ts').PresentationMedia | undefined;
   readonly key: string;
   readonly shapeId: string;
   readonly elementId: number;
   readonly sourcePart: string;
-  readonly layer: "master" | "layout" | "slide";
+  readonly layer: 'master' | 'layout' | 'slide';
   readonly name: string;
-  readonly kind: "shape" | "picture" | "chart" | "table" | "unsupported";
+  readonly kind: 'shape' | 'picture' | 'chart' | 'table' | 'unsupported';
   readonly geometry: string;
   readonly drawingGeometry: DrawingGeometry | undefined;
   readonly transform: SlideTransform;
@@ -123,7 +130,7 @@ export interface SlideObject {
   readonly gradient: DrawingGradient | undefined;
   readonly shadow: DrawingShadow | undefined;
   readonly strokeDash: string;
-  readonly strokeCap: "butt" | "round" | "square";
+  readonly strokeCap: 'butt' | 'round' | 'square';
   readonly head: DrawingLineEnd | undefined;
   readonly tail: DrawingLineEnd | undefined;
   readonly stroke: string;
@@ -132,13 +139,11 @@ export interface SlideObject {
   readonly text: SlideText | undefined;
   /** The PresentationML placeholder type, such as `ctrTitle` or `body`, when the object is one. */
   readonly placeholder?: string;
-  readonly effects?: readonly import("./appearance.ts").DrawingEffect[];
-  readonly reflection?: import("./appearance.ts").DrawingReflection | undefined;
-  readonly pattern?: import("./appearance.ts").DrawingPattern | undefined;
-  readonly pictureFill?:
-    | import("./appearance.ts").DrawingPictureFill
-    | undefined;
-  readonly image: import("./appearance.ts").DrawingPictureFill | undefined;
+  readonly effects?: readonly import('./appearance.ts').DrawingEffect[];
+  readonly reflection?: import('./appearance.ts').DrawingReflection | undefined;
+  readonly pattern?: import('./appearance.ts').DrawingPattern | undefined;
+  readonly pictureFill?: import('./appearance.ts').DrawingPictureFill | undefined;
+  readonly image: import('./appearance.ts').DrawingPictureFill | undefined;
   readonly chart: ChartModel | undefined;
   readonly table: SlideTable | undefined;
   readonly movable: boolean;
@@ -149,20 +154,16 @@ export interface SlideObject {
   readonly alternateTransformIds?: readonly number[];
 }
 export interface PresentationSlide {
-  readonly animations?: readonly import("./timing.ts").SlideAnimation[];
-  readonly transition?: import("./timing.ts").SlideTransition | undefined;
+  readonly animations?: readonly import('./timing.ts').SlideAnimation[];
+  readonly transition?: import('./timing.ts').SlideTransition | undefined;
   readonly id: string;
   readonly part: string;
   readonly title: string;
   readonly hidden: boolean;
   readonly notes: string;
   readonly background: string;
-  readonly backgroundPattern?:
-    | import("./appearance.ts").DrawingPattern
-    | undefined;
-  readonly backgroundPicture?:
-    | import("./appearance.ts").DrawingPictureFill
-    | undefined;
+  readonly backgroundPattern?: import('./appearance.ts').DrawingPattern | undefined;
+  readonly backgroundPicture?: import('./appearance.ts').DrawingPictureFill | undefined;
   readonly backgroundGradient: DrawingGradient | undefined;
   readonly objects: readonly SlideObject[];
   readonly diagnostics: readonly PresentationDiagnostic[];
@@ -176,7 +177,7 @@ export interface PresentationEmbeddedFont {
 export interface PresentationDocument {
   readonly embeddedFonts?: readonly PresentationEmbeddedFont[];
   readonly package: OpcPackage;
-  readonly conformance: "strict" | "transitional";
+  readonly conformance: 'strict' | 'transitional';
   readonly width: number;
   readonly height: number;
   readonly slides: readonly PresentationSlide[];
@@ -186,15 +187,15 @@ export interface PresentationDocument {
 export class PresentationError extends Error {
   constructor(
     readonly code:
-      | "invalid_document"
-      | "unsupported_document"
-      | "limit_exceeded"
-      | "unsupported_edit",
+      | 'invalid_document'
+      | 'unsupported_document'
+      | 'limit_exceeded'
+      | 'unsupported_edit',
     message: string,
     options?: ErrorOptions,
   ) {
     super(message, options);
-    this.name = "PresentationError";
+    this.name = 'PresentationError';
   }
 }
 export interface OpenPresentationOptions {

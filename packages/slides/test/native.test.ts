@@ -198,3 +198,53 @@ test('native archive rejects damaged blocks', () => {
     openPresentationNativeArchive({ ...archive, slides: new Map([[id, bytes]]) }),
   ).toThrow();
 });
+
+test('native Unicode typing, theme font selection and scaled font formatting match imported authoring', () => {
+  const f = fixture(),
+    pkg = f.artifact.document.package,
+    part = pkg.getPart(f.artifact.document.slides[0]!.part)!;
+  const xml = new TextDecoder()
+    .decode(pkg.readPart(part))
+    .replace('<a:bodyPr/>', '<a:bodyPr><a:normAutofit fontScale="75000"/></a:bodyPr>');
+  let source = openPresentationArtifact(
+    beginPackageTransaction(pkg).replacePart(part.name, new TextEncoder().encode(xml)).commit(),
+  );
+  let native: PresentationArtifact = importNativePresentation(source);
+  const value = '漢字 العربية é 👩🏽‍💻';
+  for (const command of [
+    { name: 'edit-text', slideId: f.slideId, objectKey: f.objectKey, start: 0, end: 0, value },
+    {
+      name: 'format-text',
+      slideId: f.slideId,
+      objectKey: f.objectKey,
+      start: 0,
+      end: value.length,
+      patch: { text: { fontSize: { set: 36 }, fontFamily: { set: 'Tahoma' } } },
+    },
+  ] satisfies PresentationCommand[]) {
+    source = applyPresentationCommand(source, command);
+    native = applyPresentationCommand(native, command);
+    const simple = (a: PresentationArtifact) =>
+      a.document.slides[0]!.objects[0]!.text!.paragraphs.map((p) =>
+        p.runs.flatMap((r) =>
+          Array.from(r.text, (text) => ({
+            text,
+            font: r.fontFamily,
+            size: r.fontSize,
+            color: r.color,
+          })),
+        ),
+      );
+    expect(simple(native)).toEqual(simple(source));
+  }
+  expect(() =>
+    applyPresentationCommand(native, {
+      name: 'edit-text',
+      slideId: f.slideId,
+      objectKey: f.objectKey,
+      start: value.indexOf('👩') + 1,
+      end: value.indexOf('👩') + 1,
+      value: 'x',
+    }),
+  ).toThrow('grapheme');
+});

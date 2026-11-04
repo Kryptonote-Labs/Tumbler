@@ -259,7 +259,7 @@ registerPresentationNativeReader((bytes, options) =>
 export function presentationNativeContent(artifact: PresentationArtifact): string {
   const { width, height, conformance, signed, slides } = artifact.document;
   return JSON.stringify({ width, height, conformance, signed, slides }, (key, value: unknown) => {
-    if (key === 'nativeDefaults') return undefined;
+    if (key === 'nativeDefaults' || key === 'nativeFonts') return undefined;
     if (value instanceof Uint8Array)
       return { binary: presentationResourceHash(value), length: value.length };
     if (value instanceof LosslessXmlDocument)

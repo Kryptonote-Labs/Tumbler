@@ -1,3 +1,4 @@
+import { nativeScriptRuns, nativeParagraphMetrics } from './native-fonts.ts';
 import { nativeColour } from './native-shape.ts';
 import type { FormattingPatch } from '@tumblerjs/core';
 import type { SlideText, SlideTextRun, SlideParagraph } from './model.ts';
@@ -9,6 +10,25 @@ type TextCommand = Extract<
 >;
 const value = (text: SlideText) =>
   text.paragraphs.map((p) => p.runs.map((r) => r.text).join('')).join('\n');
+
+function coalesceRuns(runs: readonly SlideTextRun[]) {
+  const result: SlideTextRun[] = [];
+  for (const run of runs.flatMap(nativeScriptRuns)) {
+    const last = result.at(-1);
+    const { text: a, ...left } = last ?? run,
+      { text: b, ...right } = run;
+    if (last && JSON.stringify(left) === JSON.stringify(right))
+      result[result.length - 1] = { ...last, text: last.text + run.text };
+    else if (run.text) result.push(run);
+  }
+  return result;
+}
+const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+function boundary(text: string, index: number) {
+  if (index === 0 || index === text.length) return true;
+  if (text.charCodeAt(index - 1) < 128 && text.charCodeAt(index) < 128) return true;
+  return segmenter.segment(text).containing(index)?.index === index;
+}
 
 function formatRun(
   run: SlideTextRun,
@@ -23,7 +43,11 @@ function formatRun(
     const change = t[field];
     if (change) next = { ...next, [field]: 'set' in change ? change.set : base[field] };
   }
-  if (t.fontSize) next.fontSize = 'set' in t.fontSize ? (t.fontSize.set * 4) / 3 : base.fontSize;
+  if (t.fontSize)
+    next.fontSize =
+      'set' in t.fontSize
+        ? ((t.fontSize.set * 4) / 3) * (run.nativeFonts?.scale ?? 1)
+        : base.fontSize;
   if (t.underline) {
     next.underline = 'set' in t.underline ? t.underline.set !== 'none' : base.underline;
     next.underlineStyle =
@@ -35,6 +59,14 @@ function formatRun(
             : 'sng'
         : base.underlineStyle;
   }
+  if (t.fontFamily && run.nativeFonts)
+    next.nativeFonts = {
+      ...run.nativeFonts,
+      authored: {
+        ...run.nativeFonts.authored,
+        latin: 'set' in t.fontFamily ? t.fontFamily.set : base.nativeFonts?.authored.latin,
+      },
+    };
   if (t.color)
     next.color =
       'set' in t.color && t.color.set.type === 'rgb' ? nativeColour(t.color.set.value) : base.color;
@@ -68,9 +100,12 @@ export function editNativeText(
   const original = value(text);
   if (command.start < 0 || command.end < command.start || command.end > original.length)
     throw new RangeError('Invalid text range.');
+  if (!boundary(original, command.start) || !boundary(original, command.end))
+    throw new RangeError('Text ranges must follow grapheme boundaries.');
   if (
     command.name === 'edit-text' &&
-    /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(command.value)
+    (!command.value.isWellFormed() ||
+      /[\u0000-\u0008\u000b\u000c\u000e-\u001f\r\uFFFE\uFFFF]/u.test(command.value))
   )
     throw new RangeError('Invalid XML text character.');
   const fallback: SlideTextRun = {
@@ -172,17 +207,17 @@ export function editNativeText(
         const a = Math.max(0, command.start - start),
           b = Math.min(end - start, command.end - start);
         const next = formatParagraph(p, patch, base);
-        return {
+        return nativeParagraphMetrics({
           ...next,
-          runs: [
+          runs: coalesceRuns([
             ...slice(p, 0, a, false, base),
             ...slice(p, a, b, true, base),
             ...slice(p, b, end - start, false, base),
-          ],
+          ]),
           ...(p.endRun && b === end - start
             ? { endRun: formatRun(p.endRun, patch, base.endRun ?? base.runs[0] ?? fallback) }
             : {}),
-        };
+        });
       }),
     };
   const first = ranges.findIndex((p) => command.start <= p.end),
@@ -228,7 +263,11 @@ export function editNativeText(
       patch,
       begin.base.endRun ?? begin.base.runs[0] ?? fallback,
     );
-    return { ...formatParagraph(p, patch, begin.base), runs, endRun };
+    return nativeParagraphMetrics({
+      ...formatParagraph(p, patch, begin.base),
+      runs: coalesceRuns(runs),
+      endRun: runs.length ? undefined : endRun,
+    });
   });
   return {
     ...text,
