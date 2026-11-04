@@ -112,11 +112,15 @@ export function insertObject(
     const borders = ["lnL", "lnR", "lnT", "lnB"]
       .map(
         (side) =>
-          `<a:${side} w="9525"><a:solidFill><a:srgbClr val="B4B4B4"/></a:solidFill></a:${side}>`,
+          `<a:${side} w="12700"><a:solidFill><a:srgbClr val="98A5B5"/></a:solidFill></a:${side}>`,
       )
       .join("");
-    const cell = `<a:tc><a:txBody>${textBody("", 18)}</a:txBody><a:tcPr>${borders}${color("#FFFFFF")}</a:tcPr></a:tc>`;
-    markup = `<p:graphicFrame ${ns}><p:nvGraphicFramePr><p:cNvPr id="${id}" name="Table ${id}"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${emu(bounds.x)}" y="${emu(bounds.y)}"/><a:ext cx="${emu(bounds.width)}" cy="${emu(bounds.height)}"/></p:xfrm><a:graphic><a:graphicData uri="${A}/table"><a:tbl><a:tblPr firstRow="1" bandRow="1"/><a:tblGrid>${Array.from({ length: input.columns }, () => `<a:gridCol w="${emu(bounds.width / input.columns)}"/>`).join("")}</a:tblGrid>${Array.from({ length: input.rows }, () => `<a:tr h="${emu(bounds.height / input.rows)}">${cell.repeat(input.columns)}</a:tr>`).join("")}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
+    const cell = (header: boolean) => {
+      const properties = `lang="en-US" sz="1800"${header ? ' b="1"' : ''}`;
+      const text = `<a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr ${properties}/><a:t></a:t></a:r><a:endParaRPr ${properties}/></a:p>`;
+      return `<a:tc><a:txBody>${text}</a:txBody><a:tcPr>${borders}${color(header ? "#E8EEF7" : "#FFFFFF")}</a:tcPr></a:tc>`;
+    };
+    markup = `<p:graphicFrame ${ns}><p:nvGraphicFramePr><p:cNvPr id="${id}" name="Table ${id}"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${emu(bounds.x)}" y="${emu(bounds.y)}"/><a:ext cx="${emu(bounds.width)}" cy="${emu(bounds.height)}"/></p:xfrm><a:graphic><a:graphicData uri="${A}/table"><a:tbl><a:tblPr firstRow="1" bandRow="1"/><a:tblGrid>${Array.from({ length: input.columns }, () => `<a:gridCol w="${emu(bounds.width / input.columns)}"/>`).join("")}</a:tblGrid>${Array.from({ length: input.rows }, (_, row) => `<a:tr h="${emu(bounds.height / input.rows)}">${cell(row === 0).repeat(input.columns)}</a:tr>`).join("")}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
   }
   tx.replacePart(slide.part, appendToTree(source, tree, markup));
   return openPresentationArtifact(tx.commit(), artifact.options);
