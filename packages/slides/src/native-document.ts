@@ -112,6 +112,7 @@ function embeddedFonts(
   return merged;
 }
 type Chain = { previous: Chain | undefined; change: NativeChange };
+const importedPresentations = new WeakMap<PresentationArtifact, NativePresentationDocument>();
 /** Immutable native authoring state. Source markup is resolved only for explicit export. */
 export class NativePresentationDocument extends PresentationArtifact {
   private exported: PresentationArtifact | undefined;
@@ -377,9 +378,11 @@ export function importNativePresentation(
   artifact: PresentationArtifact,
 ): NativePresentationDocument {
   if (artifact instanceof NativePresentationDocument) return artifact;
+  const cached = importedPresentations.get(artifact);
+  if (cached) return cached;
   const doc = artifact.document;
   const slides = compileNativeSlides(artifact);
-  return new NativePresentationDocument(
+  const native = new NativePresentationDocument(
     {
       version: 1,
       revisionKey: presentationResourceHash(artifact.bytes()),
@@ -395,6 +398,8 @@ export function importNativePresentation(
     undefined,
     artifact.options,
   );
+  importedPresentations.set(artifact, native);
+  return native;
 }
 
 export function restoreNativePresentation(

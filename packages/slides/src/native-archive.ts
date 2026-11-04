@@ -247,7 +247,7 @@ registerPresentationNativeReader((bytes, options) =>
 
 /** Compare compiled authoring semantics independently of object sharing and source cache residency. */
 export function presentationNativeContent(artifact: PresentationArtifact): string {
-  const { width, height, conformance, signed, slides } = artifact.document;
+  const { width, height, conformance, signed, slides } = importNativePresentation(artifact).document;
   return JSON.stringify({ width, height, conformance, signed, slides }, (key, value: unknown) => {
     if (key === 'nativeDefaults' || key === 'nativeFonts') return undefined;
     if (value instanceof Uint8Array)

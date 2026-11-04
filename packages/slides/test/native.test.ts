@@ -14,6 +14,7 @@ import {
   NativePresentationDocument,
   encodePresentationNativeState,
   presentationSlideResources,
+  presentationNativeContent,
 } from '../src/index.ts';
 import type { PresentationArtifact, PresentationCommand } from '../src/index.ts';
 
@@ -42,6 +43,7 @@ test('native conversion retains exact ZIP bytes, opaque parts and editing after 
     decodePresentationNativeArchive(encodePresentationNativeArchive(archive)),
   );
   expect(restored.bytes()).toEqual(artifact.bytes());
+  expect(presentationNativeContent(restored)).toBe(presentationNativeContent(artifact));
   const command = {
     name: 'edit-text',
     slideId,
