@@ -5,6 +5,7 @@ import {
   presentationResourceHash,
   encodeNativeSlide,
   decodeNativeSlide,
+  hasAvailablePresentationResources,
 } from './native-resources.ts';
 import { PresentationArtifact } from './artifact.ts';
 import {
@@ -221,16 +222,46 @@ export class NativePresentationDocument extends PresentationArtifact {
     ids: ReadonlySet<string>,
   ): NativePresentationDocument {
     const slides = this.state.slides.map((slide) => {
-      if (!ids.has(slide.slide.id)) return slide;
-      const encoded = encodeNativeSlide(slide);
-      return decodeNativeSlide(encoded.model, new Map([...encoded.resources, ...resources]), true);
+      if (!ids.has(slide.slide.id) || !hasAvailablePresentationResources(slide, resources))
+        return slide;
+      const encoded = encodeNativeSlide(slide),
+        decoded = decodeNativeSlide(
+          encoded.model,
+          new Map([...encoded.resources, ...resources]),
+          true,
+        );
+      return {
+        ...slide,
+        fonts: hasAvailablePresentationResources(slide.fonts, resources)
+          ? decoded.fonts
+          : slide.fonts,
+        inheritedBackground: hasAvailablePresentationResources(slide.inheritedBackground, resources)
+          ? decoded.inheritedBackground
+          : slide.inheritedBackground,
+        slide: {
+          ...slide.slide,
+          backgroundPicture: hasAvailablePresentationResources(
+            slide.slide.backgroundPicture,
+            resources,
+          )
+            ? decoded.slide.backgroundPicture
+            : slide.slide.backgroundPicture,
+          objects: slide.slide.objects.map((object, i) =>
+            hasAvailablePresentationResources(object, resources)
+              ? decoded.slide.objects[i]!
+              : object,
+          ),
+        },
+      };
     });
-    return new NativePresentationDocument(
-      { ...this.state, slides },
-      this.source,
-      this.chain,
-      this.options,
-    );
+    return slides.every((slide, i) => slide === this.state.slides[i])
+      ? this
+      : new NativePresentationDocument(
+          { ...this.state, slides },
+          this.source,
+          this.chain,
+          this.options,
+        );
   }
   sameState(other: PresentationArtifact): boolean {
     return (

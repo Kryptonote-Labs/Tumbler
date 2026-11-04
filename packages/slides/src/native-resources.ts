@@ -2,6 +2,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { readNativeGraph, writeNativeGraph } from '@tumblerjs/opc';
 import { z } from 'zod';
+import { LosslessXmlDocument } from '@tumblerjs/ooxml';
 import {
   encodePresentationBlock,
   decodePresentationBlock,
@@ -90,4 +91,27 @@ export function decodeNativeSlide(
     return bytes;
   });
   return nativeSlide.parse(readNativeGraph(parsed.graph, bytes, presentationBlockCodecs));
+}
+
+/** Inspect resource handles without parsing preserved XML or changing unrelated model identities. */
+export function hasAvailablePresentationResources(
+  value: unknown,
+  resources: ReadonlyMap<string, Uint8Array>,
+): boolean {
+  const seen = new WeakSet<object>();
+  function visit(value: unknown): boolean {
+    if (!value || typeof value !== 'object' || seen.has(value)) return false;
+    seen.add(value);
+    if (value instanceof Uint8Array) {
+      const reference = pendingResources.get(value);
+      return !!reference && resources.has(reference.hash);
+    }
+    if (value instanceof LosslessXmlDocument) return visit(value.originalBytes());
+    if (value instanceof Map) {
+      for (const [key, member] of value) if (visit(key) || visit(member)) return true;
+      return false;
+    }
+    return Object.values(value).some(visit);
+  }
+  return visit(value);
 }

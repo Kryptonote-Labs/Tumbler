@@ -228,7 +228,7 @@ export function applyNativeModelCommand(
         objects = template.objects.map((o) => ({
           ...o,
           key: nextId(),
-          shapeId: `native-${counter}`,
+          shapeId: command.sourceId ? o.shapeId : `native-${counter}`,
           sourcePart: o.layer === 'slide' ? part : o.sourcePart,
         }));
       const slide = {

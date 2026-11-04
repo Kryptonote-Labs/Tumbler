@@ -576,6 +576,7 @@ test('arriving resources hydrate the current text revision without downloading a
   }) as NativePresentationDocument;
   const hydrated = branch.hydrateResources(archive.resources!, new Set([f.slideId]));
   expect(hydrated.sameState(branch)).toBe(true);
+  expect(hydrated.document.slides[0]!.objects[0]).toBe(branch.document.slides[0]!.objects[0]);
   expect(text(hydrated)[0]).toStartWith('Current First');
   expect(hydrated.document.slides[0]!.objects.at(-1)!.image?.bytes).toEqual(
     source.document.slides[0]!.objects.at(-1)!.image?.bytes,
@@ -587,4 +588,35 @@ test('arriving resources hydrate the current text revision without downloading a
   expect(presentationSlideResources(recovery.slides.get(f.slideId)!)).toEqual(
     presentationSlideResources(archive.slides.get(f.slideId)!),
   );
+});
+
+test('duplicated native slides retain animation targets while giving objects new authoring identities', () => {
+  const f = fixture(),
+    pkg = f.artifact.document.package,
+    part = pkg.getPart(f.artifact.document.slides[0]!.part)!,
+    shape = f.artifact.document.slides[0]!.objects[0]!;
+  const timing = `<p:transition><p:fade/></p:transition><p:timing><p:tnLst><p:par><p:cTn id="1" nodeType="clickEffect"><p:childTnLst><p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="2" dur="400"/><p:tgtEl><p:spTgt spid="${shape.shapeId}"/></p:tgtEl></p:cBhvr></p:animEffect></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>`;
+  const source = openPresentationArtifact(
+    beginPackageTransaction(pkg)
+      .replacePart(
+        part.name,
+        new TextEncoder().encode(
+          new TextDecoder().decode(pkg.readPart(part)).replace('</p:sld>', timing + '</p:sld>'),
+        ),
+      )
+      .commit(),
+  );
+  expect(source.document.slides[0]!.animations).toHaveLength(1);
+  const native = applyPresentationCommand(importNativePresentation(source), {
+    name: 'insert-slide',
+    index: 1,
+    sourceId: f.slideId,
+  });
+  const slide = native.document.slides[1]!,
+    target = slide.animations![0]!.target;
+  expect(slide.objects.find((object) => object.shapeId === target)).toBeDefined();
+  expect(slide.objects[0]!.key).not.toBe(source.document.slides[0]!.objects[0]!.key);
+  const output = openPresentationArtifact(native.bytes()).document.slides[1]!;
+  expect(slide.animations).toEqual(output.animations);
+  expect(slide.transition).toEqual(output.transition);
 });
