@@ -847,7 +847,7 @@
         class="slide"
         role="group"
         aria-label={slide.title}
-        tabindex={editable ? 0 : undefined}
+        tabindex={editable && !editing ? 0 : undefined}
         width={presentation.width * factor}
         height={presentation.height * factor}
         viewBox={`0 0 ${presentation.width} ${presentation.height}`}
@@ -1032,7 +1032,7 @@
                     onfinish: () => {
                       editing = undefined;
                       pendingFormat = undefined;
-                      svg?.focus();
+                      void tick().then(() => svg?.focus({preventScroll: true}));
                     },
                     onundo,
                     onshortcut: shortcut,
@@ -1109,7 +1109,7 @@
                       onfinish: () => {
                         editing = undefined;
                         pendingFormat = undefined;
-                        svg?.focus();
+                        void tick().then(() => svg?.focus({preventScroll: true}));
                       },
                       onundo,
                       onshortcut: shortcut,
