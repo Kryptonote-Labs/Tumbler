@@ -116,6 +116,12 @@ interface ReadCache {
     { colors: ThemeColorScheme; fonts: ThemeFontScheme }
   >;
 }
+const nativeRunDefaults = new WeakMap<SlideTextRun,SlideTextRun>();
+export function presentationRunDefaults(run:SlideTextRun){return nativeRunDefaults.get(run);}
+const nativePalettes = new WeakMap<PresentationDocument, Map<string, ThemeColorScheme>>();
+export function bindPresentationThemeColours(document: PresentationDocument, id: string, scheme: ThemeColorScheme) {
+  let palettes=nativePalettes.get(document); if(!palettes){palettes=new Map();nativePalettes.set(document,palettes);}palettes.set(id,scheme);
+}
 const clipboardLines=new WeakMap<SlideObject,{xml:LosslessXmlDocument;element:Element;placeholder:string | undefined}>();
 const slideContexts = new WeakMap<PresentationSlide, Context>();
 const readCaches = new WeakMap<PresentationDocument, ReadCache>();
@@ -130,6 +136,7 @@ export function presentationClipboardLine(document:PresentationDocument,slideId:
 }
 /** Effective palette for a slide, including its theme overrides and colour-map remapping. */
 export function presentationThemeColours(document: PresentationDocument, slideId: string): ThemeColorScheme {
+  const native=nativePalettes.get(document)?.get(slideId); if(native) return native;
   const slide = document.slides.find(slide => slide.id === slideId);
   if (!slide) throw new Error('Slide not found.');
   const context = slideContexts.get(slide);
@@ -1862,6 +1869,7 @@ class Reader {
       const runStyle = (
         rpr: Element | undefined,
         value: string,
+        collectDefaults = true,
       ): SlideTextRun[] => {
         const defaults = [
           rpr,
@@ -1902,7 +1910,7 @@ class Reader {
                 "Arial");
         };
         const hyperlink = this.hyperlink(this.child(rpr, "hlinkClick"));
-        return scriptSegments(value, runAttr("lang")).map((segment) => ({
+        const result=scriptSegments(value, runAttr("lang")).map((segment) => ({
           text: segment.text,
           fontFamily: font(segment.kind, segment.script),
           fontSize: (((numeric(runAttr("sz"), 1800) / 100) * 4) / 3) * fontScale,
@@ -1920,6 +1928,8 @@ class Reader {
           capitals: runAttr("cap") ?? "none",
           ...(hyperlink ? { hyperlink } : {}),
         }));
+        if(collectDefaults)for(const run of result){const inherited=runStyle(undefined,run.text,false)[0];if(inherited)nativeRunDefaults.set(run,inherited);}
+        return result;
       };
       const runs: SlideTextRun[] = [];
       for (const run of this.children(paragraph)) {

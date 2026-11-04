@@ -1,0 +1,215 @@
+import { registerPresentationNativeReader } from './native-open.ts';
+import { ContentTypes, OpcPackage, PartName, ZipArchive, nativeCodec } from '@tumblerjs/opc';
+import { z } from 'zod';
+import { openPresentationArtifact, PresentationArtifact } from './artifact.ts';
+import {
+  NativePresentationDocument,
+  importNativePresentation,
+  restoreNativePresentation,
+  type NativePresentationState,
+  type NativeSlide,
+} from './native-document.ts';
+import { encodePresentationBlock, decodePresentationBlock } from './native-block.ts';
+import type { OpenPresentationOptions } from './model.ts';
+
+const preservationCodecs = [
+  nativeCodec(
+    'part-name',
+    (v): v is PartName => v instanceof PartName,
+    (v) => v.value,
+    (v) => PartName.parse(v),
+  ),
+  nativeCodec(
+    'zip-members',
+    (v): v is ZipArchive => v instanceof ZipArchive,
+    (v) => v.snapshot(),
+    (v) => ZipArchive.fromSnapshot(v),
+  ),
+  nativeCodec(
+    'content-types',
+    (v): v is ContentTypes => v instanceof ContentTypes,
+    (v) => ({ defaults: v.defaults, overrides: v.overrides }),
+    (v) => new ContentTypes(v.defaults, v.overrides),
+  ),
+  nativeCodec(
+    'opc-parts',
+    (v): v is OpcPackage => v instanceof OpcPackage,
+    (v) => ({ archive: v.archive, types: v.contentTypes, parts: v.parts }),
+    (v) => new OpcPackage(v.archive, v.types, v.parts),
+  ),
+];
+const slideBlocks = new WeakMap<NativeSlide, Uint8Array>();
+const preservationBlocks = new WeakMap<OpcPackage, Uint8Array>();
+function encodeSlide(slide: NativeSlide) {
+  let bytes = slideBlocks.get(slide);
+  if (!bytes) {
+    bytes = encodePresentationBlock(slide);
+    slideBlocks.set(slide, bytes);
+  }
+  return bytes;
+}
+function encodePreservation(pkg: OpcPackage) {
+  let bytes = preservationBlocks.get(pkg);
+  if (!bytes) {
+    bytes = encodePresentationBlock(pkg, preservationCodecs);
+    preservationBlocks.set(pkg, bytes);
+  }
+  return bytes;
+}
+const packageRoot = z.instanceof(OpcPackage);
+const slideRoot = z.custom<NativeSlide>(
+  (v: unknown) =>
+    !!v &&
+    typeof v === 'object' &&
+    'slide' in v &&
+    !!v.slide &&
+    typeof v.slide === 'object' &&
+    'id' in v.slide &&
+    typeof v.slide.id === 'string' &&
+    'objects' in v.slide &&
+    Array.isArray(v.slide.objects) &&
+    'palette' in v &&
+    Array.isArray(v.palette),
+);
+const header = z.object({
+  version: z.literal(1),
+  width: z.number().positive(),
+  height: z.number().positive(),
+  conformance: z.enum(['strict', 'transitional']),
+  signed: z.boolean(),
+  counter: z.number().int().nonnegative(),
+  changes: z.array(z.custom<NativePresentationState['changes'][number]>()),
+  embeddedFonts: z.custom<NativePresentationState['embeddedFonts']>(),
+  slides: z.array(
+    z.object({ id: z.string(), part: z.string(), title: z.string(), hidden: z.boolean() }),
+  ),
+});
+export type NativePresentationManifest = z.infer<typeof header>;
+export interface NativePresentationArchive {
+  readonly version: 1;
+  readonly manifest: Uint8Array;
+  readonly slides: ReadonlyMap<string, Uint8Array>;
+  readonly preservation: Uint8Array;
+}
+
+/** Conversion owns preservation separately from independently loadable compiled slide models. */
+export function createPresentationNativeArchive(
+  input: PresentationArtifact,
+): NativePresentationArchive {
+  const model = importNativePresentation(input),
+    snapshot = model.snapshot();
+  const { slides, ...metadata } = snapshot;
+  return {
+    version: 1,
+    manifest: encodePresentationBlock({
+      ...metadata,
+      slides: slides.map(({ slide }) => ({
+        id: slide.id,
+        part: slide.part,
+        title: slide.title,
+        hidden: slide.hidden,
+      })),
+    }),
+    slides: new Map(slides.map((slide) => [slide.slide.id, encodeSlide(slide)])),
+    preservation: encodePreservation(model.preservationSource().document.package),
+  };
+}
+
+/** Current compiled views omit export history and preservation entirely. Blocks reuse immutable slide identities. */
+export function createPresentationNativeView(
+  input: PresentationArtifact,
+): Pick<NativePresentationArchive, 'version' | 'manifest' | 'slides'> {
+  const model = importNativePresentation(input),
+    { slides, ...metadata } = model.state;
+  return {
+    version: 1,
+    manifest: encodePresentationBlock({
+      ...metadata,
+      changes: [],
+      slides: slides.map(({ slide }) => ({
+        id: slide.id,
+        part: slide.part,
+        title: slide.title,
+        hidden: slide.hidden,
+      })),
+    }),
+    slides: new Map(slides.map((slide) => [slide.slide.id, encodeSlide(slide)])),
+  };
+}
+
+export function readPresentationNativeManifest(bytes: Uint8Array): NativePresentationManifest {
+  const result = header.parse(decodePresentationBlock(bytes));
+  if (new Set(result.slides.map((s) => s.id)).size !== result.slides.length)
+    throw new TypeError('Duplicate native slide identity.');
+  return result;
+}
+
+/** Partial archives can paint/edit a loaded slide without resolving export-only preservation. */
+export function openPresentationNativeArchive(
+  archive: Pick<NativePresentationArchive, 'version' | 'manifest' | 'slides'> & {
+    readonly preservation?: Uint8Array;
+  },
+  options: OpenPresentationOptions = {},
+): NativePresentationDocument {
+  if (archive.version !== 1) throw new TypeError('Unsupported native presentation version.');
+  const metadata = readPresentationNativeManifest(archive.manifest);
+  const slides = metadata.slides.map((descriptor) => {
+    const block = archive.slides.get(descriptor.id);
+    if (block) {
+      const result = slideRoot.parse(decodePresentationBlock(block));
+      if (result.slide.id !== descriptor.id || result.slide.part !== descriptor.part)
+        throw new TypeError('Native slide identity mismatch.');
+      return result;
+    }
+    return {
+      slide: {
+        ...descriptor,
+        notes: '',
+        background: '#FFFFFF',
+        backgroundGradient: undefined,
+        objects: [],
+        diagnostics: [],
+      },
+      palette: [],
+      inheritedBackground: { background: '#FFFFFF', backgroundGradient: undefined },
+    };
+  });
+  let source: PresentationArtifact | undefined;
+  return restoreNativePresentation(
+    { ...metadata, slides },
+    () => {
+      if (source) return source;
+      if (!archive.preservation)
+        throw new Error('Presentation preservation resources have not loaded.');
+      const pkg = packageRoot.parse(
+        decodePresentationBlock(archive.preservation, preservationCodecs),
+      );
+      return (source = openPresentationArtifact(pkg.archive.originalBytes(), options));
+    },
+    options,
+  );
+}
+
+/** Complete envelopes are for export workers and recovery, never a prerequisite for first slide paint. */
+export function encodePresentationNativeArchive(archive: NativePresentationArchive): Uint8Array {
+  return encodePresentationBlock({
+    version: archive.version,
+    manifest: archive.manifest,
+    slides: archive.slides,
+    preservation: archive.preservation,
+  });
+}
+export function decodePresentationNativeArchive(bytes: Uint8Array): NativePresentationArchive {
+  return z
+    .object({
+      version: z.literal(1),
+      manifest: z.instanceof(Uint8Array),
+      slides: z.map(z.string(), z.instanceof(Uint8Array)),
+      preservation: z.instanceof(Uint8Array),
+    })
+    .parse(decodePresentationBlock(bytes));
+}
+
+registerPresentationNativeReader((bytes, options) =>
+  openPresentationNativeArchive(decodePresentationNativeArchive(bytes), options),
+);

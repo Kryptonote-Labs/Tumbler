@@ -1,3 +1,5 @@
+import { isPresentationBlock } from './native-block.ts';
+import { readNativePresentation } from './native-open.ts';
 import { refreshPresentationInkFallback } from "./ink-authoring.ts";
 import { refreshModificationId } from "./modification-id.ts";
 import {
@@ -27,6 +29,7 @@ import {
 
 /** Immutable presentation edits. Only the owning slide XML part is replaced. */
 export class PresentationArtifact {
+  readonly nativeCommand?: (command: import("./commands.ts").PresentationCommand) => PresentationArtifact;
   constructor(
     readonly document: PresentationDocument,
     readonly options: OpenPresentationOptions = {},
@@ -360,6 +363,7 @@ export function openPresentationArtifact(
   bytes: Uint8Array,
   options: OpenPresentationOptions = {},
 ): PresentationArtifact {
+  if(isPresentationBlock(bytes))return readNativePresentation(bytes,options);
   return new PresentationArtifact(
     openPresentationDocument(bytes, options),
     options,

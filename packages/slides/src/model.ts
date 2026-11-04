@@ -24,6 +24,7 @@ export interface PresentationDiagnostic {
   readonly message: string;
 }
 export interface SlideTextRun {
+  readonly nativeDefaults?: Omit<SlideTextRun,"text"|"nativeDefaults">;
   readonly text: string;
   readonly fontFamily: string;
   readonly fontSize: number;

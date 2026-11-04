@@ -312,3 +312,8 @@ export function resizeDrawingGeometry(
 ): DrawingGeometry {
   return evaluateGeometry(geometry.definition, width, height, geometry.overrides);
 }
+
+/** Evaluate a known shape without constructing DrawingML. */
+export function nativePresetGeometry(name:string,width:number,height:number,overrides:readonly (readonly [string,string])[]=[]):DrawingGeometry|undefined {
+ const definition=presetGeometries[name];return definition?evaluateGeometry(definition,width,height,overrides):undefined;
+}

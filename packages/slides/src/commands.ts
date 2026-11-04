@@ -258,6 +258,7 @@ export function applyPresentationCommand(
   artifact: PresentationArtifact,
   input: PresentationCommand,
 ): PresentationArtifact {
+  if (artifact.nativeCommand) return artifact.nativeCommand(input);
   const command = presentationCommand.parse(input);
   switch (command.name) {
     case "batch":
