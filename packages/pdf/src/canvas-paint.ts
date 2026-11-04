@@ -67,6 +67,8 @@ export interface PdfPaintHost<Image, Path> {
 }
 export interface PdfPaintOptions {
   readonly scale?: number;
+  /** Device-pixel rectangle to render without allocating the rest of the page. */
+  readonly region?: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
   readonly background?: string;
   readonly signal?: AbortSignal;
   readonly text?: boolean;
@@ -155,9 +157,12 @@ export async function paintPdfPage<Image, Path>(
 ) {
   const scale = options.scale ?? 4 / 3;
   if (!Number.isFinite(scale) || scale <= 0) return invalid("PDF render scale must be positive.");
-  const viewport = multiply([scale, 0, 0, scale, 0, 0], scene.viewport),
-    width = Math.ceil(scene.width * scale),
-    height = Math.ceil(scene.height * scale);
+  const region = options.region;
+  if (region && (![region.x, region.y, region.width, region.height].every(Number.isSafeInteger) || region.width <= 0 || region.height <= 0))
+    return invalid("PDF render region must have integer coordinates and positive dimensions.");
+  const viewport = multiply([scale, 0, 0, scale, -(region?.x ?? 0), -(region?.y ?? 0)], scene.viewport),
+    width = region?.width ?? Math.ceil(scene.width * scale),
+    height = region?.height ?? Math.ceil(scene.height * scale);
   const shadings = new Map<PdfPaint, Promise<Image>>();
   const shadingImage = (paint: Exclude<PdfPaint, string>) => {
     let image = shadings.get(paint);

@@ -49,6 +49,11 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
       }
     | undefined;
   const page = canvas.parentElement!;
+  let viewport = page.parentElement!;
+  while (viewport.parentElement && !/(auto|scroll)/.test(getComputedStyle(viewport).overflowY)) viewport = viewport.parentElement;
+  const pauseZoom = () => { controller?.abort(); invalidatePreparation(); if (scheduled !== undefined) { cancelAnimationFrame(scheduled); scheduled = undefined; } };
+  viewport.addEventListener('pdfzoomstart', pauseZoom);
+  viewport.addEventListener('pdfzoomend', schedule);
   const surface = () => {
     const result = window.document.createElement('canvas');
     const ratio = window.devicePixelRatio || 1;
@@ -229,7 +234,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     }
   }
   function schedule() {
-    if (scheduled === undefined && !disposed && visible)
+    if (scheduled === undefined && !disposed && visible && !viewport.hasAttribute('data-pdf-zooming'))
       scheduled = requestAnimationFrame(() => void render());
   }
   const unregister = registerPdfDragPreview(page, {
@@ -307,6 +312,8 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     },
     destroy() {
       disposed = true;
+      viewport.removeEventListener('pdfzoomstart', pauseZoom);
+      viewport.removeEventListener('pdfzoomend', schedule);
       observer.disconnect();
       unregister();
       controller?.abort();

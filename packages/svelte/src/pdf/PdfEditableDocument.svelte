@@ -406,7 +406,12 @@
   });
 </script>
 
-<div class="pdf-editable" bind:this={root}>
+<div
+  data-pdf-document
+  data-pdf-max-width={pdf.pages.reduce((maximum, page) => Math.max(maximum, page.width), 0)}
+  class="pdf-editable"
+  bind:this={root}
+>
   {#each flow.pages as page}
     <div
       class="pdf-page"

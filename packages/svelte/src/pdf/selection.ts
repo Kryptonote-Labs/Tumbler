@@ -1,3 +1,4 @@
+import { pdfTextCaretAt } from "./pointer-selection.ts";
 import type { PdfTextContent } from "@tumblerjs/pdf";
 
 /** Read only the selected PDF text nodes, excluding page chrome and layout whitespace. */
@@ -32,11 +33,11 @@ export function selectedPdfText(selection: Selection | null, host: Element): str
   return pages.length ? pages.join("\n") : undefined;
 }
 
-/** Absolute glyph spans are separate browser words. Expand a double-click using the page's Unicode text. */
+/** Expand a double-click using the page's Unicode text rather than browser word boundaries. */
 export function selectPdfWord(event: MouseEvent, content: PdfTextContent, layer: HTMLElement) {
   const target = event.target instanceof Element ? event.target.closest("[data-pdf-glyph]") : null;
-  if (!target) return;
-  const id = target.getAttribute("data-pdf-glyph");
+  const id = target?.getAttribute("data-pdf-glyph") ?? pdfTextCaretAt(layer, event.clientX, event.clientY)?.id;
+  if (!id) return;
   let offset = 0;
   for (const item of content.items) {
     if (item.id === id) break;

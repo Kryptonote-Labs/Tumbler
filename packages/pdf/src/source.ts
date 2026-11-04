@@ -40,6 +40,7 @@ export class PdfSource {
   private readonly xref = new Map<number, XrefEntry>();
   private readonly objects = new Map<string, PdfValue>();
   private security: PdfSecurity | undefined;
+  private password: string | undefined;
   private readonly decoding = new Set<string>();
   private readonly decoded = new WeakMap<PdfStream, Uint8Array>();
   private readonly objectStreams = new Map<
@@ -94,6 +95,10 @@ export class PdfSource {
   bytes() {
     return this.original.slice();
   }
+  /** Reopen this authenticated source in a dedicated renderer. Contains credentials; never persist or send to a server. */
+  renderInput(): { bytes: Uint8Array; password?: string } {
+    return { bytes: this.bytes(), ...(this.password === undefined ? {} : { password: this.password }) };
+  }
   get catalog() {
     return dictionary(this.resolve(this.trailer.get('Root')), 'catalog');
   }
@@ -103,6 +108,7 @@ export class PdfSource {
   authenticate(password?: string) {
     if (!this.encrypted) return;
     this.security = PdfSecurity.open(this, password);
+    this.password = password;
     this.objects.clear();
   }
 

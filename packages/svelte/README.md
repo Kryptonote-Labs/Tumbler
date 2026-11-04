@@ -280,9 +280,32 @@ only for the document revision currently rendered.
 
 PDF pages are available through `@tumblerjs/svelte/pdf`. `PdfDocumentView` accepts an
 `@tumblerjs/pdf` document, a display scale and page/error callbacks. It keeps page dimensions
-stable while rendering nearby canvases, releases offscreen bitmap storage, and paints at the
-screen's pixel density. `goToPage(index)` scrolls to a zero-based page index. Product navigation,
+stable while a shared module worker interprets and paints nearby pages. The viewer retains a
+small page preview while replacing visible regions with 512-device-pixel tiles at the exact
+screen density. It releases offscreen rasters, page scenes and decoded images. Large zooms
+allocate tiles around the viewport rather than full-page canvases. Source content and final
+render resolution are unchanged. `goToPage(index)` scrolls to a zero-based page index. Product navigation,
 authorization, uploads and download controls belong to the host application.
+
+`pdfZoomPreview(viewport, getScale, commit)` separates gesture presentation from PDF rendering.
+Call `zoom(nextScale, clientPoint)` for gesture updates, `pan(dx, dy)` for touch movement, and
+`finish()` at gesture end. Wheel gestures also settle after 140 ms without input. The helper
+writes one compositor transform per animation frame and suspends full-resolution page painting during the gesture,
+and supplies the original page point under the final focal point to `commit`. That callback must
+synchronously apply the new display scale, then adjust the viewport scroll using the supplied
+page element, `offsetX`, `offsetY`, `x` and `y`. Call `destroy()` when the viewport unmounts.
+The current bitmap can soften during a pinch; final tiles render at the exact device resolution.
+Newly revealed pages receive worker previews during the gesture, with selection text deferred
+until it ends. Native scroll bounds are applied during the preview, including when the
+document becomes smaller than the viewport. Use `scrollbar-gutter: stable` on the scroll
+viewport so its width stays stable when a vertical scrollbar appears or disappears.
+
+The viewer requires module workers, OffscreenCanvas and a bundler that handles
+`new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' })`, such as Vite.
+Its worker must be allowed by the host's content security policy. The transparent selection
+layer groups affine glyphs into SVG text runs. Per-glyph positions, advances, Unicode node
+identity and the headless hit-test index still determine native selection and copying.
+
 
 Hosts can call `PresentationSlideView.editText(objectKey)` after rendering an inserted
 text box or table to focus its text editor. Tables start in the first editable cell.

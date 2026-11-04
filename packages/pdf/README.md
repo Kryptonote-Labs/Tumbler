@@ -23,7 +23,15 @@ annotation appearances into a source-aware scene. Glyphs retain character codes,
 source ranges, font metrics and explicit transforms. Embedded TrueType/OpenType/CFF outlines are
 painted directly. Standard unembedded fonts use individual host glyphs with PDF advances.
 `paintPdfPage` accepts a canvas and replaceable image/path host; it never asks the browser to
-lay out PDF text. `browserPdfPaintHost` supplies browser paths, images and temporary surfaces.
+lay out PDF text. Its optional `region: {x, y, width, height}` paints an integer device-pixel
+rectangle at the supplied scale, including translated clips, images and shadings. This allows
+bounded tile rendering without lowering resolution. `browserPdfPaintHost` caches decoded images
+and glyph paths until `close()`; retain it across paints of the same visible page.
+
+`PdfSource.renderInput()` returns an owned byte copy and the successful authentication password,
+when present, so a dedicated local renderer can reopen an encrypted source. Transfer it directly
+to that worker; it contains credentials and must not be logged, persisted or sent to a server.
+`PdfInterpreter.executionLimits` returns the budget to use in an isolated interpreter.
 
 This is an initial ISO 32000-1 implementation, not complete PDF conformance. Unsupported content
 raises `PdfError` instead of silently omitting marks. Current gaps include Type 1 font programs,
