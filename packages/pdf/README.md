@@ -113,7 +113,8 @@ the RGB host image decoder cannot apply PDF sample transformations correctly.
 ## Moving text boxes
 
 `PdfTextModel.move(id, dx, dy)` translates a recovered text region in viewport points.
-`place(id, {x, y, width})` sets its position or wrapping width, `duplicate(id, newId)` copies
+When detaching a paragraph displaced by earlier edits, pass its rendered flow anchor with
+`move(id, dx, dy, flowRegion.origin)`. `place(id, {x, y, width})` sets its position or wrapping width, `duplicate(id, newId)` copies
 its text and formatting, and `hide(id)` hides it. Placement stays separate from immutable import
 seeds and collaborative text, so concurrent text changes and movement can merge independently.
 Moved boxes stay positioned instead of pushing neighbouring paragraphs. Placement and copied text

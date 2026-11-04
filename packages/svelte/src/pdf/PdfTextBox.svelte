@@ -8,6 +8,7 @@
     revision,
     editable,
     group,
+    origins,
     onedit,
   }: {
     model: PdfTextModel;
@@ -16,22 +17,25 @@
     editable: boolean;
     onedit: () => void;
     group: string[];
+    origins: ReadonlyMap<string, PdfFlowRegion['origin']>;
   } = $props();
   const frame = $derived.by(() => {
     void revision;
-    return model.geometry(layout.id);
+    return { ...model.geometry(layout.id), ...layout.origin };
   });
   const box = $derived.by(() => {
     void revision;
     const seed = model.seed(layout.id);
     if (
       model.sourcePreserved(layout.id) &&
-      (!layout.render || model.placement(layout.id)) &&
+      layout.origin.continuation === 0 &&
+      layout.carets[0]?.offset === 0 &&
+      layout.carets.at(-1)?.offset === model.text(layout.id).length &&
       seed.bounds
     )
       return {
         x: seed.bounds.x + frame.x - seed.x,
-        y: seed.bounds.y + frame.y - seed.y,
+        y: seed.bounds.y + (layout.carets[0]?.y ?? frame.y) - seed.y,
         width: seed.bounds.width,
         height: seed.bounds.height,
       };
@@ -102,12 +106,23 @@
       changed: false,
       preview: resize ? undefined : beginPdfBoxPreview(node, group),
       captureTimeout: model.undo.captureTimeout,
-      members: group.map((id) => ({ id, frame: model.geometry(id), initial: model.placement(id) })),
+      members: group.map((id) => ({
+        id,
+        frame: { ...model.geometry(id), ...origins.get(id) },
+        initial: model.placement(id),
+      })),
     };
     model.undo.captureTimeout = Number.MAX_SAFE_INTEGER;
   }
+  $effect(() => {
+    if (!editable) finish(undefined, true);
+  });
   function move(event: PointerEvent) {
     if (!gesture) return;
+    if (!editable) {
+      finish(undefined, true);
+      return;
+    }
     const { scale, xs, ys } = gesture;
     let dx = (event.clientX - gesture.x) / scale,
       dy = (event.clientY - gesture.y) / scale;
@@ -118,7 +133,12 @@
     guide = '';
     if (gesture.resize) {
       gesture.changed = true;
-      model.place(layout.id, { width: Math.max(1, gesture.box.width + dx) });
+      model.place(layout.id, {
+        x: frame.x,
+        y: frame.y,
+        continuation: layout.origin.continuation,
+        width: Math.max(1, gesture.box.width + dx),
+      });
       return;
     }
     if (!event.altKey) {
@@ -147,7 +167,8 @@
   }
   function finish(event?: PointerEvent, cancel = false) {
     if (!gesture) return;
-    if (cancel && gesture.resize && gesture.changed) {
+    cancel ||= !editable;
+    if (cancel && editable && gesture.resize && gesture.changed) {
       model.doc.transact(() => {
         for (const member of gesture!.members) {
           const region = model.regions.get(member.id)!;
@@ -160,7 +181,13 @@
       const { members, dx, dy } = gesture;
       model.doc.transact(() => {
         for (const member of members)
-          model.place(member.id, { x: member.frame.x + dx, y: member.frame.y + dy });
+          model.place(member.id, {
+            x: member.frame.x + dx,
+            y: member.frame.y + dy,
+            ...(member.frame.continuation === undefined
+              ? {}
+              : { continuation: member.frame.continuation }),
+          });
       }, model.origin);
     }
     gesture.preview?.finish(cancel);
@@ -189,6 +216,7 @@
             id,
             direction[0] * (event.shiftKey ? 10 : 1),
             direction[1] * (event.shiftKey ? 10 : 1),
+            origins.get(id),
           );
       }, model.origin);
     }

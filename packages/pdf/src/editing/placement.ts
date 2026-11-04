@@ -27,7 +27,13 @@ export function placePdfScene(scene: PdfPageScene, model: PdfTextModel): PdfPage
   return {
     ...scene,
     elements: scene.elements.map((e) => {
-      const owner = procedures.get(e.source.instance);
+      let instance = e.source.instance;
+      let owner = procedures.get(instance);
+      // A Type3 CharProc can paint through arbitrarily nested Form instances.
+      while (!owner && instance.includes(':form:')) {
+        instance = instance.slice(0, instance.lastIndexOf(':form:'));
+        owner = procedures.get(instance);
+      }
       const source = owner ?? e.source;
       const translation = targets.get(pdfSourceKey(source));
       if (!translation) return owner ? { ...e, source } : e;

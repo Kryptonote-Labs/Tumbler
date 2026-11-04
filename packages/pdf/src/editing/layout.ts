@@ -129,6 +129,8 @@ export type PdfFlowRegion = PdfTextLayout & {
   render: boolean;
   top: number;
   bottom: number;
+  /** Logical page-space anchor after flow displacement, before continuation projection. */
+  origin: { x: number; y: number; continuation: number };
 };
 export const pdfContinuationHeight = (page: PdfPage) =>
   Math.max(page.height * 0.5, page.height - 96);
@@ -144,7 +146,12 @@ export function layoutPdfTextFlow(
   for (const page of pages) {
     const layouts = model.ids(page.index).map((id) => layoutPdfText(model, id, fonts)),
       earlier: { x: number; size: number; growth: number }[] = [];
-    const fragments: { layout: PdfTextLayout; continuation: number; render: boolean }[] = [];
+    const fragments: {
+      layout: PdfTextLayout;
+      continuation: number;
+      render: boolean;
+      origin: { x: number; y: number; continuation: number };
+    }[] = [];
     let count = 0;
     for (const layout of layouts) {
       const seed = model.geometry(layout.id),
@@ -176,7 +183,11 @@ export function layoutPdfTextFlow(
       const localStart = seed.y - firstContinuation * height;
       const edge = imported || localStart <= page.height ? Math.max(bottom, localStart) : bottom;
       const project = (y: number) => {
-        if (model.placement(layout.id)) return { y, continuation: 0 };
+        if (model.placement(layout.id)) {
+          const continuation = seed.continuation ?? 0;
+          count = Math.max(count, continuation);
+          return { y: y - continuation * height, continuation };
+        }
         const absolute = y + shift,
           continuation =
             !dirty && shift === 0
@@ -211,6 +222,7 @@ export function layoutPdfTextFlow(
         fragments.push({
           layout: fragment,
           continuation,
+          origin: { x: seed.x, y: seed.y + shift, continuation: project(seed.y).continuation },
           render: dirty || shift !== 0 || continuation !== 0,
         });
       }
@@ -224,6 +236,7 @@ export function layoutPdfTextFlow(
         ...fragment.layout,
         page: first + fragment.continuation,
         render: fragment.render,
+        origin: fragment.origin,
         top: Math.min(...carets.map((c) => c.y - c.height)),
         bottom: Math.max(...carets.map((c) => c.y + c.height * 0.3)),
       });

@@ -4,7 +4,13 @@ import { pdfTextStylePatch, type PdfTextStyle } from './fonts.ts';
 import type { PdfTextSeed } from './import-text.ts';
 export { importPdfText, pdfSourceKey, type PdfTextSeed } from './import-text.ts';
 
-export type PdfTextPlacement = { x: number; y: number; width?: number; hidden?: boolean };
+export type PdfTextPlacement = {
+  x: number;
+  y: number;
+  width?: number;
+  hidden?: boolean;
+  continuation?: number;
+};
 
 export class PdfTextModel {
   readonly regions: Y.Map<Y.Map<unknown>>;
@@ -76,14 +82,26 @@ export class PdfTextModel {
     if (
       !Number.isFinite(value.x) ||
       !Number.isFinite(value.y) ||
-      (value.width !== undefined && (!Number.isFinite(value.width) || value.width <= 0))
+      (value.width !== undefined && (!Number.isFinite(value.width) || value.width <= 0)) ||
+      (value.continuation !== undefined &&
+        (!Number.isSafeInteger(value.continuation) || value.continuation < 0))
     )
       throw new Error('Invalid PDF text placement.');
     this.doc.transact(() => this.regions.get(id)!.set('placement', value), this.origin);
   }
-  move(id: string, dx: number, dy: number) {
-    const frame = this.geometry(id);
-    this.place(id, { x: frame.x + dx, y: frame.y + dy });
+  /** Supply the flow region's origin when detaching text already displaced by paragraph flow. */
+  move(
+    id: string,
+    dx: number,
+    dy: number,
+    origin?: Pick<PdfTextPlacement, 'x' | 'y' | 'continuation'>,
+  ) {
+    const frame = origin ?? this.geometry(id);
+    this.place(id, {
+      x: frame.x + dx,
+      y: frame.y + dy,
+      ...(origin?.continuation === undefined ? {} : { continuation: origin.continuation }),
+    });
   }
   duplicate(id: string, nextId: string, dx = 12, dy = 12) {
     const seed = this.geometry(id);
@@ -121,6 +139,7 @@ export class PdfTextModel {
       this.seed(id).sources.length > 0 &&
       !this.contentDirty(id) &&
       !p?.hidden &&
+      !(p?.continuation && p.continuation > 0) &&
       (p?.width === undefined || p.width === this.seed(id).width)
     );
   }

@@ -284,3 +284,105 @@ test('undoing a duplicate removes copied text while retaining a peer contributio
   a.undo.undo();
   expect(a.text('copy').toString()).toBe(' peer');
 });
+
+test('moving and resizing a continuation box keeps its page and visible origin', () => {
+  const f = setup(original(text('Original'))),
+    style = f.model.seed(f.model.ids()[0]!).style;
+  f.model.add({
+    id: 'continued',
+    page: 0,
+    continuation: 1,
+    x: 24,
+    y: 180,
+    width: 180,
+    lineHeight: 17.5,
+    style,
+    sources: [],
+    delta: [],
+  });
+  f.model.replace('continued', 0, 0, 'Continued');
+  const before = layoutPdfTextFlow(f.model, f.fonts, f.document.pages);
+  expect(before.pages).toHaveLength(2);
+  expect(before.regions.find((r) => r.id === 'continued')!.glyphs[0]!.y).toBe(100);
+  f.model.move('continued', 10, 10);
+  f.model.place('continued', { width: 150 });
+  const after = layoutPdfTextFlow(f.model, f.fonts, f.document.pages),
+    region = after.regions.find((r) => r.id === 'continued')!;
+  expect(after.pages).toHaveLength(2);
+  expect(region.page).toBe(1);
+  expect(region.glyphs[0]!.x).toBe(34);
+  expect(region.glyphs[0]!.y).toBe(110);
+  const output = openPdfDocument(exportEditedPdf(f.document, f.model, f.fonts));
+  expect(output.pages).toHaveLength(2);
+  expect(new PdfInterpreter(output).page(1).text).toContain('Continued');
+});
+
+test('detaching a reflowed paragraph uses its rendered origin without jumping', () => {
+  const f = setup(original(`${text('First', 24, 130)}\n${text('Second', 24, 85)}`)),
+    [first, second] = f.model.ids();
+  f.model.replace(first!, 5, 5, '\nLine 1\nLine 2\nLine 3');
+  const before = layoutPdfTextFlow(f.model, f.fonts, f.document.pages).regions.find(
+    (r) => r.id === second,
+  )!;
+  expect(before.glyphs[0]!.y).toBeGreaterThan(f.model.seed(second!).y);
+  f.model.move(second!, 0, 10, before.origin);
+  const after = layoutPdfTextFlow(f.model, f.fonts, f.document.pages).regions.find(
+    (r) => r.id === second,
+  )!;
+  expect(after.glyphs[0]!.y).toBe(before.glyphs[0]!.y + 10);
+});
+
+test('nested Forms inside Type3 procedures move and hide with their owning text', () => {
+  const source = pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Count 1 /Kids [5 0 R] >>',
+    '<< /Type /Font /Subtype /Type3 /FontBBox [0 0 600 800] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs << /A 6 0 R >> /Encoding << /Type /Encoding /Differences [65 /A] >> /FirstChar 65 /LastChar 65 /Widths [600] /Resources << /XObject << /X 7 0 R >> >> >>',
+    pdfStream('BT /F1 12 Tf 24 100 Td (A) Tj ET'),
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 240 160] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>',
+    pdfStream('600 0 d0 /X Do'),
+    pdfStream(
+      '0 0 600 800 re f',
+      '/Type /XObject /Subtype /Form /BBox [0 0 600 800] /Resources << >>',
+    ),
+  ]);
+  const f = setup(source),
+    id = f.model.ids()[0]!,
+    scene = new PdfInterpreter(f.document).page(0);
+  const original = scene.elements.find((e) => e.kind === 'path')!;
+  f.model.move(id, 9, 11);
+  const path = placePdfScene(scene, f.model).elements.find((e) => e.kind === 'path')!;
+  expect(path.state.transform[4]).toBe(original.state.transform[4] + 9);
+  expect(path.state.transform[5]).toBe(original.state.transform[5] - 11);
+  f.model.hide(id);
+  const hidden = placePdfScene(scene, f.model).elements.find((e) => e.kind === 'path')!;
+  expect(
+    f.model
+      .seed(id)
+      .sources.some(
+        (s) => s.instance === hidden.source.instance && s.start === hidden.source.start,
+      ),
+  ).toBe(true);
+});
+
+test('detaching text pushed onto a continuation retains its page and exported text', () => {
+  const f = setup(original(`${text('First', 24, 130)}\n${text('Second', 24, 85)}`)),
+    [first, second] = f.model.ids();
+  f.model.replace(
+    first!,
+    5,
+    5,
+    '\n' + Array.from({ length: 20 }, (_, i) => `Line ${i}`).join('\n'),
+  );
+  const before = layoutPdfTextFlow(f.model, f.fonts, f.document.pages).regions.find(
+    (r) => r.id === second,
+  )!;
+  expect(before.origin.continuation).toBeGreaterThan(0);
+  f.model.move(second!, 0, 10, before.origin);
+  const after = layoutPdfTextFlow(f.model, f.fonts, f.document.pages).regions.find(
+    (r) => r.id === second,
+  )!;
+  expect(after.page).toBe(before.page);
+  expect(after.glyphs[0]!.y).toBe(before.glyphs[0]!.y + 10);
+  const output = openPdfDocument(exportEditedPdf(f.document, f.model, f.fonts));
+  expect(new PdfInterpreter(output).page(after.page).text).toContain('Second');
+});

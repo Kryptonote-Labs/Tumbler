@@ -69,6 +69,7 @@
     return layoutPdfTextFlow(model, fonts, pdf.pages);
   });
   const layouts = $derived(flow.regions);
+  const origins = $derived(new Map(layouts.map((region) => [region.id, region.origin])));
   $effect(() => onpages?.(flow.pages.length));
   let anchors:
     | { first: ReturnType<PdfTextModel['anchor']>; last: ReturnType<PdfTextModel['anchor']> }
@@ -147,6 +148,7 @@
     });
   }
   async function select(id: string, first: number, last = first, extend = false) {
+    if (model.placement(id)?.hidden) return;
     selected = extend ? [...new Set([...selected, id])] : [id];
     active = id;
     start = Math.min(first, last);
@@ -198,7 +200,7 @@
     if (!active || composing || event.isComposing) return;
     const mod = event.metaKey || event.ctrlKey;
     if (event.key === 'Tab') {
-      const ids = model.ids(),
+      const ids = model.ids().filter((id) => !model.placement(id)?.hidden),
         index = ids.indexOf(active) + (event.shiftKey ? -1 : 1),
         next = ids[index];
       if (next) {
@@ -377,7 +379,7 @@
     };
     const after = () => {
       revision++;
-      if (active && !model.regions.has(active)) {
+      if (active && (!model.regions.has(active) || model.placement(active)?.hidden)) {
         active = undefined;
         selected = [];
         value = '';
@@ -447,6 +449,7 @@
             {revision}
             {editable}
             group={selected}
+            {origins}
             onedit={() => void select(layout.id, start, end)}
           />
         {/each}
