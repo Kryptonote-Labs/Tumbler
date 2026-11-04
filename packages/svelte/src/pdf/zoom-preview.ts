@@ -91,10 +91,11 @@ export function pdfZoomPreview(
     // Invert the preview transform to find the PDF point under the latest focal point.
     const localX = (p.point.x - p.origin.x - p.tx) / p.factor;
     const localY = (p.point.y - p.origin.y - p.ty) / p.factor;
+    const visible = p.page.isConnected && p.page.getClientRects().length > 0;
     restore();
     preview = undefined;
     try {
-      if (p.page.isConnected)
+      if (visible)
         commit(p.scale, {
           page: p.page,
           x: p.point.x,
