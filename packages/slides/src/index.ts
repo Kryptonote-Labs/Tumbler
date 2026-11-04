@@ -86,3 +86,5 @@ export {
 export { resizeDrawingGeometry } from "./drawing-geometry.ts";
 
 export { gradientFill, type GradientFill } from './gradient-authoring.ts';
+
+export { shapePlacement, placedShapeCommand, type ShapePlacement } from './shape-placement.ts';
