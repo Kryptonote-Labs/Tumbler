@@ -31,7 +31,7 @@ const kind = (value: PdfValue | undefined, expected: string) =>
 
 /** Retain only form fields with a widget on a selected page, preserving their field ancestors and resources. */
 export function subsetPdfForms(context: PdfExtractionContext): PdfValue | undefined {
-  const { source, refs, reserve, copy, set, selectedAnnotations } = context;
+  const { source, refs, reserve, copy, copyAction, set, selectedAnnotations } = context;
   const original = source.resolve(source.catalog.get('AcroForm'));
   if (!(original instanceof Map)) return undefined;
   if (original.has('XFA'))
@@ -68,7 +68,10 @@ export function subsetPdfForms(context: PdfExtractionContext): PdfValue | undefi
     const result = new Map<string, PdfValue>();
     for (const [key, entry] of info) {
       if (['Parent', 'Kids'].includes(key) || (key === 'V' && kind(fieldType, 'Sig'))) continue;
-      result.set(key, copy(entry));
+      if (key === 'A') {
+        const action = copyAction(entry);
+        if (action) result.set(key, action);
+      } else result.set(key, copy(entry));
     }
     if (parent) result.set('Parent', parent);
     if (kids.length) result.set('Kids', kids);

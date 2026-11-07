@@ -345,3 +345,36 @@ test(`bookmarks and annotation chains keep downstream actions after pruning (${c
   expect(executed(annotation.get('A'))).toEqual(expected);
   expect(executed(bookmark.get('A'))).toEqual(expected);
 });
+
+for (const indirect of [false, true])
+for (const chainArray of [false, true])
+for (const hasTail of [false, true])
+test(`pushbutton actions promote surviving successors (${indirect}, ${chainArray}, ${hasTail})`, () => {
+  const action = `<< /S /GoTo /D [4 0 R /Fit] ${hasTail ? `/Next ${chainArray ? '[8 0 R 9 0 R]' : '8 0 R'}` : ''} >>`;
+  const document = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [6 0 R] >> >>',
+    '<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] /MediaBox [0 0 100 100] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 5 0 R /Annots [6 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 5 0 R >>',
+    pdfStream(''),
+    `<< /Type /Annot /Subtype /Widget /FT /Btn /Ff 65536 /T (Button) /Rect [0 0 20 20] /P 3 0 R /A ${indirect ? '7 0 R' : action} >>`,
+    action,
+    '<< /S /URI /URI (https://example.org/first) >>',
+    '<< /S /URI /URI (https://example.org/second) >>',
+  ]));
+  const merged = openPdfDocument(mergePdfDocuments([{ document, pages: [0] }]));
+  const source = merged.source;
+  const widget = dictionary(source.resolve((merged.pages[0]!.dictionary.get('Annots') as PdfReference[])[0]));
+  if (!hasTail) { expect(widget.has('A')).toBe(false); return; }
+  const first = dictionary(source.resolve(widget.get('A')));
+  expect((first.get('S') as PdfName).value).toBe('URI');
+  expect(bytesText((first.get('URI') as PdfString).bytes)).toBe('https://example.org/first');
+  if (chainArray) {
+    const second = dictionary(source.resolve(first.get('Next')));
+    expect((second.get('S') as PdfName).value).toBe('URI');
+    expect(bytesText((second.get('URI') as PdfString).bytes)).toBe('https://example.org/second');
+  } else expect(first.has('Next')).toBe(false);
+  const form = dictionary(source.resolve(source.catalog.get('AcroForm')));
+  const namespace = dictionary(source.resolve((form.get('Fields') as PdfReference[])[0]));
+  expect(((namespace.get('Kids') as PdfReference[])[0] as PdfReference).key).toBe(((merged.pages[0]!.dictionary.get('Annots') as PdfReference[])[0] as PdfReference).key);
+});
