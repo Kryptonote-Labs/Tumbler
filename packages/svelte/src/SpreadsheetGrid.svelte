@@ -600,6 +600,9 @@
     class:text-overflow={overflowWidth !== undefined}
     class="cell"
     role="gridcell"
+    data-reference={reference}
+    aria-rowindex={sourceRow}
+    aria-colindex={column}
     tabindex="-1"
     aria-selected={selected(sourceRow, column)}
     style:left={`${left}px`}
