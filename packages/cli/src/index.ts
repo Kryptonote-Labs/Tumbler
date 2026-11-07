@@ -11,6 +11,7 @@ import {
   type OperationHost,
 } from './registry.ts';
 export * from './registry.ts';
+export type { PdfExportInput } from './pdf-pages.ts';
 
 import { tumblerHelp, tumblerOperationHelp } from './help.ts';
 export { tumblerHelp, tumblerOperationHelp, tumblerCapabilities } from './help.ts';
@@ -84,7 +85,9 @@ export async function runTumbler(
     }
     const flags: Record<string, unknown> = {};
     const allowed = new Set(
-      name === 'render'
+      name === 'export'
+        ? ['pages', 'output', 'format']
+        : name === 'render'
         ? ['page']
         : name === 'read'
         ? ['offset', 'region', 'target']
