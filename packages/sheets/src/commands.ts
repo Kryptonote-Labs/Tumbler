@@ -153,7 +153,7 @@ function editSheets(artifact: SpreadsheetArtifact, command: SheetCommand) {
   let saved = transaction.commitPackage();
   if (command.name === 'rename-sheet' || command.name === 'delete-sheet') {
     const previous = resolveSheet(artifact,command.sheetId);
-    saved = rewriteSpreadsheetSheetReferences(saved, previous.name, command.name === 'rename-sheet' ? command.nameValue : null);
+    saved = rewriteSpreadsheetSheetReferences(saved, previous.name, command.name === 'rename-sheet' ? command.nameValue : null, workbook.sheets.map(sheet => sheet.name));
   }
   return fromPackage(saved,artifact.activeSheet.sheetId);
 }
