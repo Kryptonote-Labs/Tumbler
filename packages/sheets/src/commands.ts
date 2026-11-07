@@ -130,9 +130,24 @@ function editSheets(artifact: SpreadsheetArtifact, command: SheetCommand) {
       const reordered = [...elements];
       reordered.splice(elements.indexOf(element),1);
       reordered.splice(command.index,0,element);
-      const prefix = container.prefix ? `${container.prefix}:` : '';
-      editor.replaceElementMarkup(container,`<${prefix}sheets>${reordered.map(node => workbook.document.source.slice(node.span.start,node.span.end)).join('')}</${prefix}sheets>`);
+      const startTag = workbook.document.source.slice(container.startTagSpan.start,container.startTagSpan.end);
+      editor.replaceElementMarkup(container,`${startTag}${reordered.map(node => workbook.document.source.slice(node.span.start,node.span.end)).join('')}</${container.qualified}>`);
     }
+  }
+  if (command.name === 'delete-sheet' || command.name === 'move-sheet') {
+    const target = resolveSheet(artifact,command.sheetId), oldOrder = [...workbook.sheets];
+    const newOrder = oldOrder.filter(sheet => sheet !== target);
+    if(command.name === 'move-sheet')newOrder.splice(command.index,0,target);
+    const visit = (element: typeof workbook.document.root) => {
+      if(element.localName === 'definedName') {
+        const local = element.attributes.find(attribute => attribute.localName === 'localSheetId' && !attribute.namespaceUri);
+        if(local) {
+          const previous = oldOrder[Number(local.value)], next = previous ? newOrder.indexOf(previous) : -1;
+          if(next < 0)editor.removeElement(element);else if(String(next)!==local.value)editor.setAttribute(local,String(next));
+        }
+      } else for(const child of element.children)if(child.kind==='element')visit(child);
+    };
+    visit(workbook.document.root);
   }
   transaction.replacePart(workbook.part.name,editor.commit().bytes);
   let saved = transaction.commitPackage();

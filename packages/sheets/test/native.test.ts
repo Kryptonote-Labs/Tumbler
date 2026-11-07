@@ -87,3 +87,17 @@ test('deleting referenced sheets writes REF errors and preserves unrelated formu
   expect(artifact.worksheet.cell('A1')?.formula).toBe('SUM(#REF!)+1');
   expect(artifact.calculation.displayText('A1')).toBe('#REF!');
 });
+
+test('sheet movement and deletion retain local named-range ownership and local namespaces', async () => {
+  const {beginPackageTransaction}=await import('@tumblerjs/opc');
+  let artifact=applySpreadsheetCommand(createSpreadsheet(),{name:'add-sheet',nameValue:'Budget'});
+  const transaction=beginPackageTransaction(artifact.workbook.package);
+  const xml=artifact.workbook.document.source.replace('<sheets>','<sheets xmlns:local="urn:keep">').replace('</sheets>','</sheets><definedNames><definedName name="Local" localSheetId="1">Budget!$A$1</definedName></definedNames>');
+  transaction.replacePart(artifact.workbook.part.name,new TextEncoder().encode(xml));
+  artifact=openSpreadsheetArtifact(transaction.commitPackage().archive.originalBytes());
+  artifact=applySpreadsheetCommand(artifact,{name:'move-sheet',sheetId:'2',index:0});
+  expect(artifact.workbook.document.source).toContain('xmlns:local="urn:keep"');
+  expect(artifact.workbook.document.source).toContain('localSheetId="0"');
+  artifact=applySpreadsheetCommand(artifact,{name:'delete-sheet',sheetId:'2'});
+  expect(artifact.workbook.document.source).not.toContain('name="Local"');
+});
