@@ -240,6 +240,7 @@ function spreadsheetFill(fill: CellFill): SpreadsheetFill {
 }
 
 function cellFill(styles: SpreadsheetStyles, fill: SpreadsheetFill): CellFill | undefined {
+  if (fill.gradient) return undefined;
   if (fill.patternType === undefined || fill.patternType === "none") return Object.freeze({ type: "none" });
   if (fill.patternType !== "solid") return undefined;
   return Object.freeze({ type: "solid", color: officeColor(styles, fill.foreground) });

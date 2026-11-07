@@ -44,6 +44,7 @@ export interface SpreadsheetFont {
 }
 
 export interface SpreadsheetFill {
+  readonly gradient?: true;
   readonly patternType: string | undefined;
   readonly foreground: SpreadsheetColor | undefined;
   readonly background: SpreadsheetColor | undefined;
@@ -405,6 +406,7 @@ function parseFont(element: LosslessXmlElement, namespace: string): SpreadsheetF
 function parseFill(element: LosslessXmlElement, namespace: string): SpreadsheetFill {
   const pattern = child(element, namespace, "patternFill");
   return Object.freeze({
+    ...(child(element, namespace, "gradientFill") === undefined ? {} : { gradient: true as const }),
     patternType: pattern === undefined ? undefined : attr(pattern, "patternType"),
     foreground: pattern === undefined ? undefined : parseSpreadsheetColor(child(pattern, namespace, "fgColor")),
     background: pattern === undefined ? undefined : parseSpreadsheetColor(child(pattern, namespace, "bgColor")),

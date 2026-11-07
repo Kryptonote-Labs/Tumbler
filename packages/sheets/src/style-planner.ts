@@ -53,14 +53,14 @@ export class SpreadsheetStylePlanner {
   constructor(workbook: SpreadsheetWorkbook, source = readSpreadsheetStyles(workbook)) {
     this.#workbook = workbook;
     this.source = source;
-    this.#formats = [...source.cellFormats];
-    this.#formats.forEach((format, index) => {
-      const key = styleKey(format);
-      if (!this.#formatKeys.has(key)) this.#formatKeys.set(key, index);
-    });
     this.#fonts = new StyleCollection(source.fonts);
     this.#fills = new StyleCollection(source.fills);
     this.#borders = new StyleCollection(source.borders);
+    this.#formats = [...source.cellFormats];
+    this.#formats.forEach((format, index) => {
+      const key = this.#formatKey(format);
+      if (!this.#formatKeys.has(key)) this.#formatKeys.set(key, index);
+    });
     this.#numberFormats = new Map(source.numberFormats);
   }
 
@@ -77,8 +77,8 @@ export class SpreadsheetStylePlanner {
     const base = this.#formats[baseIndex];
     if (base === undefined) throw new SpreadsheetError("invalid_styles", `Cell format index ${baseIndex} does not exist.`);
     const format = this.#withNumberFormatId(transform(base, this.normal));
-    const key = styleKey(format);
-    const index = key === styleKey(base) ? baseIndex : this.#formatKeys.get(key) ?? this.#append(format, key);
+    const key = this.#formatKey(format);
+    const index = key === this.#formatKey(base) ? baseIndex : this.#formatKeys.get(key) ?? this.#append(format, key);
     memo.set(baseIndex, index);
     return index;
   }
@@ -135,6 +135,10 @@ export class SpreadsheetStylePlanner {
     this.#formats.push(format);
     this.#formatKeys.set(key, this.#formats.length - 1);
     return this.#formats.length - 1;
+  }
+
+  #formatKey(format: SpreadsheetCellFormat): string {
+    return styleKey({ ...format, font: this.#fonts.key(format.font), fill: this.#fills.key(format.fill), border: this.#borders.key(format.border) });
   }
 
   #ids(format: SpreadsheetCellFormat) {
@@ -200,6 +204,12 @@ class StyleCollection<T extends object> {
 
   index(item: T): number | undefined {
     return this.#identities.get(item) ?? this.#keys.get(styleKey(item));
+  }
+
+  /** Uploaded records can differ in XML we do not interpret, so their ids are significant. */
+  key(item: T): string {
+    const source = this.#identities.get(item) ?? this.#keys.get(styleKey(item));
+    return source !== undefined && source < this.#initial ? `source:${source}` : styleKey(item);
   }
 
   required(item: T): number {

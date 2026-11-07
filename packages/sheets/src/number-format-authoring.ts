@@ -197,7 +197,7 @@ function numericPart(section: readonly Token[]): { readonly lastInteger: number;
   let lastDecimal: number | undefined;
   for (let index = 0; index < end; index += 1) {
     const token = section[index]!;
-    if (token.kind === "point" && point === undefined && lastInteger >= 0) point = index;
+    if (token.kind === "point" && point === undefined) point = index;
     else if (token.kind === "digit" && point === undefined) lastInteger = index;
     else if (token.kind === "digit") { decimals += 1; lastDecimal = index; }
   }

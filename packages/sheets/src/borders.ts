@@ -2,7 +2,7 @@ import { normalizeOfficeColor, type OfficeColor } from "@tumblerjs/core";
 import type { OpcPackage } from "@tumblerjs/opc";
 import { normalizeSpreadsheetRange, spreadsheetColor, type SpreadsheetFormattingTarget } from "./formatting.ts";
 import type { CellAddress, CellRange } from "./references.ts";
-import { restyleSpreadsheetCells, restyleSpreadsheetRange } from "./sheet-restyle.ts";
+import { restyleSpreadsheetRange } from "./sheet-restyle.ts";
 import type { SpreadsheetStyleTransform } from "./style-planner.ts";
 import type { SpreadsheetBorder, SpreadsheetBorderEdge, SpreadsheetCellFormat } from "./styles.ts";
 import { openWorksheet, type SpreadsheetWorksheet } from "./worksheet.ts";
@@ -53,25 +53,33 @@ export function setSpreadsheetBordersPackage(
   const original = openWorksheet(workbook, sheet);
   const range = expandToMerges(original, normalizeSpreadsheetRange(target));
   let pkg = workbook.package;
-  for (const region of regions(range, options.preset)) {
-    const current = pkg === workbook.package ? workbook : openSpreadsheet(pkg);
-    pkg = restyleSpreadsheetRange(current, sheetIn(current, sheet), region.range, withEdges(region.sides, edge));
-  }
-
-  // Merged cells draw their outer edges from boundary cells; the top-left cell carries all four.
-  // Boundary cells restart from their original style so interior sides from the region pass are undone.
   const merges = original.merges.filter((merge) => contains(range, merge));
-  if (merges.length === 0) return pkg;
-  const items = merges.flatMap((merge) => {
+  const apply = (target: CellRange, sides: readonly Side[]) => {
+    if (sides.length === 0) return;
+    const current = pkg === workbook.package ? workbook : openSpreadsheet(pkg);
+    pkg = restyleSpreadsheetRange(current, sheetIn(current, sheet), target, withEdges(sides, edge));
+  };
+  for (const region of regions(range, options.preset)) {
+    let remaining = [region.range];
+    for (const merge of merges) remaining = remaining.flatMap((part) => subtractRange(part, merge));
+    for (const part of remaining) apply(part, region.sides);
+  }
+  // A merge is one logical cell. Style its perimeter as sparse rectangles, never an
+  // enumerated list of coordinates, and leave its internal cells untouched.
+  for (const merge of merges) {
     const sides = presetSides(options.preset, rowBand(merge, range), columnBand(merge, range));
-    return boundaryCells(merge).map(({ address, sides: boundary }) => ({
-      address,
-      baseIndex: original.effectiveStyleIndex(address) ?? 0,
-      transform: withEdges(sameCell(address, merge.start) ? sides : sides.filter((side) => boundary.has(side)), edge),
-    }));
-  });
-  const current = pkg === workbook.package ? workbook : openSpreadsheet(pkg);
-  return restyleSpreadsheetCells(current, sheetIn(current, sheet), items);
+    if (options.preset === "none") apply(merge, sides);
+    else for (const side of sides) {
+      const boundary = side === "top" ? { start: merge.start, end: { row: merge.start.row, column: merge.end.column } }
+        : side === "bottom" ? { start: { row: merge.end.row, column: merge.start.column }, end: merge.end }
+        : side === "left" ? { start: merge.start, end: { row: merge.end.row, column: merge.start.column } }
+        : { start: { row: merge.start.row, column: merge.end.column }, end: merge.end };
+      apply(boundary, [side]);
+    }
+    // The owner renders the complete merged-cell rectangle in the grid.
+    apply({ start: merge.start, end: merge.start }, sides);
+  }
+  return pkg;
 }
 
 /** Replaces the named sides and keeps the others, including any diagonal. */
@@ -151,23 +159,17 @@ function expandToMerges(worksheet: SpreadsheetWorksheet, range: CellRange): Cell
   return current;
 }
 
-function boundaryCells(merge: CellRange): { address: CellAddress; sides: Set<Side> }[] {
-  const cells = new Map<string, { address: CellAddress; sides: Set<Side> }>();
-  const add = (row: number, column: number, side: Side) => {
-    const key = `${row}:${column}`;
-    const cell = cells.get(key) ?? { address: { row, column }, sides: new Set<Side>() };
-    cell.sides.add(side);
-    cells.set(key, cell);
-  };
-  for (let column = merge.start.column; column <= merge.end.column; column += 1) {
-    add(merge.start.row, column, "top");
-    add(merge.end.row, column, "bottom");
-  }
-  for (let row = merge.start.row; row <= merge.end.row; row += 1) {
-    add(row, merge.start.column, "left");
-    add(row, merge.end.column, "right");
-  }
-  return [...cells.values()];
+/** Remove an intersecting merge while retaining at most four nonoverlapping rectangles. */
+function subtractRange(range: CellRange, merge: CellRange): CellRange[] {
+  if (!intersects(range, merge)) return [range];
+  const top = Math.max(range.start.row, merge.start.row), bottom = Math.min(range.end.row, merge.end.row);
+  const left = Math.max(range.start.column, merge.start.column), right = Math.min(range.end.column, merge.end.column);
+  const result: CellRange[] = [];
+  if (range.start.row < top) result.push({ start: range.start, end: { row: top - 1, column: range.end.column } });
+  if (bottom < range.end.row) result.push({ start: { row: bottom + 1, column: range.start.column }, end: range.end });
+  if (range.start.column < left) result.push({ start: { row: top, column: range.start.column }, end: { row: bottom, column: left - 1 } });
+  if (right < range.end.column) result.push({ start: { row: top, column: right + 1 }, end: { row: bottom, column: range.end.column } });
+  return result;
 }
 
 function rowBand(merge: CellRange, range: CellRange) {
@@ -182,9 +184,6 @@ function sheetIn(workbook: SpreadsheetWorkbook, sheet: SpreadsheetSheet): Spread
   return workbook.sheets.find((candidate) => candidate.sheetId === sheet.sheetId)!;
 }
 
-function sameCell(left: CellAddress, right: CellAddress): boolean {
-  return left.row === right.row && left.column === right.column;
-}
 
 function intersects(left: CellRange, right: CellRange): boolean {
   return left.start.row <= right.end.row && right.start.row <= left.end.row &&
