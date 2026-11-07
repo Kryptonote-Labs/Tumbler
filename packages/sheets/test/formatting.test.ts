@@ -211,3 +211,26 @@ test('number formatting preserves cell contents and recalculates display text', 
   expect(artifact.worksheet.cellStyle('A1000000').numberFormatId).toBe(10);
   expect(artifact.worksheet.cell('A1')?.value).toMatchObject({value:0.125});
 });
+
+test('almost-sheet formatting uses column defaults and preserves the excluded final row', async () => {
+  const {createSpreadsheet} = await import('../src/commands.ts');
+  const artifact=createSpreadsheet().formatCells('A1:XFD1048575',{text:{bold:{set:true}}});
+  expect(artifact.worksheet.cellStyle('A1000000').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('XFD1048575').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('A1048576').font.bold).toBeFalse();
+  expect(artifact.worksheet.rows).toHaveLength(1);
+});
+
+test('whole row formatting uses sparse row defaults and preserves column styles', async () => {
+  const {createSpreadsheet} = await import('../src/commands.ts');
+  let original=createSpreadsheet().formatCells('B1:B1048576',{text:{italic:{set:true}}});
+  original=original.formatCells('C2',{text:{underline:{set:'double'}}});
+  const artifact=original.formatCells('A2:XFD4',{text:{bold:{set:true}}});
+  expect(artifact.worksheet.cellStyle('A2').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('B3').font.italic).toBeTrue();
+  expect(artifact.worksheet.cellStyle('B3').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('C2').font.underline).toBe('double');
+  expect(artifact.worksheet.cellStyle('XFD4').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('A5').font.bold).toBeFalse();
+  expect(artifact.worksheet.rows.flatMap(row=>row.cells).length).toBeLessThan(10);
+});

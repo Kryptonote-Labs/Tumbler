@@ -108,7 +108,8 @@ export function formatSpreadsheetCellsPackage(
 
   const worksheet = openWorksheet(workbook, sheet);
   const planner = new SpreadsheetStylePlanner(workbook, worksheet.styles, numberFormatId);
-  if (range.start.row === 1 && range.end.row === EXCEL_MAX_ROWS) return formatWholeColumns(workbook, worksheet, range, planner, patch);
+  if (EXCEL_MAX_ROWS - (range.end.row-range.start.row+1) <= 64) return formatWholeColumns(workbook, worksheet, range, planner, patch);
+  if (range.start.column === 1 && range.end.column === EXCEL_MAX_COLUMNS) return formatWholeRows(workbook, worksheet, range, planner, patch);
   const edits = cells(range).map((address) => ({
     address,
     styleIndex: planner.formatIndex(worksheet.effectiveStyleIndex(address) ?? 0, patch),
@@ -684,6 +685,7 @@ function formatWholeColumns(workbook: SpreadsheetWorkbook, worksheet: Spreadshee
   const edits: {address:CellAddress;styleIndex:number}[] = [];
   const sheetData = child(document.root,ns,'sheetData');
   for (const row of worksheet.rows) {
+    if (row.index < range.start.row || row.index > range.end.row) continue;
     if (row.customFormat && allColumns && sheetData) {
       const element = children(sheetData,ns,'row').find(r=>Number(attribute(r,'r')?.value)===row.index);
       if (element) {
@@ -694,6 +696,16 @@ function formatWholeColumns(workbook: SpreadsheetWorkbook, worksheet: Spreadshee
       for(let column=range.start.column;column<=range.end.column;column++)edits.push({address:{row:row.index,column},styleIndex:planner.formatIndex(worksheet.effectiveStyleIndex({row:row.index,column})??0,patch)});
     }
     for (const cell of row.cells) if(cell.address.column>=range.start.column && cell.address.column<=range.end.column && (!row.customFormat || allColumns)) edits.push({address:cell.address,styleIndex:planner.formatIndex(worksheet.effectiveStyleIndex(cell.address)??0,patch)});
+  }
+  // Column defaults span the grid. Restore rows outside the requested rectangle exactly.
+  for (const [first,last] of [[1,range.start.row-1],[range.end.row+1,EXCEL_MAX_ROWS]]) {
+    for(let row=first!;row<=last!;row++) {
+      if (worksheet.row(row)?.customFormat) continue;
+      for(let column=range.start.column;column<=range.end.column;column++) {
+        const address={row,column};
+        edits.push({address,styleIndex:worksheet.effectiveStyleIndex(address)??0});
+      }
+    }
   }
   // Stage column/row defaults first, then explicit cell overrides against the updated XML.
   const updated = parseLosslessXml(editor.commit().bytes);
@@ -708,4 +720,46 @@ function formatWholeColumns(workbook: SpreadsheetWorkbook, worksheet: Spreadshee
 export function formatSpreadsheetNumbersPackage(workbook: SpreadsheetWorkbook, sheet: SpreadsheetSheet, target: SpreadsheetFormattingTarget, format: 'general'|'number'|'currency'|'percent'|'date'): OpcPackage {
   const ids = {general:0,number:2,currency:7,percent:10,date:14} as const;
   return formatSpreadsheetCellsPackage(workbook,sheet,target,{},ids[format]);
+}
+
+/** Whole rows inherit a row format; materialize only cells that override column or cell styles. */
+function formatWholeRows(workbook: SpreadsheetWorkbook, worksheet: SpreadsheetWorksheet, range: CellRange, planner: SpreadsheetStylePlanner, patch: FormattingPatch): OpcPackage {
+  const document=worksheet.document, ns=spreadsheetNamespace(workbook.conformance);
+  const data=child(document.root,ns,'sheetData');
+  if(!data)throw new SpreadsheetError('invalid_worksheet','Worksheet data is missing.');
+  const elements=children(data,ns,'row');
+  const rowElements=new Map(elements.map((element,index,all)=>[Number(attribute(element,'r')?.value??inferredRowIndex(all,index)),element]));
+  const markup=new Map([...rowElements].map(([row,element])=>[row,sourceForNode(document,element)]));
+  const prefix=data.prefix;
+  const overrides=new Map<string,{address:CellAddress;styleIndex:number}>();
+  for(let row=range.start.row;row<=range.end.row;row++) {
+    const element=rowElements.get(row), model=worksheet.row(row);
+    const base=model?.customFormat ? model.styleIndex??0 : 0;
+    const style=planner.formatIndex(base,patch);
+    const attrs=new Map(element?.attributes.map(a=>[a.qualified,a.value]));
+    attrs.set('r',String(row));attrs.set('s',String(style));attrs.set('customFormat','1');
+    const body=element&&!element.selfClosing ? document.source.slice(element.startTagSpan.end,element.endTagSpan!.start) : '';
+    markup.set(row,`<${qualified(prefix,'row')}${[...attrs].map(([key,value])=>` ${key}="${escapeAttribute(value)}"`).join('')}>${body}</${qualified(prefix,'row')}>`);
+    if(!model?.customFormat) for(const column of worksheet.columns) {
+      const target=planner.formatIndex(column.styleIndex??0,patch);
+      if(target===style)continue;
+      for(let index=column.min;index<=column.max;index++) {
+        const address={row,column:index};
+        overrides.set(formatCellReference(address),{address,styleIndex:planner.formatIndex(worksheet.effectiveStyleIndex(address)??0,patch)});
+      }
+    }
+    for(const cell of model?.cells??[]) {
+      const target=planner.formatIndex(worksheet.effectiveStyleIndex(cell.address)??0,patch);
+      if(target!==style || cell.styleIndex!==undefined) overrides.set(cell.reference,{address:cell.address,styleIndex:target});
+    }
+  }
+  const editor=beginLosslessXmlEdit(document);
+  const nonRows=data.children.filter(node=>node.kind!=='element'||node.namespaceUri!==ns||node.localName!=='row').map(node=>sourceForNode(document,node)).join('');
+  editor.replaceElementMarkup(data,`<${data.qualified}${data.attributes.map(a=>` ${a.qualified}="${escapeAttribute(a.value)}"`).join('')}>${[...markup].sort(([a],[b])=>a-b).map(([,xml])=>xml).join('')}${nonRows}</${data.qualified}>`);
+  const updated=parseLosslessXml(editor.commit().bytes);
+  const bytes=overrides.size?styleWorksheetCells(updated,workbook.conformance,[...overrides.values()]):updated.originalBytes();
+  const tx=beginPackageTransaction(workbook.package);
+  planner.stage(tx);
+  tx.replacePart(worksheet.sheet.partName,bytes);
+  return tx.commitPackage();
 }
