@@ -9,6 +9,7 @@
     clearSpreadsheetTableFilter,
     calculateSpreadsheetWorksheet,
     formatCellReference,
+    parseCellReference,
     formatSpreadsheetCellValue,
     projectSpreadsheetTable,
     projectSpreadsheetConditionalStyles,
@@ -37,6 +38,7 @@
   import { spreadsheetEmptyRegionStart } from "./spreadsheet-empty-region.ts";
   import { zoomGesture, type ZoomGesture } from "./zoom-gesture.ts";
   import { spreadsheetScrollAxis } from "./spreadsheet-scroll.ts";
+  import { spreadsheetSelectionRects, spreadsheetSelectionRanges } from "./spreadsheet-selection.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
 
   interface RenderableChart {
@@ -100,6 +102,7 @@
   let tableStates = $state<Record<string, SpreadsheetTableViewState>>({});
   let tableMenu = $state<{ key: string; columnId: number; left: number; top: number }>();
   let selectingPointer = $state<number>();
+  let pointerSelection: GridSelection | undefined;
   let selectionDragged = $state(false);
   let suppressCellClick = $state(false);
   const rowHeaderWidth = 52;
@@ -181,6 +184,7 @@
     columnGeometry,
   }, previousViewport));
   let layout = $derived(composeSpreadsheetGridLayout({ viewport, rowGeometry, columnGeometry, frozenRows, frozenColumns, merges: worksheet.merges }));
+  const selectionRects = $derived(spreadsheetSelectionRanges(selection.range,projectedRows).flatMap(range=>spreadsheetSelectionRects({range,rows:rowGeometry,columns:columnGeometry,scrollTop,scrollLeft,width:viewportWidth,height:viewportHeight,frozenRows,frozenColumns})));
   let maximumVisibleColumn = $derived(layout.columns.at(-1)?.index ?? 1);
   let emptyRegionStart = $derived(spreadsheetEmptyRegionStart(worksheet));
   let emptyCorner = $derived.by(() => {
@@ -275,7 +279,7 @@
     return () => { current = false; };
   });
 
-  function select(row: number, column: number, extend = false) {
+  function select(row: number, column: number, extend = false, reveal = true) {
     if (chartSelection !== undefined) {
       chartSelection = undefined;
       onchartselectionchange?.(undefined);
@@ -287,6 +291,11 @@
       : merge === undefined
         ? createGridSelection(point)
         : createGridSelection(merge.start, merge.end);
+    pointerSelection = reveal ? undefined : selection;
+    if (pointerSelection) {
+      const pointer = pointerSelection;
+      void tick().then(() => { if (pointerSelection === pointer) pointerSelection = undefined; });
+    }
     onselectionchange?.(selection);
   }
 
@@ -310,7 +319,8 @@
   // Keyboard navigation and host-driven selection keep the focused cell in view.
   $effect(() => {
     const element = scroller;
-    const focus = selection.focus;
+    const focus = editing ? parseCellReference(editing) : selection.focus;
+    if (!editing && pointerSelection && selection.focus.row === pointerSelection.focus.row && selection.focus.column === pointerSelection.focus.column && selection.anchor.row === pointerSelection.anchor.row && selection.anchor.column === pointerSelection.anchor.column) return;
     if (element === undefined) return;
     const row = visualRow(focus.row);
     const x = columnGeometry.start(focus.column) + rowHeaderWidth;
@@ -365,7 +375,7 @@
     if (!preserveInputFocus) scroller?.closest<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true });
     selectingPointer = event.pointerId;
     selectionDragged = false;
-    select(row, column, event.shiftKey);
+    select(row, column, event.shiftKey, false);
   }
 
   function cellPointerEnter(event: PointerEvent, row: number, column: number) {
@@ -385,7 +395,7 @@
 
   function cellClick(event: MouseEvent, row: number, column: number) {
     if (suppressCellClick) return;
-    select(row, column, event.shiftKey);
+    select(row, column, event.shiftKey, false);
   }
 
   function interactivePointerTarget(event: PointerEvent): boolean {
@@ -418,7 +428,7 @@
     } else if (event.key === "Enter" || event.key === "F2") {
       if (editable) {
         event.preventDefault();
-        beginEdit(selection.focus.row, selection.focus.column);
+        beginEdit(selection.anchor.row, selection.anchor.column);
       }
     } else if (event.key === "Delete" || event.key === "Backspace") {
       if (editable) {
@@ -431,7 +441,7 @@
       }
     } else if (editable && event.key.length === 1) {
       event.preventDefault();
-      beginEdit(selection.focus.row, selection.focus.column, event.key);
+      beginEdit(selection.anchor.row, selection.anchor.column, event.key);
     }
   }
 
@@ -449,7 +459,7 @@
     if (event.target !== event.currentTarget) return;
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      select(row, column, event.shiftKey);
+      select(row, column, event.shiftKey, false);
     }
   }
 
@@ -625,6 +635,7 @@
   <div
     class:selected={selected(sourceRow, column)}
     class:focused={selection.focus.row === sourceRow && selection.focus.column === column}
+    class:active={selection.anchor.row === sourceRow && selection.anchor.column === column}
     class:table-header={header !== undefined}
     class:text-overflow={overflowWidth !== undefined}
     class="cell"
@@ -755,6 +766,10 @@
           </div>
         {/if}
       {/if}
+      {#if isEmptyCorner(selection.anchor.row,selection.anchor.column) && (selection.anchor.row !== selection.focus.row || selection.anchor.column !== selection.focus.column) && selection.anchor.row >= (layout.rows[0]?.index ?? 1) && selection.anchor.row <= (layout.rows.at(-1)?.index ?? 0) && selection.anchor.column >= (layout.columns[0]?.index ?? 1) && selection.anchor.column <= (layout.columns.at(-1)?.index ?? 0)}
+        {@const anchor=selection.anchor}
+        {@render gridCell(formatCellReference(anchor),anchor.row,anchor.column,rowHeaderWidth+columnGeometry.start(anchor.column),columnHeaderHeight+rowGeometry.start(anchor.row),columnGeometry.size(anchor.column),rowGeometry.size(anchor.row),1)}
+      {/if}
       {#each layout.rows as row (row.index)}
         {#each columnsForRow(row.index) as column (column.index)}
           {@const projectedRow = sourceRow(row.index)}
@@ -819,7 +834,7 @@
     <div class="scrolling-column-headers" style:left={`${frozenColumnsWidth}px`}>
       {#each layout.columns.filter((column) => column.index > frozenColumns) as column (column.index)}
         <div
-          class="column-header"
+          class="column-header" class:selected-header={column.index >= selection.range.start.column && column.index <= selection.range.end.column}
           style:left={`${column.start - scrollLeft - frozenColumnsWidth}px`}
           style:width={`${column.size}px`}
         >{columnLabel(column.index)}</div>
@@ -828,7 +843,7 @@
     {#if frozenColumnsWidth > 0}
       <div class="frozen-column-headers" style:width={`${frozenColumnsWidth}px`}>
         {#each layout.columns.filter((column) => column.index <= frozenColumns) as column (column.index)}
-          <div class="column-header" style:left={`${column.start}px`} style:width={`${column.size}px`}>{columnLabel(column.index)}</div>
+          <div class="column-header" class:selected-header={column.index >= selection.range.start.column && column.index <= selection.range.end.column} style:left={`${column.start}px`} style:width={`${column.size}px`}>{columnLabel(column.index)}</div>
         {/each}
       </div>
     {/if}
@@ -837,7 +852,7 @@
     <div class="scrolling-row-headers" style:top={`${frozenRowsHeight}px`}>
       {#each layout.rows.filter((row) => row.index > frozenRows) as row (row.index)}
         <div
-          class="row-header"
+          class="row-header" class:selected-header={(sourceRow(row.index) ?? 0) >= selection.range.start.row && (sourceRow(row.index) ?? 0) <= selection.range.end.row}
           style:top={`${row.start - scrollTop - frozenRowsHeight}px`}
           style:height={`${row.size}px`}
         >{row.index}</div>
@@ -846,11 +861,15 @@
     {#if frozenRowsHeight > 0}
       <div class="frozen-row-headers" style:height={`${frozenRowsHeight}px`}>
         {#each layout.rows.filter((row) => row.index <= frozenRows) as row (row.index)}
-          <div class="row-header" style:top={`${row.start}px`} style:height={`${row.size}px`}>{row.index}</div>
+          <div class="row-header" class:selected-header={(sourceRow(row.index) ?? 0) >= selection.range.start.row && (sourceRow(row.index) ?? 0) <= selection.range.end.row} style:top={`${row.start}px`} style:height={`${row.size}px`}>{row.index}</div>
         {/each}
       </div>
     {/if}
   </div>
+  {#each selectionRects as rect}
+    <div class="selection-outline" class:top-edge={rect.topEdge} class:bottom-edge={rect.bottomEdge} class:left-edge={rect.leftEdge} class:right-edge={rect.rightEdge}
+      style:left={`${rect.left}px`} style:top={`${rect.top}px`} style:width={`${rect.width}px`} style:height={`${rect.height}px`}></div>
+  {/each}
   <div class="corner"></div>
 </div>
 
@@ -880,9 +899,9 @@
   .tumbler-grid { transform-origin: top left; touch-action: pan-x pan-y; position: relative; overflow: hidden; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; user-select: none; -webkit-user-select: none; }
   .grid-scroller { width: 100%; height: 100%; overflow: auto; overscroll-behavior: contain; }
   .empty-grid { background: var(--tumbler-sheet-bg, #ffffff); position: absolute; pointer-events: none; fill: none; stroke: var(--tumbler-sheet-line, #d9ded9); stroke-width: 1; }
-  .empty-selection { position: absolute; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(65, 255, 83, 0.1)); }
+  .empty-selection { position: absolute; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(0, 0, 0, 0.16)); }
   .empty-focus { pointer-events: none; }
-  .empty-corner-cell .cell.selected::after { background: transparent; }
+  .cell.active.selected::after { background: transparent; }
   .canvas { position: relative; overflow: clip; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane, .frozen-column-pane { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane { left: 52px; right: 0; top: 28px; }
@@ -904,8 +923,15 @@
   .cell > .overflow-content { flex: none; max-width: none; overflow: hidden; pointer-events: none; }
   .chart-frame { position: absolute; z-index: 2; overflow: hidden; box-sizing: border-box; padding: 0; border: 0; outline: 0; background: transparent; cursor: default; }
   .chart-frame.selected, .chart-frame:focus-visible { box-shadow: inset 0 0 0 2px var(--tumbler-grid-accent, #42ff53); }
-  .cell.selected::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(65, 255, 83, 0.1)); }
-  .cell.focused { z-index: 2; box-shadow: inset 0 0 0 2px var(--tumbler-grid-accent, #42ff53); }
+  .cell.selected::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(0, 0, 0, 0.16)); }
+  .cell.focused { z-index: 2; }
+  .cell.active { z-index: 2; }
+  .selection-outline { position:absolute; z-index:5; pointer-events:none; box-sizing:border-box; border:0 solid var(--tumbler-grid-accent,#42ff53); }
+  .selection-outline.top-edge { border-top-width:2px; }
+  .selection-outline.bottom-edge { border-bottom-width:2px; }
+  .selection-outline.left-edge { border-left-width:2px; }
+  .selection-outline.right-edge { border-right-width:2px; }
+  .selected-header { background:var(--tumbler-grid-selected-header-bg,#525852); color:var(--tumbler-grid-selected-header-fg,#fff); }
   .cell > * { position: relative; z-index: 1; min-width: 0; max-width: 100%; transform-origin: center; }
   .cell.table-header { align-items: center; font-weight: 600; padding-right: 30px; }
   .table-menu-button { position: absolute; right: 4px; top: 50%; width: 20px; height: 20px; padding: 0; translate: 0 -50%; border: 1px solid transparent; border-radius: 3px; color: inherit; background: color-mix(in srgb, currentColor 10%, transparent); cursor: pointer; }
