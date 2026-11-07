@@ -184,3 +184,56 @@ test('every published blank insertion delta validates independently in delivery 
   expect(deliveries).toBeGreaterThanOrEqual(2);
   expect(peer.pages.items(pdf.pages).some((page) => page.id === id)).toBe(true);
 });
+
+test('concurrent page deletions converge on one editable blank and undo preserves its peer text', () => {
+  const original = openPdfDocument(
+    pdfFixture([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /Resources << >> /Contents 5 0 R >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /Resources << >> /Contents 6 0 R >>',
+      pdfStream('10 10 20 20 re f'),
+      pdfStream('30 30 20 20 re f'),
+    ]),
+  );
+  const a = new PdfTextModel(),
+    b = new PdfTextModel();
+  a.pages.remove(original.pages, [original.pages[0]!.id]);
+  b.pages.remove(original.pages, [original.pages[1]!.id]);
+  const ua = Y.encodeStateAsUpdate(a.doc),
+    ub = Y.encodeStateAsUpdate(b.doc);
+  Y.applyUpdate(a.doc, ub);
+  Y.applyUpdate(b.doc, ua);
+  a.pages.validate(original.pages);
+  b.pages.validate(original.pages);
+  const fallback = a.pages.items(original.pages)[0]!;
+  expect(a.pages.items(original.pages)).toHaveLength(1);
+  expect(b.pages.items(original.pages).map((page) => page.id)).toEqual([fallback.id]);
+  let output = openPdfDocument(exportEditedPdf(original, a, fonts));
+  expect(output.pages).toHaveLength(1);
+  expect(texts(output)).toEqual(['']);
+  b.add({
+    id: 'recovery',
+    page: fallback.source.index,
+    x: 20,
+    y: 40,
+    width: 100,
+    lineHeight: 15,
+    style: {
+      family: 'Sans',
+      size: 12,
+      bold: false,
+      italic: false,
+      underline: false,
+      color: '#000000',
+    },
+    sources: [],
+    delta: [],
+  });
+  b.replace('recovery', 0, 0, 'Peer recovery text');
+  Y.applyUpdate(a.doc, Y.encodeStateAsUpdate(b.doc));
+  a.undo.undo();
+  output = openPdfDocument(exportEditedPdf(original, a, fonts));
+  expect(output.pages).toHaveLength(2);
+  expect(texts(output).join(' ')).toContain('Peer recovery text');
+});

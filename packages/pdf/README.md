@@ -195,7 +195,9 @@ const selected = extractPdfPages(openPdfDocument(edited), [0, 2]);
 `layoutPdfTextFlow` returns the current output pages, with stable `id`, original `source`,
 `continuation` number and relative `rotation`. Pass its `pages` as the optional last argument to
 `insert`, `move`, `remove` and `rotate` when manipulating individual continuation pages. Removing
-every output page creates an editable blank replacement. Undoing insertion hides a blank while
+every output page creates an editable blank replacement. Concurrent deletions that remove each
+peer's last remaining page converge on one blank recovery page. Placing text on that recovery
+page makes it persist when another peer undoes a deletion. Undoing insertion hides a blank while
 retaining its immutable text ownership. The operation methods own their transactions; call
 `model.undo.stopCapturing()` around a user gesture instead of wrapping them in another transaction.
 `PdfEditableDocument` renders this order and rotation, including text placement and box manipulation.

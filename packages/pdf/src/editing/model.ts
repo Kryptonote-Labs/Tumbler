@@ -34,6 +34,7 @@ export class PdfTextModel {
   add(seed: PdfTextSeed, local = true) {
     this.doc.transact(
       () => {
+        this.pages.materialize(seed.page);
         const region = new Y.Map<unknown>();
         this.regions.set(seed.id, region);
         const text = new Y.Text();

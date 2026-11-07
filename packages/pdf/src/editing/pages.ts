@@ -3,6 +3,8 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import type { PdfPage } from '../document.ts';
 import { PdfName, PdfReference } from '../objects.ts';
 
+const fallbackId = 'blank:00000000-0000-4000-8000-000000000000';
+const fallbackIndex = -1;
 type Rotation = 0 | 90 | 180 | 270;
 export type PdfManagedPage = { id: string; source: PdfPage; rotation: Rotation; blank: boolean };
 const rank = (value: string) => {
@@ -55,7 +57,11 @@ export class PdfPageModel {
     this.records = doc.getMap('pdf-pages');
   }
   dirty() {
-    return [...this.records.values()].some((record) => record.size > 0);
+    return [...this.records].some(([id, record]) =>
+      id === fallbackId
+        ? record.get('hidden') === false || record.has('rotation')
+        : record.size > 0,
+    );
   }
   private ensure(ids: readonly string[]) {
     for (const id of ids) {
@@ -72,6 +78,31 @@ export class PdfPageModel {
         this.doc.transact(() => this.records.set(id, new Y.Map()), 'import');
     }
   }
+  private ensureFallback(pages: readonly PdfPage[]) {
+    if (this.records.has(fallbackId)) return;
+    const seed = new Y.Doc(),
+      digest = sha256(new TextEncoder().encode(fallbackId));
+    seed.clientID =
+      digest.subarray(0, 6).reduce((value, byte) => value * 256 + byte, 0) + 0x100000000;
+    const record = new Y.Map<unknown>();
+    seed.getMap<Y.Map<unknown>>('pdf-pages').set(fallbackId, record);
+    for (const [key, value] of Object.entries({
+      index: fallbackIndex,
+      width: pages[0]?.width ?? 612,
+      height: pages[0]?.height ?? 792,
+      anchor: '0/1',
+      order: '0/1',
+      hidden: true,
+    }))
+      record.set(key, value);
+    Y.applyUpdate(this.doc, Y.encodeStateAsUpdate(seed), 'import');
+    seed.destroy();
+  }
+  /** Text placed on the automatic recovery page makes it a durable visible page, preserving peer contributions through undo. */
+  materialize(index: number) {
+    if (index === fallbackIndex && this.records.has(fallbackId))
+      this.record(fallbackId).set('hidden', false);
+  }
   private record(id: string) {
     const value = this.records.get(id);
     if (!value) throw new Error('PDF page ownership is not initialized.');
@@ -82,6 +113,7 @@ export class PdfPageModel {
   }
   sourcePages(pages: readonly PdfPage[]): readonly PdfPage[] {
     this.ensure(pages.map((page) => page.id));
+    this.ensureFallback(pages);
     return [
       ...pages,
       ...[...this.records]
@@ -106,8 +138,9 @@ export class PdfPageModel {
     ];
   }
   items(pages: readonly PdfPage[]): PdfManagedPage[] {
-    return this.sourcePages(pages)
-      .filter((p) => !this.records.get(p.id)?.get('hidden'))
+    const sources = this.sourcePages(pages),
+      visible = sources.filter((p) => !this.records.get(p.id)?.get('hidden'));
+    return (visible.length ? visible : sources.filter((p) => p.id === fallbackId))
       .sort((a, b) => compare(this.position(a), this.position(b)) || a.id.localeCompare(b.id))
       .map((source) => ({
         id: source.id,
@@ -243,8 +276,8 @@ export class PdfPageModel {
     flow: readonly T[],
     pages: readonly PdfPage[],
   ): T[] {
-    return flow
-      .filter((p) => !this.records.get(p.id)?.get('hidden'))
+    const visible = flow.filter((p) => !this.records.get(p.id)?.get('hidden'));
+    return (visible.length ? visible : flow.filter((p) => p.id === fallbackId))
       .map((p) => ({
         ...p,
         rotation: rotation((this.records.get(p.id)?.get('rotation') as number) ?? 0),
