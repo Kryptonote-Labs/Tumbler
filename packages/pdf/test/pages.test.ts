@@ -170,3 +170,17 @@ test('deleting all pages retains blank ownership through undo and redo', () => {
   model.undo.redo();
   expect(model.pages.items(pdf.pages).map((page) => page.id)).toEqual([blank.id]);
 });
+
+test('every published blank insertion delta validates independently in delivery order', () => {
+  const author = new PdfTextModel(),
+    peer = new PdfTextModel();
+  let deliveries = 0;
+  author.doc.on('update', (update: Uint8Array) => {
+    Y.applyUpdate(peer.doc, update);
+    expect(() => peer.pages.validate(pdf.pages)).not.toThrow();
+    deliveries++;
+  });
+  const id = author.pages.insert(pdf.pages, pdf.pages[0]!.id);
+  expect(deliveries).toBeGreaterThanOrEqual(2);
+  expect(peer.pages.items(pdf.pages).some((page) => page.id === id)).toBe(true);
+});
