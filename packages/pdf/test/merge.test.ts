@@ -176,12 +176,13 @@ test('indirect page and annotation structure indices retain disjoint reverse map
   expect((source.resolve(nums[1]) as PdfReference[])[0]!.key).not.toBe((source.resolve(nums[5]) as PdfReference[])[0]!.key);
 });
 
-test('tagged nested Form XObjects retain ParentTree entries and MCR stream references', () => {
+for (const resourceName of ['Outer', 'P', 'Parent', 'Pg'])
+test(`tagged nested Form XObjects named ${resourceName} retain ParentTree entries and MCR stream references`, () => {
   const document = openPdfDocument(pdfFixture([
     '<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 5 0 R >>',
     '<< /Type /Pages /Count 1 /Kids [3 0 R] /MediaBox [0 0 100 100] >>',
-    '<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Resources << /XObject << /Outer 8 0 R >> >> >>',
-    pdfStream('/Outer Do'),
+    `<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Resources << /XObject << /${resourceName} 8 0 R >> >> >>`,
+    pdfStream(`/${resourceName} Do`),
     '<< /Type /StructTreeRoot /K [6 0 R] /ParentTree << /Nums [0 [6 0 R]] >> >>',
     '<< /Type /StructElem /S /P /P 5 0 R /Pg 3 0 R /K << /Type /MCR /Pg 3 0 R /Stm 7 0 R /MCID 0 >> >>',
     pdfStream('/P << /MCID 0 >> BDC 0 0 20 20 re f EMC', '/Type /XObject /Subtype /Form /BBox [0 0 100 100] /StructParents 9 0 R'),

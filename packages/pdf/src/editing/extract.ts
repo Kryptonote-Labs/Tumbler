@@ -198,9 +198,18 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
         const key = source.resolve(value.get(name));
         if (typeof key === 'number') parentKeys.add(key);
       }
+      const type = source.resolve(value.get('Type'));
+      const kind = type instanceof PdfName ? type.value : '';
+      const annotation = kind === 'Annot' ||
+        (source.resolve(value.get('Subtype')) instanceof PdfName && value.has('Rect'));
+      const field = source.resolve(value.get('FT')) instanceof PdfName;
       for (const [key, child] of value) {
-        // Do not follow page, annotation or field ownership back into other pages.
-        if (!['Parent', 'P', 'Pg'].includes(key)) resourceParentKeys(child);
+        // These names are also valid resource names. Only treat them as ownership
+        // links in dictionaries whose types give them that meaning.
+        if (key === 'Parent' && (['Page', 'Pages'].includes(kind) || annotation || field)) continue;
+        if (key === 'P' && (annotation || kind === 'StructElem')) continue;
+        if (key === 'Pg' && ['StructElem', 'MCR', 'OBJR'].includes(kind)) continue;
+        resourceParentKeys(child);
       }
     }
   }
