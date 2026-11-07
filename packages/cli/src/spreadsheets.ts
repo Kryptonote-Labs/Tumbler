@@ -24,7 +24,7 @@ export function spreadsheetHelp(commandName = 'tumbler', name?: string): string 
       `Usage: ${commandName} <document> sheets read [--sheet <sheet-id>] [--range A1:J30]`,
       `${commandName} <document> sheets <command> --input JSON [--page <read-handle>]`,
       'Read the target sheet and range before editing. Use the sheetId returned by the read. Cell references use A1 notation; formula source omits the leading equals sign. Each command or batch is one undo step.',
-      'Reads return values, formula source and calculated results. Read further ranges explicitly for more cells. A missing cell is blank, not unread content.',
+      'Reads return values, formula source, calculated results, and selection formatting including number formats. Read further ranges explicitly for more cells or per-cell formatting. A missing cell is blank, not unread content.',
       'Commands: ' + spreadsheetCommand.options.map((option) => option.shape.name.value).join(', '),
       ...(schema
         ? [JSON.stringify(z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' }), null, 2)]

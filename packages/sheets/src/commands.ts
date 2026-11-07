@@ -184,6 +184,8 @@ export function inspectSpreadsheet(artifact: SpreadsheetArtifact, sheetId?: stri
     sheets: artifact.workbook.sheets.map(sheet => ({id:String(sheet.sheetId),name:sheet.name,state:sheet.state})),
     sheet: {id:String(sheet.sheetId),name:sheet.name,state:sheet.state,dimension:selected.worksheet.dimension},
     range: reference,
+    formatting: selected.formattingState(range),
+    numberFormat: selected.numberFormatState(range),
     cells: selected.worksheet.rows.flatMap(row => row.cells.filter(cell => cell.address.row >= range.start.row && cell.address.row <= range.end.row && cell.address.column >= range.start.column && cell.address.column <= range.end.column).map(cell => ({reference:cell.reference,value:cell.value.type === 'blank' ? null : cell.value.value,computed:selected.calculation.value(cell.reference),formula:cell.formula,formatted:selected.calculation.displayText(cell.reference)}))),
   };
 }
