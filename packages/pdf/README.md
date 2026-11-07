@@ -234,3 +234,40 @@ argument. Rebuild it after edits or page operations; deleted text and replaced
 source glyphs are excluded. Search does not modify the model or undo history.
 The PDF viewer opens search with Cmd/Ctrl+F. Enter and Shift+Enter navigate,
 Escape closes, and Aa toggles case sensitivity.
+
+## Merge PDFs
+
+```ts
+import { openPdfDocument, mergePdfDocuments, parsePdfPageSelection } from '@tumblerjs/pdf';
+
+const first = openPdfDocument(firstBytes);
+const second = openPdfDocument(secondBytes, { password: 'optional-password' });
+const output = mergePdfDocuments([
+  { document: first, pages: parsePdfPageSelection('3,1-2', first.pages.length) },
+  { document: second }, // All pages, in source order.
+  { document: first, pages: [0, 0] }, // Zero-based API indices; repetitions are allowed.
+]);
+```
+
+The output is a new, unencrypted PDF. Inputs are never changed. Pages retain their
+encoded content streams, embedded fonts and images, graphics, page boxes,
+rotation, annotations and appearance streams. Internal links and bookmarks are
+retained when their target belongs to the same input selection; links to omitted
+pages are removed. Repeated pages start an independent selection and receive
+independent annotations and fields. To interleave PDFs, repeat an input in the
+array at the desired position. Selection strings use one-based inclusive ranges,
+including descending ranges and repeated pages.
+
+Interactive fields are grouped under `source1`, `source2`, etc., preventing field
+and font-resource name collisions. Repeated-page copies receive their own group.
+Tagged structures, reverse parent maps, IDs and custom role/class names are kept
+disjoint; bookmarks and optional-content groups are combined. Document-level
+metadata, attachments that are not page annotations, page labels and document
+scripts are not combined. XFA, signature fields, scripted forms and indeterminate
+or non-default optional-content configuration intents are rejected explicitly.
+A merge does not retain or validate digital signatures.
+
+The CLI and the Svelte `PdfMerge` component use these same APIs and selection rules.
+Run `bun test packages/pdf/test/merge.test.ts` for structural coverage, and
+`python3 tools/pdf-merge/verify.py` for the independently generated document corpus
+and Poppler/pypdf content-preservation checks.
