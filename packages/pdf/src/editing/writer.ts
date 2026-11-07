@@ -8,7 +8,9 @@ import {
   type PdfDictionary,
   unsupported,
 } from '../objects.ts';
-import type { PdfDocument } from '../document.ts';
+import { openPdfDocument, type PdfDocument } from '../document.ts';
+import { exportPdfPageState } from './page-writer.ts';
+import { extractPdfPages } from './extract.ts';
 import { PdfSyntax } from '../syntax.ts';
 import { readContentToken, isOperator } from '../content-syntax.ts';
 import { inverse, multiply } from '../matrix.ts';
@@ -37,14 +39,21 @@ export function exportEditedPdf(
   model: PdfTextModel,
   fonts: PdfEditingFonts,
 ) {
+  if (!model.ids().some((id) => model.dirty(id)))
+    return model.pages.dirty() ? exportPdfPageState(document, model) : document.bytes();
   fonts.importDocument(document);
   const flow = layoutPdfTextFlow(model, fonts, document.pages);
+  if (!flow.pages.length)
+    throw new Error('PDF page changes leave no visible pages. Add a blank page.');
   const dirty = [
     ...new Set(flow.regions.filter((region) => region.render).map((region) => region.id)),
   ];
-  if (!dirty.length) return document.bytes();
+  if (!dirty.length && !model.pages.dirty()) return document.bytes();
   if (document.source.trailer.has('Encrypt'))
     unsupported('Encrypted PDF editing requires an encryption-aware writer.');
+  const sourcePages = new Map(
+    model.pages.sourcePages(document.pages).map((page) => [page.index, page]),
+  );
   const writer = new PdfWriter(document),
     embedded = new Map<string, Embedded>();
   const fontFor = (face: PdfEditingFont) => {
@@ -80,7 +89,7 @@ export function exportEditedPdf(
   for (const id of dirty.filter((id) => model.placement(id) && preserved.has(id))) {
     const seed = model.seed(id),
       frame = model.geometry(id);
-    const viewport = pageViewport(document.pages[seed.page]!);
+    const viewport = pageViewport(sourcePages.get(seed.page)!);
     for (const target of seed.sources) {
       const glyph = glyphSources
         .get(seed.page)
@@ -233,7 +242,7 @@ export function exportEditedPdf(
       ),
     );
   }
-  const hasContinuations = flow.pages.length !== document.pages.length;
+  const hasContinuations = flow.pages.length !== document.pages.length || model.pages.dirty();
   const parent = hasContinuations
     ? writer.value(new Map<string, PdfValue>([['Type', new PdfName('Pages')]]))
     : undefined;
@@ -242,7 +251,7 @@ export function exportEditedPdf(
     const page = outputPage.source,
       pageIndex = outputPage.index,
       content = pageContent.get(pageIndex) ?? '';
-    const continuation = outputPage.continuation > 0;
+    const continuation = outputPage.continuation > 0 || page.index < 0;
     const seeds = dirty
       .filter((id) => model.seed(id).page === page.index)
       .map((id) => model.seed(id));
@@ -288,7 +297,7 @@ export function exportEditedPdf(
       if (parent) info.set('Parent', parent);
       info.set('MediaBox', [...page.mediaBox]);
       info.set('CropBox', [...page.cropBox]);
-      info.set('Rotate', page.rotation);
+      info.set('Rotate', (page.rotation + outputPage.rotation) % 360);
       info.set('UserUnit', page.userUnit);
     }
     info.set('Resources', resources);
@@ -409,5 +418,19 @@ export function exportEditedPdf(
     if (instance.includes(':form:')) info.set('Resources', localResources);
     return writer.stream(result, info);
   }
-  return writer.finish();
+  const output = writer.finish();
+  // Removing source pages also rebuilds bookmarks, form fields and tagged structure against the remaining pages.
+  if (
+    document.pages.some(
+      (page) =>
+        !flow.pages.some((output) => output.source.id === page.id && output.continuation === 0),
+    )
+  ) {
+    const current = openPdfDocument(output);
+    return extractPdfPages(
+      current,
+      current.pages.map((page) => page.index),
+    );
+  }
+  return output;
 }

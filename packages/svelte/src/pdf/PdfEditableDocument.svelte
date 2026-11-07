@@ -3,7 +3,7 @@
   import { paintEditablePdfPage } from './paint-editable-page.ts';
   import PdfTextBox from './PdfTextBox.svelte';
   import PdfEditableText from './PdfEditableText.svelte';
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import * as Y from 'yjs';
   import {
     PdfInterpreter,
@@ -62,6 +62,9 @@
   let value = $state(''),
     composing = false,
     dragging: { id: string; anchor: number; page: number } | undefined;
+  $effect(() => {
+    if (editable && model.pages.initialize(pdf.pages)) untrack(() => revision++);
+  });
   const interpreter = $derived(new PdfInterpreter(pdf));
   const flow = $derived.by(() => {
     void revision;
@@ -272,12 +275,37 @@
       }
     }
   }
+  function coordinates(event: MouseEvent, host: HTMLElement, index: number) {
+    const rect = host.getBoundingClientRect(),
+      page = flow.pages[index]!,
+      x = (event.clientX - rect.left) / scale,
+      y = (event.clientY - rect.top) / scale;
+    switch (page.rotation) {
+      case 90:
+        return { x: y, y: page.source.height - x };
+      case 180:
+        return { x: page.source.width - x, y: page.source.height - y };
+      case 270:
+        return { x: page.source.width - y, y: x };
+      default:
+        return { x, y };
+    }
+  }
+  function pageTransform(page: (typeof flow.pages)[number]) {
+    const w = page.source.width * scale,
+      h = page.source.height * scale;
+    return page.rotation === 90
+      ? `translate(${h}px,0) rotate(90deg)`
+      : page.rotation === 180
+        ? `translate(${w}px,${h}px) rotate(180deg)`
+        : page.rotation === 270
+          ? `translate(0,${w}px) rotate(270deg)`
+          : undefined;
+  }
   function pointer(event: PointerEvent, page: number) {
     if (event.button !== 0 || (adding && !editable)) return;
     const host = event.currentTarget as HTMLElement,
-      rect = host.getBoundingClientRect(),
-      x = (event.clientX - rect.left) / scale,
-      y = (event.clientY - rect.top) / scale;
+      { x, y } = coordinates(event, host, page);
     onpagechange?.(page);
     if (adding) {
       const targetPage = flow.pages[page]!,
@@ -333,15 +361,10 @@
   function move(event: PointerEvent) {
     if (!dragging) return;
     const host = event.currentTarget as HTMLElement,
-      rect = host.getBoundingClientRect(),
+      point = coordinates(event, host, dragging.page),
       layout = layouts.find((l) => l.id === dragging!.id && l.page === dragging!.page);
     if (layout)
-      void select(
-        layout.id,
-        dragging.anchor,
-        hitPdfText(layout, (event.clientX - rect.left) / scale, (event.clientY - rect.top) / scale)
-          .offset,
-      );
+      void select(layout.id, dragging.anchor, hitPdfText(layout, point.x, point.y).offset);
   }
   function double(event: MouseEvent, page: number) {
     if (!active || !layouts.some((l) => l.id === active && l.page === page)) return;
@@ -412,58 +435,68 @@
   class="pdf-editable"
   bind:this={root}
 >
-  {#each flow.pages as page}
+  {#each flow.pages as page (page.id)}
     <div
-      class="pdf-page"
-      data-pdf-page={page.index + 1}
-      style:width={`${page.source.width * scale}px`}
-      style:height={`${page.source.height * scale}px`}
-      onpointerdown={(e) => pointer(e, page.index)}
-      onpointermove={move}
-      onpointerup={() => (dragging = undefined)}
-      onpointercancel={() => (dragging = undefined)}
-      ondblclick={(e) => double(e, page.index)}
-      role="group"
-      aria-label="PDF page"
+      class="pdf-page-frame"
+      style:width={`${(page.rotation % 180 ? page.source.height : page.source.width) * scale}px`}
+      style:height={`${(page.rotation % 180 ? page.source.width : page.source.height) * scale}px`}
     >
-      <canvas
-        use:paintEditablePdfPage={{
-          index: page.index,
-          scale,
-          source: page.source.index,
-          continuation: page.continuation,
-          interpreter,
-          model,
-          fonts,
-          pdf,
-          flow,
-          selected,
-        }}
-        aria-label={`Page ${page.index + 1}`}
-        style:width="100%"
-        style:height="100%"
-      ></canvas>
-      <div class="text-layer" style:transform={`scale(${scale})`}>
-        {#each layouts.filter((l) => l.page === page.index && selected.includes(l.id) && !adding && !model.placement(l.id)?.hidden) as layout (layout.id)}
-          <PdfTextBox
+      <div
+        class="pdf-page"
+        data-pdf-rotation={page.rotation}
+        data-pdf-width={page.source.width}
+        data-pdf-height={page.source.height}
+        style:transform={pageTransform(page)}
+        data-pdf-page={page.index + 1}
+        style:width={`${page.source.width * scale}px`}
+        style:height={`${page.source.height * scale}px`}
+        onpointerdown={(e) => pointer(e, page.index)}
+        onpointermove={move}
+        onpointerup={() => (dragging = undefined)}
+        onpointercancel={() => (dragging = undefined)}
+        ondblclick={(e) => double(e, page.index)}
+        role="group"
+        aria-label="PDF page"
+      >
+        <canvas
+          use:paintEditablePdfPage={{
+            index: page.index,
+            scale,
+            source: page.source.index,
+            continuation: page.continuation,
+            interpreter,
+            model,
+            fonts,
+            pdf,
+            flow,
+            selected,
+          }}
+          aria-label={`Page ${page.index + 1}`}
+          style:width="100%"
+          style:height="100%"
+        ></canvas>
+        <div class="text-layer" style:transform={`scale(${scale})`}>
+          {#each layouts.filter((l) => l.page === page.index && selected.includes(l.id) && !adding && !model.placement(l.id)?.hidden) as layout (layout.id)}
+            <PdfTextBox
+              {model}
+              {layout}
+              {revision}
+              {editable}
+              group={selected}
+              {origins}
+              onedit={() => void select(layout.id, start, end)}
+            />
+          {/each}
+          <PdfEditableText
             {model}
-            {layout}
-            {revision}
-            {editable}
-            group={selected}
-            {origins}
-            onedit={() => void select(layout.id, start, end)}
+            layouts={layouts.filter((l) => l.page === page.index)}
+            {peers}
+            {active}
+            {start}
+            {end}
+            onfocus={(id) => void select(id, 0)}
           />
-        {/each}
-        <PdfEditableText
-          {model}
-          layouts={layouts.filter((l) => l.page === page.index)}
-          {peers}
-          {active}
-          {start}
-          {end}
-          onfocus={(id) => void select(id, 0)}
-        />
+        </div>
       </div>
     </div>
   {/each}
@@ -504,8 +537,13 @@
     padding: 24px;
     min-width: min-content;
   }
-  .pdf-page {
+  .pdf-page-frame {
     position: relative;
+    flex: none;
+  }
+  .pdf-page {
+    position: absolute;
+    transform-origin: 0 0;
     flex: none;
     background: white;
     box-shadow: 0 1px 5px #0005;

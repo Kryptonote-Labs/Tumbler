@@ -123,7 +123,13 @@ export function movePdfTextCaret(layout: PdfTextLayout, offset: number, directio
   }
   return next ? hitPdfText(layout, caret.x, next.y) : caret;
 }
-export type PdfFlowPage = { index: number; source: PdfPage; continuation: number };
+export type PdfFlowPage = {
+  id: string;
+  index: number;
+  source: PdfPage;
+  continuation: number;
+  rotation: 0 | 90 | 180 | 270;
+};
 export type PdfFlowRegion = PdfTextLayout & {
   page: number;
   render: boolean;
@@ -145,7 +151,7 @@ export function layoutPdfTextFlow(
 ) {
   const outputPages: PdfFlowPage[] = [],
     regions: PdfFlowRegion[] = [];
-  for (const page of pages) {
+  for (const page of model.pages.sourcePages(pages)) {
     const layouts = model.ids(page.index).map((id) => layoutPdfText(model, id, fonts)),
       earlier: { x: number; size: number; growth: number }[] = [];
     const fragments: {
@@ -233,7 +239,13 @@ export function layoutPdfTextFlow(
     }
     const first = outputPages.length;
     for (let i = 0; i <= count; i++)
-      outputPages.push({ index: outputPages.length, source: page, continuation: i });
+      outputPages.push({
+        id: i ? `${page.id}:continuation:${i}` : page.id,
+        index: outputPages.length,
+        source: page,
+        continuation: i,
+        rotation: 0,
+      });
     for (const fragment of fragments) {
       const carets = fragment.layout.carets;
       regions.push({
@@ -247,5 +259,12 @@ export function layoutPdfTextFlow(
       });
     }
   }
-  return { pages: outputPages, regions };
+  const projected = model.pages.project(outputPages, pages);
+  const indices = new Map(projected.map((page, index) => [page.index, index]));
+  return {
+    pages: projected.map((page, index) => ({ ...page, index })),
+    regions: regions
+      .filter((region) => indices.has(region.page))
+      .map((region) => ({ ...region, page: indices.get(region.page)! })),
+  };
 }

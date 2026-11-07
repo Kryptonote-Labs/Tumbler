@@ -50,8 +50,16 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     | undefined;
   const page = canvas.parentElement!;
   let viewport = page.parentElement!;
-  while (viewport.parentElement && !/(auto|scroll)/.test(getComputedStyle(viewport).overflowY)) viewport = viewport.parentElement;
-  const pauseZoom = () => { controller?.abort(); invalidatePreparation(); if (scheduled !== undefined) { cancelAnimationFrame(scheduled); scheduled = undefined; } };
+  while (viewport.parentElement && !/(auto|scroll)/.test(getComputedStyle(viewport).overflowY))
+    viewport = viewport.parentElement;
+  const pauseZoom = () => {
+    controller?.abort();
+    invalidatePreparation();
+    if (scheduled !== undefined) {
+      cancelAnimationFrame(scheduled);
+      scheduled = undefined;
+    }
+  };
   viewport.addEventListener('pdfzoomstart', pauseZoom);
   viewport.addEventListener('pdfzoomend', schedule);
   const surface = () => {
@@ -198,7 +206,18 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     const active = options;
     controller = new AbortController();
     const signal = controller.signal;
-    const scene = placePdfScene(active.interpreter.page(active.source), active.model);
+    const scene =
+      active.source < 0
+        ? {
+            page: active.flow.pages[active.index]!.source,
+            viewport: [1, 0, 0, 1, 0, 0] as const,
+            width: active.flow.pages[active.index]!.source.width,
+            height: active.flow.pages[active.index]!.source.height,
+            elements: [],
+            text: '',
+            annotations: [],
+          }
+        : placePdfScene(active.interpreter.page(active.source), active.model);
     const hidden = new Set(
       active.flow.regions
         .filter(
@@ -234,7 +253,12 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     }
   }
   function schedule() {
-    if (scheduled === undefined && !disposed && visible && !viewport.hasAttribute('data-pdf-zooming'))
+    if (
+      scheduled === undefined &&
+      !disposed &&
+      visible &&
+      !viewport.hasAttribute('data-pdf-zooming')
+    )
       scheduled = requestAnimationFrame(() => void render());
   }
   const unregister = registerPdfDragPreview(page, {
@@ -282,7 +306,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
       canvas.height = 0;
       host.close();
       host = browserPdfPaintHost();
-      options.interpreter.releasePage(options.source);
+      if (options.source >= 0) options.interpreter.releasePage(options.source);
     },
     { rootMargin: '600px 0px' },
   );

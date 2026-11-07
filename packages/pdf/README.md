@@ -176,3 +176,45 @@ Paragraph recovery and columns use geometry. New characters absent from a subset
 complex columns, rotated text, bidi shaping and tagged structure updates need further qualification.
 Encrypted editing is not implemented. Missing editing glyphs fail explicitly. None of these boundaries
 is a document-authoring size limit.
+
+## Page operations
+
+`PdfTextModel.pages` stores page order, visibility and quarter-turn rotations in the same
+collaborative document and undo history as text. Original text ownership always uses the original
+source page index. Inserted blank pages have immutable identities and unique negative source indices.
+
+```ts
+const blank = model.pages.insert(document.pages, document.pages[0].id);
+model.pages.rotate(document.pages, [blank], 90);
+model.pages.move(document.pages, blank, document.pages[0].id);
+model.pages.remove(document.pages, [blank]);
+const edited = exportEditedPdf(document, model, fonts);
+const selected = extractPdfPages(openPdfDocument(edited), [0, 2]);
+```
+
+`model.pages.initialize(document.pages)` prepares shared page ownership before reactive rendering.
+It is idempotent and does not mark the PDF edited. Read methods and layout never mutate the document;
+page mutation methods initialize ownership themselves.
+
+`layoutPdfTextFlow` returns the current output pages, with stable `id`, original `source`,
+`continuation` number and relative `rotation`. Pass its `pages` as the optional last argument to
+`insert`, `move`, `remove` and `rotate` when manipulating individual continuation pages. Removing
+every output page creates an editable blank replacement. Concurrent deletions that remove each
+peer's last remaining page converge on one blank recovery page. Placing text on that recovery
+page makes it persist when another peer undoes a deletion. Undoing insertion hides a blank while
+retaining its immutable text ownership. The operation methods own their transactions; call
+`model.undo.stopCapturing()` around a user gesture instead of wrapping them in another transaction.
+`PdfEditableDocument` renders this order and rotation, including text placement and box manipulation.
+
+Page-only exports copy object references without interpreting page content or loading fonts.
+Removing source pages reconstructs the remaining document's bookmarks, form fields and tagged
+structure. `extractPdfPages` writes a fresh document in the selected output-index order. It copies
+encoded streams and shared resources without rasterising them or retaining original revisions.
+Selected AcroForm widgets retain their field ancestors, values and appearances. Bookmarks and
+internal links retain selected destinations. Tags and their reverse parent maps retain selected
+page and annotation content. An extracted signature field has its original signature value cleared,
+because the new document is not the signed byte sequence. XFA extraction reports an explicit
+unsupported-feature error, since its XML form data needs a separate reconstruction path.
+
+The workspace or host may still retain original bytes for undo and recovery. These operations are
+not a secure-redaction API. Existing text edits do not reconstruct tagged reading-order semantics.

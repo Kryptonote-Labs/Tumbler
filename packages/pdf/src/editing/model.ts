@@ -1,5 +1,6 @@
 import { pdfSourceAttribute, pdfStyleAttributes } from './source-spacing.ts';
 import * as Y from 'yjs';
+import { PdfPageModel } from './pages.ts';
 import { pdfTextStylePatch, type PdfTextStyle } from './fonts.ts';
 import type { PdfTextSeed } from './import-text.ts';
 export { importPdfText, pdfSourceKey, type PdfTextSeed } from './import-text.ts';
@@ -14,11 +15,15 @@ export type PdfTextPlacement = {
 
 export class PdfTextModel {
   readonly regions: Y.Map<Y.Map<unknown>>;
+  readonly pages: PdfPageModel;
   readonly origin = {};
   readonly undo: Y.UndoManager;
   constructor(readonly doc: Y.Doc = new Y.Doc()) {
     this.regions = doc.getMap('pdf-text');
-    this.undo = new Y.UndoManager(this.regions, { trackedOrigins: new Set([this.origin]) });
+    this.pages = new PdfPageModel(doc, this.origin);
+    this.undo = new Y.UndoManager([this.regions, this.pages.records], {
+      trackedOrigins: new Set([this.origin]),
+    });
   }
   initialize(seeds: PdfTextSeed[]) {
     if (this.regions.size) return;
@@ -29,6 +34,7 @@ export class PdfTextModel {
   add(seed: PdfTextSeed, local = true) {
     this.doc.transact(
       () => {
+        this.pages.materialize(seed.page);
         const region = new Y.Map<unknown>();
         this.regions.set(seed.id, region);
         const text = new Y.Text();
