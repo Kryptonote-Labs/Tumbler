@@ -63,7 +63,7 @@
     composing = false,
     dragging: { id: string; anchor: number; page: number } | undefined;
   $effect(() => {
-    if (model.pages.initialize(pdf.pages)) untrack(() => revision++);
+    if (editable && model.pages.initialize(pdf.pages)) untrack(() => revision++);
   });
   const interpreter = $derived(new PdfInterpreter(pdf));
   const flow = $derived.by(() => {
