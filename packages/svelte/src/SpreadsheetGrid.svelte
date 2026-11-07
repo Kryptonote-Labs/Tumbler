@@ -734,11 +734,10 @@
   </button>
 {/snippet}
 
-<div class="grid-viewport">
+<div class="grid-viewport" use:zoomGesture={zoomGrid}>
 <div
   class="tumbler-grid"
   style={`transform:scale(${scale});width:${100 / scale}%;height:${100 / scale}%`}
-  use:zoomGesture={zoomGrid}
   role="grid"
   aria-rowcount={rowCount}
   aria-colcount={columnCount}
@@ -909,7 +908,7 @@
 {/if}
 
 <style>
-  .grid-viewport { width: 100%; height: 100%; overflow: hidden; }
+  .grid-viewport { width: 100%; height: 100%; overflow: hidden; touch-action: pan-x pan-y; }
   .tumbler-grid { transform-origin: top left; touch-action: pan-x pan-y; position: relative; overflow: hidden; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; user-select: none; -webkit-user-select: none; }
   .grid-scroller { width: 100%; height: 100%; overflow: auto; overscroll-behavior: contain; }
   .empty-grid { background: var(--tumbler-sheet-bg, #ffffff); position: absolute; pointer-events: none; fill: none; stroke: var(--tumbler-sheet-line, #d9ded9); stroke-width: 1; }
