@@ -228,5 +228,8 @@ function adjustSection(section: readonly Token[], direction: SpreadsheetDecimalD
     return tokens;
   }
   tokens.splice(numeric.lastDecimal, 1);
-  return numeric.decimals === 1 ? tokens.filter((_, index) => index !== numeric.point) : tokens;
+  if (numeric.decimals !== 1) return tokens;
+  const integer = tokens.filter((_, index) => index !== numeric.point);
+  if (numeric.lastInteger < 0) integer.splice(numeric.point, 0, digit("0"));
+  return integer;
 }

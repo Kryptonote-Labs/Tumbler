@@ -1,6 +1,7 @@
 import type { LosslessXmlDocument, LosslessXmlElement } from "@tumblerjs/ooxml";
 import {
   OOXML_NAMESPACES,
+  DEFAULT_OFFICE_THEME,
   parseLosslessXml,
   parseThemeColorScheme,
   parseThemeFontScheme,
@@ -191,7 +192,7 @@ export class SpreadsheetStyles {
       argb = `FF${color.argb.slice(2)}`;
     } else if (color.type === "theme") {
       const slot = THEME_COLOR_SLOTS[color.index];
-      const rgb = slot === undefined ? undefined : this.theme?.color(slot);
+      const rgb = slot === undefined ? undefined : (this.theme ?? DEFAULT_OFFICE_THEME).color(slot);
       argb = rgb === undefined ? undefined : `FF${rgb}`;
     } else {
       argb = this.indexedColors[color.index];

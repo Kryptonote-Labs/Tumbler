@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { adjustSpreadsheetNumberFormatDecimals, applySpreadsheetCommand, createSpreadsheet, openSpreadsheetArtifact } from '../src/index.ts';
 import { buildWorkbookFixture } from './workbook-fixture.ts';
+import { DEFAULT_OFFICE_THEME } from '@tumblerjs/ooxml';
 
 test('border changes retain distinct uploaded gradient fills', () => {
   const ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
@@ -21,6 +22,9 @@ test('decimal adjustment recognizes a point before the first digit', () => {
   expect(adjustSpreadsheetNumberFormatDecimals('.00', 'decrease')).toBe('.0');
   expect(adjustSpreadsheetNumberFormatDecimals('.##', 'increase')).toBe('.##0');
   expect(adjustSpreadsheetNumberFormatDecimals('.##', 'decrease')).toBe('.#');
+  expect(adjustSpreadsheetNumberFormatDecimals('.0', 'decrease')).toBe('0');
+  expect(adjustSpreadsheetNumberFormatDecimals('.#', 'decrease')).toBe('0');
+  expect(adjustSpreadsheetNumberFormatDecimals('.0" kg"', 'decrease')).toBe('0" kg"');
 });
 
 test('borders on a whole-column merge stay sparse', () => {
@@ -30,4 +34,12 @@ test('borders on a whole-column merge stay sparse', () => {
   expect(formatted.worksheet.rows.flatMap(row => row.cells).length).toBeLessThan(4);
   expect(formatted.worksheet.cellStyle('B500000').border).toMatchObject({ left: { style: 'thin' }, right: { style: 'thin' } });
   expect(formatted.worksheet.cellStyle('B1').border).toMatchObject({ top: { style: 'thin' }, bottom: { style: 'thin' } });
+});
+
+test('new theme colours carry their workbook theme through export', () => {
+  const formatted = applySpreadsheetCommand(createSpreadsheet(), { name: 'format-cells', sheetId: '1', range: 'A1', patch: { cell: { fill: { set: { type: 'solid', color: { type: 'theme', slot: 'accent1' } } } } } });
+  for (const artifact of [formatted, openSpreadsheetArtifact(formatted.bytes())]) {
+    expect(artifact.worksheet.styles.theme?.color('accent1')).toBe(DEFAULT_OFFICE_THEME.color('accent1'));
+    expect(artifact.worksheet.styles.resolveColor(artifact.worksheet.cellStyle('A1').fill.foreground)).toBe(`FF${DEFAULT_OFFICE_THEME.color('accent1')}`);
+  }
 });

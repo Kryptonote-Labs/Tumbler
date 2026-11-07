@@ -1,4 +1,4 @@
-import { beginLosslessXmlEdit, encodeXmlSource, parseLosslessXml, type LosslessXmlElement } from "@tumblerjs/ooxml";
+import { beginLosslessXmlEdit, encodeXmlSource, parseLosslessXml, officeThemeXml, OOXML_NAMESPACES, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { beginPackageTransaction, PartName } from "@tumblerjs/opc";
 import { BUILT_IN_NUMBER_FORMATS } from "./number-format.ts";
 import {
@@ -87,6 +87,7 @@ export class SpreadsheetStylePlanner {
   stage(transaction: ReturnType<typeof beginPackageTransaction>): void {
     const added = this.#formats.slice(this.source.cellFormats.length);
     if (added.length === 0) return;
+    stageDefaultTheme(this.#workbook, transaction, added);
     if (this.source.partName === undefined) {
       const partName = availableStylesPartName(this.#workbook);
       transaction
@@ -179,6 +180,28 @@ export class SpreadsheetStylePlanner {
       `<borders count="${this.#borders.items.length}">${this.#borders.items.map((border) => serializeBorder("", border)).join("")}</borders>` +
       `<cellXfs count="${this.#formats.length}">${this.#formats.map((format) => serializeCellFormat("", format, this.#ids(format))).join("")}</cellXfs></styleSheet>`;
   }
+}
+
+/** Newly authored theme colours need a real theme part, including in an empty workbook. */
+function stageDefaultTheme(workbook: SpreadsheetWorkbook, transaction: ReturnType<typeof beginPackageTransaction>, formats: readonly SpreadsheetCellFormat[]) {
+  const type = workbook.conformance === "strict" ? "http://purl.oclc.org/ooxml/officeDocument/relationships/theme" : "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+  const relationships = workbook.package.relationships(workbook.part.name).items;
+  if (relationships.some(relationship => relationship.type === type)) return;
+  const themed = formats.some(format => [format.font.color, format.fill.foreground, format.fill.background,
+    ...(["left", "right", "top", "bottom", "diagonal"] as const).map(side => format.border[side]?.color),
+  ].some(color => color?.type === "theme"));
+  if (!themed) return;
+  const directory = workbook.part.name.value.slice(0, workbook.part.name.value.lastIndexOf("/") + 1);
+  let suffix = 1;
+  let part = PartName.parse(`${directory}theme/theme${suffix}.xml`);
+  while (workbook.package.getPart(part)) part = PartName.parse(`${directory}theme/theme${++suffix}.xml`);
+  let id = "tumblerTheme", counter = 0;
+  while (relationships.some(relationship => relationship.id === id)) id = `tumblerTheme${++counter}`;
+  const xml = workbook.conformance === "strict"
+    ? officeThemeXml().replaceAll(OOXML_NAMESPACES.transitional.drawing, OOXML_NAMESPACES.strict.drawing)
+    : officeThemeXml();
+  transaction.addPart(part, "application/vnd.openxmlformats-officedocument.theme+xml", encodeXmlSource(xml, "utf-8", false));
+  transaction.addRelationship(workbook.part.name, { id, type, target: part });
 }
 
 /** Font, fill and border records: source objects keep their exact ids; new values are deduplicated. */
