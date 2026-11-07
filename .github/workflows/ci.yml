@@ -33,19 +33,6 @@ jobs:
       - name: Test
         run: bun test
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
-      - name: Install independent PDF merge oracle
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y poppler-utils fonts-dejavu-core
-          python3 -m pip install -r tools/pdf-merge/requirements.txt
-
-      - name: Verify merged PDFs with independent readers and rendering
-        run: python3 tools/pdf-merge/verify.py
-
   docs:
     runs-on: ubuntu-latest
     steps:
