@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PdfSearch from './PdfSearch.svelte';
+  import { PdfSearchIndex } from '@tumblerjs/pdf';
   import { onMount } from 'svelte';
   import { trackPdfSelection } from './pointer-selection.ts';
   import { selectedPdfText } from './selection.ts';
@@ -47,6 +49,7 @@
   export function goToPage(index: number) {
     host.querySelector(`[data-pdf-page="${index + 1}"]`)?.scrollIntoView({ block: 'start' });
   }
+  const searchIndex = $derived(new PdfSearchIndex(document, undefined, interpreter));
 </script>
 
 <div
@@ -63,6 +66,8 @@
     {/key}
   {/if}
 </div>
+
+<PdfSearch root={host} {scale} index={() => searchIndex} />
 
 <style>
   .pdf-document {

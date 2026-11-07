@@ -218,3 +218,19 @@ unsupported-feature error, since its XML form data needs a separate reconstructi
 
 The workspace or host may still retain original bytes for undo and recovery. These operations are
 not a secure-redaction API. Existing text edits do not reconstruct tagged reading-order semantics.
+
+### Find text
+
+`new PdfSearchIndex(document).find('invoice number')` searches the whole document
+using case-insensitive literal matching. Pass `{ matchCase: true, pages: [2, 3] }`
+to limit the search (page numbers are one-based). Results contain `matches` and
+`total`; each match has `page`, `text`, `context`, and `rects` in viewport points
+with a top-left origin. Wrapped phrases can have several rectangles. Ligature
+expansion retains the original glyph geometry. Invisible OCR text is included;
+image-only pages have no searchable text.
+
+For current edits, construct the snapshot with `{ model, fonts }` as the second
+argument. Rebuild it after edits or page operations; deleted text and replaced
+source glyphs are excluded. Search does not modify the model or undo history.
+The PDF viewer opens search with Cmd/Ctrl+F. Enter and Shift+Enter navigate,
+Escape closes, and Aa toggles case sensitivity.

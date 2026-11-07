@@ -191,3 +191,16 @@ the XLSX file. Symlink paths update their target. Injected hosts implement optio
 `readSpreadsheet(document, {sheetId?, range?})` and
 `operateSpreadsheet(document, {page?, command})`; hosts own authorization and revision checks.
 `spreadsheetHelp(commandName, command?)` generates help from the same command schema.
+
+Find PDF text with the same search engine used by the viewer:
+
+```sh
+tumbler report.pdf pdf find 'invoice number'
+tumbler report.pdf pdf find 'Invoice' --match-case --pages 2-8
+```
+
+`--pages` accepts one-based pages and inclusive ranges, including comma-separated
+lists such as `1,3-5`. JSON output contains `matches` and `total`. Matches include
+the page number, matched text, surrounding context, and rectangles in page points
+with a top-left origin. Wrapped phrases return multiple rectangles. Search is
+literal, includes existing OCR text, and leaves the file unchanged.
