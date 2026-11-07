@@ -97,6 +97,8 @@ export function tumblerOperationHelp(name: string, commandName = 'tumbler'): str
     throw new Error(`Unknown operation: ${name}. Use --help to list operations.`);
   const op = operations[name as keyof typeof operations];
   const usage = {
+    export: `${prefix} export --pages 5,2-4 --output selected.pdf [--format pdf]
+PDF pages are numbered from 1. Comma-separated numbers and inclusive ranges are exported in the order written; 5,2-4 produces pages 5,2,3,4. Descending ranges such as 4-2 produce 4,3,2. Repeated pages (including overlapping ranges) are rejected. The output must be a new .pdf file. Text, images and vectors are copied without rasterizing; the source is unchanged.`,
     render: `${prefix} render --page 3
 Render the numbered document page, starting at 1. Defaults to page 1. Visual hosts deliver page pixels separately from stdout. This does not change the document or cursor. Hosts without a renderer report that rendering is unavailable.`,
     'read-image': `${prefix} read-image --input '{"id":"<image.id>","region":"body"}'\nUse image.id from read or inspect, in the same region. File hosts return original image bytes as base64 data with their MIME type; visual hosts may deliver image input separately. This reads the image itself, not its rendered page appearance.`,

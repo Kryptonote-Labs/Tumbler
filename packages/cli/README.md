@@ -1,7 +1,7 @@
 # Tumbler CLI
 
 Requires Bun 1.3 or later. Install with `bun add --global @tumblerjs/cli`.
-Word `.docx`, PowerPoint `.pptx` and Excel `.xlsx` use their native document engines. The package is public and included in the release graph.
+Supports Word `.docx`, PowerPoint `.pptx` and Excel `.xlsx` through their native document engines, plus PDF page export. The package is public and included in the release graph.
 
 ```sh
 tumbler create draft.docx
@@ -12,6 +12,26 @@ tumbler draft.docx inspect --input '{"what":"styles"}'
 tumbler draft.docx style --page '<handle>' --target '{"text":"Report"}' --input '{"styleId":"Heading1"}'
 tumbler draft.docx --help
 ```
+
+## Export PDF pages
+
+```sh
+tumbler source.pdf export --pages 2-5,8 --output selected.pdf
+tumbler source.pdf export --pages 8,3-5,2 --format pdf --output reordered.pdf
+tumbler source.pdf export --help
+```
+
+`--pages` uses 1-based page numbers and inclusive ranges, in exactly the order written.
+For example, `8,3-5,2` exports pages 8,3,4,5,2. Descending ranges such as `5-3`
+export 5,4,3. Repeated pages and overlapping ranges are rejected, as are missing,
+invalid or out-of-bounds pages. The output must be a new `.pdf` file; existing files
+are never overwritten. The original stays unchanged. Extraction copies text, images
+and vector graphics without rasterizing and excludes unselected page streams and
+original revisions. Stdout returns JSON with the output path, format, page order and count.
+
+Injected hosts implement optional `exportPdf(document, {pages, output, format})`;
+`pages` retains the selection string so the host can validate against its source page count
+and expand ranges in the written order. Unsupported hosts return an availability error.
 
 ## Shared operations
 

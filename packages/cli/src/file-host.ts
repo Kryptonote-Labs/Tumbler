@@ -1,4 +1,6 @@
 import { spreadsheetFileHost, createSpreadsheetFile } from './spreadsheet-file-host.ts';
+import { extractPdfPages, openPdfDocument } from '@tumblerjs/pdf';
+import { pdfPageIndices } from './pdf-pages.ts';
 import { presentationFileHost, createPresentationFile } from './presentation-file-host.ts';
 import { fileRegion, fileRegions } from './file-regions.ts';
 import { inspectWordObjects, inspectWordStyles, readWordImage } from '@tumblerjs/word/operations';
@@ -224,6 +226,20 @@ export function createFileHost(): OperationHost {
   return {
     ...presentationFileHost(),
     ...spreadsheetFileHost(),
+    async exportPdf(path, input) {
+      if (extname(path).toLowerCase() !== '.pdf' || extname(input.output).toLowerCase() !== '.pdf')
+        throw new Error('PDF export requires .pdf input and output paths.');
+      const document = openPdfDocument(readFileSync(path));
+      const indices = pdfPageIndices(input.pages, document.pages.length);
+      const output = extractPdfPages(document, indices);
+      writeFileSync(input.output, output, { flag: 'wx' });
+      return {
+        output: input.output,
+        format: 'pdf',
+        pages: indices.map((index) => index + 1),
+        pageCount: indices.length,
+      };
+    },
     async readImage(path, input) {
       checkExtension(path);
       const source = fileRegion(open(readFileSync(path)), input.region);

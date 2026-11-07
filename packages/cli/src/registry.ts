@@ -1,4 +1,5 @@
 import type { SpreadsheetOperationHost } from './spreadsheets.ts';
+import { pdfExportInput, type PdfExportInput } from './pdf-pages.ts';
 import type { PresentationOperationHost } from './presentations.ts';
 import { inspectInput, type InspectInput } from '@tumblerjs/word/operations';
 import { wordOperation, targetSchema } from '@tumblerjs/word/operations';
@@ -51,6 +52,7 @@ export type OperationInput = z.infer<typeof operationInput>;
 export const selectInput = z.object({ page: z.string().optional(), target: targetSchema }).strict();
 export type SelectInput = z.infer<typeof selectInput>;
 export interface OperationHost extends PresentationOperationHost, SpreadsheetOperationHost {
+  exportPdf?(document: string, input: PdfExportInput): Promise<unknown>;
   render?(document: string, input: RenderInput): Promise<unknown>;
   readImage?(document: string, input: ReadImageInput): Promise<unknown>;
   select?(document: string, input: SelectInput): Promise<unknown>;
@@ -75,6 +77,16 @@ export function defineOperation<S extends z.ZodType>(definition: {
   };
 }
 export const operations = {
+  export: defineOperation({
+    name: 'export',
+    summary: 'Export selected PDF pages to a new PDF, preserving the order in --pages.',
+    access: 'read',
+    input: pdfExportInput,
+    run: (host, document, input) => {
+      if (!host.exportPdf) throw new Error('PDF export is unavailable on this host.');
+      return host.exportPdf(document, input);
+    },
+  }),
   render: defineOperation({
     name: 'render',
     summary: 'Render a document page as image input. --page is a 1-based page number, default 1.',
