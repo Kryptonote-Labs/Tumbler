@@ -146,3 +146,33 @@ test('page-only rotation and deletion do not decode opaque content streams', asy
   expect(output.pages[0]!.rotation).toBe(90);
   expect(new TextDecoder().decode(bytes)).not.toContain('opaque excluded content');
 });
+
+test('deletion prunes links to old page objects outside the current page tree', async () => {
+  const { PdfTextModel, PdfEditingFonts, exportEditedPdf } = await import('../src/index.ts');
+  const source = openPdfDocument(
+    pdfFixture([
+      '<< /Type /Catalog /Pages 2 0 R /Names << /Dests << /Names [(deleted) [4 0 R /Fit]] >> >> >>',
+      '<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] /MediaBox [0 0 200 300] /Resources << >> >>',
+      '<< /Type /Page /Parent 2 0 R /Contents 5 0 R /Annots [7 0 R 8 0 R] >>',
+      '<< /Type /Page /Parent 2 0 R /Contents 6 0 R >>',
+      pdfStream('10 10 20 20 re f'),
+      pdfStream('% DELETED SECRET PAGE CONTENT\n30 30 20 20 re f'),
+      '<< /Type /Annot /Subtype /Link /P 3 0 R /Rect [0 0 10 10] /Dest [4 0 R /Fit] >>',
+      '<< /Type /Annot /Subtype /Link /P 3 0 R /Rect [10 10 20 20] /A << /S /GoTo /D (deleted) >> >>',
+    ]),
+  );
+  const model = new PdfTextModel();
+  model.pages.remove(source.pages, [source.pages[1]!.id]);
+  const bytes = exportEditedPdf(source, model, new PdfEditingFonts()),
+    output = openPdfDocument(bytes);
+  expect(output.pages).toHaveLength(1);
+  expect(new TextDecoder().decode(bytes)).not.toContain('DELETED SECRET PAGE CONTENT');
+  const annotations = output.source.resolve(output.pages[0]!.dictionary.get('Annots'));
+  if (!Array.isArray(annotations)) throw new Error('Missing annotations');
+  for (const value of annotations) {
+    const annotation = output.source.resolve(value);
+    if (!(annotation instanceof Map)) throw new Error('Missing annotation');
+    expect(annotation.has('Dest')).toBe(false);
+    expect(annotation.has('A')).toBe(false);
+  }
+});
