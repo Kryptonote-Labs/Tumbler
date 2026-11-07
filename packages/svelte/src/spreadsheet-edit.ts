@@ -1,13 +1,21 @@
-import type { EditableCellValue, SpreadsheetCellValue } from "@tumblerjs/sheets";
+import { spreadsheetNumberFormatState, type SpreadsheetWorksheet, type EditableCellValue, type SpreadsheetCellValue } from "@tumblerjs/sheets";
 
 export interface SpreadsheetGridEdit {
   readonly reference: string;
   readonly value: EditableCellValue;
+  /** An explicit value keeps leading equals signs literal, for cells formatted as Text. */
+  readonly kind?: "value" | "formula";
+}
+
+export function spreadsheetCellUsesTextFormat(worksheet: SpreadsheetWorksheet, reference: string): boolean {
+  const state = spreadsheetNumberFormatState(worksheet, reference);
+  return (state.state === "value" || state.state === "inherited") && state.value.category === "text";
 }
 
 /** Interprets editor text using the existing cell type and spreadsheet-like scalar entry rules. */
-export function coerceSpreadsheetEditValue(draft: string, current: SpreadsheetCellValue | undefined): EditableCellValue {
+export function coerceSpreadsheetEditValue(draft: string, current: SpreadsheetCellValue | undefined, asText = false): EditableCellValue {
   if (draft === "") return null;
+  if (asText) return draft;
   if (current?.type === "string" || current?.type === "date" || current?.type === "error") return draft;
   const normalized = draft.trim();
   if (current?.type === "boolean" || current === undefined || current.type === "blank") {

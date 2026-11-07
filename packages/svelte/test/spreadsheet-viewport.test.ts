@@ -242,6 +242,8 @@ describe("Svelte spreadsheet viewport", () => {
     expect(coerceSpreadsheetEditValue("", undefined)).toBeNull();
     expect(coerceSpreadsheetEditValue("", { type: "string", value: "old", storage: "inline" })).toBeNull();
     expect(coerceSpreadsheetEditValue(" ", undefined)).toBe(" ");
+    expect(coerceSpreadsheetEditValue("001", undefined, true)).toBe("001");
+    expect(coerceSpreadsheetEditValue("FALSE", undefined, true)).toBe("FALSE");
     expect(coerceSpreadsheetEditValue("=SUM(A1:A2)", undefined)).toBe("=SUM(A1:A2)");
   });
 

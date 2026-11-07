@@ -31,7 +31,7 @@
   } from "@tumblerjs/sheets";
   import { calculateSpreadsheetViewport, type SpreadsheetViewport } from "./spreadsheet-viewport.ts";
   import { composeSpreadsheetGridLayout, frozenAxisExtent, placeSpreadsheetDrawing } from "./spreadsheet-grid-layout.ts";
-  import { coerceSpreadsheetEditValue, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
+  import { coerceSpreadsheetEditValue, spreadsheetCellUsesTextFormat, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
   import { measureMaximumDigitWidth, spreadsheetFontShorthand } from "./spreadsheet-font-metrics.ts";
   import { spreadsheetCellContentCss, spreadsheetCellCss } from "./spreadsheet-cell-style.ts";
   import { spreadsheetTextOverflowWidth } from "./spreadsheet-text-overflow.ts";
@@ -471,7 +471,8 @@
     const reference = editing;
     editing = undefined;
     if (commit && reference !== undefined) {
-      onedit?.({ reference, value: coerceSpreadsheetEditValue(draft, worksheet.cell(reference)?.value) });
+      const asText = spreadsheetCellUsesTextFormat(worksheet, reference);
+      onedit?.({ reference, value: coerceSpreadsheetEditValue(draft, worksheet.cell(reference)?.value, asText), ...(asText ? { kind: "value" as const } : {}) });
     }
   }
 

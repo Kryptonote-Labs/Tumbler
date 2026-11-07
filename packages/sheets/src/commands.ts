@@ -3,6 +3,7 @@ import { applySpreadsheetStructureCommand } from './structure.ts';
 import { rewriteSpreadsheetSheetReferences } from './sheet-references.ts';
 import { spreadsheetLayoutCommand, applySpreadsheetLayoutCommand } from './layout.ts';
 import { z } from 'zod';
+import { spreadsheetNumberFormatState } from './number-format-authoring.ts';
 import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
 import { beginPackageTransaction, PartName, openOpcPackageArchive, ZipArchive } from '@tumblerjs/opc';
 import { SpreadsheetArtifact } from './artifact.ts';
@@ -63,9 +64,12 @@ export function applySpreadsheetCommand(artifact: SpreadsheetArtifact, input: Sp
   else if (command.name === 'set-formula') editor.setCellFormula(sheet, command.reference, command.formula.replace(/^=/,''));
   else if (command.name === 'set-range') {
     const start = parseCellReference(command.reference);
+    const worksheet = artifact.selectSheet(sheet.sheetId).worksheet;
     for (const [row, values] of command.values.entries()) for (const [column, value] of values.entries()) {
       const reference = formatCellReference({row:start.row+row,column:start.column+column});
-      if (typeof value === 'string' && value.startsWith('=')) editor.setCellFormula(sheet, reference, value.slice(1));
+      const format = typeof value === 'string' && value.startsWith('=') ? spreadsheetNumberFormatState(worksheet, reference) : undefined;
+      const asText = format !== undefined && (format.state === 'value' || format.state === 'inherited') && format.value.category === 'text';
+      if (typeof value === 'string' && value.startsWith('=') && !asText) editor.setCellFormula(sheet, reference, value.slice(1));
       else editor.setCellValue(sheet,reference,value);
     }
   } else {

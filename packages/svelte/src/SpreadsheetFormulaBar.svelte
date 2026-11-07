@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import type { SpreadsheetWorksheet } from "@tumblerjs/sheets";
   import { spreadsheetFormulaBarEdit, spreadsheetFormulaBarText, type SpreadsheetFormulaBarEdit } from "./spreadsheet-formula-bar.ts";
+  import { spreadsheetCellUsesTextFormat } from "./spreadsheet-edit.ts";
   import {
     insertSpreadsheetFormulaReference,
     spreadsheetFormulaReferenceText,
@@ -50,7 +51,7 @@
 
   $effect(() => {
     const pick = referencePick;
-    if (!authoring || !draft.startsWith("=") || pick === undefined || pick.id === lastReferencePickId || targetWorksheet === undefined) return;
+    if (!authoring || !draft.startsWith("=") || pick === undefined || pick.id === lastReferencePickId || targetWorksheet === undefined || spreadsheetCellUsesTextFormat(targetWorksheet, targetReference)) return;
     lastReferencePickId = pick.id;
     const insertion = insertSpreadsheetFormulaReference(
       draft,
@@ -73,6 +74,7 @@
       draft,
       targetWorksheet.cell(targetReference),
       targetWorksheet.sheet.name,
+      spreadsheetCellUsesTextFormat(targetWorksheet, targetReference),
     ));
     if (accepted !== false) finish();
   }
