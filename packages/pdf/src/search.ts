@@ -39,7 +39,13 @@ const ligatures: Record<string, string> = {
 };
 const normalize = (text: string, matchCase: boolean) => {
   const expanded = text.replace(/[ﬀ-ﬆ]/gu, (c) => ligatures[c]!);
-  return matchCase ? expanded : expanded.toLowerCase();
+  // Fold code points identically in queries and glyph text. Lowercasing an
+  // entire string applies contextual final-sigma rules that individual glyphs lack.
+  return matchCase
+    ? expanded
+    : Array.from(expanded, (char) =>
+        char.toLowerCase().replace(/ς/gu, "σ"),
+      ).join("");
 };
 function bounds(item: PdfTextItem): PdfSearchRect {
   const [a, b, c, d, e, f] = item.transform;
@@ -109,23 +115,59 @@ export class PdfSearchIndex {
               .sources.map((s) => `${s.instance}/${s.object}/${s.start}`),
           ),
       );
-      const scene = placePdfScene(interpreter.page(page.source.index), model);
-      const source = page.continuation
-        ? []
-        : units(
-            pdfTextContent({
-              ...scene,
-              elements: scene.elements.filter(
-                (e) => !replaced.has(pdfSourceKey(e.source)),
-              ),
-            }).items,
-          );
+      // Merge source runs and laid-out edits before matching. Appending edits to
+      // the page would change phrase adjacency after a formatting-only change.
+      const blocks: { x: number; y: number; units: Unit[] }[] = [];
+      if (page.source.index >= 0 && !page.continuation) {
+        const scene = placePdfScene(interpreter.page(page.source.index), model);
+        const items = pdfTextContent({
+          ...scene,
+          elements: scene.elements.filter(
+            (e) => !replaced.has(pdfSourceKey(e.source)),
+          ),
+        }).items;
+        const owners = new Map<string, string>(
+          model
+            .ids(page.source.index)
+            .flatMap((id) =>
+              model
+                .seed(id)
+                .sources.map(
+                  (s) => [`${s.instance}/${s.object}/${s.start}`, id] as const,
+                ),
+            ),
+        );
+        const runs = new Map<string, (typeof blocks)[number]>();
+        const sourceUnits = units(items);
+        let line = 0;
+        items.forEach((item, i) => {
+          if (item.kind === "separator" && item.text === "\n") {
+            line++;
+            return;
+          }
+          const source = pdfSourceKey(item.source);
+          const key = `${line}:${owners.get(source) ?? "unowned"}`;
+          let run = runs.get(key);
+          if (!run) {
+            run = { x: item.transform[4], y: item.transform[5], units: [] };
+            runs.set(key, run);
+            blocks.push(run);
+          }
+          run.units.push(sourceUnits[i]!);
+        });
+      }
       for (const region of regions) {
         if (region.preserveSource || model.placement(region.id)?.hidden)
           continue;
-        if (source.length) source.push({ text: " ", line: region.id });
-        for (const g of region.glyphs)
-          source.push({
+        const lines = new Map<number, (typeof blocks)[number]>();
+        for (const g of region.glyphs) {
+          let line = lines.get(g.y);
+          if (!line) {
+            line = { x: g.x, y: g.y, units: [] };
+            lines.set(g.y, line);
+            blocks.push(line);
+          }
+          line.units.push({
             text: g.text,
             line: `${region.id}:${g.y}`,
             rect: {
@@ -135,8 +177,15 @@ export class PdfSearchIndex {
               height: g.style.size * 1.25,
             },
           });
+        }
       }
-      return source;
+      // Use the same top-to-bottom, left-to-right block order as text import;
+      // keep each source run's extraction order and exact glyph rectangles.
+      return blocks
+        .sort((a, b) => a.y - b.y || a.x - b.x)
+        .flatMap((block, i) =>
+          i ? [{ text: " ", line: "separator" }, ...block.units] : block.units,
+        );
     });
   }
   find(query: string, options: PdfSearchOptions = {}): PdfSearchResult {
