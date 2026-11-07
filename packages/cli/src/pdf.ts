@@ -8,6 +8,7 @@ export function pdfHelp(commandName = 'tumbler', name?: string): string {
     'Delete pages in place. Page numbers start at 1 and refer to the original document.',
     'Use comma-separated numbers and inclusive ranges. Descending ranges are accepted; duplicate or overlapping selections are rejected.',
     'Remaining pages keep their original order. At least one page must remain. File writes use a sibling lock and atomic replacement.',
+    'Documents with unsupported structures (including attachments, metadata and page labels) are rejected without changing the file.',
     'The PDF is rebuilt without removed page streams or historical revisions. This is not content redaction: shared resources may remain.',
   ].join('\n') + '\n';
 }

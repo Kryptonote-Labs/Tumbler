@@ -1,4 +1,5 @@
 import { extractPdfPages, openPdfDocument } from '@tumblerjs/pdf';
+import { checkPdfDeletionSupported } from './pdf-delete-pages.ts';
 import { pdfDeletePagesInput, pdfPageIndices } from './pdf-pages.ts';
 import { presentationFileHost, createPresentationFile } from './presentation-file-host.ts';
 import { fileRegion, fileRegions } from "./file-regions.ts";
@@ -10,6 +11,7 @@ import type { OperationInput } from "./registry.ts";
 import { createHash, randomUUID } from "node:crypto";
 import {
   closeSync,
+  chmodSync,
   openSync,
   readFileSync,
   renameSync,
@@ -239,8 +241,11 @@ export function createFileHost(): OperationHost {
         const removed = new Set(indices);
         const remaining = document.pages.map((_, index) => index).filter((index) => !removed.has(index));
         if (!remaining.length) throw new Error('Cannot delete every PDF page; keep at least one page.');
+        checkPdfDeletionSupported(document);
         const output = extractPdfPages(document, remaining);
-        writeFileSync(temporary, output, { flag: 'wx', mode: statSync(path).mode });
+        const mode = statSync(path).mode;
+        writeFileSync(temporary, output, { flag: 'wx', mode });
+        chmodSync(temporary, mode);
         if (revision(readFileSync(path)) !== revision(original))
           throw new Error('The document changed while editing. Try again.');
         renameSync(temporary, path);

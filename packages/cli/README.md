@@ -25,6 +25,9 @@ PDF; ranges include both endpoints. Remaining pages keep their original order.
 Descending ranges are accepted. Invalid, out-of-bounds, duplicate or overlapping
 selections fail without writing, as does deleting every page. The file host uses
 a sibling `.tumbler-lock` and atomic replacement, preserving file permissions.
+Documents with structures the extractor cannot retain (including document-level
+attachments, metadata, page labels, or trailer Info) are rejected without changing
+the original file.
 It rebuilds the PDF without removed page streams or historical revisions; shared
 resources may remain, so this is not content redaction. Keep a copy if you need
 the original. Injected hosts implement optional `deletePdfPages(document, {pages})`
