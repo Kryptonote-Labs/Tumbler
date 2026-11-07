@@ -1,6 +1,6 @@
 <script lang="ts">
   import "./controls.css";
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import { createGridSelection, moveGridSelection, type GridDirection, type GridSelection } from "@tumblerjs/core";
   import type { ChartModel } from "@tumblerjs/charts";
   import {
@@ -36,6 +36,7 @@
   import { spreadsheetTextOverflowWidth } from "./spreadsheet-text-overflow.ts";
   import { spreadsheetEmptyRegionStart } from "./spreadsheet-empty-region.ts";
   import { zoomGesture, type ZoomGesture } from "./zoom-gesture.ts";
+  import { spreadsheetScrollAxis } from "./spreadsheet-scroll.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
 
   interface RenderableChart {
@@ -88,6 +89,8 @@
   let viewportHeight = $state(500);
   let scrollTop = $state(0);
   let scrollLeft = $state(0);
+  let physicalScrollTop = $state(0);
+  let physicalScrollLeft = $state(0);
   let editing = $state<string>();
   let editor = $state<HTMLInputElement>();
   let draft = $state("");
@@ -129,6 +132,8 @@
   });
   let rowGeometry = $derived(worksheet.rowGeometry(rowCount, projectedRows));
   let columnGeometry = $derived(worksheet.columnGeometry(columnCount, maximumDigitWidth));
+  const horizontalScroll = $derived(spreadsheetScrollAxis(columnGeometry.totalSize + rowHeaderWidth, viewportWidth));
+  const verticalScroll = $derived(spreadsheetScrollAxis(rowGeometry.totalSize + columnHeaderHeight, viewportHeight));
   let drawingRowGeometry = $derived(worksheet.rowGeometry(rowCount));
   let charts = $derived.by(() => {
     const frames = worksheet.drawing?.charts ?? [];
@@ -206,8 +211,8 @@
   function emptyCellAt(event: MouseEvent) {
     if (scroller === undefined || !(event.target instanceof Element) || event.target.closest('.cell, .chart-frame')) return undefined;
     const rect = scroller.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / scale + scroller.scrollLeft - rowHeaderWidth;
-    const y = (event.clientY - rect.top) / scale + scroller.scrollTop - columnHeaderHeight;
+    const x = (event.clientX - rect.left) / scale + scrollLeft - rowHeaderWidth;
+    const y = (event.clientY - rect.top) / scale + scrollTop - columnHeaderHeight;
     if (x < 0 || y < 0) return undefined;
     const row = rowGeometry.indexAt(y);
     const column = columnGeometry.indexAt(x);
@@ -217,7 +222,6 @@
   function emptyPointerDown(event: PointerEvent) {
     const cell = emptyCellAt(event);
     if (cell === undefined) return;
-    scroller?.closest<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true });
     cellPointerDown(event, cell.row, cell.column);
   }
 
@@ -292,16 +296,15 @@
     const rect = scroller.getBoundingClientRect();
     const x = (gesture.x - rect.left) / scale;
     const y = (gesture.y - rect.top) / scale;
-    const documentX = scroller.scrollLeft + x;
-    const documentY = scroller.scrollTop + y;
+    const documentX = scrollLeft + x;
+    const documentY = scrollTop + y;
     scale = Math.max(0.25, Math.min(3, scale * gesture.factor));
     await tick();
     if (scroller === undefined) return;
     // Frozen panes stay fixed; only anchor the scrolling portion of each axis.
-    if (x > rowHeaderWidth + frozenColumnsWidth) scroller.scrollLeft = documentX - (gesture.targetX - rect.left) / scale;
-    if (y > columnHeaderHeight + frozenRowsHeight) scroller.scrollTop = documentY - (gesture.targetY - rect.top) / scale;
-    scrollLeft = scroller.scrollLeft;
-    scrollTop = scroller.scrollTop;
+    if (x > rowHeaderWidth + frozenColumnsWidth) setScroll(documentX - (gesture.targetX - rect.left) / scale, scrollTop);
+    if (y > columnHeaderHeight + frozenRowsHeight) setScroll(scrollLeft, documentY - (gesture.targetY - rect.top) / scale);
+
   }
 
   // Keyboard navigation and host-driven selection keep the focused cell in view.
@@ -314,20 +317,46 @@
     const y = rowGeometry.start(row) + columnHeaderHeight;
     const right = x + columnGeometry.size(focus.column);
     const bottom = y + rowGeometry.size(row);
-    if (focus.column > frozenColumns) {
-      if (x < element.scrollLeft + rowHeaderWidth + frozenColumnsWidth) element.scrollLeft = x - rowHeaderWidth - frozenColumnsWidth;
-      else if (right > element.scrollLeft + viewportWidth) element.scrollLeft = right - viewportWidth;
+    const width = viewportWidth, height = viewportHeight;
+    const frozenWidth = frozenColumnsWidth, frozenHeight = frozenRowsHeight;
+    const fixedColumns = frozenColumns, fixedRows = frozenRows;
+    untrack(() => {
+    if (focus.column > fixedColumns) {
+      if (x < scrollLeft + rowHeaderWidth + frozenWidth) setScroll(x - rowHeaderWidth - frozenWidth, scrollTop);
+      else if (right > scrollLeft + width) setScroll(right - width, scrollTop);
     }
-    if (row > frozenRows) {
-      if (y < element.scrollTop + columnHeaderHeight + frozenRowsHeight) element.scrollTop = y - columnHeaderHeight - frozenRowsHeight;
-      else if (bottom > element.scrollTop + viewportHeight) element.scrollTop = bottom - viewportHeight;
+    if (row > fixedRows) {
+      if (y < scrollTop + columnHeaderHeight + frozenHeight) setScroll(scrollLeft, y - columnHeaderHeight - frozenHeight);
+      else if (bottom > scrollTop + height) setScroll(scrollLeft, bottom - height);
     }
+    });
   });
 
   function handleScroll(event: Event) {
     const target = event.currentTarget as HTMLDivElement;
-    scrollTop = target.scrollTop;
-    scrollLeft = target.scrollLeft;
+    physicalScrollTop = target.scrollTop;
+    physicalScrollLeft = target.scrollLeft;
+    if (Math.abs(target.scrollTop - verticalScroll.physical(scrollTop)) > 1) scrollTop = verticalScroll.logical(target.scrollTop);
+    if (Math.abs(target.scrollLeft - horizontalScroll.physical(scrollLeft)) > 1) scrollLeft = horizontalScroll.logical(target.scrollLeft);
+  }
+
+
+  function setScroll(left: number, top: number) {
+    if (!scroller) return;
+    scrollLeft = horizontalScroll.logical(horizontalScroll.physical(left));
+    scrollTop = verticalScroll.logical(verticalScroll.physical(top));
+    scroller.scrollLeft = horizontalScroll.physical(scrollLeft);
+    scroller.scrollTop = verticalScroll.physical(scrollTop);
+    physicalScrollLeft = scroller.scrollLeft;
+    physicalScrollTop = scroller.scrollTop;
+  }
+
+  function handleWheel(event: WheelEvent) {
+    if (event.ctrlKey || event.metaKey || (!horizontalScroll.compressed && !verticalScroll.compressed)) return;
+    event.preventDefault();
+    const unit = event.deltaMode === 1 ? rowHeight : event.deltaMode === 2 ? viewportHeight : 1;
+    setScroll(scrollLeft + (event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX) * unit / scale,
+      scrollTop + (event.shiftKey && !event.deltaX ? 0 : event.deltaY) * unit / scale);
   }
 
   function cellPointerDown(event: PointerEvent, row: number, column: number) {
@@ -605,8 +634,8 @@
     aria-colindex={column}
     tabindex="-1"
     aria-selected={selected(sourceRow, column)}
-    style:left={`${left}px`}
-    style:top={`${top}px`}
+    style:left={`${zIndex === 1 ? left - scrollLeft + physicalScrollLeft : left}px`}
+    style:top={`${zIndex === 1 ? top - scrollTop + physicalScrollTop : top}px`}
     style:width={`${width}px`}
     style:height={`${height}px`}
     style:z-index={overflowWidth === undefined ? zIndex : zIndex + 1}
@@ -697,26 +726,29 @@
     bind:clientWidth={viewportWidth}
     bind:clientHeight={viewportHeight}
     onscroll={handleScroll}
+    onwheel={handleWheel}
   >
     <!-- Blank cells use the grid's keyboard handler and coordinate-based pointer selection. -->
     <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-    <div class="canvas" style:width={`${viewport.totalWidth + rowHeaderWidth}px`} style:height={`${viewport.totalHeight + columnHeaderHeight}px`}
+    <div class="canvas" style:width={`${horizontalScroll.extent}px`} style:height={`${verticalScroll.extent}px`}
       onpointerdown={emptyPointerDown} onpointermove={emptyPointerMove}
       onclick={(event) => { const cell = emptyCellAt(event); if (cell !== undefined) cellClick(event, cell.row, cell.column); }}
       ondblclick={(event) => { const cell = emptyCellAt(event); if (cell !== undefined) beginEdit(cell.row, cell.column); }}
     >
       {#if emptyCorner !== undefined}
-        <svg class="empty-grid" aria-hidden="true" width={emptyCorner.width} height={emptyCorner.height} style:left={`${rowHeaderWidth + emptyCorner.left}px`} style:top={`${columnHeaderHeight + emptyCorner.top}px`}>
+        <svg class="empty-grid" aria-hidden="true" width={emptyCorner.width} height={emptyCorner.height} style:left={`${rowHeaderWidth + emptyCorner.left - scrollLeft + physicalScrollLeft}px`} style:top={`${columnHeaderHeight + emptyCorner.top - scrollTop + physicalScrollTop}px`}>
           <path d={emptyCorner.lines} />
         </svg>
-        {@const startRow = Math.max(selection.range.start.row, emptyRegionStart!.row + 1, frozenRows + 1)}
-        {@const startColumn = Math.max(selection.range.start.column, emptyRegionStart!.column + 1, frozenColumns + 1)}
-        {#if startRow <= selection.range.end.row && startColumn <= selection.range.end.column}
-          <div class="empty-selection" style:left={`${rowHeaderWidth + columnGeometry.start(startColumn)}px`} style:top={`${columnHeaderHeight + rowGeometry.start(startRow)}px`}
-            style:width={`${columnGeometry.start(selection.range.end.column) + columnGeometry.size(selection.range.end.column) - columnGeometry.start(startColumn)}px`}
-            style:height={`${rowGeometry.start(selection.range.end.row) + rowGeometry.size(selection.range.end.row) - rowGeometry.start(startRow)}px`}></div>
+        {@const startRow = Math.max(selection.range.start.row, emptyRegionStart!.row + 1, frozenRows + 1, layout.rows[0]?.index ?? 1)}
+        {@const startColumn = Math.max(selection.range.start.column, emptyRegionStart!.column + 1, frozenColumns + 1, layout.columns[0]?.index ?? 1)}
+        {@const endRow = Math.min(selection.range.end.row, layout.rows.at(-1)?.index ?? startRow)}
+        {@const endColumn = Math.min(selection.range.end.column, layout.columns.at(-1)?.index ?? startColumn)}
+        {#if startRow <= endRow && startColumn <= endColumn}
+          <div class="empty-selection" style:left={`${rowHeaderWidth + columnGeometry.start(startColumn) - scrollLeft + physicalScrollLeft}px`} style:top={`${columnHeaderHeight + rowGeometry.start(startRow) - scrollTop + physicalScrollTop}px`}
+            style:width={`${columnGeometry.start(endColumn) + columnGeometry.size(endColumn) - columnGeometry.start(startColumn)}px`}
+            style:height={`${rowGeometry.start(endRow) + rowGeometry.size(endRow) - rowGeometry.start(startRow)}px`}></div>
         {/if}
-        {#if isEmptyCorner(selection.focus.row, selection.focus.column)}
+        {#if isEmptyCorner(selection.focus.row, selection.focus.column) && selection.focus.row >= (layout.rows[0]?.index ?? 1) && selection.focus.row <= (layout.rows.at(-1)?.index ?? 0) && selection.focus.column >= (layout.columns[0]?.index ?? 1) && selection.focus.column <= (layout.columns.at(-1)?.index ?? 0)}
           {@const focus = selection.focus}
           <div class="empty-corner-cell" class:empty-focus={editing === undefined}>
             {@render gridCell(formatCellReference(focus), focus.row, focus.column, rowHeaderWidth + columnGeometry.start(focus.column), columnHeaderHeight + rowGeometry.start(focus.row), columnGeometry.size(focus.column), rowGeometry.size(focus.row), 1)}
@@ -739,7 +771,7 @@
         {/if}
       {/each}
       {#each visibleCharts.filter((chart) => chart.placement.region === "body") as chart (chart.frame.anchor.elementId)}
-        {@render chartFrame(chart, chart.placement.left, chart.placement.top)}
+        {@render chartFrame(chart, chart.placement.left - scrollLeft + physicalScrollLeft, chart.placement.top - scrollTop + physicalScrollTop)}
       {/each}
     </div>
   </div>
@@ -851,7 +883,7 @@
   .empty-selection { position: absolute; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(65, 255, 83, 0.1)); }
   .empty-focus { pointer-events: none; }
   .empty-corner-cell .cell.selected::after { background: transparent; }
-  .canvas { position: relative; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
+  .canvas { position: relative; overflow: clip; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane, .frozen-column-pane { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane { left: 52px; right: 0; top: 28px; }
   .frozen-column-pane { left: 52px; bottom: 0; }
