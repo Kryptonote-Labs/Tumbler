@@ -261,7 +261,8 @@ Content streams, fonts, images, vectors, annotations, page boxes, rotation and
 user units remain PDF content. Form field names receive a `sourceN` parent to
 avoid collisions. Bookmarks are grouped by source. Accessibility parent keys
 and form appearance resource names are remapped. Internal links retain targets
-within their source selection; links to excluded pages are removed.
+across selections from the same source, targeting the first output occurrence;
+links to excluded pages are removed.
 
 The output is unencrypted and has no historical revisions. Authenticate encrypted
 inputs with `openPdfDocument` first. Digital signatures cannot remain valid after

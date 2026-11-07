@@ -1,4 +1,4 @@
-import { PdfName, PdfReference, PdfString, type PdfValue, type PdfDictionary, dictionary, unsupported } from './objects.ts';
+import { PdfName, PdfReference, PdfString, PdfStream, type PdfValue, type PdfDictionary, dictionary, unsupported } from './objects.ts';
 import { bytes, serializePdfValue } from './editing/object-writer.ts';
 import { PdfSyntax } from './syntax.ts';
 import { readContentToken } from './content-syntax.ts';
@@ -7,6 +7,19 @@ type Resolve = (value: PdfValue | undefined) => PdfValue | undefined;
 
 /** Join document-level owners for page annotations, layers, outlines and accessibility data. */
 export function mergePdfCatalogs(catalogs: PdfDictionary[], objects: PdfValue[], reserve: () => PdfReference, resolve: Resolve): PdfDictionary {
+  function same(left: PdfValue, right: PdfValue, seen = new Map<PdfValue, Set<PdfValue>>()): boolean {
+    const a = resolve(left), b = resolve(right);
+    if (a === b) return true;
+    if (a === undefined || b === undefined) return false;
+    if (a instanceof PdfName && b instanceof PdfName) return a.value === b.value;
+    if (a instanceof PdfString && b instanceof PdfString)
+      return a.bytes.length === b.bytes.length && a.bytes.every((byte, index) => byte === b.bytes[index]);
+    if (seen.get(a)?.has(b)) return true;
+    const matches = seen.get(a) ?? new Set<PdfValue>(); matches.add(b); seen.set(a, matches);
+    if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((value, index) => same(value, b[index]!, seen));
+    if (a instanceof Map && b instanceof Map) return a.size === b.size && [...a].every(([key, value]) => b.has(key) && same(value, b.get(key)!, seen));
+    return false;
+  }
   const output: PdfDictionary = new Map();
   const list = (value: PdfValue | undefined): PdfValue[] => {
     const result = resolve(value); return result === undefined || result === null ? [] : Array.isArray(result) ? result : [result];
@@ -26,6 +39,11 @@ export function mergePdfCatalogs(catalogs: PdfDictionary[], objects: PdfValue[],
       const renamed = new Map<string, string>();
       const dr = resolve(form.get('DR'));
       if (dr instanceof Map) for (const [category, entries] of dr) {
+        if (category === 'ProcSet') {
+          const entries = [...list(resources.get(category)), ...list(dr.get(category))];
+          resources.set(category, [...new Map(entries.map((entry) => [serializePdfValue(entry), entry])).values()]);
+          continue;
+        }
         const target = resources.get(category) ?? new Map<string, PdfValue>();
         if (!(target instanceof Map)) unsupported('Invalid PDF form resources.');
         for (const [name, value] of dictionary(resolve(entries))) {
@@ -91,7 +109,8 @@ export function mergePdfCatalogs(catalogs: PdfDictionary[], objects: PdfValue[],
         value = resolve(value);
         if (value === undefined || seen.has(value)) return;
         seen.add(value);
-        if (Array.isArray(value)) { for (const item of value) shift(item); }
+        if (value instanceof PdfStream) shift(value.dictionary);
+        else if (Array.isArray(value)) { for (const item of value) shift(item); }
         else if (value instanceof Map) for (const [key, item] of value) {
           if (['StructParents', 'StructParent'].includes(key) && typeof item === 'number') value.set(key, item + parentOffset);
           else shift(item);
@@ -103,7 +122,7 @@ export function mergePdfCatalogs(catalogs: PdfDictionary[], objects: PdfValue[],
       for (const [key, target] of [['RoleMap', roles], ['ClassMap', classes]] as const) {
         const map = resolve(tags.get(key));
         if (map instanceof Map) for (const [name, value] of map) {
-          if (target.has(name) && serializePdfValue(target.get(name)!) !== serializePdfValue(value))
+          if (target.has(name) && !same(target.get(name)!, value))
             unsupported(`Conflicting PDF accessibility ${key} entry: ${name}.`);
           target.set(name, value);
         }

@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
-import { mergePdfPages, selectPdfPages, openPdfDocument, PdfInterpreter, PdfReference, PdfStream, PdfString } from '../src/index.ts';
+import { mergePdfPages, selectPdfPages, openPdfDocument, PdfInterpreter, PdfName, PdfReference, PdfStream, PdfString, type PdfValue } from '../src/index.ts';
 import { dictionary } from '../src/objects.ts';
+import { pdfFixture, pdfStream } from './pdf-fixture.ts';
 import { mergeFixture } from './merge-fixtures.ts';
 import { extractionFixture } from './extraction-fixture.ts';
 
@@ -89,4 +90,88 @@ test('selection grammar supports ranges, reverse order and duplicates with bound
     expect(() => selectPdfPages(value, 3)).toThrow();
   for (const pages of [[], [-1], [2], [0.5], [NaN]]) expect(() => mergePdfPages([{ document: a, pages }])).toThrow();
   expect(() => mergePdfPages([])).toThrow();
+});
+
+test('links resolve across repeated and interleaved source selections to the first target occurrence', () => {
+  for (const parts of [[{ document: a, pages: [0, 0, 1] }], [{ document: a, pages: [0] }, { document: b }, { document: a, pages: [1] }]]) {
+    const output = openPdfDocument(mergePdfPages(parts));
+    const expected = output.pages.at(-1)!.reference;
+    for (const page of output.pages.filter((page) => output.source.resolve(page.dictionary.get('Annots')) !== null)) {
+      const annots = output.source.resolve(page.dictionary.get('Annots'));
+      if (!Array.isArray(annots)) continue;
+      const link = dictionary(output.source.resolve(annots[1]));
+      const dest = output.source.resolve(link.get('Dest'));
+      if (page === output.pages[0] || parts.length === 1) expect((dest as PdfReference[])[0]).toEqual(expected);
+    }
+  }
+});
+
+test('form resource ProcSet arrays remain valid when form defaults are combined', () => {
+  const output = openPdfDocument(mergePdfPages([{ document: openPdfDocument(pdfFixture([
+ '<< /Type /Catalog /Pages 2 0 R /AcroForm 5 0 R >>',
+ '<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
+ '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Annots [6 0 R] /Contents 4 0 R /Resources << >> >>',
+ pdfStream(''),
+ '<< /Fields [6 0 R] /DR << /ProcSet [/PDF /Text] /Font << /Helv 7 0 R >> >> /DA (/Helv 16 Tf 0 g) /NeedAppearances true >>',
+ '<< /Type /Annot /Subtype /Widget /FT /Tx /T (test) /V (Hello) /Rect [20 20 180 70] /P 3 0 R >>',
+ '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+])) }]));
+  const form = dictionary(output.source.resolve(output.source.catalog.get('AcroForm')));
+  const dr = dictionary(output.source.resolve(form.get('DR')));
+  expect(dr.get('ProcSet')).toHaveLength(2);
+});
+
+test('tagged Form XObjects keep distinct reverse parent lookups', () => {
+  const source = openPdfDocument(pdfFixture([
+ '<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 6 0 R /MarkInfo << /Marked true >> >>',
+ '<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
+ '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << /XObject << /Fm 5 0 R >> >> /Contents 4 0 R >>',
+ pdfStream('/Fm Do'),
+ pdfStream('/P << /MCID 0 >> BDC 10 10 80 80 re f EMC','/Type /XObject /Subtype /Form /BBox [0 0 100 100] /StructParents 7 /Resources << >>'),
+ '<< /Type /StructTreeRoot /K [7 0 R] /ParentTree << /Nums [7 [7 0 R]] >> /ParentTreeNextKey 8 >>',
+ '<< /Type /StructElem /S /P /P 6 0 R /Pg 3 0 R /K << /Type /MCR /Pg 3 0 R /Stm 5 0 R /MCID 0 >> /Alt (Accessible box) >>'
+]));
+  const output = openPdfDocument(mergePdfPages([{ document: source }, { document: source }]));
+  const keys = output.pages.map((page) => {
+    const form = output.source.resolve(dictionary(output.source.resolve(page.resources.get('XObject'))).get('Fm')) as PdfStream;
+    return form.dictionary.get('StructParents');
+  });
+  expect(keys).toEqual([7, 15]);
+  const root = dictionary(output.source.resolve(output.source.catalog.get('StructTreeRoot')));
+  const nums = dictionary(output.source.resolve(root.get('ParentTree'))).get('Nums') as PdfValue[];
+  expect([nums[0], nums[2]]).toEqual(keys);
+  expect(nums[1]).toHaveLength(1); expect(nums[3]).toHaveLength(1);
+});
+
+test('equivalent indirect accessibility class attributes merge while actual conflicts fail', () => {
+  const make = (placement: string) => openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 5 0 R /MarkInfo << /Marked true >> >>',
+    '<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << >> /Contents 4 0 R /StructParents 0 >>',
+    pdfStream('/P << /MCID 0 >> BDC 10 10 80 80 re f EMC'),
+    '<< /Type /StructTreeRoot /K [6 0 R] /ParentTree << /Nums [0 [6 0 R]] >> /ClassMap << /Box 7 0 R >> >>',
+    '<< /Type /StructElem /S /P /P 5 0 R /Pg 3 0 R /K 0 /C /Box >>',
+    `<< /O /Layout /Placement /${placement} >>`,
+  ]));
+  const document = make('Block');
+  expect(openPdfDocument(mergePdfPages([{ document }, { document }])).pages).toHaveLength(2);
+  expect(() => mergePdfPages([{ document }, { document: make('Inline') }])).toThrow('Conflicting PDF accessibility ClassMap');
+});
+
+test('named link destinations and GoTo actions resolve across separately opened source parts', () => {
+  const bytes = pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /Names << /Dests << /Names [(target) [4 0 R /XYZ null 30 0]] >> >> >>',
+    '<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] /MediaBox [0 0 100 100] /Resources << >> >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 5 0 R /Annots [7 0 R 8 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 6 0 R >>',
+    pdfStream(''), pdfStream(''),
+    '<< /Type /Annot /Subtype /Link /Rect [0 0 10 10] /Dest (target) >>',
+    '<< /Type /Annot /Subtype /Link /Rect [10 0 20 10] /A << /S /GoTo /D (target) >> >>',
+  ]);
+  const output = openPdfDocument(mergePdfPages([{ document: openPdfDocument(bytes), pages: [0] }, { document: openPdfDocument(bytes), pages: [1, 1] }]));
+  const annotations = output.source.resolve(output.pages[0]!.dictionary.get('Annots')) as PdfReference[];
+  const direct = dictionary(output.source.resolve(annotations[0])).get('Dest') as PdfValue[];
+  const action = dictionary(output.source.resolve(dictionary(output.source.resolve(annotations[1])).get('A')));
+  expect(direct).toEqual([output.pages[1]!.reference, new PdfName('XYZ'), null, 30, 0]);
+  expect(action.get('D')).toEqual(direct);
 });

@@ -2,6 +2,7 @@ import { openPdfDocument, type PdfDocument } from './document.ts';
 import { PdfName, PdfReference, PdfStream, type PdfDictionary, type PdfValue } from './objects.ts';
 import { extractPdfPages } from './editing/extract.ts';
 import { bytes, serializePdfValue } from './editing/object-writer.ts';
+import { restoreMergedPdfLinks, type PdfMergePageCopy } from './merge-links.ts';
 import { mergePdfCatalogs } from './merge-catalogs.ts';
 
 export interface PdfMergePart {
@@ -37,6 +38,7 @@ export function mergePdfPages(parts: readonly PdfMergePart[]): Uint8Array {
   const reserve = () => { objects.push(null); return new PdfReference(objects.length); };
   const root = new PdfReference(1), parent = new PdfReference(2);
   const pages: PdfReference[] = [];
+  const pageCopies: PdfMergePageCopy[] = [];
   const catalogs: PdfDictionary[] = [];
   let total = 0;
   for (const part of parts) {
@@ -85,6 +87,7 @@ export function mergePdfPages(parts: readonly PdfMergePart[]): Uint8Array {
         copied.set('Parent', parent);
         objects[ref.object - 1] = copied;
         pages.push(ref);
+        pageCopies.push({ document: part.document, index: selection[page.index]!, dictionary: copied, reference: ref });
       }
       const catalog = new Map(doc.source.catalog);
       catalog.delete('Pages');
@@ -99,6 +102,7 @@ export function mergePdfPages(parts: readonly PdfMergePart[]): Uint8Array {
     }
     return value;
   };
+  restoreMergedPdfLinks(pageCopies, resolve);
   const catalog = mergePdfCatalogs(catalogs, objects, reserve, resolve);
   catalog.set('Type', new PdfName('Catalog')); catalog.set('Pages', parent);
   objects[0] = catalog;

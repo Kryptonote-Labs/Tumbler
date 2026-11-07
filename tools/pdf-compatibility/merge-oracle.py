@@ -11,6 +11,8 @@ for item in manifest:
     name = item['name']
     source = pdfium.PdfDocument(root / f'{name}-source.pdf', password=item.get('password'))
     merged = pdfium.PdfDocument(root / f'{name}-merged.pdf')
+    source.init_forms()
+    merged.init_forms()
     assert len(merged) == 2 * len(source), name
     for output_index, source_index in enumerate(list(range(len(source))) + list(reversed(range(len(source))))):
         original, result = source[source_index], merged[output_index]

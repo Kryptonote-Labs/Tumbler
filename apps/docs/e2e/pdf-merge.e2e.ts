@@ -34,7 +34,10 @@ test('graphical merge selections, reordering and duplication match the shared AP
 test('malformed uploads show an error and leave the existing selections available', async ({ page }) => {
   await page.goto('/playground/pdf-merge');
   await expect(page.getByLabel('Add PDFs')).toBeEnabled();
+  await page.getByLabel('Add PDFs').setInputFiles({ name: 'valid.pdf', mimeType: 'application/pdf', buffer: Buffer.from(mergeFixture('Valid')) });
+  await expect(page.getByLabel('Pages for valid.pdf')).toBeVisible();
   await page.getByLabel('Add PDFs').setInputFiles({ name: 'bad.pdf', mimeType: 'application/pdf', buffer: Buffer.from('not a pdf') });
   await expect(page.getByRole('alert')).toContainText('PDF header');
-  await expect(page.getByRole('button', { name: 'Merge and download' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Merge and download' })).toBeEnabled();
+  await expect(page.getByLabel('Pages for valid.pdf')).toBeVisible();
 });

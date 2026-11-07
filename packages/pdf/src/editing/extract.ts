@@ -183,7 +183,21 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
   }
   const selectedAnnotations = new Set<string>(),
     parentKeys = new Set<number>();
+  const visitedResources = new Set<PdfValue>();
+  function resourceParentKeys(value: PdfValue | undefined) {
+    const resolved = source.resolve(value);
+    if (resolved === undefined || visitedResources.has(resolved)) return;
+    visitedResources.add(resolved);
+    if (resolved instanceof PdfStream) resourceParentKeys(resolved.dictionary);
+    else if (Array.isArray(resolved)) for (const child of resolved) resourceParentKeys(child);
+    else if (resolved instanceof Map) {
+      const key = source.resolve(resolved.get('StructParents'));
+      if (typeof key === 'number') parentKeys.add(key);
+      for (const child of resolved.values()) resourceParentKeys(child);
+    }
+  }
   for (const page of selected) {
+    resourceParentKeys(page.resources);
     const key = source.resolve(page.dictionary.get('StructParents'));
     if (typeof key === 'number') parentKeys.add(key);
     const annotations = source.resolve(page.dictionary.get('Annots'));
