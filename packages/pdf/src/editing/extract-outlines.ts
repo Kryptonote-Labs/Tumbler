@@ -6,7 +6,7 @@ export function subsetPdfOutlines(
   context: PdfExtractionContext,
   destination: (value: PdfValue) => PdfValue | undefined,
 ): PdfReference | undefined {
-  const { source, reserve, set, copy } = context,
+  const { source, reserve, set, copy, copyAction } = context,
     original = source.resolve(source.catalog.get('Outlines'));
   if (!(original instanceof Map)) return undefined;
   const root = reserve(),
@@ -24,20 +24,7 @@ export function subsetPdfOutlines(
         info = new Map<string, PdfValue>();
       const explicit = original.get('Dest'),
         dest = explicit === undefined ? undefined : destination(explicit);
-      const originalAction = source.resolve(original.get('A'));
-      let action: PdfValue | undefined;
-      if (originalAction instanceof Map) {
-        const kind = originalAction.get('S');
-        if (kind instanceof PdfName && kind.value === 'GoTo') {
-          const value = originalAction.get('D'),
-            target = value === undefined ? undefined : destination(value);
-          if (target)
-            action = new Map<string, PdfValue>([
-              ['S', new PdfName('GoTo')],
-              ['D', target],
-            ]);
-        } else action = copy(originalAction);
-      }
+      const action = copyAction(original.get('A'));
       if (dest || action || children.items.length) {
         for (const [key, value] of original)
           if (!['Parent', 'First', 'Last', 'Next', 'Prev', 'Count', 'Dest', 'A'].includes(key))

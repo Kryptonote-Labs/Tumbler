@@ -18,6 +18,7 @@ export type PdfExtractionContext = {
   reserve: () => PdfReference;
   set: (ref: PdfReference, value: PdfValue) => void;
   copy: (value: PdfValue) => PdfValue;
+  copyAction: (value: PdfValue | undefined) => PdfValue | undefined;
 };
 const compareBytes = (a: Uint8Array, b: Uint8Array) => {
   for (let i = 0; i < Math.min(a.length, b.length); i++) {

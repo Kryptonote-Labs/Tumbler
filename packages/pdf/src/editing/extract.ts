@@ -141,6 +141,39 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
     }
     return undefined;
   }
+  /** Flatten execution order so pruning a GoTo never prunes its surviving successors. */
+  function copyAction(value: PdfValue | undefined): PdfValue | undefined {
+    const active = new Set<PdfDictionary>();
+    function sequence(value: PdfValue | undefined): PdfDictionary[] {
+      const original = source.resolve(value);
+      if (original === null) return [];
+      if (Array.isArray(original)) return original.flatMap(sequence);
+      if (!(original instanceof Map)) throw new Error('Invalid PDF action dictionary.');
+      if (active.has(original)) throw new Error('Cyclic PDF action chain.');
+      active.add(original);
+      try {
+        const kind = source.resolve(original.get('S'));
+        const goto = kind instanceof PdfName && kind.value === 'GoTo';
+        const target = original.get('D');
+        const dest = goto && target !== undefined ? destination(target) : undefined;
+        const result: PdfDictionary[] = [];
+        if (!goto || dest !== undefined) {
+          const info = new Map<string, PdfValue>();
+          for (const [key, entry] of original) {
+            if (key === 'Next') continue;
+            info.set(key, key === 'D' && goto ? dest! : copy(entry));
+          }
+          result.push(info);
+        }
+        return [...result, ...sequence(original.get('Next'))];
+      } finally { active.delete(original); }
+    }
+    const actions = sequence(value);
+    const first = actions[0];
+    if (!first) return undefined;
+    if (actions.length > 1) first.set('Next', actions.length === 2 ? actions[1]! : actions.slice(1));
+    return first;
+  }
   function copyDictionary(original: PdfDictionary): PdfDictionary {
     const result = new Map<string, PdfValue>();
     const type = source.resolve(original.get('Type'));
@@ -168,26 +201,17 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
       // Resolve their destinations wherever the action dictionary occurs, retaining
       // the remaining entries (including chained actions).
       if (key === 'Next' && actionType instanceof PdfName) {
-        const chain = source.resolve(value);
-        if (Array.isArray(chain)) {
-          const retained = chain.filter((entry) => {
-            const action = source.resolve(entry);
-            if (!(action instanceof Map)) return true;
-            const kind = source.resolve(action.get('S'));
-            if (!(kind instanceof PdfName) || kind.value !== 'GoTo') return true;
-            const target = action.get('D');
-            return target !== undefined && destination(target) !== undefined;
-          });
-          if (retained.length) result.set(key, retained.map(copy));
-          continue;
-        }
+        const chain = copyAction(value);
+        if (chain) result.set(key, chain);
+        continue;
       }
       const action = source.resolve(value);
       if (action instanceof Map) {
         const kind = source.resolve(action.get('S'));
         if (kind instanceof PdfName && kind.value === 'GoTo') {
-          const target = action.get('D');
-          if (target === undefined || destination(target) === undefined) continue;
+          const retained = copyAction(value);
+          if (retained) result.set(key, retained);
+          continue;
         }
       }
       result.set(key, copy(value));
@@ -255,6 +279,7 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
       objects[ref.object - 1] = value;
     },
     copy,
+    copyAction,
   };
   const forms = subsetPdfForms(context),
     tags = subsetPdfTags(context, parentKeys),

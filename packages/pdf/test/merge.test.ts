@@ -305,7 +305,43 @@ test('action chains prune omitted page destinations while keeping other actions'
   const source = merged.source;
   const annotation = dictionary(source.resolve((merged.pages[0]!.dictionary.get('Annots') as PdfReference[])[0]));
   const action = dictionary(source.resolve(annotation.get('A')));
-  const chain = source.resolve(action.get('Next')) as PdfValue[];
+  const next = source.resolve(action.get('Next'));
+  const chain = Array.isArray(next) ? next : [next];
   expect(chain).toHaveLength(1);
   expect((dictionary(source.resolve(chain[0])).get('S') as PdfName).value).toBe('URI');
+});
+
+for (const chainArray of [false, true])
+for (const rootOmitted of [false, true])
+test(`bookmarks and annotation chains keep downstream actions after pruning (${chainArray}, ${rootOmitted})`, () => {
+  const document = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /Outlines 8 0 R >>',
+    '<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] /MediaBox [0 0 100 100] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 5 0 R /Annots [7 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 5 0 R >>',
+    pdfStream(''),
+    `<< /S /GoTo /D [${rootOmitted ? 4 : 3} 0 R /Fit] /Next ${chainArray ? '[10 0 R 12 0 R]' : '10 0 R'} >>`,
+    '<< /Type /Annot /Subtype /Link /Rect [0 0 10 10] /A 6 0 R >>',
+    '<< /Type /Outlines /First 9 0 R /Last 9 0 R >>',
+    '<< /Title (Action chain) /Parent 8 0 R /A 6 0 R >>',
+    '<< /S /GoTo /D [4 0 R /Fit] /Next 11 0 R >>',
+    '<< /S /URI /URI (https://example.org/first) >>',
+    '<< /S /URI /URI (https://example.org/second) >>',
+  ]));
+  const merged = openPdfDocument(mergePdfDocuments([{ document, pages: [0] }]));
+  const source = merged.source;
+  const annotation = dictionary(source.resolve((merged.pages[0]!.dictionary.get('Annots') as PdfReference[])[0]));
+  const outlineRoot = dictionary(source.resolve(source.catalog.get('Outlines')));
+  const bookmark = dictionary(source.resolve(outlineRoot.get('First')));
+  function executed(value: PdfValue | undefined): string[] {
+    const action = source.resolve(value);
+    if (action === null) return [];
+    if (Array.isArray(action)) return action.flatMap(executed);
+    const info = dictionary(action), kind = (info.get('S') as PdfName).value;
+    if (kind === 'GoTo') expect(((source.resolve(info.get('D')) as PdfValue[])[0] as PdfReference).key).toBe(merged.pages[0]!.reference.key);
+    return [kind === 'URI' ? bytesText((info.get('URI') as PdfString).bytes) : kind, ...executed(info.get('Next'))];
+  }
+  const expected = [...(rootOmitted ? [] : ['GoTo']), 'https://example.org/first', ...(chainArray ? ['https://example.org/second'] : [])];
+  expect(executed(annotation.get('A'))).toEqual(expected);
+  expect(executed(bookmark.get('A'))).toEqual(expected);
 });
