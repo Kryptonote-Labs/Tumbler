@@ -183,7 +183,29 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
   }
   const selectedAnnotations = new Set<string>(),
     parentKeys = new Set<number>();
+  const scannedResources = new Set<string>();
+  function resourceParentKeys(value: PdfValue | undefined) {
+    if (value instanceof PdfReference) {
+      if (scannedResources.has(value.key)) return;
+      scannedResources.add(value.key);
+      resourceParentKeys(source.resolve(value));
+    } else if (value instanceof PdfStream) resourceParentKeys(value.dictionary);
+    else if (Array.isArray(value)) value.forEach(resourceParentKeys);
+    else if (value instanceof Map) {
+      // Tagged Form XObjects (including nested resources/appearance streams) own
+      // ParentTree entries independently of the page that invokes them.
+      for (const name of ['StructParents', 'StructParent']) {
+        const key = source.resolve(value.get(name));
+        if (typeof key === 'number') parentKeys.add(key);
+      }
+      for (const [key, child] of value) {
+        // Do not follow page, annotation or field ownership back into other pages.
+        if (!['Parent', 'P', 'Pg'].includes(key)) resourceParentKeys(child);
+      }
+    }
+  }
   for (const page of selected) {
+    resourceParentKeys(page.resources);
     const key = source.resolve(page.dictionary.get('StructParents'));
     if (typeof key === 'number') parentKeys.add(key);
     const annotations = source.resolve(page.dictionary.get('Annots'));
@@ -192,6 +214,7 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
         if (value instanceof PdfReference) selectedAnnotations.add(value.key);
         const annotation = source.resolve(value);
         if (annotation instanceof Map) {
+          resourceParentKeys(annotation.get('AP'));
           const key = source.resolve(annotation.get('StructParent'));
           if (typeof key === 'number') parentKeys.add(key);
         }

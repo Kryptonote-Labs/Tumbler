@@ -175,3 +175,50 @@ test('indirect page and annotation structure indices retain disjoint reverse map
   expect(nums.filter((_, index) => index % 2 === 0)).toEqual([0, 1, 2, 3]);
   expect((source.resolve(nums[1]) as PdfReference[])[0]!.key).not.toBe((source.resolve(nums[5]) as PdfReference[])[0]!.key);
 });
+
+test('tagged nested Form XObjects retain ParentTree entries and MCR stream references', () => {
+  const document = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 5 0 R >>',
+    '<< /Type /Pages /Count 1 /Kids [3 0 R] /MediaBox [0 0 100 100] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Resources << /XObject << /Outer 8 0 R >> >> >>',
+    pdfStream('/Outer Do'),
+    '<< /Type /StructTreeRoot /K [6 0 R] /ParentTree << /Nums [0 [6 0 R]] >> >>',
+    '<< /Type /StructElem /S /P /P 5 0 R /Pg 3 0 R /K << /Type /MCR /Pg 3 0 R /Stm 7 0 R /MCID 0 >> >>',
+    pdfStream('/P << /MCID 0 >> BDC 0 0 20 20 re f EMC', '/Type /XObject /Subtype /Form /BBox [0 0 100 100] /StructParents 9 0 R'),
+    pdfStream('/Inner Do', '/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Resources << /XObject << /Inner 7 0 R >> >>'),
+    '0',
+  ]));
+  const merged = openPdfDocument(mergePdfDocuments([{ document }, { document }]));
+  const source = merged.source, root = dictionary(source.resolve(source.catalog.get('StructTreeRoot')));
+  const nums = dictionary(source.resolve(root.get('ParentTree'))).get('Nums') as PdfValue[];
+  expect(nums.filter((_, index) => index % 2 === 0)).toEqual([0, 1]);
+  for (const index of [0, 1]) {
+    const child = dictionary(source.resolve((source.resolve(nums[index * 2 + 1]) as PdfReference[])[0]));
+    const mcrs = source.resolve(child.get('K')) as PdfValue[];
+    const mcr = dictionary(source.resolve(mcrs[0]));
+    const stream = source.resolve(mcr.get('Stm')) as PdfStream;
+    expect(source.resolve(stream.dictionary.get('StructParents'))).toBe(index);
+    expect((mcr.get('Pg') as PdfReference).key).toBe(merged.pages[index]!.reference.key);
+  }
+});
+
+for (const location of ['link', 'page-open'])
+for (const action of [
+  '/S /JavaScript /JS (this.getField\\(field\\))',
+  '/S /ResetForm /Fields [(field)]',
+  '/S /SubmitForm /Fields [(field)] /F (https://example.org)',
+  '/S /Hide /T (field)',
+  '/S /ResetForm',
+  '/S /ImportData /F (values.fdf)',
+]) test(`form actions at ${location} are rejected before namespacing: ${action}`, () => {
+  const document = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /AcroForm 5 0 R >>',
+    '<< /Type /Pages /Count 1 /Kids [3 0 R] /MediaBox [0 0 100 100] >>',
+    `<< /Type /Page /Parent 2 0 R /Annots [6 0 R 7 0 R] /Contents 4 0 R ${location === 'page-open' ? `/AA << /O << ${action} >> >>` : ''} >>`,
+    pdfStream(''),
+    '<< /Fields [6 0 R] >>',
+    '<< /Type /Annot /Subtype /Widget /FT /Tx /T (field) /V (before) /Rect [0 0 80 20] >>',
+    `<< /Type /Annot /Subtype /Link /Rect [0 30 80 50] ${location === 'link' ? `/A << ${action} >>` : ''} >>`,
+  ]));
+  expect(() => mergePdfDocuments([{ document }])).toThrow('not supported');
+});

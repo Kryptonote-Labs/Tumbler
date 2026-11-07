@@ -263,7 +263,8 @@ and font-resource name collisions. Repeated-page copies receive their own group.
 Tagged structures, reverse parent maps, IDs and custom role/class names are kept
 disjoint; bookmarks and optional-content groups are combined. Document-level
 metadata, attachments that are not page annotations, page labels and document
-scripts are not combined. XFA, signature fields, scripted forms and indeterminate
+scripts are not combined. XFA, signature fields, scripted forms, forms with ResetForm,
+SubmitForm, Hide or ImportData actions, and indeterminate
 or non-default optional-content configuration intents are rejected explicitly.
 A merge does not retain or validate digital signatures.
 

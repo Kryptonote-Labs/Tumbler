@@ -52,18 +52,22 @@ export function mergePdfDocuments(inputs: readonly PdfMergeInput[]): Uint8Array 
         if (visited.has(value.key)) return;
         visited.add(value.key);
         check(document.source.resolve(value));
-      } else if (Array.isArray(value)) value.forEach(check);
+      } else if (value instanceof PdfStream) check(value.dictionary);
+      else if (Array.isArray(value)) value.forEach(check);
       else if (value instanceof Map) {
         const ft = document.source.resolve(value.get('FT'));
         if (ft instanceof PdfName && ft.value === 'Sig') unsupported('Merging PDF signature fields is not supported.');
         const kind = document.source.resolve(value.get('S'));
         if (kind instanceof PdfName && kind.value === 'JavaScript' && document.source.catalog.has('AcroForm'))
           unsupported('Merging scripted PDF forms is not supported because field names are namespaced.');
+        if (kind instanceof PdfName && ['ResetForm', 'SubmitForm', 'Hide', 'ImportData'].includes(kind.value) && document.source.catalog.has('AcroForm'))
+          unsupported(`Merging PDF forms with /${kind.value} actions is not supported because field names and document scope change.`);
         for (const entry of value.values()) check(entry);
       }
     }
-    check(document.source.catalog.get('AcroForm'));
-    check(document.source.catalog.get('Names'));
+    // Actions can be attached to pages, links, outlines and widgets without a /P
+    // back-reference. Walk the entire catalog graph before namespacing any fields.
+    check(document.source.catalog);
     // Each independent graph has unique page identities. Split at repetitions so a duplicate
     // never shares mutable annotations, widgets, or structure ownership with its original.
     let group: number[] = [], seen = new Set<number>();
