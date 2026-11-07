@@ -67,7 +67,7 @@ export function spreadsheetFormattingState(
   const alignments = formats.map((format) => format.alignment);
   return Object.freeze({
     text: Object.freeze({
-      fontSize: combine(fonts.map((font) => font.size)),
+      fontSize: combine(fonts.map((font) => styles.resolveFontSize(font))),
       fontFamily: combine(fonts.map((font) => styles.resolveFontName(font))),
       bold: combine(fonts.map((font) => font.bold)),
       italic: combine(fonts.map((font) => font.italic)),

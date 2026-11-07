@@ -126,8 +126,11 @@ interface FormatRecord {
   readonly applyAlignment: boolean | undefined;
 }
 
+export const DEFAULT_SPREADSHEET_FONT_FAMILY = "Aptos";
+export const DEFAULT_SPREADSHEET_FONT_SIZE = 11;
+
 const DEFAULT_FONT: SpreadsheetFont = Object.freeze({
-  name: undefined, scheme: undefined, size: undefined, bold: false, italic: false, underline: undefined, strike: false, color: undefined,
+  name: DEFAULT_SPREADSHEET_FONT_FAMILY, scheme: undefined, size: DEFAULT_SPREADSHEET_FONT_SIZE, bold: false, italic: false, underline: undefined, strike: false, color: undefined,
 });
 const DEFAULT_FILL: SpreadsheetFill = Object.freeze({ patternType: undefined, foreground: undefined, background: undefined });
 const EMPTY_EDGE: SpreadsheetBorderEdge = Object.freeze({ style: undefined, color: undefined });
@@ -200,11 +203,21 @@ export class SpreadsheetStyles {
     return argb === undefined ? undefined : tintArgb(argb, color.tint);
   }
 
-  resolveFontName(font: SpreadsheetFont, script: ThemeFontScript = "latin"): string | undefined {
+  /** Resolves omitted font properties through Normal before using the workbook theme or default. */
+  resolveFontName(font: SpreadsheetFont, script: ThemeFontScript = "latin"): string {
     const themed = font.scheme === "major" || font.scheme === "minor"
       ? this.themeFonts?.typeface(font.scheme, script)
       : undefined;
-    return themed ?? font.name;
+    const normal = this.cellFormats[0]?.font;
+    const normalTheme = normal?.scheme === "major" || normal?.scheme === "minor"
+      ? this.themeFonts?.typeface(normal.scheme, script)
+      : undefined;
+    return themed ?? font.name ?? normalTheme ?? normal?.name
+      ?? this.themeFonts?.typeface("minor", script) ?? DEFAULT_SPREADSHEET_FONT_FAMILY;
+  }
+
+  resolveFontSize(font: SpreadsheetFont): number {
+    return font.size ?? this.cellFormats[0]?.font.size ?? DEFAULT_SPREADSHEET_FONT_SIZE;
   }
 }
 
@@ -215,7 +228,7 @@ export function readSpreadsheetStyles(workbook: SpreadsheetWorkbook): Spreadshee
     ? "http://purl.oclc.org/ooxml/officeDocument/relationships/styles"
     : "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
   const relationships = workbook.package.relationships(workbook.part.name).byType(relationshipType);
-  if (relationships.length === 0) return defaultStyles();
+  if (relationships.length === 0) return defaultStyles(readTheme(workbook));
   if (relationships.length !== 1 || relationships[0]?.targetMode !== "Internal") {
     throw new SpreadsheetError("invalid_styles", "A workbook must not reference more than one internal Styles part.");
   }
@@ -341,10 +354,14 @@ export function applySpreadsheetDifferentialFormats(
   return Object.freeze({ ...base, font, fill, border });
 }
 
-function defaultStyles(): SpreadsheetStyles {
+function defaultStyles(theme?: ReturnType<typeof readTheme>): SpreadsheetStyles {
+  const font = theme === undefined ? DEFAULT_FONT : Object.freeze({ ...DEFAULT_FONT,
+    name: theme.fonts.typeface("minor") ?? DEFAULT_SPREADSHEET_FONT_FAMILY, scheme: "minor" as const,
+  });
   return new SpreadsheetStyles({
-    fonts: [DEFAULT_FONT], fills: [DEFAULT_FILL], borders: [DEFAULT_BORDER],
-    cellFormats: [Object.freeze({ font: DEFAULT_FONT, fill: DEFAULT_FILL, border: DEFAULT_BORDER, numberFormatId: 0, numberFormatCode: undefined, alignment: DEFAULT_ALIGNMENT })],
+    fonts: [font], fills: [DEFAULT_FILL], borders: [DEFAULT_BORDER],
+    cellFormats: [Object.freeze({ font, fill: DEFAULT_FILL, border: DEFAULT_BORDER, numberFormatId: 0, numberFormatCode: undefined, alignment: DEFAULT_ALIGNMENT })],
+    ...(theme === undefined ? {} : { theme: theme.colors, themeFonts: theme.fonts }),
   });
 }
 

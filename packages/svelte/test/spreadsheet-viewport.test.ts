@@ -259,6 +259,6 @@ describe("Svelte spreadsheet viewport", () => {
       underline: undefined,
       strike: false,
       color: undefined,
-    }, `Aptos "Display"`)).toBe(`italic 700 12pt "Aptos \\"Display\\""`);
+    }, `Aptos "Display"`)).toBe(`italic 700 12pt "Aptos \\"Display\\"",sans-serif`);
   });
 });

@@ -85,6 +85,10 @@ reports the current code with its matching `preset`, a broad `category` and its
 `decimals`, or `mixed`. `describeSpreadsheetNumberFormat` classifies any code
 the same way.
 
+New workbooks declare an Aptos 11 pt Normal style. Effective font reads and grid
+rendering resolve omitted family and size through Normal, the workbook theme,
+and these defaults. Reading an older workbook does not rewrite its source styles.
+
 Spreadsheet CLI and headless reads return `formatting` and `numberFormat` for
 the requested range. These use the same uniform, mixed and unavailable states as
 the editor. Request a single-cell range to inspect one cell's formatting.

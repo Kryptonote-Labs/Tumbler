@@ -266,12 +266,12 @@
     const styles = worksheet.styles;
     const font = styles.resolve(0).font;
     const name = styles.resolveFontName(font);
-    if (name === undefined || typeof document === "undefined") {
+    if (typeof document === "undefined") {
       maximumDigitWidth = 7;
       return;
     }
     let current = true;
-    const shorthand = spreadsheetFontShorthand(font, name);
+    const shorthand = spreadsheetFontShorthand({ ...font, size: styles.resolveFontSize(font) }, name);
     const refresh = () => {
       const context = document.createElement("canvas").getContext("2d");
       if (context === null || !current) return;
