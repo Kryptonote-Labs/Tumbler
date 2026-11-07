@@ -737,7 +737,8 @@ function formatWholeRows(workbook: SpreadsheetWorkbook, worksheet: SpreadsheetWo
   const markup=new Map([...rowElements].map(([row,element])=>[row,sourceForNode(document,element)]));
   const prefix=data.prefix;
   const overrides=new Map<string,{address:CellAddress;styleIndex:number}>();
-  const defaultBase=predominantColumnStyle(worksheet).style;
+  const columnDefaults=predominantColumnStyle(worksheet);
+  const defaultBase=columnDefaults.style;
   for(let row=range.start.row;row<=range.end.row;row++) {
     const element=rowElements.get(row), model=worksheet.row(row);
     const base=model?.customFormat ? model.styleIndex??0 : defaultBase;
@@ -746,7 +747,7 @@ function formatWholeRows(workbook: SpreadsheetWorkbook, worksheet: SpreadsheetWo
     attrs.set('r',String(row));attrs.set('s',String(style));attrs.set('customFormat','1');
     const body=element&&!element.selfClosing ? document.source.slice(element.startTagSpan.end,element.endTagSpan!.start) : '';
     markup.set(row,`<${qualified(prefix,'row')}${[...attrs].map(([key,value])=>` ${key}="${escapeAttribute(value)}"`).join('')}>${body}</${qualified(prefix,'row')}>`);
-    if(!model?.customFormat) for(const column of worksheet.columns) {
+    if(!model?.customFormat) for(const column of columnDefaults.runs) {
       const target=planner.formatIndex(column.styleIndex??0,patch);
       if(target===style)continue;
       for(let index=Math.max(column.min,range.start.column);index<=Math.min(column.max,range.end.column);index++) {
@@ -779,11 +780,13 @@ function predominantColumnStyle(worksheet: SpreadsheetWorksheet) {
   const boundaries=new Set([1,EXCEL_MAX_COLUMNS+1]);
   for(const column of worksheet.columns){boundaries.add(column.min);boundaries.add(column.max+1);}
   const sorted=[...boundaries].sort((a,b)=>a-b), counts=new Map<number,number>();
+  const runs:{min:number;max:number;styleIndex:number}[]=[];
   for(let i=0;i<sorted.length-1;i++){
     const min=sorted[i]!, max=sorted[i+1]!-1;
     const style=worksheet.columns.findLast(column=>min>=column.min&&max<=column.max&&column.styleIndex!==undefined)?.styleIndex??0;
     counts.set(style,(counts.get(style)??0)+(max-min+1));
+    runs.push({min,max,styleIndex:style});
   }
   const [style,count]=[...counts].sort((a,b)=>b[1]-a[1])[0]??[0,EXCEL_MAX_COLUMNS];
-  return {style,exceptions:EXCEL_MAX_COLUMNS-count};
+  return {style,exceptions:EXCEL_MAX_COLUMNS-count,runs};
 }

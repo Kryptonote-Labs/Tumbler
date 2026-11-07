@@ -263,3 +263,12 @@ test('full-sheet formatting updates custom row styles with inferred row indexes'
   const artifact=openSpreadsheetArtifact(pkg.archive.originalBytes()).formatCells('A1:XFD1048576',{text:{bold:{set:true}}});
   expect(artifact.worksheet.cellStyle('A1').font).toMatchObject({bold:true,italic:true});
 });
+
+test('predominant row formatting retains uncovered default-style columns', async () => {
+  const {createSpreadsheet} = await import('../src/commands.ts');
+  const artifact=createSpreadsheet().formatCells('B1:XFD1048576',{text:{italic:{set:true}}}).formatCells('A1:XFD2',{text:{bold:{set:true}}});
+  expect(artifact.worksheet.cellStyle('A1').font).toMatchObject({bold:true,italic:false});
+  expect(artifact.worksheet.cellStyle('B1').font).toMatchObject({bold:true,italic:true});
+  expect(artifact.worksheet.cellStyle('A3').font).toMatchObject({bold:false,italic:false});
+  expect(artifact.worksheet.rows.flatMap(r=>r.cells)).toHaveLength(2);
+});
