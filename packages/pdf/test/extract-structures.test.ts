@@ -176,3 +176,13 @@ test('deletion prunes links to old page objects outside the current page tree', 
     expect(annotation.has('A')).toBe(false);
   }
 });
+
+for (const name of ['encrypted-rc4', 'encrypted-aes128', 'encrypted-aes256'])
+  test(`extracting authenticated ${name} pages writes readable unencrypted stream payloads`, async () => {
+    const { PdfInterpreter } = await import('../src/index.ts');
+    const data = await Bun.file(new URL(`./fixtures/${name}.pdf`, import.meta.url)).bytes();
+    const source = openPdfDocument(data, { password: 'fixture-password' }),
+      output = openPdfDocument(extractPdfPages(source, [0]));
+    expect(output.source.trailer.has('Encrypt')).toBe(false);
+    expect(new PdfInterpreter(output).page(0).text).toBe(new PdfInterpreter(source).page(0).text);
+  });

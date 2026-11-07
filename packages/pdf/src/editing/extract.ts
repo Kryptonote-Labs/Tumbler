@@ -73,7 +73,7 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
       refs.set(value.key, ref);
       if (original instanceof PdfStream)
         objects[ref.object - 1] = {
-          data: original.encoded,
+          data: source.encodedStream(original),
           dictionary: copyDictionary(original.dictionary),
         };
       else objects[ref.object - 1] = copy(original);
@@ -82,7 +82,7 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
     if (value instanceof PdfStream) {
       const ref = reserve();
       objects[ref.object - 1] = {
-        data: value.encoded,
+        data: source.encodedStream(value),
         dictionary: copyDictionary(value.dictionary),
       };
       return ref;
