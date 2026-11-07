@@ -97,6 +97,7 @@
   let editor = $state<HTMLInputElement>();
   let draft = $state("");
   let selectDraft = false;
+  let editingText = false;
   let maximumDigitWidth = $state(7);
   let stateWorksheet = $state<SpreadsheetWorksheet>();
   let tableStates = $state<Record<string, SpreadsheetTableViewState>>({});
@@ -105,6 +106,9 @@
   let pointerSelection: GridSelection | undefined;
   let selectionDragged = $state(false);
   let suppressCellClick = $state(false);
+  const directions: Partial<Record<string, GridDirection>> = {
+    ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
+  };
   const rowHeaderWidth = 52;
   const columnHeaderHeight = 28;
   let viewCalculation = $derived(calculation === undefined ? undefined : calculateSpreadsheetWorksheet(worksheet, {
@@ -411,12 +415,6 @@
       return;
     }
     if (event.ctrlKey || event.metaKey || event.altKey) return;
-    const directions: Partial<Record<string, GridDirection>> = {
-      ArrowUp: "up",
-      ArrowDown: "down",
-      ArrowLeft: "left",
-      ArrowRight: "right",
-    };
     const direction = directions[event.key];
     if (direction !== undefined) {
       event.preventDefault();
@@ -450,6 +448,7 @@
     const owner = worksheet.mergedRange({ row, column })?.start ?? { row, column };
     const reference = formatCellReference(owner);
     selectDraft = initial === undefined;
+    editingText = initial === undefined;
     editing = reference;
     const cell = worksheet.cell(reference);
     draft = initial ?? (cell?.formula === undefined ? displayValue(cell?.value) : `=${cell.formula}`);
@@ -473,10 +472,24 @@
 
   function inputKeydown(event: KeyboardEvent) {
     event.stopPropagation();
-    if (event.key === "Enter" || event.key === "Tab") {
+    if (event.isComposing) return;
+    if (event.key === "F2") {
       event.preventDefault();
+      editingText = true;
+      return;
+    }
+    const arrow = directions[event.key];
+    if (arrow !== undefined && editingText) {
+      // Single-line inputs have no vertical caret movement; never scroll the sheet while editing text.
+      if (arrow === "up" || arrow === "down") event.preventDefault();
+      return;
+    }
+    if (event.key === "Enter" || event.key === "Tab" || arrow !== undefined) {
+      event.preventDefault();
+      const origin = editing;
       finishEdit(true);
-      selection = moveGridSelection(selection, event.key === "Tab" ? (event.shiftKey ? "left" : "right") : (event.shiftKey ? "up" : "down"), { rows: rowCount, columns: columnCount });
+      if (origin !== undefined) selection = createGridSelection(parseCellReference(origin));
+      selection = moveGridSelection(selection, arrow ?? (event.key === "Tab" ? (event.shiftKey ? "left" : "right") : (event.shiftKey ? "up" : "down")), { rows: rowCount, columns: columnCount });
       onselectionchange?.(selection);
       void tick().then(() => scroller?.closest<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true }));
     } else if (event.key === "Escape") {
@@ -662,6 +675,7 @@
         bind:this={editor}
         bind:value={draft}
         autocomplete="off"
+        onpointerdown={() => { editingText = true; }}
         onkeydown={inputKeydown}
         onblur={() => finishEdit(true)}
         aria-label={`Edit ${reference}`}
