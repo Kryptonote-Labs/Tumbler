@@ -99,7 +99,7 @@ export async function runPdf(
   },
 ): Promise<void> {
   const [document, , name, ...args] = argv;
-  if (!name || name === "--help" || args.includes("--help")) {
+  if (!name || name === "--help" || (name !== "merge" && args.includes("--help"))) {
     options.stdout(
       pdfHelp(options.commandName, name === "--help" ? undefined : name),
     );
@@ -108,15 +108,26 @@ export async function runPdf(
   if (name === "merge") {
     if (!document) throw new Error('Specify the first PDF source.');
     const input: PdfMergeInput = { sources: [{ path: document }], output: '' };
-    for (let i = 0; i < args.length; i += 2) {
-      const flag = args[i], value = args[i + 1];
-      if (!value || value.startsWith('--')) throw new Error(`Missing value for ${flag}.`);
+    for (let i = 0; i < args.length; i++) {
+      const argument = args[i]!;
+      const equals = argument.indexOf('=');
+      const flag = equals < 0 ? argument : argument.slice(0, equals);
+      if (argument === '--help') {
+        options.stdout(pdfHelp(options.commandName, 'merge'));
+        return;
+      }
+      if (!['--source', '--output', '--pages', '--password'].includes(flag))
+        throw new Error('Unknown PDF merge flag. Use pdf merge --help.');
+      const value = equals < 0 ? args[++i] : argument.slice(equals + 1);
+      // Passwords are literal strings, including empty strings and flag-shaped values.
+      if (value === undefined || (flag !== '--password' && (!value || (equals < 0 && value.startsWith('--')))))
+        throw new Error(`Missing value for ${flag}.`);
       const current = input.sources[input.sources.length - 1]!;
       if (flag === '--source') input.sources.push({ path: value });
       else if (flag === '--output' && !input.output) input.output = value;
       else if (flag === '--pages' && current.pages === undefined) current.pages = value;
       else if (flag === '--password' && current.password === undefined) current.password = value;
-      else throw new Error(`Unknown or duplicate flag: ${flag}`);
+      else throw new Error(`Duplicate flag: ${flag}`);
     }
     if (!input.output) throw new Error('Specify --output merged.pdf.');
     if (!options.host.mergePdf) throw new Error('PDF merging is unavailable on this host.');

@@ -1,7 +1,7 @@
 import { openPdfDocument, type PdfDocument } from './document.ts';
 import { extractPdfPages } from './editing/extract.ts';
 import { bytes, serializePdfValue } from './editing/object-writer.ts';
-import { PdfName, PdfReference, PdfStream, PdfString, bytesText, dictionary, type PdfDictionary, type PdfValue, unsupported } from './objects.ts';
+import { PdfName, PdfReference, PdfStream, PdfString, bytesText, dictionary, type PdfDictionary, type PdfValue, integer, unsupported } from './objects.ts';
 
 export interface PdfMergeInput {
   readonly document: PdfDocument;
@@ -137,7 +137,7 @@ export function mergePdfDocuments(inputs: readonly PdfMergeInput[]): Uint8Array 
       return new Map([...original].map(([key, value]) => [key,
         element && key === 'S' && !original.has('NS') ? roleName(source.resolve(value)) :
           element && key === 'C' ? className(source.resolve(value)) :
-        (key === 'StructParents' || key === 'StructParent') && typeof value === 'number' ? value + parentOffset :
+        (key === 'StructParents' || key === 'StructParent') ? integer(source.resolve(value)) + parentOffset :
           key === 'DA' && field ? appearance(value) : copy(value)]));
     }
     function outDictionary(value: PdfValue | undefined): PdfDictionary {

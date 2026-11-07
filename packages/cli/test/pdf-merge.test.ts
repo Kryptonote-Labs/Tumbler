@@ -68,3 +68,19 @@ test('merge help and host-backed parsing do not open sources or disclose passwor
   expect(result).toEqual({code:0, stdout:'{"pageCount":1}\n', stderr:''});
   expect(calls).toEqual([{sources:[{path:'first.pdf',password:'secret'},{path:'next.pdf',pages:'1'}],output:'out.pdf'}]);
 });
+
+test('merge consumes literal and equals-form passwords without mistaking values for flags or exposing them', async () => {
+  const calls: unknown[] = [];
+  const host = { ...createFileHost(), mergePdf: async (input: unknown) => { calls.push(input); return { saved: true }; } };
+  for (const password of ['--secret', '--help', '--output', '', 'has=equals']) {
+    for (const flags of [['--password',password], [`--password=${password}`]]) {
+      const result = await run(['locked.pdf','pdf','merge',...flags,'--output','out.pdf'],host);
+      expect(result).toEqual({ code: 0, stdout: '{"saved":true}\n', stderr: '' });
+      expect(calls.at(-1)).toEqual({ sources: [{ path: 'locked.pdf', password }], output: 'out.pdf' });
+    }
+  }
+  const duplicate = await run(['locked.pdf','pdf','merge','--password=--secret','--password=--do-not-print','--output','out.pdf'],host);
+  expect(duplicate.code).toBe(1);
+  expect(duplicate.stderr).not.toContain('--secret'); expect(duplicate.stderr).not.toContain('--do-not-print');
+  expect((await run(['locked.pdf','pdf','merge','--password','--secret','--help'],host)).stdout).toContain('Usage:');
+});

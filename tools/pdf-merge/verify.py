@@ -61,7 +61,7 @@ with tempfile.TemporaryDirectory(prefix='tumbler-merge-oracle-') as temp:
             if doc == 2:
                 for page in writer.pages: page.cropbox.lower_left = (10,15)
             if doc == 3:
-                writer.encrypt('test-password', algorithm='AES-256', permissions_flag=-4)
+                writer.encrypt('--help', algorithm='AES-256', permissions_flag=-4)
                 # ISO 32000 requires /P to be signed; pypdf serializes uint32.
                 writer._encrypt_entry[NameObject('/P')] = NumberObject(-4)
             with path.open('wb') as f: writer.write(f)
@@ -72,14 +72,14 @@ with tempfile.TemporaryDirectory(prefix='tumbler-merge-oracle-') as temp:
     args = ['bun','packages/cli/src/bin.ts',str(sources[0]),'pdf','merge','--pages','3,1,1']
     for doc, pages in plan[1:]:
         args += ['--source',str(sources[doc]),'--pages',','.join(str(p+1) for p in pages)]
-        if doc == 3: args += ['--password','test-password']
+        if doc == 3: args += ['--password','--help']
     run(*args,'--output',str(output))
     merged = PdfReader(output)
     assert len(merged.pages) == 11 and not merged.is_encrypted
     expected = []
     originals = []
     for doc, path in enumerate(sources):
-        originals.append(render(path,directory / f'original-{doc}', 'test-password' if doc == 3 else None))
+        originals.append(render(path,directory / f'original-{doc}', '--help' if doc == 3 else None))
     actual = render(output,directory / 'result')
     for doc, pages in plan:
         expected += [originals[doc][p] for p in pages]

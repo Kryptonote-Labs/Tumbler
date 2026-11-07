@@ -152,3 +152,26 @@ for (const fixture of ['basic-text', 'positioned-text', 'compressed-content', 'o
       expect(merged.pages[i]!.rotation).toEqual(document.pages[index]!.rotation);
     });
   });
+
+test('indirect page and annotation structure indices retain disjoint reverse mappings', () => {
+  const document = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 5 0 R >>',
+    '<< /Type /Pages /Count 1 /Kids [3 0 R] /MediaBox [0 0 200 300] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 4 0 R /StructParents 7 0 R /Annots [8 0 R] >>',
+    pdfStream('/P << /MCID 0 >> BDC 10 10 20 20 re f EMC'),
+    '<< /Type /StructTreeRoot /K [6 0 R] /ParentTree << /Nums [0 [6 0 R] 1 6 0 R] >> >>',
+    '<< /Type /StructElem /S /P /P 5 0 R /Pg 3 0 R /K [0 << /Type /OBJR /Obj 8 0 R /Pg 3 0 R >>] >>',
+    '0',
+    '<< /Type /Annot /Subtype /Text /P 3 0 R /Rect [0 0 10 10] /StructParent 9 0 R >>',
+    '1',
+  ]));
+  const merged = openPdfDocument(mergePdfDocuments([{ document }, { document }]));
+  const source = merged.source;
+  expect(merged.pages.map(page => source.resolve(page.dictionary.get('StructParents')))).toEqual([0, 2]);
+  const annotations = merged.pages.map(page => dictionary(source.resolve((source.resolve(page.dictionary.get('Annots')) as PdfReference[])[0])));
+  expect(annotations.map(annotation => source.resolve(annotation.get('StructParent')))).toEqual([1, 3]);
+  const root = dictionary(source.resolve(source.catalog.get('StructTreeRoot')));
+  const nums = dictionary(source.resolve(root.get('ParentTree'))).get('Nums') as PdfValue[];
+  expect(nums.filter((_, index) => index % 2 === 0)).toEqual([0, 1, 2, 3]);
+  expect((source.resolve(nums[1]) as PdfReference[])[0]!.key).not.toBe((source.resolve(nums[5]) as PdfReference[])[0]!.key);
+});
