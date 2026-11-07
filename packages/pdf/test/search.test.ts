@@ -7,6 +7,7 @@ import {
   PdfEditingFonts,
   importPdfText,
   PdfInterpreter,
+  layoutPdfTextFlow,
 } from "../src/index.ts";
 function document(content: string) {
   return openPdfDocument(
@@ -229,4 +230,42 @@ test("Greek sigma queries use the same casing rules as real extracted glyphs", (
   expect(index.find("ΟΣ", { matchCase: true }).total).toBe(1);
   expect(index.find("ος", { matchCase: true }).total).toBe(0);
   expect(index.find("σ").matches[0]!.text).toBe("Σ");
+});
+
+test("automatic wraps retain word adjacency and original whitespace", async () => {
+  const identifier = "INV2026042ABCDEFGHIJKLMN";
+  const pdf = document(`BT /F 12 Tf 20 150 Td (${identifier}) Tj ET`);
+  const { model, fonts } = await editing(pdf);
+  try {
+    const id = model.ids()[0]!;
+    expect(
+      new PdfSearchIndex(pdf, { model, fonts }).find(identifier).total,
+    ).toBe(1);
+    model.place(id, { width: 45 });
+    const flow = layoutPdfTextFlow(model, fonts, pdf.pages);
+    const lines = new Map<number, string>();
+    for (const glyph of flow.regions.flatMap((region) => region.glyphs))
+      lines.set(glyph.y, (lines.get(glyph.y) ?? "") + glyph.text);
+    expect(lines.size).toBeGreaterThan(1);
+    const inventedSpaces = [...lines.values()].join(" ");
+    const undo = model.undo.undoStack.length;
+    const index = new PdfSearchIndex(pdf, { model, fonts });
+    const result = index.find(identifier);
+    expect(result.total).toBe(1);
+    expect(result.matches[0]!.text).toBe(identifier);
+    expect(result.matches[0]!.rects).toHaveLength(lines.size);
+    expect(index.find(inventedSpaces).total).toBe(0);
+    expect(model.undo.undoStack.length).toBe(undo);
+
+    model.replace(id, 0, identifier.length, "invoice number");
+    const phrase = new PdfSearchIndex(pdf, { model, fonts });
+    expect(phrase.find("invoice number").total).toBe(1);
+    expect(phrase.find("invoicenumber").total).toBe(0);
+    model.replace(id, 0, model.text(id).length, "invoice\nnumber");
+    const explicitBreak = new PdfSearchIndex(pdf, { model, fonts });
+    expect(explicitBreak.find("invoice number").total).toBe(1);
+    expect(explicitBreak.find("invoicenumber").total).toBe(0);
+  } finally {
+    model.doc.destroy();
+  }
 });

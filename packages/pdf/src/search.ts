@@ -117,7 +117,12 @@ export class PdfSearchIndex {
       );
       // Merge source runs and laid-out edits before matching. Appending edits to
       // the page would change phrase adjacency after a formatting-only change.
-      const blocks: { x: number; y: number; units: Unit[] }[] = [];
+      const blocks: {
+        x: number;
+        y: number;
+        units: Unit[];
+        range?: { region: string; start: number; end: number };
+      }[] = [];
       if (page.source.index >= 0 && !page.continuation) {
         const scene = placePdfScene(interpreter.page(page.source.index), model);
         const items = pdfTextContent({
@@ -163,10 +168,16 @@ export class PdfSearchIndex {
         for (const g of region.glyphs) {
           let line = lines.get(g.y);
           if (!line) {
-            line = { x: g.x, y: g.y, units: [] };
+            line = {
+              x: g.x,
+              y: g.y,
+              units: [],
+              range: { region: region.id, start: g.start, end: g.end },
+            };
             lines.set(g.y, line);
             blocks.push(line);
           }
+          line.range!.end = g.end;
           line.units.push({
             text: g.text,
             line: `${region.id}:${g.y}`,
@@ -183,9 +194,19 @@ export class PdfSearchIndex {
       // keep each source run's extraction order and exact glyph rectangles.
       return blocks
         .sort((a, b) => a.y - b.y || a.x - b.x)
-        .flatMap((block, i) =>
-          i ? [{ text: " ", line: "separator" }, ...block.units] : block.units,
-        );
+        .flatMap((block, i) => {
+          const previous = blocks[i - 1]?.range;
+          // A visual wrap does not insert characters into the region's text.
+          // Retain explicit whitespace glyphs, and separate distinct paragraphs.
+          const adjacent =
+            block.range &&
+            previous &&
+            block.range.region === previous.region &&
+            block.range.start === previous.end;
+          return i && !adjacent
+            ? [{ text: " ", line: "separator" }, ...block.units]
+            : block.units;
+        });
     });
   }
   find(query: string, options: PdfSearchOptions = {}): PdfSearchResult {
