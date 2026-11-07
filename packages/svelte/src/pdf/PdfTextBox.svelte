@@ -49,6 +49,7 @@
         resize: boolean;
         captureTimeout: number;
         scale: number;
+        rotation: number;
         xs: number[];
         ys: number[];
         dx: number;
@@ -81,8 +82,8 @@
     const scale = new DOMMatrix(getComputedStyle(node.parentElement!).transform).a;
     const page = node.closest('.pdf-page')!,
       rect = page.getBoundingClientRect();
-    const width = rect.width / scale,
-      height = rect.height / scale;
+    const width = Number(page.getAttribute('data-pdf-width')) || rect.width / scale,
+      height = Number(page.getAttribute('data-pdf-height')) || rect.height / scale;
     const xs = [0, 24, 48, width / 2, width - 48, width - 24, width],
       ys = [0, 24, 48, height / 2, height - 48, height - 24, height];
     for (const id of model.ids(frame.page)) {
@@ -99,6 +100,7 @@
       box: { ...box },
       resize,
       scale,
+      rotation: Number(page.getAttribute('data-pdf-rotation')) || 0,
       xs,
       ys,
       dx: 0,
@@ -126,6 +128,9 @@
     const { scale, xs, ys } = gesture;
     let dx = (event.clientX - gesture.x) / scale,
       dy = (event.clientY - gesture.y) / scale;
+    if (gesture.rotation === 90) [dx,dy]=[dy,-dx];
+    else if (gesture.rotation === 180) [dx,dy]=[-dx,-dy];
+    else if (gesture.rotation === 270) [dx,dy]=[-dy,dx];
     if (event.shiftKey && !gesture.resize) {
       if (Math.abs(dx) > Math.abs(dy)) dy = 0;
       else dx = 0;

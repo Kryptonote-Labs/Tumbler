@@ -1,7 +1,7 @@
-import type { PdfTextModel } from './model.ts';
-import { pdfSourceSpacing, pdfSourceAttribute, pdfStyleAttributes } from './source-spacing.ts';
-import type { PdfPage } from '../document.ts';
-import { type PdfTextStyle, type PdfEditingFonts } from './fonts.ts';
+import type { PdfTextModel } from "./model.ts";
+import { pdfSourceSpacing, pdfSourceAttribute, pdfStyleAttributes } from "./source-spacing.ts";
+import type { PdfPage } from "../document.ts";
+import { type PdfTextStyle, type PdfEditingFonts } from "./fonts.ts";
 export type PdfLayoutGlyph = {
   text: string;
   start: number;
@@ -18,7 +18,7 @@ export type PdfTextLayout = {
   carets: PdfLayoutCaret[];
   height: number;
 };
-const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 /** Layout uses full font metrics in page viewport points and UTF-16 offsets shared with Y.Text. */
 export function layoutPdfText(
   model: PdfTextModel,
@@ -37,7 +37,7 @@ export function layoutPdfText(
     .toDelta();
   const runs = delta.filter(
     (run): run is { insert: string; attributes?: Record<string, unknown> } =>
-      typeof run.insert === 'string',
+      typeof run.insert === "string",
   );
   let runIndex = 0,
     runStart = 0;
@@ -52,10 +52,10 @@ export function layoutPdfText(
     }
     const attributes = runs[runIndex]?.attributes;
     const source = attributes?.[pdfSourceAttribute];
-    originals.push(typeof source === 'number' ? source : undefined);
+    originals.push(typeof source === "number" ? source : undefined);
     const style = { ...seed.style, ...pdfStyleAttributes(attributes) };
     styles.push(style);
-    widths.push(entry.segment === '\n' ? 0 : fonts.measure(entry.segment, style));
+    widths.push(entry.segment === "\n" ? 0 : fonts.measure(entry.segment, style));
   }
   const kern = pdfSourceSpacing(
     seed,
@@ -83,7 +83,7 @@ export function layoutPdfText(
     if (x > seed.x) x += kern[i]!;
     carets.push({ offset: index, x, y, height: style.size });
     glyphs.push({ text: segment, start: index, end: index + segment.length, x, y, width, style });
-    if (segment === '\n') line();
+    if (segment === "\n") line();
     else x += width;
     offset = index + segment.length;
   }
@@ -123,7 +123,13 @@ export function movePdfTextCaret(layout: PdfTextLayout, offset: number, directio
   }
   return next ? hitPdfText(layout, caret.x, next.y) : caret;
 }
-export type PdfFlowPage = { index: number; source: PdfPage; continuation: number };
+export type PdfFlowPage = {
+  id: string;
+  index: number;
+  source: PdfPage;
+  continuation: number;
+  rotation: 0 | 90 | 180 | 270;
+};
 export type PdfFlowRegion = PdfTextLayout & {
   page: number;
   render: boolean;
@@ -145,7 +151,7 @@ export function layoutPdfTextFlow(
 ) {
   const outputPages: PdfFlowPage[] = [],
     regions: PdfFlowRegion[] = [];
-  for (const page of pages) {
+  for (const page of model.pages.sourcePages(pages)) {
     const layouts = model.ids(page.index).map((id) => layoutPdfText(model, id, fonts)),
       earlier: { x: number; size: number; growth: number }[] = [];
     const fragments: {
@@ -169,8 +175,8 @@ export function layoutPdfTextFlow(
       const originalHeight =
         (seed.delta
           .map((d) => d.insert)
-          .join('')
-          .split('\n').length -
+          .join("")
+          .split("\n").length -
           1) *
           seed.lineHeight +
         seed.style.size * 1.25;
@@ -233,7 +239,13 @@ export function layoutPdfTextFlow(
     }
     const first = outputPages.length;
     for (let i = 0; i <= count; i++)
-      outputPages.push({ index: outputPages.length, source: page, continuation: i });
+      outputPages.push({
+        id: i ? `${page.id}:continuation:${i}` : page.id,
+        index: outputPages.length,
+        source: page,
+        continuation: i,
+        rotation: 0,
+      });
     for (const fragment of fragments) {
       const carets = fragment.layout.carets;
       regions.push({
@@ -247,5 +259,12 @@ export function layoutPdfTextFlow(
       });
     }
   }
-  return { pages: outputPages, regions };
+  const projected = model.pages.project(outputPages, pages);
+  const indices = new Map(projected.map((page, index) => [page.index, index]));
+  return {
+    pages: projected.map((page, index) => ({ ...page, index })),
+    regions: regions
+      .filter((region) => indices.has(region.page))
+      .map((region) => ({ ...region, page: indices.get(region.page)! })),
+  };
 }

@@ -7,17 +7,17 @@ import {
   type PdfValue,
   type PdfDictionary,
   unsupported,
-} from '../objects.ts';
-import type { PdfDocument } from '../document.ts';
-import { PdfSyntax } from '../syntax.ts';
-import { readContentToken, isOperator } from '../content-syntax.ts';
-import { inverse, multiply } from '../matrix.ts';
-import { PdfInterpreter } from '../interpreter.ts';
-import { pageViewport } from '../scene.ts';
-import { layoutPdfTextFlow } from './layout.ts';
-import type { PdfEditingFonts, PdfEditingFont } from './fonts.ts';
-import type { PdfTextModel, PdfTextSeed } from './model.ts';
-import { PdfWriter, enc, bytes, hex, n, serializePdfValue } from './object-writer.ts';
+} from "../objects.ts";
+import type { PdfDocument } from "../document.ts";
+import { PdfSyntax } from "../syntax.ts";
+import { readContentToken, isOperator } from "../content-syntax.ts";
+import { inverse, multiply } from "../matrix.ts";
+import { PdfInterpreter } from "../interpreter.ts";
+import { pageViewport } from "../scene.ts";
+import { layoutPdfTextFlow } from "./layout.ts";
+import type { PdfEditingFonts, PdfEditingFont } from "./fonts.ts";
+import type { PdfTextModel, PdfTextSeed } from "./model.ts";
+import { PdfWriter, enc, bytes, hex, n, serializePdfValue } from "./object-writer.ts";
 const utf16 = (text: string) => {
   const out = new Uint8Array(text.length * 2);
   for (let i = 0; i < text.length; i++) {
@@ -42,9 +42,12 @@ export function exportEditedPdf(
   const dirty = [
     ...new Set(flow.regions.filter((region) => region.render).map((region) => region.id)),
   ];
-  if (!dirty.length) return document.bytes();
-  if (document.source.trailer.has('Encrypt'))
-    unsupported('Encrypted PDF editing requires an encryption-aware writer.');
+  if (!dirty.length && !model.pages.dirty()) return document.bytes();
+  if (document.source.trailer.has("Encrypt"))
+    unsupported("Encrypted PDF editing requires an encryption-aware writer.");
+  const sourcePages = new Map(
+    model.pages.sourcePages(document.pages).map((page) => [page.index, page]),
+  );
   const writer = new PdfWriter(document),
     embedded = new Map<string, Embedded>();
   const fontFor = (face: PdfEditingFont) => {
@@ -66,7 +69,7 @@ export function exportEditedPdf(
         interpreter
           .page(page.index)
           .elements.flatMap((e) =>
-            e.kind === 'glyph'
+            e.kind === "glyph"
               ? [[`${e.source.instance}/${e.source.object.key}/${e.source.start}`, e] as const]
               : [],
           ),
@@ -80,12 +83,12 @@ export function exportEditedPdf(
   for (const id of dirty.filter((id) => model.placement(id) && preserved.has(id))) {
     const seed = model.seed(id),
       frame = model.geometry(id);
-    const viewport = pageViewport(document.pages[seed.page]!);
+    const viewport = pageViewport(sourcePages.get(seed.page)!);
     for (const target of seed.sources) {
       const glyph = glyphSources
         .get(seed.page)
         ?.get(`${target.instance}/${target.object}/${target.start}`);
-      if (!glyph || glyph.kind !== 'glyph') throw new Error('PDF text source was not found.');
+      if (!glyph || glyph.kind !== "glyph") throw new Error("PDF text source was not found.");
       const m = inverse(multiply(viewport, glyph.contentTransform));
       const dx = frame.x - seed.x,
         dy = frame.y - seed.y;
@@ -97,26 +100,26 @@ export function exportEditedPdf(
   }
   for (const layout of flow.regions.filter((region) => region.render && !region.preserveSource)) {
     const page = flow.pages[layout.page]!.source;
-    let content = pageContent.get(layout.page) ?? '';
+    let content = pageContent.get(layout.page) ?? "";
     const viewport = inverse(pageViewport(page));
     for (const glyph of layout.glyphs) {
-      if (glyph.text === '\n') continue;
+      if (glyph.text === "\n") continue;
       const style = glyph.style,
         shaped = fonts.shape(glyph.text, style),
         face = shaped.face;
       let embeddedFont = fontFor(face);
       const scale = style.size / face.font.unitsPerEm;
       let x = glyph.x;
-      const color = /^#[0-9a-f]{6}$/i.test(style.color) ? style.color : '#000000';
+      const color = /^#[0-9a-f]{6}$/i.test(style.color) ? style.color : "#000000";
       const rgb = [1, 3, 5]
         .map((i) => parseInt(color.slice(i, i + 2), 16) / 255)
         .map(n)
-        .join(' ');
+        .join(" ");
       content += `q ${rgb} rg ${rgb} RG\n`;
       for (let i = 0; i < shaped.glyphs.length; i++) {
         const g = shaped.glyphs[i]!,
           p = shaped.positions[i]!,
-          text = i === 0 ? glyph.text : '';
+          text = i === 0 ? glyph.text : "";
         if (g.id === 0 && glyph.text.trim())
           throw new Error(`The editing font has no glyph for ${glyph.text}.`);
         const key = `${g.id}:${text}`;
@@ -140,14 +143,14 @@ export function exportEditedPdf(
           glyph.y - p.yOffset * scale,
         ]);
         if (shaped.bold) content += `${n(style.size * 0.025)} w\n`;
-        content += `BT /${embeddedFont.resource} ${n(style.size)} Tf ${shaped.bold ? '2 Tr ' : ''}${tm.map(n).join(' ')} Tm <${code.cid.toString(16).padStart((face.sourceGlyphs?.get(glyph.text)?.length ?? 2) * 2, '0')}> Tj ET\n`;
+        content += `BT /${embeddedFont.resource} ${n(style.size)} Tf ${shaped.bold ? "2 Tr " : ""}${tm.map(n).join(" ")} Tm <${code.cid.toString(16).padStart((face.sourceGlyphs?.get(glyph.text)?.length ?? 2) * 2, "0")}> Tj ET\n`;
         x += p.xAdvance * scale;
       }
       if (style.underline) {
         const [a, b, c, d, e, f] = viewport;
-        content += `${[a, b, c, d, e, f].map(n).join(' ')} cm ${n(style.size / 16)} w ${n(glyph.x)} ${n(glyph.y + style.size * 0.12)} m ${n(glyph.x + glyph.width)} ${n(glyph.y + style.size * 0.12)} l S\n`;
+        content += `${[a, b, c, d, e, f].map(n).join(" ")} cm ${n(style.size / 16)} w ${n(glyph.x)} ${n(glyph.y + style.size * 0.12)} m ${n(glyph.x + glyph.width)} ${n(glyph.y + style.size * 0.12)} l S\n`;
       }
-      content += 'Q\n';
+      content += "Q\n";
     }
     pageContent.set(layout.page, content);
   }
@@ -160,15 +163,15 @@ export function exportEditedPdf(
     }
     const face = font.face.font,
       scale = 1000 / face.unitsPerEm;
-    const program = writer.stream(font.face.bytes, new Map([['Length1', font.face.bytes.length]]));
-    const name = new PdfName(font.face.name.replace(/^[A-Z]{6}\+/, ''));
+    const program = writer.stream(font.face.bytes, new Map([["Length1", font.face.bytes.length]]));
+    const name = new PdfName(font.face.name.replace(/^[A-Z]{6}\+/, ""));
     const descriptor = writer.value(
       new Map<string, PdfValue>([
-        ['Type', new PdfName('FontDescriptor')],
-        ['FontName', name],
-        ['Flags', 32],
+        ["Type", new PdfName("FontDescriptor")],
+        ["FontName", name],
+        ["Flags", 32],
         [
-          'FontBBox',
+          "FontBBox",
           [
             face.bbox.minX * scale,
             face.bbox.minY * scale,
@@ -176,12 +179,12 @@ export function exportEditedPdf(
             face.bbox.maxY * scale,
           ],
         ],
-        ['ItalicAngle', face.italicAngle],
-        ['Ascent', face.ascent * scale],
-        ['Descent', face.descent * scale],
-        ['CapHeight', face.capHeight * scale],
-        ['StemV', 80],
-        ['FontFile2', program],
+        ["ItalicAngle", face.italicAngle],
+        ["Ascent", face.ascent * scale],
+        ["Descent", face.descent * scale],
+        ["CapHeight", face.capHeight * scale],
+        ["StemV", 80],
+        ["FontFile2", program],
       ]),
     );
     const cmap = new Uint8Array((font.codes.size + 1) * 2),
@@ -193,105 +196,105 @@ export function exportEditedPdf(
     }
     const descendant = writer.value(
       new Map<string, PdfValue>([
-        ['Type', new PdfName('Font')],
-        ['Subtype', new PdfName('CIDFontType2')],
-        ['BaseFont', name],
+        ["Type", new PdfName("Font")],
+        ["Subtype", new PdfName("CIDFontType2")],
+        ["BaseFont", name],
         [
-          'CIDSystemInfo',
+          "CIDSystemInfo",
           new Map<string, PdfValue>([
-            ['Registry', new PdfString(bytes('Adobe'))],
-            ['Ordering', new PdfString(bytes('Identity'))],
-            ['Supplement', 0],
+            ["Registry", new PdfString(bytes("Adobe"))],
+            ["Ordering", new PdfString(bytes("Identity"))],
+            ["Supplement", 0],
           ]),
         ],
-        ['FontDescriptor', descriptor],
-        ['CIDToGIDMap', writer.stream(cmap)],
-        ['W', [1, widths]],
+        ["FontDescriptor", descriptor],
+        ["CIDToGIDMap", writer.stream(cmap)],
+        ["W", [1, widths]],
       ]),
     );
     const mappings = [...font.codes.values()]
       .filter((c) => c.text)
-      .map((c) => `<${c.cid.toString(16).padStart(4, '0')}> <${utf16(c.text)}>`);
+      .map((c) => `<${c.cid.toString(16).padStart(4, "0")}> <${utf16(c.text)}>`);
     let unicode =
-      '/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /KNUCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <ffff>\nendcodespacerange\n';
+      "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /KNUCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <ffff>\nendcodespacerange\n";
     for (let i = 0; i < mappings.length; i += 100) {
       const group = mappings.slice(i, i + 100);
-      unicode += `${group.length} beginbfchar\n${group.join('\n')}\nendbfchar\n`;
+      unicode += `${group.length} beginbfchar\n${group.join("\n")}\nendbfchar\n`;
     }
-    unicode += 'endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend';
+    unicode += "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend";
     fontRefs.set(
       font.resource,
       writer.value(
         new Map<string, PdfValue>([
-          ['Type', new PdfName('Font')],
-          ['Subtype', new PdfName('Type0')],
-          ['BaseFont', name],
-          ['Encoding', new PdfName('Identity-H')],
-          ['DescendantFonts', [descendant]],
-          ['ToUnicode', writer.stream(bytes(unicode))],
+          ["Type", new PdfName("Font")],
+          ["Subtype", new PdfName("Type0")],
+          ["BaseFont", name],
+          ["Encoding", new PdfName("Identity-H")],
+          ["DescendantFonts", [descendant]],
+          ["ToUnicode", writer.stream(bytes(unicode))],
         ]),
       ),
     );
   }
-  const hasContinuations = flow.pages.length !== document.pages.length;
+  const hasContinuations = flow.pages.length !== document.pages.length || model.pages.dirty();
   const parent = hasContinuations
-    ? writer.value(new Map<string, PdfValue>([['Type', new PdfName('Pages')]]))
+    ? writer.value(new Map<string, PdfValue>([["Type", new PdfName("Pages")]]))
     : undefined;
   const pageRefs: PdfReference[] = [];
   for (const outputPage of flow.pages) {
     const page = outputPage.source,
       pageIndex = outputPage.index,
-      content = pageContent.get(pageIndex) ?? '';
-    const continuation = outputPage.continuation > 0;
+      content = pageContent.get(pageIndex) ?? "";
+    const continuation = outputPage.continuation > 0 || page.index < 0;
     const seeds = dirty
       .filter((id) => model.seed(id).page === page.index)
       .map((id) => model.seed(id));
     const resources = continuation ? new Map<string, PdfValue>() : new Map(page.resources);
     const info = continuation
-      ? new Map<string, PdfValue>([['Type', new PdfName('Page')]])
+      ? new Map<string, PdfValue>([["Type", new PdfName("Page")]])
       : new Map(page.dictionary);
     if (content || (!continuation && seeds.length)) {
       // Resource names are scoped to a Form, avoiding collisions with imported font names.
       const overlay = writer.stream(
         bytes(content),
         new Map<string, PdfValue>([
-          ['Type', new PdfName('XObject')],
-          ['Subtype', new PdfName('Form')],
-          ['BBox', [...page.mediaBox]],
-          ['Resources', new Map<string, PdfValue>([['Font', new Map(fontRefs)]])],
+          ["Type", new PdfName("XObject")],
+          ["Subtype", new PdfName("Form")],
+          ["BBox", [...page.mediaBox]],
+          ["Resources", new Map<string, PdfValue>([["Font", new Map(fontRefs)]])],
         ]),
       );
       const xobjects = new Map(
-        dictionary(document.source.resolve(resources.get('XObject') ?? new Map())),
+        dictionary(document.source.resolve(resources.get("XObject") ?? new Map())),
       );
-      let overlayName = 'KNText';
-      while (xobjects.has(overlayName)) overlayName += '_';
+      let overlayName = "KNText";
+      while (xobjects.has(overlayName)) overlayName += "_";
       xobjects.set(overlayName, overlay);
-      resources.set('XObject', xobjects);
+      resources.set("XObject", xobjects);
       const original = continuation
         ? null
-        : document.source.resolve(page.dictionary.get('Contents'));
+        : document.source.resolve(page.dictionary.get("Contents"));
       const streams = original === null ? [] : Array.isArray(original) ? original : [original];
       const rewritten = streams.map((value) => {
         const stream = document.source.resolve(value);
-        if (!(stream instanceof PdfStream)) throw new Error('Invalid page content stream.');
+        if (!(stream instanceof PdfStream)) throw new Error("Invalid page content stream.");
         return rewrite(stream, `page:${page.id}:stream:${stream.object.key}`, resources, seeds);
       });
       // Isolate appended content from the original page's persistent graphics and text state.
-      info.set('Contents', [
-        writer.stream(bytes('q\n')),
+      info.set("Contents", [
+        writer.stream(bytes("q\n")),
         ...rewritten,
         writer.stream(bytes(`Q\nq /${overlayName} Do Q\n`)),
       ]);
     }
     if (parent || continuation) {
-      if (parent) info.set('Parent', parent);
-      info.set('MediaBox', [...page.mediaBox]);
-      info.set('CropBox', [...page.cropBox]);
-      info.set('Rotate', page.rotation);
-      info.set('UserUnit', page.userUnit);
+      if (parent) info.set("Parent", parent);
+      info.set("MediaBox", [...page.mediaBox]);
+      info.set("CropBox", [...page.cropBox]);
+      info.set("Rotate", (page.rotation + outputPage.rotation) % 360);
+      info.set("UserUnit", page.userUnit);
     }
-    info.set('Resources', resources);
+    info.set("Resources", resources);
     if (continuation) pageRefs.push(writer.value(info));
     else {
       pageRefs.push(page.reference);
@@ -301,16 +304,16 @@ export function exportEditedPdf(
   if (parent) {
     writer.value(
       new Map<string, PdfValue>([
-        ['Type', new PdfName('Pages')],
-        ['Count', pageRefs.length],
-        ['Kids', pageRefs],
+        ["Type", new PdfName("Pages")],
+        ["Count", pageRefs.length],
+        ["Kids", pageRefs],
       ]),
       parent,
     );
     const catalog = new Map(document.source.catalog);
-    catalog.set('Pages', parent);
-    const root = document.source.trailer.get('Root');
-    if (!(root instanceof PdfReference)) throw new Error('Invalid PDF catalog reference.');
+    catalog.set("Pages", parent);
+    const root = document.source.trailer.get("Root");
+    if (!(root instanceof PdfReference)) throw new Error("Invalid PDF catalog reference.");
     writer.value(catalog, root);
   }
   function rewrite(
@@ -323,13 +326,13 @@ export function exportEditedPdf(
       data = source.stream(stream),
       patches = new Map<number, { end: number; text: string }>();
     const localResources = new Map(resources),
-      xobjects = new Map(dictionary(source.resolve(resources.get('XObject') ?? new Map())));
+      xobjects = new Map(dictionary(source.resolve(resources.get("XObject") ?? new Map())));
     const targets = seeds.flatMap((s) => s.sources);
     for (const target of targets)
       if (target.instance === instance && target.object === stream.object.key) {
         const syntax = new PdfSyntax(data.subarray(target.start, target.end));
         const operands: PdfValue[] = [];
-        let operator = '';
+        let operator = "";
         while (syntax.position < syntax.bytes.length) {
           const token = readContentToken(syntax);
           if (isOperator(token)) {
@@ -340,16 +343,16 @@ export function exportEditedPdf(
         }
         const prefix =
           operator === "'"
-            ? 'T* '
+            ? "T* "
             : operator === '"'
               ? `${serializePdfValue(operands[0]!)} Tw ${serializePdfValue(operands[1]!)} Tc T* `
-              : '';
+              : "";
         const translation = translations.get(`${target.instance}/${target.object}/${target.start}`);
         if (translation) {
           const showing =
             operator === "'" || operator === '"'
               ? `${serializePdfValue(operands.at(-1)!)} Tj`
-              : `${operands.map(serializePdfValue).join(' ')} ${operator}`;
+              : `${operands.map(serializePdfValue).join(" ")} ${operator}`;
           // Restore the CTM with its inverse. q/Q inside BT restores text advances in PDFium.
           patches.set(target.start, {
             end: target.end,
@@ -360,14 +363,14 @@ export function exportEditedPdf(
         // Replace glyph codes with their exact displacement. Deleted text is absent from extraction.
         patches.set(target.start, {
           end: target.end,
-          text: `${prefix}[${n(target.displacement + (operator === 'TJ' && Array.isArray(operands[0]) ? operands[0].reduce<number>((sum, value) => sum + (typeof value === 'number' ? value : 0), 0) : 0))}] TJ`,
+          text: `${prefix}[${n(target.displacement + (operator === "TJ" && Array.isArray(operands[0]) ? operands[0].reduce<number>((sum, value) => sum + (typeof value === "number" ? value : 0), 0) : 0))}] TJ`,
         });
       }
     const children = [
       ...new Set(
         targets
-          .filter((t) => t.instance.startsWith(instance + ':form:'))
-          .map((t) => t.instance.slice(instance.length + 6).split(':')[0]!),
+          .filter((t) => t.instance.startsWith(instance + ":form:"))
+          .map((t) => t.instance.slice(instance.length + 6).split(":")[0]!),
       ),
     ];
     for (const offset of children) {
@@ -376,22 +379,22 @@ export function exportEditedPdf(
       syntax.position = start;
       const operand = readContentToken(syntax),
         op = readContentToken(syntax);
-      if (!(operand instanceof PdfName) || !isOperator(op) || op.operator !== 'Do') continue;
+      if (!(operand instanceof PdfName) || !isOperator(op) || op.operator !== "Do") continue;
       const nested = source.resolve(xobjects.get(operand.value));
       if (!(nested instanceof PdfStream)) continue;
       const childInstance = `${instance}:form:${offset}`;
-      const nestedResources = nested.dictionary.has('Resources')
-        ? dictionary(source.resolve(nested.dictionary.get('Resources')))
+      const nestedResources = nested.dictionary.has("Resources")
+        ? dictionary(source.resolve(nested.dictionary.get("Resources")))
         : resources;
       const ref = rewrite(nested, childInstance, nestedResources, seeds);
       let key = `KNForm${offset}`;
-      while (xobjects.has(key)) key += '_';
+      while (xobjects.has(key)) key += "_";
       xobjects.set(key, ref);
       patches.set(start, { end: syntax.position, text: `/${key} Do` });
     }
-    localResources.set('XObject', xobjects);
-    if (instance.startsWith('page:') && !instance.includes(':form:'))
-      resources.set('XObject', xobjects);
+    localResources.set("XObject", xobjects);
+    if (instance.startsWith("page:") && !instance.includes(":form:"))
+      resources.set("XObject", xobjects);
     const chunks: Uint8Array[] = [];
     let at = 0;
     for (const [start, patch] of [...patches].sort((a, b) => a[0] - b[0])) {
@@ -406,7 +409,7 @@ export function exportEditedPdf(
       at += c.length;
     }
     const info = new Map(stream.dictionary);
-    if (instance.includes(':form:')) info.set('Resources', localResources);
+    if (instance.includes(":form:")) info.set("Resources", localResources);
     return writer.stream(result, info);
   }
   return writer.finish();
