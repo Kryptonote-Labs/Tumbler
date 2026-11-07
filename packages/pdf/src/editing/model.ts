@@ -1,9 +1,9 @@
-import { pdfSourceAttribute, pdfStyleAttributes } from "./source-spacing.ts";
-import * as Y from "yjs";
-import { PdfPageModel } from "./pages.ts";
-import { pdfTextStylePatch, type PdfTextStyle } from "./fonts.ts";
-import type { PdfTextSeed } from "./import-text.ts";
-export { importPdfText, pdfSourceKey, type PdfTextSeed } from "./import-text.ts";
+import { pdfSourceAttribute, pdfStyleAttributes } from './source-spacing.ts';
+import * as Y from 'yjs';
+import { PdfPageModel } from './pages.ts';
+import { pdfTextStylePatch, type PdfTextStyle } from './fonts.ts';
+import type { PdfTextSeed } from './import-text.ts';
+export { importPdfText, pdfSourceKey, type PdfTextSeed } from './import-text.ts';
 
 export type PdfTextPlacement = {
   x: number;
@@ -19,7 +19,7 @@ export class PdfTextModel {
   readonly origin = {};
   readonly undo: Y.UndoManager;
   constructor(readonly doc: Y.Doc = new Y.Doc()) {
-    this.regions = doc.getMap("pdf-text");
+    this.regions = doc.getMap('pdf-text');
     this.pages = new PdfPageModel(doc, this.origin);
     this.undo = new Y.UndoManager([this.regions, this.pages.records], {
       trackedOrigins: new Set([this.origin]),
@@ -29,7 +29,7 @@ export class PdfTextModel {
     if (this.regions.size) return;
     this.doc.transact(() => {
       for (const seed of seeds) this.add(seed, false);
-    }, "import");
+    }, 'import');
   }
   add(seed: PdfTextSeed, local = true) {
     this.doc.transact(
@@ -37,7 +37,7 @@ export class PdfTextModel {
         const region = new Y.Map<unknown>();
         this.regions.set(seed.id, region);
         const text = new Y.Text();
-        region.set("text", text);
+        region.set('text', text);
         const original = new Set(seed.spacing?.flatMap((gap) => [gap.left, gap.right]));
         text.applyDelta(
           seed.delta.map((run, index) => ({
@@ -47,21 +47,21 @@ export class PdfTextModel {
               : run.attributes,
           })),
         );
-        region.set("seed", seed);
+        region.set('seed', seed);
       },
-      local ? "create" : "import",
+      local ? 'create' : 'import',
     );
     return seed.id;
   }
   seed(id: string): PdfTextSeed {
-    const value = this.regions.get(id)?.get("seed");
-    if (!value || typeof value !== "object" || !("id" in value))
-      throw new Error("Unknown PDF text region.");
+    const value = this.regions.get(id)?.get('seed');
+    if (!value || typeof value !== 'object' || !('id' in value))
+      throw new Error('Unknown PDF text region.');
     return value as PdfTextSeed;
   }
   text(id: string): Y.Text {
-    const text = this.regions.get(id)?.get("text");
-    if (!(text instanceof Y.Text)) throw new Error("Unknown PDF text region.");
+    const text = this.regions.get(id)?.get('text');
+    if (!(text instanceof Y.Text)) throw new Error('Unknown PDF text region.');
     return text;
   }
   ids(page?: number) {
@@ -74,7 +74,7 @@ export class PdfTextModel {
       });
   }
   placement(id: string): PdfTextPlacement | undefined {
-    return this.regions.get(id)?.get("placement") as PdfTextPlacement | undefined;
+    return this.regions.get(id)?.get('placement') as PdfTextPlacement | undefined;
   }
   geometry(id: string) {
     return { ...this.seed(id), ...this.placement(id) };
@@ -91,15 +91,15 @@ export class PdfTextModel {
       (value.continuation !== undefined &&
         (!Number.isSafeInteger(value.continuation) || value.continuation < 0))
     )
-      throw new Error("Invalid PDF text placement.");
-    this.doc.transact(() => this.regions.get(id)!.set("placement", value), this.origin);
+      throw new Error('Invalid PDF text placement.');
+    this.doc.transact(() => this.regions.get(id)!.set('placement', value), this.origin);
   }
   /** Supply the flow region's origin when detaching text already displaced by paragraph flow. */
   move(
     id: string,
     dx: number,
     dy: number,
-    origin?: Pick<PdfTextPlacement, "x" | "y" | "continuation">,
+    origin?: Pick<PdfTextPlacement, 'x' | 'y' | 'continuation'>,
   ) {
     const frame = origin ?? this.geometry(id);
     this.place(id, {
@@ -111,7 +111,7 @@ export class PdfTextModel {
   duplicate(
     id: string,
     nextId: string,
-    origin?: Pick<PdfTextPlacement, "x" | "y" | "continuation">,
+    origin?: Pick<PdfTextPlacement, 'x' | 'y' | 'continuation'>,
     dx = 12,
     dy = 12,
   ) {
@@ -163,7 +163,7 @@ export class PdfTextModel {
     const normalize = (delta: { insert: unknown; attributes?: Record<string, unknown> }[]) => {
       const result: { insert: string; attributes: PdfTextStyle }[] = [];
       for (const run of delta) {
-        if (typeof run.insert !== "string") return "";
+        if (typeof run.insert !== 'string') return '';
         const attributes = { ...seed.style, ...pdfStyleAttributes(run.attributes) },
           previous = result.at(-1);
         if (previous && JSON.stringify(previous.attributes) === JSON.stringify(attributes))
@@ -183,7 +183,7 @@ export class PdfTextModel {
       end < start ||
       end > text.length
     )
-      throw new Error("Invalid PDF text range.");
+      throw new Error('Invalid PDF text range.');
     const attributes = style ?? this.styleAt(id, start + (end > start ? 1 : 0));
     this.doc.transact(() => {
       if (end > start) text.delete(start, end - start);
@@ -197,7 +197,7 @@ export class PdfTextModel {
   styleAt(id: string, offset: number): PdfTextStyle {
     let at = 0;
     for (const run of this.text(id).toDelta()) {
-      if (typeof run.insert !== "string") continue;
+      if (typeof run.insert !== 'string') continue;
       at += run.insert.length;
       if (at >= Math.max(1, offset))
         return { ...this.seed(id).style, ...pdfStyleAttributes(run.attributes) };
@@ -206,14 +206,14 @@ export class PdfTextModel {
   }
   format(id: string, start: number, end: number, patch: Partial<PdfTextStyle>) {
     if (start < 0 || end < start || end > this.text(id).length)
-      throw new Error("Invalid PDF text range.");
+      throw new Error('Invalid PDF text range.');
     const attributes = pdfTextStylePatch(this.styleAt(id, start), patch);
     this.doc.transact(() => this.text(id).format(start, end - start, attributes), this.origin);
   }
   anchor(id: string, offset: number) {
     return Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(this.text(id), offset));
   }
-  resolve(anchor: ReturnType<PdfTextModel["anchor"]>) {
+  resolve(anchor: ReturnType<PdfTextModel['anchor']>) {
     const value = Y.createAbsolutePositionFromRelativePosition(
       Y.createRelativePositionFromJSON(anchor),
       this.doc,

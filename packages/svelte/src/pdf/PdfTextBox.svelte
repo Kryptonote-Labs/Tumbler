@@ -128,9 +128,9 @@
     const { scale, xs, ys } = gesture;
     let dx = (event.clientX - gesture.x) / scale,
       dy = (event.clientY - gesture.y) / scale;
-    if (gesture.rotation === 90) [dx,dy]=[dy,-dx];
-    else if (gesture.rotation === 180) [dx,dy]=[-dx,-dy];
-    else if (gesture.rotation === 270) [dx,dy]=[-dy,dx];
+    if (gesture.rotation === 90) [dx, dy] = [dy, -dx];
+    else if (gesture.rotation === 180) [dx, dy] = [-dx, -dy];
+    else if (gesture.rotation === 270) [dx, dy] = [-dy, dx];
     if (event.shiftKey && !gesture.resize) {
       if (Math.abs(dx) > Math.abs(dy)) dy = 0;
       else dx = 0;
@@ -305,9 +305,16 @@
     /* Only the border moves the box; its interior must pass clicks through to the text. */
     clip-path: polygon(
       evenodd,
-      0 0, 100% 0, 100% 100%, 0 100%, 0 0,
-      5px 5px, calc(100% - 5px) 5px,
-      calc(100% - 5px) calc(100% - 5px), 5px calc(100% - 5px), 5px 5px
+      0 0,
+      100% 0,
+      100% 100%,
+      0 100%,
+      0 0,
+      5px 5px,
+      calc(100% - 5px) 5px,
+      calc(100% - 5px) calc(100% - 5px),
+      5px calc(100% - 5px),
+      5px 5px
     );
     pointer-events: auto;
     cursor: move;

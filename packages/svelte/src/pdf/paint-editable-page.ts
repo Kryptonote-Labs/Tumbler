@@ -9,9 +9,9 @@ import {
   type PdfEditingFonts,
   type PdfDocument,
   type PdfPageScene,
-} from "@tumblerjs/pdf";
-import { paintPdfText } from "./paint-pdf-text.ts";
-import { registerPdfDragPreview } from "./pdf-box-preview.ts";
+} from '@tumblerjs/pdf';
+import { paintPdfText } from './paint-pdf-text.ts';
+import { registerPdfDragPreview } from './pdf-box-preview.ts';
 export type PdfPagePaintOptions = {
   index: number;
   scale: number;
@@ -36,7 +36,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
   let normal: HTMLCanvasElement | undefined;
   let snapshot: { options: PdfPagePaintOptions; scene: PdfPageScene } | undefined;
   let prepared:
-    | { key: string; flow: PdfPagePaintOptions["flow"]; value: Promise<Raster> }
+    | { key: string; flow: PdfPagePaintOptions['flow']; value: Promise<Raster> }
     | undefined;
   let drag:
     | {
@@ -60,10 +60,10 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
       scheduled = undefined;
     }
   };
-  viewport.addEventListener("pdfzoomstart", pauseZoom);
-  viewport.addEventListener("pdfzoomend", schedule);
+  viewport.addEventListener('pdfzoomstart', pauseZoom);
+  viewport.addEventListener('pdfzoomend', schedule);
   const surface = () => {
-    const result = window.document.createElement("canvas");
+    const result = window.document.createElement('canvas');
     const ratio = window.devicePixelRatio || 1;
     result.width = Math.ceil(
       options.flow.pages[options.index]!.source.width * options.scale * ratio,
@@ -77,7 +77,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     // Resizing an unchanged canvas clears it and reallocates its backing store.
     if (canvas.width !== raster.width) canvas.width = raster.width;
     if (canvas.height !== raster.height) canvas.height = raster.height;
-    const context = canvas.getContext("2d")!;
+    const context = canvas.getContext('2d')!;
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.drawImage(raster, 0, 0);
@@ -104,7 +104,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     signal: AbortSignal,
   ) {
     const scale = active.scale * (window.devicePixelRatio || 1),
-      context = target.getContext("2d")!;
+      context = target.getContext('2d')!;
     const sources = new Set(
       ids
         ? [...ids].flatMap((id) =>
@@ -121,7 +121,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     await paintPdfPage(context, projected, active.pdf.source, host, {
       scale,
       signal,
-      background: ink ? "transparent" : "#fff",
+      background: ink ? 'transparent' : '#fff',
     });
     signal.throwIfAborted();
     context.setTransform(scale, 0, 0, scale, 0, 0);
@@ -141,7 +141,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
       invalidatePreparation();
       return;
     }
-    const key = local.slice().sort().join("\0");
+    const key = local.slice().sort().join('\0');
     if (prepared?.key === key && prepared.flow === current.options.flow) return prepared.value;
     invalidatePreparation();
     preparation = new AbortController();
@@ -173,30 +173,30 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
         publish(raster.background);
         current.layer?.remove();
         current.layer = raster.ink;
-        current.clip ??= window.document.createElement("div");
+        current.clip ??= window.document.createElement('div');
         Object.assign(current.clip.style, {
-          position: "absolute",
-          inset: "0",
-          overflow: "hidden",
-          pointerEvents: "none",
+          position: 'absolute',
+          inset: '0',
+          overflow: 'hidden',
+          pointerEvents: 'none',
         });
         current.clip.append(raster.ink);
         Object.assign(raster.ink.style, {
-          position: "absolute",
-          left: "0",
-          top: "0",
-          width: "100%",
-          height: "100%",
-          pointerEvents: "none",
-          willChange: "transform",
-          transformOrigin: "0 0",
+          position: 'absolute',
+          left: '0',
+          top: '0',
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          willChange: 'transform',
+          transformOrigin: '0 0',
         });
-        raster.ink.dataset.pdfDragInk = "";
+        raster.ink.dataset.pdfDragInk = '';
         page.insertBefore(current.clip, canvas.nextSibling);
         transformDrag();
       })
       .catch((error) => {
-        if (!(error instanceof DOMException && error.name === "AbortError")) console.error(error);
+        if (!(error instanceof DOMException && error.name === 'AbortError')) console.error(error);
       });
   }
   async function render() {
@@ -214,7 +214,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
             width: active.flow.pages[active.index]!.source.width,
             height: active.flow.pages[active.index]!.source.height,
             elements: [],
-            text: "",
+            text: '',
             annotations: [],
           }
         : placePdfScene(active.interpreter.page(active.source), active.model);
@@ -257,7 +257,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
       scheduled === undefined &&
       !disposed &&
       visible &&
-      !viewport.hasAttribute("data-pdf-zooming")
+      !viewport.hasAttribute('data-pdf-zooming')
     )
       scheduled = requestAnimationFrame(() => void render());
   }
@@ -308,7 +308,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
       host = browserPdfPaintHost();
       if (options.source >= 0) options.interpreter.releasePage(options.source);
     },
-    { rootMargin: "600px 0px" },
+    { rootMargin: '600px 0px' },
   );
   observer.observe(canvas);
   return {
@@ -336,8 +336,8 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     },
     destroy() {
       disposed = true;
-      viewport.removeEventListener("pdfzoomstart", pauseZoom);
-      viewport.removeEventListener("pdfzoomend", schedule);
+      viewport.removeEventListener('pdfzoomstart', pauseZoom);
+      viewport.removeEventListener('pdfzoomend', schedule);
       observer.disconnect();
       unregister();
       controller?.abort();
