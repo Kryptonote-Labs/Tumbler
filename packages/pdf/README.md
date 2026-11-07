@@ -234,3 +234,49 @@ argument. Rebuild it after edits or page operations; deleted text and replaced
 source glyphs are excluded. Search does not modify the model or undo history.
 The PDF viewer opens search with Cmd/Ctrl+F. Enter and Shift+Enter navigate,
 Escape closes, and Aa toggles case sensitivity.
+
+## Merge PDFs
+
+`mergePdfPages` copies PDF objects into a standalone PDF without rasterizing pages.
+Pass ordered source selections using zero-based page indices. Omit `pages` to copy
+all pages. Repeated pages receive distinct page and annotation identities.
+
+```ts
+import { mergePdfPages, openPdfDocument, selectPdfPages } from '@tumblerjs/pdf';
+
+const first = openPdfDocument(firstBytes);
+const second = openPdfDocument(secondBytes);
+const merged = mergePdfPages([
+  { document: first, pages: selectPdfPages('3,1-2', first.pages.length) },
+  { document: second },
+  { document: first, pages: [0] },
+]);
+```
+
+`selectPdfPages` accepts one-based numbers, inclusive ascending or descending
+ranges, and repetitions. Each selection and the merged output are limited to
+100,000 pages. Empty selections and out-of-range indices throw before output.
+
+Content streams, fonts, images, vectors, annotations, page boxes, rotation and
+user units remain PDF content. Form field names receive a `sourceN` parent to
+avoid collisions. Bookmarks are grouped by source. Accessibility parent keys
+and form appearance resource names are remapped. Internal links retain targets
+within their source selection; links to excluded pages are removed.
+
+The output is unencrypted and has no historical revisions. Authenticate encrypted
+inputs with `openPdfDocument` first. Digital signatures cannot remain valid after
+merging. Document metadata, attachments, page labels and alternate layer
+configurations are outside this page merge API. XFA forms, conflicting accessibility
+maps or IDs, PDF 2.0 accessibility namespaces, and automatic or non-default layer
+configurations throw rather than silently discard their page behavior.
+
+Independent rendering check, with `pypdfium2` installed in the selected Python:
+
+```sh
+PDF_PYTHON=python3 bun tools/pdf-compatibility/merge-check.ts
+```
+
+This generates source documents with colliding object/resource names, compressed
+content, forms, tags, images, transparency, links and bookmarks, and tests the
+existing PDF fixture corpus. PDFium compares every output page's pixels, text
+and size against its source, including reversed copies and encrypted inputs.

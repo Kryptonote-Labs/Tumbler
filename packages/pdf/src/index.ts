@@ -34,3 +34,5 @@ export { extractPdfPages } from "./editing/extract.ts";
 
 export { PdfSearchIndex } from "./search.ts";
 export type { PdfSearchMatch, PdfSearchOptions, PdfSearchRect, PdfSearchResult } from "./search.ts";
+export { mergePdfPages, selectPdfPages } from './merge.ts';
+export type { PdfMergePart } from './merge.ts';

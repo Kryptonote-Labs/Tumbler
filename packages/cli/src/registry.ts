@@ -50,6 +50,7 @@ export type OperationInput = z.infer<typeof operationInput>;
 export const selectInput = z.object({ page: z.string().optional(), target: targetSchema }).strict();
 export type SelectInput = z.infer<typeof selectInput>;
 export interface OperationHost extends PresentationOperationHost, PdfOperationHost {
+  mergePdf?(input: import('./pdf-merge.ts').PdfMergeInput): Promise<unknown>;
   deletePdfPages?(document: string, input: PdfDeletePagesInput): Promise<unknown>;
   exportPdf?(document: string, input: PdfExportInput): Promise<unknown>;
   render?(document: string, input: RenderInput): Promise<unknown>;

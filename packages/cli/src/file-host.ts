@@ -1,3 +1,4 @@
+import { mergePdfPages, selectPdfPages } from '@tumblerjs/pdf';
 import { extractPdfPages, openPdfDocument, PdfSearchIndex } from '@tumblerjs/pdf';
 import { checkPdfDeletionSupported } from './pdf-delete-pages.ts';
 import { pdfDeletePagesInput, pdfPageIndices } from './pdf-pages.ts';
@@ -226,6 +227,18 @@ export function createFileHost(): OperationHost {
   }
   return {
     ...presentationFileHost(),
+    async mergePdf(input) {
+      if (extname(input.output).toLowerCase() !== '.pdf' || !input.sources.length)
+        throw new Error('PDF merge requires sources and a new .pdf output path.');
+      const parts = input.sources.map((source) => {
+        if (extname(source.document).toLowerCase() !== '.pdf') throw new Error('PDF merge requires .pdf sources.');
+        const document = openPdfDocument(readFileSync(source.document));
+        return { document, pages: source.pages === undefined ? undefined : selectPdfPages(source.pages, document.pages.length) };
+      });
+      const bytes = mergePdfPages(parts);
+      writeFileSync(input.output, bytes, { flag: 'wx' });
+      return { output: input.output, pageCount: openPdfDocument(bytes).pages.length };
+    },
     async findPdf(document, query, options) {
       return new PdfSearchIndex(openPdfDocument(readFileSync(document))).find(query, options);
     },

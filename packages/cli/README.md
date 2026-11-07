@@ -182,3 +182,20 @@ lists such as `1,3-5`. JSON output contains `matches` and `total`. Matches inclu
 the page number, matched text, surrounding context, and rectangles in page points
 with a top-left origin. Wrapped phrases return multiple rectangles. Search is
 literal, includes existing OCR text, and leaves the file unchanged.
+
+### Merge PDF pages
+
+```sh
+tumbler first.pdf pdf merge --pages 3,1-2 --source second.pdf --pages 4-2 --output merged.pdf
+```
+
+The first file and every `--source` contribute pages in written order. Omit
+`--pages` for all pages of that source. Repeat `--source first.pdf` to interleave
+selections. Page numbers start at 1; ranges can descend and pages can repeat.
+Both `--flag value` and `--flag=value` work. The output must be a new `.pdf`
+file; existing files and input files are never overwritten.
+
+The reusable `PdfMerger` component from `@tumblerjs/svelte/pdf` offers the same
+selections, repetition and source ordering in the docs at `/playground/pdf-merge`.
+Both use `mergePdfPages` from `@tumblerjs/pdf`, preserving PDF page content.
+See the PDF package README for document-level limits and unsupported structures.

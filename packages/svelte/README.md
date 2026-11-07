@@ -348,3 +348,20 @@ Hosts own menus, touch insertion policy, permissions, saving, error display, and
 selection after a successful command. Unmount the placement component when the
 active slide, tool or editing permission changes. After pointerup, keep it mounted
 through the following click event before removing it to avoid click-through.
+
+### PDF merging
+
+```svelte
+<script lang="ts">
+  import { PdfMerger } from '@tumblerjs/svelte/pdf';
+</script>
+
+<PdfMerger onmerge={(bytes) => console.log(`Merged ${bytes.length} bytes`)} />
+```
+
+`PdfMerger` reads local files in the browser and downloads a new PDF. Users can
+select pages with one-based numbers or ranges, reverse ranges, repeat pages,
+duplicate sources for interleaving, reorder source rows, and choose the output
+filename. `onmerge` optionally receives the resulting bytes before download.
+The component and CLI use the same PDF merge and page selection functions.
+See `@tumblerjs/pdf` for preservation guarantees and unsupported structures.

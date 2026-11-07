@@ -46,6 +46,7 @@ export const navigation: NavigationGroup[] = [
     { href: '/changelog', label: 'Changelog' },
     { href: '/components', label: 'Components' },
     { href: '/playground/word-brief', label: 'Playground' },
+    { href: '/playground/pdf-merge', label: 'Merge PDFs' },
     { href: '/docs/development', label: 'Local development' },
   ] },
 ];

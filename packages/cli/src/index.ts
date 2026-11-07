@@ -176,3 +176,5 @@ export async function runTumbler(
     return 1;
   }
 }
+
+export type { PdfMergeInput } from './pdf-merge.ts';

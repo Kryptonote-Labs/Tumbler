@@ -23,6 +23,7 @@
       "dependencies": {
         "@tumblerjs/charts": "workspace:*",
         "@tumblerjs/core": "workspace:*",
+        "@tumblerjs/pdf": "workspace:*",
         "@tumblerjs/sheets": "workspace:*",
         "@tumblerjs/slides": "workspace:*",
         "@tumblerjs/svelte": "workspace:*",

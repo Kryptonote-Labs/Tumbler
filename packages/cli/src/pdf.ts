@@ -1,3 +1,4 @@
+import { pdfMergeHelp, runPdfMerge } from './pdf-merge.ts';
 import { pdfDeletePagesInput } from "./pdf-pages.ts";
 import type { OperationHost } from "./registry.ts";
 import type { PdfSearchOptions, PdfSearchResult } from "@tumblerjs/pdf";
@@ -61,12 +62,13 @@ async function runPdfFind(
 }
 
 export function pdfHelp(commandName = "tumbler", name?: string): string {
-  if (name && !["delete-pages", "find"].includes(name))
+  if (name && !["delete-pages", "find", "merge"].includes(name))
     throw new Error(`Unknown PDF command: ${name}`);
+  if (name === "merge") return pdfMergeHelp(commandName);
   const findHelp = `Usage: ${commandName} <document.pdf> pdf find <text> [--match-case] [--pages 2-8]\nReturns matches, total, one-based pages, context, and top-left page rectangles in points.\n`;
   if (name === "find") return findHelp;
   return (
-    (name ? "" : findHelp) +
+    (name ? "" : pdfMergeHelp(commandName) + findHelp) +
     [
       `Usage: ${commandName} <document.pdf> pdf delete-pages 2,4-6`,
       "Delete pages in place. Page numbers start at 1 and refer to the original document.",
@@ -92,6 +94,10 @@ export async function runPdf(
     options.stdout(
       pdfHelp(options.commandName, name === "--help" ? undefined : name),
     );
+    return;
+  }
+  if (name === "merge") {
+    options.stdout(JSON.stringify(await runPdfMerge(document!, args, options.host)) + "\n");
     return;
   }
   if (name === "find") {
