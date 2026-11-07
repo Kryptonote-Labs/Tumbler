@@ -55,6 +55,7 @@
         "tumbler": "./src/bin.ts",
       },
       "dependencies": {
+        "@tumblerjs/sheets": "0.1.0-alpha.26",
         "@tumblerjs/pdf": "0.1.0-alpha.26",
         "@tumblerjs/slides": "0.1.0-alpha.26",
         "@tumblerjs/word": "0.1.0-alpha.26",
@@ -120,6 +121,7 @@
         "@tumblerjs/formulas": "0.1.0-alpha.26",
         "@tumblerjs/ooxml": "0.1.0-alpha.26",
         "@tumblerjs/opc": "0.1.0-alpha.26",
+        "zod": "4.6.5",
       },
     },
     "packages/slides": {
