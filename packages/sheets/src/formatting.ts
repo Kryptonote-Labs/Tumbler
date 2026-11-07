@@ -19,8 +19,8 @@ import {
   type LosslessXmlElement,
   type LosslessXmlNode,
 } from "@tumblerjs/ooxml";
-import { beginPackageTransaction, PartName } from "@tumblerjs/opc";
-import { formatCellReference, parseCellRange, type CellAddress, type CellRange } from "./references.ts";
+import { beginPackageTransaction, PartName, type OpcPackage } from "@tumblerjs/opc";
+import { EXCEL_MAX_ROWS, EXCEL_MAX_COLUMNS, formatCellReference, parseCellRange, type CellAddress, type CellRange } from "./references.ts";
 import {
   readSpreadsheetStyles,
   type SpreadsheetAlignment,
@@ -33,7 +33,8 @@ import { openWorksheet, type SpreadsheetWorksheet } from "./worksheet.ts";
 import { SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";
 
 const STYLES_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
-export const MAX_FORMATTED_CELLS = 100_000;
+/** The worksheet grid is the formatting limit, matching Excel. */
+export const MAX_FORMATTED_CELLS = EXCEL_MAX_ROWS * EXCEL_MAX_COLUMNS;
 
 export const SPREADSHEET_FORMATTING_CAPABILITIES: FormattingCapabilities = Object.freeze({
   text: Object.freeze({
@@ -86,28 +87,46 @@ export function formatSpreadsheetCells(
   target: SpreadsheetFormattingTarget,
   input: FormattingPatch,
 ): Uint8Array {
+  return formatSpreadsheetCellsPackage(workbook, sheet, target, input).archive.originalBytes();
+}
+
+/** Apply styles to native package members without rebuilding an XLSX. */
+export function formatSpreadsheetCellsPackage(
+  workbook: SpreadsheetWorkbook,
+  sheet: SpreadsheetSheet,
+  target: SpreadsheetFormattingTarget,
+  input: FormattingPatch,
+  numberFormatId?: number,
+): OpcPackage {
   if (!workbook.sheets.includes(sheet)) throw new TypeError("The sheet does not belong to this workbook.");
   const range = normalizeRange(target);
   validateRangeSize(range);
   const patch = normalizeFormattingPatch(input);
   const size=patch.text?.fontSize;
   if(size && 'set' in size && (size.set<1 || size.set>409))throw new RangeError('Spreadsheet font sizes must be between 1 and 409 points.');
-  if (patch.text === undefined && patch.block === undefined) return workbook.package.archive.originalBytes();
+  if (patch.text === undefined && patch.block === undefined && numberFormatId === undefined) return workbook.package;
 
   const worksheet = openWorksheet(workbook, sheet);
-  const planner = new SpreadsheetStylePlanner(workbook, worksheet.styles);
+  const planner = new SpreadsheetStylePlanner(workbook, worksheet.styles, numberFormatId);
+  const height=range.end.row-range.start.row+1, width=range.end.column-range.start.column+1;
+  const cellsCost=height*width;
+  const columnCost=(EXCEL_MAX_ROWS-height)*width+worksheet.columns.length+1;
+  const defaults=predominantColumnStyle(worksheet);
+  const rowCost=height*(EXCEL_MAX_COLUMNS-width+1+defaults.exceptions);
+  if(columnCost < cellsCost && columnCost <= rowCost)return formatWholeColumns(workbook,worksheet,range,planner,patch);
+  if(rowCost < cellsCost)return formatWholeRows(workbook,worksheet,range,planner,patch);
   const edits = cells(range).map((address) => ({
     address,
     styleIndex: planner.formatIndex(worksheet.effectiveStyleIndex(address) ?? 0, patch),
   }));
   if (edits.every(({ address, styleIndex }) => styleIndex === (worksheet.effectiveStyleIndex(address) ?? 0))) {
-    return workbook.package.archive.originalBytes();
+    return workbook.package;
   }
 
   const transaction = beginPackageTransaction(workbook.package);
   planner.stage(transaction);
   transaction.replacePart(sheet.partName, styleWorksheetCells(worksheet.document, workbook.conformance, edits));
-  return transaction.commit();
+  return transaction.commitPackage();
 }
 
 class SpreadsheetStylePlanner {
@@ -118,7 +137,7 @@ class SpreadsheetStylePlanner {
   readonly initialFontCount: number;
   readonly initialFormatCount: number;
 
-  constructor(workbook: SpreadsheetWorkbook, source = readSpreadsheetStyles(workbook)) {
+  constructor(workbook: SpreadsheetWorkbook, source = readSpreadsheetStyles(workbook), readonly numberFormatId?: number) {
     this.workbook = workbook;
     this.source = source;
     this.fonts = [...source.fonts];
@@ -133,7 +152,7 @@ class SpreadsheetStylePlanner {
     const fallback = this.formats[0]!;
     const font = applyFontPatch(base.font, fallback.font, patch);
     const alignment = applyAlignmentPatch(base.alignment, fallback.alignment, patch);
-    const format = Object.freeze({ ...base, font, alignment });
+    const format = Object.freeze({ ...base, font, alignment, ...(this.numberFormatId === undefined ? {} : { numberFormatId: this.numberFormatId, numberFormatCode: undefined }) });
     const existing = this.formats.findIndex((candidate) => equal(candidate, format));
     if (existing >= 0) return existing;
     if (!this.fonts.some((candidate) => equal(candidate, font))) this.fonts.push(font);
@@ -304,7 +323,20 @@ function cells(range: CellRange): CellAddress[] {
 /** Merged continuations are presentation coordinates; their top-left owner is the logical cell. */
 function logicalCells(worksheet: SpreadsheetWorksheet, range: CellRange): CellAddress[] {
   const result = new Map<string, CellAddress>();
-  for (const address of cells(range)) {
+  const area = (range.end.row-range.start.row+1)*(range.end.column-range.start.column+1);
+  let addresses: CellAddress[];
+  if (area > 100_000) {
+    const rows = new Set([range.start.row, range.end.row]);
+    const columns = new Set([range.start.column,range.end.column]);
+    for (const row of worksheet.rows) if (row.index >= range.start.row && row.index <= range.end.row) {
+      rows.add(row.index);
+      if (row.index < range.end.row) rows.add(row.index+1);
+    }
+    for (const col of worksheet.columns) for (const n of [col.min,col.max,col.max+1]) if (n >= range.start.column && n <= range.end.column) columns.add(n);
+    addresses = [...rows].flatMap(row => [...columns].map(column => ({row,column})));
+    for (const row of worksheet.rows) for (const cell of row.cells) if (cell.address.row >= range.start.row && cell.address.row <= range.end.row && cell.address.column >= range.start.column && cell.address.column <= range.end.column) addresses.push(cell.address);
+  } else addresses = cells(range);
+  for (const address of addresses) {
     const owner = worksheet.mergedRange(address)?.start ?? address;
     result.set(formatCellReference(owner), owner);
   }
@@ -546,7 +578,7 @@ function serializeCellFormat(
   borderId: number,
 ): string {
   const alignment = serializeAlignment(prefix, format.alignment);
-  return `<${qualified(prefix, "xf")} numFmtId="${format.numberFormatId}" fontId="${fontId}" fillId="${fillId}" borderId="${borderId}" applyFont="1" applyAlignment="1"${alignment === "" ? "/>" : `>${alignment}</${qualified(prefix, "xf")}>`}`;
+  return `<${qualified(prefix, "xf")} numFmtId="${format.numberFormatId}" fontId="${fontId}" fillId="${fillId}" borderId="${borderId}" applyFont="1" applyAlignment="1" applyNumberFormat="1"${alignment === "" ? "/>" : `>${alignment}</${qualified(prefix, "xf")}>`}`;
 }
 
 function serializeAlignment(prefix: string, alignment: SpreadsheetAlignment): string {
@@ -626,4 +658,135 @@ function sourceForNode(document: LosslessXmlDocument, node: LosslessXmlNode): st
 
 function escapeAttribute(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+/** Full columns use column defaults and explicit cell overrides instead of a million empty cells. */
+function formatWholeColumns(workbook: SpreadsheetWorkbook, worksheet: SpreadsheetWorksheet, range: CellRange, planner: SpreadsheetStylePlanner, patch: FormattingPatch): OpcPackage {
+  const document = worksheet.document, ns = spreadsheetNamespace(workbook.conformance);
+  const prefix = document.root.prefix ? `${document.root.prefix}:` : '';
+  const original = child(document.root,ns,'cols');
+  const definitions = original ? children(original,ns,'col') : [];
+  const editor = beginLosslessXmlEdit(document);
+  const intervals: {min:number;max:number;markup:string}[] = [];
+  const boundaries = new Set([range.start.column,range.end.column+1]);
+  for (const column of definitions) { boundaries.add(Number(attribute(column,'min')?.value)); boundaries.add(Number(attribute(column,'max')?.value)+1); }
+  const sorted = [...boundaries].sort((a,b)=>a-b);
+  for (let index=0;index<sorted.length-1;index++) {
+    const min = sorted[index]!, max = sorted[index+1]!-1;
+    const source = definitions.findLast(c => Number(attribute(c,'min')?.value)<=min && Number(attribute(c,'max')?.value)>=max);
+    const selected = min >= range.start.column && max <= range.end.column;
+    if (!source && !selected) continue;
+    const attrs = new Map(source?.attributes.map(a=>[a.qualified,a.value]));
+    attrs.set('min',String(min)); attrs.set('max',String(max));
+    if (selected) attrs.set('style',String(planner.formatIndex(Number(attribute(source ?? document.root,'style')?.value ?? 0),patch)));
+    const markup = `<${prefix}col${[...attrs].map(([k,v])=>` ${k}="${escapeAttribute(v)}"`).join('')}/>`;
+    intervals.push({min,max,markup});
+  }
+  const markup = `<${prefix}cols>${intervals.map(i=>i.markup).join('')}</${prefix}cols>`;
+  if (original) editor.replaceElementMarkup(original,markup);
+  else { const data=child(document.root,ns,'sheetData'); if(data)editor.insertMarkupBefore(data,markup);else editor.appendMarkup(document.root,markup); }
+  // Row defaults take precedence over columns. Preserve that precedence while applying the patch.
+  const allColumns = range.start.column === 1 && range.end.column === EXCEL_MAX_COLUMNS;
+  const edits: {address:CellAddress;styleIndex:number}[] = [];
+  const sheetData = child(document.root,ns,'sheetData');
+  for (const row of worksheet.rows) {
+    if (row.index < range.start.row || row.index > range.end.row) continue;
+    if (row.customFormat && allColumns && sheetData) {
+      const element = children(sheetData,ns,'row').find((r,index,all)=>Number(attribute(r,'r')?.value??inferredRowIndex(all,index))===row.index);
+      if (element) {
+        const style = attribute(element,'s'), value=String(planner.formatIndex(row.styleIndex??0,patch));
+        if(style)editor.setAttribute(style,value);else editor.insertAttribute(element,'s',value);
+      }
+    } else if (row.customFormat) {
+      for(let column=range.start.column;column<=range.end.column;column++)edits.push({address:{row:row.index,column},styleIndex:planner.formatIndex(worksheet.effectiveStyleIndex({row:row.index,column})??0,patch)});
+    }
+    for (const cell of row.cells) if(cell.address.column>=range.start.column && cell.address.column<=range.end.column && (!row.customFormat || allColumns)) edits.push({address:cell.address,styleIndex:planner.formatIndex(worksheet.effectiveStyleIndex(cell.address)??0,patch)});
+  }
+  // Column defaults span the grid. Restore rows outside the requested rectangle exactly.
+  for (const [first,last] of [[1,range.start.row-1],[range.end.row+1,EXCEL_MAX_ROWS]]) {
+    for(let row=first!;row<=last!;row++) {
+      if (worksheet.row(row)?.customFormat) continue;
+      for(let column=range.start.column;column<=range.end.column;column++) {
+        const address={row,column};
+        edits.push({address,styleIndex:worksheet.effectiveStyleIndex(address)??0});
+      }
+    }
+  }
+  // Stage column/row defaults first, then explicit cell overrides against the updated XML.
+  const updated = parseLosslessXml(editor.commit().bytes);
+  const bytes = edits.length ? styleWorksheetCells(updated,workbook.conformance,edits) : updated.originalBytes();
+  const transaction=beginPackageTransaction(workbook.package);
+  planner.stage(transaction);
+  transaction.replacePart(worksheet.sheet.partName,bytes);
+  return transaction.commitPackage();
+}
+
+/** Assign a built-in Excel number format while preserving fonts, fills, borders and alignment. */
+export function formatSpreadsheetNumbersPackage(workbook: SpreadsheetWorkbook, sheet: SpreadsheetSheet, target: SpreadsheetFormattingTarget, format: 'general'|'number'|'currency'|'percent'|'date'): OpcPackage {
+  const ids = {general:0,number:2,currency:7,percent:10,date:14} as const;
+  return formatSpreadsheetCellsPackage(workbook,sheet,target,{},ids[format]);
+}
+
+/** Whole rows inherit a row format; materialize only cells that override column or cell styles. */
+function formatWholeRows(workbook: SpreadsheetWorkbook, worksheet: SpreadsheetWorksheet, range: CellRange, planner: SpreadsheetStylePlanner, patch: FormattingPatch): OpcPackage {
+  const document=worksheet.document, ns=spreadsheetNamespace(workbook.conformance);
+  const data=child(document.root,ns,'sheetData');
+  if(!data)throw new SpreadsheetError('invalid_worksheet','Worksheet data is missing.');
+  const elements=children(data,ns,'row');
+  const rowElements=new Map(elements.map((element,index,all)=>[Number(attribute(element,'r')?.value??inferredRowIndex(all,index)),element]));
+  const markup=new Map([...rowElements].map(([row,element])=>[row,sourceForNode(document,element)]));
+  const prefix=data.prefix;
+  const overrides=new Map<string,{address:CellAddress;styleIndex:number}>();
+  const columnDefaults=predominantColumnStyle(worksheet);
+  const defaultBase=columnDefaults.style;
+  for(let row=range.start.row;row<=range.end.row;row++) {
+    const element=rowElements.get(row), model=worksheet.row(row);
+    const base=model?.customFormat ? model.styleIndex??0 : defaultBase;
+    const style=planner.formatIndex(base,patch);
+    const attrs=new Map(element?.attributes.map(a=>[a.qualified,a.value]));
+    attrs.set('r',String(row));attrs.set('s',String(style));attrs.set('customFormat','1');
+    const body=element&&!element.selfClosing ? document.source.slice(element.startTagSpan.end,element.endTagSpan!.start) : '';
+    markup.set(row,`<${qualified(prefix,'row')}${[...attrs].map(([key,value])=>` ${key}="${escapeAttribute(value)}"`).join('')}>${body}</${qualified(prefix,'row')}>`);
+    if(!model?.customFormat) for(const column of columnDefaults.runs) {
+      const target=planner.formatIndex(column.styleIndex??0,patch);
+      if(target===style)continue;
+      for(let index=Math.max(column.min,range.start.column);index<=Math.min(column.max,range.end.column);index++) {
+        const address={row,column:index};
+        overrides.set(formatCellReference(address),{address,styleIndex:planner.formatIndex(worksheet.effectiveStyleIndex(address)??0,patch)});
+      }
+    }
+    for (const [first,last] of [[1,range.start.column-1],[range.end.column+1,EXCEL_MAX_COLUMNS]]) for(let column=first!;column<=last!;column++) {
+      const address={row,column};
+      overrides.set(formatCellReference(address),{address,styleIndex:worksheet.effectiveStyleIndex(address)??0});
+    }
+    for(const cell of model?.cells??[]) {
+      if(cell.address.column<range.start.column || cell.address.column>range.end.column)continue;
+      const target=planner.formatIndex(worksheet.effectiveStyleIndex(cell.address)??0,patch);
+      if(target!==style || cell.styleIndex!==undefined) overrides.set(cell.reference,{address:cell.address,styleIndex:target});
+    }
+  }
+  const editor=beginLosslessXmlEdit(document);
+  const nonRows=data.children.filter(node=>node.kind!=='element'||node.namespaceUri!==ns||node.localName!=='row').map(node=>sourceForNode(document,node)).join('');
+  editor.replaceElementMarkup(data,`<${data.qualified}${data.attributes.map(a=>` ${a.qualified}="${escapeAttribute(a.value)}"`).join('')}>${[...markup].sort(([a],[b])=>a-b).map(([,xml])=>xml).join('')}${nonRows}</${data.qualified}>`);
+  const updated=parseLosslessXml(editor.commit().bytes);
+  const bytes=overrides.size?styleWorksheetCells(updated,workbook.conformance,[...overrides.values()]):updated.originalBytes();
+  const tx=beginPackageTransaction(workbook.package);
+  planner.stage(tx);
+  tx.replacePart(worksheet.sheet.partName,bytes);
+  return tx.commitPackage();
+}
+
+function predominantColumnStyle(worksheet: SpreadsheetWorksheet) {
+  const boundaries=new Set([1,EXCEL_MAX_COLUMNS+1]);
+  for(const column of worksheet.columns){boundaries.add(column.min);boundaries.add(column.max+1);}
+  const sorted=[...boundaries].sort((a,b)=>a-b), counts=new Map<number,number>();
+  const runs:{min:number;max:number;styleIndex:number}[]=[];
+  for(let i=0;i<sorted.length-1;i++){
+    const min=sorted[i]!, max=sorted[i+1]!-1;
+    const style=worksheet.columns.findLast(column=>min>=column.min&&max<=column.max&&column.styleIndex!==undefined)?.styleIndex??0;
+    counts.set(style,(counts.get(style)??0)+(max-min+1));
+    runs.push({min,max,styleIndex:style});
+  }
+  const [style,count]=[...counts].sort((a,b)=>b[1]-a[1])[0]??[0,EXCEL_MAX_COLUMNS];
+  return {style,exceptions:EXCEL_MAX_COLUMNS-count,runs};
 }

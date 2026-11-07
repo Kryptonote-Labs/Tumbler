@@ -186,3 +186,89 @@ test('spreadsheet font validation keeps its own Excel range',()=>{
  const workbook=openSpreadsheet(openOpcPackage(fixture())),sheet=workbook.sheets[0]!;
  expect(()=>formatSpreadsheetCells(workbook,sheet,'A1',{text:{fontSize:{set:800}}})).toThrow('409');
 });
+
+test('whole columns format sparsely and keep explicit cell styles through native edits', async () => {
+  const {createSpreadsheet, applySpreadsheetCommand} = await import('../src/commands.ts');
+  let artifact = applySpreadsheetCommand(createSpreadsheet(),{name:'set-cell',sheetId:'1',reference:'A1',value:12.5});
+  artifact = artifact.formatCells('A1:A1048576',{text:{bold:{set:true}}});
+  expect(artifact.worksheet.cellStyle('A1048576').font.bold).toBeTrue();
+  expect(artifact.worksheet.rows).toHaveLength(1);
+  expect(artifact.worksheet.columns).toHaveLength(1);
+  expect(artifact.formattingState('A1:A1048576').text.bold).toEqual({state:'value',value:true});
+  const reopened = openSpreadsheet(openOpcPackage(artifact.bytes()));
+  expect(openWorksheet(reopened,reopened.sheets[0]!).cellStyle('A1048576').font.bold).toBeTrue();
+});
+
+test('number formatting preserves cell contents and recalculates display text', async () => {
+  const {createSpreadsheet, applySpreadsheetCommand} = await import('../src/commands.ts');
+  const {formatSpreadsheetNumbersPackage} = await import('../src/formatting.ts');
+  const {SpreadsheetArtifact} = await import('../src/artifact.ts');
+  const original = applySpreadsheetCommand(createSpreadsheet(),{name:'set-cell',sheetId:'1',reference:'A1',value:0.125}).formatCells('A1',{text:{bold:{set:true}}});
+  const workbook = openSpreadsheet(formatSpreadsheetNumbersPackage(original.workbook,original.activeSheet,'A1:A1048576','percent'));
+  const artifact = new SpreadsheetArtifact(workbook,workbook.sheets[0]!);
+  expect(artifact.calculation.displayText('A1')).toBe('12.50%');
+  expect(artifact.worksheet.cellStyle('A1').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('A1000000').numberFormatId).toBe(10);
+  expect(artifact.worksheet.cell('A1')?.value).toMatchObject({value:0.125});
+});
+
+test('almost-sheet formatting uses column defaults and preserves the excluded final row', async () => {
+  const {createSpreadsheet} = await import('../src/commands.ts');
+  const artifact=createSpreadsheet().formatCells('A1:XFD1048575',{text:{bold:{set:true}}});
+  expect(artifact.worksheet.cellStyle('A1000000').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('XFD1048575').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('A1048576').font.bold).toBeFalse();
+  expect(artifact.worksheet.rows).toHaveLength(1);
+});
+
+test('whole row formatting uses sparse row defaults and preserves column styles', async () => {
+  const {createSpreadsheet} = await import('../src/commands.ts');
+  let original=createSpreadsheet().formatCells('B1:B1048576',{text:{italic:{set:true}}});
+  original=original.formatCells('C2',{text:{underline:{set:'double'}}});
+  const artifact=original.formatCells('A2:XFD4',{text:{bold:{set:true}}});
+  expect(artifact.worksheet.cellStyle('A2').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('B3').font.italic).toBeTrue();
+  expect(artifact.worksheet.cellStyle('B3').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('C2').font.underline).toBe('double');
+  expect(artifact.worksheet.cellStyle('XFD4').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('A5').font.bold).toBeFalse();
+  expect(artifact.worksheet.rows.flatMap(row=>row.cells).length).toBeLessThan(10);
+});
+
+test('wide rectangles preserve excluded columns using sparse row defaults', async () => {
+  const {createSpreadsheet} = await import('../src/commands.ts');
+  const artifact=createSpreadsheet().formatCells('B2:XFC100',{text:{bold:{set:true}}});
+  expect(artifact.worksheet.cellStyle('B2').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('XFC100').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('A2').font.bold).toBeFalse();
+  expect(artifact.worksheet.cellStyle('XFD100').font.bold).toBeFalse();
+  expect(artifact.worksheet.cellStyle('B1').font.bold).toBeFalse();
+  expect(artifact.worksheet.rows.flatMap(r=>r.cells).length).toBe(198);
+});
+
+test('whole rows inherit the predominant column format without materializing cells', async () => {
+  const {createSpreadsheet} = await import('../src/commands.ts');
+  const original=createSpreadsheet().formatCells('A1:XFD1048576',{text:{italic:{set:true}}});
+  const artifact=original.formatCells('A1:XFD2',{text:{bold:{set:true}}});
+  expect(artifact.worksheet.cellStyle('B2').font).toMatchObject({bold:true,italic:true});
+  expect(artifact.worksheet.rows.flatMap(row=>row.cells)).toHaveLength(0);
+});
+
+test('full-sheet formatting updates custom row styles with inferred row indexes', async () => {
+  const {createSpreadsheet,openSpreadsheetArtifact} = await import('../src/index.ts');
+  const {beginPackageTransaction} = await import('@tumblerjs/opc');
+  const original=createSpreadsheet().formatCells('A1:XFD1',{text:{italic:{set:true}}});
+  const xml=original.worksheet.document.source.replace('r="1"','');
+  const pkg=beginPackageTransaction(original.workbook.package).replacePart(original.activeSheet.partName,new TextEncoder().encode(xml)).commitPackage();
+  const artifact=openSpreadsheetArtifact(pkg.archive.originalBytes()).formatCells('A1:XFD1048576',{text:{bold:{set:true}}});
+  expect(artifact.worksheet.cellStyle('A1').font).toMatchObject({bold:true,italic:true});
+});
+
+test('predominant row formatting retains uncovered default-style columns', async () => {
+  const {createSpreadsheet} = await import('../src/commands.ts');
+  const artifact=createSpreadsheet().formatCells('B1:XFD1048576',{text:{italic:{set:true}}}).formatCells('A1:XFD2',{text:{bold:{set:true}}});
+  expect(artifact.worksheet.cellStyle('A1').font).toMatchObject({bold:true,italic:false});
+  expect(artifact.worksheet.cellStyle('B1').font).toMatchObject({bold:true,italic:true});
+  expect(artifact.worksheet.cellStyle('A3').font).toMatchObject({bold:false,italic:false});
+  expect(artifact.worksheet.rows.flatMap(r=>r.cells)).toHaveLength(2);
+});

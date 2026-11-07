@@ -2,6 +2,8 @@ import type { SpreadsheetCellValue } from "./worksheet.ts";
 
 export const BUILT_IN_NUMBER_FORMATS: ReadonlyMap<number, string> = new Map([
   [0, "General"], [1, "0"], [2, "0.00"], [3, "#,##0"], [4, "#,##0.00"],
+  [5, '"$"#,##0_);("$"#,##0)'], [6, '"$"#,##0_);[Red]("$"#,##0)'],
+  [7, '"$"#,##0.00_);("$"#,##0.00)'], [8, '"$"#,##0.00_);[Red]("$"#,##0.00)'],
   [9, "0%"], [10, "0.00%"], [11, "0.00E+00"], [12, "# ?/?"], [13, "# ??/??"],
   [14, "mm-dd-yy"], [15, "d-mmm-yy"], [16, "d-mmm"], [17, "mmm-yy"],
   [18, "h:mm AM/PM"], [19, "h:mm:ss AM/PM"], [20, "h:mm"], [21, "h:mm:ss"],
@@ -31,7 +33,7 @@ export function formatSpreadsheetCellValue(
 function formatNumber(value: number, code: string, dateSystem: "1900" | "1904", locale: string): string {
   if (code.toLowerCase() === "general") return generalNumber(value);
   const sections = splitSections(code);
-  const index = value > 0 ? 0 : value < 0 ? Math.min(1, sections.length - 1) : Math.min(2, sections.length - 1);
+  const index = value > 0 ? 0 : value < 0 ? Math.min(1, sections.length - 1) : sections.length >= 3 ? 2 : 0;
   const section = sections[index] ?? sections[0] ?? "General";
   if (section === "") return "";
   const normalized = removeDecorators(section);

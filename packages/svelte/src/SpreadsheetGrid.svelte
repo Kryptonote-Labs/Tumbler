@@ -50,11 +50,13 @@
     selection?: GridSelection;
     readonly onselectionchange?: (selection: GridSelection) => void;
     readonly onedit?: (edit: SpreadsheetGridEdit) => void;
+    readonly onclear?: (selection: GridSelection) => void;
     readonly onhyperlink?: (hyperlink: SpreadsheetHyperlink) => void;
     chartSelection?: number;
     readonly onchartselectionchange?: (anchorElementId: number | undefined) => void;
     /** Prevents cell edits while retaining selection and table view controls. */
     readonly readonly?: boolean;
+    readonly preserveInputFocus?: boolean;
     readonly scale?: number;
     readonly rowCount?: number;
     readonly columnCount?: number;
@@ -68,10 +70,12 @@
     selection = createGridSelection({ row: 1, column: 1 }),
     onselectionchange,
     onedit,
+    onclear,
     onhyperlink,
     chartSelection,
     onchartselectionchange,
     readonly = false,
+    preserveInputFocus = false,
     scale = $bindable(1),
     rowCount = EXCEL_MAX_ROWS,
     columnCount = EXCEL_MAX_COLUMNS,
@@ -87,6 +91,7 @@
   let editing = $state<string>();
   let editor = $state<HTMLInputElement>();
   let draft = $state("");
+  let selectDraft = false;
   let maximumDigitWidth = $state(7);
   let stateWorksheet = $state<SpreadsheetWorksheet>();
   let tableStates = $state<Record<string, SpreadsheetTableViewState>>({});
@@ -240,7 +245,8 @@
     void tick().then(() => {
       if (editing !== reference) return;
       editor?.focus();
-      editor?.select();
+      if (selectDraft) editor?.select();
+      else editor?.setSelectionRange(draft.length, draft.length);
     });
   });
 
@@ -298,6 +304,26 @@
     scrollTop = scroller.scrollTop;
   }
 
+  // Keyboard navigation and host-driven selection keep the focused cell in view.
+  $effect(() => {
+    const element = scroller;
+    const focus = selection.focus;
+    if (element === undefined) return;
+    const row = visualRow(focus.row);
+    const x = columnGeometry.start(focus.column) + rowHeaderWidth;
+    const y = rowGeometry.start(row) + columnHeaderHeight;
+    const right = x + columnGeometry.size(focus.column);
+    const bottom = y + rowGeometry.size(row);
+    if (focus.column > frozenColumns) {
+      if (x < element.scrollLeft + rowHeaderWidth + frozenColumnsWidth) element.scrollLeft = x - rowHeaderWidth - frozenColumnsWidth;
+      else if (right > element.scrollLeft + viewportWidth) element.scrollLeft = right - viewportWidth;
+    }
+    if (row > frozenRows) {
+      if (y < element.scrollTop + columnHeaderHeight + frozenRowsHeight) element.scrollTop = y - columnHeaderHeight - frozenRowsHeight;
+      else if (bottom > element.scrollTop + viewportHeight) element.scrollTop = bottom - viewportHeight;
+    }
+  });
+
   function handleScroll(event: Event) {
     const target = event.currentTarget as HTMLDivElement;
     scrollTop = target.scrollTop;
@@ -307,6 +333,7 @@
   function cellPointerDown(event: PointerEvent, row: number, column: number) {
     if (event.pointerType !== "mouse" || event.button !== 0 || interactivePointerTarget(event)) return;
     event.preventDefault();
+    if (!preserveInputFocus) scroller?.closest<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true });
     selectingPointer = event.pointerId;
     selectionDragged = false;
     select(row, column, event.shiftKey);
@@ -337,6 +364,14 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (event.isComposing || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLButtonElement) return;
+    if (event.key === "Tab") {
+      event.preventDefault();
+      selection = moveGridSelection(selection, event.shiftKey ? "left" : "right", { rows: rowCount, columns: columnCount });
+      onselectionchange?.(selection);
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
     const directions: Partial<Record<string, GridDirection>> = {
       ArrowUp: "up",
       ArrowDown: "down",
@@ -351,7 +386,7 @@
         selection = moveGridSelection(selection, direction, { rows: rowCount, columns: columnCount }, { extend: event.shiftKey });
         onselectionchange?.(selection);
       }
-    } else if (event.key === "Enter") {
+    } else if (event.key === "Enter" || event.key === "F2") {
       if (editable) {
         event.preventDefault();
         beginEdit(selection.focus.row, selection.focus.column);
@@ -359,18 +394,26 @@
     } else if (event.key === "Delete" || event.key === "Backspace") {
       if (editable) {
         event.preventDefault();
-        const owner = worksheet.mergedRange(selection.focus)?.start ?? selection.focus;
-        onedit?.({ reference: formatCellReference(owner), value: null });
+        if (onclear !== undefined) onclear(selection);
+        else {
+          const owner = worksheet.mergedRange(selection.focus)?.start ?? selection.focus;
+          onedit?.({ reference: formatCellReference(owner), value: null });
+        }
       }
+    } else if (editable && event.key.length === 1) {
+      event.preventDefault();
+      beginEdit(selection.focus.row, selection.focus.column, event.key);
     }
   }
 
-  function beginEdit(row: number, column: number) {
+  function beginEdit(row: number, column: number, initial?: string) {
     if (!editable) return;
     const owner = worksheet.mergedRange({ row, column })?.start ?? { row, column };
     const reference = formatCellReference(owner);
+    selectDraft = initial === undefined;
     editing = reference;
-    draft = displayValue(worksheet.cell(reference)?.value);
+    const cell = worksheet.cell(reference);
+    draft = initial ?? (cell?.formula === undefined ? displayValue(cell?.value) : `=${cell.formula}`);
   }
 
   function cellKeydown(event: KeyboardEvent, row: number, column: number) {
@@ -391,12 +434,16 @@
 
   function inputKeydown(event: KeyboardEvent) {
     event.stopPropagation();
-    if (event.key === "Enter") {
+    if (event.key === "Enter" || event.key === "Tab") {
       event.preventDefault();
       finishEdit(true);
+      selection = moveGridSelection(selection, event.key === "Tab" ? (event.shiftKey ? "left" : "right") : (event.shiftKey ? "up" : "down"), { rows: rowCount, columns: columnCount });
+      onselectionchange?.(selection);
+      void tick().then(() => scroller?.closest<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true }));
     } else if (event.key === "Escape") {
       event.preventDefault();
       finishEdit(false);
+      void tick().then(() => scroller?.closest<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true }));
     }
   }
 
@@ -553,6 +600,9 @@
     class:text-overflow={overflowWidth !== undefined}
     class="cell"
     role="gridcell"
+    data-reference={reference}
+    aria-rowindex={sourceRow}
+    aria-colindex={column}
     tabindex="-1"
     aria-selected={selected(sourceRow, column)}
     style:left={`${left}px`}
