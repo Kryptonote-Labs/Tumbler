@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { applySpreadsheetCommand, createSpreadsheet, createSpreadsheetNativeArchive, encodeSpreadsheetNativeArchive, inspectSpreadsheet, openSpreadsheetArtifact, openSpreadsheetNativeArchive } from '../src/index.ts';
-import { ZipArchive } from '@tumblerjs/opc';
+import { ZipArchive, beginPackageTransaction } from '@tumblerjs/opc';
 
 test('native conversion preserves original XLSX bytes and independent resources', () => {
   const original = applySpreadsheetCommand(createSpreadsheet(), {name:'set-range',sheetId:'1',reference:'A1',values:[['Revenue',20],['Cost',5]]}).bytes();
@@ -100,4 +100,15 @@ test('sheet movement and deletion retain local named-range ownership and local n
   expect(artifact.workbook.document.source).toContain('localSheetId="0"');
   artifact=applySpreadsheetCommand(artifact,{name:'delete-sheet',sheetId:'2'});
   expect(artifact.workbook.document.source).not.toContain('name="Local"');
+});
+
+test('worksheet order edits keep workbook view indexes attached to their worksheets', () => {
+  let artifact=applySpreadsheetCommand(createSpreadsheet(),{name:'add-sheet',nameValue:'Second'});
+  const pkg=artifact.workbook.package;
+  const xml=new TextDecoder().decode(pkg.readPart(artifact.workbook.part)).replace('<sheets>','<bookViews><workbookView activeTab="1" firstSheet="1"/></bookViews><sheets>');
+  const edited=beginPackageTransaction(pkg).replacePart(artifact.workbook.part.name,new TextEncoder().encode(xml)).commitPackage();
+  artifact=openSpreadsheetArtifact(edited.archive.originalBytes());
+  artifact=applySpreadsheetCommand(artifact,{name:'delete-sheet',sheetId:'1'});
+  const output=new TextDecoder().decode(artifact.workbook.package.readPart(artifact.workbook.part));
+  expect(output).toContain('activeTab="0" firstSheet="0"');
 });

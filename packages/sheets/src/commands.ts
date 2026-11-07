@@ -139,6 +139,16 @@ function editSheets(artifact: SpreadsheetArtifact, command: SheetCommand) {
     const newOrder = oldOrder.filter(sheet => sheet !== target);
     if(command.name === 'move-sheet')newOrder.splice(command.index,0,target);
     const visit = (element: typeof workbook.document.root) => {
+      if(element.localName === 'workbookView') {
+        for(const name of ['activeTab','firstSheet']) {
+          const attr=element.attributes.find(a=>a.localName===name&&!a.namespaceUri);
+          if(!attr)continue;
+          const oldIndex=Number(attr.value), previous=oldOrder[oldIndex];
+          const located=previous?newOrder.indexOf(previous):-1;
+          const index=located<0?Math.min(oldIndex,newOrder.length-1):located;
+          if(String(index)!==attr.value)editor.setAttribute(attr,String(index));
+        }
+      }
       if(element.localName === 'definedName') {
         const local = element.attributes.find(attribute => attribute.localName === 'localSheetId' && !attribute.namespaceUri);
         if(local) {
