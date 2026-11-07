@@ -55,6 +55,7 @@
         "tumbler": "./src/bin.ts",
       },
       "dependencies": {
+        "@tumblerjs/pdf": "0.1.0-alpha.26",
         "@tumblerjs/slides": "0.1.0-alpha.26",
         "@tumblerjs/word": "0.1.0-alpha.26",
         "yjs": "^13.6.0",
