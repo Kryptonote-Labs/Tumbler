@@ -7,6 +7,7 @@ export interface SpreadsheetGridEdit {
 
 /** Interprets editor text using the existing cell type and spreadsheet-like scalar entry rules. */
 export function coerceSpreadsheetEditValue(draft: string, current: SpreadsheetCellValue | undefined): EditableCellValue {
+  if (draft === "") return null;
   if (current?.type === "string" || current?.type === "date" || current?.type === "error") return draft;
   const normalized = draft.trim();
   if (current?.type === "boolean" || current === undefined || current.type === "blank") {

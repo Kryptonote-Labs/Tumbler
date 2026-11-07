@@ -239,7 +239,9 @@ describe("Svelte spreadsheet viewport", () => {
     expect(coerceSpreadsheetEditValue("FALSE", { type: "boolean", value: true })).toBeFalse();
     expect(coerceSpreadsheetEditValue("001", { type: "string", value: "old", storage: "inline" })).toBe("001");
     expect(coerceSpreadsheetEditValue("12 apples", { type: "number", value: 12, lexical: "12" })).toBe("12 apples");
-    expect(coerceSpreadsheetEditValue("", undefined)).toBe("");
+    expect(coerceSpreadsheetEditValue("", undefined)).toBeNull();
+    expect(coerceSpreadsheetEditValue("", { type: "string", value: "old", storage: "inline" })).toBeNull();
+    expect(coerceSpreadsheetEditValue(" ", undefined)).toBe(" ");
     expect(coerceSpreadsheetEditValue("=SUM(A1:A2)", undefined)).toBe("=SUM(A1:A2)");
   });
 

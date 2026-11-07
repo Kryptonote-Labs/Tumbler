@@ -34,3 +34,22 @@ test('F2 keeps arrows inside the cell text and blocks vertical page scrolling', 
   await editor.press('Escape');
   await expect(page.locator('[data-reference="C2"]')).toHaveText('85');
 });
+
+test('Backspace starts a blank edit in the first selected cell and preserves its neighbors', async ({ page }) => {
+  await page.goto('/playground/sheet-budget');
+  await expect(page.getByRole('gridcell', { name: '85', exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.locator('[data-reference="C3"]').click();
+  await page.keyboard.press('Shift+ArrowUp');
+  await page.keyboard.press('Backspace');
+  const editor = page.getByRole('textbox', { name: 'Edit C3', exact: true });
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveValue('');
+  await editor.press('Escape');
+  await expect(page.locator('[data-reference="C3"]')).toHaveText('95');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('100');
+  await editor.press('Enter');
+  await expect(page.locator('[data-reference="C3"]')).toHaveText('100');
+  await expect(page.locator('[data-reference="C2"]')).toHaveText('85');
+});

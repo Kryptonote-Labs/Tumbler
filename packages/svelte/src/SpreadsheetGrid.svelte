@@ -428,7 +428,12 @@
         event.preventDefault();
         beginEdit(selection.anchor.row, selection.anchor.column);
       }
-    } else if (event.key === "Delete" || event.key === "Backspace") {
+    } else if (event.key === "Backspace") {
+      if (editable) {
+        event.preventDefault();
+        beginEdit(selection.anchor.row, selection.anchor.column, "");
+      }
+    } else if (event.key === "Delete") {
       if (editable) {
         event.preventDefault();
         if (onclear !== undefined) onclear(selection);
