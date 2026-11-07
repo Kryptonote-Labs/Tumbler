@@ -112,7 +112,8 @@ export function mergePdfCatalogs(catalogs: PdfDictionary[], objects: PdfValue[],
         if (value instanceof PdfStream) shift(value.dictionary);
         else if (Array.isArray(value)) { for (const item of value) shift(item); }
         else if (value instanceof Map) for (const [key, item] of value) {
-          if (['StructParents', 'StructParent'].includes(key) && typeof item === 'number') value.set(key, item + parentOffset);
+          const parentKey = ['StructParents', 'StructParent'].includes(key) ? resolve(item) : undefined;
+          if (typeof parentKey === 'number') value.set(key, parentKey + parentOffset);
           else shift(item);
         }
       };
@@ -176,7 +177,7 @@ export function mergePdfCatalogs(catalogs: PdfDictionary[], objects: PdfValue[],
   }
   if (outlines.length) {
     outlines.forEach((ref, i) => { const info = dictionary(resolve(ref)); if (i) info.set('Prev', outlines[i - 1]!); if (i + 1 < outlines.length) info.set('Next', outlines[i + 1]!); });
-    objects[outlineRoot.object - 1] = new Map<string, PdfValue>([['Type', new PdfName('Outlines')], ['First', outlines[0]!], ['Last', outlines.at(-1)!], ['Count', outlines.length]]);
+    objects[outlineRoot.object - 1] = new Map<string, PdfValue>([['Type', new PdfName('Outlines')], ['First', outlines[0]!], ['Last', outlines.at(-1)!], ['Count', outlines.reduce((count, ref) => count + 1 + Number(dictionary(resolve(ref)).get('Count') ?? 0), 0)]]);
     output.set('Outlines', outlineRoot);
   }
   if (layers.length) output.set('OCProperties', new Map<string, PdfValue>([['OCGs', layers], ['D', new Map<string, PdfValue>([['ON', on], ['OFF', off], ['Order', order], ['Locked', locked], ['RBGroups', radios]])]]));

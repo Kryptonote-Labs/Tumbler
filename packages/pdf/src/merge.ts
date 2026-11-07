@@ -102,8 +102,8 @@ export function mergePdfPages(parts: readonly PdfMergePart[]): Uint8Array {
     }
     return value;
   };
-  restoreMergedPdfLinks(pageCopies, resolve);
   const catalog = mergePdfCatalogs(catalogs, objects, reserve, resolve);
+  restoreMergedPdfLinks(pageCopies, resolve);
   catalog.set('Type', new PdfName('Catalog')); catalog.set('Pages', parent);
   objects[0] = catalog;
   objects[1] = new Map<string, PdfValue>([['Type', new PdfName('Pages')], ['Kids', pages], ['Count', pages.length]]);

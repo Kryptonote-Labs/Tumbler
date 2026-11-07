@@ -61,7 +61,7 @@ test('forms, links, tags, layers and bookmarks retain their owners across source
   expect(resolve(layers.get('OCGs'))).toHaveLength(2);
   expect(resolve(dictionary(resolve(layers.get('D'))).get('OFF'))).toHaveLength(2);
   const outlines = dictionary(resolve(output.source.catalog.get('Outlines')));
-  expect(outlines.get('Count')).toBe(2);
+  expect(outlines.get('Count')).toBe(4);
 });
 
 test('repeated pages have distinct widget identities and omitted link targets are removed', () => {
@@ -174,4 +174,27 @@ test('named link destinations and GoTo actions resolve across separately opened 
   const action = dictionary(output.source.resolve(dictionary(output.source.resolve(annotations[1])).get('A')));
   expect(direct).toEqual([output.pages[1]!.reference, new PdfName('XYZ'), null, 30, 0]);
   expect(action.get('D')).toEqual(direct);
+});
+
+test('restored links across source occurrences cannot shift another source accessibility keys', () => {
+  const source = openPdfDocument(Uint8Array.from(Buffer.from(Buffer.from(mergeFixture('Alpha')).toString('latin1').replace('/Dest [4 0 R', '/Dest [3 0 R'), 'latin1')));
+  const output = openPdfDocument(mergePdfPages([{ document: source }, { document: source }]));
+  expect(output.pages.map((page) => page.dictionary.get('StructParents'))).toEqual([0, undefined, 1, undefined]);
+  const tags = dictionary(output.source.resolve(output.source.catalog.get('StructTreeRoot')));
+  const nums = dictionary(output.source.resolve(tags.get('ParentTree'))).get('Nums') as PdfValue[];
+  expect([nums[0], nums[2]]).toEqual([0, 1]);
+});
+
+test('indirect integer structure-parent keys are remapped per source', () => {
+  const source = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 5 0 R >>',
+    '<< /Type /Pages /Count 1 /Kids [3 0 R] /MediaBox [0 0 100 100] /Resources << >> >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 4 0 R /StructParents 7 0 R >>',
+    pdfStream('/P << /MCID 0 >> BDC 10 10 20 20 re f EMC'),
+    '<< /Type /StructTreeRoot /K [6 0 R] /ParentTree << /Nums [0 [6 0 R]] >> >>',
+    '<< /Type /StructElem /S /P /P 5 0 R /Pg 3 0 R /K 0 >>',
+    '0',
+  ]));
+  const output = openPdfDocument(mergePdfPages([{ document: source }, { document: source }]));
+  expect(output.pages.map((page) => output.source.resolve(page.dictionary.get('StructParents')))).toEqual([0, 1]);
 });
