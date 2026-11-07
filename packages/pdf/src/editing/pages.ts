@@ -137,9 +137,9 @@ export class PdfPageModel {
       const data = crypto.getRandomValues(new Uint32Array(2));
       logicalIndex = -(data[0]! * 0x200000 + (data[1]! >>> 11) + 1);
     } while (!Number.isSafeInteger(logicalIndex) || indices.has(logicalIndex));
-    this.ensure([id]);
     this.doc.transact(() => {
-      const record = this.record(id);
+      const record = new Y.Map<unknown>();
+      this.records.set(id, record);
       record.set('index', logicalIndex);
       record.set('width', width);
       record.set('height', height);
