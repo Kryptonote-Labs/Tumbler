@@ -186,3 +186,28 @@ test('spreadsheet font validation keeps its own Excel range',()=>{
  const workbook=openSpreadsheet(openOpcPackage(fixture())),sheet=workbook.sheets[0]!;
  expect(()=>formatSpreadsheetCells(workbook,sheet,'A1',{text:{fontSize:{set:800}}})).toThrow('409');
 });
+
+test('whole columns format sparsely and keep explicit cell styles through native edits', async () => {
+  const {createSpreadsheet, applySpreadsheetCommand} = await import('../src/commands.ts');
+  let artifact = applySpreadsheetCommand(createSpreadsheet(),{name:'set-cell',sheetId:'1',reference:'A1',value:12.5});
+  artifact = artifact.formatCells('A1:A1048576',{text:{bold:{set:true}}});
+  expect(artifact.worksheet.cellStyle('A1048576').font.bold).toBeTrue();
+  expect(artifact.worksheet.rows).toHaveLength(1);
+  expect(artifact.worksheet.columns).toHaveLength(1);
+  expect(artifact.formattingState('A1:A1048576').text.bold).toEqual({state:'value',value:true});
+  const reopened = openSpreadsheet(openOpcPackage(artifact.bytes()));
+  expect(openWorksheet(reopened,reopened.sheets[0]!).cellStyle('A1048576').font.bold).toBeTrue();
+});
+
+test('number formatting preserves cell contents and recalculates display text', async () => {
+  const {createSpreadsheet, applySpreadsheetCommand} = await import('../src/commands.ts');
+  const {formatSpreadsheetNumbersPackage} = await import('../src/formatting.ts');
+  const {SpreadsheetArtifact} = await import('../src/artifact.ts');
+  const original = applySpreadsheetCommand(createSpreadsheet(),{name:'set-cell',sheetId:'1',reference:'A1',value:0.125}).formatCells('A1',{text:{bold:{set:true}}});
+  const workbook = openSpreadsheet(formatSpreadsheetNumbersPackage(original.workbook,original.activeSheet,'A1:A1048576','percent'));
+  const artifact = new SpreadsheetArtifact(workbook,workbook.sheets[0]!);
+  expect(artifact.calculation.displayText('A1')).toBe('12.50%');
+  expect(artifact.worksheet.cellStyle('A1').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('A1000000').numberFormatId).toBe(10);
+  expect(artifact.worksheet.cell('A1')?.value).toMatchObject({value:0.125});
+});
