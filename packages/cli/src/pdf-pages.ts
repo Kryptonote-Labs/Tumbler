@@ -24,6 +24,8 @@ export const pdfExportInput = z.object({
   output: z.string().min(1),
   format: z.literal('pdf').default('pdf'),
 }).strict();
+export const pdfDeletePagesInput = pdfExportInput.pick({ pages: true });
+export type PdfDeletePagesInput = z.infer<typeof pdfDeletePagesInput>;
 export type PdfExportInput = z.infer<typeof pdfExportInput>;
 
 /** Expand 1-based selections without sorting; descending ranges follow their written direction. */
