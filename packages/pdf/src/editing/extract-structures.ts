@@ -36,18 +36,23 @@ export function subsetPdfForms(context: PdfExtractionContext): PdfValue | undefi
     unsupported('Extracting pages from an XFA form requires reconstructing its XML form data.');
   const active = new Set<string>(),
     kept = new Set<string>();
-  function field(value: PdfValue, parent?: PdfReference): PdfReference | undefined {
+  function field(
+    value: PdfValue,
+    parent?: PdfReference,
+    inheritedType?: PdfValue,
+  ): PdfReference | undefined {
     if (!(value instanceof PdfReference))
       throw new Error('PDF form fields must be indirect objects.');
     if (active.has(value.key)) throw new Error('Cyclic PDF form field tree.');
     active.add(value.key);
     const info = dictionary(source.resolve(value)),
       ref = reserve();
+    const fieldType = info.has('FT') ? source.resolve(info.get('FT')) : inheritedType;
     refs.set(value.key, ref);
     const originalKids = source.resolve(info.get('Kids'));
     const kids = Array.isArray(originalKids)
       ? originalKids.flatMap((kid) => {
-          const result = field(kid, ref);
+          const result = field(kid, ref, fieldType);
           return result ? [result] : [];
         })
       : [];
@@ -60,8 +65,7 @@ export function subsetPdfForms(context: PdfExtractionContext): PdfValue | undefi
     kept.add(value.key);
     const result = new Map<string, PdfValue>();
     for (const [key, entry] of info) {
-      if (['Parent', 'Kids'].includes(key) || (key === 'V' && kind(info.get('FT'), 'Sig')))
-        continue;
+      if (['Parent', 'Kids'].includes(key) || (key === 'V' && kind(fieldType, 'Sig'))) continue;
       result.set(key, copy(entry));
     }
     if (parent) result.set('Parent', parent);

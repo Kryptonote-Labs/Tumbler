@@ -8,6 +8,26 @@ import {
 } from '../src/index.ts';
 import { pdfFixture, pdfStream } from './pdf-fixture.ts';
 
+test('extracted signature fields clear signed values inherited through their field type', () => {
+  const source = openPdfDocument(
+    pdfFixture([
+      '<< /Type /Catalog /Pages 2 0 R /AcroForm 6 0 R >>',
+      '<< /Type /Pages /Count 1 /Kids [3 0 R] /MediaBox [0 0 200 300] /Resources << >> >>',
+      '<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Annots [9 0 R] >>',
+      pdfStream(''),
+      'null',
+      '<< /Fields [7 0 R] >>',
+      '<< /FT /Sig /T (group) /Kids [8 0 R] >>',
+      '<< /T (signature) /Parent 7 0 R /V 10 0 R /Kids [9 0 R] >>',
+      '<< /Type /Annot /Subtype /Widget /Parent 8 0 R /P 3 0 R /Rect [10 10 100 30] >>',
+      '<< /Type /Sig /ByteRange [0 1 2 3] /Contents <4142> >>',
+    ]),
+  );
+  const output = extractPdfPages(source, [0]);
+  expect(new TextDecoder().decode(output)).not.toContain('/ByteRange');
+  expect(new TextDecoder().decode(output)).not.toContain('/V ');
+});
+
 test('tagged extraction preserves selected structure and its reverse parent map without excluded semantic text', () => {
   const source = openPdfDocument(
     pdfFixture([
