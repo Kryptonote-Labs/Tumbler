@@ -1,11 +1,10 @@
-import { formatSpreadsheetNumbersPackage } from './formatting.ts';
+import { spreadsheetFormattingCommand, spreadsheetFormattingCommandPackage } from './formatting-commands.ts';
 import { applySpreadsheetStructureCommand } from './structure.ts';
 import { rewriteSpreadsheetSheetReferences } from './sheet-references.ts';
 import { spreadsheetLayoutCommand, applySpreadsheetLayoutCommand } from './layout.ts';
 import { z } from 'zod';
 import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
 import { beginPackageTransaction, PartName, openOpcPackageArchive, ZipArchive } from '@tumblerjs/opc';
-import { normalizeFormattingPatch, type FormattingPatch } from '@tumblerjs/core';
 import { SpreadsheetArtifact } from './artifact.ts';
 import { beginSpreadsheetEdit } from './editor.ts';
 import { parseCellRange, parseCellReference, formatCellReference } from './references.ts';
@@ -13,15 +12,6 @@ import { openSpreadsheet, type SpreadsheetSheet } from './workbook.ts';
 
 const id = z.string().min(1);
 const value = z.union([z.string(), z.number().finite(), z.boolean(), z.null()]);
-const change = <T extends z.ZodType>(type: T) => z.union([z.object({set:type}).strict(), z.object({inherit:z.literal(true)}).strict()]);
-const patch = z.object({
-  text: z.object({
-    fontSize: change(z.number().min(1).max(409)).optional(), fontFamily: change(z.string().min(1)).optional(),
-    bold: change(z.boolean()).optional(), italic: change(z.boolean()).optional(), underline: change(z.enum(['none','single','double'])).optional(),
-    color: change(z.discriminatedUnion('type', [z.object({type:z.literal('automatic')}).strict(),z.object({type:z.literal('rgb'),value:z.string().regex(/^#[a-f\d]{6}$/i)}).strict()])).optional(),
-  }).strict().optional(),
-  block: z.object({horizontalAlignment:change(z.enum(['start','center','end','justify'])).optional(),verticalAlignment:change(z.enum(['top','center','bottom'])).optional()}).strict().optional(),
-}).strict().transform(value => normalizeFormattingPatch(value as FormattingPatch));
 const single = z.discriminatedUnion('name', [
   z.object({name:z.literal('insert-rows'),sheetId:id,index:z.number().int().positive(),count:z.number().int().positive().optional()}).strict(),
   z.object({name:z.literal('delete-rows'),sheetId:id,index:z.number().int().positive(),count:z.number().int().positive().optional()}).strict(),
@@ -32,8 +22,7 @@ const single = z.discriminatedUnion('name', [
   z.object({name:z.literal('set-formula'),sheetId:id,reference:id,formula:z.string()}).strict(),
   z.object({name:z.literal('set-range'),sheetId:id,reference:id,values:z.array(z.array(value))}).strict(),
   z.object({name:z.literal('clear-range'),sheetId:id,range:id}).strict(),
-  z.object({name:z.literal('format-cells'),sheetId:id,range:id,patch}).strict(),
-  z.object({name:z.literal('set-number-format'),sheetId:id,range:id,format:z.enum(['general','number','currency','percent','date'])}).strict(),
+  ...spreadsheetFormattingCommand.options,
   z.object({name:z.literal('add-sheet'),nameValue:z.string().optional()}).strict(),
   z.object({name:z.literal('delete-sheet'),sheetId:id}).strict(),
   z.object({name:z.literal('rename-sheet'),sheetId:id,nameValue:z.string()}).strict(),
@@ -65,8 +54,10 @@ export function applySpreadsheetCommand(artifact: SpreadsheetArtifact, input: Sp
   if (command.name === 'add-sheet' || command.name === 'delete-sheet' || command.name === 'rename-sheet' || command.name === 'move-sheet') return editSheets(artifact, command);
   if (command.name === 'set-column-width' || command.name === 'set-row-height' || command.name === 'merge-cells' || command.name === 'unmerge-cells' || command.name === 'freeze-panes') return applySpreadsheetLayoutCommand(artifact, command);
   const sheet = resolveSheet(artifact, command.sheetId);
-  if (command.name === 'set-number-format') return fromPackage(formatSpreadsheetNumbersPackage(artifact.workbook,sheet,command.range,command.format),artifact.activeSheet.sheetId);
-  if (command.name === 'format-cells') return artifact.formatCellsOnSheet(sheet, command.range, command.patch);
+  if (command.name === 'format-cells' || command.name === 'set-number-format' || command.name === 'adjust-number-decimals' || command.name === 'set-borders' || command.name === 'clear-formatting') {
+    const saved = spreadsheetFormattingCommandPackage(artifact, sheet, command);
+    return saved === artifact.workbook.package ? artifact : fromPackage(saved, artifact.activeSheet.sheetId);
+  }
   const editor = beginSpreadsheetEdit(artifact.workbook);
   if (command.name === 'set-cell') editor.setCellValue(sheet, command.reference, command.value);
   else if (command.name === 'set-formula') editor.setCellFormula(sheet, command.reference, command.formula.replace(/^=/,''));

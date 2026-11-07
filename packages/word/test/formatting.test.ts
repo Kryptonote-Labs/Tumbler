@@ -123,3 +123,13 @@ test('shared formatting accepts Word font sizes beyond the spreadsheet ceiling',
  expect(edited.formattingState(selection(first(edited).elementId,0,4)).text.fontSize).toMatchObject({value:800});
  expect(()=>source.applyFormatting(selection(paragraph.elementId,0,4),{text:{fontSize:{set:1638.5}}})).toThrow();
 });
+
+test("strikethrough and theme colours use the shared patch", () => {
+  const source = open('<w:p><w:r><w:t>Word</w:t></w:r></w:p>'), paragraph = first(source);
+  const edited = source.applyFormatting(selection(paragraph.elementId, 0, 4), { text: {
+    strike: { set: true },
+    color: { set: { type: "theme", slot: "accent2", tint: -0.25, value: "#943634" } },
+  } });
+  expect(edited.document.source.source).toContain('<w:strike w:val="1"/><w:color w:val="943634" w:themeColor="accent2" w:themeShade="BF"/>');
+  expect(edited.formattingState(selection(first(edited).elementId, 0, 4)).text.strike).toEqual({ state: "value", value: true });
+});

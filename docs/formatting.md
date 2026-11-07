@@ -8,14 +8,27 @@ PresentationML directly.
 
 `FormattingPatch` separates inline text properties from their containing block:
 
-- `text` covers font family and size, bold, italic, underline, and foreground
-  colour;
-- `block` covers horizontal and vertical alignment.
+- `text` covers font family and size, bold, italic, underline, strikethrough
+  and foreground colour;
+- `block` covers horizontal and vertical alignment;
+- `cell` covers properties that only spreadsheet-style cells have: fill
+  (`none` or `solid`), wrap text, text rotation (-90 to 90 degrees or
+  `vertical`) and indent (whole levels, 0–250).
 
 For a spreadsheet the block is a cell. For a word-processing document it is a
 paragraph. For presentation text it is a paragraph or text frame. Format
 adapters may support different subsets and expose them through
-`FormattingCapabilities`.
+`FormattingCapabilities`. Optional groups and fields (`text.strike`,
+`text.themeColor`, `cell`) are advertised only by adapters that implement them;
+adapters reject a `cell` group they cannot apply.
+
+`OfficeColor` is `automatic`, `rgb`, or `theme`. A theme colour keeps its
+DrawingML slot (`lt1`, `dk1`, `lt2`, `dk2`, `accent1`–`accent6`, `hlink`,
+`folHlink`) and a SpreadsheetML-style tint from -1 (darker) to 1 (lighter), so
+it follows later theme changes. Its optional `value` is the resolved `#RRGGBB`
+colour. SpreadsheetML stores the slot as its theme index; Word writes
+`w:themeColor` with `w:themeTint` or `w:themeShade`; Slides writes `a:schemeClr`
+with `a:lumMod` and `a:lumOff`.
 
 Each property change is explicit:
 
@@ -39,17 +52,38 @@ order to preserve or write that name.
 The first adapter implements the contract for rectangular cell ranges. It:
 
 - resolves the effective cell, row, column, or default style;
-- changes only requested font and alignment properties;
-- retains number formats, fills, borders, wrapping, rotation, and reading order;
+- changes only requested properties and retains the rest of each cell format,
+  including protection and diagonal borders;
 - creates styled blank cells when necessary;
-- appends and reuses `font` and `xf` records rather than mutating shared styles;
+- appends and reuses `numFmt`, `font`, `fill`, `border` and `xf` records rather
+  than mutating shared styles, reserving Excel's `none` and `gray125` fills;
 - creates a Styles part and relationship when the workbook has none;
 - preserves unrelated XML and package parts through an atomic OPC transaction;
 - accepts Strict and Transitional SpreadsheetML.
 
-Client-side work is bounded to 100,000 cells per formatting command. Structural
-whole-row and whole-column style operations should eventually use their native
-SpreadsheetML representations rather than materializing every cell.
+Every style operation shares one internal engine: a style transform applied to a rectangle. Whole columns and rows use column and row
+defaults plus sparse cell overrides, so selecting a column, a row or the whole
+sheet does not materialize the grid. The worksheet grid is the only size limit.
+
+Setting an indent on general, centered or justified text switches it to left
+alignment, as Excel does. Shrink-to-fit is preserved but not yet authored.
+
+### Spreadsheet commands
+
+`spreadsheetCommand` (used by browser, service and command-line hosts) adds
+these formatting commands next to `format-cells`:
+
+| Command | Input | Effect |
+| --- | --- | --- |
+| `set-number-format` | `range`, `format`: a preset or `{ code }` | Presets: `general`, `number`, `integer`, `currency`, `accounting`, `percent`, `short-date` (alias `date`), `long-date`, `time`, `fraction`, `scientific`, `text`. Built-in codes use their reserved ids; other codes append a `numFmt` record from id 164. |
+| `adjust-number-decimals` | `range`, `direction`: `increase` or `decrease` | Adds or removes one decimal place from each cell's current code, in every section, keeping currency, percent, colours, conditions and quoted literals. General becomes `0.0` or `0`. Text, date, time and fraction formats are unchanged; a code without a numeric section is rejected. |
+| `set-borders` | `range`, `preset`, optional `style` (`ST_BorderStyle`, default `thin`) and `color` (default automatic) | Presets: `none`, `all`, `outside`, `inside`, `top`, `bottom`, `left`, `right`, `horizontal`, `vertical`. Only the named edges change. The range extends to whole merged cells; merged cells receive their outer edges as one logical cell. |
+| `clear-formatting` | `range` | Resets font, fill, borders, alignment and number format to the Normal style. Values and formulas remain. |
+
+`spreadsheetNumberFormatState` (also `SpreadsheetArtifact.numberFormatState`)
+reports the current code with its matching `preset`, a broad `category` and its
+`decimals`, or `mixed`. `describeSpreadsheetNumberFormat` classifies any code
+the same way.
 
 ## Word and Slides adapters
 
@@ -58,9 +92,10 @@ properties. Slides maps them to DrawingML character and paragraph
 properties. Both implement the same state, capability, and patch contract,
 but remain responsible for their own inheritance and package-preservation rules.
 
-Format-specific features such as cell fills, paragraph spacing, and shape fills
-will extend typed adapter capabilities without weakening the shared text and
-block vocabulary.
+Word supports strikethrough and theme colours. Slides writes theme colours but
+does not yet author strikethrough. Further format-specific features such as
+paragraph spacing and shape fills extend typed adapter capabilities without
+weakening the shared text and block vocabulary.
 
 Font ranges belong to the format adapter, not the shared patch normalizer. The
 normalizer accepts finite positive sizes. Word accepts half-point steps through

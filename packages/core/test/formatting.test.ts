@@ -53,8 +53,23 @@ describe("format-neutral formatting", () => {
     { text: { color: { set: { type: "rgb", value: "red" } } } },
     { text: { underline: { set: "wavy" } } },
     { block: { horizontalAlignment: { set: "middle" } } },
+    { text: { color: { set: { type: "theme", slot: "accent9" } } } },
+    { text: { color: { set: { type: "theme", slot: "accent1", tint: 1.5 } } } },
+    { cell: { textRotation: { set: 91 } } },
+    { cell: { indent: { set: 1.5 } } },
+    { cell: { fill: { set: { type: "pattern" } } } },
   ])("rejects invalid public formatting input", (patch) => {
     expect(() => normalizeFormattingPatch(patch as FormattingPatch)).toThrow();
+  });
+
+  test("keeps theme colour identity and cell properties", () => {
+    expect(normalizeFormattingPatch({
+      text: { strike: { set: true }, color: { set: { type: "theme", slot: "accent1", tint: 0, value: "#4f81bd" } } },
+      cell: { fill: { set: { type: "solid", color: { type: "theme", slot: "lt2", tint: -0.1 } } }, textRotation: { set: "vertical" }, indent: { set: 3 } },
+    })).toEqual({
+      text: { strike: { set: true }, color: { set: { type: "theme", slot: "accent1", value: "#4F81BD" } } },
+      cell: { fill: { set: { type: "solid", color: { type: "theme", slot: "lt2", tint: -0.1 } } }, textRotation: { set: "vertical" }, indent: { set: 3 } },
+    });
   });
 
   test("normalizes generated RGB colors without changing their value", () => {

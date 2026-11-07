@@ -125,18 +125,40 @@ export type {
   SpreadsheetDifferentialFormat,
   SpreadsheetFill,
   SpreadsheetFont,
+  SpreadsheetProtection,
 } from "./styles.ts";
 export type {
   EditableCellValue,
   SpreadsheetEditorStatus,
 } from "./editor.ts";
 export {
+  clearSpreadsheetFormattingPackage,
   formatSpreadsheetCells,
+  formatSpreadsheetCellsPackage,
   MAX_FORMATTED_CELLS,
   spreadsheetFormattingState,
   SPREADSHEET_FORMATTING_CAPABILITIES,
 } from "./formatting.ts";
 export type { SpreadsheetFormattingTarget } from "./formatting.ts";
+export {
+  adjustSpreadsheetNumberDecimalsPackage,
+  adjustSpreadsheetNumberFormatDecimals,
+  describeSpreadsheetNumberFormat,
+  formatSpreadsheetNumbersPackage,
+  spreadsheetNumberFormatState,
+  SPREADSHEET_NUMBER_FORMAT_PRESETS,
+} from "./number-format-authoring.ts";
+export type {
+  SpreadsheetDecimalDirection,
+  SpreadsheetNumberFormat,
+  SpreadsheetNumberFormatCategory,
+  SpreadsheetNumberFormatInput,
+  SpreadsheetNumberFormatPreset,
+} from "./number-format-authoring.ts";
+export { setSpreadsheetBordersPackage, SPREADSHEET_BORDER_PRESETS, SPREADSHEET_BORDER_STYLES } from "./borders.ts";
+export type { SpreadsheetBorderOptions, SpreadsheetBorderPreset, SpreadsheetBorderStyle } from "./borders.ts";
+export { spreadsheetFormattingCommand, spreadsheetFormattingPatch } from "./formatting-commands.ts";
+export type { SpreadsheetFormattingCommand } from "./formatting-commands.ts";
 export type {
   SpreadsheetCell,
   SpreadsheetCellValue,

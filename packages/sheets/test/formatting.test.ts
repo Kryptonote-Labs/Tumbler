@@ -201,7 +201,7 @@ test('whole columns format sparsely and keep explicit cell styles through native
 
 test('number formatting preserves cell contents and recalculates display text', async () => {
   const {createSpreadsheet, applySpreadsheetCommand} = await import('../src/commands.ts');
-  const {formatSpreadsheetNumbersPackage} = await import('../src/formatting.ts');
+  const {formatSpreadsheetNumbersPackage} = await import('../src/number-format-authoring.ts');
   const {SpreadsheetArtifact} = await import('../src/artifact.ts');
   const original = applySpreadsheetCommand(createSpreadsheet(),{name:'set-cell',sheetId:'1',reference:'A1',value:0.125}).formatCells('A1',{text:{bold:{set:true}}});
   const workbook = openSpreadsheet(formatSpreadsheetNumbersPackage(original.workbook,original.activeSheet,'A1:A1048576','percent'));

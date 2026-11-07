@@ -1,5 +1,5 @@
 import { openOpcPackage } from "@tumblerjs/opc";
-import type { FormattingAdapter, FormattingCapabilities, FormattingPatch, FormattingState } from "@tumblerjs/core";
+import type { FormattingAdapter, FormattingCapabilities, FormattingPatch, FormattingState, FormattingValue } from "@tumblerjs/core";
 import { beginSpreadsheetEdit, type EditableCellValue } from "./editor.ts";
 import {
   formatSpreadsheetCellsPackage,
@@ -7,6 +7,7 @@ import {
   SPREADSHEET_FORMATTING_CAPABILITIES,
   type SpreadsheetFormattingTarget,
 } from "./formatting.ts";
+import { spreadsheetNumberFormatState, type SpreadsheetNumberFormat } from "./number-format-authoring.ts";
 import { openWorksheet, type SpreadsheetWorksheet } from "./worksheet.ts";
 import { openSpreadsheet, SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";
 import { isSpreadsheetNativeArchive, decodeSpreadsheetNativeArchive, openSpreadsheetNativeArchive } from "./native.ts";
@@ -73,6 +74,11 @@ export class SpreadsheetArtifact implements FormattingAdapter<SpreadsheetFormatt
 
   formattingState(target: SpreadsheetFormattingTarget): FormattingState {
     return spreadsheetFormattingState(this.worksheet, target);
+  }
+
+  /** Number format of the active sheet's logical cells; `mixed` when they differ. */
+  numberFormatState(target: SpreadsheetFormattingTarget): FormattingValue<SpreadsheetNumberFormat> {
+    return spreadsheetNumberFormatState(this.worksheet, target);
   }
 
   applyFormatting(target: SpreadsheetFormattingTarget, patch: FormattingPatch): SpreadsheetArtifact {
