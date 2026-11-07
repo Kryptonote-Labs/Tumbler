@@ -122,26 +122,28 @@ export function mergePdfDocuments(inputs: readonly PdfMergeInput[]): Uint8Array 
         if (found) return found;
         const ref = reserve(); refs.set(value.key, ref);
         const original = source.resolve(value);
-        if (original instanceof PdfStream) put(ref, { data: source.encodedStream(original), dictionary: copyDictionary(original.dictionary) });
+        if (original instanceof PdfStream) put(ref, { data: source.encodedStream(original), dictionary: copyDictionary(original.dictionary, true) });
         else put(ref, copy(original));
         return ref;
       }
       if (value instanceof PdfStream) {
-        const ref = reserve(); put(ref, { data: source.encodedStream(value), dictionary: copyDictionary(value.dictionary) }); return ref;
+        const ref = reserve(); put(ref, { data: source.encodedStream(value), dictionary: copyDictionary(value.dictionary, true) }); return ref;
       }
       if (Array.isArray(value)) return value.map(copy);
       if (value instanceof Map) return copyDictionary(value);
       return value;
     }
-    function copyDictionary(original: PdfDictionary): PdfDictionary {
+    function copyDictionary(original: PdfDictionary, stream = false): PdfDictionary {
       const type = source.resolve(original.get('Type'));
       const element = type instanceof PdfName && type.value === 'StructElem';
       const subtype = source.resolve(original.get('Subtype'));
+      const ownsStructure = stream || (type instanceof PdfName && ['Page', 'Annot'].includes(type.value)) ||
+        (subtype instanceof PdfName && original.has('Rect'));
       const field = original.has('FT') || original.has('T') || (subtype instanceof PdfName && subtype.value === 'Widget');
       return new Map([...original].map(([key, value]) => [key,
         element && key === 'S' && !original.has('NS') ? roleName(source.resolve(value)) :
           element && key === 'C' ? className(source.resolve(value)) :
-        (key === 'StructParents' || key === 'StructParent') ? integer(source.resolve(value)) + parentOffset :
+        ownsStructure && (key === 'StructParents' || key === 'StructParent') ? integer(source.resolve(value)) + parentOffset :
           key === 'DA' && field ? appearance(value) : copy(value)]));
     }
     function outDictionary(value: PdfValue | undefined): PdfDictionary {

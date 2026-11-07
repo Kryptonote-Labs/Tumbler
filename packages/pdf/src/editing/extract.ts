@@ -143,6 +143,13 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
   }
   function copyDictionary(original: PdfDictionary): PdfDictionary {
     const result = new Map<string, PdfValue>();
+    const type = source.resolve(original.get('Type'));
+    const subtype = source.resolve(original.get('Subtype'));
+    const annotation = (type instanceof PdfName && type.value === 'Annot') ||
+      (subtype instanceof PdfName && original.has('Rect'));
+    const outline = source.resolve(original.get('Title')) instanceof PdfString;
+    const actionType = source.resolve(original.get('S'));
+    const goto = actionType instanceof PdfName && actionType.value === 'GoTo';
     for (const [key, value] of original) {
       // Page back-references never pull a page tree or another page into this standalone file.
       if (
@@ -152,29 +159,35 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
       )
         continue;
 
-      if (key === 'Dest') {
+      if ((key === 'Dest' && (annotation || outline)) || (key === 'D' && goto)) {
         const dest = destination(value);
         if (dest) result.set(key, dest);
         continue;
       }
-      if (key === 'A') {
-        const action = source.resolve(value);
-        if (
-          action instanceof Map &&
-          action.get('S') instanceof PdfName &&
-          (action.get('S') as PdfName).value === 'GoTo'
-        ) {
-          const dest = action.get('D');
-          const copied = dest === undefined ? undefined : destination(dest);
-          if (copied)
-            result.set(
-              key,
-              new Map<string, PdfValue>([
-                ['S', new PdfName('GoTo')],
-                ['D', copied],
-              ]),
-            );
+      // Actions can appear under /A, additional-action events, /Next or arrays.
+      // Resolve their destinations wherever the action dictionary occurs, retaining
+      // the remaining entries (including chained actions).
+      if (key === 'Next' && actionType instanceof PdfName) {
+        const chain = source.resolve(value);
+        if (Array.isArray(chain)) {
+          const retained = chain.filter((entry) => {
+            const action = source.resolve(entry);
+            if (!(action instanceof Map)) return true;
+            const kind = source.resolve(action.get('S'));
+            if (!(kind instanceof PdfName) || kind.value !== 'GoTo') return true;
+            const target = action.get('D');
+            return target !== undefined && destination(target) !== undefined;
+          });
+          if (retained.length) result.set(key, retained.map(copy));
           continue;
+        }
+      }
+      const action = source.resolve(value);
+      if (action instanceof Map) {
+        const kind = source.resolve(action.get('S'));
+        if (kind instanceof PdfName && kind.value === 'GoTo') {
+          const target = action.get('D');
+          if (target === undefined || destination(target) === undefined) continue;
         }
       }
       result.set(key, copy(value));
@@ -183,12 +196,14 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
   }
   const selectedAnnotations = new Set<string>(),
     parentKeys = new Set<number>();
-  const scannedResources = new Set<string>();
+  const scannedResources = new Set<string>(), selectedResources = new Set<string>();
   function resourceParentKeys(value: PdfValue | undefined) {
     if (value instanceof PdfReference) {
       if (scannedResources.has(value.key)) return;
       scannedResources.add(value.key);
-      resourceParentKeys(source.resolve(value));
+      const resolved = source.resolve(value);
+      if (resolved instanceof PdfStream) selectedResources.add(value.key);
+      resourceParentKeys(resolved);
     } else if (value instanceof PdfStream) resourceParentKeys(value.dictionary);
     else if (Array.isArray(value)) value.forEach(resourceParentKeys);
     else if (value instanceof Map) {
@@ -233,6 +248,7 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
     source,
     selectedPages: new Set(selected.map((page) => page.reference.key)),
     selectedAnnotations,
+    selectedObjects: new Set([...selectedAnnotations, ...selectedResources]),
     refs,
     reserve,
     set: (ref, value) => {

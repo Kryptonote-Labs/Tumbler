@@ -13,6 +13,7 @@ export type PdfExtractionContext = {
   source: PdfSource;
   selectedPages: ReadonlySet<string>;
   selectedAnnotations: ReadonlySet<string>;
+  selectedObjects: ReadonlySet<string>;
   refs: Map<string, PdfReference>;
   reserve: () => PdfReference;
   set: (ref: PdfReference, value: PdfValue) => void;
@@ -102,7 +103,7 @@ export function subsetPdfTags(
   context: PdfExtractionContext,
   parentKeys: ReadonlySet<number>,
 ): PdfReference | undefined {
-  const { source, refs, reserve, copy, set, selectedPages, selectedAnnotations } = context;
+  const { source, refs, reserve, copy, set, selectedPages, selectedObjects } = context;
   const originalValue = source.catalog.get('StructTreeRoot'),
     original = source.resolve(originalValue);
   if (!(original instanceof Map)) return undefined;
@@ -125,7 +126,7 @@ export function subsetPdfTags(
     if (kind(resolved.get('Type'), 'MCR')) return selected(ownPage) ? [copy(resolved)] : [];
     if (kind(resolved.get('Type'), 'OBJR')) {
       const object = resolved.get('Obj');
-      return object instanceof PdfReference && selectedAnnotations.has(object.key)
+      return object instanceof PdfReference && selectedObjects.has(object.key)
         ? [copy(resolved)]
         : [];
     }

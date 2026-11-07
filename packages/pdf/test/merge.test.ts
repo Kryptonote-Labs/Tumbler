@@ -223,3 +223,89 @@ for (const action of [
   ]));
   expect(() => mergePdfDocuments([{ document }])).toThrow('not supported');
 });
+
+for (const resourceName of ['Dest', 'StructParent', 'StructParents', 'A', 'D', 'S', 'Type', 'DA', 'T', 'Title'])
+test(`resource name ${resourceName} is preserved as an ordinary XObject name`, () => {
+  const document = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Count 1 /Kids [3 0 R] /MediaBox [0 0 100 100] >>',
+    `<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Resources << /XObject << /${resourceName} 5 0 R >> >> >>`,
+    pdfStream(`/${resourceName} Do`),
+    pdfStream('BT /F 12 Tf 5 20 Td (HELLO) Tj ET', '/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Resources << /Font << /F 6 0 R >> >>'),
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ]));
+  const merged = openPdfDocument(mergePdfDocuments([{ document }, { document }]));
+  expect(texts(merged)).toEqual(['HELLO', 'HELLO']);
+});
+
+test('whole-object Form XObject tags retain Figure alternative text and parent references', () => {
+  const document = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 5 0 R >>',
+    '<< /Type /Pages /Count 1 /Kids [3 0 R] /MediaBox [0 0 100 100] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Resources << /XObject << /X 7 0 R >> >> >>',
+    pdfStream('/X Do'),
+    '<< /Type /StructTreeRoot /K [6 0 R] /ParentTree << /Nums [0 6 0 R] >> >>',
+    '<< /Type /StructElem /S /Figure /P 5 0 R /Pg 3 0 R /Alt (Important figure description) /K << /Type /OBJR /Obj 7 0 R /Pg 3 0 R >> >>',
+    pdfStream('0 0 20 20 re f', '/Type /XObject /Subtype /Form /BBox [0 0 100 100] /StructParent 0'),
+  ]));
+  const merged = openPdfDocument(mergePdfDocuments([{ document }, { document }]));
+  const source = merged.source, root = dictionary(source.resolve(source.catalog.get('StructTreeRoot')));
+  const nums = dictionary(source.resolve(root.get('ParentTree'))).get('Nums') as PdfValue[];
+  expect(nums.filter((_, index) => index % 2 === 0)).toEqual([0, 1]);
+  for (const index of [0, 1]) {
+    const figure = dictionary(source.resolve(nums[index * 2 + 1]));
+    expect(bytesText((figure.get('Alt') as PdfString).bytes)).toBe('Important figure description');
+    const objr = dictionary(source.resolve((figure.get('K') as PdfValue[])[0]));
+    const stream = source.resolve(objr.get('Obj')) as PdfStream;
+    expect(source.resolve(stream.dictionary.get('StructParent'))).toBe(index);
+    expect((objr.get('Pg') as PdfReference).key).toBe(merged.pages[index]!.reference.key);
+  }
+});
+
+for (const chainArray of [false, true])
+test(`named destinations resolve in additional actions and retain ${chainArray ? 'array' : 'single'} action chains`, () => {
+  const document = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /Names << /Dests << /Names [(target) [3 0 R /Fit]] >> >> >>',
+    '<< /Type /Pages /Count 1 /Kids [3 0 R] /MediaBox [0 0 100 100] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Annots [5 0 R] /AA << /O 6 0 R >> >>',
+    pdfStream(''),
+    '<< /Type /Annot /Subtype /Link /Rect [0 0 20 20] /A 6 0 R /AA << /U 6 0 R >> >>',
+    `<< /S /GoTo /D (target) /Next ${chainArray ? '[7 0 R 8 0 R]' : '7 0 R'} >>`,
+    '<< /S /URI /URI (https://example.org/) >>',
+    '<< /S /GoTo /D (target) >>',
+  ]));
+  const merged = openPdfDocument(mergePdfDocuments([{ document }, { document }]));
+  const source = merged.source;
+  for (const page of merged.pages) {
+    const annotation = dictionary(source.resolve((page.dictionary.get('Annots') as PdfReference[])[0]));
+    for (const value of [annotation.get('A'), dictionary(source.resolve(annotation.get('AA'))).get('U'), dictionary(source.resolve(page.dictionary.get('AA'))).get('O')]) {
+      const action = dictionary(source.resolve(value));
+      expect(((source.resolve(action.get('D')) as PdfValue[])[0] as PdfReference).key).toBe(page.reference.key);
+      const chain = source.resolve(action.get('Next'));
+      const uri = dictionary(source.resolve(Array.isArray(chain) ? chain[0] : chain));
+      expect(bytesText((uri.get('URI') as PdfString).bytes)).toBe('https://example.org/');
+      if (Array.isArray(chain)) {
+        const go = dictionary(source.resolve(chain[1]));
+        expect(((source.resolve(go.get('D')) as PdfValue[])[0] as PdfReference).key).toBe(page.reference.key);
+      }
+    }
+  }
+});
+
+test('action chains prune omitted page destinations while keeping other actions', () => {
+  const document = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] /MediaBox [0 0 100 100] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 5 0 R /Annots [6 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 5 0 R >>',
+    pdfStream(''),
+    '<< /Type /Annot /Subtype /Link /Rect [0 0 10 10] /A << /S /GoTo /D [3 0 R /Fit] /Next [<< /S /GoTo /D [4 0 R /Fit] >> << /S /URI /URI (https://example.org/) >>] >> >>',
+  ]));
+  const merged = openPdfDocument(mergePdfDocuments([{ document, pages: [0] }]));
+  const source = merged.source;
+  const annotation = dictionary(source.resolve((merged.pages[0]!.dictionary.get('Annots') as PdfReference[])[0]));
+  const action = dictionary(source.resolve(annotation.get('A')));
+  const chain = source.resolve(action.get('Next')) as PdfValue[];
+  expect(chain).toHaveLength(1);
+  expect((dictionary(source.resolve(chain[0])).get('S') as PdfName).value).toBe('URI');
+});
