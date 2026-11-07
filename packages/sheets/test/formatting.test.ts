@@ -234,3 +234,32 @@ test('whole row formatting uses sparse row defaults and preserves column styles'
   expect(artifact.worksheet.cellStyle('A5').font.bold).toBeFalse();
   expect(artifact.worksheet.rows.flatMap(row=>row.cells).length).toBeLessThan(10);
 });
+
+test('wide rectangles preserve excluded columns using sparse row defaults', async () => {
+  const {createSpreadsheet} = await import('../src/commands.ts');
+  const artifact=createSpreadsheet().formatCells('B2:XFC100',{text:{bold:{set:true}}});
+  expect(artifact.worksheet.cellStyle('B2').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('XFC100').font.bold).toBeTrue();
+  expect(artifact.worksheet.cellStyle('A2').font.bold).toBeFalse();
+  expect(artifact.worksheet.cellStyle('XFD100').font.bold).toBeFalse();
+  expect(artifact.worksheet.cellStyle('B1').font.bold).toBeFalse();
+  expect(artifact.worksheet.rows.flatMap(r=>r.cells).length).toBe(198);
+});
+
+test('whole rows inherit the predominant column format without materializing cells', async () => {
+  const {createSpreadsheet} = await import('../src/commands.ts');
+  const original=createSpreadsheet().formatCells('A1:XFD1048576',{text:{italic:{set:true}}});
+  const artifact=original.formatCells('A1:XFD2',{text:{bold:{set:true}}});
+  expect(artifact.worksheet.cellStyle('B2').font).toMatchObject({bold:true,italic:true});
+  expect(artifact.worksheet.rows.flatMap(row=>row.cells)).toHaveLength(0);
+});
+
+test('full-sheet formatting updates custom row styles with inferred row indexes', async () => {
+  const {createSpreadsheet,openSpreadsheetArtifact} = await import('../src/index.ts');
+  const {beginPackageTransaction} = await import('@tumblerjs/opc');
+  const original=createSpreadsheet().formatCells('A1:XFD1',{text:{italic:{set:true}}});
+  const xml=original.worksheet.document.source.replace('r="1"','');
+  const pkg=beginPackageTransaction(original.workbook.package).replacePart(original.activeSheet.partName,new TextEncoder().encode(xml)).commitPackage();
+  const artifact=openSpreadsheetArtifact(pkg.archive.originalBytes()).formatCells('A1:XFD1048576',{text:{bold:{set:true}}});
+  expect(artifact.worksheet.cellStyle('A1').font).toMatchObject({bold:true,italic:true});
+});

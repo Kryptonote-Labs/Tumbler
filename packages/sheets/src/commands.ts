@@ -142,11 +142,10 @@ function editSheets(artifact: SpreadsheetArtifact, command: SheetCommand) {
       if(element.localName === 'workbookView') {
         for(const name of ['activeTab','firstSheet']) {
           const attr=element.attributes.find(a=>a.localName===name&&!a.namespaceUri);
-          if(!attr)continue;
-          const oldIndex=Number(attr.value), previous=oldOrder[oldIndex];
+          const oldIndex=Number(attr?.value??0), previous=oldOrder[oldIndex];
           const located=previous?newOrder.indexOf(previous):-1;
           const index=located<0?Math.min(oldIndex,newOrder.length-1):located;
-          if(String(index)!==attr.value)editor.setAttribute(attr,String(index));
+          if(index!==oldIndex) { if(attr)editor.setAttribute(attr,String(index));else editor.insertAttribute(element,name,String(index)); }
         }
       }
       if(element.localName === 'definedName') {

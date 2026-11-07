@@ -108,8 +108,13 @@ export function formatSpreadsheetCellsPackage(
 
   const worksheet = openWorksheet(workbook, sheet);
   const planner = new SpreadsheetStylePlanner(workbook, worksheet.styles, numberFormatId);
-  if (EXCEL_MAX_ROWS - (range.end.row-range.start.row+1) <= 64) return formatWholeColumns(workbook, worksheet, range, planner, patch);
-  if (range.start.column === 1 && range.end.column === EXCEL_MAX_COLUMNS) return formatWholeRows(workbook, worksheet, range, planner, patch);
+  const height=range.end.row-range.start.row+1, width=range.end.column-range.start.column+1;
+  const cellsCost=height*width;
+  const columnCost=(EXCEL_MAX_ROWS-height)*width+worksheet.columns.length+1;
+  const defaults=predominantColumnStyle(worksheet);
+  const rowCost=height*(EXCEL_MAX_COLUMNS-width+1+defaults.exceptions);
+  if(columnCost < cellsCost && columnCost <= rowCost)return formatWholeColumns(workbook,worksheet,range,planner,patch);
+  if(rowCost < cellsCost)return formatWholeRows(workbook,worksheet,range,planner,patch);
   const edits = cells(range).map((address) => ({
     address,
     styleIndex: planner.formatIndex(worksheet.effectiveStyleIndex(address) ?? 0, patch),
@@ -687,7 +692,7 @@ function formatWholeColumns(workbook: SpreadsheetWorkbook, worksheet: Spreadshee
   for (const row of worksheet.rows) {
     if (row.index < range.start.row || row.index > range.end.row) continue;
     if (row.customFormat && allColumns && sheetData) {
-      const element = children(sheetData,ns,'row').find(r=>Number(attribute(r,'r')?.value)===row.index);
+      const element = children(sheetData,ns,'row').find((r,index,all)=>Number(attribute(r,'r')?.value??inferredRowIndex(all,index))===row.index);
       if (element) {
         const style = attribute(element,'s'), value=String(planner.formatIndex(row.styleIndex??0,patch));
         if(style)editor.setAttribute(style,value);else editor.insertAttribute(element,'s',value);
@@ -732,9 +737,10 @@ function formatWholeRows(workbook: SpreadsheetWorkbook, worksheet: SpreadsheetWo
   const markup=new Map([...rowElements].map(([row,element])=>[row,sourceForNode(document,element)]));
   const prefix=data.prefix;
   const overrides=new Map<string,{address:CellAddress;styleIndex:number}>();
+  const defaultBase=predominantColumnStyle(worksheet).style;
   for(let row=range.start.row;row<=range.end.row;row++) {
     const element=rowElements.get(row), model=worksheet.row(row);
-    const base=model?.customFormat ? model.styleIndex??0 : 0;
+    const base=model?.customFormat ? model.styleIndex??0 : defaultBase;
     const style=planner.formatIndex(base,patch);
     const attrs=new Map(element?.attributes.map(a=>[a.qualified,a.value]));
     attrs.set('r',String(row));attrs.set('s',String(style));attrs.set('customFormat','1');
@@ -743,12 +749,17 @@ function formatWholeRows(workbook: SpreadsheetWorkbook, worksheet: SpreadsheetWo
     if(!model?.customFormat) for(const column of worksheet.columns) {
       const target=planner.formatIndex(column.styleIndex??0,patch);
       if(target===style)continue;
-      for(let index=column.min;index<=column.max;index++) {
+      for(let index=Math.max(column.min,range.start.column);index<=Math.min(column.max,range.end.column);index++) {
         const address={row,column:index};
         overrides.set(formatCellReference(address),{address,styleIndex:planner.formatIndex(worksheet.effectiveStyleIndex(address)??0,patch)});
       }
     }
+    for (const [first,last] of [[1,range.start.column-1],[range.end.column+1,EXCEL_MAX_COLUMNS]]) for(let column=first!;column<=last!;column++) {
+      const address={row,column};
+      overrides.set(formatCellReference(address),{address,styleIndex:worksheet.effectiveStyleIndex(address)??0});
+    }
     for(const cell of model?.cells??[]) {
+      if(cell.address.column<range.start.column || cell.address.column>range.end.column)continue;
       const target=planner.formatIndex(worksheet.effectiveStyleIndex(cell.address)??0,patch);
       if(target!==style || cell.styleIndex!==undefined) overrides.set(cell.reference,{address:cell.address,styleIndex:target});
     }
@@ -762,4 +773,17 @@ function formatWholeRows(workbook: SpreadsheetWorkbook, worksheet: SpreadsheetWo
   planner.stage(tx);
   tx.replacePart(worksheet.sheet.partName,bytes);
   return tx.commitPackage();
+}
+
+function predominantColumnStyle(worksheet: SpreadsheetWorksheet) {
+  const boundaries=new Set([1,EXCEL_MAX_COLUMNS+1]);
+  for(const column of worksheet.columns){boundaries.add(column.min);boundaries.add(column.max+1);}
+  const sorted=[...boundaries].sort((a,b)=>a-b), counts=new Map<number,number>();
+  for(let i=0;i<sorted.length-1;i++){
+    const min=sorted[i]!, max=sorted[i+1]!-1;
+    const style=worksheet.columns.findLast(column=>min>=column.min&&max<=column.max&&column.styleIndex!==undefined)?.styleIndex??0;
+    counts.set(style,(counts.get(style)??0)+(max-min+1));
+  }
+  const [style,count]=[...counts].sort((a,b)=>b[1]-a[1])[0]??[0,EXCEL_MAX_COLUMNS];
+  return {style,exceptions:EXCEL_MAX_COLUMNS-count};
 }
