@@ -23,6 +23,7 @@ function schemaHelp(schema: z.ZodType) {
 export function tumblerHelp(commandName = 'tumbler') {
   return (
     [
+      `PDF search: ${commandName} <document> pdf --help`,
       `Presentations: ${commandName} <document> slides --help`,
       `Usage: ${commandName} <document> <operation> [flags]`,
       `Discover: ${commandName} <document> <operation> --help (no document is opened).`,

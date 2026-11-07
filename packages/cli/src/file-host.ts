@@ -1,3 +1,4 @@
+import { openPdfDocument, PdfSearchIndex } from '@tumblerjs/pdf';
 import { presentationFileHost, createPresentationFile } from './presentation-file-host.ts';
 import { fileRegion, fileRegions } from "./file-regions.ts";
 import { inspectWordObjects, inspectWordStyles, readWordImage } from "@tumblerjs/word/operations";
@@ -222,6 +223,9 @@ export function createFileHost(): OperationHost {
   }
   return {
     ...presentationFileHost(),
+    async findPdf(document, query, options) {
+      return new PdfSearchIndex(openPdfDocument(readFileSync(document))).find(query, options);
+    },
     async readImage(path, input) {
       checkExtension(path);
       const source = fileRegion(open(readFileSync(path)), input.region);

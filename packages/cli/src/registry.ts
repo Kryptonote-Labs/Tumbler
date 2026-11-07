@@ -1,3 +1,4 @@
+import type { PdfOperationHost } from './pdf.ts';
 import type { PresentationOperationHost } from './presentations.ts';
 import { inspectInput, type InspectInput } from "@tumblerjs/word/operations";
 import { wordOperation, targetSchema } from "@tumblerjs/word/operations";
@@ -47,7 +48,7 @@ export const operationInput = z
 export type OperationInput = z.infer<typeof operationInput>;
 export const selectInput = z.object({ page: z.string().optional(), target: targetSchema }).strict();
 export type SelectInput = z.infer<typeof selectInput>;
-export interface OperationHost extends PresentationOperationHost {
+export interface OperationHost extends PresentationOperationHost, PdfOperationHost {
   render?(document: string, input: RenderInput): Promise<unknown>;
   readImage?(document: string, input: ReadImageInput): Promise<unknown>;
   select?(document: string, input: SelectInput): Promise<unknown>;

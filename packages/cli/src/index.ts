@@ -1,3 +1,5 @@
+import { runPdf } from './pdf.ts';
+export type { PdfOperationHost } from './pdf.ts';
 import { runPresentation } from './presentations.ts';
 export { presentationHelp } from './presentations.ts';
 export type { PresentationOperationHost } from './presentations.ts';
@@ -28,6 +30,10 @@ export async function runTumbler(
   },
 ): Promise<number> {
   try {
+    if (argv[1] === 'pdf') {
+      await runPdf(argv, options);
+      return 0;
+    }
     if(argv[1] === 'slides'){await runPresentation(argv,options);return 0;}
     if (!argv.length || argv.includes('--help')) {
       const name =
