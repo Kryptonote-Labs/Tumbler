@@ -17,6 +17,14 @@ const stylesXml = (artifact: SpreadsheetArtifact) =>
   new TextDecoder().decode(artifact.workbook.package.readPart(artifact.workbook.package.getPart(artifact.worksheet.styles.partName!)!));
 
 describe("spreadsheet cell formatting", () => {
+  test("explicit centering clears indentation and adding indentation restores left alignment", () => {
+    const indented = run(createSpreadsheet(), { name: "format-cells", sheetId: "1", range: "A1", patch: { cell: { indent: { set: 2 } } } });
+    const centered = run(indented, { name: "format-cells", sheetId: "1", range: "A1", patch: { block: { horizontalAlignment: { set: "center" } } } });
+    expect(reopen(centered).worksheet.cellStyle("A1").alignment).toMatchObject({ horizontal: "center", indent: 0 });
+    const restored = run(centered, { name: "format-cells", sheetId: "1", range: "A1", patch: { cell: { indent: { set: 1 } } } });
+    expect(reopen(restored).worksheet.cellStyle("A1").alignment).toMatchObject({ horizontal: "left", indent: 1 });
+  });
+
   test("writes strike, theme colours, fills, wrap, rotation and indent that survive export and native archives", () => {
     const formatted = run(themed(), {
       name: "format-cells", sheetId: "1", range: "A1:B2", patch: {

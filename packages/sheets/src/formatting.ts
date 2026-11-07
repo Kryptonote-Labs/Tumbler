@@ -184,9 +184,10 @@ function applyAlignmentPatch(
     textRotation: changed(base.textRotation, fallback.textRotation, cell?.textRotation, spreadsheetTextRotation),
     indent: changed(base.indent, fallback.indent, cell?.indent, identity),
   };
-  // Excel indents only left, right and distributed text; it switches other alignments to left.
+  // Explicit alignment clears incompatible indentation; adding indentation switches to left.
   if (alignment.indent > 0 && alignment.horizontal !== "left" && alignment.horizontal !== "right" && alignment.horizontal !== "distributed") {
-    alignment.horizontal = "left";
+    if (block?.horizontalAlignment !== undefined && cell?.indent === undefined) alignment.indent = 0;
+    else alignment.horizontal = "left";
   }
   return Object.freeze(alignment);
 }
