@@ -152,3 +152,5 @@ export type { NativeSpreadsheetArchive } from "./native.ts";
 
 export { applySpreadsheetStructureCommand, rebaseSpreadsheetFormula } from "./structure.ts";
 export type { SpreadsheetStructureCommand } from "./structure.ts";
+
+export { translateSpreadsheetFormula } from './formula-translation.ts';
