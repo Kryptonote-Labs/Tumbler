@@ -111,9 +111,14 @@ export class PdfPageModel {
   position(page: PdfPage) {
     return (this.records.get(page.id)?.get('order') as string | undefined) ?? `${page.index}/1`;
   }
-  sourcePages(pages: readonly PdfPage[]): readonly PdfPage[] {
+  /** Initialize shared ownership outside reactive projections. Reads never publish Yjs updates. */
+  initialize(pages: readonly PdfPage[]): boolean {
+    const previous = this.records.size;
     this.ensure(pages.map((page) => page.id));
     this.ensureFallback(pages);
+    return previous !== this.records.size;
+  }
+  sourcePages(pages: readonly PdfPage[]): readonly PdfPage[] {
     return [
       ...pages,
       ...[...this.records]
@@ -155,6 +160,7 @@ export class PdfPageModel {
     size?: { width: number; height: number },
     output?: readonly { id: string; source: PdfPage; continuation: number }[],
   ) {
+    this.initialize(pages);
     const items = output ?? this.items(pages).map((p) => ({ ...p, continuation: 0 })),
       index = afterId === undefined ? items.length - 1 : items.findIndex((p) => p.id === afterId);
     if (afterId !== undefined && index < 0) throw new Error('Unknown PDF page.');
@@ -198,6 +204,7 @@ export class PdfPageModel {
     );
   }
   remove(pages: readonly PdfPage[], ids: readonly string[], output?: readonly { id: string }[]) {
+    this.initialize(pages);
     const known = this.sourcePages(pages);
     if (ids.some((id) => !this.known(known, id))) throw new Error('Unknown PDF page.');
     // Create immutable blank ownership before the tracked visibility transaction so undo cannot erase it.
@@ -216,6 +223,7 @@ export class PdfPageModel {
     beforeId?: string,
     output?: readonly { id: string; source: PdfPage; continuation: number }[],
   ) {
+    this.initialize(pages);
     const all = output ?? this.items(pages).map((p) => ({ ...p, continuation: 0 }));
     if (
       !all.some((p) => p.id === id) ||
@@ -244,6 +252,7 @@ export class PdfPageModel {
     degrees: number,
     _output?: readonly { id: string }[],
   ) {
+    this.initialize(pages);
     rotation(degrees);
     const known = this.sourcePages(pages);
     if (ids.some((id) => !this.known(known, id))) throw new Error('Unknown PDF page.');

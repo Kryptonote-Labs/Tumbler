@@ -237,3 +237,24 @@ test('concurrent page deletions converge on one editable blank and undo preserve
   expect(output.pages).toHaveLength(2);
   expect(texts(output).join(' ')).toContain('Peer recovery text');
 });
+
+test('page projections are read-only and inactive initialization retains exact source bytes', () => {
+  const model = new PdfTextModel();
+  let updates = 0;
+  model.doc.on('update', () => updates++);
+  expect(model.pages.items(pdf.pages)).toHaveLength(3);
+  model.pages.sourcePages(pdf.pages);
+  layoutPdfTextFlow(model, fonts, pdf.pages);
+  expect(updates).toBe(0);
+  expect(model.pages.dirty()).toBe(false);
+  expect(exportEditedPdf(pdf, model, fonts)).toEqual(data);
+  model.pages.initialize(pdf.pages);
+  const initializedUpdates = updates;
+  expect(model.pages.dirty()).toBe(false);
+  expect(exportEditedPdf(pdf, model, fonts)).toEqual(data);
+  model.pages.items(pdf.pages);
+  model.pages.sourcePages(pdf.pages);
+  layoutPdfTextFlow(model, fonts, pdf.pages);
+  expect(updates).toBe(initializedUpdates);
+  expect(model.pages.initialize(pdf.pages)).toBe(false);
+});

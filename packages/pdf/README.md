@@ -192,6 +192,10 @@ const edited = exportEditedPdf(document, model, fonts);
 const selected = extractPdfPages(openPdfDocument(edited), [0, 2]);
 ```
 
+`model.pages.initialize(document.pages)` prepares shared page ownership before reactive rendering.
+It is idempotent and does not mark the PDF edited. Read methods and layout never mutate the document;
+page mutation methods initialize ownership themselves.
+
 `layoutPdfTextFlow` returns the current output pages, with stable `id`, original `source`,
 `continuation` number and relative `rotation`. Pass its `pages` as the optional last argument to
 `insert`, `move`, `remove` and `rotate` when manipulating individual continuation pages. Removing

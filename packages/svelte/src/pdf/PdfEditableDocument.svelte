@@ -3,7 +3,7 @@
   import { paintEditablePdfPage } from './paint-editable-page.ts';
   import PdfTextBox from './PdfTextBox.svelte';
   import PdfEditableText from './PdfEditableText.svelte';
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import * as Y from 'yjs';
   import {
     PdfInterpreter,
@@ -62,6 +62,9 @@
   let value = $state(''),
     composing = false,
     dragging: { id: string; anchor: number; page: number } | undefined;
+  $effect(() => {
+    if (model.pages.initialize(pdf.pages)) untrack(() => revision++);
+  });
   const interpreter = $derived(new PdfInterpreter(pdf));
   const flow = $derived.by(() => {
     void revision;
