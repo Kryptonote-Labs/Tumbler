@@ -2,13 +2,14 @@ import { openOpcPackage } from "@tumblerjs/opc";
 import type { FormattingAdapter, FormattingCapabilities, FormattingPatch, FormattingState } from "@tumblerjs/core";
 import { beginSpreadsheetEdit, type EditableCellValue } from "./editor.ts";
 import {
-  formatSpreadsheetCells,
+  formatSpreadsheetCellsPackage,
   spreadsheetFormattingState,
   SPREADSHEET_FORMATTING_CAPABILITIES,
   type SpreadsheetFormattingTarget,
 } from "./formatting.ts";
 import { openWorksheet, type SpreadsheetWorksheet } from "./worksheet.ts";
 import { openSpreadsheet, SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";
+import { isSpreadsheetNativeArchive, decodeSpreadsheetNativeArchive, openSpreadsheetNativeArchive } from "./native.ts";
 import { calculateSpreadsheetWorksheet, type SpreadsheetCalculationSnapshot } from "./calculation.ts";
 
 export interface OpenSpreadsheetArtifactOptions {
@@ -47,9 +48,10 @@ export class SpreadsheetArtifact implements FormattingAdapter<SpreadsheetFormatt
   /** Edits a worksheet without changing the sheet currently presented by the host. */
   editCellOnSheet(sheet: SpreadsheetSheet | number | string, reference: string, value: EditableCellValue): SpreadsheetArtifact {
     const target = this.#resolveSheet(sheet);
-    const saved = beginSpreadsheetEdit(this.workbook).setCellValue(target, reference, value).commit();
-    if (saved === this.bytes()) return this;
-    return openSpreadsheetArtifact(saved, { sheet: this.activeSheet.name });
+    const saved = beginSpreadsheetEdit(this.workbook).setCellValue(target, reference, value).commitPackage();
+    if (saved === this.workbook.package) return this;
+    const workbook = openSpreadsheet(saved);
+    return new SpreadsheetArtifact(workbook, workbook.sheet(this.activeSheet.sheetId)!);
   }
 
   editFormula(reference: string, formula: string): SpreadsheetArtifact {
@@ -59,9 +61,10 @@ export class SpreadsheetArtifact implements FormattingAdapter<SpreadsheetFormatt
   /** Writes a formula to its original target sheet while reference picking may display another sheet. */
   editFormulaOnSheet(sheet: SpreadsheetSheet | number | string, reference: string, formula: string): SpreadsheetArtifact {
     const target = this.#resolveSheet(sheet);
-    const saved = beginSpreadsheetEdit(this.workbook).setCellFormula(target, reference, formula).commit();
-    if (saved === this.bytes()) return this;
-    return openSpreadsheetArtifact(saved, { sheet: this.activeSheet.name });
+    const saved = beginSpreadsheetEdit(this.workbook).setCellFormula(target, reference, formula).commitPackage();
+    if (saved === this.workbook.package) return this;
+    const workbook = openSpreadsheet(saved);
+    return new SpreadsheetArtifact(workbook, workbook.sheet(this.activeSheet.sheetId)!);
   }
 
   formattingCapabilities(_target: SpreadsheetFormattingTarget): FormattingCapabilities {
@@ -87,9 +90,10 @@ export class SpreadsheetArtifact implements FormattingAdapter<SpreadsheetFormatt
     patch: FormattingPatch,
   ): SpreadsheetArtifact {
     const resolved = this.#resolveSheet(sheet);
-    const saved = formatSpreadsheetCells(this.workbook, resolved, target, patch);
-    if (saved === this.bytes()) return this;
-    return openSpreadsheetArtifact(saved, { sheet: this.activeSheet.name });
+    const saved = formatSpreadsheetCellsPackage(this.workbook, resolved, target, patch);
+    if (saved === this.workbook.package) return this;
+    const workbook = openSpreadsheet(saved);
+    return new SpreadsheetArtifact(workbook, workbook.sheet(this.activeSheet.sheetId)!);
   }
 
   replace(bytes: Uint8Array): SpreadsheetArtifact {
@@ -106,6 +110,7 @@ export class SpreadsheetArtifact implements FormattingAdapter<SpreadsheetFormatt
 }
 
 export function openSpreadsheetArtifact(bytes: Uint8Array, options: OpenSpreadsheetArtifactOptions = {}): SpreadsheetArtifact {
+  if (isSpreadsheetNativeArchive(bytes)) return openSpreadsheetNativeArchive(decodeSpreadsheetNativeArchive(bytes), options);
   const workbook = openSpreadsheet(openOpcPackage(bytes));
   const requested = options.sheet === undefined ? undefined : workbook.sheet(options.sheet);
   const activeSheet = requested ?? workbook.sheets.find((sheet) => sheet.state === "visible") ?? workbook.sheets[0];

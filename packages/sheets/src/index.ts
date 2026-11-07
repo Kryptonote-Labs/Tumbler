@@ -144,3 +144,11 @@ export type {
   SpreadsheetPane,
   SpreadsheetRow,
 } from "./worksheet.ts";
+
+export { createSpreadsheet, applySpreadsheetCommand, inspectSpreadsheet, spreadsheetCommand } from "./commands.ts";
+export type { SpreadsheetCommand } from "./commands.ts";
+export { createSpreadsheetNativeArchive, openSpreadsheetNativeArchive, encodeSpreadsheetNativeArchive, decodeSpreadsheetNativeArchive, isSpreadsheetNativeArchive } from "./native.ts";
+export type { NativeSpreadsheetArchive } from "./native.ts";
+
+export { applySpreadsheetStructureCommand, rebaseSpreadsheetFormula } from "./structure.ts";
+export type { SpreadsheetStructureCommand } from "./structure.ts";
