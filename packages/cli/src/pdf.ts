@@ -1,3 +1,5 @@
+import { pdfDeletePagesInput } from "./pdf-pages.ts";
+import type { OperationHost } from "./registry.ts";
 import type { PdfSearchOptions, PdfSearchResult } from "@tumblerjs/pdf";
 export interface PdfOperationHost {
   findPdf?(
@@ -6,7 +8,7 @@ export interface PdfOperationHost {
     options: PdfSearchOptions,
   ): Promise<PdfSearchResult>;
 }
-export async function runPdf(
+async function runPdfFind(
   argv: readonly string[],
   options: {
     host: PdfOperationHost;
@@ -15,12 +17,6 @@ export async function runPdf(
   },
 ) {
   const [document, , command, query, ...flags] = argv;
-  if (!command || command === "--help" || argv.includes("--help")) {
-    options.stdout(
-      `Usage: ${options.commandName ?? "tumbler"} <document> pdf find <text> [--match-case] [--pages 2-8]\nReturns matches, total, one-based pages, context, and top-left page rectangles in points.\n`,
-    );
-    return;
-  }
   if (command !== "find" || !query?.trim())
     throw new Error(
       "Use pdf find <non-empty text> [--match-case] [--pages 2-8].",
@@ -61,5 +57,56 @@ export async function runPdf(
     throw new Error("PDF search is unavailable on this host.");
   options.stdout(
     JSON.stringify(await options.host.findPdf(document!, query, search)) + "\n",
+  );
+}
+
+export function pdfHelp(commandName = "tumbler", name?: string): string {
+  if (name && !["delete-pages", "find"].includes(name))
+    throw new Error(`Unknown PDF command: ${name}`);
+  const findHelp = `Usage: ${commandName} <document.pdf> pdf find <text> [--match-case] [--pages 2-8]\nReturns matches, total, one-based pages, context, and top-left page rectangles in points.\n`;
+  if (name === "find") return findHelp;
+  return (
+    (name ? "" : findHelp) +
+    [
+      `Usage: ${commandName} <document.pdf> pdf delete-pages 2,4-6`,
+      "Delete pages in place. Page numbers start at 1 and refer to the original document.",
+      "Use comma-separated numbers and inclusive ranges. Descending ranges are accepted; duplicate or overlapping selections are rejected.",
+      "Remaining pages keep their original order. At least one page must remain. File writes use a sibling lock and atomic replacement.",
+      "Documents with unsupported structures (including attachments, metadata and page labels) are rejected without changing the file.",
+      "The PDF is rebuilt without removed page streams or historical revisions. This is not content redaction: shared resources may remain.",
+    ].join("\n") +
+    "\n"
+  );
+}
+
+export async function runPdf(
+  argv: readonly string[],
+  options: {
+    host: OperationHost;
+    commandName?: string;
+    stdout: (text: string) => void;
+  },
+): Promise<void> {
+  const [document, , name, ...args] = argv;
+  if (!name || name === "--help" || args.includes("--help")) {
+    options.stdout(
+      pdfHelp(options.commandName, name === "--help" ? undefined : name),
+    );
+    return;
+  }
+  if (name === "find") {
+    await runPdfFind(argv, options);
+    return;
+  }
+  if (name !== "delete-pages") throw new Error(`Unknown PDF command: ${name}`);
+  if (!document || args.length !== 1)
+    throw new Error(
+      "Use pdf delete-pages <pages>, such as pdf delete-pages 2,4-6.",
+    );
+  const input = pdfDeletePagesInput.parse({ pages: args[0] });
+  if (!options.host.deletePdfPages)
+    throw new Error("PDF page deletion is unavailable on this host.");
+  options.stdout(
+    JSON.stringify(await options.host.deletePdfPages(document, input)) + "\n",
   );
 }

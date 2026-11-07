@@ -1,4 +1,6 @@
-import { openPdfDocument, PdfSearchIndex } from '@tumblerjs/pdf';
+import { extractPdfPages, openPdfDocument, PdfSearchIndex } from '@tumblerjs/pdf';
+import { checkPdfDeletionSupported } from './pdf-delete-pages.ts';
+import { pdfDeletePagesInput, pdfPageIndices } from './pdf-pages.ts';
 import { presentationFileHost, createPresentationFile } from './presentation-file-host.ts';
 import { fileRegion, fileRegions } from "./file-regions.ts";
 import { inspectWordObjects, inspectWordStyles, readWordImage } from "@tumblerjs/word/operations";
@@ -9,6 +11,7 @@ import type { OperationInput } from "./registry.ts";
 import { createHash, randomUUID } from "node:crypto";
 import {
   closeSync,
+  chmodSync,
   openSync,
   readFileSync,
   renameSync,
@@ -225,6 +228,54 @@ export function createFileHost(): OperationHost {
     ...presentationFileHost(),
     async findPdf(document, query, options) {
       return new PdfSearchIndex(openPdfDocument(readFileSync(document))).find(query, options);
+    },
+    async deletePdfPages(path, input) {
+      input = pdfDeletePagesInput.parse(input);
+      if (extname(path).toLowerCase() !== '.pdf')
+        throw new Error('PDF deletion requires a .pdf input path.');
+      path = realpathSync(path);
+      const lock = `${path}.tumbler-lock`;
+      const descriptor = openSync(lock, 'wx');
+      const temporary = `${path}.${randomUUID()}.tmp`;
+      try {
+        const original = readFileSync(path);
+        const document = openPdfDocument(original);
+        const indices = pdfPageIndices(input.pages, document.pages.length);
+        const removed = new Set(indices);
+        const remaining = document.pages.map((_, index) => index).filter((index) => !removed.has(index));
+        if (!remaining.length) throw new Error('Cannot delete every PDF page; keep at least one page.');
+        checkPdfDeletionSupported(document);
+        const output = extractPdfPages(document, remaining);
+        const mode = statSync(path).mode;
+        writeFileSync(temporary, output, { flag: 'wx', mode });
+        chmodSync(temporary, mode);
+        if (revision(readFileSync(path)) !== revision(original))
+          throw new Error('The document changed while editing. Try again.');
+        renameSync(temporary, path);
+        return { deletedPages: indices.map((index) => index + 1).sort((a, b) => a - b), pageCount: remaining.length };
+      } finally {
+        try {
+          unlinkSync(temporary);
+        } catch (error) {
+          if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+        }
+        closeSync(descriptor);
+        unlinkSync(lock);
+      }
+    },
+    async exportPdf(path, input) {
+      if (extname(path).toLowerCase() !== '.pdf' || extname(input.output).toLowerCase() !== '.pdf')
+        throw new Error('PDF export requires .pdf input and output paths.');
+      const document = openPdfDocument(readFileSync(path));
+      const indices = pdfPageIndices(input.pages, document.pages.length);
+      const output = extractPdfPages(document, indices);
+      writeFileSync(input.output, output, { flag: 'wx' });
+      return {
+        output: input.output,
+        format: 'pdf',
+        pages: indices.map((index) => index + 1),
+        pageCount: indices.length,
+      };
     },
     async readImage(path, input) {
       checkExtension(path);

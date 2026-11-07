@@ -1,7 +1,7 @@
 # Tumbler CLI
 
 Requires Bun 1.3 or later. Install with `bun add --global @tumblerjs/cli`.
-Word `.docx` is the supported engine. The package is public and included in the release graph.
+Supports Word `.docx`, presentation `.pptx` operations, and PDF page export/deletion. The package is public and included in the release graph.
 
 ```sh
 tumbler create draft.docx
@@ -12,6 +12,47 @@ tumbler draft.docx inspect --input '{"what":"styles"}'
 tumbler draft.docx style --page '<handle>' --target '{"text":"Report"}' --input '{"styleId":"Heading1"}'
 tumbler draft.docx --help
 ```
+
+## Delete PDF pages
+
+```sh
+tumbler report.pdf pdf delete-pages 2,4-6
+tumbler report.pdf pdf delete-pages --help
+```
+
+Deletes the selected pages in place. Numbers start at 1 and refer to the original
+PDF; ranges include both endpoints. Remaining pages keep their original order.
+Descending ranges are accepted. Invalid, out-of-bounds, duplicate or overlapping
+selections fail without writing, as does deleting every page. The file host uses
+a sibling `.tumbler-lock` and atomic replacement, preserving file permissions.
+Documents with structures the extractor cannot retain (including document-level
+attachments, metadata, page labels, or trailer Info) are rejected without changing
+the original file.
+It rebuilds the PDF without removed page streams or historical revisions; shared
+resources may remain, so this is not content redaction. Keep a copy if you need
+the original. Injected hosts implement optional `deletePdfPages(document, {pages})`
+and own permission checks and storage. Success returns `deletedPages` (original
+1-based numbers in ascending order) and the remaining `pageCount`.
+
+## Export PDF pages
+
+```sh
+tumbler source.pdf export --pages 2-5,8 --output selected.pdf
+tumbler source.pdf export --pages 8,3-5,2 --format pdf --output reordered.pdf
+tumbler source.pdf export --help
+```
+
+`--pages` uses 1-based page numbers and inclusive ranges, in exactly the order written.
+For example, `8,3-5,2` exports pages 8,3,4,5,2. Descending ranges such as `5-3`
+export 5,4,3. Repeated pages and overlapping ranges are rejected, as are missing,
+invalid or out-of-bounds pages. The output must be a new `.pdf` file; existing files
+are never overwritten. The original stays unchanged. Extraction copies text, images
+and vector graphics without rasterizing and excludes unselected page streams and
+original revisions. Stdout returns JSON with the output path, format, page order and count.
+
+Injected hosts implement optional `exportPdf(document, {pages, output, format})`;
+`pages` retains the selection string so the host can validate against its source page count
+and expand ranges in the written order. Unsupported hosts return an availability error.
 
 ## Shared operations
 

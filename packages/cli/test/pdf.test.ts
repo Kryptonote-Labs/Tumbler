@@ -33,5 +33,12 @@ test("PDF find reads files and returns shared results without modifying bytes", 
   expect(await run(["find", ""])).toBe(1);
   expect(await run(["--help"])).toBe(0);
   expect(stdout).toContain("pdf find");
+  expect(stdout).toContain("pdf delete-pages");
+  expect(await run(["find", "--help"])).toBe(0);
+  expect(stdout).toContain("--match-case");
+  expect(stdout).not.toContain("pdf delete-pages");
+  expect(await run(["delete-pages", "--help"])).toBe(0);
+  expect(stdout).toContain("pdf delete-pages");
+  expect(stdout).not.toContain("pdf find");
   expect(await Bun.file(path).bytes()).toEqual(original);
 });
