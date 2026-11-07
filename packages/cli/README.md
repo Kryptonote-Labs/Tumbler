@@ -169,3 +169,16 @@ File reads return a content-hash page handle. Writes require that handle, retain
 the sibling-lock convention and replace the file atomically. Hosted integrations
 implement `readPresentation` and `operatePresentation` on `OperationHost` to use
 the same syntax with their own permissions, revisions and durable receipts.
+
+Find PDF text with the same search engine used by the viewer:
+
+```sh
+tumbler report.pdf pdf find 'invoice number'
+tumbler report.pdf pdf find 'Invoice' --match-case --pages 2-8
+```
+
+`--pages` accepts one-based pages and inclusive ranges, including comma-separated
+lists such as `1,3-5`. JSON output contains `matches` and `total`. Matches include
+the page number, matched text, surrounding context, and rectangles in page points
+with a top-left origin. Wrapped phrases return multiple rectangles. Search is
+literal, includes existing OCR text, and leaves the file unchanged.

@@ -1,3 +1,4 @@
+import type { PdfOperationHost } from './pdf.ts';
 import { pdfExportInput, type PdfDeletePagesInput, type PdfExportInput } from './pdf-pages.ts';
 import type { PresentationOperationHost } from './presentations.ts';
 import { inspectInput, type InspectInput } from "@tumblerjs/word/operations";
@@ -48,7 +49,7 @@ export const operationInput = z
 export type OperationInput = z.infer<typeof operationInput>;
 export const selectInput = z.object({ page: z.string().optional(), target: targetSchema }).strict();
 export type SelectInput = z.infer<typeof selectInput>;
-export interface OperationHost extends PresentationOperationHost {
+export interface OperationHost extends PresentationOperationHost, PdfOperationHost {
   deletePdfPages?(document: string, input: PdfDeletePagesInput): Promise<unknown>;
   exportPdf?(document: string, input: PdfExportInput): Promise<unknown>;
   render?(document: string, input: RenderInput): Promise<unknown>;

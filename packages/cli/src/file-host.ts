@@ -1,4 +1,4 @@
-import { extractPdfPages, openPdfDocument } from '@tumblerjs/pdf';
+import { extractPdfPages, openPdfDocument, PdfSearchIndex } from '@tumblerjs/pdf';
 import { checkPdfDeletionSupported } from './pdf-delete-pages.ts';
 import { pdfDeletePagesInput, pdfPageIndices } from './pdf-pages.ts';
 import { presentationFileHost, createPresentationFile } from './presentation-file-host.ts';
@@ -226,6 +226,9 @@ export function createFileHost(): OperationHost {
   }
   return {
     ...presentationFileHost(),
+    async findPdf(document, query, options) {
+      return new PdfSearchIndex(openPdfDocument(readFileSync(document))).find(query, options);
+    },
     async deletePdfPages(path, input) {
       input = pdfDeletePagesInput.parse(input);
       if (extname(path).toLowerCase() !== '.pdf')

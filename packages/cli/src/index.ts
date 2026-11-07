@@ -1,5 +1,6 @@
 import { runPdf } from './pdf.ts';
 export { pdfHelp } from './pdf.ts';
+export type { PdfOperationHost } from './pdf.ts';
 import { runPresentation } from './presentations.ts';
 export { presentationHelp } from './presentations.ts';
 export type { PresentationOperationHost } from './presentations.ts';
