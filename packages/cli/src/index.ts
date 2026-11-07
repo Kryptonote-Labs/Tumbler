@@ -1,6 +1,8 @@
 import { runSpreadsheet } from './spreadsheets.ts';
 export { spreadsheetHelp } from './spreadsheets.ts';
 export type { SpreadsheetReadInput, SpreadsheetOperationHost } from './spreadsheets.ts';
+import { runPdf } from './pdf.ts';
+export { pdfHelp } from './pdf.ts';
 import { runPresentation } from './presentations.ts';
 export { presentationHelp } from './presentations.ts';
 export type { PresentationOperationHost } from './presentations.ts';
@@ -14,7 +16,7 @@ import {
   type OperationHost,
 } from './registry.ts';
 export * from './registry.ts';
-export type { PdfExportInput } from './pdf-pages.ts';
+export type { PdfDeletePagesInput, PdfExportInput } from './pdf-pages.ts';
 
 import { tumblerHelp, tumblerOperationHelp } from './help.ts';
 export { tumblerHelp, tumblerOperationHelp, tumblerCapabilities } from './help.ts';
@@ -38,6 +40,10 @@ export async function runTumbler(
     }
     if (argv[1] === 'slides') {
       await runPresentation(argv, options);
+      return 0;
+    }
+    if (argv[1] === 'pdf') {
+      await runPdf(argv, options);
       return 0;
     }
     if (!argv.length || argv.includes('--help')) {

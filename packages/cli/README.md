@@ -1,7 +1,7 @@
 # Tumbler CLI
 
 Requires Bun 1.3 or later. Install with `bun add --global @tumblerjs/cli`.
-Supports Word `.docx`, PowerPoint `.pptx` and Excel `.xlsx` through their native document engines, plus PDF page export. The package is public and included in the release graph.
+Supports Word `.docx`, PowerPoint `.pptx` and Excel `.xlsx` through their native document engines, plus PDF page export and deletion. The package is public and included in the release graph.
 
 ```sh
 tumbler create draft.docx
@@ -12,6 +12,27 @@ tumbler draft.docx inspect --input '{"what":"styles"}'
 tumbler draft.docx style --page '<handle>' --target '{"text":"Report"}' --input '{"styleId":"Heading1"}'
 tumbler draft.docx --help
 ```
+
+## Delete PDF pages
+
+```sh
+tumbler report.pdf pdf delete-pages 2,4-6
+tumbler report.pdf pdf delete-pages --help
+```
+
+Deletes the selected pages in place. Numbers start at 1 and refer to the original
+PDF; ranges include both endpoints. Remaining pages keep their original order.
+Descending ranges are accepted. Invalid, out-of-bounds, duplicate or overlapping
+selections fail without writing, as does deleting every page. The file host uses
+a sibling `.tumbler-lock` and atomic replacement, preserving file permissions.
+Documents with structures the extractor cannot retain (including document-level
+attachments, metadata, page labels, or trailer Info) are rejected without changing
+the original file.
+It rebuilds the PDF without removed page streams or historical revisions; shared
+resources may remain, so this is not content redaction. Keep a copy if you need
+the original. Injected hosts implement optional `deletePdfPages(document, {pages})`
+and own permission checks and storage. Success returns `deletedPages` (original
+1-based numbers in ascending order) and the remaining `pageCount`.
 
 ## Export PDF pages
 
