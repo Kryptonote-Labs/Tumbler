@@ -48,9 +48,9 @@ export function subsetPdfOutlines(
         if (children.items.length) {
           info.set('First', children.items[0]!.ref);
           info.set('Last', children.items.at(-1)!.ref);
-          info.set('Count', (Number(original.get('Count')) < 0 ? -1 : 1) * children.total);
+          info.set('Count', (Number(source.resolve(original.get('Count'))) < 0 ? -1 : 1) * children.total);
         }
-        kept.push({ ref, info, descendants: children.total });
+        kept.push({ ref, info, descendants: Number(info.get('Count')) > 0 ? children.total : 0 });
       } else set(ref, null);
       current = original.get('Next');
     }

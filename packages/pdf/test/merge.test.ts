@@ -198,3 +198,23 @@ test('indirect integer structure-parent keys are remapped per source', () => {
   const output = openPdfDocument(mergePdfPages([{ document: source }, { document: source }]));
   expect(output.pages.map((page) => output.source.resolve(page.dictionary.get('StructParents')))).toEqual([0, 1]);
 });
+
+test('bookmark visible counts exclude descendants of closed subtrees', () => {
+  const document = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /Outlines 5 0 R >>',
+    '<< /Type /Pages /Count 1 /Kids [3 0 R] /MediaBox [0 0 100 100] /Resources << >> >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 4 0 R >>', pdfStream(''),
+    '<< /Type /Outlines /First 6 0 R /Last 6 0 R /Count 1 >>',
+    '<< /Title (Closed) /Dest [3 0 R /Fit] /Parent 5 0 R /First 7 0 R /Last 7 0 R /Count 8 0 R >>',
+    '<< /Title (Hidden child) /Dest [3 0 R /Fit] /Parent 6 0 R >>',
+    '-1',
+  ]));
+  const output = openPdfDocument(mergePdfPages([{ document }]));
+  const root = dictionary(output.source.resolve(output.source.catalog.get('Outlines')));
+  const wrapper = dictionary(output.source.resolve(root.get('First')));
+  const closed = dictionary(output.source.resolve(wrapper.get('First')));
+  expect(root.get('Count')).toBe(2);
+  expect(wrapper.get('Count')).toBe(1);
+  expect(closed.get('Count')).toBe(-1);
+  expect(dictionary(output.source.resolve(closed.get('First'))).get('Title')).toBeInstanceOf(PdfString);
+});
