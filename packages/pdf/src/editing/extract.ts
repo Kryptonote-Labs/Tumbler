@@ -178,7 +178,7 @@ export function extractPdfPageGraph(document: PdfDocument, indices: readonly num
           const info = new Map<string, PdfValue>();
           for (const [key, entry] of original) {
             if (key === 'Next') continue;
-            info.set(key, key === 'D' && goto ? dest! : copy(entry));
+            info.set(key, key === 'S' ? copy(kind) : key === 'D' && goto ? dest! : copy(entry));
           }
           result.push(info);
         }

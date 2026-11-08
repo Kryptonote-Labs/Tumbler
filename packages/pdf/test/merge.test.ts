@@ -519,3 +519,40 @@ test(`promoted bookmark destinations own only their output occurrences (${target
     expect(actual).toEqual(expected);
   }
 });
+
+for (const promoted of [false, true])
+for (const indirectKind of [false, true])
+test(`bookmark ownership uses normalized action types (${promoted}, ${indirectKind})`, () => {
+  const kind = indirectKind ? '12 0 R' : '/GoTo';
+  const document = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /Outlines 7 0 R >>',
+    '<< /Type /Pages /Count 3 /Kids [3 0 R 4 0 R 5 0 R] /MediaBox [0 0 100 100] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 6 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 6 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 6 0 R >>',
+    pdfStream(''),
+    '<< /Type /Outlines /First 8 0 R /Last 8 0 R /Count 1 >>',
+    '<< /Title (Target first page) /Parent 7 0 R /A 9 0 R >>',
+    `<< /S ${kind} /D [${promoted ? 5 : 3} 0 R /Fit] /Next ${promoted ? 10 : 11} 0 R >>`,
+    `<< /S ${kind} /D [3 0 R /Fit] /Next 11 0 R >>`,
+    '<< /S 13 0 R /URI (https://example.org/tail) >>',
+    '/GoTo',
+    '/URI',
+  ]));
+  for (const blocks of [[[0, 1]], [[0], [1]], [[1], [0]], [[0], [1], [0]]]) {
+    const merged = openPdfDocument(mergePdfDocuments(blocks.map(pages => ({ document, pages }))));
+    const source = merged.source, root = dictionary(source.resolve(source.catalog.get('Outlines')));
+    const targets: string[] = [];
+    let next = root.get('First');
+    while (next instanceof PdfReference) {
+      const item = dictionary(source.resolve(next)), action = dictionary(source.resolve(item.get('A')));
+      expect((action.get('S') as PdfName).value).toBe('GoTo');
+      targets.push(((source.resolve(action.get('D')) as PdfReference[])[0] as PdfReference).key);
+      const tail = dictionary(source.resolve(action.get('Next')));
+      expect((tail.get('S') as PdfName).value).toBe('URI');
+      expect(bytesText((tail.get('URI') as PdfString).bytes)).toBe('https://example.org/tail');
+      next = item.get('Next');
+    }
+    expect(targets).toEqual(blocks.flat().flatMap((page, index) => page === 0 ? [merged.pages[index]!.reference.key] : []));
+  }
+});
