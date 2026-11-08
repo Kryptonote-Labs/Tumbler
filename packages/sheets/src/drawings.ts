@@ -289,3 +289,16 @@ function qualifiedAttr(element: LosslessXmlElement, namespace: string, name: str
 function invalid(message: string): never {
   throw new SpreadsheetError("invalid_drawing", message);
 }
+
+/** Stable DrawingML identity, independent of XML node positions after edits. */
+export function spreadsheetDrawingObjectId(drawing: SpreadsheetDrawing, anchor: SpreadsheetDrawingAnchor): number | undefined {
+  const visit = (element: LosslessXmlElement): number | undefined => {
+    if(element.localName === 'cNvPr') {
+      const id = Number(attr(element, 'id'));
+      return Number.isSafeInteger(id) && id >= 0 ? id : undefined;
+    }
+    for(const child of element.children) if(child.kind === 'element') { const id = visit(child); if(id !== undefined) return id; }
+  };
+  const element = drawing.document.element(anchor.elementId);
+  return element ? visit(element) : undefined;
+}
