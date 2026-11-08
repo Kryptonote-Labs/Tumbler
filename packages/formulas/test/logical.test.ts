@@ -112,6 +112,22 @@ describe("logical category generated-document cases through contract adapter", (
 });
 
 describe("logical category bounds and lexical contract", () => {
+  test("omitted runtime values follow shared blank coercion and survive lambda bindings", () => {
+    const omitted = { kind: "omitted" } as unknown as FunctionValue;
+    const original = context();
+    const ctx: FunctionContext = { ...original, evaluate: () => omitted };
+    const result = logicalFunctions.get("BYROW")!([expression("1"), expression("2")], {
+      ...ctx,
+      evaluate(node) {
+        if (node.kind === "number" && node.value === 2) return { kind: "lambda", parameters: ["ITEM"], invoke: () => omitted };
+        return omitted;
+      },
+    });
+    expect(result).toEqual({ kind: "array", rows: [[functionNumber(0)]] });
+    const fn = run("LAMBDA(item,item)");
+    if (!("kind" in fn) || fn.kind !== "lambda") throw new Error("lambda");
+    expect(fn.invoke([omitted])).toEqual(omitted);
+  });
   test("lambda is lazy and zero parameters are supported", () => {
     const fn = run("LAMBDA(1/0)");
     expect("kind" in fn && fn.kind === "lambda").toBe(true);

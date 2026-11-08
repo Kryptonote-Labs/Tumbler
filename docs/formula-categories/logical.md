@@ -48,8 +48,9 @@ Category code calls `context.evaluate`, `context.withBindings` and receives
 `FunctionLambda`/`FunctionArray` values. It does not implement another evaluator.
 It structurally recognizes the agreed AST nodes `{kind:'name',name:string}` and
 `{kind:'omitted'}` pending their integration. `_xlpm.` parameter prefixes used in
-XLSX storage are normalized. A future `{kind:'omitted'}` FunctionValue passes
-through lambda bindings unchanged; scalar-array contexts reject it with #CALC!.
+XLSX storage are normalized. The confirmed `{kind:'omitted'}` FunctionValue passes
+through lambda bindings unchanged; array inputs coerce it to blank and materialized
+scalar outputs coerce that blank to zero, matching the shared helpers.
 
 Integration must provide immutable lexical child contexts with case-insensitive
 lookup, named and expression lambda invocation, zero-argument TRUE/FALSE calls
@@ -85,7 +86,7 @@ rather than calendar conversion. No service/nondeterministic flags are needed.
 The test file runs all 63 fixtures against a category-local contract context.
 It reuses the existing parser through temporary sentinel calls for name/omitted
 nodes and TRUE/FALSE calls. This is test infrastructure only and does not prove
-shared parser/evaluator or XLSX integration. Six additional tests cover lazy lambda
+shared parser/evaluator or XLSX integration. Seven additional tests cover lazy lambda
 bodies, zero parameters, the 253/126 parameter/binding limits, invalid names,
 array-cell and operation budgets, near-boundary dimensions, and function arity.
 The parent harness must generate real uncached XLSX workbooks, verify recalculation,
@@ -97,7 +98,7 @@ provide semantics only; no external workbook, screenshot, or dataset is copied.
 The multiplication-table and running-product patterns are commonplace mathematical
 examples. Expectations are not Excel-cached results and are not yet oracle-certified.
 
-Validation: `bun test packages/formulas/test/logical.test.ts` (69 passing tests),
+Validation: `bun test packages/formulas/test/logical.test.ts` (70 passing tests),
 `bun run check`, and the existing formulas test suite. Readiness additionally
 requires the coordinator's generated-document tests and independent GPT-6.1 sol
 high reviews; this category does not open a PR or assert project readiness.

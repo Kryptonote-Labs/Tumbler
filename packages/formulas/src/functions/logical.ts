@@ -28,11 +28,13 @@ function isError(value: FunctionValue): value is FormulaScalarValue & { type: "e
   return !("kind" in value) && value.type === "error";
 }
 function scalarResult(value: FunctionValue): FormulaScalarValue {
+  if ((value as { kind?: string }).kind === "omitted") return number(0);
   if (!("kind" in value)) return value.type === "blank" ? number(0) : value;
   if (value.kind === "array" && value.rows.length === 1 && value.rows[0]?.length === 1) return scalarResult(value.rows[0][0]!);
   return error("#CALC!");
 }
 function matrix(value: FunctionValue, context: FunctionContext): readonly (readonly FormulaScalarValue[])[] | FormulaScalarValue {
+  if ((value as { kind?: string }).kind === "omitted") return [[{ type: "blank" }]];
   if ("kind" in value && value.kind !== "array") return error("#CALC!");
   const rows = "kind" in value ? value.rows : [[value]];
   const width = rows[0]?.length ?? 0;
@@ -50,7 +52,7 @@ function build(height: number, width: number, context: FunctionContext, cell: (r
     for (let column = 0; column < width; column++) {
       context.operation();
       const value = cell(row, column);
-      if ("kind" in value && (value.kind !== "array" || value.rows.length !== 1 || value.rows[0]?.length !== 1)) return error("#CALC!");
+      if ("kind" in value && (value as { kind: string }).kind !== "omitted" && (value.kind !== "array" || value.rows.length !== 1 || value.rows[0]?.length !== 1)) return error("#CALC!");
       output.push(scalarResult(value));
     }
     rows.push(output);
