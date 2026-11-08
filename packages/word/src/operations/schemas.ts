@@ -82,7 +82,7 @@ export const tableFormat = z
 export const shape = z
   .custom<import('../shapes.ts').WordAuthoredShape>(isWordAuthoredShape)
   .describe(
-    'Shape object: required preset (rect|roundRect|ellipse|triangle|diamond|rightArrow|chevron|star5|line), width/height in points, fill/outline colours, outlineWidth in points. Optional cornerRadius in points for roundRect (default 16.667% of shorter side; clamped to half that side), text, textBody rich paragraphs, textAnchor top|center|bottom, textInsets {top?,right?,bottom?,left?} in points (omitted sides: top/bottom 3.6, left/right 7.2; zero allowed), alt. Placement: layout inline|front|behind, x/y points, horizontalRelativeTo page|column, verticalRelativeTo page|line|paragraph, alignment left|center|right, moveWithText boolean, wrap none.',
+    'Shape object: required preset (rect|roundRect|ellipse|triangle|diamond|rightArrow|chevron|star5|line), width/height in points, fill/outline colours, outlineWidth in points. Optional gradient {kind: gradient, type: linear|radial|rectangular, stops: [{offset: 0..1, color: #RRGGBB, opacity?: 0..1}], angle?: degrees, scaled?: boolean, center?: [x,y]}, zOrder (0..4294967295), cornerRadius in points for roundRect (default 16.667% of shorter side; clamped to half that side), text, textBody rich paragraphs, textAnchor top|center|bottom, textInsets {top?,right?,bottom?,left?} in points (omitted sides: top/bottom 3.6, left/right 7.2; zero allowed), alt. Placement: layout inline|front|behind, x/y points, horizontalRelativeTo page|column, verticalRelativeTo page|line|paragraph, alignment left|center|right, moveWithText boolean, wrap none.',
   );
 export const image = z
   .custom<import('../collaboration/images.ts').DocumentImage>(isDocumentImage)
@@ -108,7 +108,7 @@ export const drawing = z
     isWordDrawingGeometry(value),
   )
   .describe(
-    'Drawing geometry: required positive width and height in points. Optional layout inline|front|behind; x/y offsets in points; horizontalRelativeTo page|column; verticalRelativeTo page|line|paragraph; wrap none. Use page/page for fixed positioning or line/paragraph vertical positioning to follow text. Applies to existing objects.',
+    'Drawing geometry: required positive width and height in points. Optional zOrder (0..4294967295), layout inline|front|behind; x/y offsets in points; horizontalRelativeTo page|column; verticalRelativeTo page|line|paragraph; wrap none. Use page/page for fixed positioning or line/paragraph vertical positioning to follow text. Applies to existing objects.',
   );
 export const ink = z
   .custom<import('../authored-ink.ts').WordAuthoredInk>(isWordAuthoredInk)

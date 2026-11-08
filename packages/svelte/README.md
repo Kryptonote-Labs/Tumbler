@@ -348,3 +348,7 @@ Hosts own menus, touch insertion policy, permissions, saving, error display, and
 selection after a successful command. Unmount the placement component when the
 active slide, tool or editing permission changes. After pointerup, keep it mounted
 through the following click event before removing it to avoid click-through.
+
+### Remote spreadsheet selections
+
+Pass `remoteSelections` to `SpreadsheetGrid` as an array of `{ id, name, color, range }`. Ranges use one-based, inclusive `start` and `end` cell coordinates. The host supplies selections for the displayed worksheet and owns presence transport. The grid projects ranges through filtered rows and clips them against scrolling and frozen panes. Overlays do not intercept pointer input.

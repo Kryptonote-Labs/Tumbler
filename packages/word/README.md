@@ -1275,3 +1275,10 @@ Word authored shapes include chevron and five-point star presets alongside the e
 Rounded rectangles accept optional `cornerRadius` in points. Omission uses the DrawingML default, 16.667% of the shorter side. Rendering and DOCX export clamp the radius to half that side. Explicit `roundRect` adjustment values import as editable radii, including zero; unsupported geometry formulas remain preserved as opaque drawings.
 
 The rounded-rectangle default and radius bounds follow `roundRect` in `presetShapeDefinitions.xml`, distributed with [ECMA-376 Part 1](https://ecma-international.org/wp-content/uploads/ECMA-376-1_5th_edition_december_2016.zip).
+
+Authored shapes accept an optional `gradient` using the shared DrawingML gradient fill
+from `@tumblerjs/ooxml`. Linear, radial and rectangular fills retain stops, opacity,
+direction and focus through editing and export. Solid `fill` remains the fallback.
+Floating shapes, pictures and retained drawing geometry accept `zOrder`. An order-only
+`updateDrawing` changes the anchor order without rewriting its positioning or wrapping.
+Canvas paint targets provide `createLinearGradient` and `createRadialGradient`.

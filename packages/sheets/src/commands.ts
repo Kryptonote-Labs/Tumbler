@@ -1,3 +1,6 @@
+import { spreadsheetDrawingObjectId, spreadsheetDrawingBounds } from './drawings.ts';
+import { spreadsheetDrawingCommand, isSpreadsheetDrawingCommand, applySpreadsheetDrawingCommand } from './drawing-commands.ts';
+import { spreadsheetInteractionCommand, applySpreadsheetInteractionCommand } from './interaction.ts';
 import { spreadsheetFormattingCommand, spreadsheetFormattingCommandPackage } from './formatting-commands.ts';
 import { applySpreadsheetStructureCommand } from './structure.ts';
 import { rewriteSpreadsheetSheetReferences } from './sheet-references.ts';
@@ -20,6 +23,8 @@ const single = z.discriminatedUnion('name', [
   z.object({name:z.literal('insert-columns'),sheetId:id,index:z.number().int().positive(),count:z.number().int().positive().optional()}).strict(),
   z.object({name:z.literal('delete-columns'),sheetId:id,index:z.number().int().positive(),count:z.number().int().positive().optional()}).strict(),
   ...spreadsheetLayoutCommand.options,
+  ...spreadsheetDrawingCommand.options,
+  ...spreadsheetInteractionCommand.options,
   z.object({name:z.literal('set-cell'),sheetId:id,reference:id,value}).strict(),
   z.object({name:z.literal('set-formula'),sheetId:id,reference:id,formula:z.string()}).strict(),
   z.object({name:z.literal('set-range'),sheetId:id,reference:id,values:z.array(z.array(value))}).strict(),
@@ -52,9 +57,11 @@ function validName(artifact: SpreadsheetArtifact, name: string, except?: Spreads
 export function applySpreadsheetCommand(artifact: SpreadsheetArtifact, input: SpreadsheetCommand): SpreadsheetArtifact {
   const command = spreadsheetCommand.parse(input);
   if (command.name === 'batch') return command.commands.reduce(applySpreadsheetCommand, artifact);
+  if (isSpreadsheetDrawingCommand(command)) return applySpreadsheetDrawingCommand(artifact, command);
   if (command.name === 'insert-rows' || command.name === 'delete-rows' || command.name === 'insert-columns' || command.name === 'delete-columns') return applySpreadsheetStructureCommand(artifact, command);
   if (command.name === 'add-sheet' || command.name === 'delete-sheet' || command.name === 'rename-sheet' || command.name === 'move-sheet') return editSheets(artifact, command);
   if (command.name === 'set-column-width' || command.name === 'set-row-height' || command.name === 'merge-cells' || command.name === 'unmerge-cells' || command.name === 'freeze-panes') return applySpreadsheetLayoutCommand(artifact, command);
+  if (command.name === 'replace-text' || command.name === 'set-sheet-state' || command.name === 'set-tab-color') return applySpreadsheetInteractionCommand(artifact, command);
   const sheet = resolveSheet(artifact, command.sheetId);
   if (command.name === 'paint-formatting' || command.name === 'format-cells' || command.name === 'set-number-format' || command.name === 'adjust-number-decimals' || command.name === 'set-borders' || command.name === 'clear-formatting') {
     const saved = spreadsheetFormattingCommandPackage(artifact, sheet, command);
@@ -185,6 +192,7 @@ export function inspectSpreadsheet(artifact: SpreadsheetArtifact, sheetId?: stri
   return {
     sheets: artifact.workbook.sheets.map(sheet => ({id:String(sheet.sheetId),name:sheet.name,state:sheet.state})),
     sheet: {id:String(sheet.sheetId),name:sheet.name,state:sheet.state,dimension:selected.worksheet.dimension},
+    drawings: selected.worksheet.drawing?.anchors.map(anchor=>({ objectId: spreadsheetDrawingObjectId(selected.worksheet.drawing!,anchor), ...spreadsheetDrawingBounds(anchor,selected.worksheet.rowGeometry(),selected.worksheet.columnGeometry()) })) ?? [],
     range: reference,
     formatting: selected.formattingState(range),
     numberFormat: selected.numberFormatState(range),

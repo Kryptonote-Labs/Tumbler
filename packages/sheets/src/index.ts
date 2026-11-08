@@ -177,4 +177,11 @@ export type { SpreadsheetStructureCommand } from "./structure.ts";
 
 export { translateSpreadsheetFormula } from './formula-translation.ts';
 
+export { readSpreadsheetDrawingObjects } from './drawing-objects.ts';
+export type { SpreadsheetDrawingObject, SpreadsheetDrawingObjectFrame } from './drawing-objects.ts';
+
+export { spreadsheetDrawingCommand, applySpreadsheetDrawingCommand } from './drawing-commands.ts';
+export type { SpreadsheetDrawingCommand } from './drawing-commands.ts';
+export { spreadsheetDrawingObjectId } from './drawings.ts';
+export { spreadsheetPrintHeaderText, spreadsheetPrintPages, type SpreadsheetPrintPage } from './print.ts';
 export { spreadsheetFormatPainterSample } from './format-painter.ts';

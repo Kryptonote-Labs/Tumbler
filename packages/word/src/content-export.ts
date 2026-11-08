@@ -64,7 +64,9 @@ export function reconcileWordContent(
               ? 'behind'
               : 'front';
         const moved = drawingNeedsUpdate(drawing, { ...image, width: drawing.widthPoints, height: drawing.heightPoints }, run.drawing !== undefined);
+        const ordered = image.zOrder !== undefined && image.zOrder !== (drawing.anchor?.zOrder ?? 0);
         if (
+          ordered ||
           drawing.widthPoints !== image.width ||
           drawing.heightPoints !== image.height ||
           moved
@@ -87,14 +89,15 @@ export function reconcileWordContent(
             elementId: segment.elementId,
             widthPoints: image.width,
             heightPoints: image.height,
+            ...(image.zOrder !== undefined ? { zOrder: image.zOrder } : {}),
             ...(moved
               ? {
                   layout: image.layout ?? layout,
                   wrap: image.wrap,
-                  horizontalRelativeTo: image.horizontalRelativeTo ?? (run.image ? 'column' : 'page'),
-                  verticalRelativeTo: image.verticalRelativeTo ?? (run.image ? (run.image.moveWithText === false ? 'page' : 'paragraph') : 'page'),
-                  xPoints: image.x ?? 0,
-                  yPoints: image.y ?? 0,
+                  horizontalRelativeTo: image.horizontalRelativeTo ?? (drawing.anchor?.horizontalRelativeTo === 'column' ? 'column' : 'page'),
+                  verticalRelativeTo: image.verticalRelativeTo ?? (drawing.anchor?.verticalRelativeTo === 'line' ? 'line' : drawing.anchor?.verticalRelativeTo === 'paragraph' ? 'paragraph' : 'page'),
+                  xPoints: image.x ?? drawing.anchor?.horizontalOffsetPoints ?? 0,
+                  yPoints: image.y ?? drawing.anchor?.verticalOffsetPoints ?? 0,
                 }
               : {}),
           });

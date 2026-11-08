@@ -114,11 +114,11 @@
             style:position={run.baseline ? "relative" : undefined}
             style:top={`${-(run.baseline ?? 0) * run.fontSize}px`}
             >{#if run.hyperlink}<a
-                href={run.hyperlink.href ?? "#"}
+                href={run.hyperlink.href && /^(https?|mailto|tel):/i.test(run.hyperlink.href) ? run.hyperlink.href : "#"}
                 target={run.hyperlink.href ? "_blank" : undefined}
                 rel="noopener noreferrer"
                 onclick={(event) => {
-                  if (!linksEnabled || editor?.active) {
+                  if (!linksEnabled || editor?.active || (run.hyperlink?.href && !/^(https?|mailto|tel):/i.test(run.hyperlink.href))) {
                     event.preventDefault();
                     return;
                   }

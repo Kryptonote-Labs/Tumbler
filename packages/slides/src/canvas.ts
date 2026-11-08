@@ -1,3 +1,4 @@
+import { paintDrawingGradient as gradient, paintRectangularGradient as rectangular } from "@tumblerjs/ooxml";
 import {
   linearGradientLine,
   rectangularGradientFaces,
@@ -16,55 +17,6 @@ export function presentationSlideImages(slide: PresentationSlide): readonly Draw
     slide.backgroundPicture,
     ...slide.objects.flatMap((o) => [o.image, o.pictureFill]),
   ].filter((p): p is DrawingPictureFill => p !== undefined);
-}
-function gradient<Path, Image>(
-  ctx: SlideCanvasContext<Path, Image>,
-  value: DrawingGradient | undefined,
-  fallback: string,
-  w: number,
-  h: number,
-) {
-  if (!value) return fallback;
-  let result;
-  if (value.kind === 'radial') {
-    result = ctx.createRadialGradient(
-      w * value.center[0],
-      h * value.center[1],
-      0,
-      w * value.center[0],
-      h * value.center[1],
-      Math.max(w, h),
-    );
-  } else result = ctx.createLinearGradient(...linearGradientLine(value, w, h));
-  for (const stop of value.stops)
-    result.addColorStop(Math.max(0, Math.min(1, stop.offset)), stop.color);
-  return result;
-}
-/**
- * Canvas has no rectangular paint either; paint the shaded faces into the current clip. Opaque
- * faces overlap to hide anti-aliased seams. Translucent faces stay exact: overlapping would darken
- * the diagonals, so they keep a faint anti-aliasing hairline that only an offscreen layer avoids.
- */
-function rectangular<Path, Image>(
-  ctx: SlideCanvasContext<Path, Image>,
-  value: DrawingGradient,
-  w: number,
-  h: number,
-) {
-  const opaque = value.stops.every(({ color }) => {
-    const alpha = /^rgba\(.*,\s*([\d.]+)\)$/.exec(color)?.[1];
-    return color !== 'transparent' && (alpha === undefined || Number(alpha) >= 1);
-  });
-  for (const face of rectangularGradientFaces(value.center, opaque ? 0.002 : 0)) {
-    const [x1, y1, x2, y2] = face.line;
-    const fill = ctx.createLinearGradient(x1 * w, y1 * h, x2 * w, y2 * h);
-    for (const stop of value.stops)
-      fill.addColorStop(Math.max(0, Math.min(1, stop.offset)), stop.color);
-    ctx.fillStyle = fill;
-    ctx.beginPath();
-    face.points.forEach(([x, y], i) => (i ? ctx.lineTo(x * w, y * h) : ctx.moveTo(x * w, y * h)));
-    ctx.fill();
-  }
 }
 function picture<Path, Image>(
   ctx: SlideCanvasContext<Path, Image>,
