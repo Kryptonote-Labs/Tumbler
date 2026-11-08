@@ -53,3 +53,5 @@ export { findTextMatches } from './search.ts';
 export type { TextMatch, TextSearchOptions } from './search.ts';
 
 export { textReplacement } from './text-replacement.ts';
+
+export { FormatPainter } from './format-painter.ts';

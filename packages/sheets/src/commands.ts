@@ -63,7 +63,7 @@ export function applySpreadsheetCommand(artifact: SpreadsheetArtifact, input: Sp
   if (command.name === 'set-column-width' || command.name === 'set-row-height' || command.name === 'merge-cells' || command.name === 'unmerge-cells' || command.name === 'freeze-panes') return applySpreadsheetLayoutCommand(artifact, command);
   if (command.name === 'replace-text' || command.name === 'set-sheet-state' || command.name === 'set-tab-color') return applySpreadsheetInteractionCommand(artifact, command);
   const sheet = resolveSheet(artifact, command.sheetId);
-  if (command.name === 'format-cells' || command.name === 'set-number-format' || command.name === 'adjust-number-decimals' || command.name === 'set-borders' || command.name === 'clear-formatting') {
+  if (command.name === 'paint-formatting' || command.name === 'format-cells' || command.name === 'set-number-format' || command.name === 'adjust-number-decimals' || command.name === 'set-borders' || command.name === 'clear-formatting') {
     const saved = spreadsheetFormattingCommandPackage(artifact, sheet, command);
     return saved === artifact.workbook.package ? artifact : fromPackage(saved, artifact.activeSheet.sheetId);
   }

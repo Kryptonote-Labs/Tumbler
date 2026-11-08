@@ -184,3 +184,4 @@ export { spreadsheetDrawingCommand, applySpreadsheetDrawingCommand } from './dra
 export type { SpreadsheetDrawingCommand } from './drawing-commands.ts';
 export { spreadsheetDrawingObjectId } from './drawings.ts';
 export { spreadsheetPrintHeaderText, spreadsheetPrintPages, type SpreadsheetPrintPage } from './print.ts';
+export { spreadsheetFormatPainterSample } from './format-painter.ts';

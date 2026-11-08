@@ -13,6 +13,8 @@ import {
 } from "./number-format-authoring.ts";
 import type { SpreadsheetSheet } from "./workbook.ts";
 
+import { paintSpreadsheetFormatting, spreadsheetPainterSample } from './format-painter.ts';
+import { parseCellRange } from './references.ts';
 const sheetId = z.string().min(1);
 const range = z.string().min(1);
 const inherit = z.object({ inherit: z.literal(true) }).strict().meta({ id: "InheritFormatting", description: "Return the property to the workbook Normal style." });
@@ -53,6 +55,7 @@ export const spreadsheetFormattingPatch = z.object({
 const presets = Object.keys(SPREADSHEET_NUMBER_FORMAT_PRESETS) as [SpreadsheetNumberFormatPreset, ...SpreadsheetNumberFormatPreset[]];
 
 export const spreadsheetFormattingCommand = z.discriminatedUnion("name", [
+  z.object({ name: z.literal('paint-formatting'), sheetId, range, styles: spreadsheetPainterSample }).strict(),
   z.object({ name: z.literal("format-cells"), sheetId, range, patch: spreadsheetFormattingPatch }).strict(),
   z.object({
     name: z.literal("set-number-format"),
@@ -78,6 +81,7 @@ export type SpreadsheetFormattingCommand = z.infer<typeof spreadsheetFormattingC
 export function spreadsheetFormattingCommandPackage(artifact: SpreadsheetArtifact, sheet: SpreadsheetSheet, command: SpreadsheetFormattingCommand): OpcPackage {
   const workbook = artifact.workbook;
   switch (command.name) {
+    case 'paint-formatting': return paintSpreadsheetFormatting(workbook, sheet, parseCellRange(command.range), command.styles);
     case "format-cells": return formatSpreadsheetCellsPackage(workbook, sheet, command.range, command.patch);
     case "set-number-format": return formatSpreadsheetNumbersPackage(workbook, sheet, command.range, command.format);
     case "adjust-number-decimals": return adjustSpreadsheetNumberDecimalsPackage(workbook, sheet, command.range, command.direction);
