@@ -176,3 +176,5 @@ export { applySpreadsheetStructureCommand, rebaseSpreadsheetFormula } from "./st
 export type { SpreadsheetStructureCommand } from "./structure.ts";
 
 export { translateSpreadsheetFormula } from './formula-translation.ts';
+
+export { spreadsheetFormatPainterSample } from './format-painter.ts';

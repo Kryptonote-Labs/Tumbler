@@ -323,7 +323,11 @@ should display these errors through the same path as other editing failures.
 The optional Svelte `PresentationShapePlacement` component handles pointer input
 and previews through the slide view's overlay hook.
 
-## Table formatting
+## Format painter and table formatting
+
+`presentationFormatPainterSample(object, offset, cell)` captures resolved text and shape
+formatting. `presentationFormatPainterCommands(sample, slideId, object, range, cell)`
+returns semantic commands that keep destination text and geometry.
 
 The `format-table` command accepts a cell coordinate and `cell`, `row`, `column` or
 `table` scope. It updates fill, individual borders, vertical alignment and padding

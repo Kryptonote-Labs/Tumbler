@@ -115,3 +115,11 @@ XLSX bytes, including unrecognized package parts.
 Worksheet renames update formulas, named ranges, chart references, and validation
 formulas. Deleting a referenced worksheet writes `#REF!` formulas. Formula string
 literals and external workbook references retain their original text.
+
+## Format painter
+
+`spreadsheetFormatPainterSample(artifact, range)` captures workbook style defaults and sparse overrides for
+a source rectangle. Apply them with `paint-formatting`, providing `sheetId`, a destination
+`range`, and the captured `styles` sample. Formatting repeats across the destination
+without changing values or formulas. Samples belong to their source workbook and
+include number formats, borders, fills and alignment.
