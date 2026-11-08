@@ -68,7 +68,12 @@ I/O, arbitrary code execution, or DLL loading.
   active selection. CELL formatting/path queries with a reference send
   `[lowercaseInfoType, sheetIdentity, firstRow, firstColumn]`. This includes
   color, filename, format, parentheses, prefix, protect and width. The host owns
-  Excel format-code mapping and width's two-item result. Same-sheet address is
+  unmapped custom Excel format codes and width's two-item result. Built-in
+  format IDs 0–4 and 9–22 map locally to documented CELL format strings when
+  `FormulaCellInput.numberFormatId` is available. If `numberFormatCode` is
+  supplied, local color/parentheses queries inspect its unquoted, unescaped
+  sections; mapped format strings include negative-red/positive-parentheses
+  suffixes. Quoted or escaped literal parentheses/color words do not count. Same-sheet address is
   computed locally; cross-sheet address uses the service because saved workbook
   names/display sheet names are absent from the source contract. Row, column,
   contents (blank becomes zero), and type are computed locally. Referenced
@@ -108,7 +113,7 @@ checks and independent GPT-6.1 sol high review remain integration requirements.
 
 ## Validation
 
-`bun test packages/formulas/test/information.test.ts`: 111 tests pass.
+`bun test packages/formulas/test/information.test.ts`: 112 tests pass.
 `bun run check`: passes. The direct harness intentionally implements only the
 expression forms needed by this category's fixtures; it is not a replacement
 for generated-document tests against the integrated evaluator. Excel oracle

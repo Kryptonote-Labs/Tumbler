@@ -40,6 +40,28 @@ const parity = (odd: boolean): ExtendedFunction => unary(value => {
   return n.type === "number" ? bool((Math.abs(Math.trunc(n.value)) % 2 === 1) === odd) : n;
 });
 
+// Excel built-in formats with documented CELL codes. Unmapped custom formats
+// remain a host capability rather than guessing from rendered cell text.
+const cellFormatCodes: Readonly<Record<number, string>> = {
+  0: "G", 1: "F0", 2: "F2", 3: ",0", 4: ",2", 9: "P0", 10: "P2",
+  11: "S2", 12: "G", 13: "G", 14: "D4", 15: "D1", 16: "D2", 17: "D3",
+  18: "D7", 19: "D6", 20: "D9", 21: "D8", 22: "D4",
+};
+function formatSections(code: string, context: FunctionContext): string[] {
+  const sections = [""];
+  let quoted = false;
+  for (let i = 0; i < code.length; i++) {
+    context.operation();
+    const ch = code[i]!;
+    if (ch === "\\" || ch === "_" || ch === "*") { i++; continue; }
+    if (ch === '"') { quoted = !quoted; continue; }
+    if (quoted) continue;
+    if (ch === ";") sections.push("");
+    else sections[sections.length - 1] += ch;
+  }
+  return sections;
+}
+
 export const informationFunctions: FunctionRegistry = new Map<string, ExtendedFunction>([
   ["ERROR.TYPE", unary(value => {
     const index = value.type === "error" ? errors.indexOf(value.value) : -1;
@@ -127,7 +149,23 @@ export const informationFunctions: FunctionRegistry = new Map<string, ExtendedFu
       const value = functionScalar(context.readReference({ ...ref, height: 1, width: 1 }));
       return key === "contents" ? value.type === "blank" ? num(0) : value : text(value.type === "blank" ? "b" : value.type === "string" ? "l" : "v");
     }
-    // Formatting, saved filename and cross-sheet address spelling belong to the host.
+    const input = context.cell({ sheet: ref.sheet, row: ref.firstRow, column: ref.firstColumn }) as
+      ReturnType<FunctionContext["cell"]> & { numberFormatId?: number; numberFormatCode?: string };
+    if (key === "format" && input?.numberFormatId !== undefined) {
+      const code = cellFormatCodes[input.numberFormatId];
+      if (code !== undefined) {
+        const sections = input.numberFormatCode === undefined ? undefined : formatSections(input.numberFormatCode, context);
+        const color = sections && /\[red\]/i.test(sections[1] ?? sections[0]!) ? "-" : "";
+        const parentheses = sections?.[0]?.includes("(") && sections[0].includes(")") ? "()" : "";
+        return text(code + color + parentheses);
+      }
+    }
+    if ((key === "color" || key === "parentheses") && input?.numberFormatCode !== undefined) {
+      const sections = formatSections(input.numberFormatCode, context);
+      if (key === "color") return num(/\[red\]/i.test(sections[1] ?? sections[0]!) ? 1 : 0);
+      return num(sections[0]!.includes("(") && sections[0]!.includes(")") ? 1 : 0);
+    }
+    // Remaining formatting, saved filename and cross-sheet address spelling belong to the host.
     if (key === "address" && ref.sheet === context.address.sheet) {
       let column = ref.firstColumn, label = "";
       while (column > 0) { context.operation(); column--; label = String.fromCharCode(65 + column % 26) + label; column = Math.floor(column / 26); }

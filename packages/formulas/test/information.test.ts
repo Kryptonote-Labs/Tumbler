@@ -157,6 +157,21 @@ describe("information contract and boundaries", () => {
     const { context } = harness();
     for (const [name, handler] of informationFunctions) if (!["NA", "SHEET", "SHEETS"].includes(name)) expect(handler([], context)).toEqual(functionError());
   });
+  test("CELL reads available workbook style metadata locally", () => {
+    const { context, run } = harness();
+    Object.assign(context, { cell: () => ({ formula: undefined, value: n(3), numberFormatId: 2, numberFormatCode: '0.00;[Red](0.00)' }) });
+    expect(run('CELL("format",Inputs!A1)')).toEqual(s("F2-"));
+    expect(run('CELL("color",Inputs!A1)')).toEqual(n(1));
+    expect(run('CELL("parentheses",Inputs!A1)')).toEqual(n(0));
+    Object.assign(context, { cell: () => ({ formula: undefined, value: n(3), numberFormatId: 14, numberFormatCode: '(m/d/yy);m/d/yy' }) });
+    expect(run('CELL("format",Inputs!A1)')).toEqual(s("D4()"));
+    expect(run('CELL("parentheses",Inputs!A1)')).toEqual(n(1));
+    Object.assign(context, { cell: () => ({ formula: undefined, value: n(3), numberFormatId: 164, numberFormatCode: '0.00000' }) });
+    expect(() => run('CELL("format",Inputs!A1)')).toThrow("unavailable:");
+    Object.assign(context, { cell: () => ({ formula: undefined, value: n(3), numberFormatId: 0, numberFormatCode: '"([Red])"0;0' }) });
+    expect(run('CELL("color",Inputs!A1)')).toEqual(n(0));
+    expect(run('CELL("parentheses",Inputs!A1)')).toEqual(n(0));
+  });
   test("local address converts final Excel column", () => {
     const { run } = harness();
     expect(run('CELL("address",XFD1048576)')).toEqual(s("$XFD$1048576"));
