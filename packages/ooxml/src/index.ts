@@ -72,3 +72,8 @@ export type {
 } from "./xml/editor.ts";
 
 export { DEFAULT_OFFICE_THEME, officeThemeXml } from './office-theme.ts';
+
+export { customGeometry, evaluateGeometry, resolveDrawingGeometry, resizeDrawingGeometry, nativePresetGeometry } from "./drawing-geometry.ts";
+export type { GeometryDefinition, DrawingGeometry } from "./drawing-geometry.ts";
+export { presetGeometries } from "./preset-geometries.ts";
+export { resolveDrawingColor } from "./drawing-color.ts";
