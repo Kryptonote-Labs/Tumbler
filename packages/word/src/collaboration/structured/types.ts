@@ -37,6 +37,7 @@ export type WordStructuredChange =
       id: string;
     }
   | { kind: "table-format"; cell: CellAddress; patch: WordTableFormatPatch }
+  | { kind: "merge-down"; cell: CellAddress }
   | { kind: "merge-right"; cell: CellAddress }
   | { kind: "split-cell"; cell: CellAddress };
 export type PreparedWordUpdate = {

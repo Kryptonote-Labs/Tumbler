@@ -225,6 +225,12 @@ export function projectWordSharedText(doc: Y.Doc, story: string) {
               ? { rowFormat: originalRow.rowFormat }
               : {}),
         };
+        if (cell.emptyContinuation) {
+          append("\n", { table: { ...reference, ...(parents.length ? { parents } : {}) } }, {
+            root: cellName(cell.address), offset: 0, cell: cell.address, virtual: true,
+          });
+          continue;
+        }
         for (const owner of cell.payloads) {
           const value = payload(doc, owner);
           const scope: WordViewCell = { cell: owner, start: length, end: length, virtual: !value?.source };

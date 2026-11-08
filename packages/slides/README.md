@@ -324,3 +324,9 @@ The optional Svelte `PresentationShapePlacement` component handles pointer input
 and previews through the slide view's overlay hook.
 
 Speaker notes, links and picture metadata use the same semantic commands as the editor and CLI. Use `set-notes` with `slideId` and `notes`; `set-link` with `slideId`, `objectKey` and `href` links a shape, or add `start` and `end` for a text range. An empty `href` removes the link. `set-alt-text` updates `alt`, and `replace-picture` accepts base64 `data` and PNG/JPEG `contentType` while retaining the picture frame and crop.
+
+## Table formatting
+
+The `format-table` command accepts a cell coordinate and `cell`, `row`, `column` or
+`table` scope. It updates fill, individual borders, vertical alignment and padding
+without replacing text or merged geometry. Padding and border widths use CSS pixels.

@@ -462,10 +462,11 @@ cell's content width. These are authored horizontal dimensions, not text wrappin
 pagination measurements. Table `columnWidths` values are points, 72 per inch; fields
 whose names end in `Twips` use twentieths of a point.
 
-The collaborative `table-edit` actions `merge-right` and `split-cell` operate on horizontal
-cell spans. Merging preserves both cells' paragraphs under the first cell identity.
-Splitting keeps existing content in the first cell and adds empty cells for the remaining
-columns. Both reject cells participating in vertical merges and support undo.
+The collaborative `table-edit` actions include `merge-right`, `merge-down` and `split-cell`.
+Merge down joins adjacent cells of equal width. Structured tables retain each cell's
+content identities, display both cells' paragraphs in the restart cell, and restore their
+original ownership when split. Horizontal splitting keeps content in the first cell and
+adds empty cells for the remaining columns. All three actions support undo.
 
 ## Shared editable content from DOCX
 

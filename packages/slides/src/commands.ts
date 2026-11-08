@@ -1,3 +1,4 @@
+import { formatPresentationTable } from './table-format.ts';
 import { gradientFill } from './gradient-authoring.ts';
 import { backgroundFill, setSlideBackground } from "./background-authoring.ts";
 import { insertPresentationInk } from "./ink-authoring.ts";
@@ -66,7 +67,15 @@ const patch = z
   })
   .strict()
   .transform((value) => normalizeFormattingPatch(value as FormattingPatch));
+const tableBorder = z.object({ color, width: number.nonnegative(), dash: z.enum(['solid', 'dash', 'dot', 'double']) }).strict();
 const singlePresentationCommand = z.discriminatedUnion("name", [
+  z.object({ name: z.literal('format-table'), ...target,
+    row: z.number().int().nonnegative(), column: z.number().int().nonnegative(),
+    scope: z.enum(['cell', 'row', 'column', 'table']),
+    fill: color.optional(), borders: z.object({ top: tableBorder.optional(), right: tableBorder.optional(), bottom: tableBorder.optional(), left: tableBorder.optional() }).strict().optional(),
+    verticalAlignment: z.enum(['top', 'center', 'bottom']).optional(),
+    padding: number.nonnegative().optional(),
+  }).strict(),
   z
     .object({
       name: z.literal("edit-table"),
@@ -270,6 +279,8 @@ export function applyPresentationCommand(
   switch (command.name) {
     case "batch":
       return command.commands.reduce(applyPresentationCommand, artifact);
+    case "format-table":
+      return formatPresentationTable(artifact, command);
     case "edit-table":
       return editPresentationTable(artifact, command);
     case "paste-object":
