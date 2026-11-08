@@ -10,6 +10,7 @@ import {
   nativeGradient,
   nativeColour,
 } from './native-shape.ts';
+import { formatNativeTable } from './table-format.ts';
 import { editNativeTable } from './native-table.ts';
 import { nativeLayoutTemplate as layoutTemplate, nativeMasterLayout } from './native-layout.ts';
 import { nativePresetGeometry } from './drawing-geometry.ts';
@@ -87,6 +88,11 @@ export function applyNativeModelCommand(
             }
           : { ...selected!, text },
       );
+      break;
+    }
+    case 'format-table': {
+      if (!selected!.table) throw new Error('Select a table.');
+      patchObject({ ...selected!, table: formatNativeTable(selected!.table!, command) });
       break;
     }
     case 'edit-table': {

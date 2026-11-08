@@ -92,7 +92,7 @@ export function rebasePresentationCommands(
     const identity = `${inputSlideId}:${inputObjectKey}`;
     if (input.name !== 'paste-object' && removedObjects.has(identity) && !objectIds.has(identity))
       conflict();
-    if ('cell' in input && input.cell && removedTables.has(identity) && !objectIds.has(identity))
+    if (((('cell' in input) && input.cell) || input.name === 'format-table') && removedTables.has(identity) && !objectIds.has(identity))
       conflict();
     const oldSlide = base.document.slides.find((s) => s.id === inputSlideId);
     const targetSlideId = 'slideId' in command ? command.slideId : undefined;

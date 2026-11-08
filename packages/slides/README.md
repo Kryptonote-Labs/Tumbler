@@ -322,3 +322,9 @@ should display these errors through the same path as other editing failures.
 
 The optional Svelte `PresentationShapePlacement` component handles pointer input
 and previews through the slide view's overlay hook.
+
+## Table formatting
+
+The `format-table` command accepts a cell coordinate and `cell`, `row`, `column` or
+`table` scope. It updates fill, individual borders, vertical alignment and padding
+without replacing text or merged geometry. Padding and border widths use CSS pixels.
