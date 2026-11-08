@@ -5,6 +5,7 @@ import type { PdfExtractionContext } from './extract-structures.ts';
 export function subsetPdfOutlines(
   context: PdfExtractionContext,
   destination: (value: PdfValue) => PdfValue | undefined,
+  ownsDestination: (value: PdfValue) => boolean = () => true,
 ): PdfReference | undefined {
   const { source, reserve, set, copy, copyAction } = context,
     original = source.resolve(source.catalog.get('Outlines'));
@@ -23,8 +24,18 @@ export function subsetPdfOutlines(
         children = siblings(original.get('First'), ref),
         info = new Map<string, PdfValue>();
       const explicit = original.get('Dest'),
-        dest = explicit === undefined ? undefined : destination(explicit);
-      const action = copyAction(original.get('A'));
+        target = explicit === undefined ? undefined : destination(explicit);
+      const originalAction = source.resolve(original.get('A'));
+      const actionKind = originalAction instanceof Map ? source.resolve(originalAction.get('S')) : null;
+      const actionTarget = originalAction instanceof Map && actionKind instanceof PdfName && actionKind.value === 'GoTo'
+        ? originalAction.get('D') : undefined;
+      const actionDestination = actionTarget === undefined ? undefined : destination(actionTarget);
+      // Cross-block destinations are resolvable, but the bookmark belongs to the
+      // block that contains its target. Surviving ancestors can appear in each tree.
+      const owned = (target === undefined || ownsDestination(target)) &&
+        (actionDestination === undefined || ownsDestination(actionDestination));
+      const dest = owned ? target : undefined;
+      const action = owned ? copyAction(original.get('A')) : undefined;
       if (dest || action || children.items.length) {
         for (const [key, value] of original)
           if (!['Parent', 'First', 'Last', 'Next', 'Prev', 'Count', 'Dest', 'A'].includes(key))

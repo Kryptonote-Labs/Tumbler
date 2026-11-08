@@ -255,7 +255,9 @@ rotation, annotations and appearance streams. Internal links and bookmarks are
 retained when their target appears anywhere in the merged output, including another
 block from the same source bytes. Within a copied block, destinations prefer its
 local page copy; otherwise they target the first matching output page. Links to
-pages omitted from the entire output are removed. Repeated pages start an independent selection and receive
+pages omitted from the entire output are removed. Page bookmarks belong to the
+block containing their target page, so split selections do not duplicate them.
+Repeated pages start an independent selection and receive
 independent annotations and fields. To interleave PDFs, repeat an input in the
 array at the desired position. Selection strings use one-based inclusive ranges,
 including descending ranges and repeated pages.

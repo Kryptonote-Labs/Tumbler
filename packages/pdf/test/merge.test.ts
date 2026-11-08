@@ -441,3 +441,44 @@ test(`AcroForm ProcSet arrays are retained and combined without name prefixes ($
     expect(form.get('Fields')).toHaveLength(inputs.length);
   }
 });
+
+for (const actions of [false, true])
+test(`split selections retain each page bookmark once while keeping cross-block actions (${actions})`, () => {
+  const document = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /Outlines 6 0 R >>',
+    '<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] /MediaBox [0 0 100 100] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 5 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 5 0 R >>',
+    pdfStream(''),
+    '<< /Type /Outlines /First 7 0 R /Last 8 0 R /Count 2 >>',
+    `<< /Title (First) /Parent 6 0 R /Next 8 0 R ${actions ? '/A << /S /GoTo /D [3 0 R /Fit] /Next << /S /GoTo /D [4 0 R /Fit] >> >>' : '/Dest [3 0 R /Fit]'} >>`,
+    `<< /Title (Second) /Parent 6 0 R /Prev 7 0 R ${actions ? '/A << /S /GoTo /D [4 0 R /Fit] /Next << /S /URI /URI (https://example.org/) >> >>' : '/Dest [4 0 R /Fit]'} >>`,
+  ]));
+  const plans = [
+    { inputs: [{ document, pages: [0, 1] }], titles: ['First', 'Second'], targets: [0, 1] },
+    { inputs: [{ document, pages: [0] }, { document, pages: [1] }], titles: ['First', 'Second'], targets: [0, 1] },
+    { inputs: [{ document, pages: [1] }, { document, pages: [0] }], titles: ['Second', 'First'], targets: [0, 1] },
+    { inputs: [{ document, pages: [0] }, { document: text('OTHER'), pages: [0] }, { document, pages: [1] }], titles: ['First', 'Second'], targets: [0, 2] },
+  ];
+  for (const plan of plans) {
+    const merged = openPdfDocument(mergePdfDocuments(plan.inputs)), source = merged.source;
+    const root = dictionary(source.resolve(source.catalog.get('Outlines')));
+    const titles: string[] = [], targets: string[] = [];
+    let next = root.get('First');
+    while (next instanceof PdfReference) {
+      const item = dictionary(source.resolve(next));
+      titles.push(bytesText((item.get('Title') as PdfString).bytes));
+      const action = actions ? dictionary(source.resolve(item.get('A'))) : undefined;
+      const dest = source.resolve(actions ? action!.get('D') : item.get('Dest')) as PdfReference[];
+      targets.push(dest[0]!.key);
+      if (actions && titles.at(-1) === 'First') {
+        const successor = dictionary(source.resolve(action!.get('Next')));
+        const secondIndex = plan.inputs[0]!.pages![0] === 1 ? 0 : merged.pages.length - 1;
+        expect(((source.resolve(successor.get('D')) as PdfReference[])[0] as PdfReference).key).toBe(merged.pages[secondIndex]!.reference.key);
+      }
+      next = item.get('Next');
+    }
+    expect(titles).toEqual(plan.titles);
+    expect(targets).toEqual(plan.targets.map(index => merged.pages[index]!.reference.key));
+  }
+});

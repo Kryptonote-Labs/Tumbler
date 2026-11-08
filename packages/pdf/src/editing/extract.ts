@@ -300,7 +300,10 @@ export function extractPdfPageGraph(document: PdfDocument, indices: readonly num
   };
   const forms = subsetPdfForms(context),
     tags = subsetPdfTags(context, parentKeys),
-    outlines = subsetPdfOutlines(context, destination);
+    outlines = subsetPdfOutlines(context, destination, (value) =>
+      !Array.isArray(value) || !(value[0] instanceof PdfReference) ||
+      pageRefs.some((reference) => value[0] instanceof PdfReference && reference.key === value[0].key),
+    );
   selected.forEach((page, index) => {
     const info = copyDictionary(page.dictionary);
     info.set('Type', new PdfName('Page'));
