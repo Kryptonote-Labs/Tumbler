@@ -37,6 +37,9 @@ function fieldvalue(arguments_: readonly FormulaExpression[], context: FunctionC
     context.operation();
     const value = context.evaluate(argument);
     if (!("kind" in value) && value.type === "error") return value;
+    // Required arguments cannot be omitted; arrays are the only supported
+    // nonscalar inputs. This also rejects lambdas before crossing the host API.
+    if ("kind" in value && value.kind !== "array") return functionError();
     values.push(value);
   }
   // Do not stringify linked records or collapse array fields. The host resolves

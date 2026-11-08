@@ -111,6 +111,14 @@ describe("specialized host functions", () => {
   test("FIELDVALUE propagates input errors without requesting a host", () => {
     expect(run('FIELDVALUE(#N/A,"Price")', context())).toEqual(error("#N/A"));
   });
+  test("FIELDVALUE rejects the shared omitted marker before invoking the service", () => {
+    const ctx = context({}, { invoke() { throw new Error("must not invoke"); } });
+    const expression = parseFormula('FIELDVALUE("record","Price")').expression;
+    if (expression.kind !== "function") throw new Error("expected function");
+    // The coordinator adds this variant to FunctionValue during integration.
+    const omitted = { kind: "omitted" } as unknown as FunctionValue;
+    expect(specializedFunctions.get("FIELDVALUE")!(expression.arguments, { ...ctx, evaluate: () => omitted })).toEqual(error("#VALUE!"));
+  });
   test("FIELDVALUE does not coerce literal, reference, or array arguments", () => {
     const ctx = context({ A1: n(12) }, { invoke: (_, args) => { expect(args).toEqual([n(12), s("12")]); return n(9); } });
     expect(run('FIELDVALUE(Inputs!A1,"12")', ctx)).toEqual(n(9));
