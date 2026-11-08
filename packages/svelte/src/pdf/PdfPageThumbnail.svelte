@@ -17,7 +17,7 @@
     const controller = new AbortController(), pool = thumbnailRenderer(pdf);
     const scale = pixels / Math.max(page.width, page.height);
     error = false;
-    void pool.renderer.render({ page: index, scale, region: { x: 0, y: 0, width: Math.max(1, Math.ceil(page.width * scale)), height: Math.max(1, Math.ceil(page.height * scale)) } }, controller.signal).then(result => {
+    void pool.renderer.render({ page: index, scale, cache: false, region: { x: 0, y: 0, width: Math.max(1, Math.ceil(page.width * scale)), height: Math.max(1, Math.ceil(page.height * scale)) } }, controller.signal).then(result => {
       try {
         if (controller.signal.aborted) return;
         target.width = result.bitmap.width;

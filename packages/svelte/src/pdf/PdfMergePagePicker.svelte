@@ -2,7 +2,7 @@
   import PdfPageThumbnail from './PdfPageThumbnail.svelte';
   import { mergeSourceSelection, type PdfMergeSource } from './merge-source.ts';
   import { mergePageRanges, toggleMergePage } from './merge-selection.ts';
-  let { source, disabled = false, onchange }: { source: PdfMergeSource; disabled?: boolean; onchange: () => void } = $props();
+  let { source = $bindable(), disabled = false, onchange }: { source: PdfMergeSource; disabled?: boolean; onchange: () => void } = $props();
   let anchor: number | undefined;
   const selection = $derived(mergeSourceSelection(source));
   const selected = $derived(new Set(selection.pages));
@@ -15,15 +15,15 @@
 <div class="picker">
   <div class="selection-tools">
     <span>{selection.custom ? 'Custom order' : `${selection.pages.length} selected`}</span>
-    {#if selection.custom}<button disabled={disabled} onclick={() => choose([...new Set(selection.pages)].sort((a,b) => a-b))}>Use page order</button>
-    {:else}<button disabled={disabled} onclick={() => { source.none = false; source.pages = ''; onchange(); }}>All</button><button disabled={disabled} onclick={() => choose([])}>None</button>{/if}
+    {#if selection.custom}<button type="button" disabled={disabled} onclick={() => choose([...new Set(selection.pages)].sort((a,b) => a-b))}>Use page order</button>
+    {:else}<button type="button" disabled={disabled} onclick={() => { source.none = false; source.pages = ''; onchange(); }}>All</button><button type="button" disabled={disabled} onclick={() => choose([])}>None</button>{/if}
   </div>
   <label>Pages<input aria-label={`Pages in ${source.name}`} aria-invalid={!!selection.error} disabled={disabled} value={source.pages} placeholder={source.none ? 'No pages' : `All ${source.document?.pages.length ?? 0} pages`} title="Page numbers or ranges, e.g. 3,1-2" oninput={event => { source.pages = event.currentTarget.value; source.none = false; onchange(); }} /></label>
   {#if selection.error}<p class="error" role="alert">{selection.error}</p>{/if}
   {#if source.document}
     <div class="grid" aria-label={`Pages in ${source.name}`}>
       {#each source.document.pages as page, index (page.id)}
-        <button class:selected={selected.has(index)} class="page" role="checkbox" aria-checked={selected.has(index)} aria-label={`Page ${index + 1} of ${source.name}`} disabled={disabled || selection.custom || !!selection.error} onclick={event => { choose(toggleMergePage(selection.pages, index, event.shiftKey ? anchor : undefined)); anchor = index; }}>
+        <button type="button" class:selected={selected.has(index)} class="page" role="checkbox" aria-checked={selected.has(index)} aria-label={`Page ${index + 1} of ${source.name}`} disabled={disabled || selection.custom || !!selection.error} onclick={event => { choose(toggleMergePage(selection.pages, index, event.shiftKey ? anchor : undefined)); anchor = index; }}>
           <PdfPageThumbnail document={source.document} {index} />
           <span class="number">{index + 1}</span><span class="check" aria-hidden="true">{selected.has(index) ? '✓' : ''}</span>
         </button>

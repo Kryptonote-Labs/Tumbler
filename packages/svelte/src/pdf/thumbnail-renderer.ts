@@ -1,5 +1,5 @@
-import type { PdfDocument } from '@tumblerjs/pdf';
-import { PdfPageRenderer } from './page-renderer.ts';
+import type { PdfDocument } from "@tumblerjs/pdf";
+import { PdfPageRenderer } from "./page-renderer.ts";
 
 const renderers = new WeakMap<PdfDocument, { renderer: PdfPageRenderer; references: number }>();
 /** Visible thumbnails share one bounded render queue per source document. */
@@ -11,10 +11,13 @@ export function thumbnailRenderer(document: PdfDocument) {
   }
   entry.references++;
   const current = entry;
-  return { renderer: current.renderer, release() {
-    if (--current.references === 0) {
-      renderers.delete(document);
-      current.renderer.destroy();
-    }
-  } };
+  return {
+    renderer: current.renderer,
+    release() {
+      if (--current.references === 0) {
+        renderers.delete(document);
+        current.renderer.destroy();
+      }
+    },
+  };
 }

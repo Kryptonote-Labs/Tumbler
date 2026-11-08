@@ -381,3 +381,5 @@ File drops and uploads use the same source flow. A successful `onmerge` can retu
 for an Open link; the merge setup remains intact. Host `disabled` prevents creation and edits.
 `PdfPageThumbnail` is exported from `@tumblerjs/svelte/pdf` and shares a worker render queue
 between visible thumbnails of the same source document.
+
+Hosts can retain a reactive `createPdfMergeState()` per document and pass it as `session` to preserve source choices, output name and expanded row across mounts.

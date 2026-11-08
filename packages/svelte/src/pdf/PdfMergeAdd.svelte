@@ -21,7 +21,7 @@
   }
 </script>
 <div class="add" class:over>
-  <button bind:this={trigger} class="drop-zone" disabled={disabled} aria-label="Add PDFs" aria-expanded={open} aria-controls={open ? id : undefined} onclick={show}
+  <button type="button" bind:this={trigger} class="drop-zone" disabled={disabled} aria-label="Add PDFs" aria-expanded={open} aria-controls={open ? id : undefined} onclick={show}
     ondragover={event => { if (!disabled && event.dataTransfer?.types.includes('Files')) { event.preventDefault(); over = true; } }}
     ondragleave={() => over = false}
     ondrop={event => { if (disabled || !event.dataTransfer?.types.includes('Files')) return; event.preventDefault(); event.stopPropagation(); over = false; onfiles(Array.from(event.dataTransfer.files)); }}>

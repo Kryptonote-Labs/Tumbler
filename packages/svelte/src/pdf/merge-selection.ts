@@ -1,12 +1,24 @@
-import { parsePdfPageSelection } from '@tumblerjs/pdf';
+import { parsePdfPageSelection } from "@tumblerjs/pdf";
 
 /** Empty text means all pages; an explicit empty selection is kept separately. */
 export function mergePageSelection(value: string, count: number, none = false) {
   try {
-    const pages = none ? [] : value.trim() ? parsePdfPageSelection(value, count) : Array.from({ length: count }, (_, index) => index);
-    return { pages, custom: pages.some((page, index) => index > 0 && page <= pages[index - 1]!), error: '' };
+    const pages = none
+      ? []
+      : value.trim()
+        ? parsePdfPageSelection(value, count)
+        : Array.from({ length: count }, (_, index) => index);
+    return {
+      pages,
+      custom: pages.some((page, index) => index > 0 && page <= pages[index - 1]!),
+      error: "",
+    };
   } catch (cause) {
-    return { pages: [], custom: false, error: cause instanceof Error ? cause.message : 'Invalid page selection.' };
+    return {
+      pages: [],
+      custom: false,
+      error: cause instanceof Error ? cause.message : "Invalid page selection.",
+    };
   }
 }
 
@@ -20,14 +32,15 @@ export function mergePageRanges(pages: readonly number[]) {
     while (sorted[at + 1] === last + 1) last = sorted[++at]!;
     ranges.push(first === last ? String(first + 1) : `${first + 1}-${last + 1}`);
   }
-  return ranges.join(',');
+  return ranges.join(",");
 }
 
 /** Checkbox interaction preserves a simple page order; range text retains arbitrary orders. */
 export function toggleMergePage(pages: readonly number[], page: number, anchor?: number) {
   const selected = new Set(pages);
   if (anchor !== undefined) {
-    for (let index = Math.min(anchor, page); index <= Math.max(anchor, page); index++) selected.add(index);
+    for (let index = Math.min(anchor, page); index <= Math.max(anchor, page); index++)
+      selected.add(index);
   } else if (selected.has(page)) selected.delete(page);
   else selected.add(page);
   return [...selected].sort((a, b) => a - b);
