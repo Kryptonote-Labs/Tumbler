@@ -176,3 +176,6 @@ export { applySpreadsheetStructureCommand, rebaseSpreadsheetFormula } from "./st
 export type { SpreadsheetStructureCommand } from "./structure.ts";
 
 export { translateSpreadsheetFormula } from './formula-translation.ts';
+
+export { readSpreadsheetDrawingObjects } from './drawing-objects.ts';
+export type { SpreadsheetDrawingObject, SpreadsheetDrawingObjectFrame } from './drawing-objects.ts';
