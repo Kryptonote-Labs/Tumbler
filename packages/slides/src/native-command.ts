@@ -1,3 +1,4 @@
+import { linkedText } from './authoring-metadata.ts';
 import type { PresentationCommand } from './commands.ts';
 import type { NativePresentationState, NativeSlide, NativeChange } from './native-document.ts';
 import type { SlideObject, PresentationSlide } from './model.ts';
@@ -225,6 +226,28 @@ export function applyNativeModelCommand(
       addObjects(command.slideId, [object]);
       break;
     }
+    case 'set-alt-text':
+      patchObject({ ...selected!, alt: command.alt });
+      break;
+    case 'replace-picture':
+      if (selected!.kind !== 'picture' || !selected!.image) throw new Error('Select a picture.');
+      patchObject({ ...selected!, image: { ...selected!.image!, bytes: Uint8Array.from(atob(command.data), c => c.charCodeAt(0)), contentType: command.contentType } });
+      break;
+    case 'set-link': {
+      if ((command.start === undefined) !== (command.end === undefined)) throw new Error('Provide both link range boundaries.');
+      if (command.start === undefined) patchObject({ ...selected!, hyperlink: command.href ? { href: command.href } : undefined });
+      else {
+        if (command.end === undefined) throw new Error('Link range end is required.');
+        const object = presentationTextTarget(selected!, command.cell);
+        if (!object.textEditable || !object.text) throw new Error('Select editable text.');
+        const text = linkedText(object.text, command.start, command.end, command.href);
+        patchObject(command.cell ? { ...selected!, table: { ...selected!.table!, cells: selected!.table!.cells.map(c => c.row === command.cell!.row && c.column === command.cell!.column ? { ...c, text } : c) } } : { ...selected!, text });
+      }
+      break;
+    }
+    case 'set-notes':
+      patchSlide({ ...target!, slide: { ...target!.slide, notes: command.notes } });
+      break;
     case 'set-slide-hidden':
       patchSlide({ ...target!, slide: { ...target!.slide, hidden: command.hidden } });
       break;
