@@ -1,4 +1,7 @@
 <script lang="ts">
+  import PresentationGradient from './PresentationGradient.svelte';
+  import { drawingGradientFill } from '@tumblerjs/ooxml';
+  const gradientId = $props.id();
   import { untrack } from 'svelte';
   import {
     shapeTextParagraphs,
@@ -77,7 +80,8 @@
   aria-label={shape.alt ?? (shapePlainText(shape) || shape.preset)}
 >
   <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
-    <path d={wordShapePath(geometry)} fill={resolveWordColour(shape.fill)} stroke={resolveWordColour(shape.outline)} stroke-width={shape.outlineWidth} />
+    {#if shape.gradient}<defs><PresentationGradient gradient={drawingGradientFill(shape.gradient)} id={gradientId} {width} {height} /></defs>{/if}
+    <path d={wordShapePath(geometry)} fill={shape.gradient ? `url(#${gradientId})` : resolveWordColour(shape.fill)} stroke={resolveWordColour(shape.outline)} stroke-width={shape.outlineWidth} />
   </svg>
   <div
     class="text"

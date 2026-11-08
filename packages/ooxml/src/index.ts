@@ -72,3 +72,8 @@ export type {
 } from "./xml/editor.ts";
 
 export { DEFAULT_OFFICE_THEME, officeThemeXml } from './office-theme.ts';
+
+export { gradientFill, gradientFillMarkup, linearGradientLine, rectangularGradientFaces, type GradientFill, type DrawingGradient } from "./gradient.ts";
+export { drawingGradientFill } from "./gradient.ts";
+export { readGradientFill } from "./gradient.ts";
+export { paintDrawingGradient, paintRectangularGradient, type DrawingGradientCanvasContext } from "./gradient-canvas.ts";
