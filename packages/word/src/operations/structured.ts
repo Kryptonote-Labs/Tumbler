@@ -184,6 +184,7 @@ export function applyWordScopedOperation(
           const at = offsets[0] ?? 0;
           return { cell: resolved.payloads[0] ?? cell, range: { start: at, end: at } };
         }
+        case "merge-down":
         case "merge-right":
         case "split-cell":
           change = { kind: action, cell };

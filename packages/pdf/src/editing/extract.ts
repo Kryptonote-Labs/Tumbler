@@ -16,6 +16,11 @@ import { bytes, serializePdfValue } from './object-writer.ts';
 
 /** Copy selected pages into a fresh object graph. No original revisions or unselected page streams are retained. */
 export function extractPdfPages(document: PdfDocument, indices: readonly number[]): Uint8Array {
+  return extractPdfPageGraph(document, indices).bytes;
+}
+
+/** Internal merge intermediate: external page slots are remapped before publishing a PDF. */
+export function extractPdfPageGraph(document: PdfDocument, indices: readonly number[], linkedIndices: readonly number[] = []) {
   if (
     !indices.length ||
     indices.some((index) => !Number.isSafeInteger(index) || !document.pages[index])
@@ -38,6 +43,18 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
       refs.set(page.reference.key, ref);
       return ref;
     });
+  const pageReferences = new Map(selected.map((page, index) => [page.reference.key, pageRefs[index]!]));
+  for (const index of linkedIndices) {
+    const page = document.pages[index];
+    if (!page) throw new Error('Invalid linked PDF page.');
+    if (!pageReferences.has(page.reference.key)) {
+      // A null slot retains reference identity without copying an unselected page.
+      // The merge writer maps this slot to the actual output page before copying.
+      const ref = reserve();
+      refs.set(page.reference.key, ref);
+      pageReferences.set(page.reference.key, ref);
+    }
+  }
   const excluded = new Set(
     document.pages
       .filter((page) => !refs.has(page.reference.key))
@@ -51,7 +68,7 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
   }
   const selectedPageKeys = new Set(selected.map((page) => page.reference.key));
   const excludedValue = (value: PdfValue | undefined) =>
-    value instanceof PdfReference && !selectedPageKeys.has(value.key);
+    value instanceof PdfReference && !pageReferences.has(value.key);
   function copy(value: PdfValue): PdfValue {
     if (value instanceof PdfReference) {
       if (excluded.has(value.key)) return null;
@@ -351,5 +368,5 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
     output.set(chunk, at);
     at += chunk.length;
   }
-  return output;
+  return { bytes: output, pageReferences };
 }

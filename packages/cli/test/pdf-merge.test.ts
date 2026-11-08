@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, writeFileSync, rmSync, readdirSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { openPdfDocument, PdfInterpreter, mergePdfDocuments, parsePdfPageSelection } from '@tumblerjs/pdf';
+import { openPdfDocument, PdfReference, PdfInterpreter, mergePdfDocuments, parsePdfPageSelection } from '@tumblerjs/pdf';
 import { pdfFixture, pdfStream } from '../../pdf/test/pdf-fixture.ts';
 import { runTumbler } from '../src/index.ts';
 import { createFileHost } from '../src/file-host.ts';
@@ -83,4 +83,26 @@ test('merge consumes literal and equals-form passwords without mistaking values 
   expect(duplicate.code).toBe(1);
   expect(duplicate.stderr).not.toContain('--secret'); expect(duplicate.stderr).not.toContain('--do-not-print');
   expect((await run(['locked.pdf','pdf','merge','--password','--secret','--help'],host)).stdout).toContain('Usage:');
+});
+
+test('CLI preserves links whose target is supplied by a later interleaved block', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tumbler-merge-links-'));
+  try {
+    const source = join(dir, 'links.pdf'), other = join(dir, 'other.pdf'), output = join(dir, 'merged.pdf');
+    writeFileSync(source, pdfFixture([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] /MediaBox [0 0 100 100] >>',
+      '<< /Type /Page /Parent 2 0 R /Contents 5 0 R /Annots [6 0 R] >>',
+      '<< /Type /Page /Parent 2 0 R /Contents 5 0 R >>',
+      pdfStream(''),
+      '<< /Type /Annot /Subtype /Link /Rect [0 0 10 10] /Dest [4 0 R /Fit] >>',
+    ]));
+    writeFileSync(other, fixture('OTHER'));
+    const result = await run([source,'pdf','merge','--pages','1','--source',other,'--pages','1','--source',source,'--pages','2','--output',output]);
+    expect(result.code).toBe(0);
+    const merged = openPdfDocument(readFileSync(output));
+    const annotationRefs = merged.source.resolve(merged.pages[0]!.dictionary.get('Annots')) as PdfReference[];
+    const annotation = merged.source.resolve(annotationRefs[0]) as Map<string, PdfReference[]>;
+    expect(annotation.get('Dest')![0]!.key).toBe(merged.pages[2]!.reference.key);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

@@ -11,6 +11,8 @@ type Call = readonly [string, ...unknown[]];
 function recorder() {
   const calls: Call[] = [];
   const context = {
+    createLinearGradient: () => ({ addColorStop() {} }),
+    createRadialGradient: () => ({ addColorStop() {} }),
     font: "", fillStyle: "" as unknown, strokeStyle: "" as unknown, lineWidth: 1, globalAlpha: 1, textAlign: "start", textBaseline: "alphabetic", direction: "inherit", letterSpacing: "0px",
     save: () => {}, restore: () => {}, beginPath: () => {}, rect: (x: number, y: number, width: number, height: number) => calls.push(['rect', x, y, width, height]), clip: () => {}, moveTo: () => {}, setLineDash: () => {}, rotate: () => {}, arc: () => {},
     measureText: (text: string) => ({ width: text.length * 6 }),

@@ -1,5 +1,5 @@
 import { openPdfDocument, type PdfDocument } from './document.ts';
-import { extractPdfPages } from './editing/extract.ts';
+import { extractPdfPageGraph } from './editing/extract.ts';
 import { bytes, serializePdfValue } from './editing/object-writer.ts';
 import { PdfName, PdfReference, PdfStream, PdfString, bytesText, dictionary, type PdfDictionary, type PdfValue, integer, unsupported } from './objects.ts';
 
@@ -39,7 +39,16 @@ type OutputObject = PdfValue | { data: Uint8Array; dictionary: PdfDictionary };
  */
 export function mergePdfDocuments(inputs: readonly PdfMergeInput[]): Uint8Array {
   if (!inputs.length) throw new Error('Select at least one PDF document.');
-  const parts: PdfDocument[] = [];
+  const parts: { document: PdfDocument; origin: PdfDocument; indices: number[]; pageReferences: Map<string, PdfReference> }[] = [];
+  const selectedBySource = new Map<string, Set<number>>();
+  for (const { document, pages = document.pages.map((_, index) => index) } of inputs) {
+    if (!pages.length || pages.some((index) => !Number.isSafeInteger(index) || !document.pages[index]))
+      throw new Error('Select at least one valid PDF page from each document.');
+    const key = document.source.fingerprint;
+    const selected = selectedBySource.get(key) ?? new Set<number>();
+    for (const index of pages) selected.add(index);
+    selectedBySource.set(key, selected);
+  }
   let version = '1.7';
   for (const { document, pages = document.pages.map((_, i) => i) } of inputs) {
     if (!pages.length || pages.some((i) => !Number.isSafeInteger(i) || i < 0 || !document.pages[i]))
@@ -71,7 +80,11 @@ export function mergePdfDocuments(inputs: readonly PdfMergeInput[]): Uint8Array 
     // Each independent graph has unique page identities. Split at repetitions so a duplicate
     // never shares mutable annotations, widgets, or structure ownership with its original.
     let group: number[] = [], seen = new Set<number>();
-    const flush = () => { if (group.length) parts.push(openPdfDocument(extractPdfPages(document, group))); };
+    const flush = () => {
+      if (!group.length) return;
+      const graph = extractPdfPageGraph(document, group, [...selectedBySource.get(document.source.fingerprint)!]);
+      parts.push({ document: openPdfDocument(graph.bytes), origin: document, indices: [...group], pageReferences: graph.pageReferences });
+    };
     for (const index of pages) {
       if (seen.has(index)) { flush(); group = []; seen = new Set(); }
       group.push(index); seen.add(index);
@@ -90,7 +103,25 @@ export function mergePdfDocuments(inputs: readonly PdfMergeInput[]): Uint8Array 
     locked: PdfValue[] = [], usages: PdfValue[] = [], configs: PdfValue[] = [], outputIntents: PdfValue[] = [];
   let parentOffset = 0, needAppearances = false;
   const catalog = new Map<string, PdfValue>([['Type', new PdfName('Catalog')], ['Pages', pagesRef]]);
-  parts.forEach((document, sourceIndex) => {
+  // Allocate every output page before any destination is copied. A destination in
+  // another block targets its first occurrence; targets within this copy stay local.
+  const firstPages = new Map<string, Map<string, PdfReference>>();
+  const partPages = parts.map((part) => {
+    const key = part.origin.source.fingerprint;
+    const first = firstPages.get(key) ?? new Map<string, PdfReference>();
+    const local = new Map<string, PdfReference>();
+    for (const index of part.indices) {
+      const pageKey = part.origin.pages[index]!.reference.key;
+      const ref = reserve();
+      local.set(pageKey, ref);
+      if (!first.has(pageKey)) first.set(pageKey, ref);
+      outputPages.push(ref);
+    }
+    firstPages.set(key, first);
+    return local;
+  });
+  parts.forEach((part, sourceIndex) => {
+    const { document } = part;
     const source = document.source, refs = new Map<string, PdfReference>(), prefix = `source${sourceIndex + 1}`;
     const resourceNames = new Map<string, string>();
     const sourceStruct = source.resolve(source.catalog.get('StructTreeRoot'));
@@ -154,14 +185,18 @@ export function mergePdfDocuments(inputs: readonly PdfMergeInput[]): Uint8Array 
       const resolved = source.resolve(value);
       return Array.isArray(resolved) ? resolved : resolved === null ? [] : [resolved];
     }
-    // Reserve page refs before copying cyclic annotations and destinations.
-    for (const page of document.pages) refs.set(page.reference.key, reserve());
+    // Remap both real pages and external destination slots in this intermediate.
+    for (const [key, ref] of part.pageReferences) {
+      const target = partPages[sourceIndex]!.get(key) ?? firstPages.get(part.origin.source.fingerprint)!.get(key);
+      if (!target) throw new Error('PDF merge destination has no output page.');
+      refs.set(ref.key, target);
+    }
     for (const page of document.pages) {
       const ref = refs.get(page.reference.key)!;
       const info = copyDictionary(page.dictionary);
       info.set('Parent', pagesRef);
       if (!info.has('Lang') && source.catalog.has('Lang')) info.set('Lang', copy(source.catalog.get('Lang')!));
-      put(ref, info); outputPages.push(ref);
+      put(ref, info);
     }
     if (originalForm instanceof Map) {
       const container = reserve();
@@ -175,6 +210,17 @@ export function mergePdfDocuments(inputs: readonly PdfMergeInput[]): Uint8Array 
       const dr = source.resolve(originalForm.get('DR'));
       if (dr instanceof Map) for (const [category, entries] of dr) {
         const resolved = source.resolve(entries);
+        if (category === 'ProcSet') {
+          if (!Array.isArray(resolved)) unsupported('PDF form /ProcSet must be an array of names.');
+          const target = (formResources.get(category) as PdfValue[] | undefined) ?? [];
+          for (const entry of resolved) {
+            const value = source.resolve(entry);
+            if (!(value instanceof PdfName)) unsupported('PDF form /ProcSet must contain names.');
+            if (!target.some((item) => item instanceof PdfName && item.value === value.value)) target.push(new PdfName(value.value));
+          }
+          formResources.set(category, target);
+          continue;
+        }
         if (!(resolved instanceof Map)) unsupported('Unsupported PDF form resource dictionary.');
         const target = (formResources.get(category) as PdfDictionary | undefined) ?? new Map<string, PdfValue>();
         for (const [key, value] of resolved) target.set(resourceNames.get(key)!, copy(value));

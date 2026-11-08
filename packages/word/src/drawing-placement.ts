@@ -2,6 +2,7 @@ import type { WordDrawing } from './drawings.ts';
 
 /** Explicit DrawingML coordinate bases, shared by pictures and retained graphics. */
 export interface WordDrawingPosition {
+  readonly zOrder?: number;
   readonly wrap?: 'none';
   readonly layout?: 'inline' | 'front' | 'behind';
   readonly horizontalRelativeTo?: 'page' | 'column';
@@ -11,7 +12,7 @@ export interface WordDrawingPosition {
 }
 
 export function isWordDrawingPosition(value: WordDrawingPosition): boolean {
-  return (value.wrap === undefined || value.wrap === 'none') && (value.horizontalRelativeTo === undefined || ['page', 'column'].includes(value.horizontalRelativeTo)) &&
+  return (value.zOrder === undefined || Number.isInteger(value.zOrder) && value.zOrder >= 0 && value.zOrder <= 4294967295) && (value.wrap === undefined || value.wrap === 'none') && (value.horizontalRelativeTo === undefined || ['page', 'column'].includes(value.horizontalRelativeTo)) &&
     (value.verticalRelativeTo === undefined || ['page', 'line', 'paragraph'].includes(value.verticalRelativeTo));
 }
 

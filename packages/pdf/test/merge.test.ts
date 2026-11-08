@@ -378,3 +378,66 @@ test(`pushbutton actions promote surviving successors (${indirect}, ${chainArray
   const namespace = dictionary(source.resolve((form.get('Fields') as PdfReference[])[0]));
   expect(((namespace.get('Kids') as PdfReference[])[0] as PdfReference).key).toBe(((merged.pages[0]!.dictionary.get('Annots') as PdfReference[])[0] as PdfReference).key);
 });
+
+function linkedDocument() {
+  return openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /Names << /Dests << /Names [(target) [4 0 R /Fit]] >> >> >>',
+    '<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] /MediaBox [0 0 100 100] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 5 0 R /Annots [6 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 5 0 R >>',
+    pdfStream(''),
+    '<< /Type /Annot /Subtype /Link /Rect [0 0 10 10] /Dest [4 0 R /Fit] /A << /S /GoTo /D (target) /Next << /S /URI /URI (https://example.org/) >> >> /AA << /U << /S /GoTo /D (target) >> >> >>',
+  ]));
+}
+
+test('destinations resolve against all output blocks, including reopened sources, interleaving and repeats', () => {
+  const document = linkedDocument(), reopened = openPdfDocument(document.bytes()), other = text('OTHER');
+  const cases = [
+    { inputs: [{ document, pages: [0] }, { document: reopened, pages: [1] }], targets: [[0, 1]] },
+    { inputs: [{ document, pages: [1] }, { document: other, pages: [0] }, { document: reopened, pages: [0] }], targets: [[2, 0]] },
+    { inputs: [{ document, pages: [0, 0] }, { document: other, pages: [0] }, { document: reopened, pages: [1, 1] }], targets: [[0, 3], [1, 3]] },
+    { inputs: [{ document }, { document: reopened }], targets: [[0, 1], [2, 3]] },
+  ];
+  for (const { inputs, targets } of cases) {
+    const merged = openPdfDocument(mergePdfDocuments(inputs)), source = merged.source;
+    for (const [from, to] of targets) {
+      const annotation = dictionary(source.resolve((merged.pages[from!]!.dictionary.get('Annots') as PdfReference[])[0]));
+      const action = dictionary(source.resolve(annotation.get('A')));
+      const additional = dictionary(source.resolve(dictionary(source.resolve(annotation.get('AA'))).get('U')));
+      for (const value of [annotation.get('Dest'), action.get('D'), additional.get('D')]) {
+        const destination = source.resolve(value) as PdfValue[];
+        expect((destination[0] as PdfReference).key).toBe(merged.pages[to!]!.reference.key);
+      }
+      expect((dictionary(source.resolve(action.get('Next'))).get('S') as PdfName).value).toBe('URI');
+    }
+  }
+  const omitted = openPdfDocument(mergePdfDocuments([{ document, pages: [0] }]));
+  const annotation = dictionary(omitted.source.resolve((omitted.pages[0]!.dictionary.get('Annots') as PdfReference[])[0]));
+  expect(annotation.has('Dest')).toBe(false);
+  expect((dictionary(omitted.source.resolve(annotation.get('A'))).get('S') as PdfName).value).toBe('URI');
+});
+
+for (const indirect of [false, true])
+test(`AcroForm ProcSet arrays are retained and combined without name prefixes (${indirect})`, () => {
+  function withProcSet(names: string) {
+    return openPdfDocument(pdfFixture([
+      '<< /Type /Catalog /Pages 2 0 R /AcroForm 5 0 R >>',
+      '<< /Type /Pages /Count 1 /Kids [3 0 R] /MediaBox [0 0 100 100] >>',
+      '<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Annots [6 0 R] >>',
+      pdfStream(''),
+      `<< /Fields [6 0 R] /DR << /ProcSet ${indirect ? '8 0 R' : `[${names}]`} /Font << /F 7 0 R >> >> /DA (/F 12 Tf 0 g) >>`,
+      '<< /Type /Annot /Subtype /Widget /FT /Tx /T (field) /V (value) /Rect [0 0 20 20] /P 3 0 R >>',
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+      `[${names}]`,
+    ]));
+  }
+  const first = withProcSet('/PDF /Text'), second = withProcSet('/Text /ImageC');
+  for (const inputs of [[{ document: first }], [{ document: first }, { document: second }]]) {
+    const merged = openPdfDocument(mergePdfDocuments(inputs)), source = merged.source;
+    const form = dictionary(source.resolve(source.catalog.get('AcroForm')));
+    const resources = dictionary(source.resolve(form.get('DR')));
+    expect((source.resolve(resources.get('ProcSet')) as PdfName[]).map(name => name.value)).toEqual(inputs.length === 1 ? ['PDF', 'Text'] : ['PDF', 'Text', 'ImageC']);
+    expect([...dictionary(source.resolve(resources.get('Font'))).keys()]).toEqual(inputs.length === 1 ? ['source1_F'] : ['source1_F', 'source2_F']);
+    expect(form.get('Fields')).toHaveLength(inputs.length);
+  }
+});
