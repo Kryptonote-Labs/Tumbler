@@ -47,7 +47,15 @@
     readonly model: ChartModel;
   }
 
+  interface SpreadsheetRemoteSelection {
+    readonly id: string;
+    readonly name: string;
+    readonly color: string;
+    readonly range: GridSelection["range"];
+  }
+
   interface Props {
+    readonly remoteSelections?: readonly SpreadsheetRemoteSelection[];
     readonly worksheet: SpreadsheetWorksheet;
     readonly calculation?: SpreadsheetCalculationSnapshot;
     selection?: GridSelection;
@@ -69,6 +77,7 @@
 
   let {
     worksheet,
+    remoteSelections = [],
     calculation,
     selection = createGridSelection({ row: 1, column: 1 }),
     onselectionchange,
@@ -189,6 +198,7 @@
   }, previousViewport));
   let layout = $derived(composeSpreadsheetGridLayout({ viewport, rowGeometry, columnGeometry, frozenRows, frozenColumns, merges: worksheet.merges }));
   const selectionRects = $derived(spreadsheetSelectionRanges(selection.range,projectedRows).flatMap(range=>spreadsheetSelectionRects({range,rows:rowGeometry,columns:columnGeometry,scrollTop,scrollLeft,width:viewportWidth,height:viewportHeight,frozenRows,frozenColumns})));
+  const remoteRects = $derived(remoteSelections.map(peer => ({ ...peer, rects: spreadsheetSelectionRanges(peer.range,projectedRows).flatMap(range=>spreadsheetSelectionRects({range,rows:rowGeometry,columns:columnGeometry,scrollTop,scrollLeft,width:viewportWidth,height:viewportHeight,frozenRows,frozenColumns})) })));
   let maximumVisibleColumn = $derived(layout.columns.at(-1)?.index ?? 1);
   let emptyRegionStart = $derived(spreadsheetEmptyRegionStart(worksheet));
   let emptyCorner = $derived.by(() => {
@@ -889,6 +899,15 @@
     <div class="selection-outline" class:top-edge={rect.topEdge} class:bottom-edge={rect.bottomEdge} class:left-edge={rect.leftEdge} class:right-edge={rect.rightEdge}
       style:left={`${rect.left}px`} style:top={`${rect.top}px`} style:width={`${rect.width}px`} style:height={`${rect.height}px`}></div>
   {/each}
+  {#each remoteRects as peer (peer.id)}
+    {#each peer.rects as rect, index}
+      <div class="remote-selection" style:--peer-color={peer.color}
+        class:top-edge={rect.topEdge} class:bottom-edge={rect.bottomEdge} class:left-edge={rect.leftEdge} class:right-edge={rect.rightEdge}
+        style:left={`${rect.left}px`} style:top={`${rect.top}px`} style:width={`${rect.width}px`} style:height={`${rect.height}px`}>
+        {#if index === 0}<span class="remote-name">{peer.name}</span>{/if}
+      </div>
+    {/each}
+  {/each}
   <div class="corner"></div>
 </div>
 
@@ -914,6 +933,13 @@
 {/if}
 
 <style>
+  .remote-selection { position: absolute; pointer-events: none; z-index: 8; box-sizing: border-box; border: 0 solid var(--peer-color); background: color-mix(in srgb, var(--peer-color) 10%, transparent); }
+  .remote-selection.top-edge { border-top-width: 2px; }
+  .remote-selection.bottom-edge { border-bottom-width: 2px; }
+  .remote-selection.left-edge { border-left-width: 2px; }
+  .remote-selection.right-edge { border-right-width: 2px; }
+  .remote-name { position: absolute; left: -2px; top: 0; padding: 2px 5px; background: var(--peer-color); color: white; font-size: 11px; white-space: nowrap; border-radius: 3px 3px 0 0; }
+
   .grid-viewport { width: 100%; height: 100%; overflow: hidden; touch-action: pan-x pan-y; }
   .tumbler-grid { transform-origin: top left; touch-action: pan-x pan-y; position: relative; overflow: hidden; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; user-select: none; -webkit-user-select: none; }
   .grid-scroller { width: 100%; height: 100%; overflow: auto; overscroll-behavior: contain; }
