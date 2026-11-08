@@ -482,3 +482,40 @@ test(`split selections retain each page bookmark once while keeping cross-block 
     expect(targets).toEqual(plan.targets.map(index => merged.pages[index]!.reference.key));
   }
 });
+
+for (const targetIndex of [0, 1])
+for (const indirect of [false, true])
+for (const arrayChain of [false, true])
+test(`promoted bookmark destinations own only their output occurrences (${targetIndex}, ${indirect}, ${arrayChain})`, () => {
+  const primary = `<< /S /GoTo /D [5 0 R /Fit] /Next ${arrayChain ? '[10 0 R]' : '10 0 R'} >>`;
+  const document = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R /Outlines 7 0 R >>',
+    '<< /Type /Pages /Count 3 /Kids [3 0 R 4 0 R 5 0 R] /MediaBox [0 0 100 100] >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 6 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 6 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /Contents 6 0 R >>',
+    pdfStream(''),
+    '<< /Type /Outlines /First 8 0 R /Last 8 0 R /Count 1 >>',
+    `<< /Title (Promoted target) /Parent 7 0 R /A ${indirect ? '9 0 R' : primary} >>`,
+    primary,
+    `<< /S /GoTo /D [${targetIndex + 3} 0 R /Fit] /Next 11 0 R >>`,
+    '<< /S /URI /URI (https://example.org/tail) >>',
+  ]));
+  for (const blocks of [[[0, 1]], [[0], [1]], [[1], [0]], [[0, 0], [1]], [[0], [1], [0]]]) {
+    const merged = openPdfDocument(mergePdfDocuments(blocks.map(pages => ({ document: openPdfDocument(document.bytes()), pages }))));
+    const source = merged.source, root = dictionary(source.resolve(source.catalog.get('Outlines')));
+    const actual: string[] = [];
+    let next = root.get('First');
+    while (next instanceof PdfReference) {
+      const item = dictionary(source.resolve(next));
+      const action = dictionary(source.resolve(item.get('A')));
+      expect((action.get('S') as PdfName).value).toBe('GoTo');
+      actual.push(((source.resolve(action.get('D')) as PdfReference[])[0] as PdfReference).key);
+      const tail = dictionary(source.resolve(action.get('Next')));
+      expect(bytesText((tail.get('URI') as PdfString).bytes)).toBe('https://example.org/tail');
+      next = item.get('Next');
+    }
+    const expected = blocks.flat().flatMap((page, index) => page === targetIndex ? [merged.pages[index]!.reference.key] : []);
+    expect(actual).toEqual(expected);
+  }
+});
