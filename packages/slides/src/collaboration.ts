@@ -134,7 +134,7 @@ export function rebasePresentationCommands(
         JSON.stringify(object.table?.cells.map((c) => [c.row, c.column, c.rowSpan, c.columnSpan]))
     )
       conflict();
-    if ('start' in command && oldObject && object) {
+    if ('start' in command && command.start !== undefined && command.end !== undefined && oldObject && object) {
       const cell = command.cell;
       const text = (target: typeof object) =>
         cell
