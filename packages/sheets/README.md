@@ -115,3 +115,9 @@ XLSX bytes, including unrecognized package parts.
 Worksheet renames update formulas, named ranges, chart references, and validation
 formulas. Deleting a referenced worksheet writes `#REF!` formulas. Formula string
 literals and external workbook references retain their original text.
+
+### Printing
+
+`spreadsheetPrintPages(artifact)` paginates the active worksheet in CSS pixels. It reads saved print areas and repeated title rows/columns, paper size and orientation, margins, scale or fit-to-page, manual breaks, page order, gridlines, headings and centering. The Svelte `SpreadsheetPrintView` renders these pages with calculated values, cell formatting and supported charts. `PresentationPrintView` from `@tumblerjs/svelte/slides` renders one page per slide using the existing slide renderer. Hosts mount the views before invoking their browser print dialog, which also supports saving PDF.
+
+Header/footer text fields are rendered as plain text. Printer-specific settings and header/footer font runs are retained in the file but do not control browser output. Paper codes outside the supported standard sizes require explicit paper dimensions.

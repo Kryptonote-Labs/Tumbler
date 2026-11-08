@@ -176,3 +176,5 @@ export { applySpreadsheetStructureCommand, rebaseSpreadsheetFormula } from "./st
 export type { SpreadsheetStructureCommand } from "./structure.ts";
 
 export { translateSpreadsheetFormula } from './formula-translation.ts';
+
+export { spreadsheetPrintHeaderText, spreadsheetPrintPages, type SpreadsheetPrintPage } from './print.ts';
