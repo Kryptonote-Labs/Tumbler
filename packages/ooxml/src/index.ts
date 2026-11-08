@@ -73,6 +73,10 @@ export type {
 
 export { DEFAULT_OFFICE_THEME, officeThemeXml } from './office-theme.ts';
 
+export { customGeometry, evaluateGeometry, resolveDrawingGeometry, resizeDrawingGeometry, nativePresetGeometry } from "./drawing-geometry.ts";
+export type { GeometryDefinition, DrawingGeometry } from "./drawing-geometry.ts";
+export { presetGeometries } from "./preset-geometries.ts";
+export { resolveDrawingColor } from "./drawing-color.ts";
 export { gradientFill, gradientFillMarkup, linearGradientLine, rectangularGradientFaces, type GradientFill, type DrawingGradient } from "./gradient.ts";
 export { drawingGradientFill } from "./gradient.ts";
 export { readGradientFill } from "./gradient.ts";
