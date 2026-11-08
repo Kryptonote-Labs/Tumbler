@@ -116,6 +116,12 @@ Worksheet renames update formulas, named ranges, chart references, and validatio
 formulas. Deleting a referenced worksheet writes `#REF!` formulas. Formula string
 literals and external workbook references retain their original text.
 
+### Printing
+
+`spreadsheetPrintPages(artifact)` paginates the active worksheet in CSS pixels. It reads saved print areas and repeated title rows/columns, paper size and orientation, margins, scale or fit-to-page, manual breaks, page order, gridlines, headings and centering. The Svelte `SpreadsheetPrintView` renders these pages with calculated values, cell formatting and supported charts. `PresentationPrintView` from `@tumblerjs/svelte/slides` renders one page per slide using the existing slide renderer. Hosts mount the views before invoking their browser print dialog, which also supports saving PDF.
+
+Header/footer text fields are rendered as plain text. Printer-specific settings and header/footer font runs are retained in the file but do not control browser output. Paper codes outside the supported standard sizes require explicit paper dimensions.
+
 Worksheet drawings retain their original XML, relationships and media when cells are edited. `readSpreadsheetDrawingObjects` projects imported shapes, pictures, text and groups for grid rendering. `spreadsheetDrawingObjectId` reads the stable, sheet-local DrawingML object identity. Drawing commands use that `objectId`, not XML parser node IDs.
 
 `applySpreadsheetCommand` supports `insert-shape` with optional text, `insert-image` with base64 data and a content type, `move-drawing` with pixel bounds, `style-drawing`, `align-drawing` to a cell range, `order-drawing`, `duplicate-drawing` and `delete-drawing`. These commands also apply to imported chart placement; chart creation is not provided. CLI sheet reads include drawing IDs and bounds, and the same command schemas drive the CLI and interactive editor.

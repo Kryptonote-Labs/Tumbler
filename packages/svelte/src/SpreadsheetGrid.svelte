@@ -10,10 +10,8 @@
     calculateSpreadsheetWorksheet,
     formatCellReference,
     parseCellReference,
-    formatSpreadsheetCellValue,
     projectSpreadsheetTable,
     projectSpreadsheetConditionalStyles,
-    resolveSpreadsheetChartColor,
     resolveSpreadsheetChartDataSet,
     savedSpreadsheetTableView,
     setSpreadsheetTableSort,
@@ -42,7 +40,7 @@
   import { spreadsheetScrollAxis } from "./spreadsheet-scroll.ts";
   import { spreadsheetSelectionRects, spreadsheetSelectionRanges } from "./spreadsheet-selection.ts";
   import SpreadsheetDrawingObject from "./SpreadsheetDrawingObject.svelte";
-  import OoxmlChart from "./OoxmlChart.svelte";
+  import SpreadsheetChart from "./SpreadsheetChart.svelte";
 
   interface RenderableChart {
     readonly frame: SpreadsheetChartFrame;
@@ -793,12 +791,11 @@
     }}
   >
     {#if !readonly && worksheet.drawing && objectSelection===spreadsheetDrawingObjectId(worksheet.drawing,chart.frame.anchor)}<span class="drawing-resize" data-resize></span>{/if}
-    <OoxmlChart
+    <SpreadsheetChart
+      {worksheet}
       model={chart.model}
       width={Math.max(1, chart.bounds.width)}
       height={Math.max(1, chart.bounds.height)}
-      resolveColor={(color) => resolveSpreadsheetChartColor(worksheet.styles, color)}
-      formatNumber={(value, formatCode) => formatSpreadsheetCellValue({ type: "number", value, lexical: String(value) }, { numberFormatCode: formatCode, dateSystem: worksheet.workbook.dateSystem })}
       clipId={`tumbler-scatter-clip-${chart.frame.anchor.elementId}`}
     />
   </button>
