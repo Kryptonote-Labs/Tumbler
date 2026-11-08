@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { mergePdfDocuments, openPdfDocument, parsePdfPageSelection, type PdfDocument } from '@tumblerjs/pdf';
+  import { onMount, type Snippet } from 'svelte';
+  import { mergePdfDocuments, openPdfDocument, parsePdfPageSelection, type PdfDocument, PdfError } from '@tumblerjs/pdf';
 
   /** Hosts may intercept the finished PDF instead of the default browser download. */
-  let { onmerge, sources = [], submitLabel = 'Merge and download PDF' }: { onmerge?: (bytes: Uint8Array, filename: string) => void | Promise<void>; sources?: { name: string; bytes: Uint8Array }[]; submitLabel?: string } = $props();
+  let { onmerge, sources = [], submitLabel = 'Merge PDF', sourcePicker }: { onmerge?: (bytes: Uint8Array, filename: string) => void | Promise<void>; sources?: { name: string; bytes: Uint8Array }[]; submitLabel?: string; sourcePicker?: Snippet } = $props();
   type Block = {
     id: number; name: string; bytes: Uint8Array; password: string;
-    document?: PdfDocument; pages: string; error: string;
+    document?: PdfDocument; pages: string; error: string; locked?: boolean;
   };
   let blocks = $state<Block[]>([]);
   let filename = $state('merged.pdf');
@@ -37,8 +37,10 @@
       // PdfDocument is an immutable source graph; keep its class identity out of deep proxies.
       block.document = openPdfDocument(block.bytes, { password: block.password || undefined });
       block.error = '';
+      block.locked = false;
     } catch (cause) {
       block.document = undefined;
+      block.locked = cause instanceof PdfError && ['password_required', 'invalid_password'].includes(cause.code);
       block.error = message(cause);
     }
     error = '';
@@ -104,56 +106,88 @@
 </script>
 
 <div class="pdf-merge">
-  <div class="intro">
-    <p>Add PDFs, choose pages, then arrange the blocks in output order. Files are combined in your browser.</p>
-    <label class="upload">Add PDF files<input type="file" accept=".pdf,application/pdf" multiple onchange={upload} disabled={reading} /></label>
+  <div class="source-actions">
+    {@render sourcePicker?.()}
+    <label class="upload">
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 11V2m-3 3 3-3 3 3M2 10v4h12v-4" /></svg>
+      Upload
+      <input aria-label="Upload PDFs" type="file" accept=".pdf,application/pdf" multiple onchange={upload} disabled={reading} />
+    </label>
   </div>
-  <p class="hint">Leave Pages empty for every page. Use numbers or inclusive ranges, such as 5,2-4 or 3-1,1. Repeats are allowed. Duplicate a block to insert more pages from the same PDF elsewhere.</p>
-  {#if !blocks.length}<p class="empty">Add your first PDF to begin.</p>{/if}
-  <ol aria-label="PDF merge order">
-    {#each blocks as block, index (block.id)}
-      <li>
-        <fieldset>
-          <legend>{index + 1}. {block.name}</legend>
-          <div class="fields">
-            <label>Pages<input aria-label={`Pages for block ${index + 1}`} type="text" bind:value={block.pages} placeholder={block.document ? `All ${block.document.pages.length} pages` : 'All pages'} oninput={() => { error = ''; status = ''; }} /></label>
-            <label>Password (if needed)<input aria-label={`Password for block ${index + 1}`} type="password" bind:value={block.password} oninput={event => { block.password = event.currentTarget.value; open(block); }} autocomplete="off" /></label>
+  <div class="sources">
+    {#if !blocks.length}<p class="empty">Add a PDF to begin.</p>{/if}
+    <ol aria-label="PDF merge order">
+      {#each blocks as block, index (block.id)}
+        <li>
+          <div class="source-heading">
+            <span class="order">{index + 1}</span>
+            <span class="name" title={block.name}>{block.name}</span>
+            <div class="actions">
+              <button type="button" aria-label={`Move block ${index + 1} up`} title="Move up" disabled={index === 0 || reading} onclick={() => move(index, -1)}>
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3m-4 4 4-4 4 4" /></svg>
+              </button>
+              <button type="button" aria-label={`Move block ${index + 1} down`} title="Move down" disabled={index === blocks.length - 1 || reading} onclick={() => move(index, 1)}>
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10m-4-4 4 4 4-4" /></svg>
+              </button>
+              <button type="button" aria-label={`Duplicate block ${index + 1}`} title="Duplicate" disabled={reading} onclick={() => duplicate(index)}>
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2h8v8H6zM3 5H2v9h9v-1" /></svg>
+              </button>
+              <button type="button" aria-label={`Remove block ${index + 1}`} title="Remove" disabled={reading} onclick={() => { blocks = blocks.filter(item => item.id !== block.id); status = ''; }}>
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8" /></svg>
+              </button>
+            </div>
           </div>
-          {#if block.error}<p class="error" role="alert">{block.error}</p>{:else}<p class="count">{block.document?.pages.length} source {block.document?.pages.length === 1 ? 'page' : 'pages'}</p>{/if}
-          <div class="actions">
-            <button type="button" aria-label={`Move block ${index + 1} up`} disabled={index === 0 || reading} onclick={() => move(index, -1)}>Move up</button>
-            <button type="button" aria-label={`Move block ${index + 1} down`} disabled={index === blocks.length - 1 || reading} onclick={() => move(index, 1)}>Move down</button>
-            <button type="button" aria-label={`Duplicate block ${index + 1}`} disabled={reading} onclick={() => duplicate(index)}>Duplicate</button>
-            <button type="button" aria-label={`Remove block ${index + 1}`} disabled={reading} onclick={() => { blocks = blocks.filter(item => item.id !== block.id); status = ''; }}>Remove</button>
-          </div>
-        </fieldset>
-      </li>
-    {/each}
-  </ol>
+          <label class="pages">Pages
+            <input aria-label={`Pages for block ${index + 1}`} title="Page numbers or ranges, e.g. 3,1-2. Leave empty for all pages." type="text" bind:value={block.pages} placeholder={block.document ? `All ${block.document.pages.length} pages` : 'All pages'} oninput={() => { error = ''; status = ''; }} />
+          </label>
+          {#if block.locked}
+            <label class="password">Password<input aria-label={`Password for block ${index + 1}`} type="password" bind:value={block.password} oninput={event => { block.password = event.currentTarget.value; open(block); }} autocomplete="off" /></label>
+          {/if}
+          {#if block.error}<p class="error" role="alert">{block.error}</p>{/if}
+        </li>
+      {/each}
+    </ol>
+    {#if plan.error && blocks.every(block => !block.error)}<p class="error" role="alert">{plan.error}</p>{/if}
+    {#if error}<p class="error" role="alert">{error}</p>{/if}
+  </div>
   <div class="finish">
-    <label>Output filename<input aria-label="Output filename" type="text" bind:value={filename} /></label>
-    <button type="button" disabled={!blocks.length || reading || !!plan.error} onclick={merge}>{submitLabel}</button>
+    <label class="filename">File name<input aria-label="Output filename" type="text" bind:value={filename} /></label>
+    <div class="submit-row">
+      <span class="status" role="status">{reading ? 'Working…' : status || `${pageCount} ${pageCount === 1 ? 'page' : 'pages'}`}</span>
+      <button class="submit" type="button" disabled={!blocks.length || reading || !!plan.error} onclick={merge}>{submitLabel}</button>
+    </div>
   </div>
-  {#if plan.error && blocks.every(block => !block.error)}<p class="error" role="alert">{plan.error}</p>{/if}
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
-  <p class="status" role="status">{reading ? 'Reading files…' : status || (pageCount ? `${pageCount} ${pageCount === 1 ? 'page' : 'pages'} in output order` : '')}</p>
 </div>
 
 <style>
-  .pdf-merge { color: var(--text, #202820); font: inherit; }
-  .intro p, .hint { line-height: 1.6; }
-  .hint, .count, .status { color: var(--soft, #5c675c); font-size: 0.85em; }
-  .upload { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-weight: 600; }
-  .upload input { max-width: 100%; }
-  ol { padding: 0; list-style: none; display: grid; gap: 16px; margin: 24px 0; }
-  fieldset { border: 1px solid var(--border, #bcc8bc); padding: 16px; border-radius: 8px; min-width: 0; }
-  legend { font-weight: 600; padding: 0 6px; overflow-wrap: anywhere; }
-  .fields, .finish, .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
-  .fields label, .finish label { display: grid; gap: 6px; flex: 1 1 180px; font-size: 0.85em; }
-  input[type='text'], input[type='password'] { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid var(--border, #a5b5a5); border-radius: 4px; padding: 9px; background: var(--bg, white); color: inherit; font: inherit; }
-  button { cursor: pointer; padding: 8px 12px; border: 1px solid var(--border, #a5b5a5); border-radius: 4px; background: var(--surface, #f0f4f0); color: inherit; font: inherit; font-size: 0.85em; }
-  button:disabled { opacity: 0.5; cursor: default; }
-  .finish button { background: var(--accent, #246644); color: var(--accent-ink, white); padding: 10px 16px; }
-  .error { color: var(--danger, #b82222); overflow-wrap: anywhere; }
-  .empty { padding: 28px 0; color: var(--soft, #5c675c); }
+  .pdf-merge { display: flex; flex-direction: column; min-height: 0; height: 100%; color: var(--text, #202820); font: inherit; font-size: 12px; }
+  .source-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px; border-bottom: 1px solid var(--border, #ddd); }
+  .upload { position: relative; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--border, #ddd); border-radius: 4px; cursor: pointer; white-space: nowrap; }
+  .upload input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .upload:focus-within { outline: 1px solid var(--accent, #246644); outline-offset: 2px; }
+  .sources { flex: 1; min-height: 0; overflow: auto; padding: 0 12px; }
+  ol { list-style: none; padding: 0; margin: 0; }
+  li { padding: 12px 0; border-bottom: 1px solid var(--border, #ddd); }
+  li:last-child { border-bottom: 0; }
+  .source-heading { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .order { color: var(--text-soft, #666); font-variant-numeric: tabular-nums; }
+  .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .actions { display: flex; gap: 2px; }
+  .actions button { display: grid; place-items: center; padding: 4px; width: 24px; height: 24px; border: 0; background: transparent; }
+  svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+  .pages, .password { display: grid; grid-template-columns: 62px minmax(0, 1fr); align-items: center; gap: 8px; color: var(--text-soft, #666); }
+  .password { margin-top: 8px; }
+  input[type='text'], input[type='password'] { box-sizing: border-box; width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--border, #ddd); border-radius: 4px; background: var(--bg, white); color: var(--text, #202820); font: inherit; }
+  input:focus-visible, button:focus-visible { outline: 1px solid var(--accent, #246644); outline-offset: 2px; }
+  button { color: inherit; font: inherit; cursor: pointer; border-radius: 4px; }
+  button:hover { background: var(--surface-hover, #f0f4f0); }
+  button:disabled { opacity: 0.35; cursor: default; }
+  .finish { flex-shrink: 0; border-top: 1px solid var(--border, #ddd); padding: 12px; }
+  .filename { display: grid; gap: 6px; color: var(--text-soft, #666); }
+  .submit-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
+  .submit { padding: 7px 12px; border: 1px solid var(--border, #ddd); background: var(--surface, #f0f4f0); font-weight: 500; white-space: nowrap; }
+  .error { color: var(--danger, #b82222); overflow-wrap: anywhere; margin: 8px 0 0; line-height: 1.5; }
+  .status, .empty { color: var(--text-soft, #666); line-height: 1.5; }
+  .status { min-height: 18px; }
+  .empty { margin: 12px 0; }
 </style>
