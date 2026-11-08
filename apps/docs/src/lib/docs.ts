@@ -1,3 +1,4 @@
+import { pdfMergeDoc } from './docs/pdf-merge';
 import { spreadsheetViewerDoc } from './docs/spreadsheet-viewer';
 import { powerpointViewerDoc } from './docs/powerpoint-viewer';
 import { installationDoc } from './docs/installation';
@@ -30,6 +31,7 @@ import { releasesDoc } from './docs/releases';
 import type { Doc } from './docs/types';
 
 export const docs: Record<string, Doc> = {
+  "pdf-merge": pdfMergeDoc,
   "installation": installationDoc,
   "architecture": architectureDoc,
   "development": developmentDoc,

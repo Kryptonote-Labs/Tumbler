@@ -1,5 +1,5 @@
 import { spreadsheetFileHost, createSpreadsheetFile } from './spreadsheet-file-host.ts';
-import { extractPdfPages, openPdfDocument, PdfSearchIndex } from '@tumblerjs/pdf';
+import { extractPdfPages, openPdfDocument, PdfSearchIndex, mergePdfDocuments, parsePdfPageSelection } from '@tumblerjs/pdf';
 import { checkPdfDeletionSupported } from './pdf-delete-pages.ts';
 import { pdfDeletePagesInput, pdfPageIndices } from './pdf-pages.ts';
 import { presentationFileHost, createPresentationFile } from './presentation-file-host.ts';
@@ -12,6 +12,7 @@ import type { OperationInput } from './registry.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   closeSync,
+  linkSync,
   chmodSync,
   openSync,
   readFileSync,
@@ -228,6 +229,27 @@ export function createFileHost(): OperationHost {
   return {
     ...presentationFileHost(),
     ...spreadsheetFileHost(),
+    async mergePdf(input) {
+      if (!input.sources.length) throw new Error('Select at least one PDF source.');
+      if (extname(input.output).toLowerCase() !== '.pdf') throw new Error('PDF merge requires a .pdf output path.');
+      const sources = input.sources.map((source) => {
+        if (extname(source.path).toLowerCase() !== '.pdf') throw new Error('PDF merge requires .pdf input paths.');
+        const document = openPdfDocument(readFileSync(source.path), source.password === undefined ? {} : { password: source.password });
+        return { document, ...(source.pages === undefined ? {} : { pages: parsePdfPageSelection(source.pages, document.pages.length) }) };
+      });
+      const output = mergePdfDocuments(sources);
+      // Exclusive creation also protects aliases/symlinks to any input and existing output.
+      // Finish the write before exposing the destination; hard-link publication never replaces a file.
+      const temporary = `${input.output}.${randomUUID()}.tmp`;
+      try {
+        writeFileSync(temporary, output, { flag: 'wx' });
+        linkSync(temporary, input.output);
+      } finally {
+        try { unlinkSync(temporary); }
+        catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error; }
+      }
+      return { output: input.output, format: 'pdf', pageCount: sources.reduce((sum, source) => sum + (source.pages?.length ?? source.document.pages.length), 0) };
+    },
     async findPdf(document, query, options) {
       return new PdfSearchIndex(openPdfDocument(readFileSync(document))).find(query, options);
     },

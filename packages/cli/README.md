@@ -204,3 +204,13 @@ lists such as `1,3-5`. JSON output contains `matches` and `total`. Matches inclu
 the page number, matched text, surrounding context, and rectangles in page points
 with a top-left origin. Wrapped phrases return multiple rectangles. Search is
 literal, includes existing OCR text, and leaves the file unchanged.
+
+### Merge PDFs
+
+```sh
+tumbler first.pdf pdf merge --pages 3,1-2,1 --source second.pdf --pages 2-1 --source first.pdf --pages 4 --output merged.pdf
+```
+
+Sources are read in command order. `--pages` and `--password` apply to the most recent source (initially the positional PDF). Omit `--pages` to include every page. Selections use one-based numbers, comma lists, inclusive ranges in either direction, and repetitions. Repeat `--source` to interleave blocks from any document. `--password` takes the next argument literally (including passwords such as `--help`); `--password=--secret` is also supported. It unlocks an encrypted input; the new PDF is unencrypted. The output must end in `.pdf` and must not exist. Inputs remain untouched and publication occurs only after the complete output has been written.
+
+The shared `@tumblerjs/pdf` merge API also powers the Svelte docs PDF merge playground. Both interfaces use the same page-selection rules and preservation checks. See the PDF package README for document structure support and limitations.
