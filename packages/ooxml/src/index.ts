@@ -77,3 +77,7 @@ export { customGeometry, evaluateGeometry, resolveDrawingGeometry, resizeDrawing
 export type { GeometryDefinition, DrawingGeometry } from "./drawing-geometry.ts";
 export { presetGeometries } from "./preset-geometries.ts";
 export { resolveDrawingColor } from "./drawing-color.ts";
+export { gradientFill, gradientFillMarkup, linearGradientLine, rectangularGradientFaces, type GradientFill, type DrawingGradient } from "./gradient.ts";
+export { drawingGradientFill } from "./gradient.ts";
+export { readGradientFill } from "./gradient.ts";
+export { paintDrawingGradient, paintRectangularGradient, type DrawingGradientCanvasContext } from "./gradient-canvas.ts";

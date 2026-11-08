@@ -55,8 +55,8 @@
         "tumbler": "./src/bin.ts",
       },
       "dependencies": {
-        "@tumblerjs/sheets": "0.1.0-alpha.26",
         "@tumblerjs/pdf": "0.1.0-alpha.26",
+        "@tumblerjs/sheets": "0.1.0-alpha.26",
         "@tumblerjs/slides": "0.1.0-alpha.26",
         "@tumblerjs/word": "0.1.0-alpha.26",
         "yjs": "^13.6.0",
@@ -87,6 +87,7 @@
       "dependencies": {
         "@tumblerjs/opc": "0.1.0-alpha.26",
         "saxes": "6.0.0",
+        "zod": "^4.6.5",
       },
     },
     "packages/opc": {
@@ -145,6 +146,7 @@
       "dependencies": {
         "@tumblerjs/charts": "0.1.0-alpha.26",
         "@tumblerjs/core": "0.1.0-alpha.26",
+        "@tumblerjs/ooxml": "0.1.0-alpha.26",
         "@tumblerjs/pdf": "0.1.0-alpha.26",
         "@tumblerjs/sheets": "0.1.0-alpha.26",
         "@tumblerjs/word": "0.1.0-alpha.26",
@@ -857,6 +859,8 @@
     "@sveltejs/vite-plugin-svelte/magic-string": ["magic-string@1.4.1", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.6.0" } }, "sha512-8lyCu36ErXR0J9uaGKlKQoiLZKmtI63YGLE8G2o9jyRPdr4X47LusSOwgOJOzcVtp81fTAAjxR7BwKz682Jhow=="],
 
     "@tumblerjs/cli/zod": ["zod@4.6.7", "", {}, "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="],
+
+    "@tumblerjs/ooxml/zod": ["zod@4.6.7", "", {}, "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="],
 
     "@tumblerjs/slides/zod": ["zod@4.6.7", "", {}, "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="],
 
