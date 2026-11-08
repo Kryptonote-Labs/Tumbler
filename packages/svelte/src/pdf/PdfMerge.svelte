@@ -1,8 +1,9 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { mergePdfDocuments, openPdfDocument, parsePdfPageSelection, type PdfDocument } from '@tumblerjs/pdf';
 
   /** Hosts may intercept the finished PDF instead of the default browser download. */
-  let { onmerge }: { onmerge?: (bytes: Uint8Array, filename: string) => void } = $props();
+  let { onmerge, sources = [], submitLabel = 'Merge and download PDF' }: { onmerge?: (bytes: Uint8Array, filename: string) => void | Promise<void>; sources?: { name: string; bytes: Uint8Array }[]; submitLabel?: string } = $props();
   type Block = {
     id: number; name: string; bytes: Uint8Array; password: string;
     document?: PdfDocument; pages: string; error: string;
@@ -43,6 +44,13 @@
     error = '';
     status = '';
   }
+  onMount(() => {
+    blocks = sources.map(source => {
+      const block: Block = { id: nextId++, name: source.name, bytes: source.bytes, password: '', pages: '', error: '' };
+      open(block);
+      return block;
+    });
+  });
   async function upload(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const files = Array.from(input.files ?? []);
@@ -70,7 +78,9 @@
     blocks = [...blocks.slice(0, index + 1), { ...original, id: nextId++ }, ...blocks.slice(index + 1)];
     status = '';
   }
-  function merge() {
+  async function merge() {
+    if (reading) return;
+    reading = true;
     error = '';
     status = '';
     try {
@@ -78,7 +88,7 @@
       if (!filename.trim() || !/\.pdf$/i.test(filename.trim())) throw new Error('Choose an output filename ending in .pdf.');
       const bytes = mergePdfDocuments(plan.inputs);
       const name = filename.trim();
-      if (onmerge) onmerge(bytes, name);
+      if (onmerge) await onmerge(bytes, name);
       else {
         const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes).buffer], { type: 'application/pdf' }));
         const link = document.createElement('a');
@@ -89,12 +99,13 @@
       }
       status = `Created ${name} with ${pageCount} ${pageCount === 1 ? 'page' : 'pages'}.`;
     } catch (cause) { error = message(cause); }
+    finally { reading = false; }
   }
 </script>
 
 <div class="pdf-merge">
   <div class="intro">
-    <p>Add PDFs, choose pages, then arrange the blocks in output order. Files stay in your browser.</p>
+    <p>Add PDFs, choose pages, then arrange the blocks in output order. Files are combined in your browser.</p>
     <label class="upload">Add PDF files<input type="file" accept=".pdf,application/pdf" multiple onchange={upload} disabled={reading} /></label>
   </div>
   <p class="hint">Leave Pages empty for every page. Use numbers or inclusive ranges, such as 5,2-4 or 3-1,1. Repeats are allowed. Duplicate a block to insert more pages from the same PDF elsewhere.</p>
@@ -121,7 +132,7 @@
   </ol>
   <div class="finish">
     <label>Output filename<input aria-label="Output filename" type="text" bind:value={filename} /></label>
-    <button type="button" disabled={!blocks.length || reading || !!plan.error} onclick={merge}>Merge and download PDF</button>
+    <button type="button" disabled={!blocks.length || reading || !!plan.error} onclick={merge}>{submitLabel}</button>
   </div>
   {#if plan.error && blocks.every(block => !block.error)}<p class="error" role="alert">{plan.error}</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
