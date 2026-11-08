@@ -48,6 +48,8 @@
   }
 
   interface Props {
+    readonly showGridlines?: boolean;
+    readonly showHeadings?: boolean;
     readonly worksheet: SpreadsheetWorksheet;
     readonly calculation?: SpreadsheetCalculationSnapshot;
     selection?: GridSelection;
@@ -68,6 +70,8 @@
   }
 
   let {
+    showGridlines = true,
+    showHeadings = true,
     worksheet,
     calculation,
     selection = createGridSelection({ row: 1, column: 1 }),
@@ -109,8 +113,8 @@
   const directions: Partial<Record<string, GridDirection>> = {
     ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
   };
-  const rowHeaderWidth = 52;
-  const columnHeaderHeight = 28;
+  const rowHeaderWidth = $derived(showHeadings ? 52 : 0);
+  const columnHeaderHeight = $derived(showHeadings ? 28 : 0);
   let viewCalculation = $derived(calculation === undefined ? undefined : calculateSpreadsheetWorksheet(worksheet, {
     tableViewStates: tableStates,
   }));
@@ -188,7 +192,7 @@
     columnGeometry,
   }, previousViewport));
   let layout = $derived(composeSpreadsheetGridLayout({ viewport, rowGeometry, columnGeometry, frozenRows, frozenColumns, merges: worksheet.merges }));
-  const selectionRects = $derived(spreadsheetSelectionRanges(selection.range,projectedRows).flatMap(range=>spreadsheetSelectionRects({range,rows:rowGeometry,columns:columnGeometry,scrollTop,scrollLeft,width:viewportWidth,height:viewportHeight,frozenRows,frozenColumns})));
+  const selectionRects = $derived(spreadsheetSelectionRanges(selection.range,projectedRows).flatMap(range=>spreadsheetSelectionRects({rowHeaderWidth,columnHeaderHeight,range,rows:rowGeometry,columns:columnGeometry,scrollTop,scrollLeft,width:viewportWidth,height:viewportHeight,frozenRows,frozenColumns})));
   let maximumVisibleColumn = $derived(layout.columns.at(-1)?.index ?? 1);
   let emptyRegionStart = $derived(spreadsheetEmptyRegionStart(worksheet));
   let emptyCorner = $derived.by(() => {
@@ -300,6 +304,14 @@
       const pointer = pointerSelection;
       void tick().then(() => { if (pointerSelection === pointer) pointerSelection = undefined; });
     }
+    onselectionchange?.(selection);
+  }
+
+  function selectHeader(index: number, row: boolean, extend: boolean) {
+    const anchor = extend ? (row ? selection.anchor.row : selection.anchor.column) : index;
+    selection = row
+      ? { ...createGridSelection({ row: anchor, column: 1 }, { row: index, column: columnCount }), focus: { row: index, column: selection.focus.column } }
+      : { ...createGridSelection({ row: 1, column: anchor }, { row: rowCount, column: index }), focus: { row: selection.focus.row, column: index } };
     onselectionchange?.(selection);
   }
 
@@ -743,11 +755,21 @@
 <div class="grid-viewport" use:zoomGesture={zoomGrid}>
 <div
   class="tumbler-grid"
-  style={`transform:scale(${scale});width:${100 / scale}%;height:${100 / scale}%`}
+  style={`transform:scale(${scale});width:${100 / scale}%;height:${100 / scale}%;--tumbler-header-width:${rowHeaderWidth}px;--tumbler-header-height:${columnHeaderHeight}px`}
+  class:no-gridlines={!showGridlines}
+  class:no-headings={!showHeadings}
   role="grid"
   aria-rowcount={rowCount}
   aria-colcount={columnCount}
   tabindex="0"
+  oncontextmenu={(event) => {
+    if (!(event.target instanceof Element) || !event.target.closest('.canvas') || event.target.closest('.chart-frame')) return;
+    const cell = emptyCellAt(event);
+    if (cell && (cell.row < selection.range.start.row || cell.row > selection.range.end.row || cell.column < selection.range.start.column || cell.column > selection.range.end.column)) {
+      selection = createGridSelection(cell);
+      onselectionchange?.(selection);
+    }
+  }}
   onkeydown={handleKeydown}
 >
   <div
@@ -853,7 +875,7 @@
     <div class="scrolling-column-headers" style:left={`${frozenColumnsWidth}px`}>
       {#each layout.columns.filter((column) => column.index > frozenColumns) as column (column.index)}
         <div
-          class="column-header" class:selected-header={column.index >= selection.range.start.column && column.index <= selection.range.end.column}
+          data-column={column.index} tabindex="0" role="button" onclick={(event) => selectHeader(column.index, false, event.shiftKey)} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); selectHeader(column.index, false, event.shiftKey); } }} aria-label={`Column ${columnLabel(column.index)}`} class="column-header" class:selected-header={column.index >= selection.range.start.column && column.index <= selection.range.end.column}
           style:left={`${column.start - scrollLeft - frozenColumnsWidth}px`}
           style:width={`${column.size}px`}
         >{columnLabel(column.index)}</div>
@@ -862,7 +884,7 @@
     {#if frozenColumnsWidth > 0}
       <div class="frozen-column-headers" style:width={`${frozenColumnsWidth}px`}>
         {#each layout.columns.filter((column) => column.index <= frozenColumns) as column (column.index)}
-          <div class="column-header" class:selected-header={column.index >= selection.range.start.column && column.index <= selection.range.end.column} style:left={`${column.start}px`} style:width={`${column.size}px`}>{columnLabel(column.index)}</div>
+          <div data-column={column.index} tabindex="0" role="button" onclick={(event) => selectHeader(column.index, false, event.shiftKey)} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); selectHeader(column.index, false, event.shiftKey); } }} aria-label={`Column ${columnLabel(column.index)}`} class="column-header" class:selected-header={column.index >= selection.range.start.column && column.index <= selection.range.end.column} style:left={`${column.start}px`} style:width={`${column.size}px`}>{columnLabel(column.index)}</div>
         {/each}
       </div>
     {/if}
@@ -871,7 +893,7 @@
     <div class="scrolling-row-headers" style:top={`${frozenRowsHeight}px`}>
       {#each layout.rows.filter((row) => row.index > frozenRows) as row (row.index)}
         <div
-          class="row-header" class:selected-header={(sourceRow(row.index) ?? 0) >= selection.range.start.row && (sourceRow(row.index) ?? 0) <= selection.range.end.row}
+          data-row={sourceRow(row.index) ?? row.index} tabindex="0" role="button" onclick={(event) => selectHeader(sourceRow(row.index) ?? row.index, true, event.shiftKey)} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); selectHeader(sourceRow(row.index) ?? row.index, true, event.shiftKey); } }} aria-label={`Row ${sourceRow(row.index) ?? row.index}`} class="row-header" class:selected-header={(sourceRow(row.index) ?? 0) >= selection.range.start.row && (sourceRow(row.index) ?? 0) <= selection.range.end.row}
           style:top={`${row.start - scrollTop - frozenRowsHeight}px`}
           style:height={`${row.size}px`}
         >{row.index}</div>
@@ -880,7 +902,7 @@
     {#if frozenRowsHeight > 0}
       <div class="frozen-row-headers" style:height={`${frozenRowsHeight}px`}>
         {#each layout.rows.filter((row) => row.index <= frozenRows) as row (row.index)}
-          <div class="row-header" class:selected-header={(sourceRow(row.index) ?? 0) >= selection.range.start.row && (sourceRow(row.index) ?? 0) <= selection.range.end.row} style:top={`${row.start}px`} style:height={`${row.size}px`}>{row.index}</div>
+          <div data-row={sourceRow(row.index) ?? row.index} tabindex="0" role="button" onclick={(event) => selectHeader(sourceRow(row.index) ?? row.index, true, event.shiftKey)} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); selectHeader(sourceRow(row.index) ?? row.index, true, event.shiftKey); } }} aria-label={`Row ${sourceRow(row.index) ?? row.index}`} class="row-header" class:selected-header={(sourceRow(row.index) ?? 0) >= selection.range.start.row && (sourceRow(row.index) ?? 0) <= selection.range.end.row} style:top={`${row.start}px`} style:height={`${row.size}px`}>{row.index}</div>
         {/each}
       </div>
     {/if}
@@ -923,9 +945,13 @@
   .cell.active.selected::after { background: transparent; }
   .canvas { position: relative; overflow: clip; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane, .frozen-column-pane { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; background: var(--tumbler-sheet-bg, #ffffff); }
-  .frozen-row-pane { left: 52px; right: 0; top: 28px; }
-  .frozen-column-pane { left: 52px; bottom: 0; }
+  .frozen-row-pane { left: var(--tumbler-header-width); right: 0; top: var(--tumbler-header-height); }
+  .frozen-column-pane { left: var(--tumbler-header-width); bottom: 0; }
   .frozen-row-pane .cell, .frozen-column-pane .cell, .frozen-row-pane .chart-frame, .frozen-column-pane .chart-frame { pointer-events: auto; }
+  .no-gridlines .cell { border-color: transparent; }
+  .no-gridlines .empty-grid { stroke: transparent; }
+  .no-headings .column-gutter, .no-headings .row-gutter, .no-headings .corner { visibility: hidden; }
+  .column-header, .row-header { pointer-events: auto; }
   .column-gutter { position: absolute; left: 52px; right: 0; top: 0; z-index: 3; height: 28px; overflow: hidden; pointer-events: none; background: var(--tumbler-grid-header-bg, #171b17); }
   .row-gutter { position: absolute; left: 0; top: 28px; bottom: 0; z-index: 3; width: 52px; overflow: hidden; pointer-events: none; background: var(--tumbler-grid-header-bg, #171b17); }
   .scrolling-column-headers, .frozen-column-headers, .scrolling-row-headers, .frozen-row-headers { position: absolute; overflow: hidden; }

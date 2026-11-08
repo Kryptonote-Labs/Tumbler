@@ -100,3 +100,14 @@ test("sorted rows outline the rendered cells, including disjoint selections", as
     { start: { row: 4, column: 1 }, end: { row: 4, column: 2 } },
   ]);
 });
+
+test('selection outlines follow hidden heading gutters', () => {
+  const axis = { count: 10, start: (index: number) => (index - 1) * 20, size: () => 20 };
+  const rectangles = spreadsheetSelectionRects({
+    range: { start: { row: 1, column: 1 }, end: { row: 1, column: 1 } },
+    rows: axis, columns: axis, scrollTop: 0, scrollLeft: 0,
+    width: 200, height: 200, frozenRows: 0, frozenColumns: 0,
+    rowHeaderWidth: 0, columnHeaderHeight: 0,
+  });
+  expect(rectangles[0]).toMatchObject({ left: 0, top: 0, width: 20, height: 20 });
+});

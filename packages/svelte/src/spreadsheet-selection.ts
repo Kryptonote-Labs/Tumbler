@@ -7,6 +7,8 @@ type Axis = {
 };
 /** Clip the range outline separately in each frozen/scrolling pane without drawing internal seams. */
 export function spreadsheetSelectionRects(input: {
+  rowHeaderWidth?: number;
+  columnHeaderHeight?: number;
   range: GridRange;
   rows: Axis;
   columns: Axis;
@@ -18,6 +20,8 @@ export function spreadsheetSelectionRects(input: {
   frozenColumns: number;
 }) {
   const {
+    rowHeaderWidth = 52,
+    columnHeaderHeight = 28,
     range,
     rows,
     columns,
@@ -61,25 +65,25 @@ export function spreadsheetSelectionRects(input: {
       );
       if (startRow > endRow || startColumn > endColumn) continue;
       const left =
-        52 + columns.start(startColumn) - (fixedColumn ? 0 : scrollLeft);
-      const top = 28 + rows.start(startRow) - (fixedRow ? 0 : scrollTop);
+        rowHeaderWidth + columns.start(startColumn) - (fixedColumn ? 0 : scrollLeft);
+      const top = columnHeaderHeight + rows.start(startRow) - (fixedRow ? 0 : scrollTop);
       const right =
-        52 +
+        rowHeaderWidth +
         columns.start(endColumn) +
         columns.size(endColumn) -
         (fixedColumn ? 0 : scrollLeft);
       const bottom =
-        28 +
+        columnHeaderHeight +
         rows.start(endRow) +
         rows.size(endRow) -
         (fixedRow ? 0 : scrollTop);
-      const clippedLeft = Math.max(left, 52 + (fixedColumn ? 0 : columnSplit));
-      const clippedTop = Math.max(top, 28 + (fixedRow ? 0 : rowSplit));
+      const clippedLeft = Math.max(left, rowHeaderWidth + (fixedColumn ? 0 : columnSplit));
+      const clippedTop = Math.max(top, columnHeaderHeight + (fixedRow ? 0 : rowSplit));
       const clippedRight = Math.min(
         right,
-        fixedColumn ? 52 + columnSplit : width,
+        fixedColumn ? rowHeaderWidth + columnSplit : width,
       );
-      const clippedBottom = Math.min(bottom, fixedRow ? 28 + rowSplit : height);
+      const clippedBottom = Math.min(bottom, fixedRow ? columnHeaderHeight + rowSplit : height);
       if (clippedLeft >= clippedRight || clippedTop >= clippedBottom) continue;
       result.push({
         left: clippedLeft,
