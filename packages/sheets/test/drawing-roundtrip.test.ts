@@ -10,8 +10,12 @@ test('untouched drawings survive cell editing, native storage and XLSX download 
   const original = openOpcPackage(source);
   let artifact = openSpreadsheetArtifact(source);
   expect(artifact.worksheet.drawing?.anchors).toHaveLength(5);
+  expect(artifact.worksheet.drawing?.document.root.children.some(node => node.kind === 'element' && node.children.some(child => child.kind === 'element' && child.localName === 'cxnSp'))).toBe(true);
   artifact = applySpreadsheetCommand(artifact, { name: 'set-cell', sheetId: '1', reference: 'A1', value: 'Edited cell' });
   artifact = openSpreadsheetNativeArchive(createSpreadsheetNativeArchive(artifact));
+  const reopened = openSpreadsheetArtifact(artifact.bytes());
+  expect(reopened.worksheet.drawing?.anchors).toHaveLength(5);
+  expect(reopened.worksheet.drawing?.relationshipId).toBe(artifact.worksheet.drawing?.relationshipId);
   const saved = openOpcPackage(artifact.bytes());
   const drawingParts = original.parts.filter(part => /\/(drawings|media)\//.test(part.name.value));
   expect(drawingParts.length).toBeGreaterThanOrEqual(3);
