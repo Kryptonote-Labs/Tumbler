@@ -15,6 +15,12 @@ const currencies = new Map<string, readonly [number, number]>([
   ["GRD", [340.750, 0]], ["SIT", [239.640, 2]],
 ]);
 
+// The integration runtime adds this shared value variant; keep compatibility
+// with the category branch's earlier FunctionValue declaration until integration.
+function omitted(value: FunctionValue): boolean {
+  return "kind" in value && String(value.kind) === "omitted";
+}
+
 function scalar(argument: FormulaExpression, context: FunctionContext): FormulaScalarValue {
   context.operation();
   return functionScalar(context.evaluate(argument));
@@ -35,8 +41,12 @@ function round(value: number, digits: number): number {
 
 const euroconvert: ExtendedFunction = (arguments_, context) => {
   if (arguments_.length < 3 || arguments_.length > 5) return functionError();
-  const values = arguments_.map(argument => scalar(argument, context));
-  const error = values.find(value => value.type === "error");
+  const values = arguments_.map((argument, index) => {
+    context.operation();
+    const value = context.evaluate(argument);
+    return index >= 3 && omitted(value) ? undefined : functionScalar(value);
+  });
+  const error = values.find(value => value?.type === "error");
   if (error) return error;
   const amount = functionNumeric(values[0]!);
   if (amount.type !== "number") return amount;
@@ -100,7 +110,13 @@ function host(name: string, values: readonly FunctionValue[], context: FunctionC
 
 const registerId: ExtendedFunction = (arguments_, context) => {
   if (arguments_.length < 2 || arguments_.length > 3) return functionError();
-  const values = arguments_.map(argument => scalar(argument, context));
+  const values: FormulaScalarValue[] = [];
+  for (let index = 0; index < arguments_.length; index++) {
+    context.operation();
+    const value = context.evaluate(arguments_[index]!);
+    if (index === 2 && omitted(value)) break;
+    values.push(functionScalar(value));
+  }
   const error = values.find(value => value.type === "error");
   if (error) return error;
   if (values[0]!.type !== "string" || !values[0]!.value || !procedure(values[1]!)) return functionError();
@@ -123,6 +139,10 @@ const call: ExtendedFunction = (arguments_, context) => {
   for (let index = 1; index < arguments_.length; index++) {
     context.operation();
     const value = context.evaluate(arguments_[index]!);
+    if (omitted(value) && (index >= headerLength || index === 2)) {
+      values.push(value);
+      continue;
+    }
     if (index < headerLength) {
       const header = functionScalar(value);
       if (header.type === "error") return header;

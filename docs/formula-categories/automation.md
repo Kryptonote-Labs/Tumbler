@@ -36,7 +36,8 @@ Rates are fixed constants; the implementation performs no network access and
 does not imply support for every modern euro member's former currency.
 
 Three to five arguments are accepted. Full precision defaults to false;
-triangulation defaults to no intermediate rounding. Same-currency conversion
+triangulation defaults to no intermediate rounding. Explicit shared omitted
+values use those defaults, while omitted required arguments are errors. Same-currency conversion
 returns the original amount. Numeric text, booleans, and blank amount cells
 use the shared numeric coercion helper; currency arguments must be strings.
 Errors propagate. Arrays are rejected, as Microsoft's documentation explicitly
@@ -76,7 +77,9 @@ positive integral ordinal. CALL accepts a positive numeric registered ID and
 arguments, or module/procedure/type information and arguments. The two-argument
 module/procedure form is passed to the host for standalone XLL resources with
 omitted type information. Header errors propagate before host invocation.
-Typed procedure arguments, including P-type arrays/errors, are passed intact.
+Typed procedure arguments, including P-type arrays/errors and the shared
+{kind: "omitted"} marker, are passed intact. An omitted REGISTER.ID type
+argument is treated as absent; CALL can forward an omitted type to an XLL host.
 Lambdas are rejected. Array inputs and outputs honor operation/cell budgets;
 ragged outputs are rejected and nonfinite numeric outputs return #NUM!.
 

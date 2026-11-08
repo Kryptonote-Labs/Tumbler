@@ -135,3 +135,22 @@ test("half boundaries, symmetry, and extremes use bounded rounding", () => {
 test("operation budget remains effective", () => {
   expect(() => evaluate('EUROCONVERT(1,"EUR","DEM")', context({}, { operation: () => { throw new Error("budget"); } }))).toThrow("budget");
 });
+
+test("shared omitted values default optional euro/registration arguments and marshal CALL arguments", () => {
+  // Runtime integration owns adding the already agreed shared variant to its
+  // union; this cast is temporary compatibility with the category baseline.
+  const missing = { kind: "omitted" } as unknown as FunctionValue;
+  const text = (value: string): FunctionValue => ({ type: "string", value });
+  const ctx = context();
+  expect(ctx.call("EUROCONVERT", [functionNumber(1), text("FRF"), text("EUR"), missing, functionNumber(3)])).toEqual(functionNumber(0.15));
+  expect(ctx.call("EUROCONVERT", [functionNumber(1), text("FRF"), text("EUR"), { type: "boolean", value: true }, missing])).toEqual(functionNumber(1 / 6.55957));
+  expect(ctx.call("EUROCONVERT", [missing, text("FRF"), text("EUR")])).toEqual(functionError());
+  const registering = context({}, { services: modeledAutomationServices });
+  expect(registering.call("REGISTER.ID", [text("Demo"), text("Scale"), missing])).toEqual(functionNumber(42));
+  const received: FunctionValue[][] = [];
+  const calling = context({}, { services: { invoke(_name, values) { received.push([...values]); return functionNumber(7); } } });
+  expect(calling.call("CALL", [functionNumber(42), missing])).toEqual(functionNumber(7));
+  expect(calling.call("CALL", [text("Demo"), text("Scale"), missing, missing])).toEqual(functionNumber(7));
+  expect(received[0]![1]).toEqual(missing);
+  expect(received[1]![2]).toEqual(missing);
+});
