@@ -44,13 +44,13 @@
     error = '';
     status = '';
   }
-  onMount(() => {
-    blocks = sources.map(source => {
-      const block: Block = { id: nextId++, name: source.name, bytes: source.bytes, password: '', pages: '', error: '' };
-      open(block);
-      return block;
-    });
-  });
+  /** Add an authorized host snapshot without requiring a browser file upload. */
+  export function addSource(name: string, bytes: Uint8Array) {
+    const block: Block = { id: nextId++, name, bytes, password: '', pages: '', error: '' };
+    open(block);
+    blocks = [...blocks, block];
+  }
+  onMount(() => { for (const source of sources) addSource(source.name, source.bytes); });
   async function upload(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const files = Array.from(input.files ?? []);
