@@ -322,3 +322,5 @@ should display these errors through the same path as other editing failures.
 
 The optional Svelte `PresentationShapePlacement` component handles pointer input
 and previews through the slide view's overlay hook.
+
+Speaker notes, links and picture metadata use the same semantic commands as the editor and CLI. Use `set-notes` with `slideId` and `notes`; `set-link` with `slideId`, `objectKey` and `href` links a shape, or add `start` and `end` for a text range. An empty `href` removes the link. `set-alt-text` updates `alt`, and `replace-picture` accepts base64 `data` and PNG/JPEG `contentType` while retaining the picture frame and crop.

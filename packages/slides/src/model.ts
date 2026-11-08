@@ -45,7 +45,7 @@ export interface SlideTextRun {
   readonly baseline?: number;
   readonly spacing?: number;
   readonly capitals?: string;
-  readonly hyperlink?: { readonly href?: string; readonly slidePart?: string };
+  readonly hyperlink?: { readonly href?: string; readonly slidePart?: string } | undefined;
 }
 export type NativeRunField = Exclude<keyof SlideTextRun,
   'text' | 'nativeAuthored' | 'nativeOwnFonts' | 'nativeOwnLanguage' | 'nativeFonts' | 'nativeDefaults'>;
@@ -126,6 +126,8 @@ export interface SlideTable {
   readonly cells: readonly SlideTableCell[];
 }
 export interface SlideObject {
+  readonly alt?: string;
+  readonly hyperlink?: { readonly href?: string; readonly slidePart?: string } | undefined;
   readonly ink?: import('./ink.ts').PresentationInk;
   readonly media?: import('./media.ts').PresentationMedia | undefined;
   readonly key: string;
