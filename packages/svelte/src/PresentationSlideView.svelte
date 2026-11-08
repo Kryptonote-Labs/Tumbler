@@ -64,6 +64,8 @@
     editable = false,
     minimumEditingTextSize,
     scale = $bindable(1),
+    absoluteScale = false,
+    onfitscale,
     selectedKey = $bindable<string | undefined>(),
     selectedKeys = $bindable<string[]>([]),
     onobjectschange,
@@ -97,6 +99,9 @@
     /** Optional minimum screen text size when entering text editing, using viewport zoom only. */
     minimumEditingTextSize?: number;
     scale?: number;
+    /** Use document scale rather than a multiple of fit, for shared editor zoom. */
+    absoluteScale?: boolean;
+    onfitscale?: (scale: number) => void;
     selectedKey?: string;
     selectedKeys?: string[];
     onobjectschange?: (changes: PresentationObjectChange[]) => void;
@@ -130,7 +135,8 @@
       ),
     ),
   );
-  let factor = $derived(fit * scale);
+  let factor = $derived(absoluteScale && !thumbnail && !stage ? scale : fit * scale);
+  $effect(() => { onfitscale?.(fit); });
   let selected = $derived(
     slide.objects.find((item) => item.key === selectedKey),
   );
