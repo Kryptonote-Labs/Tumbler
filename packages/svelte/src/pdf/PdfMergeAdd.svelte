@@ -36,8 +36,8 @@
   {/if}
 </div>
 <style>
-  .add { position: relative; display: flex; flex: 1; min-height: 96px; padding: 12px; }
-  .drop-zone { display: flex; flex: 1; align-items: center; justify-content: center; gap: 8px; min-height: 72px; padding: 12px; border: 1px dashed var(--border, #aaa); border-radius: 6px; background: transparent; color: var(--text-soft, #666); font: inherit; cursor: pointer; }
+  .add { position: relative; display: flex; flex: none; padding: 10px 12px; background: var(--bg, white); }
+  .drop-zone { display: flex; flex: 1; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 8px; border: 1px dashed var(--border, #aaa); border-radius: 6px; background: transparent; color: var(--text-soft, #666); font: inherit; cursor: pointer; }
   .drop-zone:hover, .over .drop-zone { color: var(--text, #222); border-color: var(--text-soft, #666); background: var(--surface-hover, #eee); }
   .drop-zone:disabled { opacity: .4; cursor: default; }
   svg { fill: none; stroke: currentColor; stroke-width: 1.3; }

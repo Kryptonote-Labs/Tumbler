@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, type Snippet } from 'svelte';
+  import { onMount, onDestroy, tick, type Snippet } from 'svelte';
   import { mergePdfDocuments } from '@tumblerjs/pdf';
   import PdfMergeSourceView from './PdfMergeSource.svelte';
   import PdfMergeAdd from './PdfMergeAdd.svelte';
@@ -15,6 +15,9 @@
   const localState = $state(createPdfMergeState());
   const model = $derived(session ?? localState);
   let saving = $state(false), error = $state(''), announcement = $state('');
+  let removed = $state<{ source: PdfMergeSource; index: number }>();
+  let root: HTMLDivElement;
+  let over = $state(false);
   const reads = new Map<number, AbortController>();
   const plan = $derived(model.blocks.map(source => ({ source, selection: mergeSourceSelection(source) })));
   const pageCount = $derived(plan.reduce((count, entry) => count + (entry.source.document ? entry.selection.pages.length : 0), 0));
@@ -28,8 +31,10 @@
     model.blocks = [...model.blocks, source];
     const current = model.blocks.find(block => block.id === id)!;
     reads.set(id, controller);
+    model.expanded = id;
     if (!model.filename) model.filename = `${name.replace(/\.pdf$/i, '')} merged.pdf`;
     changed();
+    void tick().then(() => root?.querySelector(`[data-source-id="${id}"]`)?.scrollIntoView({ block: 'nearest' }));
     try {
       const bytes = typeof data === 'function' ? await data(controller.signal) : data;
       if (controller.signal.aborted) return;
@@ -70,11 +75,22 @@
     changed();
   }
   function remove(source: PdfMergeSource) {
-    reads.get(source.id)?.abort();
+    removed = { source, index: model.blocks.indexOf(source) };
     model.blocks = model.blocks.filter(block => block.id !== source.id);
     if (model.expanded === source.id) model.expanded = model.blocks[0]?.id;
     announcement = `Removed ${source.name}.`;
     changed();
+    void tick().then(() => root.querySelector<HTMLButtonElement>('.grip')?.focus());
+  }
+  function undoRemove() {
+    if (!removed) return;
+    const { source, index } = removed;
+    model.blocks.splice(Math.min(index, model.blocks.length), 0, source);
+    model.expanded = source.id;
+    removed = undefined;
+    changed();
+    announcement = `Restored ${source.name}.`;
+    void tick().then(() => root.querySelectorAll<HTMLButtonElement>('.grip')[index]?.focus());
   }
   async function merge() {
     if (saving || disabled || reason) return;
@@ -96,8 +112,13 @@
   }
 </script>
 
-<div class="pdf-merge">
-  <div class="sources">
+<div class="pdf-merge" bind:this={root}>
+  <PdfMergeAdd onfiles={upload} {sourcePicker} disabled={disabled || saving} />
+  <div class="sources" class:over role="group" aria-label="Merge sources"
+    ondragover={event => { if (!disabled && !saving && event.dataTransfer?.types.includes('Files')) { event.preventDefault(); over = true; } }}
+    ondragleave={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) over = false; }}
+    ondrop={event => { over = false; if (disabled || saving || !event.dataTransfer?.types.includes('Files')) return; event.preventDefault(); event.stopPropagation(); upload(Array.from(event.dataTransfer.files)); }}>
+    {#if over}<div class="drop-hint">Drop PDFs to add</div>{/if}
     <ol aria-label="PDF merge order">
       {#each model.blocks as source, index (source.id)}
         <li><PdfMergeSourceView bind:source={model.blocks[index]!} position={index} count={model.blocks.length} expanded={model.expanded === source.id} disabled={disabled || saving}
@@ -106,9 +127,9 @@
           ondrop={(id, after) => move(id, after ? model.blocks[index + 1]?.id : source.id)} /></li>
       {/each}
     </ol>
-    <PdfMergeAdd onfiles={upload} {sourcePicker} disabled={disabled || saving} />
   </div>
   <div class="finish">
+    {#if removed}<div class="undo" role="status"><span>Removed {removed.source.name}</span><button type="button" disabled={disabled || saving} onclick={undoRemove}>Undo</button></div>{/if}
     <label>File name<input aria-label="Output filename" type="text" bind:value={model.filename} disabled={disabled || saving} oninput={changed} /></label>
     <div class="submit-row">
       <span class="status" class:error={!!error} role="status">{#if error}{error}{:else if model.created}Created {model.created.name}{:else if reason}{reason}{:else}{pageCount} {pageCount === 1 ? 'page' : 'pages'}{/if}</span>
@@ -121,7 +142,10 @@
 
 <style>
   .pdf-merge { container-type: inline-size; display: flex; flex: 1; flex-direction: column; min-width: 0; width: 100%; min-height: 0; height: 100%; box-sizing: border-box; color: var(--text, #222); font: inherit; font-size: 12px; }
-  .sources { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: auto; }
+  .sources { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: auto; }
+  .drop-hint { position: absolute; inset: 8px; z-index: 3; pointer-events: none; display: grid; place-items: center; min-height: 90px; border: 1px dashed var(--accent, #246644); background: var(--bg, white); }
+  .undo { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .undo span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   ol { list-style: none; padding: 0; margin: 0; }
   .finish { flex-shrink: 0; padding: 12px; border-top: 1px solid var(--border, #ddd); }
   label { display: grid; gap: 6px; color: var(--text-soft, #666); }

@@ -13,11 +13,11 @@ export function mergePageSelection(value: string, count: number, none = false) {
       custom: pages.some((page, index) => index > 0 && page <= pages[index - 1]!),
       error: "",
     };
-  } catch (cause) {
+  } catch {
     return {
       pages: [],
       custom: false,
-      error: cause instanceof Error ? cause.message : "Invalid page selection.",
+      error: `Use page numbers from 1 to ${count}, or ranges such as 1-2.`,
     };
   }
 }

@@ -18,12 +18,12 @@
     else if (event.key === 'Delete' && event.target instanceof Element && !event.target.closest('button:not(.grip)')) { event.preventDefault(); onremove(); }
   }
 </script>
-<div class="source" class:drop-target={draggingOver} class:drop-after={dropAfter} role="group" aria-label={source.name}
+<div data-source-id={source.id} class="source" class:drop-target={draggingOver} class:drop-after={dropAfter} role="group" aria-label={source.name}
   ondragover={event => { if (!disabled && event.dataTransfer?.types.includes('application/x-tumbler-pdf-source')) { event.preventDefault(); draggingOver = true; dropAfter = event.clientY > event.currentTarget.getBoundingClientRect().top + event.currentTarget.clientHeight / 2; } }}
   ondragleave={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) draggingOver = false; }}
   ondrop={event => { draggingOver = false; const value = event.dataTransfer?.getData('application/x-tumbler-pdf-source'); if (!disabled && value) { event.preventDefault(); event.stopPropagation(); ondrop(Number(value), event.clientY > event.currentTarget.getBoundingClientRect().top + event.currentTarget.clientHeight / 2); } }}>
   <div class="source-row">
-    <button type="button" onkeydown={keys} class="grip" aria-label={`Reorder ${source.name}`} title="Drag to reorder. Alt+Up or Alt+Down also moves this PDF." draggable={!disabled} disabled={disabled} ondragstart={event => { event.dataTransfer?.setData('application/x-tumbler-pdf-source', String(source.id)); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }}><span class="ordinal">{position + 1}</span><span class="dots" aria-hidden="true">⠿</span></button>
+    <button type="button" onkeydown={keys} class="grip" aria-label={`Reorder ${source.name}, position ${position + 1} of ${count}`} title="Drag to reorder. Alt+Up or Alt+Down moves this PDF; Delete removes it." draggable={!disabled} disabled={disabled} ondragstart={event => { event.dataTransfer?.setData('application/x-tumbler-pdf-source', String(source.id)); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }}><span class="ordinal">{position + 1}</span><span class="dots" aria-hidden="true">⠿</span></button>
     <button type="button" class="expand" aria-expanded={expanded} aria-controls={`${id}-pages`} onclick={onexpand}>
       <span class="cover">{#if source.document}<PdfPageThumbnail document={source.document} index={cover} pixels={96} />{:else}<span class="placeholder" aria-hidden="true"></span>{/if}</span>
       <span class="description"><span class="name">{source.name}</span><span class="summary">{mergeSourceSummary(source)}</span></span>
@@ -53,7 +53,8 @@
   .grip, .more { display: grid; place-items: center; flex: none; width: 24px; height: 32px; border: 0; border-radius: 4px; background: transparent; color: var(--text-soft, #666); }
   .more { font-size: 22px; }
   .grip { position: relative; cursor: grab; }
-  .dots { display: none; font-size: 18px; }
+  .dots { display: inline; font-size: 18px; }
+  .ordinal { display: none; }
   .source:hover .dots, .grip:focus-visible .dots { display: inline; }
   .source:hover .ordinal, .grip:focus-visible .ordinal { display: none; }
   .expand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; text-align: left; }

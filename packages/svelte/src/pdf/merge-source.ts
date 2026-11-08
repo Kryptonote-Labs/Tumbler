@@ -8,6 +8,8 @@ export type PdfMergeSource = {
   document?: PdfDocument | undefined;
   password: string;
   pages: string;
+  /** Incomplete range text; the last valid selection stays visible until corrected. */
+  draft?: string | undefined;
   none: boolean;
   loading: boolean;
   error: string;
@@ -34,19 +36,20 @@ export function openMergeSource(source: PdfMergeSource) {
   }
 }
 export function mergeSourceSelection(source: PdfMergeSource) {
-  return mergePageSelection(source.pages, source.document?.pages.length ?? 0, source.none);
+  const count = source.document?.pages.length ?? 0;
+  const selection = mergePageSelection(source.pages, count, source.none);
+  return source.draft === undefined ? selection : { ...selection, error: mergePageSelection(source.draft, count).error };
 }
 export function mergeSourceSummary(source: PdfMergeSource) {
   if (source.loading) return "Reading PDF…";
   if (!source.document) return source.locked ? "Password required" : "Could not open PDF";
   const selection = mergeSourceSelection(source),
     count = source.document.pages.length;
-  if (selection.error) return "Check page selection";
-  if (!selection.pages.length) return "No pages selected";
+  if (!selection.pages.length) return "No pages included";
   if (selection.custom) return `${selection.pages.length} pages · Custom order`;
   return selection.pages.length === count
-    ? `All ${count} pages`
-    : `${selection.pages.length} of ${count} pages`;
+    ? `All ${count} pages included`
+    : `${selection.pages.length} of ${count} pages included`;
 }
 
 /** A host can retain this state for a document across component mounts. */
