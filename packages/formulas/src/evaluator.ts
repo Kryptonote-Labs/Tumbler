@@ -1,3 +1,5 @@
+import { extendedFunctions } from "./extended-functions.ts";
+import type { FunctionValue, FunctionArray, FunctionReference, FunctionContext, FunctionRegistry, FormulaFunctionServices } from "./function-runtime.ts";
 import type { FormulaErrorValue, FormulaExpression, FormulaReferenceExpression, ParsedFormula } from "./ast.ts";
 import { FormulaParseError, parseFormula } from "./parser.ts";
 
@@ -16,6 +18,8 @@ export interface FormulaCellAddress {
 }
 
 export interface FormulaCellInput {
+  readonly numberFormatId?: number;
+  readonly numberFormatCode?: string;
   readonly formula: string | undefined;
   readonly value: FormulaScalarValue;
 }
@@ -33,6 +37,11 @@ export interface FormulaWorkbookSource {
   readonly formulaCells: Iterable<{ readonly address: FormulaCellAddress; readonly formula: string }>;
   cell(address: FormulaCellAddress): FormulaCellInput | undefined;
   resolveSheet(currentSheet: string, name: string): string | undefined;
+  sheetNames?(): readonly string[];
+  sheetIndex?(sheet: string): number | undefined;
+  usedDimensions?(sheet: string): { readonly rows: number; readonly columns: number };
+  resolveName?(name: string, address: FormulaCellAddress): FormulaExpression | FunctionReference | undefined;
+  spillBlocked?(address: FormulaCellAddress): boolean;
   rowVisibility?(sheet: string, row: number): FormulaRowVisibility;
 }
 
@@ -54,6 +63,11 @@ export interface FormulaDiagnostic {
 export interface FormulaCalculationOptions {
   /** Workbook date system used by date functions. Defaults to the OOXML 1900 system. */
   readonly dateSystem?: "1900" | "1904";
+  readonly functionRegistries?: readonly FunctionRegistry[];
+  readonly services?: FormulaFunctionServices;
+  readonly now?: () => Date;
+  readonly random?: () => number;
+  readonly maxArrayCells?: number;
   readonly maxFormulaCells?: number;
   readonly maxRangeCells?: number;
   readonly maxOperations?: number;
@@ -63,21 +77,28 @@ export interface FormulaCalculationOptions {
 export class FormulaCalculation {
   readonly diagnostics: readonly FormulaDiagnostic[];
   readonly #values: ReadonlyMap<string, FormulaScalarValue>;
+  readonly #arrays: ReadonlyMap<string, FunctionArray>;
   readonly #dependencies: ReadonlyMap<string, readonly FormulaCellAddress[]>;
 
   constructor(
     values: ReadonlyMap<string, FormulaScalarValue>,
     dependencies: ReadonlyMap<string, readonly FormulaCellAddress[]>,
     diagnostics: readonly FormulaDiagnostic[],
+    arrays: ReadonlyMap<string, FunctionArray> = new Map(),
   ) {
     this.#values = new Map(values);
-    this.#dependencies = new Map(dependencies);
+    this.#arrays = new Map(arrays);
+    this.#dependencies = new Map([...dependencies].map(([key, refs]) => [key, Object.freeze([...refs])]));
     this.diagnostics = Object.freeze([...diagnostics]);
   }
 
   /** Returns only a value calculated by this engine; cached fallbacks remain source-owned. */
   value(address: FormulaCellAddress): FormulaScalarValue | undefined {
     return this.#values.get(addressKey(address));
+  }
+
+  arrayValue(address: FormulaCellAddress): FunctionArray | undefined {
+    return this.#arrays.get(addressKey(address));
   }
 
   dependencies(address: FormulaCellAddress): readonly FormulaCellAddress[] {
@@ -92,6 +113,7 @@ export function calculateFormulas(
 ): FormulaCalculation {
   const limits = {
     maxFormulaCells: options.maxFormulaCells ?? 100_000,
+    maxArrayCells: options.maxArrayCells ?? options.maxRangeCells ?? 100_000,
     maxRangeCells: options.maxRangeCells ?? 100_000,
     maxOperations: options.maxOperations ?? 1_000_000,
     maxEvaluationDepth: options.maxEvaluationDepth ?? 1_000,
@@ -99,19 +121,29 @@ export function calculateFormulas(
   const dateSystem = options.dateSystem ?? "1900";
   const formulaCells = [...source.formulaCells];
   if (formulaCells.length > limits.maxFormulaCells) throw new RangeError("Formula cell count exceeds the calculation limit.");
+  const capturedNow = new Date((options.now?.() ?? new Date()).getTime());
+  let activeAddress: FormulaCellAddress = { sheet: "", row: 1, column: 1 };
+  let bindings: ReadonlyMap<string, FunctionValue> = new Map();
+  let publicExpression: FormulaExpression | undefined;
+  const registries = [extendedFunctions, ...(options.functionRegistries ?? [])];
+  const arrays = new Map<string, FunctionArray>();
+  const spillOwners = new Map<string, string>();
   const parsed = new Map<string, ParsedFormula>();
   const values = new Map<string, FormulaScalarValue>();
   const memo = new Map<string, FormulaScalarValue>();
   const unavailable = new Map<string, EvaluationUnavailable>();
-  const dependencies = new Map<string, readonly FormulaCellAddress[]>();
+  const dependencies = new Map<string, FormulaCellAddress[]>();
+  const dependencyKeys = new Map<string, Set<string>>();
   const diagnostics: FormulaDiagnostic[] = [];
   const diagnosed = new Set<string>();
   const visiting = new Set<string>();
   const aggregateFormulaCells = new Map<string, boolean>();
   let operations = 0;
+  let evaluationFrames = 0;
 
-  const operation = () => {
-    operations += 1;
+  const operation = (count = 1) => {
+    if (!Number.isSafeInteger(count) || count < 0) throw new RangeError("Invalid operation charge.");
+    operations += count;
     if (operations > limits.maxOperations) throw new EvaluationUnavailable("evaluation-limit", "Formula operation limit exceeded.");
   };
 
@@ -121,9 +153,13 @@ export function calculateFormulas(
     if (existing !== undefined) return existing;
     try {
       const result = parseFormula(formula);
+      walkExpression(result.expression, node => {
+        if (node.kind === "function" && normalizeFunctionName(node.name) === "PY" && node !== result.expression) throw new EvaluationUnavailable("unsupported-function", "PY must be a standalone public formula.");
+      });
       parsed.set(key, result);
       const refs = collectReferences(result.expression, address.sheet, source, limits.maxRangeCells);
-      dependencies.set(key, Object.freeze(refs));
+      dependencies.set(key, refs);
+      dependencyKeys.set(key, new Set(refs.map(addressKey)));
       return result;
     } catch (cause) {
       if (cause instanceof FormulaParseError) throw new EvaluationUnavailable("parse-error", cause.message);
@@ -132,10 +168,45 @@ export function calculateFormulas(
     }
   };
 
+  function recordDependency(address: FormulaCellAddress): void {
+    if (!visiting.size) return;
+    const owner = addressKey(activeAddress), key = addressKey(address);
+    const keys = dependencyKeys.get(owner) ?? new Set<string>();
+    if (keys.has(key)) return;
+    keys.add(key); dependencyKeys.set(owner, keys);
+    const refs = dependencies.get(owner) ?? [];
+    refs.push(freezeAddress(address)); dependencies.set(owner, refs);
+  }
+
+  function invalidateDependants(changed: ReadonlySet<string>): void {
+    const pending = new Set(changed);
+    let invalidated = true;
+    while (invalidated) {
+      invalidated = false;
+      for (const [key, refs] of dependencies) {
+        operation();
+        if (visiting.has(key) || !memo.has(key) || !refs.some(ref => pending.has(addressKey(ref)))) continue;
+        memo.delete(key); values.delete(key);
+        if (arrays.delete(key)) {
+          for (const [target, owner] of spillOwners) if (owner === key) { spillOwners.delete(target); values.delete(target); pending.add(target); }
+        }
+        pending.add(key); invalidated = true;
+      }
+    }
+  }
+
   const cellValue = (address: FormulaCellAddress, depth: number, asDependency: boolean): FormulaScalarValue => {
     operation();
     if (depth > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Formula evaluation depth exceeded.");
     const key = addressKey(address);
+    recordDependency(address);
+    const overlay = values.get(key);
+    const spillOwner = spillOwners.get(key);
+    if (spillOwner !== undefined && overlay !== undefined) {
+      const [sheet, row, column] = spillOwner.split("\u0000");
+      recordDependency({sheet: sheet!, row: Number(row), column: Number(column)});
+      return overlay;
+    }
     const knownFailure = unavailable.get(key);
     if (knownFailure !== undefined) {
       if (asDependency) throw knownFailure;
@@ -147,9 +218,39 @@ export function calculateFormulas(
     if (input?.formula === undefined) return input?.value ?? BLANK;
     if (visiting.has(key)) throw new EvaluationUnavailable("circular-reference", "Formula contains a circular reference.");
     visiting.add(key);
+    const previousAddress = activeAddress, previousBindings = bindings, previousPublic = publicExpression;
+    activeAddress = Object.freeze({...address});
+    bindings = new Map();
     try {
       const expression = parse(address, input.formula).expression;
-      const result = scalar(evaluate(expression, address.sheet, depth + 1));
+      publicExpression = expression;
+      const evaluated = toFunction(evaluate(expression, address.sheet, depth + 1));
+      let result = scalar(evaluated);
+      if ("kind" in evaluated && evaluated.kind === "array") {
+        const rows = evaluated.rows, height = rows.length, width = rows[0]?.length ?? 0;
+        assertArray(height, width);
+        if (rows.some(row => row.length !== width)) throw new EvaluationUnavailable("unavailable-dependency", "Function returned a nonrectangular array.");
+        let blocked = source.spillBlocked?.(address) === true || address.row + height - 1 > MAX_SPREADSHEET_ROW || address.column + width - 1 > MAX_SPREADSHEET_COLUMN;
+        for (let r = 0; r < height; r++) for (let c = 0; c < width; c++) {
+          operation();
+          if (!r && !c) continue;
+          const target = {sheet: address.sheet, row: address.row + r, column: address.column + c};
+          const input = readCell(source, target);
+          if (input?.formula !== undefined || input !== undefined && input.value.type !== "blank" || spillOwners.has(addressKey(target)) || source.spillBlocked?.(target)) blocked = true;
+        }
+        result = blocked ? error("#SPILL!") : rows[0]![0]!;
+        if (!blocked) {
+          const copy: FunctionArray = Object.freeze({kind: "array", rows: Object.freeze(rows.map(row => Object.freeze([...row])))});
+          arrays.set(key, copy);
+          const changed = new Set<string>();
+          for (let r = 0; r < height; r++) for (let c = 0; c < width; c++) {
+            const target = addressKey({sheet: address.sheet, row: address.row + r, column: address.column + c});
+            values.set(target, rows[r]![c]!);
+            if (r || c) { spillOwners.set(target, key); changed.add(target); }
+          }
+          if (changed.size) invalidateDependants(changed);
+        }
+      }
       memo.set(key, result);
       values.set(key, result);
       return result;
@@ -165,44 +266,75 @@ export function calculateFormulas(
       return input.value;
     } finally {
       visiting.delete(key);
+      activeAddress = previousAddress; bindings = previousBindings; publicExpression = previousPublic;
     }
   };
 
   const evaluate = (expression: FormulaExpression, sheet: string, depth: number): EvaluationValue => {
     operation();
+    evaluationFrames++;
+    try {
+    if (evaluationFrames > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Formula evaluation depth exceeded.");
+    if (depth > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Formula evaluation depth exceeded.");
     switch (expression.kind) {
+      case "value": return expression.value;
+      case "omitted": return {kind: "omitted"};
+      case "name": {
+        const bound = bindings.get(expression.name.toUpperCase());
+        if (bound !== undefined) return bound;
+        const named = source.resolveName?.(expression.name, activeAddress);
+        return named === undefined ? error("#NAME?") : "kind" in named ? evaluate(named, sheet, depth + 1) : readReference(named, depth);
+      }
+      case "array": {
+        assertArray(expression.rows.length, expression.rows[0]?.length ?? 0);
+        return {kind: "array", rows: expression.rows.map(row => row.map(item => scalar(evaluate(item, sheet, depth + 1))))};
+      }
+      case "invoke": {
+        const callee = toFunction(evaluate(expression.callee, sheet, depth + 1));
+        return "kind" in callee && callee.kind === "lambda" ? callee.invoke(expression.arguments.map(arg => toFunction(evaluate(arg, sheet, depth + 1)))) : error("#VALUE!");
+      }
+      case "spill": {
+        const ref = resolveReference(expression.operand, sheet, depth);
+        if ("type" in ref) return ref;
+        cellValue({sheet: ref.sheet, row: ref.firstRow, column: ref.firstColumn}, depth + 1, true);
+        return arrays.get(addressKey({sheet: ref.sheet, row: ref.firstRow, column: ref.firstColumn})) ?? error("#REF!");
+      }
+      case "intersection": {
+        const ref = resolveReference(expression.operand, sheet, depth);
+        if (!("type" in ref)) {
+          const row = ref.height === 1 ? ref.firstRow : activeAddress.row;
+          const column = ref.width === 1 ? ref.firstColumn : activeAddress.column;
+          if (row < ref.firstRow || row >= ref.firstRow + ref.height || column < ref.firstColumn || column >= ref.firstColumn + ref.width) return error("#VALUE!");
+          return cellValue({sheet: ref.sheet, row, column}, depth + 1, true);
+        }
+        return matrix(evaluate(expression.operand, sheet, depth + 1))[0]?.[0] ?? error("#VALUE!");
+      }
       case "number": return number(expression.value);
       case "string": return string(expression.value);
       case "boolean": return boolean(expression.value);
       case "error": return error(expression.value);
       case "reference": return referenceValue(expression, sheet, depth);
-      case "unary": {
-        const value = numeric(scalar(evaluate(expression.operand, sheet, depth + 1)));
-        return value.type === "error" ? value : number(expression.operator === "-" ? -value.value : value.value);
-      }
-      case "percent": {
-        const value = numeric(scalar(evaluate(expression.operand, sheet, depth + 1)));
-        return value.type === "error" ? value : number(value.value / 100);
+      case "unary": case "percent": {
+        return mapValues(evaluate(expression.operand, sheet, depth + 1), number(0), (item) => {
+          const value = numeric(item);
+          return value.type === "error" ? value : finite(expression.kind === "percent" ? value.value / 100 : expression.operator === "-" ? -value.value : value.value);
+        });
       }
       case "binary": return binary(expression, sheet, depth);
       case "function": return call(expression.name, expression.arguments, sheet, depth);
     }
+    } finally { evaluationFrames--; }
   };
 
   const referenceValue = (expression: FormulaReferenceExpression, currentSheet: string, depth: number): EvaluationValue => {
-    const sheet = expression.sheet === undefined ? currentSheet : source.resolveSheet(currentSheet, expression.sheet);
-    if (sheet === undefined) return error("#REF!");
-    if (expression.endReference === undefined) {
-      return cellValue({ sheet, row: expression.startReference.row, column: expression.startReference.column }, depth + 1, true);
-    }
-    const addresses = rangeAddresses(sheet, expression, limits.maxRangeCells);
-    return Object.freeze({ kind: "range", values: Object.freeze(addresses.map((address) => cellValue(address, depth + 1, true))) });
+    const ref = resolveReference(expression, currentSheet, depth + 1);
+    if ("type" in ref) return ref;
+    const value = readReference(ref, depth + 1);
+    return "kind" in value && value.kind === "array" ? {kind: "range", rows: value.rows, values: value.rows.flat()} : value;
   };
 
-  const binary = (expression: Extract<FormulaExpression, { kind: "binary" }>, sheet: string, depth: number): FormulaScalarValue => {
-    const left = scalar(evaluate(expression.left, sheet, depth + 1));
+  const binary = (expression: Extract<FormulaExpression, { kind: "binary" }>, sheet: string, depth: number): EvaluationValue => mapValues(evaluate(expression.left, sheet, depth + 1), evaluate(expression.right, sheet, depth + 1), (left, right) => {
     if (left.type === "error") return left;
-    const right = scalar(evaluate(expression.right, sheet, depth + 1));
     if (right.type === "error") return right;
     if (expression.operator === "&") return string(text(left) + text(right));
     if (["=", "<>", "<", "<=", ">", ">="].includes(expression.operator)) {
@@ -228,20 +360,20 @@ export function calculateFormulas(
       case "^": return finite(leftNumber.value ** rightNumber.value);
       default: return error("#VALUE!");
     }
-  };
+  });
 
   type FormulaFunction = (
     args: readonly FormulaExpression[],
     sheet: string,
     depth: number,
-  ) => FormulaScalarValue;
+  ) => EvaluationValue;
 
   const callIf: FormulaFunction = (args, sheet, depth) => {
       if (args.length < 2 || args.length > 3) return error("#VALUE!");
       const condition = logical(scalar(evaluate(args[0]!, sheet, depth + 1)));
       if (condition.type === "error") return condition;
       const branch = condition.value ? args[1]! : args[2];
-      return branch === undefined ? boolean(false) : scalar(evaluate(branch, sheet, depth + 1));
+      return branch === undefined ? boolean(false) : evaluate(branch, sheet, depth + 1);
   };
 
   const callIfError = (onlyNotAvailable: boolean): FormulaFunction => (args, sheet, depth) => {
@@ -281,7 +413,7 @@ export function calculateFormulas(
     (args, sheet, depth) => {
       const validArgumentCount = name === "COUNTIF" ? args.length === 2 : args.length === 2 || args.length === 3;
       if (!validArgumentCount) return error("#VALUE!");
-      const inspected = resolveRangeArgument(args[0]!, sheet, source, limits.maxRangeCells);
+      const inspected = resolveRange(args[0]!, sheet, source, limits.maxRangeCells);
       if (isFormulaError(inspected)) return inspected;
       const criterionValue = scalar(evaluate(args[1]!, sheet, depth + 1));
       if (criterionValue.type === "error") return criterionValue;
@@ -330,11 +462,11 @@ export function calculateFormulas(
         (args.length - firstCriteriaIndex) % 2 !== 0
       ) return error("#VALUE!");
 
-      const resultRange = resolveRangeArgument(args[0]!, sheet, source, limits.maxRangeCells);
+      const resultRange = resolveRange(args[0]!, sheet, source, limits.maxRangeCells);
       if (isFormulaError(resultRange)) return resultRange;
       const criteria: Array<{ readonly range: FormulaRangeGeometry; readonly criterion: FormulaCriterion }> = [];
       for (let index = firstCriteriaIndex; index < args.length; index += 2) {
-        const range = resolveRangeArgument(args[index]!, sheet, source, limits.maxRangeCells);
+        const range = resolveRange(args[index]!, sheet, source, limits.maxRangeCells);
         if (isFormulaError(range)) return range;
         if (range.height !== resultRange.height || range.width !== resultRange.width) return error("#VALUE!");
         const criterionValue = scalar(evaluate(args[index + 1]!, sheet, depth + 1));
@@ -450,12 +582,11 @@ export function calculateFormulas(
 
   const callSumProduct: FormulaFunction = (args, sheet, depth) => {
     if (args.length === 0) return error("#VALUE!");
-    const arrays = args.map((argument) => {
-      const value = evaluate(argument, sheet, depth + 1);
-      return isRange(value) ? value.values : [value];
-    });
-    const length = arrays[0]!.length;
-    if (arrays.some((values) => values.length !== length)) return error("#VALUE!");
+    const matrices = args.map(argument => matrix(evaluate(argument, sheet, depth + 1)));
+    const height = matrices[0]!.length, width = matrices[0]![0]!.length;
+    if (matrices.some(rows => rows.length !== height || rows[0]!.length !== width)) return error("#VALUE!");
+    const arrays = matrices.map(rows => rows.flat());
+    const length = height * width;
     let total = 0;
     for (let index = 0; index < length; index += 1) {
       operation();
@@ -642,6 +773,7 @@ export function calculateFormulas(
       if (returnType === 1) return number(sundayZero + 1);
       if (returnType === 2) return number((sundayZero + 6) % 7 + 1);
       if (returnType === 3) return number((sundayZero + 6) % 7);
+      if (returnType >= 11 && returnType <= 17) return number((sundayZero + 7 - (returnType - 10) % 7) % 7 + 1);
       return error("#NUM!");
     }
     return error("#VALUE!");
@@ -739,16 +871,16 @@ export function calculateFormulas(
 
   const callIndex: FormulaFunction = (args, sheet, depth) => {
     if (args.length < 2 || args.length > 3) return error("#VALUE!");
-    const range = resolveRangeArgument(args[0]!, sheet, source, limits.maxRangeCells);
-    if (isFormulaError(range)) return range;
+    const data = matrix(evaluate(args[0]!, sheet, depth + 1));
     const rowValue = numeric(scalar(evaluate(args[1]!, sheet, depth + 1)));
     const columnValue = args[2] === undefined ? undefined : numeric(scalar(evaluate(args[2], sheet, depth + 1)));
     if (rowValue.type === "error") return rowValue;
     if (columnValue?.type === "error") return columnValue;
-    const row = range.height === 1 && columnValue === undefined ? 1 : Math.trunc(rowValue.value);
-    const column = range.height === 1 && columnValue === undefined ? Math.trunc(rowValue.value) : Math.trunc(columnValue?.value ?? 1);
-    if (row < 1 || row > range.height || column < 1 || column > range.width) return error("#REF!");
-    return cellValue(correspondingAddress(range, row - 1, column - 1), depth + 1, true);
+    const row = data.length === 1 && columnValue === undefined ? 1 : Math.trunc(rowValue.value);
+    const column = data.length === 1 && columnValue === undefined ? Math.trunc(rowValue.value) : Math.trunc(columnValue?.value ?? 1);
+    if (row < 0 || row > data.length || column < 0 || column > data[0]!.length) return error("#REF!");
+    const rows = (row ? [data[row - 1]!] : data).map(values => column ? [values[column - 1]!] : values);
+    return rows.length === 1 && rows[0]!.length === 1 ? rows[0]![0]! : {kind: "array", rows};
   };
 
   const callMatch = (extended: boolean): FormulaFunction => (args, sheet, depth) => {
@@ -756,7 +888,7 @@ export function calculateFormulas(
     if (args.length < 2 || args.length > maximum) return error("#VALUE!");
     const lookup = scalar(evaluate(args[0]!, sheet, depth + 1));
     if (lookup.type === "error") return lookup;
-    const range = resolveRangeArgument(args[1]!, sheet, source, limits.maxRangeCells);
+    const range = resolveRange(args[1]!, sheet, source, limits.maxRangeCells);
     if (isFormulaError(range)) return range;
     if (range.height > 1 && range.width > 1) return error("#N/A");
     const modeValue = args[2] === undefined ? number(extended ? 0 : 1) : numeric(scalar(evaluate(args[2], sheet, depth + 1)));
@@ -776,11 +908,11 @@ export function calculateFormulas(
     if (args.length < 3 || args.length > 6) return error("#VALUE!");
     const lookup = scalar(evaluate(args[0]!, sheet, depth + 1));
     if (lookup.type === "error") return lookup;
-    const lookupRange = resolveRangeArgument(args[1]!, sheet, source, limits.maxRangeCells);
-    const resultRange = resolveRangeArgument(args[2]!, sheet, source, limits.maxRangeCells);
+    const lookupRange = resolveRange(args[1]!, sheet, source, limits.maxRangeCells);
+    const resultRange = resolveRange(args[2]!, sheet, source, limits.maxRangeCells);
     if (isFormulaError(lookupRange)) return lookupRange;
     if (isFormulaError(resultRange)) return resultRange;
-    if (lookupRange.height > 1 && lookupRange.width > 1 || lookupRange.height !== resultRange.height || lookupRange.width !== resultRange.width) return error("#VALUE!");
+    if (lookupRange.height > 1 && lookupRange.width > 1 || (lookupRange.width === 1 ? lookupRange.height !== resultRange.height : lookupRange.width !== resultRange.width)) return error("#VALUE!");
     const match = args[4] === undefined ? number(0) : numeric(scalar(evaluate(args[4], sheet, depth + 1)));
     const search = args[5] === undefined ? number(1) : numeric(scalar(evaluate(args[5], sheet, depth + 1)));
     if (match.type === "error") return match;
@@ -790,14 +922,14 @@ export function calculateFormulas(
     if (![-1, 0, 1, 2].includes(matchMode) || ![1, -1, 2, -2].includes(searchMode)) return error("#VALUE!");
     const index = findLookupIndex(lookup, readRange(lookupRange, depth), matchMode, searchMode);
     if (index === undefined) return args[3] === undefined ? error("#N/A") : scalar(evaluate(args[3], sheet, depth + 1));
-    return cellValue(correspondingAddress(resultRange, resultRange.width === 1 ? index : 0, resultRange.width === 1 ? 0 : index), depth + 1, true);
+    return readReference({...resultRange, firstRow: resultRange.firstRow + (lookupRange.width === 1 ? index : 0), firstColumn: resultRange.firstColumn + (lookupRange.width === 1 ? 0 : index), height: lookupRange.width === 1 ? 1 : resultRange.height, width: lookupRange.width === 1 ? resultRange.width : 1}, depth + 1);
   };
 
   const callTableLookup = (horizontal: boolean): FormulaFunction => (args, sheet, depth) => {
     if (args.length < 3 || args.length > 4) return error("#VALUE!");
     const lookup = scalar(evaluate(args[0]!, sheet, depth + 1));
     if (lookup.type === "error") return lookup;
-    const table = resolveRangeArgument(args[1]!, sheet, source, limits.maxRangeCells);
+    const table = resolveRange(args[1]!, sheet, source, limits.maxRangeCells);
     if (isFormulaError(table)) return table;
     const selected = numeric(scalar(evaluate(args[2]!, sheet, depth + 1)));
     const approximate = args[3] === undefined ? boolean(true) : logical(scalar(evaluate(args[3], sheet, depth + 1)));
@@ -829,7 +961,7 @@ export function calculateFormulas(
   ): FormulaScalarValue[] | Extract<FormulaScalarValue, { type: "error" }> => {
     const cells: AggregateCell[] = [];
     for (const argument of args) {
-      const range = resolveRangeArgument(argument, sheet, source, limits.maxRangeCells);
+      const range = resolveRange(argument, sheet, source, limits.maxRangeCells);
       if (isFormulaError(range)) return range;
       for (let rowOffset = 0; rowOffset < range.height; rowOffset += 1) {
         for (let columnOffset = 0; columnOffset < range.width; columnOffset += 1) {
@@ -963,10 +1095,147 @@ export function calculateFormulas(
       .map((name) => [name, callAggregate(name)] as const),
   ]);
 
-  const call = (name: string, args: readonly FormulaExpression[], sheet: string, depth: number): FormulaScalarValue => {
-    const implementation = functions.get(normalizeFunctionName(name));
-    if (implementation === undefined) {
-      throw new EvaluationUnavailable("unsupported-function", `Function ${name} is not supported.`);
+  function resolveRange(expression: FormulaExpression, sheet: string, _source: FormulaWorkbookSource, max: number): FunctionReference | Extract<FormulaScalarValue, {type: "error"}> {
+    const ref = resolveReference(expression, sheet, 0);
+    if ("type" in ref) return ref.type === "error" ? ref : error("#VALUE!");
+    assertRangeSize(ref.height, ref.width, max);
+    return ref;
+  }
+
+  function assertArray(height: number, width: number): void {
+    if (!Number.isSafeInteger(height) || !Number.isSafeInteger(width) || height < 1 || width < 1 || height * width > limits.maxArrayCells) throw new EvaluationUnavailable("evaluation-limit", "Array exceeds the calculation limit.");
+  }
+
+  function mapValues(left: EvaluationValue, right: EvaluationValue, fn: (a: FormulaScalarValue, b: FormulaScalarValue) => FormulaScalarValue): EvaluationValue {
+    if (!("kind" in left) && !("kind" in right)) return fn(left, right);
+    const a = matrix(left), b = matrix(right);
+    const height = Math.max(a.length, b.length), width = Math.max(a[0]?.length ?? 0, b[0]?.length ?? 0);
+    assertArray(height, width);
+    if ((a.length !== 1 && a.length !== height) || (b.length !== 1 && b.length !== height) || (a[0]!.length !== 1 && a[0]!.length !== width) || (b[0]!.length !== 1 && b[0]!.length !== width)) return error("#VALUE!");
+    return {kind: "array", rows: Array.from({length: height}, (_, r) => Array.from({length: width}, (_, c) => {
+      operation();
+      return fn(a[a.length === 1 ? 0 : r]![a[0]!.length === 1 ? 0 : c]!, b[b.length === 1 ? 0 : r]![b[0]!.length === 1 ? 0 : c]!);
+    }))};
+  }
+
+  function readReference(ref: FunctionReference, depth: number): FunctionValue {
+    if (ref.height < 1 || ref.width < 1) return error("#REF!");
+    assertArray(ref.height, ref.width);
+    if (!Number.isSafeInteger(ref.firstRow) || !Number.isSafeInteger(ref.firstColumn) || ref.firstRow < 1 || ref.firstColumn < 1 || ref.firstRow + ref.height - 1 > MAX_SPREADSHEET_ROW || ref.firstColumn + ref.width - 1 > MAX_SPREADSHEET_COLUMN) return error("#REF!");
+    const rows = Array.from({length: ref.height}, (_, r) => Array.from({length: ref.width}, (_, c) => cellValue(correspondingAddress(ref, r, c), depth + 1, true)));
+    return ref.height === 1 && ref.width === 1 ? rows[0]![0]! : {kind: "array", rows};
+  }
+
+  function checkedReference(ref: FunctionReference): FunctionReference | FormulaScalarValue {
+    if (![ref.firstRow, ref.firstColumn, ref.height, ref.width].every(value => Number.isSafeInteger(value) && value > 0) || ref.firstRow + ref.height - 1 > MAX_SPREADSHEET_ROW || ref.firstColumn + ref.width - 1 > MAX_SPREADSHEET_COLUMN) return error("#REF!");
+    return ref;
+  }
+
+  function resolveReference(expression: FormulaExpression, sheet: string, depth: number): FunctionReference | FormulaScalarValue {
+    operation();
+    if (depth > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Reference depth exceeded.");
+    if (expression.kind === "spill") {
+      const base = resolveReference(expression.operand, sheet, depth + 1);
+      if ("type" in base) return base;
+      const address = {sheet: base.sheet, row: base.firstRow, column: base.firstColumn};
+      cellValue(address, depth + 1, true);
+      const array = arrays.get(addressKey(address));
+      return array ? {...base, height: array.rows.length, width: array.rows[0]!.length} : error("#REF!");
+    }
+    if (expression.kind === "name") {
+      const named = source.resolveName?.(expression.name, activeAddress);
+      return named === undefined ? error("#NAME?") : "kind" in named ? resolveReference(named, sheet, depth + 1) : checkedReference(named);
+    }
+    if (expression.kind === "function") {
+      const name = normalizeFunctionName(expression.name), args = expression.arguments;
+      const n = (index: number, fallback: number) => args[index] === undefined || args[index]!.kind === "omitted" ? number(fallback) : numeric(scalar(evaluate(args[index]!, sheet, depth + 1)));
+      if (name === "INDIRECT" && args.length >= 1 && args.length <= 2) {
+        const value = scalar(evaluate(args[0]!, sheet, depth + 1));
+        if (value.type === "error") return value;
+        const style = args[1] === undefined ? boolean(true) : logical(scalar(evaluate(args[1]!, sheet, depth + 1)));
+        if (style.type === "error") return style;
+        if (!style.value) return error("#REF!");
+        try { return resolveReference(parseFormula(text(value)).expression, sheet, depth + 1); } catch (cause) { if (cause instanceof FormulaParseError) return error("#REF!"); throw cause; }
+      }
+      if ((name === "OFFSET" && args.length >= 3 && args.length <= 5) || (name === "INDEX" && args.length >= 2 && args.length <= 3)) {
+        const base = resolveReference(args[0]!, sheet, depth + 1);
+        if ("type" in base) return base;
+        const row = n(1, 0), col = n(2, name === "INDEX" ? 1 : 0);
+        if (row.type === "error") return row;
+        if (col.type === "error") return col;
+        const r = Math.trunc(row.value), c = Math.trunc(col.value);
+        if (name === "OFFSET") {
+          const h = n(3, base.height), w = n(4, base.width);
+          if (h.type === "error") return h;
+          if (w.type === "error") return w;
+          return checkedReference({...base, firstRow: base.firstRow + r, firstColumn: base.firstColumn + c, height: Math.trunc(h.value), width: Math.trunc(w.value)});
+        }
+        const rr = base.height === 1 && args[2] === undefined ? 1 : r;
+        const cc = base.height === 1 && args[2] === undefined ? r : c;
+        if (rr < 0 || cc < 0 || rr > base.height || cc > base.width) return error("#REF!");
+        return {...base, firstRow: base.firstRow + (rr ? rr - 1 : 0), firstColumn: base.firstColumn + (cc ? cc - 1 : 0), height: rr ? 1 : base.height, width: cc ? 1 : base.width};
+      }
+    }
+    const ref = referenceGeometry(expression, sheet, source);
+    return "type" in ref ? ref : checkedReference(ref);
+  }
+
+  function context(sheet: string, depth: number): FunctionContext {
+    const capturedAddress = activeAddress, capturedBindings = new Map(bindings);
+    const scoped = <T>(action: () => T, additions?: ReadonlyMap<string, FunctionValue>): T => {
+      const priorAddress = activeAddress, priorBindings = bindings;
+      activeAddress = capturedAddress;
+      bindings = new Map([...capturedBindings, ...[...(additions ?? [])].map(([key, value]) => [key.toUpperCase(), value] as const)]);
+      try { return action(); } finally { activeAddress = priorAddress; bindings = priorBindings; }
+    };
+    return {
+      address: capturedAddress, source, dateSystem, maxArrayCells: limits.maxArrayCells, services: options.services,
+      evaluate: expression => scoped(() => toFunction(evaluate(expression, sheet, depth + 1))),
+      withBindings: (additions, expression) => scoped(() => toFunction(evaluate(expression, sheet, depth + 1)), additions),
+      call: (name, args) => scoped(() => toFunction(call(name.toUpperCase(), args.map(value => ({kind: "value", value, start: 0, end: 0})), sheet, depth + 1))),
+      reference: expression => scoped(() => resolveReference(expression, sheet, depth + 1)),
+      readReference: ref => scoped(() => readReference(ref, depth + 1)),
+      cell: address => readCell(source, address), operation,
+      now: () => new Date(capturedNow.getTime()), random: options.random ?? Math.random,
+      unavailable: message => { throw new EvaluationUnavailable("unavailable-dependency", message); },
+    };
+  }
+
+  const call = (name: string, args: readonly FormulaExpression[], sheet: string, depth: number): EvaluationValue => {
+    operation();
+    if (depth > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Function evaluation depth exceeded.");
+    const normalized = normalizeFunctionName(name);
+    if (normalized === "PY" && (publicExpression?.kind !== "function" || normalizeFunctionName(publicExpression.name) !== "PY" || publicExpression.arguments !== args)) throw new EvaluationUnavailable("unsupported-function", "PY must be a standalone public formula.");
+    if (normalized === "PY" && args[0]?.kind !== "string") throw new EvaluationUnavailable("unavailable-dependency", "OOXML Python script indices require explicit script resolution; only public literal code syntax can be passed to a host.");
+    const named = source.resolveName?.(name, activeAddress);
+    const bound = bindings.get(normalized) ?? (named && "kind" in named ? toFunction(evaluate(named, sheet, depth + 1)) : undefined);
+    if (bound !== undefined) return "kind" in bound && bound.kind === "lambda" ? bound.invoke(args.map(arg => toFunction(evaluate(arg, sheet, depth + 1)))) : error("#VALUE!");
+    for (const registry of [...registries].reverse()) {
+      const handler = registry.get(normalized);
+      if (handler !== undefined) return handler(args, context(sheet, depth));
+    }
+    if (["OFFSET", "INDIRECT", "INDEX"].includes(normalized) && args[0]?.kind !== "array" && args[0]?.kind !== "value") {
+      const ref = resolveReference({kind: "function", name: normalized, arguments: args, start: 0, end: 0}, sheet, depth + 1);
+      if (!("type" in ref)) return readReference(ref, depth + 1);
+      if (normalized !== "INDEX") return ref;
+    }
+    if (normalized === "TRUE" || normalized === "FALSE") return args.length === 0 ? boolean(normalized === "TRUE") : error("#VALUE!");
+    const implementation = functions.get(normalized);
+    if (implementation === undefined) throw new EvaluationUnavailable("unsupported-function", `Function ${name} is not supported.`);
+    if (/^(?:ABS|INT|MOD|POWER|SQRT|SIGN|ROUND|ROUNDUP|ROUNDDOWN|CEILING\.MATH|FLOOR\.MATH|LEN|LEFT|RIGHT|MID|LOWER|UPPER|PROPER|TRIM|FIND|SEARCH|EXACT|SUBSTITUTE|DATE|YEAR|MONTH|DAY|WEEKDAY)$/.test(normalized)) {
+      const evaluated = args.map(arg => evaluate(arg, sheet, depth + 1));
+      if (evaluated.some(value => "kind" in value && (value.kind === "array" || value.kind === "range"))) {
+        const matrices = evaluated.map(matrix);
+        const height = Math.max(...matrices.map(rows => rows.length)), width = Math.max(...matrices.map(rows => rows[0]!.length));
+        assertArray(height, width);
+        if (matrices.some(rows => rows.length !== 1 && rows.length !== height || rows[0]!.length !== 1 && rows[0]!.length !== width)) return error("#VALUE!");
+        return {kind: "array", rows: Array.from({length: height}, (_, r) => Array.from({length: width}, (_, c) => {
+          operation();
+          const scalarArgs: FormulaExpression[] = matrices.map(rows => ({kind: "value", value: rows[rows.length === 1 ? 0 : r]![rows[0]!.length === 1 ? 0 : c]!, start: 0, end: 0}));
+          return scalar(implementation(scalarArgs, sheet, depth + 1));
+        }))};
+      }
+      return implementation(evaluated.map(value => ({kind: "value", value: toFunction(value), start: 0, end: 0})), sheet, depth);
     }
     return implementation(args, sheet, depth);
   };
@@ -978,7 +1247,9 @@ export function calculateFormulas(
     diagnostics.push(Object.freeze({ code: failure.code, address: freezeAddress(address), formula, message: failure.message }));
   };
 
-  for (const formulaCell of formulaCells) {
+  let pendingCells = formulaCells;
+  while (pendingCells.length) {
+  for (const formulaCell of pendingCells) {
     try {
       cellValue(formulaCell.address, 0, false);
     } catch (cause) {
@@ -986,11 +1257,14 @@ export function calculateFormulas(
       else throw cause;
     }
   }
-  return new FormulaCalculation(values, dependencies, diagnostics);
+  pendingCells = formulaCells.filter(cell => !memo.has(addressKey(cell.address)) && !unavailable.has(addressKey(cell.address)));
+  if (operations > limits.maxOperations) break;
+  }
+  return new FormulaCalculation(values, dependencies, diagnostics, arrays);
 }
 
-type RangeEvaluationValue = { readonly kind: "range"; readonly values: readonly FormulaScalarValue[] };
-type EvaluationValue = FormulaScalarValue | RangeEvaluationValue;
+type RangeEvaluationValue = { readonly kind: "range"; readonly values: readonly FormulaScalarValue[]; readonly rows: readonly (readonly FormulaScalarValue[])[] };
+type EvaluationValue = FunctionValue | RangeEvaluationValue;
 
 class EvaluationUnavailable extends Error {
   readonly code: FormulaDiagnosticCode;
@@ -1015,11 +1289,16 @@ function collectReferences(
     switch (node.kind) {
       case "reference": {
         const sheet = node.sheet === undefined ? currentSheet : source.resolveSheet(currentSheet, node.sheet);
-        if (sheet !== undefined) result.push(...rangeAddresses(sheet, node, maxRangeCells));
+        if (sheet !== undefined) {
+          const ref = referenceGeometry(node, currentSheet, source);
+          if (!("type" in ref)) result.push(...correspondingRangeAddresses(ref, ref.height, ref.width, maxRangeCells));
+        }
         break;
       }
-      case "unary":
+      case "unary": case "intersection": case "spill":
       case "percent": visit(node.operand); break;
+      case "array": node.rows.forEach(row => row.forEach(visit)); break;
+      case "invoke": visit(node.callee); node.arguments.forEach(visit); break;
       case "binary": visit(node.left); visit(node.right); break;
       case "function": {
         if ((node.name === "SUMIF" || node.name === "AVERAGEIF") && node.arguments.length === 3) {
@@ -1045,39 +1324,12 @@ function collectReferences(
   return [...unique.values()];
 }
 
-function rangeAddresses(sheet: string, reference: FormulaReferenceExpression, maxRangeCells: number): FormulaCellAddress[] {
-  const end = reference.endReference ?? reference.startReference;
-  const firstRow = Math.min(reference.startReference.row, end.row);
-  const lastRow = Math.max(reference.startReference.row, end.row);
-  const firstColumn = Math.min(reference.startReference.column, end.column);
-  const lastColumn = Math.max(reference.startReference.column, end.column);
-  const count = (lastRow - firstRow + 1) * (lastColumn - firstColumn + 1);
-  if (!Number.isSafeInteger(count) || count > maxRangeCells) throw new EvaluationUnavailable("evaluation-limit", "Formula range exceeds the calculation limit.");
-  const result: FormulaCellAddress[] = [];
-  for (let row = firstRow; row <= lastRow; row += 1) {
-    for (let column = firstColumn; column <= lastColumn; column += 1) result.push(Object.freeze({ sheet, row, column }));
-  }
-  return result;
-}
-
 interface FormulaRangeGeometry {
   readonly sheet: string;
   readonly firstRow: number;
   readonly firstColumn: number;
   readonly height: number;
   readonly width: number;
-}
-
-function resolveRangeArgument(
-  expression: FormulaExpression,
-  currentSheet: string,
-  source: FormulaWorkbookSource,
-  maxRangeCells: number,
-): FormulaRangeGeometry | Extract<FormulaScalarValue, { type: "error" }> {
-  const geometry = referenceGeometry(expression, currentSheet, source);
-  if (isFormulaError(geometry)) return geometry;
-  assertRangeSize(geometry.height, geometry.width, maxRangeCells);
-  return geometry;
 }
 
 function referenceGeometry(
@@ -1088,7 +1340,9 @@ function referenceGeometry(
   if (expression.kind !== "reference") return error("#VALUE!");
   const sheet = expression.sheet === undefined ? currentSheet : source.resolveSheet(currentSheet, expression.sheet);
   if (sheet === undefined) return error("#REF!");
-  const end = expression.endReference ?? expression.startReference;
+  let end = expression.endReference ?? expression.startReference;
+  const dimensions = source.usedDimensions?.(sheet);
+  if (dimensions && expression.whole) end = {...end, ...(expression.whole === "columns" ? {row: Math.max(1, dimensions.rows)} : {column: Math.max(1, dimensions.columns)})};
   const firstRow = Math.min(expression.startReference.row, end.row);
   const lastRow = Math.max(expression.startReference.row, end.row);
   const firstColumn = Math.min(expression.startReference.column, end.column);
@@ -1287,7 +1541,7 @@ const MAX_SPREADSHEET_COLUMN = 16_384;
 const DAY_MILLISECONDS = 86_400_000;
 
 function normalizeFunctionName(name: string): string {
-  return name.startsWith("_XLFN.") ? name.slice("_XLFN.".length) : name;
+  return name.toUpperCase().replace(/^_XLFN\./, "").replace(/^_XLWS\./, "");
 }
 
 function formulaContainsAggregate(formula: string): boolean {
@@ -1511,16 +1765,16 @@ function boundedString(value: string): FormulaScalarValue {
 }
 
 function scalar(value: EvaluationValue): FormulaScalarValue {
-  return isRange(value) ? error("#VALUE!") : value;
+  return "kind" in value ? value.kind === "omitted" ? BLANK : error(value.kind === "lambda" ? "#CALC!" : "#VALUE!") : value;
 }
 
 function flatten(values: readonly EvaluationValue[]): FormulaScalarValue[] {
-  return values.flatMap((value) => isRange(value) ? value.values : [value]);
+  return values.flatMap(value => matrix(value).flat());
 }
 
 function numbersForAggregate(values: readonly EvaluationValue[]): number[] {
   return values.flatMap((value) => {
-    if (isRange(value)) return value.values.flatMap((cell) => cell.type === "number" ? [cell.value] : []);
+    if ("kind" in value) return matrix(value).flatMap(row => row.flatMap(cell => cell.type === "number" ? [cell.value] : []));
     if (value.type === "number") return [value.value];
     if (value.type === "boolean") return [value.value ? 1 : 0];
     if (value.type === "string" && value.value.trim() !== "") {
@@ -1624,5 +1878,26 @@ function readCell(source: FormulaWorkbookSource, address: FormulaCellAddress): F
     return source.cell(address);
   } catch {
     throw new EvaluationUnavailable("unavailable-dependency", "Formula dependency could not be read.");
+  }
+}
+
+function matrix(value: EvaluationValue): readonly (readonly FormulaScalarValue[])[] {
+  if (!("kind" in value)) return [[value]];
+  if (value.kind === "array" || value.kind === "range") return value.rows;
+  return [[value.kind === "omitted" ? BLANK : error("#CALC!")]];
+}
+
+function toFunction(value: EvaluationValue): FunctionValue {
+  return isRange(value) ? {kind: "array", rows: value.rows} : value;
+}
+
+function walkExpression(expression: FormulaExpression, visit: (node: FormulaExpression) => void): void {
+  visit(expression);
+  switch (expression.kind) {
+    case "binary": walkExpression(expression.left, visit); walkExpression(expression.right, visit); break;
+    case "unary": case "percent": case "spill": case "intersection": walkExpression(expression.operand, visit); break;
+    case "function": expression.arguments.forEach(arg => walkExpression(arg, visit)); break;
+    case "invoke": walkExpression(expression.callee, visit); expression.arguments.forEach(arg => walkExpression(arg, visit)); break;
+    case "array": expression.rows.forEach(row => row.forEach(arg => walkExpression(arg, visit))); break;
   }
 }
