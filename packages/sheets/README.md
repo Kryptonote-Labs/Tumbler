@@ -115,3 +115,7 @@ XLSX bytes, including unrecognized package parts.
 Worksheet renames update formulas, named ranges, chart references, and validation
 formulas. Deleting a referenced worksheet writes `#REF!` formulas. Formula string
 literals and external workbook references retain their original text.
+
+Worksheet drawings retain their original XML, relationships and media when cells are edited. `readSpreadsheetDrawingObjects` projects imported shapes, pictures, text and groups for grid rendering. `spreadsheetDrawingObjectId` reads the stable, sheet-local DrawingML object identity. Drawing commands use that `objectId`, not XML parser node IDs.
+
+`applySpreadsheetCommand` supports `insert-shape` with optional text, `insert-image` with base64 data and a content type, `move-drawing` with pixel bounds, `style-drawing`, `align-drawing` to a cell range, `order-drawing`, `duplicate-drawing` and `delete-drawing`. These commands also apply to imported chart placement; chart creation is not provided. CLI sheet reads include drawing IDs and bounds, and the same command schemas drive the CLI and interactive editor.

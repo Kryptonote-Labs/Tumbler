@@ -8,6 +8,7 @@ import type { SpreadsheetWorkbook } from './workbook.ts';
 /** Read-only drawing projection. Source XML and relationships remain in the package. */
 export interface SpreadsheetDrawingObject {
   readonly elementId: number;
+  readonly objectId: number;
   readonly name: string;
   readonly kind: 'shape' | 'picture' | 'group';
   readonly x: number;
@@ -73,7 +74,7 @@ export function readSpreadsheetDrawingObjects(workbook: SpreadsheetWorkbook, dra
     const chOff = child(transform, 'chOff'), chExt = child(transform, 'chExt');
     const sx = width / (number(chExt, 'cx', 1) / 9525), sy = height / (number(chExt, 'cy', 1) / 9525);
     return {
-      elementId: e.id, name: attr(child(nonvisual, 'cNvPr'), 'name') ?? e.localName,
+      elementId: e.id, objectId: number(child(nonvisual, 'cNvPr'), 'id'), name: attr(child(nonvisual, 'cNvPr'), 'name') ?? e.localName,
       kind: group ? 'group' : e.localName === 'pic' ? 'picture' : 'shape',
       x: number(offset, 'x') / 9525, y: number(offset, 'y') / 9525, width, height,
       rotation: number(transform, 'rot') / 60000, flipX: attr(transform, 'flipH') === '1', flipY: attr(transform, 'flipV') === '1',

@@ -20,6 +20,7 @@
     setSpreadsheetTableValueFilter,
     spreadsheetTableDistinctValues,
     spreadsheetDrawingBounds,
+    spreadsheetDrawingObjectId,
     readSpreadsheetDrawingObjects,
     type SpreadsheetChartFrame,
     type SpreadsheetCellValue,
@@ -57,7 +58,11 @@
     readonly onedit?: (edit: SpreadsheetGridEdit) => void;
     readonly onclear?: (selection: GridSelection) => void;
     readonly onhyperlink?: (hyperlink: SpreadsheetHyperlink) => void;
+    objectSelection?: number;
+    readonly onobjectmove?: (objectId: number, bounds: SpreadsheetDrawingBounds) => void;
+    readonly onobjectdelete?: (objectId: number) => void;
     chartSelection?: number;
+    readonly onobjectselectionchange?: (objectId: number | undefined) => void;
     readonly onchartselectionchange?: (anchorElementId: number | undefined) => void;
     /** Prevents cell edits while retaining selection and table view controls. */
     readonly readonly?: boolean;
@@ -77,7 +82,9 @@
     onedit,
     onclear,
     onhyperlink,
+    objectSelection, onobjectmove, onobjectdelete,
     chartSelection,
+    onobjectselectionchange,
     onchartselectionchange,
     readonly = false,
     preserveInputFocus = false,
@@ -176,6 +183,32 @@
     const placement = placeSpreadsheetDrawing({ anchor: frame.anchor, bounds, frozenRows, frozenColumns, frozenRowsHeight, frozenColumnsWidth, scrollTop, scrollLeft, viewportWidth, viewportHeight, rowHeaderWidth, columnHeaderHeight });
     return placement.visible ? [{ ...frame, bounds, placement }] : [];
   }));
+  let drawingDrag = $state<{id:number;pointer:number;startX:number;startY:number;bounds:SpreadsheetDrawingBounds;resize:boolean}>();
+  let dragOffset=$state({x:0,y:0});
+  function drawingTransform(id:number|undefined) {
+    const drag=drawingDrag;
+    if(!drag || drag.id!==id)return undefined;
+    return drag.resize?`scale(${Math.max(1,drag.bounds.width+dragOffset.x)/drag.bounds.width},${Math.max(1,drag.bounds.height+dragOffset.y)/drag.bounds.height})`:`translate(${dragOffset.x}px,${dragOffset.y}px)`;
+  }
+  function drawingPointerMove(event:PointerEvent){const drag=drawingDrag;if(drag && drag.pointer===event.pointerId)dragOffset={x:(event.clientX-drag.startX)/scale,y:(event.clientY-drag.startY)/scale};}
+  function drawingPointerDown(event: PointerEvent, id: number, bounds: SpreadsheetDrawingBounds) {
+    event.stopPropagation();
+    if(event.button !== 0) return;
+    onobjectselectionchange?.(id);
+    if(readonly) return;
+    const target = event.currentTarget as HTMLElement;
+    target.setPointerCapture(event.pointerId);
+    dragOffset={x:0,y:0};
+    drawingDrag = {id,pointer:event.pointerId,startX:event.clientX,startY:event.clientY,bounds,resize:event.target instanceof Element && !!event.target.closest('[data-resize]')};
+  }
+  function drawingPointerUp(event: PointerEvent) {
+    const drag = drawingDrag;
+    if(!drag || drag.pointer !== event.pointerId) return;
+    drawingDrag = undefined;
+    const dx=(event.clientX-drag.startX)/scale,dy=(event.clientY-drag.startY)/scale;
+    if(Math.abs(dx)+Math.abs(dy)<2) return;
+    onobjectmove?.(drag.id,drag.resize?{...drag.bounds,width:Math.max(1,drag.bounds.width+dx),height:Math.max(1,drag.bounds.height+dy)}:{...drag.bounds,x:drag.bounds.x+dx,y:drag.bounds.y+dy});
+  }
   let frozenPane = $derived(worksheet.panes.find((pane) => pane.state === "frozen" || pane.state === "frozenSplit"));
   let frozenRows = $derived(Math.min(rowCount, Math.max(0, Math.floor(frozenPane?.ySplit ?? 0))));
   let frozenColumns = $derived(Math.min(columnCount, Math.max(0, Math.floor(frozenPane?.xSplit ?? 0))));
@@ -415,6 +448,9 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if(event.isComposing || event.target instanceof HTMLElement && !!event.target.closest('input,textarea,select,[contenteditable="true"]')) return;
+    if(objectSelection!==undefined && !readonly && (event.key==='Delete'||event.key==='Backspace')) {event.preventDefault();onobjectdelete?.(objectSelection);return;}
+
     if (event.isComposing || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLButtonElement) return;
     if (event.key === "Tab") {
       event.preventDefault();
@@ -652,7 +688,7 @@
 
 </script>
 
-<svelte:window onpointerup={finishPointerSelection} onpointercancel={finishPointerSelection} />
+<svelte:window onpointermove={drawingPointerMove} onpointerup={event=>{finishPointerSelection(event);drawingPointerUp(event);}} onpointercancel={event=>{finishPointerSelection(event);drawingDrag=undefined;dragOffset={x:0,y:0};}} />
 
 {#snippet gridCell(reference: string, sourceRow: number, column: number, left: number, top: number, width: number, height: number, zIndex: number)}
   {@const header = tableHeader(sourceRow, column)}
@@ -728,6 +764,9 @@
 {#snippet chartFrame(chart: RenderableChart, left: number, top: number)}
   <button
     class="chart-frame"
+    style:transform-origin="top left" style:transform={drawingTransform(worksheet.drawing?spreadsheetDrawingObjectId(worksheet.drawing,chart.frame.anchor):undefined)}
+    onpointerdown={event=>{if(worksheet.drawing){const id=spreadsheetDrawingObjectId(worksheet.drawing,chart.frame.anchor);if(id!==undefined)drawingPointerDown(event,id,chart.bounds);}}}
+    data-drawing-id={worksheet.drawing ? spreadsheetDrawingObjectId(worksheet.drawing,chart.frame.anchor) : undefined}
     style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === chart.frame.anchor.elementId) ?? 0)}
     class:selected={chartSelection === chart.frame.anchor.elementId}
     type="button"
@@ -736,8 +775,12 @@
     style:top={`${top}px`}
     style:width={`${Math.max(1, chart.bounds.width)}px`}
     style:height={`${Math.max(1, chart.bounds.height)}px`}
-    onclick={(event) => selectChart(event, chart.frame)}
+    onclick={(event) => {
+      selectChart(event, chart.frame);
+      if(worksheet.drawing) onobjectselectionchange?.(spreadsheetDrawingObjectId(worksheet.drawing,chart.frame.anchor));
+    }}
   >
+    {#if !readonly && worksheet.drawing && objectSelection===spreadsheetDrawingObjectId(worksheet.drawing,chart.frame.anchor)}<span class="drawing-resize" data-resize></span>{/if}
     <OoxmlChart
       model={chart.model}
       width={Math.max(1, chart.bounds.width)}
@@ -814,9 +857,10 @@
         {/if}
       {/each}
       {#each visibleObjects.filter(frame => frame.placement.region === "body") as frame (frame.object.elementId)}
-        <div class="drawing-object" style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${frame.placement.left - scrollLeft + physicalScrollLeft}px`} style:top={`${frame.placement.top - scrollTop + physicalScrollTop}px`} style:width={`${Math.max(1, frame.bounds.width)}px`} style:height={`${Math.max(1, frame.bounds.height)}px`}>
+        <button type="button" aria-label={`Select ${frame.object.name}`} class="drawing-object" style:transform-origin="top left" style:transform={drawingTransform(frame.object.objectId)} data-drawing-id={frame.object.objectId} onclick={(event)=>{event.stopPropagation();onobjectselectionchange?.(frame.object.objectId);}} class:selected={objectSelection===frame.object.objectId} onpointerdown={event=>drawingPointerDown(event,frame.object.objectId,frame.bounds)} style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${frame.placement.left - scrollLeft + physicalScrollLeft}px`} style:top={`${frame.placement.top - scrollTop + physicalScrollTop}px`} style:width={`${Math.max(1, frame.bounds.width)}px`} style:height={`${Math.max(1, frame.bounds.height)}px`}>
           <SpreadsheetDrawingObject object={frame.object} />
-        </div>
+          {#if !readonly && objectSelection===frame.object.objectId}<span class="drawing-resize" data-resize></span>{/if}
+        </button>
       {/each}
       {#each visibleCharts.filter((chart) => chart.placement.region === "body") as chart (chart.frame.anchor.elementId)}
         {@render chartFrame(chart, chart.placement.left - scrollLeft + physicalScrollLeft, chart.placement.top - scrollTop + physicalScrollTop)}
@@ -839,9 +883,10 @@
         {@render gridCell(reference, merge.range.start.row, merge.range.start.column, merge.left - (merge.range.start.column <= frozenColumns ? 0 : scrollLeft), merge.top, merge.width, merge.height, 2)}
       {/each}
       {#each visibleObjects.filter(frame => frame.placement.region === "frozen-row") as frame (frame.object.elementId)}
-        <div class="drawing-object" style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${frame.placement.left}px`} style:top={`${frame.placement.top}px`} style:width={`${Math.max(1, frame.bounds.width)}px`} style:height={`${Math.max(1, frame.bounds.height)}px`}>
+        <button type="button" aria-label={`Select ${frame.object.name}`} class="drawing-object" style:transform-origin="top left" style:transform={drawingTransform(frame.object.objectId)} data-drawing-id={frame.object.objectId} onclick={(event)=>{event.stopPropagation();onobjectselectionchange?.(frame.object.objectId);}} class:selected={objectSelection===frame.object.objectId} onpointerdown={event=>drawingPointerDown(event,frame.object.objectId,frame.bounds)} style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${frame.placement.left}px`} style:top={`${frame.placement.top}px`} style:width={`${Math.max(1, frame.bounds.width)}px`} style:height={`${Math.max(1, frame.bounds.height)}px`}>
           <SpreadsheetDrawingObject object={frame.object} />
-        </div>
+          {#if !readonly && objectSelection===frame.object.objectId}<span class="drawing-resize" data-resize></span>{/if}
+        </button>
       {/each}
       {#each visibleCharts.filter((chart) => chart.placement.region === "frozen-row") as chart (chart.frame.anchor.elementId)}
         {@render chartFrame(chart, chart.placement.left, chart.placement.top)}
@@ -864,9 +909,10 @@
         {@render gridCell(reference, merge.range.start.row, merge.range.start.column, merge.left, merge.top - scrollTop - frozenRowsHeight, merge.width, merge.height, 2)}
       {/each}
       {#each visibleObjects.filter(frame => frame.placement.region === "frozen-column") as frame (frame.object.elementId)}
-        <div class="drawing-object" style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${frame.placement.left}px`} style:top={`${frame.placement.top}px`} style:width={`${Math.max(1, frame.bounds.width)}px`} style:height={`${Math.max(1, frame.bounds.height)}px`}>
+        <button type="button" aria-label={`Select ${frame.object.name}`} class="drawing-object" style:transform-origin="top left" style:transform={drawingTransform(frame.object.objectId)} data-drawing-id={frame.object.objectId} onclick={(event)=>{event.stopPropagation();onobjectselectionchange?.(frame.object.objectId);}} class:selected={objectSelection===frame.object.objectId} onpointerdown={event=>drawingPointerDown(event,frame.object.objectId,frame.bounds)} style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${frame.placement.left}px`} style:top={`${frame.placement.top}px`} style:width={`${Math.max(1, frame.bounds.width)}px`} style:height={`${Math.max(1, frame.bounds.height)}px`}>
           <SpreadsheetDrawingObject object={frame.object} />
-        </div>
+          {#if !readonly && objectSelection===frame.object.objectId}<span class="drawing-resize" data-resize></span>{/if}
+        </button>
       {/each}
       {#each visibleCharts.filter((chart) => chart.placement.region === "frozen-column") as chart (chart.frame.anchor.elementId)}
         {@render chartFrame(chart, chart.placement.left, chart.placement.top)}
@@ -945,6 +991,10 @@
   .empty-selection { position: absolute; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(0, 0, 0, 0.16)); }
   .empty-focus { pointer-events: none; }
   .cell.active.selected::after { background: transparent; }
+  .drawing-resize { position:absolute;right:0;bottom:0;width:10px;height:10px;background:var(--tumbler-grid-accent,#42ff53);cursor:nwse-resize;z-index:1; }
+  .drawing-object.selected { outline:2px solid var(--tumbler-grid-accent,#42ff53); }
+  .drawing-object { padding:0;border:0;background:transparent;pointer-events:auto; }
+  .drawing-object:focus-visible { outline:2px solid var(--tumbler-grid-accent,#42ff53); }
   .canvas { isolation: isolate; position: relative; overflow: clip; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane, .frozen-column-pane { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane { left: 52px; right: 0; top: 28px; }
