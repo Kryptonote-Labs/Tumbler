@@ -131,7 +131,7 @@ const edges: [string, string, TextCase["expected"]][] = [
   ["TEXT percent", 'TEXT(0.125,"0.0%")', S("12.5%")],
   ["TEXT empty format", 'TEXT(1,"")', S("")],
   ["BAHTTEXT zero", "BAHTTEXT(0)", S("ศูนย์บาทถ้วน")],
-  ["BAHTTEXT million", "BAHTTEXT(1000001)", S("หนึ่งล้านหนึ่งบาทถ้วน")],
+  ["BAHTTEXT million", "BAHTTEXT(1000001)", S("หนึ่งล้านเอ็ดบาทถ้วน")],
   ["BAHTTEXT negative", "BAHTTEXT(-21.01)", S("ลบยี่สิบเอ็ดบาทหนึ่งสตางค์")],
   ["TEXTAFTER reverse", 'TEXTAFTER("a:b:c",":",-1)', S("c")],
   ["TEXTBEFORE reverse", 'TEXTBEFORE("a:b:c",":",-1)', S("a:b")],

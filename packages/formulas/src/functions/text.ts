@@ -406,13 +406,13 @@ define("TEXT", 2, 2, (v, c) => {
   }
   return host("TEXT", v, c);
 });
-function thaiInteger(x: number): string {
+function thaiInteger(x: number, followsMillion = false): string {
   if (x === 0) return "ศูนย์";
   if (x >= 1e6)
     return (
       thaiInteger(Math.floor(x / 1e6)) +
       "ล้าน" +
-      (x % 1e6 ? thaiInteger(x % 1e6) : "")
+      (x % 1e6 ? thaiInteger(x % 1e6, true) : "")
     );
   const digits = [
       "",
@@ -434,7 +434,7 @@ function thaiInteger(x: number): string {
     out +=
       p === 1
         ? (d === 1 ? "" : d === 2 ? "ยี่" : digits[d]!) + units[p]!
-        : p === 0 && d === 1 && x > 1
+        : p === 0 && d === 1 && (x > 1 || followsMillion)
           ? "เอ็ด"
           : digits[d]! + units[p]!;
   }

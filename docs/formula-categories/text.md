@@ -20,7 +20,8 @@ results are not counted as local parity. This is not a full Excel parity claim.
 - BAHTTEXT implements Thai integer groups, millions, satang, negatives, zero,
   and cent rounding locally for magnitudes through 10^13. Larger magnitudes
   require an adapter instead of risking precision loss. Thai spelling and
-  rounding expectations are authored cases awaiting independent Excel checking.
+  rounding expectations are authored cases; the million-plus-one case was corrected
+  from independent native Excel 16.114.4 evidence supplied by the coordinator.
 - CHAR and CODE implement invariant ASCII locally. Non-ASCII values require an
   adapter selecting the producer's code page (Macintosh and Windows differ).
 - CLEAN strips ASCII controls 0–31, retaining NBSP and other Unicode characters.
@@ -92,8 +93,10 @@ all 35 names, standalone and nested expressions, Inputs!A1 references, defaults,
 errors, Unicode, dates, arrays, overflow, and boundary values. Expected values
 are full scalar objects or rectangular matrices. No cached spreadsheet or third
 party workbook is copied. Fixtures and implementation are original contributions
-under this repository's MIT license. These are documentation-derived expectations,
-not Excel oracle results. The coordinator owns uncached XLSX generation,
+under this repository's MIT license. Most expectations are documentation-derived. The coordinator independently
+verified BAHTTEXT(1000001) = หนึ่งล้านเอ็ดบาทถ้วน and
+TEXT(60,"yyyy-mm-dd") = 1900-02-29 in native Excel 16.114.4; no other oracle
+qualification is claimed here. The coordinator owns uncached XLSX generation,
 calculation, edit/reopen/preservation testing, and independent Excel/consumer
 qualification. Host cases must be excluded from local-success counts.
 
