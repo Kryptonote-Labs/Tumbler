@@ -20,6 +20,7 @@
     setSpreadsheetTableValueFilter,
     spreadsheetTableDistinctValues,
     spreadsheetDrawingBounds,
+    readSpreadsheetDrawingObjects,
     type SpreadsheetChartFrame,
     type SpreadsheetCellValue,
     type SpreadsheetCalculationSnapshot,
@@ -39,6 +40,7 @@
   import { zoomGesture, type ZoomGesture } from "./zoom-gesture.ts";
   import { spreadsheetScrollAxis } from "./spreadsheet-scroll.ts";
   import { spreadsheetSelectionRects, spreadsheetSelectionRanges } from "./spreadsheet-selection.ts";
+  import SpreadsheetDrawingObject from "./SpreadsheetDrawingObject.svelte";
   import OoxmlChart from "./OoxmlChart.svelte";
 
   interface RenderableChart {
@@ -167,6 +169,12 @@
       columnHeaderHeight,
     });
     return placement.visible ? [{ ...chart, placement }] : [];
+  }));
+  let objects = $derived(worksheet.drawing ? readSpreadsheetDrawingObjects(worksheet.workbook, worksheet.drawing, worksheet) : []);
+  let visibleObjects = $derived(objects.flatMap(frame => {
+    const bounds = spreadsheetDrawingBounds(frame.anchor, drawingRowGeometry, columnGeometry);
+    const placement = placeSpreadsheetDrawing({ anchor: frame.anchor, bounds, frozenRows, frozenColumns, frozenRowsHeight, frozenColumnsWidth, scrollTop, scrollLeft, viewportWidth, viewportHeight, rowHeaderWidth, columnHeaderHeight });
+    return placement.visible ? [{ ...frame, bounds, placement }] : [];
   }));
   let frozenPane = $derived(worksheet.panes.find((pane) => pane.state === "frozen" || pane.state === "frozenSplit"));
   let frozenRows = $derived(Math.min(rowCount, Math.max(0, Math.floor(frozenPane?.ySplit ?? 0))));
@@ -720,6 +728,7 @@
 {#snippet chartFrame(chart: RenderableChart, left: number, top: number)}
   <button
     class="chart-frame"
+    style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === chart.frame.anchor.elementId) ?? 0)}
     class:selected={chartSelection === chart.frame.anchor.elementId}
     type="button"
     aria-label={`Select ${chart.model.title ?? "chart"}`}
@@ -804,6 +813,11 @@
           {@render gridCell(reference, merge.range.start.row, merge.range.start.column, rowHeaderWidth + merge.left, columnHeaderHeight + merge.top, merge.width, merge.height, 1)}
         {/if}
       {/each}
+      {#each visibleObjects.filter(frame => frame.placement.region === "body") as frame (frame.object.elementId)}
+        <div class="drawing-object" style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${frame.placement.left - scrollLeft + physicalScrollLeft}px`} style:top={`${frame.placement.top - scrollTop + physicalScrollTop}px`} style:width={`${Math.max(1, frame.bounds.width)}px`} style:height={`${Math.max(1, frame.bounds.height)}px`}>
+          <SpreadsheetDrawingObject object={frame.object} />
+        </div>
+      {/each}
       {#each visibleCharts.filter((chart) => chart.placement.region === "body") as chart (chart.frame.anchor.elementId)}
         {@render chartFrame(chart, chart.placement.left - scrollLeft + physicalScrollLeft, chart.placement.top - scrollTop + physicalScrollTop)}
       {/each}
@@ -824,6 +838,11 @@
         {@const reference = formatCellReference(merge.range.start)}
         {@render gridCell(reference, merge.range.start.row, merge.range.start.column, merge.left - (merge.range.start.column <= frozenColumns ? 0 : scrollLeft), merge.top, merge.width, merge.height, 2)}
       {/each}
+      {#each visibleObjects.filter(frame => frame.placement.region === "frozen-row") as frame (frame.object.elementId)}
+        <div class="drawing-object" style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${frame.placement.left}px`} style:top={`${frame.placement.top}px`} style:width={`${Math.max(1, frame.bounds.width)}px`} style:height={`${Math.max(1, frame.bounds.height)}px`}>
+          <SpreadsheetDrawingObject object={frame.object} />
+        </div>
+      {/each}
       {#each visibleCharts.filter((chart) => chart.placement.region === "frozen-row") as chart (chart.frame.anchor.elementId)}
         {@render chartFrame(chart, chart.placement.left, chart.placement.top)}
       {/each}
@@ -843,6 +862,11 @@
       {#each layout.merges.filter((merge) => merge.range.start.row > frozenRows && merge.range.start.column <= frozenColumns) as merge (`${merge.range.start.row}:${merge.range.start.column}`)}
         {@const reference = formatCellReference(merge.range.start)}
         {@render gridCell(reference, merge.range.start.row, merge.range.start.column, merge.left, merge.top - scrollTop - frozenRowsHeight, merge.width, merge.height, 2)}
+      {/each}
+      {#each visibleObjects.filter(frame => frame.placement.region === "frozen-column") as frame (frame.object.elementId)}
+        <div class="drawing-object" style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${frame.placement.left}px`} style:top={`${frame.placement.top}px`} style:width={`${Math.max(1, frame.bounds.width)}px`} style:height={`${Math.max(1, frame.bounds.height)}px`}>
+          <SpreadsheetDrawingObject object={frame.object} />
+        </div>
       {/each}
       {#each visibleCharts.filter((chart) => chart.placement.region === "frozen-column") as chart (chart.frame.anchor.elementId)}
         {@render chartFrame(chart, chart.placement.left, chart.placement.top)}
@@ -921,7 +945,7 @@
   .empty-selection { position: absolute; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(0, 0, 0, 0.16)); }
   .empty-focus { pointer-events: none; }
   .cell.active.selected::after { background: transparent; }
-  .canvas { position: relative; overflow: clip; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
+  .canvas { isolation: isolate; position: relative; overflow: clip; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane, .frozen-column-pane { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane { left: 52px; right: 0; top: 28px; }
   .frozen-column-pane { left: 52px; bottom: 0; }
