@@ -115,3 +115,5 @@ XLSX bytes, including unrecognized package parts.
 Worksheet renames update formulas, named ranges, chart references, and validation
 formulas. Deleting a referenced worksheet writes `#REF!` formulas. Formula string
 literals and external workbook references retain their original text.
+
+Spreadsheet interaction commands include `replace-text` with literal, case-sensitive and whole-word search options, `set-sheet-state` for hide and unhide, and `set-tab-color` for RGB colours or removal. Replacement edits cell source, including formulas, rather than calculated results. Hiding the last visible sheet is rejected. `SpreadsheetGrid` hosts can toggle `showGridlines` and `showHeadings`; row and column headers expose their source indices for host menus.

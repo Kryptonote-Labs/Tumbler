@@ -1,3 +1,4 @@
+import { spreadsheetInteractionCommand, applySpreadsheetInteractionCommand } from './interaction.ts';
 import { spreadsheetFormattingCommand, spreadsheetFormattingCommandPackage } from './formatting-commands.ts';
 import { applySpreadsheetStructureCommand } from './structure.ts';
 import { rewriteSpreadsheetSheetReferences } from './sheet-references.ts';
@@ -20,6 +21,7 @@ const single = z.discriminatedUnion('name', [
   z.object({name:z.literal('insert-columns'),sheetId:id,index:z.number().int().positive(),count:z.number().int().positive().optional()}).strict(),
   z.object({name:z.literal('delete-columns'),sheetId:id,index:z.number().int().positive(),count:z.number().int().positive().optional()}).strict(),
   ...spreadsheetLayoutCommand.options,
+  ...spreadsheetInteractionCommand.options,
   z.object({name:z.literal('set-cell'),sheetId:id,reference:id,value}).strict(),
   z.object({name:z.literal('set-formula'),sheetId:id,reference:id,formula:z.string()}).strict(),
   z.object({name:z.literal('set-range'),sheetId:id,reference:id,values:z.array(z.array(value))}).strict(),
@@ -55,6 +57,7 @@ export function applySpreadsheetCommand(artifact: SpreadsheetArtifact, input: Sp
   if (command.name === 'insert-rows' || command.name === 'delete-rows' || command.name === 'insert-columns' || command.name === 'delete-columns') return applySpreadsheetStructureCommand(artifact, command);
   if (command.name === 'add-sheet' || command.name === 'delete-sheet' || command.name === 'rename-sheet' || command.name === 'move-sheet') return editSheets(artifact, command);
   if (command.name === 'set-column-width' || command.name === 'set-row-height' || command.name === 'merge-cells' || command.name === 'unmerge-cells' || command.name === 'freeze-panes') return applySpreadsheetLayoutCommand(artifact, command);
+  if (command.name === 'replace-text' || command.name === 'set-sheet-state' || command.name === 'set-tab-color') return applySpreadsheetInteractionCommand(artifact, command);
   const sheet = resolveSheet(artifact, command.sheetId);
   if (command.name === 'format-cells' || command.name === 'set-number-format' || command.name === 'adjust-number-decimals' || command.name === 'set-borders' || command.name === 'clear-formatting') {
     const saved = spreadsheetFormattingCommandPackage(artifact, sheet, command);
