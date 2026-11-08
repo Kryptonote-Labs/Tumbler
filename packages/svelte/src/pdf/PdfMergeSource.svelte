@@ -23,7 +23,7 @@
   ondragleave={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) draggingOver = false; }}
   ondrop={event => { draggingOver = false; const value = event.dataTransfer?.getData('application/x-tumbler-pdf-source'); if (!disabled && value) { event.preventDefault(); event.stopPropagation(); ondrop(Number(value), event.clientY > event.currentTarget.getBoundingClientRect().top + event.currentTarget.clientHeight / 2); } }}>
   <div class="source-row">
-    <button type="button" onkeydown={keys} class="grip" aria-label={`Reorder ${source.name}, position ${position + 1} of ${count}`} title="Drag to reorder. Alt+Up or Alt+Down moves this PDF; Delete removes it." draggable={!disabled} disabled={disabled} ondragstart={event => { event.dataTransfer?.setData('application/x-tumbler-pdf-source', String(source.id)); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }}><span class="ordinal">{position + 1}</span><span class="dots" aria-hidden="true">⠿</span></button>
+    <button type="button" onkeydown={keys} class="grip" aria-label={`Reorder ${source.name}, position ${position + 1} of ${count}`} title="Drag to reorder. Alt+Up or Alt+Down moves this PDF; Delete removes it." draggable={!disabled} disabled={disabled} ondragstart={event => { event.dataTransfer?.setData('application/x-tumbler-pdf-source', String(source.id)); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }}><span class="dots" aria-hidden="true">⠿</span></button>
     <button type="button" class="expand" aria-expanded={expanded} aria-controls={`${id}-pages`} onclick={onexpand}>
       <span class="cover">{#if source.document}<PdfPageThumbnail document={source.document} index={cover} pixels={96} />{:else}<span class="placeholder" aria-hidden="true"></span>{/if}</span>
       <span class="description"><span class="name">{source.name}</span><span class="summary">{mergeSourceSummary(source)}</span></span>
@@ -48,15 +48,13 @@
   .source:focus-visible { outline: 1px solid var(--accent, #246644); outline-offset: -1px; }
   .drop-target { box-shadow: inset 0 2px var(--accent, #246644); }
   .drop-target.drop-after { box-shadow: inset 0 -2px var(--accent, #246644); }
-  .source-row { display: flex; align-items: center; gap: 4px; padding: 10px 6px; }
+  .source-row { display: flex; align-items: center; gap: 4px; padding: 10px 12px 10px 6px; }
   button { font: inherit; color: var(--text, #222); cursor: pointer; }
   .grip, .more { display: grid; place-items: center; flex: none; width: 24px; height: 32px; border: 0; border-radius: 4px; background: transparent; color: var(--text-soft, #666); }
   .more { font-size: 22px; }
   .grip { position: relative; cursor: grab; }
   .dots { display: inline; font-size: 18px; }
-  .ordinal { display: none; }
   .source:hover .dots, .grip:focus-visible .dots { display: inline; }
-  .source:hover .ordinal, .grip:focus-visible .ordinal { display: none; }
   .expand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; text-align: left; }
   .cover { display: block; flex: none; width: 40px; }
   .placeholder { display: block; aspect-ratio: 0.75; border-radius: 2px; background: var(--surface-hover, #eee); }

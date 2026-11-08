@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import PdfPageThumbnail from './PdfPageThumbnail.svelte';
   import { mergeSourceSelection, type PdfMergeSource } from './merge-source.ts';
   import { mergePageRanges, toggleMergePage } from './merge-selection.ts';
   let { source = $bindable(), disabled = false, onchange }: { source: PdfMergeSource; disabled?: boolean; onchange: () => void } = $props();
   const id = $props.id();
+  let rangeInput: HTMLInputElement;
   let anchor: number | undefined;
   let focused = $state(false), settled = $state(true);
   const selection = $derived(mergeSourceSelection(source));
@@ -20,6 +22,11 @@
     return () => clearTimeout(timer);
   });
   const invalid = $derived(!!selection.error && (!focused || settled));
+  $effect(() => { source.rangeErrorVisible = invalid; });
+  function resetOrder() {
+    choose([...selected].sort((a,b) => a-b));
+    void tick().then(() => rangeInput.focus());
+  }
   function choose(pages: number[]) {
     source.draft = undefined;
     source.none = pages.length === 0;
@@ -27,6 +34,7 @@
     onchange();
   }
   function input(value: string) {
+    source.rangeErrorVisible = false;
     source.draft = value;
     const candidate = { ...source, pages: value, draft: undefined, none: false };
     if (!mergeSourceSelection(candidate).error) { source.pages = value; source.none = false; source.draft = undefined; }
@@ -37,16 +45,16 @@
 <div class="picker">
   <div class="selection-tools">
     <label for={`${id}-range`}>Include pages</label>
-    {#if selection.custom}<button type="button" disabled={disabled} onclick={() => choose([...selected].sort((a,b) => a-b))}>Sort and remove repeats</button>
+    {#if selection.custom}<button type="button" disabled={disabled} onclick={resetOrder}>Sort and remove repeats</button>
     {:else}<button type="button" disabled={disabled} onclick={() => { anchor = undefined; choose(source.document!.pages.map((_, index) => index)); }}>All</button><button type="button" disabled={disabled} onclick={() => { anchor = undefined; choose([]); }}>None</button>{/if}
   </div>
-  <input id={`${id}-range`} aria-label={`Include pages in ${source.name}`} aria-describedby={`${id}-help`} aria-invalid={invalid} disabled={disabled} value={source.draft ?? source.pages} placeholder={source.none ? 'No pages' : `All ${source.document?.pages.length ?? 0} pages`} onfocus={() => focused = true} onblur={() => focused = false} oninput={event => input(event.currentTarget.value)} />
-  <div id={`${id}-help`} class="help" class:error={invalid} aria-live="polite">{#if invalid}{selection.error}{:else if selection.custom}Badges show output order. Edit the range to change it.{:else}Shift-click to include a range.{/if}</div>
+  <input bind:this={rangeInput} id={`${id}-range`} aria-label={`Include pages in ${source.name}`} aria-describedby={`${id}-help`} aria-invalid={invalid} disabled={disabled} value={source.draft ?? source.pages} placeholder={source.none ? 'No pages' : `All ${source.document?.pages.length ?? 0} pages`} onfocus={() => focused = true} onblur={() => focused = false} oninput={event => input(event.currentTarget.value)} />
+  <div id={`${id}-help`} class="help" class:error={invalid} aria-live="polite">{#if invalid}{selection.error}{:else if selection.custom}Order within this PDF. Edit the range to change it.{:else}Shift-click to include a range.{/if}</div>
   {#if source.document}
     <div class="grid" class:custom={selection.custom} aria-label={`Pages included from ${source.name}`}>
       {#each source.document.pages as page, index (page.id)}
         {@const order = positions.get(index) ?? []}
-        <button type="button" class:selected={selected.has(index)} class="page" role="checkbox" aria-checked={selected.has(index)} aria-label={`Page ${index + 1} of ${source.name}${selection.custom && order.length ? `, output positions ${order.join(', ')}` : ''}`} disabled={disabled || selection.custom || !!selection.error} onclick={event => { choose(toggleMergePage(selection.pages, index, event.shiftKey ? anchor : undefined)); anchor = index; }}>
+        <button type="button" class:selected={selected.has(index)} class="page" role="checkbox" aria-checked={selected.has(index)} aria-label={`Page ${index + 1} of ${source.name}${selection.custom && order.length ? `, output ${order.length === 1 ? 'position' : 'positions'} ${order.join(', ')}` : ''}`} disabled={disabled || selection.custom || invalid} onclick={event => { choose(toggleMergePage(selection.pages, index, event.shiftKey ? anchor : undefined)); anchor = index; }}>
           <PdfPageThumbnail document={source.document} {index} pixels={300} />
           <span class="number">{index + 1}</span><span class="check" title={selection.custom ? `Output positions ${order.join(', ')}` : undefined} aria-hidden="true">{selection.custom ? order.slice(0, 3).join('·') + (order.length > 3 ? '…' : '') : selected.has(index) ? '✓' : ''}</span>
         </button>

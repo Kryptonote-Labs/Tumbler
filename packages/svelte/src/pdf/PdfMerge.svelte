@@ -22,7 +22,8 @@
   const plan = $derived(model.blocks.map(source => ({ source, selection: mergeSourceSelection(source) })));
   const pageCount = $derived(plan.reduce((count, entry) => count + (entry.source.document ? entry.selection.pages.length : 0), 0));
   const problem = $derived(plan.find(entry => entry.source.loading || entry.source.error || entry.selection.error));
-  const reason = $derived(problem ? problem.source.loading ? `Reading ${problem.source.name}…` : `Check ${problem.source.name}` : !pageCount ? 'Select at least one page' : '');
+  const blocked = $derived(!!problem || !pageCount);
+  const reason = $derived(problem?.selection.error && !problem.source.rangeErrorVisible ? '' : problem ? problem.source.loading ? `Reading ${problem.source.name}…` : `Check ${problem.source.name}` : !pageCount ? 'Select at least one page' : '');
   function changed() { model.created = undefined; error = ''; }
   /** Adds a row immediately; hosts can supply cancellable authorized reads. */
   export async function addSource(name: string, data: PdfMergeRead) {
@@ -60,6 +61,7 @@
     rest.splice(index, 0, source);
     model.blocks = rest;
     announcement = `Moved ${source.name} to position ${index + 1} of ${model.blocks.length}.`;
+    void tick().then(() => root.querySelector<HTMLButtonElement>(`[data-source-id="${id}"] .grip`)?.focus({ preventScroll: true }));
     changed();
   }
   function moveBy(index: number, delta: number) {
@@ -80,7 +82,7 @@
     if (model.expanded === source.id) model.expanded = model.blocks[0]?.id;
     announcement = `Removed ${source.name}.`;
     changed();
-    void tick().then(() => root.querySelector<HTMLButtonElement>('.grip')?.focus());
+    void tick().then(() => root.querySelectorAll<HTMLButtonElement>('.grip')[Math.min(removed?.index ?? 0, model.blocks.length - 1)]?.focus());
   }
   function undoRemove() {
     if (!removed) return;
@@ -93,7 +95,7 @@
     void tick().then(() => root.querySelectorAll<HTMLButtonElement>('.grip')[index]?.focus());
   }
   async function merge() {
-    if (saving || disabled || reason) return;
+    if (saving || disabled || blocked) return;
     changed();
     if (!model.filename.trim() || !/\.pdf$/i.test(model.filename.trim())) { error = 'Choose a file name ending in .pdf.'; return; }
     saving = true;
@@ -134,7 +136,7 @@
     <div class="submit-row">
       <span class="status" class:error={!!error} role="status">{#if error}{error}{:else if model.created}Created {model.created.name}{:else if reason}{reason}{:else}{pageCount} {pageCount === 1 ? 'page' : 'pages'}{/if}</span>
       {#if model.created?.href}<a href={model.created.href}>Open</a>{/if}
-      <button type="button" disabled={disabled || saving || !!reason} onclick={merge}>{saving ? 'Creating…' : submitLabel}</button>
+      <button type="button" disabled={disabled || saving || blocked} onclick={merge}>{saving ? 'Creating…' : submitLabel}</button>
     </div>
   </div>
   <span class="sr-only" aria-live="polite">{announcement}</span>

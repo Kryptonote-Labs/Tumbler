@@ -10,6 +10,7 @@ export type PdfMergeSource = {
   pages: string;
   /** Incomplete range text; the last valid selection stays visible until corrected. */
   draft?: string | undefined;
+  rangeErrorVisible?: boolean;
   none: boolean;
   loading: boolean;
   error: string;
