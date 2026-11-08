@@ -1,27 +1,28 @@
+import type { SpreadsheetOperationHost } from './spreadsheets.ts';
 import type { PdfOperationHost } from './pdf.ts';
 import { pdfExportInput, type PdfDeletePagesInput, type PdfExportInput } from './pdf-pages.ts';
 import type { PresentationOperationHost } from './presentations.ts';
-import { inspectInput, type InspectInput } from "@tumblerjs/word/operations";
-import { wordOperation, targetSchema } from "@tumblerjs/word/operations";
-import { z } from "zod";
-import { characterFormat } from "@tumblerjs/word/operations";
-export { characterFormat } from "@tumblerjs/word/operations";
+import { inspectInput, type InspectInput } from '@tumblerjs/word/operations';
+import { wordOperation, targetSchema } from '@tumblerjs/word/operations';
+import { z } from 'zod';
+import { characterFormat } from '@tumblerjs/word/operations';
+export { characterFormat } from '@tumblerjs/word/operations';
 export const textTarget = z.union([
   z.object({ text: z.string().min(1), within: z.string().min(1).optional() }).strict(),
   z
     .object({
-      kind: z.literal("range"),
+      kind: z.literal('range'),
       start: z.number().int().nonnegative(),
       end: z.number().int().nonnegative(),
     })
     .strict()
-    .refine((value) => value.end >= value.start, "end must be at least start"),
+    .refine((value) => value.end >= value.start, 'end must be at least start'),
 ]);
 const edit = z.object({ page: z.string().optional(), target: textTarget });
 export const readInput = z
   .object({
     offset: z.number().int().nonnegative().default(0),
-    region: z.string().default("body"),
+    region: z.string().default('body'),
     target: z.object({ start: z.string(), end: z.string() }).optional(),
   })
   .strict();
@@ -29,7 +30,7 @@ export const formatInput = edit
   .extend({
     format: characterFormat.refine(
       (value) => Object.keys(value).length > 0,
-      "Supply at least one format",
+      'Supply at least one format',
     ),
   })
   .strict();
@@ -38,7 +39,9 @@ export type ReadInput = z.infer<typeof readInput>;
 export const readImageInput = z
   .object({ id: z.string().min(1), region: z.string().default('body') })
   .strict();
-export const renderInput = z.object({ page: z.number().int().positive().safe().default(1) }).strict();
+export const renderInput = z
+  .object({ page: z.number().int().positive().safe().default(1) })
+  .strict();
 export type RenderInput = z.infer<typeof renderInput>;
 export type ReadImageInput = z.infer<typeof readImageInput>;
 export type FormatInput = z.infer<typeof formatInput>;
@@ -49,7 +52,7 @@ export const operationInput = z
 export type OperationInput = z.infer<typeof operationInput>;
 export const selectInput = z.object({ page: z.string().optional(), target: targetSchema }).strict();
 export type SelectInput = z.infer<typeof selectInput>;
-export interface OperationHost extends PresentationOperationHost, PdfOperationHost {
+export interface OperationHost extends PresentationOperationHost, SpreadsheetOperationHost, PdfOperationHost {
   deletePdfPages?(document: string, input: PdfDeletePagesInput): Promise<unknown>;
   exportPdf?(document: string, input: PdfExportInput): Promise<unknown>;
   render?(document: string, input: RenderInput): Promise<unknown>;
@@ -65,7 +68,7 @@ export interface OperationHost extends PresentationOperationHost, PdfOperationHo
 export function defineOperation<S extends z.ZodType>(definition: {
   name: string;
   summary: string;
-  access: "read" | "edit";
+  access: 'read' | 'edit';
   input: S;
   run: (host: OperationHost, document: string, input: z.output<S>) => Promise<unknown>;
 }) {
@@ -107,66 +110,66 @@ export const operations = {
     },
   }),
   select: defineOperation({
-    name: "select",
-    summary: "Select an exact text, range, cell or table target from a read page. --input JSON.",
-    access: "read",
+    name: 'select',
+    summary: 'Select an exact text, range, cell or table target from a read page. --input JSON.',
+    access: 'read',
     input: selectInput,
     run: (host, document, input) => {
-      if (!host.select) throw new Error("Selection is unavailable on this host.");
+      if (!host.select) throw new Error('Selection is unavailable on this host.');
       return host.select(document, input);
     },
   }),
   unselect: defineOperation({
-    name: "unselect",
-    summary: "Collapse the current selection.",
-    access: "read",
+    name: 'unselect',
+    summary: 'Collapse the current selection.',
+    access: 'read',
     input: z.object({}).strict(),
     run: (host, document) => {
-      if (!host.unselect) throw new Error("Selection is unavailable on this host.");
+      if (!host.unselect) throw new Error('Selection is unavailable on this host.');
       return host.unselect(document);
     },
   }),
   inspect: defineOperation({
-    name: "inspect",
-    summary: "Inspect styles, objects, regions or geometry using --input JSON.",
-    access: "read",
+    name: 'inspect',
+    summary: 'Inspect styles, objects, regions or geometry using --input JSON.',
+    access: 'read',
     input: inspectInput,
     run: (host, document, input) => {
-      if (!host.inspect) throw new Error("Inspection is unavailable on this host.");
+      if (!host.inspect) throw new Error('Inspection is unavailable on this host.');
       return host.inspect(document, input);
     },
   }),
   read: defineOperation({
-    name: "read",
-    summary: "Read a bounded page and its revision handle",
-    access: "read",
+    name: 'read',
+    summary: 'Read a bounded page and its revision handle',
+    access: 'read',
     input: readInput,
     run: (host, document, input) => host.read(document, input),
   }),
   format: defineOperation({
-    name: "format",
-    summary: "Format one exact target from a read page",
-    access: "edit",
+    name: 'format',
+    summary: 'Format one exact target from a read page',
+    access: 'edit',
     input: formatInput,
     run: (host, document, { format, ...input }) =>
-      host.operate(document, { ...input, operation: { name: "format", input: format } }),
+      host.operate(document, { ...input, operation: { name: 'format', input: format } }),
   }),
   replace: defineOperation({
-    name: "replace",
-    summary: "Replace one exact target from a read page",
-    access: "edit",
+    name: 'replace',
+    summary: 'Replace one exact target from a read page',
+    access: 'edit',
     input: replaceInput,
     run: (host, document, input) =>
       host.operate(document, {
         page: input.page,
         target: input.target,
-        operation: { name: "replace", input: { value: input.value } },
+        operation: { name: 'replace', input: { value: input.value } },
       }),
   }),
   create: defineOperation({
-    name: "create",
-    summary: "Create a document without overwriting an existing file",
-    access: "edit",
+    name: 'create',
+    summary: 'Create a document without overwriting an existing file',
+    access: 'edit',
     input: z.object({}).strict(),
     run: (host, document) => host.create(document),
   }),
@@ -175,4 +178,4 @@ export const operations = {
 /** An uncertain write outcome must retry with the same operation identity. */
 export class OperationRecoveryError extends Error {}
 
-export { inspectInput, type InspectInput } from "@tumblerjs/word/operations";
+export { inspectInput, type InspectInput } from '@tumblerjs/word/operations';

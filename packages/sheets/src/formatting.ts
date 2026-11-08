@@ -1,5 +1,8 @@
 import {
   normalizeFormattingPatch,
+  OFFICE_THEME_COLOR_SLOTS,
+  type CellFill,
+  type CellTextRotation,
   type FormattingCapabilities,
   type FormattingChange,
   type FormattingPatch,
@@ -10,30 +13,23 @@ import {
   type TextUnderline,
   type VerticalAlignment,
 } from "@tumblerjs/core";
-import {
-  beginLosslessXmlEdit,
-  encodeXmlSource,
-  parseLosslessXml,
-  type LosslessXmlAttribute,
-  type LosslessXmlDocument,
-  type LosslessXmlElement,
-  type LosslessXmlNode,
-} from "@tumblerjs/ooxml";
-import { beginPackageTransaction, PartName } from "@tumblerjs/opc";
-import { formatCellReference, parseCellRange, type CellAddress, type CellRange } from "./references.ts";
-import {
-  readSpreadsheetStyles,
-  type SpreadsheetAlignment,
-  type SpreadsheetCellFormat,
-  type SpreadsheetColor,
-  type SpreadsheetFont,
-  type SpreadsheetStyles,
+import type { OpcPackage } from "@tumblerjs/opc";
+import { EXCEL_MAX_ROWS, EXCEL_MAX_COLUMNS, formatCellReference, parseCellRange, type CellAddress, type CellRange } from "./references.ts";
+import { restyleSpreadsheetRange } from "./sheet-restyle.ts";
+import type { SpreadsheetStyleTransform } from "./style-planner.ts";
+import type {
+  SpreadsheetAlignment,
+  SpreadsheetCellFormat,
+  SpreadsheetColor,
+  SpreadsheetFill,
+  SpreadsheetFont,
+  SpreadsheetStyles,
 } from "./styles.ts";
-import { openWorksheet, type SpreadsheetWorksheet } from "./worksheet.ts";
-import { SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";
+import type { SpreadsheetWorksheet } from "./worksheet.ts";
+import type { SpreadsheetSheet, SpreadsheetWorkbook } from "./workbook.ts";
 
-const STYLES_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
-export const MAX_FORMATTED_CELLS = 100_000;
+/** The worksheet grid is the formatting limit, matching Excel. */
+export const MAX_FORMATTED_CELLS = EXCEL_MAX_ROWS * EXCEL_MAX_COLUMNS;
 
 export const SPREADSHEET_FORMATTING_CAPABILITIES: FormattingCapabilities = Object.freeze({
   text: Object.freeze({
@@ -42,11 +38,19 @@ export const SPREADSHEET_FORMATTING_CAPABILITIES: FormattingCapabilities = Objec
     bold: true,
     italic: true,
     underline: Object.freeze(["none", "single", "double"] as const),
+    strike: true,
     color: true,
+    themeColor: true,
   }),
   block: Object.freeze({
     horizontalAlignment: Object.freeze(["start", "center", "end", "justify"] as const),
     verticalAlignment: Object.freeze(["top", "center", "bottom"] as const),
+  }),
+  cell: Object.freeze({
+    fill: true,
+    wrapText: true,
+    textRotation: Object.freeze({ minimum: -90, maximum: 90, vertical: true }),
+    indent: Object.freeze({ minimum: 0, maximum: 250 }),
   }),
 });
 
@@ -57,26 +61,37 @@ export function spreadsheetFormattingState(
   worksheet: SpreadsheetWorksheet,
   target: SpreadsheetFormattingTarget,
 ): FormattingState {
-  const range = normalizeRange(target);
-  validateRangeSize(range);
-  const formats = logicalCells(worksheet, range).map((address) => worksheet.cellStyle(address));
+  const formats = spreadsheetLogicalFormats(worksheet, target);
   const styles = worksheet.styles;
   const fonts = formats.map((format) => format.font);
   const alignments = formats.map((format) => format.alignment);
   return Object.freeze({
     text: Object.freeze({
-      fontSize: combine(fonts.map((font) => font.size), numberValue),
-      fontFamily: combine(fonts.map((font) => styles.resolveFontName(font)), stringValue),
-      bold: combine(fonts.map((font) => font.bold), directValue),
-      italic: combine(fonts.map((font) => font.italic), directValue),
-      underline: combine(fonts.map((font) => spreadsheetUnderline(font.underline)), directValue),
-      color: combine(fonts.map((font) => resolvedOfficeColor(styles, font.color)), directValue),
+      fontSize: combine(fonts.map((font) => styles.resolveFontSize(font))),
+      fontFamily: combine(fonts.map((font) => styles.resolveFontName(font))),
+      bold: combine(fonts.map((font) => font.bold)),
+      italic: combine(fonts.map((font) => font.italic)),
+      underline: combine(fonts.map((font) => spreadsheetUnderline(font.underline))),
+      strike: combine(fonts.map((font) => font.strike)),
+      color: combine(fonts.map((font) => officeColor(styles, font.color))),
     }),
     block: Object.freeze({
-      horizontalAlignment: combine(alignments.map((alignment) => officeHorizontalAlignment(alignment.horizontal)), directValue),
-      verticalAlignment: combine(alignments.map((alignment) => officeVerticalAlignment(alignment.vertical)), directValue),
+      horizontalAlignment: combine(alignments.map((alignment) => officeHorizontalAlignment(alignment.horizontal))),
+      verticalAlignment: combine(alignments.map((alignment) => officeVerticalAlignment(alignment.vertical))),
+    }),
+    cell: Object.freeze({
+      fill: combine(formats.map((format) => cellFill(styles, format.fill))),
+      wrapText: combine(alignments.map((alignment) => alignment.wrapText)),
+      textRotation: combine(alignments.map((alignment) => cellTextRotation(alignment.textRotation))),
+      indent: combine(alignments.map((alignment) => alignment.indent)),
     }),
   });
+}
+
+/** Effective formats of the logical cells in a range, sampling sparse whole-axis ranges. */
+export function spreadsheetLogicalFormats(worksheet: SpreadsheetWorksheet, target: SpreadsheetFormattingTarget): SpreadsheetCellFormat[] {
+  const range = normalizeSpreadsheetRange(target);
+  return logicalCells(worksheet, range).map((address) => worksheet.cellStyle(address));
 }
 
 /** Applies semantic formatting entirely in-memory and returns a new XLSX byte sequence. */
@@ -86,100 +101,53 @@ export function formatSpreadsheetCells(
   target: SpreadsheetFormattingTarget,
   input: FormattingPatch,
 ): Uint8Array {
-  if (!workbook.sheets.includes(sheet)) throw new TypeError("The sheet does not belong to this workbook.");
-  const range = normalizeRange(target);
-  validateRangeSize(range);
-  const patch = normalizeFormattingPatch(input);
-  const size=patch.text?.fontSize;
-  if(size && 'set' in size && (size.set<1 || size.set>409))throw new RangeError('Spreadsheet font sizes must be between 1 and 409 points.');
-  if (patch.text === undefined && patch.block === undefined) return workbook.package.archive.originalBytes();
-
-  const worksheet = openWorksheet(workbook, sheet);
-  const planner = new SpreadsheetStylePlanner(workbook, worksheet.styles);
-  const edits = cells(range).map((address) => ({
-    address,
-    styleIndex: planner.formatIndex(worksheet.effectiveStyleIndex(address) ?? 0, patch),
-  }));
-  if (edits.every(({ address, styleIndex }) => styleIndex === (worksheet.effectiveStyleIndex(address) ?? 0))) {
-    return workbook.package.archive.originalBytes();
-  }
-
-  const transaction = beginPackageTransaction(workbook.package);
-  planner.stage(transaction);
-  transaction.replacePart(sheet.partName, styleWorksheetCells(worksheet.document, workbook.conformance, edits));
-  return transaction.commit();
+  return formatSpreadsheetCellsPackage(workbook, sheet, target, input).archive.originalBytes();
 }
 
-class SpreadsheetStylePlanner {
-  readonly workbook: SpreadsheetWorkbook;
-  readonly source: SpreadsheetStyles;
-  readonly fonts: SpreadsheetFont[];
-  readonly formats: SpreadsheetCellFormat[];
-  readonly initialFontCount: number;
-  readonly initialFormatCount: number;
+/** Apply styles to native package members without rebuilding an XLSX. */
+export function formatSpreadsheetCellsPackage(
+  workbook: SpreadsheetWorkbook,
+  sheet: SpreadsheetSheet,
+  target: SpreadsheetFormattingTarget,
+  input: FormattingPatch,
+): OpcPackage {
+  const patch = normalizeFormattingPatch(input);
+  const size = patch.text?.fontSize;
+  if (size && "set" in size && (size.set < 1 || size.set > 409)) throw new RangeError("Spreadsheet font sizes must be between 1 and 409 points.");
+  if (patch.text === undefined && patch.block === undefined && patch.cell === undefined) return workbook.package;
+  return restyleSpreadsheetTarget(workbook, sheet, target, (format, normal) => applyFormattingPatch(format, normal, patch));
+}
 
-  constructor(workbook: SpreadsheetWorkbook, source = readSpreadsheetStyles(workbook)) {
-    this.workbook = workbook;
-    this.source = source;
-    this.fonts = [...source.fonts];
-    this.formats = [...source.cellFormats];
-    this.initialFontCount = this.fonts.length;
-    this.initialFormatCount = this.formats.length;
-  }
+/** Resets fonts, fills, borders, alignment and number formats to the Normal style; values stay. */
+export function clearSpreadsheetFormattingPackage(
+  workbook: SpreadsheetWorkbook,
+  sheet: SpreadsheetSheet,
+  target: SpreadsheetFormattingTarget,
+): OpcPackage {
+  return restyleSpreadsheetTarget(workbook, sheet, target, clearFormatting);
+}
 
-  formatIndex(baseIndex: number, patch: FormattingPatch): number {
-    const base = this.formats[baseIndex];
-    if (base === undefined) throw new SpreadsheetError("invalid_styles", `Cell format index ${baseIndex} does not exist.`);
-    const fallback = this.formats[0]!;
-    const font = applyFontPatch(base.font, fallback.font, patch);
-    const alignment = applyAlignmentPatch(base.alignment, fallback.alignment, patch);
-    const format = Object.freeze({ ...base, font, alignment });
-    const existing = this.formats.findIndex((candidate) => equal(candidate, format));
-    if (existing >= 0) return existing;
-    if (!this.fonts.some((candidate) => equal(candidate, font))) this.fonts.push(font);
-    this.formats.push(format);
-    return this.formats.length - 1;
-  }
+const clearFormatting: SpreadsheetStyleTransform = (_format, normal) => normal;
 
-  stage(transaction: ReturnType<typeof beginPackageTransaction>): void {
-    if (this.formats.length === this.initialFormatCount) return;
-    const newFonts = uniqueNewFonts(this.fonts, this.initialFontCount);
-    const fontIds = this.formats.map((format) => indexOf(this.fonts, format.font));
-    const addedFormats = this.formats.slice(this.initialFormatCount);
-    if (this.source.partName === undefined) {
-      const partName = availableStylesPartName(this.workbook);
-      transaction
-        .addPart(partName, STYLES_CONTENT_TYPE, encodeXmlSource(serializeStyleSheet(this.workbook, this.fonts, this.formats), "utf-8", false))
-        .addRelationship(this.workbook.part.name, {
-          id: availableRelationshipId(this.workbook),
-          type: stylesRelationshipType(this.workbook),
-          target: partName,
-        });
-      return;
-    }
-    const part = this.workbook.package.getPart(this.source.partName)!;
-    const document = parseLosslessXml(this.workbook.package.readPart(part));
-    const namespace = spreadsheetNamespace(this.workbook.conformance);
-    const fonts = child(document.root, namespace, "fonts");
-    const cellXfs = child(document.root, namespace, "cellXfs");
-    if (fonts === undefined || cellXfs === undefined) throw new SpreadsheetError("invalid_styles", "Editable styles require fonts and cellXfs collections.");
-    const editor = beginLosslessXmlEdit(document);
-    appendCollection(editor, document, fonts, newFonts.map(({ value }) => serializeFont(fonts.prefix, value)).join(""), this.fonts.length);
-    appendCollection(
-      editor,
-      document,
-      cellXfs,
-      addedFormats.map((format, offset) => serializeCellFormat(
-        cellXfs.prefix,
-        format,
-        fontIds[this.initialFormatCount + offset]!,
-        indexOf(this.source.fills, format.fill),
-        indexOf(this.source.borders, format.border),
-      )).join(""),
-      this.formats.length,
-    );
-    transaction.replacePart(this.source.partName, editor.commit().bytes);
-  }
+/** Validates a target and applies one transform to it. */
+export function restyleSpreadsheetTarget(
+  workbook: SpreadsheetWorkbook,
+  sheet: SpreadsheetSheet,
+  target: SpreadsheetFormattingTarget,
+  transform: SpreadsheetStyleTransform,
+): OpcPackage {
+  if (!workbook.sheets.includes(sheet)) throw new TypeError("The sheet does not belong to this workbook.");
+  return restyleSpreadsheetRange(workbook, sheet, normalizeSpreadsheetRange(target), transform);
+}
+
+function applyFormattingPatch(base: SpreadsheetCellFormat, normal: SpreadsheetCellFormat, patch: FormattingPatch): SpreadsheetCellFormat {
+  const fill = patch.cell?.fill;
+  return Object.freeze({
+    ...base,
+    font: applyFontPatch(base.font, normal.font, patch),
+    fill: fill === undefined ? base.fill : "inherit" in fill ? normal.fill : spreadsheetFill(fill.set),
+    alignment: applyAlignmentPatch(base.alignment, normal.alignment, patch),
+  });
 }
 
 function applyFontPatch(base: SpreadsheetFont, fallback: SpreadsheetFont, patch: FormattingPatch): SpreadsheetFont {
@@ -187,10 +155,11 @@ function applyFontPatch(base: SpreadsheetFont, fallback: SpreadsheetFont, patch:
   if (text === undefined) return base;
   const font = {
     ...base,
-    size: changed(base.size, fallback.size, text.fontSize),
-    bold: changed(base.bold, fallback.bold, text.bold),
-    italic: changed(base.italic, fallback.italic, text.italic),
+    size: changed(base.size, fallback.size, text.fontSize, identity),
+    bold: changed(base.bold, fallback.bold, text.bold, identity),
+    italic: changed(base.italic, fallback.italic, text.italic, identity),
     underline: changed(base.underline, fallback.underline, text.underline, (value) => value === "none" ? undefined : value),
+    strike: changed(base.strike, fallback.strike, text.strike, identity),
     color: changed(base.color, fallback.color, text.color, spreadsheetColor),
   };
   if (text.fontFamily !== undefined) {
@@ -205,37 +174,90 @@ function applyAlignmentPatch(
   fallback: SpreadsheetAlignment,
   patch: FormattingPatch,
 ): SpreadsheetAlignment {
-  const block = patch.block;
-  if (block === undefined) return base;
-  return Object.freeze({
+  const { block, cell } = patch;
+  if (block === undefined && cell === undefined) return base;
+  const alignment = {
     ...base,
-    horizontal: changed(base.horizontal, fallback.horizontal, block.horizontalAlignment, spreadsheetHorizontalAlignment),
-    vertical: changed(base.vertical, fallback.vertical, block.verticalAlignment, spreadsheetVerticalAlignment),
-  });
+    horizontal: changed(base.horizontal, fallback.horizontal, block?.horizontalAlignment, spreadsheetHorizontalAlignment),
+    vertical: changed(base.vertical, fallback.vertical, block?.verticalAlignment, identity),
+    wrapText: changed(base.wrapText, fallback.wrapText, cell?.wrapText, identity),
+    textRotation: changed(base.textRotation, fallback.textRotation, cell?.textRotation, spreadsheetTextRotation),
+    indent: changed(base.indent, fallback.indent, cell?.indent, identity),
+  };
+  // Explicit alignment clears incompatible indentation; adding indentation switches to left.
+  if (alignment.indent > 0 && alignment.horizontal !== "left" && alignment.horizontal !== "right" && alignment.horizontal !== "distributed") {
+    if (block?.horizontalAlignment !== undefined && cell?.indent === undefined) alignment.indent = 0;
+    else alignment.horizontal = "left";
+  }
+  return Object.freeze(alignment);
 }
 
-function changed<TSource, TTarget = TSource>(
+function changed<TSource, TTarget>(
   current: TTarget,
   fallback: TTarget,
   change: FormattingChange<TSource> | undefined,
-  convert: (value: TSource) => TTarget = (value) => value as unknown as TTarget,
+  convert: (value: TSource) => TTarget,
 ): TTarget {
   if (change === undefined) return current;
   return "inherit" in change ? fallback : convert(change.set);
 }
 
-function spreadsheetColor(color: OfficeColor): SpreadsheetColor {
-  return color.type === "automatic"
-    ? Object.freeze({ type: "automatic", tint: 0 })
-    : Object.freeze({ type: "rgb", argb: `FF${color.value.slice(1)}`, tint: 0 });
+function identity<T>(value: T): T {
+  return value;
+}
+
+/** Converts a shared colour to SpreadsheetML, keeping theme slot and tint. */
+export function spreadsheetColor(color: OfficeColor): SpreadsheetColor {
+  if (color.type === "automatic") return Object.freeze({ type: "automatic", tint: 0 });
+  if (color.type === "rgb") return Object.freeze({ type: "rgb", argb: `FF${color.value.slice(1).toUpperCase()}`, tint: 0 });
+  return Object.freeze({ type: "theme", index: OFFICE_THEME_COLOR_SLOTS.indexOf(color.slot), tint: color.tint ?? 0 });
+}
+
+/** Reports source colour identity; indexed colours resolve to RGB. */
+export function officeColor(styles: SpreadsheetStyles, value: SpreadsheetColor | undefined): OfficeColor {
+  const argb = styles.resolveColor(value);
+  const rgb = argb === undefined ? undefined : `#${argb.slice(2)}`;
+  const slot = value?.type === "theme" ? OFFICE_THEME_COLOR_SLOTS[value.index] : undefined;
+  if (value !== undefined && slot !== undefined) {
+    return Object.freeze({
+      type: "theme",
+      slot,
+      ...(value.tint === 0 ? {} : { tint: value.tint }),
+      ...(rgb === undefined ? {} : { value: rgb }),
+    });
+  }
+  return rgb === undefined ? Object.freeze({ type: "automatic" }) : Object.freeze({ type: "rgb", value: rgb });
+}
+
+function spreadsheetFill(fill: CellFill): SpreadsheetFill {
+  return fill.type === "none"
+    ? Object.freeze({ patternType: "none", foreground: undefined, background: undefined })
+    : Object.freeze({
+      patternType: "solid",
+      foreground: spreadsheetColor(fill.color),
+      // Excel writes system background colour 64 behind solid fills.
+      background: Object.freeze({ type: "indexed", index: 64, tint: 0 }),
+    });
+}
+
+function cellFill(styles: SpreadsheetStyles, fill: SpreadsheetFill): CellFill | undefined {
+  if (fill.gradient) return undefined;
+  if (fill.patternType === undefined || fill.patternType === "none") return Object.freeze({ type: "none" });
+  if (fill.patternType !== "solid") return undefined;
+  return Object.freeze({ type: "solid", color: officeColor(styles, fill.foreground) });
+}
+
+/** SpreadsheetML stores clockwise angles as 91–180 and stacked text as 255. */
+function spreadsheetTextRotation(value: CellTextRotation): number {
+  return value === "vertical" ? 255 : value >= 0 ? value : 90 - value;
+}
+
+function cellTextRotation(value: number): CellTextRotation {
+  return value === 255 ? "vertical" : value <= 90 ? value : 90 - value;
 }
 
 function spreadsheetHorizontalAlignment(value: HorizontalAlignment): string {
   return value === "start" ? "left" : value === "end" ? "right" : value;
-}
-
-function spreadsheetVerticalAlignment(value: VerticalAlignment): string {
-  return value;
 }
 
 function officeHorizontalAlignment(value: string | undefined): HorizontalAlignment | undefined {
@@ -251,46 +273,28 @@ function spreadsheetUnderline(value: string | undefined): TextUnderline | undefi
   return value === undefined ? "none" : value === "single" || value === "double" ? value : undefined;
 }
 
-function resolvedOfficeColor(styles: SpreadsheetStyles, value: SpreadsheetColor | undefined): OfficeColor {
-  const argb = styles.resolveColor(value);
-  return argb === undefined
-    ? Object.freeze({ type: "automatic" })
-    : Object.freeze({ type: "rgb", value: `#${argb.slice(2)}` });
-}
-
-function combine<T, U>(values: readonly (T | undefined)[], present: (value: T) => FormattingValue<U>): FormattingValue<U> {
+/** Uniform values report `value`, differing values `mixed`, and unrepresentable values `unavailable`. */
+export function combine<T>(values: readonly (T | undefined)[]): FormattingValue<T> {
   if (values.length === 0) return Object.freeze({ state: "unavailable" });
   const first = values[0];
-  if (values.some((value) => !equal(value, first))) return Object.freeze({ state: "mixed" });
+  const key = JSON.stringify(first);
+  if (values.some((value) => JSON.stringify(value) !== key)) return Object.freeze({ state: "mixed" });
   if (first === undefined) return Object.freeze({ state: "unavailable" });
-  return present(first);
+  return Object.freeze({ state: "value", value: first });
 }
 
-function directValue<T>(value: T): FormattingValue<T> {
-  return Object.freeze({ state: "value", value });
-}
-
-function numberValue(value: number): FormattingValue<number> {
-  return directValue(value);
-}
-
-function stringValue(value: string): FormattingValue<string> {
-  return directValue(value);
-}
-
-function normalizeRange(target: SpreadsheetFormattingTarget): CellRange {
+/** Parses and orders a target range, rejecting ranges beyond the worksheet grid. */
+export function normalizeSpreadsheetRange(target: SpreadsheetFormattingTarget): CellRange {
   const range = typeof target === "string" ? parseCellRange(target) : parseCellRange(`${formatCellReference(target.start)}:${formatCellReference(target.end)}`);
-  return Object.freeze({
+  const normalized = Object.freeze({
     start: Object.freeze({ row: Math.min(range.start.row, range.end.row), column: Math.min(range.start.column, range.end.column) }),
     end: Object.freeze({ row: Math.max(range.start.row, range.end.row), column: Math.max(range.start.column, range.end.column) }),
   });
-}
-
-function validateRangeSize(range: CellRange): void {
-  const count = (range.end.row - range.start.row + 1) * (range.end.column - range.start.column + 1);
+  const count = (normalized.end.row - normalized.start.row + 1) * (normalized.end.column - normalized.start.column + 1);
   if (!Number.isSafeInteger(count) || count > MAX_FORMATTED_CELLS) {
     throw new RangeError(`A formatting operation cannot exceed ${MAX_FORMATTED_CELLS.toLocaleString("en-US")} cells.`);
   }
+  return normalized;
 }
 
 function cells(range: CellRange): CellAddress[] {
@@ -304,326 +308,23 @@ function cells(range: CellRange): CellAddress[] {
 /** Merged continuations are presentation coordinates; their top-left owner is the logical cell. */
 function logicalCells(worksheet: SpreadsheetWorksheet, range: CellRange): CellAddress[] {
   const result = new Map<string, CellAddress>();
-  for (const address of cells(range)) {
+  const area = (range.end.row-range.start.row+1)*(range.end.column-range.start.column+1);
+  let addresses: CellAddress[];
+  if (area > 100_000) {
+    // Sparse ranges vary only at stored rows, column-definition boundaries and stored cells.
+    const rows = new Set([range.start.row, range.end.row]);
+    const columns = new Set([range.start.column,range.end.column]);
+    for (const row of worksheet.rows) if (row.index >= range.start.row && row.index <= range.end.row) {
+      rows.add(row.index);
+      if (row.index < range.end.row) rows.add(row.index+1);
+    }
+    for (const col of worksheet.columns) for (const n of [col.min,col.max,col.max+1]) if (n >= range.start.column && n <= range.end.column) columns.add(n);
+    addresses = [...rows].flatMap(row => [...columns].map(column => ({row,column})));
+    for (const row of worksheet.rows) for (const cell of row.cells) if (cell.address.row >= range.start.row && cell.address.row <= range.end.row && cell.address.column >= range.start.column && cell.address.column <= range.end.column) addresses.push(cell.address);
+  } else addresses = cells(range);
+  for (const address of addresses) {
     const owner = worksheet.mergedRange(address)?.start ?? address;
     result.set(formatCellReference(owner), owner);
   }
   return [...result.values()];
-}
-
-function styleWorksheetCells(
-  document: LosslessXmlDocument,
-  conformance: "strict" | "transitional",
-  edits: readonly { readonly address: CellAddress; readonly styleIndex: number }[],
-): Uint8Array {
-  const namespace = spreadsheetNamespace(conformance);
-  const sheetData = child(document.root, namespace, "sheetData");
-  if (sheetData === undefined) throw new SpreadsheetError("invalid_worksheet", "A worksheet must contain sheetData before it can be formatted.");
-  const byRow = new Map<number, { readonly address: CellAddress; readonly styleIndex: number }[]>();
-  for (const edit of edits) {
-    const row = byRow.get(edit.address.row) ?? [];
-    row.push(edit);
-    byRow.set(edit.address.row, row);
-  }
-  const rows = children(sheetData, namespace, "row").map((element, index, all) => ({
-    index: Number(attribute(element, "r")?.value ?? inferredRowIndex(all, index)),
-    element,
-  }));
-  const editor = beginLosslessXmlEdit(document);
-  const missing: { row: number; markup: string }[] = [];
-  for (const [rowIndex, rowEdits] of byRow) {
-    const row = rows.find((candidate) => candidate.index === rowIndex)?.element;
-    if (row === undefined) {
-      missing.push({ row: rowIndex, markup: serializeNewStyledRow(sheetData.prefix, rowIndex, rowEdits) });
-    } else {
-      editor.replaceElementMarkup(row, serializeStyledRow(document, row, namespace, rowEdits));
-    }
-  }
-  if (missing.length > 0) {
-    missing.sort((left, right) => left.row - right.row);
-    if (sheetData.selfClosing) {
-      const start = document.source.slice(sheetData.startTagSpan.start, sheetData.startTagSpan.end).replace(/\/\s*>$/, ">");
-      editor.replaceElementMarkup(sheetData, `${start}${missing.map((item) => item.markup).join("")}</${sheetData.qualified}>`);
-    } else {
-      const groups = new Map<LosslessXmlElement | undefined, string[]>();
-      for (const item of missing) {
-        const next = rows.find((row) => row.index > item.row)?.element;
-        const markup = groups.get(next) ?? [];
-        markup.push(item.markup);
-        groups.set(next, markup);
-      }
-      for (const [next, markup] of groups) {
-        if (next === undefined) editor.appendMarkup(sheetData, markup.join(""));
-        else editor.insertMarkupBefore(next, markup.join(""));
-      }
-    }
-  }
-  updateDimension(editor, document, namespace, sheetData, edits.map((edit) => edit.address));
-  return editor.commit().bytes;
-}
-
-function serializeStyledRow(
-  document: LosslessXmlDocument,
-  row: LosslessXmlElement,
-  namespace: string,
-  edits: readonly { readonly address: CellAddress; readonly styleIndex: number }[],
-): string {
-  const editByColumn = new Map(edits.map((edit) => [edit.address.column, edit.styleIndex]));
-  const existing = children(row, namespace, "c").map((cell, index, all) => ({
-    column: parseCellColumn(cell, edits[0]!.address.row, index, all),
-    markup: document.source.slice(cell.span.start, cell.span.end),
-    element: cell,
-  }));
-  const byColumn = new Map(existing.map((cell) => [cell.column, cell]));
-  const columns = [...new Set([...byColumn.keys(), ...editByColumn.keys()])].sort((left, right) => left - right);
-  const cellsMarkup = columns.map((column) => {
-    const source = byColumn.get(column);
-    const styleIndex = editByColumn.get(column);
-    return styleIndex === undefined ? source!.markup : source === undefined
-      ? serializeNewStyledCell(row.prefix, { row: edits[0]!.address.row, column }, styleIndex)
-      : setCellStyle(document, source.element, styleIndex);
-  }).join("");
-  const nonCells = row.children
-    .filter((node) => node.kind !== "element" || node.namespaceUri !== namespace || node.localName !== "c")
-    .map((node) => sourceForNode(document, node))
-    .join("");
-  const start = document.source.slice(row.startTagSpan.start, row.startTagSpan.end).replace(/\/\s*>$/, ">");
-  return `${start}${cellsMarkup}${nonCells}</${row.qualified}>`;
-}
-
-function serializeNewStyledRow(
-  prefix: string,
-  row: number,
-  edits: readonly { readonly address: CellAddress; readonly styleIndex: number }[],
-): string {
-  return `<${qualified(prefix, "row")} r="${row}">${[...edits]
-    .sort((left, right) => left.address.column - right.address.column)
-    .map((edit) => serializeNewStyledCell(prefix, edit.address, edit.styleIndex)).join("")}</${qualified(prefix, "row")}>`;
-}
-
-function serializeNewStyledCell(prefix: string, address: CellAddress, styleIndex: number): string {
-  return `<${qualified(prefix, "c")} r="${formatCellReference(address)}" s="${styleIndex}"/>`;
-}
-
-function setCellStyle(document: LosslessXmlDocument, cell: LosslessXmlElement, styleIndex: number): string {
-  let start = document.source.slice(cell.startTagSpan.start, cell.startTagSpan.end);
-  const style = attribute(cell, "s");
-  if (style === undefined) {
-    const offset = start.search(/\/?>\s*$/);
-    start = `${start.slice(0, offset)} s="${styleIndex}"${start.slice(offset)}`;
-  } else {
-    const relativeStart = style.valueSpan.start - cell.startTagSpan.start;
-    const relativeEnd = style.valueSpan.end - cell.startTagSpan.start;
-    start = `${start.slice(0, relativeStart)}${styleIndex}${start.slice(relativeEnd)}`;
-  }
-  return `${start}${document.source.slice(cell.startTagSpan.end, cell.span.end)}`;
-}
-
-function parseCellColumn(
-  cell: LosslessXmlElement,
-  row: number,
-  index: number,
-  siblings: readonly LosslessXmlElement[],
-): number {
-  const reference = attribute(cell, "r")?.value;
-  if (reference !== undefined) return parseCellRange(reference).start.column;
-  if (index === 0) return 1;
-  return parseCellColumn(siblings[index - 1]!, row, index - 1, siblings) + 1;
-}
-
-function inferredRowIndex(rows: readonly LosslessXmlElement[], index: number): number {
-  if (index === 0) return 1;
-  return Number(attribute(rows[index - 1]!, "r")?.value ?? inferredRowIndex(rows, index - 1)) + 1;
-}
-
-function updateDimension(
-  editor: ReturnType<typeof beginLosslessXmlEdit>,
-  document: LosslessXmlDocument,
-  namespace: string,
-  sheetData: LosslessXmlElement,
-  addresses: readonly CellAddress[],
-): void {
-  const dimension = child(document.root, namespace, "dimension");
-  const previous = dimension === undefined || attribute(dimension, "ref") === undefined
-    ? undefined
-    : parseCellRange(attribute(dimension, "ref")!.value);
-  const points = [...addresses, ...(previous === undefined ? [] : [previous.start, previous.end])];
-  const range = {
-    start: { row: Math.min(...points.map((point) => point.row)), column: Math.min(...points.map((point) => point.column)) },
-    end: { row: Math.max(...points.map((point) => point.row)), column: Math.max(...points.map((point) => point.column)) },
-  };
-  const value = range.start.row === range.end.row && range.start.column === range.end.column
-    ? formatCellReference(range.start)
-    : `${formatCellReference(range.start)}:${formatCellReference(range.end)}`;
-  if (dimension === undefined) editor.insertMarkupBefore(sheetData, `<${qualified(document.root.prefix, "dimension")} ref="${value}"/>`);
-  else {
-    const reference = attribute(dimension, "ref");
-    if (reference === undefined) editor.insertAttribute(dimension, "ref", value);
-    else editor.setAttribute(reference, value);
-  }
-}
-
-function uniqueNewFonts(fonts: readonly SpreadsheetFont[], initial: number): readonly { readonly value: SpreadsheetFont }[] {
-  const result: { value: SpreadsheetFont }[] = [];
-  for (const font of fonts.slice(initial)) {
-    if (fonts.slice(0, initial).some((candidate) => equal(candidate, font)) || result.some((candidate) => equal(candidate.value, font))) continue;
-    result.push({ value: font });
-  }
-  return result;
-}
-
-function appendCollection(
-  editor: ReturnType<typeof beginLosslessXmlEdit>,
-  document: LosslessXmlDocument,
-  collection: LosslessXmlElement,
-  markup: string,
-  count: number,
-): void {
-  if (markup !== "") {
-    if (collection.selfClosing) {
-      const start = setRawAttribute(
-        document.source.slice(collection.startTagSpan.start, collection.startTagSpan.end),
-        "count",
-        String(count),
-      ).replace(/\/\s*>$/, ">");
-      editor.replaceElementMarkup(collection, `${start}${markup}</${collection.qualified}>`);
-      return;
-    }
-    editor.appendMarkup(collection, markup);
-  }
-  const countAttribute = attribute(collection, "count");
-  if (countAttribute === undefined) editor.insertAttribute(collection, "count", String(count));
-  else editor.setAttribute(countAttribute, String(count));
-}
-
-function setRawAttribute(startTag: string, name: string, value: string): string {
-  const expression = new RegExp(`(\\s${name}\\s*=\\s*["'])[^"']*(["'])`);
-  if (expression.test(startTag)) return startTag.replace(expression, `$1${value}$2`);
-  const offset = startTag.search(/\/?>\s*$/);
-  return `${startTag.slice(0, offset)} ${name}="${value}"${startTag.slice(offset)}`;
-}
-
-function serializeStyleSheet(
-  workbook: SpreadsheetWorkbook,
-  fonts: readonly SpreadsheetFont[],
-  formats: readonly SpreadsheetCellFormat[],
-): string {
-  const namespace = spreadsheetNamespace(workbook.conformance);
-  const prefix = "";
-  return `<styleSheet xmlns="${namespace}"><fonts count="${fonts.length}">${fonts.map((font) => serializeFont(prefix, font)).join("")}</fonts>` +
-    `<fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders>` +
-    `<cellXfs count="${formats.length}">${formats.map((format) => serializeCellFormat(prefix, format, indexOf(fonts, format.font), 0, 0)).join("")}</cellXfs></styleSheet>`;
-}
-
-function serializeFont(prefix: string, font: SpreadsheetFont): string {
-  const item = (name: string, value?: string) => value === undefined
-    ? `<${qualified(prefix, name)}/>`
-    : `<${qualified(prefix, name)} val="${escapeAttribute(value)}"/>`;
-  return `<${qualified(prefix, "font")}>` +
-    (font.name === undefined ? "" : item("name", font.name)) +
-    (font.size === undefined ? "" : item("sz", String(font.size))) +
-    (font.bold ? item("b") : "") +
-    (font.italic ? item("i") : "") +
-    (font.underline === undefined ? "" : item("u", font.underline)) +
-    (font.strike ? item("strike") : "") +
-    (font.color === undefined ? "" : serializeColor(prefix, "color", font.color)) +
-    (font.scheme === undefined ? "" : item("scheme", font.scheme)) +
-    `</${qualified(prefix, "font")}>`;
-}
-
-function serializeColor(prefix: string, name: string, color: SpreadsheetColor): string {
-  const tint = color.tint === 0 ? "" : ` tint="${color.tint}"`;
-  const property = color.type === "automatic" ? ' auto="1"' : color.type === "rgb"
-    ? ` rgb="${color.argb}"` : color.type === "indexed" ? ` indexed="${color.index}"` : ` theme="${color.index}"`;
-  return `<${qualified(prefix, name)}${property}${tint}/>`;
-}
-
-function serializeCellFormat(
-  prefix: string,
-  format: SpreadsheetCellFormat,
-  fontId: number,
-  fillId: number,
-  borderId: number,
-): string {
-  const alignment = serializeAlignment(prefix, format.alignment);
-  return `<${qualified(prefix, "xf")} numFmtId="${format.numberFormatId}" fontId="${fontId}" fillId="${fillId}" borderId="${borderId}" applyFont="1" applyAlignment="1"${alignment === "" ? "/>" : `>${alignment}</${qualified(prefix, "xf")}>`}`;
-}
-
-function serializeAlignment(prefix: string, alignment: SpreadsheetAlignment): string {
-  const attributes = [
-    alignment.horizontal === undefined ? "" : ` horizontal="${escapeAttribute(alignment.horizontal)}"`,
-    alignment.vertical === undefined ? "" : ` vertical="${escapeAttribute(alignment.vertical)}"`,
-    alignment.wrapText ? ' wrapText="1"' : "",
-    alignment.shrinkToFit ? ' shrinkToFit="1"' : "",
-    alignment.textRotation === 0 ? "" : ` textRotation="${alignment.textRotation}"`,
-    alignment.indent === 0 ? "" : ` indent="${alignment.indent}"`,
-    alignment.readingOrder === 0 ? "" : ` readingOrder="${alignment.readingOrder}"`,
-  ].join("");
-  return attributes === "" ? "" : `<${qualified(prefix, "alignment")}${attributes}/>`;
-}
-
-function availableStylesPartName(workbook: SpreadsheetWorkbook): PartName {
-  const directory = workbook.part.name.value.slice(0, workbook.part.name.value.lastIndexOf("/") + 1);
-  for (let suffix = 0; ; suffix += 1) {
-    const name = PartName.parse(`${directory}styles${suffix === 0 ? "" : suffix}.xml`);
-    if (workbook.package.getPart(name) === undefined) return name;
-  }
-}
-
-function availableRelationshipId(workbook: SpreadsheetWorkbook): string {
-  const used = new Set(workbook.package.relationships(workbook.part.name).items.map((relationship) => relationship.id));
-  for (let suffix = 0; ; suffix += 1) {
-    const id = `tumblerStyles${suffix === 0 ? "" : suffix}`;
-    if (!used.has(id)) return id;
-  }
-}
-
-function stylesRelationshipType(workbook: SpreadsheetWorkbook): string {
-  return workbook.conformance === "strict"
-    ? "http://purl.oclc.org/ooxml/officeDocument/relationships/styles"
-    : "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
-}
-
-function spreadsheetNamespace(conformance: "strict" | "transitional"): string {
-  return conformance === "strict"
-    ? "http://purl.oclc.org/ooxml/spreadsheetml/main"
-    : "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-}
-
-function indexOf<T>(values: readonly T[], target: T): number {
-  const index = values.findIndex((value) => equal(value, target));
-  if (index < 0) throw new SpreadsheetError("invalid_styles", "A resolved style component is missing from its collection.");
-  return index;
-}
-
-function equal(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function child(parent: LosslessXmlElement, namespace: string, name: string): LosslessXmlElement | undefined {
-  return parent.children.find((node): node is LosslessXmlElement =>
-    node.kind === "element" && node.namespaceUri === namespace && node.localName === name
-  );
-}
-
-function children(parent: LosslessXmlElement, namespace: string, name: string): LosslessXmlElement[] {
-  return parent.children.filter((node): node is LosslessXmlElement =>
-    node.kind === "element" && node.namespaceUri === namespace && node.localName === name
-  );
-}
-
-function attribute(element: LosslessXmlElement, name: string): LosslessXmlAttribute | undefined {
-  return element.attributes.find((candidate) => candidate.namespaceUri === "" && candidate.localName === name);
-}
-
-function qualified(prefix: string, local: string): string {
-  return prefix === "" ? local : `${prefix}:${local}`;
-}
-
-function sourceForNode(document: LosslessXmlDocument, node: LosslessXmlNode): string {
-  return document.source.slice(node.span.start, node.span.end);
-}
-
-function escapeAttribute(value: string): string {
-  return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }

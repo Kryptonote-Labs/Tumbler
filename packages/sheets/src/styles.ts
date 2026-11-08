@@ -1,6 +1,7 @@
 import type { LosslessXmlDocument, LosslessXmlElement } from "@tumblerjs/ooxml";
 import {
   OOXML_NAMESPACES,
+  DEFAULT_OFFICE_THEME,
   parseLosslessXml,
   parseThemeColorScheme,
   parseThemeFontScheme,
@@ -44,6 +45,7 @@ export interface SpreadsheetFont {
 }
 
 export interface SpreadsheetFill {
+  readonly gradient?: true;
   readonly patternType: string | undefined;
   readonly foreground: SpreadsheetColor | undefined;
   readonly background: SpreadsheetColor | undefined;
@@ -59,6 +61,10 @@ export interface SpreadsheetBorder {
   readonly right: SpreadsheetBorderEdge;
   readonly top: SpreadsheetBorderEdge;
   readonly bottom: SpreadsheetBorderEdge;
+  /** Present only when the source border declares a diagonal line. */
+  readonly diagonal?: SpreadsheetBorderEdge;
+  readonly diagonalUp?: boolean;
+  readonly diagonalDown?: boolean;
 }
 
 export interface SpreadsheetAlignment {
@@ -78,6 +84,15 @@ export interface SpreadsheetCellFormat {
   readonly numberFormatId: number;
   readonly numberFormatCode: string | undefined;
   readonly alignment: SpreadsheetAlignment;
+  /** Present only when the cell format declares protection (ECMA-376-1 §18.8.33). */
+  readonly protection?: SpreadsheetProtection;
+  /** Present only when the cell format forces text entry with a quote prefix. */
+  readonly quotePrefix?: boolean;
+}
+
+export interface SpreadsheetProtection {
+  readonly locked: boolean;
+  readonly hidden: boolean;
 }
 
 /** Incremental formatting from a Styles-part dxf record (ECMA-376-1 §18.8.14). */
@@ -101,6 +116,9 @@ interface FormatRecord {
   readonly numberFormatId: number | undefined;
   readonly baseFormatId: number | undefined;
   readonly alignment: Partial<SpreadsheetAlignment> | undefined;
+  readonly protection: SpreadsheetProtection | undefined;
+  readonly quotePrefix: boolean | undefined;
+  readonly applyProtection: boolean | undefined;
   readonly applyFont: boolean | undefined;
   readonly applyFill: boolean | undefined;
   readonly applyBorder: boolean | undefined;
@@ -108,8 +126,11 @@ interface FormatRecord {
   readonly applyAlignment: boolean | undefined;
 }
 
+export const DEFAULT_SPREADSHEET_FONT_FAMILY = "Aptos";
+export const DEFAULT_SPREADSHEET_FONT_SIZE = 11;
+
 const DEFAULT_FONT: SpreadsheetFont = Object.freeze({
-  name: undefined, scheme: undefined, size: undefined, bold: false, italic: false, underline: undefined, strike: false, color: undefined,
+  name: DEFAULT_SPREADSHEET_FONT_FAMILY, scheme: undefined, size: DEFAULT_SPREADSHEET_FONT_SIZE, bold: false, italic: false, underline: undefined, strike: false, color: undefined,
 });
 const DEFAULT_FILL: SpreadsheetFill = Object.freeze({ patternType: undefined, foreground: undefined, background: undefined });
 const EMPTY_EDGE: SpreadsheetBorderEdge = Object.freeze({ style: undefined, color: undefined });
@@ -126,6 +147,8 @@ export class SpreadsheetStyles {
   readonly borders: readonly SpreadsheetBorder[];
   readonly cellFormats: readonly SpreadsheetCellFormat[];
   readonly differentialFormats: readonly SpreadsheetDifferentialFormat[];
+  /** Custom `numFmt` records by id; built-in ids without a record are absent. */
+  readonly numberFormats: ReadonlyMap<number, string>;
   readonly theme: ThemeColorScheme | undefined;
   readonly themeFonts: ThemeFontScheme | undefined;
   readonly indexedColors: readonly string[];
@@ -137,6 +160,7 @@ export class SpreadsheetStyles {
     borders: readonly SpreadsheetBorder[];
     cellFormats: readonly SpreadsheetCellFormat[];
     differentialFormats?: readonly SpreadsheetDifferentialFormat[];
+    numberFormats?: ReadonlyMap<number, string>;
     theme?: ThemeColorScheme;
     themeFonts?: ThemeFontScheme;
     indexedColors?: readonly string[];
@@ -147,6 +171,7 @@ export class SpreadsheetStyles {
     this.borders = Object.freeze([...input.borders]);
     this.cellFormats = Object.freeze([...input.cellFormats]);
     this.differentialFormats = Object.freeze([...(input.differentialFormats ?? [])]);
+    this.numberFormats = new Map(input.numberFormats ?? []);
     this.theme = input.theme;
     this.themeFonts = input.themeFonts;
     this.indexedColors = Object.freeze([...(input.indexedColors ?? DEFAULT_INDEXED_COLORS)]);
@@ -170,7 +195,7 @@ export class SpreadsheetStyles {
       argb = `FF${color.argb.slice(2)}`;
     } else if (color.type === "theme") {
       const slot = THEME_COLOR_SLOTS[color.index];
-      const rgb = slot === undefined ? undefined : this.theme?.color(slot);
+      const rgb = slot === undefined ? undefined : (this.theme ?? DEFAULT_OFFICE_THEME).color(slot);
       argb = rgb === undefined ? undefined : `FF${rgb}`;
     } else {
       argb = this.indexedColors[color.index];
@@ -178,11 +203,21 @@ export class SpreadsheetStyles {
     return argb === undefined ? undefined : tintArgb(argb, color.tint);
   }
 
-  resolveFontName(font: SpreadsheetFont, script: ThemeFontScript = "latin"): string | undefined {
+  /** Resolves omitted font properties through Normal before using the workbook theme or default. */
+  resolveFontName(font: SpreadsheetFont, script: ThemeFontScript = "latin"): string {
     const themed = font.scheme === "major" || font.scheme === "minor"
       ? this.themeFonts?.typeface(font.scheme, script)
       : undefined;
-    return themed ?? font.name;
+    const normal = this.cellFormats[0]?.font;
+    const normalTheme = normal?.scheme === "major" || normal?.scheme === "minor"
+      ? this.themeFonts?.typeface(normal.scheme, script)
+      : undefined;
+    return themed ?? font.name ?? normalTheme ?? normal?.name
+      ?? this.themeFonts?.typeface("minor", script) ?? DEFAULT_SPREADSHEET_FONT_FAMILY;
+  }
+
+  resolveFontSize(font: SpreadsheetFont): number {
+    return font.size ?? this.cellFormats[0]?.font.size ?? DEFAULT_SPREADSHEET_FONT_SIZE;
   }
 }
 
@@ -193,7 +228,7 @@ export function readSpreadsheetStyles(workbook: SpreadsheetWorkbook): Spreadshee
     ? "http://purl.oclc.org/ooxml/officeDocument/relationships/styles"
     : "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
   const relationships = workbook.package.relationships(workbook.part.name).byType(relationshipType);
-  if (relationships.length === 0) return defaultStyles();
+  if (relationships.length === 0) return defaultStyles(readTheme(workbook));
   if (relationships.length !== 1 || relationships[0]?.targetMode !== "Internal") {
     throw new SpreadsheetError("invalid_styles", "A workbook must not reference more than one internal Styles part.");
   }
@@ -234,6 +269,7 @@ export function readSpreadsheetStyles(workbook: SpreadsheetWorkbook): Spreadshee
     borders,
     cellFormats: resolved,
     differentialFormats,
+    numberFormats,
     ...(theme === undefined ? {} : { theme: theme.colors, themeFonts: theme.fonts }),
     ...(indexedColors === undefined ? {} : { indexedColors }),
   });
@@ -318,10 +354,14 @@ export function applySpreadsheetDifferentialFormats(
   return Object.freeze({ ...base, font, fill, border });
 }
 
-function defaultStyles(): SpreadsheetStyles {
+function defaultStyles(theme?: ReturnType<typeof readTheme>): SpreadsheetStyles {
+  const font = theme === undefined ? DEFAULT_FONT : Object.freeze({ ...DEFAULT_FONT,
+    name: theme.fonts.typeface("minor") ?? DEFAULT_SPREADSHEET_FONT_FAMILY, scheme: "minor" as const,
+  });
   return new SpreadsheetStyles({
-    fonts: [DEFAULT_FONT], fills: [DEFAULT_FILL], borders: [DEFAULT_BORDER],
-    cellFormats: [Object.freeze({ font: DEFAULT_FONT, fill: DEFAULT_FILL, border: DEFAULT_BORDER, numberFormatId: 0, numberFormatCode: undefined, alignment: DEFAULT_ALIGNMENT })],
+    fonts: [font], fills: [DEFAULT_FILL], borders: [DEFAULT_BORDER],
+    cellFormats: [Object.freeze({ font, fill: DEFAULT_FILL, border: DEFAULT_BORDER, numberFormatId: 0, numberFormatCode: undefined, alignment: DEFAULT_ALIGNMENT })],
+    ...(theme === undefined ? {} : { theme: theme.colors, themeFonts: theme.fonts }),
   });
 }
 
@@ -384,6 +424,7 @@ function parseFont(element: LosslessXmlElement, namespace: string): SpreadsheetF
 function parseFill(element: LosslessXmlElement, namespace: string): SpreadsheetFill {
   const pattern = child(element, namespace, "patternFill");
   return Object.freeze({
+    ...(child(element, namespace, "gradientFill") === undefined ? {} : { gradient: true as const }),
     patternType: pattern === undefined ? undefined : attr(pattern, "patternType"),
     foreground: pattern === undefined ? undefined : parseSpreadsheetColor(child(pattern, namespace, "fgColor")),
     background: pattern === undefined ? undefined : parseSpreadsheetColor(child(pattern, namespace, "bgColor")),
@@ -391,11 +432,17 @@ function parseFill(element: LosslessXmlElement, namespace: string): SpreadsheetF
 }
 
 function parseBorder(element: LosslessXmlElement, namespace: string): SpreadsheetBorder {
+  const diagonal = child(element, namespace, "diagonal");
+  const diagonalUp = optionalBoolean(attr(element, "diagonalUp"), "border diagonalUp");
+  const diagonalDown = optionalBoolean(attr(element, "diagonalDown"), "border diagonalDown");
   return Object.freeze({
     left: parseEdge(child(element, namespace, "left") ?? child(element, namespace, "start"), namespace),
     right: parseEdge(child(element, namespace, "right") ?? child(element, namespace, "end"), namespace),
     top: parseEdge(child(element, namespace, "top"), namespace),
     bottom: parseEdge(child(element, namespace, "bottom"), namespace),
+    ...(diagonal === undefined || attr(diagonal, "style") === undefined ? {} : { diagonal: parseEdge(diagonal, namespace) }),
+    ...(diagonalUp === undefined ? {} : { diagonalUp }),
+    ...(diagonalDown === undefined ? {} : { diagonalDown }),
   });
 }
 
@@ -467,12 +514,23 @@ function parseRecords(root: LosslessXmlElement, namespace: string, collection: s
     numberFormatId: optionalUnsigned(attr(element, "numFmtId"), "numFmtId"),
     baseFormatId: optionalUnsigned(attr(element, "xfId"), "xfId"),
     alignment: parseAlignment(child(element, namespace, "alignment")),
+    protection: parseProtection(child(element, namespace, "protection")),
+    quotePrefix: optionalBoolean(attr(element, "quotePrefix"), "quotePrefix"),
+    applyProtection: optionalBoolean(attr(element, "applyProtection"), "applyProtection"),
     applyFont: optionalBoolean(attr(element, "applyFont"), "applyFont"),
     applyFill: optionalBoolean(attr(element, "applyFill"), "applyFill"),
     applyBorder: optionalBoolean(attr(element, "applyBorder"), "applyBorder"),
     applyNumberFormat: optionalBoolean(attr(element, "applyNumberFormat"), "applyNumberFormat"),
     applyAlignment: optionalBoolean(attr(element, "applyAlignment"), "applyAlignment"),
   }));
+}
+
+function parseProtection(element: LosslessXmlElement | undefined): SpreadsheetProtection | undefined {
+  if (element === undefined) return undefined;
+  return Object.freeze({
+    locked: optionalBoolean(attr(element, "locked"), "protection locked") ?? true,
+    hidden: optionalBoolean(attr(element, "hidden"), "protection hidden") ?? false,
+  });
 }
 
 function parseAlignment(element: LosslessXmlElement | undefined): Partial<SpreadsheetAlignment> | undefined {
@@ -530,9 +588,12 @@ function resolveRecord(
   const fill = fills[fillId];
   const border = borders[borderId];
   if (font === undefined || fill === undefined || border === undefined) throw styleError("A cell format references a missing font, fill, or border.");
+  const protection = direct.applyProtection === false ? base?.protection : direct.protection ?? base?.protection;
   return Object.freeze({
     font, fill, border, numberFormatId,
     numberFormatCode: numberFormats.get(numberFormatId),
+    ...(protection === undefined ? {} : { protection }),
+    ...(direct.quotePrefix === undefined ? {} : { quotePrefix: direct.quotePrefix }),
     alignment: Object.freeze({
       ...DEFAULT_ALIGNMENT,
       ...(direct.applyAlignment === true

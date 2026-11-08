@@ -92,3 +92,26 @@ Tumbler is developed at
 [Kryptonote-Labs/Tumbler](https://github.com/Kryptonote-Labs/Tumbler).
 
 MIT licensed. See [LICENSE](LICENSE).
+
+## Native editing and commands
+
+`createSpreadsheet()` starts an editable workbook. `applySpreadsheetCommand()`
+validates cell, formula, range, formatting, worksheet, row, column, merge, and
+freeze actions through the exported `spreadsheetCommand` schema. Worksheet
+handles are decimal `sheetId` strings; names are also accepted. The `nameValue`
+field names new or renamed worksheets. `inspectSpreadsheet()` returns populated
+cells, formula sources, calculated values, and formatted display text for a
+requested worksheet range.
+
+Spreadsheet artifacts edit native OPC member resources. Cell edits, formatting,
+and structural actions do not serialize or compress an XLSX. Call `bytes()` only
+when exporting XLSX. `createSpreadsheetNativeArchive()` separates the native
+manifest and immutable binary resources so hosts can deduplicate them in SQLite
+or object storage. `encodeSpreadsheetNativeArchive()` frames those resources for
+transport, and `openSpreadsheetArtifact()` accepts either that native transport
+or an XLSX upload. A native conversion preserves an untouched upload's original
+XLSX bytes, including unrecognized package parts.
+
+Worksheet renames update formulas, named ranges, chart references, and validation
+formulas. Deleting a referenced worksheet writes `#REF!` formulas. Formula string
+literals and external workbook references retain their original text.

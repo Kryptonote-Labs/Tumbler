@@ -25,6 +25,7 @@ export function tumblerHelp(commandName = 'tumbler') {
     [
       `PDF: ${commandName} <document> pdf --help`,
       `Presentations: ${commandName} <document> slides --help`,
+      `Spreadsheets: ${commandName} <document> sheets --help`,
       `Usage: ${commandName} <document> <operation> [flags]`,
       `Discover: ${commandName} <document> <operation> --help (no document is opened).`,
       ...Object.values(operations)

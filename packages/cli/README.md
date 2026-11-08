@@ -1,7 +1,7 @@
 # Tumbler CLI
 
 Requires Bun 1.3 or later. Install with `bun add --global @tumblerjs/cli`.
-Supports Word `.docx`, presentation `.pptx` operations, and PDF page export/deletion. The package is public and included in the release graph.
+Supports Word `.docx`, PowerPoint `.pptx` and Excel `.xlsx` through their native document engines, plus PDF page export and deletion. The package is public and included in the release graph.
 
 ```sh
 tumbler create draft.docx
@@ -111,7 +111,7 @@ Hosts enforce permissions, revisions, asset resolution, receipts and commit boun
 `createWordOperations` accepts host-specific command validation. `openWordOperationDocument`
 adapts DOCX files to the same operations and reconciles against their source package.
 
-The Word registry does not include sheets or document section-layout authoring. Presentation commands use the separate `slides` namespace below.
+Presentation commands use the separate `slides` namespace and spreadsheet commands use `sheets`.
 
 ## Replacement text
 
@@ -169,6 +169,28 @@ File reads return a content-hash page handle. Writes require that handle, retain
 the sibling-lock convention and replace the file atomically. Hosted integrations
 implement `readPresentation` and `operatePresentation` on `OperationHost` to use
 the same syntax with their own permissions, revisions and durable receipts.
+
+## Spreadsheets
+
+```sh
+tumbler create budget.xlsx
+tumbler budget.xlsx sheets read --range A1:J30
+tumbler budget.xlsx sheets set-cell --page '<read handle>' --input '{"sheetId":"1","reference":"A1","value":42}'
+tumbler budget.xlsx sheets set-formula --page '<refreshed handle>' --input '{"sheetId":"1","reference":"A2","formula":"SUM(A1:A1)"}'
+tumbler budget.xlsx sheets --help
+```
+
+`@tumblerjs/sheets` owns spreadsheet commands and validation. The `sheets` namespace
+supports typed values, formulas, rectangular values, clearing, cell formatting, sheet
+management and batches. Use a returned sheet ID and A1 references. Literal strings remain
+text; formula commands take formula source without a leading equals sign. Reads include
+formula source and calculated results. Use `--sheet` and `--range` to read the desired cells.
+
+File edits require the content-hash read handle, use a sibling lock and atomically replace
+the XLSX file. Symlink paths update their target. Injected hosts implement optional
+`readSpreadsheet(document, {sheetId?, range?})` and
+`operateSpreadsheet(document, {page?, command})`; hosts own authorization and revision checks.
+`spreadsheetHelp(commandName, command?)` generates help from the same command schema.
 
 Find PDF text with the same search engine used by the viewer:
 

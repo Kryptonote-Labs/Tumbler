@@ -1,6 +1,6 @@
 <script lang="ts">
   import "./controls.css";
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import { createGridSelection, moveGridSelection, type GridDirection, type GridSelection } from "@tumblerjs/core";
   import type { ChartModel } from "@tumblerjs/charts";
   import {
@@ -9,6 +9,7 @@
     clearSpreadsheetTableFilter,
     calculateSpreadsheetWorksheet,
     formatCellReference,
+    parseCellReference,
     formatSpreadsheetCellValue,
     projectSpreadsheetTable,
     projectSpreadsheetConditionalStyles,
@@ -30,12 +31,14 @@
   } from "@tumblerjs/sheets";
   import { calculateSpreadsheetViewport, type SpreadsheetViewport } from "./spreadsheet-viewport.ts";
   import { composeSpreadsheetGridLayout, frozenAxisExtent, placeSpreadsheetDrawing } from "./spreadsheet-grid-layout.ts";
-  import { coerceSpreadsheetEditValue, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
+  import { coerceSpreadsheetEditValue, spreadsheetCellUsesTextFormat, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
   import { measureMaximumDigitWidth, spreadsheetFontShorthand } from "./spreadsheet-font-metrics.ts";
   import { spreadsheetCellContentCss, spreadsheetCellCss } from "./spreadsheet-cell-style.ts";
   import { spreadsheetTextOverflowWidth } from "./spreadsheet-text-overflow.ts";
   import { spreadsheetEmptyRegionStart } from "./spreadsheet-empty-region.ts";
   import { zoomGesture, type ZoomGesture } from "./zoom-gesture.ts";
+  import { spreadsheetScrollAxis } from "./spreadsheet-scroll.ts";
+  import { spreadsheetSelectionRects, spreadsheetSelectionRanges } from "./spreadsheet-selection.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
 
   interface RenderableChart {
@@ -50,11 +53,13 @@
     selection?: GridSelection;
     readonly onselectionchange?: (selection: GridSelection) => void;
     readonly onedit?: (edit: SpreadsheetGridEdit) => void;
+    readonly onclear?: (selection: GridSelection) => void;
     readonly onhyperlink?: (hyperlink: SpreadsheetHyperlink) => void;
     chartSelection?: number;
     readonly onchartselectionchange?: (anchorElementId: number | undefined) => void;
     /** Prevents cell edits while retaining selection and table view controls. */
     readonly readonly?: boolean;
+    readonly preserveInputFocus?: boolean;
     readonly scale?: number;
     readonly rowCount?: number;
     readonly columnCount?: number;
@@ -68,10 +73,12 @@
     selection = createGridSelection({ row: 1, column: 1 }),
     onselectionchange,
     onedit,
+    onclear,
     onhyperlink,
     chartSelection,
     onchartselectionchange,
     readonly = false,
+    preserveInputFocus = false,
     scale = $bindable(1),
     rowCount = EXCEL_MAX_ROWS,
     columnCount = EXCEL_MAX_COLUMNS,
@@ -84,16 +91,24 @@
   let viewportHeight = $state(500);
   let scrollTop = $state(0);
   let scrollLeft = $state(0);
+  let physicalScrollTop = $state(0);
+  let physicalScrollLeft = $state(0);
   let editing = $state<string>();
   let editor = $state<HTMLInputElement>();
   let draft = $state("");
+  let selectDraft = false;
+  let editingText = false;
   let maximumDigitWidth = $state(7);
   let stateWorksheet = $state<SpreadsheetWorksheet>();
   let tableStates = $state<Record<string, SpreadsheetTableViewState>>({});
   let tableMenu = $state<{ key: string; columnId: number; left: number; top: number }>();
   let selectingPointer = $state<number>();
+  let pointerSelection: GridSelection | undefined;
   let selectionDragged = $state(false);
   let suppressCellClick = $state(false);
+  const directions: Partial<Record<string, GridDirection>> = {
+    ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
+  };
   const rowHeaderWidth = 52;
   const columnHeaderHeight = 28;
   let viewCalculation = $derived(calculation === undefined ? undefined : calculateSpreadsheetWorksheet(worksheet, {
@@ -124,6 +139,8 @@
   });
   let rowGeometry = $derived(worksheet.rowGeometry(rowCount, projectedRows));
   let columnGeometry = $derived(worksheet.columnGeometry(columnCount, maximumDigitWidth));
+  const horizontalScroll = $derived(spreadsheetScrollAxis(columnGeometry.totalSize + rowHeaderWidth, viewportWidth));
+  const verticalScroll = $derived(spreadsheetScrollAxis(rowGeometry.totalSize + columnHeaderHeight, viewportHeight));
   let drawingRowGeometry = $derived(worksheet.rowGeometry(rowCount));
   let charts = $derived.by(() => {
     const frames = worksheet.drawing?.charts ?? [];
@@ -171,6 +188,7 @@
     columnGeometry,
   }, previousViewport));
   let layout = $derived(composeSpreadsheetGridLayout({ viewport, rowGeometry, columnGeometry, frozenRows, frozenColumns, merges: worksheet.merges }));
+  const selectionRects = $derived(spreadsheetSelectionRanges(selection.range,projectedRows).flatMap(range=>spreadsheetSelectionRects({range,rows:rowGeometry,columns:columnGeometry,scrollTop,scrollLeft,width:viewportWidth,height:viewportHeight,frozenRows,frozenColumns})));
   let maximumVisibleColumn = $derived(layout.columns.at(-1)?.index ?? 1);
   let emptyRegionStart = $derived(spreadsheetEmptyRegionStart(worksheet));
   let emptyCorner = $derived.by(() => {
@@ -201,8 +219,8 @@
   function emptyCellAt(event: MouseEvent) {
     if (scroller === undefined || !(event.target instanceof Element) || event.target.closest('.cell, .chart-frame')) return undefined;
     const rect = scroller.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / scale + scroller.scrollLeft - rowHeaderWidth;
-    const y = (event.clientY - rect.top) / scale + scroller.scrollTop - columnHeaderHeight;
+    const x = (event.clientX - rect.left) / scale + scrollLeft - rowHeaderWidth;
+    const y = (event.clientY - rect.top) / scale + scrollTop - columnHeaderHeight;
     if (x < 0 || y < 0) return undefined;
     const row = rowGeometry.indexAt(y);
     const column = columnGeometry.indexAt(x);
@@ -212,7 +230,6 @@
   function emptyPointerDown(event: PointerEvent) {
     const cell = emptyCellAt(event);
     if (cell === undefined) return;
-    scroller?.closest<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true });
     cellPointerDown(event, cell.row, cell.column);
   }
 
@@ -240,7 +257,8 @@
     void tick().then(() => {
       if (editing !== reference) return;
       editor?.focus();
-      editor?.select();
+      if (selectDraft) editor?.select();
+      else editor?.setSelectionRange(draft.length, draft.length);
     });
   });
 
@@ -248,12 +266,12 @@
     const styles = worksheet.styles;
     const font = styles.resolve(0).font;
     const name = styles.resolveFontName(font);
-    if (name === undefined || typeof document === "undefined") {
+    if (typeof document === "undefined") {
       maximumDigitWidth = 7;
       return;
     }
     let current = true;
-    const shorthand = spreadsheetFontShorthand(font, name);
+    const shorthand = spreadsheetFontShorthand({ ...font, size: styles.resolveFontSize(font) }, name);
     const refresh = () => {
       const context = document.createElement("canvas").getContext("2d");
       if (context === null || !current) return;
@@ -265,7 +283,7 @@
     return () => { current = false; };
   });
 
-  function select(row: number, column: number, extend = false) {
+  function select(row: number, column: number, extend = false, reveal = true) {
     if (chartSelection !== undefined) {
       chartSelection = undefined;
       onchartselectionchange?.(undefined);
@@ -277,6 +295,11 @@
       : merge === undefined
         ? createGridSelection(point)
         : createGridSelection(merge.start, merge.end);
+    pointerSelection = reveal ? undefined : selection;
+    if (pointerSelection) {
+      const pointer = pointerSelection;
+      void tick().then(() => { if (pointerSelection === pointer) pointerSelection = undefined; });
+    }
     onselectionchange?.(selection);
   }
 
@@ -286,30 +309,77 @@
     const rect = scroller.getBoundingClientRect();
     const x = (gesture.x - rect.left) / scale;
     const y = (gesture.y - rect.top) / scale;
-    const documentX = scroller.scrollLeft + x;
-    const documentY = scroller.scrollTop + y;
+    const documentX = scrollLeft + x;
+    const documentY = scrollTop + y;
     scale = Math.max(0.25, Math.min(3, scale * gesture.factor));
     await tick();
     if (scroller === undefined) return;
     // Frozen panes stay fixed; only anchor the scrolling portion of each axis.
-    if (x > rowHeaderWidth + frozenColumnsWidth) scroller.scrollLeft = documentX - (gesture.targetX - rect.left) / scale;
-    if (y > columnHeaderHeight + frozenRowsHeight) scroller.scrollTop = documentY - (gesture.targetY - rect.top) / scale;
-    scrollLeft = scroller.scrollLeft;
-    scrollTop = scroller.scrollTop;
+    if (x > rowHeaderWidth + frozenColumnsWidth) setScroll(documentX - (gesture.targetX - rect.left) / scale, scrollTop);
+    if (y > columnHeaderHeight + frozenRowsHeight) setScroll(scrollLeft, documentY - (gesture.targetY - rect.top) / scale);
+
   }
+
+  // Keyboard navigation and host-driven selection keep the focused cell in view.
+  $effect(() => {
+    const element = scroller;
+    const focus = editing ? parseCellReference(editing) : selection.focus;
+    if (!editing && pointerSelection && selection.focus.row === pointerSelection.focus.row && selection.focus.column === pointerSelection.focus.column && selection.anchor.row === pointerSelection.anchor.row && selection.anchor.column === pointerSelection.anchor.column) return;
+    if (element === undefined) return;
+    const row = visualRow(focus.row);
+    const x = columnGeometry.start(focus.column) + rowHeaderWidth;
+    const y = rowGeometry.start(row) + columnHeaderHeight;
+    const right = x + columnGeometry.size(focus.column);
+    const bottom = y + rowGeometry.size(row);
+    const width = viewportWidth, height = viewportHeight;
+    const frozenWidth = frozenColumnsWidth, frozenHeight = frozenRowsHeight;
+    const fixedColumns = frozenColumns, fixedRows = frozenRows;
+    untrack(() => {
+    if (focus.column > fixedColumns) {
+      if (x < scrollLeft + rowHeaderWidth + frozenWidth) setScroll(x - rowHeaderWidth - frozenWidth, scrollTop);
+      else if (right > scrollLeft + width) setScroll(right - width, scrollTop);
+    }
+    if (row > fixedRows) {
+      if (y < scrollTop + columnHeaderHeight + frozenHeight) setScroll(scrollLeft, y - columnHeaderHeight - frozenHeight);
+      else if (bottom > scrollTop + height) setScroll(scrollLeft, bottom - height);
+    }
+    });
+  });
 
   function handleScroll(event: Event) {
     const target = event.currentTarget as HTMLDivElement;
-    scrollTop = target.scrollTop;
-    scrollLeft = target.scrollLeft;
+    physicalScrollTop = target.scrollTop;
+    physicalScrollLeft = target.scrollLeft;
+    if (Math.abs(target.scrollTop - verticalScroll.physical(scrollTop)) > 1) scrollTop = verticalScroll.logical(target.scrollTop);
+    if (Math.abs(target.scrollLeft - horizontalScroll.physical(scrollLeft)) > 1) scrollLeft = horizontalScroll.logical(target.scrollLeft);
+  }
+
+
+  function setScroll(left: number, top: number) {
+    if (!scroller) return;
+    scrollLeft = horizontalScroll.logical(horizontalScroll.physical(left));
+    scrollTop = verticalScroll.logical(verticalScroll.physical(top));
+    scroller.scrollLeft = horizontalScroll.physical(scrollLeft);
+    scroller.scrollTop = verticalScroll.physical(scrollTop);
+    physicalScrollLeft = scroller.scrollLeft;
+    physicalScrollTop = scroller.scrollTop;
+  }
+
+  function handleWheel(event: WheelEvent) {
+    if (event.ctrlKey || event.metaKey || (!horizontalScroll.compressed && !verticalScroll.compressed)) return;
+    event.preventDefault();
+    const unit = event.deltaMode === 1 ? rowHeight : event.deltaMode === 2 ? viewportHeight : 1;
+    setScroll(scrollLeft + (event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX) * unit / scale,
+      scrollTop + (event.shiftKey && !event.deltaX ? 0 : event.deltaY) * unit / scale);
   }
 
   function cellPointerDown(event: PointerEvent, row: number, column: number) {
     if (event.pointerType !== "mouse" || event.button !== 0 || interactivePointerTarget(event)) return;
     event.preventDefault();
+    if (!preserveInputFocus) scroller?.closest<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true });
     selectingPointer = event.pointerId;
     selectionDragged = false;
-    select(row, column, event.shiftKey);
+    select(row, column, event.shiftKey, false);
   }
 
   function cellPointerEnter(event: PointerEvent, row: number, column: number) {
@@ -329,7 +399,7 @@
 
   function cellClick(event: MouseEvent, row: number, column: number) {
     if (suppressCellClick) return;
-    select(row, column, event.shiftKey);
+    select(row, column, event.shiftKey, false);
   }
 
   function interactivePointerTarget(event: PointerEvent): boolean {
@@ -337,12 +407,14 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    const directions: Partial<Record<string, GridDirection>> = {
-      ArrowUp: "up",
-      ArrowDown: "down",
-      ArrowLeft: "left",
-      ArrowRight: "right",
-    };
+    if (event.isComposing || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLButtonElement) return;
+    if (event.key === "Tab") {
+      event.preventDefault();
+      selection = moveGridSelection(selection, event.shiftKey ? "left" : "right", { rows: rowCount, columns: columnCount });
+      onselectionchange?.(selection);
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
     const direction = directions[event.key];
     if (direction !== undefined) {
       event.preventDefault();
@@ -351,33 +423,47 @@
         selection = moveGridSelection(selection, direction, { rows: rowCount, columns: columnCount }, { extend: event.shiftKey });
         onselectionchange?.(selection);
       }
-    } else if (event.key === "Enter") {
+    } else if (event.key === "Enter" || event.key === "F2") {
       if (editable) {
         event.preventDefault();
-        beginEdit(selection.focus.row, selection.focus.column);
+        beginEdit(selection.anchor.row, selection.anchor.column);
       }
-    } else if (event.key === "Delete" || event.key === "Backspace") {
+    } else if (event.key === "Backspace") {
       if (editable) {
         event.preventDefault();
-        const owner = worksheet.mergedRange(selection.focus)?.start ?? selection.focus;
-        onedit?.({ reference: formatCellReference(owner), value: null });
+        beginEdit(selection.anchor.row, selection.anchor.column, "");
       }
+    } else if (event.key === "Delete") {
+      if (editable) {
+        event.preventDefault();
+        if (onclear !== undefined) onclear(selection);
+        else {
+          const owner = worksheet.mergedRange(selection.focus)?.start ?? selection.focus;
+          onedit?.({ reference: formatCellReference(owner), value: null });
+        }
+      }
+    } else if (editable && event.key.length === 1) {
+      event.preventDefault();
+      beginEdit(selection.anchor.row, selection.anchor.column, event.key);
     }
   }
 
-  function beginEdit(row: number, column: number) {
+  function beginEdit(row: number, column: number, initial?: string) {
     if (!editable) return;
     const owner = worksheet.mergedRange({ row, column })?.start ?? { row, column };
     const reference = formatCellReference(owner);
+    selectDraft = initial === undefined;
+    editingText = initial === undefined;
     editing = reference;
-    draft = displayValue(worksheet.cell(reference)?.value);
+    const cell = worksheet.cell(reference);
+    draft = initial ?? (cell?.formula === undefined ? displayValue(cell?.value) : `=${cell.formula}`);
   }
 
   function cellKeydown(event: KeyboardEvent, row: number, column: number) {
     if (event.target !== event.currentTarget) return;
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      select(row, column, event.shiftKey);
+      select(row, column, event.shiftKey, false);
     }
   }
 
@@ -385,18 +471,37 @@
     const reference = editing;
     editing = undefined;
     if (commit && reference !== undefined) {
-      onedit?.({ reference, value: coerceSpreadsheetEditValue(draft, worksheet.cell(reference)?.value) });
+      const asText = spreadsheetCellUsesTextFormat(worksheet, reference);
+      onedit?.({ reference, value: coerceSpreadsheetEditValue(draft, worksheet.cell(reference)?.value, asText), ...(asText ? { kind: "value" as const } : {}) });
     }
   }
 
   function inputKeydown(event: KeyboardEvent) {
     event.stopPropagation();
-    if (event.key === "Enter") {
+    if (event.isComposing) return;
+    if (event.key === "F2") {
       event.preventDefault();
+      editingText = true;
+      return;
+    }
+    const arrow = directions[event.key];
+    if (arrow !== undefined && editingText) {
+      // Single-line inputs have no vertical caret movement; never scroll the sheet while editing text.
+      if (arrow === "up" || arrow === "down") event.preventDefault();
+      return;
+    }
+    if (event.key === "Enter" || event.key === "Tab" || arrow !== undefined) {
+      event.preventDefault();
+      const origin = editing;
       finishEdit(true);
+      if (origin !== undefined) selection = createGridSelection(parseCellReference(origin));
+      selection = moveGridSelection(selection, arrow ?? (event.key === "Tab" ? (event.shiftKey ? "left" : "right") : (event.shiftKey ? "up" : "down")), { rows: rowCount, columns: columnCount });
+      onselectionchange?.(selection);
+      void tick().then(() => scroller?.closest<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true }));
     } else if (event.key === "Escape") {
       event.preventDefault();
       finishEdit(false);
+      void tick().then(() => scroller?.closest<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true }));
     }
   }
 
@@ -549,14 +654,18 @@
   <div
     class:selected={selected(sourceRow, column)}
     class:focused={selection.focus.row === sourceRow && selection.focus.column === column}
+    class:active={selection.anchor.row === sourceRow && selection.anchor.column === column}
     class:table-header={header !== undefined}
     class:text-overflow={overflowWidth !== undefined}
     class="cell"
     role="gridcell"
+    data-reference={reference}
+    aria-rowindex={sourceRow}
+    aria-colindex={column}
     tabindex="-1"
     aria-selected={selected(sourceRow, column)}
-    style:left={`${left}px`}
-    style:top={`${top}px`}
+    style:left={`${zIndex === 1 ? left - scrollLeft + physicalScrollLeft : left}px`}
+    style:top={`${zIndex === 1 ? top - scrollTop + physicalScrollTop : top}px`}
     style:width={`${width}px`}
     style:height={`${height}px`}
     style:z-index={overflowWidth === undefined ? zIndex : zIndex + 1}
@@ -572,6 +681,7 @@
         bind:this={editor}
         bind:value={draft}
         autocomplete="off"
+        onpointerdown={() => { editingText = true; }}
         onkeydown={inputKeydown}
         onblur={() => finishEdit(true)}
         aria-label={`Edit ${reference}`}
@@ -630,11 +740,10 @@
   </button>
 {/snippet}
 
-<div class="grid-viewport">
+<div class="grid-viewport" use:zoomGesture={zoomGrid}>
 <div
   class="tumbler-grid"
   style={`transform:scale(${scale});width:${100 / scale}%;height:${100 / scale}%`}
-  use:zoomGesture={zoomGrid}
   role="grid"
   aria-rowcount={rowCount}
   aria-colcount={columnCount}
@@ -647,31 +756,38 @@
     bind:clientWidth={viewportWidth}
     bind:clientHeight={viewportHeight}
     onscroll={handleScroll}
+    onwheel={handleWheel}
   >
     <!-- Blank cells use the grid's keyboard handler and coordinate-based pointer selection. -->
     <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-    <div class="canvas" style:width={`${viewport.totalWidth + rowHeaderWidth}px`} style:height={`${viewport.totalHeight + columnHeaderHeight}px`}
+    <div class="canvas" style:width={`${horizontalScroll.extent}px`} style:height={`${verticalScroll.extent}px`}
       onpointerdown={emptyPointerDown} onpointermove={emptyPointerMove}
       onclick={(event) => { const cell = emptyCellAt(event); if (cell !== undefined) cellClick(event, cell.row, cell.column); }}
       ondblclick={(event) => { const cell = emptyCellAt(event); if (cell !== undefined) beginEdit(cell.row, cell.column); }}
     >
       {#if emptyCorner !== undefined}
-        <svg class="empty-grid" aria-hidden="true" width={emptyCorner.width} height={emptyCorner.height} style:left={`${rowHeaderWidth + emptyCorner.left}px`} style:top={`${columnHeaderHeight + emptyCorner.top}px`}>
+        <svg class="empty-grid" aria-hidden="true" width={emptyCorner.width} height={emptyCorner.height} style:left={`${rowHeaderWidth + emptyCorner.left - scrollLeft + physicalScrollLeft}px`} style:top={`${columnHeaderHeight + emptyCorner.top - scrollTop + physicalScrollTop}px`}>
           <path d={emptyCorner.lines} />
         </svg>
-        {@const startRow = Math.max(selection.range.start.row, emptyRegionStart!.row + 1, frozenRows + 1)}
-        {@const startColumn = Math.max(selection.range.start.column, emptyRegionStart!.column + 1, frozenColumns + 1)}
-        {#if startRow <= selection.range.end.row && startColumn <= selection.range.end.column}
-          <div class="empty-selection" style:left={`${rowHeaderWidth + columnGeometry.start(startColumn)}px`} style:top={`${columnHeaderHeight + rowGeometry.start(startRow)}px`}
-            style:width={`${columnGeometry.start(selection.range.end.column) + columnGeometry.size(selection.range.end.column) - columnGeometry.start(startColumn)}px`}
-            style:height={`${rowGeometry.start(selection.range.end.row) + rowGeometry.size(selection.range.end.row) - rowGeometry.start(startRow)}px`}></div>
+        {@const startRow = Math.max(selection.range.start.row, emptyRegionStart!.row + 1, frozenRows + 1, layout.rows[0]?.index ?? 1)}
+        {@const startColumn = Math.max(selection.range.start.column, emptyRegionStart!.column + 1, frozenColumns + 1, layout.columns[0]?.index ?? 1)}
+        {@const endRow = Math.min(selection.range.end.row, layout.rows.at(-1)?.index ?? startRow)}
+        {@const endColumn = Math.min(selection.range.end.column, layout.columns.at(-1)?.index ?? startColumn)}
+        {#if startRow <= endRow && startColumn <= endColumn}
+          <div class="empty-selection" style:left={`${rowHeaderWidth + columnGeometry.start(startColumn) - scrollLeft + physicalScrollLeft}px`} style:top={`${columnHeaderHeight + rowGeometry.start(startRow) - scrollTop + physicalScrollTop}px`}
+            style:width={`${columnGeometry.start(endColumn) + columnGeometry.size(endColumn) - columnGeometry.start(startColumn)}px`}
+            style:height={`${rowGeometry.start(endRow) + rowGeometry.size(endRow) - rowGeometry.start(startRow)}px`}></div>
         {/if}
-        {#if isEmptyCorner(selection.focus.row, selection.focus.column)}
+        {#if isEmptyCorner(selection.focus.row, selection.focus.column) && selection.focus.row >= (layout.rows[0]?.index ?? 1) && selection.focus.row <= (layout.rows.at(-1)?.index ?? 0) && selection.focus.column >= (layout.columns[0]?.index ?? 1) && selection.focus.column <= (layout.columns.at(-1)?.index ?? 0)}
           {@const focus = selection.focus}
           <div class="empty-corner-cell" class:empty-focus={editing === undefined}>
             {@render gridCell(formatCellReference(focus), focus.row, focus.column, rowHeaderWidth + columnGeometry.start(focus.column), columnHeaderHeight + rowGeometry.start(focus.row), columnGeometry.size(focus.column), rowGeometry.size(focus.row), 1)}
           </div>
         {/if}
+      {/if}
+      {#if isEmptyCorner(selection.anchor.row,selection.anchor.column) && (selection.anchor.row !== selection.focus.row || selection.anchor.column !== selection.focus.column) && selection.anchor.row >= (layout.rows[0]?.index ?? 1) && selection.anchor.row <= (layout.rows.at(-1)?.index ?? 0) && selection.anchor.column >= (layout.columns[0]?.index ?? 1) && selection.anchor.column <= (layout.columns.at(-1)?.index ?? 0)}
+        {@const anchor=selection.anchor}
+        {@render gridCell(formatCellReference(anchor),anchor.row,anchor.column,rowHeaderWidth+columnGeometry.start(anchor.column),columnHeaderHeight+rowGeometry.start(anchor.row),columnGeometry.size(anchor.column),rowGeometry.size(anchor.row),1)}
       {/if}
       {#each layout.rows as row (row.index)}
         {#each columnsForRow(row.index) as column (column.index)}
@@ -689,7 +805,7 @@
         {/if}
       {/each}
       {#each visibleCharts.filter((chart) => chart.placement.region === "body") as chart (chart.frame.anchor.elementId)}
-        {@render chartFrame(chart, chart.placement.left, chart.placement.top)}
+        {@render chartFrame(chart, chart.placement.left - scrollLeft + physicalScrollLeft, chart.placement.top - scrollTop + physicalScrollTop)}
       {/each}
     </div>
   </div>
@@ -737,7 +853,7 @@
     <div class="scrolling-column-headers" style:left={`${frozenColumnsWidth}px`}>
       {#each layout.columns.filter((column) => column.index > frozenColumns) as column (column.index)}
         <div
-          class="column-header"
+          class="column-header" class:selected-header={column.index >= selection.range.start.column && column.index <= selection.range.end.column}
           style:left={`${column.start - scrollLeft - frozenColumnsWidth}px`}
           style:width={`${column.size}px`}
         >{columnLabel(column.index)}</div>
@@ -746,7 +862,7 @@
     {#if frozenColumnsWidth > 0}
       <div class="frozen-column-headers" style:width={`${frozenColumnsWidth}px`}>
         {#each layout.columns.filter((column) => column.index <= frozenColumns) as column (column.index)}
-          <div class="column-header" style:left={`${column.start}px`} style:width={`${column.size}px`}>{columnLabel(column.index)}</div>
+          <div class="column-header" class:selected-header={column.index >= selection.range.start.column && column.index <= selection.range.end.column} style:left={`${column.start}px`} style:width={`${column.size}px`}>{columnLabel(column.index)}</div>
         {/each}
       </div>
     {/if}
@@ -755,7 +871,7 @@
     <div class="scrolling-row-headers" style:top={`${frozenRowsHeight}px`}>
       {#each layout.rows.filter((row) => row.index > frozenRows) as row (row.index)}
         <div
-          class="row-header"
+          class="row-header" class:selected-header={(sourceRow(row.index) ?? 0) >= selection.range.start.row && (sourceRow(row.index) ?? 0) <= selection.range.end.row}
           style:top={`${row.start - scrollTop - frozenRowsHeight}px`}
           style:height={`${row.size}px`}
         >{row.index}</div>
@@ -764,11 +880,15 @@
     {#if frozenRowsHeight > 0}
       <div class="frozen-row-headers" style:height={`${frozenRowsHeight}px`}>
         {#each layout.rows.filter((row) => row.index <= frozenRows) as row (row.index)}
-          <div class="row-header" style:top={`${row.start}px`} style:height={`${row.size}px`}>{row.index}</div>
+          <div class="row-header" class:selected-header={(sourceRow(row.index) ?? 0) >= selection.range.start.row && (sourceRow(row.index) ?? 0) <= selection.range.end.row} style:top={`${row.start}px`} style:height={`${row.size}px`}>{row.index}</div>
         {/each}
       </div>
     {/if}
   </div>
+  {#each selectionRects as rect}
+    <div class="selection-outline" class:top-edge={rect.topEdge} class:bottom-edge={rect.bottomEdge} class:left-edge={rect.leftEdge} class:right-edge={rect.rightEdge}
+      style:left={`${rect.left}px`} style:top={`${rect.top}px`} style:width={`${rect.width}px`} style:height={`${rect.height}px`}></div>
+  {/each}
   <div class="corner"></div>
 </div>
 
@@ -794,14 +914,14 @@
 {/if}
 
 <style>
-  .grid-viewport { width: 100%; height: 100%; overflow: hidden; }
+  .grid-viewport { width: 100%; height: 100%; overflow: hidden; touch-action: pan-x pan-y; }
   .tumbler-grid { transform-origin: top left; touch-action: pan-x pan-y; position: relative; overflow: hidden; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; user-select: none; -webkit-user-select: none; }
   .grid-scroller { width: 100%; height: 100%; overflow: auto; overscroll-behavior: contain; }
   .empty-grid { background: var(--tumbler-sheet-bg, #ffffff); position: absolute; pointer-events: none; fill: none; stroke: var(--tumbler-sheet-line, #d9ded9); stroke-width: 1; }
-  .empty-selection { position: absolute; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(65, 255, 83, 0.1)); }
+  .empty-selection { position: absolute; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(0, 0, 0, 0.16)); }
   .empty-focus { pointer-events: none; }
-  .empty-corner-cell .cell.selected::after { background: transparent; }
-  .canvas { position: relative; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
+  .cell.active.selected::after { background: transparent; }
+  .canvas { position: relative; overflow: clip; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane, .frozen-column-pane { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane { left: 52px; right: 0; top: 28px; }
   .frozen-column-pane { left: 52px; bottom: 0; }
@@ -822,8 +942,15 @@
   .cell > .overflow-content { flex: none; max-width: none; overflow: hidden; pointer-events: none; }
   .chart-frame { position: absolute; z-index: 2; overflow: hidden; box-sizing: border-box; padding: 0; border: 0; outline: 0; background: transparent; cursor: default; }
   .chart-frame.selected, .chart-frame:focus-visible { box-shadow: inset 0 0 0 2px var(--tumbler-grid-accent, #42ff53); }
-  .cell.selected::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(65, 255, 83, 0.1)); }
-  .cell.focused { z-index: 2; box-shadow: inset 0 0 0 2px var(--tumbler-grid-accent, #42ff53); }
+  .cell.selected::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(0, 0, 0, 0.16)); }
+  .cell.focused { z-index: 2; }
+  .cell.active { z-index: 2; }
+  .selection-outline { position:absolute; z-index:5; pointer-events:none; box-sizing:border-box; border:0 solid var(--tumbler-grid-accent,#42ff53); }
+  .selection-outline.top-edge { border-top-width:2px; }
+  .selection-outline.bottom-edge { border-bottom-width:2px; }
+  .selection-outline.left-edge { border-left-width:2px; }
+  .selection-outline.right-edge { border-right-width:2px; }
+  .selected-header { background:var(--tumbler-grid-selected-header-bg,#525852); color:var(--tumbler-grid-selected-header-fg,#fff); }
   .cell > * { position: relative; z-index: 1; min-width: 0; max-width: 100%; transform-origin: center; }
   .cell.table-header { align-items: center; font-weight: 600; padding-right: 30px; }
   .table-menu-button { position: absolute; right: 4px; top: 50%; width: 20px; height: 20px; padding: 0; translate: 0 -50%; border: 1px solid transparent; border-radius: 3px; color: inherit; background: color-mix(in srgb, currentColor 10%, transparent); cursor: pointer; }
