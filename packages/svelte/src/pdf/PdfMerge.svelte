@@ -120,7 +120,7 @@
 </div>
 
 <style>
-  .pdf-merge { container-type: inline-size; display: flex; flex-direction: column; min-height: 0; height: 100%; color: var(--text, #222); font: inherit; font-size: 12px; }
+  .pdf-merge { container-type: inline-size; display: flex; flex: 1; flex-direction: column; min-width: 0; width: 100%; min-height: 0; height: 100%; box-sizing: border-box; color: var(--text, #222); font: inherit; font-size: 12px; }
   .sources { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: auto; }
   ol { list-style: none; padding: 0; margin: 0; }
   .finish { flex-shrink: 0; padding: 12px; border-top: 1px solid var(--border, #ddd); }
