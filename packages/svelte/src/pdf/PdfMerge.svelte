@@ -23,8 +23,8 @@
   const pageCount = $derived(plan.reduce((count, entry) => count + (entry.source.document ? entry.selection.pages.length : 0), 0));
   const problem = $derived(plan.find(entry => entry.source.loading || entry.source.error || entry.selection.error));
   const blocked = $derived(!!problem || !pageCount);
-  const reason = $derived(problem?.selection.error && !problem.source.rangeErrorVisible ? '' : problem ? problem.source.loading ? `Reading ${problem.source.name}…` : `Check ${problem.source.name}` : !pageCount ? 'Select at least one page' : '');
-  function changed() { model.created = undefined; error = ''; }
+  const reason = $derived(problem?.selection.error && !problem.source.rangeErrorVisible ? '' : problem ? problem.source.loading ? `Reading ${problem.source.name}…` : `Check ${problem.source.name}` : !pageCount ? model.blocks.length ? 'Select at least one page' : 'Add PDFs to begin' : '');
+  function changed() { removed = undefined; model.created = undefined; error = ''; }
   /** Adds a row immediately; hosts can supply cancellable authorized reads. */
   export async function addSource(name: string, data: PdfMergeRead) {
     const id = model.nextId++, controller = new AbortController();
@@ -81,8 +81,11 @@
     model.blocks = model.blocks.filter(block => block.id !== source.id);
     if (model.expanded === source.id) model.expanded = model.blocks[0]?.id;
     announcement = `Removed ${source.name}.`;
-    changed();
-    void tick().then(() => root.querySelectorAll<HTMLButtonElement>('.grip')[Math.min(removed?.index ?? 0, model.blocks.length - 1)]?.focus());
+    model.created = undefined; error = "";
+    void tick().then(() => {
+      const next = root.querySelectorAll<HTMLButtonElement>('.grip')[Math.min(removed?.index ?? 0, model.blocks.length - 1)];
+      (next ?? root.querySelector<HTMLButtonElement>('button[aria-label="Add PDFs"]'))?.focus();
+    });
   }
   function undoRemove() {
     if (!removed) return;

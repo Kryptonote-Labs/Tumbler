@@ -10,6 +10,7 @@
   const id = $props.id();
   let trigger: HTMLButtonElement, menu: HTMLDivElement;
   let left = $state(0), top = $state(0), draggingOver = $state(false), dropAfter = $state(false);
+  const invalid = $derived(source.rangeErrorVisible && !!mergeSourceSelection(source).error);
   const cover = $derived(mergeSourceSelection(source).pages[0] ?? 0);
   function run(work: () => void) { menu.hidePopover(); trigger.focus(); work(); }
   function keys(event: KeyboardEvent) {
@@ -26,7 +27,7 @@
     <button type="button" onkeydown={keys} class="grip" aria-label={`Reorder ${source.name}, position ${position + 1} of ${count}`} title="Drag to reorder. Alt+Up or Alt+Down moves this PDF; Delete removes it." draggable={!disabled} disabled={disabled} ondragstart={event => { event.dataTransfer?.setData('application/x-tumbler-pdf-source', String(source.id)); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }}><span class="dots" aria-hidden="true">⠿</span></button>
     <button type="button" class="expand" aria-expanded={expanded} aria-controls={`${id}-pages`} onclick={onexpand}>
       <span class="cover">{#if source.document}<PdfPageThumbnail document={source.document} index={cover} pixels={96} />{:else}<span class="placeholder" aria-hidden="true"></span>{/if}</span>
-      <span class="description"><span class="name">{source.name}</span><span class="summary">{mergeSourceSummary(source)}</span></span>
+      <span class="description"><span class="name">{source.name}</span><span class="summary" class:invalid>{mergeSourceSummary(source)}</span></span>
       <svg class:expanded viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m5 6 3 3 3-3" /></svg>
     </button>
     <button type="button" class="more" bind:this={trigger} popovertarget={`${id}-menu`} aria-label={`Options for ${source.name}`} disabled={disabled}>⋯</button>
@@ -61,6 +62,7 @@
   .description { flex: 1; min-width: 0; display: grid; gap: 4px; }
   .name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; line-height: 1.4; font-weight: 500; }
   .summary { font-size: 11px; color: var(--text-soft, #666); }
+  .summary.invalid { color: var(--danger, #b82222); }
   svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; }
   svg.expanded { transform: rotate(180deg); }
   .menu { box-sizing: border-box; position: fixed; inset: auto; width: 160px; padding: 4px; margin: 0; border: 1px solid var(--border, #ddd); border-radius: 6px; background: var(--bg, white); color: var(--text, #222); box-shadow: 0 5px 20px #0003; }

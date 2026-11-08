@@ -46,6 +46,7 @@ export function mergeSourceSummary(source: PdfMergeSource) {
   if (!source.document) return source.locked ? "Password required" : "Could not open PDF";
   const selection = mergeSourceSelection(source),
     count = source.document.pages.length;
+  if (selection.error && source.rangeErrorVisible) return "Check page selection";
   if (!selection.pages.length) return "No pages included";
   if (selection.custom) return `${selection.pages.length} pages · Custom order`;
   return selection.pages.length === count

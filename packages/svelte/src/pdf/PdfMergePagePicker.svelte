@@ -48,7 +48,7 @@
     {#if selection.custom}<button type="button" disabled={disabled} onclick={resetOrder}>Sort and remove repeats</button>
     {:else}<button type="button" disabled={disabled} onclick={() => { anchor = undefined; choose(source.document!.pages.map((_, index) => index)); }}>All</button><button type="button" disabled={disabled} onclick={() => { anchor = undefined; choose([]); }}>None</button>{/if}
   </div>
-  <input bind:this={rangeInput} id={`${id}-range`} aria-label={`Include pages in ${source.name}`} aria-describedby={`${id}-help`} aria-invalid={invalid} disabled={disabled} value={source.draft ?? source.pages} placeholder={source.none ? 'No pages' : `All ${source.document?.pages.length ?? 0} pages`} onfocus={() => focused = true} onblur={() => focused = false} oninput={event => input(event.currentTarget.value)} />
+  <input bind:this={rangeInput} id={`${id}-range`} aria-label={`Include pages in ${source.name}`} aria-describedby={`${id}-help`} aria-invalid={invalid} disabled={disabled} value={source.draft ?? source.pages} placeholder={source.none ? 'No pages' : `All ${source.document?.pages.length ?? 0} pages`} onfocus={() => focused = true} onblur={() => { focused = false; source.rangeErrorVisible = !!selection.error; }} oninput={event => input(event.currentTarget.value)} />
   <div id={`${id}-help`} class="help" class:error={invalid} aria-live="polite">{#if invalid}{selection.error}{:else if selection.custom}Order within this PDF. Edit the range to change it.{:else}Shift-click to include a range.{/if}</div>
   {#if source.document}
     <div class="grid" class:custom={selection.custom} aria-label={`Pages included from ${source.name}`}>

@@ -52,7 +52,7 @@ test('locked sources retain their password prompt until authentication succeeds'
 
 
 test('an incomplete range preserves the last valid preview and blocks merging', async () => {
-  const { mergeSourceSelection, openMergeSource } = await import('../src/pdf/merge-source.ts');
+  const { mergeSourceSelection, mergeSourceSummary, openMergeSource } = await import('../src/pdf/merge-source.ts');
   const state = (await import('../src/pdf/merge-source.ts')).createPdfMergeState();
   state.blocks.push({ id: 0, name: 'Pages.pdf', bytes: new Uint8Array(await Bun.file(new URL('../../pdf/test/fixtures/page-sequence.pdf', import.meta.url)).arrayBuffer()), pages: '', none: false, password: '', loading: false, locked: false, error: '' });
   const source = state.blocks[0]!;
@@ -61,6 +61,9 @@ test('an incomplete range preserves the last valid preview and blocks merging', 
   source.draft = '2-';
   expect(mergeSourceSelection(source).pages).toEqual(before);
   expect(mergeSourceSelection(source).error).not.toBe('');
+  expect(mergeSourceSummary(source)).not.toBe('Check page selection');
+  source.rangeErrorVisible = true;
+  expect(mergeSourceSummary(source)).toBe('Check page selection');
   source.pages = '2,1,1';
   source.draft = undefined;
   expect(mergeSourceSelection(source)).toMatchObject({ pages: [1, 0, 0], custom: true, error: '' });
