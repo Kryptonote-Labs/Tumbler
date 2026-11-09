@@ -79,3 +79,23 @@ test('independent edits of an imported annotation merge without replacing shared
   expect(a.annotations.items(pdf)).toEqual(b.annotations.items(pdf));
   expect(a.annotations.items(pdf)[0]).toMatchObject({ color: '#123456', hidden: true });
 });
+test('undoing annotation creation hides it without erasing a peer colour edit', () => {
+  const pdf = fixture(),
+    a = new PdfTextModel(),
+    b = new PdfTextModel();
+  const markup = { ...importPdfMarkup(pdf)[0]!, id: 'new' };
+  a.annotations.set(markup);
+  Y.applyUpdate(b.doc, Y.encodeStateAsUpdate(a.doc));
+  b.annotations.update(pdf, 'new', { color: '#123456' });
+  Y.applyUpdate(a.doc, Y.encodeStateAsUpdate(b.doc));
+  a.undo.undo();
+  expect(a.annotations.items(pdf).find((v) => v.id === 'new')).toMatchObject({
+    hidden: true,
+    color: '#123456',
+  });
+  a.undo.redo();
+  expect(a.annotations.items(pdf).find((v) => v.id === 'new')).toMatchObject({
+    hidden: false,
+    color: '#123456',
+  });
+});

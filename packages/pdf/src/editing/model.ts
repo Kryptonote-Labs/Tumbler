@@ -26,8 +26,8 @@ export class PdfTextModel {
   readonly undo: Y.UndoManager;
   constructor(readonly doc: Y.Doc = new Y.Doc()) {
     this.regions = doc.getMap('pdf-text');
-    this.annotations = new PdfMarkupModel(doc, this.origin);
     this.pages = new PdfPageModel(doc, this.origin);
+    this.annotations = new PdfMarkupModel(doc, this.origin, page => this.pages.materialize(page));
     this.regions.observeDeep((events) => {
       for (const event of events) {
         const id = event.path[0];

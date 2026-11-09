@@ -97,6 +97,7 @@ export class PdfMarkupModel {
   constructor(
     private doc: Y.Doc,
     private origin: object,
+    private materialize: (page: number) => void,
   ) {
     this.records = doc.getMap('pdf-markup');
   }
@@ -107,12 +108,16 @@ export class PdfMarkupModel {
   }
   set(value: PdfMarkup) {
     validatePdfMarkup(value);
-    this.doc.transact(() => {
-      let record = this.records.get(value.id);
-      if (!record) {
-        record = new Y.Map();
+    if (!this.records.has(value.id)) {
+      this.doc.transact(() => {
+        const record = new Y.Map<unknown>();
         this.records.set(value.id, record);
-      }
+        for (const [key, v] of Object.entries({ ...value, hidden: true })) record.set(key, v);
+      }, 'import');
+    }
+    this.doc.transact(() => {
+      if (!value.hidden) this.materialize(value.page);
+      const record = this.records.get(value.id)!;
       for (const [key, v] of Object.entries(value))
         if (JSON.stringify(record.get(key)) !== JSON.stringify(v)) record.set(key, v);
     }, this.origin);
