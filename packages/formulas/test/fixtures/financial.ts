@@ -397,3 +397,9 @@ cases.push(
  {name:"IRR leading zero retains a genuine root",formula:"IRR(Inputs!A1:A3)",cells:{A1:{type:"number",value:0},A2:{type:"number",value:-100},A3:{type:"number",value:110}},expected:{type:"number",value:.1}},
  {name:"XIRR leading zero retains a genuine root",formula:"XIRR(Inputs!A1:A3,Inputs!B1:B3)",cells:{A1:{type:"number",value:0},A2:{type:"number",value:-100},A3:{type:"number",value:110},B1:{type:"number",value:43831},B2:{type:"number",value:44196},B3:{type:"number",value:44561}},expected:{type:"number",value:.1}},
 );
+for (const guess of ["",",-0.9"]) {
+ const cells = {A1:{type:"number" as const,value:0},A2:{type:"number" as const,value:100},A3:{type:"number" as const,value:-100},A4:{type:"number" as const,value:1},B1:{type:"number" as const,value:43831},B2:{type:"number" as const,value:47481},B3:{type:"number" as const,value:47481},B4:{type:"number" as const,value:43831}};
+ cases.push({name:`XIRR cancelled same-date terms leave no root ${guess||"default"}`,formula:`XIRR(Inputs!A1:A4,Inputs!B1:B4${guess})`,cells,expected:{type:"error",value:"#NUM!"}});
+ cases.push({name:`XIRR cancelled same-date terms retain a genuine root ${guess||"default"}`,formula:`XIRR(Inputs!A1:A5,Inputs!B1:B5${guess})`,cells:{...cells,A4:{type:"number",value:-1},A5:{type:"number",value:2},B5:{type:"number",value:44196}},expected:{type:"number",value:1}});
+}
+cases.push({name:"XIRR exact same-date net retains a small term between huge cancellations",formula:"XIRR(Inputs!A1:A5,Inputs!B1:B5)",cells:{A1:{type:"number",value:0},A2:{type:"number",value:1e300},A3:{type:"number",value:1},A4:{type:"number",value:-1e300},A5:{type:"number",value:-2},B1:{type:"number",value:43831},B2:{type:"number",value:47481},B3:{type:"number",value:47481},B4:{type:"number",value:47481},B5:{type:"number",value:47846}},expected:{type:"number",value:1}});
