@@ -217,3 +217,10 @@ add("regex initial bracket literal", 'REGEXTEST("]","[]]")', {type:"boolean",val
 add("regex escaped control class range", 'REGEXTEST(UNICHAR(11),"[\\n-\\r]")', {type:"boolean",value:true});
 add("textsplit delimiter errors propagate", 'TEXTSPLIT("a,b",{",",#N/A})', E("#N/A"));
 add("textsplit rejects text array input", 'TEXTSPLIT({"a,b";"c,d"},",")', E());
+add("regex caseless original broad ASCII range", 'REGEXTEST("_","[A-z]",1)', {type:"boolean",value:true});
+add("regex caseless original crossing ASCII range", 'REGEXTEST("_","[Z-a]",1)', {type:"boolean",value:true});
+add("regex initial bracket as range endpoint", 'REGEXTEST("^","[]-a]")', {type:"boolean",value:true});
+add("regex escaped bracket as range endpoint", 'REGEXTEST("^","[\\]-a]")', {type:"boolean",value:true});
+add("regex caseless upper range accepts lowercase", 'REGEXTEST("m","[A-Z]",1)', {type:"boolean",value:true});
+add("regex caseless upper range excludes punctuation", 'REGEXTEST("_","[A-Z]",1)', {type:"boolean",value:false});
+add("regex reversed range remains invalid caseless", 'REGEXTEST("a","[z-A]",1)', E());
