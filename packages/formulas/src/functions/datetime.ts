@@ -32,13 +32,12 @@ function dateText(text: string, c: FunctionContext): number | undefined {
   return serial(y, m, d, c);
 }
 function timeText(text: string, c: FunctionContext): number | undefined {
-  const match = /^(?:(.+?)\s+)?(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}(?:\.\d+)?))?\s*(AM|PM)?$/i.exec(text.trim());
+  const match = /^(?:(.+?)\s+)?(\d{1,5})(?::(\d{1,5}))?(?::(\d{1,5}(?:\.\d+)?))?\s*(AM|PM)?$/i.exec(text.trim());
   if (!match || (!match[3] && !match[5]) || (match[1] && dateText(match[1], c) === undefined)) return undefined;
   let h = Number(match[2]); const m = Number(match[3] ?? 0), s = Number(match[4] ?? 0);
-  if (m >= 60 || s >= 60) return undefined;
-  if (match[5]) { if (h < 1 || h > 12) return undefined; h = h % 12 + (match[5].toUpperCase() === "PM" ? 12 : 0); }
-  if (h > 23) return undefined;
-  return (h * 3600 + m * 60 + s) / 86400;
+  if (h > 32767 || m > 32767 || s > 32767) return undefined;
+  if (match[5]) { if (h > 12) return undefined; h = h % 12 + (match[5].toUpperCase() === "PM" ? 12 : 0); }
+  return ((h * 3600 + m * 60 + s) % 86400) / 86400;
 }
 function numeric(v: FormulaScalarValue): number | FormulaScalarValue {
   const n = functionNumeric(v); return n.type === "number" ? n.value : n;
@@ -82,7 +81,7 @@ function lift(min: number, max: number, run: (v: FormulaScalarValue[], c: Functi
 function days360(a: Civil, b: Civil, european: boolean): number {
   let ad = a.d, bd = b.d;
   if (european) { ad = Math.min(ad, 30); bd = Math.min(bd, 30); }
-  else { if (ad === monthDays(a.y, a.m)) ad = 30; if (bd === monthDays(b.y, b.m)) bd = ad >= 30 ? 30 : 31; }
+  else { if (ad === monthDays(a.y, a.m)) ad = 30; if (bd === monthDays(b.y, b.m) && ad >= 30) bd = 30; }
   return (b.y - a.y) * 360 + (b.m - a.m) * 30 + bd - ad;
 }
 function isoWeek(n: number, c: FunctionContext): number {
