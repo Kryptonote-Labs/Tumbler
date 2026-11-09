@@ -35,7 +35,7 @@ cases.push(
   { name: "DGET: unique text", formula: expression("DGET", undefined, '"Team"'), expected: s("northwest"), cells: { ...base, E2: s("=northwest") } },
   { name: "DGET: no record", formula: expression("DGET"), expected: e("#VALUE!"), cells: { ...base, E2: s("West") } },
   { name: "DGET: multiple records", formula: expression("DGET"), expected: e("#NUM!"), cells: { ...base } },
-  { name: "DGET: blank field becomes zero", formula: expression("DGET"), expected: n(0), cells: { ...base, E1: s("Serial"), E2: n(45004) } },
+  { name: "DGET: blank field error", formula: expression("DGET"), expected: e("#VALUE!"), cells: { ...base, E1: s("Serial"), E2: n(45004) } },
   { name: "DSUM: AND with duplicate numeric headers", formula: expression("DSUM", "Inputs!E1:G2"), expected: n(4), cells: { ...base, F1: s("Amount"), F2: s(">2"), G1: s("Amount"), G2: s("<8") } },
   { name: "DSUM: OR does not double count", formula: expression("DSUM", "Inputs!E1:E3"), expected: n(6), cells: { ...base, E3: s("=North") } },
   { name: "DSUM: blank criterion selects all", formula: expression("DSUM"), expected: n(14), cells: { ...base, E2: b } },
@@ -44,12 +44,12 @@ cases.push(
   { name: "DCOUNTA: omitted field counts records", formula: expression("DCOUNTA", undefined, ""), expected: n(3), cells: { ...base } },
   { name: "DSUM: nested arithmetic", formula: `${expression("DSUM")}*2+1`, expected: n(13), cells: { ...base } },
   { name: "DSUM: field by reference", formula: expression("DSUM", undefined, "Inputs!H1"), expected: n(6), cells: { ...base, H1: s("amount") } },
-  { name: "DAVERAGE: avoids intermediate overflow", formula: expression("DAVERAGE"), expected: n(1e308), cells: { ...base, B2: n(1e308), B3: n(1e308) } },
+  { name: "DAVERAGE: intermediate overflow", formula: expression("DAVERAGE"), expected: e("#NUM!"), cells: { ...base, B2: n(9e307), B3: n(9e307) } },
   { name: "DSUM: numeric overflow", formula: expression("DSUM"), expected: e("#NUM!"), cells: { ...base, B2: n(1e308), B3: n(1e308) } },
   { name: "DPRODUCT: numeric overflow", formula: expression("DPRODUCT"), expected: e("#NUM!"), cells: { ...base, B2: n(1e200), B3: n(1e200) } },
   { name: "DVAR: stable small spread", formula: expression("DVAR"), expected: n(2), cells: { ...base, B2: n(1e12), B3: n(1e12 + 2) } },
   { name: "DVARP: variance overflow", formula: expression("DVARP"), expected: e("#NUM!"), cells: { ...base, B2: n(-1e308), B3: n(1e308) } },
-  { name: "DSTDEVP: finite extreme spread", formula: expression("DSTDEVP"), expected: n(1e308), cells: { ...base, B2: n(-1e308), B3: n(1e308) } },
+  { name: "DSTDEVP: variance intermediate overflow", formula: expression("DSTDEVP"), expected: e("#NUM!"), cells: { ...base, B2: n(-9e307), B3: n(9e307) } },
 );
 for (const dateSystem of ["1900", "1904"] as const) cases.push({
   name: `DSUM: date serial criteria (${dateSystem})`, formula: expression("DSUM", "Inputs!E1:F2", '"Serial"'), expected: n(90005), dateSystem,

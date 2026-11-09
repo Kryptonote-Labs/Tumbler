@@ -21,16 +21,17 @@ Numeric criteria compare numeric cells (and blanks as zero), without converting
 text or Boolean field values into numbers. Numeric aggregates ignore text,
 Boolean values and blank cells. Matching field errors propagate, except DCOUNT
 ignores them and DCOUNTA counts them. DCOUNTA counts empty strings as values.
-DGET retains the selected scalar type, converts a selected blank to zero, and
+DGET retains the selected scalar type, returns #VALUE! for a selected blank, and
 returns #VALUE! for no records or #NUM! for multiple records.
 
 DSUM, DCOUNT, DCOUNTA, DMIN, DMAX and DPRODUCT return zero for no numeric/matching
 values, as applicable. DAVERAGE requires one numeric value. Sample variance and
 standard deviation require two numeric values; population versions require one.
 Insufficient observations return #DIV/0!. Nonfinite numeric outputs return #NUM!.
-Sums and means use scaled compensated summation. Variance shifts observations
-before scaling to retain small spreads at large offsets. Standard deviation is
-computed without forming an overflowing intermediate variance. Product uses
+Sums and means use compensated summation and preserve Excel's intermediate
+overflow errors. Variance shifts observations before scaling to retain small
+spreads at large offsets; an overflowing final variance also produces #NUM! for
+standard deviation, matching the observed native boundary. Product uses
 bounded sequential IEEE-754 multiplication and reports intermediate overflow;
 it does not promise order-independent products across intermediate overflow or
 underflow. Every traversal and wildcard retry charges `context.operation`;

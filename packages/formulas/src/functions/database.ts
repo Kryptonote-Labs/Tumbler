@@ -117,9 +117,8 @@ function aggregate(name: string, values: readonly number[], context: FunctionCon
   if (name === "DMIN") return functionNumber(count ? minimum : 0);
   if (name === "DSUM" || name === "DAVERAGE") {
     if (!count && name === "DAVERAGE") return functionError("#DIV/0!");
-    const normalized = values.map(value => { context.operation(); return scale ? value / scale : 0; });
-    const sum = compensated(normalized, context);
-    return functionNumber((name === "DAVERAGE" ? sum / count : sum) * scale);
+    const sum = compensated(values, context);
+    return functionNumber(name === "DAVERAGE" ? sum / count : sum);
   }
   const sample = name === "DVAR" || name === "DSTDEV";
   if (count < (sample ? 2 : 1)) return functionError("#DIV/0!");
@@ -134,9 +133,10 @@ function aggregate(name: string, values: readonly number[], context: FunctionCon
   const mean = compensated(normalized, context) / count;
   const squares = normalized.map(value => { context.operation(); return (value - mean) ** 2; });
   const variance = compensated(squares, context) / (count - (sample ? 1 : 0));
-  // Compute standard deviation without first forming a possibly overflowing variance.
-  if (name === "DSTDEV" || name === "DSTDEVP") return functionNumber(Math.sqrt(variance) * unit);
-  return functionNumber((variance * unit) * unit);
+  const unscaledVariance = (variance * unit) * unit;
+  if (!Number.isFinite(unscaledVariance)) return functionError("#NUM!");
+  if (name === "DSTDEV" || name === "DSTDEVP") return functionNumber(Math.sqrt(unscaledVariance));
+  return functionNumber(unscaledVariance);
 }
 
 function database(name: string, arguments_: readonly FormulaExpression[], context: FunctionContext): Scalar {
@@ -186,7 +186,7 @@ function database(name: string, arguments_: readonly FormulaExpression[], contex
     else if (selected.type === "error") error ??= selected;
   }
   if (omitted) return functionNumber(matches);
-  if (name === "DGET") return matches === 0 ? functionError() : matches > 1 ? functionError("#NUM!") : selected.type === "blank" ? functionNumber(0) : selected;
+  if (name === "DGET") return matches === 0 ? functionError() : matches > 1 ? functionError("#NUM!") : selected.type === "blank" ? functionError() : selected;
   if (name === "DCOUNTA") return functionNumber(nonempty);
   if (name !== "DCOUNT" && error) return error;
   return aggregate(name, numbers, context);
