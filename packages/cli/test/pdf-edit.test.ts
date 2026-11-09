@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { openPdfDocument, importPdfText, PdfTextModel, PdfEditingFonts } from '@tumblerjs/pdf';
+import { openPdfDocument, importPdfText, PdfTextModel, PdfEditingFonts, layoutPdfTextFlow, pdfContinuationHeight } from '@tumblerjs/pdf';
 import { editPdfModel, inspectPdfModel, pdfEditInput } from '../src/pdf-edit.ts';
 
 const fonts = new PdfEditingFonts();
@@ -37,4 +37,22 @@ test('headless PDF commands inspect, edit and undo the shared model', async () =
   } finally {
     model.doc.destroy();
   }
+});
+
+test('headless text coordinates stay local to continuation pages', async () => {
+  const document = openPdfDocument(await Bun.file(new URL('../../pdf/test/fixtures/page-sequence.pdf', import.meta.url)).bytes());
+  const model = new PdfTextModel();
+  try {
+    model.initialize(importPdfText(document));
+    const id = model.ids()[0]!;
+    model.replace(id, 0, model.text(id).length, 'line\n'.repeat(100));
+    const flow = layoutPdfTextFlow(model, fonts, document.pages);
+    const target = flow.pages.find(page => page.continuation === 1)!;
+    expect(target).toBeDefined();
+    editPdfModel(document, model, fonts, pdfEditInput.parse({ operation: 'add-text', input: { page: target.index + 1, x: 20, y: 30, width: 70, text: 'Added' } }));
+    const added = model.ids().find(key => model.text(key).toString() === 'Added')!;
+    expect(model.geometry(added).y).toBe(30 + pdfContinuationHeight(target.source));
+    editPdfModel(document, model, fonts, pdfEditInput.parse({ operation: 'place-text', input: { id: added, y: 40 } }));
+    expect(model.geometry(added).y).toBe(40 + pdfContinuationHeight(target.source));
+  } finally { model.doc.destroy(); }
 });

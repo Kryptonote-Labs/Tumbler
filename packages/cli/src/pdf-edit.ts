@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   defaultPdfTextStyle,
   layoutPdfTextFlow,
+  pdfContinuationHeight,
   type PdfDocument,
   type PdfTextModel,
   type PdfEditingFonts,
@@ -119,7 +120,7 @@ export function editPdfModel(
         page: target.source.index,
         continuation: target.continuation,
         x: p.x,
-        y: p.y,
+        y: p.y + target.continuation * pdfContinuationHeight(target.source),
         width: p.width,
         lineHeight: style.size * 1.25,
         style,
@@ -131,10 +132,12 @@ export function editPdfModel(
     }
     case 'place-text': {
       const { id, ...patch } = pdfEdits['place-text'].parse(command.input);
+      const region = flow.regions.find((r) => r.id === id);
+      const target = region && flow.pages[region.page];
       model.place(id, {
-        ...flow.regions.find((r) => r.id === id)?.origin,
+        ...region?.origin,
         ...(patch.x === undefined ? {} : { x: patch.x }),
-        ...(patch.y === undefined ? {} : { y: patch.y }),
+        ...(patch.y === undefined ? {} : { y: patch.y + (target ? target.continuation * pdfContinuationHeight(target.source) : 0) }),
         ...(patch.width === undefined ? {} : { width: patch.width }),
       });
       break;
