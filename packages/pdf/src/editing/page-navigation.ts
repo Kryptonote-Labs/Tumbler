@@ -17,7 +17,7 @@ export function pdfModelLinks(document: PdfDocument, model: PdfTextModel, page: 
     const [object, generation] = key.split(' ').map(Number);
     return target ? [{ ...target, id: key, reference: new PdfReference(object!, generation) }] : [];
   });
-  return new PdfNavigation({ ...source, pages: targets }).links(source.pages[0]!).flatMap(link => {
+  return new PdfNavigation({ source: source.source, pages: targets }).links(source.pages[0]!).flatMap(link => {
     if (link.target.kind === 'external') return [link];
     const id = links?.[link.target.pageId];
     return id ? [{ ...link, target: { ...link.target, pageId: id } }] : [];
