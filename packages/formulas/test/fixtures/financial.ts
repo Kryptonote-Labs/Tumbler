@@ -386,3 +386,14 @@ cases.push(
  {name:"native RATE tiny future fails convergence",formula:"RATE(1000,0,-1,1e-100)",expected:{type:"error",value:"#NUM!"},oracle:"excel"},
  {name:"native RATE no finite root",formula:"RATE(1000,0,-1,0)",expected:{type:"error",value:"#NUM!"},oracle:"excel"},
 );
+for (const [label, sign] of [["positive",1],["negative",-1]] as const) {
+ const cells = {A1:{type:"number" as const,value:0},A2:{type:"number" as const,value:sign},A3:{type:"number" as const,value:-sign},A4:{type:"number" as const,value:sign},B1:{type:"number" as const,value:43831},B2:{type:"number" as const,value:44196},B3:{type:"number" as const,value:44561},B4:{type:"number" as const,value:44926}};
+ cases.push(
+  {name:`IRR ${label} residual has no finite root`,formula:"IRR(Inputs!A1:A4)",cells,expected:{type:"error",value:"#NUM!"}},
+  {name:`XIRR ${label} residual has no finite root`,formula:"XIRR(Inputs!A1:A4,Inputs!B1:B4)",cells,expected:{type:"error",value:"#NUM!"}},
+ );
+}
+cases.push(
+ {name:"IRR leading zero retains a genuine root",formula:"IRR(Inputs!A1:A3)",cells:{A1:{type:"number",value:0},A2:{type:"number",value:-100},A3:{type:"number",value:110}},expected:{type:"number",value:.1}},
+ {name:"XIRR leading zero retains a genuine root",formula:"XIRR(Inputs!A1:A3,Inputs!B1:B3)",cells:{A1:{type:"number",value:0},A2:{type:"number",value:-100},A3:{type:"number",value:110},B1:{type:"number",value:43831},B2:{type:"number",value:44196},B3:{type:"number",value:44561}},expected:{type:"number",value:.1}},
+);
