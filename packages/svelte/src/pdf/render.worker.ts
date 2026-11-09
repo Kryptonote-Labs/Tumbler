@@ -52,9 +52,14 @@ async function render(message: Extract<PdfRenderRequest, { type: "render" }>) {
       const placed = placePdfSceneSources(scene, projection.placements);
       const excluded = new Set(projection.exclude);
       const included = projection.include && new Set(projection.include);
-      scene = { ...placed, elements: placed.elements.filter((element) =>
-        !excluded.has(pdfSourceKey(element.source)) && (!included || included.has(pdfSourceKey(element.source))),
-      ) };
+      scene = {
+        ...placed,
+        elements: placed.elements.filter(
+          (element) =>
+            !excluded.has(pdfSourceKey(element.source)) &&
+            (!included || included.has(pdfSourceKey(element.source))),
+        ),
+      };
     }
     let host = hosts.get(page);
     if (!host) {
@@ -64,11 +69,14 @@ async function render(message: Extract<PdfRenderRequest, { type: "render" }>) {
     const canvas = new OffscreenCanvas(region.width, region.height);
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Canvas rendering is unavailable.");
-    if (scene) await paintPdfPage(context, scene, interpreter.document.source, host, {
-      scale, region, background: projection?.transparent ? 'transparent' : '#fff',
-    });
+    if (scene)
+      await paintPdfPage(context, scene, interpreter.document.source, host, {
+        scale,
+        region,
+        background: projection?.transparent ? "transparent" : "#fff",
+      });
     else if (!projection?.transparent) {
-      context.fillStyle = '#fff';
+      context.fillStyle = "#fff";
       context.fillRect(0, 0, region.width, region.height);
     }
     extendPdfTileEdges(
@@ -80,7 +88,11 @@ async function render(message: Extract<PdfRenderRequest, { type: "render" }>) {
     );
     const bitmap = canvas.transferToImageBitmap();
     scope.postMessage(
-      { id: message.id, bitmap, ...(message.tile.text && scene ? { text: pdfTextContent(scene) } : {}) },
+      {
+        id: message.id,
+        bitmap,
+        ...(message.tile.text && scene ? { text: pdfTextContent(scene) } : {}),
+      },
       [bitmap],
     );
   } catch (cause) {
