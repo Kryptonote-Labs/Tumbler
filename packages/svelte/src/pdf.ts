@@ -11,3 +11,5 @@ export { default as PdfPageThumbnail } from "./pdf/PdfPageThumbnail.svelte";
 export type { PdfMergeResult, PdfMergeRead, PdfMergeState } from "./pdf/merge-source.ts";
 
 export { createPdfMergeState } from "./pdf/merge-source.ts";
+
+export { createPdfSearch, type PdfSearchController } from "./pdf/search.svelte.ts";
