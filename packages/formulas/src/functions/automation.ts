@@ -44,7 +44,7 @@ const euroconvert: ExtendedFunction = (arguments_, context) => {
   const values = arguments_.map((argument, index) => {
     context.operation();
     const value = context.evaluate(argument);
-    return index >= 3 && omitted(value) ? undefined : functionScalar(value);
+    return omitted(value) ? index >= 3 ? undefined : functionError() : functionScalar(value);
   });
   const error = values.find(value => value?.type === "error");
   if (error) return error;
