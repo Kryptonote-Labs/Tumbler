@@ -32,9 +32,11 @@ export function observePdfPageVisibility(
   };
   const resize = new ResizeObserver(observe);
   resize.observe(sizing);
+  if (!root) document.defaultView?.addEventListener("resize", observe);
   observe();
   return () => {
     observer?.disconnect();
     resize.disconnect();
+    if (!root) document.defaultView?.removeEventListener("resize", observe);
   };
 }
