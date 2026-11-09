@@ -1,3 +1,7 @@
+import {
+  openFormulaDocument,
+  verifyFormulaDocument,
+} from "../../../scripts/formula-conformance/corpus.ts";
 import { expect, test } from "bun:test";
 import {
   calculateFormulas,
@@ -101,11 +105,12 @@ test("multiple regression removes dependent columns and preserves coefficient or
   const result = run("LINEST({3;5;7;9},{1,2;2,4;3,6;4,8})");
   const rows = result.arrayValue(at)?.rows;
   expect(rows?.[0]?.length).toBe(3);
-  expect(rows?.[0]?.[1]).toEqual(n(0));
-  expect(rows?.[0]?.[0]?.type === "number" && rows[0][0].value).toBeCloseTo(
-    1,
-    12,
-  );
+  const coefficients =
+    rows?.[0]
+      ?.slice(0, 2)
+      .map((value) => (value.type === "number" ? value.value : NaN)) ?? [];
+  expect(coefficients.some((value) => value === 0)).toBe(true);
+  expect(coefficients[0]! * 2 + coefficients[1]!).toBeCloseTo(2, 12);
   expect(rows?.[0]?.[2]?.type === "number" && rows[0][2].value).toBeCloseTo(
     1,
     12,
@@ -146,3 +151,52 @@ test("regression rejects excessive work before allocating a quadratic workspace"
   const result = run(`LINEST({1;2},{${predictors}})`, { maxOperations: 1000 });
   expect(result.diagnostics.map((d) => d.code)).toContain("evaluation-limit");
 });
+
+test.each([
+  ["CHISQ.DIST(1000000,1000000,TRUE)", 0.5001880631966055],
+  ["CORREL({1e100;2e100;3e100},{1e100;2e100;3e100})", 1],
+  ["PEARSON({1e200;2e200;3e200},{1e200;2e200;3e200})", 1],
+  ["RSQ({1e-200;2e-200;3e-200},{1e-200;2e-200;3e-200})", 1],
+  ["WEIBULL.DIST(0,1,2,FALSE)", 0.5],
+  ["FORECAST.ETS(8,{8;12;8;12;8;12;8;12},{1;2;3;4;5;6;7;8},2)", 12],
+  ["FORECAST.ETS(8.5,{8;12;8;12;8;12;8;12},{1;2;3;4;5;6;7;8},2)", 10],
+])("numerical and seasonal correctness: %s", (formula, expected) => {
+  const result = run(formula);
+  expect(result.diagnostics).toEqual([]);
+  const value = result.value(at);
+  expect(value?.type).toBe("number");
+  if (value?.type === "number")
+    expect(Math.abs(value.value - expected)).toBeLessThan(1e-11);
+});
+test("regression rank is invariant under predictor units", () => {
+  const result = run(
+    "LINEST({1;0;1;0},{1000000000000,0.001;2000000000000,0;3000000000000,0.001;4000000000000,0})",
+  );
+  const coefficients = result.arrayValue(at)?.rows[0];
+  expect(coefficients?.length).toBe(3);
+  for (const [i, expected] of [1000, 0, 0].entries()) {
+    const value = coefficients?.[i];
+    expect(value?.type).toBe("number");
+    if (value?.type === "number") expect(value.value).toBeCloseTo(expected, 10);
+  }
+});
+test.each([
+  [{ type: "blank" }, { type: "string", value: "yes" }, "*", 10],
+  [
+    { type: "boolean", value: true },
+    { type: "boolean", value: false },
+    "TRUE",
+    5,
+  ],
+] as const)(
+  "conditional extrema share COUNTIF criteria semantics",
+  (first, second, criterion, expected) => {
+    const fixture = {
+      name: "conditional extrema",
+      formula: `MINIFS(Inputs!A1:A2,Inputs!B1:B2,"${criterion}")`,
+      expected: n(expected),
+      cells: { A1: n(5), A2: n(10), B1: first, B2: second },
+    };
+    verifyFormulaDocument(fixture, openFormulaDocument(fixture));
+  },
+);

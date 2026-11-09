@@ -68,11 +68,20 @@ export function gamma(
 ): number {
   if (x === 0) return upper ? 1 : 0;
   if (!Number.isFinite(x)) return upper ? 0 : 1;
-  const scale = Math.exp(a * Math.log(x) - x - lg(a));
+  // Avoid subtracting two values of order a*log(a) near the central region.
+  const delta = (x - a) / a;
+  const correction = 1 / (12 * a) - 1 / (360 * a ** 3) + 1 / (1260 * a ** 5);
+  const logScale =
+    a >= 16 && Math.abs(delta) < 0.5
+      ? a * (Math.log1p(delta) - delta) +
+        0.5 * Math.log(a / (2 * Math.PI)) -
+        correction
+      : a * Math.log(x) - x - lg(a);
+  const scale = Math.exp(logScale);
   if (x < a + 1) {
     let term = 1 / a,
       sum = term;
-    for (let i = 1; i <= 4096; i++) {
+    for (let i = 1; i <= 1_000_000; i++) {
       c.operation();
       term *= x / (a + i);
       sum += term;
@@ -84,7 +93,7 @@ export function gamma(
       cc = 1e300,
       d = 1 / b,
       h = d;
-    for (let i = 1; i <= 4096; i++) {
+    for (let i = 1; i <= 1_000_000; i++) {
       c.operation();
       const an = -i * (i - a);
       b += 2;
@@ -99,7 +108,7 @@ export function gamma(
         return clamp(upper ? scale * h : 1 - scale * h);
     }
   }
-  return fail();
+  return c.unavailable("The incomplete gamma calculation did not converge.");
 }
 export function normalTail(x: number, c: FunctionContext): number {
   const q = gamma(0.5, (x * x) / 2, true, c) / 2;

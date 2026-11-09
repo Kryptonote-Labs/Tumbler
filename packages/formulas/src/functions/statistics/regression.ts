@@ -45,8 +45,16 @@ for (const name of [
 ])
   register(name, 2, 2, (v, c) => {
     // SLOPE/INTERCEPT/STEYX receive known_y first, known_x second.
-    const [a, b] = paired(v, c),
-      n = a.length,
+    const [originalA, originalB] = paired(v, c);
+    const scaling = (xs: number[]) => {
+      const max = xs.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
+      return max > 1e75 || (max > 0 && max < 1e-75) ? max : 1;
+    };
+    const scaleA = scaling(originalA),
+      scaleB = scaling(originalB);
+    const a = originalA.map((x) => x / scaleA),
+      b = originalB.map((x) => x / scaleB);
+    const n = a.length,
       [ma] = moments(a, false),
       [mb] = moments(b, false);
     let aa = 0,
@@ -59,19 +67,21 @@ for (const name of [
     }
     if (name === "COVARIANCE.S") {
       check(n > 1, "#DIV/0!");
-      return ab / (n - 1);
+      return (ab / (n - 1)) * scaleA * scaleB;
     }
     if (name === "SLOPE" || name === "INTERCEPT") {
       check(bb > 0, "#DIV/0!");
       const slope = ab / bb;
-      return name === "SLOPE" ? slope : ma - slope * mb;
+      return name === "SLOPE"
+        ? slope * (scaleA / scaleB)
+        : (ma - slope * mb) * scaleA;
     }
     if (name === "STEYX") {
       check(n > 2 && bb > 0, "#DIV/0!");
-      return Math.sqrt(Math.max(0, aa - (ab * ab) / bb) / (n - 2));
+      return Math.sqrt(Math.max(0, aa - (ab / bb) * ab) / (n - 2)) * scaleA;
     }
     check(aa > 0 && bb > 0, "#DIV/0!");
-    const r = Math.max(-1, Math.min(1, ab / Math.sqrt(aa * bb)));
+    const r = Math.max(-1, Math.min(1, ab / Math.sqrt(aa) / Math.sqrt(bb)));
     return name === "RSQ" ? r * r : r;
   });
 for (const name of ["FORECAST", "FORECAST.LINEAR"])
@@ -126,8 +136,11 @@ function fit(
     r = Array.from({ length: p }, () => Array<number>(p).fill(0));
   const qty: number[] = [],
     norm = (a: number[]) => a.reduce((length, z) => Math.hypot(length, z), 0);
-  const initial = columns.map(norm),
-    scale = initial.reduce((a, b) => Math.max(a, b), 0);
+  const initial = columns.map(norm);
+  const predictorScales = initial.map((length) => length || 1);
+  for (let j = 0; j < p; j++)
+    columns[j] = columns[j]!.map((value) => value / predictorScales[j]!);
+  const scale = 1;
   let rank = 0;
   for (let k = 0; k < p; k++) {
     c.operation((p - k) * n * 2);
@@ -160,7 +173,8 @@ function fit(
     active[i] = z / r[i]![i]!;
   }
   const coefficients = Array<number>(p).fill(0);
-  for (let i = 0; i < rank; i++) coefficients[order[i]!] = active[i]!;
+  for (let i = 0; i < rank; i++)
+    coefficients[order[i]!] = active[i]! / predictorScales[order[i]!]!;
   const intercept = my - means.reduce((s, z, i) => s + z * coefficients[i]!, 0);
   let ssres = 0;
   for (let i = 0; i < n; i++) {
@@ -191,7 +205,8 @@ function fit(
   let interceptVar = constant ? 1 / n : 0;
   for (let col = 0; col < rank; col++) {
     const z = inverse.reduce(
-      (s, row, i) => s + means[order[i]!]! * row[col]!,
+      (s, row, i) =>
+        s + (means[order[i]!]! / predictorScales[order[i]!]!) * row[col]!,
       0,
     );
     interceptVar += z * z;

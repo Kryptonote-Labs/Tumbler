@@ -259,7 +259,7 @@ for (const name of [
     const at = (h: number) =>
       model.level +
       h * model.trend +
-      (period ? model.seasons[(s.y.length + Math.max(1, h) - 1) % period]! : 0);
+      (period ? model.seasons[(s.y.length + h - 1) % period]! : 0);
     const lo = Math.floor(horizon),
       fraction = horizon - lo;
     return at(lo) * (1 - fraction) + at(lo + 1) * fraction;

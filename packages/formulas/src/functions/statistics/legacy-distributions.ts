@@ -166,6 +166,6 @@ scalar("WEIBULL", 4, 4, ([x = 0, a = 0, b = 0, cum = 0]) => {
   const logRatio = Math.log(x) - Math.log(b);
   const power = Math.exp(a * logRatio);
   if (cum) return -Math.expm1(-power);
-  if (x === 0) return 0;
+  if (x === 0) return a === 1 ? 1 / b : a > 1 ? 0 : fail();
   return Math.exp(Math.log(a) - Math.log(b) + (a - 1) * logRatio - power);
 });
