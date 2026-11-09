@@ -64,3 +64,14 @@ cases.push(
  {name:"xml valid PI",formula:'FILTERXML("<r><?processing data?><x>7</x></r>","/r/x")',expected:n(7)},
  {name:"xml valid declaration",formula:'FILTERXML("<?xml version=\'1.0\'?><r>7</r>","/r")',expected:n(7)},
 );
+cases.push(
+ {name:"xml rejects comment ending in hyphen",formula:'FILTERXML("<r><!--x--->7</r>","/r")',expected:e()},
+ {name:"xml accepts trailing comment space",formula:'FILTERXML("<r><!--x- -->7</r>","/r")',expected:n(7)},
+ {name:"xml rejects NBSP attribute separator",formula:'FILTERXML("<r\u00a0a=\'v\'>7</r>","/r")',expected:e()},
+ {name:"xml rejects NBSP before closing tag bracket",formula:'FILTERXML("<r>7</r\u00a0>","/r")',expected:e()},
+ {name:"xml rejects NBSP before self close",formula:'FILTERXML("<r\u00a0/>","/r")',expected:e()},
+ {name:"xml rejects document leading NBSP",formula:'FILTERXML("\u00a0<r>7</r>","/r")',expected:e()},
+ {name:"xml rejects document trailing NBSP",formula:'FILTERXML("<r>7</r>\u00a0","/r")',expected:e()},
+ {name:"xml accepts XML syntax whitespace",formula:'FILTERXML(" \t\n<r\ta = \'v\'\n>7</r\t>\r\n","/r")',expected:n(7)},
+ {name:"xml preserves NBSP in attribute values",formula:'FILTERXML("<r a=\'x\u00a0y\'>7</r>","/r/@a")',expected:s("x\u00a0y")},
+);

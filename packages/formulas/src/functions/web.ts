@@ -101,7 +101,7 @@ function parseXml(input: string, context: FunctionContext): XmlNode {
     const parent = stack[stack.length - 1]!;
     if (source.startsWith("<!--", position)) {
       const end = source.indexOf("-->", position + 4);
-      if (end < 0 || source.slice(position + 4, end).includes("--")) throw new InvalidXml();
+      if (end < 0 || (source.slice(position + 4, end).includes("--") || source.slice(position + 4, end).endsWith("-"))) throw new InvalidXml();
       position = end + 3; continue;
     }
     if (source.startsWith("<?", position)) {
@@ -125,16 +125,16 @@ function parseXml(input: string, context: FunctionContext): XmlNode {
     if (source[position] !== "<") {
       const end = source.indexOf("<", position);
       const text = source.slice(position, end < 0 ? source.length : end);
-      if (text.includes("]]>") || stack.length === 1 && text.trim()) throw new InvalidXml();
+      if (text.includes("]]>") || stack.length === 1 && /[^ \t\r\n]/.test(text)) throw new InvalidXml();
       if (stack.length > 1) parent.children.push(decode(text));
       position += text.length; continue;
     }
-    const close = new RegExp(`^</(${NAME})\\s*>`).exec(source.slice(position));
+    const close = new RegExp(`^</(${NAME})[ \\t\\r\\n]*>`).exec(source.slice(position));
     if (close) {
       if (stack.length === 1 || parent.name !== close[1]) throw new InvalidXml();
       stack.pop(); position += close[0].length; continue;
     }
-    const open = new RegExp(`^<(${NAME})(?=\\s|/?>)`).exec(source.slice(position));
+    const open = new RegExp(`^<(${NAME})(?=[ \\t\\r\\n]|/?>)`).exec(source.slice(position));
     if (!open) {
       if (/^<[\u0080-\uffff]/.test(source.slice(position))) throw new UnsupportedXml("Unicode XML names require host support");
       throw new InvalidXml();
@@ -143,15 +143,15 @@ function parseXml(input: string, context: FunctionContext): XmlNode {
     const node: XmlNode = { name: open[1]!, order: nodes, attributes: new Map(), children: [] };
     if (node.name.includes(":")) throw new UnsupportedXml("Namespaces require host support");
     position += open[0].length;
-    while (!/^\s*\/?>/.test(source.slice(position))) {
+    while (!/^[ \t\r\n]*\/?>/.test(source.slice(position))) {
       context.operation();
-      const attribute = new RegExp(`^\\s+(${NAME})\\s*=\\s*(?:"([^"<]*)"|'([^'<]*)')`).exec(source.slice(position));
+      const attribute = new RegExp(`^[ \\t\\r\\n]+(${NAME})[ \\t\\r\\n]*=[ \\t\\r\\n]*(?:"([^"<]*)"|'([^'<]*)')`).exec(source.slice(position));
       if (!attribute || node.attributes.has(attribute[1]!)) throw new InvalidXml();
       if (attribute[1]!.includes(":") || attribute[1] === "xmlns") throw new UnsupportedXml("Namespaces require host support");
       node.attributes.set(attribute[1]!, decode((attribute[2] ?? attribute[3]!).replace(/[\t\n]/g, " ")));
       position += attribute[0].length;
     }
-    const end = /^\s*(\/?)>/.exec(source.slice(position))!;
+    const end = /^[ \t\r\n]*(\/?)>/.exec(source.slice(position))!;
     parent.children.push(node); position += end[0].length;
     if (!end[1]) stack.push(node);
   }

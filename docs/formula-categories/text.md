@@ -121,3 +121,5 @@ Primary semantic sources consulted:
 ## Independent review follow-up
 
 Review regressions cover error-valued delimiter arrays, unsupported text-array inputs, literal initial closing brackets and escaped control-character ranges in regex classes. TEXTSPLIT charges every delimiter comparison proportional to delimiter length; regex class predicate checks also consume operations.
+
+Regex class range ordering and membership now use the original endpoints; case-insensitive matching tests case variants against that original interval. A leading literal closing bracket uses the same atom/range path as an escaped closing bracket. Regressions cover crossing ASCII ranges, punctuation membership, reversed endpoints and both closing-bracket spellings.
