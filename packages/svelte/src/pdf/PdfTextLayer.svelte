@@ -87,7 +87,6 @@
     cursor: text;
   }
   svg {
-    will-change: opacity;
     opacity: 0;
     display: block;
     overflow: visible;

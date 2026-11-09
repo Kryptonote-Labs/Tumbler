@@ -25,7 +25,7 @@ const host: PdfPaintHost<Canvas, Path2D> = {
     return canvas;
   },
 };
-for (const name of ['graphics', 'inherited-page', 'hidden-ocr', 'inline-image', 'annotation']) {
+for (const name of ['graphics', 'inherited-page', 'hidden-ocr', 'inline-image', 'annotation', 'chromium-typography', 'truetype-extraction', 'positioned-text']) {
   test(`${name}: a device-pixel tile matches the full page including negative gutters`, async () => {
     const pdf = openPdfDocument(
       new Uint8Array(
