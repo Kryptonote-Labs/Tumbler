@@ -24,7 +24,7 @@ test('image placement syncs references, and a move is one undoable change', () =
     model.undo.redo(); expect(model.images.get('image')?.x).toBe(31);
     expect(initial.length).toBeLessThan(400);
     model.images.duplicate('image', 'copy'); model.images.rotate('copy'); model.images.hide('image');
-    expect(model.images.get('copy')).toMatchObject({ asset: image.asset, rotation: 90, x: 43 });
+    expect(model.images.get('copy')).toMatchObject({ asset: image.asset, rotation: 90, x: 53, width: 20, height: 40 });
     expect(model.images.get('image')?.hidden).toBe(true);
   } finally { model.doc.destroy(); peer.doc.destroy(); }
 });

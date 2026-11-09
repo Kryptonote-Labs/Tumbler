@@ -42,6 +42,7 @@
     onbox,
     imageUrls = {},
     onimagefiles,
+    onimage,
   }: {
     document: PdfDocument;
     model: PdfTextModel;
@@ -55,6 +56,7 @@
     onpagechange?: (index: number) => void;
     onpages?: (count: number) => void;
     onstyle?: (style: PdfTextStyle) => void;
+    onimage?: (id: string | null) => void;
     imageUrls?: Record<string, string>;
     onimagefiles?: (files: File[], target: { page: number; continuation: number; x: number; y: number }) => void;
     onbox?: (box: { x: number; y: number; width: number } | null) => void;
@@ -97,6 +99,7 @@
     | { first: ReturnType<PdfTextModel['anchor']>; last: ReturnType<PdfTextModel['anchor']> }
     | undefined;
   let activeImage = $state<string>();
+  $effect(() => { void revision; onimage?.(activeImage && selected.includes(activeImage) && !model.images.get(activeImage)?.hidden ? activeImage : null); });
   function selectImage(id: string, extend: boolean) {
     selected = extend ? [...new Set([...selected, id])] : selected.includes(id) ? selected : [id];
     active = undefined; activeImage = id; onselection?.(null);

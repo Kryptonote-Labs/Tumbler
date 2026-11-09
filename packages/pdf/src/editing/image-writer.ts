@@ -35,7 +35,8 @@ export function writePdfImages(document: PdfDocument, placements: { image: PdfIm
       xobjects.set(name, ref);
       const angle = image.rotation * Math.PI / 180, c = Math.round(Math.cos(angle)), s = Math.round(Math.sin(angle));
       const rotation = [c, s, -s, c, image.x + image.width / 2, image.y + image.height / 2] as const;
-      const matrix = multiply(inverse(viewport), multiply(rotation, [image.width, 0, 0, -image.height, -image.width / 2, image.height / 2]));
+      const width = image.rotation % 180 ? image.height : image.width, height = image.rotation % 180 ? image.width : image.height;
+      const matrix = multiply(inverse(viewport), multiply(rotation, [width, 0, 0, -height, -width / 2, height / 2]));
       content += `q ${matrix.map(n).join(' ')} cm /${name} Do Q\n`;
     }
     resources.set('XObject', xobjects);

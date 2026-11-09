@@ -36,6 +36,6 @@ export class PdfImageModel {
   }
   rotate(id: string) {
     const image = this.get(id);
-    if (image) this.place(id, { ...image, rotation: ((image.rotation + 90) % 360) as PdfImagePlacement['rotation'] });
+    if (image) this.place(id, { ...image, x: image.x + (image.width - image.height) / 2, y: image.y + (image.height - image.width) / 2, width: image.height, height: image.width, rotation: ((image.rotation + 90) % 360) as PdfImagePlacement['rotation'] });
   }
 }
