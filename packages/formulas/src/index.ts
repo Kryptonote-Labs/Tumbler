@@ -22,3 +22,5 @@ export type {
   FormulaScalarValue,
   FormulaWorkbookSource,
 } from "./evaluator.ts";
+
+export type { FunctionValue, FunctionArray, FunctionLambda, FunctionOmitted, FunctionReference, FunctionContext, FunctionRegistry, ExtendedFunction, FormulaFunctionServices } from "./function-runtime.ts";

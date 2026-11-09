@@ -1,4 +1,11 @@
 <script lang="ts">
+  import { pdfNavigation, scrollPdfDestination } from './navigation.ts';
+  import type { PdfDestination } from '@tumblerjs/pdf';
+  import type { PdfSearchController } from './search.svelte.ts';
+  import PdfMarkupLayer from './PdfMarkupLayer.svelte';
+  import { pdfMarkupFromRects, type PdfMarkupKind } from '@tumblerjs/pdf';
+  import { copyPdfText, pastePdfText } from './clipboard.ts';
+  import { pdfHistoryShortcut } from './history-shortcut.ts';
   import PdfSearch from './PdfSearch.svelte';
   import { pdfPagePosition } from './page-position.ts';
   import { PdfSearchIndex } from '@tumblerjs/pdf';
@@ -30,6 +37,8 @@
     model,
     fonts,
     scale = 4 / 3,
+    search,
+    searchEnabled = true,
     editable = true,
     adding = false,
     peers = [],
@@ -44,6 +53,8 @@
     model: PdfTextModel;
     fonts: PdfEditingFonts;
     scale?: number;
+    search?: PdfSearchController;
+    searchEnabled?: boolean;
     editable?: boolean;
     adding?: boolean;
     peers?: { id: string; name: string; color: string; selection?: Selection | null }[];
@@ -93,19 +104,55 @@
   const currentStyle = $derived.by(() => {
     void revision;
     return active
-      ? { ...model.styleAt(active, start + (end > start ? 1 : 0)), ...pending }
+      ? { ...model.styleAt(active, start + (end > start ? 1 : 0)), ...model.paragraph(active), ...pending }
       : defaultPdfTextStyle;
   });
   $effect(() => onstyle?.(currentStyle));
+  let formattingText = false;
+  /** Capture editing mode before a ribbon picker takes keyboard focus. */
+  export function captureFormattingSelection(focused: EventTarget | null = window.document.activeElement) {
+    if (focused === input) formattingText = true;
+    else if (focused && focused instanceof Node && root?.contains(focused)) formattingText = false;
+  }
+  export function fontChoices() { return fonts.choices; }
+  export function selectFont(key: string) { format(fonts.selection(key)); }
+  export function fontValue(style: PdfTextStyle) {
+    const face = fonts.get(style);
+    return fonts.choices.some(choice => choice.value === face.key) ? face.key : fonts.fontName(style);
+  }
+  export function formatParagraph(patch: Pick<PdfTextStyle, 'alignment' | 'lineSpacing'>) {
+    if (!editable || !active) return;
+    model.undo.stopCapturing();
+    model.formatParagraph(active, patch);
+    model.undo.stopCapturing();
+  }
+  /** Mark the selected glyphs on each output page without changing text formatting. */
+  export function annotate(kind: PdfMarkupKind, color: string) {
+    if (!editable || !active || start === end) return;
+    model.undo.stopCapturing();
+    model.doc.transact(() => {
+      for (const layout of layouts.filter(l => l.id === active)) {
+        const page = flow.pages[layout.page]!;
+        const rects = layout.glyphs.filter(g => g.end > start && g.start < end && g.text !== '\n').map(g => ({ x:g.x, y:g.y-g.style.size*0.85, width:g.width, height:g.style.size*1.15 }));
+        if (!rects.length) continue;
+        model.pages.materialize(page.source.index);
+        model.annotations.set({ id:crypto.randomUUID(), page:page.source.index, continuation:page.continuation, kind, color, quads:pdfMarkupFromRects(page.source, rects), hidden:false });
+      }
+    }, model.origin);
+    model.undo.stopCapturing();
+    input?.focus({ preventScroll:true });
+  }
+  const annotations = $derived.by(() => { void revision; return model.annotations.items(pdf); });
   export function format(patch: Partial<PdfTextStyle>) {
     if (!editable || !active) return;
-    if (window.document.activeElement !== input) {
+    if (window.document.activeElement !== input && !formattingText) {
       formatBox(patch);
       return;
     }
     model.undo.stopCapturing();
     if (start !== end) model.format(active, start, end, patch);
     else pending = { ...pending, ...pdfTextStylePatch(currentStyle, patch) };
+    model.undo.stopCapturing();
     input?.focus({ preventScroll: true });
   }
   $effect(() => {
@@ -140,7 +187,15 @@
     model.undo.stopCapturing();
     void select(id, 0);
   }
-  export function toggle(key: 'bold' | 'italic' | 'underline') {
+  export async function copyText(cut = false) {
+    if (!active || (cut && !editable)) return;
+    await copyPdfText(model, active, start, end, navigator.clipboard, () => cut && editable);
+  }
+  export async function pasteText() {
+    if (!editable || !active) return;
+    await pastePdfText(model, active, start, end, navigator.clipboard, () => editable);
+  }
+  export function toggle(key: 'bold' | 'italic' | 'underline' | 'strike') {
     format({ [key]: !currentStyle[key] });
   }
   export function undo(redo = false) {
@@ -148,6 +203,10 @@
       if (redo) model.undo.redo();
       else model.undo.undo();
     }
+  }
+  const navigationOptions = $derived({ document: pdf, pages: flow.pages, scale, editable });
+  export function goToDestination(target: PdfDestination) {
+    scrollPdfDestination(root, target, navigationOptions);
   }
   export function goToPage(index: number) {
     root?.querySelector(`[data-pdf-page="${index + 1}"]`)?.scrollIntoView({ block: 'start' });
@@ -233,9 +292,19 @@
         ],
       );
     }
-    if (mod && event.key.toLowerCase() === 'z') {
+    if (mod && !event.altKey) {
+      const alignment = ({ l: 'left', e: 'center', r: 'right', j: 'justify' } as const)[event.key.toLowerCase() as 'l'];
+      const spacing = ({ '1': 1, '2': 2, '5': 1.5 } as const)[event.key as '1'];
+      if (alignment) { event.preventDefault(); formatParagraph({ alignment }); }
+      if (spacing) { event.preventDefault(); formatParagraph({ lineSpacing: spacing }); }
+    }
+    if (mod && event.shiftKey && event.key.toLowerCase() === 'x') {
+      event.preventDefault(); toggle('strike');
+    }
+    const history = pdfHistoryShortcut(event);
+    if (history) {
       event.preventDefault();
-      undo(event.shiftKey);
+      undo(history === 'redo');
     }
     if (event.key === 'Home' || event.key === 'End') {
       const layout = layouts.find(
@@ -316,11 +385,11 @@
           : undefined;
   }
   function pointer(event: PointerEvent, page: number) {
-    if (event.button !== 0 || (adding && !editable)) return;
+    if (![0, 2].includes(event.button) || (adding && !editable)) return;
     const host = event.currentTarget as HTMLElement,
       { x, y } = coordinates(event, host, page);
     onpagechange?.(page);
-    if (adding) {
+    if (adding && event.button === 0) {
       const targetPage = flow.pages[page]!,
         id = crypto.randomUUID();
       model.add({
@@ -363,6 +432,11 @@
       active = undefined;
       selected = [];
       onselection?.(null);
+      return;
+    }
+    if (event.button === 2) {
+      if (active !== layout.id) void select(layout.id, 0, model.text(layout.id).length);
+      event.preventDefault();
       return;
     }
     const offset = hitPdfText(layout, x, y).offset;
@@ -447,6 +521,7 @@
   data-pdf-document
   data-pdf-max-width={pdf.pages.reduce((maximum, page) => Math.max(maximum, page.width), 0)}
   class="pdf-editable"
+  use:pdfNavigation={navigationOptions}
   bind:this={root}
 >
   {#each flow.pages as page (page.id)}
@@ -494,6 +569,7 @@
           style:width="100%"
           style:height="100%"
         ></canvas>{/if}
+        <PdfMarkupLayer page={page.source} annotations={annotations.filter(a => a.page === page.source.index && a.continuation === page.continuation)} />
         {#if visiblePages.has(page.id) || selected.some((id) => layouts.some((l) => l.id === id && l.page === page.index))}<div class="text-layer" style:transform={`scale(${scale})`}>
           {#each layouts.filter((l) => l.page === page.index && selected.includes(l.id) && !adding && !model.placement(l.id)?.hidden) as layout (layout.id)}
             <PdfTextBox
@@ -546,7 +622,7 @@
   ></textarea>
 </div>
 
-<PdfSearch root={root} {scale} index={() => searchIndex} />
+<PdfSearch root={root} {scale} index={() => searchIndex} controller={search} enabled={searchEnabled} model={() => editable && !pdf.source.encrypted ? model : undefined} />
 
 <style>
   .pdf-editable {
@@ -570,7 +646,7 @@
     box-shadow: 0 1px 5px #0005;
     color-scheme: light;
     touch-action: none;
-    cursor: text;
+    cursor: var(--pdf-link-cursor, text);
   }
   canvas {
     display: block;

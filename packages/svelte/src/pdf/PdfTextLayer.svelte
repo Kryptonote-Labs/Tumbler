@@ -84,7 +84,7 @@
     user-select: text;
     -webkit-user-select: text;
     color: transparent;
-    cursor: text;
+    cursor: var(--pdf-link-cursor, text);
   }
   svg {
     opacity: 0;

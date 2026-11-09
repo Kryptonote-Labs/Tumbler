@@ -1,3 +1,4 @@
+import { writePdfMarkup } from './markup.ts';
 import {
   PdfName,
   PdfReference,
@@ -9,6 +10,7 @@ import {
   unsupported,
 } from '../objects.ts';
 import { openPdfDocument, type PdfDocument } from '../document.ts';
+import { copyPdfPageSnapshot } from './page-snapshot.ts';
 import { exportPdfPageState } from './page-writer.ts';
 import { extractPdfPages } from './extract.ts';
 import { PdfSyntax } from '../syntax.ts';
@@ -40,7 +42,7 @@ export function exportEditedPdf(
   fonts: PdfEditingFonts,
 ) {
   if (!model.ids().some((id) => model.dirty(id)))
-    return model.pages.dirty() ? exportPdfPageState(document, model) : document.bytes();
+    return (model.pages.dirty() || model.annotations.records.size) ? exportPdfPageState(document, model) : document.bytes();
   fonts.importDocument(document);
   const flow = layoutPdfTextFlow(model, fonts, document.pages);
   if (!flow.pages.length)
@@ -48,7 +50,7 @@ export function exportEditedPdf(
   const dirty = [
     ...new Set(flow.regions.filter((region) => region.render).map((region) => region.id)),
   ];
-  if (!dirty.length && !model.pages.dirty()) return document.bytes();
+  if (!dirty.length && !model.pages.dirty() && !model.annotations.records.size) return document.bytes();
   if (document.source.trailer.has('Encrypt'))
     unsupported('Encrypted PDF editing requires an encryption-aware writer.');
   const sourcePages = new Map(
@@ -109,6 +111,12 @@ export function exportEditedPdf(
     let content = pageContent.get(layout.page) ?? '';
     const viewport = inverse(pageViewport(page));
     for (const glyph of layout.glyphs) {
+      if (glyph.style.background && /^#[0-9a-f]{6}$/i.test(glyph.style.background)) {
+        const fill = [1, 3, 5].map(i => n(parseInt(glyph.style.background!.slice(i, i + 2), 16) / 255)).join(' ');
+        content += `q ${viewport.map(n).join(' ')} cm ${fill} rg ${n(glyph.x)} ${n(glyph.y - glyph.style.size * 0.85)} ${n(glyph.width)} ${n(glyph.style.size * 1.15)} re f Q\n`;
+      }
+    }
+    for (const glyph of layout.glyphs) {
       if (glyph.text === '\n') continue;
       const style = glyph.style,
         shaped = fonts.shape(glyph.text, style),
@@ -151,6 +159,9 @@ export function exportEditedPdf(
         if (shaped.bold) content += `${n(style.size * 0.025)} w\n`;
         content += `BT /${embeddedFont.resource} ${n(style.size)} Tf ${shaped.bold ? '2 Tr ' : ''}${tm.map(n).join(' ')} Tm <${code.cid.toString(16).padStart((face.sourceGlyphs?.get(glyph.text)?.length ?? 2) * 2, '0')}> Tj ET\n`;
         x += p.xAdvance * scale;
+      }
+      if (style.strike) {
+        content += `q ${viewport.map(n).join(' ')} cm ${n(style.size / 16)} w ${n(glyph.x)} ${n(glyph.y - style.size * 0.3)} m ${n(glyph.x + glyph.width)} ${n(glyph.y - style.size * 0.3)} l S Q\n`;
       }
       if (style.underline) {
         const [a, b, c, d, e, f] = viewport;
@@ -246,6 +257,7 @@ export function exportEditedPdf(
   const parent = hasContinuations
     ? writer.value(new Map<string, PdfValue>([['Type', new PdfName('Pages')]]))
     : undefined;
+  const outputRefs = new Map(flow.pages.map(page => [page.id, page.continuation > 0 || page.source.index < 0 ? writer.value(null) : page.source.reference]));
   const pageRefs: PdfReference[] = [];
   for (const outputPage of flow.pages) {
     const page = outputPage.source,
@@ -300,11 +312,39 @@ export function exportEditedPdf(
       info.set('Rotate', (page.rotation + outputPage.rotation) % 360);
       info.set('UserUnit', page.userUnit);
     }
+    const snapshot = !outputPage.continuation && model.pages.records.get(page.id)?.get('snapshot');
+    const target = outputRefs.get(outputPage.id)!;
+    if (snapshot instanceof Uint8Array) {
+      const links = model.pages.records.get(page.id)?.get('snapshotLinks') as Record<string, string> | undefined;
+      const references = new Map(Object.entries(links ?? {}).flatMap(([key, id]) => {
+        const reference = outputRefs.get(id);
+        return reference ? [[key, reference] as const] : [];
+      }));
+      const original = copyPdfPageSnapshot(writer, snapshot, target, references);
+      const baseResources = original.get('Resources') as PdfDictionary;
+      // The snapshot copier isolates its source resources in a form.
+      const originalContents = original.get('Contents');
+      const streams = originalContents == null ? [] : Array.isArray(originalContents) ? originalContents : [originalContents];
+      for (const [key, value] of original) if (!['Contents', 'Resources', 'MediaBox', 'CropBox', 'Rotate', 'UserUnit'].includes(key)) info.set(key, value);
+      if (content) {
+        info.set('Contents', [writer.stream(bytes('q\n')), ...streams, writer.stream(bytes('Q\n')), ...(info.get('Contents') as PdfValue[])]);
+        const xobjects = resources.get('XObject');
+        if (xobjects instanceof Map) {
+          const existing = baseResources.get('XObject');
+          if (existing instanceof Map) for (const [key, value] of existing) xobjects.set(key, value);
+        }
+        for (const [key, value] of baseResources) if (key !== 'XObject') resources.set(key, value);
+      } else {
+        if (originalContents) info.set('Contents', originalContents);
+        for (const [key, value] of baseResources) resources.set(key, value);
+      }
+    }
+    writePdfMarkup(writer, document, page, outputPage.continuation, model.annotations, info);
     info.set('Resources', resources);
-    if (continuation) pageRefs.push(writer.value(info));
+    if (continuation) pageRefs.push(writer.value(info, target));
     else {
       pageRefs.push(page.reference);
-      if (parent || pageContent.has(pageIndex) || seeds.length) writer.value(info, page.reference);
+      if (parent || pageContent.has(pageIndex) || seeds.length || model.annotations.records.size) writer.value(info, page.reference);
     }
   }
   if (parent) {
