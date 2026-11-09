@@ -56,28 +56,37 @@ export function boundedRegex(
       const tests: ((s: string) => boolean)[] = [];
       const invert = pattern[p] === "^";
       if (invert) p++;
-      while (p < pattern.length && pattern[p] !== "]") {
+      function classAtom(): { literal?: string; test: (s: string) => boolean } {
         c.operation();
-        const a = pattern[p++]!;
-        if (a === "\\") {
-          tests.push(escaped());
-          continue;
+        const value = pattern[p++];
+        if (value === undefined) throw new SyntaxError("class atom");
+        if (value !== "\\") return {literal: value, test: s => equal(s, value)};
+        const escape = pattern[p];
+        const control: Record<string, string> = {n: "\n", r: "\r", t: "\t", f: "\f", v: "\v"};
+        if (escape !== undefined && control[escape] !== undefined) {
+          p++;
+          const literal = control[escape]!;
+          return {literal, test: s => equal(s, literal)};
         }
+        const test = escaped();
+        return escape !== undefined && !/[a-zA-Z0-9]/.test(escape) ? {literal: escape, test} : {test};
+      }
+      // A closing bracket in the first class position is a literal (also after ^).
+      if (pattern[p] === "]") { p++; tests.push(s => equal(s, "]")); }
+      while (p < pattern.length && pattern[p] !== "]") {
+        const a = classAtom();
         if (pattern[p] === "-" && pattern[p + 1] !== "]") {
           p++;
-          const b = pattern[p++]!;
-          if (a > b) throw new SyntaxError("range");
-          tests.push((s) => {
-            const t = insensitive ? s.toLowerCase() : s;
-            return (
-              t >= (insensitive ? a.toLowerCase() : a) &&
-              t <= (insensitive ? b.toLowerCase() : b)
-            );
-          });
-        } else tests.push((s) => equal(s, a));
+          const b = classAtom();
+          if (a.literal === undefined || b.literal === undefined) throw new UnsupportedRegex("nonliteral class range");
+          const first = insensitive ? a.literal.toLowerCase() : a.literal;
+          const last = insensitive ? b.literal.toLowerCase() : b.literal;
+          if (first > last) throw new SyntaxError("range");
+          tests.push(s => { const value = insensitive ? s.toLowerCase() : s; return value >= first && value <= last; });
+        } else tests.push(a.test);
       }
       if (pattern[p++] !== "]") throw new SyntaxError("class");
-      return { kind: "char", test: (s) => tests.some((t) => t(s)) !== invert };
+      return { kind: "char", test: (s) => tests.some((t) => { c.operation(); return t(s); }) !== invert };
     }
     if (x === "\\") return { kind: "char", test: escaped() };
     if (x === ".")
