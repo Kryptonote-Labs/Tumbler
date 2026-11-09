@@ -3,6 +3,7 @@ import {
   OpcPackage,
   OpcPackageError,
   openOpcPackage,
+  openOpcPackageArchive,
   saveOpcPackage,
 } from "./package.ts";
 import { PartName } from "./part-name.ts";
@@ -213,6 +214,15 @@ export class PackageTransaction {
   }
 
   commit(): Uint8Array {
+    return this.#commit(false).archive.originalBytes();
+  }
+
+  /** Commits validated package members without encoding a ZIP container. */
+  commitPackage(): OpcPackage {
+    return this.#commit(true);
+  }
+
+  #commit(native: boolean): OpcPackage {
     this.#assertActive();
     this.#validateNoIncomingRelationships();
     if (
@@ -220,7 +230,9 @@ export class PackageTransaction {
       this.#removals.size === 0 &&
       this.#relationshipSets.size === 0
     ) {
-      const output = this.#commitReplacements();
+      const output = native
+        ? openOpcPackageArchive(this.package.archive.withChanges({ replacements: this.#zipReplacements() }))
+        : openOpcPackage(this.#commitReplacements());
       this.#status = "committed";
       return output;
     }
@@ -280,12 +292,11 @@ export class PackageTransaction {
       replacements.set("[Content_Types].xml", serializeContentTypes(updatedContentTypes));
     }
 
-    const output = writeZipArchiveChanges(this.package.archive, {
-      replacements,
-      additions,
-      removals,
-    });
-    validateRelationshipGraph(openOpcPackage(output));
+    const changes = { replacements, additions, removals };
+    const output = native
+      ? openOpcPackageArchive(this.package.archive.withChanges(changes))
+      : openOpcPackage(writeZipArchiveChanges(this.package.archive, changes));
+    validateRelationshipGraph(output);
     this.#status = "committed";
     return output;
   }

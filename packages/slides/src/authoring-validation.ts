@@ -17,6 +17,8 @@ export function presentationFormattingPatch(patch: FormattingPatch | undefined) 
     throw new RangeError(
       'Presentation font sizes use hundredth-point steps from 1 to 4000 points.',
     );
+  if (normalized?.cell) throw new RangeError('Presentation text does not support cell formatting.');
+  if (normalized?.text?.strike) throw new RangeError('Strikethrough is not supported by this text command.');
   if (normalized?.block?.verticalAlignment)
     throw new RangeError('Vertical alignment is not supported by this text command.');
   return normalized;

@@ -8,7 +8,7 @@ import {
   type LosslessXmlNode,
 } from "@tumblerjs/ooxml";
 import { parseFormula } from "@tumblerjs/formulas";
-import { beginPackageTransaction, type PackageTransaction, type PartName } from "@tumblerjs/opc";
+import { beginPackageTransaction, type PackageTransaction, type OpcPackage, type PartName } from "@tumblerjs/opc";
 import { formatCellRange, formatCellReference, parseCellReference, type CellAddress, type CellRange } from "./references.ts";
 import { openWorksheet, type SpreadsheetCellValue } from "./worksheet.ts";
 import { SpreadsheetError, type SpreadsheetSheet, type SpreadsheetWorkbook } from "./workbook.ts";
@@ -76,10 +76,15 @@ export class SpreadsheetEditor {
   }
 
   commit(): Uint8Array {
+    return this.commitPackage().archive.originalBytes();
+  }
+
+  /** Commit into native package members without serializing a ZIP. */
+  commitPackage(): OpcPackage {
     this.#assertActive();
     if (this.#edits.size === 0) {
       this.#status = "committed";
-      return this.workbook.package.archive.originalBytes();
+      return this.workbook.package;
     }
     const editsByPart = new Map<string, StagedCellEdit[]>();
     for (const edit of this.#edits.values()) {
@@ -98,12 +103,12 @@ export class SpreadsheetEditor {
     }
     if (replacements.size === 0) {
       this.#status = "committed";
-      return this.workbook.package.archive.originalBytes();
+      return this.workbook.package;
     }
     const transaction = beginPackageTransaction(this.workbook.package);
     for (const [partName, bytes] of replacements) transaction.replacePart(partName, bytes);
     invalidateCalculationState(transaction, this.workbook);
-    const output = transaction.commit();
+    const output = transaction.commitPackage();
     this.#status = "committed";
     return output;
   }

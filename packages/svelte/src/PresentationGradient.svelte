@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { linearGradientLine, rectangularGradientFaces } from '@tumblerjs/slides';
-  import type { DrawingGradient } from '@tumblerjs/slides';
+  import { linearGradientLine, rectangularGradientFaces } from '@tumblerjs/ooxml';
+  import type { DrawingGradient } from '@tumblerjs/ooxml';
   let {
     gradient,
     id,

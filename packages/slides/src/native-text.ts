@@ -71,7 +71,9 @@ function formatRun(
     };
   if (t.color)
     next.color =
-      'set' in t.color && t.color.set.type === 'rgb' ? nativeColour(t.color.set.value) : base.color;
+      'set' in t.color && t.color.set.type !== 'automatic' && t.color.set.value !== undefined
+        ? nativeColour(t.color.set.value)
+        : base.color;
   const authored = new Set(run.nativeAuthored);
   for (const [change, fields] of [
     [t.bold, ['bold']],

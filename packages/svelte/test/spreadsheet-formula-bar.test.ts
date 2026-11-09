@@ -21,6 +21,11 @@ describe("Svelte spreadsheet formula bar", () => {
     expect(spreadsheetFormulaBarEdit("A1", "FALSE", undefined)).toEqual({ kind: "value", reference: "A1", value: false });
   });
 
+  test("Text format preserves numeric-looking and leading-equals literals", () => {
+    expect(spreadsheetFormulaBarEdit("A1", "001", undefined, undefined, true)).toEqual({ kind: "value", reference: "A1", value: "001" });
+    expect(spreadsheetFormulaBarEdit("A1", "=literal", undefined, undefined, true)).toEqual({ kind: "value", reference: "A1", value: "=literal" });
+  });
+
   test("identifies the original target sheet after the host switches worksheets", () => {
     expect(spreadsheetFormulaBarEdit("C7", "='Project Inputs'!B4", undefined, "Dashboard")).toEqual({
       kind: "formula",
