@@ -403,3 +403,10 @@ for (const guess of ["",",-0.9"]) {
  cases.push({name:`XIRR cancelled same-date terms retain a genuine root ${guess||"default"}`,formula:`XIRR(Inputs!A1:A5,Inputs!B1:B5${guess})`,cells:{...cells,A4:{type:"number",value:-1},A5:{type:"number",value:2},B5:{type:"number",value:44196}},expected:{type:"number",value:1}});
 }
 cases.push({name:"XIRR exact same-date net retains a small term between huge cancellations",formula:"XIRR(Inputs!A1:A5,Inputs!B1:B5)",cells:{A1:{type:"number",value:0},A2:{type:"number",value:1e300},A3:{type:"number",value:1},A4:{type:"number",value:-1e300},A5:{type:"number",value:-2},B1:{type:"number",value:43831},B2:{type:"number",value:47481},B3:{type:"number",value:47481},B4:{type:"number",value:47481},B5:{type:"number",value:47846}},expected:{type:"number",value:1}});
+for (const future of [1e-3,1e-5,1e-10]) for (const guess of ["",`,${future-1}`]) {
+ const cells = {A1:{type:"number" as const,value:-1},A2:{type:"number" as const,value:future},B1:{type:"number" as const,value:43831},B2:{type:"number" as const,value:44196}};
+ cases.push(
+  {name:`IRR negative root log precision ${future} ${guess||"default"}`,formula:`IRR(Inputs!A1:A2${guess})`,cells,expected:{type:"number",value:future-1}},
+  {name:`XIRR negative root log precision ${future} ${guess||"default"}`,formula:`XIRR(Inputs!A1:A2,Inputs!B1:B2${guess})`,cells,expected:{type:"number",value:future-1}},
+ );
+}
