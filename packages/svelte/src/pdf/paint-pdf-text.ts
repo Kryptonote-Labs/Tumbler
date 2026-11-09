@@ -1,5 +1,7 @@
 import type { PdfFlowRegion, PdfEditingFonts } from '@tumblerjs/pdf';
 
+const paths = new WeakMap<object, Path2D>();
+
 /** Paint edited glyphs with the same metrics used by layout and PDF export. */
 export function paintPdfText(
   context: CanvasRenderingContext2D,
@@ -20,7 +22,11 @@ export function paintPdfText(
         context.scale(em, -em);
         if (shaped.italic) context.transform(1, 0, 0.2, 1, 0, 0);
         context.fillStyle = glyph.style.color;
-        const path = new Path2D(outline.path.toSVG());
+        let path = paths.get(outline);
+        if (!path) {
+          path = new Path2D(outline.path.toSVG());
+          paths.set(outline, path);
+        }
         context.fill(path);
         if (shaped.bold) {
           context.strokeStyle = glyph.style.color;

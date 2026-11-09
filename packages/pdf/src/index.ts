@@ -27,7 +27,7 @@ export * from "./editing/model.ts";
 export * from "./editing/layout.ts";
 
 export { exportEditedPdf } from "./editing/writer.ts";
-export { placePdfScene } from "./editing/placement.ts";
+export { placePdfScene, placePdfSceneSources, pdfScenePlacements, type PdfScenePlacement } from "./editing/placement.ts";
 
 export { PdfPageModel, type PdfManagedPage } from "./editing/pages.ts";
 export { extractPdfPages } from "./editing/extract.ts";

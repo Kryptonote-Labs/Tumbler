@@ -1,11 +1,14 @@
 <script lang="ts">
   import PdfSearch from './PdfSearch.svelte';
+  import { pdfPagePosition } from './page-position.ts';
   import { PdfSearchIndex } from '@tumblerjs/pdf';
   import { pdfTextInputChange, type PdfInputSelection } from './text-input.ts';
+  import { PdfPageRenderer } from './page-renderer.ts';
   import { paintEditablePdfPage } from './paint-editable-page.ts';
   import PdfTextBox from './PdfTextBox.svelte';
   import PdfEditableText from './PdfEditableText.svelte';
   import { onMount, tick, untrack } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import * as Y from 'yjs';
   import {
     PdfInterpreter,
@@ -57,6 +60,7 @@
     start = $state(0),
     end = $state(0),
     pending = $state<Partial<PdfTextStyle>>({});
+  const visiblePages = new SvelteSet<string>();
   let input: HTMLTextAreaElement;
   let root = $state<HTMLDivElement>();
   let compositionBase: PdfTextModel | undefined;
@@ -69,6 +73,12 @@
     if (editable && model.pages.initialize(pdf.pages)) untrack(() => revision++);
   });
   const interpreter = $derived(new PdfInterpreter(pdf));
+  let renderer = $state.raw<PdfPageRenderer>();
+  $effect(() => {
+    const current = new PdfPageRenderer(pdf);
+    renderer = current;
+    return () => current.destroy();
+  });
   const flow = $derived.by(() => {
     void revision;
     fonts.importDocument(pdf);
@@ -442,6 +452,7 @@
   {#each flow.pages as page (page.id)}
     <div
       class="pdf-page-frame"
+      use:pdfPagePosition={{ index: page.index, oncurrent: onpagechange }}
       style:width={`${(page.rotation % 180 ? page.source.height : page.source.width) * scale}px`}
       style:height={`${(page.rotation % 180 ? page.source.width : page.source.height) * scale}px`}
     >
@@ -462,24 +473,28 @@
         role="group"
         aria-label="PDF page"
       >
-        <canvas
+        {#if renderer}<canvas
           use:paintEditablePdfPage={{
             index: page.index,
             scale,
             source: page.source.index,
             continuation: page.continuation,
-            interpreter,
+            renderer,
             model,
             fonts,
             pdf,
             flow,
             selected,
+            onvisible: (visible) => {
+              if (visible) visiblePages.add(page.id);
+              else visiblePages.delete(page.id);
+            },
           }}
           aria-label={`Page ${page.index + 1}`}
           style:width="100%"
           style:height="100%"
-        ></canvas>
-        <div class="text-layer" style:transform={`scale(${scale})`}>
+        ></canvas>{/if}
+        {#if visiblePages.has(page.id) || selected.some((id) => layouts.some((l) => l.id === id && l.page === page.index))}<div class="text-layer" style:transform={`scale(${scale})`}>
           {#each layouts.filter((l) => l.page === page.index && selected.includes(l.id) && !adding && !model.placement(l.id)?.hidden) as layout (layout.id)}
             <PdfTextBox
               {model}
@@ -500,7 +515,7 @@
             {end}
             onfocus={(id) => void select(id, 0)}
           />
-        </div>
+        </div>{/if}
       </div>
     </div>
   {/each}

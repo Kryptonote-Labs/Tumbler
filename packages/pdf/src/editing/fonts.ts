@@ -55,6 +55,8 @@ const familyKey = (family: string) =>
 /** Source programs and source code-to-glyph mappings remain authoritative for existing text.
  * Full matching faces extend subset fonts for new characters. Fallback affects only missing glyphs. */
 export class PdfEditingFonts {
+  revision = 0;
+  private shapes = new WeakMap<PdfEditingFont, Map<string, Pick<PdfEditingShape, 'glyphs' | 'positions'>>>();
   private fonts = new Map<string, PdfEditingFont>();
   private documents = new WeakSet<PdfDocument>();
   add(key: string, bytes: Uint8Array, source?: PdfFont) {
@@ -64,6 +66,7 @@ export class PdfEditingFonts {
     const name = typeof font.postscriptName === 'string' ? font.postscriptName : source?.baseName ?? key;
     const family = typeof font.familyName === 'string' ? font.familyName : source?.baseName ?? key;
     const subfamily = typeof font.subfamilyName === 'string' ? font.subfamilyName : source?.baseName ?? key;
+    this.revision++;
     this.fonts.set(key, {
       key,
       name,
@@ -75,7 +78,7 @@ export class PdfEditingFonts {
       italic: /italic|oblique/i.test(subfamily),
     });
   }
-  importDocument(document: PdfDocument) {
+  private *importPages(document: PdfDocument) {
     if (this.documents.has(document)) return;
     const interpreter = new PdfInterpreter(document);
     for (const page of document.pages) {
@@ -96,9 +99,23 @@ export class PdfEditingFonts {
             width: (element.glyph.width * face.font.unitsPerEm) / 1000,
           });
       }
+      this.revision++;
       interpreter.releasePage(page.index);
+      yield;
     }
     this.documents.add(document);
+  }
+  importDocument(document: PdfDocument) {
+    const pages = this.importPages(document);
+    while (!pages.next().done) { /* Consume synchronously for headless callers. */ }
+  }
+  /** Prepare source fonts a page at a time, allowing the host to paint or cancel between pages. */
+  async forkAsync(document: PdfDocument, yieldControl: () => Promise<void>) {
+    const result = new PdfEditingFonts();
+    result.fonts = new Map(this.fonts);
+    await yieldControl();
+    for (const _ of result.importPages(document)) await yieldControl();
+    return result;
   }
   fork(document: PdfDocument) {
     const result = new PdfEditingFonts();
@@ -134,12 +151,18 @@ export class PdfEditingFonts {
   shape(text: string, style: PdfTextStyle): PdfEditingShape {
     const face = this.get(style, text),
       original = face.sourceGlyphs?.get(text);
-    const run = original
+    let cache = this.shapes.get(face);
+    if (!cache) this.shapes.set(face, cache = new Map());
+    let run = cache.get(text);
+    if (!run) {
+      run = original
       ? {
           glyphs: [face.font.getGlyph(original.id)],
           positions: [{ xAdvance: original.width, yAdvance: 0, xOffset: 0, yOffset: 0 }],
         }
       : face.font.layout(text);
+      cache.set(text, run);
+    }
     return {
       face,
       glyphs: run.glyphs,
