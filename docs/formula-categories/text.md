@@ -117,3 +117,7 @@ Primary semantic sources consulted:
 - [FIXED](https://support.microsoft.com/en-us/excel/functions/fixed-function)
 - [CHAR](https://support.microsoft.com/en-us/excel/functions/char-function)
 - [PHONETIC](https://support.microsoft.com/en-us/excel/functions/phonetic-function)
+
+## Independent review follow-up
+
+Review regressions cover error-valued delimiter arrays, unsupported text-array inputs, literal initial closing brackets and escaped control-character ranges in regex classes. TEXTSPLIT charges every delimiter comparison proportional to delimiter length; regex class predicate checks also consume operations.
