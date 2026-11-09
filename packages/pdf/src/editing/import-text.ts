@@ -66,7 +66,7 @@ export function importPdfText(document: PdfDocument): PdfTextSeed[] {
 
 /** Yield completed pages in source order so callers can build editing state without retaining every page scene. */
 export function* iteratePdfText(document: PdfDocument): Generator<PdfTextSeed> {
-  const interpreter = new PdfInterpreter(document);
+  const interpreter = new PdfInterpreter(document, undefined, { deferImages: true });
   let count = 0;
   for (const page of document.pages) {
     const blocks: PdfTextSeed[] = [];
