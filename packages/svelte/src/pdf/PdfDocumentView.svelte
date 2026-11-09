@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { pdfNavigation, scrollPdfDestination } from './navigation.ts';
+  import type { PdfDestination } from '@tumblerjs/pdf';
+  import type { PdfSearchController } from './search.svelte.ts';
   import PdfSearch from './PdfSearch.svelte';
   import { PdfSearchIndex } from '@tumblerjs/pdf';
   import { onMount } from 'svelte';
@@ -10,11 +13,15 @@
   let {
     document,
     scale = 4 / 3,
+    search,
+    searchEnabled = true,
     onpagechange,
     onerror,
   }: {
     document: PdfDocument;
     scale?: number;
+    search?: PdfSearchController;
+    searchEnabled?: boolean;
     onpagechange?: (page: number) => void;
     onerror?: (error: Error, page: number) => void;
   } = $props();
@@ -48,6 +55,14 @@
       element.ownerDocument.removeEventListener('copy', copy);
     };
   });
+  const navigationOptions = $derived({
+    document: document,
+    pages: document.pages.map((source) => ({ source, rotation: 0 })),
+    scale,
+  });
+  export function goToDestination(target: PdfDestination) {
+    scrollPdfDestination(host, target, navigationOptions);
+  }
   export function goToPage(index: number) {
     host?.querySelector(`[data-pdf-page="${index + 1}"]`)?.scrollIntoView({ block: 'start' });
   }
@@ -58,6 +73,7 @@
   class="pdf-document"
   data-pdf-document
   data-pdf-max-width={document.pages.reduce((maximum, page) => Math.max(maximum, page.width), 0)}
+  use:pdfNavigation={navigationOptions}
   bind:this={host}
 >
   {#if renderer}
@@ -69,7 +85,7 @@
   {/if}
 </div>
 
-<PdfSearch root={host} {scale} index={() => searchIndex} />
+<PdfSearch root={host} {scale} index={() => searchIndex} controller={search} enabled={searchEnabled} />
 
 <style>
   .pdf-document {
@@ -79,5 +95,6 @@
     gap: 20px;
     padding: 24px;
     min-width: min-content;
+    cursor: var(--pdf-link-cursor, auto);
   }
 </style>

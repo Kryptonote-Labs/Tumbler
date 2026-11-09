@@ -37,9 +37,12 @@ export type { PdfSearchMatch, PdfSearchOptions, PdfSearchRect, PdfSearchResult }
 
 export { mergePdfDocuments, parsePdfPageSelection } from './merge.ts';
 export type { PdfMergeInput } from './merge.ts';
-export { deletePdfModelPages } from './editing/page-operations.ts';
+export { deletePdfModelPages, duplicatePdfModelPages, insertPdfModelPages } from './editing/page-operations.ts';
 
 export { createEditablePdfCopy } from "./editing/editable-copy.ts";
 
 export * from './editing/image-model.ts';
 export type { PdfImagePixels } from './editing/image-writer.ts';
+export { PdfNavigation, isSafePdfUri } from "./navigation.ts";
+export type { PdfDestination, PdfLinkTarget, PdfLink, PdfOutlineEntry } from "./navigation.ts";
+export * from './editing/markup.ts';

@@ -390,3 +390,13 @@ for an Open link; the merge setup remains intact. Host `disabled` prevents creat
 between visible thumbnails of the same source document.
 
 Hosts can retain a reactive `createPdfMergeState()` per document and pass it as `session` to preserve source choices, output name and expanded row across mounts.
+
+PDF viewers follow internal destinations and safe HTTP, HTTPS and mailto links. In
+`PdfEditableDocument`, Ctrl/Cmd-click follows links while plain clicks still edit or select.
+Both PDF document components expose `goToDestination(target)` for outline navigation.
+Navigation follows source page identities through reorder, insertion and deletion.
+Hosted PDF merge sources can provide a `read(signal)` callback alongside their initial `bytes`.
+`PdfMerge` calls it when adding the source and immediately before creation, preserving page choices
+and position. Reads may return fresh bytes or an already authenticated `PdfDocument`. Give initial
+sources a stable `key` when retaining `session` across mounts to replace the host read callback.
+Callbacks and authenticated documents remain in memory only.

@@ -40,12 +40,10 @@ export class PdfWriter {
     this.objects.set(ref.object, { reference: ref, data: bytes(serializePdfValue(value)) });
     return ref;
   }
-  stream(data: Uint8Array, info: PdfDictionary = new Map(), compress = false) {
-    const ref = new PdfReference(this.next++),
-      dictionary = new Map(info);
-    dictionary.delete('Filter');
-    dictionary.delete('DecodeParms');
-    if (compress) { data = zlibSync(data); dictionary.set('Filter', new PdfName('FlateDecode')); }
+  stream(data: Uint8Array, info: PdfDictionary = new Map(), options: { reference?: PdfReference; encoded?: boolean; compress?: boolean } = {}) {
+    const ref = options.reference ?? new PdfReference(this.next++), dictionary = new Map(info);
+    if (!options.encoded) { dictionary.delete('Filter'); dictionary.delete('DecodeParms'); }
+    if (options.compress) { data = zlibSync(data); dictionary.set('Filter', new PdfName('FlateDecode')); }
     dictionary.set('Length', data.length);
     const head = bytes(serializePdfValue(dictionary) + '\nstream\n'),
       tail = bytes('\nendstream');

@@ -1,3 +1,4 @@
+import { PdfMarkupModel } from './markup.ts';
 import { pdfSourceAttribute, pdfStyleAttributes } from './source-spacing.ts';
 import * as Y from 'yjs';
 import { PdfImageModel } from './image-model.ts';
@@ -22,12 +23,14 @@ export class PdfTextModel {
   readonly regions: Y.Map<Y.Map<unknown>>;
   readonly pages: PdfPageModel;
   readonly images: PdfImageModel;
+  readonly annotations: PdfMarkupModel;
   readonly origin = {};
   readonly undo: Y.UndoManager;
   constructor(readonly doc: Y.Doc = new Y.Doc()) {
     this.regions = doc.getMap('pdf-text');
     this.pages = new PdfPageModel(doc, this.origin);
     this.images = new PdfImageModel(doc, this.origin);
+    this.annotations = new PdfMarkupModel(doc, this.origin, page => this.pages.materialize(page));
     this.regions.observeDeep((events) => {
       for (const event of events) {
         const id = event.path[0];
@@ -38,7 +41,7 @@ export class PdfTextModel {
     });
     doc.on('beforeTransaction', () => { this.inTransaction = true; });
     doc.on('afterTransaction', () => { this.inTransaction = false; this.revision++; });
-    this.undo = new Y.UndoManager([this.regions, this.pages.records, this.images.records], {
+    this.undo = new Y.UndoManager([this.regions, this.pages.records, this.images.records, this.annotations.records], {
       trackedOrigins: new Set([this.origin]),
     });
   }
@@ -157,6 +160,7 @@ export class PdfTextModel {
     this.doc.transact(() => {
       const delta: { insert: unknown; attributes?: Record<string, unknown> }[] =
         this.text(id).toDelta();
+      this.formatParagraph(nextId, this.paragraph(id));
       this.text(nextId).applyDelta(
         delta.map((run) => ({
           insert: run.insert,
@@ -193,6 +197,7 @@ export class PdfTextModel {
     const cached = this.contentStates.get(region);
     if (!this.inTransaction && cached?.version === version) return cached.dirty;
     const seed = this.seed(id);
+    if (region.has('alignment') || region.has('lineSpacing')) return true;
     if (!seed.sources.length) return true;
     const normalize = (delta: { insert: unknown; attributes?: Record<string, unknown> }[]) => {
       const result: { insert: string; attributes: PdfTextStyle }[] = [];
@@ -230,6 +235,20 @@ export class PdfTextModel {
         });
     }, this.origin);
   }
+  /** Apply snapshot search ranges in one collaborative transaction and undo step. */
+  replaceMatches(matches: readonly { region: string; start: number; end: number }[], value: string) {
+    // Validate every range before mutating any text.
+    for (const match of matches) {
+      if (!Number.isInteger(match.start) || !Number.isInteger(match.end) || match.start < 0 || match.end < match.start || match.end > this.text(match.region).length)
+        throw new Error('Invalid PDF text range.');
+    }
+    this.undo.stopCapturing();
+    this.doc.transact(() => {
+      for (const match of [...matches].sort((a, b) => a.region.localeCompare(b.region) || b.start - a.start))
+        this.replace(match.region, match.start, match.end, value);
+    }, this.origin);
+    this.undo.stopCapturing();
+  }
   styleAt(id: string, offset: number): PdfTextStyle {
     let at = 0;
     for (const run of this.text(id).toDelta()) {
@@ -240,11 +259,31 @@ export class PdfTextModel {
     }
     return this.seed(id).style;
   }
+  paragraph(id: string): Pick<PdfTextStyle, 'alignment' | 'lineSpacing'> {
+    const region = this.regions.get(id)!;
+    return { alignment: (region.get('alignment') as PdfTextStyle['alignment']) ?? 'left',
+      lineSpacing: region.get('lineSpacing') as number | undefined };
+  }
+  formatParagraph(id: string, patch: Pick<PdfTextStyle, 'alignment' | 'lineSpacing'>) {
+    if (patch.alignment !== undefined && !['left', 'center', 'right', 'justify'].includes(patch.alignment))
+      throw new Error('Invalid PDF paragraph alignment.');
+    if (patch.lineSpacing !== undefined && (!Number.isFinite(patch.lineSpacing) || patch.lineSpacing <= 0))
+      throw new Error('Invalid PDF line spacing.');
+    this.doc.transact(() => {
+      const region = this.regions.get(id)!;
+      if (patch.alignment !== undefined) region.set('alignment', patch.alignment);
+      if (patch.lineSpacing !== undefined) region.set('lineSpacing', patch.lineSpacing);
+    }, this.origin);
+  }
   format(id: string, start: number, end: number, patch: Partial<PdfTextStyle>) {
     if (start < 0 || end < start || end > this.text(id).length)
       throw new Error('Invalid PDF text range.');
-    const attributes = pdfTextStylePatch(this.styleAt(id, start), patch);
-    this.doc.transact(() => this.text(id).format(start, end - start, attributes), this.origin);
+    const { alignment, lineSpacing, ...character } = patch;
+    const attributes = pdfTextStylePatch(this.styleAt(id, start), character);
+    this.doc.transact(() => {
+      if (alignment !== undefined || lineSpacing !== undefined) this.formatParagraph(id, { alignment, lineSpacing });
+      this.text(id).format(start, end - start, attributes);
+    }, this.origin);
   }
   anchor(id: string, offset: number) {
     return Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(this.text(id), offset));

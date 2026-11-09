@@ -27,8 +27,8 @@ export function writePdfImages(document: PdfDocument, placements: { image: PdfIm
           alpha[i] = rgba[i * 4 + 3]!;
         }
         const info = new Map<string, PdfValue>([['Type', new PdfName('XObject')], ['Subtype', new PdfName('Image')], ['Width', width], ['Height', height], ['BitsPerComponent', 8], ['ColorSpace', new PdfName('DeviceRGB')]]);
-        if (alpha.some(a => a !== 255)) info.set('SMask', writer.stream(alpha, new Map<string, PdfValue>([['Type', new PdfName('XObject')], ['Subtype', new PdfName('Image')], ['Width', width], ['Height', height], ['BitsPerComponent', 8], ['ColorSpace', new PdfName('DeviceGray')]]), true));
-        ref = writer.stream(rgb, info, true);
+        if (alpha.some(a => a !== 255)) info.set('SMask', writer.stream(alpha, new Map<string, PdfValue>([['Type', new PdfName('XObject')], ['Subtype', new PdfName('Image')], ['Width', width], ['Height', height], ['BitsPerComponent', 8], ['ColorSpace', new PdfName('DeviceGray')]]), { compress: true }));
+        ref = writer.stream(rgb, info, { compress: true });
         embedded.set(image.asset, ref);
       }
       let name = 'KNImage'; while (xobjects.has(name)) name += '_';
