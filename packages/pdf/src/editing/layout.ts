@@ -172,18 +172,20 @@ export function layoutPdfTextFlow(model: PdfTextModel, fonts: PdfEditingFonts, p
   if (!model.inTransaction) flows.set(model, { revision: model.revision, fonts, fontRevision: fonts.revision, pages, flow });
   return flow;
 }
-/** Imported paragraphs in the same column continue in reading order. Added regions keep their explicit placement.
- * Overflow creates continuation pages after the source page, preserving other source pages and their graphics. */
-function computePdfTextFlow(
-  model: PdfTextModel,
-  fonts: PdfEditingFonts,
-  pages: readonly PdfPage[],
-) {
-  const outputPages: PdfFlowPage[] = [],
-    regions: PdfFlowRegion[] = [];
-  for (const page of model.pages.sourcePages(pages)) {
-    const layouts = model.ids(page.index).map((id) => layoutPdfText(model, id, fonts)),
-      earlier: { x: number; size: number; growth: number }[] = [];
+const pageFlows = new WeakMap<PdfTextModel, WeakMap<PdfPage, ReturnType<typeof computePdfPageFlow>>>();
+function layoutPdfPageFlow(model: PdfTextModel, fonts: PdfEditingFonts, page: PdfPage) {
+  const layouts = model.ids(page.index).map((id) => layoutPdfText(model, id, fonts));
+  let cache = pageFlows.get(model);
+  if (!cache) pageFlows.set(model, cache = new WeakMap());
+  const previous = cache.get(page);
+  if (!model.inTransaction && previous && previous.layouts.length === layouts.length && previous.layouts.every((layout, index) => layout === layouts[index]))
+    return previous;
+  const result = computePdfPageFlow(model, page, layouts);
+  if (!model.inTransaction) cache.set(page, result);
+  return result;
+}
+function computePdfPageFlow(model: PdfTextModel, page: PdfPage, layouts: PdfTextLayout[]) {
+    const earlier: { x: number; size: number; growth: number }[] = [];
     const fragments: {
       layout: PdfTextLayout;
       continuation: number;
@@ -267,6 +269,20 @@ function computePdfTextFlow(
         });
       }
     }
+
+  return { layouts, count, fragments };
+}
+/** Imported paragraphs in the same column continue in reading order. Added regions keep their explicit placement.
+ * Overflow creates continuation pages after the source page, preserving other source pages and their graphics. */
+function computePdfTextFlow(
+  model: PdfTextModel,
+  fonts: PdfEditingFonts,
+  pages: readonly PdfPage[],
+) {
+  const outputPages: PdfFlowPage[] = [],
+    regions: PdfFlowRegion[] = [];
+  for (const page of model.pages.sourcePages(pages)) {
+    const { count, fragments } = layoutPdfPageFlow(model, fonts, page);
     const first = outputPages.length;
     for (let i = 0; i <= count; i++)
       outputPages.push({
