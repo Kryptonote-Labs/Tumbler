@@ -9,6 +9,7 @@ import { textFunctions } from "./functions/text.ts";
 import { lookupFunctions } from "./functions/lookup.ts";
 import { informationFunctions } from "./functions/information.ts";
 import { databaseFunctions } from "./functions/database.ts";
+import { webFunctions } from "./functions/web.ts";
 
 /** Excel extension categories included in this stack layer. */
 export const extendedFunctions: FunctionRegistry = new Map([
@@ -22,4 +23,5 @@ export const extendedFunctions: FunctionRegistry = new Map([
   ...lookupFunctions,
   ...informationFunctions,
   ...databaseFunctions,
+  ...webFunctions,
 ]);
