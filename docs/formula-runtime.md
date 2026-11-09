@@ -47,7 +47,7 @@ Optional `FormulaWorkbookSource` hooks:
 
 - `sheetNames(): readonly string[]`: visible sheet names in workbook order.
 - `sheetIndex(sheet): number | undefined`: source sheet identity to one-based index.
-- `usedDimensions(sheet): {rows, columns}`: used extent for whole-axis ranges.
+- `usedDimensions(sheet): {rows, columns}`: used extent for bounded dependency and blank-insensitive aggregate scans.
 - `resolveName(name, address): FormulaExpression | FunctionReference | undefined`.
 - `spillBlocked(address): boolean`.
 
@@ -63,7 +63,8 @@ referenced from other sheets, including sheets later in workbook order.
 OFFSET, A1-style INDIRECT, INDEX, names, and spill references. `readReference`
 validates bounds, enforces array limits, evaluates dependencies, and records
 reads. Whole-column and whole-row references, including absolute axes, use
-source used dimensions; without that hook their actual Excel extent is subject
+full worksheet reference geometry. Blank-insensitive aggregates can bound scans by
+source used dimensions; materializing the full reference is subject
 to the explicit calculation budget. Arrays are never silently truncated to fit.
 
 ## Budgets, time, and services
