@@ -15,6 +15,7 @@ export type StructuredCell = {
   columns: string[];
   payloads: CellAddress[];
   source?: TableCell;
+  emptyContinuation?: boolean;
   verticalGroup?: string;
   verticalMerge?: "restart" | "continue";
 };
@@ -164,6 +165,29 @@ export function structuredGrid(
     }
     return { id: row, before, after, cells };
   });
+  const unmerged = new Set(tableRecords(doc, address).flatMap(r => r.value.kind === "vertical-split" ? [r.value.group] : []));
+  for (const row of grid) for (const cell of row.cells) {
+    if (cell.verticalGroup && unmerged.has(cell.verticalGroup)) {
+      delete cell.verticalGroup;
+      delete cell.verticalMerge;
+    }
+  }
+  for (const { key, value } of tableRecords(doc, address)) {
+    if (value.kind !== "vertical-merge") continue;
+    const members = grid.filter(row => value.rows.includes(row.id));
+    let anchor: StructuredCell | undefined;
+    for (const [index, row] of members.entries()) {
+      const cell = row.cells.find(cell => JSON.stringify(cell.columns) === JSON.stringify(value.columns));
+      if (!cell || cell.verticalMerge) throw new WordTableConflict(address, "overlap", "Overlapping vertical merges.");
+      if (index === 0) anchor = cell;
+      else {
+        anchor!.payloads.push(...cell.payloads);
+        cell.emptyContinuation = true;
+      }
+      cell.verticalGroup = key;
+      cell.verticalMerge = index === 0 ? "restart" : "continue";
+    }
+  }
   let previous = new Map<string, StructuredCell>();
   for (const row of grid) {
     const current = new Map<string, StructuredCell>();

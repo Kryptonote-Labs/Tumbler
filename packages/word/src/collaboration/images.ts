@@ -65,6 +65,7 @@ export function isDocumentImage(value: unknown): value is DocumentImage {
         'layout',
         'alignment',
         'moveWithText',
+        'zOrder',
         'wrap',
         'horizontalRelativeTo',
         'verticalRelativeTo',

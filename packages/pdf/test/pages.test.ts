@@ -258,3 +258,19 @@ test('page projections are read-only and inactive initialization retains exact s
   expect(updates).toBe(initializedUpdates);
   expect(model.pages.initialize(pdf.pages)).toBe(false);
 });
+
+test('numbered collaborative deletion follows reordered pages and rejects invalid selections atomically', async () => {
+  const { deletePdfModelPages } = await import('../src/index.ts');
+  const model = new PdfTextModel();
+  try {
+    model.initialize(importPdfText(pdf));
+    model.pages.move(pdf.pages, pdf.pages[2]!.id, pdf.pages[0]!.id);
+    for (const selection of ['0', '4', '1,1', '1-3']) {
+      const before = Y.encodeStateAsUpdate(model.doc);
+      expect(() => deletePdfModelPages(pdf, model, fonts, selection)).toThrow();
+      expect(Y.encodeStateAsUpdate(model.doc)).toEqual(before);
+    }
+    expect(deletePdfModelPages(pdf, model, fonts, '2')).toEqual({ deletedPages: [2], pageCount: 2 });
+    expect(texts(openPdfDocument(exportEditedPdf(pdf, model, fonts)))).toEqual(['THIRD', 'SECOND SECRET']);
+  } finally { model.doc.destroy(); }
+});

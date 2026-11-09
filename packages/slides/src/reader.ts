@@ -1486,6 +1486,8 @@ class Reader {
         ...(ph ? { placeholder: role } : {}),
         sourcePart: source.part.name.value,
         layer,
+        alt: attr(metadata, "descr") ?? '',
+        hyperlink: this.hyperlink(this.child(metadata, 'hlinkClick')),
         name:
           attr(metadata, "descr") ||
           attr(metadata, "name") ||

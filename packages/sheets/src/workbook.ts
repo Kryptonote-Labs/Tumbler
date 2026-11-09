@@ -61,6 +61,7 @@ export type SpreadsheetErrorCode =
   | "missing_shared_string"
   | "unsupported_document"
   | "unsupported_formula"
+  | "unsupported_number_format"
   | "unsupported_sheet";
 
 export class SpreadsheetError extends Error {

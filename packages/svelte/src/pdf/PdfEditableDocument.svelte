@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PdfSearch from './PdfSearch.svelte';
+  import { PdfSearchIndex } from '@tumblerjs/pdf';
   import { pdfTextInputChange, type PdfInputSelection } from './text-input.ts';
   import { paintEditablePdfPage } from './paint-editable-page.ts';
   import PdfTextBox from './PdfTextBox.svelte';
@@ -55,7 +57,8 @@
     start = $state(0),
     end = $state(0),
     pending = $state<Partial<PdfTextStyle>>({});
-  let input: HTMLTextAreaElement, root: HTMLDivElement;
+  let input: HTMLTextAreaElement;
+  let root = $state<HTMLDivElement>();
   let compositionBase: PdfTextModel | undefined;
   let beforeSelection: PdfInputSelection | undefined,
     compositionSelection: PdfInputSelection | undefined;
@@ -137,7 +140,7 @@
     }
   }
   export function goToPage(index: number) {
-    root.querySelector(`[data-pdf-page="${index + 1}"]`)?.scrollIntoView({ block: 'start' });
+    root?.querySelector(`[data-pdf-page="${index + 1}"]`)?.scrollIntoView({ block: 'start' });
   }
   function publish() {
     if (!active || !input) return;
@@ -427,6 +430,7 @@
       onselection?.(null);
     };
   });
+  const searchIndex = $derived(new PdfSearchIndex(pdf, { model, fonts, flow }, interpreter));
 </script>
 
 <div
@@ -526,6 +530,8 @@
     style:left={`${(active ? layouts.find((l) => l.id === active)?.carets.find((c) => c.offset === start)?.x : 0) ?? 0}px`}
   ></textarea>
 </div>
+
+<PdfSearch root={root} {scale} index={() => searchIndex} />
 
 <style>
   .pdf-editable {

@@ -8,6 +8,7 @@ import {
   type FormattingValue,
   type HorizontalAlignment,
   type OfficeColor,
+  type OfficeThemeColorSlot,
   type TextUnderline,
 } from "@tumblerjs/core";
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, type LosslessXmlElement } from "@tumblerjs/ooxml";
@@ -23,7 +24,9 @@ export const WORD_FORMATTING_CAPABILITIES: FormattingCapabilities = Object.freez
     bold: true,
     italic: true,
     underline: Object.freeze(["none", "single", "double"] as const),
+    strike: true,
     color: true,
+    themeColor: true,
   }),
   block: Object.freeze({
     horizontalAlignment: Object.freeze(["start", "center", "end", "justify"] as const),
@@ -33,12 +36,8 @@ export const WORD_FORMATTING_CAPABILITIES: FormattingCapabilities = Object.freez
 
 export type WordFormattingTarget = WordTextSelection;
 
-/** Word-specific properties extend the shared Office formatting contract. */
-export type WordFormattingPatch = Omit<FormattingPatch, 'text'> & {
-  readonly text?: NonNullable<FormattingPatch['text']> & {
-    readonly strike?: import('@tumblerjs/core').FormattingChange<boolean>;
-  };
-};
+/** Word accepts the shared text and block groups; strikethrough is now shared. */
+export type WordFormattingPatch = Omit<FormattingPatch, "cell">;
 
 export interface WordFormattingDocumentAdapter extends FormattingAdapter<WordFormattingTarget, Uint8Array> {}
 
@@ -58,6 +57,7 @@ export function wordFormattingState(document: WordDocument, target: WordFormatti
       bold: state(formats, (item) => item.computed.bold, (item) => item.direct.bold),
       italic: state(formats, (item) => item.computed.italic, (item) => item.direct.italic),
       underline: state(formats, (item) => item.computed.underline, (item) => item.direct.underline),
+      strike: state(formats, (item) => item.computed.strike, (item) => item.direct.strike),
       color: state(formats, (item) => officeColor(item.computed), (item) => item.direct.color === undefined ? undefined : officeColor(item.computed), officeColorEqual),
     }),
     block: Object.freeze({
@@ -69,15 +69,12 @@ export function wordFormattingState(document: WordDocument, target: WordFormatti
 
 /** Applies direct run/paragraph formatting without rewriting untouched package parts. */
 export function formatWordSelection(document: WordDocument, target: WordFormattingTarget, input: WordFormattingPatch): Uint8Array {
-  const strike = input.text?.strike;
-  if (strike !== undefined && !('inherit' in strike ? strike.inherit === true && !('set' in strike) : typeof strike.set === 'boolean'))
-    throw new TypeError('Strikethrough requires a boolean or inherit.');
+  if ("cell" in input && input.cell !== undefined) throw new TypeError("Word paragraphs do not support cell formatting.");
   // Word uses half-point sizes up to 1638 pt, unlike the shared spreadsheet range.
   const fontSize = input.text?.fontSize;
   if (fontSize && 'set' in fontSize && !(fontSize.set >= 1 && fontSize.set <= 1638 && Number.isInteger(fontSize.set * 2)))
     throw new RangeError('Word font sizes use half-point steps from 1 to 1638 points.');
-  const normalized = normalizeFormattingPatch(input);
-  const patch: WordFormattingPatch = { ...normalized, ...(input.text ? { text: { ...normalized.text, ...(strike ? { strike } : {}) } } : {}) };
+  const patch: WordFormattingPatch = normalizeFormattingPatch(input);
   if (patch.text === undefined && patch.block === undefined) return document.bytes();
   const ranges = selectedRanges(document, target);
   const editor = beginLosslessXmlEdit(document.source);
@@ -212,7 +209,7 @@ function runPropertiesMarkup(
     ["i", property(propertyPrefix, declaration, "i", patch.italic, (value) => `${qualified(propertyPrefix, "val")}="${value ? "1" : "0"}"`)],
     ["strike", property(propertyPrefix, declaration, "strike", patch.strike, (value) => `${qualified(propertyPrefix, "val")}="${value ? "1" : "0"}"`)],
     ["u", property(propertyPrefix, declaration, "u", patch.underline, (value) => `${qualified(propertyPrefix, "val")}="${value}"`)],
-    ["color", property(propertyPrefix, declaration, "color", patch.color, (value) => `${qualified(propertyPrefix, "val")}="${value.type === "automatic" ? "auto" : value.value.slice(1)}"`)],
+    ["color", property(propertyPrefix, declaration, "color", patch.color, (value) => wordColorAttributes(propertyPrefix, value))],
   ] as const;
   // Use the ordered Transitional/SDK representation, also valid in Strict.
   // Insert new properties without reordering or rewriting retained property XML.
@@ -311,6 +308,26 @@ function paragraphState(items: readonly { readonly computed: HorizontalAlignment
 function directRun(document: WordDocument, run: WordRun): WordRunProperties {
   return run.propertiesElementId === undefined ? {} : parseRunProperties(requiredElement(document, run.propertiesElementId), namespace(document));
 }
+
+/** Theme colours keep their slot and Office tint/shade byte (ECMA-376-1 §17.3.2.6). */
+function wordColorAttributes(prefix: string, color: OfficeColor): string {
+  const attribute = (name: string, value: string) => `${qualified(prefix, name)}="${value}"`;
+  if (color.type === "automatic") return attribute("val", "auto");
+  if (color.type === "rgb") return attribute("val", color.value.slice(1));
+  const tint = color.tint ?? 0;
+  const byte = Math.round((1 - Math.abs(tint)) * 255).toString(16).padStart(2, "0").toUpperCase();
+  return [
+    attribute("val", color.value?.slice(1) ?? "auto"),
+    attribute("themeColor", WORD_THEME_COLORS[color.slot]),
+    ...(tint > 0 ? [attribute("themeTint", byte)] : tint < 0 ? [attribute("themeShade", byte)] : []),
+  ].join(" ");
+}
+
+const WORD_THEME_COLORS = {
+  lt1: "light1", dk1: "dark1", lt2: "light2", dk2: "dark2",
+  accent1: "accent1", accent2: "accent2", accent3: "accent3", accent4: "accent4", accent5: "accent5", accent6: "accent6",
+  hlink: "hyperlink", folHlink: "followedHyperlink",
+} as const satisfies Record<OfficeThemeColorSlot, string>;
 
 function officeColor(format: ComputedWordTextFormat): OfficeColor { return { type: "rgb", value: format.color }; }
 function officeColorEqual(left: OfficeColor, right: OfficeColor): boolean { return left.type === right.type && (left.type === "automatic" || right.type === "automatic" || left.value === right.value); }
