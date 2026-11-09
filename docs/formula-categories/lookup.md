@@ -25,7 +25,7 @@ arrays; ROWS/COLUMNS count reference dimensions without reading the range.
 AREAS handles one contiguous reference. FORMULATEXT reads the upper-left source
 formula, retaining the leading equals sign. INDIRECT parses bounded A1 and R1C1
 references, relative coordinates, escaped sheet names, and reversed endpoints;
-workbook-defined names use the announced optional `source.resolveName` hook.
+workbook-defined names and common structured-reference selectors use the optional `source.resolveName` hook.
 OFFSET reads bounded offset geometry. HYPERLINK returns its display label or
 location without navigation or network activity.
 
@@ -87,7 +87,7 @@ The existing reference contract describes only one rectangular area. Consequentl
 union/3-D AREAS calls need a multi-area runtime extension; they are not counted as
 supported here. INDIRECT external workbooks remain explicitly unavailable;
 workbook-defined names require `source.resolveName`. Full-row/column INDIRECT
-text, structured references, and array broadcasting of scalar address arguments
+text, structured selectors unsupported by the workbook resolver, and array broadcasting of scalar address arguments
 are not implemented. HYPERLINK computes a label, without hyperlink relationship
 metadata (there is no shared rich-value metadata hook).
 
@@ -132,3 +132,5 @@ cannot yet parse them. This substitution is test-only; fixtures retain real Exce
 formula syntax for the parent's uncached-XLSX harness. Direct tests additionally
 exercise FORMULATEXT length limits, service absence/decline/errors, budget aborts,
 name resolution, argument counts, custom IMAGE sizing, and reference coercion.
+
+INDIRECT routes structured-reference tokens through source.resolveName before A1/R1C1 cell parsing. Workbook tests cover single-cell data/header selectors, case-insensitive names, reference geometry, unknown-column errors and source edits/reopen for text, boolean, numeric and blank data.
