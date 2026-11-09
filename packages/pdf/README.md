@@ -290,3 +290,10 @@ scanning and between pages. Yield to the event loop there to keep the viewer res
 and throw on cancellation to stop preparation. Headless callers can keep using `fork`.
 The editable Svelte view mounts editing controls for nearby pages and retains selected
 regions off screen; page geometry remains mounted for stable scrolling.
+
+`createEditablePdfCopy(document)` rewrites an authenticated document into a fresh,
+unencrypted PDF. It retains the full reachable catalog graph and metadata, including
+forms, annotations, attachments and shared object references. It does not append
+plaintext objects to an encrypted revision. Hosts own user consent and storage of
+the new copy; the source remains unchanged. Password-protected inputs must first
+be opened with a valid password. Rewriting a PDF invalidates existing signatures.
