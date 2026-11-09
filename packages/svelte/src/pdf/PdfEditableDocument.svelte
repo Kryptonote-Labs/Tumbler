@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { copyPdfText, pastePdfText } from './clipboard.ts';
+  import { pdfHistoryShortcut } from './history-shortcut.ts';
   import PdfSearch from './PdfSearch.svelte';
   import { pdfPagePosition } from './page-position.ts';
   import { PdfSearchIndex } from '@tumblerjs/pdf';
@@ -140,6 +142,14 @@
     model.undo.stopCapturing();
     void select(id, 0);
   }
+  export async function copyText(cut = false) {
+    if (!active || (cut && !editable)) return;
+    await copyPdfText(model, active, start, end, navigator.clipboard, () => cut && editable);
+  }
+  export async function pasteText() {
+    if (!editable || !active) return;
+    await pastePdfText(model, active, start, end, navigator.clipboard, () => editable);
+  }
   export function toggle(key: 'bold' | 'italic' | 'underline') {
     format({ [key]: !currentStyle[key] });
   }
@@ -233,9 +243,10 @@
         ],
       );
     }
-    if (mod && event.key.toLowerCase() === 'z') {
+    const history = pdfHistoryShortcut(event);
+    if (history) {
       event.preventDefault();
-      undo(event.shiftKey);
+      undo(history === 'redo');
     }
     if (event.key === 'Home' || event.key === 'End') {
       const layout = layouts.find(
@@ -316,11 +327,11 @@
           : undefined;
   }
   function pointer(event: PointerEvent, page: number) {
-    if (event.button !== 0 || (adding && !editable)) return;
+    if (![0, 2].includes(event.button) || (adding && !editable)) return;
     const host = event.currentTarget as HTMLElement,
       { x, y } = coordinates(event, host, page);
     onpagechange?.(page);
-    if (adding) {
+    if (adding && event.button === 0) {
       const targetPage = flow.pages[page]!,
         id = crypto.randomUUID();
       model.add({
@@ -363,6 +374,11 @@
       active = undefined;
       selected = [];
       onselection?.(null);
+      return;
+    }
+    if (event.button === 2) {
+      if (active !== layout.id) void select(layout.id, 0, model.text(layout.id).length);
+      event.preventDefault();
       return;
     }
     const offset = hitPdfText(layout, x, y).offset;
