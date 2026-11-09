@@ -12,4 +12,5 @@ export type { PdfMergeResult, PdfMergeRead, PdfMergeState } from "./pdf/merge-so
 
 export { createPdfMergeState } from "./pdf/merge-source.ts";
 
+export { createPdfSearch, type PdfSearchController } from "./pdf/search.svelte.ts";
 export { pdfHistoryShortcut } from './pdf/history-shortcut.ts';

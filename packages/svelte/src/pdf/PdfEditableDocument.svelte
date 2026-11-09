@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { PdfSearchController } from './search.svelte.ts';
   import PdfMarkupLayer from './PdfMarkupLayer.svelte';
   import { pdfMarkupFromRects, type PdfMarkupKind } from '@tumblerjs/pdf';
   import { copyPdfText, pastePdfText } from './clipboard.ts';
@@ -34,6 +35,8 @@
     model,
     fonts,
     scale = 4 / 3,
+    search,
+    searchEnabled = true,
     editable = true,
     adding = false,
     peers = [],
@@ -48,6 +51,8 @@
     model: PdfTextModel;
     fonts: PdfEditingFonts;
     scale?: number;
+    search?: PdfSearchController;
+    searchEnabled?: boolean;
     editable?: boolean;
     adding?: boolean;
     peers?: { id: string; name: string; color: string; selection?: Selection | null }[];
@@ -582,7 +587,7 @@
   ></textarea>
 </div>
 
-<PdfSearch root={root} {scale} index={() => searchIndex} />
+<PdfSearch root={root} {scale} index={() => searchIndex} controller={search} enabled={searchEnabled} model={() => editable && !pdf.source.encrypted ? model : undefined} />
 
 <style>
   .pdf-editable {

@@ -230,6 +230,20 @@ export class PdfTextModel {
         });
     }, this.origin);
   }
+  /** Apply snapshot search ranges in one collaborative transaction and undo step. */
+  replaceMatches(matches: readonly { region: string; start: number; end: number }[], value: string) {
+    // Validate every range before mutating any text.
+    for (const match of matches) {
+      if (!Number.isInteger(match.start) || !Number.isInteger(match.end) || match.start < 0 || match.end < match.start || match.end > this.text(match.region).length)
+        throw new Error('Invalid PDF text range.');
+    }
+    this.undo.stopCapturing();
+    this.doc.transact(() => {
+      for (const match of [...matches].sort((a, b) => a.region.localeCompare(b.region) || b.start - a.start))
+        this.replace(match.region, match.start, match.end, value);
+    }, this.origin);
+    this.undo.stopCapturing();
+  }
   styleAt(id: string, offset: number): PdfTextStyle {
     let at = 0;
     for (const run of this.text(id).toDelta()) {
