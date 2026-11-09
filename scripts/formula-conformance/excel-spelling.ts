@@ -221,4 +221,3 @@ export function nativeExcelFormula(formula: string): string {
   for (const replacement of [...replacements.values()].sort((a, b) => b.start - a.start)) formula = formula.slice(0, replacement.start) + replacement.value + formula.slice(replacement.end);
   return formula;
 }
-
