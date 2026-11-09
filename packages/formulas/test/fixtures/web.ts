@@ -72,6 +72,6 @@ cases.push(
  {name:"xml rejects NBSP before self close",formula:'FILTERXML("<r\u00a0/>","/r")',expected:e()},
  {name:"xml rejects document leading NBSP",formula:'FILTERXML("\u00a0<r>7</r>","/r")',expected:e()},
  {name:"xml rejects document trailing NBSP",formula:'FILTERXML("<r>7</r>\u00a0","/r")',expected:e()},
- {name:"xml accepts XML syntax whitespace",formula:'FILTERXML(" \t\n<r\ta = \'v\'\n>7</r\t>\r\n","/r")',expected:n(7)},
+ {name:"xml accepts XML syntax whitespace",formula:'FILTERXML(Inputs!A1,"/r")',cells:{A1:s(" \t\n<r\ta = 'v'\n>7</r\t>\r\n")},expected:n(7)},
  {name:"xml preserves NBSP in attribute values",formula:'FILTERXML("<r a=\'x\u00a0y\'>7</r>","/r/@a")',expected:s("x\u00a0y")},
 );
