@@ -12,6 +12,7 @@ import { databaseFunctions } from "./functions/database.ts";
 import { webFunctions } from "./functions/web.ts";
 import { automationFunctions } from "./functions/automation.ts";
 import { cubeFunctions } from "./functions/cube.ts";
+import { specializedFunctions } from "./functions/specialized.ts";
 
 /** Excel extension categories included in this stack layer. */
 export const extendedFunctions: FunctionRegistry = new Map([
@@ -28,4 +29,5 @@ export const extendedFunctions: FunctionRegistry = new Map([
   ...webFunctions,
   ...automationFunctions,
   ...cubeFunctions,
+  ...specializedFunctions,
 ]);
