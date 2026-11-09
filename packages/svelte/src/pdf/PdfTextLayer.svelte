@@ -30,7 +30,6 @@
         svg.style.opacity = next ? '1' : '0';
       }
     };
-    changed();
     document.addEventListener('selectionchange', changed);
     return () => document.removeEventListener('selectionchange', changed);
   });
