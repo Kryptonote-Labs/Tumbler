@@ -154,6 +154,14 @@ test('structural operations retain unsupported imported content by failing befor
   ).toThrow();
 });
 
+test('structural rebasing traverses extended syntax without dropping references', () => {
+  const change = rows('insert-rows', 1);
+  expect(rebaseSpreadsheetFormula('LAMBDA(item,item+A1)(B2)', 'Sheet1', 'Sheet1', change)).toBe('LAMBDA(item,item+A2)(B3)');
+  expect(rebaseSpreadsheetFormula('{A1,B2;C3,D4}', 'Sheet1', 'Sheet1', change)).toBe('{A2,B3;C4,D5}');
+  expect(rebaseSpreadsheetFormula('@A1+A2#', 'Sheet1', 'Sheet1', change)).toBe('@A2+A3#');
+  expect(() => rebaseSpreadsheetFormula('SUM(A:A)', 'Sheet1', 'Sheet1', change)).toThrow('whole-axis');
+});
+
 function replaceSheet(artifact: SpreadsheetArtifact, change: (source: string) => string) {
   const transaction = beginPackageTransaction(artifact.workbook.package);
   transaction.replacePart(
