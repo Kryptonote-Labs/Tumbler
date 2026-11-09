@@ -94,6 +94,8 @@ const splitSchema = z
   .object({ kind: z.literal("split"), cell: id, column: id })
   .strict();
 export const recordSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("vertical-merge"), rows: z.array(id).min(2), columns: z.array(id).min(1) }).strict(),
+  z.object({ kind: z.literal("vertical-split"), group: id }).strict(),
   axisSchema,
   baseSchema,
   removalSchema,

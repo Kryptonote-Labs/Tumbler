@@ -92,7 +92,7 @@ export function rebasePresentationCommands(
     const identity = `${inputSlideId}:${inputObjectKey}`;
     if (input.name !== 'paste-object' && removedObjects.has(identity) && !objectIds.has(identity))
       conflict();
-    if ('cell' in input && input.cell && removedTables.has(identity) && !objectIds.has(identity))
+    if (((('cell' in input) && input.cell) || input.name === 'format-table') && removedTables.has(identity) && !objectIds.has(identity))
       conflict();
     const oldSlide = base.document.slides.find((s) => s.id === inputSlideId);
     const targetSlideId = 'slideId' in command ? command.slideId : undefined;
@@ -134,7 +134,7 @@ export function rebasePresentationCommands(
         JSON.stringify(object.table?.cells.map((c) => [c.row, c.column, c.rowSpan, c.columnSpan]))
     )
       conflict();
-    if ('start' in command && oldObject && object) {
+    if ('start' in command && command.start !== undefined && command.end !== undefined && oldObject && object) {
       const cell = command.cell;
       const text = (target: typeof object) =>
         cell

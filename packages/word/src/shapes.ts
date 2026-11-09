@@ -1,3 +1,4 @@
+import { gradientFill, gradientFillMarkup, type GradientFill } from "@tumblerjs/ooxml";
 import { drawingColourXml } from './theme-colour-xml.ts';
 import { isWordColour, type WordColour } from './theme-colours.ts';
 import { shapeTextParagraphs, isShapeTextBody } from './shape-text.ts';
@@ -14,6 +15,7 @@ export interface WordAuthoredShape extends WordImagePosition {
   readonly width: number;
   readonly height: number;
   readonly fill: WordColour;
+  readonly gradient?: GradientFill;
   readonly outline: WordColour;
   readonly outlineWidth: number;
   /** Rounded-rectangle radius in points. Omitted: 16.667% of the shorter side.
@@ -36,11 +38,12 @@ export function isWordAuthoredShape(value: unknown): value is WordAuthoredShape 
   if (typeof shape.outlineWidth !== 'number' || !Number.isFinite(shape.outlineWidth) || shape.outlineWidth < 0 || !Number.isSafeInteger(Math.round(shape.outlineWidth * 12700))) return false;
   if (['text', 'alt'].some(k => shape[k] !== undefined && (typeof shape[k] !== 'string' || !String(shape[k]).isWellFormed() || /[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]/.test(String(shape[k]))))) return false;
   if (shape.cornerRadius !== undefined && (shape.preset !== 'roundRect' || typeof shape.cornerRadius !== 'number' || !Number.isFinite(shape.cornerRadius) || shape.cornerRadius < 0)) return false;
+  if (shape.gradient !== undefined && !gradientFill.safeParse(shape.gradient).success) return false;
   if (shape.textBody !== undefined && !isShapeTextBody(shape.textBody)) return false;
   if (shape.textAnchor !== undefined && !['top', 'center', 'bottom'].includes(String(shape.textAnchor))) return false;
   if (shape.textInsets !== undefined && !isWordShapeTextInsets(shape.textInsets)) return false;
   try { imagePlacement(shape as WordImagePosition, Number(shape.width), Number(shape.width)); } catch { return false; }
-  return Object.keys(shape).every(k => ['preset','width','height','fill','outline','outlineWidth','cornerRadius','text','textBody','textAnchor','textInsets','alt','layout','alignment','moveWithText','wrap','horizontalRelativeTo','verticalRelativeTo','x','y'].includes(k));
+  return Object.keys(shape).every(k => ['gradient','zOrder','preset','width','height','fill','outline','outlineWidth','cornerRadius','text','textBody','textAnchor','textInsets','alt','layout','alignment','moveWithText','wrap','horizontalRelativeTo','verticalRelativeTo','x','y'].includes(k));
 }
 /**
  * The shape's outline as an SVG path in its own point space, inset by one point so strokes stay
@@ -90,7 +93,7 @@ export function wordShapeXml(shape: WordAuthoredShape, id: number, availableWidt
   const placement = imagePlacement(shape, shape.width, availableWidth);
   const cx = Math.round(shape.width * 12700), cy = Math.round(shape.height * 12700);
   const fill = (color: WordColour) => color === 'none' ? '<a:noFill/>' : `<a:solidFill>${drawingColourXml(color)}</a:solidFill>`;
-  return `<w:r><w:drawing xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">${placement.open}<wp:extent cx="${cx}" cy="${cy}"/>${placement.wrap}<wp:docPr id="${id}" name="Shape ${id}" descr="${xmlAttribute(shape.alt ?? '')}"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="${shape.preset}"><a:avLst>${shape.cornerRadius === undefined ? '' : `<a:gd name="adj" fmla="val ${Math.round(Math.min(.5, shape.cornerRadius / Math.min(shape.width, shape.height)) * 100000)}"/>`}</a:avLst></a:prstGeom>${fill(shape.fill)}<a:ln w="${Math.round(shape.outlineWidth * 12700)}">${fill(shape.outline)}</a:ln></wps:spPr>${shape.text === undefined && shape.textBody === undefined ? '' : `<wps:txbx><w:txbxContent>${renderText(shapeTextParagraphs(shape))}</w:txbxContent></wps:txbx>`}<wps:bodyPr${wordShapeTextInsetsXml(shape.textInsets)} anchor="${shape.textAnchor === 'top' ? 't' : shape.textAnchor === 'bottom' ? 'b' : 'ctr'}"/></wps:wsp></a:graphicData></a:graphic>${placement.close}</w:drawing></w:r>`;
+  return `<w:r><w:drawing xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">${placement.open}<wp:extent cx="${cx}" cy="${cy}"/>${placement.wrap}<wp:docPr id="${id}" name="Shape ${id}" descr="${xmlAttribute(shape.alt ?? '')}"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="${shape.preset}"><a:avLst>${shape.cornerRadius === undefined ? '' : `<a:gd name="adj" fmla="val ${Math.round(Math.min(.5, shape.cornerRadius / Math.min(shape.width, shape.height)) * 100000)}"/>`}</a:avLst></a:prstGeom>${shape.gradient ? gradientFillMarkup(shape.gradient) : fill(shape.fill)}<a:ln w="${Math.round(shape.outlineWidth * 12700)}">${fill(shape.outline)}</a:ln></wps:spPr>${shape.text === undefined && shape.textBody === undefined ? '' : `<wps:txbx><w:txbxContent>${renderText(shapeTextParagraphs(shape))}</w:txbxContent></wps:txbx>`}<wps:bodyPr${wordShapeTextInsetsXml(shape.textInsets)} anchor="${shape.textAnchor === 'top' ? 't' : shape.textAnchor === 'bottom' ? 'b' : 'ctr'}"/></wps:wsp></a:graphicData></a:graphic>${placement.close}</w:drawing></w:r>`;
 }
 export function nativeShapeDrawing(elementId: number, shape: WordAuthoredShape, availableWidth: number): WordShapeDrawing {
   if (!isWordAuthoredShape(shape)) throw new TypeError('Invalid shape.');
@@ -99,7 +102,7 @@ export function nativeShapeDrawing(elementId: number, shape: WordAuthoredShape, 
   return { kind: 'shape', elementId, shape, placement: floating ? 'anchor' : 'inline', widthPoints: shape.width, heightPoints: shape.height, name: 'Shape', altText: shape.alt, anchor: floating ? {
     horizontalRelativeTo: shape.horizontalRelativeTo ?? 'column', verticalRelativeTo: shape.verticalRelativeTo ?? (shape.moveWithText === false ? 'page' : 'paragraph'),
     horizontalOffsetPoints: shape.x ?? (shape.alignment === 'center' ? (availableWidth - shape.width) / 2 : shape.alignment === 'right' ? availableWidth - shape.width : 0), verticalOffsetPoints: shape.y ?? 0,
-    wrap: 'none', behindDocument: shape.layout === 'behind', layoutInCell: true, allowOverlap: true, distanceTopPoints: 0, distanceEndPoints: 0, distanceBottomPoints: 0, distanceStartPoints: 0,
+    ...(shape.zOrder ? { zOrder: shape.zOrder } : {}), wrap: 'none', behindDocument: shape.layout === 'behind', layoutInCell: true, allowOverlap: true, distanceTopPoints: 0, distanceEndPoints: 0, distanceBottomPoints: 0, distanceStartPoints: 0,
   } : undefined };
 }
 

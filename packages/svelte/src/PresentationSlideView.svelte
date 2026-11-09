@@ -64,6 +64,8 @@
     editable = false,
     minimumEditingTextSize,
     scale = $bindable(1),
+    absoluteScale = false,
+    onfitscale,
     selectedKey = $bindable<string | undefined>(),
     selectedKeys = $bindable<string[]>([]),
     onobjectschange,
@@ -97,6 +99,9 @@
     /** Optional minimum screen text size when entering text editing, using viewport zoom only. */
     minimumEditingTextSize?: number;
     scale?: number;
+    /** Use document scale rather than a multiple of fit, for shared editor zoom. */
+    absoluteScale?: boolean;
+    onfitscale?: (scale: number) => void;
     selectedKey?: string;
     selectedKeys?: string[];
     onobjectschange?: (changes: PresentationObjectChange[]) => void;
@@ -130,7 +135,8 @@
       ),
     ),
   );
-  let factor = $derived(fit * scale);
+  let factor = $derived(absoluteScale && !thumbnail && !stage ? scale : fit * scale);
+  $effect(() => { onfitscale?.(fit); });
   let selected = $derived(
     slide.objects.find((item) => item.key === selectedKey),
   );
@@ -926,9 +932,9 @@
           <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
           <g
             transform={`matrix(${matrix.join(" ")})`}
-            role={editable ? "button" : "group"}
-            tabindex={editable && editing !== object.key ? 0 : undefined}
-            aria-label={object.name}
+            role={editable ? "button" : object.hyperlink ? "link" : "group"}
+            tabindex={(editable && editing !== object.key) || (!editable && object.hyperlink) ? 0 : undefined}
+            aria-label={object.alt || object.name}
             data-slide-object={object.key}
             data-object-width={w}
             data-object-height={h}
@@ -956,8 +962,20 @@
                 event.target instanceof Element && event.target.closest("[data-table-cell]"))
                 start(event, object);
             }}
+            onclick={(event) => {
+              if (editable || !object.hyperlink || (event.target instanceof Element && event.target.closest('a'))) return;
+              event.stopPropagation();
+              if (object.hyperlink.slidePart) onslide?.(object.hyperlink.slidePart);
+              else if (object.hyperlink.href && /^(https?|mailto|tel):/i.test(object.hyperlink.href)) window.open(object.hyperlink.href, '_blank', 'noopener,noreferrer');
+            }}
             onpointerdown={(event) => start(event, object)}
             onkeydown={(event) => {
+              if (!editable && object.hyperlink && event.key === 'Enter') {
+                event.preventDefault(); event.stopPropagation();
+                if (object.hyperlink.slidePart) onslide?.(object.hyperlink.slidePart);
+                else if (object.hyperlink.href && /^(https?|mailto|tel):/i.test(object.hyperlink.href)) window.open(object.hyperlink.href, '_blank', 'noopener,noreferrer');
+                return;
+              }
               if (
                 editable &&
                 !editing &&

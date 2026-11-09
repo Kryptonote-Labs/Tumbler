@@ -1,12 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import { openOpcPackage } from "../../opc/src/index.ts";
-import { openSpreadsheet, openWorksheet, projectSpreadsheetConditionalStyles } from "@tumblerjs/sheets";
+import { applySpreadsheetCommand, createSpreadsheet, openSpreadsheet, openWorksheet, projectSpreadsheetConditionalStyles } from "@tumblerjs/sheets";
 import { buildWorkbookFixture } from "../../sheets/test/workbook-fixture.ts";
 import { spreadsheetCellContentCss, spreadsheetCellCss } from "../src/index.ts";
 
 const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
 describe("Svelte spreadsheet cell styles", () => {
+  test("renders the effective font reported for titles that only specify size and bold", () => {
+    const artifact = applySpreadsheetCommand(createSpreadsheet(), { name: "format-cells", sheetId: "1", range: "A1", patch: { text: { bold: { set: true }, fontSize: { set: 20 } } } });
+    const css = spreadsheetCellCss(artifact.worksheet, "A1");
+    expect(css).toContain('font-family:"Aptos",sans-serif');
+    expect(css).toContain('font-size:20pt');
+    expect(css).toContain('font-weight:700');
+    expect(artifact.formattingState("A1").text.fontFamily).toEqual({ state: "value", value: "Aptos" });
+  });
+
   test("lets authored font and fill colours override the light canvas defaults", () => {
     const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
       stylesXml: `<styleSheet xmlns="${namespace}"><fonts count="2"><font/><font><color rgb="FFFFFFFF"/></font></fonts><fills count="2"><fill/><fill><patternFill patternType="solid"><fgColor rgb="FF1F4E78"/></patternFill></fill></fills><borders count="1"><border/></borders><cellXfs count="2"><xf/><xf fontId="1" fillId="1" applyFont="1" applyFill="1"/></cellXfs></styleSheet>`,

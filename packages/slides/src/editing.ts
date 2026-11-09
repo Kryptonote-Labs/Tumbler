@@ -251,6 +251,20 @@ function properties(
         "solidFill",
         `<${q("solidFill")}><${q("srgbClr")} val="${t.color.set.value.slice(1)}"/></${q("solidFill")}>`,
       );
+    if ("set" in t.color && t.color.set.type === "theme") {
+      // Office lighter/darker theme swatches use luminance modulation and offset.
+      const tint = t.color.set.tint ?? 0;
+      const transforms =
+        tint > 0
+          ? `<${q("lumMod")} val="${Math.round((1 - tint) * 100000)}"/><${q("lumOff")} val="${Math.round(tint * 100000)}"/>`
+          : tint < 0
+            ? `<${q("lumMod")} val="${Math.round((1 + tint) * 100000)}"/>`
+            : "";
+      replacements.set(
+        "solidFill",
+        `<${q("solidFill")}><${q("schemeClr")} val="${t.color.set.slot}"${transforms ? `>${transforms}</${q("schemeClr")}>` : "/>"}</${q("solidFill")}>`,
+      );
+    }
   }
 
   // DrawingML CT_TextCharacterProperties order: line, fill, effects, highlight, underline, fonts, links, extensions.

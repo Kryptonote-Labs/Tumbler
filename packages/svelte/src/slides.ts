@@ -7,3 +7,5 @@ export { default as PresentationFormattingToolbar } from "./PresentationFormatti
 export type { PresentationRemoteSelection } from "./presentation-presence.ts";
 
 export { default as PresentationShapePlacement } from "./PresentationShapePlacement.svelte";
+
+export { default as PresentationPrintView } from './PresentationPrintView.svelte';

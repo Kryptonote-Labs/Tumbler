@@ -11,6 +11,7 @@ export const TABLE_ACTIONS = [
   'delete-table',
   'clear-cell',
   'merge-right',
+  'merge-down',
   'split-cell',
 ] as const;
 export type TableAction = (typeof TABLE_ACTIONS)[number];
@@ -61,7 +62,30 @@ export function editTableDelta(
   const remove = (start: number, end: number) => {
     if (end > start) changes.push({ start, end, delta: [{ delete: end - start }] });
   };
-  if (action === 'merge-right') {
+  if (action === 'merge-down') {
+    const nextRow = rows[rows.indexOf(target.row) + 1];
+    const below = cells.find(c => c.table.row === nextRow && c.table.column === target.column && (c.table.span ?? 1) === (target.span ?? 1));
+    if (!below || target.merge || below.table.merge) throw new Error('Select vertically adjacent unmerged cells of equal width.');
+    // Move the lower paragraphs into the restart cell; continuation content is not rendered.
+    const copied: Delta = [];
+    let cursor = 0;
+    for (const part of text.toDelta()) {
+      const value = typeof part.insert === 'string' ? part.insert : '';
+      const from = Math.max(0, below.start - cursor), to = Math.min(value.length, below.end - cursor);
+      const paragraph = table.find(p => p.start <= cursor + from && cursor + from < p.end);
+      if (to > from) copied.push({ insert: value.slice(from, to), attributes: {
+        ...part.attributes,
+        ...(part.attributes?.table ? { table: replaceCell(paragraph!.start, { ...target, merge: 'restart' }) } : {}),
+      } });
+      cursor += value.length;
+    }
+    changes.push({ start: current.end, end: current.end, delta: copied });
+    remove(below.start, below.end - 1);
+    for (const p of table.filter(p => p.table.cell === target.cell || p.end === below.end)) {
+      const merged = { ...p.table, merge: p.table.cell === target.cell ? 'restart' as const : 'continue' as const };
+      changes.push({ start: p.end - 1, end: p.end, delta: [{ retain: 1, attributes: { table: p.table.cell === target.cell ? replaceCell(p.start, merged) : { ...below.table, merge: 'continue' } } }] });
+    }
+  } else if (action === 'merge-right') {
     const next = cells[cells.indexOf(current) + 1];
     if (!next || next.table.row !== target.row || next.table.column !== target.column + (target.span ?? 1))
       throw new Error('Select a cell with an adjacent cell on its right.');
@@ -70,12 +94,26 @@ export function editTableDelta(
     for (const p of table.filter(p => p.table.cell === target.cell || p.table.cell === next.table.cell))
       changes.push({ start: p.end - 1, end: p.end, delta: [{ retain: 1, attributes: { table: replaceCell(p.start, merged) } }] });
   } else if (action === 'split-cell') {
+    if (target.merge === 'restart') {
+      const rowIndex = rows.indexOf(target.row);
+      const group = [target.cell];
+      for (const row of rows.slice(rowIndex + 1)) {
+        const continuation = cells.find(c => c.table.row === row && c.table.column === target.column);
+        if (continuation?.table.merge !== 'continue') break;
+        group.push(continuation.table.cell);
+      }
+      for (const p of table.filter(p => group.includes(p.table.cell))) {
+        const { merge: _merge, ...split } = p.table;
+        changes.push({ start: p.end - 1, end: p.end, delta: [{ retain: 1, attributes: { table: replaceCell(p.start, split) } }] });
+      }
+    } else {
     const span = target.span ?? 1;
     if (span === 1 || target.merge) throw new Error('Select a horizontally merged cell to split.');
     for (const p of table.filter(p => p.table.cell === target.cell))
       changes.push({ start: p.end - 1, end: p.end, delta: [{ retain: 1, attributes: { table: replaceCell(p.start, { ...target, span: 1 }) } }] });
     const { source: _source, ...split } = target;
     changes.push({ start: current.end, end: current.end, delta: Array.from({ length: span - 1 }, (_, index) => ({ insert: '\n', attributes: { table: { ...split, cell: crypto.randomUUID(), column: target.column + index + 1, span: 1 } } })) });
+    }
   } else if (removesTable) remove(cells[0]!.start, cells.at(-1)!.end);
   else if (action === 'clear-cell') remove(current.start, current.end - 1);
   else if (action === 'delete-row') {
