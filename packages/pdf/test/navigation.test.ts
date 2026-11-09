@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import {
   openPdfDocument,
   PdfNavigation,
+  PdfDocument,
   PdfTextModel,
   PdfEditingFonts,
   exportEditedPdf,
@@ -28,7 +29,7 @@ test('resolve link actions, named destinations and nested outline in viewport co
   });
 });
 
-test('page reorder, insert, rotation and delete preserve surviving navigation on export', () => {
+test('page reorder, insert and delete preserve surviving navigation on export', () => {
   const document = openPdfDocument(navigationFixture()),
     model = new PdfTextModel(),
     fonts = new PdfEditingFonts();
@@ -70,4 +71,17 @@ test('unsafe URI actions and cyclic named destinations do not become browser nav
   expect(
     new PdfNavigation(document).destination(new PdfString(new TextEncoder().encode('loop'))),
   ).toBeUndefined();
+});
+
+test('destinations and link hit rectangles respect crop, rotation and user units', () => {
+  const original = openPdfDocument(navigationFixture());
+  for (const page of original.pages) {
+    page.dictionary.set('CropBox', [10, 20, 190, 180]);
+    page.dictionary.set('Rotate', 90);
+    page.dictionary.set('UserUnit', 2);
+  }
+  const document = new PdfDocument(original.source);
+  const link = new PdfNavigation(document).links(document.pages[0]!)[0]!;
+  expect(link.rect).toEqual([300, 0, 340, 140]);
+  expect(link.target).toEqual({ kind: 'internal', pageId: document.pages[1]!.id, x: 280, y: 20 });
 });
