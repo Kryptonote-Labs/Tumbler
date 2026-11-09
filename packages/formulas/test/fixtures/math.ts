@@ -114,3 +114,9 @@ cases.push(
   { name:"matrix product dimension error",formula:"MMULT(Inputs!A1:A2,Inputs!A1:A2)",cells:{A1:n(1),A2:n(2)},expected:e("#VALUE!") },
   { name:"matrix inverse singular dependent rows",formula:"MINVERSE(Inputs!A1:B2)",cells:{A1:n(1),B1:n(2),A2:n(2),B2:n(4)},expected:e() },
 );
+cases.push(
+ {name:"factorial truncates before overflow check",formula:"FACT(170.5)",expected:n(7.257415615307999e306)},
+ {name:"factorial rejects next integer",formula:"FACT(171)",expected:e()},
+ {name:"mround opposite tiny normal signs",formula:"MROUND(-1e-200,1e-200)",expected:e()},
+ {name:"mround reverse tiny normal signs",formula:"MROUND(1e-200,-1e-200)",expected:e()},
+);
