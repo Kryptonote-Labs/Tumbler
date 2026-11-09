@@ -137,6 +137,7 @@ export function calculateFormulas(
   const diagnostics: FormulaDiagnostic[] = [];
   const diagnosed = new Set<string>();
   const visiting = new Set<string>();
+  const dirtyActive = new Set<string>();
   const aggregateFormulaCells = new Map<string, boolean>();
   let operations = 0;
   let evaluationFrames = 0;
@@ -185,7 +186,8 @@ export function calculateFormulas(
       invalidated = false;
       for (const [key, refs] of dependencies) {
         operation();
-        if (visiting.has(key) || !memo.has(key) || !refs.some(ref => pending.has(addressKey(ref)))) continue;
+        if (pending.has(key) || (!visiting.has(key) && !memo.has(key)) || !refs.some(ref => pending.has(addressKey(ref)))) continue;
+        if (visiting.has(key)) dirtyActive.add(key);
         memo.delete(key); values.delete(key);
         if (arrays.delete(key)) {
           for (const [target, owner] of spillOwners) if (owner === key) { spillOwners.delete(target); values.delete(target); pending.add(target); }
@@ -230,6 +232,7 @@ export function calculateFormulas(
       publicExpression = expression;
       const evaluated = toFunction(evaluate(expression, address.sheet, depth + 1));
       let result = scalar(evaluated);
+      if (result.type === "blank") result = number(0);
       if ("kind" in evaluated && evaluated.kind === "array") {
         const rows = evaluated.rows, height = rows.length, width = rows[0]?.length ?? 0;
         assertArray(height, width);
@@ -255,8 +258,15 @@ export function calculateFormulas(
           if (changed.size) invalidateDependants(changed);
         }
       }
-      memo.set(key, result);
-      values.set(key, result);
+      if (dirtyActive.delete(key)) {
+        // A dependency published a spill after this active frame read a blank.
+        // Leave it and all marked ancestors uncached for the next calculation pass.
+        memo.delete(key); values.delete(key); arrays.delete(key);
+        for (const [target, owner] of spillOwners) if (owner === key) { spillOwners.delete(target); values.delete(target); }
+      } else {
+        memo.set(key, result);
+        values.set(key, result);
+      }
       return result;
     } catch (cause) {
       if (!(cause instanceof EvaluationUnavailable)) throw cause;
@@ -335,7 +345,8 @@ export function calculateFormulas(
     const ref = resolveReference(expression, currentSheet, depth + 1);
     if ("type" in ref) return ref;
     const value = readReference(ref, depth + 1);
-    return "kind" in value && value.kind === "array" ? {kind: "range", rows: value.rows, values: value.rows.flat()} : value;
+    if (!("kind" in value)) return value.type === "error" ? value : {kind: "range", rows: [[value]], values: [value]};
+    return value.kind === "array" ? {kind: "range", rows: value.rows, values: value.rows.flat()} : value;
   };
 
   const binary = (expression: Extract<FormulaExpression, { kind: "binary" }>, sheet: string, depth: number): EvaluationValue => mapValues(evaluate(expression.left, sheet, depth + 1), evaluate(expression.right, sheet, depth + 1), (left, right) => {
@@ -425,8 +436,8 @@ export function calculateFormulas(
       const criterion = compileCriterion(criterionValue);
       const resultStart = args[2] === undefined
         ? inspected
-        : referenceGeometry(args[2], sheet, source);
-      if (isFormulaError(resultStart)) return resultStart;
+        : resolveReference(args[2], sheet, depth + 1);
+      if ("type" in resultStart) return resultStart.type === "error" ? resultStart : error("#VALUE!");
       assertCorrespondingRange(resultStart, inspected.height, inspected.width, limits.maxRangeCells);
 
       let count = 0;
@@ -511,7 +522,16 @@ export function calculateFormulas(
 
   const callAggregate = (name: "SUM" | "COUNT" | "AVERAGE" | "MIN" | "MAX" | "AND" | "OR" | "XOR" | "NOT"): FormulaFunction =>
     (args, sheet, depth) => {
-    const evaluated = args.map((argument) => evaluate(argument, sheet, depth + 1));
+    const evaluated = args.map((argument): EvaluationValue => {
+      if (argument.kind === "reference" && argument.whole) {
+        const ref = resolveReference(argument, sheet, depth + 1);
+        if ("type" in ref) return ref;
+        const value = readReference(usedReference(ref, source), depth + 1);
+        const rows = matrix(value);
+        return {kind: "range", rows, values: rows.flat()};
+      }
+      return evaluate(argument, sheet, depth + 1);
+    });
     const firstError = flatten(evaluated).find((value) => value.type === "error");
     if (firstError?.type === "error") return firstError;
     switch (name) {
@@ -1157,7 +1177,8 @@ export function calculateFormulas(
       if (name === "INDIRECT" && args.length >= 1 && args.length <= 2) {
         const value = scalar(evaluate(args[0]!, sheet, depth + 1));
         if (value.type === "error") return value;
-        const style = args[1] === undefined ? boolean(true) : logical(scalar(evaluate(args[1]!, sheet, depth + 1)));
+        const styleValue = args[1] === undefined ? {kind: "omitted"} as const : evaluate(args[1], sheet, depth + 1);
+        const style = "kind" in styleValue && styleValue.kind === "omitted" ? boolean(true) : logical(scalar(styleValue));
         if (style.type === "error") return style;
         if (!style.value) return error("#REF!");
         try { return resolveReference(parseFormula(text(value)).expression, sheet, depth + 1); } catch (cause) { if (cause instanceof FormulaParseError) return error("#REF!"); throw cause; }
@@ -1296,7 +1317,10 @@ function collectReferences(
         const sheet = node.sheet === undefined ? currentSheet : source.resolveSheet(currentSheet, node.sheet);
         if (sheet !== undefined) {
           const ref = referenceGeometry(node, currentSheet, source);
-          if (!("type" in ref)) result.push(...correspondingRangeAddresses(ref, ref.height, ref.width, maxRangeCells));
+          if (!("type" in ref)) {
+            const scanned = node.whole ? usedReference(ref, source) : ref;
+            result.push(...correspondingRangeAddresses(scanned, scanned.height, scanned.width, maxRangeCells));
+          }
         }
         break;
       }
@@ -1345,9 +1369,7 @@ function referenceGeometry(
   if (expression.kind !== "reference") return error("#VALUE!");
   const sheet = expression.sheet === undefined ? currentSheet : source.resolveSheet(currentSheet, expression.sheet);
   if (sheet === undefined) return error("#REF!");
-  let end = expression.endReference ?? expression.startReference;
-  const dimensions = source.usedDimensions?.(sheet);
-  if (dimensions && expression.whole) end = {...end, ...(expression.whole === "columns" ? {row: Math.max(1, dimensions.rows)} : {column: Math.max(1, dimensions.columns)})};
+  const end = expression.endReference ?? expression.startReference;
   const firstRow = Math.min(expression.startReference.row, end.row);
   const lastRow = Math.max(expression.startReference.row, end.row);
   const firstColumn = Math.min(expression.startReference.column, end.column);
@@ -1359,6 +1381,16 @@ function referenceGeometry(
     height: lastRow - firstRow + 1,
     width: lastColumn - firstColumn + 1,
   });
+}
+
+/** Bound blank-insensitive aggregate/dependency scans, never reference geometry. */
+function usedReference<T extends FormulaRangeGeometry>(ref: T, source: FormulaWorkbookSource): T {
+  const used = source.usedDimensions?.(ref.sheet);
+  if (!used) return ref;
+  return {...ref,
+    height: ref.firstRow === 1 && ref.height === MAX_SPREADSHEET_ROW ? Math.max(1, used.rows) : ref.height,
+    width: ref.firstColumn === 1 && ref.width === MAX_SPREADSHEET_COLUMN ? Math.max(1, used.columns) : ref.width,
+  };
 }
 
 function correspondingAddress(
@@ -1774,6 +1806,7 @@ function boundedString(value: string): FormulaScalarValue {
 }
 
 function scalar(value: EvaluationValue): FormulaScalarValue {
+  if ("kind" in value && (value.kind === "array" || value.kind === "range") && value.rows.length === 1 && value.rows[0]?.length === 1) return value.rows[0][0]!;
   return "kind" in value ? value.kind === "omitted" ? BLANK : error(value.kind === "lambda" ? "#CALC!" : "#VALUE!") : value;
 }
 
