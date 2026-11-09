@@ -17,8 +17,10 @@ export type PdfTileRequest = {
   projection?: {
     placements: readonly PdfScenePlacement[];
     exclude: readonly string[];
+    excludeAnnotations?: readonly string[];
     include?: readonly string[];
     transparent?: boolean;
+    snapshot?: Uint8Array;
     blank?: { width: number; height: number };
   };
 };

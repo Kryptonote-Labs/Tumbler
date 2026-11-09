@@ -3,6 +3,8 @@ import { mergePageSelection } from "./merge-selection.ts";
 
 export type PdfMergeSource = {
   id: number;
+  key?: string | undefined;
+  read?: PdfMergeRead | undefined;
   name: string;
   bytes?: Uint8Array;
   document?: PdfDocument | undefined;
@@ -17,7 +19,7 @@ export type PdfMergeSource = {
   locked: boolean;
 };
 export type PdfMergeResult = { name?: string; href?: string };
-export type PdfMergeRead = Uint8Array | ((signal: AbortSignal) => Promise<Uint8Array>);
+export type PdfMergeRead = Uint8Array | ((signal: AbortSignal) => Promise<Uint8Array | PdfDocument>);
 
 export function openMergeSource(source: PdfMergeSource) {
   if (!source.bytes) return;
@@ -65,4 +67,23 @@ export type PdfMergeState = {
 };
 export function createPdfMergeState(): PdfMergeState {
   return { blocks: [], filename: '', expanded: undefined, created: undefined, nextId: 0, initialized: false };
+}
+
+/** Refresh hosted sources immediately before merging without replacing rows or page choices. */
+export async function refreshMergeSources(sources: PdfMergeSource[], signal: AbortSignal) {
+  for (const source of sources) {
+    if (typeof source.read !== 'function') continue;
+    const data = await source.read(signal);
+    signal.throwIfAborted();
+    if (data instanceof Uint8Array) {
+      source.bytes = data;
+      openMergeSource(source);
+    } else {
+      source.document = data;
+      source.error = '';
+      source.locked = false;
+    }
+    const selection = mergeSourceSelection(source);
+    if (source.error || selection.error) throw new Error(source.error || selection.error);
+  }
 }
