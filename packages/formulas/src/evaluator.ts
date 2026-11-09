@@ -589,7 +589,7 @@ export function calculateFormulas(
     if (aggregate) {
       if (args.length === 0) return error("#VALUE!");
       const values = numbersForAggregate(evaluated);
-      return finite(values.reduce((product, value) => product * value, 1));
+      return finite(values.length ? values.reduce((product, value) => product * value, 1) : 0);
     }
     const values = evaluated.map(scalar);
     const expected = name === "ABS" || name === "INT" ? [1, 1] : name === "CEILING.MATH" || name === "FLOOR.MATH" ? [1, 3] : [2, 2];
