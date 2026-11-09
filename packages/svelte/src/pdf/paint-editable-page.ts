@@ -1,15 +1,6 @@
-import {
-  placePdfScene,
-  pdfSourceKey,
-  browserPdfPaintHost,
-  paintPdfPage,
-  type layoutPdfTextFlow,
-  type PdfInterpreter,
-  type PdfTextModel,
-  type PdfEditingFonts,
-  type PdfDocument,
-  type PdfPageScene,
-} from '@tumblerjs/pdf';
+import type { layoutPdfTextFlow, PdfTextModel, PdfEditingFonts, PdfDocument } from '@tumblerjs/pdf';
+import type { PdfPageRenderer } from './page-renderer.ts';
+import { PdfEditableSource } from './editable-source.ts';
 import { paintPdfText } from './paint-pdf-text.ts';
 import { registerPdfDragPreview } from './pdf-box-preview.ts';
 export type PdfPagePaintOptions = {
@@ -17,7 +8,7 @@ export type PdfPagePaintOptions = {
   scale: number;
   source: number;
   continuation: number;
-  interpreter: PdfInterpreter;
+  renderer: PdfPageRenderer;
   model: PdfTextModel;
   fonts: PdfEditingFonts;
   pdf: PdfDocument;
@@ -33,14 +24,9 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     disposed = false,
     scheduled: number | undefined;
   let controller: AbortController | undefined, preparation: AbortController | undefined;
-  let host = browserPdfPaintHost();
+  const source = new PdfEditableSource();
   let normal: HTMLCanvasElement | undefined;
-  let background: { key: string; value: Promise<HTMLCanvasElement>; controller: AbortController } | undefined;
-  function clearBackground() {
-    background?.controller.abort();
-    background = undefined;
-  }
-  let snapshot: { options: PdfPagePaintOptions; scene: PdfPageScene } | undefined;
+  let snapshot: { options: PdfPagePaintOptions } | undefined;
   let prepared:
     | { key: string; flow: PdfPagePaintOptions['flow']; value: Promise<Raster> }
     | undefined;
@@ -104,7 +90,6 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
   }
   async function paint(
     target: HTMLCanvasElement,
-    scene: PdfPageScene,
     active: PdfPagePaintOptions,
     ids: ReadonlySet<string> | undefined,
     ink: boolean,
@@ -112,24 +97,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
   ) {
     const scale = active.scale * (window.devicePixelRatio || 1),
       context = target.getContext('2d')!;
-    const sources = new Set(
-      ids
-        ? [...ids].flatMap((id) =>
-            active.model.seed(id).sources.map((s) => `${s.instance}/${s.object}/${s.start}`),
-          )
-        : [],
-    );
-    const projected = ids
-      ? {
-          ...scene,
-          elements: scene.elements.filter((e) => sources.has(pdfSourceKey(e.source)) === ink),
-        }
-      : scene;
-    await paintPdfPage(context, projected, active.pdf.source, host, {
-      scale,
-      signal,
-      background: ink ? 'transparent' : '#fff',
-    });
+    await source.paint(context, active, ids, ink, signal);
     signal.throwIfAborted();
     context.setTransform(scale, 0, 0, scale, 0, 0);
     paintPdfText(
@@ -157,8 +125,8 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
       ink = surface(),
       selected = new Set(local);
     const value = Promise.all([
-      paint(background, current.scene, current.options, selected, false, signal),
-      paint(ink, current.scene, current.options, selected, true, signal),
+      paint(background, current.options, selected, false, signal),
+      paint(ink, current.options, selected, true, signal),
     ]).then(() => ({ background, ink }));
     // Selection can change while image decoding or a page paint is pending.
     void value.catch(() => {});
@@ -213,67 +181,12 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     const active = options;
     controller = new AbortController();
     const signal = controller.signal;
-    const scene =
-      active.source < 0
-        ? {
-            page: active.flow.pages[active.index]!.source,
-            viewport: [1, 0, 0, 1, 0, 0] as const,
-            width: active.flow.pages[active.index]!.source.width,
-            height: active.flow.pages[active.index]!.source.height,
-            elements: [],
-            text: '',
-            annotations: [],
-          }
-        : placePdfScene(active.interpreter.page(active.source), active.model);
-    const hidden = new Set(
-      active.flow.regions
-        .filter(
-          (region) =>
-            region.render &&
-            !region.preserveSource &&
-            active.model.seed(region.id).page === active.source,
-        )
-        .flatMap((region) =>
-          active.model.seed(region.id).sources.map((s) => `${s.instance}/${s.object}/${s.start}`),
-        ),
-    );
-    const projected = {
-      ...scene,
-      elements: active.continuation
-        ? []
-        : scene.elements.filter((e) => !hidden.has(pdfSourceKey(e.source))),
-    };
     const raster = surface();
-    const key = JSON.stringify([
-      active.scale, window.devicePixelRatio, active.source, active.continuation,
-      projected.width, projected.height, [...hidden].sort(),
-      active.model.ids(active.source).filter((id) => active.model.sourcePreserved(id)).map((id) => {
-        const frame = active.model.geometry(id);
-        return [id, frame.x, frame.y];
-      }),
-    ]);
-    if (!background || background.key !== key) {
-      clearBackground();
-      const controller = new AbortController(), source = surface();
-      const value = paintPdfPage(source.getContext('2d')!, projected, active.pdf.source, host, {
-        scale: active.scale * (window.devicePixelRatio || 1), signal: controller.signal, background: '#fff',
-      }).then(() => source);
-      void value.catch(() => {
-        if (background?.controller === controller) background = undefined;
-      });
-      background = { key, value, controller };
-    }
     try {
-      const source = await background.value;
-      if (disposed || signal.aborted) return;
-      const context = raster.getContext('2d')!;
-      context.drawImage(source, 0, 0);
-      const scale = active.scale * (window.devicePixelRatio || 1);
-      context.setTransform(scale, 0, 0, scale, 0, 0);
-      paintPdfText(context, edited(active), active.fonts);
+      await paint(raster, active, undefined, false, signal);
       if (disposed || signal.aborted) return;
       normal = raster;
-      snapshot = { options: active, scene: projected };
+      snapshot = { options: active };
       if (!drag || drag.ending) {
         publish(raster);
         clearDrag();
@@ -333,14 +246,12 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
         delete drag.layer;
         delete drag.clip;
       }
-      clearBackground();
+      source.clear();
       normal = undefined;
       snapshot = undefined;
       canvas.width = 0;
       canvas.height = 0;
-      host.close();
-      host = browserPdfPaintHost();
-      if (options.source >= 0) options.interpreter.releasePage(options.source);
+      if (options.source >= 0 && !options.continuation) options.renderer.release(options.source);
     },
     { rootMargin: '600px 0px' },
   );
@@ -354,14 +265,12 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
         previous.scale !== value.scale ||
         previous.source !== value.source ||
         previous.continuation !== value.continuation ||
-        previous.pdf !== value.pdf;
+        previous.pdf !== value.pdf || previous.renderer !== value.renderer;
       if (changed) {
         controller?.abort();
         invalidatePreparation();
-        if (previous.pdf !== value.pdf) {
-          clearBackground();
-          host.close();
-          host = browserPdfPaintHost();
+        if (previous.pdf !== value.pdf || previous.renderer !== value.renderer) {
+          source.clear();
           normal = undefined;
           snapshot = undefined;
         }
@@ -370,7 +279,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
         void prepare(value.selected);
     },
     destroy() {
-      clearBackground();
+      source.clear();
       disposed = true;
       viewport.removeEventListener('pdfzoomstart', pauseZoom);
       viewport.removeEventListener('pdfzoomend', schedule);
@@ -379,7 +288,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
       controller?.abort();
       invalidatePreparation();
       clearDrag();
-      host.close();
+      if (options.source >= 0 && !options.continuation) options.renderer.release(options.source);
       if (scheduled !== undefined) cancelAnimationFrame(scheduled);
     },
   };

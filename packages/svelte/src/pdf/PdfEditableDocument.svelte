@@ -3,6 +3,7 @@
   import { pdfPagePosition } from './page-position.ts';
   import { PdfSearchIndex } from '@tumblerjs/pdf';
   import { pdfTextInputChange, type PdfInputSelection } from './text-input.ts';
+  import { PdfPageRenderer } from './page-renderer.ts';
   import { paintEditablePdfPage } from './paint-editable-page.ts';
   import PdfTextBox from './PdfTextBox.svelte';
   import PdfEditableText from './PdfEditableText.svelte';
@@ -71,6 +72,12 @@
     if (editable && model.pages.initialize(pdf.pages)) untrack(() => revision++);
   });
   const interpreter = $derived(new PdfInterpreter(pdf));
+  let renderer = $state.raw<PdfPageRenderer>();
+  $effect(() => {
+    const current = new PdfPageRenderer(pdf);
+    renderer = current;
+    return () => current.destroy();
+  });
   const flow = $derived.by(() => {
     void revision;
     fonts.importDocument(pdf);
@@ -465,13 +472,13 @@
         role="group"
         aria-label="PDF page"
       >
-        <canvas
+        {#if renderer}<canvas
           use:paintEditablePdfPage={{
             index: page.index,
             scale,
             source: page.source.index,
             continuation: page.continuation,
-            interpreter,
+            renderer,
             model,
             fonts,
             pdf,
@@ -485,7 +492,7 @@
           aria-label={`Page ${page.index + 1}`}
           style:width="100%"
           style:height="100%"
-        ></canvas>
+        ></canvas>{/if}
         {#if visiblePages.has(page.id) || selected.some((id) => layouts.some((l) => l.id === id && l.page === page.index))}<div class="text-layer" style:transform={`scale(${scale})`}>
           {#each layouts.filter((l) => l.page === page.index && selected.includes(l.id) && !adding && !model.placement(l.id)?.hidden) as layout (layout.id)}
             <PdfTextBox

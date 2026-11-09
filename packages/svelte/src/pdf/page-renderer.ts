@@ -11,19 +11,22 @@ type Job = {
 };
 /** One worker and one in-flight tile per document. Aborted work never reaches the display. */
 export class PdfPageRenderer {
-  private worker: Worker;
+  private worker: Pick<Worker, 'postMessage' | 'onmessage' | 'onerror' | 'terminate'>;
+  private releases = new Set<number>();
   private queue: Job[] = [];
   private active: Job | undefined;
   private sequence = 0;
   private closed = false;
-  constructor(document: PdfDocument, limits: PdfExecutionLimits = {}) {
-    this.worker = new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' });
+  constructor(document: PdfDocument, limits: PdfExecutionLimits = {},
+    createWorker: () => Pick<Worker, 'postMessage' | 'onmessage' | 'onerror' | 'terminate'> =
+      () => new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' })) {
+    this.worker = createWorker();
     const input = document.source.renderInput();
     this.send({ type: 'open', input, limits }, [input.bytes.buffer]);
     this.worker.onmessage = (event: MessageEvent<PdfRenderResponse>) => {
       const result = event.data,
         job = this.active;
-      if (!job || result.id !== job.id) {
+      if (this.closed || !job || result.id !== job.id) {
         if ('bitmap' in result) result.bitmap.close();
         return;
       }
@@ -35,6 +38,7 @@ export class PdfPageRenderer {
         job.reject(result.code ? new PdfError(result.code, result.error) : new Error(result.error));
       else job.resolve(result);
       this.next();
+      this.flushReleases();
     };
     this.worker.onerror = (event) => this.fail(new Error(event.message || 'PDF renderer failed.'));
   }
@@ -60,6 +64,7 @@ export class PdfPageRenderer {
           this.queue = this.queue.filter((queued) => queued !== job);
           signal.removeEventListener('abort', job.abort);
           reject(new DOMException('PDF render cancelled.', 'AbortError'));
+          this.flushReleases();
         },
       };
       signal.addEventListener('abort', job.abort, { once: true });
@@ -68,9 +73,19 @@ export class PdfPageRenderer {
     });
   }
   release(page: number) {
-    if (!this.closed) this.send({ type: 'release', page });
+    if (this.closed) return;
+    this.releases.add(page);
+    this.flushReleases();
+  }
+  private flushReleases() {
+    for (const page of this.releases) {
+      if (this.active?.tile.page === page || this.queue.some((job) => job.tile.page === page)) continue;
+      this.releases.delete(page);
+      this.send({ type: 'release', page });
+    }
   }
   private fail(error: Error) {
+    if (this.closed) return;
     this.closed = true;
     for (const job of [...this.queue, ...(this.active ? [this.active] : [])]) {
       job.signal.removeEventListener('abort', job.abort);
@@ -78,6 +93,7 @@ export class PdfPageRenderer {
     }
     this.queue = [];
     this.active = undefined;
+    this.releases.clear();
     this.worker.terminate();
   }
   destroy() {
