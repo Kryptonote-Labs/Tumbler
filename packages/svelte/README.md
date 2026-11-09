@@ -366,3 +366,20 @@ browser memory. The docs example is `/playground/pdf-merge`.
 ### Remote spreadsheet selections
 
 Pass `remoteSelections` to `SpreadsheetGrid` as an array of `{ id, name, color, range }`. Ranges use one-based, inclusive `start` and `end` cell coordinates. The host supplies selections for the displayed worksheet and owns presence transport. The grid projects ranges through filtered rows and clips them against scrolling and frozen panes. Overlays do not intercept pointer input.
+
+### Visual PDF merging
+
+`PdfMerge` shows expandable source rows with lazy page thumbnails, checkbox and Shift-click
+selection, editable page ranges, source drag ordering and keyboard alternatives. Custom ordered
+or repeated page ranges remain intact until the user explicitly chooses page order. None and
+all-pages selections are distinct. Only one source grid opens at a time.
+
+Hosts can add an immediate loading row with `addSource(name, signal => readBytes(signal))`.
+Removing that source or destroying the component cancels the read. Undoing a removal starts a fresh read with a new signal, so host readers must support being called again. The optional `sourcePicker`
+snippet receives upload and close callbacks for a workspace picker inside the Add PDFs popover.
+File drops and uploads use the same source flow. A successful `onmerge` can return `{name, href}`
+for an Open link; the merge setup remains intact. Host `disabled` prevents creation and edits.
+`PdfPageThumbnail` is exported from `@tumblerjs/svelte/pdf` and shares a worker render queue
+between visible thumbnails of the same source document.
+
+Hosts can retain a reactive `createPdfMergeState()` per document and pass it as `session` to preserve source choices, output name and expanded row across mounts.

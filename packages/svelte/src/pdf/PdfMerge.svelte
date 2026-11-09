@@ -1,148 +1,178 @@
 <script lang="ts">
-  import { mergePdfDocuments, openPdfDocument, parsePdfPageSelection, type PdfDocument } from '@tumblerjs/pdf';
+  import { onMount, onDestroy, tick, type Snippet } from 'svelte';
+  import { mergePdfDocuments } from '@tumblerjs/pdf';
+  import PdfMergeSourceView from './PdfMergeSource.svelte';
+  import PdfMergeAdd from './PdfMergeAdd.svelte';
+  import { openMergeSource, mergeSourceSelection, type PdfMergeSource, type PdfMergeRead, type PdfMergeResult, type PdfMergeState, createPdfMergeState } from './merge-source.ts';
 
-  /** Hosts may intercept the finished PDF instead of the default browser download. */
-  let { onmerge }: { onmerge?: (bytes: Uint8Array, filename: string) => void } = $props();
-  type Block = {
-    id: number; name: string; bytes: Uint8Array; password: string;
-    document?: PdfDocument; pages: string; error: string;
-  };
-  let blocks = $state<Block[]>([]);
-  let filename = $state('merged.pdf');
-  let error = $state('');
-  let status = $state('');
-  let reading = $state(false);
-  let nextId = 0;
-  const plan = $derived.by(() => {
-    try {
-      return {
-        inputs: blocks.map(block => {
-          if (!block.document) throw new Error(block.error || `Open ${block.name} first.`);
-          return {
-            document: block.document,
-            pages: block.pages.trim() ? parsePdfPageSelection(block.pages, block.document.pages.length) : undefined,
-          };
-        }),
-        error: '',
-      };
-    } catch (cause) {
-      return { inputs: [], error: message(cause) };
-    }
-  });
-  const pageCount = $derived(plan.inputs.reduce((count, input) => count + (input.pages?.length ?? input.document.pages.length), 0));
-  function message(cause: unknown) { return cause instanceof Error ? cause.message : String(cause); }
-  function open(block: Block) {
-    try {
-      // PdfDocument is an immutable source graph; keep its class identity out of deep proxies.
-      block.document = openPdfDocument(block.bytes, { password: block.password || undefined });
-      block.error = '';
-    } catch (cause) {
-      block.document = undefined;
-      block.error = message(cause);
-    }
-    error = '';
-    status = '';
+  let { onmerge, sources = [], submitLabel = 'Merge PDF', sourcePicker, disabled = false, session = $bindable() }: {
+    onmerge?: (bytes: Uint8Array, filename: string) => void | PdfMergeResult | Promise<void | PdfMergeResult>;
+    sources?: { name: string; bytes: Uint8Array }[];
+    submitLabel?: string; disabled?: boolean;
+    session?: PdfMergeState;
+    sourcePicker?: Snippet<[upload: () => void, close: () => void]>;
+  } = $props();
+  const localState = $state(createPdfMergeState());
+  const model = $derived(session ?? localState);
+  let saving = $state(false), error = $state(''), announcement = $state('');
+  let removed = $state<{ source: PdfMergeSource; index: number; read: PdfMergeRead | undefined }>();
+  let root: HTMLDivElement;
+  let over = $state(false);
+  const reads = new Map<number, { controller: AbortController; data: PdfMergeRead }>();
+  const plan = $derived(model.blocks.map(source => ({ source, selection: mergeSourceSelection(source) })));
+  const pageCount = $derived(plan.reduce((count, entry) => count + (entry.source.document ? entry.selection.pages.length : 0), 0));
+  const problem = $derived(plan.find(entry => entry.source.loading || entry.source.error || entry.selection.error));
+  const blocked = $derived(!!problem || !pageCount);
+  const reason = $derived(problem?.selection.error && !problem.source.rangeErrorVisible ? '' : problem ? problem.source.loading ? `Reading ${problem.source.name}…` : `Check ${problem.source.name}` : !pageCount ? model.blocks.length ? 'Select at least one page' : 'Add PDFs to begin' : '');
+  function changed() { removed = undefined; model.created = undefined; error = ''; }
+  /** Adds a row immediately; hosts can supply cancellable authorized reads. */
+  export async function addSource(name: string, data: PdfMergeRead) {
+    const id = model.nextId++;
+    const source: PdfMergeSource = { id, name, password: '', pages: '', none: false, loading: true, error: '', locked: false };
+    model.blocks = [...model.blocks, source];
+    const current = model.blocks.find(block => block.id === id)!;
+    model.expanded = id;
+    if (!model.filename) model.filename = `${name.replace(/\.pdf$/i, '')} merged.pdf`;
+    changed();
+    void tick().then(() => root?.querySelector(`[data-source-id="${id}"]`)?.scrollIntoView({ block: 'nearest' }));
+    await readSource(current, data);
   }
-  async function upload(event: Event) {
-    const input = event.currentTarget as HTMLInputElement;
-    const files = Array.from(input.files ?? []);
-    input.value = '';
-    reading = true;
-    error = '';
-    status = '';
+  async function readSource(current: PdfMergeSource, data: PdfMergeRead) {
+    const controller = new AbortController(), id = current.id;
+    reads.set(id, { controller, data });
+    current.loading = true;
+    current.error = '';
     try {
-      for (const file of files) {
-        const block: Block = { id: nextId++, name: file.name, bytes: new Uint8Array(await file.arrayBuffer()), password: '', pages: '', error: '' };
-        open(block);
-        blocks = [...blocks, block];
-      }
-    } catch (cause) { error = message(cause); }
-    finally { reading = false; }
+      const bytes = typeof data === 'function' ? await data(controller.signal) : data;
+      if (controller.signal.aborted) return;
+      current.bytes = bytes;
+      openMergeSource(current);
+    } catch (cause) {
+      if (!controller.signal.aborted) current.error = cause instanceof Error ? cause.message : 'Could not read PDF.';
+    } finally {
+      if (reads.get(id)?.controller === controller) { current.loading = false; reads.delete(id); }
+    }
   }
-  function move(index: number, delta: number) {
-    const next = [...blocks];
-    [next[index], next[index + delta]] = [next[index + delta]!, next[index]!];
-    blocks = next;
-    status = '';
+  onMount(() => { if (model.initialized) return; model.initialized = true; for (const source of sources) void addSource(source.name, source.bytes); });
+  onDestroy(() => { for (const [id, read] of reads) { read.controller.abort(); const source = model.blocks.find(source => source.id === id); if (source) { source.loading = false; source.error = 'Reading was cancelled. Add this PDF again.'; } } });
+  function upload(files: File[]) {
+    const pdfs = files.filter(file => /\.pdf$/i.test(file.name) || file.type === 'application/pdf');
+    for (const file of pdfs) void addSource(file.name, () => file.arrayBuffer().then(bytes => new Uint8Array(bytes)));
+    if (pdfs.length !== files.length) error = 'Only PDF files were added.';
+  }
+  function move(id: number, before?: number) {
+    const source = model.blocks.find(source => source.id === id);
+    if (!source || id === before) return;
+    const rest = model.blocks.filter(source => source.id !== id);
+    const index = before === undefined ? rest.length : rest.findIndex(source => source.id === before);
+    if (index < 0) return;
+    rest.splice(index, 0, source);
+    model.blocks = rest;
+    announcement = `Moved ${source.name} to position ${index + 1} of ${model.blocks.length}.`;
+    void tick().then(() => root.querySelector<HTMLButtonElement>(`[data-source-id="${id}"] .grip`)?.focus({ preventScroll: true }));
+    changed();
+  }
+  function moveBy(index: number, delta: number) {
+    const next = index + delta;
+    if (next < 0 || next >= model.blocks.length) return;
+    move(model.blocks[index]!.id, model.blocks[delta < 0 ? next : next + 1]?.id);
   }
   function duplicate(index: number) {
-    const original = blocks[index]!;
-    blocks = [...blocks.slice(0, index + 1), { ...original, id: nextId++ }, ...blocks.slice(index + 1)];
-    status = '';
+    const original = model.blocks[index]!;
+    const source = { ...original, id: model.nextId++ };
+    model.blocks = [...model.blocks.slice(0, index + 1), source, ...model.blocks.slice(index + 1)];
+    model.expanded = source.id;
+    changed();
   }
-  function merge() {
-    error = '';
-    status = '';
+  function remove(source: PdfMergeSource) {
+    const pending = reads.get(source.id);
+    removed = { source, index: model.blocks.indexOf(source), read: pending?.data };
+    reads.delete(source.id);
+    pending?.controller.abort();
+    if (pending) source.loading = false;
+    model.blocks = model.blocks.filter(block => block.id !== source.id);
+    if (model.expanded === source.id) model.expanded = model.blocks[0]?.id;
+    announcement = `Removed ${source.name}.`;
+    model.created = undefined; error = "";
+    void tick().then(() => {
+      const next = root.querySelectorAll<HTMLButtonElement>('.grip')[Math.min(removed?.index ?? 0, model.blocks.length - 1)];
+      (next ?? root.querySelector<HTMLButtonElement>('button[aria-label="Add PDFs"]'))?.focus();
+    });
+  }
+  function undoRemove() {
+    if (!removed) return;
+    const { source, index, read } = removed;
+    model.blocks.splice(Math.min(index, model.blocks.length), 0, source);
+    model.expanded = source.id;
+    if (read) void readSource(source, read);
+    removed = undefined;
+    changed();
+    announcement = `Restored ${source.name}.`;
+    void tick().then(() => root.querySelectorAll<HTMLButtonElement>('.grip')[index]?.focus());
+  }
+  async function merge() {
+    if (saving || disabled || blocked) return;
+    changed();
+    if (!model.filename.trim() || !/\.pdf$/i.test(model.filename.trim())) { error = 'Choose a file name ending in .pdf.'; return; }
+    saving = true;
     try {
-      if (plan.error) throw new Error(plan.error);
-      if (!filename.trim() || !/\.pdf$/i.test(filename.trim())) throw new Error('Choose an output filename ending in .pdf.');
-      const bytes = mergePdfDocuments(plan.inputs);
-      const name = filename.trim();
-      if (onmerge) onmerge(bytes, name);
+      const inputs = plan.flatMap(({ source, selection }) => source.document && selection.pages.length ? [{ document: source.document, pages: selection.pages }] : []);
+      const bytes = mergePdfDocuments(inputs), name = model.filename.trim();
+      if (onmerge) model.created = { name, ...await onmerge(bytes, name) };
       else {
         const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes).buffer], { type: 'application/pdf' }));
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = name;
-        link.click();
+        const link = document.createElement('a'); link.href = url; link.download = name; link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
+        model.created = { name };
       }
-      status = `Created ${name} with ${pageCount} ${pageCount === 1 ? 'page' : 'pages'}.`;
-    } catch (cause) { error = message(cause); }
+    } catch (cause) { error = cause instanceof Error ? cause.message : 'Could not create PDF.'; }
+    finally { saving = false; }
   }
 </script>
 
-<div class="pdf-merge">
-  <div class="intro">
-    <p>Add PDFs, choose pages, then arrange the blocks in output order. Files stay in your browser.</p>
-    <label class="upload">Add PDF files<input type="file" accept=".pdf,application/pdf" multiple onchange={upload} disabled={reading} /></label>
+<div class="pdf-merge" bind:this={root}>
+  <PdfMergeAdd onfiles={upload} {sourcePicker} disabled={disabled || saving} />
+  <div class="sources" class:over role="group" aria-label="Merge sources"
+    ondragover={event => { if (!disabled && !saving && event.dataTransfer?.types.includes('Files')) { event.preventDefault(); over = true; } }}
+    ondragleave={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) over = false; }}
+    ondrop={event => { over = false; if (disabled || saving || !event.dataTransfer?.types.includes('Files')) return; event.preventDefault(); event.stopPropagation(); upload(Array.from(event.dataTransfer.files)); }}>
+    {#if over}<div class="drop-hint">Drop PDFs to add</div>{/if}
+    <ol aria-label="PDF merge order">
+      {#each model.blocks as source, index (source.id)}
+        <li><PdfMergeSourceView bind:source={model.blocks[index]!} position={index} count={model.blocks.length} expanded={model.expanded === source.id} disabled={disabled || saving}
+          onexpand={() => model.expanded = model.expanded === source.id ? undefined : source.id} onchange={changed}
+          onmove={delta => moveBy(index, delta)} onduplicate={() => duplicate(index)} onremove={() => remove(source)}
+          ondrop={(id, after) => move(id, after ? model.blocks[index + 1]?.id : source.id)} /></li>
+      {/each}
+    </ol>
   </div>
-  <p class="hint">Leave Pages empty for every page. Use numbers or inclusive ranges, such as 5,2-4 or 3-1,1. Repeats are allowed. Duplicate a block to insert more pages from the same PDF elsewhere.</p>
-  {#if !blocks.length}<p class="empty">Add your first PDF to begin.</p>{/if}
-  <ol aria-label="PDF merge order">
-    {#each blocks as block, index (block.id)}
-      <li>
-        <fieldset>
-          <legend>{index + 1}. {block.name}</legend>
-          <div class="fields">
-            <label>Pages<input aria-label={`Pages for block ${index + 1}`} type="text" bind:value={block.pages} placeholder={block.document ? `All ${block.document.pages.length} pages` : 'All pages'} oninput={() => { error = ''; status = ''; }} /></label>
-            <label>Password (if needed)<input aria-label={`Password for block ${index + 1}`} type="password" bind:value={block.password} oninput={event => { block.password = event.currentTarget.value; open(block); }} autocomplete="off" /></label>
-          </div>
-          {#if block.error}<p class="error" role="alert">{block.error}</p>{:else}<p class="count">{block.document?.pages.length} source {block.document?.pages.length === 1 ? 'page' : 'pages'}</p>{/if}
-          <div class="actions">
-            <button type="button" aria-label={`Move block ${index + 1} up`} disabled={index === 0 || reading} onclick={() => move(index, -1)}>Move up</button>
-            <button type="button" aria-label={`Move block ${index + 1} down`} disabled={index === blocks.length - 1 || reading} onclick={() => move(index, 1)}>Move down</button>
-            <button type="button" aria-label={`Duplicate block ${index + 1}`} disabled={reading} onclick={() => duplicate(index)}>Duplicate</button>
-            <button type="button" aria-label={`Remove block ${index + 1}`} disabled={reading} onclick={() => { blocks = blocks.filter(item => item.id !== block.id); status = ''; }}>Remove</button>
-          </div>
-        </fieldset>
-      </li>
-    {/each}
-  </ol>
   <div class="finish">
-    <label>Output filename<input aria-label="Output filename" type="text" bind:value={filename} /></label>
-    <button type="button" disabled={!blocks.length || reading || !!plan.error} onclick={merge}>Merge and download PDF</button>
+    {#if removed}<div class="undo" role="status"><span>Removed {removed.source.name}</span><button type="button" disabled={disabled || saving} onclick={undoRemove}>Undo</button></div>{/if}
+    <label>File name<input aria-label="Output filename" type="text" bind:value={model.filename} disabled={disabled || saving} oninput={changed} /></label>
+    <div class="submit-row">
+      <span class="status" class:error={!!error} role="status">{#if error}{error}{:else if model.created}Created {model.created.name}{:else if reason}{reason}{:else}{pageCount} {pageCount === 1 ? 'page' : 'pages'}{/if}</span>
+      {#if model.created?.href}<a href={model.created.href}>Open</a>{/if}
+      <button type="button" disabled={disabled || saving || blocked} onclick={merge}>{saving ? 'Creating…' : submitLabel}</button>
+    </div>
   </div>
-  {#if plan.error && blocks.every(block => !block.error)}<p class="error" role="alert">{plan.error}</p>{/if}
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
-  <p class="status" role="status">{reading ? 'Reading files…' : status || (pageCount ? `${pageCount} ${pageCount === 1 ? 'page' : 'pages'} in output order` : '')}</p>
+  <span class="sr-only" aria-live="polite">{announcement}</span>
 </div>
 
 <style>
-  .pdf-merge { color: var(--text, #202820); font: inherit; }
-  .intro p, .hint { line-height: 1.6; }
-  .hint, .count, .status { color: var(--soft, #5c675c); font-size: 0.85em; }
-  .upload { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-weight: 600; }
-  .upload input { max-width: 100%; }
-  ol { padding: 0; list-style: none; display: grid; gap: 16px; margin: 24px 0; }
-  fieldset { border: 1px solid var(--border, #bcc8bc); padding: 16px; border-radius: 8px; min-width: 0; }
-  legend { font-weight: 600; padding: 0 6px; overflow-wrap: anywhere; }
-  .fields, .finish, .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
-  .fields label, .finish label { display: grid; gap: 6px; flex: 1 1 180px; font-size: 0.85em; }
-  input[type='text'], input[type='password'] { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid var(--border, #a5b5a5); border-radius: 4px; padding: 9px; background: var(--bg, white); color: inherit; font: inherit; }
-  button { cursor: pointer; padding: 8px 12px; border: 1px solid var(--border, #a5b5a5); border-radius: 4px; background: var(--surface, #f0f4f0); color: inherit; font: inherit; font-size: 0.85em; }
-  button:disabled { opacity: 0.5; cursor: default; }
-  .finish button { background: var(--accent, #246644); color: var(--accent-ink, white); padding: 10px 16px; }
-  .error { color: var(--danger, #b82222); overflow-wrap: anywhere; }
-  .empty { padding: 28px 0; color: var(--soft, #5c675c); }
+  .pdf-merge { container-type: inline-size; display: flex; flex: 1; flex-direction: column; min-width: 0; width: 100%; min-height: 0; height: 100%; box-sizing: border-box; color: var(--text, #222); font: inherit; font-size: 12px; }
+  .sources { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: auto; }
+  .drop-hint { position: absolute; inset: 8px; z-index: 3; pointer-events: none; display: grid; place-items: center; min-height: 90px; border: 1px dashed var(--accent, #246644); background: var(--bg, white); }
+  .undo { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .undo span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  ol { list-style: none; padding: 0; margin: 0; }
+  .finish { flex-shrink: 0; padding: 12px; border-top: 1px solid var(--border, #ddd); }
+  label { display: grid; gap: 6px; color: var(--text-soft, #666); }
+  input { box-sizing: border-box; width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--border, #ddd); border-radius: 4px; background: var(--bg, white); color: var(--text, #222); font: inherit; }
+  .submit-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; min-height: 32px; }
+  .status { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--text-soft, #666); line-height: 1.5; }
+  button { flex: none; padding: 7px 12px; border: 1px solid var(--border, #ddd); border-radius: 4px; background: var(--surface, #eee); color: var(--text, #222); font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
+  a { color: var(--text, #222); }
+  .status.error { color: var(--danger, #b82222); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 </style>

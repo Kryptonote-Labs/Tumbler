@@ -135,3 +135,6 @@ a source rectangle. Apply them with `paint-formatting`, providing `sheetId`, a d
 `range`, and the captured `styles` sample. Formatting repeats across the destination
 without changing values or formulas. Samples belong to their source workbook and
 include number formats, borders, fills and alignment.
+
+`inspectSpreadsheet` and CLI `sheets read` include `formattingSample` for the requested
+range. Pass that object unchanged as `styles` to `paint-formatting` in the same workbook.

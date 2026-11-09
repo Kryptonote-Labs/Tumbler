@@ -24,3 +24,15 @@ test('whole-sheet sampling keeps defaults and sparse overrides compact', () => {
   expect(a.worksheet.cellStyle('D4')!.font.bold).toBe(true);
   expect(a.worksheet.cellStyle('C3')!.font.bold).toBe(false);
 });
+
+test('CLI read supplies a reusable painter sample without changing cell content', async () => {
+  const { inspectSpreadsheet } = await import('../src/commands.ts');
+  let artifact = createSpreadsheet();
+  const sheetId = String(artifact.activeSheet.sheetId);
+  artifact = applySpreadsheetCommand(artifact, { name: 'format-cells', sheetId, range: 'A1', patch: { text: { bold: { set: true } } } });
+  artifact = applySpreadsheetCommand(artifact, { name: 'set-formula', sheetId, reference: 'C1', formula: '1+2' });
+  const read = inspectSpreadsheet(artifact, sheetId, 'A1');
+  artifact = applySpreadsheetCommand(artifact, { name: 'paint-formatting', sheetId, range: 'C1', styles: read.formattingSample });
+  expect(artifact.worksheet.cellStyle('C1').font.bold).toBe(true);
+  expect(artifact.worksheet.cell('C1')!.formula).toBe('1+2');
+});

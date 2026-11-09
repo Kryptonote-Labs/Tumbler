@@ -276,3 +276,9 @@ The CLI and the Svelte `PdfMerge` component use these same APIs and selection ru
 Run `bun test packages/pdf/test/merge.test.ts` for structural coverage, and
 `python3 tools/pdf-merge/verify.py` for the independently generated document corpus
 and Poppler/pypdf content-preservation checks.
+
+`deletePdfModelPages(document, model, fonts, selection)` applies a one-based page
+selection to the current collaborative layout, including reordered and continuation
+pages. It rejects duplicates and deletion of every page before mutation. It uses
+the same page model as interactive deletion and preserves source identities and undo;
+it is not a redaction API. File replacement uses the CLI's separate extraction safeguards.

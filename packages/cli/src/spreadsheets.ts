@@ -25,6 +25,7 @@ export function spreadsheetHelp(commandName = 'tumbler', name?: string): string 
       `${commandName} <document> sheets <command> --input JSON [--page <read-handle>]`,
       'Read the target sheet and range before editing. Use the sheetId returned by the read. Cell references use A1 notation; formula source omits the leading equals sign. Each command or batch is one undo step.',
       'Reads return values, formula source, calculated results, and selection formatting including number formats. Read further ranges explicitly for more cells or per-cell formatting. A missing cell is blank, not unread content.',
+      'Reads include formattingSample for the selected range. Pass it unchanged as styles to paint-formatting on a range in the same workbook; values and formulas stay unchanged.',
       'Drawing reads include stable objectId values and pixel bounds. Use insert-shape with optional text for text boxes; insert-image takes base64 data and contentType. Move-drawing sets pixel position and size; duplicate-drawing, delete-drawing and order-drawing use objectId. In K, data may also be a shared imageRef.',
       'Commands: ' + spreadsheetCommand.options.map((option) => option.shape.name.value).join(', '),
       ...(schema

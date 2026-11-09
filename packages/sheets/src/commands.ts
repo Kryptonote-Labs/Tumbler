@@ -1,3 +1,4 @@
+import { spreadsheetFormatPainterSample } from './format-painter.ts';
 import { spreadsheetDrawingObjectId, spreadsheetDrawingBounds } from './drawings.ts';
 import { spreadsheetDrawingCommand, isSpreadsheetDrawingCommand, applySpreadsheetDrawingCommand } from './drawing-commands.ts';
 import { spreadsheetInteractionCommand, applySpreadsheetInteractionCommand } from './interaction.ts';
@@ -195,6 +196,7 @@ export function inspectSpreadsheet(artifact: SpreadsheetArtifact, sheetId?: stri
     drawings: selected.worksheet.drawing?.anchors.map(anchor=>({ objectId: spreadsheetDrawingObjectId(selected.worksheet.drawing!,anchor), ...spreadsheetDrawingBounds(anchor,selected.worksheet.rowGeometry(),selected.worksheet.columnGeometry()) })) ?? [],
     range: reference,
     formatting: selected.formattingState(range),
+    formattingSample: spreadsheetFormatPainterSample(selected, range),
     numberFormat: selected.numberFormatState(range),
     cells: selected.worksheet.rows.flatMap(row => row.cells.filter(cell => cell.address.row >= range.start.row && cell.address.row <= range.end.row && cell.address.column >= range.start.column && cell.address.column <= range.end.column).map(cell => ({reference:cell.reference,value:cell.value.type === 'blank' ? null : cell.value.value,computed:selected.calculation.value(cell.reference),formula:cell.formula,formatted:selected.calculation.displayText(cell.reference)}))),
   };
