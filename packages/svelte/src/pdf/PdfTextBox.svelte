@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pdfHistoryShortcut } from './history-shortcut.ts';
   import { onDestroy } from 'svelte';
   import { beginPdfBoxPreview } from './pdf-box-preview.ts';
   import type { PdfTextModel, PdfFlowRegion } from '@tumblerjs/pdf';
@@ -241,9 +242,10 @@
       }, model.origin);
       model.undo.stopCapturing();
     }
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+    const history = pdfHistoryShortcut(event);
+    if (history) {
       event.preventDefault();
-      if (event.shiftKey) model.undo.redo();
+      if (history === 'redo') model.undo.redo();
       else model.undo.undo();
     }
   }
