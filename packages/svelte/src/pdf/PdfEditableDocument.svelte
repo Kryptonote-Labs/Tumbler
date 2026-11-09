@@ -299,6 +299,7 @@
     }
     if (event.key === 'Escape') {
       active = undefined;
+      activeImage = undefined;
       selected = [];
       onselection?.(null);
       return;
@@ -394,6 +395,7 @@
       )[0];
     if (!layout) {
       active = undefined;
+      activeImage = undefined;
       selected = [];
       onselection?.(null);
       return;

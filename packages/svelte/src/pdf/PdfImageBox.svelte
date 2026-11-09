@@ -13,10 +13,11 @@
     event.stopPropagation();
     if (!editable || event.button !== 0) return;
     event.preventDefault();
+    const members = event.shiftKey ? [...new Set([...group, id])] : selected ? [...group] : [id];
     onselect(id, event.shiftKey);
     node.focus(); node.setPointerCapture(event.pointerId);
     const page = node.closest<HTMLElement>('.pdf-page')!;
-    gesture = { x: event.clientX, y: event.clientY, dx: 0, dy: 0, scale: Number(new DOMMatrix(getComputedStyle(node.parentElement!).transform).a), rotation: Number(page.dataset.pdfRotation), resize, image: { ...image }, members: event.shiftKey ? [...new Set([...group, id])] : selected ? [...group] : [id], preview: beginPdfBoxPreview(node, group) };
+    gesture = { x: event.clientX, y: event.clientY, dx: 0, dy: 0, scale: Number(new DOMMatrix(getComputedStyle(node.parentElement!).transform).a), rotation: Number(page.dataset.pdfRotation), resize, image: { ...image }, members, preview: beginPdfBoxPreview(node, members) };
   }
   function move(event: PointerEvent) {
     if (!gesture) return;

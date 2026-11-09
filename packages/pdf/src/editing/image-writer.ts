@@ -39,7 +39,8 @@ export function writePdfImages(document: PdfDocument, placements: { image: PdfIm
       content += `q ${matrix.map(n).join(' ')} cm /${name} Do Q\n`;
     }
     resources.set('XObject', xobjects);
-    const info = new Map(page.dictionary), original = info.get('Contents') ?? null;
+    const info = new Map(page.dictionary), reference = info.get('Contents') ?? null;
+    const resolved = document.source.resolve(reference), original = Array.isArray(resolved) ? resolved : reference;
     info.set('Resources', resources);
     info.set('Contents', [writer.stream(bytes('q\n')), ...(original === null ? [] : Array.isArray(original) ? original : [original]), writer.stream(bytes('Q\n' + content))]);
     writer.value(info, page.reference);
