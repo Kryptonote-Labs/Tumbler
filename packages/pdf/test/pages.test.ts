@@ -357,6 +357,10 @@ test('inserted pages retain internal destinations across snapshots', () => {
     const annotation = output.source.resolve(annots[0]) as Map<string, unknown>;
     const destination = annotation.get('Dest') as PdfReference[];
     expect(destination[0]!.key).toBe(output.pages[4]!.reference.key);
+    const inserted = model.pages.sourcePages(pdf.pages).find(page => page.id === ids[0])!;
+    model.annotations.set({ id: 'new-markup', page: inserted.index, continuation: 0, kind: 'Highlight', color: '#ffff00', quads: [[10, 30, 40, 30, 10, 10, 40, 10]], hidden: false });
+    const marked = openPdfDocument(exportEditedPdf(pdf, model, fonts));
+    expect(marked.source.resolve(marked.pages[3]!.dictionary.get('Annots'))).toHaveLength(2);
     model.pages.remove(pdf.pages, [ids[1]!]);
     expect(openPdfDocument(exportEditedPdf(pdf, model, fonts)).pages).toHaveLength(4);
   } finally { model.doc.destroy(); }
