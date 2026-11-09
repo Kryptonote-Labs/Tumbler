@@ -188,26 +188,40 @@ export function calculateFormulas(
     refs.push(freezeAddress(address)); dependencies.set(owner, refs);
   }
 
-  function invalidateDependants(changed: ReadonlySet<string>): void {
-    const pending = new Set(changed);
+  function planInvalidation(changed: ReadonlySet<string>): {formulas: Set<string>; spills: Set<string>} {
+    const pending = new Set(changed), formulas = new Set<string>(), spills = new Set<string>();
     let invalidated = true;
     while (invalidated) {
       invalidated = false;
       for (const [key, refs] of dependencies) {
         operation();
-        if (pending.has(key) || (!visiting.has(key) && !memo.has(key)) || !(refs.some(ref => pending.has(addressKey(ref))) || (wholeDependencies.get(key) ?? []).some(ref => [...pending].some(target => {
+        if (pending.has(key) || (!visiting.has(key) && !memo.has(key)) || !(refs.some(ref => {
+          operation(); return pending.has(addressKey(ref));
+        }) || (wholeDependencies.get(key) ?? []).some(ref => [...pending].some(target => {
           operation();
           const [sheet, row, column] = target.split("\u0000");
           return sheet === ref.sheet && Number(row) >= ref.firstRow && Number(row) < ref.firstRow + ref.height && Number(column) >= ref.firstColumn && Number(column) < ref.firstColumn + ref.width;
         })))) continue;
-        if (visiting.has(key)) dirtyActive.add(key);
-        memo.delete(key); values.delete(key);
-        if (arrays.delete(key)) {
-          for (const [target, owner] of spillOwners) if (owner === key) { spillOwners.delete(target); values.delete(target); pending.add(target); }
+        formulas.add(key);
+        if (arrays.has(key)) {
+          for (const [target, owner] of spillOwners) {
+            operation();
+            if (owner === key) { spills.add(target); pending.add(target); }
+          }
         }
         pending.add(key); invalidated = true;
       }
     }
+    return {formulas, spills};
+  }
+
+  function commitInvalidation(plan: ReturnType<typeof planInvalidation>): void {
+    // All budgeted discovery finishes before any output or memo mutation.
+    for (const key of plan.formulas) {
+      if (visiting.has(key)) dirtyActive.add(key);
+      memo.delete(key); values.delete(key); arrays.delete(key);
+    }
+    for (const target of plan.spills) { spillOwners.delete(target); values.delete(target); }
   }
 
   const cellValue = (address: FormulaCellAddress, depth: number, asDependency: boolean): FormulaScalarValue => {
@@ -261,14 +275,21 @@ export function calculateFormulas(
         result = blocked ? error("#SPILL!") : rows[0]![0]!;
         if (!blocked) {
           const copy: FunctionArray = Object.freeze({kind: "array", rows: Object.freeze(rows.map(row => Object.freeze([...row])))});
-          arrays.set(key, copy);
-          const changed = new Set<string>();
+          const entries: [string, FormulaScalarValue][] = [], changed = new Set<string>();
           for (let r = 0; r < height; r++) for (let c = 0; c < width; c++) {
             const target = addressKey({sheet: address.sheet, row: address.row + r, column: address.column + c});
-            values.set(target, rows[r]![c]!);
-            if (r || c) { spillOwners.set(target, key); changed.add(target); }
+            entries.push([target, rows[r]![c]!]);
+            if (r || c) changed.add(target);
           }
-          if (changed.size) invalidateDependants(changed);
+          const plan = changed.size ? planInvalidation(changed) : {formulas: new Set<string>(), spills: new Set<string>()};
+          // Commit cannot exhaust the operation budget: discovery/validation above
+          // is complete, and no evaluator or source callbacks run during mutation.
+          commitInvalidation(plan);
+          arrays.set(key, copy);
+          for (const [target, value] of entries) {
+            values.set(target, value);
+            if (target !== key) spillOwners.set(target, key);
+          }
         }
       }
       if (dirtyActive.delete(key)) {
@@ -1317,6 +1338,7 @@ export function calculateFormulas(
   let pendingCells = formulaCells;
   while (pendingCells.length) {
   for (const formulaCell of pendingCells) {
+    if (memo.has(addressKey(formulaCell.address)) || unavailable.has(addressKey(formulaCell.address))) continue;
     try {
       cellValue(formulaCell.address, 0, false);
     } catch (cause) {

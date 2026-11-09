@@ -154,3 +154,20 @@ for (const tableName of ["Items", "Receipts"]) for (const columnName of ["Amount
     }
     expect(artifact.bytes()).toEqual(bytes);
   });
+
+test("budget-limited workbook calculation publishes no partial spill and preserves producer cache", () => {
+  const bytes = buildWorkbookFixture({sheets:[{name:"Data",sheetId:1,relationshipId:"data",xml:sheet('<row r="1"><c r="E1"><f>B2+1</f><v>88</v></c></row><row r="2"><c r="A2"><f>{1,2}</f><v>99</v></c></row>')} ]});
+  const original = openSpreadsheetArtifact(bytes);
+  for (const artifact of [original,openSpreadsheetArtifact(original.bytes())]) {
+    const limited = calculateSpreadsheetWorksheet(artifact.worksheet,{maxOperations:12});
+    expect(limited.diagnostics).toContainEqual(expect.objectContaining({code:"evaluation-limit",address:expect.objectContaining({row:2,column:1})}));
+    expect(limited.arrayValue("A2")).toBeUndefined();
+    expect(limited.value("A2")).toBeUndefined();
+    expect(limited.value("B2")).toBeUndefined();
+    expect(limited.displayText("A2")).toBe("99");
+    expect(limited.displayText("E1")).toBe("1");
+    expect(artifact.worksheet.cell("A2")?.value).toMatchObject({type:"number",value:99});
+    expect(artifact.worksheet.cell("B2")).toBeUndefined();
+    expect(artifact.bytes()).toEqual(bytes);
+  }
+});
