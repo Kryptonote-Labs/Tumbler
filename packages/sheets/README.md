@@ -92,3 +92,49 @@ Tumbler is developed at
 [Kryptonote-Labs/Tumbler](https://github.com/Kryptonote-Labs/Tumbler).
 
 MIT licensed. See [LICENSE](LICENSE).
+
+## Native editing and commands
+
+`createSpreadsheet()` starts an editable workbook. `applySpreadsheetCommand()`
+validates cell, formula, range, formatting, worksheet, row, column, merge, and
+freeze actions through the exported `spreadsheetCommand` schema. Worksheet
+handles are decimal `sheetId` strings; names are also accepted. The `nameValue`
+field names new or renamed worksheets. `inspectSpreadsheet()` returns populated
+cells, formula sources, calculated values, and formatted display text for a
+requested worksheet range.
+
+Spreadsheet artifacts edit native OPC member resources. Cell edits, formatting,
+and structural actions do not serialize or compress an XLSX. Call `bytes()` only
+when exporting XLSX. `createSpreadsheetNativeArchive()` separates the native
+manifest and immutable binary resources so hosts can deduplicate them in SQLite
+or object storage. `encodeSpreadsheetNativeArchive()` frames those resources for
+transport, and `openSpreadsheetArtifact()` accepts either that native transport
+or an XLSX upload. A native conversion preserves an untouched upload's original
+XLSX bytes, including unrecognized package parts.
+
+Worksheet renames update formulas, named ranges, chart references, and validation
+formulas. Deleting a referenced worksheet writes `#REF!` formulas. Formula string
+literals and external workbook references retain their original text.
+
+Worksheet drawings retain their original XML, relationships and media when cells are edited. `readSpreadsheetDrawingObjects` projects imported shapes, pictures, text and groups for grid rendering. `spreadsheetDrawingObjectId` reads the stable, sheet-local DrawingML object identity. Drawing commands use that `objectId`, not XML parser node IDs.
+
+`applySpreadsheetCommand` supports `insert-shape` with optional text, `insert-image` with base64 data and a content type, `move-drawing` with pixel bounds, `style-drawing`, `align-drawing` to a cell range, `order-drawing`, `duplicate-drawing` and `delete-drawing`. These commands also apply to imported chart placement; chart creation is not provided. CLI sheet reads include drawing IDs and bounds, and the same command schemas drive the CLI and interactive editor.
+
+Spreadsheet interaction commands include `replace-text` with literal, case-sensitive and whole-word search options, `set-sheet-state` for hide and unhide, and `set-tab-color` for RGB colours or removal. Replacement edits cell source, including formulas, rather than calculated results. Hiding the last visible sheet is rejected. `SpreadsheetGrid` hosts can toggle `showGridlines` and `showHeadings`; row and column headers expose their source indices for host menus.
+
+### Printing
+
+`spreadsheetPrintPages(artifact)` paginates the active worksheet in CSS pixels. It reads saved print areas and repeated title rows/columns, paper size and orientation, margins, scale or fit-to-page, manual breaks, page order, gridlines, headings and centering. The Svelte `SpreadsheetPrintView` renders these pages with calculated values, cell formatting and supported charts. `PresentationPrintView` from `@tumblerjs/svelte/slides` renders one page per slide using the existing slide renderer. Hosts mount the views before invoking their browser print dialog, which also supports saving PDF.
+
+Header/footer text fields are rendered as plain text. Printer-specific settings and header/footer font runs are retained in the file but do not control browser output. Paper codes outside the supported standard sizes require explicit paper dimensions.
+
+## Format painter
+
+`spreadsheetFormatPainterSample(artifact, range)` captures workbook style defaults and sparse overrides for
+a source rectangle. Apply them with `paint-formatting`, providing `sheetId`, a destination
+`range`, and the captured `styles` sample. Formatting repeats across the destination
+without changing values or formulas. Samples belong to their source workbook and
+include number formats, borders, fills and alignment.
+
+`inspectSpreadsheet` and CLI `sheets read` include `formattingSample` for the requested
+range. Pass that object unchanged as `styles` to `paint-formatting` in the same workbook.

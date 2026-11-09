@@ -1,3 +1,9 @@
+import { runSpreadsheet } from './spreadsheets.ts';
+export { spreadsheetHelp } from './spreadsheets.ts';
+export type { SpreadsheetReadInput, SpreadsheetOperationHost } from './spreadsheets.ts';
+import { runPdf } from './pdf.ts';
+export { pdfHelp } from './pdf.ts';
+export type { PdfOperationHost, PdfMergeInput } from './pdf.ts';
 import { runPresentation } from './presentations.ts';
 export { presentationHelp } from './presentations.ts';
 export type { PresentationOperationHost } from './presentations.ts';
@@ -11,6 +17,7 @@ import {
   type OperationHost,
 } from './registry.ts';
 export * from './registry.ts';
+export type { PdfDeletePagesInput, PdfExportInput } from './pdf-pages.ts';
 
 import { tumblerHelp, tumblerOperationHelp } from './help.ts';
 export { tumblerHelp, tumblerOperationHelp, tumblerCapabilities } from './help.ts';
@@ -28,7 +35,18 @@ export async function runTumbler(
   },
 ): Promise<number> {
   try {
-    if(argv[1] === 'slides'){await runPresentation(argv,options);return 0;}
+    if (argv[1] === 'sheets') {
+      await runSpreadsheet(argv, options);
+      return 0;
+    }
+    if (argv[1] === 'slides') {
+      await runPresentation(argv, options);
+      return 0;
+    }
+    if (argv[1] === 'pdf') {
+      await runPdf(argv, options);
+      return 0;
+    }
     if (!argv.length || argv.includes('--help')) {
       const name =
         argv[0] === 'create' ? 'create' : argv[1] && argv[1] !== '--help' ? argv[1] : undefined;
@@ -84,20 +102,22 @@ export async function runTumbler(
     }
     const flags: Record<string, unknown> = {};
     const allowed = new Set(
-      name === 'render'
+      name === 'export'
+        ? ['pages', 'output', 'format']
+        : name === 'render'
         ? ['page']
         : name === 'read'
-        ? ['offset', 'region', 'target']
-        : name === 'create'
-          ? []
-          : [
-              'page',
-              'find',
-              'within',
-              'start',
-              'end',
-              ...(name === 'replace' ? ['value', 'valueFile', 'literal'] : formatFlags),
-            ],
+          ? ['offset', 'region', 'target']
+          : name === 'create'
+            ? []
+            : [
+                'page',
+                'find',
+                'within',
+                'start',
+                'end',
+                ...(name === 'replace' ? ['value', 'valueFile', 'literal'] : formatFlags),
+              ],
     );
     for (let i = 0; i < rest.length; i++) {
       const arg = rest[i]!;
@@ -132,7 +152,8 @@ export async function runTumbler(
               : value === 'false'
                 ? false
                 : value
-            : (name === 'render' && key === 'page') || ['start', 'end', 'offset', 'fontSize', 'characterSpacingPoints'].includes(key)
+            : (name === 'render' && key === 'page') ||
+                ['start', 'end', 'offset', 'fontSize', 'characterSpacingPoints'].includes(key)
               ? value.trim() === ''
                 ? NaN
                 : Number(value)
