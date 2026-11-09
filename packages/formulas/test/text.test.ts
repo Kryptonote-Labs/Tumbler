@@ -67,6 +67,10 @@ function context(
     },
     evaluate: (e: FormulaExpression): FunctionValue => {
       switch (e.kind) {
+        case "array": return {kind: "array", rows: e.rows.map(row => row.map(item => {
+          const value = c.evaluate(item);
+          return "kind" in value ? {type: "error" as const, value: "#VALUE!" as const} : value;
+        }))};
         case "number":
         case "string":
         case "boolean":
@@ -202,4 +206,13 @@ test("spill allocations respect maxArrayCells", () => {
       { ...c, maxArrayCells: 1 },
     ),
   ).toEqual({ type: "error", value: "#NUM!" });
+});
+
+test("TEXTSPLIT charges every candidate delimiter comparison", () => {
+  const c = context({}, undefined, 50000);
+  const evaluate = c.evaluate;
+  c.evaluate = expression => expression.kind === "function" && expression.name === "DELIMS"
+    ? {kind: "array", rows: [Array.from({length: 10000}, () => ({type: "string" as const, value: "b"}))]}
+    : evaluate(expression);
+  expect(() => c.evaluate(parseFormula(`TEXTSPLIT("${"a".repeat(10000)}",DELIMS())`).expression)).toThrow("operation budget");
 });

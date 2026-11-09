@@ -491,6 +491,18 @@ for (const name of ["TEXTAFTER", "TEXTBEFORE"])
     );
   });
 define("TEXTSPLIT", 2, 6, (v, c) => {
+  // Only delimiters accept arrays; scalarization must not turn errors into text.
+  for (const index of [0, 3, 4, 5]) {
+    const value = v[index];
+    if (value && "kind" in value && value.kind === "array") return err();
+  }
+  for (const index of [1, 2]) {
+    if (omitted(v[index])) continue;
+    for (const delimiter of functionMatrix(v[index]!)) for (const item of delimiter) {
+      c.operation();
+      if (item.type === "error") return item;
+    }
+  }
   const t = s(v[0]),
     ignore = n(v[3]),
     mode = n(v[4]);
@@ -510,11 +522,13 @@ define("TEXTSPLIT", 2, 6, (v, c) => {
     let start = 0;
     for (let i = 0; i < input.length;) {
       c.operation();
-      const d = ds.find((d) =>
-        mode
+      const d = ds.find((d) => {
+        // Include every candidate and its worst-case string comparison work.
+        c.operation(1 + d.length);
+        return mode
           ? input.slice(i, i + d.length).toLowerCase() === d.toLowerCase()
-          : input.startsWith(d, i),
-      );
+          : input.startsWith(d, i);
+      });
       if (d !== undefined) {
         const part = input.slice(start, i);
         if (!ignore || part) out.push(part);

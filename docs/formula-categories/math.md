@@ -86,3 +86,7 @@ Primary Microsoft sources consulted (2026-11-08):
 - [RAND](https://support.microsoft.com/en-us/excel/functions/rand-function), [RANDARRAY](https://support.microsoft.com/en-us/excel/functions/randarray-function), [RANDBETWEEN](https://support.microsoft.com/en-us/excel/functions/randbetween-function).
 - [PERCENTOF](https://support.microsoft.com/en-us/excel/functions/percentof-function), [SERIESSUM](https://support.microsoft.com/en-us/excel/functions/seriessum-function), [SUMXMY2](https://support.microsoft.com/en-us/excel/functions/sumxmy2-function), [TRUNC](https://support.microsoft.com/en-us/excel/functions/trunc-function).
 - [Worksheet numeric limits and subnormals](https://learn.microsoft.com/en-us/office/client-developer/excel/excel-worksheet-and-expression-evaluation).
+
+## Independent review follow-up
+
+Review regressions cover FACT fractional arguments in (170,171), which truncate before overflow checking, and MROUND opposite-sign normal inputs whose product would underflow to signed zero. Sign validation compares signs directly.

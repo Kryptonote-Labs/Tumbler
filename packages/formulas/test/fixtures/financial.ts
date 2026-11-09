@@ -6,6 +6,7 @@ export interface FinancialFixture {
   cells?: Record<string, FormulaScalarValue>;
   dateSystem?: "1900" | "1904";
   tolerance?: number;
+  oracle?: "excel" | "host" | "nondeterministic";
 }
 const number = (value: number): FormulaScalarValue => ({
   type: "number",
@@ -381,3 +382,7 @@ cases.push({
   formula: "TBILLYIELD(43831,43831,99)",
   expected: { type: "error", value: "#NUM!" },
 });
+cases.push(
+ {name:"native RATE tiny future fails convergence",formula:"RATE(1000,0,-1,1e-100)",expected:{type:"error",value:"#NUM!"},oracle:"excel"},
+ {name:"native RATE no finite root",formula:"RATE(1000,0,-1,0)",expected:{type:"error",value:"#NUM!"},oracle:"excel"},
+);
