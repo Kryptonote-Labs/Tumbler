@@ -20,6 +20,7 @@ export type PdfTileRequest = {
     excludeAnnotations?: readonly string[];
     include?: readonly string[];
     transparent?: boolean;
+    snapshot?: Uint8Array;
     blank?: { width: number; height: number };
   };
 };
