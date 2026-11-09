@@ -105,7 +105,10 @@
   }
   export function fontChoices() { return fonts.choices; }
   export function selectFont(key: string) { format(fonts.selection(key)); }
-  export function fontName(style: PdfTextStyle) { return fonts.fontName(style); }
+  export function fontValue(style: PdfTextStyle) {
+    const face = fonts.get(style);
+    return fonts.choices.some(choice => choice.value === face.key) ? face.key : fonts.fontName(style);
+  }
   export function formatParagraph(patch: Pick<PdfTextStyle, 'alignment' | 'lineSpacing'>) {
     if (!editable || !active) return;
     model.undo.stopCapturing();

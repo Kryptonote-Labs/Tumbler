@@ -109,6 +109,12 @@ export function exportEditedPdf(
     let content = pageContent.get(layout.page) ?? '';
     const viewport = inverse(pageViewport(page));
     for (const glyph of layout.glyphs) {
+      if (glyph.style.background && /^#[0-9a-f]{6}$/i.test(glyph.style.background)) {
+        const fill = [1, 3, 5].map(i => n(parseInt(glyph.style.background!.slice(i, i + 2), 16) / 255)).join(' ');
+        content += `q ${viewport.map(n).join(' ')} cm ${fill} rg ${n(glyph.x)} ${n(glyph.y - glyph.style.size * 0.85)} ${n(glyph.width)} ${n(glyph.style.size * 1.15)} re f Q\n`;
+      }
+    }
+    for (const glyph of layout.glyphs) {
       if (glyph.text === '\n') continue;
       const style = glyph.style,
         shaped = fonts.shape(glyph.text, style),
@@ -121,10 +127,6 @@ export function exportEditedPdf(
         .map((i) => parseInt(color.slice(i, i + 2), 16) / 255)
         .map(n)
         .join(' ');
-      if (style.background && /^#[0-9a-f]{6}$/i.test(style.background)) {
-        const fill = [1, 3, 5].map(i => n(parseInt(style.background!.slice(i, i + 2), 16) / 255)).join(' ');
-        content += `q ${viewport.map(n).join(' ')} cm ${fill} rg ${n(glyph.x)} ${n(glyph.y - style.size * 0.85)} ${n(glyph.width)} ${n(style.size * 1.15)} re f Q\n`;
-      }
       content += `q ${rgb} rg ${rgb} RG\n`;
       for (let i = 0; i < shaped.glyphs.length; i++) {
         const g = shaped.glyphs[i]!,

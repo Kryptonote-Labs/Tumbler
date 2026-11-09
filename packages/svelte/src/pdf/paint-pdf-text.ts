@@ -8,13 +8,17 @@ export function paintPdfText(
   regions: readonly PdfFlowRegion[],
   fonts: PdfEditingFonts,
 ) {
+  // Paint backgrounds first so italic overhangs remain above neighbouring cells.
   for (const region of regions)
     for (const glyph of region.glyphs) {
-      if (glyph.text === '\n') continue;
       if (glyph.style.background && /^#[0-9a-f]{6}$/i.test(glyph.style.background)) {
         context.fillStyle = glyph.style.background;
         context.fillRect(glyph.x, glyph.y - glyph.style.size * 0.85, glyph.width, glyph.style.size * 1.15);
       }
+    }
+  for (const region of regions)
+    for (const glyph of region.glyphs) {
+      if (glyph.text === '\n') continue;
       const shaped = fonts.shape(glyph.text, glyph.style),
         em = glyph.style.size / shaped.face.font.unitsPerEm;
       let x = glyph.x;
