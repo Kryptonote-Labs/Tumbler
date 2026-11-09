@@ -17,7 +17,15 @@ export const pdfEdits = {
   'move-page': z.object({ page, before: page.optional() }).strict(),
 };
 export const pdfEditInput = z.discriminatedUnion('operation', [
-  ...Object.entries(pdfEdits).map(([operation, input]) => z.object({ operation: z.literal(operation), input })),
+  z.object({ operation: z.literal('replace-text'), input: pdfEdits['replace-text'] }).strict(),
+  z.object({ operation: z.literal('add-text'), input: pdfEdits['add-text'] }).strict(),
+  z.object({ operation: z.literal('place-text'), input: pdfEdits['place-text'] }).strict(),
+  z.object({ operation: z.literal('duplicate-text'), input: pdfEdits['duplicate-text'] }).strict(),
+  z.object({ operation: z.literal('hide-text'), input: pdfEdits['hide-text'] }).strict(),
+  z.object({ operation: z.literal('format-text'), input: pdfEdits['format-text'] }).strict(),
+  z.object({ operation: z.literal('insert-page'), input: pdfEdits['insert-page'] }).strict(),
+  z.object({ operation: z.literal('rotate-page'), input: pdfEdits['rotate-page'] }).strict(),
+  z.object({ operation: z.literal('move-page'), input: pdfEdits['move-page'] }).strict(),
 ]);
 export type PdfEditInput = z.infer<typeof pdfEditInput>;
 
@@ -34,8 +42,8 @@ export function editPdfModel(document: PdfDocument, model: PdfTextModel, fonts: 
   switch (command.operation) {
     case 'replace-text': { const p = pdfEdits['replace-text'].parse(command.input); model.replace(p.id, p.start ?? 0, p.end ?? model.text(p.id).length, p.text); break; }
     case 'add-text': { const p = pdfEdits['add-text'].parse(command.input), target = at(p.page); regionId = crypto.randomUUID(); const style = { ...defaultPdfTextStyle, ...p.style }; model.add({ id: regionId, page: target.source.index, continuation: target.continuation, x: p.x, y: p.y, width: p.width, lineHeight: style.size * 1.25, style, sources: [], delta: [] }); model.replace(regionId, 0, 0, p.text, style); break; }
-    case 'place-text': { const { id, ...patch } = pdfEdits['place-text'].parse(command.input); model.place(id, patch); break; }
-    case 'duplicate-text': { const p = pdfEdits['duplicate-text'].parse(command.input); regionId = crypto.randomUUID(); model.duplicate(p.id, regionId, undefined, p.dx, p.dy); break; }
+    case 'place-text': { const { id, ...patch } = pdfEdits['place-text'].parse(command.input); model.place(id, { ...flow.regions.find(r => r.id === id)?.origin, ...patch }); break; }
+    case 'duplicate-text': { const p = pdfEdits['duplicate-text'].parse(command.input); regionId = crypto.randomUUID(); model.duplicate(p.id, regionId, flow.regions.find(r => r.id === p.id)?.origin, p.dx, p.dy); break; }
     case 'hide-text': { const p = pdfEdits['hide-text'].parse(command.input); model.hide(p.id, p.hidden); break; }
     case 'format-text': { const p = pdfEdits['format-text'].parse(command.input); model.format(p.id, p.start ?? 0, p.end ?? model.text(p.id).length, p.style); break; }
     case 'insert-page': { const p = pdfEdits['insert-page'].parse(command.input); if ((p.width === undefined) !== (p.height === undefined)) throw new Error('Supply both width and height.'); model.pages.insert(document.pages, p.after === undefined ? undefined : at(p.after).id, p.width === undefined ? undefined : { width: p.width, height: p.height! }, flow.pages); break; }
