@@ -10,8 +10,8 @@ export type PdfTextStyle = {
   underline: boolean;
   strike?: boolean;
   background?: string;
-  alignment?: 'left' | 'center' | 'right' | 'justify';
-  lineSpacing?: number;
+  alignment?: 'left' | 'center' | 'right' | 'justify' | undefined;
+  lineSpacing?: number | undefined;
   size: number;
   family: 'Sans' | 'Serif' | 'Mono';
   color: string;
@@ -112,7 +112,11 @@ export class PdfEditingFonts {
           face.bytes[0] !== 0 || face.bytes[1] !== 1 ||
           !Array.from({ length: 95 }, (_, i) => i + 32).every(c => face.font.hasGlyphForCodePoint(c))) continue;
       const key = `full:${face.key}`;
-      if (!this.fonts.has(key)) this.fonts.set(key, { ...face, key, source: undefined, sourceGlyphs: undefined });
+      if (!this.fonts.has(key)) {
+        const full = { ...face, key, source: undefined };
+        delete full.sourceGlyphs;
+        this.fonts.set(key, full);
+      }
     }
     this.documents.add(document);
   }
