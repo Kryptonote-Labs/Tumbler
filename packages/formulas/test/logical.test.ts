@@ -93,6 +93,7 @@ function context(cells: Record<string, FormulaScalarValue> = {}, maxArrayCells =
               default: throw new Error("unused test operator");
             }
           }
+          default: throw new Error(`Unused logical adapter syntax ${node.kind}`);
         }
       },
     };
@@ -152,7 +153,7 @@ describe("logical category bounds and lexical contract", () => {
     expect(run("MAKEARRAY(2,3,LAMBDA(row,col,row+col))", context({}, 4))).toEqual(functionError("#NUM!"));
     expect(run("MAKEARRAY(1E308,1E308,LAMBDA(row,col,1))")).toEqual(functionError("#NUM!"));
     expect(run("MAKEARRAY(0.999999999999,1,LAMBDA(row,col,1))")).toEqual(functionError());
-    expect(run("MAKEARRAY(1.999999999999,1,LAMBDA(row,col,row))")).toMatchObject({ rows: [[functionNumber(1)]] });
+    expect(run("MAKEARRAY(1.999999999999,1,LAMBDA(row,col,row))")).toEqual(functionError());
   });
   test("operation budget cannot be bypassed by helper iteration", () => {
     expect(() => run("MAKEARRAY(100,100,LAMBDA(row,col,row*col))", context({}, 10000, 100))).toThrow("operation budget");

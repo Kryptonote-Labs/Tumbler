@@ -6,6 +6,7 @@ const e = (value: `#${string}`): FormulaScalarValue => ({ type: "error", value }
 interface Case {
   name: string; formula: string; expected: FormulaScalarValue | FormulaScalarValue[][];
   cells?: Record<string, FormulaScalarValue>; dateSystem?: "1900" | "1904"; tolerance?: number;
+  oracle?: "excel" | "host" | "nondeterministic";
 }
 const grid = { A1: n(2), B1: n(3), A2: n(4), B2: n(5) };
 export const cases: Case[] = [
@@ -59,7 +60,7 @@ export const cases: Case[] = [
   { name: "scan wrong lambda", formula: "SCAN(0,1,LAMBDA(item,item))", expected: e("#VALUE!") },
   { name: "scan error propagation", formula: "SCAN(0,Inputs!A1:A2,LAMBDA(total,item,total+item))", cells: { A1: e("#N/A"), A2: n(4) }, expected: [[e("#N/A")],[e("#N/A")]] },
   { name: "makearray reference dimensions", formula: "MAKEARRAY(Inputs!A1,Inputs!B1,LAMBDA(row,col,row+col))", cells: { A1: n(2), B1: n(1) }, expected: [[n(2)],[n(3)]] },
-  { name: "makearray fractional dimensions", formula: "MAKEARRAY(1.999999999999,1,LAMBDA(row,col,row))", expected: [[n(1)]] },
+  { name: "makearray fractional dimensions", formula: "MAKEARRAY(1.999999999999,1,LAMBDA(row,col,row))", expected: e("#VALUE!"), oracle: "excel" },
   { name: "makearray near zero boundary", formula: "MAKEARRAY(0.999999999999,1,LAMBDA(row,col,1))", expected: e("#VALUE!") },
   { name: "makearray error dimension", formula: "MAKEARRAY(1/0,1,LAMBDA(row,col,1))", expected: e("#DIV/0!") },
   { name: "makearray scalar error body", formula: "MAKEARRAY(1,2,LAMBDA(row,col,1/0))", expected: [[e("#DIV/0!"),e("#DIV/0!")]] },

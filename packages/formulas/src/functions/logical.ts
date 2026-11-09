@@ -12,7 +12,7 @@ function bindingName(expression: FormulaExpression, lambda: boolean): string | u
   if (node.kind !== "name" || typeof node.name !== "string") return undefined;
   const name = node.name.replace(/^_xlpm\./i, "");
   if (name.length > 255 || !/^[\p{L}_\\][\p{L}\p{N}_\\.]*$/u.test(name) || (lambda && name.includes("."))) return undefined;
-  if (/^[rc]$/i.test(name) || /^r\d+c\d+$/i.test(name)) return undefined;
+  if ((!lambda && /^[rc]$/i.test(name)) || /^r\d+c\d+$/i.test(name)) return undefined;
   const cell = /^([a-z]+)([1-9]\d*)$/i.exec(name);
   if (cell) {
     let column = 0;
@@ -116,7 +116,7 @@ const makeArray: NonNullable<ReturnType<FunctionRegistry["get"]>> = (args, conte
     if (isError(value)) return value;
     if ("kind" in value) return error();
     const numeric = functionNumeric(value);
-    if (numeric.type !== "number" || numeric.value < 1) return error();
+    if (numeric.type !== "number" || numeric.value < 1 || !Number.isInteger(numeric.value)) return error();
     dimensions.push(Math.trunc(numeric.value));
   }
   const [height, width] = dimensions as [number, number];

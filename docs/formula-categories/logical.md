@@ -33,7 +33,7 @@ Microsoft primary references consulted 2026-11-08:
   SCAN starts at zero when omitted. Text accumulation uses an explicit empty string.
 
 No numeric approximation algorithms are needed: arithmetic is delegated to the
-shared evaluator. Dimensions truncate positive fractions, reject values below
+shared evaluator. Dimensions require positive integers and reject values below
 one, and are bounded by worksheet limits (1,048,576 rows, 16,384 columns) and
 `maxArrayCells`. Callback iteration, dimension validation, and row/column
 construction charge `context.operation`. Allocation-budget failures return
