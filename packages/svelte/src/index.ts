@@ -69,3 +69,5 @@ export { wordDarkColour, wordDisplayColour, wordDisplaySurface } from './word-di
 export { default as WordPageLayoutDecorations } from './WordPageLayoutDecorations.svelte';
 
 export { loadEmbeddedFonts, type EmbeddedFont, type EmbeddedFontContext } from './embedded-fonts.ts';
+
+export { default as SpreadsheetPrintView } from './SpreadsheetPrintView.svelte';

@@ -45,7 +45,7 @@ describe("SpreadsheetML calculated-value overlays", () => {
       name: "Data",
       sheetId: 1,
       relationshipId: "data",
-      xml: sheet(`<row r="1"><c r="A1"><f>OFFSET(B1,0,0)</f><v>42</v></c></row>`),
+      xml: sheet(`<row r="1"><c r="A1"><f>UNSUPPORTED(B1,0,0)</f><v>42</v></c></row>`),
     }] }));
     expect(artifact.calculation.value("A1")).toBeUndefined();
     expect(artifact.calculation.displayText("A1")).toBe("42");

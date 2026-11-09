@@ -13,7 +13,7 @@ export function wordDrawingChanges(
   value: WordDrawingChange,
   destination?: number,
 ): WordChange[] {
-  if (!fragment.drawing || !["image", "chart"].includes(fragment.drawing.kind)) return [];
+  if (!fragment.drawing || !["image", "chart", "shape"].includes(fragment.drawing.kind)) return [];
   let offset = 0;
   const parts: { insert?: unknown; attributes?: TextAttributes }[] = text.toDelta();
   const part = parts.find((part) => {
@@ -24,7 +24,7 @@ export function wordDrawingChanges(
   });
   if (!part?.attributes || text.toString()[start] !== "\uFFFC") return [];
   const image = isDocumentImage(part.attributes.image) ? part.attributes.image : undefined;
-  if (!image && !part.attributes.wordSource && !part.attributes.ink) return [];
+  if (!image && !part.attributes.wordSource && !part.attributes.ink && !part.attributes.shape) return [];
   const target = anchorWordRange(text, { start, end: start + 1 });
   if (destination !== undefined) {
     if (destination >= start && destination <= start + 1) return [];
@@ -62,6 +62,8 @@ export function wordDrawingChanges(
           : {}),
       }
     : {};
+  const zOrder = value.zOrder === undefined ? {} : { zOrder: value.zOrder };
+  if (part.attributes.shape) return [{ kind: "format", target, expected: "\uFFFC", attributes: { shape: { ...part.attributes.shape, width: value.widthPoints, height: value.heightPoints, ...position, ...zOrder } } }];
   if (image)
     return [
       {
@@ -73,6 +75,7 @@ export function wordDrawingChanges(
           width: value.widthPoints,
           height: value.heightPoints,
           ...position,
+          ...zOrder,
           ...(value.layout && value.layout !== "inline"
             ? {
                 moveWithText:
@@ -93,6 +96,7 @@ export function wordDrawingChanges(
           width: value.widthPoints,
           height: value.heightPoints,
           ...position,
+          ...zOrder,
         },
       },
     },

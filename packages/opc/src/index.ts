@@ -39,6 +39,7 @@ export {
   OpcPackage,
   OpcPackageError,
   openOpcPackage,
+  openOpcPackageArchive,
   saveOpcPackage,
 } from "./package.ts";
 export type {

@@ -1,7 +1,7 @@
 # Tumbler CLI
 
 Requires Bun 1.3 or later. Install with `bun add --global @tumblerjs/cli`.
-Word `.docx` is the supported engine. The package is public and included in the release graph.
+Supports Word `.docx`, PowerPoint `.pptx` and Excel `.xlsx` through their native document engines, plus PDF page export and deletion. The package is public and included in the release graph.
 
 ```sh
 tumbler create draft.docx
@@ -12,6 +12,47 @@ tumbler draft.docx inspect --input '{"what":"styles"}'
 tumbler draft.docx style --page '<handle>' --target '{"text":"Report"}' --input '{"styleId":"Heading1"}'
 tumbler draft.docx --help
 ```
+
+## Delete PDF pages
+
+```sh
+tumbler report.pdf pdf delete-pages 2,4-6
+tumbler report.pdf pdf delete-pages --help
+```
+
+Deletes the selected pages in place. Numbers start at 1 and refer to the original
+PDF; ranges include both endpoints. Remaining pages keep their original order.
+Descending ranges are accepted. Invalid, out-of-bounds, duplicate or overlapping
+selections fail without writing, as does deleting every page. The file host uses
+a sibling `.tumbler-lock` and atomic replacement, preserving file permissions.
+Documents with structures the extractor cannot retain (including document-level
+attachments, metadata, page labels, or trailer Info) are rejected without changing
+the original file.
+It rebuilds the PDF without removed page streams or historical revisions; shared
+resources may remain, so this is not content redaction. Keep a copy if you need
+the original. Injected hosts implement optional `deletePdfPages(document, {pages})`
+and own permission checks and storage. Success returns `deletedPages` (original
+1-based numbers in ascending order) and the remaining `pageCount`.
+
+## Export PDF pages
+
+```sh
+tumbler source.pdf export --pages 2-5,8 --output selected.pdf
+tumbler source.pdf export --pages 8,3-5,2 --format pdf --output reordered.pdf
+tumbler source.pdf export --help
+```
+
+`--pages` uses 1-based page numbers and inclusive ranges, in exactly the order written.
+For example, `8,3-5,2` exports pages 8,3,4,5,2. Descending ranges such as `5-3`
+export 5,4,3. Repeated pages and overlapping ranges are rejected, as are missing,
+invalid or out-of-bounds pages. The output must be a new `.pdf` file; existing files
+are never overwritten. The original stays unchanged. Extraction copies text, images
+and vector graphics without rasterizing and excludes unselected page streams and
+original revisions. Stdout returns JSON with the output path, format, page order and count.
+
+Injected hosts implement optional `exportPdf(document, {pages, output, format})`;
+`pages` retains the selection string so the host can validate against its source page count
+and expand ranges in the written order. Unsupported hosts return an availability error.
 
 ## Shared operations
 
@@ -70,7 +111,7 @@ Hosts enforce permissions, revisions, asset resolution, receipts and commit boun
 `createWordOperations` accepts host-specific command validation. `openWordOperationDocument`
 adapts DOCX files to the same operations and reconciles against their source package.
 
-The Word registry does not include sheets or document section-layout authoring. Presentation commands use the separate `slides` namespace below.
+Presentation commands use the separate `slides` namespace and spreadsheet commands use `sheets`.
 
 ## Replacement text
 
@@ -128,3 +169,48 @@ File reads return a content-hash page handle. Writes require that handle, retain
 the sibling-lock convention and replace the file atomically. Hosted integrations
 implement `readPresentation` and `operatePresentation` on `OperationHost` to use
 the same syntax with their own permissions, revisions and durable receipts.
+
+## Spreadsheets
+
+```sh
+tumbler create budget.xlsx
+tumbler budget.xlsx sheets read --range A1:J30
+tumbler budget.xlsx sheets set-cell --page '<read handle>' --input '{"sheetId":"1","reference":"A1","value":42}'
+tumbler budget.xlsx sheets set-formula --page '<refreshed handle>' --input '{"sheetId":"1","reference":"A2","formula":"SUM(A1:A1)"}'
+tumbler budget.xlsx sheets --help
+```
+
+`@tumblerjs/sheets` owns spreadsheet commands and validation. The `sheets` namespace
+supports typed values, formulas, rectangular values, clearing, cell formatting, sheet
+management and batches. Use a returned sheet ID and A1 references. Literal strings remain
+text; formula commands take formula source without a leading equals sign. Reads include
+formula source and calculated results. Use `--sheet` and `--range` to read the desired cells.
+
+File edits require the content-hash read handle, use a sibling lock and atomically replace
+the XLSX file. Symlink paths update their target. Injected hosts implement optional
+`readSpreadsheet(document, {sheetId?, range?})` and
+`operateSpreadsheet(document, {page?, command})`; hosts own authorization and revision checks.
+`spreadsheetHelp(commandName, command?)` generates help from the same command schema.
+
+Find PDF text with the same search engine used by the viewer:
+
+```sh
+tumbler report.pdf pdf find 'invoice number'
+tumbler report.pdf pdf find 'Invoice' --match-case --pages 2-8
+```
+
+`--pages` accepts one-based pages and inclusive ranges, including comma-separated
+lists such as `1,3-5`. JSON output contains `matches` and `total`. Matches include
+the page number, matched text, surrounding context, and rectangles in page points
+with a top-left origin. Wrapped phrases return multiple rectangles. Search is
+literal, includes existing OCR text, and leaves the file unchanged.
+
+### Merge PDFs
+
+```sh
+tumbler first.pdf pdf merge --pages 3,1-2,1 --source second.pdf --pages 2-1 --source first.pdf --pages 4 --output merged.pdf
+```
+
+Sources are read in command order. `--pages` and `--password` apply to the most recent source (initially the positional PDF). Omit `--pages` to include every page. Selections use one-based numbers, comma lists, inclusive ranges in either direction, and repetitions. Repeat `--source` to interleave blocks from any document. `--password` takes the next argument literally (including passwords such as `--help`); `--password=--secret` is also supported. It unlocks an encrypted input; the new PDF is unencrypted. The output must end in `.pdf` and must not exist. Inputs remain untouched and publication occurs only after the complete output has been written.
+
+The shared `@tumblerjs/pdf` merge API also powers the Svelte docs PDF merge playground. Both interfaces use the same page-selection rules and preservation checks. See the PDF package README for document structure support and limitations.

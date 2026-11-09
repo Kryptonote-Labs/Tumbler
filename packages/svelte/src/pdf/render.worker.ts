@@ -71,5 +71,11 @@ async function render(message: Extract<PdfRenderRequest, { type: "render" }>) {
       error: cause instanceof Error ? cause.message : String(cause),
       ...(cause instanceof PdfError ? { code: cause.code } : {}),
     });
+  } finally {
+    if (message.tile.cache === false) {
+      hosts.get(message.tile.page)?.close();
+      hosts.delete(message.tile.page);
+      interpreter?.releasePage(message.tile.page);
+    }
   }
 }

@@ -1,14 +1,5 @@
-/** `rectangular` covers DrawingML `rect` and `shape` paths, which match on rectangular fills. */
-export interface DrawingGradient {
-  readonly kind: "linear" | "radial" | "rectangular";
-  readonly angle: number;
-  readonly scaled: boolean;
-  readonly center: readonly [number, number];
-  readonly stops: readonly {
-    readonly offset: number;
-    readonly color: string;
-  }[];
-}
+export type { DrawingGradient } from "@tumblerjs/ooxml";
+import type { DrawingGradient } from "@tumblerjs/ooxml";
 export interface DrawingShadow {
   readonly color: string;
   readonly blur: number;
