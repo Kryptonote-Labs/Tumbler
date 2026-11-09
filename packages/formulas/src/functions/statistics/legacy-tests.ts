@@ -32,7 +32,7 @@ for (const name of ["STDEV", "STDEVP", "VAR", "VARP", "MODE"])
       const part = data(
         v[i]!,
         c,
-        name !== "MODE" && args[i]!.kind !== "reference" && !("kind" in v[i]!),
+        args[i]!.kind !== "reference" && !("kind" in v[i]!),
       );
       check(xs.length + part.length <= c.maxArrayCells);
       for (const x of part) xs.push(x);

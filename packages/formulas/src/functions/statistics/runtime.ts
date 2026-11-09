@@ -29,7 +29,15 @@ export function isOmitted(v: FunctionValue): boolean {
 }
 export function numeric(v: FunctionValue): number {
   if (isOmitted(v)) return 0;
-  const n = functionNumeric(functionScalar(v));
+  const rows = functionMatrix(v);
+  const scalar =
+    "kind" in v &&
+    v.kind === "array" &&
+    rows.length === 1 &&
+    rows[0]!.length === 1
+      ? rows[0]![0]!
+      : functionScalar(v);
+  const n = functionNumeric(scalar);
   if (n.type === "error") throw new ExcelError(n);
   return n.type === "number" ? n.value : fail("#VALUE!");
 }
@@ -81,12 +89,15 @@ export function register(
     c: FunctionContext,
     args: readonly FormulaExpression[],
   ) => number | FunctionValue,
+  aggregate = true,
 ): void {
   registry.set(name, (args, c) => {
     try {
       check(args.length >= min && args.length <= max, "#VALUE!");
       c.operation(args.length);
-      const evaluated = args.map((x) => c.evaluate(x));
+      const evaluated = args.map((x) =>
+        aggregate ? c.evaluateAggregate(x) : c.evaluate(x),
+      );
       for (const value of evaluated)
         if (!("kind" in value) && value.type === "error")
           throw new ExcelError(value);
@@ -104,39 +115,46 @@ export function scalar(
   max: number,
   fn: (v: (number | undefined)[], c: FunctionContext) => number,
 ) {
-  register(name, min, max, (v, c) => {
-    const calculate = (args: FunctionValue[]) =>
-      fn(
-        args.map((x) => (isOmitted(x) ? undefined : numeric(x))),
-        c,
+  register(
+    name,
+    min,
+    max,
+    (v, c) => {
+      const calculate = (args: FunctionValue[]) =>
+        fn(
+          args.map((x) => (isOmitted(x) ? undefined : numeric(x))),
+          c,
+        );
+      if (!v.some((x) => "kind" in x && x.kind === "array"))
+        return calculate(v);
+      const matrices = v.map((x) =>
+        "kind" in x && x.kind === "array" ? x.rows : undefined,
       );
-    if (!v.some((x) => "kind" in x && x.kind === "array")) return calculate(v);
-    const matrices = v.map((x) =>
-      "kind" in x && x.kind === "array" ? x.rows : undefined,
-    );
-    const height = Math.max(1, ...matrices.map((x) => x?.length ?? 1));
-    const width = Math.max(1, ...matrices.map((x) => x?.[0]?.length ?? 1));
-    check(height * width <= c.maxArrayCells);
-    c.operation(height * width * v.length);
-    const rows: FormulaScalarValue[][] = [];
-    for (let row = 0; row < height; row++) {
-      const output: FormulaScalarValue[] = [];
-      for (let col = 0; col < width; col++) {
-        try {
-          const args = v.map((value, i) => {
-            const matrix = matrices[i];
-            if (!matrix) return value;
-            const r = matrix[matrix.length === 1 ? 0 : row];
-            return r?.[r.length === 1 ? 0 : col] ?? functionError("#N/A");
-          });
-          output.push(functionNumber(calculate(args)));
-        } catch (e) {
-          if (!(e instanceof ExcelError)) throw e;
-          output.push(e.value);
+      const height = Math.max(1, ...matrices.map((x) => x?.length ?? 1));
+      const width = Math.max(1, ...matrices.map((x) => x?.[0]?.length ?? 1));
+      check(height * width <= c.maxArrayCells);
+      c.operation(height * width * v.length);
+      const rows: FormulaScalarValue[][] = [];
+      for (let row = 0; row < height; row++) {
+        const output: FormulaScalarValue[] = [];
+        for (let col = 0; col < width; col++) {
+          try {
+            const args = v.map((value, i) => {
+              const matrix = matrices[i];
+              if (!matrix) return value;
+              const r = matrix[matrix.length === 1 ? 0 : row];
+              return r?.[r.length === 1 ? 0 : col] ?? functionError("#N/A");
+            });
+            output.push(functionNumber(calculate(args)));
+          } catch (e) {
+            if (!(e instanceof ExcelError)) throw e;
+            output.push(e.value);
+          }
         }
+        rows.push(output);
       }
-      rows.push(output);
-    }
-    return { kind: "array", rows };
-  });
+      return { kind: "array", rows };
+    },
+    false,
+  );
 }

@@ -116,7 +116,10 @@ for (const name of ["MAXIFS", "MINIFS"])
         rows.length === height && rows.every((row) => row.length === width),
         "#VALUE!",
       );
-      criteria.push({ rows, criterion: functionScalar(v[i + 1]!) });
+      criteria.push({
+        rows,
+        criterion: functionScalar(c.evaluate(args[i + 1]!)),
+      });
     }
     let result: number | undefined;
     for (let r = 0; r < height; r++)

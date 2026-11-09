@@ -1287,6 +1287,16 @@ export function calculateFormulas(
     return {
       address: capturedAddress, source, dateSystem, maxArrayCells: limits.maxArrayCells, services: options.services,
       evaluate: expression => scoped(() => toFunction(evaluate(expression, sheet, depth + 1))),
+      evaluateAggregate: expression => scoped(() => {
+        if (expression.kind === "reference" && expression.whole) {
+          const ref = resolveReference(expression, sheet, depth + 1);
+          if ("type" in ref) return ref;
+          const value = readReference(scanReference(ref), depth + 1);
+          return {kind: "array", rows: matrix(value)};
+        }
+        const value = evaluate(expression, sheet, depth + 1);
+        return isRange(value) ? {kind: "array", rows: value.rows} : value;
+      }),
       withBindings: (additions, expression) => scoped(() => toFunction(evaluate(expression, sheet, depth + 1)), additions),
       call: (name, args) => scoped(() => toFunction(call(name.toUpperCase(), args.map(value => ({kind: "value", value, start: 0, end: 0})), sheet, depth + 1))),
       reference: expression => scoped(() => resolveReference(expression, sheet, depth + 1)),

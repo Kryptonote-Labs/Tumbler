@@ -138,9 +138,11 @@ test("duplicate frequency bins do not count observations twice", () => {
   ]);
 });
 test("regression rejects excessive work before allocating a quadratic workspace", () => {
-  const result = run(
-    `LINEST({1},${"{" + Array.from({ length: 100 }, (_, i) => i).join(",") + "}"})`,
-    { maxOperations: 1000 },
-  );
+  const predictors = [0, 1]
+    .map((offset) =>
+      Array.from({ length: 100 }, (_, i) => i + offset).join(","),
+    )
+    .join(";");
+  const result = run(`LINEST({1;2},{${predictors}})`, { maxOperations: 1000 });
   expect(result.diagnostics.map((d) => d.code)).toContain("evaluation-limit");
 });
