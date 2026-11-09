@@ -109,3 +109,25 @@ test("whole-axis aggregates include virtual spill cells beyond source dimensions
     }
   }
 });
+
+test("one-cell structured references preserve aggregate coercion after reopen and edits", () => {
+  for (const [data, sum, average, count] of [
+    ['t="inlineStr"><is><t>7</t></is>', "0", "#DIV/0!", "0"],
+    ['t="b"><v>1</v>', "0", "#DIV/0!", "0"],
+    ['><v>7</v>', "7", "7", "1"],
+    ['>', "0", "#DIV/0!", "0"],
+  ]) {
+    const bytes = buildWorkbookFixture({sheets: [{name:"Data", sheetId:1, relationshipId:"data",
+      xml:`<worksheet xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Amount</t></is></c><c r="C1"><f>SUM(Items[Amount])</f></c><c r="D1"><f>AVERAGE(Items[Amount])</f></c><c r="E1"><f>COUNT(Items[Amount])</f></c></row><row r="2"><c r="A2" ${data}</c></row></sheetData><tableParts count="1"><tablePart r:id="table"/></tableParts></worksheet>`,
+      tables:[{relationshipId:"table",target:"tables/table1.xml",xml:`<table xmlns="${ns}" id="1" name="Items" displayName="Items" ref="A1:A2" totalsRowShown="0"><tableColumns count="1"><tableColumn id="1" name="Amount"/></tableColumns></table>`}],
+    }]});
+    const original = openSpreadsheetArtifact(bytes);
+    for (const artifact of [original, openSpreadsheetArtifact(original.bytes()), original.editCell("G3", 1)]) {
+      expect(artifact.calculation.displayText("C1")).toBe(sum!);
+      expect(artifact.calculation.displayText("D1")).toBe(average!);
+      expect(artifact.calculation.displayText("E1")).toBe(count!);
+      expect(artifact.calculation.diagnostics).toEqual([]);
+    }
+    expect(original.bytes()).toEqual(bytes);
+  }
+});
