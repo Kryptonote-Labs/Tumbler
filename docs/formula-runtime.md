@@ -113,3 +113,5 @@ integration. The coordinator owns the comprehensive generated-document corpus
 and independent reviews; those are not claimed by this branch.
 
 Single-cell workbook/table reference objects retain the same internal range provenance as direct references, including text/boolean exclusion in aggregates.
+
+PRODUCT returns zero when its referenced/array arguments contain no numeric values. Referenced text, booleans and blanks remain ignored; adding a numeric argument still multiplies that argument normally.
