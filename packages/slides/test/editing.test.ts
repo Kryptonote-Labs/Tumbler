@@ -219,3 +219,19 @@ test("hyperlinks, soft breaks, autofit and Office extensions survive text edits"
   expect(xml).toContain("ppaction://hlinkshowjump?jump=nextslide");
   expect(xml).toContain("<a:br");
 });
+
+test("theme text colours keep their scheme slot and Office tint", async () => {
+  const session = openPresentationEditingSession(await bytes());
+  const slide = session.artifact.document.slides[0]!;
+  const object = slide.objects.find((o) => o.textEditable)!;
+  const result = session.formatText({
+    slideId: slide.id,
+    objectKey: object.key,
+    start: 0,
+    end: 2,
+    patch: { text: { color: { set: { type: "theme", slot: "accent1", tint: 0.4 } } } },
+  });
+  const pkg = result.document.package;
+  const xml = new TextDecoder().decode(pkg.readPart(pkg.parts.find((part) => part.name.value === slide.part)!));
+  expect(xml).toContain('<a:schemeClr val="accent1"><a:lumMod val="60000"/><a:lumOff val="40000"/></a:schemeClr>');
+});

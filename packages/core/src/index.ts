@@ -26,10 +26,14 @@ export {
   undoEditingHistory,
 } from "./editing-history.ts";
 export type { EditingHistory, EditingHistoryOptions } from "./editing-history.ts";
-export { normalizeFormattingPatch } from "./formatting.ts";
+export { normalizeFormattingPatch, normalizeOfficeColor, officeColorsEqual, OFFICE_THEME_COLOR_SLOTS } from "./formatting.ts";
 export type {
   BlockFormattingPatch,
   BlockFormattingState,
+  CellFill,
+  CellFormattingPatch,
+  CellFormattingState,
+  CellTextRotation,
   FormattingAdapter,
   FormattingCapabilities,
   FormattingChange,
@@ -38,6 +42,7 @@ export type {
   FormattingValue,
   HorizontalAlignment,
   OfficeColor,
+  OfficeThemeColorSlot,
   TextFormattingPatch,
   TextFormattingState,
   TextUnderline,
@@ -48,3 +53,5 @@ export { findTextMatches } from './search.ts';
 export type { TextMatch, TextSearchOptions } from './search.ts';
 
 export { textReplacement } from './text-replacement.ts';
+
+export { FormatPainter } from './format-painter.ts';

@@ -273,6 +273,16 @@ export function applyStructuredChange(
         }),
       );
     }
+  } else if (change.kind === "merge-down") {
+    const grid = structuredGrid(doc, address);
+    const at = grid.findIndex(row => row.id === change.cell.row);
+    const current = resolveCell(doc, change.cell);
+    const below = grid[at + 1]?.cells.find(cell => JSON.stringify(cell.columns) === JSON.stringify(current.columns));
+    if (!below || current.verticalMerge || below.verticalMerge)
+      throw new WordTableConflict(address, "overlap", "Select vertically adjacent unmerged cells of equal width.");
+    records.set("vertical-merge:" + crypto.randomUUID(), {
+      kind: "vertical-merge", rows: [change.cell.row, below.address.row], columns: current.columns,
+    });
   } else if (change.kind === "merge-right") {
     const row = structuredGrid(doc, address).find(
       (row) => row.id === change.cell.row,
@@ -303,6 +313,11 @@ export function applyStructuredChange(
       columns: coverage,
     });
   } else {
+    const vertical = tableRecords(doc, address).filter(r => r.value.kind === "vertical-merge" && r.value.rows.includes(change.cell.row) && r.value.columns.includes(change.cell.column));
+    if (vertical.length) {
+      for (const record of vertical) records.delete(record.key);
+      return;
+    }
     const base = tableBase(doc, address);
     const original = base.cells.find(
       (cell) =>
@@ -333,6 +348,11 @@ export function applyStructuredChange(
         cell: original.cell,
         column: change.cell.column,
       });
+      return;
+    }
+    const resolved = resolveCell(doc, change.cell);
+    if (resolved.verticalGroup) {
+      records.set("vertical-split:" + resolved.verticalGroup, { kind: "vertical-split", group: resolved.verticalGroup });
       return;
     }
     const merges = tableRecords(doc, address).filter(
