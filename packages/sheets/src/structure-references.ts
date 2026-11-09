@@ -54,6 +54,7 @@ export function moveRange(range: CellRange, change: StructureChange): CellRange 
 function references(expression: FormulaExpression, result: FormulaReferenceExpression[]): void {
   switch (expression.kind) {
     case 'reference':
+      if (expression.whole) throw new Error('Structural edits of whole-axis formula references are not supported. The workbook has not changed.');
       result.push(expression);
       break;
     case 'binary':
@@ -62,7 +63,19 @@ function references(expression: FormulaExpression, result: FormulaReferenceExpre
       break;
     case 'unary':
     case 'percent':
+    case 'intersection':
+    case 'spill':
       references(expression.operand, result);
+      break;
+    case 'array':
+      expression.rows.forEach((row) => row.forEach((value) => references(value, result)));
+      break;
+    case 'invoke':
+      references(expression.callee, result);
+      expression.arguments.forEach((argument) => references(argument, result));
+      break;
+    case 'name':
+      if (expression.name.includes('[')) throw new Error('Structural edits of table formula references are not supported. The workbook has not changed.');
       break;
     case 'function':
       expression.arguments.forEach((argument) => references(argument, result));

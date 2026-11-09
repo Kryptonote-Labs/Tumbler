@@ -39,11 +39,10 @@ export class PdfWriter {
     this.objects.set(ref.object, { reference: ref, data: bytes(serializePdfValue(value)) });
     return ref;
   }
-  stream(data: Uint8Array, info: PdfDictionary = new Map()) {
-    const ref = new PdfReference(this.next++),
+  stream(data: Uint8Array, info: PdfDictionary = new Map(), ref = new PdfReference(this.next++), encoded = false) {
+    const
       dictionary = new Map(info);
-    dictionary.delete('Filter');
-    dictionary.delete('DecodeParms');
+    if (!encoded) { dictionary.delete('Filter'); dictionary.delete('DecodeParms'); }
     dictionary.set('Length', data.length);
     const head = bytes(serializePdfValue(dictionary) + '\nstream\n'),
       tail = bytes('\nendstream');

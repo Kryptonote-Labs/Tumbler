@@ -18,16 +18,19 @@ export interface PdfSearchMatch {
   text: string;
   context: string;
   rects: PdfSearchRect[];
+  /** Present only when every character belongs to one editable text region. */
+  range?: { region: string; start: number; end: number };
 }
 export interface PdfSearchOptions {
   matchCase?: boolean;
+  wholeWord?: boolean;
   pages?: readonly number[];
 }
 export interface PdfSearchResult {
   matches: PdfSearchMatch[];
   total: number;
 }
-type Unit = { text: string; rect?: PdfSearchRect; line: string };
+type Unit = { text: string; rect?: PdfSearchRect; line: string; range?: { region: string; start: number; end: number } };
 const ligatures: Record<string, string> = {
   ﬀ: "ff",
   ﬁ: "fi",
@@ -79,6 +82,7 @@ function units(items: readonly PdfTextItem[]): Unit[] {
  * Extraction includes invisible OCR glyphs; only the current PDF object graph is interpreted. */
 export class PdfSearchIndex {
   private readonly pages: Unit[][];
+  private readonly model: PdfTextModel | undefined;
   constructor(
     document: PdfDocument,
     editing?: {
@@ -88,6 +92,7 @@ export class PdfSearchIndex {
     },
     interpreter = new PdfInterpreter(document),
   ) {
+    this.model = editing?.model;
     if (!editing) {
       this.pages = document.pages.map((_, i) =>
         units(pdfTextContent(interpreter.page(i)).items),
@@ -144,6 +149,7 @@ export class PdfSearchIndex {
         );
         const runs = new Map<string, (typeof blocks)[number]>();
         const sourceUnits = units(items);
+        const offsets = new Map<string, number>();
         let line = 0;
         items.forEach((item, i) => {
           if (item.kind === "separator" && item.text === "\n") {
@@ -158,7 +164,19 @@ export class PdfSearchIndex {
             runs.set(key, run);
             blocks.push(run);
           }
-          run.units.push(sourceUnits[i]!);
+          const unit = sourceUnits[i]!;
+          const owner = owners.get(source);
+          if (owner) {
+            const text = model.text(owner).toString();
+            const cursor = offsets.get(owner) ?? 0;
+            const start = text.indexOf(item.text, cursor);
+            if (start >= 0 && !text.slice(cursor, start).trim()) {
+              unit.range = { region: owner, start, end: start + item.text.length };
+              offsets.set(owner, start + item.text.length);
+              run.range = { region: owner, start: run.range?.start ?? start, end: start + item.text.length };
+            }
+          }
+          run.units.push(unit);
         });
       }
       for (const region of regions) {
@@ -180,6 +198,7 @@ export class PdfSearchIndex {
           line.range!.end = g.end;
           line.units.push({
             text: g.text,
+            range: { region: region.id, start: g.start, end: g.end },
             line: `${region.id}:${g.y}`,
             rect: {
               x: g.x,
@@ -203,8 +222,11 @@ export class PdfSearchIndex {
             previous &&
             block.range.region === previous.region &&
             block.range.start === previous.end;
+          const gap = block.range && previous && block.range.region === previous.region
+            ? { region: previous.region, start: previous.end, end: block.range.start }
+            : undefined;
           return i && !adjacent
-            ? [{ text: " ", line: "separator" }, ...block.units]
+            ? [{ text: " ", line: "separator", ...(gap ? { range: gap } : {}) }, ...block.units]
             : block.units;
         });
     });
@@ -224,9 +246,12 @@ export class PdfSearchIndex {
       if (options.pages && !options.pages.includes(index + 1)) return;
       let text = "",
         display = "";
-      const mapping: { unit: Unit; start: number; end: number }[] = [];
+      const mapping: { unit: Unit; start: number; end: number; range?: PdfSearchMatch["range"] }[] = [];
       for (const unit of page) {
+        let characterOffset = 0;
         for (const char of unit.text) {
+          const range = unit.range && { region: unit.range.region, start: unit.range.start + characterOffset, end: characterOffset + char.length === unit.text.length ? unit.range.end : unit.range.start + characterOffset + char.length };
+          characterOffset += char.length;
           const value = /\s/u.test(char) ? " " : char;
           if (value === " " && text.endsWith(" ")) continue;
           const start = display.length;
@@ -234,11 +259,15 @@ export class PdfSearchIndex {
           const folded = normalize(value, matchCase);
           text += folded;
           for (let i = 0; i < folded.length; i++)
-            mapping.push({ unit, start, end: display.length });
+            mapping.push({ unit, start, end: display.length, range });
         }
       }
       let offset = 0;
       while ((offset = text.indexOf(needle, offset)) !== -1) {
+        if (options.wholeWord && (/[\p{L}\p{N}_]/u.test(text[offset - 1] ?? "") || /[\p{L}\p{N}_]/u.test(text[offset + needle.length] ?? ""))) {
+          offset += needle.length;
+          continue;
+        }
         const selected = mapping.slice(offset, offset + needle.length),
           first = selected[0]!,
           last = selected.at(-1)!;
@@ -259,7 +288,18 @@ export class PdfSearchIndex {
             previous.y = y;
           }
         }
+        const candidate = first.range && last.range && selected.every((entry) => entry.range?.region === first.range!.region)
+          ? { region: first.range.region, start: first.range.start, end: last.range.end }
+          : undefined;
+        // Normalization may expand a single glyph. Never replace only part of it,
+        // or bridge unowned content that happens to lie between editable glyphs.
+        const range = candidate && this.model &&
+          mapping[offset - 1]?.start !== first.start &&
+          mapping[offset + needle.length]?.start !== last.start &&
+          normalize(this.model.text(candidate.region).toString().slice(candidate.start, candidate.end), matchCase).replace(/\s+/gu, " ") === needle
+          ? candidate : undefined;
         matches.push({
+          ...(range ? { range } : {}),
           page: index + 1,
           text: display.slice(first.start, last.end),
           context: display.slice(Math.max(0, first.start - 40), last.end + 40),

@@ -38,9 +38,11 @@ calculation.diagnostics;
 ```
 
 Unsupported formulas retain producer caches at the SpreadsheetML integration
-layer. Structured references, defined names, external books, dynamic arrays,
-volatile functions, and locale-sensitive `TEXT`/`VALUE` conversion are not
-claimed yet.
+layer. The shared runtime supports rectangular arrays and spill overlays, names
+resolved by the workbook source, and extensions through `functionRegistries`.
+Category registration is assembled separately in `src/extended-functions.ts`.
+See [shared runtime integration](../../docs/formula-runtime.md) for the API,
+budgets, service boundaries, and remaining syntax limits.
 
 Tumbler is developed at
 [Kryptonote-Labs/Tumbler](https://github.com/Kryptonote-Labs/Tumbler).

@@ -47,7 +47,8 @@ async function render(message: Extract<PdfRenderRequest, { type: "render" }>) {
     if (!interpreter) throw new Error(openError ?? "PDF renderer is not open.");
     const { page, scale, region } = message.tile;
     const projection = message.tile.projection;
-    let scene = projection?.blank ? undefined : interpreter.page(page);
+    const source = projection?.snapshot ? new PdfInterpreter(openPdfDocument(projection.snapshot)) : interpreter;
+    let scene = projection?.blank ? undefined : source.page(projection?.snapshot ? 0 : page);
     if (scene && projection) {
       const placed = placePdfSceneSources(scene, projection.placements);
       const excluded = new Set(projection.exclude);
@@ -56,6 +57,7 @@ async function render(message: Extract<PdfRenderRequest, { type: "render" }>) {
         ...placed,
         elements: placed.elements.filter(
           (element) =>
+            !projection.excludeAnnotations?.some(id => element.source.instance === id || element.source.instance.startsWith(id + ':')) &&
             !excluded.has(pdfSourceKey(element.source)) &&
             (!included || included.has(pdfSourceKey(element.source))),
         ),
@@ -70,7 +72,7 @@ async function render(message: Extract<PdfRenderRequest, { type: "render" }>) {
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Canvas rendering is unavailable.");
     if (scene)
-      await paintPdfPage(context, scene, interpreter.document.source, host, {
+      await paintPdfPage(context, scene, source.document.source, host, {
         scale,
         region,
         background: projection?.transparent ? "transparent" : "#fff",
