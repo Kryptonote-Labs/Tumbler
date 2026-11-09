@@ -37,6 +37,8 @@ export interface FunctionContext {
   readonly maxArrayCells: number;
   readonly services: FormulaFunctionServices | undefined;
   evaluate(expression: FormulaExpression): FunctionValue;
+  /** Preserve reference provenance and bound blank-insensitive whole-axis scans. */
+  evaluateAggregate(expression: FormulaExpression): FunctionValue;
   /** Invoke a registered function with already evaluated values. */
   call(name: string, arguments_: readonly FunctionValue[]): FunctionValue;
   /** Evaluate an expression in a child lexical scope (LET/LAMBDA). */

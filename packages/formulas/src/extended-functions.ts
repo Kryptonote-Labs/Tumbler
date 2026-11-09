@@ -1,4 +1,6 @@
 import type { FunctionRegistry } from "./function-runtime.ts";
+import { statisticalFunctions } from "./functions/statistical.ts";
 
-/** Assembled by the category integration branch. */
-export const extendedFunctions: FunctionRegistry = new Map();
+export const extendedFunctions: FunctionRegistry = new Map(
+  statisticalFunctions,
+);
