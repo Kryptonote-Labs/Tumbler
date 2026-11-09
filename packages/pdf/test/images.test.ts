@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import * as Y from 'yjs';
-import { PdfTextModel, PdfEditingFonts, PdfInterpreter, openPdfDocument, exportEditedPdf, layoutPdfTextFlow } from '../src/index.ts';
+import { PdfTextModel, PdfEditingFonts, PdfInterpreter, openPdfDocument, exportEditedPdf, layoutPdfTextFlow, duplicatePdfModelPages } from '../src/index.ts';
 import { pdfFixture, pdfStream } from './pdf-fixture.ts';
 const fixture = (rotation = 0) => openPdfDocument(pdfFixture([
   '<< /Type /Catalog /Pages 2 0 R >>',
@@ -57,5 +57,16 @@ test('visible images retain continuation pages independently of text flow', () =
     expect(new PdfInterpreter(exported).page(1).elements.some(element => element.kind === 'image')).toBe(true);
     model.images.hide('image');
     expect(layoutPdfTextFlow(model, fonts, document.pages).pages).toHaveLength(1);
+  } finally { model.doc.destroy(); }
+});
+
+test('duplicated pages freeze durable images into their independent snapshots', () => {
+  const document = fixture(), model = new PdfTextModel(), fonts = new PdfEditingFonts();
+  try {
+    model.images.place('image', image);
+    duplicatePdfModelPages(document, model, fonts, [document.pages[0]!.id], () => pixels);
+    const output = openPdfDocument(exportEditedPdf(document, model, fonts, () => pixels));
+    expect(output.pages).toHaveLength(2);
+    expect(new PdfInterpreter(output).page(1).elements.some(element => element.kind === 'image')).toBe(true);
   } finally { model.doc.destroy(); }
 });
