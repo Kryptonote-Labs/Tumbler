@@ -215,7 +215,11 @@ export function calculateFormulas(
     const remembered = memo.get(key);
     if (remembered !== undefined) return remembered;
     const input = readCell(source, address);
-    if (input?.formula === undefined) return input?.value ?? BLANK;
+    if (input?.formula === undefined) {
+      const value = input?.value ?? BLANK;
+      // Entered constants have a smaller documented domain than formula results.
+      return value.type === "number" && Math.abs(value.value) > 9.99999999999999e307 ? error("#NUM!") : value;
+    }
     if (visiting.has(key)) throw new EvaluationUnavailable("circular-reference", "Formula contains a circular reference.");
     visiting.add(key);
     const previousAddress = activeAddress, previousBindings = bindings, previousPublic = publicExpression;
@@ -280,8 +284,9 @@ export function calculateFormulas(
       case "value": return expression.value;
       case "omitted": return {kind: "omitted"};
       case "name": {
-        const bound = bindings.get(expression.name.toUpperCase());
+        const bound = bindings.get(normalizeBindingName(expression.name));
         if (bound !== undefined) return bound;
+        if (/^_xlpm\./i.test(expression.name)) return error("#NAME?");
         const named = source.resolveName?.(expression.name, activeAddress);
         return named === undefined ? error("#NAME?") : "kind" in named ? evaluate(named, sheet, depth + 1) : readReference(named, depth);
       }
@@ -1185,7 +1190,7 @@ export function calculateFormulas(
     const scoped = <T>(action: () => T, additions?: ReadonlyMap<string, FunctionValue>): T => {
       const priorAddress = activeAddress, priorBindings = bindings;
       activeAddress = capturedAddress;
-      bindings = new Map([...capturedBindings, ...[...(additions ?? [])].map(([key, value]) => [key.toUpperCase(), value] as const)]);
+      bindings = new Map([...capturedBindings, ...[...(additions ?? [])].map(([key, value]) => [normalizeBindingName(key), value] as const)]);
       try { return action(); } finally { activeAddress = priorAddress; bindings = priorBindings; }
     };
     return {
@@ -1208,7 +1213,7 @@ export function calculateFormulas(
     if (normalized === "PY" && (publicExpression?.kind !== "function" || normalizeFunctionName(publicExpression.name) !== "PY" || publicExpression.arguments !== args)) throw new EvaluationUnavailable("unsupported-function", "PY must be a standalone public formula.");
     if (normalized === "PY" && args[0]?.kind !== "string") throw new EvaluationUnavailable("unavailable-dependency", "OOXML Python script indices require explicit script resolution; only public literal code syntax can be passed to a host.");
     const named = source.resolveName?.(name, activeAddress);
-    const bound = bindings.get(normalized) ?? (named && "kind" in named ? toFunction(evaluate(named, sheet, depth + 1)) : undefined);
+    const bound = bindings.get(normalizeBindingName(normalized)) ?? (named && "kind" in named ? toFunction(evaluate(named, sheet, depth + 1)) : undefined);
     if (bound !== undefined) return "kind" in bound && bound.kind === "lambda" ? bound.invoke(args.map(arg => toFunction(evaluate(arg, sheet, depth + 1)))) : error("#VALUE!");
     for (const registry of [...registries].reverse()) {
       const handler = registry.get(normalized);
@@ -1542,6 +1547,10 @@ const DAY_MILLISECONDS = 86_400_000;
 
 function normalizeFunctionName(name: string): string {
   return name.toUpperCase().replace(/^_XLFN\./, "").replace(/^_XLWS\./, "");
+}
+
+function normalizeBindingName(name: string): string {
+  return name.toUpperCase().replace(/^_XLPM\./, "");
 }
 
 function formulaContainsAggregate(formula: string): boolean {

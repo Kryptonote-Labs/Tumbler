@@ -1,13 +1,14 @@
 # Shared formula runtime
 
 The category integration branch assembles `packages/formulas/src/extended-functions.ts`.
-This branch deliberately exports an empty `extendedFunctions` registry; category
-modules and the generated XLSX corpus harness belong to the coordinator.
+The foundation has an empty `extendedFunctions` registry; category PRs add their
+registrations. The uncached-XLSX corpus harness discovers their fixture modules.
 
 `calculateFormulas(source, options)` accepts `functionRegistries?: readonly
 FunctionRegistry[]`. Later registries take precedence, followed by the default
 extended registry, then existing builtins. Function names are uppercase with
-OOXML `_xlfn.` / `_xlws.` prefixes removed. A handler receives raw AST arguments.
+OOXML `_xlfn.` / `_xlws.` prefixes removed. Stored `_xlpm.` names resolve in
+their captured lexical scope. A handler receives raw AST arguments.
 `context.call(name, values)` dispatches already evaluated scalars, arrays,
 lambdas, and omitted arguments without converting them to formula text.
 
