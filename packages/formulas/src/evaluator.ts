@@ -311,7 +311,7 @@ export function calculateFormulas(
         if (bound !== undefined) return bound;
         if (/^_xlpm\./i.test(expression.name)) return error("#NAME?");
         const named = source.resolveName?.(expression.name, activeAddress);
-        return named === undefined ? error("#NAME?") : "kind" in named ? evaluate(named, sheet, depth + 1) : readReference(named, depth);
+        return named === undefined ? error("#NAME?") : "kind" in named ? evaluate(named, sheet, depth + 1) : referenceResult(readReference(named, depth));
       }
       case "array": {
         assertArray(expression.rows.length, expression.rows[0]?.length ?? 0);

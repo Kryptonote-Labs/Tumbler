@@ -111,3 +111,5 @@ unit tests, 200 generated row/column arithmetic cases, actual uncached XLSX
 fixtures, no-mutation checks, edits/reopen, cross-sheet ordering, and text-overflow
 integration. The coordinator owns the comprehensive generated-document corpus
 and independent reviews; those are not claimed by this branch.
+
+Single-cell workbook/table reference objects retain the same internal range provenance as direct references, including text/boolean exclusion in aggregates.
