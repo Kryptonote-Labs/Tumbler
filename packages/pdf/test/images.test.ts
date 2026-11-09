@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import * as Y from 'yjs';
-import { PdfTextModel, PdfEditingFonts, PdfInterpreter, openPdfDocument, exportEditedPdf } from '../src/index.ts';
+import { PdfTextModel, PdfEditingFonts, PdfInterpreter, openPdfDocument, exportEditedPdf, layoutPdfTextFlow } from '../src/index.ts';
 import { pdfFixture, pdfStream } from './pdf-fixture.ts';
 const fixture = (rotation = 0) => openPdfDocument(pdfFixture([
   '<< /Type /Catalog /Pages 2 0 R >>',
@@ -42,5 +42,20 @@ for (const rotation of [0, 90, 180, 270] as const) test(`image export preserves 
     expect(exported.pages[0]?.cropBox).toEqual(document.pages[0]?.cropBox);
     expect(exported.pages[0]?.rotation).toBe(rotation);
     await Bun.write(`/tmp/pdf-images-${rotation}.pdf`, bytes);
+  } finally { model.doc.destroy(); }
+});
+
+test('visible images retain continuation pages independently of text flow', () => {
+  const document = fixture(), model = new PdfTextModel(), fonts = new PdfEditingFonts();
+  try {
+    model.pages.initialize(document.pages);
+    expect(layoutPdfTextFlow(model, fonts, document.pages).pages).toHaveLength(1);
+    model.images.place('image', { ...image, continuation: 1 });
+    expect(layoutPdfTextFlow(model, fonts, document.pages).pages).toHaveLength(2);
+    const exported = openPdfDocument(exportEditedPdf(document, model, fonts, () => pixels));
+    expect(exported.pages).toHaveLength(2);
+    expect(new PdfInterpreter(exported).page(1).elements.some(element => element.kind === 'image')).toBe(true);
+    model.images.hide('image');
+    expect(layoutPdfTextFlow(model, fonts, document.pages).pages).toHaveLength(1);
   } finally { model.doc.destroy(); }
 });

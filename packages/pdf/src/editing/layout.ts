@@ -283,8 +283,12 @@ function computePdfTextFlow(
     regions: PdfFlowRegion[] = [];
   for (const page of model.pages.sourcePages(pages)) {
     const { count, fragments } = layoutPdfPageFlow(model, fonts, page);
+    const imageCount = [...model.images.records.values()].reduce(
+      (max, image) => image.page === page.index && !image.hidden ? Math.max(max, image.continuation) : max,
+      count,
+    );
     const first = outputPages.length;
-    for (let i = 0; i <= count; i++)
+    for (let i = 0; i <= imageCount; i++)
       outputPages.push({
         id: i ? `${page.id}:continuation:${i}` : page.id,
         index: outputPages.length,

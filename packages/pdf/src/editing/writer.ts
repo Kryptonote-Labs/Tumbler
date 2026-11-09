@@ -40,7 +40,8 @@ function exportTextPdf(
   model: PdfTextModel,
   fonts: PdfEditingFonts,
 ) {
-  if (!model.ids().some((id) => model.dirty(id)))
+  const imageContinuations = [...model.images.records.values()].some(image => !image.hidden && image.continuation > 0);
+  if (!imageContinuations && !model.ids().some((id) => model.dirty(id)))
     return model.pages.dirty() ? exportPdfPageState(document, model) : document.bytes();
   fonts.importDocument(document);
   const flow = layoutPdfTextFlow(model, fonts, document.pages);
@@ -49,7 +50,7 @@ function exportTextPdf(
   const dirty = [
     ...new Set(flow.regions.filter((region) => region.render).map((region) => region.id)),
   ];
-  if (!dirty.length && !model.pages.dirty()) return document.bytes();
+  if (!dirty.length && !model.pages.dirty() && flow.pages.length === document.pages.length) return document.bytes();
   if (document.source.trailer.has('Encrypt'))
     unsupported('Encrypted PDF editing requires an encryption-aware writer.');
   const sourcePages = new Map(
