@@ -28,7 +28,7 @@ test('image placement syncs references, and a move is one undoable change', () =
     expect(model.images.get('image')?.hidden).toBe(true);
   } finally { model.doc.destroy(); peer.doc.destroy(); }
 });
-for (const rotation of [0, 90, 180, 270]) test(`image export preserves crop and ${rotation}-degree source orientation`, async () => {
+for (const rotation of [0, 90, 180, 270] as const) test(`image export preserves crop and ${rotation}-degree source orientation`, async () => {
   const document = fixture(rotation), model = new PdfTextModel();
   try {
     model.pages.initialize(document.pages); model.images.place('image', image);
