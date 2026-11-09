@@ -105,11 +105,35 @@ function interest(
 // Trial-relative residual: discounting every term toward zero does not
 // constitute convergence. Log scaling keeps genuine cancellations representable.
 function discountedResidual(values: readonly number[], time: (index: number) => number, c: FunctionContext): (r: number) => number {
-  const terms: {sign: number; log: number; time: number}[] = [];
+  // Net identical exponents exactly in units of the least binary64 value.
+  // The accumulator is bounded by binary64's 2098-bit span plus log2(count).
+  // This avoids both intermediate overflow and losing small uncancelled flows.
+  const grouped = new Map<number, bigint>();
+  const bits = new DataView(new ArrayBuffer(8));
   values.forEach((value, index) => {
     c.operation();
-    if (value !== 0) terms.push({sign: Math.sign(value), log: Math.log(Math.abs(value)), time: time(index)});
+    check(Number.isFinite(value));
+    if (value === 0) return;
+    bits.setFloat64(0, value);
+    const encoded = bits.getBigUint64(0);
+    const exponent = Number((encoded >> 52n) & 2047n);
+    const significand = (encoded & ((1n << 52n) - 1n)) | (exponent ? 1n << 52n : 0n);
+    c.operation(1 + Math.ceil((exponent + 52) / 64));
+    const units = significand << BigInt(exponent ? exponent - 1 : 0);
+    const at = time(index);
+    grouped.set(at, (grouped.get(at) ?? 0n) + (value < 0 ? -units : units));
   });
+  const terms: {sign: number; log: number; time: number}[] = [];
+  for (const [at, net] of grouped) {
+    c.operation(34 + Math.ceil(Math.log2(values.length + 1) / 64));
+    if (net === 0n) continue;
+    const magnitude = net < 0n ? -net : net;
+    const shift = Math.max(0, magnitude.toString(2).length - 53);
+    const leading = Number(magnitude >> BigInt(shift));
+    const coefficient = leading * Math.pow(2, shift - 1074);
+    const log = Number.isFinite(coefficient) ? Math.log(coefficient) : Math.log(leading) + (shift - 1074) * Math.LN2;
+    terms.push({sign: net < 0n ? -1 : 1, log, time: at});
+  }
   return r => {
     check(r > -1);
     const q = Math.log1p(r);
@@ -121,7 +145,7 @@ function discountedResidual(values: readonly number[], time: (index: number) => 
       const weight = Math.exp(term.log - term.time * q - largest);
       residual += term.sign * weight; magnitude += weight;
     }
-    return residual / magnitude;
+    return terms.length ? residual / magnitude : 0;
   };
 }
 // Newton in log(1+r), followed by bounded bracketing; no unbounded iteration.
