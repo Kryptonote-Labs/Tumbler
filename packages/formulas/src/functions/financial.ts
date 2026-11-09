@@ -155,13 +155,14 @@ function solve(
   c: FunctionContext,
   bracket = true,
   iterations = 80,
+  residualTolerance = 1e-10,
 ): number {
   check(guess > -1);
   let x = Math.log1p(guess);
   for (let i = 0; i < iterations; i++) {
     c.operation(3);
     const y = fn(Math.expm1(x));
-    if (Number.isFinite(y) && Math.abs(y) < 1e-10) return Math.expm1(x);
+    if (Number.isFinite(y) && Math.abs(y) < residualTolerance) return Math.expm1(x);
     const h = 1e-5;
     const d = (fn(Math.expm1(x + h)) - fn(Math.expm1(x - h))) / (2 * h);
     if (!Number.isFinite(d) || d === 0) break;
@@ -185,7 +186,7 @@ function solve(
         c.operation();
         const mid = (left + right) / 2,
           y = fn(Math.expm1(mid));
-        if (Number.isFinite(y) && Math.abs(y) < 1e-10) return Math.expm1(mid);
+        if (Number.isFinite(y) && Math.abs(y) < residualTolerance) return Math.expm1(mid);
         if (right - left < 1e-13) break;
         if (y > 0 === a > 0) {
           left = mid;
@@ -877,7 +878,7 @@ for (const name of ["NPV", "IRR", "MIRR", "FVSCHEDULE", "XNPV", "XIRR"])
         if (name === "XNPV") return functionNumber(npv(scalar(0)));
         check(values.some((v) => v > 0) && values.some((v) => v < 0));
         const residual = discountedResidual(values, i => (dates[i]! - dates[0]!) / 365, c);
-        return functionNumber(solve(residual, scalar(2, 0.1), c));
+        return functionNumber(solve(residual, scalar(2, 0.1), c, true, 80, 1e-13));
       }
       check(values.some((v) => v > 0) && values.some((v) => v < 0));
       if (name === "MIRR") {
@@ -896,7 +897,7 @@ for (const name of ["NPV", "IRR", "MIRR", "FVSCHEDULE", "XNPV", "XIRR"])
           Math.pow(-pos / neg, 1 / (values.length - 1)) - 1,
         );
       }
-      return functionNumber(solve(discountedResidual(values, i => i, c), scalar(1, 0.1), c));
+      return functionNumber(solve(discountedResidual(values, i => i, c), scalar(1, 0.1), c, true, 80, 1e-13));
     } catch (e) {
       if (e instanceof FinancialError) return e.value;
       throw e;
