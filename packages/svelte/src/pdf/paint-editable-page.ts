@@ -1,6 +1,7 @@
 import type { layoutPdfTextFlow, PdfTextModel, PdfEditingFonts, PdfDocument } from '@tumblerjs/pdf';
 import type { PdfPageRenderer } from './page-renderer.ts';
 import { PdfEditableSource } from './editable-source.ts';
+import { observePdfPageVisibility } from './page-visibility.ts';
 import { paintPdfText } from './paint-pdf-text.ts';
 import { registerPdfDragPreview } from './pdf-box-preview.ts';
 export type PdfPagePaintOptions = {
@@ -231,9 +232,8 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
       schedule();
     },
   });
-  const observer = new IntersectionObserver(
-    (entries) => {
-      visible = entries.some((e) => e.isIntersecting);
+  const stopVisibility = observePdfPageVisibility(canvas, viewport, (next) => {
+      visible = next;
       options.onvisible?.(visible);
       if (visible) {
         schedule();
@@ -252,10 +252,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
       canvas.width = 0;
       canvas.height = 0;
       if (options.source >= 0 && !options.continuation) options.renderer.release(options.source);
-    },
-    { rootMargin: '600px 0px' },
-  );
-  observer.observe(canvas);
+    });
   return {
     update(value: PdfPagePaintOptions) {
       const previous = options;
@@ -283,7 +280,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
       disposed = true;
       viewport.removeEventListener('pdfzoomstart', pauseZoom);
       viewport.removeEventListener('pdfzoomend', schedule);
-      observer.disconnect();
+      stopVisibility();
       unregister();
       controller?.abort();
       invalidatePreparation();

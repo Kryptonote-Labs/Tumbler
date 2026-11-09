@@ -1,3 +1,4 @@
+import { observePdfPageVisibility } from './page-visibility.ts';
 import type { PdfTextContent } from '@tumblerjs/pdf';
 import type { PdfPageRenderer } from './page-renderer.ts';
 type Options = {
@@ -218,16 +219,12 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
     hasText = false;
     options.renderer.release(options.index);
   }
-  const observer = new IntersectionObserver(
-    (entries) => {
-      visible = entries.some((entry) => entry.isIntersecting);
+  const stopVisibility = observePdfPageVisibility(element, viewport, (next) => {
+      visible = next;
       if (visible) schedule();
       else if (zooming()) cancel();
       else release();
-    },
-    { root: viewport, rootMargin: '128px' },
-  );
-  observer.observe(element);
+    });
   const resize = new ResizeObserver(schedule);
   resize.observe(viewport);
   viewport.addEventListener('scroll', schedule, { passive: true });
@@ -259,7 +256,7 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
     },
     destroy() {
       disposed = true;
-      observer.disconnect();
+      stopVisibility();
       resize.disconnect();
       if (frame !== undefined) cancelAnimationFrame(frame);
       viewport.removeEventListener('scroll', schedule);

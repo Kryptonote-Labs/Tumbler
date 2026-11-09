@@ -3,6 +3,7 @@
   import type { PdfTextContent } from '@tumblerjs/pdf';
   import { registerPdfTextLayer } from './pointer-selection.ts';
   import { selectPdfWord } from './selection.ts';
+  import { pdfTextSpans } from './text-spans.ts';
   import { pdfTextRuns } from './text-runs.ts';
   let {
     content,
@@ -17,22 +18,25 @@
   let svg: SVGSVGElement;
   // Transparent selection glyphs need no paint until the page contains a native selection.
   onMount(() => {
+    let showing = false;
     const changed = () => {
       const selection = window.getSelection();
-      svg.style.opacity =
-        selection &&
+      const next = !!(selection &&
         !selection.isCollapsed &&
         selection.rangeCount &&
-        selection.getRangeAt(0).intersectsNode(layer)
-          ? '1'
-          : '0';
+        selection.getRangeAt(0).intersectsNode(layer));
+      if (next !== showing) {
+        showing = next;
+        svg.style.opacity = next ? '1' : '0';
+      }
     };
     changed();
     document.addEventListener('selectionchange', changed);
     return () => document.removeEventListener('selectionchange', changed);
   });
-  $effect(() => registerPdfTextLayer(layer, content));
-  const runs = $derived(pdfTextRuns(content));
+  $effect(() => registerPdfTextLayer(layer, content, bindings));
+  const runs = $derived(pdfTextRuns(content).map((run) => ({ ...run, spans: pdfTextSpans(run) })));
+  const bindings = $derived(new Map(runs.flatMap((run) => run.spans.map((span) => [span.id, span.bindings] as const))));
 </script>
 
 <div
@@ -55,16 +59,15 @@
         font-weight={run.font.weight}
         font-style={run.font.style}
       >
-        {#each run.items as { item, x, y, size } (item.id)}
+        {#each run.spans as span (span.id)}
           <tspan
-            data-pdf-text-id={item.id}
-            data-pdf-text={item.kind}
-            data-pdf-glyph={item.kind === 'glyph' ? item.id : undefined}
-            {x}
-            {y}
-            textLength={Math.max(0.00001, item.width * size)}
-            lengthAdjust="spacingAndGlyphs">{item.text}</tspan
-          >
+            data-pdf-text-id={span.id}
+            data-pdf-text="run"
+            data-pdf-glyph={span.glyph}
+            x={span.x}
+            y={span.y}
+            textLength={span.width}
+            lengthAdjust="spacingAndGlyphs">{span.text}</tspan>
         {/each}
       </text>
     {/each}
@@ -93,6 +96,7 @@
   }
   text {
     white-space: pre;
+    font-variant-ligatures: none;
     fill: none;
     unicode-bidi: isolate;
   }
