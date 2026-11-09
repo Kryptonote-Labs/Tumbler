@@ -94,13 +94,14 @@ for (const name of ["CEILING.PRECISE", "ISO.CEILING", "FLOOR.PRECISE"]) numeric(
   return (name === "FLOOR.PRECISE" ? Math.floor(adjusted) : Math.ceil(adjusted)) * Math.abs(s!);
 }, [0, 1]);
 numeric("MROUND", 2, 2, ([x, m]) => {
-  if (x! * m! < 0) return NUM();
+  if (x !== 0 && m !== 0 && Math.sign(x!) !== Math.sign(m!)) return NUM();
   if (m === 0) return 0;
   return Math.sign(x!) * Math.floor(Math.abs(x! / m!) + .5) * Math.abs(m!);
 });
 function factorial(n: number, step: number, c: FunctionContext): NumericResult {
-  if (n < 0 || n > (step === 1 ? 170 : 300)) return NUM();
+  if (n < 0) return NUM();
   n = Math.trunc(n);
+  if (n > (step === 1 ? 170 : 300)) return NUM();
   let result = 1;
   for (; n > 1; n -= step) { c.operation(); result *= n; }
   return result;

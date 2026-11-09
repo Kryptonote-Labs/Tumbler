@@ -80,3 +80,32 @@ test("single-cell references retain aggregate coercion and nested aggregate resu
   expect(artifact.calculation.displayText("J1")).toBe("15");
   expect(artifact.calculation.diagnostics).toEqual([]);
 });
+
+test("scalar arithmetic and functions remain scalar at merged anchors", () => {
+  for (const formula of ["A1+1", "ABS(A1)"]) {
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet(`<row r="1"><c r="A1"><v>2</v></c><c r="C1"><f>${formula}</f></c></row>`, '<mergeCells count="1"><mergeCell ref="C1:D1"/></mergeCells>')}]}));
+    expect(artifact.calculation.displayText("C1")).toBe(formula === "A1+1" ? "3" : "2");
+    expect(artifact.calculation.arrayValue("C1")).toBeUndefined();
+  }
+});
+
+test("nested reference results keep aggregate coercion provenance", () => {
+  const artifact = openSpreadsheetArtifact(buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet('<row r="1"><c r="A1" t="inlineStr"><is><t>7</t></is></c><c r="B1" t="b"><v>1</v></c><c r="D1"><f>SUM(INDEX(A1:A2,1))</f></c><c r="E1"><f>AVERAGE(INDEX(A1:A2,1))</f></c><c r="F1"><f>COUNT(INDIRECT(&quot;B1&quot;))</f></c></row>')}]}));
+  expect(artifact.calculation.displayText("D1")).toBe("0");
+  expect(artifact.calculation.displayText("E1")).toBe("#DIV/0!");
+  expect(artifact.calculation.displayText("F1")).toBe("0");
+});
+
+test("whole-axis aggregates include virtual spill cells beyond source dimensions", () => {
+  for (const anchor of ["A2", "B2"]) {
+    // A2 spills across B and down; B2 spills down. No source cells exist below row 2.
+    const formula = anchor === "A2" ? "{0,1;0,2;0,3}" : "{1;2;3}";
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet(`<row r="1"><c r="D1"><f>SUM(B:B)</f></c><c r="E1"><f>COUNT(B:B)</f></c><c r="F1"><f>AVERAGE(B:B)</f></c></row><row r="2"><c r="${anchor}"><f>${formula}</f></c></row>`)}]}));
+    for (const current of [artifact, openSpreadsheetArtifact(artifact.bytes())]) {
+      expect(current.calculation.displayText("D1")).toBe("6");
+      expect(current.calculation.displayText("E1")).toBe("3");
+      expect(current.calculation.displayText("F1")).toBe("2");
+      expect(current.calculation.diagnostics).toEqual([]);
+    }
+  }
+});
