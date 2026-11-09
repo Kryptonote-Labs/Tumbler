@@ -298,7 +298,7 @@ define("INDIRECT", 1, 2, (a, c) => {
   if (sheet === undefined) fail("#REF!");
   const token = match[3]!;
   if (
-    /^[A-Za-z_][A-Za-z0-9_.]*$/.test(token) &&
+    (/^[A-Za-z_][A-Za-z0-9_.]*$/.test(token) || /^[^[]+\[.*\]$/.test(token)) &&
     !(a1 && /^\$?[A-Za-z]{1,3}\$?[1-9]\d*$/.test(token)) &&
     !(!a1 && /^R.*C/i.test(token))
   ) {
