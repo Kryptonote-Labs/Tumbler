@@ -99,10 +99,14 @@
     | { first: ReturnType<PdfTextModel['anchor']>; last: ReturnType<PdfTextModel['anchor']> }
     | undefined;
   let activeImage = $state<string>();
+  let imagePastePage = 0;
   $effect(() => { void revision; onimage?.(activeImage && selected.includes(activeImage) && !model.images.get(activeImage)?.hidden ? activeImage : null); });
   function selectImage(id: string, extend: boolean) {
     selected = extend ? [...new Set([...selected, id])] : selected.includes(id) ? selected : [id];
-    active = undefined; activeImage = id; onselection?.(null);
+    active = undefined; activeImage = id;
+    const image = model.images.get(id);
+    imagePastePage = flow.pages.findIndex(page => page.source.index === image?.page && page.continuation === image?.continuation);
+    onselection?.(null);
   }
   export function imageAction(action: 'rotate' | 'duplicate' | 'delete') {
     if (!editable || !activeImage) return;
@@ -356,6 +360,7 @@
     if (event.button !== 0 || (adding && !editable)) return;
     const host = event.currentTarget as HTMLElement,
       { x, y } = coordinates(event, host, page);
+    imagePastePage = page;
     onpagechange?.(page);
     if (adding) {
       const targetPage = flow.pages[page]!,
@@ -397,6 +402,7 @@
           Math.min(...b.carets.map((c) => Math.abs(c.y - y))),
       )[0];
     if (!layout) {
+      input?.focus({ preventScroll: true });
       active = undefined;
       activeImage = undefined;
       selected = [];
@@ -569,7 +575,7 @@
     aria-label="Edit PDF text"
     readonly={!editable}
     {value}
-    onpaste={(e) => imageTransfer(e, layouts.find(l => l.id === active)?.page ?? 0)}
+    onpaste={(e) => imageTransfer(e, imagePastePage)}
     onbeforeinput={beforeInput}
     oninput={changed}
     onselect={publish}
