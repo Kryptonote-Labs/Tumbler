@@ -127,11 +127,28 @@ function complex(value: Scalar): Complex | Scalar {
   const z = { re: match[1] ? Number(match[1]) : 0, im: match[2] === '-' ? -1 : match[2] === '+' || match[2] === '' ? 1 : Number(match[2]), suffix: match[3]! };
   return Number.isFinite(z.re) && Number.isFinite(z.im) ? z : error('#NUM!');
 }
+function coefficient(value: number): string {
+  const [mantissa, exponent] = value.toPrecision(15).split('e');
+  if (exponent !== undefined && (Number(exponent) <= -20 || Number(exponent) >= 21)) {
+    const significant = mantissa!.includes('.') ? mantissa!.replace(/0+$/, '').replace(/\.$/, '') : mantissa!;
+    return `${significant}E${Number(exponent) >= 0 ? '+' : ''}${Number(exponent)}`;
+  }
+  const plain = exponent === undefined ? mantissa! : (() => {
+    const negative = mantissa!.startsWith('-');
+    const digits = mantissa!.replace('-', '').replace('.', '');
+    const point = 1 + Number(exponent);
+    const magnitude = point <= 0 ? `0.${'0'.repeat(-point)}${digits}`
+      : point >= digits.length ? digits + '0'.repeat(point - digits.length)
+      : `${digits.slice(0, point)}.${digits.slice(point)}`;
+    return negative ? '-' + magnitude : magnitude;
+  })();
+  return plain.includes('.') ? plain.replace(/0+$/, '').replace(/\.$/, '') : plain;
+}
 function format(z: Complex): Scalar {
   if (!Number.isFinite(z.re) || !Number.isFinite(z.im)) return error('#NUM!');
   const re = Object.is(z.re, -0) ? 0 : z.re, im = Object.is(z.im, -0) ? 0 : z.im;
-  if (im === 0) return text(String(re));
-  return text(`${re === 0 ? '' : re}${im < 0 ? '-' : re === 0 ? '' : '+'}${Math.abs(im) === 1 ? '' : Math.abs(im)}${z.suffix}`);
+  if (im === 0) return text(coefficient(re));
+  return text(`${re === 0 ? '' : coefficient(re)}${im < 0 ? '-' : re === 0 ? '' : '+'}${Math.abs(im) === 1 ? '' : coefficient(Math.abs(im))}${z.suffix}`);
 }
 const mul = (a: Complex, b: Complex): Complex => ({ re: a.re * b.re - a.im * b.im, im: a.re * b.im + a.im * b.re, suffix: a.suffix });
 function div(a: Complex, b: Complex): Complex {

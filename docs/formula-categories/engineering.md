@@ -62,11 +62,11 @@ grid is not independently certified. Overflow returns NUM and floating-point
 underflow returns zero. These are substantive numeric implementations, but not a
 claim of unlimited Excel numerical parity.
 
-Complex result strings currently use JavaScript's shortest round-trip numeric
-format. Excel may round complex text components differently, particularly for
-transcendentals or scientific notation. Corpus cases check nontrivial complex
-transcendentals through IMREAL/IMAGINARY/IMABS; they do not establish exact Excel
-text rendering. Mixed i/j suffixes with nonzero imaginary coefficients are
+Complex result coefficients use 15 significant digits. Native Excel verifies
+fixed decimal notation for exponents -19 through 20, and uppercase signed
+scientific notation outside that window. Exact cosine/exponential strings and
+the formatting boundaries have dedicated fixtures; nontrivial identities also
+exercise IMREAL/IMAGINARY/IMABS. Mixed i/j suffixes with nonzero imaginary coefficients are
 rejected; suffix treatment with zero coefficients and reference/literal boolean
 coercion need the parent Excel oracle. CONVERT uses modern physical constants;
 Excel may retain historical constants for atomic mass, electron volts, parsecs,

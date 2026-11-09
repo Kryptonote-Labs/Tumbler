@@ -95,6 +95,19 @@ cases.push({name:'range complex product',formula:'IMPRODUCT(Inputs!A1:A2)',cells
 cases.push({name:'array radix',formula:'DEC2BIN(Inputs!A1:A2,4)',cells:{A1:n(1),A2:n(2)},expected:[[s('0001')],[s('0010')]]});
 for (const dateSystem of ['1900','1904'] as const) cases.push({name:`date serial as number ${dateSystem}`,formula:'GESTEP(Inputs!A1,40000)',cells:{A1:n(45000)},expected:n(1),dateSystem});
 // Independent real/imaginary identities exercise nonzero transcendental paths.
+// Exact strings independently confirmed in native Excel 16.114.4 (2026-11-09).
+cases.push(
+ {name:'native complex cosine coefficient precision',formula:'IMCOS("1+i")',expected:s('0.833730025131149-0.988897705762865i')},
+ {name:'native complex exponential coefficient precision',formula:'IMEXP("1+i")',expected:s('1.46869393991589+2.28735528717884i')},
+ {name:'native small complex decimal coefficient',formula:'COMPLEX(1e-10,1)',expected:s('0.0000000001+i')},
+ {name:'native large complex decimal coefficient',formula:'COMPLEX(1e15,1)',expected:s('1000000000000000+i')},
+ {name:'native complex lower fixed boundary',formula:'COMPLEX(1e-19,1)',expected:s('0.0000000000000000001+i')},
+ {name:'native complex lower scientific boundary',formula:'COMPLEX(1e-20,1)',expected:s('1E-20+i')},
+ {name:'native complex upper fixed boundary',formula:'COMPLEX(1e20,1)',expected:s('100000000000000000000+i')},
+ {name:'native complex upper scientific boundary',formula:'COMPLEX(1e21,1)',expected:s('1E+21+i')},
+ {name:'native complex extreme negative exponent',formula:'COMPLEX(1e-100,1)',expected:s('1E-100+i')},
+ {name:'native complex extreme positive exponent',formula:'COMPLEX(1e100,1)',expected:s('1E+100+i')},
+);
 for (const [fn, re, im] of [
  ['IMCOS',Math.cos(1)*Math.cosh(2),-Math.sin(1)*Math.sinh(2)],
  ['IMSIN',Math.sin(1)*Math.cosh(2),Math.cos(1)*Math.sinh(2)],
