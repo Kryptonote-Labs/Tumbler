@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { PdfSearchState } from "./search-state.svelte.ts";
   import PdfSearch from './PdfSearch.svelte';
   import { pdfPagePosition } from './page-position.ts';
   import { PdfSearchIndex } from '@tumblerjs/pdf';
@@ -30,6 +31,8 @@
     model,
     fonts,
     scale = 4 / 3,
+    search,
+    searchEnabled = true,
     editable = true,
     adding = false,
     peers = [],
@@ -44,6 +47,8 @@
     model: PdfTextModel;
     fonts: PdfEditingFonts;
     scale?: number;
+    search?: PdfSearchState;
+    searchEnabled?: boolean;
     editable?: boolean;
     adding?: boolean;
     peers?: { id: string; name: string; color: string; selection?: Selection | null }[];
@@ -440,7 +445,7 @@
       onselection?.(null);
     };
   });
-  const searchIndex = $derived(new PdfSearchIndex(pdf, { model, fonts, flow }, interpreter));
+  const searchIndex = $derived(new PdfSearchIndex(pdf, { model, fonts, flow, editable }, interpreter));
 </script>
 
 <div
@@ -546,7 +551,7 @@
   ></textarea>
 </div>
 
-<PdfSearch root={root} {scale} index={() => searchIndex} />
+<PdfSearch root={root} {scale} index={() => searchIndex} {search} enabled={searchEnabled} />
 
 <style>
   .pdf-editable {

@@ -269,3 +269,43 @@ test("automatic wraps retain word adjacency and original whitespace", async () =
     model.doc.destroy();
   }
 });
+
+test("replacement is one undo step, synchronizes, and refuses stale snapshots", async () => {
+  const Y = await import('yjs');
+  const pdf = document('BT /F 12 Tf 20 150 Td (cat cat cats) Tj ET');
+  const model = new PdfTextModel(), fonts = new PdfEditingFonts();
+  model.initialize(importPdfText(pdf));
+  fonts.add('Sans-Regular', await Bun.file(new URL('./fixtures/editing-fonts/LiberationSans-Regular.ttf', import.meta.url)).bytes());
+  const peer = new PdfTextModel();
+  Y.applyUpdate(peer.doc, Y.encodeStateAsUpdate(model.doc));
+  const index = new PdfSearchIndex(pdf, { model, fonts });
+  const matches = index.find('cat', { wholeWord: true }).matches;
+  expect(matches).toHaveLength(2);
+  expect(matches.every(m => m.range)).toBe(true);
+  expect(index.replace(matches, 'dog')).toBe(2);
+  const id = model.ids()[0]!;
+  expect(model.text(id).toString()).toBe('dog dog cats');
+  Y.applyUpdate(peer.doc, Y.encodeStateAsUpdate(model.doc));
+  expect(peer.text(id).toString()).toBe('dog dog cats');
+  expect(index.replace(matches, 'bad')).toBe(0);
+  model.undo.undo();
+  expect(model.text(id).toString()).toBe('cat cat cats');
+  model.undo.redo();
+  expect(model.text(id).toString()).toBe('dog dog cats');
+  model.doc.destroy(); peer.doc.destroy();
+});
+
+test('viewer, read-only models, and OCR matches are find-only', async () => {
+  const pdf = document('BT /F 12 Tf 20 150 Td (cat) Tj 3 Tr 0 -20 Td (scan) Tj ET');
+  const model = new PdfTextModel(), fonts = new PdfEditingFonts();
+  model.initialize(importPdfText(pdf));
+  fonts.add('Sans-Regular', await Bun.file(new URL('./fixtures/editing-fonts/LiberationSans-Regular.ttf', import.meta.url)).bytes());
+  const view = new PdfSearchIndex(pdf);
+  expect(view.find('cat').matches[0]?.range).toBeUndefined();
+  expect(view.replace(view.find('cat').matches, 'dog')).toBe(0);
+  const readonly = new PdfSearchIndex(pdf, { model, fonts, editable: false });
+  expect(readonly.find('cat').matches[0]?.range).toBeUndefined();
+  const editing = new PdfSearchIndex(pdf, { model, fonts });
+  expect(editing.find('scan').matches[0]?.range).toBeUndefined();
+  model.doc.destroy();
+});

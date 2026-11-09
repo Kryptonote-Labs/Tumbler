@@ -1,65 +1,51 @@
 <script lang="ts">
+  import { PdfSearchState } from "./search-state.svelte.ts";
   import { tick } from "svelte";
   import type { PdfSearchIndex } from "@tumblerjs/pdf";
   let {
     root,
     scale,
     index,
+    search,
+    enabled = true,
   }: {
+    search?: PdfSearchState;
+    enabled?: boolean;
     root: HTMLDivElement | undefined;
     scale: number;
     index: () => PdfSearchIndex;
   } = $props();
-  let open = $state(false),
-    query = $state(""),
-    matchCase = $state(false),
-    active = $state(0);
+  const fallback = new PdfSearchState();
+  const state = $derived(search ?? fallback);
+  let replacement = $state("");
   let input = $state<HTMLInputElement>();
-  let error = $state("");
-  const result = $derived.by(() => {
-    if (!open || !query.trim()) return { matches: [], total: 0 };
-    try {
-      return index().find(query, { matchCase });
-    } catch (cause) {
-      return {
-        matches: [],
-        total: 0,
-        error: cause instanceof Error ? cause.message : String(cause),
-      };
-    }
-  });
+  const result = $derived(state.result);
   $effect(() => {
-    error = "error" in result ? (result.error ?? "") : "";
+    if (!enabled) return;
+    const source = () => index();
+    state.source = source;
+    return () => { if (state.source === source) state.source = undefined; };
   });
-  $effect(() => {
-    void query;
-    void matchCase;
-    active = 0;
-  });
-  $effect(() => {
-    if (active >= result.total) active = Math.max(0, result.total - 1);
-  });
-  function move(direction: number) {
-    if (result.total)
-      active = (active + direction + result.total) % result.total;
-  }
+  $effect(() => { void state.query; void state.matchCase; void state.wholeWord; state.active = 0; });
+  $effect(() => { if (state.active >= result.total) state.active = Math.max(0, result.total - 1); });
   async function key(event: KeyboardEvent) {
+    if (search || !enabled) return;
     if (!root?.getClientRects().length || root.closest("[hidden],[inert]"))
       return;
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
       event.preventDefault();
-      open = true;
+      state.open = true;
       await tick();
       input?.focus({ preventScroll: true });
       input?.select();
-    } else if (open && event.key === "Escape") {
+    } else if (state.open && event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      open = false;
+      state.open = false;
     }
   }
   $effect(() => {
-    if (!root || !open) return;
+    if (!root || !enabled || !state.open) return;
     const marks: HTMLElement[] = [];
     for (const [i, match] of result.matches.entries()) {
       const page = root.querySelector<HTMLElement>(
@@ -78,15 +64,15 @@
           top: `${rect.y * scale}px`,
           width: `${rect.width * scale}px`,
           height: `${rect.height * scale}px`,
-          background: i === active ? "#ff8a0080" : "#ffe60066",
-          outline: i === active ? "1px solid #b85d00" : "none",
+          background: i === state.active ? "#ff8a0080" : "#ffe60066",
+          outline: i === state.active ? "1px solid #b85d00" : "none",
         });
         page.append(mark);
         marks.push(mark);
       }
     }
     const current = marks.find(
-      (mark) => mark.dataset.pdfSearchMatch === String(active),
+      (mark) => mark.dataset.pdfSearchMatch === String(state.active),
     );
     current?.scrollIntoView({ block: "nearest", inline: "nearest" });
     return () => marks.forEach((mark) => mark.remove());
@@ -94,39 +80,44 @@
 </script>
 
 <svelte:window onkeydown={key} />
-{#if open}
+{#if enabled && !search && state.open}
   <div class="pdf-search" role="search" aria-label="Find in PDF">
     <input
       bind:this={input}
-      bind:value={query}
+      bind:value={state.query}
       aria-label="Search document"
       placeholder="Search document…"
       onkeydown={(event) => {
         if (event.key === "Enter" && !event.isComposing) {
           event.preventDefault();
-          move(event.shiftKey ? -1 : 1);
+          state.move(event.shiftKey ? -1 : 1);
         }
       }}
     />
     <span role="status"
-      >{error || `${result.total ? active + 1 : 0} of ${result.total}`}</span
+      >{`${result.total ? state.active + 1 : 0} of ${result.total}`}</span
     >
     <button
       aria-label="Match case"
-      aria-pressed={matchCase}
-      onclick={() => (matchCase = !matchCase)}>Aa</button
+      aria-pressed={state.matchCase}
+      onclick={() => (state.matchCase = !state.matchCase)}>Aa</button
     >
     <button
       aria-label="Previous match"
       disabled={!result.total}
-      onclick={() => move(-1)}>↑</button
+      onclick={() => state.move(-1)}>↑</button
     >
     <button
       aria-label="Next match"
       disabled={!result.total}
-      onclick={() => move(1)}>↓</button
+      onclick={() => state.move(1)}>↓</button
     >
-    <button aria-label="Close search" onclick={() => (open = false)}>×</button>
+    {#if result.matches.some(match => match.range)}
+      <input aria-label="Replace with" bind:value={replacement} />
+      <button disabled={!state.activeMatch?.range} onclick={() => state.replace(replacement)}>Replace</button>
+      <button onclick={() => state.replace(replacement, true)}>Replace all</button>
+    {/if}
+    <button aria-label="Close search" onclick={() => (state.open = false)}>×</button>
   </div>
 {/if}
 

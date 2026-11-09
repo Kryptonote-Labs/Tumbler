@@ -390,3 +390,13 @@ for an Open link; the merge setup remains intact. Host `disabled` prevents creat
 between visible thumbnails of the same source document.
 
 Hosts can retain a reactive `createPdfMergeState()` per document and pass it as `session` to preserve source choices, output name and expanded row across mounts.
+
+PDF hosts can supply a `PdfSearchState` from `@tumblerjs/svelte/pdf` as the
+`search` prop of `PdfDocumentView` or `PdfEditableDocument` to replace the default
+bar. Bind `open`, `query`, `matchCase`, and `wholeWord`; read `result` and
+`activeMatch`, call `move(-1 | 1)` and `replace(value, all)`. The component still
+paints match rectangles. Hosts own shortcuts and focus with a supplied controller.
+When sharing it between views, set `searchEnabled` only on the visible view.
+Only model-backed matches have `range`; viewers, encrypted documents, and
+`editable={false}` never expose replacement ranges. Replacement refuses stale
+snapshots and groups all changes into one collaborative undo step.

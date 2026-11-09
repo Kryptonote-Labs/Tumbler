@@ -18,16 +18,19 @@ export interface PdfSearchMatch {
   text: string;
   context: string;
   rects: PdfSearchRect[];
+  /** Present only when the complete match maps to editable model text. */
+  range?: { region: string; start: number; end: number };
 }
 export interface PdfSearchOptions {
   matchCase?: boolean;
+  wholeWord?: boolean;
   pages?: readonly number[];
 }
 export interface PdfSearchResult {
   matches: PdfSearchMatch[];
   total: number;
 }
-type Unit = { text: string; rect?: PdfSearchRect; line: string };
+type Unit = { text: string; rect?: PdfSearchRect; line: string; range?: { region: string; start: number; end: number } };
 const ligatures: Record<string, string> = {
   ﬀ: "ff",
   ﬁ: "fi",
@@ -79,10 +82,13 @@ function units(items: readonly PdfTextItem[]): Unit[] {
  * Extraction includes invisible OCR glyphs; only the current PDF object graph is interpreted. */
 export class PdfSearchIndex {
   private readonly pages: Unit[][];
+  private readonly model?: PdfTextModel;
+  private readonly revision?: number;
   constructor(
     document: PdfDocument,
     editing?: {
       model: PdfTextModel;
+      editable?: boolean;
       fonts: PdfEditingFonts;
       flow?: ReturnType<typeof layoutPdfTextFlow>;
     },
@@ -95,6 +101,7 @@ export class PdfSearchIndex {
       return;
     }
     const { model, fonts } = editing;
+    if (editing.editable !== false && !document.source.encrypted) { this.model = model; this.revision = model.revision; }
     if (!editing.flow) fonts.importDocument(document);
     const flow =
       editing.flow ?? layoutPdfTextFlow(model, fonts, document.pages);
@@ -144,6 +151,7 @@ export class PdfSearchIndex {
         );
         const runs = new Map<string, (typeof blocks)[number]>();
         const sourceUnits = units(items);
+        const offsets = new Map<string, number>();
         let line = 0;
         items.forEach((item, i) => {
           if (item.kind === "separator" && item.text === "\n") {
@@ -158,7 +166,17 @@ export class PdfSearchIndex {
             runs.set(key, run);
             blocks.push(run);
           }
-          run.units.push(sourceUnits[i]!);
+          const unit = sourceUnits[i]!;
+          const owner = owners.get(source);
+          if (owner) {
+            const content = model.text(owner).toString();
+            const start = content.indexOf(item.text, offsets.get(owner) ?? 0);
+            if (start >= 0) {
+              unit.range = { region: owner, start, end: start + item.text.length };
+              offsets.set(owner, start + item.text.length);
+            }
+          }
+          run.units.push(unit);
         });
       }
       for (const region of regions) {
@@ -180,6 +198,7 @@ export class PdfSearchIndex {
           line.range!.end = g.end;
           line.units.push({
             text: g.text,
+            range: { region: region.id, start: g.start, end: g.end },
             line: `${region.id}:${g.y}`,
             rect: {
               x: g.x,
@@ -209,6 +228,21 @@ export class PdfSearchIndex {
         });
     });
   }
+  /** Replace a snapshot's model-backed matches as one collaborative undo step.
+   * A changed model invalidates the snapshot rather than applying stale offsets. */
+  replace(matches: readonly PdfSearchMatch[], value: string): number {
+    const model = this.model;
+    if (!model || model.revision !== this.revision) return 0;
+    const ranges = matches.flatMap(match => match.range ? [match.range] : [])
+      .sort((a, b) => a.region.localeCompare(b.region) || b.start - a.start);
+    if (!ranges.length) return 0;
+    model.undo.stopCapturing();
+    model.doc.transact(() => {
+      for (const range of ranges) model.replace(range.region, range.start, range.end, value);
+    }, model.origin);
+    model.undo.stopCapturing();
+    return ranges.length;
+  }
   find(query: string, options: PdfSearchOptions = {}): PdfSearchResult {
     const matchCase = options.matchCase ?? false;
     const needle = normalize(query, matchCase).replace(/\s+/gu, " ");
@@ -224,9 +258,12 @@ export class PdfSearchIndex {
       if (options.pages && !options.pages.includes(index + 1)) return;
       let text = "",
         display = "";
-      const mapping: { unit: Unit; start: number; end: number }[] = [];
+      const mapping: { unit: Unit; start: number; end: number; range?: PdfSearchMatch["range"] }[] = [];
       for (const unit of page) {
+        let unitOffset = 0;
         for (const char of unit.text) {
+          const range = unit.range && { region: unit.range.region, start: unit.range.start + unitOffset, end: unit.range.start + unitOffset + char.length };
+          unitOffset += char.length;
           const value = /\s/u.test(char) ? " " : char;
           if (value === " " && text.endsWith(" ")) continue;
           const start = display.length;
@@ -234,7 +271,7 @@ export class PdfSearchIndex {
           const folded = normalize(value, matchCase);
           text += folded;
           for (let i = 0; i < folded.length; i++)
-            mapping.push({ unit, start, end: display.length });
+            mapping.push({ unit, start, end: display.length, range });
         }
       }
       let offset = 0;
@@ -242,6 +279,15 @@ export class PdfSearchIndex {
         const selected = mapping.slice(offset, offset + needle.length),
           first = selected[0]!,
           last = selected.at(-1)!;
+        if (options.wholeWord && (/[\p{L}\p{N}_]/u.test(text[offset - 1] ?? '') || /[\p{L}\p{N}_]/u.test(text[offset + needle.length] ?? ''))) {
+          offset += needle.length;
+          continue;
+        }
+        const range = first.range && last.range && selected.every((entry, i) =>
+          entry.range?.region === first.range!.region && (!i || entry.range.start <= selected[i - 1]!.range!.end)
+        ) ? { region: first.range.region, start: first.range.start, end: last.range.end } : undefined;
+        // A match inside an expanded ligature must never delete the whole glyph.
+        const complete = mapping[offset - 1]?.start !== first.start && mapping[offset + needle.length]?.end !== last.end;
         const lines = new Map<string, PdfSearchRect>();
         for (const { unit } of selected) {
           if (!unit.rect) continue;
@@ -264,6 +310,7 @@ export class PdfSearchIndex {
           text: display.slice(first.start, last.end),
           context: display.slice(Math.max(0, first.start - 40), last.end + 40),
           rects: [...lines.values()],
+          ...(this.model && range && complete ? { range } : {}),
         });
         offset += needle.length;
       }

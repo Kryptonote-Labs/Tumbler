@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { PdfSearchState } from "./search-state.svelte.ts";
   import PdfSearch from './PdfSearch.svelte';
   import { PdfSearchIndex } from '@tumblerjs/pdf';
   import { onMount } from 'svelte';
@@ -10,11 +11,15 @@
   let {
     document,
     scale = 4 / 3,
+    search,
+    searchEnabled = true,
     onpagechange,
     onerror,
   }: {
     document: PdfDocument;
     scale?: number;
+    search?: PdfSearchState;
+    searchEnabled?: boolean;
     onpagechange?: (page: number) => void;
     onerror?: (error: Error, page: number) => void;
   } = $props();
@@ -69,7 +74,7 @@
   {/if}
 </div>
 
-<PdfSearch root={host} {scale} index={() => searchIndex} />
+<PdfSearch root={host} {scale} index={() => searchIndex} {search} enabled={searchEnabled} />
 
 <style>
   .pdf-document {
