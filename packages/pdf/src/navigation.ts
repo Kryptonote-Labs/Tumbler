@@ -23,7 +23,7 @@ export type PdfOutlineEntry = {
 
 /** Resolve navigation without interpreting page content or executing PDF actions. */
 export class PdfNavigation {
-  constructor(readonly document: PdfDocument) {}
+  constructor(readonly document: Pick<PdfDocument, 'source' | 'pages'>) {}
   destination(value: PdfValue | undefined): PdfDestination | undefined {
     const source = this.document.source,
       seen = new Set<PdfValue>(),
