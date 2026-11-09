@@ -14,6 +14,10 @@ export type PdfTextPlacement = {
 };
 
 export class PdfTextModel {
+  private regionVersions = new WeakMap<Y.Map<unknown>, number>();
+  private contentStates = new WeakMap<Y.Map<unknown>, { version: number; dirty: boolean }>();
+  revision = 0;
+  inTransaction = false;
   readonly regions: Y.Map<Y.Map<unknown>>;
   readonly pages: PdfPageModel;
   readonly origin = {};
@@ -21,6 +25,16 @@ export class PdfTextModel {
   constructor(readonly doc: Y.Doc = new Y.Doc()) {
     this.regions = doc.getMap('pdf-text');
     this.pages = new PdfPageModel(doc, this.origin);
+    this.regions.observeDeep((events) => {
+      for (const event of events) {
+        const id = event.path[0];
+        if (typeof id !== 'string') continue;
+        const region = this.regions.get(id);
+        if (region) this.regionVersions.set(region, (this.regionVersions.get(region) ?? 0) + 1);
+      }
+    });
+    doc.on('beforeTransaction', () => { this.inTransaction = true; });
+    doc.on('afterTransaction', () => { this.inTransaction = false; this.revision++; });
     this.undo = new Y.UndoManager([this.regions, this.pages.records], {
       trackedOrigins: new Set([this.origin]),
     });
@@ -158,7 +172,15 @@ export class PdfTextModel {
   dirty(id: string) {
     return this.placement(id) !== undefined || this.contentDirty(id);
   }
+  regionVersion(id: string) {
+    const region = this.regions.get(id);
+    return region ? this.regionVersions.get(region) ?? 0 : 0;
+  }
   contentDirty(id: string) {
+    const region = this.regions.get(id)!;
+    const version = this.regionVersion(id);
+    const cached = this.contentStates.get(region);
+    if (!this.inTransaction && cached?.version === version) return cached.dirty;
     const seed = this.seed(id);
     if (!seed.sources.length) return true;
     const normalize = (delta: { insert: unknown; attributes?: Record<string, unknown> }[]) => {
@@ -173,7 +195,9 @@ export class PdfTextModel {
       }
       return JSON.stringify(result);
     };
-    return normalize(this.text(id).toDelta()) !== normalize(seed.delta);
+    const dirty = normalize(this.text(id).toDelta()) !== normalize(seed.delta);
+    if (!this.inTransaction) this.contentStates.set(region, { version, dirty });
+    return dirty;
   }
   replace(id: string, start: number, end: number, value: string, style?: PdfTextStyle) {
     const text = this.text(id);

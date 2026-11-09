@@ -55,6 +55,7 @@ const familyKey = (family: string) =>
 /** Source programs and source code-to-glyph mappings remain authoritative for existing text.
  * Full matching faces extend subset fonts for new characters. Fallback affects only missing glyphs. */
 export class PdfEditingFonts {
+  revision = 0;
   private fonts = new Map<string, PdfEditingFont>();
   private documents = new WeakSet<PdfDocument>();
   add(key: string, bytes: Uint8Array, source?: PdfFont) {
@@ -64,6 +65,7 @@ export class PdfEditingFonts {
     const name = typeof font.postscriptName === 'string' ? font.postscriptName : source?.baseName ?? key;
     const family = typeof font.familyName === 'string' ? font.familyName : source?.baseName ?? key;
     const subfamily = typeof font.subfamilyName === 'string' ? font.subfamilyName : source?.baseName ?? key;
+    this.revision++;
     this.fonts.set(key, {
       key,
       name,
@@ -96,6 +98,7 @@ export class PdfEditingFonts {
             width: (element.glyph.width * face.font.unitsPerEm) / 1000,
           });
       }
+      this.revision++;
       interpreter.releasePage(page.index);
       yield;
     }

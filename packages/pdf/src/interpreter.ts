@@ -43,16 +43,21 @@ import {
 } from "./scene.ts";
 import { PdfSyntax } from "./syntax.ts";
 
+const documentFonts = new WeakMap<PdfDocument, WeakMap<PdfDictionary, PdfFont>>();
+
 /** Compile a page to a reusable scene; the browser is a painter, not the canonical PDF document. */
 export class PdfInterpreter {
-  private readonly fonts = new WeakMap<PdfDictionary, PdfFont>();
+  private readonly fonts: WeakMap<PdfDictionary, PdfFont>;
   private readonly scenes = new Map<number, PdfPageScene>();
   private readonly activeForms = new Set<PdfStream>();
   private budget = new PdfExecutionBudget();
   constructor(
     readonly document: PdfDocument,
     private limits: PdfExecutionLimits = {},
-  ) {}
+  ) {
+    this.fonts = documentFonts.get(document) ?? new WeakMap<PdfDictionary, PdfFont>();
+    documentFonts.set(document, this.fonts);
+  }
   /** Carry the same execution budget into isolated renderers. */
   get executionLimits(): PdfExecutionLimits { return { ...this.limits }; }
   page(index: number): PdfPageScene {

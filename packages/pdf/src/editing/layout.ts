@@ -1,3 +1,4 @@
+import type * as Y from 'yjs';
 import type { PdfTextModel } from './model.ts';
 import { pdfSourceSpacing, pdfSourceAttribute, pdfStyleAttributes } from './source-spacing.ts';
 import type { PdfPage } from '../document.ts';
@@ -19,8 +20,24 @@ export type PdfTextLayout = {
   height: number;
 };
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+const regionLayouts = new WeakMap<Y.Map<unknown>, {
+  version: number;
+  fonts: PdfEditingFonts;
+  fontRevision: number;
+  layout: PdfTextLayout;
+}>();
+/** Reuse unchanged region metrics across keystrokes, formatting and page projections. */
+export function layoutPdfText(model: PdfTextModel, id: string, fonts: PdfEditingFonts): PdfTextLayout {
+  const region = model.regions.get(id)!, version = model.regionVersion(id);
+  const previous = regionLayouts.get(region);
+  if (!model.inTransaction && previous?.version === version && previous.fonts === fonts && previous.fontRevision === fonts.revision)
+    return previous.layout;
+  const layout = computePdfTextLayout(model, id, fonts);
+  if (!model.inTransaction) regionLayouts.set(region, { version, fonts, fontRevision: fonts.revision, layout });
+  return layout;
+}
 /** Layout uses full font metrics in page viewport points and UTF-16 offsets shared with Y.Text. */
-export function layoutPdfText(
+function computePdfTextLayout(
   model: PdfTextModel,
   id: string,
   fonts: PdfEditingFonts,
@@ -142,9 +159,22 @@ export type PdfFlowRegion = PdfTextLayout & {
 };
 export const pdfContinuationHeight = (page: PdfPage) =>
   Math.max(page.height * 0.5, page.height - 96);
+type PdfTextFlow = { pages: PdfFlowPage[]; regions: PdfFlowRegion[] };
+const flows = new WeakMap<PdfTextModel, {
+  revision: number; fonts: PdfEditingFonts; fontRevision: number;
+  pages: readonly PdfPage[]; flow: PdfTextFlow;
+}>();
+export function layoutPdfTextFlow(model: PdfTextModel, fonts: PdfEditingFonts, pages: readonly PdfPage[]): PdfTextFlow {
+  const previous = flows.get(model);
+  if (!model.inTransaction && previous?.revision === model.revision && previous.fonts === fonts && previous.fontRevision === fonts.revision && previous.pages === pages)
+    return previous.flow;
+  const flow = computePdfTextFlow(model, fonts, pages);
+  if (!model.inTransaction) flows.set(model, { revision: model.revision, fonts, fontRevision: fonts.revision, pages, flow });
+  return flow;
+}
 /** Imported paragraphs in the same column continue in reading order. Added regions keep their explicit placement.
  * Overflow creates continuation pages after the source page, preserving other source pages and their graphics. */
-export function layoutPdfTextFlow(
+function computePdfTextFlow(
   model: PdfTextModel,
   fonts: PdfEditingFonts,
   pages: readonly PdfPage[],
