@@ -135,6 +135,7 @@ export function calculateFormulas(
   const dependencies = new Map<string, FormulaCellAddress[]>();
   const dependencyKeys = new Map<string, Set<string>>();
   const wholeDependencies = new Map<string, FunctionReference[]>();
+  const spillObstructions = new Map<string, Set<string>>();
   const diagnostics: FormulaDiagnostic[] = [];
   const diagnosed = new Set<string>();
   const visiting = new Set<string>();
@@ -197,7 +198,7 @@ export function calculateFormulas(
         operation();
         if (pending.has(key) || (!visiting.has(key) && !memo.has(key)) || !(refs.some(ref => {
           operation(); return pending.has(addressKey(ref));
-        }) || (wholeDependencies.get(key) ?? []).some(ref => [...pending].some(target => {
+        }) || [...(spillObstructions.get(key) ?? [])].some(target => { operation(); return pending.has(target); }) || (wholeDependencies.get(key) ?? []).some(ref => [...pending].some(target => {
           operation();
           const [sheet, row, column] = target.split("\u0000");
           return sheet === ref.sheet && Number(row) >= ref.firstRow && Number(row) < ref.firstRow + ref.height && Number(column) >= ref.firstColumn && Number(column) < ref.firstColumn + ref.width;
@@ -251,6 +252,9 @@ export function calculateFormulas(
     }
     if (visiting.has(key)) throw new EvaluationUnavailable("circular-reference", "Formula contains a circular reference.");
     visiting.add(key);
+    // Obstructions belong to the previous attempted spill, not the formula's
+    // read dependencies. Rechecking must not depend on our own future output.
+    spillObstructions.delete(key);
     const previousAddress = activeAddress, previousBindings = bindings, previousPublic = publicExpression;
     activeAddress = Object.freeze({...address});
     bindings = new Map();
@@ -264,14 +268,21 @@ export function calculateFormulas(
         const rows = evaluated.rows, height = rows.length, width = rows[0]?.length ?? 0;
         assertArray(height, width);
         if (rows.some(row => row.length !== width)) throw new EvaluationUnavailable("unavailable-dependency", "Function returned a nonrectangular array.");
+        const obstructions = new Set<string>();
         let blocked = source.spillBlocked?.(address) === true || address.row + height - 1 > MAX_SPREADSHEET_ROW || address.column + width - 1 > MAX_SPREADSHEET_COLUMN;
         for (let r = 0; r < height; r++) for (let c = 0; c < width; c++) {
           operation();
           if (!r && !c) continue;
           const target = {sheet: address.sheet, row: address.row + r, column: address.column + c};
           const input = readCell(source, target);
-          if (input?.formula !== undefined || input !== undefined && input.value.type !== "blank" || spillOwners.has(addressKey(target)) || source.spillBlocked?.(target)) blocked = true;
+          const targetKey = addressKey(target), owner = spillOwners.get(targetKey);
+          if (owner !== undefined) {
+            // Track both the occupied coordinate and its shape-changing owner.
+            obstructions.add(targetKey); obstructions.add(owner);
+          }
+          if (input?.formula !== undefined || input !== undefined && input.value.type !== "blank" || owner !== undefined || source.spillBlocked?.(target)) blocked = true;
         }
+        if (blocked && obstructions.size) spillObstructions.set(key, obstructions);
         result = blocked ? error("#SPILL!") : rows[0]![0]!;
         if (!blocked) {
           const copy: FunctionArray = Object.freeze({kind: "array", rows: Object.freeze(rows.map(row => Object.freeze([...row])))});

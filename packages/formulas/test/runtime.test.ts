@@ -228,3 +228,14 @@ test("budget exhaustion does not misdiagnose an already committed nested produce
     }
   }
 });
+
+test.each([
+  [0,1,2], [0,2,1], [1,0,2], [1,2,0], [2,0,1], [2,1,0],
+])("temporary spill obstructions resolve independently of formula enumeration: %j", (...order) => {
+  const formulas = [["1,2", "IF(A5,1,{1;2})"], ["2,1", "{3,4}"], ["4,1", "{1;2}"]] as const;
+  const result = calculateFormulas(workbook(Object.fromEntries(order.map(index => formulas[index]!))));
+  expect(result.value(at(1,2))).toEqual(n(1));
+  expect(result.value(at(2,1))).toEqual(n(3));
+  expect(result.value(at(2,2))).toEqual(n(4));
+  expect(result.diagnostics).toEqual([]);
+});

@@ -171,3 +171,22 @@ test("budget-limited workbook calculation publishes no partial spill and preserv
     expect(artifact.bytes()).toEqual(bytes);
   }
 });
+
+test("blocked arrays recalculate after a temporary occupying spill shrinks", () => {
+  const bytes = buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet(
+    '<row r="1"><c r="B1"><f>IF(A5,1,{1;2})</f></c></row>' +
+    '<row r="2"><c r="A2"><f>{3,4}</f></c><c r="C2"><f>B2+1</f></c></row>' +
+    '<row r="4"><c r="A4"><f>{1;2}</f></c></row>'
+  )}]});
+  const original = openSpreadsheetArtifact(bytes);
+  for (const artifact of [original, openSpreadsheetArtifact(original.bytes()), original.editCell("E1", "unrelated")]) {
+    expect(artifact.calculation.displayText("B1")).toBe("1");
+    expect(artifact.calculation.displayText("A2")).toBe("3");
+    expect(artifact.calculation.displayText("B2")).toBe("4");
+    expect(artifact.calculation.displayText("C2")).toBe("5");
+    expect(artifact.calculation.arrayValue("A2")?.rows).toEqual([[{type:"number",value:3},{type:"number",value:4}]]);
+    expect(artifact.calculation.diagnostics).toEqual([]);
+    expect(artifact.worksheet.cell("B2")).toBeUndefined();
+  }
+  expect(original.bytes()).toEqual(bytes);
+});
