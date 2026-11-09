@@ -89,7 +89,7 @@
   }
 </script>
 <div class="playground-heading"><h1>Playground</h1><a class="quiet-link" href={sample.format === 'word' ? '/docs/word' : sample.format === 'slides' ? '/docs/powerpoint' : '/docs/spreadsheets'}>Read the docs <span aria-hidden="true">↗</span></a></div>
-<p class="playground-description">Open a sample or bring your own file. Edits stay in this browser until you download them.</p>
+<p class="playground-description">Open a sample or bring your own file. Edits stay in this browser until you download them. <a href="/playground/pdf-merge">Merge PDFs ↗</a></p>
 <div class="playground-controls">
   <label class="sample-picker"><span class="control-label">Example</span><select aria-label="Example" value={sample.id} onchange={event => goto(`/playground/${event.currentTarget.value}`)}>{#each samples as item}<option value={item.id}>{item.label} · {item.format === 'word' ? 'Word' : item.format === 'slides' ? 'PowerPoint' : 'Excel'}</option>{/each}</select></label>
   <div class="file-actions"><input bind:this={fileInput} type="file" accept=".docx,.xlsx,.pptx" onchange={upload} aria-label="Choose a document" hidden /><button onclick={() => fileInput?.click()}>Open file <span aria-hidden="true">↑</span></button></div>

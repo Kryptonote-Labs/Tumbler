@@ -7,6 +7,11 @@ describe("SpreadsheetML number formatting", () => {
   test.each([
     [1234.5, { numberFormatId: 0 }, "1234.5"],
     [1234.5, { numberFormatId: 4 }, "1,234.50"],
+    [1234.5, { numberFormatId: 5 }, "$1,235"],
+    [-1234.5, { numberFormatId: 6 }, "($1,235)"],
+    [1234.5, { numberFormatId: 7 }, "$1,234.50"],
+    [-1234.5, { numberFormatId: 7 }, "($1,234.50)"],
+    [-1234.5, { numberFormatId: 8 }, "($1,234.50)"],
     [0.256, { numberFormatId: 9 }, "26%"],
     [0.256, { numberFormatId: 10 }, "25.60%"],
     [12_200_000, { numberFormatCode: "#0.0,," }, "12.2"],
@@ -37,4 +42,14 @@ describe("SpreadsheetML number formatting", () => {
   test("supports locale-specific decimal and grouping output", () => {
     expect(formatSpreadsheetCellValue(number(1234.5), { numberFormatId: 4, locale: "de-DE" })).toBe("1.234,50");
   });
+});
+
+
+test("currency commands render the same values before and after an XLSX roundtrip", async () => {
+  const { createSpreadsheet, applySpreadsheetCommand, openSpreadsheetArtifact } = await import("../src/index.ts");
+  let artifact = applySpreadsheetCommand(createSpreadsheet(), {name:"set-range",sheetId:"1",reference:"A1",values:[[1234.5],[-1234.5],["=SUM(A1:A2)"]]});
+  artifact = applySpreadsheetCommand(artifact,{name:"set-number-format",sheetId:"1",range:"A1:A3",format:"currency"});
+  expect(["A1","A2","A3"].map(reference=>artifact.calculation.displayText(reference))).toEqual(["$1,234.50","($1,234.50)","$0.00"]);
+  const reopened = openSpreadsheetArtifact(artifact.bytes());
+  expect(["A1","A2","A3"].map(reference=>reopened.calculation.displayText(reference))).toEqual(["$1,234.50","($1,234.50)","$0.00"]);
 });

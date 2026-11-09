@@ -2,7 +2,9 @@ import type { FormulaExpression } from "./ast.ts";
 import type { FormulaCellAddress, FormulaCellInput, FormulaScalarValue, FormulaWorkbookSource } from "./evaluator.ts";
 
 /** Values passed between the extended function families and the evaluator. */
-export type FunctionValue = FormulaScalarValue | FunctionArray | FunctionLambda;
+export type FunctionValue = FormulaScalarValue | FunctionArray | FunctionLambda | FunctionOmitted;
+
+export interface FunctionOmitted { readonly kind: "omitted"; }
 
 export interface FunctionArray {
   readonly kind: "array";
@@ -63,12 +65,12 @@ export function functionNumber(value: number): FormulaScalarValue {
 }
 
 export function functionScalar(value: FunctionValue): FormulaScalarValue {
-  return "kind" in value ? functionError() : value;
+  return "kind" in value ? value.kind === "omitted" ? { type: "blank" } : functionError() : value;
 }
 
 export function functionMatrix(value: FunctionValue): readonly (readonly FormulaScalarValue[])[] {
   if (!("kind" in value)) return [[value]];
-  return value.kind === "array" ? value.rows : [[functionError("#CALC!")]];
+  return value.kind === "omitted" ? [[{type: "blank"}]] : value.kind === "array" ? value.rows : [[functionError("#CALC!")]];
 }
 
 export function functionFlatten(value: FunctionValue): readonly FormulaScalarValue[] {

@@ -32,6 +32,7 @@ export const nativeImageDrawing = (id: number, image: WordAuthoredImage, width: 
                     ? width - image.width
                     : 0),
               verticalOffsetPoints: image.y ?? 0,
+              ...(image.zOrder ? { zOrder: image.zOrder } : {}),
               wrap: 'none',
               behindDocument: image.layout === 'behind',
               layoutInCell: true, allowOverlap: true,

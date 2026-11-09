@@ -10,10 +10,11 @@ export const compatibilityDoc: Doc = {
           ['XLSX', 'Virtualized grid, cell and ordinary formula edits, formatting, tables, and supported charts.', 'Formula and workbook feature coverage remains incomplete.'],
           ['DOC / XLS / PPT', 'Not supported.', 'Convert legacy binary files to DOCX, XLSX, or PPTX first.'],
           ['PPTX', 'Slide viewing, thumbnail navigation, text and table-cell editing, formatting, and object movement, resizing, and rotation.', 'Table row/column operations, SmartArt relayout, 3D effects, and full animation/layout fidelity remain unsupported.'],
-          ['PDF', 'No viewer in this playground.', 'PDF rendering is outside the current format packages.'],
+          ['PDF', 'Source-preserving page merging through the API, CLI, and graphical merge playground.', 'Unsupported document structures or combinations fail before output; a merged PDF is unencrypted and signatures cannot authenticate the result.'],
         ] },
     ] },
     { id: 'formats-guides', title: 'Support by format', blocks: [
+        { kind: 'link', href: '/docs/pdf-merge', label: 'PDF page merging' },
         { kind: 'link', href: '/docs/word-support', label: 'Word support and limitations' },
         { kind: 'link', href: '/docs/spreadsheet-support', label: 'Spreadsheet support and limitations' },
         { kind: 'link', href: '/docs/powerpoint-support', label: 'PowerPoint support and limitations' },

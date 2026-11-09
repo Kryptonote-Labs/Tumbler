@@ -12,7 +12,7 @@ export function isWordDrawingGeometry(value: unknown): value is WordDrawingGeome
   if (!value || typeof value !== 'object') return false;
   const geometry = value as Record<string, unknown>;
   return (
-    Object.keys(geometry).every((key) => ['width', 'height', 'layout', 'x', 'y', 'horizontalRelativeTo', 'verticalRelativeTo', 'wrap'].includes(key)) &&
+    Object.keys(geometry).every((key) => ['zOrder', 'width', 'height', 'layout', 'x', 'y', 'horizontalRelativeTo', 'verticalRelativeTo', 'wrap'].includes(key)) &&
     isWordDrawingPosition(value as WordDrawingPosition) &&
     ['width', 'height'].every(
       (key) =>
@@ -83,6 +83,7 @@ export function withWordDrawingGeometry(
                   verticalOffsetPoints: geometry.y ?? 0,
                 }
               : {}),
+            ...(geometry.zOrder !== undefined ? { zOrder: geometry.zOrder } : {}),
             ...(geometry.wrap ? { wrap: geometry.wrap } : {}),
             ...(geometry.layout ? { behindDocument: layout === 'behind' } : {}),
           },

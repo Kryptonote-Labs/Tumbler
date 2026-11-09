@@ -1,13 +1,19 @@
+import { spreadsheetFileHost, createSpreadsheetFile } from './spreadsheet-file-host.ts';
+import { extractPdfPages, openPdfDocument, PdfSearchIndex, mergePdfDocuments, parsePdfPageSelection } from '@tumblerjs/pdf';
+import { checkPdfDeletionSupported } from './pdf-delete-pages.ts';
+import { pdfDeletePagesInput, pdfPageIndices } from './pdf-pages.ts';
 import { presentationFileHost, createPresentationFile } from './presentation-file-host.ts';
-import { fileRegion, fileRegions } from "./file-regions.ts";
-import { inspectWordObjects, inspectWordStyles, readWordImage } from "@tumblerjs/word/operations";
-import { NativeWordDocument } from "@tumblerjs/word";
-import { openWordOperationDocument, prepareWordOperation } from "@tumblerjs/word/operations";
-import { tableParagraphs } from "@tumblerjs/word/collaboration";
-import type { OperationInput } from "./registry.ts";
-import { createHash, randomUUID } from "node:crypto";
+import { fileRegion, fileRegions } from './file-regions.ts';
+import { inspectWordObjects, inspectWordStyles, readWordImage } from '@tumblerjs/word/operations';
+import { NativeWordDocument } from '@tumblerjs/word';
+import { openWordOperationDocument, prepareWordOperation } from '@tumblerjs/word/operations';
+import { tableParagraphs } from '@tumblerjs/word/collaboration';
+import type { OperationInput } from './registry.ts';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   closeSync,
+  linkSync,
+  chmodSync,
   openSync,
   readFileSync,
   renameSync,
@@ -15,19 +21,19 @@ import {
   writeFileSync,
   statSync,
   realpathSync,
-} from "node:fs";
-import { extname } from "node:path";
-import { z } from "zod";
-import { createWordArtifact, openWordArtifact, type WordArtifact } from "@tumblerjs/word";
-import type { OperationHost, ReadInput } from "./registry.ts";
+} from 'node:fs';
+import { extname } from 'node:path';
+import { z } from 'zod';
+import { createWordArtifact, openWordArtifact, type WordArtifact } from '@tumblerjs/word';
+import type { OperationHost, ReadInput } from './registry.ts';
 
 const handleSchema = z.object({
   revision: z.string(),
-  region: z.string().default("body"),
+  region: z.string().default('body'),
   start: z.number().int().nonnegative(),
   end: z.number().int().nonnegative(),
 });
-const revision = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
+const revision = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const open = (bytes: Uint8Array) =>
   openWordArtifact(bytes, {
     maxBlocks: Number.MAX_SAFE_INTEGER,
@@ -35,8 +41,8 @@ const open = (bytes: Uint8Array) =>
     maxTextCharacters: Number.MAX_SAFE_INTEGER,
   });
 function checkExtension(path: string) {
-  if (extname(path).toLowerCase() !== ".docx")
-    throw new Error("This CLI currently supports .docx documents.");
+  if (extname(path).toLowerCase() !== '.docx')
+    throw new Error('This CLI currently supports .docx documents.');
 }
 function paragraphs(artifact: WordArtifact) {
   const session = openWordOperationDocument(artifact);
@@ -50,15 +56,15 @@ function paragraphs(artifact: WordArtifact) {
     session.destroy();
   }
 }
-function page(artifact: WordArtifact, offset: number, region = "body") {
+function page(artifact: WordArtifact, offset: number, region = 'body') {
   const content = paragraphs(artifact);
-  if (offset > content.text.length) throw new Error("Offset is outside the document.");
+  if (offset > content.text.length) throw new Error('Offset is outside the document.');
   // Transport pages are bounded; this does not constrain document size.
   let end = Math.min(content.text.length, offset + 4000);
   if (end < content.text.length && /[\uDC00-\uDFFF]/.test(content.text[end]!)) end--;
   const handle = { revision: revision(artifact.bytes()), region, start: offset, end };
   return {
-    page: Buffer.from(JSON.stringify(handle)).toString("base64url"),
+    page: Buffer.from(JSON.stringify(handle)).toString('base64url'),
     region,
     start: offset,
     end,
@@ -89,16 +95,16 @@ function page(artifact: WordArtifact, offset: number, region = "body") {
   };
 }
 function resolveTarget(artifact: WordArtifact, input: OperationInput) {
-  if (!input.page) throw new Error("Read first and supply --page <handle> when editing a file.");
-  const handle = handleSchema.parse(JSON.parse(Buffer.from(input.page, "base64url").toString()));
+  if (!input.page) throw new Error('Read first and supply --page <handle> when editing a file.');
+  const handle = handleSchema.parse(JSON.parse(Buffer.from(input.page, 'base64url').toString()));
   if (handle.revision !== revision(artifact.bytes()))
-    throw new Error("The document changed. Read it again before editing.");
+    throw new Error('The document changed. Read it again before editing.');
   const content = paragraphs(artifact);
   if (handle.end > content.text.length || handle.end < handle.start)
-    throw new Error("Invalid page range.");
+    throw new Error('Invalid page range.');
   let start: number;
   let end: number;
-  if ("text" in input.target) {
+  if ('text' in input.target) {
     const target = input.target;
     const found: number[] = [];
     const visible = content.text.slice(handle.start, handle.end);
@@ -126,7 +132,7 @@ function resolveTarget(artifact: WordArtifact, input: OperationInput) {
       );
     start = found[0]!;
     end = start + target.text.length;
-  } else if (input.target.kind === "range") {
+  } else if (input.target.kind === 'range') {
     start = input.target.start;
     end = input.target.end;
   } else {
@@ -134,28 +140,28 @@ function resolveTarget(artifact: WordArtifact, input: OperationInput) {
     const selected = content.tables.filter(
       (p) =>
         p.table?.id === target.tableId &&
-        (target.kind === "table" || p.table.cell === target.cellId),
+        (target.kind === 'table' || p.table.cell === target.cellId),
     );
-    if (!selected.length) throw new Error("Table or cell unavailable.");
+    if (!selected.length) throw new Error('Table or cell unavailable.');
     start = selected[0]!.start;
-    end = selected.at(-1)!.end - (target.kind === "cell" ? 1 : 0);
+    end = selected.at(-1)!.end - (target.kind === 'cell' ? 1 : 0);
   }
   if (
-    "kind" in input.target && input.target.kind === "table"
+    'kind' in input.target && input.target.kind === 'table'
       ? end <= handle.start || start >= handle.end
       : start < handle.start || end > handle.end || end < start
   )
-    throw new Error("Target is outside the read page.");
+    throw new Error('Target is outside the read page.');
   if (
-    input.operation.name === "move-object" &&
+    input.operation.name === 'move-object' &&
     (input.operation.input.destination < handle.start ||
       input.operation.input.destination > handle.end)
   )
-    throw new Error("Move destination is outside the read page.");
-  const segments = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(content.text);
+    throw new Error('Move destination is outside the read page.');
+  const segments = new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(content.text);
   for (const offset of [start, end]) {
     const segment = segments.containing(offset);
-    if (segment && segment.index !== offset) throw new Error("Target splits a character.");
+    if (segment && segment.index !== offset) throw new Error('Target splits a character.');
   }
   return { start, end, offset: handle.start };
 }
@@ -166,14 +172,14 @@ export function createFileHost(): OperationHost {
     checkExtension(path);
     path = realpathSync(path);
     const lock = `${path}.tumbler-lock`;
-    const descriptor = openSync(lock, "wx");
+    const descriptor = openSync(lock, 'wx');
     const temporary = `${path}.${randomUUID()}.tmp`;
     try {
       const original = readFileSync(path);
       const main = open(original);
-      if (!input.page) throw new Error("Read first and supply --page.");
+      if (!input.page) throw new Error('Read first and supply --page.');
       const region = handleSchema.parse(
-        JSON.parse(Buffer.from(input.page, "base64url").toString()),
+        JSON.parse(Buffer.from(input.page, 'base64url').toString()),
       ).region;
       const artifact = fileRegion(main, region);
       const target = resolveTarget(artifact, input);
@@ -185,14 +191,14 @@ export function createFileHost(): OperationHost {
             session.text,
             target,
             input.operation,
-            input.operation.name === "fit-table"
+            input.operation.name === 'fit-table'
               ? {
                   availableWidthPoints: new NativeWordDocument({ source: artifact }).geometryAt(
                     target.start,
                     tableParagraphs(session.text).find(
                       (p) =>
                         p.table?.cell ===
-                        (input.operation.name === "fit-table" ? input.operation.input.cellId : ""),
+                        (input.operation.name === 'fit-table' ? input.operation.input.cellId : ''),
                     )?.table?.parents?.length ?? 0,
                   ).availableWidthPoints,
                 }
@@ -203,9 +209,9 @@ export function createFileHost(): OperationHost {
       } finally {
         session.destroy();
       }
-      writeFileSync(temporary, result.bytes(), { flag: "wx", mode: statSync(path).mode });
+      writeFileSync(temporary, result.bytes(), { flag: 'wx', mode: statSync(path).mode });
       if (revision(readFileSync(path)) !== revision(original))
-        throw new Error("The document changed while editing. Read it again.");
+        throw new Error('The document changed while editing. Read it again.');
       renameSync(temporary, path);
       return {
         page: page(result, Math.min(target.offset, paragraphs(result).text.length), region),
@@ -214,7 +220,7 @@ export function createFileHost(): OperationHost {
       try {
         unlinkSync(temporary);
       } catch (error) {
-        if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
       }
       closeSync(descriptor);
       unlinkSync(lock);
@@ -222,6 +228,79 @@ export function createFileHost(): OperationHost {
   }
   return {
     ...presentationFileHost(),
+    ...spreadsheetFileHost(),
+    async mergePdf(input) {
+      if (!input.sources.length) throw new Error('Select at least one PDF source.');
+      if (extname(input.output).toLowerCase() !== '.pdf') throw new Error('PDF merge requires a .pdf output path.');
+      const sources = input.sources.map((source) => {
+        if (extname(source.path).toLowerCase() !== '.pdf') throw new Error('PDF merge requires .pdf input paths.');
+        const document = openPdfDocument(readFileSync(source.path), source.password === undefined ? {} : { password: source.password });
+        return { document, ...(source.pages === undefined ? {} : { pages: parsePdfPageSelection(source.pages, document.pages.length) }) };
+      });
+      const output = mergePdfDocuments(sources);
+      // Exclusive creation also protects aliases/symlinks to any input and existing output.
+      // Finish the write before exposing the destination; hard-link publication never replaces a file.
+      const temporary = `${input.output}.${randomUUID()}.tmp`;
+      try {
+        writeFileSync(temporary, output, { flag: 'wx' });
+        linkSync(temporary, input.output);
+      } finally {
+        try { unlinkSync(temporary); }
+        catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error; }
+      }
+      return { output: input.output, format: 'pdf', pageCount: sources.reduce((sum, source) => sum + (source.pages?.length ?? source.document.pages.length), 0) };
+    },
+    async findPdf(document, query, options) {
+      return new PdfSearchIndex(openPdfDocument(readFileSync(document))).find(query, options);
+    },
+    async deletePdfPages(path, input) {
+      input = pdfDeletePagesInput.parse(input);
+      if (extname(path).toLowerCase() !== '.pdf')
+        throw new Error('PDF deletion requires a .pdf input path.');
+      path = realpathSync(path);
+      const lock = `${path}.tumbler-lock`;
+      const descriptor = openSync(lock, 'wx');
+      const temporary = `${path}.${randomUUID()}.tmp`;
+      try {
+        const original = readFileSync(path);
+        const document = openPdfDocument(original);
+        const indices = pdfPageIndices(input.pages, document.pages.length);
+        const removed = new Set(indices);
+        const remaining = document.pages.map((_, index) => index).filter((index) => !removed.has(index));
+        if (!remaining.length) throw new Error('Cannot delete every PDF page; keep at least one page.');
+        checkPdfDeletionSupported(document);
+        const output = extractPdfPages(document, remaining);
+        const mode = statSync(path).mode;
+        writeFileSync(temporary, output, { flag: 'wx', mode });
+        chmodSync(temporary, mode);
+        if (revision(readFileSync(path)) !== revision(original))
+          throw new Error('The document changed while editing. Try again.');
+        renameSync(temporary, path);
+        return { deletedPages: indices.map((index) => index + 1).sort((a, b) => a - b), pageCount: remaining.length };
+      } finally {
+        try {
+          unlinkSync(temporary);
+        } catch (error) {
+          if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+        }
+        closeSync(descriptor);
+        unlinkSync(lock);
+      }
+    },
+    async exportPdf(path, input) {
+      if (extname(path).toLowerCase() !== '.pdf' || extname(input.output).toLowerCase() !== '.pdf')
+        throw new Error('PDF export requires .pdf input and output paths.');
+      const document = openPdfDocument(readFileSync(path));
+      const indices = pdfPageIndices(input.pages, document.pages.length);
+      const output = extractPdfPages(document, indices);
+      writeFileSync(input.output, output, { flag: 'wx' });
+      return {
+        output: input.output,
+        format: 'pdf',
+        pages: indices.map((index) => index + 1),
+        pageCount: indices.length,
+      };
+    },
     async readImage(path, input) {
       checkExtension(path);
       const source = fileRegion(open(readFileSync(path)), input.region);
@@ -237,10 +316,10 @@ export function createFileHost(): OperationHost {
     async inspect(path, input) {
       checkExtension(path);
       const main = open(readFileSync(path));
-      if (input.what === "regions") return fileRegions(main);
+      if (input.what === 'regions') return fileRegions(main);
       const source = fileRegion(main, input.region);
-      if (input.what === "styles") return inspectWordStyles(source);
-      if (input.what === "geometry")
+      if (input.what === 'styles') return inspectWordStyles(source);
+      if (input.what === 'geometry')
         return new NativeWordDocument({ source }).geometryAt(input.offset);
       const session = openWordOperationDocument(source);
       try {
@@ -254,15 +333,16 @@ export function createFileHost(): OperationHost {
     },
     async read(path: string, input: ReadInput) {
       checkExtension(path);
-      if (input.target) throw new Error("File navigation uses numeric offsets.");
+      if (input.target) throw new Error('File navigation uses numeric offsets.');
       const source = open(readFileSync(path));
       return page(fileRegion(source, input.region), input.offset, input.region);
     },
     async create(path) {
-      if(extname(path).toLowerCase() === '.pptx')return createPresentationFile(path);
+      if (extname(path).toLowerCase() === '.xlsx') return createSpreadsheetFile(path);
+      if (extname(path).toLowerCase() === '.pptx') return createPresentationFile(path);
       checkExtension(path);
       const artifact = createWordArtifact();
-      writeFileSync(path, artifact.bytes(), { flag: "wx" });
+      writeFileSync(path, artifact.bytes(), { flag: 'wx' });
       return page(artifact, 0);
     },
   };

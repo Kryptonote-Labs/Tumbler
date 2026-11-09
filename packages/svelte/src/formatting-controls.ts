@@ -34,7 +34,7 @@ export function colorFormatting(value: string): FormattingPatch | undefined {
 }
 
 export function formattingColorValue(state: FormattingValue<OfficeColor>): string {
-  if ((state.state === "value" || state.state === "inherited") && state.value.type === "rgb") {
+  if ((state.state === "value" || state.state === "inherited") && state.value.type !== "automatic" && state.value.value !== undefined) {
     return state.value.value;
   }
   return "#000000";

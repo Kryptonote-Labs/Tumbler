@@ -1,3 +1,4 @@
+import { readGradientFill } from "@tumblerjs/ooxml";
 import { readWordPictureGeometry, type WordPictureGeometry } from './picture-geometry.ts';
 import { inkFrame, resizeWordInk, positionWordInk } from './ink-geometry.ts';
 import { wordInkChoice } from './ink-fallback.ts';
@@ -146,6 +147,9 @@ function parseDrawing(
   if (shapeNode) {
     const nodes = descendants(shapeNode);
     const props = nodes.find(element => element.localName === 'spPr');
+    const gradientNode = props && child(props, drawingNs, 'gradFill');
+    const gradient = gradientNode && readGradientFill(gradientNode);
+    const gradientNodes = gradientNode ? new Set(descendants(gradientNode)) : new Set();
     const geometry = props && descendants(props).find(element => element.localName === 'prstGeom');
     const preset = attribute(geometry, 'prst');
     const adjustments = geometry ? descendants(geometry).filter(node => node.localName === 'gd') : [];
@@ -162,7 +166,7 @@ function parseDrawing(
       const off = Number(attribute(transforms.find(n => n.localName === 'lumOff'), 'val') ?? 0);
       return !Number.isFinite(mod) || !Number.isFinite(off) || mod < 0 || off < 0 || mod > 100000 || off > 100000 || off !== 0 && Math.abs(mod + off - 100000) > 1 || transforms.length > new Set(transforms.map(n => n.localName)).size;
     });
-    if (unsupportedLuminance || nodes.some(node => node.localName === 'schemeClr' && (!wordThemeSlot(attribute(node, 'val') ?? '') || node.children.some(c => c.kind === 'element' && !['lumMod', 'lumOff'].includes(c.localName)))) || nodes.some(node => ['gradFill', 'pattFill', 'blipFill', 'alpha', 'style', 'effectLst', 'effectDag'].includes(node.localName)) ||
+    if (unsupportedLuminance || nodes.some(node => node.localName === 'schemeClr' && (!wordThemeSlot(attribute(node, 'val') ?? '') || node.children.some(c => c.kind === 'element' && !['lumMod', 'lumOff'].includes(c.localName)))) || (gradientNode && !gradient) || nodes.some(node => ['pattFill', 'blipFill', 'alpha', 'style', 'effectLst', 'effectDag'].includes(node.localName) && !gradientNodes.has(node)) ||
       ['rot', 'flipH', 'flipV'].some(name => attribute(transform, name) !== undefined) ||
       adjustments.length > 0 && !supportedRadius ||
       anchor && anchor.wrap !== 'none')
@@ -193,7 +197,7 @@ function parseDrawing(
     const body = nodes.find(n => n.localName === 'bodyPr');
     const textInsets = readWordShapeTextInsets(name => attribute(body, name));
     const textAnchor = attribute(body, 'anchor') === 'ctr' ? 'center' : attribute(body, 'anchor') === 'b' ? 'bottom' : 'top';
-    const shape = { preset, ...(supportedRadius ? { cornerRadius: Math.min(widthPoints, heightPoints) * Math.min(50000, Math.max(0, radiusAdjustment!)) / 100000 } : {}), textAnchor, ...(textInsets ? { textInsets } : {}), ...(textBody ? { textBody } : {}), width: widthPoints, height: heightPoints, fill: color(props), outline: color(line), outlineWidth: Number(attribute(line, 'w') ?? 0) / EMUS_PER_POINT, ...(text ? { text } : {}), ...(altText ? { alt: altText } : {}), layout: placement === 'inline' ? 'inline' : anchor?.behindDocument ? 'behind' : 'front', ...(anchor ? { x: anchor.horizontalOffsetPoints ?? 0, y: anchor.verticalOffsetPoints ?? 0, moveWithText: anchor.verticalRelativeTo !== 'page', ...(anchor.horizontalRelativeTo === 'page' || anchor.horizontalRelativeTo === 'column' ? { horizontalRelativeTo: anchor.horizontalRelativeTo } : {}), ...(['page', 'line', 'paragraph'].includes(anchor.verticalRelativeTo ?? '') ? { verticalRelativeTo: anchor.verticalRelativeTo } : {}) } : {}) };
+    const shape = { preset, ...(gradient ? { gradient } : {}), ...(anchor?.zOrder !== undefined ? { zOrder: anchor.zOrder } : {}), ...(supportedRadius ? { cornerRadius: Math.min(widthPoints, heightPoints) * Math.min(50000, Math.max(0, radiusAdjustment!)) / 100000 } : {}), textAnchor, ...(textInsets ? { textInsets } : {}), ...(textBody ? { textBody } : {}), width: widthPoints, height: heightPoints, fill: color(props), outline: color(line), outlineWidth: Number(attribute(line, 'w') ?? 0) / EMUS_PER_POINT, ...(text ? { text } : {}), ...(altText ? { alt: altText } : {}), layout: placement === 'inline' ? 'inline' : anchor?.behindDocument ? 'behind' : 'front', ...(anchor ? { x: anchor.horizontalOffsetPoints ?? 0, y: anchor.verticalOffsetPoints ?? 0, moveWithText: anchor.verticalRelativeTo !== 'page', ...(anchor.horizontalRelativeTo === 'page' || anchor.horizontalRelativeTo === 'column' ? { horizontalRelativeTo: anchor.horizontalRelativeTo } : {}), ...(['page', 'line', 'paragraph'].includes(anchor.verticalRelativeTo ?? '') ? { verticalRelativeTo: anchor.verticalRelativeTo } : {}) } : {}) };
     if (isWordAuthoredShape(shape)) return { kind: 'shape', elementId: drawing.id, placement, widthPoints, heightPoints, name, altText, anchor, shape };
   }
   const relationshipNs = input.conformance === "strict" ? "http://purl.oclc.org/ooxml/officeDocument/relationships" : "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -328,7 +332,7 @@ export function resizeWordDrawing(document: WordDocument, size: WordDrawingResiz
   return transaction.commit();
 }
 
-export interface WordDrawingChange extends WordDrawingResize, Pick<WordDrawingPosition, 'layout' | 'wrap' | 'horizontalRelativeTo' | 'verticalRelativeTo'> {
+export interface WordDrawingChange extends WordDrawingResize, Pick<WordDrawingPosition, 'zOrder' | 'layout' | 'wrap' | 'horizontalRelativeTo' | 'verticalRelativeTo'> {
   /** Destination in the text flow; does not convert the drawing to a floating object. */
   readonly inlinePosition?: import('./text.ts').WordTextPosition;
   /** Coordinates in the specified bases, defaulting to the page. */
@@ -346,7 +350,20 @@ export interface WordShapeTextChange {
 
 /** Change wrapping and coordinate bases, preserving the embedded graphic. */
 export function positionWordDrawing(document: WordDocument, change: WordDrawingChange): Uint8Array {
-  if (change.layout === undefined) return document.bytes();
+  if (change.layout === undefined) {
+    if (change.zOrder === undefined) return document.bytes();
+    if (!isWordDrawingPosition(change)) throw new TypeError('Invalid drawing order.');
+    const element = document.source.element(change.elementId);
+    const anchor = element && descendants(element).find(n => n.namespaceUri === wordDrawingNamespace(document.conformance) && n.localName === 'anchor');
+    if (!anchor) return document.bytes();
+    const editor = beginLosslessXmlEdit(document.source);
+    const order = anchor.attributes.find(a => a.localName === 'relativeHeight');
+    if (order) editor.setAttribute(order, String(change.zOrder));
+    else editor.insertAttribute(anchor, 'relativeHeight', String(change.zOrder));
+    const transaction = beginPackageTransaction(document.package);
+    transaction.replacePart(document.part.name, editor.commit().bytes);
+    return transaction.commit();
+  }
   if (!isWordDrawingPosition(change)) throw new TypeError('Invalid drawing coordinate base.');
   if (!['inline', 'front', 'behind'].includes(change.layout)) throw new RangeError('Unknown drawing layout.');
   const drawing = document.drawings.get(change.elementId);
@@ -386,13 +403,17 @@ export function positionWordDrawing(document: WordDocument, change: WordDrawingC
         const wrapping = children.find(item => item.namespaceUri === wp && item.localName.startsWith('wrap'));
         if (wrapping) editor.replaceElementMarkup(wrapping, `<${prefix}wrapNone/>`);
       }
+      if (change.zOrder !== undefined) {
+        const order = placement.attributes.find(a => a.localName === 'relativeHeight');
+        if (order) editor.setAttribute(order, String(change.zOrder));
+      }
       const simple = placement.attributes.find(attribute => attribute.localName === 'simplePos');
       if (simple !== undefined) editor.setAttribute(simple, '0');
       const transaction = beginPackageTransaction(document.package);
       transaction.replacePart(document.part.name, editor.commit().bytes);
       return transaction.commit();
     }
-    markup = `<${prefix}anchor ${namespaces} distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="0" behindDoc="${change.layout === 'behind' ? 1 : 0}" locked="0" layoutInCell="1" allowOverlap="1"><${prefix}simplePos x="0" y="0"/><${prefix}positionH relativeFrom="${change.horizontalRelativeTo ?? 'page'}"><${prefix}posOffset>${x}</${prefix}posOffset></${prefix}positionH><${prefix}positionV relativeFrom="${change.verticalRelativeTo ?? 'page'}"><${prefix}posOffset>${y}</${prefix}posOffset></${prefix}positionV>${raw(extent)}${effect === undefined ? '' : raw(effect)}<${prefix}wrapNone/>${retained}</${prefix}anchor>`;
+    markup = `<${prefix}anchor ${namespaces} distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="${change.zOrder ?? drawing.anchor?.zOrder ?? 0}" behindDoc="${change.layout === 'behind' ? 1 : 0}" locked="0" layoutInCell="1" allowOverlap="1"><${prefix}simplePos x="0" y="0"/><${prefix}positionH relativeFrom="${change.horizontalRelativeTo ?? 'page'}"><${prefix}posOffset>${x}</${prefix}posOffset></${prefix}positionH><${prefix}positionV relativeFrom="${change.verticalRelativeTo ?? 'page'}"><${prefix}posOffset>${y}</${prefix}posOffset></${prefix}positionV>${raw(extent)}${effect === undefined ? '' : raw(effect)}<${prefix}wrapNone/>${retained}</${prefix}anchor>`;
   }
   editor.replaceElementMarkup(placement, markup);
   const transaction = beginPackageTransaction(document.package);
