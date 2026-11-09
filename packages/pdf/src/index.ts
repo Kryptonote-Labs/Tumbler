@@ -40,3 +40,5 @@ export type { PdfMergeInput } from './merge.ts';
 export { deletePdfModelPages } from './editing/page-operations.ts';
 
 export { createEditablePdfCopy } from "./editing/editable-copy.ts";
+
+export * from './editing/markup.ts';

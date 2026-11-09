@@ -1,3 +1,4 @@
+import { writePdfMarkup } from './markup.ts';
 import { openPdfDocument, type PdfDocument } from '../document.ts';
 import { PdfName, type PdfValue, PdfReference, unsupported } from '../objects.ts';
 import type { PdfTextModel } from './model.ts';
@@ -18,6 +19,7 @@ export function exportPdfPageState(document: PdfDocument, model: PdfTextModel): 
         source.index < 0
           ? new Map<string, PdfValue>([['Type', new PdfName('Page')]])
           : new Map(source.dictionary);
+    writePdfMarkup(writer, document, source, 0, model.annotations, info);
     info.set('Parent', parent);
     info.set('Resources', source.resources);
     info.set('MediaBox', [...source.mediaBox]);
