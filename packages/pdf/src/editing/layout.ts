@@ -292,8 +292,12 @@ function computePdfTextFlow(
       (max, image) => image.page === page.index && !image.hidden ? Math.max(max, image.continuation) : max,
       count,
     );
+    const annotationCount = [...model.annotations.records.values()].reduce((max, annotation) => {
+      const continuation = annotation.get('continuation');
+      return annotation.get('page') === page.index && !annotation.get('hidden') && typeof continuation === 'number' ? Math.max(max, continuation) : max;
+    }, imageCount);
     const first = outputPages.length;
-    for (let i = 0; i <= imageCount; i++)
+    for (let i = 0; i <= annotationCount; i++)
       outputPages.push({
         id: i ? `${page.id}:continuation:${i}` : page.id,
         index: outputPages.length,

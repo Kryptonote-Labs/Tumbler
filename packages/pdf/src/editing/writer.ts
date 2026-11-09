@@ -43,7 +43,8 @@ function exportTextPdf(
   fonts: PdfEditingFonts,
 ) {
   const imageContinuations = [...model.images.records.values()].some(image => !image.hidden && image.continuation > 0);
-  if (!imageContinuations && !model.ids().some((id) => model.dirty(id)))
+  const annotationContinuations = [...model.annotations.records.values()].some(annotation => !annotation.get('hidden') && Number(annotation.get('continuation') ?? 0) > 0);
+  if (!imageContinuations && !annotationContinuations && !model.ids().some((id) => model.dirty(id)))
     return (model.pages.dirty() || model.annotations.records.size) ? exportPdfPageState(document, model) : document.bytes();
   fonts.importDocument(document);
   const flow = layoutPdfTextFlow(model, fonts, document.pages);
