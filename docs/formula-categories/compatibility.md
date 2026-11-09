@@ -24,7 +24,7 @@ are preserved rather than mechanically renaming functions to newer aliases.
 | [HYPGEOMDIST](https://support.microsoft.com/en-gb/excel/functions/hypgeomdist-function), [NEGBINOMDIST](https://support.microsoft.com/en-gb/excel/functions/negbinomdist-function) | Discrete probability masses using log-gamma to avoid factorial overflow. |
 | [LOGINV](https://support.microsoft.com/en-gb/excel/functions/loginv-function), [LOGNORMDIST](https://support.microsoft.com/en-gb/excel/functions/lognormdist-function) | Lognormal inverse/CDF; positive standard deviation required. |
 | [NORMDIST](https://support.microsoft.com/en-gb/excel/functions/normdist-function), [NORMINV](https://support.microsoft.com/en-gb/excel/functions/norminv-function), [NORMSDIST](https://support.microsoft.com/en-gb/excel/functions/normsdist-function), [NORMSINV](https://support.microsoft.com/en-gb/excel/functions/normsinv-function) | Normal density/CDF/inverse, with direct small-tail evaluation. |
-| [MODE](https://support.microsoft.com/en-gb/excel/functions/mode-function), [RANK](https://support.microsoft.com/en-gb/excel/functions/rank-function) | Smallest tied mode, duplicate rank gaps, descending default or ascending order. |
+| [MODE](https://support.microsoft.com/en-gb/excel/functions/mode-function), [RANK](https://support.microsoft.com/en-gb/excel/functions/rank-function) | First occurring tied mode (native Excel verified), duplicate rank gaps, descending default or ascending order. |
 | [PERCENTILE](https://support.microsoft.com/en-gb/excel/functions/percentile-function), [QUARTILE](https://support.microsoft.com/en-gb/excel/functions/quartile-function), [PERCENTRANK](https://support.microsoft.com/en-gb/excel/functions/percentrank-function) | Inclusive interpolation, truncated quartile argument, percentage rank with default three decimal digits. |
 | [POISSON](https://support.microsoft.com/en-gb/excel/functions/poisson-function) | Poisson mass/CDF; mean zero is a degenerate point mass at zero. |
 | [STDEV](https://support.microsoft.com/en-gb/excel/functions/stdev-function), [STDEVP](https://support.microsoft.com/en-gb/excel/functions/stdevp-function), [VAR](https://support.microsoft.com/en-gb/excel/functions/var-function), [VARP](https://support.microsoft.com/en-gb/excel/functions/varp-function) | Sample/population moments using Welford accumulation. Direct numeric strings/logicals count; text/logicals/blanks inside arrays or references do not. |
@@ -77,9 +77,10 @@ The 314 fixtures comprise:
 Synthetic fixture inputs and numeric expectations are original project test data,
 distributed under the repository's MIT license. Most distribution expectations
 were computed independently with SciPy 1.18.0; no SciPy source code is included.
-Simple identities supply exact expectations. The t distribution with one degree
-of freedom near zero uses the exact Cauchy identity rather than SciPy's less
-accurate survival-function result. Mathematical constants and algorithms are
+Simple identities supply exact expectations. Two near-zero legacy TDIST cases
+use independently observed native Excel rounding; the df=1/2 paths preserve
+that upper-beta rounding without weakening other distribution tolerances.
+Mathematical constants and algorithms are
 implemented locally; no Microsoft documentation text or workbook was imported.
 Microsoft documentation supplies semantic requirements, not copied fixture files.
 

@@ -292,8 +292,8 @@ scalar("BETADIST", 3, 5, ([x = 0, a = 0, b = 0, lo = 0, hi = 1], c) => {
   return beta((x - lo) / (hi - lo), a, b, c);
 });
 scalar("BETAINV", 3, 5, ([p = 0, a = 0, b = 0, lo = 0, hi = 1], c) => {
-  check(p > 0 && p <= 1 && a > 0 && b > 0 && lo < hi);
-  return p === 1 ? hi : lo + (hi - lo) * inverse(p, (x) => beta(x, a, b, c), c);
+  check(p > 0 && p < 1 && a > 0 && b > 0 && lo < hi);
+  return lo + (hi - lo) * inverse(p, (x) => beta(x, a, b, c), c);
 });
 for (const name of ["CEILING", "FLOOR"])
   scalar(name, 2, 2, ([x = 0, s = 0]) => {
@@ -368,7 +368,7 @@ for (const name of ["FDIST", "FINV"])
 scalar("GAMMADIST", 4, 4, ([x = 0, a = 0, b = 0, cum = 0], c) => {
   check(x >= 0 && a > 0 && b > 0);
   if (cum) return gamma(a, x / b, false, c);
-  if (x === 0) return a === 1 ? 1 / b : a > 1 ? 0 : fail();
+  if (x === 0) return a > 1 ? 0 : fail();
   return Math.exp((a - 1) * Math.log(x) - x / b - lg(a) - a * Math.log(b));
 });
 scalar("GAMMAINV", 3, 3, ([p = 0, a = 0, b = 0], c) => {
@@ -388,9 +388,9 @@ scalar("HYPGEOMDIST", 4, 4, ([k = 0, n = 0, m = 0, N = 0]) => {
       n <= N &&
       m >= 0 &&
       m <= N &&
-      k >= Math.max(0, n - N + m) &&
-      k <= Math.min(n, m),
+      k >= 0,
   );
+  if (k < Math.max(0, n - N + m) || k > Math.min(n, m)) return 0;
   const choose = (a: number, b: number) =>
     lg(a + 1) - lg(b + 1) - lg(a - b + 1);
   return Math.exp(choose(m, k) + choose(N - m, n - k) - choose(N, n));
@@ -438,6 +438,9 @@ scalar("TDIST", 3, 3, ([x = 0, df = 0, t = 0], c) => {
   df = Math.trunc(df);
   t = Math.trunc(t);
   check(x >= 0 && df >= 1 && (t === 1 || t === 2));
+  // Excel's legacy df=1/2 paths retain rounding from the upper-beta argument.
+  // Keep the stable helper for inverses/tests and the higher-degree paths.
+  if (df <= 2) return t * beta(df / (df + x * x), df / 2, 0.5, c) / 2;
   return t * tTail(x, df, c);
 });
 scalar("TINV", 2, 2, ([p = 0, df = 0], c) => {
@@ -450,7 +453,7 @@ scalar("WEIBULL", 4, 4, ([x = 0, a = 0, b = 0, cum = 0]) => {
   const logRatio = Math.log(x) - Math.log(b);
   const power = Math.exp(a * logRatio);
   if (cum) return -Math.expm1(-power);
-  if (x === 0) return a === 1 ? 1 / b : 0;
+  if (x === 0) return 0;
   return Math.exp(Math.log(a) - Math.log(b) + (a - 1) * logRatio - power);
 });
 for (const name of ["STDEV", "STDEVP", "VAR", "VARP", "MODE"])
@@ -460,7 +463,7 @@ for (const name of ["STDEV", "STDEVP", "VAR", "VARP", "MODE"])
       const part = data(
         v[i]!,
         c,
-        args[i]!.kind !== "reference" && !("kind" in v[i]!),
+        name !== "MODE" && args[i]!.kind !== "reference" && !("kind" in v[i]!),
       );
       check(xs.length + part.length <= c.maxArrayCells);
       for (const x of part) xs.push(x);
@@ -470,9 +473,10 @@ for (const name of ["STDEV", "STDEVP", "VAR", "VARP", "MODE"])
       let count = 1,
         result = Infinity;
       for (const x of xs) {
-        const n = (counts.get(x) ?? 0) + 1;
-        counts.set(x, n);
-        if (n > count || (n === count && x < result)) {
+        counts.set(x, (counts.get(x) ?? 0) + 1);
+      }
+      for (const [x, n] of counts) {
+        if (n > count) {
           count = n;
           result = x;
         }

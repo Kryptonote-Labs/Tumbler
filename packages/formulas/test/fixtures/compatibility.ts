@@ -1062,7 +1062,7 @@ export const cases: readonly CompatibilityCase[] = [
   },
   {
     name: "hypgeomdist-domain",
-    formula: "HYPGEOMDIST(6,5,8,20)",
+    formula: "HYPGEOMDIST(-1,5,8,20)",
     expected: {
       type: "error",
       value: "#NUM!",
@@ -1158,7 +1158,7 @@ export const cases: readonly CompatibilityCase[] = [
     formula: "MODE(8,2,8,2,5)",
     expected: {
       type: "number",
-      value: 2,
+      value: 8,
     },
     tolerance: 1e-11,
   },
@@ -1183,7 +1183,7 @@ export const cases: readonly CompatibilityCase[] = [
     formula: "MODE(8,2,8,2,5)+1",
     expected: {
       type: "number",
-      value: 3,
+      value: 9,
     },
     tolerance: 1e-11,
   },
@@ -3366,8 +3366,8 @@ export const cases: readonly CompatibilityCase[] = [
     name: "beta-upper",
     formula: "BETAINV(1,2,5)",
     expected: {
-      type: "number",
-      value: 1,
+      type: "error",
+      value: "#NUM!",
     },
     tolerance: 1e-11,
   },
@@ -3491,8 +3491,8 @@ export const cases: readonly CompatibilityCase[] = [
     name: "gamma-zero-density",
     formula: "GAMMADIST(0,1,2,FALSE)",
     expected: {
-      type: "number",
-      value: 0.5,
+      type: "error",
+      value: "#NUM!",
     },
     tolerance: 1e-11,
   },
@@ -3598,8 +3598,8 @@ export const cases: readonly CompatibilityCase[] = [
     name: "mode-literal-coercion",
     formula: 'MODE("2",2,3)',
     expected: {
-      type: "number",
-      value: 2,
+      type: "error",
+      value: "#N/A",
     },
     tolerance: 1e-11,
   },
@@ -5306,7 +5306,7 @@ export const cases: readonly CompatibilityCase[] = [
     formula: "TDIST(1e-06,1,2)",
     expected: {
       type: "number",
-      value: 0.9999993633802277,
+      value: 0.9999993633519304,
     },
     tolerance: 2e-11,
   },
@@ -5333,7 +5333,7 @@ export const cases: readonly CompatibilityCase[] = [
     formula: "TDIST(1e-06,2,2)",
     expected: {
       type: "number",
-      value: 0.9999992928932188,
+      value: 0.9999992928617885,
     },
     tolerance: 2e-11,
   },

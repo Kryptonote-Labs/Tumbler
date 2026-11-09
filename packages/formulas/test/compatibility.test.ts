@@ -136,6 +136,7 @@ function context(
           const v = functionScalar(c.evaluate(e.operand));
           return v.type === "number" ? functionNumber(v.value / 100) : v;
         }
+        default: throw new Error(`Unused compatibility adapter syntax ${e.kind}`);
       }
     },
   };
