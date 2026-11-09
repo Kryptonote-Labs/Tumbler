@@ -1,3 +1,4 @@
+import { zlibSync } from 'fflate';
 import { PdfName, PdfReference, PdfString, type PdfValue, type PdfDictionary } from '../objects.ts';
 import type { PdfDocument } from '../document.ts';
 export const enc = new TextEncoder();
@@ -39,11 +40,12 @@ export class PdfWriter {
     this.objects.set(ref.object, { reference: ref, data: bytes(serializePdfValue(value)) });
     return ref;
   }
-  stream(data: Uint8Array, info: PdfDictionary = new Map()) {
+  stream(data: Uint8Array, info: PdfDictionary = new Map(), compress = false) {
     const ref = new PdfReference(this.next++),
       dictionary = new Map(info);
     dictionary.delete('Filter');
     dictionary.delete('DecodeParms');
+    if (compress) { data = zlibSync(data); dictionary.set('Filter', new PdfName('FlateDecode')); }
     dictionary.set('Length', data.length);
     const head = bytes(serializePdfValue(dictionary) + '\nstream\n'),
       tail = bytes('\nendstream');

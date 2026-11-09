@@ -1,3 +1,4 @@
+import { writePdfImages, type PdfImagePixels } from './image-writer.ts';
 import {
   PdfName,
   PdfReference,
@@ -34,7 +35,7 @@ type Embedded = {
   codes: Map<string, { cid: number; glyph: number; text: string; width: number }>;
 };
 /** ISO 32000-1 §7.5.6 incremental export. Unchanged objects retain their original bytes. */
-export function exportEditedPdf(
+function exportTextPdf(
   document: PdfDocument,
   model: PdfTextModel,
   fonts: PdfEditingFonts,
@@ -433,4 +434,20 @@ export function exportEditedPdf(
     );
   }
   return output;
+}
+
+/** Resolve durable image assets on the host before calling this synchronous writer. */
+export function exportEditedPdf(document: PdfDocument, model: PdfTextModel, fonts: PdfEditingFonts, resolveImage?: (asset: string) => PdfImagePixels) {
+  const images = [...model.images.records.values()].filter(image => !image.hidden);
+  if (images.length && document.source.encrypted) unsupported('Encrypted PDF editing requires an encryption-aware writer.');
+  const output = exportTextPdf(document, model, fonts);
+  if (!images.length) return output;
+  const flow = layoutPdfTextFlow(model, fonts, document.pages);
+  const placements = images.flatMap(image => {
+    const page = flow.pages.find(page => page.source.index === image.page && page.continuation === image.continuation);
+    return page ? [{ image, output: page.index, viewport: pageViewport(page.source) }] : [];
+  });
+  if (!placements.length) return output;
+  if (!resolveImage) throw new Error('PDF image assets must be loaded before export.');
+  return writePdfImages(openPdfDocument(output), placements, resolveImage);
 }
