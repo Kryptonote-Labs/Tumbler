@@ -107,10 +107,12 @@ function solve(
   fn: (r: number) => number,
   guess: number,
   c: FunctionContext,
+  bracket = true,
+  iterations = 80,
 ): number {
   check(guess > -1);
   let x = Math.log1p(guess);
-  for (let i = 0; i < 80; i++) {
+  for (let i = 0; i < iterations; i++) {
     c.operation(3);
     const y = fn(Math.expm1(x));
     if (Number.isFinite(y) && Math.abs(y) < 1e-10) return Math.expm1(x);
@@ -119,10 +121,10 @@ function solve(
     if (!Number.isFinite(d) || d === 0) break;
     const next = x - y / d;
     if (!Number.isFinite(next) || next < -35 || next > 700) break;
-    if (Math.abs(next - x) < 1e-12 && Number.isFinite(y))
-      return Math.expm1(next);
+    if (Math.abs(next - x) < 1e-12) break;
     x = next;
   }
+  if (!bracket) return fail();
   let lo = -25,
     a = fn(Math.expm1(lo));
   for (let hi = -24.5; hi <= 50; hi += 0.5) {
@@ -130,14 +132,15 @@ function solve(
     if (a === 0) return Math.expm1(lo);
     const b = fn(Math.expm1(hi));
     if (b === 0) return Math.expm1(hi);
-    if (Number.isFinite(a) && Number.isFinite(b) && a * b <= 0) {
+    if (Number.isFinite(a) && Number.isFinite(b) && (a > 0) !== (b > 0)) {
       let left = lo,
         right = hi;
       for (let j = 0; j < 100; j++) {
         c.operation();
         const mid = (left + right) / 2,
           y = fn(Math.expm1(mid));
-        if (Math.abs(y) < 1e-10 || right - left < 1e-13) return Math.expm1(mid);
+        if (Number.isFinite(y) && Math.abs(y) < 1e-10) return Math.expm1(mid);
+        if (right - left < 1e-13) break;
         if (y > 0 === a > 0) {
           left = mid;
           a = y;
@@ -180,20 +183,27 @@ define("NPER", 3, 5, ([r, p, pv, f = 0, t = 0]) => {
 define("RATE", 3, 6, ([n, p, pv, f = 0, t = 0, g = 0.1], c) => {
   type(t);
   check(n! > 0);
-  const scale = Math.max(
-    Math.abs(pv!),
-    Math.abs(p!),
-    Math.abs(f),
-    Number.MIN_VALUE,
-  );
-  return solve(
-    (r) =>
-      (pv! / scale) * growth(r, n!) +
-      (p! / scale) * (1 + r * t) * annuity(r, n!) +
-      f / scale,
-    g,
-    c,
-  );
+  // Scale each trial by its cash-flow magnitudes in log space. A tiny
+  // terminal value must not make an unrelated rate appear converged, and
+  // underflow of a lone discounted cash flow must never manufacture a root.
+  check(pv !== 0 || p !== 0 || f !== 0);
+  return solve((r) => {
+    const q = Math.log1p(r), power = n! * q;
+    const logAnnuity = r === 0 ? Math.log(n!) :
+      (power > 700 ? power : Math.log(Math.abs(Math.expm1(power)))) - Math.log(Math.abs(r));
+    const terms = [
+      {sign: Math.sign(pv!), log: Math.log(Math.abs(pv!)) + power},
+      {sign: Math.sign(p!), log: Math.log(Math.abs(p!)) + Math.log1p(r * t) + logAnnuity},
+      {sign: Math.sign(f), log: Math.log(Math.abs(f))},
+    ].filter(term => term.sign !== 0);
+    const largest = Math.max(...terms.map(term => term.log));
+    let sum = 0, magnitude = 0;
+    for (const term of terms) {
+      const weight = Math.exp(term.log - largest);
+      sum += term.sign * weight; magnitude += weight;
+    }
+    return sum / magnitude;
+  }, g, c, false, 20);
 });
 for (const name of ["CUMIPMT", "CUMPRINC"])
   define(name, 6, 6, ([r, n, p, s, e, t], c) => {
