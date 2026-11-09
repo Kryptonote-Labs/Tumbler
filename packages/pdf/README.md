@@ -297,3 +297,23 @@ forms, annotations, attachments and shared object references. It does not append
 plaintext objects to an encrypted revision. Hosts own user consent and storage of
 the new copy; the source remains unchanged. Password-protected inputs must first
 be opened with a valid password. Rewriting a PDF invalidates existing signatures.
+
+### Text markup
+
+`model.annotations.set` creates highlight, underline and strikeout annotations using
+PDF user-space quads. `pdfMarkupFromRects` converts viewport selection rectangles,
+including cropped and rotated pages. Supply a unique ID for each new annotation and
+its logical source page and continuation. Markup stays anchored to page coordinates
+when text is subsequently edited.
+
+`model.annotations.items(document)` includes supported imported annotations.
+Use `model.annotations.update(document, id, { color, kind, hidden })` to edit or
+delete one. Imported ownership initializes deterministically, so concurrent patches
+merge and local undo does not erase peer edits. Annotation updates share the text
+model's Yjs document and undo manager. Hosts must validate received updates with
+`model.annotations.validate(allowedSourcePageIndices)` before persistence.
+
+`exportEditedPdf` writes real annotation dictionaries with appearance streams and
+preserves untouched annotation objects. `PdfEditableDocument.annotate(kind, color)`
+marks the current text selection. This API does not yet author comments, ink or
+signatures.

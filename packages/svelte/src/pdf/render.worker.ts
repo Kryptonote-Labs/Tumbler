@@ -56,6 +56,7 @@ async function render(message: Extract<PdfRenderRequest, { type: "render" }>) {
         ...placed,
         elements: placed.elements.filter(
           (element) =>
+            !projection.excludeAnnotations?.some(id => element.source.instance === id || element.source.instance.startsWith(id + ':')) &&
             !excluded.has(pdfSourceKey(element.source)) &&
             (!included || included.has(pdfSourceKey(element.source))),
         ),
