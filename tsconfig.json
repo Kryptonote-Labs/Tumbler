@@ -18,5 +18,5 @@
     "types": ["bun"],
     "verbatimModuleSyntax": true
   },
-  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts"]
+  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "scripts/formula-conformance/**/*.ts"]
 }

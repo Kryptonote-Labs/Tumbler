@@ -161,3 +161,46 @@ export function setSlideHidden(artifact: PresentationArtifact, id: string, hidde
   else edit.insertAttribute(source.root, "show", hidden ? "0" : "1");
   return commitXml(artifact, slide.part, edit.commit().bytes);
 }
+
+/** Write speaker notes without replacing slide content or notes placeholders. */
+export function setSlideNotes(artifact: PresentationArtifact, id: string, notes: string) {
+  editable(artifact);
+  const slide = slideById(artifact, id), pkg = artifact.document.package;
+  const relation = pkg.relationships(pkg.getPart(slide.part)!.name).items.find(r => r.type.endsWith('/notesSlide'));
+  const strict = artifact.document.conformance === 'strict';
+  const p = strict ? 'http://purl.oclc.org/ooxml/presentationml/main' : P;
+  const a = strict ? 'http://purl.oclc.org/ooxml/drawingml/main' : A;
+  const r = strict ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : R;
+  const paragraphs = notes.split('\n').map(line => `<a:p><a:r><a:t xml:space="preserve">${xml(line)}</a:t></a:r></a:p>`).join('');
+  const body = `<p:txBody xmlns:p="${p}" xmlns:a="${a}"><a:bodyPr/><a:lstStyle/>${paragraphs}</p:txBody>`;
+  const shape = `<p:sp xmlns:p="${p}"><p:nvSpPr><p:cNvPr id="2" name="Notes"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr/>${body}</p:sp>`;
+  const tx = beginPackageTransaction(pkg);
+  if (relation && relation.targetMode !== 'External') {
+    const source = partXml(artifact, relation.targetPartName.value);
+    const tree = children(source.root).find(e => e.localName === 'cSld');
+    const shapes = tree && children(tree).find(e => e.localName === 'spTree');
+    if (!shapes) throw new Error('Notes shape tree is missing.');
+    const target = children(shapes).find(e => e.localName === 'sp' && children(e).some(n => n.localName === 'nvSpPr' && children(n).some(v => v.localName === 'nvPr' && children(v).some(ph => ph.localName === 'ph' && ph.attributes.some(a => a.localName === 'type' && a.value === 'body')))));
+    const edit = beginLosslessXmlEdit(source);
+    const text = target && children(target).find(e => e.localName === 'txBody');
+    if (text) edit.replaceElementMarkup(text, body);
+    else if (target) edit.appendMarkup(target, body);
+    else {
+      const ids = new Set(children(shapes).flatMap(s => children(s).flatMap(n => children(n))).filter(e => e.localName === 'cNvPr').flatMap(e => e.attributes.filter(a => a.localName === 'id').map(a => a.value)));
+      let id = 2; while (ids.has(String(id))) id++;
+      edit.appendMarkup(shapes, shape.replace('id="2"', `id="${id}"`));
+    }
+    tx.replacePart(relation.targetPartName, edit.commit().bytes);
+  } else {
+    let n = 1;
+    while (pkg.getPart(`/ppt/notesSlides/notesSlide${n}.xml`)) n++;
+    const part = `/ppt/notesSlides/notesSlide${n}.xml`;
+    tx.addPart(part, type('notesSlide'), encoder.encode(`<p:notes xmlns:p="${p}" xmlns:a="${a}"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>${shape}</p:spTree></p:cSld></p:notes>`));
+    let rid = 'rIdNotes';
+    const ids = new Set(pkg.relationships(pkg.getPart(slide.part)!.name).items.map(r => r.id));
+    while (ids.has(rid)) rid += '_';
+    tx.addRelationship(slide.part, { id: rid, type: `${r}/notesSlide`, target: part });
+    tx.addRelationship(part, { id: 'rIdSlide', type: `${r}/slide`, target: slide.part });
+  }
+  return openPresentationArtifact(tx.commit(), artifact.options);
+}

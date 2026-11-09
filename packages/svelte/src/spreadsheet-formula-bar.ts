@@ -21,9 +21,10 @@ export function spreadsheetFormulaBarEdit(
   draft: string,
   cell: SpreadsheetCell | undefined,
   sheet?: string,
+  asText = false,
 ): SpreadsheetFormulaBarEdit {
-  const edit: SpreadsheetFormulaBarEdit = draft.startsWith("=")
+  const edit: SpreadsheetFormulaBarEdit = draft.startsWith("=") && !asText
     ? { kind: "formula", reference, formula: draft.slice(1) }
-    : { kind: "value", reference, value: coerceSpreadsheetEditValue(draft, cell?.value) };
+    : { kind: "value", reference, value: coerceSpreadsheetEditValue(draft, cell?.value, asText) };
   return sheet === undefined ? edit : Object.freeze({ ...edit, sheet });
 }

@@ -49,6 +49,16 @@ class Parser {
     let left = this.prefix();
     while (true) {
       const token = this.current();
+      if (token.kind === "symbol" && token.value === "(") {
+        const args = this.arguments();
+        left = { kind: "invoke", callee: left, arguments: args, start: left.start, end: this.#tokens[this.#position - 1]!.end };
+        continue;
+      }
+      if (token.kind === "symbol" && token.value === "#") {
+        this.#position++;
+        left = {kind: "spill", operand: left, start: left.start, end: token.end};
+        continue;
+      }
       if (token.kind === "symbol" && token.value === "%") {
         if (70 < minimumBindingPower) break;
         this.#position += 1;
@@ -67,11 +77,27 @@ class Parser {
 
   prefix(): FormulaExpression {
     const token = this.current();
+    if (this.takeSymbol("@")) {
+      const operand = this.expression(60);
+      return {kind: "intersection", operand, start: token.start, end: operand.end};
+    }
+    if (this.takeSymbol("{")) {
+      const rows: FormulaExpression[][] = [[]];
+      do {
+        rows[rows.length - 1]!.push(this.expression(0));
+        if (this.takeSymbol(",")) continue;
+        if (this.takeSymbol(";")) { rows.push([]); continue; }
+        break;
+      } while (true);
+      if (!this.takeSymbol("}") || rows.some(row => row.length !== rows[0]!.length)) throw new FormulaParseError("Invalid array constant", token.start);
+      return {kind: "array", rows, start: token.start, end: this.#tokens[this.#position - 1]!.end};
+    }
     if (token.kind === "symbol" && (token.value === "+" || token.value === "-")) {
       this.#position += 1;
       const operand = this.expression(60);
       return Object.freeze({ kind: "unary", operator: token.value, operand, start: token.start, end: operand.end });
     }
+    if ((token.kind === "number" || token.kind === "identifier") && this.peekSymbol(":")) return this.wholeReference(undefined);
     if (token.kind === "number") {
       this.#position += 1;
       const value = Number(token.value);
@@ -86,25 +112,18 @@ class Parser {
     if ((token.kind === "sheet" || token.kind === "identifier") && this.peekSymbol("!")) {
       const sheet = token.value;
       this.#position += 2;
+      if (this.current().kind === "number" || this.current().kind === "identifier") return this.wholeReference(sheet, token.start);
       if (this.current().kind !== "reference") throw new FormulaParseError("A sheet qualifier must be followed by a cell reference", this.current().start);
       return this.reference(sheet, token.start);
     }
     if (token.kind === "identifier") {
       this.#position += 1;
       const normalized = token.value.toUpperCase();
-      if (normalized === "TRUE" || normalized === "FALSE") {
+      if ((normalized === "TRUE" || normalized === "FALSE") && !(this.current().kind === "symbol" && (this.current() as {value:string}).value === "(")) {
         return Object.freeze({ kind: "boolean", value: normalized === "TRUE", start: token.start, end: token.end });
       }
-      if (!this.takeSymbol("(")) throw new FormulaParseError(`Unsupported name ${JSON.stringify(token.value)}`, token.start);
-      const args: FormulaExpression[] = [];
-      if (!this.takeSymbol(")")) {
-        while (true) {
-          args.push(this.expression(0));
-          if (this.takeSymbol(")")) break;
-          if (this.current().kind === "eof") throw new FormulaParseError("Function call is not closed", this.current().start);
-          if (!this.takeSymbol(",")) throw new FormulaParseError("Function arguments must be separated by commas", this.current().start);
-        }
-      }
+      if (!(this.current().kind === "symbol" && (this.current() as {value:string}).value === "(")) return {kind: "name", name: token.value, start: token.start, end: token.end};
+      const args = this.arguments();
       return Object.freeze({ kind: "function", name: normalized, arguments: Object.freeze(args), start: token.start, end: this.#tokens[this.#position - 1]!.end });
     }
     if (this.takeSymbol("(")) {
@@ -132,6 +151,36 @@ class Parser {
       end = endToken.end;
     }
     return Object.freeze({ kind: "reference", sheet, startReference, endReference, start: sourceStart ?? startToken.start, end });
+  }
+
+  wholeReference(sheet: string | undefined, sourceStart?: number): FormulaReferenceExpression {
+    const first = this.current();
+    this.#position++;
+    if (!this.takeSymbol(":")) throw new FormulaParseError("Expected range", first.start);
+    const last = this.current();
+    if (!("value" in first) || !("value" in last)) throw new FormulaParseError("Invalid whole-axis range", first.start);
+    const rows = /^\$?[1-9][0-9]*$/.test(first.value);
+    const valid = rows ? /^\$?[1-9][0-9]*$/ : /^\$?[A-Za-z]{1,3}$/;
+    if (!valid.test(first.value) || !valid.test(last.value)) throw new FormulaParseError("Invalid whole-axis range", first.start);
+    this.#position++;
+    const a = parseReference(rows ? `A${first.value}` : `${first.value}1`);
+    const b = parseReference(rows ? `XFD${last.value}` : `${last.value}1048576`);
+    if (a.row > 1048576 || b.row > 1048576 || a.column > 16384 || b.column > 16384) throw new FormulaParseError("Range out of bounds", first.start);
+    return {kind: "reference", whole: rows ? "rows" : "columns", sheet, startReference: a, endReference: b, start: sourceStart ?? first.start, end: last.end};
+  }
+
+  arguments(): FormulaExpression[] {
+    this.takeSymbol("(");
+    const args: FormulaExpression[] = [];
+    if (this.takeSymbol(")")) return args;
+    while (true) {
+      const token = this.current();
+      args.push(token.kind === "symbol" && (token.value === "," || token.value === ")")
+        ? {kind: "omitted", start: token.start, end: token.start} : this.expression(0));
+      if (this.takeSymbol(")")) return args;
+      if (this.current().kind === "eof") throw new FormulaParseError("Function call is not closed", this.current().start);
+      if (!this.takeSymbol(",")) throw new FormulaParseError("Expected comma or closing parenthesis", this.current().start);
+    }
   }
 
   peekSymbol(value: FormulaSymbol): boolean {
