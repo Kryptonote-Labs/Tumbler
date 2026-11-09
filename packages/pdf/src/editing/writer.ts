@@ -41,7 +41,8 @@ export function exportEditedPdf(
   model: PdfTextModel,
   fonts: PdfEditingFonts,
 ) {
-  if (!model.ids().some((id) => model.dirty(id)))
+  const annotationContinuations = [...model.annotations.records.values()].some(annotation => !annotation.get('hidden') && Number(annotation.get('continuation') ?? 0) > 0);
+  if (!annotationContinuations && !model.ids().some((id) => model.dirty(id)))
     return (model.pages.dirty() || model.annotations.records.size) ? exportPdfPageState(document, model) : document.bytes();
   fonts.importDocument(document);
   const flow = layoutPdfTextFlow(model, fonts, document.pages);
