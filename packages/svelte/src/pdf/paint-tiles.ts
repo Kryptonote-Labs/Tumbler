@@ -235,6 +235,7 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
   // A readable page preview travels with the scroll. Device-resolution tiles resume
   // after motion stops, avoiding a burst of new canvases on every scroll frame.
   const scroll = () => {
+    if (!visible || disposed) return;
     if (settling !== undefined) clearTimeout(settling);
     settling = setTimeout(() => {
       settling = undefined;
