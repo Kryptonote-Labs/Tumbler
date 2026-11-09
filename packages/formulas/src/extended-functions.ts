@@ -7,6 +7,7 @@ import { engineeringFunctions } from "./functions/engineering.ts";
 import { compatibilityFunctions } from "./functions/compatibility.ts";
 import { textFunctions } from "./functions/text.ts";
 import { lookupFunctions } from "./functions/lookup.ts";
+import { informationFunctions } from "./functions/information.ts";
 
 /** Excel extension categories included in this stack layer. */
 export const extendedFunctions: FunctionRegistry = new Map([
@@ -18,4 +19,5 @@ export const extendedFunctions: FunctionRegistry = new Map([
   ...compatibilityFunctions,
   ...textFunctions,
   ...lookupFunctions,
+  ...informationFunctions,
 ]);
