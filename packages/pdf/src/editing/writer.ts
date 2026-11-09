@@ -121,6 +121,10 @@ export function exportEditedPdf(
         .map((i) => parseInt(color.slice(i, i + 2), 16) / 255)
         .map(n)
         .join(' ');
+      if (style.background && /^#[0-9a-f]{6}$/i.test(style.background)) {
+        const fill = [1, 3, 5].map(i => n(parseInt(style.background!.slice(i, i + 2), 16) / 255)).join(' ');
+        content += `q ${viewport.map(n).join(' ')} cm ${fill} rg ${n(glyph.x)} ${n(glyph.y - style.size * 0.85)} ${n(glyph.width)} ${n(style.size * 1.15)} re f Q\n`;
+      }
       content += `q ${rgb} rg ${rgb} RG\n`;
       for (let i = 0; i < shaped.glyphs.length; i++) {
         const g = shaped.glyphs[i]!,
@@ -151,6 +155,9 @@ export function exportEditedPdf(
         if (shaped.bold) content += `${n(style.size * 0.025)} w\n`;
         content += `BT /${embeddedFont.resource} ${n(style.size)} Tf ${shaped.bold ? '2 Tr ' : ''}${tm.map(n).join(' ')} Tm <${code.cid.toString(16).padStart((face.sourceGlyphs?.get(glyph.text)?.length ?? 2) * 2, '0')}> Tj ET\n`;
         x += p.xAdvance * scale;
+      }
+      if (style.strike) {
+        content += `q ${viewport.map(n).join(' ')} cm ${n(style.size / 16)} w ${n(glyph.x)} ${n(glyph.y - style.size * 0.3)} m ${n(glyph.x + glyph.width)} ${n(glyph.y - style.size * 0.3)} l S Q\n`;
       }
       if (style.underline) {
         const [a, b, c, d, e, f] = viewport;

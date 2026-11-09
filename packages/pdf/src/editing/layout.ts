@@ -1,4 +1,5 @@
 import type * as Y from 'yjs';
+import { alignPdfLines } from './paragraph-layout.ts';
 import type { PdfTextModel } from './model.ts';
 import { pdfSourceSpacing, pdfSourceAttribute, pdfStyleAttributes } from './source-spacing.ts';
 import type { PdfPage } from '../document.ts';
@@ -42,6 +43,7 @@ function computePdfTextLayout(
   id: string,
   fonts: PdfEditingFonts,
 ): PdfTextLayout {
+  const paragraph = model.paragraph(id);
   const seed = model.geometry(id),
     glyphs: PdfLayoutGlyph[] = [],
     carets: PdfLayoutCaret[] = [];
@@ -114,13 +116,16 @@ function computePdfTextLayout(
     lastSize = seed.style.size;
   for (const [original, size] of sizes) {
     if (previousSize !== undefined)
-      baseline += Math.max(seed.lineHeight, previousSize * 1.25, size * 1.25);
+      baseline += paragraph.lineSpacing === undefined
+        ? Math.max(seed.lineHeight, previousSize * 1.25, size * 1.25)
+        : Math.max(previousSize, size) * paragraph.lineSpacing;
     baselines.set(original, baseline);
     previousSize = size;
     lastSize = size;
   }
   for (const glyph of glyphs) glyph.y = baselines.get(glyph.y)!;
   for (const caret of carets) caret.y = baselines.get(caret.y)!;
+  alignPdfLines(glyphs, carets, seed.x, seed.width, paragraph.alignment ?? 'left');
   return { id, glyphs, carets, height: baseline - seed.y + lastSize * 1.25 };
 }
 export function hitPdfText(layout: PdfTextLayout, x: number, y: number) {

@@ -8,6 +8,10 @@ export type PdfTextStyle = {
   bold: boolean;
   italic: boolean;
   underline: boolean;
+  strike?: boolean;
+  background?: string;
+  alignment?: 'left' | 'center' | 'right' | 'justify';
+  lineSpacing?: number;
   size: number;
   family: 'Sans' | 'Serif' | 'Mono';
   color: string;
@@ -103,6 +107,13 @@ export class PdfEditingFonts {
       interpreter.releasePage(page.index);
       yield;
     }
+    for (const face of [...this.fonts.values()]) {
+      if (!face.source || /^[A-Z]{6}\+/.test(face.source.baseName) ||
+          face.bytes[0] !== 0 || face.bytes[1] !== 1 ||
+          !Array.from({ length: 95 }, (_, i) => i + 32).every(c => face.font.hasGlyphForCodePoint(c))) continue;
+      const key = `full:${face.key}`;
+      if (!this.fonts.has(key)) this.fonts.set(key, { ...face, key, source: undefined, sourceGlyphs: undefined });
+    }
     this.documents.add(document);
   }
   importDocument(document: PdfDocument) {
@@ -123,6 +134,20 @@ export class PdfEditingFonts {
     result.importDocument(document);
     return result;
   }
+  /** Only full TrueType programs can be newly encoded by the export writer. */
+  get choices() {
+    return [...this.fonts.values()]
+      .filter(face => !face.source && face.bytes[0] === 0 && face.bytes[1] === 1)
+      .map(face => ({ value: face.key, label: face.name.replace(/^[A-Z]{6}\+/, '') }));
+  }
+  selection(key: string): Partial<PdfTextStyle> {
+    const face = this.fonts.get(key);
+    if (!face || !this.choices.some(choice => choice.value === key)) throw new Error('Font is not available for PDF export.');
+    return { font: key, bold: face.bold, italic: face.italic };
+  }
+  fontName(style: PdfTextStyle) {
+    return this.get(style).name.replace(/^[A-Z]{6}\+/, '');
+  }
   get sourceFamilies() {
     return new Set(
       [...this.fonts.values()].filter((face) => face.sourceGlyphs).map((face) => face.family),
@@ -132,7 +157,7 @@ export class PdfEditingFonts {
     const source = style.font ? this.fonts.get(style.font) : undefined;
     if (source) {
       const matches = source.bold === style.bold && source.italic === style.italic;
-      if (matches && (!text || source.sourceGlyphs?.has(text))) return source;
+      if (matches && (!text || source.sourceGlyphs?.has(text) || (!source.source && [...text].every(c => source.font.hasGlyphForCodePoint(c.codePointAt(0)!))))) return source;
       const full = [...this.fonts.values()].find(
         (face) =>
           !face.sourceGlyphs &&
