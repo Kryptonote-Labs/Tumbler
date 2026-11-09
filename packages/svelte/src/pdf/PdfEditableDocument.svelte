@@ -204,7 +204,7 @@
       else model.undo.undo();
     }
   }
-  const navigationOptions = $derived({ document: pdf, pages: flow.pages, scale, editable });
+  const navigationOptions = $derived({ document: pdf, model, pages: flow.pages, scale, editable });
   export function goToDestination(target: PdfDestination) {
     scrollPdfDestination(root, target, navigationOptions);
   }
