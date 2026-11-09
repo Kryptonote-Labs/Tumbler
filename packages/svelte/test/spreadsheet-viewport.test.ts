@@ -239,7 +239,11 @@ describe("Svelte spreadsheet viewport", () => {
     expect(coerceSpreadsheetEditValue("FALSE", { type: "boolean", value: true })).toBeFalse();
     expect(coerceSpreadsheetEditValue("001", { type: "string", value: "old", storage: "inline" })).toBe("001");
     expect(coerceSpreadsheetEditValue("12 apples", { type: "number", value: 12, lexical: "12" })).toBe("12 apples");
-    expect(coerceSpreadsheetEditValue("", undefined)).toBe("");
+    expect(coerceSpreadsheetEditValue("", undefined)).toBeNull();
+    expect(coerceSpreadsheetEditValue("", { type: "string", value: "old", storage: "inline" })).toBeNull();
+    expect(coerceSpreadsheetEditValue(" ", undefined)).toBe(" ");
+    expect(coerceSpreadsheetEditValue("001", undefined, true)).toBe("001");
+    expect(coerceSpreadsheetEditValue("FALSE", undefined, true)).toBe("FALSE");
     expect(coerceSpreadsheetEditValue("=SUM(A1:A2)", undefined)).toBe("=SUM(A1:A2)");
   });
 
@@ -255,6 +259,6 @@ describe("Svelte spreadsheet viewport", () => {
       underline: undefined,
       strike: false,
       color: undefined,
-    }, `Aptos "Display"`)).toBe(`italic 700 12pt "Aptos \\"Display\\""`);
+    }, `Aptos "Display"`)).toBe(`italic 700 12pt "Aptos \\"Display\\"",sans-serif`);
   });
 });

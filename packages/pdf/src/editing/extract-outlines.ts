@@ -5,8 +5,9 @@ import type { PdfExtractionContext } from './extract-structures.ts';
 export function subsetPdfOutlines(
   context: PdfExtractionContext,
   destination: (value: PdfValue) => PdfValue | undefined,
+  ownsDestination: (value: PdfValue) => boolean = () => true,
 ): PdfReference | undefined {
-  const { source, reserve, set, copy } = context,
+  const { source, reserve, set, copy, copyAction } = context,
     original = source.resolve(source.catalog.get('Outlines'));
   if (!(original instanceof Map)) return undefined;
   const root = reserve(),
@@ -23,21 +24,19 @@ export function subsetPdfOutlines(
         children = siblings(original.get('First'), ref),
         info = new Map<string, PdfValue>();
       const explicit = original.get('Dest'),
-        dest = explicit === undefined ? undefined : destination(explicit);
-      const originalAction = source.resolve(original.get('A'));
-      let action: PdfValue | undefined;
-      if (originalAction instanceof Map) {
-        const kind = originalAction.get('S');
-        if (kind instanceof PdfName && kind.value === 'GoTo') {
-          const value = originalAction.get('D'),
-            target = value === undefined ? undefined : destination(value);
-          if (target)
-            action = new Map<string, PdfValue>([
-              ['S', new PdfName('GoTo')],
-              ['D', target],
-            ]);
-        } else action = copy(originalAction);
-      }
+        target = explicit === undefined ? undefined : destination(explicit);
+      const retainedAction = copyAction(original.get('A'));
+      // The primary GoTo may have been pruned. Ownership follows the action that
+      // will actually execute, using its already-remapped destination references.
+      const actionKind = retainedAction instanceof Map ? retainedAction.get('S') : undefined;
+      const actionDestination = retainedAction instanceof Map && actionKind instanceof PdfName && actionKind.value === 'GoTo'
+        ? retainedAction.get('D') : undefined;
+      // Cross-block destinations are resolvable, but the bookmark belongs to the
+      // block that contains its target. Surviving ancestors can appear in each tree.
+      const owned = (target === undefined || ownsDestination(target)) &&
+        (actionDestination === undefined || ownsDestination(actionDestination));
+      const dest = owned ? target : undefined;
+      const action = owned ? retainedAction : undefined;
       if (dest || action || children.items.length) {
         for (const [key, value] of original)
           if (!['Parent', 'First', 'Last', 'Next', 'Prev', 'Count', 'Dest', 'A'].includes(key))
