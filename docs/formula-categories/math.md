@@ -51,11 +51,11 @@ singular matrices, overflow, underflow, extremes, defaults and both date systems
 
 The implementation uses double arithmetic, not Excel's proprietary math library.
 Last-bit differences, ill-conditioned matrices, extreme cancellation and ambiguous
-decimal MROUND midpoint behaviour may differ. Excel oracle confirmation has been
-requested for COMBINA's documented number >= chosen restriction, permissive
-ARABIC spellings, fractional RANDBETWEEN bounds, equal RANDARRAY bounds, and
-fractional BASE/ROMAN limits. These are implemented and tested rather than
-silently excluded; unresolved differences must be resolved during integration.
+decimal MROUND midpoint behaviour may differ. Native Excel verified that
+COMBINA permits chosen counts above the population, ARABIC accepts "IIX",
+RANDBETWEEN handles fractional negative bounds, RANDARRAY permits equal bounds,
+and BASE/ROMAN truncate their tested fractional arguments. Broader boundary
+differences remain subject to the independent generated-document corpus.
 Scalar numeric lifting is implemented; string conversions, matrix constructors
 and SERIESSUM's scalar parameters currently consume the first scalar of an
 array. Full elementwise array lifting of those nonnumeric/special functions is

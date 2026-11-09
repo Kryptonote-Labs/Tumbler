@@ -116,7 +116,7 @@ function combination(n: number, k: number, c: FunctionContext): NumericResult {
 }
 numeric("COMBIN", 2, 2, ([n, k], c) => n! < 0 || k! < 0 ? NUM() : combination(Math.trunc(n!), Math.trunc(k!), c));
 numeric("COMBINA", 2, 2, ([n, k], c) => {
-  if (n! < 0 || k! < 0 || n! < k!) return NUM();
+  if (n! < 0 || k! < 0) return NUM();
   n = Math.trunc(n!); k = Math.trunc(k!);
   return k === 0 ? 1 : combination(n + k - 1, k, c);
 });
