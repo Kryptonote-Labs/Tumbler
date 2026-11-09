@@ -134,3 +134,23 @@ test("one-cell structured references preserve aggregate coercion after reopen an
     expect(original.bytes()).toEqual(bytes);
   }
 });
+
+for (const tableName of ["Items", "Receipts"]) for (const columnName of ["Amount", "Net!Amount"])
+  test(`core INDIRECT structured geometry is independent of cell style: ${tableName}[${columnName}]`, () => {
+    const token = `${tableName}[${columnName}]`;
+    const bytes = buildWorkbookFixture({sheets:[{name:"Data",sheetId:1,relationshipId:"data",
+      xml:`<worksheet xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>${columnName}</t></is></c><c r="C1"><f>SUM(INDIRECT("${token}",FALSE))</f></c><c r="D1"><f>SUM(OFFSET(INDIRECT("${token}",FALSE),0,0))</f></c><c r="E1"><f>INDEX(INDIRECT("${token}",FALSE),1)</f></c><c r="F1"><f>SUMIF(A2:A2,"&gt;0",INDIRECT("${token}",FALSE))</f></c></row><row r="2"><c r="A2"><v>7</v></c></row></sheetData><tableParts count="1"><tablePart r:id="table"/></tableParts></worksheet>`,
+      tables:[{relationshipId:"table",target:"tables/table1.xml",xml:`<table xmlns="${ns}" id="1" name="${tableName}" displayName="${tableName}" ref="A1:A2" totalsRowShown="0"><tableColumns count="1"><tableColumn id="1" name="${columnName}"/></tableColumns></table>`}],
+    }]});
+    const artifact = openSpreadsheetArtifact(bytes);
+    for (const current of [artifact,openSpreadsheetArtifact(artifact.bytes())]) {
+      for (const cell of ["C1","D1","E1","F1"]) expect(current.calculation.displayText(cell)).toBe("7");
+      expect(current.calculation.diagnostics).toEqual([]);
+    }
+    const edited = artifact.editCell("A2", 8);
+    for (const current of [edited,openSpreadsheetArtifact(edited.bytes())]) {
+      for (const cell of ["C1","D1","E1","F1"]) expect(current.calculation.displayText(cell)).toBe("8");
+      expect(current.calculation.diagnostics).toEqual([]);
+    }
+    expect(artifact.bytes()).toEqual(bytes);
+  });

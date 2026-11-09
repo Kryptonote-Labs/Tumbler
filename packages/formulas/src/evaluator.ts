@@ -1211,8 +1211,15 @@ export function calculateFormulas(
         const styleValue = args[1] === undefined ? {kind: "omitted"} as const : evaluate(args[1], sheet, depth + 1);
         const style = "kind" in styleValue && styleValue.kind === "omitted" ? boolean(true) : logical(scalar(styleValue));
         if (style.type === "error") return style;
+        const target = text(value);
+        // A1/R1C1 mode does not change a structured reference's geometry.
+        // Resolve the complete token before cell-style parsing or sheet splitting.
+        if (/^[^![\]]+\[.*\]$/.test(target)) {
+          const named = source.resolveName?.(target, activeAddress);
+          return named === undefined ? error("#REF!") : "kind" in named ? resolveReference(named, sheet, depth + 1) : checkedReference(named);
+        }
         if (!style.value) return error("#REF!");
-        try { return resolveReference(parseFormula(text(value)).expression, sheet, depth + 1); } catch (cause) { if (cause instanceof FormulaParseError) return error("#REF!"); throw cause; }
+        try { return resolveReference(parseFormula(target).expression, sheet, depth + 1); } catch (cause) { if (cause instanceof FormulaParseError) return error("#REF!"); throw cause; }
       }
       if ((name === "OFFSET" && args.length >= 3 && args.length <= 5) || (name === "INDEX" && args.length >= 2 && args.length <= 3)) {
         const base = resolveReference(args[0]!, sheet, depth + 1);
