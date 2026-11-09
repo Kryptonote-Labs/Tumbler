@@ -131,7 +131,12 @@ export function editPdfModel(
     }
     case 'place-text': {
       const { id, ...patch } = pdfEdits['place-text'].parse(command.input);
-      model.place(id, { ...flow.regions.find((r) => r.id === id)?.origin, ...patch });
+      model.place(id, {
+        ...flow.regions.find((r) => r.id === id)?.origin,
+        ...(patch.x === undefined ? {} : { x: patch.x }),
+        ...(patch.y === undefined ? {} : { y: patch.y }),
+        ...(patch.width === undefined ? {} : { width: patch.width }),
+      });
       break;
     }
     case 'duplicate-text': {

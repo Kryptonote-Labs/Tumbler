@@ -71,7 +71,7 @@ async function runPdfFind(
 }
 
 export function pdfHelp(commandName = "tumbler", name?: string): string {
-  if (name && Object.hasOwn(pdfEdits, name)) return `Usage: ${commandName} <document> pdf ${name} --input JSON\n${JSON.stringify(z.toJSONSchema(pdfEdits[name as keyof typeof pdfEdits]), null, 2)}\nRead or inspect first. Offsets are UTF-16; coordinates and widths are points in unrotated page space. place-text resizes width; height follows text flow. hide-text removes from output, hidden:false restores it.\n`;
+  if (name && Object.hasOwn(pdfEdits, name)) return `Usage: ${commandName} <document> pdf ${name} --input JSON\n${JSON.stringify(z.toJSONSchema(pdfEdits[name as keyof typeof pdfEdits], { io: "input" }), null, 2)}\nRead or inspect first. Offsets are UTF-16; coordinates and widths are points in unrotated page space. place-text resizes width; height follows text flow. hide-text removes from output, hidden:false restores it.\n`;
   if (name === 'inspect' || name === 'render') return `Usage: ${commandName} <document> pdf ${name} --page N\nPages start at 1. Inspect returns region IDs, text, bounds, runs and style. Render returns page pixels.\n`;
   if (name && !["delete-pages", "find", "merge"].includes(name))
     throw new Error(`Unknown PDF command: ${name}`);
