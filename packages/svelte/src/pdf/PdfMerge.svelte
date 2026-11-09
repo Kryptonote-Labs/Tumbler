@@ -15,10 +15,10 @@
   const localState = $state(createPdfMergeState());
   const model = $derived(session ?? localState);
   let saving = $state(false), error = $state(''), announcement = $state('');
-  let removed = $state<{ source: PdfMergeSource; index: number }>();
+  let removed = $state<{ source: PdfMergeSource; index: number; read: PdfMergeRead | undefined }>();
   let root: HTMLDivElement;
   let over = $state(false);
-  const reads = new Map<number, AbortController>();
+  const reads = new Map<number, { controller: AbortController; data: PdfMergeRead }>();
   const plan = $derived(model.blocks.map(source => ({ source, selection: mergeSourceSelection(source) })));
   const pageCount = $derived(plan.reduce((count, entry) => count + (entry.source.document ? entry.selection.pages.length : 0), 0));
   const problem = $derived(plan.find(entry => entry.source.loading || entry.source.error || entry.selection.error));
@@ -27,15 +27,21 @@
   function changed() { removed = undefined; model.created = undefined; error = ''; }
   /** Adds a row immediately; hosts can supply cancellable authorized reads. */
   export async function addSource(name: string, data: PdfMergeRead) {
-    const id = model.nextId++, controller = new AbortController();
+    const id = model.nextId++;
     const source: PdfMergeSource = { id, name, password: '', pages: '', none: false, loading: true, error: '', locked: false };
     model.blocks = [...model.blocks, source];
     const current = model.blocks.find(block => block.id === id)!;
-    reads.set(id, controller);
     model.expanded = id;
     if (!model.filename) model.filename = `${name.replace(/\.pdf$/i, '')} merged.pdf`;
     changed();
     void tick().then(() => root?.querySelector(`[data-source-id="${id}"]`)?.scrollIntoView({ block: 'nearest' }));
+    await readSource(current, data);
+  }
+  async function readSource(current: PdfMergeSource, data: PdfMergeRead) {
+    const controller = new AbortController(), id = current.id;
+    reads.set(id, { controller, data });
+    current.loading = true;
+    current.error = '';
     try {
       const bytes = typeof data === 'function' ? await data(controller.signal) : data;
       if (controller.signal.aborted) return;
@@ -43,10 +49,12 @@
       openMergeSource(current);
     } catch (cause) {
       if (!controller.signal.aborted) current.error = cause instanceof Error ? cause.message : 'Could not read PDF.';
-    } finally { current.loading = false; reads.delete(id); }
+    } finally {
+      if (reads.get(id)?.controller === controller) { current.loading = false; reads.delete(id); }
+    }
   }
   onMount(() => { if (model.initialized) return; model.initialized = true; for (const source of sources) void addSource(source.name, source.bytes); });
-  onDestroy(() => { for (const [id, read] of reads) { read.abort(); const source = model.blocks.find(source => source.id === id); if (source) { source.loading = false; source.error = 'Reading was cancelled. Add this PDF again.'; } } });
+  onDestroy(() => { for (const [id, read] of reads) { read.controller.abort(); const source = model.blocks.find(source => source.id === id); if (source) { source.loading = false; source.error = 'Reading was cancelled. Add this PDF again.'; } } });
   function upload(files: File[]) {
     const pdfs = files.filter(file => /\.pdf$/i.test(file.name) || file.type === 'application/pdf');
     for (const file of pdfs) void addSource(file.name, () => file.arrayBuffer().then(bytes => new Uint8Array(bytes)));
@@ -77,7 +85,11 @@
     changed();
   }
   function remove(source: PdfMergeSource) {
-    removed = { source, index: model.blocks.indexOf(source) };
+    const pending = reads.get(source.id);
+    removed = { source, index: model.blocks.indexOf(source), read: pending?.data };
+    reads.delete(source.id);
+    pending?.controller.abort();
+    if (pending) source.loading = false;
     model.blocks = model.blocks.filter(block => block.id !== source.id);
     if (model.expanded === source.id) model.expanded = model.blocks[0]?.id;
     announcement = `Removed ${source.name}.`;
@@ -89,9 +101,10 @@
   }
   function undoRemove() {
     if (!removed) return;
-    const { source, index } = removed;
+    const { source, index, read } = removed;
     model.blocks.splice(Math.min(index, model.blocks.length), 0, source);
     model.expanded = source.id;
+    if (read) void readSource(source, read);
     removed = undefined;
     changed();
     announcement = `Restored ${source.name}.`;

@@ -59,6 +59,21 @@ try {
     await row.getByRole('button', { name: `Options for ${name}`, exact: true }).click();
     await row.getByRole('button', { name: action, exact: true }).click();
   }
+  // A host may settle an aborted read late. Undo starts a new read, which must
+  // remain loading until its own result arrives, irrespective of the old result.
+  await page.evaluate('void window.startPendingRead()');
+  await option('pending.pdf', 'Remove');
+  assert.equal(await page.evaluate<boolean>('window.pendingReads[0].signal.aborted'), true);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  assert.equal(await page.evaluate<number>('window.pendingReads.length'), 2);
+  await page.evaluate('window.finishPendingRead(0,[0])');
+  await group('pending.pdf').getByText('Reading PDF…', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Merge and download PDF' }).isDisabled(), true);
+  await page.evaluate(`window.finishPendingRead(1,${JSON.stringify(Array.from(first))})`);
+  await group('pending.pdf').getByText('All 3 pages included', { exact: true }).waitFor();
+  await option('pending.pdf', 'Remove');
+  assert.equal(await page.getByRole('button', { name: 'Merge and download PDF' }).isEnabled(), true);
+
   await group('beta.pdf').locator('.thumbnail:not(.pending)').first().waitFor();
   assert.ok(await group('beta.pdf').locator('canvas').first().evaluate((canvas: HTMLCanvasElement) => canvas.width > 0 && canvas.height > 0));
   await range('alpha.pdf', '3-1,1');
@@ -115,5 +130,8 @@ try {
   await option('beta.pdf', 'Remove');
   await option('alpha.pdf', 'Remove');
   assert.equal(await page.getByRole('button', { name: 'Merge and download PDF' }).isDisabled(), true);
+  await page.evaluate('void window.startPendingRead()');
+  await page.evaluate('window.destroyMerge()');
+  assert.equal(await page.evaluate<boolean>('window.pendingReads[2].signal.aborted'), true);
   assert.deepEqual(errors, []);
 } finally { await browser.close(); }

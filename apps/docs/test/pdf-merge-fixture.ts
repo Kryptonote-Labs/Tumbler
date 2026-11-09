@@ -9,7 +9,11 @@ const built = await Bun.build({
   plugins: [{ name: 'pdf-merge', setup(builder) {
     builder.onResolve({ filter: /^merge-fixture$/ }, () => ({ path: 'entry', namespace: 'fixture' }));
     builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({
-      contents: `import {mount} from 'svelte';import PdfMerge from '${root}/packages/svelte/src/pdf/PdfMerge.svelte';mount(PdfMerge,{target:document.body,props:{submitLabel:"Merge and download PDF"}});`, loader: 'js',
+      contents: `import {mount,unmount} from 'svelte';import PdfMerge from '${root}/packages/svelte/src/pdf/PdfMerge.svelte';const merge=mount(PdfMerge,{target:document.body,props:{submitLabel:"Merge and download PDF"}});
+        window.pendingReads=[];
+        window.startPendingRead=()=>merge.addSource('pending.pdf',signal=>new Promise(resolve=>window.pendingReads.push({signal,resolve})));
+        window.finishPendingRead=(index,bytes)=>window.pendingReads[index].resolve(new Uint8Array(bytes));
+        window.destroyMerge=()=>unmount(merge);`, loader: 'js',
     }));
     builder.onResolve({ filter: /^svelte(\/.*)?$/ }, ({ path }) => ({ path: path === 'svelte'
       ? realpathSync(resolve(root, 'apps/docs/node_modules/svelte/src/index-client.js'))

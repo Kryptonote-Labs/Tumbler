@@ -375,7 +375,7 @@ or repeated page ranges remain intact until the user explicitly chooses page ord
 all-pages selections are distinct. Only one source grid opens at a time.
 
 Hosts can add an immediate loading row with `addSource(name, signal => readBytes(signal))`.
-Removing that source or destroying the component cancels the read. The optional `sourcePicker`
+Removing that source or destroying the component cancels the read. Undoing a removal starts a fresh read with a new signal, so host readers must support being called again. The optional `sourcePicker`
 snippet receives upload and close callbacks for a workspace picker inside the Add PDFs popover.
 File drops and uploads use the same source flow. A successful `onmerge` can return `{name, href}`
 for an Open link; the merge setup remains intact. Host `disabled` prevents creation and edits.
