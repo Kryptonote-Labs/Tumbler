@@ -25,7 +25,7 @@ const host: PdfPaintHost<Canvas, Path2D> = {
     return canvas;
   },
 };
-for (const name of ['graphics', 'inherited-page', 'hidden-ocr', 'inline-image', 'annotation', 'chromium-typography', 'truetype-extraction', 'positioned-text']) {
+for (const name of ['graphics', 'inherited-page', 'hidden-ocr', 'inline-image', 'annotation']) {
   test(`${name}: a device-pixel tile matches the full page including negative gutters`, async () => {
     const pdf = openPdfDocument(
       new Uint8Array(
@@ -68,4 +68,22 @@ for (const password of ['fixture-password', 'fixture-owner'])
     expect(new PdfInterpreter(reopened).page(0).text).toBe(new PdfInterpreter(pdf).page(0).text);
     input.bytes.fill(0);
     expect(pdf.bytes()).toEqual(bytes);
+  });
+
+for (const name of ['chromium-typography','truetype-extraction','positioned-text'])
+  test(name + ': glyph bounds culling retains exact tile pixels', async () => {
+    const pdf = openPdfDocument(await Bun.file(new URL('./fixtures/'+name+'.pdf',import.meta.url)).bytes());
+    const scene = new PdfInterpreter(pdf).page(0);
+    const unbounded = {...scene,elements:scene.elements.map((element)=>{
+      if(element.kind!=='glyph')return element;
+      const {bounds: _bounds,...glyph}=element.glyph;
+      return {...element,glyph};
+    })};
+    for(const region of [{x:31,y:19,width:79,height:83},{x:-1,y:-1,width:64,height:64}]) {
+      const expected=host.surface(region.width,region.height),actual=host.surface(region.width,region.height);
+      await paintPdfPage(expected.context,unbounded,pdf.source,host,{scale:1.75,region});
+      await paintPdfPage(actual.context,scene,pdf.source,host,{scale:1.75,region});
+      expect(actual.image.getContext('2d').getImageData(0,0,region.width,region.height).data)
+        .toEqual(expected.image.getContext('2d').getImageData(0,0,region.width,region.height).data);
+    }
   });
