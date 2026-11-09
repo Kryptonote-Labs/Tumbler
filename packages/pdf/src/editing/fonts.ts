@@ -56,6 +56,7 @@ const familyKey = (family: string) =>
  * Full matching faces extend subset fonts for new characters. Fallback affects only missing glyphs. */
 export class PdfEditingFonts {
   revision = 0;
+  private shapes = new WeakMap<PdfEditingFont, Map<string, Pick<PdfEditingShape, 'glyphs' | 'positions'>>>();
   private fonts = new Map<string, PdfEditingFont>();
   private documents = new WeakSet<PdfDocument>();
   add(key: string, bytes: Uint8Array, source?: PdfFont) {
@@ -150,12 +151,18 @@ export class PdfEditingFonts {
   shape(text: string, style: PdfTextStyle): PdfEditingShape {
     const face = this.get(style, text),
       original = face.sourceGlyphs?.get(text);
-    const run = original
+    let cache = this.shapes.get(face);
+    if (!cache) this.shapes.set(face, cache = new Map());
+    let run = cache.get(text);
+    if (!run) {
+      run = original
       ? {
           glyphs: [face.font.getGlyph(original.id)],
           positions: [{ xAdvance: original.width, yAdvance: 0, xOffset: 0, yOffset: 0 }],
         }
       : face.font.layout(text);
+      cache.set(text, run);
+    }
     return {
       face,
       glyphs: run.glyphs,
