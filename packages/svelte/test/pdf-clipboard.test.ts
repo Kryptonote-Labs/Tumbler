@@ -4,7 +4,7 @@ import { copyPdfText, pastePdfText } from '../src/pdf/clipboard.ts';
 function setup() {
   const model = new PdfTextModel();
   model.add({ id: 'box', page: 0, x: 0, y: 0, width: 100, lineHeight: 15,
-    style: defaultPdfTextStyle, sources: [], delta: [{ insert: 'hello world' }] });
+    style: defaultPdfTextStyle, sources: [], delta: [{ insert: 'hello world', attributes: defaultPdfTextStyle }] });
   model.undo.clear();
   return model;
 }
