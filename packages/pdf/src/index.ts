@@ -40,3 +40,6 @@ export type { PdfMergeInput } from './merge.ts';
 export { deletePdfModelPages } from './editing/page-operations.ts';
 
 export { createEditablePdfCopy } from "./editing/editable-copy.ts";
+
+export { PdfNavigation, isSafePdfUri } from "./navigation.ts";
+export type { PdfDestination, PdfLinkTarget, PdfLink, PdfOutlineEntry } from "./navigation.ts";

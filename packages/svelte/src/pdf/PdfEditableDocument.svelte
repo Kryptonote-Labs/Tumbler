@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { pdfNavigation, scrollPdfDestination } from './navigation.ts';
+  import type { PdfDestination } from '@tumblerjs/pdf';
   import PdfSearch from './PdfSearch.svelte';
   import { pdfPagePosition } from './page-position.ts';
   import { PdfSearchIndex } from '@tumblerjs/pdf';
@@ -148,6 +150,10 @@
       if (redo) model.undo.redo();
       else model.undo.undo();
     }
+  }
+  const navigationOptions = $derived({ document: pdf, pages: flow.pages, scale, editable });
+  export function goToDestination(target: PdfDestination) {
+    scrollPdfDestination(root, target, navigationOptions);
   }
   export function goToPage(index: number) {
     root?.querySelector(`[data-pdf-page="${index + 1}"]`)?.scrollIntoView({ block: 'start' });
@@ -447,6 +453,7 @@
   data-pdf-document
   data-pdf-max-width={pdf.pages.reduce((maximum, page) => Math.max(maximum, page.width), 0)}
   class="pdf-editable"
+  use:pdfNavigation={navigationOptions}
   bind:this={root}
 >
   {#each flow.pages as page (page.id)}
@@ -570,7 +577,7 @@
     box-shadow: 0 1px 5px #0005;
     color-scheme: light;
     touch-action: none;
-    cursor: text;
+    cursor: var(--pdf-link-cursor, text);
   }
   canvas {
     display: block;

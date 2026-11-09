@@ -390,3 +390,8 @@ for an Open link; the merge setup remains intact. Host `disabled` prevents creat
 between visible thumbnails of the same source document.
 
 Hosts can retain a reactive `createPdfMergeState()` per document and pass it as `session` to preserve source choices, output name and expanded row across mounts.
+
+PDF viewers follow internal destinations and safe HTTP, HTTPS and mailto links. In
+`PdfEditableDocument`, Ctrl/Cmd-click follows links while plain clicks still edit or select.
+Both PDF document components expose `goToDestination(target)` for outline navigation.
+Navigation follows source page identities through reorder, insertion and deletion.
