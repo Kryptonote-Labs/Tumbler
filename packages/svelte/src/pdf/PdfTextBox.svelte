@@ -95,6 +95,7 @@
       xs.push(p.x + (b ? b.x - s.x : 0));
       ys.push(p.y + (b ? b.y - s.y : 0));
     }
+    for (const [id, image] of model.images.records) if (!group.includes(id) && image.page === frame.page && !image.hidden) { xs.push(image.x, image.x + image.width); ys.push(image.y, image.y + image.height); }
     gesture = {
       x: event.clientX,
       y: event.clientY,
@@ -109,7 +110,7 @@
       changed: false,
       preview: resize ? undefined : beginPdfBoxPreview(node, group),
       captureTimeout: model.undo.captureTimeout,
-      members: group.map((id) => ({
+      members: group.filter(id => !model.images.get(id)).map((id) => ({
         id,
         frame: { ...model.geometry(id), ...origins.get(id) },
         initial: model.placement(id),
@@ -186,6 +187,7 @@
     if (!cancel && !gesture.resize && (gesture.dx || gesture.dy)) {
       const { members, dx, dy } = gesture;
       model.doc.transact(() => {
+        for (const id of group) if (model.images.get(id)) model.images.move(id, dx, dy);
         for (const member of members)
           model.place(member.id, {
             x: member.frame.x + dx,
@@ -218,7 +220,7 @@
       event.stopPropagation();
       model.doc.transact(() => {
         for (const id of group)
-          model.move(
+          if (model.images.get(id)) model.images.move(id, direction[0] * (event.shiftKey ? 10 : 1), direction[1] * (event.shiftKey ? 10 : 1)); else model.move(
             id,
             direction[0] * (event.shiftKey ? 10 : 1),
             direction[1] * (event.shiftKey ? 10 : 1),
@@ -238,7 +240,7 @@
       event.preventDefault();
       model.undo.stopCapturing();
       model.doc.transact(() => {
-        for (const id of group) model.hide(id);
+        for (const id of group) { if (model.images.get(id)) model.images.hide(id); else model.hide(id); }
       }, model.origin);
       model.undo.stopCapturing();
     }

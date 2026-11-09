@@ -1,3 +1,4 @@
+import { writePdfImages, type PdfImagePixels } from './image-writer.ts';
 import { writePdfMarkup } from './markup.ts';
 import {
   PdfName,
@@ -36,13 +37,14 @@ type Embedded = {
   codes: Map<string, { cid: number; glyph: number; text: string; width: number }>;
 };
 /** ISO 32000-1 §7.5.6 incremental export. Unchanged objects retain their original bytes. */
-export function exportEditedPdf(
+function exportTextPdf(
   document: PdfDocument,
   model: PdfTextModel,
   fonts: PdfEditingFonts,
 ) {
+  const imageContinuations = [...model.images.records.values()].some(image => !image.hidden && image.continuation > 0);
   const annotationContinuations = [...model.annotations.records.values()].some(annotation => !annotation.get('hidden') && Number(annotation.get('continuation') ?? 0) > 0);
-  if (!annotationContinuations && !model.ids().some((id) => model.dirty(id)))
+  if (!imageContinuations && !annotationContinuations && !model.ids().some((id) => model.dirty(id)))
     return (model.pages.dirty() || model.annotations.records.size) ? exportPdfPageState(document, model) : document.bytes();
   fonts.importDocument(document);
   const flow = layoutPdfTextFlow(model, fonts, document.pages);
@@ -51,7 +53,7 @@ export function exportEditedPdf(
   const dirty = [
     ...new Set(flow.regions.filter((region) => region.render).map((region) => region.id)),
   ];
-  if (!dirty.length && !model.pages.dirty() && !model.annotations.records.size) return document.bytes();
+  if (!dirty.length && !model.pages.dirty() && !model.annotations.records.size && flow.pages.length === document.pages.length) return document.bytes();
   if (document.source.trailer.has('Encrypt'))
     unsupported('Encrypted PDF editing requires an encryption-aware writer.');
   const sourcePages = new Map(
@@ -474,4 +476,20 @@ export function exportEditedPdf(
     );
   }
   return output;
+}
+
+/** Resolve durable image assets on the host before calling this synchronous writer. */
+export function exportEditedPdf(document: PdfDocument, model: PdfTextModel, fonts: PdfEditingFonts, resolveImage?: (asset: string) => PdfImagePixels) {
+  const images = [...model.images.records.values()].filter(image => !image.hidden);
+  if (images.length && document.source.encrypted) unsupported('Encrypted PDF editing requires an encryption-aware writer.');
+  const output = exportTextPdf(document, model, fonts);
+  if (!images.length) return output;
+  const flow = layoutPdfTextFlow(model, fonts, document.pages);
+  const placements = images.flatMap(image => {
+    const page = flow.pages.find(page => page.source.index === image.page && page.continuation === image.continuation);
+    return page ? [{ image, output: page.index, viewport: pageViewport(page.source) }] : [];
+  });
+  if (!placements.length) return output;
+  if (!resolveImage) throw new Error('PDF image assets must be loaded before export.');
+  return writePdfImages(openPdfDocument(output), placements, resolveImage);
 }

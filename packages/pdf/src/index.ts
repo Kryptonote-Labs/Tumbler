@@ -41,6 +41,8 @@ export { deletePdfModelPages, duplicatePdfModelPages, insertPdfModelPages } from
 
 export { createEditablePdfCopy } from "./editing/editable-copy.ts";
 
+export * from './editing/image-model.ts';
+export type { PdfImagePixels } from './editing/image-writer.ts';
 export { PdfNavigation, isSafePdfUri } from "./navigation.ts";
 export type { PdfDestination, PdfLinkTarget, PdfLink, PdfOutlineEntry } from "./navigation.ts";
 export * from './editing/markup.ts';

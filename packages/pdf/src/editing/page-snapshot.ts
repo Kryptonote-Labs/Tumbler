@@ -21,7 +21,7 @@ export function copyPdfPageSnapshot(writer: PdfWriter, bytes: Uint8Array, target
       refs.set(value.key, ref);
       const resolved = document.source.resolve(value);
       if (resolved instanceof PdfStream) {
-        writer.stream(resolved.encoded, copy(resolved.dictionary) as PdfDictionary, ref, true);
+        writer.stream(resolved.encoded, copy(resolved.dictionary) as PdfDictionary, { reference: ref, encoded: true });
       } else writer.value(copy(resolved), ref);
       return ref;
     }

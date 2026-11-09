@@ -5,6 +5,7 @@ import { parsePdfPageSelection } from '../merge.ts';
 import { layoutPdfTextFlow } from './layout.ts';
 import type { PdfTextModel } from './model.ts';
 import type { PdfEditingFonts } from './fonts.ts';
+import type { PdfImagePixels } from './image-writer.ts';
 
 /** Delete numbered pages from the current collaborative layout, retaining source identities and undo. */
 export function deletePdfModelPages(document: PdfDocument, model: PdfTextModel, fonts: PdfEditingFonts, selection: string) {
@@ -17,12 +18,12 @@ export function deletePdfModelPages(document: PdfDocument, model: PdfTextModel, 
 }
 
 /** Duplicate the visible selection as independent frozen pages, including current text edits and continuations. */
-export function duplicatePdfModelPages(document: PdfDocument, model: PdfTextModel, fonts: PdfEditingFonts, ids: readonly string[]) {
+export function duplicatePdfModelPages(document: PdfDocument, model: PdfTextModel, fonts: PdfEditingFonts, ids: readonly string[], resolveImage?: (asset: string) => PdfImagePixels) {
   const pages = layoutPdfTextFlow(model, fonts, document.pages).pages;
   if (ids.some(id => !pages.some(page => page.id === id))) throw new Error('Unknown PDF page.');
   const selected = pages.flatMap((page, index) => ids.includes(page.id) ? [index] : []);
   if (!selected.length) return [];
-  const snapshot = openPdfDocument(exportEditedPdf(document, model, fonts));
+  const snapshot = openPdfDocument(exportEditedPdf(document, model, fonts, resolveImage));
   const copies = selected.map(index => extractPdfPageGraph(snapshot, [index], selected));
   model.undo.stopCapturing();
   try { return insertSnapshots(document, model, snapshot, selected, copies, pages[selected.at(-1)!]!.id, pages); }

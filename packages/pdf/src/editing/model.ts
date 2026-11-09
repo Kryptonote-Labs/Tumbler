@@ -1,6 +1,7 @@
 import { PdfMarkupModel } from './markup.ts';
 import { pdfSourceAttribute, pdfStyleAttributes } from './source-spacing.ts';
 import * as Y from 'yjs';
+import { PdfImageModel } from './image-model.ts';
 import { PdfPageModel } from './pages.ts';
 import { pdfTextStylePatch, type PdfTextStyle } from './fonts.ts';
 import type { PdfTextSeed } from './import-text.ts';
@@ -21,12 +22,14 @@ export class PdfTextModel {
   inTransaction = false;
   readonly regions: Y.Map<Y.Map<unknown>>;
   readonly pages: PdfPageModel;
+  readonly images: PdfImageModel;
   readonly annotations: PdfMarkupModel;
   readonly origin = {};
   readonly undo: Y.UndoManager;
   constructor(readonly doc: Y.Doc = new Y.Doc()) {
     this.regions = doc.getMap('pdf-text');
     this.pages = new PdfPageModel(doc, this.origin);
+    this.images = new PdfImageModel(doc, this.origin);
     this.annotations = new PdfMarkupModel(doc, this.origin, page => this.pages.materialize(page));
     this.regions.observeDeep((events) => {
       for (const event of events) {
@@ -38,7 +41,7 @@ export class PdfTextModel {
     });
     doc.on('beforeTransaction', () => { this.inTransaction = true; });
     doc.on('afterTransaction', () => { this.inTransaction = false; this.revision++; });
-    this.undo = new Y.UndoManager([this.regions, this.pages.records, this.annotations.records], {
+    this.undo = new Y.UndoManager([this.regions, this.pages.records, this.images.records, this.annotations.records], {
       trackedOrigins: new Set([this.origin]),
     });
   }

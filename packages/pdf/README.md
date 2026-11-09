@@ -298,6 +298,15 @@ plaintext objects to an encrypted revision. Hosts own user consent and storage o
 the new copy; the source remains unchanged. Password-protected inputs must first
 be opened with a valid password. Rewriting a PDF invalidates existing signatures.
 
+## Added images
+
+`PdfTextModel.images` stores reference-only image placements in the same collaborative document and undo manager as text and pages. Use `place(id, { page, continuation, asset, x, y, width, height, rotation })`, `move`, `rotate`, `duplicate` and `hide`. Coordinates are source page viewport points, before additional page rotation. Rotation uses quarter turns around the image centre. Hosts own durable assets and must upload them before committing a placement.
+
+Pass a synchronous asset resolver as the fourth argument to `exportEditedPdf`. It returns `{ width, height, rgba }` with eight-bit RGBA samples. The writer embeds compressed image XObjects and transparency masks as ordinary page content. Load editing fonts before export, including when clean source text shares a page with an added image. Missing referenced assets fail export rather than silently omitting content.
+
+`PdfEditableDocument` accepts `imageUrls` and `onimagefiles(files, target)` for device paste and page drop. The host can use `imageTarget(pageIndex)` for ribbon insertion and `imageAction` for rotation, duplication and deletion. Mixed image/text selection uses Shift-click. Drag previews use compositor transforms; pointer release commits one undo step. Resizing preserves aspect ratio.
+
+Images cover existing content visually. They do not redact or remove the underlying content.
 Editable text supports `strike` and RGB `background` character formatting through
 `PdfTextModel.format`. `formatParagraph` sets region `alignment` and positive
 `lineSpacing` multipliers. These properties merge through Yjs, share the text undo

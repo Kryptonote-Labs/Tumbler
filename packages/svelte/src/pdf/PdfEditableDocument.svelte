@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PdfImageBox from './PdfImageBox.svelte';
   import { pdfNavigation, scrollPdfDestination } from './navigation.ts';
   import type { PdfDestination } from '@tumblerjs/pdf';
   import type { PdfSearchController } from './search.svelte.ts';
@@ -48,6 +49,9 @@
     onpages,
     onstyle,
     onbox,
+    imageUrls = {},
+    onimagefiles,
+    onimage,
   }: {
     document: PdfDocument;
     model: PdfTextModel;
@@ -63,6 +67,9 @@
     onpagechange?: (index: number) => void;
     onpages?: (count: number) => void;
     onstyle?: (style: PdfTextStyle) => void;
+    onimage?: (id: string | null) => void;
+    imageUrls?: Record<string, string>;
+    onimagefiles?: (files: File[], target: { page: number; continuation: number; x: number; y: number }) => void;
     onbox?: (box: { x: number; y: number; width: number } | null) => void;
   } = $props();
   let revision = $state(0),
@@ -95,12 +102,44 @@
     fonts.importDocument(pdf);
     return layoutPdfTextFlow(model, fonts, pdf.pages);
   });
+  const imageObjects = $derived.by(() => { void revision; return [...model.images.records]; });
   const layouts = $derived(flow.regions);
   const origins = $derived(new Map(layouts.map((region) => [region.id, region.origin])));
   $effect(() => onpages?.(flow.pages.length));
   let anchors:
     | { first: ReturnType<PdfTextModel['anchor']>; last: ReturnType<PdfTextModel['anchor']> }
     | undefined;
+  let activeImage = $state<string>();
+  let imagePastePage = 0;
+  $effect(() => { void revision; onimage?.(activeImage && selected.includes(activeImage) && !model.images.get(activeImage)?.hidden ? activeImage : null); });
+  function selectImage(id: string, extend: boolean) {
+    selected = extend ? [...new Set([...selected, id])] : selected.includes(id) ? selected : [id];
+    active = undefined; activeImage = id;
+    const image = model.images.get(id);
+    imagePastePage = flow.pages.findIndex(page => page.source.index === image?.page && page.continuation === image?.continuation);
+    onselection?.(null);
+  }
+  export function imageAction(action: 'rotate' | 'duplicate' | 'delete') {
+    if (!editable || !activeImage) return;
+    model.undo.stopCapturing();
+    if (action === 'rotate') model.images.rotate(activeImage);
+    else if (action === 'duplicate') model.images.duplicate(activeImage, crypto.randomUUID());
+    else model.images.hide(activeImage);
+    model.undo.stopCapturing();
+  }
+  export function imageTarget(index: number) {
+    const page = flow.pages[index];
+    return page ? { page: page.source.index, continuation: page.continuation, x: 48, y: 48 } : undefined;
+  }
+  function imageTransfer(event: DragEvent | ClipboardEvent, index: number) {
+    if (!editable || !onimagefiles) return;
+    const transfer = 'dataTransfer' in event ? event.dataTransfer : event.clipboardData;
+    const files = [...(transfer?.files ?? [])].filter(file => ['image/png', 'image/jpeg'].includes(file.type));
+    if (!files.length) return;
+    const target = imageTarget(index); if (!target) return;
+    if ('clientX' in event) Object.assign(target, coordinates(event, event.currentTarget as HTMLElement, index));
+    event.preventDefault(); event.stopPropagation(); onimagefiles(files, target);
+  }
   const currentStyle = $derived.by(() => {
     void revision;
     return active
@@ -175,7 +214,7 @@
     if (!editable || !active) return;
     model.undo.stopCapturing();
     model.doc.transact(() => {
-      for (const id of selected) model.hide(id);
+      for (const id of selected) { if (model.images.get(id)) model.images.hide(id); else model.hide(id); }
     }, model.origin);
     model.undo.stopCapturing();
   }
@@ -226,6 +265,7 @@
     if (model.placement(id)?.hidden) return;
     selected = extend ? [...new Set([...selected, id])] : [id];
     active = id;
+    activeImage = undefined;
     start = Math.min(first, last);
     end = Math.max(first, last);
     pending = {};
@@ -335,6 +375,7 @@
     }
     if (event.key === 'Escape') {
       active = undefined;
+      activeImage = undefined;
       selected = [];
       onselection?.(null);
       return;
@@ -388,6 +429,7 @@
     if (![0, 2].includes(event.button) || (adding && !editable)) return;
     const host = event.currentTarget as HTMLElement,
       { x, y } = coordinates(event, host, page);
+    imagePastePage = page;
     onpagechange?.(page);
     if (adding && event.button === 0) {
       const targetPage = flow.pages[page]!,
@@ -429,7 +471,9 @@
           Math.min(...b.carets.map((c) => Math.abs(c.y - y))),
       )[0];
     if (!layout) {
+      input?.focus({ preventScroll: true });
       active = undefined;
+      activeImage = undefined;
       selected = [];
       onselection?.(null);
       return;
@@ -540,6 +584,9 @@
         data-pdf-page={page.index + 1}
         style:width={`${page.source.width * scale}px`}
         style:height={`${page.source.height * scale}px`}
+        onpaste={(e) => imageTransfer(e, page.index)}
+        ondrop={(e) => imageTransfer(e, page.index)}
+        ondragover={(e) => { if (editable && e.dataTransfer?.types.includes('Files')) e.preventDefault(); }}
         onpointerdown={(e) => pointer(e, page.index)}
         onpointermove={move}
         onpointerup={() => (dragging = undefined)}
@@ -571,6 +618,9 @@
         ></canvas>{/if}
         <PdfMarkupLayer page={page.source} annotations={annotations.filter(a => a.page === page.source.index && a.continuation === page.continuation)} />
         {#if visiblePages.has(page.id) || selected.some((id) => layouts.some((l) => l.id === id && l.page === page.index))}<div class="text-layer" style:transform={`scale(${scale})`}>
+          {#each imageObjects.filter(([, image]) => !image.hidden && image.page === page.source.index && image.continuation === page.continuation) as [imageId, image] (imageId)}
+            <PdfImageBox {model} id={imageId} {image} url={imageUrls[image.asset]} selected={selected.includes(imageId)} group={selected} {editable} {origins} onselect={selectImage} />
+          {/each}
           {#each layouts.filter((l) => l.page === page.index && selected.includes(l.id) && !adding && !model.placement(l.id)?.hidden) as layout (layout.id)}
             <PdfTextBox
               {model}
@@ -601,6 +651,7 @@
     aria-label="Edit PDF text"
     readonly={!editable}
     {value}
+    onpaste={(e) => imageTransfer(e, imagePastePage)}
     onbeforeinput={beforeInput}
     oninput={changed}
     onselect={publish}
@@ -658,6 +709,8 @@
     top: 0;
     transform-origin: 0 0;
     pointer-events: none;
+    width: 100%;
+    height: 100%;
   }
   textarea {
     position: fixed;
