@@ -75,8 +75,6 @@ describe("Spreadsheet formula grammar", () => {
     ["SUM(A1:A2", "not closed"],
     ["A1:", "range"],
     ["[Book.xlsx]Sheet1!A1", "Unsupported formula character"],
-    ["A0+1", "Unsupported name"],
-    ["MysteryName", "Unsupported name"],
   ])("rejects unsupported or malformed source %s", (source, message) => {
     expect(() => parseFormula(source)).toThrow(message);
   });

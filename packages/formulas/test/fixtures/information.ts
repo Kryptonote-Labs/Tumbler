@@ -1,0 +1,72 @@
+import type { FormulaScalarValue } from "../../src/evaluator.ts";
+interface Case {
+  name: string; formula: string; expected: FormulaScalarValue | FormulaScalarValue[][];
+  cells?: Record<string, FormulaScalarValue>; dateSystem?: "1900" | "1904";
+  requiresService?: boolean; oracle?: "excel" | "host" | "nondeterministic";
+}
+const n = (value: number): FormulaScalarValue => ({ type: "number", value });
+const b = (value: boolean): FormulaScalarValue => ({ type: "boolean", value });
+const s = (value: string): FormulaScalarValue => ({ type: "string", value });
+const e = (value: `#${string}`): FormulaScalarValue => ({ type: "error", value });
+export const cases: Case[] = [
+  ...["#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A"].map((v, i) => ({ name: `error code ${i + 1}`, formula: `ERROR.TYPE(${v})`, expected: n(i + 1) })),
+  { name: "nonerror code", formula: "ERROR.TYPE(42)", expected: e("#N/A") },
+  { name: "nested error", formula: "ERROR.TYPE(NA())", expected: n(7) },
+  ...[[-3.9, false], [-2.99999999999999, true], [-0.99999999999999, true], [0, true], [1.99999999999999, false], [2, true], [999999999999999, false], [1e100, true]].flatMap(([v, even]) => [
+    { name: `even ${v}`, formula: `ISEVEN(${v})`, expected: b(even as boolean) },
+    { name: `odd ${v}`, formula: `ISODD(${v})`, expected: b(!even) },
+  ]),
+  { name: "even numeric text", formula: 'ISEVEN("2")', expected: b(true) },
+  { name: "odd invalid text", formula: 'ISODD("two")', expected: e("#VALUE!") },
+  { name: "even boolean", formula: "ISEVEN(TRUE)", expected: e("#VALUE!") },
+  { name: "odd error", formula: "ISODD(NA())", expected: e("#N/A") },
+  { name: "even reference", formula: "ISEVEN(Inputs!A1)", cells: { A1: n(6) }, expected: b(true) },
+  { name: "even blank", formula: "ISEVEN(Inputs!A1)", expected: b(true) },
+  { name: "formula reference", formula: "ISFORMULA(Results!A1)", expected: b(true) },
+  { name: "constant reference", formula: "ISFORMULA(Inputs!A1)", cells: { A1: n(4) }, expected: b(false) },
+  { name: "invalid formula input", formula: "ISFORMULA(1)", expected: e("#VALUE!") },
+  { name: "nontext number", formula: "ISNONTEXT(123)", expected: b(true) },
+  { name: "nontext error", formula: "ISNONTEXT(NA())", expected: b(true) },
+  { name: "nontext empty string", formula: 'ISNONTEXT("")', expected: b(false) },
+  { name: "nontext blank", formula: "ISNONTEXT(Inputs!A1)", expected: b(true) },
+  { name: "not omitted", formula: "ISOMITTED(0)", expected: b(false) },
+  { name: "blank not omitted", formula: "ISOMITTED(Inputs!A1)", expected: b(false) },
+  { name: "reference", formula: "ISREF(Inputs!A1)", expected: b(true) },
+  { name: "range reference", formula: "ISREF(Inputs!A1:A2)", expected: b(true) },
+  { name: "number not reference", formula: "ISREF(1)", expected: b(false) },
+  { name: "error not reference", formula: "ISREF(NA())", expected: b(false) },
+  ...[n(1.5), b(true), b(false), s("19"), s("note"), e("#REF!")].map((v, i) => ({ name: `N reference ${i}`, formula: "N(Inputs!A1)", cells: { A1: v }, expected: v.type === "number" || v.type === "error" ? v : n(v.type === "boolean" && v.value ? 1 : 0) })),
+  { name: "N blank", formula: "N(Inputs!A1)", expected: n(0) },
+  { name: "N date serial 1900", formula: "N(Inputs!A1)", cells: { A1: n(60) }, expected: n(60) },
+  { name: "N date serial 1904", formula: "N(Inputs!A1)", cells: { A1: n(0) }, dateSystem: "1904", expected: n(0) },
+  { name: "missing value", formula: "NA()", expected: e("#N/A") },
+  { name: "sheet name", formula: 'SHEET("Inputs")', expected: n(1) },
+  { name: "current sheet", formula: "SHEET()", expected: n(2) },
+  { name: "sheet reference", formula: "SHEET(Inputs!A1)", expected: n(1) },
+  { name: "missing sheet", formula: 'SHEET("Nonexistent")', expected: e("#N/A") },
+  { name: "sheet count", formula: "SHEETS()", expected: n(2) },
+  { name: "single reference sheet", formula: "SHEETS(Inputs!A1:A5)", expected: n(1) },
+  { name: "invalid sheets", formula: "SHEETS(1)", expected: e("#VALUE!") },
+  ...[n(1), s("1"), b(true), e("#N/A")].map((v, i) => ({ name: `type ${i}`, formula: "TYPE(Inputs!A1)", cells: { A1: v }, expected: n([1, 2, 4, 16][i]!) })),
+  { name: "type blank", formula: "TYPE(Inputs!A1)", expected: n(1) },
+  { name: "N array", formula: "N(Inputs!A1:A2)", cells: { A1: n(2), A2: s("text") }, expected: [[n(2)], [n(0)]] },
+  { name: "nontext array", formula: "ISNONTEXT(Inputs!A1:A2)", cells: { A1: n(2), A2: s("text") }, expected: [[b(true)], [b(false)]] },
+  { name: "array type", formula: "TYPE(Inputs!A1:A2)", expected: n(64) },
+  { name: "cell value type", formula: 'CELL("type",Inputs!A1)', cells: { A1: b(false) }, expected: s("v") },
+  { name: "cell error contents", formula: 'CELL("contents",Inputs!A1)', cells: { A1: e("#NUM!") }, expected: e("#NUM!") },
+  { name: "cell row", formula: 'CELL("row",Inputs!A1)', expected: n(1) },
+  { name: "cell column", formula: 'CELL("col",Inputs!A1)', expected: n(1) },
+  { name: "cell contents", formula: 'CELL("contents",Inputs!A1)', cells: { A1: s("hello") }, expected: s("hello") },
+  { name: "cell blank contents", formula: 'CELL("contents",Inputs!A1)', expected: n(0) },
+  { name: "cell blank type", formula: 'CELL("type",Inputs!A1)', expected: s("b") },
+  { name: "cell label type", formula: 'CELL("type",Inputs!A1)', cells: { A1: s("hello") }, expected: s("l") },
+  { name: "cell bad key", formula: 'CELL("unknown",Inputs!A1)', expected: e("#VALUE!") },
+  { name: "info invalid key", formula: 'INFO("unknown")', expected: e("#VALUE!") },
+  { name: "info obsolete memory", formula: 'INFO("memavail")', expected: e("#N/A") },
+  { name: "modeled info", formula: 'INFO("system")', expected: s("mac"), requiresService: true, oracle: "host" },
+  { name: "modeled cell format", formula: 'CELL("format",Inputs!A1)', expected: s("G"), requiresService: true, oracle: "host" },
+  { name: "modeled stock", formula: 'STOCKHISTORY("XNAS:TEST",45000)', expected: [[s("Date"), s("Close")], [n(45000), n(123.5)]], requiresService: true, oracle: "host" },
+  { name: "stock invalid dates", formula: 'STOCKHISTORY("XNAS:TEST",-1)', expected: e("#VALUE!") },
+  { name: "stock reversed dates", formula: 'STOCKHISTORY("XNAS:TEST",45001,45000)', expected: e("#VALUE!") },
+  { name: "stock invalid interval", formula: 'STOCKHISTORY("XNAS:TEST",45000,45000,3)', expected: e("#VALUE!") },
+];
