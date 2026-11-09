@@ -315,6 +315,7 @@ text layers. Both views prepare two viewport heights ahead and release rasters o
 The transparent selection layer batches compatible glyphs into SVG text spans with explicit character
 positions. Contextually shaped scripts and multi-character glyphs retain independent source widths.
 Per-item UTF-16 offsets and the headless hit-test index still determine native selection and copying.
+Worker text projections share immutable font descriptors across glyphs to reduce message allocation.
 
 Hosts can call `PresentationSlideView.editText(objectKey)` after rendering an inserted
 text box or table to focus its text editor. Tables start in the first editable cell.
