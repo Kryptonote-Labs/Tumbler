@@ -22,6 +22,7 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
     disposed = false,
     running = false,
     again = false;
+  let settling: ReturnType<typeof setTimeout> | undefined;
   let frame: number | undefined,
     controller = new AbortController();
   let preview: HTMLCanvasElement | undefined,
@@ -74,8 +75,8 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
       if (!preview) {
         const small = Math.min(
           scale,
-          (element.getBoundingClientRect().width / active.width) * ratio,
-          1024 / Math.max(active.width, active.height),
+          (element.getBoundingClientRect().width / active.width),
+          2048 / Math.max(active.width, active.height),
         );
         const result = await active.renderer.render(
           {
@@ -108,7 +109,7 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
           active.ontext(result.text);
         }
       }
-      if (zooming()) return;
+      if (zooming() || settling !== undefined) return;
       if (rasterScale !== scale) {
         disposeCanvas(previous);
         previous = layer;
@@ -154,6 +155,10 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
             signal,
           );
           if (signal.aborted || disposed) {
+            result.bitmap.close();
+            return;
+          }
+          if (settling !== undefined || zooming()) {
             result.bitmap.close();
             return;
           }
@@ -227,7 +232,17 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
     });
   const resize = new ResizeObserver(schedule);
   resize.observe(viewport);
-  viewport.addEventListener('scroll', schedule, { passive: true });
+  // A readable page preview travels with the scroll. Device-resolution tiles resume
+  // after motion stops, avoiding a burst of new canvases on every scroll frame.
+  const scroll = () => {
+    if (settling !== undefined) clearTimeout(settling);
+    settling = setTimeout(() => {
+      settling = undefined;
+      schedule();
+    }, 100);
+    schedule();
+  };
+  viewport.addEventListener('scroll', scroll, { passive: true });
   const pauseZoom = () => {
     cancel();
     if (!preview) schedule();
@@ -259,7 +274,8 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
       stopVisibility();
       resize.disconnect();
       if (frame !== undefined) cancelAnimationFrame(frame);
-      viewport.removeEventListener('scroll', schedule);
+      viewport.removeEventListener('scroll', scroll);
+      if (settling !== undefined) clearTimeout(settling);
       viewport.removeEventListener('pdfzoomstart', pauseZoom);
       viewport.removeEventListener('pdfzoomend', finishZoom);
       window.removeEventListener('resize', schedule);
