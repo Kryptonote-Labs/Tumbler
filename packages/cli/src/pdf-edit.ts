@@ -23,7 +23,16 @@ const style = z
       .optional(),
     font: z.string().min(1).optional(),
   })
-  .strict();
+  .strict()
+  .transform((p) => ({
+    ...(p.bold === undefined ? {} : { bold: p.bold }),
+    ...(p.italic === undefined ? {} : { italic: p.italic }),
+    ...(p.underline === undefined ? {} : { underline: p.underline }),
+    ...(p.size === undefined ? {} : { size: p.size }),
+    ...(p.family === undefined ? {} : { family: p.family }),
+    ...(p.color === undefined ? {} : { color: p.color }),
+    ...(p.font === undefined ? {} : { font: p.font }),
+  }));
 export const pdfEdits = {
   'replace-text': z
     .object({ id, text: z.string(), start: offset.optional(), end: offset.optional() })
