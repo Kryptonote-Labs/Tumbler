@@ -1,5 +1,7 @@
 import {
   PdfNavigation,
+  pdfModelLinks,
+  type PdfTextModel,
   isSafePdfUri,
   type PdfDocument,
   type PdfPage,
@@ -13,6 +15,7 @@ export type PdfNavigationOptions = {
   pages: readonly Page[];
   scale: number;
   editable?: boolean;
+  model?: PdfTextModel;
 };
 
 function rotate(x: number, y: number, page: Page) {
@@ -65,7 +68,8 @@ export function pdfNavigation(root: HTMLElement, initial: PdfNavigationOptions) 
     const bounds = element.getBoundingClientRect();
     const x = (event.clientX - bounds.left) / options.scale,
       y = (event.clientY - bounds.top) / options.scale;
-    return navigation.links(page.source).find((link) => {
+    const links = options.model ? pdfModelLinks(options.document, options.model, page.source) : navigation.links(page.source);
+    return links.find((link) => {
       const a = rotate(link.rect[0], link.rect[1], page),
         b = rotate(link.rect[2], link.rect[3], page);
       return (
