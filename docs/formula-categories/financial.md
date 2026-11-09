@@ -110,3 +110,5 @@ the integrated project ready.
 ## Independent review follow-up
 
 RATE trial residuals now scale individual cash-flow terms in log space. RATE uses a bounded twenty-step Newton search and rejects nonconvergence without a bracket fallback. Native Excel returns #NUM! for RATE(1000,0,-1,1e-100) despite a mathematical root, and for RATE(1000,0,-1,0); both are explicit oracle fixtures. Other financial solvers retain bounded bracketing with direct sign comparison and require a validated residual instead of accepting bracket width alone.
+
+IRR and XIRR now normalize every trial residual by the sum of absolute discounted terms, calculated in log space. Discounting all flows toward zero cannot satisfy convergence by itself. Regressions cover no-root alternating flows with a leading zero (and sign reversal), plus genuine roots with leading zeros.
