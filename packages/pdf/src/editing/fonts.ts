@@ -80,7 +80,7 @@ export class PdfEditingFonts {
   }
   private *importPages(document: PdfDocument) {
     if (this.documents.has(document)) return;
-    const interpreter = new PdfInterpreter(document);
+    const interpreter = new PdfInterpreter(document, undefined, { deferImages: true });
     for (const page of document.pages) {
       for (const element of interpreter.page(page.index).elements) {
         if (element.kind !== 'glyph' || !element.font.program || !element.font.sourceId) continue;

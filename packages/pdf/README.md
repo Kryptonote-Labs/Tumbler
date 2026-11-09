@@ -297,3 +297,14 @@ forms, annotations, attachments and shared object references. It does not append
 plaintext objects to an encrypted revision. Hosts own user consent and storage of
 the new copy; the source remains unchanged. Password-protected inputs must first
 be opened with a valid password. Rewriting a PDF invalidates existing signatures.
+
+For headless editing imports, `iteratePdfText(document)` yields completed text regions one page
+at a time. Pass the iterator directly to `PdfTextModel.initialize` to avoid collecting the
+entire document's imported regions before building collaborative state. It preserves the same
+region identities and page order as `importPdfText(document)`, which still returns an array.
+
+Headless callers that only inspect text can construct
+`new PdfInterpreter(document, undefined, { deferImages: true })`. Image elements and source
+identities stay in the scene, while pixels are decoded and cached only when `element.image`
+is accessed. Rendering uses eager decoding by default. Text editing import and editing-font
+discovery use deferred images automatically.
