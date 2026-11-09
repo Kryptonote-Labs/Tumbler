@@ -11,6 +11,7 @@ import {
   layoutPdfTextFlow,
   insertPdfModelPages,
   PdfReference,
+  pdfModelLinks,
 } from '../src/index.ts';
 import { pdfFixture, pdfStream } from './pdf-fixture.ts';
 const data = pdfFixture([
@@ -358,6 +359,7 @@ test('inserted pages retain internal destinations across snapshots', () => {
     const destination = annotation.get('Dest') as PdfReference[];
     expect(destination[0]!.key).toBe(output.pages[4]!.reference.key);
     const inserted = model.pages.sourcePages(pdf.pages).find(page => page.id === ids[0])!;
+    expect(pdfModelLinks(pdf, model, inserted)[0]?.target).toMatchObject({ kind: 'internal', pageId: ids[1] });
     model.annotations.set({ id: 'new-markup', page: inserted.index, continuation: 0, kind: 'Highlight', color: '#ffff00', quads: [[10, 30, 40, 30, 10, 10, 40, 10]], hidden: false });
     const marked = openPdfDocument(exportEditedPdf(pdf, model, fonts));
     expect(marked.source.resolve(marked.pages[3]!.dictionary.get('Annots'))).toHaveLength(2);
