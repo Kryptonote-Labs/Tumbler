@@ -3,13 +3,13 @@
   import { mergePdfDocuments } from '@tumblerjs/pdf';
   import PdfMergeSourceView from './PdfMergeSource.svelte';
   import PdfMergeAdd from './PdfMergeAdd.svelte';
-  import { openMergeSource, mergeSourceSelection, type PdfMergeSource, type PdfMergeRead, type PdfMergeResult, type PdfMergeState, createPdfMergeState } from './merge-source.ts';
+  import { openMergeSource, refreshMergeSources, mergeSourceSelection, type PdfMergeSource, type PdfMergeRead, type PdfMergeResult, type PdfMergeState, createPdfMergeState } from './merge-source.ts';
 
   let { onmerge, sources = [], submitLabel = 'Merge PDF', sourcePicker, disabled = false, defaultFilename, showFilename = true, session = $bindable() }: {
     onmerge?: (bytes: Uint8Array, filename: string) => void | PdfMergeResult | Promise<void | PdfMergeResult>;
-    sources?: { name: string; bytes: Uint8Array }[];
     showFilename?: boolean;
     defaultFilename?: (name: string) => string;
+    sources?: { name: string; bytes: Uint8Array; key?: string; read?: PdfMergeRead }[];
     submitLabel?: string; disabled?: boolean;
     session?: PdfMergeState;
     sourcePicker?: Snippet<[upload: () => void, close: () => void]>;
@@ -19,6 +19,7 @@
   let saving = $state(false), error = $state(''), announcement = $state('');
   let removed = $state<{ source: PdfMergeSource; index: number; read: PdfMergeRead | undefined }>();
   let root: HTMLDivElement;
+  let mergeController: AbortController | undefined;
   let over = $state(false);
   const reads = new Map<number, { controller: AbortController; data: PdfMergeRead }>();
   const plan = $derived(model.blocks.map(source => ({ source, selection: mergeSourceSelection(source) })));
@@ -28,9 +29,9 @@
   const reason = $derived(problem?.selection.error && !problem.source.rangeErrorVisible ? '' : problem ? problem.source.loading ? `Reading ${problem.source.name}…` : `Check ${problem.source.name}` : !pageCount ? model.blocks.length ? 'Select at least one page' : 'Add PDFs to begin' : '');
   function changed() { removed = undefined; model.created = undefined; error = ''; }
   /** Adds a row immediately; hosts can supply cancellable authorized reads. */
-  export async function addSource(name: string, data: PdfMergeRead) {
+  export async function addSource(name: string, data: PdfMergeRead, key?: string) {
     const id = model.nextId++;
-    const source: PdfMergeSource = { id, name, password: '', pages: '', none: false, loading: true, error: '', locked: false };
+    const source: PdfMergeSource = { id, name, key, read: data, password: '', pages: '', none: false, loading: true, error: '', locked: false };
     model.blocks = [...model.blocks, source];
     const current = model.blocks.find(block => block.id === id)!;
     model.expanded = id;
@@ -47,16 +48,22 @@
     try {
       const bytes = typeof data === 'function' ? await data(controller.signal) : data;
       if (controller.signal.aborted) return;
-      current.bytes = bytes;
-      openMergeSource(current);
+      if (bytes instanceof Uint8Array) { current.bytes = bytes; openMergeSource(current); }
+      else { current.document = bytes; current.locked = false; }
     } catch (cause) {
       if (!controller.signal.aborted) current.error = cause instanceof Error ? cause.message : 'Could not read PDF.';
     } finally {
       if (reads.get(id)?.controller === controller) { current.loading = false; reads.delete(id); }
     }
   }
-  onMount(() => { if (model.initialized) return; model.initialized = true; for (const source of sources) void addSource(source.name, source.bytes); });
-  onDestroy(() => { for (const [id, read] of reads) { read.controller.abort(); const source = model.blocks.find(source => source.id === id); if (source) { source.loading = false; source.error = 'Reading was cancelled. Add this PDF again.'; } } });
+  onMount(() => { if (model.initialized) return; model.initialized = true; for (const source of sources) void addSource(source.name, source.read ?? source.bytes, source.key); });
+  $effect(() => {
+    for (const source of sources) {
+      if (!source.key) continue;
+      for (const block of model.blocks) if (block.key === source.key) block.read = source.read ?? source.bytes;
+    }
+  });
+  onDestroy(() => { mergeController?.abort(); for (const [id, read] of reads) { read.controller.abort(); const source = model.blocks.find(source => source.id === id); if (source) { source.loading = false; source.error = 'Reading was cancelled. Add this PDF again.'; } } });
   function upload(files: File[]) {
     const pdfs = files.filter(file => /\.pdf$/i.test(file.name) || file.type === 'application/pdf');
     for (const file of pdfs) void addSource(file.name, () => file.arrayBuffer().then(bytes => new Uint8Array(bytes)));
@@ -118,7 +125,9 @@
     if (!model.filename.trim() || !/\.pdf$/i.test(model.filename.trim())) { error = 'Choose a file name ending in .pdf.'; return; }
     saving = true;
     try {
-      const inputs = plan.flatMap(({ source, selection }) => source.document && selection.pages.length ? [{ document: source.document, pages: selection.pages }] : []);
+      mergeController = new AbortController();
+      await refreshMergeSources(model.blocks, mergeController.signal);
+      const inputs = model.blocks.map(source => ({ source, selection: mergeSourceSelection(source) })).flatMap(({ source, selection }) => source.document && selection.pages.length ? [{ document: source.document, pages: selection.pages }] : []);
       const bytes = mergePdfDocuments(inputs), name = model.filename.trim();
       if (onmerge) model.created = { name, ...await onmerge(bytes, name) };
       else {
@@ -128,7 +137,7 @@
         model.created = { name };
       }
     } catch (cause) { error = cause instanceof Error ? cause.message : 'Could not create PDF.'; }
-    finally { saving = false; }
+    finally { saving = false; mergeController = undefined; }
   }
 </script>
 

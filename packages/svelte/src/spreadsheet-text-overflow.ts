@@ -36,7 +36,7 @@ export function spreadsheetTextOverflowWidth(input: SpreadsheetTextOverflowInput
 
   for (let candidate = column + 1; candidate <= maximumColumn; candidate += 1) {
     if ((candidate <= (input.frozenColumns ?? 0)) !== sourceFrozen) break;
-    if (occupied(worksheet, row, candidate)) break;
+    if (occupied(worksheet, row, candidate) || calculation?.value({row, column: candidate}) !== undefined) break;
     width += columnGeometry.size(candidate);
   }
 

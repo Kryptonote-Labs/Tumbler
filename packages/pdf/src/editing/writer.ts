@@ -1,3 +1,4 @@
+import { writePdfMarkup } from './markup.ts';
 import {
   PdfName,
   PdfReference,
@@ -41,7 +42,7 @@ export function exportEditedPdf(
   fonts: PdfEditingFonts,
 ) {
   if (!model.ids().some((id) => model.dirty(id)))
-    return model.pages.dirty() ? exportPdfPageState(document, model) : document.bytes();
+    return (model.pages.dirty() || model.annotations.records.size) ? exportPdfPageState(document, model) : document.bytes();
   fonts.importDocument(document);
   const flow = layoutPdfTextFlow(model, fonts, document.pages);
   if (!flow.pages.length)
@@ -49,7 +50,7 @@ export function exportEditedPdf(
   const dirty = [
     ...new Set(flow.regions.filter((region) => region.render).map((region) => region.id)),
   ];
-  if (!dirty.length && !model.pages.dirty()) return document.bytes();
+  if (!dirty.length && !model.pages.dirty() && !model.annotations.records.size) return document.bytes();
   if (document.source.trailer.has('Encrypt'))
     unsupported('Encrypted PDF editing requires an encryption-aware writer.');
   const sourcePages = new Map(
@@ -329,11 +330,12 @@ export function exportEditedPdf(
         for (const [key, value] of baseResources) resources.set(key, value);
       }
     }
+    writePdfMarkup(writer, document, page, outputPage.continuation, model.annotations, info);
     info.set('Resources', resources);
     if (continuation) pageRefs.push(writer.value(info, target));
     else {
       pageRefs.push(page.reference);
-      if (parent || pageContent.has(pageIndex) || seeds.length) writer.value(info, page.reference);
+      if (parent || pageContent.has(pageIndex) || seeds.length || model.annotations.records.size) writer.value(info, page.reference);
     }
   }
   if (parent) {

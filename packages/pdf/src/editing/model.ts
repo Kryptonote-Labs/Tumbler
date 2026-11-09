@@ -1,3 +1,4 @@
+import { PdfMarkupModel } from './markup.ts';
 import { pdfSourceAttribute, pdfStyleAttributes } from './source-spacing.ts';
 import * as Y from 'yjs';
 import { PdfPageModel } from './pages.ts';
@@ -20,11 +21,13 @@ export class PdfTextModel {
   inTransaction = false;
   readonly regions: Y.Map<Y.Map<unknown>>;
   readonly pages: PdfPageModel;
+  readonly annotations: PdfMarkupModel;
   readonly origin = {};
   readonly undo: Y.UndoManager;
   constructor(readonly doc: Y.Doc = new Y.Doc()) {
     this.regions = doc.getMap('pdf-text');
     this.pages = new PdfPageModel(doc, this.origin);
+    this.annotations = new PdfMarkupModel(doc, this.origin, page => this.pages.materialize(page));
     this.regions.observeDeep((events) => {
       for (const event of events) {
         const id = event.path[0];
@@ -35,7 +38,7 @@ export class PdfTextModel {
     });
     doc.on('beforeTransaction', () => { this.inTransaction = true; });
     doc.on('afterTransaction', () => { this.inTransaction = false; this.revision++; });
-    this.undo = new Y.UndoManager([this.regions, this.pages.records], {
+    this.undo = new Y.UndoManager([this.regions, this.pages.records, this.annotations.records], {
       trackedOrigins: new Set([this.origin]),
     });
   }
@@ -226,6 +229,20 @@ export class PdfTextModel {
           [pdfSourceAttribute]: null,
         });
     }, this.origin);
+  }
+  /** Apply snapshot search ranges in one collaborative transaction and undo step. */
+  replaceMatches(matches: readonly { region: string; start: number; end: number }[], value: string) {
+    // Validate every range before mutating any text.
+    for (const match of matches) {
+      if (!Number.isInteger(match.start) || !Number.isInteger(match.end) || match.start < 0 || match.end < match.start || match.end > this.text(match.region).length)
+        throw new Error('Invalid PDF text range.');
+    }
+    this.undo.stopCapturing();
+    this.doc.transact(() => {
+      for (const match of [...matches].sort((a, b) => a.region.localeCompare(b.region) || b.start - a.start))
+        this.replace(match.region, match.start, match.end, value);
+    }, this.origin);
+    this.undo.stopCapturing();
   }
   styleAt(id: string, offset: number): PdfTextStyle {
     let at = 0;

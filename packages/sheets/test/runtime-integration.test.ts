@@ -1,0 +1,192 @@
+import { describe, expect, test } from "bun:test";
+import { calculateSpreadsheetWorksheet, openSpreadsheetArtifact } from "../src/index.ts";
+import type { FunctionRegistry } from "@tumblerjs/formulas";
+import { buildWorkbookFixture } from "./workbook-fixture.ts";
+
+const ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+const sheet = (body: string, extra = "") => `<worksheet xmlns="${ns}"><sheetData>${body}</sheetData>${extra}</worksheet>`;
+
+describe("shared formula runtime SpreadsheetML integration", () => {
+  test("displays spill overlays without source cells, and refreshes on edit/reopen", () => {
+    const bytes = buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet('<row r="1"><c r="A1"><f>{1,2;3,4}*D1</f></c><c r="D1"><v>2</v></c></row><row r="3"><c r="C3"><f>B2+1</f></c></row>')} ]});
+    const artifact = openSpreadsheetArtifact(bytes);
+    expect(artifact.calculation.displayText("B2")).toBe("8");
+    expect(artifact.calculation.displayText("C3")).toBe("9");
+    expect(artifact.calculation.arrayValue("A1")?.rows).toHaveLength(2);
+    expect(artifact.worksheet.cell("B2")).toBeUndefined();
+    expect(artifact.bytes()).toEqual(bytes);
+    const edited = artifact.editCell("D1", 3);
+    expect(edited.calculation.displayText("B2")).toBe("12");
+    const reopened = openSpreadsheetArtifact(edited.bytes());
+    expect(reopened.calculation.displayText("B2")).toBe("12");
+    expect(reopened.worksheet.cell("B2")).toBeUndefined();
+    const obstruction = artifact.editCell("B2", 7);
+    expect(obstruction.calculation.displayText("A1")).toBe("#SPILL!");
+    expect(obstruction.calculation.arrayValue("A1")).toBeUndefined();
+  });
+  test("resolves spill dependencies on another sheet even when that anchor comes later", () => {
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({sheets: [
+      {name: "Results", sheetId: 1, relationshipId: "r", xml: sheet('<row r="1"><c r="A1"><f>Inputs!B2+1</f></c></row>')},
+      {name: "Inputs", sheetId: 2, relationshipId: "i", xml: sheet('<row r="1"><c r="A1"><f>{1,2;3,4}</f></c></row>')},
+    ]}));
+    expect(artifact.calculation.displayText("A1")).toBe("5");
+  });
+  test("merged cells obstruct a spill", () => {
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet('<row r="1"><c r="A1"><f>{1,2}</f></c></row>', '<mergeCells count="1"><mergeCell ref="B1:C1"/></mergeCells>')}]}));
+    expect(artifact.calculation.displayText("A1")).toBe("#SPILL!");
+  });
+  test("workbook and scoped names, table columns, used dimensions, and metadata are available to extensions", () => {
+    const bytes = buildWorkbookFixture({
+      workbookXml: `<workbook xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Data" sheetId="1" r:id="data"/></sheets><definedNames><definedName name="Rate">2</definedName><definedName name="Rate" localSheetId="0">3</definedName><definedName name="Numbers">Data!$B$2:$B$3</definedName></definedNames></workbook>`,
+      sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: `<worksheet xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetData>
+        <row r="1"><c r="B1" t="inlineStr"><is><t>Amount</t></is></c><c r="D1"><f>SUM(Items[Amount])*Rate+SUM(Numbers)</f></c><c r="E1"><f>META()</f></c></row>
+        <row r="2"><c r="B2"><v>4</v></c><c r="D2"><f>SUM(B:B)</f></c></row><row r="3"><c r="B3"><v>5</v></c></row>
+        </sheetData><tableParts count="1"><tablePart r:id="table"/></tableParts></worksheet>`,
+        tables: [{relationshipId: "table", target: "tables/table1.xml", xml: `<table xmlns="${ns}" id="1" name="Items" displayName="Items" ref="B1:B3" totalsRowShown="0"><tableColumns count="1"><tableColumn id="1" name="Amount"/></tableColumns></table>`}],
+      }],
+    });
+    const artifact = openSpreadsheetArtifact(bytes);
+    expect(artifact.calculation.displayText("D1")).toBe("36");
+    expect(artifact.calculation.displayText("D2")).toBe("9");
+    const registry: FunctionRegistry = new Map([["META", (_, context) => {
+      expect(context.source.sheetNames?.()).toEqual(["Data"]);
+      expect(context.source.sheetIndex?.(context.address.sheet)).toBe(1);
+      expect(context.source.usedDimensions?.(context.address.sheet)).toEqual({rows: 3, columns: 5});
+      expect(context.cell({...context.address, row: 2, column: 2})?.numberFormatId).toBe(0);
+      return {type: "number", value: 7};
+    }]]);
+    expect(calculateSpreadsheetWorksheet(artifact.worksheet, {functionRegistries: [registry]}).displayText("E1")).toBe("7");
+    expect(artifact.bytes()).toEqual(bytes);
+  });
+});
+
+// Independent review regressions use actual uncached workbooks, not category mocks.
+test("active consumers and transitive dependants refresh after a later spill publishes", () => {
+  const bytes = buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet('<row r="1"><c r="C1"><f>B2+A2</f></c><c r="D1"><f>C1*10</f></c></row><row r="2"><c r="A2"><f>{1,2}</f></c></row>')}]});
+  for (const artifact of [openSpreadsheetArtifact(bytes), openSpreadsheetArtifact(openSpreadsheetArtifact(bytes).bytes())]) {
+    expect(artifact.calculation.displayText("B2")).toBe("2");
+    expect(artifact.calculation.displayText("C1")).toBe("3");
+    expect(artifact.calculation.displayText("D1")).toBe("30");
+    expect(artifact.calculation.diagnostics).toEqual([]);
+  }
+});
+
+test("single-cell references retain aggregate coercion and nested aggregate result ranges resolve", () => {
+  const artifact = openSpreadsheetArtifact(buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet('<row r="1"><c r="A1" t="inlineStr"><is><t>7</t></is></c><c r="B1" t="b"><v>1</v></c><c r="C1"><v>1</v></c><c r="D1"><v>10</v></c><c r="F1"><f>SUM(A1:A1)</f></c><c r="G1"><f>COUNT(B1:B1)</f></c><c r="H1"><f>AVERAGE(A1:A1)</f></c><c r="I1"><f>SUMIF(C1:C2,&quot;&gt;0&quot;,OFFSET(D1,0,0,2))</f></c><c r="J1"><f>AVERAGEIF(C1:C2,&quot;&gt;0&quot;,INDEX(D1:D2,0))</f></c></row><row r="2"><c r="C2"><v>2</v></c><c r="D2"><v>20</v></c></row>')}]}));
+  expect(artifact.calculation.displayText("F1")).toBe("0");
+  expect(artifact.calculation.displayText("G1")).toBe("0");
+  expect(artifact.calculation.displayText("H1")).toBe("#DIV/0!");
+  expect(artifact.calculation.displayText("I1")).toBe("30");
+  expect(artifact.calculation.displayText("J1")).toBe("15");
+  expect(artifact.calculation.diagnostics).toEqual([]);
+});
+
+test("scalar arithmetic and functions remain scalar at merged anchors", () => {
+  for (const formula of ["A1+1", "ABS(A1)"]) {
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet(`<row r="1"><c r="A1"><v>2</v></c><c r="C1"><f>${formula}</f></c></row>`, '<mergeCells count="1"><mergeCell ref="C1:D1"/></mergeCells>')}]}));
+    expect(artifact.calculation.displayText("C1")).toBe(formula === "A1+1" ? "3" : "2");
+    expect(artifact.calculation.arrayValue("C1")).toBeUndefined();
+  }
+});
+
+test("nested reference results keep aggregate coercion provenance", () => {
+  const artifact = openSpreadsheetArtifact(buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet('<row r="1"><c r="A1" t="inlineStr"><is><t>7</t></is></c><c r="B1" t="b"><v>1</v></c><c r="D1"><f>SUM(INDEX(A1:A2,1))</f></c><c r="E1"><f>AVERAGE(INDEX(A1:A2,1))</f></c><c r="F1"><f>COUNT(INDIRECT(&quot;B1&quot;))</f></c></row>')}]}));
+  expect(artifact.calculation.displayText("D1")).toBe("0");
+  expect(artifact.calculation.displayText("E1")).toBe("#DIV/0!");
+  expect(artifact.calculation.displayText("F1")).toBe("0");
+});
+
+test("whole-axis aggregates include virtual spill cells beyond source dimensions", () => {
+  for (const anchor of ["A2", "B2"]) {
+    // A2 spills across B and down; B2 spills down. No source cells exist below row 2.
+    const formula = anchor === "A2" ? "{0,1;0,2;0,3}" : "{1;2;3}";
+    const artifact = openSpreadsheetArtifact(buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet(`<row r="1"><c r="D1"><f>SUM(B:B)</f></c><c r="E1"><f>COUNT(B:B)</f></c><c r="F1"><f>AVERAGE(B:B)</f></c></row><row r="2"><c r="${anchor}"><f>${formula}</f></c></row>`)}]}));
+    for (const current of [artifact, openSpreadsheetArtifact(artifact.bytes())]) {
+      expect(current.calculation.displayText("D1")).toBe("6");
+      expect(current.calculation.displayText("E1")).toBe("3");
+      expect(current.calculation.displayText("F1")).toBe("2");
+      expect(current.calculation.diagnostics).toEqual([]);
+    }
+  }
+});
+
+test("one-cell structured references preserve aggregate coercion after reopen and edits", () => {
+  for (const [data, sum, average, count, product, mixed] of [
+    ['t="inlineStr"><is><t>7</t></is>', "0", "#DIV/0!", "0", "0", "2"],
+    ['t="b"><v>1</v>', "0", "#DIV/0!", "0", "0", "2"],
+    ['><v>7</v>', "7", "7", "1", "7", "14"],
+    ['>', "0", "#DIV/0!", "0", "0", "2"],
+  ]) {
+    const bytes = buildWorkbookFixture({sheets: [{name:"Data", sheetId:1, relationshipId:"data",
+      xml:`<worksheet xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Amount</t></is></c><c r="C1"><f>SUM(Items[Amount])</f></c><c r="D1"><f>AVERAGE(Items[Amount])</f></c><c r="E1"><f>COUNT(Items[Amount])</f></c><c r="F1"><f>PRODUCT(Items[Amount])</f></c><c r="G1"><f>PRODUCT(A2:A2)</f></c><c r="H1"><f>PRODUCT(Items[Amount],2)</f></c></row><row r="2"><c r="A2" ${data}</c></row></sheetData><tableParts count="1"><tablePart r:id="table"/></tableParts></worksheet>`,
+      tables:[{relationshipId:"table",target:"tables/table1.xml",xml:`<table xmlns="${ns}" id="1" name="Items" displayName="Items" ref="A1:A2" totalsRowShown="0"><tableColumns count="1"><tableColumn id="1" name="Amount"/></tableColumns></table>`}],
+    }]});
+    const original = openSpreadsheetArtifact(bytes);
+    for (const artifact of [original, openSpreadsheetArtifact(original.bytes()), original.editCell("G3", 1)]) {
+      expect(artifact.calculation.displayText("C1")).toBe(sum!);
+      expect(artifact.calculation.displayText("D1")).toBe(average!);
+      expect(artifact.calculation.displayText("E1")).toBe(count!);
+      expect(artifact.calculation.displayText("F1")).toBe(product!);
+      expect(artifact.calculation.displayText("G1")).toBe(product!);
+      expect(artifact.calculation.displayText("H1")).toBe(mixed!);
+      expect(artifact.calculation.diagnostics).toEqual([]);
+    }
+    expect(original.bytes()).toEqual(bytes);
+  }
+});
+
+for (const tableName of ["Items", "Receipts"]) for (const columnName of ["Amount", "Net!Amount"])
+  test(`core INDIRECT structured geometry is independent of cell style: ${tableName}[${columnName}]`, () => {
+    const token = `${tableName}[${columnName}]`;
+    const bytes = buildWorkbookFixture({sheets:[{name:"Data",sheetId:1,relationshipId:"data",
+      xml:`<worksheet xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>${columnName}</t></is></c><c r="C1"><f>SUM(INDIRECT("${token}",FALSE))</f></c><c r="D1"><f>SUM(OFFSET(INDIRECT("${token}",FALSE),0,0))</f></c><c r="E1"><f>INDEX(INDIRECT("${token}",FALSE),1)</f></c><c r="F1"><f>SUMIF(A2:A2,"&gt;0",INDIRECT("${token}",FALSE))</f></c></row><row r="2"><c r="A2"><v>7</v></c></row></sheetData><tableParts count="1"><tablePart r:id="table"/></tableParts></worksheet>`,
+      tables:[{relationshipId:"table",target:"tables/table1.xml",xml:`<table xmlns="${ns}" id="1" name="${tableName}" displayName="${tableName}" ref="A1:A2" totalsRowShown="0"><tableColumns count="1"><tableColumn id="1" name="${columnName}"/></tableColumns></table>`}],
+    }]});
+    const artifact = openSpreadsheetArtifact(bytes);
+    for (const current of [artifact,openSpreadsheetArtifact(artifact.bytes())]) {
+      for (const cell of ["C1","D1","E1","F1"]) expect(current.calculation.displayText(cell)).toBe("7");
+      expect(current.calculation.diagnostics).toEqual([]);
+    }
+    const edited = artifact.editCell("A2", 8);
+    for (const current of [edited,openSpreadsheetArtifact(edited.bytes())]) {
+      for (const cell of ["C1","D1","E1","F1"]) expect(current.calculation.displayText(cell)).toBe("8");
+      expect(current.calculation.diagnostics).toEqual([]);
+    }
+    expect(artifact.bytes()).toEqual(bytes);
+  });
+
+test("budget-limited workbook calculation publishes no partial spill and preserves producer cache", () => {
+  const bytes = buildWorkbookFixture({sheets:[{name:"Data",sheetId:1,relationshipId:"data",xml:sheet('<row r="1"><c r="E1"><f>B2+1</f><v>88</v></c></row><row r="2"><c r="A2"><f>{1,2}</f><v>99</v></c></row>')} ]});
+  const original = openSpreadsheetArtifact(bytes);
+  for (const artifact of [original,openSpreadsheetArtifact(original.bytes())]) {
+    const limited = calculateSpreadsheetWorksheet(artifact.worksheet,{maxOperations:12});
+    expect(limited.diagnostics).toContainEqual(expect.objectContaining({code:"evaluation-limit",address:expect.objectContaining({row:2,column:1})}));
+    expect(limited.arrayValue("A2")).toBeUndefined();
+    expect(limited.value("A2")).toBeUndefined();
+    expect(limited.value("B2")).toBeUndefined();
+    expect(limited.displayText("A2")).toBe("99");
+    expect(limited.displayText("E1")).toBe("1");
+    expect(artifact.worksheet.cell("A2")?.value).toMatchObject({type:"number",value:99});
+    expect(artifact.worksheet.cell("B2")).toBeUndefined();
+    expect(artifact.bytes()).toEqual(bytes);
+  }
+});
+
+test("blocked arrays recalculate after a temporary occupying spill shrinks", () => {
+  const bytes = buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet(
+    '<row r="1"><c r="B1"><f>IF(A5,1,{1;2})</f></c></row>' +
+    '<row r="2"><c r="A2"><f>{3,4}</f></c><c r="C2"><f>B2+1</f></c></row>' +
+    '<row r="4"><c r="A4"><f>{1;2}</f></c></row>'
+  )}]});
+  const original = openSpreadsheetArtifact(bytes);
+  for (const artifact of [original, openSpreadsheetArtifact(original.bytes()), original.editCell("E1", "unrelated")]) {
+    expect(artifact.calculation.displayText("B1")).toBe("1");
+    expect(artifact.calculation.displayText("A2")).toBe("3");
+    expect(artifact.calculation.displayText("B2")).toBe("4");
+    expect(artifact.calculation.displayText("C2")).toBe("5");
+    expect(artifact.calculation.arrayValue("A2")?.rows).toEqual([[{type:"number",value:3},{type:"number",value:4}]]);
+    expect(artifact.calculation.diagnostics).toEqual([]);
+    expect(artifact.worksheet.cell("B2")).toBeUndefined();
+  }
+  expect(original.bytes()).toEqual(bytes);
+});
