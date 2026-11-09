@@ -61,7 +61,8 @@
     end = $state(0),
     pending = $state<Partial<PdfTextStyle>>({});
   const visiblePages = new SvelteSet<string>();
-  let input: HTMLTextAreaElement, root: HTMLDivElement;
+  let input: HTMLTextAreaElement;
+  let root = $state<HTMLDivElement>();
   let compositionBase: PdfTextModel | undefined;
   let beforeSelection: PdfInputSelection | undefined,
     compositionSelection: PdfInputSelection | undefined;
@@ -149,7 +150,7 @@
     }
   }
   export function goToPage(index: number) {
-    root.querySelector(`[data-pdf-page="${index + 1}"]`)?.scrollIntoView({ block: 'start' });
+    root?.querySelector(`[data-pdf-page="${index + 1}"]`)?.scrollIntoView({ block: 'start' });
   }
   function publish() {
     if (!active || !input) return;

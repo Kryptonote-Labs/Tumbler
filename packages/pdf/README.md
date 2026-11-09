@@ -288,5 +288,5 @@ For interactive hosts, `await fonts.forkAsync(document, yieldControl)` prepares 
 source font mappings as `fork(document)`, but calls the host's async callback before
 scanning and between pages. Yield to the event loop there to keep the viewer responsive,
 and throw on cancellation to stop preparation. Headless callers can keep using `fork`.
-The editable Svelte view mounts character overlays for nearby pages and retains selected
+The editable Svelte view mounts editing controls for nearby pages and retains selected
 regions off screen; page geometry remains mounted for stable scrolling.
