@@ -1,5 +1,6 @@
 <script lang="ts">
   import PdfSearch from './PdfSearch.svelte';
+  import { pdfPagePosition } from './page-position.ts';
   import { PdfSearchIndex } from '@tumblerjs/pdf';
   import { pdfTextInputChange, type PdfInputSelection } from './text-input.ts';
   import { paintEditablePdfPage } from './paint-editable-page.ts';
@@ -443,6 +444,7 @@
   {#each flow.pages as page (page.id)}
     <div
       class="pdf-page-frame"
+      use:pdfPagePosition={{ index: page.index, oncurrent: onpagechange }}
       style:width={`${(page.rotation % 180 ? page.source.height : page.source.width) * scale}px`}
       style:height={`${(page.rotation % 180 ? page.source.width : page.source.height) * scale}px`}
     >
