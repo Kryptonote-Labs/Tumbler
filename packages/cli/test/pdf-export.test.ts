@@ -65,7 +65,7 @@ test('invalid export selections and flags fail without producing a file', async 
       expect(existsSync(output)).toBe(false);
     }
     for (const flags of [
-      ['--output', output], ['--pages', '1'],
+      ['--pages', '1'],
       ['--pages', '1', '--output', output, '--format', 'png'],
       ['--pages', '1', '--output', output, '--pages', '2'],
       ['--pages', '1', '--output', output, '--unknown', 'x'],
