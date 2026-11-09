@@ -16,6 +16,11 @@ import { bytes, serializePdfValue } from './object-writer.ts';
 
 /** Copy selected pages into a fresh object graph. No original revisions or unselected page streams are retained. */
 export function extractPdfPages(document: PdfDocument, indices: readonly number[]): Uint8Array {
+  return extractPdfPageGraph(document, indices).bytes;
+}
+
+/** Internal merge intermediate: external page slots are remapped before publishing a PDF. */
+export function extractPdfPageGraph(document: PdfDocument, indices: readonly number[], linkedIndices: readonly number[] = []) {
   if (
     !indices.length ||
     indices.some((index) => !Number.isSafeInteger(index) || !document.pages[index])
@@ -38,6 +43,18 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
       refs.set(page.reference.key, ref);
       return ref;
     });
+  const pageReferences = new Map(selected.map((page, index) => [page.reference.key, pageRefs[index]!]));
+  for (const index of linkedIndices) {
+    const page = document.pages[index];
+    if (!page) throw new Error('Invalid linked PDF page.');
+    if (!pageReferences.has(page.reference.key)) {
+      // A null slot retains reference identity without copying an unselected page.
+      // The merge writer maps this slot to the actual output page before copying.
+      const ref = reserve();
+      refs.set(page.reference.key, ref);
+      pageReferences.set(page.reference.key, ref);
+    }
+  }
   const excluded = new Set(
     document.pages
       .filter((page) => !refs.has(page.reference.key))
@@ -51,7 +68,7 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
   }
   const selectedPageKeys = new Set(selected.map((page) => page.reference.key));
   const excludedValue = (value: PdfValue | undefined) =>
-    value instanceof PdfReference && !selectedPageKeys.has(value.key);
+    value instanceof PdfReference && !pageReferences.has(value.key);
   function copy(value: PdfValue): PdfValue {
     if (value instanceof PdfReference) {
       if (excluded.has(value.key)) return null;
@@ -141,8 +158,48 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
     }
     return undefined;
   }
+  /** Flatten execution order so pruning a GoTo never prunes its surviving successors. */
+  function copyAction(value: PdfValue | undefined): PdfValue | undefined {
+    const active = new Set<PdfDictionary>();
+    function sequence(value: PdfValue | undefined): PdfDictionary[] {
+      const original = source.resolve(value);
+      if (original === null) return [];
+      if (Array.isArray(original)) return original.flatMap(sequence);
+      if (!(original instanceof Map)) throw new Error('Invalid PDF action dictionary.');
+      if (active.has(original)) throw new Error('Cyclic PDF action chain.');
+      active.add(original);
+      try {
+        const kind = source.resolve(original.get('S'));
+        const goto = kind instanceof PdfName && kind.value === 'GoTo';
+        const target = original.get('D');
+        const dest = goto && target !== undefined ? destination(target) : undefined;
+        const result: PdfDictionary[] = [];
+        if (!goto || dest !== undefined) {
+          const info = new Map<string, PdfValue>();
+          for (const [key, entry] of original) {
+            if (key === 'Next') continue;
+            info.set(key, key === 'S' ? copy(kind) : key === 'D' && goto ? dest! : copy(entry));
+          }
+          result.push(info);
+        }
+        return [...result, ...sequence(original.get('Next'))];
+      } finally { active.delete(original); }
+    }
+    const actions = sequence(value);
+    const first = actions[0];
+    if (!first) return undefined;
+    if (actions.length > 1) first.set('Next', actions.length === 2 ? actions[1]! : actions.slice(1));
+    return first;
+  }
   function copyDictionary(original: PdfDictionary): PdfDictionary {
     const result = new Map<string, PdfValue>();
+    const type = source.resolve(original.get('Type'));
+    const subtype = source.resolve(original.get('Subtype'));
+    const annotation = (type instanceof PdfName && type.value === 'Annot') ||
+      (subtype instanceof PdfName && original.has('Rect'));
+    const outline = source.resolve(original.get('Title')) instanceof PdfString;
+    const actionType = source.resolve(original.get('S'));
+    const goto = actionType instanceof PdfName && actionType.value === 'GoTo';
     for (const [key, value] of original) {
       // Page back-references never pull a page tree or another page into this standalone file.
       if (
@@ -152,28 +209,25 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
       )
         continue;
 
-      if (key === 'Dest') {
+      if ((key === 'Dest' && (annotation || outline)) || (key === 'D' && goto)) {
         const dest = destination(value);
         if (dest) result.set(key, dest);
         continue;
       }
-      if (key === 'A') {
-        const action = source.resolve(value);
-        if (
-          action instanceof Map &&
-          action.get('S') instanceof PdfName &&
-          (action.get('S') as PdfName).value === 'GoTo'
-        ) {
-          const dest = action.get('D');
-          const copied = dest === undefined ? undefined : destination(dest);
-          if (copied)
-            result.set(
-              key,
-              new Map<string, PdfValue>([
-                ['S', new PdfName('GoTo')],
-                ['D', copied],
-              ]),
-            );
+      // Actions can appear under /A, additional-action events, /Next or arrays.
+      // Resolve their destinations wherever the action dictionary occurs, retaining
+      // the remaining entries (including chained actions).
+      if (key === 'Next' && actionType instanceof PdfName) {
+        const chain = copyAction(value);
+        if (chain) result.set(key, chain);
+        continue;
+      }
+      const action = source.resolve(value);
+      if (action instanceof Map) {
+        const kind = source.resolve(action.get('S'));
+        if (kind instanceof PdfName && kind.value === 'GoTo') {
+          const retained = copyAction(value);
+          if (retained) result.set(key, retained);
           continue;
         }
       }
@@ -183,7 +237,40 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
   }
   const selectedAnnotations = new Set<string>(),
     parentKeys = new Set<number>();
+  const scannedResources = new Set<string>(), selectedResources = new Set<string>();
+  function resourceParentKeys(value: PdfValue | undefined) {
+    if (value instanceof PdfReference) {
+      if (scannedResources.has(value.key)) return;
+      scannedResources.add(value.key);
+      const resolved = source.resolve(value);
+      if (resolved instanceof PdfStream) selectedResources.add(value.key);
+      resourceParentKeys(resolved);
+    } else if (value instanceof PdfStream) resourceParentKeys(value.dictionary);
+    else if (Array.isArray(value)) value.forEach(resourceParentKeys);
+    else if (value instanceof Map) {
+      // Tagged Form XObjects (including nested resources/appearance streams) own
+      // ParentTree entries independently of the page that invokes them.
+      for (const name of ['StructParents', 'StructParent']) {
+        const key = source.resolve(value.get(name));
+        if (typeof key === 'number') parentKeys.add(key);
+      }
+      const type = source.resolve(value.get('Type'));
+      const kind = type instanceof PdfName ? type.value : '';
+      const annotation = kind === 'Annot' ||
+        (source.resolve(value.get('Subtype')) instanceof PdfName && value.has('Rect'));
+      const field = source.resolve(value.get('FT')) instanceof PdfName;
+      for (const [key, child] of value) {
+        // These names are also valid resource names. Only treat them as ownership
+        // links in dictionaries whose types give them that meaning.
+        if (key === 'Parent' && (['Page', 'Pages'].includes(kind) || annotation || field)) continue;
+        if (key === 'P' && (annotation || kind === 'StructElem')) continue;
+        if (key === 'Pg' && ['StructElem', 'MCR', 'OBJR'].includes(kind)) continue;
+        resourceParentKeys(child);
+      }
+    }
+  }
   for (const page of selected) {
+    resourceParentKeys(page.resources);
     const key = source.resolve(page.dictionary.get('StructParents'));
     if (typeof key === 'number') parentKeys.add(key);
     const annotations = source.resolve(page.dictionary.get('Annots'));
@@ -192,6 +279,7 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
         if (value instanceof PdfReference) selectedAnnotations.add(value.key);
         const annotation = source.resolve(value);
         if (annotation instanceof Map) {
+          resourceParentKeys(annotation.get('AP'));
           const key = source.resolve(annotation.get('StructParent'));
           if (typeof key === 'number') parentKeys.add(key);
         }
@@ -201,16 +289,21 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
     source,
     selectedPages: new Set(selected.map((page) => page.reference.key)),
     selectedAnnotations,
+    selectedObjects: new Set([...selectedAnnotations, ...selectedResources]),
     refs,
     reserve,
     set: (ref, value) => {
       objects[ref.object - 1] = value;
     },
     copy,
+    copyAction,
   };
   const forms = subsetPdfForms(context),
     tags = subsetPdfTags(context, parentKeys),
-    outlines = subsetPdfOutlines(context, destination);
+    outlines = subsetPdfOutlines(context, destination, (value) =>
+      !Array.isArray(value) || !(value[0] instanceof PdfReference) ||
+      pageRefs.some((reference) => value[0] instanceof PdfReference && reference.key === value[0].key),
+    );
   selected.forEach((page, index) => {
     const info = copyDictionary(page.dictionary);
     info.set('Type', new PdfName('Page'));
@@ -278,5 +371,5 @@ export function extractPdfPages(document: PdfDocument, indices: readonly number[
     output.set(chunk, at);
     at += chunk.length;
   }
-  return output;
+  return { bytes: output, pageReferences };
 }

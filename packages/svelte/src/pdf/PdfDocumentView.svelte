@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PdfSearch from './PdfSearch.svelte';
+  import { PdfSearchIndex } from '@tumblerjs/pdf';
   import { onMount } from 'svelte';
   import { trackPdfSelection } from './pointer-selection.ts';
   import { selectedPdfText } from './selection.ts';
@@ -23,30 +25,33 @@
     return () => current.destroy();
   });
   const interpreter = $derived(new PdfInterpreter(document));
-  let host: HTMLDivElement;
+  let host = $state<HTMLDivElement>();
   onMount(() => {
-    const stopSelection = trackPdfSelection(host);
+    const element = host;
+    if (!element) return;
+    const stopSelection = trackPdfSelection(element);
     const copy = (event: ClipboardEvent) => {
       if (
         event.target instanceof Element &&
         event.target.closest('input,textarea,[contenteditable]')
       )
         return;
-      if (!host.getClientRects().length || host.closest('[inert],[hidden]')) return;
-      const text = selectedPdfText(window.getSelection(), host);
+      if (!element.getClientRects().length || element.closest('[inert],[hidden]')) return;
+      const text = selectedPdfText(window.getSelection(), element);
       if (text === undefined || !event.clipboardData) return;
       event.clipboardData.setData('text/plain', text);
       event.preventDefault();
     };
-    host.ownerDocument.addEventListener('copy', copy);
+    element.ownerDocument.addEventListener('copy', copy);
     return () => {
       stopSelection();
-      host.ownerDocument.removeEventListener('copy', copy);
+      element.ownerDocument.removeEventListener('copy', copy);
     };
   });
   export function goToPage(index: number) {
-    host.querySelector(`[data-pdf-page="${index + 1}"]`)?.scrollIntoView({ block: 'start' });
+    host?.querySelector(`[data-pdf-page="${index + 1}"]`)?.scrollIntoView({ block: 'start' });
   }
+  const searchIndex = $derived(new PdfSearchIndex(document, undefined, interpreter));
 </script>
 
 <div
@@ -63,6 +68,8 @@
     {/key}
   {/if}
 </div>
+
+<PdfSearch root={host} {scale} index={() => searchIndex} />
 
 <style>
   .pdf-document {

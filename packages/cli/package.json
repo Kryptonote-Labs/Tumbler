@@ -14,13 +14,15 @@
     "LICENSE"
   ],
   "dependencies": {
+    "@tumblerjs/pdf": "0.1.0-alpha.26",
     "@tumblerjs/word": "0.1.0-alpha.26",
     "zod": "^4.6.5",
     "yjs": "^13.6.0",
-    "@tumblerjs/slides": "0.1.0-alpha.26"
+    "@tumblerjs/slides": "0.1.0-alpha.26",
+    "@tumblerjs/sheets": "0.1.0-alpha.26"
   },
   "version": "0.1.0-alpha.26",
-  "description": "Host-backed command-line operations for reading and editing Word documents.",
+  "description": "Host-backed command-line operations for Word documents, presentations and spreadsheets.",
   "license": "MIT",
   "repository": {
     "type": "git",

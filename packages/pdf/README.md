@@ -218,3 +218,67 @@ unsupported-feature error, since its XML form data needs a separate reconstructi
 
 The workspace or host may still retain original bytes for undo and recovery. These operations are
 not a secure-redaction API. Existing text edits do not reconstruct tagged reading-order semantics.
+
+### Find text
+
+`new PdfSearchIndex(document).find('invoice number')` searches the whole document
+using case-insensitive literal matching. Pass `{ matchCase: true, pages: [2, 3] }`
+to limit the search (page numbers are one-based). Results contain `matches` and
+`total`; each match has `page`, `text`, `context`, and `rects` in viewport points
+with a top-left origin. Wrapped phrases can have several rectangles. Ligature
+expansion retains the original glyph geometry. Invisible OCR text is included;
+image-only pages have no searchable text.
+
+For current edits, construct the snapshot with `{ model, fonts }` as the second
+argument. Rebuild it after edits or page operations; deleted text and replaced
+source glyphs are excluded. Search does not modify the model or undo history.
+The PDF viewer opens search with Cmd/Ctrl+F. Enter and Shift+Enter navigate,
+Escape closes, and Aa toggles case sensitivity.
+
+## Merge PDFs
+
+```ts
+import { openPdfDocument, mergePdfDocuments, parsePdfPageSelection } from '@tumblerjs/pdf';
+
+const first = openPdfDocument(firstBytes);
+const second = openPdfDocument(secondBytes, { password: 'optional-password' });
+const output = mergePdfDocuments([
+  { document: first, pages: parsePdfPageSelection('3,1-2', first.pages.length) },
+  { document: second }, // All pages, in source order.
+  { document: first, pages: [0, 0] }, // Zero-based API indices; repetitions are allowed.
+]);
+```
+
+The output is a new, unencrypted PDF. Inputs are never changed. Pages retain their
+encoded content streams, embedded fonts and images, graphics, page boxes,
+rotation, annotations and appearance streams. Internal links and bookmarks are
+retained when their target appears anywhere in the merged output, including another
+block from the same source bytes. Within a copied block, destinations prefer its
+local page copy; otherwise they target the first matching output page. Links to
+pages omitted from the entire output are removed. Page bookmarks belong to the
+block containing their target page, so split selections do not duplicate them.
+Repeated pages start an independent selection and receive
+independent annotations and fields. To interleave PDFs, repeat an input in the
+array at the desired position. Selection strings use one-based inclusive ranges,
+including descending ranges and repeated pages.
+
+Interactive fields are grouped under `source1`, `source2`, etc., preventing field
+and font-resource name collisions. Repeated-page copies receive their own group.
+Tagged structures, reverse parent maps, IDs and custom role/class names are kept
+disjoint; bookmarks and optional-content groups are combined. Document-level
+metadata, attachments that are not page annotations, page labels and document
+scripts are not combined. XFA, signature fields, scripted forms, forms with ResetForm,
+SubmitForm, Hide or ImportData actions, and indeterminate
+or non-default optional-content configuration intents are rejected explicitly.
+A merge does not retain or validate digital signatures.
+
+The CLI and the Svelte `PdfMerge` component use these same APIs and selection rules.
+Run `bun test packages/pdf/test/merge.test.ts` for structural coverage, and
+`python3 tools/pdf-merge/verify.py` for the independently generated document corpus
+and Poppler/pypdf content-preservation checks.
+
+`deletePdfModelPages(document, model, fonts, selection)` applies a one-based page
+selection to the current collaborative layout, including reordered and continuation
+pages. It rejects duplicates and deletion of every page before mutation. It uses
+the same page model as interactive deletion and preserves source identities and undo;
+it is not a redaction API. File replacement uses the CLI's separate extraction safeguards.

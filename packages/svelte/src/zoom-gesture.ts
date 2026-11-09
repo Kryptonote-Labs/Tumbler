@@ -77,7 +77,8 @@ export function zoomGesture(element: HTMLElement, zoom: (gesture: ZoomGesture) =
   element.addEventListener('gesturestart', gestureStart, { passive: false });
   element.addEventListener('gesturechange', gestureChange, { passive: false });
   element.addEventListener('gestureend', gestureEnd, { passive: false });
-  element.addEventListener('wheel', wheel, { passive: false });
+  // Claim trackpad pinches before a document surface or overlay can stop propagation.
+  element.addEventListener('wheel', wheel, { passive: false, capture: true });
   element.addEventListener('touchstart', touch, { passive: false });
   element.addEventListener('touchmove', touch, { passive: false });
   element.addEventListener('touchend', end);
@@ -88,7 +89,7 @@ export function zoomGesture(element: HTMLElement, zoom: (gesture: ZoomGesture) =
     element.removeEventListener('gesturestart', gestureStart);
     element.removeEventListener('gesturechange', gestureChange);
     element.removeEventListener('gestureend', gestureEnd);
-    element.removeEventListener('wheel', wheel);
+    element.removeEventListener('wheel', wheel, { capture: true });
     element.removeEventListener('touchstart', touch);
     element.removeEventListener('touchmove', touch);
     element.removeEventListener('touchend', end);

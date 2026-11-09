@@ -44,13 +44,13 @@ describe("bounded spreadsheet formula calculation", () => {
 
   test("uses a source cache for unsupported dependencies without claiming it was calculated", () => {
     const workbook = source({
-      "Sheet1!A1": formula("OFFSET(B1,0,0)", { type: "number", value: 42 }),
+      "Sheet1!A1": formula("UNSUPPORTED(B1,0,0)", { type: "number", value: 42 }),
       "Sheet1!A2": formula("A1+1"),
     });
     const calculation = calculateFormulas(workbook);
     expect(calculation.value(address("Sheet1!A1"))).toBeUndefined();
     expect(calculation.value(address("Sheet1!A2"))).toEqual({ type: "number", value: 43 });
-    expect(calculation.diagnostics).toMatchObject([{ code: "unsupported-function", formula: "OFFSET(B1,0,0)" }]);
+    expect(calculation.diagnostics).toMatchObject([{ code: "unsupported-function", formula: "UNSUPPORTED(B1,0,0)" }]);
   });
 
   test("keeps IF lazy and implements errors, aggregates, logicals, and coercion", () => {

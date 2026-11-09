@@ -2,11 +2,16 @@ import type { SpreadsheetCellValue } from "./worksheet.ts";
 
 export const BUILT_IN_NUMBER_FORMATS: ReadonlyMap<number, string> = new Map([
   [0, "General"], [1, "0"], [2, "0.00"], [3, "#,##0"], [4, "#,##0.00"],
+  [5, '"$"#,##0_);("$"#,##0)'], [6, '"$"#,##0_);[Red]("$"#,##0)'],
+  [7, '"$"#,##0.00_);("$"#,##0.00)'], [8, '"$"#,##0.00_);[Red]("$"#,##0.00)'],
   [9, "0%"], [10, "0.00%"], [11, "0.00E+00"], [12, "# ?/?"], [13, "# ??/??"],
   [14, "mm-dd-yy"], [15, "d-mmm-yy"], [16, "d-mmm"], [17, "mmm-yy"],
   [18, "h:mm AM/PM"], [19, "h:mm:ss AM/PM"], [20, "h:mm"], [21, "h:mm:ss"],
   [22, "m/d/yy h:mm"], [37, "#,##0 ;(#,##0)"], [38, "#,##0 ;[Red](#,##0)"],
-  [39, "#,##0.00;(#,##0.00)"], [40, "#,##0.00;[Red](#,##0.00)"], [49, "@"],
+  [39, "#,##0.00;(#,##0.00)"], [40, "#,##0.00;[Red](#,##0.00)"],
+  [41, '_(* #,##0_);_(* \\(#,##0\\);_(* "-"_);_(@_)'], [42, '_("$"* #,##0_);_("$"* \\(#,##0\\);_("$"* "-"_);_(@_)'],
+  [43, '_(* #,##0.00_);_(* \\(#,##0.00\\);_(* "-"??_);_(@_)'], [44, '_("$"* #,##0.00_);_("$"* \\(#,##0.00\\);_("$"* "-"??_);_(@_)'],
+  [49, "@"],
 ]);
 
 export interface SpreadsheetFormatOptions {
@@ -31,7 +36,7 @@ export function formatSpreadsheetCellValue(
 function formatNumber(value: number, code: string, dateSystem: "1900" | "1904", locale: string): string {
   if (code.toLowerCase() === "general") return generalNumber(value);
   const sections = splitSections(code);
-  const index = value > 0 ? 0 : value < 0 ? Math.min(1, sections.length - 1) : Math.min(2, sections.length - 1);
+  const index = value > 0 ? 0 : value < 0 ? Math.min(1, sections.length - 1) : sections.length >= 3 ? 2 : 0;
   const section = sections[index] ?? sections[0] ?? "General";
   if (section === "") return "";
   const normalized = removeDecorators(section);
@@ -56,11 +61,14 @@ function formatDecimal(value: number, section: string, locale: string, explicitN
   const rawSuffix = section.slice(last + 1);
   const trailingCommas = /^,+/.exec(rawSuffix)?.[0].length ?? 0;
   const magnitude = Math.abs(value) * 100 ** percentCount / 1000 ** trailingCommas;
-  const number = new Intl.NumberFormat(locale, {
+  const formatted = new Intl.NumberFormat(locale, {
     useGrouping: grouping,
     minimumFractionDigits,
     maximumFractionDigits,
   }).format(magnitude);
+  // Without a 0 placeholder, a zero integer part is omitted (#) or padded (?), as in Excel.
+  const integerPattern = pattern.slice(0, decimal < 0 ? pattern.length : decimal);
+  const number = integerPattern.includes("0") ? formatted : formatted.replace(/^0(?=\D|$)/, integerPattern.includes("?") ? " " : "");
   const prefix = literalText(section.slice(0, first));
   const suffix = literalText(rawSuffix.slice(trailingCommas));
   const sign = value < 0 && !explicitNegativeSection ? "-" : "";

@@ -62,6 +62,8 @@ test('wrapped floating ink outside its anchor cell keeps page bounds for pixel I
   expect(wordPageInkBounds(inTable)[0]!.width).toBeGreaterThan(0);
   const reads: number[][] = [], writes: number[][] = [];
   const context = {
+    createLinearGradient() { return { addColorStop() {} }; },
+    createRadialGradient() { return { addColorStop() {} }; },
     save() {}, restore() {}, scale() {}, beginPath() {}, rect() {}, clip() {}, fillRect() {}, fillText() {},
     direction: 'inherit' as const, globalAlpha: 1, translate() {}, rotate() {}, arc() {}, fill() {}, measureText: () => ({ width: 0 }),
     font: '', fillStyle: '' as string | CanvasGradient | CanvasPattern, strokeStyle: '' as string | CanvasGradient | CanvasPattern,
