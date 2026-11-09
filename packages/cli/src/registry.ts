@@ -81,7 +81,7 @@ export function defineOperation<S extends z.ZodType>(definition: {
 export const operations = {
   export: defineOperation({
     name: 'export',
-    summary: 'Export selected PDF pages to a new PDF, preserving the order in --pages.',
+    summary: 'Export a presentation or PDF to a new PDF. --pages selects PDF pages in order.',
     access: 'read',
     input: pdfExportInput,
     run: (host, document, input) => {
