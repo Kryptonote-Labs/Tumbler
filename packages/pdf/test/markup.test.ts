@@ -9,6 +9,7 @@ import {
   pdfMarkupFromRects,
   pdfMarkupDisplayQuads,
   PdfInterpreter,
+  layoutPdfTextFlow,
 } from '../src/index.ts';
 import { pdfFixture } from './pdf-fixture.ts';
 const fixture = () =>
@@ -98,4 +99,18 @@ test('undoing annotation creation hides it without erasing a peer colour edit', 
     hidden: false,
     color: '#123456',
   });
+});
+
+test('visible markup retains its continuation page without text overflow', () => {
+  const pdf = fixture(), model = new PdfTextModel(), fonts = new PdfEditingFonts();
+  try {
+    const markup = importPdfMarkup(pdf)[0]!;
+    model.annotations.set({ ...markup, id: 'continuation-markup', continuation: 1 });
+    expect(layoutPdfTextFlow(model, fonts, pdf.pages).pages).toHaveLength(2);
+    const output = openPdfDocument(exportEditedPdf(pdf, model, fonts));
+    expect(output.pages).toHaveLength(2);
+    expect(importPdfMarkup(output).some(annotation => annotation.page === 1)).toBe(true);
+    model.annotations.update(pdf, 'continuation-markup', { hidden: true });
+    expect(layoutPdfTextFlow(model, fonts, pdf.pages).pages).toHaveLength(1);
+  } finally { model.doc.destroy(); }
 });
