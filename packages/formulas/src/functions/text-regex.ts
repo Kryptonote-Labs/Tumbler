@@ -72,17 +72,21 @@ export function boundedRegex(
         return escape !== undefined && !/[a-zA-Z0-9]/.test(escape) ? {literal: escape, test} : {test};
       }
       // A closing bracket in the first class position is a literal (also after ^).
-      if (pattern[p] === "]") { p++; tests.push(s => equal(s, "]")); }
-      while (p < pattern.length && pattern[p] !== "]") {
+      let firstAtom = true;
+      while (p < pattern.length && (pattern[p] !== "]" || firstAtom)) {
         const a = classAtom();
+        firstAtom = false;
         if (pattern[p] === "-" && pattern[p + 1] !== "]") {
           p++;
           const b = classAtom();
           if (a.literal === undefined || b.literal === undefined) throw new UnsupportedRegex("nonliteral class range");
-          const first = insensitive ? a.literal.toLowerCase() : a.literal;
-          const last = insensitive ? b.literal.toLowerCase() : b.literal;
+          const first = a.literal;
+          const last = b.literal;
           if (first > last) throw new SyntaxError("range");
-          tests.push(s => { const value = insensitive ? s.toLowerCase() : s; return value >= first && value <= last; });
+          tests.push(s => {
+            const members = insensitive ? [s, s.toLowerCase(), s.toUpperCase(), s.toLowerCase().toUpperCase()] : [s];
+            return members.some(value => value.length === 1 && value >= first && value <= last);
+          });
         } else tests.push(a.test);
       }
       if (pattern[p++] !== "]") throw new SyntaxError("class");
