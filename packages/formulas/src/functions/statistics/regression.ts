@@ -199,9 +199,9 @@ function fit(
     }
   const standardErrors = Array<number>(p).fill(0);
   for (let i = 0; i < rank; i++)
-    standardErrors[order[i]!] = Math.sqrt(
-      inverse[i]!.reduce((s, z) => s + z * z, 0) * variance,
-    );
+    standardErrors[order[i]!] =
+      Math.sqrt(inverse[i]!.reduce((s, z) => s + z * z, 0) * variance) /
+      predictorScales[order[i]!]!;
   let interceptVar = constant ? 1 / n : 0;
   for (let col = 0; col < rank; col++) {
     const z = inverse.reduce(

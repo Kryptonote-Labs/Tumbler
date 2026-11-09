@@ -200,3 +200,24 @@ test.each([
     verifyFormulaDocument(fixture, openFormulaDocument(fixture));
   },
 );
+
+test("LINEST statistics retain the units of each coefficient", () => {
+  const fixture = {
+    name: "LINEST full statistics",
+    formula: "LINEST({2;4;5;4;5},{1;2;3;4;5},TRUE,TRUE)",
+    expected: [
+      [n(0.6), n(2.2)],
+      [n(Math.sqrt(0.08)), n(Math.sqrt(0.88))],
+      [n(0.6), n(Math.sqrt(0.8))],
+      [n(4.5), n(3)],
+      [n(3.6), n(2.4)],
+    ],
+  };
+  verifyFormulaDocument(fixture, openFormulaDocument(fixture));
+  const scaled = run(
+    "LINEST({2;4;5;4;5},{10;20;30;40;50},TRUE,TRUE)",
+  ).arrayValue(at)?.rows[1]?.[0];
+  expect(scaled?.type).toBe("number");
+  if (scaled?.type === "number")
+    expect(scaled.value).toBeCloseTo(Math.sqrt(0.08) / 10, 12);
+});
