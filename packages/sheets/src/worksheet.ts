@@ -1,5 +1,5 @@
-import type { LosslessXmlDocument, LosslessXmlElement } from "@tumblerjs/ooxml";
-import { OOXML_NAMESPACES, parseLosslessXml } from "@tumblerjs/ooxml";
+import type { LosslessXmlElement } from "@tumblerjs/ooxml";
+import { OOXML_NAMESPACES, projectLosslessXml, LosslessXmlDocument } from "@tumblerjs/ooxml";
 import type { OpcPart } from "@tumblerjs/opc";
 import { SparseAxisGeometry } from "@tumblerjs/core";
 import {
@@ -248,18 +248,37 @@ export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetS
   if (!workbook.sheets.includes(sheet)) throw new TypeError("The sheet does not belong to this workbook.");
   const part = workbook.package.getPart(sheet.partName);
   if (part === undefined) throw new SpreadsheetError("invalid_worksheet", `Worksheet part ${JSON.stringify(sheet.partName.value)} is missing.`);
-  let document: LosslessXmlDocument;
-  try {
-    document = parseLosslessXml(workbook.package.readPart(part));
-  } catch (cause) {
-    throw new SpreadsheetError("invalid_worksheet", `Worksheet ${JSON.stringify(sheet.name)} is not valid XML.`, { cause });
-  }
   const namespace = workbook.conformance === "strict"
     ? OOXML_NAMESPACES.strict.spreadsheet
     : OOXML_NAMESPACES.transitional.spreadsheet;
+  const bytes = workbook.package.readPart(part);
+  const strings = readSharedStrings(workbook);
+  const rows: SpreadsheetRow[] = [];
+  const seenRows = new Set<number>();
+  let previousRow = 0;
+  let document: LosslessXmlDocument;
+  try {
+    // Parse each row once, then discard its lexical tree. Editing retains the untouched
+    // source and builds its lossless tree only when an edit needs lexical positions.
+    document = projectLosslessXml(bytes, (element, parent, depth) => {
+      if (depth !== 2 || element.namespaceUri !== namespace || element.localName !== "row" ||
+          parent?.namespaceUri !== namespace || parent.localName !== "sheetData") return true;
+      const rowDocument = new LosslessXmlDocument('', 'utf-8', false, element, new Uint8Array());
+      const row = parseRow(rowDocument, element, namespace, strings, previousRow);
+      if (seenRows.has(row.index)) throw new SpreadsheetError("invalid_worksheet", `Worksheet contains duplicate row ${row.index}.`);
+      seenRows.add(row.index);
+      previousRow = row.index;
+      rows.push(row);
+      return false;
+    });
+  } catch (cause) {
+    if (cause instanceof SpreadsheetError) throw cause;
+    throw new SpreadsheetError("invalid_worksheet", `Worksheet ${JSON.stringify(sheet.name)} is not valid XML.`, { cause });
+  }
   if (document.root.namespaceUri !== namespace || document.root.localName !== "worksheet") {
     throw new SpreadsheetError("invalid_worksheet", "A Worksheet part must have a SpreadsheetML worksheet root element.");
   }
+  if (children(document.root, namespace, "sheetData").length !== 1) throw new SpreadsheetError("invalid_worksheet", "A worksheet must contain exactly one sheetData element.");
   const sheetFormat = parseSheetFormat(document.root, namespace);
   const relationshipsNamespace = workbook.conformance === "strict"
     ? "http://purl.oclc.org/ooxml/officeDocument/relationships"
@@ -269,10 +288,10 @@ export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetS
     workbook,
     sheet,
     part,
-    document,
+    document: new LosslessXmlDocument(bytes),
     dimension: parseDimension(document.root, namespace),
     columns: parseColumns(document.root, namespace),
-    rows: parseRows(document, namespace, readSharedStrings(workbook)),
+    rows,
     merges: parseMerges(document.root, namespace),
     panes: parsePanes(document.root, namespace),
     tables: readSpreadsheetTables({ workbook, worksheetPart: part, worksheetRoot: document.root, spreadsheetNamespace: namespace, relationshipsNamespace }),
@@ -324,47 +343,42 @@ function parseSheetFormat(root: LosslessXmlElement, namespace: string): { defaul
   };
 }
 
-function parseRows(document: LosslessXmlDocument, namespace: string, strings: SharedStringTable | undefined): SpreadsheetRow[] {
-  const sheetData = children(document.root, namespace, "sheetData");
-  if (sheetData.length !== 1) throw new SpreadsheetError("invalid_worksheet", "A worksheet must contain exactly one sheetData element.");
-  const rows: SpreadsheetRow[] = [];
-  const seenRows = new Set<number>();
-  let previousRow = 0;
-  for (const rowElement of children(sheetData[0]!, namespace, "row")) {
-    const rawIndex = attr(rowElement, "r");
-    const index = rawIndex === undefined ? previousRow + 1 : gridInteger(rawIndex, EXCEL_MAX_ROWS, "row index");
-    if (seenRows.has(index)) throw new SpreadsheetError("invalid_worksheet", `Worksheet contains duplicate row ${index}.`);
-    seenRows.add(index);
-    previousRow = index;
-    const cells: SpreadsheetCell[] = [];
-    const seenCells = new Set<string>();
-    let previousColumn = 0;
-    for (const cellElement of children(rowElement, namespace, "c")) {
-      const rawReference = attr(cellElement, "r");
-      const address = rawReference === undefined
-        ? { row: index, column: previousColumn + 1 }
-        : cellReference(rawReference);
-      if (address.row !== index || address.column > EXCEL_MAX_COLUMNS) {
-        throw new SpreadsheetError("invalid_cell", `Cell ${JSON.stringify(rawReference)} does not belong to row ${index}.`);
-      }
-      const reference = formatCellReference(address);
-      if (seenCells.has(reference)) throw new SpreadsheetError("invalid_cell", `Worksheet contains duplicate cell ${reference}.`);
-      seenCells.add(reference);
-      previousColumn = address.column;
-      cells.push(parseCell(document, cellElement, namespace, reference, address, strings));
+function parseRow(
+  document: LosslessXmlDocument,
+  rowElement: LosslessXmlElement,
+  namespace: string,
+  strings: SharedStringTable | undefined,
+  previousRow: number,
+): SpreadsheetRow {
+  const rawIndex = attr(rowElement, "r");
+  const index = rawIndex === undefined ? previousRow + 1 : gridInteger(rawIndex, EXCEL_MAX_ROWS, "row index");
+  const cells: SpreadsheetCell[] = [];
+  const seenCells = new Set<string>();
+  let previousColumn = 0;
+  for (const cellElement of children(rowElement, namespace, "c")) {
+    const rawReference = attr(cellElement, "r");
+    const address = rawReference === undefined
+      ? { row: index, column: previousColumn + 1 }
+      : cellReference(rawReference);
+    if (address.row !== index || address.column > EXCEL_MAX_COLUMNS) {
+      throw new SpreadsheetError("invalid_cell", `Cell ${JSON.stringify(rawReference)} does not belong to row ${index}.`);
     }
-    const rawHeight = attr(rowElement, "ht");
-    const rawStyle = attr(rowElement, "s");
-    rows.push(Object.freeze({
-      index,
-      height: rawHeight === undefined ? undefined : nonNegativeDouble(rawHeight, "row height"),
-      hidden: xmlBoolean(attr(rowElement, "hidden"), false, "row hidden"),
-      styleIndex: rawStyle === undefined ? undefined : unsignedInteger(rawStyle, "row style index"),
-      customFormat: xmlBoolean(attr(rowElement, "customFormat"), false, "row customFormat"),
-      cells: Object.freeze(cells),
-    }));
+    const reference = formatCellReference(address);
+    if (seenCells.has(reference)) throw new SpreadsheetError("invalid_cell", `Worksheet contains duplicate cell ${reference}.`);
+    seenCells.add(reference);
+    previousColumn = address.column;
+    cells.push(parseCell(document, cellElement, namespace, reference, address, strings));
   }
-  return rows;
+  const rawHeight = attr(rowElement, "ht");
+  const rawStyle = attr(rowElement, "s");
+  return Object.freeze({
+    index,
+    height: rawHeight === undefined ? undefined : nonNegativeDouble(rawHeight, "row height"),
+    hidden: xmlBoolean(attr(rowElement, "hidden"), false, "row hidden"),
+    styleIndex: rawStyle === undefined ? undefined : unsignedInteger(rawStyle, "row style index"),
+    customFormat: xmlBoolean(attr(rowElement, "customFormat"), false, "row customFormat"),
+    cells: Object.freeze(cells),
+  });
 }
 
 function parseCell(
