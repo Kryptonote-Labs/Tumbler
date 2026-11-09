@@ -112,3 +112,5 @@ independent consumer comparisons and independent GPT-6.1 sol high reviews.
 ## Independent review follow-up
 
 Processing instructions now require valid targets. Reserved XML declarations must appear at the document start with valid version/optional encoding/standalone syntax. Malformed empty targets and misplaced declarations produce #VALUE!, while valid ordinary instructions remain supported.
+
+XML comments ending in a hyphen are rejected. XML syntax uses only space, tab, CR and LF as whitespace, including tag/attribute separators and document-level text. Regressions reject NBSP in syntax while preserving it in valid attribute content and accepting ordinary XML whitespace.
