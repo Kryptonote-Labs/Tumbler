@@ -125,18 +125,40 @@ export type {
   SpreadsheetDifferentialFormat,
   SpreadsheetFill,
   SpreadsheetFont,
+  SpreadsheetProtection,
 } from "./styles.ts";
 export type {
   EditableCellValue,
   SpreadsheetEditorStatus,
 } from "./editor.ts";
 export {
+  clearSpreadsheetFormattingPackage,
   formatSpreadsheetCells,
+  formatSpreadsheetCellsPackage,
   MAX_FORMATTED_CELLS,
   spreadsheetFormattingState,
   SPREADSHEET_FORMATTING_CAPABILITIES,
 } from "./formatting.ts";
 export type { SpreadsheetFormattingTarget } from "./formatting.ts";
+export {
+  adjustSpreadsheetNumberDecimalsPackage,
+  adjustSpreadsheetNumberFormatDecimals,
+  describeSpreadsheetNumberFormat,
+  formatSpreadsheetNumbersPackage,
+  spreadsheetNumberFormatState,
+  SPREADSHEET_NUMBER_FORMAT_PRESETS,
+} from "./number-format-authoring.ts";
+export type {
+  SpreadsheetDecimalDirection,
+  SpreadsheetNumberFormat,
+  SpreadsheetNumberFormatCategory,
+  SpreadsheetNumberFormatInput,
+  SpreadsheetNumberFormatPreset,
+} from "./number-format-authoring.ts";
+export { setSpreadsheetBordersPackage, SPREADSHEET_BORDER_PRESETS, SPREADSHEET_BORDER_STYLES } from "./borders.ts";
+export type { SpreadsheetBorderOptions, SpreadsheetBorderPreset, SpreadsheetBorderStyle } from "./borders.ts";
+export { spreadsheetFormattingCommand, spreadsheetFormattingPatch } from "./formatting-commands.ts";
+export type { SpreadsheetFormattingCommand } from "./formatting-commands.ts";
 export type {
   SpreadsheetCell,
   SpreadsheetCellValue,
@@ -144,3 +166,22 @@ export type {
   SpreadsheetPane,
   SpreadsheetRow,
 } from "./worksheet.ts";
+
+export { createSpreadsheet, applySpreadsheetCommand, inspectSpreadsheet, spreadsheetCommand } from "./commands.ts";
+export type { SpreadsheetCommand } from "./commands.ts";
+export { createSpreadsheetNativeArchive, openSpreadsheetNativeArchive, encodeSpreadsheetNativeArchive, decodeSpreadsheetNativeArchive, isSpreadsheetNativeArchive } from "./native.ts";
+export type { NativeSpreadsheetArchive } from "./native.ts";
+
+export { applySpreadsheetStructureCommand, rebaseSpreadsheetFormula } from "./structure.ts";
+export type { SpreadsheetStructureCommand } from "./structure.ts";
+
+export { translateSpreadsheetFormula } from './formula-translation.ts';
+
+export { readSpreadsheetDrawingObjects } from './drawing-objects.ts';
+export type { SpreadsheetDrawingObject, SpreadsheetDrawingObjectFrame } from './drawing-objects.ts';
+
+export { spreadsheetDrawingCommand, applySpreadsheetDrawingCommand } from './drawing-commands.ts';
+export type { SpreadsheetDrawingCommand } from './drawing-commands.ts';
+export { spreadsheetDrawingObjectId } from './drawings.ts';
+export { spreadsheetPrintHeaderText, spreadsheetPrintPages, type SpreadsheetPrintPage } from './print.ts';
+export { spreadsheetFormatPainterSample } from './format-painter.ts';

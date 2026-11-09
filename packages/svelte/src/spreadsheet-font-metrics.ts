@@ -14,7 +14,7 @@ export function spreadsheetFontShorthand(font: SpreadsheetFont, name: string): s
   const style = font.italic ? "italic " : "";
   const weight = font.bold ? "700 " : "400 ";
   const size = font.size ?? 11;
-  return `${style}${weight}${size}pt ${quoteCssString(name)}`;
+  return `${style}${weight}${size}pt ${quoteCssString(name)},sans-serif`;
 }
 
 function quoteCssString(value: string): string {

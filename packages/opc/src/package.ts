@@ -183,7 +183,11 @@ export function openOpcPackage(
   source: Uint8Array,
   options: OpenOpcPackageOptions = {},
 ): OpcPackage {
-  const archive = openZipArchive(source, options);
+  return openOpcPackageArchive(openZipArchive(source, options), options);
+}
+
+/** Opens member resources without serializing or parsing a ZIP container. */
+export function openOpcPackageArchive(archive: ZipArchive, options: OpenOpcPackageOptions = {}): OpcPackage {
   const contentTypes = parseContentTypes(archive);
   const parts: OpcPart[] = [];
   const logicalNames = new Set<string>();

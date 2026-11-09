@@ -1,3 +1,4 @@
+import { formatPresentationTable } from './table-format.ts';
 import { gradientFill } from './gradient-authoring.ts';
 import { backgroundFill, setSlideBackground } from "./background-authoring.ts";
 import { insertPresentationInk } from "./ink-authoring.ts";
@@ -13,11 +14,14 @@ import {
   insertSlide,
   moveSlide,
   setSlideHidden,
+  setSlideNotes,
   slideById,
 } from "./authoring-slides.ts";
 import { arrangeObject, deleteObject, duplicateObject, insertObject } from "./authoring-objects.ts";
 import { applyPresentationLayout } from "./authoring-layout.ts";
 import { paragraphFormat } from "./paragraph-format.ts";
+
+import { authorMetadata } from './authoring-metadata.ts';
 
 const number = z.number().finite();
 const id = z.string().min(1);
@@ -63,7 +67,15 @@ const patch = z
   })
   .strict()
   .transform((value) => normalizeFormattingPatch(value as FormattingPatch));
+const tableBorder = z.object({ color, width: number.nonnegative(), dash: z.enum(['solid', 'dash', 'dot', 'double']) }).strict();
 const singlePresentationCommand = z.discriminatedUnion("name", [
+  z.object({ name: z.literal('format-table'), ...target,
+    row: z.number().int().nonnegative(), column: z.number().int().nonnegative(),
+    scope: z.enum(['cell', 'row', 'column', 'table']),
+    fill: color.optional(), borders: z.object({ top: tableBorder.optional(), right: tableBorder.optional(), bottom: tableBorder.optional(), left: tableBorder.optional() }).strict().optional(),
+    verticalAlignment: z.enum(['top', 'center', 'bottom']).optional(),
+    padding: number.nonnegative().optional(),
+  }).strict(),
   z
     .object({
       name: z.literal("edit-table"),
@@ -106,6 +118,7 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
       layoutSourceId: id.optional(),
     })
     .strict(),
+  z.object({ name: z.literal("set-notes"), slideId: id, notes: z.string() }).strict(),
   z.object({ name: z.literal("delete-slide"), slideId: id }).strict(),
   z.object({ name: z.literal("set-slide-hidden"), slideId: id, hidden: z.boolean() }).strict(),
   z
@@ -171,6 +184,9 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
     color: z.string().regex(/^#[a-f\d]{6}$/i), size: number.positive(),
     highlighter: z.boolean().optional(),
   }).strict(),
+  z.object({ name: z.literal('set-link'), ...target, href: z.string(), start: z.number().int().nonnegative().optional(), end: z.number().int().nonnegative().optional(), cell }).strict(),
+  z.object({ name: z.literal('set-alt-text'), ...target, alt: z.string() }).strict(),
+  z.object({ name: z.literal('replace-picture'), ...target, data: z.string(), contentType: z.enum(['image/png', 'image/jpeg']) }).strict(),
   z.object({ name: z.literal("delete-object"), ...target }).strict(),
   z.object({ name: z.literal("duplicate-object"), ...target }).strict(),
   z
@@ -263,6 +279,8 @@ export function applyPresentationCommand(
   switch (command.name) {
     case "batch":
       return command.commands.reduce(applyPresentationCommand, artifact);
+    case "format-table":
+      return formatPresentationTable(artifact, command);
     case "edit-table":
       return editPresentationTable(artifact, command);
     case "paste-object":
@@ -282,6 +300,8 @@ export function applyPresentationCommand(
       return insertSlide(artifact, command.index, command.sourceId, command.layoutSourceId);
     case "delete-slide":
       return deleteSlide(artifact, command.slideId);
+    case "set-notes":
+      return setSlideNotes(artifact, command.slideId, command.notes);
     case "set-slide-hidden":
       return setSlideHidden(artifact, command.slideId, command.hidden);
     case "move-slide":
@@ -294,6 +314,10 @@ export function applyPresentationCommand(
       return insertObject(artifact, command.slideId, command.bounds, command.object);
     case "insert-ink":
       return insertPresentationInk(artifact, command);
+    case 'set-link':
+    case 'set-alt-text':
+    case 'replace-picture':
+      return authorMetadata(artifact, command);
     case "delete-object":
       return deleteObject(artifact, command.slideId, command.objectKey);
     case "duplicate-object":

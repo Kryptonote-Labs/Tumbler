@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { SparseAxisGeometry } from "@tumblerjs/core";
-import { openSpreadsheet, openWorksheet } from "@tumblerjs/sheets";
+import { calculateSpreadsheetWorksheet, openSpreadsheet, openWorksheet } from "@tumblerjs/sheets";
 import { openOpcPackage } from "../../opc/src/index.ts";
 import { buildWorkbookFixture } from "../../sheets/test/workbook-fixture.ts";
 import { spreadsheetTextOverflowWidth } from "../src/index.ts";
@@ -37,6 +37,14 @@ describe("spreadsheet text overflow", () => {
     expect(spreadsheetTextOverflowWidth({ worksheet: formula, row: 1, column: 1, columnGeometry: columns, maximumColumn: 8 })).toBe(200);
     expect(spreadsheetTextOverflowWidth({ worksheet: merged, row: 1, column: 1, columnGeometry: columns, maximumColumn: 8 })).toBe(200);
     expect(spreadsheetTextOverflowWidth({ worksheet: formula, row: 1, column: 1, columnGeometry: columns, maximumColumn: 8, frozenColumns: 1 })).toBeUndefined();
+  });
+
+  test("reserves virtual spill cells when painting adjacent text", () => {
+    const sheet = worksheet(`<row r="1"><c r="A1"><f>{1;2}</f></c></row><row r="2"><c r="A2"/></row>`);
+    const calculation = calculateSpreadsheetWorksheet(sheet);
+    const text = worksheet(`<row r="1"><c r="B1"><f>{1,2;3,4}</f></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>long text</t></is></c></row>`);
+    expect(calculation.value("A2")?.type).toBe("number");
+    expect(spreadsheetTextOverflowWidth({worksheet: text, calculation: calculateSpreadsheetWorksheet(text), row: 2, column: 1, columnGeometry: new SparseAxisGeometry(8, 100), maximumColumn: 8})).toBeUndefined();
   });
 
   test("does not spill non-text values", () => {
