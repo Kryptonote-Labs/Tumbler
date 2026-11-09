@@ -258,7 +258,9 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
       const value = paintPdfPage(source.getContext('2d')!, projected, active.pdf.source, host, {
         scale: active.scale * (window.devicePixelRatio || 1), signal: controller.signal, background: '#fff',
       }).then(() => source);
-      void value.catch(() => {});
+      void value.catch(() => {
+        if (background?.controller === controller) background = undefined;
+      });
       background = { key, value, controller };
     }
     try {
