@@ -1,7 +1,9 @@
 import * as Y from 'yjs';
 import { sha256 } from '@noble/hashes/sha2.js';
-import type { PdfPage } from '../document.ts';
+import { type PdfPage } from '../document.ts';
 import { PdfName, PdfReference } from '../objects.ts';
+
+import { pdfPageSnapshot } from './page-snapshot.ts';
 
 const fallbackId = 'blank:00000000-0000-4000-8000-000000000000';
 const fallbackIndex = -1;
@@ -126,16 +128,18 @@ export class PdfPageModel {
         .map(([id, record]) => {
           const width = record.get('width') as number,
             height = record.get('height') as number;
+          const snapshot = record.get('snapshot');
+          const source = snapshot instanceof Uint8Array ? pdfPageSnapshot(snapshot).pages[0] : undefined;
           return {
             id,
             index: record.get('index') as number,
             reference: new PdfReference(-1),
             dictionary: new Map([['Type', new PdfName('Page')]]),
             resources: new Map(),
-            mediaBox: [0, 0, width, height] as const,
-            cropBox: [0, 0, width, height] as const,
-            rotation: 0 as const,
-            userUnit: 1,
+            mediaBox: source?.mediaBox ?? [0, 0, width, height] as const,
+            cropBox: source?.cropBox ?? [0, 0, width, height] as const,
+            rotation: source?.rotation ?? 0 as const,
+            userUnit: source?.userUnit ?? 1,
             width,
             height,
           };
@@ -159,6 +163,8 @@ export class PdfPageModel {
     afterId?: string,
     size?: { width: number; height: number },
     output?: readonly { id: string; source: PdfPage; continuation: number }[],
+    snapshot?: Uint8Array,
+    visible = true,
   ) {
     this.initialize(pages);
     const items = output ?? this.items(pages).map((p) => ({ ...p, continuation: 0 })),
@@ -180,6 +186,7 @@ export class PdfPageModel {
       const record = new Y.Map<unknown>();
       this.records.set(id, record);
       record.set('index', logicalIndex);
+      if (snapshot) record.set('snapshot', snapshot);
       record.set('width', width);
       record.set('height', height);
       record.set('hidden', true);
@@ -192,8 +199,28 @@ export class PdfPageModel {
       );
       record.set('anchor', record.get('order'));
     }, 'import');
-    this.doc.transact(() => this.record(id).set('hidden', false), this.origin);
+    if (visible) this.doc.transact(() => this.record(id).set('hidden', false), this.origin);
     return id;
+  }
+  /** Frozen source ownership survives undo; the whole batch changes visibility in one transaction. */
+  insertSnapshots(pages: readonly PdfPage[], snapshots: readonly Uint8Array[], afterId?: string,
+    output?: readonly { id: string; source: PdfPage; continuation: number }[]) {
+    const documents = snapshots.map(pdfPageSnapshot);
+    if (documents.some(document => document.pages.length !== 1)) throw new Error('Expected one page per snapshot.');
+    const ids: string[] = [];
+    let current = output;
+    for (const [index, document] of documents.entries()) {
+      const source = document.pages[0]!;
+      const id = this.insert(pages, afterId, source, current, snapshots[index], false);
+      ids.push(id);
+      const inserted = this.sourcePages(pages).find(page => page.id === id)!;
+      const items = current ?? this.items(pages).map(page => ({ ...page, continuation: 0 }));
+      const position = afterId === undefined ? items.length : items.findIndex(page => page.id === afterId) + 1;
+      current = [...items.slice(0, position), { id, source: inserted, continuation: 0 }, ...items.slice(position)];
+      afterId = id;
+    }
+    this.doc.transact(() => { for (const id of ids) this.record(id).set('hidden', false); }, this.origin);
+    return ids;
   }
   private known(pages: readonly Pick<PdfPage, 'id'>[], id: string) {
     return pages.some(
@@ -321,7 +348,7 @@ export class PdfPageModel {
         if (
           !(
             blank
-              ? ['index', 'width', 'height', 'order', 'anchor', 'hidden', 'rotation']
+              ? ['index', 'width', 'height', 'order', 'anchor', 'hidden', 'rotation', 'snapshot']
               : ['order', 'hidden', 'rotation']
           ).includes(key)
         )
@@ -332,6 +359,11 @@ export class PdfPageModel {
         throw new Error('Invalid PDF page visibility.');
       if (record.has('rotation') && ![0, 90, 180, 270].includes(record.get('rotation') as number))
         throw new Error('Invalid PDF page rotation.');
+      if (record.has('snapshot')) {
+        const bytes = record.get('snapshot');
+        if (!(bytes instanceof Uint8Array) || pdfPageSnapshot(bytes).pages.length !== 1)
+          throw new Error('Invalid PDF page snapshot.');
+      }
       if (blank) {
         const index = record.get('index') as number;
         if (!Number.isSafeInteger(index) || index >= 0 || indices.has(index))

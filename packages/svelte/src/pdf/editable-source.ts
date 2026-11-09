@@ -28,6 +28,7 @@ function request(
           .sources.map((source) => `${source.instance}/${source.object}/${source.start}`),
       )
     : [];
+  const snapshot = active.model.pages.records.get(page.id)?.get('snapshot');
   return {
     page: active.source,
     scale,
@@ -42,7 +43,8 @@ function request(
       exclude: [...new Set([...hidden, ...(!ink ? selected : [])])],
       ...(ids && ink ? { include: selected } : {}),
       transparent: ink,
-      ...(active.continuation || active.source < 0
+      ...(snapshot instanceof Uint8Array && !active.continuation ? { snapshot } : {}),
+      ...(active.continuation || (active.source < 0 && !(snapshot instanceof Uint8Array))
         ? { blank: { width: page.width, height: page.height } }
         : {}),
     },

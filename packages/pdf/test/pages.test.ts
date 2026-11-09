@@ -274,3 +274,45 @@ test('numbered collaborative deletion follows reordered pages and rejects invali
     expect(texts(openPdfDocument(exportEditedPdf(pdf, model, fonts)))).toEqual(['THIRD', 'SECOND SECRET']);
   } finally { model.doc.destroy(); }
 });
+
+test('duplicate selected pages freezes local edits, preserves order and reloads with one undo step', async () => {
+  const { duplicatePdfModelPages } = await import('../src/index.ts');
+  const model = new PdfTextModel();
+  model.initialize(importPdfText(pdf));
+  model.pages.initialize(pdf.pages);
+  model.replace(model.ids(0)[0]!, 0, 5, 'EDITED');
+  model.undo.stopCapturing();
+  const ids = duplicatePdfModelPages(pdf, model, fonts, [pdf.pages[2]!.id, pdf.pages[0]!.id]);
+  expect(ids).toHaveLength(2);
+  expect(texts(openPdfDocument(exportEditedPdf(pdf, model, fonts)))).toEqual(['EDITED', 'SECOND SECRET', 'THIRD', 'EDITED', 'THIRD']);
+  model.undo.undo();
+  expect(layoutPdfTextFlow(model, fonts, pdf.pages).pages).toHaveLength(3);
+  expect(model.text(model.ids(0)[0]!).toString()).toBe('EDITED');
+  model.undo.redo();
+  const peer = new PdfTextModel();
+  Y.applyUpdate(peer.doc, Y.encodeStateAsUpdate(model.doc));
+  peer.pages.validate(pdf.pages);
+  peer.replace(peer.ids(0)[0]!, 0, 6, 'LATER');
+  const output = openPdfDocument(exportEditedPdf(pdf, peer, fonts));
+  expect(texts(output)).toEqual(['LATER', 'SECOND SECRET', 'THIRD', 'EDITED', 'THIRD']);
+  expect(output.pages[3]!.rotation).toBe(90);
+  model.doc.destroy(); peer.doc.destroy();
+});
+
+test('copies retain source graphics when adding text, rotating and deleting their original', async () => {
+  const { duplicatePdfModelPages } = await import('../src/index.ts');
+  const model = new PdfTextModel();
+  model.initialize(importPdfText(pdf));
+  const [id] = duplicatePdfModelPages(pdf, model, fonts, [pdf.pages[0]!.id]);
+  const copy = model.pages.sourcePages(pdf.pages).find(page => page.id === id)!;
+  const seed = model.seed(model.ids(0)[0]!);
+  model.add({ ...seed, id: 'copy-overlay', page: copy.index, sources: [], delta: [], spacing: undefined });
+  model.replace('copy-overlay', 0, 0, 'ADDED');
+  model.pages.rotate(pdf.pages, [id!], 90);
+  model.pages.remove(pdf.pages, [pdf.pages[0]!.id]);
+  const output = openPdfDocument(exportEditedPdf(pdf, model, fonts));
+  expect(texts(output)[0]).toContain('FIRST');
+  expect(texts(output)[0]).toContain('ADDED');
+  expect(output.pages[0]!.rotation).toBe(180);
+  model.doc.destroy();
+});

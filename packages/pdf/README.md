@@ -297,3 +297,10 @@ forms, annotations, attachments and shared object references. It does not append
 plaintext objects to an encrypted revision. Hosts own user consent and storage of
 the new copy; the source remains unchanged. Password-protected inputs must first
 be opened with a valid password. Rewriting a PDF invalidates existing signatures.
+
+`duplicatePdfModelPages(document, model, fonts, ids)` copies selected visible pages in
+page order after the last selected page. Copies freeze the current exported content,
+including local text changes and continuation pages, in immutable page snapshots.
+Visibility is one undo step; the source bytes remain available to peers through undo
+and reload. Copies support the regular page ordering, rotation and deletion APIs,
+and can receive new text regions without sharing text ownership with their originals.

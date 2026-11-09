@@ -2,6 +2,7 @@ import { openPdfDocument, type PdfDocument } from '../document.ts';
 import { PdfName, type PdfValue, PdfReference, unsupported } from '../objects.ts';
 import type { PdfTextModel } from './model.ts';
 import { PdfWriter } from './object-writer.ts';
+import { copyPdfPageSnapshot } from './page-snapshot.ts';
 import { extractPdfPages } from './extract.ts';
 
 /** Page-only changes copy object references and never interpret content streams or load fonts. */
@@ -18,13 +19,18 @@ export function exportPdfPageState(document: PdfDocument, model: PdfTextModel): 
         source.index < 0
           ? new Map<string, PdfValue>([['Type', new PdfName('Page')]])
           : new Map(source.dictionary);
+    const snapshot = model.pages.records.get(page.id)?.get('snapshot');
+    const target = source.index < 0 ? writer.value(null) : source.reference;
+    if (snapshot instanceof Uint8Array) {
+      for (const [key, value] of copyPdfPageSnapshot(writer, snapshot, target)) info.set(key, value);
+    }
     info.set('Parent', parent);
-    info.set('Resources', source.resources);
+    if (!(snapshot instanceof Uint8Array)) info.set('Resources', source.resources);
     info.set('MediaBox', [...source.mediaBox]);
     info.set('CropBox', [...source.cropBox]);
     info.set('Rotate', (source.rotation + page.rotation) % 360);
     info.set('UserUnit', source.userUnit);
-    return source.index < 0 ? writer.value(info) : writer.value(info, source.reference);
+    return writer.value(info, target);
   });
   writer.value(
     new Map<string, PdfValue>([

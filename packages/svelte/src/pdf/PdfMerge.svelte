@@ -5,9 +5,10 @@
   import PdfMergeAdd from './PdfMergeAdd.svelte';
   import { openMergeSource, mergeSourceSelection, type PdfMergeSource, type PdfMergeRead, type PdfMergeResult, type PdfMergeState, createPdfMergeState } from './merge-source.ts';
 
-  let { onmerge, sources = [], submitLabel = 'Merge PDF', sourcePicker, disabled = false, session = $bindable() }: {
+  let { onmerge, sources = [], submitLabel = 'Merge PDF', sourcePicker, disabled = false, defaultFilename, session = $bindable() }: {
     onmerge?: (bytes: Uint8Array, filename: string) => void | PdfMergeResult | Promise<void | PdfMergeResult>;
     sources?: { name: string; bytes: Uint8Array }[];
+    defaultFilename?: (name: string) => string;
     submitLabel?: string; disabled?: boolean;
     session?: PdfMergeState;
     sourcePicker?: Snippet<[upload: () => void, close: () => void]>;
@@ -32,7 +33,7 @@
     model.blocks = [...model.blocks, source];
     const current = model.blocks.find(block => block.id === id)!;
     model.expanded = id;
-    if (!model.filename) model.filename = `${name.replace(/\.pdf$/i, '')} merged.pdf`;
+    if (!model.filename) model.filename = defaultFilename?.(name) ?? `${name.replace(/\.pdf$/i, '')} merged.pdf`;
     changed();
     void tick().then(() => root?.querySelector(`[data-source-id="${id}"]`)?.scrollIntoView({ block: 'nearest' }));
     await readSource(current, data);

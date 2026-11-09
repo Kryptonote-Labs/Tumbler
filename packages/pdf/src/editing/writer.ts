@@ -9,6 +9,7 @@ import {
   unsupported,
 } from '../objects.ts';
 import { openPdfDocument, type PdfDocument } from '../document.ts';
+import { copyPdfPageSnapshot } from './page-snapshot.ts';
 import { exportPdfPageState } from './page-writer.ts';
 import { extractPdfPages } from './extract.ts';
 import { PdfSyntax } from '../syntax.ts';
@@ -300,8 +301,30 @@ export function exportEditedPdf(
       info.set('Rotate', (page.rotation + outputPage.rotation) % 360);
       info.set('UserUnit', page.userUnit);
     }
+    const snapshot = !outputPage.continuation && model.pages.records.get(page.id)?.get('snapshot');
+    const target = continuation ? writer.value(null) : page.reference;
+    if (snapshot instanceof Uint8Array) {
+      const original = copyPdfPageSnapshot(writer, snapshot, target);
+      const baseResources = original.get('Resources') as PdfDictionary;
+      // The snapshot copier isolates its source resources in a form.
+      const originalContents = original.get('Contents');
+      const streams = originalContents == null ? [] : Array.isArray(originalContents) ? originalContents : [originalContents];
+      for (const [key, value] of original) if (!['Contents', 'Resources', 'MediaBox', 'CropBox', 'Rotate', 'UserUnit'].includes(key)) info.set(key, value);
+      if (content) {
+        info.set('Contents', [writer.stream(bytes('q\n')), ...streams, writer.stream(bytes('Q\n')), ...(info.get('Contents') as PdfValue[])]);
+        const xobjects = resources.get('XObject');
+        if (xobjects instanceof Map) {
+          const existing = baseResources.get('XObject');
+          if (existing instanceof Map) for (const [key, value] of existing) xobjects.set(key, value);
+        }
+        for (const [key, value] of baseResources) if (key !== 'XObject') resources.set(key, value);
+      } else {
+        if (originalContents) info.set('Contents', originalContents);
+        for (const [key, value] of baseResources) resources.set(key, value);
+      }
+    }
     info.set('Resources', resources);
-    if (continuation) pageRefs.push(writer.value(info));
+    if (continuation) pageRefs.push(writer.value(info, target));
     else {
       pageRefs.push(page.reference);
       if (parent || pageContent.has(pageIndex) || seeds.length) writer.value(info, page.reference);

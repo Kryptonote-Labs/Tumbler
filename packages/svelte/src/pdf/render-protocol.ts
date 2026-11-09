@@ -19,6 +19,7 @@ export type PdfTileRequest = {
     exclude: readonly string[];
     include?: readonly string[];
     transparent?: boolean;
+    snapshot?: Uint8Array;
     blank?: { width: number; height: number };
   };
 };
