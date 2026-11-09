@@ -6,6 +6,7 @@
   import PdfTextBox from './PdfTextBox.svelte';
   import PdfEditableText from './PdfEditableText.svelte';
   import { onMount, tick, untrack } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import * as Y from 'yjs';
   import {
     PdfInterpreter,
@@ -57,6 +58,7 @@
     start = $state(0),
     end = $state(0),
     pending = $state<Partial<PdfTextStyle>>({});
+  const visiblePages = new SvelteSet<string>();
   let input: HTMLTextAreaElement, root: HTMLDivElement;
   let compositionBase: PdfTextModel | undefined;
   let beforeSelection: PdfInputSelection | undefined,
@@ -473,12 +475,16 @@
             pdf,
             flow,
             selected,
+            onvisible: (visible) => {
+              if (visible) visiblePages.add(page.id);
+              else visiblePages.delete(page.id);
+            },
           }}
           aria-label={`Page ${page.index + 1}`}
           style:width="100%"
           style:height="100%"
         ></canvas>
-        <div class="text-layer" style:transform={`scale(${scale})`}>
+        {#if visiblePages.has(page.id) || selected.some((id) => layouts.some((l) => l.id === id && l.page === page.index))}<div class="text-layer" style:transform={`scale(${scale})`}>
           {#each layouts.filter((l) => l.page === page.index && selected.includes(l.id) && !adding && !model.placement(l.id)?.hidden) as layout (layout.id)}
             <PdfTextBox
               {model}
@@ -499,7 +505,7 @@
             {end}
             onfocus={(id) => void select(id, 0)}
           />
-        </div>
+        </div>{/if}
       </div>
     </div>
   {/each}

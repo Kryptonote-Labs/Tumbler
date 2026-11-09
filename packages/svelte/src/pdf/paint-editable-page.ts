@@ -23,6 +23,7 @@ export type PdfPagePaintOptions = {
   pdf: PdfDocument;
   flow: ReturnType<typeof layoutPdfTextFlow>;
   selected: readonly string[];
+  onvisible?: (visible: boolean) => void;
 };
 type Raster = { background: HTMLCanvasElement; ink: HTMLCanvasElement };
 
@@ -289,6 +290,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
   const observer = new IntersectionObserver(
     (entries) => {
       visible = entries.some((e) => e.isIntersecting);
+      options.onvisible?.(visible);
       if (visible) {
         schedule();
         return;

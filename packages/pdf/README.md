@@ -282,3 +282,11 @@ selection to the current collaborative layout, including reordered and continuat
 pages. It rejects duplicates and deletion of every page before mutation. It uses
 the same page model as interactive deletion and preserves source identities and undo;
 it is not a redaction API. File replacement uses the CLI's separate extraction safeguards.
+
+
+For interactive hosts, `await fonts.forkAsync(document, yieldControl)` prepares the same
+source font mappings as `fork(document)`, but calls the host's async callback before
+scanning and between pages. Yield to the event loop there to keep the viewer responsive,
+and throw on cancellation to stop preparation. Headless callers can keep using `fork`.
+The editable Svelte view mounts character overlays for nearby pages and retains selected
+regions off screen; page geometry remains mounted for stable scrolling.

@@ -75,7 +75,7 @@ export class PdfEditingFonts {
       italic: /italic|oblique/i.test(subfamily),
     });
   }
-  importDocument(document: PdfDocument) {
+  private *importPages(document: PdfDocument) {
     if (this.documents.has(document)) return;
     const interpreter = new PdfInterpreter(document);
     for (const page of document.pages) {
@@ -97,8 +97,21 @@ export class PdfEditingFonts {
           });
       }
       interpreter.releasePage(page.index);
+      yield;
     }
     this.documents.add(document);
+  }
+  importDocument(document: PdfDocument) {
+    const pages = this.importPages(document);
+    while (!pages.next().done) { /* Consume synchronously for headless callers. */ }
+  }
+  /** Prepare source fonts a page at a time, allowing the host to paint or cancel between pages. */
+  async forkAsync(document: PdfDocument, yieldControl: () => Promise<void>) {
+    const result = new PdfEditingFonts();
+    result.fonts = new Map(this.fonts);
+    await yieldControl();
+    for (const _ of result.importPages(document)) await yieldControl();
+    return result;
   }
   fork(document: PdfDocument) {
     const result = new PdfEditingFonts();
