@@ -14,7 +14,7 @@
     query = $state(""),
     matchCase = $state(false),
     active = $state(0);
-  let input: HTMLInputElement;
+  let input = $state<HTMLInputElement>();
   let error = $state("");
   const result = $derived.by(() => {
     if (!open || !query.trim()) return { matches: [], total: 0 };
@@ -50,8 +50,8 @@
       event.preventDefault();
       open = true;
       await tick();
-      input.focus({ preventScroll: true });
-      input.select();
+      input?.focus({ preventScroll: true });
+      input?.select();
     } else if (open && event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
