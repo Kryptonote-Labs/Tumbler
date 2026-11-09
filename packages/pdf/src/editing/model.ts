@@ -54,12 +54,20 @@ export class PdfTextModel {
         const text = new Y.Text();
         region.set('text', text);
         const original = new Set(seed.spacing?.flatMap((gap) => [gap.left, gap.right]));
+        // Insert styled runs before adding per-glyph source markers. Inserting each
+        // glyph with all its attributes creates redundant formatting tombstones in Yjs.
+        const runs: PdfTextSeed['delta'] = [];
+        for (const run of seed.delta) {
+          const previous = runs.at(-1);
+          if (previous && JSON.stringify(previous.attributes) === JSON.stringify(run.attributes))
+            previous.insert += run.insert;
+          else runs.push({ insert: run.insert, attributes: { ...run.attributes } });
+        }
+        text.applyDelta(runs);
         text.applyDelta(
           seed.delta.map((run, index) => ({
-            ...run,
-            attributes: original.has(index)
-              ? { ...run.attributes, [pdfSourceAttribute]: index }
-              : run.attributes,
+            retain: run.insert.length,
+            ...(original.has(index) ? { attributes: { [pdfSourceAttribute]: index } } : {}),
           })),
         );
         region.set('seed', seed);
