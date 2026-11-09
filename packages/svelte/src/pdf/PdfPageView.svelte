@@ -47,7 +47,7 @@
     let root = host.parentElement;
     while (root && !/(auto|scroll)/.test(getComputedStyle(root).overflowY))
       root = root.parentElement;
-    const stopVisibility = observePdfPageVisibility(host, root ?? document.documentElement, (next) => {
+    const stopVisibility = observePdfPageVisibility(host, root, (next) => {
         near = next;
         if (!host.closest('[data-pdf-zooming]')) applyVisibility();
       });

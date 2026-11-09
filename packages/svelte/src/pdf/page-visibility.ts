@@ -1,14 +1,20 @@
 /** Prepare a bounded window ahead of the scroll container, including after viewport resizes. */
 export function observePdfPageVisibility(
   element: Element,
-  viewport: HTMLElement,
+  viewport: HTMLElement | null,
   changed: (visible: boolean) => void,
 ) {
+  const document = element.ownerDocument;
+  const root =
+    viewport === document.documentElement || viewport === document.scrollingElement
+      ? null
+      : viewport;
+  const sizing = root ?? document.documentElement;
   let observer: IntersectionObserver | undefined;
   let margin = -1,
     visible: boolean | undefined;
   const observe = () => {
-    const next = Math.max(600, Math.ceil(viewport.clientHeight * 2));
+    const next = Math.max(600, Math.ceil(sizing.clientHeight * 2));
     if (observer && next === margin) return;
     margin = next;
     observer?.disconnect();
@@ -20,12 +26,12 @@ export function observePdfPageVisibility(
           changed(next);
         }
       },
-      { root: viewport, rootMargin: `${margin}px 0px` },
+      { root, rootMargin: `${margin}px 0px` },
     );
     observer.observe(element);
   };
   const resize = new ResizeObserver(observe);
-  resize.observe(viewport);
+  resize.observe(sizing);
   observe();
   return () => {
     observer?.disconnect();
