@@ -13,6 +13,7 @@ export function exportPdfPageState(document: PdfDocument, model: PdfTextModel): 
     pages = model.pages.items(document.pages),
     parent = writer.value(new Map<string, PdfValue>([['Type', new PdfName('Pages')]]));
   if (!pages.length) throw new Error('PDF page changes leave no visible pages. Add a blank page.');
+  const outputRefs = new Map(pages.map(page => [page.id, page.source.index < 0 ? writer.value(null) : page.source.reference]));
   const refs = pages.map((page) => {
     const source = page.source,
       info =
@@ -20,9 +21,14 @@ export function exportPdfPageState(document: PdfDocument, model: PdfTextModel): 
           ? new Map<string, PdfValue>([['Type', new PdfName('Page')]])
           : new Map(source.dictionary);
     const snapshot = model.pages.records.get(page.id)?.get('snapshot');
-    const target = source.index < 0 ? writer.value(null) : source.reference;
+    const target = outputRefs.get(page.id)!;
     if (snapshot instanceof Uint8Array) {
-      for (const [key, value] of copyPdfPageSnapshot(writer, snapshot, target)) info.set(key, value);
+      const links = model.pages.records.get(page.id)?.get('snapshotLinks') as Record<string, string> | undefined;
+      const references = new Map(Object.entries(links ?? {}).flatMap(([key, id]) => {
+        const reference = outputRefs.get(id);
+        return reference ? [[key, reference] as const] : [];
+      }));
+      for (const [key, value] of copyPdfPageSnapshot(writer, snapshot, target, references)) info.set(key, value);
     }
     info.set('Parent', parent);
     if (!(snapshot instanceof Uint8Array)) info.set('Resources', source.resources);

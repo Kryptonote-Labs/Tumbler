@@ -10,9 +10,9 @@ export function pdfPageSnapshot(bytes: Uint8Array) {
 }
 
 /** Copy a frozen page graph into a new owner. References, including annotation back-references, stay local. */
-export function copyPdfPageSnapshot(writer: PdfWriter, bytes: Uint8Array, target: PdfReference) {
+export function copyPdfPageSnapshot(writer: PdfWriter, bytes: Uint8Array, target: PdfReference, links = new Map<string, PdfReference>()) {
   const document = pdfPageSnapshot(bytes), page = document.pages[0]!;
-  const refs = new Map<string, PdfReference>([[page.reference.key, target]]);
+  const refs = new Map<string, PdfReference>([...links, [page.reference.key, target]]);
   function copy(value: PdfValue): PdfValue {
     if (value instanceof PdfReference) {
       const known = refs.get(value.key);

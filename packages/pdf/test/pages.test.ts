@@ -9,6 +9,8 @@ import {
   extractPdfPages,
   importPdfText,
   layoutPdfTextFlow,
+  insertPdfModelPages,
+  PdfReference,
 } from '../src/index.ts';
 import { pdfFixture, pdfStream } from './pdf-fixture.ts';
 const data = pdfFixture([
@@ -336,4 +338,26 @@ test('foreign page insertion retains independent source bytes and one undo step 
   model.undo.redo();
   expect(model.pages.items(pdf.pages)).toHaveLength(5);
   model.doc.destroy(); peer.doc.destroy();
+});
+
+test('inserted pages retain internal destinations across snapshots', () => {
+  const source = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /Annots [5 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] >>',
+    '<< /Type /Annot /Subtype /Link /Rect [0 0 20 20] /Dest [4 0 R /Fit] >>',
+  ]));
+  const model = new PdfTextModel();
+  try {
+    const ids = insertPdfModelPages(pdf, model, fonts, source);
+    model.pages.validate(pdf.pages);
+    const output = openPdfDocument(exportEditedPdf(pdf, model, fonts));
+    const annots = output.source.resolve(output.pages[3]!.dictionary.get('Annots')) as PdfReference[];
+    const annotation = output.source.resolve(annots[0]) as Map<string, unknown>;
+    const destination = annotation.get('Dest') as PdfReference[];
+    expect(destination[0]!.key).toBe(output.pages[4]!.reference.key);
+    model.pages.remove(pdf.pages, [ids[1]!]);
+    expect(openPdfDocument(exportEditedPdf(pdf, model, fonts)).pages).toHaveLength(4);
+  } finally { model.doc.destroy(); }
 });

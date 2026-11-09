@@ -1,5 +1,5 @@
 import { exportEditedPdf } from './writer.ts';
-import { extractPdfPages } from './extract.ts';
+import { extractPdfPageGraph } from './extract.ts';
 import { openPdfDocument, type PdfDocument } from '../document.ts';
 import { parsePdfPageSelection } from '../merge.ts';
 import { layoutPdfTextFlow } from './layout.ts';
@@ -23,9 +23,9 @@ export function duplicatePdfModelPages(document: PdfDocument, model: PdfTextMode
   const selected = pages.flatMap((page, index) => ids.includes(page.id) ? [index] : []);
   if (!selected.length) return [];
   const snapshot = openPdfDocument(exportEditedPdf(document, model, fonts));
-  const copies = selected.map(index => extractPdfPages(snapshot, [index]));
+  const copies = selected.map(index => extractPdfPageGraph(snapshot, [index], selected));
   model.undo.stopCapturing();
-  try { return model.pages.insertSnapshots(document.pages, copies, pages[selected.at(-1)!]!.id, pages); }
+  try { return insertSnapshots(document, model, snapshot, selected, copies, pages[selected.at(-1)!]!.id, pages); }
   finally { model.undo.stopCapturing(); }
 }
 
@@ -33,8 +33,25 @@ export function duplicatePdfModelPages(document: PdfDocument, model: PdfTextMode
 export function insertPdfModelPages(document: PdfDocument, model: PdfTextModel, fonts: PdfEditingFonts, source: PdfDocument, afterId?: string) {
   const pages = layoutPdfTextFlow(model, fonts, document.pages).pages;
   if (afterId !== undefined && !pages.some(page => page.id === afterId)) throw new Error('Unknown PDF page.');
-  const copies = source.pages.map(page => extractPdfPages(source, [page.index]));
+  const selected = source.pages.map(page => page.index);
+  const copies = selected.map(index => extractPdfPageGraph(source, [index], selected));
   model.undo.stopCapturing();
-  try { return model.pages.insertSnapshots(document.pages, copies, afterId, pages); }
+  try { return insertSnapshots(document, model, source, selected, copies, afterId, pages); }
   finally { model.undo.stopCapturing(); }
+}
+
+// Keep destinations between frozen pages tied to their new collaborative identities.
+function insertSnapshots(document: PdfDocument, model: PdfTextModel, source: PdfDocument,
+  selected: number[], copies: ReturnType<typeof extractPdfPageGraph>[], afterId: string | undefined,
+  pages: ReturnType<typeof layoutPdfTextFlow>['pages']) {
+  const ids = model.pages.insertSnapshots(document.pages, copies.map(copy => copy.bytes), afterId, pages);
+  model.doc.transact(() => {
+    for (const [index, copy] of copies.entries()) {
+      const links = Object.fromEntries(selected.map((page, position) => [
+        copy.pageReferences.get(source.pages[page]!.reference.key)!.key, ids[position]!,
+      ]));
+      model.pages.records.get(ids[index]!)!.set('snapshotLinks', links);
+    }
+  }, model.origin);
+  return ids;
 }

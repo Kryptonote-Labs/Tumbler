@@ -247,6 +247,7 @@ export function exportEditedPdf(
   const parent = hasContinuations
     ? writer.value(new Map<string, PdfValue>([['Type', new PdfName('Pages')]]))
     : undefined;
+  const outputRefs = new Map(flow.pages.map(page => [page.id, page.continuation > 0 || page.source.index < 0 ? writer.value(null) : page.source.reference]));
   const pageRefs: PdfReference[] = [];
   for (const outputPage of flow.pages) {
     const page = outputPage.source,
@@ -302,9 +303,14 @@ export function exportEditedPdf(
       info.set('UserUnit', page.userUnit);
     }
     const snapshot = !outputPage.continuation && model.pages.records.get(page.id)?.get('snapshot');
-    const target = continuation ? writer.value(null) : page.reference;
+    const target = outputRefs.get(outputPage.id)!;
     if (snapshot instanceof Uint8Array) {
-      const original = copyPdfPageSnapshot(writer, snapshot, target);
+      const links = model.pages.records.get(page.id)?.get('snapshotLinks') as Record<string, string> | undefined;
+      const references = new Map(Object.entries(links ?? {}).flatMap(([key, id]) => {
+        const reference = outputRefs.get(id);
+        return reference ? [[key, reference] as const] : [];
+      }));
+      const original = copyPdfPageSnapshot(writer, snapshot, target, references);
       const baseResources = original.get('Resources') as PdfDictionary;
       // The snapshot copier isolates its source resources in a form.
       const originalContents = original.get('Contents');

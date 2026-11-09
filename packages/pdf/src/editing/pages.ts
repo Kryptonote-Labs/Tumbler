@@ -348,7 +348,7 @@ export class PdfPageModel {
         if (
           !(
             blank
-              ? ['index', 'width', 'height', 'order', 'anchor', 'hidden', 'rotation', 'snapshot']
+              ? ['index', 'width', 'height', 'order', 'anchor', 'hidden', 'rotation', 'snapshot', 'snapshotLinks']
               : ['order', 'hidden', 'rotation']
           ).includes(key)
         )
@@ -359,6 +359,12 @@ export class PdfPageModel {
         throw new Error('Invalid PDF page visibility.');
       if (record.has('rotation') && ![0, 90, 180, 270].includes(record.get('rotation') as number))
         throw new Error('Invalid PDF page rotation.');
+      if (record.has('snapshotLinks')) {
+        const links = record.get('snapshotLinks');
+        if (!links || typeof links !== 'object' || Array.isArray(links) ||
+          Object.entries(links).some(([key, id]) => !/^\d+ \d+$/.test(key) || typeof id !== 'string' || !this.records.has(id)))
+          throw new Error('Invalid PDF snapshot links.');
+      }
       if (record.has('snapshot')) {
         const bytes = record.get('snapshot');
         if (!(bytes instanceof Uint8Array) || pdfPageSnapshot(bytes).pages.length !== 1)
