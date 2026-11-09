@@ -35,6 +35,11 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
   let controller: AbortController | undefined, preparation: AbortController | undefined;
   let host = browserPdfPaintHost();
   let normal: HTMLCanvasElement | undefined;
+  let background: { key: string; value: Promise<HTMLCanvasElement>; controller: AbortController } | undefined;
+  function clearBackground() {
+    background?.controller.abort();
+    background = undefined;
+  }
   let snapshot: { options: PdfPagePaintOptions; scene: PdfPageScene } | undefined;
   let prepared:
     | { key: string; flow: PdfPagePaintOptions['flow']; value: Promise<Raster> }
@@ -82,6 +87,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.drawImage(raster, 0, 0);
+    canvas.dataset.pdfRendered = String(options.scale * (window.devicePixelRatio || 1));
   }
   function clearDrag() {
     drag?.clip?.remove();
@@ -238,8 +244,31 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
         : scene.elements.filter((e) => !hidden.has(pdfSourceKey(e.source))),
     };
     const raster = surface();
+    const key = JSON.stringify([
+      active.scale, window.devicePixelRatio, active.source, active.continuation,
+      projected.width, projected.height, [...hidden].sort(),
+      active.model.ids(active.source).filter((id) => active.model.sourcePreserved(id)).map((id) => {
+        const frame = active.model.geometry(id);
+        return [id, frame.x, frame.y];
+      }),
+    ]);
+    if (!background || background.key !== key) {
+      clearBackground();
+      const controller = new AbortController(), source = surface();
+      const value = paintPdfPage(source.getContext('2d')!, projected, active.pdf.source, host, {
+        scale: active.scale * (window.devicePixelRatio || 1), signal: controller.signal, background: '#fff',
+      }).then(() => source);
+      void value.catch(() => {});
+      background = { key, value, controller };
+    }
     try {
-      await paint(raster, projected, active, undefined, false, signal);
+      const source = await background.value;
+      if (disposed || signal.aborted) return;
+      const context = raster.getContext('2d')!;
+      context.drawImage(source, 0, 0);
+      const scale = active.scale * (window.devicePixelRatio || 1);
+      context.setTransform(scale, 0, 0, scale, 0, 0);
+      paintPdfText(context, edited(active), active.fonts);
       if (disposed || signal.aborted) return;
       normal = raster;
       snapshot = { options: active, scene: projected };
@@ -302,6 +331,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
         delete drag.layer;
         delete drag.clip;
       }
+      clearBackground();
       normal = undefined;
       snapshot = undefined;
       canvas.width = 0;
@@ -327,6 +357,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
         controller?.abort();
         invalidatePreparation();
         if (previous.pdf !== value.pdf) {
+          clearBackground();
           host.close();
           host = browserPdfPaintHost();
           normal = undefined;
@@ -337,6 +368,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
         void prepare(value.selected);
     },
     destroy() {
+      clearBackground();
       disposed = true;
       viewport.removeEventListener('pdfzoomstart', pauseZoom);
       viewport.removeEventListener('pdfzoomend', schedule);
