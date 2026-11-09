@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PdfMarkupLayer from './PdfMarkupLayer.svelte';
+  import { pdfMarkupFromRects, type PdfMarkupKind } from '@tumblerjs/pdf';
   import { copyPdfText, pastePdfText } from './clipboard.ts';
   import { pdfHistoryShortcut } from './history-shortcut.ts';
   import PdfSearch from './PdfSearch.svelte';
@@ -99,6 +101,23 @@
       : defaultPdfTextStyle;
   });
   $effect(() => onstyle?.(currentStyle));
+  /** Mark the selected glyphs on each output page without changing text formatting. */
+  export function annotate(kind: PdfMarkupKind, color: string) {
+    if (!editable || !active || start === end) return;
+    model.undo.stopCapturing();
+    model.doc.transact(() => {
+      for (const layout of layouts.filter(l => l.id === active)) {
+        const page = flow.pages[layout.page]!;
+        const rects = layout.glyphs.filter(g => g.end > start && g.start < end && g.text !== '\n').map(g => ({ x:g.x, y:g.y-g.style.size*0.85, width:g.width, height:g.style.size*1.15 }));
+        if (!rects.length) continue;
+        model.pages.materialize(page.source.index);
+        model.annotations.set({ id:crypto.randomUUID(), page:page.source.index, continuation:page.continuation, kind, color, quads:pdfMarkupFromRects(page.source, rects), hidden:false });
+      }
+    }, model.origin);
+    model.undo.stopCapturing();
+    input?.focus({ preventScroll:true });
+  }
+  const annotations = $derived.by(() => { void revision; return model.annotations.items(pdf); });
   export function format(patch: Partial<PdfTextStyle>) {
     if (!editable || !active) return;
     if (window.document.activeElement !== input) {
@@ -510,6 +529,7 @@
           style:width="100%"
           style:height="100%"
         ></canvas>{/if}
+        <PdfMarkupLayer page={page.source} annotations={annotations.filter(a => a.page === page.source.index && a.continuation === page.continuation)} />
         {#if visiblePages.has(page.id) || selected.some((id) => layouts.some((l) => l.id === id && l.page === page.index))}<div class="text-layer" style:transform={`scale(${scale})`}>
           {#each layouts.filter((l) => l.page === page.index && selected.includes(l.id) && !adding && !model.placement(l.id)?.hidden) as layout (layout.id)}
             <PdfTextBox

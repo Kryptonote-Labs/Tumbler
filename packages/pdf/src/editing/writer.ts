@@ -1,3 +1,4 @@
+import { writePdfMarkup } from './markup.ts';
 import {
   PdfName,
   PdfReference,
@@ -39,8 +40,9 @@ export function exportEditedPdf(
   model: PdfTextModel,
   fonts: PdfEditingFonts,
 ) {
-  if (!model.ids().some((id) => model.dirty(id)))
-    return model.pages.dirty() ? exportPdfPageState(document, model) : document.bytes();
+  const annotationContinuations = [...model.annotations.records.values()].some(annotation => !annotation.get('hidden') && Number(annotation.get('continuation') ?? 0) > 0);
+  if (!annotationContinuations && !model.ids().some((id) => model.dirty(id)))
+    return (model.pages.dirty() || model.annotations.records.size) ? exportPdfPageState(document, model) : document.bytes();
   fonts.importDocument(document);
   const flow = layoutPdfTextFlow(model, fonts, document.pages);
   if (!flow.pages.length)
@@ -48,7 +50,7 @@ export function exportEditedPdf(
   const dirty = [
     ...new Set(flow.regions.filter((region) => region.render).map((region) => region.id)),
   ];
-  if (!dirty.length && !model.pages.dirty()) return document.bytes();
+  if (!dirty.length && !model.pages.dirty() && !model.annotations.records.size) return document.bytes();
   if (document.source.trailer.has('Encrypt'))
     unsupported('Encrypted PDF editing requires an encryption-aware writer.');
   const sourcePages = new Map(
@@ -300,11 +302,12 @@ export function exportEditedPdf(
       info.set('Rotate', (page.rotation + outputPage.rotation) % 360);
       info.set('UserUnit', page.userUnit);
     }
+    writePdfMarkup(writer, document, page, outputPage.continuation, model.annotations, info);
     info.set('Resources', resources);
     if (continuation) pageRefs.push(writer.value(info));
     else {
       pageRefs.push(page.reference);
-      if (parent || pageContent.has(pageIndex) || seeds.length) writer.value(info, page.reference);
+      if (parent || pageContent.has(pageIndex) || seeds.length || model.annotations.records.size) writer.value(info, page.reference);
     }
   }
   if (parent) {
