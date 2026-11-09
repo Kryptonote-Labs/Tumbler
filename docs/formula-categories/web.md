@@ -108,3 +108,7 @@ operation accounting and unavailable/cache behavior; retain FILTERXML vertical
 arrays in the generated-document harness. No new runtime API is needed. The
 coordinator owns uncached XLSX generation, edit/reopen/preservation checks,
 independent consumer comparisons and independent GPT-6.1 sol high reviews.
+
+## Independent review follow-up
+
+Processing instructions now require valid targets. Reserved XML declarations must appear at the document start with valid version/optional encoding/standalone syntax. Malformed empty targets and misplaced declarations produce #VALUE!, while valid ordinary instructions remain supported.

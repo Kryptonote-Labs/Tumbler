@@ -213,3 +213,7 @@ add("SEARCHB wildcard", 'SEARCHB("a?c","xabcy")', N(2));
 add("SEARCHB escaped wildcard", 'SEARCHB("~*","a*b")', N(2));
 add("SEARCHB empty at end", 'SEARCHB("","abc",4)', N(4));
 add("FINDB empty at end", 'FINDB("","abc",4)', N(4));
+add("regex initial bracket literal", 'REGEXTEST("]","[]]")', {type:"boolean",value:true});
+add("regex escaped control class range", 'REGEXTEST(UNICHAR(11),"[\\n-\\r]")', {type:"boolean",value:true});
+add("textsplit delimiter errors propagate", 'TEXTSPLIT("a,b",{",",#N/A})', E("#N/A"));
+add("textsplit rejects text array input", 'TEXTSPLIT({"a,b";"c,d"},",")', E());

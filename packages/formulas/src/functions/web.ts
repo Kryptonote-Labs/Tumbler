@@ -107,6 +107,13 @@ function parseXml(input: string, context: FunctionContext): XmlNode {
     if (source.startsWith("<?", position)) {
       const end = source.indexOf("?>", position + 2);
       if (end < 0) throw new InvalidXml();
+      const instruction = source.slice(position + 2, end);
+      const match = new RegExp(`^(${NAME})(?:[ \t\n\r]+([\\s\\S]*))?$`).exec(instruction);
+      if (!match) throw new InvalidXml();
+      if (match[1]!.toLowerCase() === "xml") {
+        // XML declarations are reserved, case-sensitive, and only legal at start.
+        if (position !== 0 || match[1] !== "xml" || !/^xml[ \t\n\r]+version[ \t\n\r]*=[ \t\n\r]*(?:"1\.0"|'1\.0')(?:[ \t\n\r]+encoding[ \t\n\r]*=[ \t\n\r]*(?:"[A-Za-z][A-Za-z0-9._-]*"|'[A-Za-z][A-Za-z0-9._-]*'))?(?:[ \t\n\r]+standalone[ \t\n\r]*=[ \t\n\r]*(?:"(?:yes|no)"|'(?:yes|no)'))?[ \t\n\r]*$/.test(instruction)) throw new InvalidXml();
+      }
       position = end + 2; continue;
     }
     if (source.startsWith("<![CDATA[", position)) {

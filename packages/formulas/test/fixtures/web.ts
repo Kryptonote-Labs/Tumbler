@@ -56,3 +56,11 @@ export const cases: WebCase[] = [
   { name: "service-url-overflow", formula: "WEBSERVICE(Inputs!A1)", cells: { A1: s("https://example.test/" + "a".repeat(2048)) }, expected: e() },
   { name: "service-error", formula: "WEBSERVICE(#DIV/0!)", expected: e("#DIV/0!") },
 ];
+cases.push(
+ {name:"xml invalid empty PI target",formula:'FILTERXML("<r><??><x>7</x></r>","/r/x")',expected:e()},
+ {name:"xml misplaced declaration",formula:'FILTERXML("<r><?xml version=\'1.0\'?><x>7</x></r>","/r/x")',expected:e()},
+ {name:"xml invalid declaration version",formula:'FILTERXML("<?xml bad?><r>7</r>","/r")',expected:e()},
+ {name:"xml reserved PI target case",formula:'FILTERXML("<?XML version=\'1.0\'?><r>7</r>","/r")',expected:e()},
+ {name:"xml valid PI",formula:'FILTERXML("<r><?processing data?><x>7</x></r>","/r/x")',expected:n(7)},
+ {name:"xml valid declaration",formula:'FILTERXML("<?xml version=\'1.0\'?><r>7</r>","/r")',expected:n(7)},
+);
