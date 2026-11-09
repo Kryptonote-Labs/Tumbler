@@ -24,6 +24,7 @@
     "@tumblerjs/core": "0.1.0-alpha.26",
     "@tumblerjs/formulas": "0.1.0-alpha.26",
     "@tumblerjs/ooxml": "0.1.0-alpha.26",
-    "@tumblerjs/opc": "0.1.0-alpha.26"
+    "@tumblerjs/opc": "0.1.0-alpha.26",
+    "zod": "4.6.5"
   }
 }

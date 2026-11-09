@@ -1,3 +1,4 @@
+import { drawingGradientFill, paintDrawingGradient, paintRectangularGradient, type DrawingGradientCanvasContext } from "@tumblerjs/ooxml";
 import { wordFontKerning } from './font-kerning.ts';
 import { wordColumnSeparators } from './section-columns.ts';
 import { paintWordPicture } from './picture-paint.ts';
@@ -19,7 +20,8 @@ import { resolveWordColour } from "./theme-colours.ts";
  * The drawing subset of a Canvas 2D context. Browser, OffscreenCanvas and server canvases satisfy
  * it; `Path` is the host's Path2D.
  */
-export interface WordCanvasContext<Image, Path = unknown> extends ChartCanvasContext<Path>, WordCanvasTextContext, WordInkPixelContext {
+export interface WordCanvasContext<Image, Path = unknown> extends Omit<DrawingGradientCanvasContext, "fill">, ChartCanvasContext<Path>, WordCanvasTextContext, WordInkPixelContext {
+  clip(path?: Path): void;
   direction: "inherit" | "ltr" | "rtl";
   fontKerning?: "auto" | "none" | "normal";
   letterSpacing?: string;
@@ -278,9 +280,15 @@ function paintShape<Image, Path>(context: WordCanvasContext<Image, Path>, shape:
   // The outline stretches to the frame, as the editor's SVG does with preserveAspectRatio="none".
   context.scale(fragment.width / shape.width, fragment.height / shape.height);
   const outlinePath = options.path(wordShapePath(shape));
-  if (fill !== "none" && shape.preset !== "line") {
-    context.fillStyle = fill;
-    context.fill(outlinePath);
+  if ((shape.gradient || fill !== "none") && shape.preset !== "line") {
+    if (shape.gradient?.type === 'rectangular') {
+      context.save(); context.clip(outlinePath);
+      paintRectangularGradient(context, drawingGradientFill(shape.gradient), shape.width, shape.height);
+      context.restore();
+    } else {
+      context.fillStyle = paintDrawingGradient(context, shape.gradient && drawingGradientFill(shape.gradient), fill, shape.width, shape.height);
+      context.fill(outlinePath);
+    }
   }
   if (outline !== "none" && shape.outlineWidth > 0) {
     context.strokeStyle = outline;

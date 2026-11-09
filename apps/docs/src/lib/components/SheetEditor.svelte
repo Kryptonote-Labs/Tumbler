@@ -11,7 +11,7 @@
   let selection = $state(createGridSelection({ row: 1, column: 1 }));
   let history = $state<SpreadsheetArtifact[]>([]);
   let future = $state<SpreadsheetArtifact[]>([]);
-  let reference = $derived(formatCellReference(selection.focus));
+  let reference = $derived(formatCellReference(selection.anchor));
   function apply(operation: () => SpreadsheetArtifact) {
     try {
       const next = operation();

@@ -72,7 +72,9 @@ test('sheet zoom scales cells and headers while retaining editing and scrolling'
   expect((await cell.boundingBox())!.width / before.width).toBeCloseTo(zoom, 1);
   expect((await grid.boundingBox())!.width).toBeCloseTo(gridBefore.width, 0);
   expect((await grid.boundingBox())!.height).toBeCloseTo(gridBefore.height, 0);
-  await cell.dblclick();
+  // Pointer-anchored zoom can leave C2 partly behind the frozen header. Edit its visible portion.
+  const zoomedCell = (await cell.boundingBox())!;
+  await cell.dblclick({ position: { x: zoomedCell.width / 2, y: zoomedCell.height - 2 } });
   const input = page.getByRole('textbox', { name: 'Edit C2', exact: true });
   await input.fill('100');
   await input.press('Enter');

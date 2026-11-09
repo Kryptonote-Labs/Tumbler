@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import type { SpreadsheetWorksheet } from "@tumblerjs/sheets";
   import { spreadsheetFormulaBarEdit, spreadsheetFormulaBarText, type SpreadsheetFormulaBarEdit } from "./spreadsheet-formula-bar.ts";
+  import { spreadsheetCellUsesTextFormat } from "./spreadsheet-edit.ts";
   import {
     insertSpreadsheetFormulaReference,
     spreadsheetFormulaReferenceText,
@@ -15,10 +16,11 @@
     /** A host-issued grid selection event used while authoring a formula. */
     readonly referencePick?: SpreadsheetFormulaReferencePick;
     readonly onedit?: (edit: SpreadsheetFormulaBarEdit) => boolean | void;
+    readonly oneditingchange?: (editing: boolean) => void;
     readonly readonly?: boolean;
   }
 
-  let { worksheet, reference, referencePick, onedit, readonly = false }: Props = $props();
+  let { worksheet, reference, referencePick, onedit, oneditingchange, readonly = false }: Props = $props();
   let draft = $state("");
   let input = $state<HTMLInputElement>();
   let authoring = $state(false);
@@ -49,7 +51,7 @@
 
   $effect(() => {
     const pick = referencePick;
-    if (!authoring || !draft.startsWith("=") || pick === undefined || pick.id === lastReferencePickId || targetWorksheet === undefined) return;
+    if (!authoring || !draft.startsWith("=") || pick === undefined || pick.id === lastReferencePickId || targetWorksheet === undefined || spreadsheetCellUsesTextFormat(targetWorksheet, targetReference)) return;
     lastReferencePickId = pick.id;
     const insertion = insertSpreadsheetFormulaReference(
       draft,
@@ -72,6 +74,7 @@
       draft,
       targetWorksheet.cell(targetReference),
       targetWorksheet.sheet.name,
+      spreadsheetCellUsesTextFormat(targetWorksheet, targetReference),
     ));
     if (accepted !== false) finish();
   }
@@ -84,12 +87,14 @@
 
   function finish() {
     authoring = false;
+    oneditingchange?.(false);
     insertedReferenceSpan = undefined;
     input?.blur();
   }
 
   function beginAuthoring(event: FocusEvent) {
     authoring = true;
+    oneditingchange?.(true);
     lastReferencePickId = referencePick?.id;
     rememberSelection(event.currentTarget as HTMLInputElement);
   }
