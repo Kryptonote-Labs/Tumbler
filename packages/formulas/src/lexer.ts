@@ -10,7 +10,7 @@ export type FormulaToken =
   | { readonly kind: "symbol"; readonly value: FormulaSymbol; readonly start: number; readonly end: number }
   | { readonly kind: "eof"; readonly start: number; readonly end: number };
 
-export type FormulaSymbol = "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "<" | "<=" | ">" | ">=" | "%" | "(" | ")" | "," | ":" | "!";
+export type FormulaSymbol = "{" | "}" | ";" | "@" | "#" | "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "<" | "<=" | ">" | ">=" | "%" | "(" | ")" | "," | ":" | "!";
 
 export class FormulaLexError extends SyntaxError {
   readonly offset: number;
@@ -85,8 +85,14 @@ export function tokenizeFormula(source: string): readonly FormulaToken[] {
       tokens.push({ kind: "number", value: number, start, end: offset });
       continue;
     }
+    const axis = /^\$(?:[A-Za-z]{1,3}|[1-9][0-9]*)(?![A-Za-z0-9_$])/.exec(remaining)?.[0];
+    if (axis !== undefined) {
+      offset += axis.length;
+      tokens.push({kind: "identifier", value: axis, start, end: offset});
+      continue;
+    }
     const word = /^\$?[A-Za-z]{1,3}\$?[1-9][0-9]*/.exec(remaining)?.[0];
-    if (word !== undefined && isBoundedReference(word) && source[offset + word.length] !== "(") {
+    if (word !== undefined && isBoundedReference(word) && !/[A-Za-z0-9_.(]/.test(source[offset + word.length] ?? " ")) {
       offset += word.length;
       tokens.push({ kind: "reference", value: word, start, end: offset });
       continue;
@@ -94,7 +100,16 @@ export function tokenizeFormula(source: string): readonly FormulaToken[] {
     const identifier = /^(?:_xlfn\.)?[A-Za-z_\\][A-Za-z0-9_.]*/i.exec(remaining)?.[0];
     if (identifier !== undefined) {
       offset += identifier.length;
-      tokens.push({ kind: "identifier", value: identifier, start, end: offset });
+      if (source[offset] === "[") {
+        let brackets = 0;
+        do {
+          const char = source[offset++]!;
+          if (char === "[") brackets++;
+          if (char === "]") brackets--;
+        } while (offset < source.length && brackets > 0);
+        if (brackets) throw new FormulaLexError("Unclosed structured reference", start);
+      }
+      tokens.push({ kind: "identifier", value: source.slice(start, offset), start, end: offset });
       continue;
     }
     const twoCharacter = source.slice(offset, offset + 2);
@@ -114,8 +129,8 @@ export function tokenizeFormula(source: string): readonly FormulaToken[] {
   return Object.freeze(tokens);
 }
 
-const ERROR_VALUES: readonly FormulaErrorValue[] = ["#DIV/0!", "#VALUE!", "#NULL!", "#REF!", "#NAME?", "#NUM!", "#N/A"];
-const SYMBOLS = new Set<FormulaSymbol>(["+", "-", "*", "/", "^", "&", "=", "<", ">", "%", "(", ")", ",", ":", "!"]);
+const ERROR_VALUES: readonly FormulaErrorValue[] = ["#SPILL!", "#CALC!", "#DIV/0!", "#VALUE!", "#NULL!", "#REF!", "#NAME?", "#NUM!", "#N/A"];
+const SYMBOLS = new Set<FormulaSymbol>(["{", "}", ";", "@", "#","+", "-", "*", "/", "^", "&", "=", "<", ">", "%", "(", ")", ",", ":", "!"]);
 
 function isBoundedReference(reference: string): boolean {
   const match = /^\$?([A-Za-z]{1,3})\$?([1-9][0-9]*)$/.exec(reference);
