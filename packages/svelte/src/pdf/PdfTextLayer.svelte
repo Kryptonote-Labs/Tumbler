@@ -16,7 +16,7 @@
   } = $props();
   let layer: HTMLDivElement;
   let svg: SVGSVGElement;
-  // Transparent selection glyphs need no paint until the page contains a native selection.
+  // Defer SVG text layout until selection needs browser carets or highlighting.
   onMount(() => {
     let showing = false;
     const changed = () => {
@@ -28,10 +28,22 @@
       if (next !== showing) {
         showing = next;
         svg.style.opacity = next ? '1' : '0';
+        svg.style.contentVisibility = next ? 'visible' : 'hidden';
       }
     };
+    const reveal = () => {
+      showing = true;
+      svg.style.opacity = '1';
+      svg.style.contentVisibility = 'visible';
+    };
+    layer.addEventListener('pointerdown', reveal);
+    layer.addEventListener('pointerup', changed);
     document.addEventListener('selectionchange', changed);
-    return () => document.removeEventListener('selectionchange', changed);
+    return () => {
+      layer.removeEventListener('pointerdown', reveal);
+      layer.removeEventListener('pointerup', changed);
+      document.removeEventListener('selectionchange', changed);
+    };
   });
   $effect(() => registerPdfTextLayer(layer, content, bindings));
   const runs = $derived(pdfTextRuns(content).map((run) => ({ ...run, spans: pdfTextSpans(run) })));
@@ -88,6 +100,7 @@
   }
   svg {
     opacity: 0;
+    content-visibility: hidden;
     display: block;
     overflow: visible;
     pointer-events: none;
