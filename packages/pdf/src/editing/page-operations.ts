@@ -28,3 +28,13 @@ export function duplicatePdfModelPages(document: PdfDocument, model: PdfTextMode
   try { return model.pages.insertSnapshots(document.pages, copies, pages[selected.at(-1)!]!.id, pages); }
   finally { model.undo.stopCapturing(); }
 }
+
+/** Insert independent pages from a read-authorized source snapshot into this document. */
+export function insertPdfModelPages(document: PdfDocument, model: PdfTextModel, fonts: PdfEditingFonts, source: PdfDocument, afterId?: string) {
+  const pages = layoutPdfTextFlow(model, fonts, document.pages).pages;
+  if (afterId !== undefined && !pages.some(page => page.id === afterId)) throw new Error('Unknown PDF page.');
+  const copies = source.pages.map(page => extractPdfPages(source, [page.index]));
+  model.undo.stopCapturing();
+  try { return model.pages.insertSnapshots(document.pages, copies, afterId, pages); }
+  finally { model.undo.stopCapturing(); }
+}

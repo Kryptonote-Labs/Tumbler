@@ -37,6 +37,6 @@ export type { PdfSearchMatch, PdfSearchOptions, PdfSearchRect, PdfSearchResult }
 
 export { mergePdfDocuments, parsePdfPageSelection } from './merge.ts';
 export type { PdfMergeInput } from './merge.ts';
-export { deletePdfModelPages, duplicatePdfModelPages } from './editing/page-operations.ts';
+export { deletePdfModelPages, duplicatePdfModelPages, insertPdfModelPages } from './editing/page-operations.ts';
 
 export { createEditablePdfCopy } from "./editing/editable-copy.ts";

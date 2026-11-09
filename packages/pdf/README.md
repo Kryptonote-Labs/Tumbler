@@ -304,3 +304,9 @@ including local text changes and continuation pages, in immutable page snapshots
 Visibility is one undo step; the source bytes remain available to peers through undo
 and reload. Copies support the regular page ordering, rotation and deletion APIs,
 and can receive new text regions without sharing text ownership with their originals.
+
+`insertPdfModelPages(document, model, fonts, source, afterId)` uses the same frozen
+page ownership for another document's pages. The caller authorizes the source read
+before insertion. Source bytes travel with the destination model, so undo and reload
+never require continued access to the source document. Merge hosts can hide the output
+filename with `showFilename={false}` when using the picker for insertion.

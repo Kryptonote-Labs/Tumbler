@@ -306,7 +306,7 @@ test('copies retain source graphics when adding text, rotating and deleting thei
   const [id] = duplicatePdfModelPages(pdf, model, fonts, [pdf.pages[0]!.id]);
   const copy = model.pages.sourcePages(pdf.pages).find(page => page.id === id)!;
   const seed = model.seed(model.ids(0)[0]!);
-  model.add({ ...seed, id: 'copy-overlay', page: copy.index, sources: [], delta: [], spacing: undefined });
+  model.add({ ...seed, id: 'copy-overlay', page: copy.index, sources: [], delta: [], spacing: [] });
   model.replace('copy-overlay', 0, 0, 'ADDED');
   model.pages.rotate(pdf.pages, [id!], 90);
   model.pages.remove(pdf.pages, [pdf.pages[0]!.id]);
@@ -315,4 +315,25 @@ test('copies retain source graphics when adding text, rotating and deleting thei
   expect(texts(output)[0]).toContain('ADDED');
   expect(output.pages[0]!.rotation).toBe(180);
   model.doc.destroy();
+});
+
+test('foreign page insertion retains independent source bytes and one undo step after reload', async () => {
+  const { insertPdfModelPages } = await import('../src/index.ts');
+  const source = openPdfDocument(extractPdfPages(pdf, [2, 0]));
+  const model = new PdfTextModel();
+  model.pages.initialize(pdf.pages);
+  const updates: Uint8Array[] = [];
+  model.doc.on('update', (update: Uint8Array) => updates.push(update));
+  insertPdfModelPages(pdf, model, fonts, source, pdf.pages[0]!.id);
+  const peer = new PdfTextModel();
+  for (const update of updates) {
+    Y.applyUpdate(peer.doc, update);
+    peer.pages.validate(pdf.pages);
+  }
+  expect(texts(openPdfDocument(exportEditedPdf(pdf, peer, fonts)))).toEqual(['FIRST', 'THIRD', 'FIRST', 'SECOND SECRET', 'THIRD']);
+  model.undo.undo();
+  expect(model.pages.items(pdf.pages)).toHaveLength(3);
+  model.undo.redo();
+  expect(model.pages.items(pdf.pages)).toHaveLength(5);
+  model.doc.destroy(); peer.doc.destroy();
 });

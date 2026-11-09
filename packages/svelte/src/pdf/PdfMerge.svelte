@@ -5,9 +5,10 @@
   import PdfMergeAdd from './PdfMergeAdd.svelte';
   import { openMergeSource, mergeSourceSelection, type PdfMergeSource, type PdfMergeRead, type PdfMergeResult, type PdfMergeState, createPdfMergeState } from './merge-source.ts';
 
-  let { onmerge, sources = [], submitLabel = 'Merge PDF', sourcePicker, disabled = false, defaultFilename, session = $bindable() }: {
+  let { onmerge, sources = [], submitLabel = 'Merge PDF', sourcePicker, disabled = false, defaultFilename, showFilename = true, session = $bindable() }: {
     onmerge?: (bytes: Uint8Array, filename: string) => void | PdfMergeResult | Promise<void | PdfMergeResult>;
     sources?: { name: string; bytes: Uint8Array }[];
+    showFilename?: boolean;
     defaultFilename?: (name: string) => string;
     submitLabel?: string; disabled?: boolean;
     session?: PdfMergeState;
@@ -149,7 +150,7 @@
   </div>
   <div class="finish">
     {#if removed}<div class="undo" role="status"><span>Removed {removed.source.name}</span><button type="button" disabled={disabled || saving} onclick={undoRemove}>Undo</button></div>{/if}
-    <label>File name<input aria-label="Output filename" type="text" bind:value={model.filename} disabled={disabled || saving} oninput={changed} /></label>
+    {#if showFilename}<label>File name<input aria-label="Output filename" type="text" bind:value={model.filename} disabled={disabled || saving} oninput={changed} /></label>{/if}
     <div class="submit-row">
       <span class="status" class:error={!!error} role="status">{#if error}{error}{:else if model.created}Created {model.created.name}{:else if reason}{reason}{:else}{pageCount} {pageCount === 1 ? 'page' : 'pages'}{/if}</span>
       {#if model.created?.href}<a href={model.created.href}>Open</a>{/if}
