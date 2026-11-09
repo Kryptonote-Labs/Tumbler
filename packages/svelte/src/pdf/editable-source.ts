@@ -41,15 +41,11 @@ export class PdfEditableSource {
     previous.controller.abort();
     void previous.value.then((bitmap) => bitmap.close()).catch(() => {});
   }
-  async paint(context: CanvasRenderingContext2D, active: PdfPagePaintOptions,
-    ids: ReadonlySet<string> | undefined, ink: boolean, signal: AbortSignal) {
-    const tile = request(active, ids, ink);
-    if (ids) {
-      const { bitmap } = await active.renderer.render(tile, signal);
-      try { signal.throwIfAborted(); context.drawImage(bitmap, 0, 0); }
-      finally { bitmap.close(); }
-      return;
-    }
+  async render(active: PdfPagePaintOptions, ids: ReadonlySet<string>, ink: boolean, signal: AbortSignal) {
+    return (await active.renderer.render(request(active, ids, ink), signal)).bitmap;
+  }
+  async bitmap(active: PdfPagePaintOptions, signal: AbortSignal) {
+    const tile = request(active);
     const key = JSON.stringify(tile);
     if (!this.cached || this.cached.key !== key || this.cached.renderer !== active.renderer) {
       this.clear();
@@ -61,6 +57,6 @@ export class PdfEditableSource {
     }
     const bitmap = await this.cached.value;
     signal.throwIfAborted();
-    context.drawImage(bitmap, 0, 0);
+    return bitmap;
   }
 }

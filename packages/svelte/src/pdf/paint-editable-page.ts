@@ -26,7 +26,13 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     scheduled: number | undefined;
   let controller: AbortController | undefined, preparation: AbortController | undefined;
   const source = new PdfEditableSource();
-  let normal: HTMLCanvasElement | undefined;
+  const background = document.createElement('canvas');
+  background.setAttribute('aria-hidden','true');
+  Object.assign(background.style,{position:'absolute',inset:'0',width:'100%',height:'100%',pointerEvents:'none'});
+  Object.assign(canvas.style,{position:'absolute',inset:'0'});
+  canvas.before(background);
+  let displayed: ImageBitmap | undefined;
+  let ink: {regions: ReturnType<typeof layoutPdfTextFlow>['regions']; scale:number; fonts:PdfEditingFonts; fontRevision:number} | undefined;
   let snapshot: { options: PdfPagePaintOptions } | undefined;
   let prepared:
     | { key: string; flow: PdfPagePaintOptions['flow']; value: Promise<Raster> }
@@ -66,17 +72,9 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     );
     return result;
   };
-  function publish(raster: HTMLCanvasElement) {
-    // Resizing an unchanged canvas clears it and reallocates its backing store.
-    if (canvas.width !== raster.width) canvas.width = raster.width;
-    if (canvas.height !== raster.height) canvas.height = raster.height;
-    const context = canvas.getContext('2d')!;
-    context.setTransform(1, 0, 0, 1, 0, 0);
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(raster, 0, 0);
-    canvas.dataset.pdfRendered = String(options.scale * (window.devicePixelRatio || 1));
-  }
   function clearDrag() {
+    background.style.visibility = '';
+    canvas.style.visibility = '';
     drag?.clip?.remove();
     drag = undefined;
   }
@@ -96,17 +94,22 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     ink: boolean,
     signal: AbortSignal,
   ) {
-    const scale = active.scale * (window.devicePixelRatio || 1),
-      context = target.getContext('2d')!;
-    await source.paint(context, active, ids, ink, signal);
-    signal.throwIfAborted();
-    context.setTransform(scale, 0, 0, scale, 0, 0);
-    paintPdfText(
-      context,
-      edited(active).filter((region) => !ids || ids.has(region.id) === ink),
-      active.fonts,
-    );
+    const bitmap = await source.render(active, ids ?? new Set(), ink, signal);
+    try {
+      signal.throwIfAborted();
+      const regions = edited(active).filter((region) => !ids || ids.has(region.id) === ink);
+      const bitmapContext = !regions.length && target.getContext('bitmaprenderer');
+      if (bitmapContext) bitmapContext.transferFromImageBitmap(bitmap);
+      else {
+        const context = target.getContext('2d')!;
+        context.drawImage(bitmap,0,0);
+        const scale = active.scale * (window.devicePixelRatio || 1);
+        context.setTransform(scale,0,0,scale,0,0);
+        paintPdfText(context,regions,active.fonts);
+      }
+    } finally { bitmap.close(); }
   }
+
   function prepare(ids: readonly string[]) {
     const current = snapshot;
     if (!current) return;
@@ -146,7 +149,8 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     void ready
       .then((raster) => {
         if (disposed || drag !== current || current.ending) return;
-        publish(raster.background);
+        background.style.visibility = 'hidden';
+        canvas.style.visibility = 'hidden';
         current.layer?.remove();
         current.layer = raster.ink;
         current.clip ??= window.document.createElement('div');
@@ -156,7 +160,8 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
           overflow: 'hidden',
           pointerEvents: 'none',
         });
-        current.clip.append(raster.ink);
+        Object.assign(raster.background.style,{position:'absolute',inset:'0',width:'100%',height:'100%',pointerEvents:'none'});
+        current.clip.replaceChildren(raster.background,raster.ink);
         Object.assign(raster.ink.style, {
           position: 'absolute',
           left: '0',
@@ -182,16 +187,36 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     const active = options;
     controller = new AbortController();
     const signal = controller.signal;
-    const raster = surface();
     try {
-      await paint(raster, active, undefined, false, signal);
+      const bitmap = await source.bitmap(active,signal);
       if (disposed || signal.aborted) return;
-      normal = raster;
-      snapshot = { options: active };
-      if (!drag || drag.ending) {
-        publish(raster);
-        clearDrag();
+      if (displayed !== bitmap) {
+        const copy = await createImageBitmap(bitmap);
+        if (disposed || signal.aborted) {copy.close();return;}
+        if (background.width !== copy.width) background.width=copy.width;
+        if (background.height !== copy.height) background.height=copy.height;
+        const context=background.getContext('bitmaprenderer');
+        if(context)context.transferFromImageBitmap(copy);
+        else {background.getContext('2d')!.drawImage(copy,0,0);copy.close();}
+        displayed=bitmap;
       }
+      const regions=edited(active);
+      if (!ink || ink.scale!==active.scale || ink.fonts!==active.fonts || ink.fontRevision!==active.fonts.revision ||
+          ink.regions.length!==regions.length || regions.some((region,index)=>region.glyphs!==ink!.regions[index]!.glyphs)) {
+        if(regions.length) {
+          if(canvas.width!==background.width)canvas.width=background.width;
+          if(canvas.height!==background.height)canvas.height=background.height;
+          const context=canvas.getContext('2d')!;
+          context.setTransform(1,0,0,1,0,0);context.clearRect(0,0,canvas.width,canvas.height);
+          const scale=active.scale*(window.devicePixelRatio||1);
+          context.setTransform(scale,0,0,scale,0,0);
+          paintPdfText(context,regions,active.fonts);
+        } else {canvas.width=0;canvas.height=0;}
+        ink={regions,scale:active.scale,fonts:active.fonts,fontRevision:active.fonts.revision};
+      }
+      background.dataset.pdfRendered=String(active.scale*(window.devicePixelRatio||1));
+      snapshot = { options: active };
+      if (!drag || drag.ending) clearDrag();
       if (drag) showDrag();
       else void prepare(active.selected);
     } catch (error) {
@@ -223,8 +248,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     },
     finish(cancelled) {
       if (!drag) return;
-      if (cancelled && normal) {
-        publish(normal);
+      if (cancelled) {
         clearDrag();
         return;
       }
@@ -247,7 +271,10 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
         delete drag.clip;
       }
       source.clear();
-      normal = undefined;
+      displayed = undefined;
+      ink = undefined;
+      background.width=0; background.height=0;
+      delete background.dataset.pdfRendered;
       snapshot = undefined;
       canvas.width = 0;
       canvas.height = 0;
@@ -268,7 +295,10 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
         invalidatePreparation();
         if (previous.pdf !== value.pdf || previous.renderer !== value.renderer) {
           source.clear();
-          normal = undefined;
+          displayed = undefined;
+      ink = undefined;
+      background.width=0; background.height=0;
+      delete background.dataset.pdfRendered;
           snapshot = undefined;
         }
         schedule();
@@ -277,6 +307,7 @@ export function paintEditablePdfPage(canvas: HTMLCanvasElement, options: PdfPage
     },
     destroy() {
       source.clear();
+      background.width=0; background.height=0; background.remove();
       disposed = true;
       viewport.removeEventListener('pdfzoomstart', pauseZoom);
       viewport.removeEventListener('pdfzoomend', schedule);
