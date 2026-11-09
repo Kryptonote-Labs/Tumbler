@@ -106,3 +106,7 @@ Generated XLSX calculation/edit/reopen/preservation checks and the independent
 GPT-6.1 sol high reviews belong to the coordinator's integrated pass. They have
 not been run in this category worktree, and this category commit does not declare
 the integrated project ready.
+
+## Independent review follow-up
+
+RATE trial residuals now scale individual cash-flow terms in log space. RATE uses a bounded twenty-step Newton search and rejects nonconvergence without a bracket fallback. Native Excel returns #NUM! for RATE(1000,0,-1,1e-100) despite a mathematical root, and for RATE(1000,0,-1,0); both are explicit oracle fixtures. Other financial solvers retain bounded bracketing with direct sign comparison and require a validated residual instead of accepting bracket width alone.

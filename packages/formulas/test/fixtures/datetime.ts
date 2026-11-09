@@ -135,3 +135,8 @@ cases.push(
   { name: "clock today", formula: "TODAY()", now: "2024-01-01T12:00:00", oracle: "nondeterministic", expected: n(45292) },
   { name: "clock 1904", formula: "TODAY()", now: "2024-01-01T12:00:00", dateSystem: "1904", oracle: "nondeterministic", expected: n(43830) },
 );
+cases.push(
+ {name:"native nonleap ending February monthend",formula:"DAYS360(44927,44985)",expected:n(57),oracle:"excel"},
+ {name:"native leap ending February monthend",formula:"DAYS360(45292,45351)",expected:n(58),oracle:"excel"},
+ {name:"native January monthend rollover",formula:"DAYS360(44927,44957)",expected:n(30),oracle:"excel"},
+);

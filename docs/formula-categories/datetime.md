@@ -105,3 +105,7 @@ third-party fixture corpus is redistributed.
 - [WEEKNUM](https://support.microsoft.com/en-us/excel/functions/weeknum-function)
 - [WORKDAY.INTL](https://support.microsoft.com/en-us/excel/functions/workday-intl-function)
 - [YEARFRAC](https://support.microsoft.com/en-us/excel/functions/yearfrac-function)
+
+## Independent review follow-up
+
+Native Excel review probes confirm NASD DAYS360(44927,44985)=57 (Jan 1–Feb 28 2023), DAYS360(45292,45351)=58 (Jan 1–Feb 29 2024), and DAYS360(44927,44957)=30 (Jan 1–Jan 31 2023). These observed February results override the conflicting month-end rollover interpretation in the support prose; no February implementation change was made.
