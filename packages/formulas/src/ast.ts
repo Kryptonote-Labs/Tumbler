@@ -12,6 +12,7 @@ export interface FormulaCellReference {
 
 export interface FormulaReferenceExpression extends FormulaSourceSpan {
   readonly kind: "reference";
+  readonly whole?: "rows" | "columns";
   readonly sheet: string | undefined;
   readonly startReference: FormulaCellReference;
   readonly endReference: FormulaCellReference | undefined;
@@ -20,6 +21,12 @@ export interface FormulaReferenceExpression extends FormulaSourceSpan {
 export type FormulaBinaryOperator = "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "<" | "<=" | ">" | ">=";
 
 export type FormulaExpression =
+  | (FormulaSourceSpan & { readonly kind: "name"; readonly name: string })
+  | (FormulaSourceSpan & { readonly kind: "omitted" })
+  | (FormulaSourceSpan & { readonly kind: "value"; readonly value: import("./function-runtime.ts").FunctionValue })
+  | (FormulaSourceSpan & { readonly kind: "array"; readonly rows: readonly (readonly FormulaExpression[])[] })
+  | (FormulaSourceSpan & { readonly kind: "invoke"; readonly callee: FormulaExpression; readonly arguments: readonly FormulaExpression[] })
+  | (FormulaSourceSpan & { readonly kind: "intersection" | "spill"; readonly operand: FormulaExpression })
   | (FormulaSourceSpan & { readonly kind: "number"; readonly value: number; readonly lexical: string })
   | (FormulaSourceSpan & { readonly kind: "string"; readonly value: string })
   | (FormulaSourceSpan & { readonly kind: "boolean"; readonly value: boolean })

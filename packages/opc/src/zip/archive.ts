@@ -1,6 +1,6 @@
 import { inflateRaw } from "#zip-codec";
 import { crc32 } from "./crc32.ts";
-import { writeZipArchiveChanges } from "./writer.ts";
+import { writeZipArchiveChanges, ZipWriterError, type ZipArchiveChanges } from "./writer.ts";
 
 const END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
 const CENTRAL_DIRECTORY_ENTRY_SIGNATURE = 0x02014b50;
@@ -85,6 +85,8 @@ export interface ZipEntry {
 
 /** Durable member resources, independent of the original ZIP byte sequence. */
 export interface ZipArchiveSnapshot {
+  /** Edited member archives have no original ZIP layout until export. */
+  readonly memberBacked?: true;
   readonly entries: readonly ZipEntry[];
   readonly comment: string;
   readonly payloads: ReadonlyMap<string, Uint8Array>;
@@ -117,6 +119,7 @@ export class ZipArchive {
   }
 
   snapshot(): ZipArchiveSnapshot {
+    if (this.#payloads && !this.#layout) return { entries: this.entries, comment: this.comment, payloads: this.#payloads, layout: [], memberBacked: true };
     let offset = 0;
     const layout = this.#layout ?? [...this.entries].sort((a, b) => a.compressedDataOffset - b.compressedDataOffset).map(entry => {
       const header = this.#source.subarray(offset, entry.compressedDataOffset);
@@ -131,15 +134,52 @@ export class ZipArchive {
     if (new Set(snapshot.entries.map(entry => entry.name)).size !== snapshot.entries.length ||
         snapshot.payloads.size !== snapshot.entries.length || snapshot.entries.some(entry =>
           snapshot.payloads.get(entry.name)?.byteLength !== entry.compressedSize) ||
-        snapshot.layout.length !== snapshot.entries.length + 1)
+        (snapshot.memberBacked ? snapshot.layout.length !== 0 : snapshot.layout.length !== snapshot.entries.length + 1))
       throw new TypeError('Invalid native ZIP member resources.');
     let offset = 0;
-    for (const [index, entry] of [...snapshot.entries].sort((a, b) => a.compressedDataOffset - b.compressedDataOffset).entries()) {
+    for (const [index, entry] of (snapshot.layout.length ? [...snapshot.entries].sort((a, b) => a.compressedDataOffset - b.compressedDataOffset) : []).entries()) {
       offset += snapshot.layout[index]!.byteLength;
       if (offset !== entry.compressedDataOffset) throw new TypeError('Invalid native ZIP layout.');
       offset += entry.compressedSize;
     }
-    return new ZipArchive(new Uint8Array(), snapshot.entries, snapshot.comment, snapshot.payloads, snapshot.layout);
+    return new ZipArchive(new Uint8Array(), snapshot.entries, snapshot.comment, snapshot.payloads, snapshot.layout.length ? snapshot.layout : undefined);
+  }
+
+  /** Shares unchanged compressed members and stores edited members without rebuilding a ZIP. */
+  withChanges(changes: ZipArchiveChanges): ZipArchive {
+    const replacements = changes.replacements ?? new Map<string, Uint8Array>();
+    const additions = changes.additions ?? [];
+    const removals = new Set(changes.removals);
+    if (!replacements.size && !additions.length && !removals.size) return this;
+    for (const name of replacements.keys()) {
+      if (!this.get(name)) throw new ZipWriterError("unknown_entry", `Cannot replace unknown ZIP entry ${JSON.stringify(name)}.`);
+      if (removals.has(name)) throw new ZipWriterError("invalid_change", "Cannot replace and remove the same ZIP entry.");
+    }
+    for (const name of removals) if (!this.get(name)) throw new ZipWriterError("unknown_entry", `Cannot remove unknown ZIP entry ${JSON.stringify(name)}.`);
+    const names = new Set(this.entries.map(entry => entry.name));
+    for (const addition of additions) {
+      // Validate names using the same rules as an imported ZIP.
+      validateEntryName(addition.name);
+      if (names.has(addition.name)) throw new ZipWriterError("duplicate_entry", `Duplicate ZIP entry ${JSON.stringify(addition.name)}.`);
+      names.add(addition.name);
+    }
+    const entries: ZipEntry[] = [];
+    const payloads = new Map<string, Uint8Array>();
+    const append = (name: string, data: Uint8Array) => {
+      const bytes = data.slice();
+      entries.push(Object.freeze({ name, compressionMethod: 0, compressedSize: bytes.length,
+        uncompressedSize: bytes.length, crc32: crc32(bytes), flags: UTF8_NAME_FLAG,
+        localHeaderOffset: 0, compressedDataOffset: 0 }));
+      payloads.set(name, bytes);
+    };
+    for (const entry of this.entries) {
+      if (removals.has(entry.name) || entry.name.endsWith("/")) continue;
+      const replacement = replacements.get(entry.name);
+      if (replacement !== undefined) append(entry.name, replacement);
+      else { entries.push(entry); payloads.set(entry.name, this.compressedBytes(entry)); }
+    }
+    for (const addition of additions) append(addition.name, addition.data);
+    return new ZipArchive(new Uint8Array(), entries, this.comment, payloads);
   }
 
   get(name: string): ZipEntry | undefined {

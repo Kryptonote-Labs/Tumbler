@@ -24,8 +24,24 @@ async function run() {
     );
     await page.goto('https://fixture.local/');
     await page.addScriptTag({ content: script });
+    await page.locator('[data-pdf-page="1"]').waitFor();
+    await page.keyboard.press('Control+f');
+    const initialSearch = page.getByLabel('Search document', {exact:true});
+    await initialSearch.fill('Line');
+    await page.waitForFunction(() => document.querySelector('[role="status"]')?.textContent === '1 of 30');
+    await initialSearch.press('Enter');
+    assert.equal(await page.getByRole('status').textContent(), '2 of 30');
+    await initialSearch.press('Shift+Enter');
+    assert.equal(await page.getByRole('status').textContent(), '1 of 30');
+    await initialSearch.fill('Line 29');
+    await page.waitForFunction(() => {
+      const mark = document.querySelector('[data-pdf-search-match="0"]');
+      return !!mark && mark.closest('[data-pdf-page]')?.getAttribute('data-pdf-page') !== '1';
+    });
+    await initialSearch.press('Escape');
     const first = page.locator('[data-pdf-page="1"] .glyph').first();
     await first.waitFor();
+    await first.scrollIntoViewIfNeeded();
     const box = (await first.boundingBox())!;
     await page.mouse.click(box.x + 2, box.y + box.height * 0.6);
     const input = page.getByLabel('Edit PDF text');
@@ -116,6 +132,23 @@ async function run() {
       { insert: 'ZA', color: '#ff0000' },
       { insert: 'AA', color: '#0000ff' },
     ]);
+    await page.keyboard.press('Control+f');
+    const search = page.getByLabel('Search document', {exact:true});
+    await search.fill('AAA');
+    await page.waitForFunction(() => document.querySelectorAll('[data-pdf-search-match]').length > 0);
+    assert.equal(await page.getByRole('status').textContent(), '1 of 1');
+    await search.fill('aaa');
+    await page.getByRole('button', {name:'Match case',exact:true}).click();
+    assert.equal(await page.getByRole('status').textContent(), '0 of 0');
+    await page.getByRole('button', {name:'Match case',exact:true}).click();
+    await search.press('Enter');
+    assert.equal(await page.getByRole('status').textContent(), '1 of 1');
+    await search.press('Shift+Enter');
+    await page.evaluate('window.remotePrefix()');
+    await search.fill('BBZ');
+    await page.waitForFunction(() => document.querySelectorAll('[data-pdf-search-match]').length > 0);
+    await search.press('Escape');
+    assert.equal(await page.locator('[data-pdf-search-match]').count(), 0);
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();

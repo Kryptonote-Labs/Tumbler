@@ -99,3 +99,5 @@ export type { NativePresentationArchive, NativePresentationManifest } from "./na
 export {presentationSlideResources,presentationResourceHash} from "./native-resources.ts";
 
 export {presentationNativeContent} from "./native-archive.ts";
+
+export { presentationFormatPainterSample, presentationFormatPainterCommands, type PresentationFormatPainterSample } from './format-painter.ts';

@@ -13,8 +13,8 @@ export function spreadsheetCellCss(
   const style = applySpreadsheetDifferentialFormats(worksheet.cellStyle(reference), differentialFormats);
   const declarations: string[] = [];
   const fontName = worksheet.styles.resolveFontName(style.font);
-  if (fontName !== undefined) declarations.push(`font-family:${cssValue(fontName)}`);
-  if (style.font.size !== undefined) declarations.push(`font-size:${style.font.size}pt`);
+  declarations.push(`font-family:${cssValue(fontName)},sans-serif`);
+  declarations.push(`font-size:${worksheet.styles.resolveFontSize(style.font)}pt`);
   if (style.font.bold) declarations.push("font-weight:700");
   if (style.font.italic) declarations.push("font-style:italic");
   if (style.font.underline !== undefined || style.font.strike) {
