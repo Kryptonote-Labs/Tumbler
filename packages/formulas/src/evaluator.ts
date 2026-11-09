@@ -1930,6 +1930,9 @@ function matrix(value: EvaluationValue): readonly (readonly FormulaScalarValue[]
 }
 
 function toFunction(value: EvaluationValue): FunctionValue {
+  // Extension handlers retain the scalar context contract for one-cell reads.
+  // Core aggregates consume the range provenance before crossing this boundary.
+  if (isRange(value) && value.rows.length === 1 && value.rows[0]?.length === 1) return value.rows[0][0]!;
   return isRange(value) ? {kind: "array", rows: value.rows} : value;
 }
 
