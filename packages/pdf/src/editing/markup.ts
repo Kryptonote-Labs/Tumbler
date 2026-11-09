@@ -181,7 +181,7 @@ export function writePdfMarkup(
   annotations: PdfMarkupModel,
   info: Map<string, PdfValue>,
 ) {
-  const raw = continuation ? [] : document.source.resolve(page.dictionary.get('Annots'));
+  const raw = continuation ? [] : page.index < 0 ? info.get('Annots') : document.source.resolve(page.dictionary.get('Annots'));
   const originals = Array.isArray(raw) ? raw : [];
   const retained = originals.filter(
     (_, i) => !annotations.records.has(`annotation:${page.id}:${i}`),
