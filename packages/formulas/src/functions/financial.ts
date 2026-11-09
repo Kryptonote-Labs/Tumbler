@@ -104,7 +104,8 @@ function interest(
 }
 // Trial-relative residual: discounting every term toward zero does not
 // constitute convergence. Log scaling keeps genuine cancellations representable.
-function discountedResidual(values: readonly number[], time: (index: number) => number, c: FunctionContext): (r: number) => number {
+type RateResidual = ((r: number) => number) & { readonly logRate?: (q: number) => number };
+function discountedResidual(values: readonly number[], time: (index: number) => number, c: FunctionContext): RateResidual {
   // Net identical exponents exactly in units of the least binary64 value.
   // The accumulator is bounded by binary64's 2098-bit span plus log2(count).
   // This avoids both intermediate overflow and losing small uncancelled flows.
@@ -134,9 +135,7 @@ function discountedResidual(values: readonly number[], time: (index: number) => 
     const log = Number.isFinite(coefficient) ? Math.log(coefficient) : Math.log(leading) + (shift - 1074) * Math.LN2;
     terms.push({sign: net < 0n ? -1 : 1, log, time: at});
   }
-  return r => {
-    check(r > -1);
-    const q = Math.log1p(r);
+  const logRate = (q: number) => {
     let largest = -Infinity;
     for (const term of terms) { c.operation(); largest = Math.max(largest, term.log - term.time * q); }
     let residual = 0, magnitude = 0;
@@ -147,10 +146,11 @@ function discountedResidual(values: readonly number[], time: (index: number) => 
     }
     return terms.length ? residual / magnitude : 0;
   };
+  return Object.assign((r: number) => { check(r > -1); return logRate(Math.log1p(r)); }, {logRate});
 }
 // Newton in log(1+r), followed by bounded bracketing; no unbounded iteration.
 function solve(
-  fn: (r: number) => number,
+  fn: RateResidual,
   guess: number,
   c: FunctionContext,
   bracket = true,
@@ -158,26 +158,29 @@ function solve(
   residualTolerance = 1e-10,
 ): number {
   check(guess > -1);
+  // Cash-flow residuals retain the solver coordinate near r=-1, where
+  // expm1(x) followed by log1p(r) would lose significant digits.
+  const evaluate = fn.logRate ?? ((q: number) => fn(Math.expm1(q)));
   let x = Math.log1p(guess);
   for (let i = 0; i < iterations; i++) {
     c.operation(3);
-    const y = fn(Math.expm1(x));
+    const y = evaluate(x);
     if (Number.isFinite(y) && Math.abs(y) < residualTolerance) return Math.expm1(x);
     const h = 1e-5;
-    const d = (fn(Math.expm1(x + h)) - fn(Math.expm1(x - h))) / (2 * h);
+    const d = (evaluate(x + h) - evaluate(x - h)) / (2 * h);
     if (!Number.isFinite(d) || d === 0) break;
     const next = x - y / d;
     if (!Number.isFinite(next) || next < -35 || next > 700) break;
-    if (Math.abs(next - x) < 1e-12) break;
+    if (next === x) break;
     x = next;
   }
   if (!bracket) return fail();
   let lo = -25,
-    a = fn(Math.expm1(lo));
+    a = evaluate(lo);
   for (let hi = -24.5; hi <= 50; hi += 0.5) {
     c.operation();
     if (a === 0) return Math.expm1(lo);
-    const b = fn(Math.expm1(hi));
+    const b = evaluate(hi);
     if (b === 0) return Math.expm1(hi);
     if (Number.isFinite(a) && Number.isFinite(b) && (a > 0) !== (b > 0)) {
       let left = lo,
@@ -185,7 +188,7 @@ function solve(
       for (let j = 0; j < 100; j++) {
         c.operation();
         const mid = (left + right) / 2,
-          y = fn(Math.expm1(mid));
+          y = evaluate(mid);
         if (Number.isFinite(y) && Math.abs(y) < residualTolerance) return Math.expm1(mid);
         if (right - left < 1e-13) break;
         if (y > 0 === a > 0) {
