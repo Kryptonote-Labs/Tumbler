@@ -298,6 +298,12 @@ plaintext objects to an encrypted revision. Hosts own user consent and storage o
 the new copy; the source remains unchanged. Password-protected inputs must first
 be opened with a valid password. Rewriting a PDF invalidates existing signatures.
 
+`PdfNavigation` resolves Link annotations and nested outlines without interpreting page content.
+`links(page)` returns viewport rectangles and typed external URI or internal targets;
+`outline()` returns titles, targets and children. Internal targets carry source page IDs and
+cropped, rotated viewport coordinates. Resolve IDs against the displayed page list after page edits;
+a deleted target must do nothing. URI actions are data, never executable actions. Browser consumers
+must use `isSafePdfUri` and open external targets with `noopener,noreferrer`.
 `duplicatePdfModelPages(document, model, fonts, ids)` copies selected visible pages in
 page order after the last selected page. Copies freeze the current exported content,
 including local text changes and continuation pages, in immutable page snapshots.
