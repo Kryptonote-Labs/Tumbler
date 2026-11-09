@@ -104,10 +104,28 @@
   const currentStyle = $derived.by(() => {
     void revision;
     return active
-      ? { ...model.styleAt(active, start + (end > start ? 1 : 0)), ...pending }
+      ? { ...model.styleAt(active, start + (end > start ? 1 : 0)), ...model.paragraph(active), ...pending }
       : defaultPdfTextStyle;
   });
   $effect(() => onstyle?.(currentStyle));
+  let formattingText = false;
+  /** Capture editing mode before a ribbon picker takes keyboard focus. */
+  export function captureFormattingSelection(focused: EventTarget | null = window.document.activeElement) {
+    if (focused === input) formattingText = true;
+    else if (focused && focused instanceof Node && root?.contains(focused)) formattingText = false;
+  }
+  export function fontChoices() { return fonts.choices; }
+  export function selectFont(key: string) { format(fonts.selection(key)); }
+  export function fontValue(style: PdfTextStyle) {
+    const face = fonts.get(style);
+    return fonts.choices.some(choice => choice.value === face.key) ? face.key : fonts.fontName(style);
+  }
+  export function formatParagraph(patch: Pick<PdfTextStyle, 'alignment' | 'lineSpacing'>) {
+    if (!editable || !active) return;
+    model.undo.stopCapturing();
+    model.formatParagraph(active, patch);
+    model.undo.stopCapturing();
+  }
   /** Mark the selected glyphs on each output page without changing text formatting. */
   export function annotate(kind: PdfMarkupKind, color: string) {
     if (!editable || !active || start === end) return;
@@ -127,13 +145,14 @@
   const annotations = $derived.by(() => { void revision; return model.annotations.items(pdf); });
   export function format(patch: Partial<PdfTextStyle>) {
     if (!editable || !active) return;
-    if (window.document.activeElement !== input) {
+    if (window.document.activeElement !== input && !formattingText) {
       formatBox(patch);
       return;
     }
     model.undo.stopCapturing();
     if (start !== end) model.format(active, start, end, patch);
     else pending = { ...pending, ...pdfTextStylePatch(currentStyle, patch) };
+    model.undo.stopCapturing();
     input?.focus({ preventScroll: true });
   }
   $effect(() => {
@@ -176,7 +195,7 @@
     if (!editable || !active) return;
     await pastePdfText(model, active, start, end, navigator.clipboard, () => editable);
   }
-  export function toggle(key: 'bold' | 'italic' | 'underline') {
+  export function toggle(key: 'bold' | 'italic' | 'underline' | 'strike') {
     format({ [key]: !currentStyle[key] });
   }
   export function undo(redo = false) {
@@ -272,6 +291,15 @@
           event.key.toLowerCase() as 'b' | 'i' | 'u'
         ],
       );
+    }
+    if (mod && !event.altKey) {
+      const alignment = ({ l: 'left', e: 'center', r: 'right', j: 'justify' } as const)[event.key.toLowerCase() as 'l'];
+      const spacing = ({ '1': 1, '2': 2, '5': 1.5 } as const)[event.key as '1'];
+      if (alignment) { event.preventDefault(); formatParagraph({ alignment }); }
+      if (spacing) { event.preventDefault(); formatParagraph({ lineSpacing: spacing }); }
+    }
+    if (mod && event.shiftKey && event.key.toLowerCase() === 'x') {
+      event.preventDefault(); toggle('strike');
     }
     const history = pdfHistoryShortcut(event);
     if (history) {

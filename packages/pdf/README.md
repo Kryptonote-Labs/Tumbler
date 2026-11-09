@@ -298,6 +298,20 @@ plaintext objects to an encrypted revision. Hosts own user consent and storage o
 the new copy; the source remains unchanged. Password-protected inputs must first
 be opened with a valid password. Rewriting a PDF invalidates existing signatures.
 
+Editable text supports `strike` and RGB `background` character formatting through
+`PdfTextModel.format`. `formatParagraph` sets region `alignment` and positive
+`lineSpacing` multipliers. These properties merge through Yjs, share the text undo
+manager, and use the same glyph and caret layout for painting and export. Alignment
+supports left, center, right and justification of soft-wrapped lines. Explicit and
+final lines are not stretched. Omitting line spacing retains recovered source spacing.
+These text properties do not create PDF markup annotations.
+
+`PdfEditingFonts.choices` lists loaded TrueType faces that the writer can encode.
+Complete, non-subset embedded TrueType fonts with printable Latin coverage also
+appear as independently encodable faces. Subsets and CFF source faces retain their
+original encoding for existing text without becoming selectable replacement fonts.
+`selection(key)` supplies the chosen face's weight and slant with its identity.
+Missing characters still use the configured fallback fonts.
 `PdfNavigation` resolves Link annotations and nested outlines without interpreting page content.
 `links(page)` returns viewport rectangles and typed external URI or internal targets;
 `outline()` returns titles, targets and children. Internal targets carry source page IDs and
