@@ -59,3 +59,24 @@ describe("shared formula runtime SpreadsheetML integration", () => {
     expect(artifact.bytes()).toEqual(bytes);
   });
 });
+
+// Independent review regressions use actual uncached workbooks, not category mocks.
+test("active consumers and transitive dependants refresh after a later spill publishes", () => {
+  const bytes = buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet('<row r="1"><c r="C1"><f>B2+A2</f></c><c r="D1"><f>C1*10</f></c></row><row r="2"><c r="A2"><f>{1,2}</f></c></row>')}]});
+  for (const artifact of [openSpreadsheetArtifact(bytes), openSpreadsheetArtifact(openSpreadsheetArtifact(bytes).bytes())]) {
+    expect(artifact.calculation.displayText("B2")).toBe("2");
+    expect(artifact.calculation.displayText("C1")).toBe("3");
+    expect(artifact.calculation.displayText("D1")).toBe("30");
+    expect(artifact.calculation.diagnostics).toEqual([]);
+  }
+});
+
+test("single-cell references retain aggregate coercion and nested aggregate result ranges resolve", () => {
+  const artifact = openSpreadsheetArtifact(buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet('<row r="1"><c r="A1" t="inlineStr"><is><t>7</t></is></c><c r="B1" t="b"><v>1</v></c><c r="C1"><v>1</v></c><c r="D1"><v>10</v></c><c r="F1"><f>SUM(A1:A1)</f></c><c r="G1"><f>COUNT(B1:B1)</f></c><c r="H1"><f>AVERAGE(A1:A1)</f></c><c r="I1"><f>SUMIF(C1:C2,&quot;&gt;0&quot;,OFFSET(D1,0,0,2))</f></c><c r="J1"><f>AVERAGEIF(C1:C2,&quot;&gt;0&quot;,INDEX(D1:D2,0))</f></c></row><row r="2"><c r="C2"><v>2</v></c><c r="D2"><v>20</v></c></row>')}]}));
+  expect(artifact.calculation.displayText("F1")).toBe("0");
+  expect(artifact.calculation.displayText("G1")).toBe("0");
+  expect(artifact.calculation.displayText("H1")).toBe("#DIV/0!");
+  expect(artifact.calculation.displayText("I1")).toBe("30");
+  expect(artifact.calculation.displayText("J1")).toBe("15");
+  expect(artifact.calculation.diagnostics).toEqual([]);
+});

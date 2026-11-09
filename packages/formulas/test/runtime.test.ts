@@ -167,3 +167,20 @@ describe("shared extension runtime", () => {
     expect(calls).toBe(0);
   });
 });
+
+test("reference geometry preserves whole axes while materialization honors budgets", () => {
+  const geometry: FunctionRegistry = new Map([["HEIGHT", (args, ctx) => {
+    const ref = ctx.reference(args[0]!);
+    return "type" in ref ? ref : n(ref.height);
+  }], ["WIDTH", (args, ctx) => {
+    const ref = ctx.reference(args[0]!);
+    return "type" in ref ? ref : n(ref.width);
+  }]]);
+  const calc = calculateFormulas(workbook({"1,4": "HEIGHT(A:A)", "2,4": "WIDTH(1:1)", "3,4": "INDEX(A:A,100)", "4,4": 'INDEX(INDIRECT("B1",),1)'}, {"1,2":7}), {functionRegistries: [geometry]});
+  expect(calc.value(at(1,4))).toEqual(n(1048576));
+  expect(calc.value(at(2,4))).toEqual(n(16384));
+  expect(calc.value(at(3,4))).toEqual(n(0));
+  expect(calc.value(at(4,4))).toEqual(n(7));
+  expect(calc.diagnostics).toEqual([]);
+  expect(run("A:A").diagnostics[0]?.code).toBe("evaluation-limit");
+});
