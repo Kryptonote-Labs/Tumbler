@@ -61,9 +61,15 @@ function styleOf(item: PdfTextItem, color: string): PdfTextStyle {
 }
 /** Geometric paragraph recovery preserves source ownership. Shared showing operators never split between regions. */
 export function importPdfText(document: PdfDocument): PdfTextSeed[] {
-  const interpreter = new PdfInterpreter(document),
-    blocks: PdfTextSeed[] = [];
+  return [...iteratePdfText(document)];
+}
+
+/** Yield completed pages in source order so callers can build editing state without retaining every page scene. */
+export function* iteratePdfText(document: PdfDocument): Generator<PdfTextSeed> {
+  const interpreter = new PdfInterpreter(document);
+  let count = 0;
   for (const page of document.pages) {
+    const blocks: PdfTextSeed[] = [];
     const scene = interpreter.page(page.index),
       glyphs = new Map(scene.elements.filter((e) => e.kind === 'glyph').map((e) => [e.id, e]));
     const lines: PdfTextItem[][] = [];
@@ -244,7 +250,7 @@ export function importPdfText(document: PdfDocument): PdfTextSeed[] {
         previous.width = Math.max(previous.width, right - previous.x);
       } else {
         previous = {
-          id: `source:${page.id}:${blocks.length}`,
+          id: `source:${page.id}:${count + blocks.length}`,
           page: page.index,
           x,
           y,
@@ -274,6 +280,7 @@ export function importPdfText(document: PdfDocument): PdfTextSeed[] {
           );
       }
     interpreter.releasePage(page.index);
+    count += blocks.length;
+    yield* blocks;
   }
-  return blocks;
 }

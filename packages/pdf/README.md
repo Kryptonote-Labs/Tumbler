@@ -349,3 +349,7 @@ model's Yjs document and undo manager. Hosts must validate received updates with
 preserves untouched annotation objects. `PdfEditableDocument.annotate(kind, color)`
 marks the current text selection. This API does not yet author comments, ink or
 signatures.
+For headless editing imports, `iteratePdfText(document)` yields completed text regions one page
+at a time. Pass the iterator directly to `PdfTextModel.initialize` to avoid collecting the
+entire document's imported regions before building collaborative state. It preserves the same
+region identities and page order as `importPdfText(document)`, which still returns an array.

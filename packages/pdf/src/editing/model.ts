@@ -4,7 +4,7 @@ import * as Y from 'yjs';
 import { PdfPageModel } from './pages.ts';
 import { pdfTextStylePatch, type PdfTextStyle } from './fonts.ts';
 import type { PdfTextSeed } from './import-text.ts';
-export { importPdfText, pdfSourceKey, type PdfTextSeed } from './import-text.ts';
+export { importPdfText, iteratePdfText, pdfSourceKey, type PdfTextSeed } from './import-text.ts';
 
 export type PdfTextPlacement = {
   x: number;
@@ -42,7 +42,7 @@ export class PdfTextModel {
       trackedOrigins: new Set([this.origin]),
     });
   }
-  initialize(seeds: PdfTextSeed[]) {
+  initialize(seeds: Iterable<PdfTextSeed>) {
     if (this.regions.size) return;
     this.doc.transact(() => {
       for (const seed of seeds) this.add(seed, false);
