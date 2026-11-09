@@ -102,6 +102,28 @@ function interest(
     (t === 1 ? 1 + r : 1)
   );
 }
+// Trial-relative residual: discounting every term toward zero does not
+// constitute convergence. Log scaling keeps genuine cancellations representable.
+function discountedResidual(values: readonly number[], time: (index: number) => number, c: FunctionContext): (r: number) => number {
+  const terms: {sign: number; log: number; time: number}[] = [];
+  values.forEach((value, index) => {
+    c.operation();
+    if (value !== 0) terms.push({sign: Math.sign(value), log: Math.log(Math.abs(value)), time: time(index)});
+  });
+  return r => {
+    check(r > -1);
+    const q = Math.log1p(r);
+    let largest = -Infinity;
+    for (const term of terms) { c.operation(); largest = Math.max(largest, term.log - term.time * q); }
+    let residual = 0, magnitude = 0;
+    for (const term of terms) {
+      c.operation();
+      const weight = Math.exp(term.log - term.time * q - largest);
+      residual += term.sign * weight; magnitude += weight;
+    }
+    return residual / magnitude;
+  };
+}
 // Newton in log(1+r), followed by bounded bracketing; no unbounded iteration.
 function solve(
   fn: (r: number) => number,
@@ -830,8 +852,8 @@ for (const name of ["NPV", "IRR", "MIRR", "FVSCHEDULE", "XNPV", "XIRR"])
         };
         if (name === "XNPV") return functionNumber(npv(scalar(0)));
         check(values.some((v) => v > 0) && values.some((v) => v < 0));
-        const scale = values.reduce((max, v) => Math.max(max, Math.abs(v)), 0);
-        return functionNumber(solve((r) => npv(r) / scale, scalar(2, 0.1), c));
+        const residual = discountedResidual(values, i => (dates[i]! - dates[0]!) / 365, c);
+        return functionNumber(solve(residual, scalar(2, 0.1), c));
       }
       check(values.some((v) => v > 0) && values.some((v) => v < 0));
       if (name === "MIRR") {
@@ -850,21 +872,7 @@ for (const name of ["NPV", "IRR", "MIRR", "FVSCHEDULE", "XNPV", "XIRR"])
           Math.pow(-pos / neg, 1 / (values.length - 1)) - 1,
         );
       }
-      const scale = values.reduce((max, v) => Math.max(max, Math.abs(v)), 0);
-      return functionNumber(
-        solve(
-          (r) => {
-            let sum = 0;
-            for (let i = 0; i < values.length; i++) {
-              c.operation();
-              sum += values[i]! / scale / Math.pow(1 + r, i);
-            }
-            return sum;
-          },
-          scalar(1, 0.1),
-          c,
-        ),
-      );
+      return functionNumber(solve(discountedResidual(values, i => i, c), scalar(1, 0.1), c));
     } catch (e) {
       if (e instanceof FinancialError) return e.value;
       throw e;
