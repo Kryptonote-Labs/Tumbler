@@ -47,7 +47,7 @@ function model(category: string, fixture: FormulaFixtureCase): FormulaFunctionSe
 }
 
 for (const { category, cases } of await loadCategoryCases()) {
-  for (const fixture of cases.filter(fixture => fixture.requiresService)) test(`hosted uncached XLSX: ${category}: ${fixture.name}`, () => {
+  for (const fixture of cases.filter(fixture => fixture.requiresService || category === "specialized")) test(`host integration uncached XLSX: ${category}: ${fixture.name}`, () => {
     const bytes = buildFormulaDocument(fixture);
     const original = bytes.slice();
     const artifact = openFormulaDocument(fixture, bytes);

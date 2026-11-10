@@ -1263,7 +1263,7 @@ export function calculateFormulas(
     if (depth > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Function evaluation depth exceeded.");
     const normalized = normalizeFunctionName(name);
     if (normalized === "PY" && (publicExpression?.kind !== "function" || normalizeFunctionName(publicExpression.name) !== "PY" || publicExpression.arguments !== args)) throw new EvaluationUnavailable("unsupported-function", "PY must be a standalone public formula.");
-    if (normalized === "PY" && args[0]?.kind !== "string") throw new EvaluationUnavailable("unavailable-dependency", "OOXML Python script indices require explicit script resolution; only public literal code syntax can be passed to a host.");
+    if (normalized === "PY" && args[0]?.kind === "number" && Number.isInteger(args[0].value) && args[0].value >= 0) throw new EvaluationUnavailable("unavailable-dependency", "OOXML Python script indices require explicit script resolution; only public literal code syntax can be passed to a host.");
     const named = source.resolveName?.(name, activeAddress);
     const bound = bindings.get(normalizeBindingName(normalized)) ?? (named && "kind" in named ? toFunction(evaluate(named, sheet, depth + 1)) : undefined);
     if (bound !== undefined) return "kind" in bound && bound.kind === "lambda" ? bound.invoke(args.map(arg => toFunction(evaluate(arg, sheet, depth + 1)))) : error("#VALUE!");
