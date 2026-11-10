@@ -17,6 +17,8 @@ export interface CompatibilityCase {
 }
 // Original test data; distribution expectations independently computed with SciPy 1.18.0.
 export const cases: readonly CompatibilityCase[] = [
+  { name: "hypgeomdist above support", formula: "HYPGEOMDIST(3,2,4,10)", expected: { type: "error", value: "#NUM!" } },
+  { name: "hypgeomdist below support", formula: "HYPGEOMDIST(0,8,8,10)", expected: { type: "error", value: "#NUM!" } },
   {
     name: "betadist-success",
     formula: "BETADIST(0.3,2,5)",
@@ -3491,8 +3493,8 @@ export const cases: readonly CompatibilityCase[] = [
     name: "gamma-zero-density",
     formula: "GAMMADIST(0,1,2,FALSE)",
     expected: {
-      type: "error",
-      value: "#NUM!",
+      type: "number",
+      value: 0.5,
     },
     tolerance: 1e-11,
   },

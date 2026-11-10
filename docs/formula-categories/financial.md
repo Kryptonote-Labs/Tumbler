@@ -69,9 +69,8 @@ can be emitted as its own uncached Results/Inputs XLSX workbook.
 
 ## Fixture inventory and verification
 
-The fixture module exports 147 `cases` with full scalar expectations (87 numeric,
-60 errors). The financial tests contain 159 passing tests; the complete formula
-test directory contains 198 passing tests. Every name has
+The fixture module exports 173 `cases` with full scalar expectations (104 numeric,
+69 errors). Every name has
 a numeric success and domain/error case (110 baseline cases). Additional cases
 cover nesting, editable referenced loan inputs, literal/reference coercion,
 propagated errors, negative dollar values, tiny rates, annuity-due payments,

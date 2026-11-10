@@ -37,11 +37,14 @@ export interface FunctionContext {
   readonly maxArrayCells: number;
   readonly services: FormulaFunctionServices | undefined;
   evaluate(expression: FormulaExpression): FunctionValue;
+  /** Preserve reference provenance and bound blank-insensitive whole-axis scans. */
+  evaluateAggregate(expression: FormulaExpression): FunctionValue;
   /** Invoke a registered function with already evaluated values. */
   call(name: string, arguments_: readonly FunctionValue[]): FunctionValue;
-  /** Evaluate an expression in a child lexical scope (LET/LAMBDA). */
-  withBindings(bindings: ReadonlyMap<string, FunctionValue>, expression: FormulaExpression): FunctionValue;
-  reference(expression: FormulaExpression): FunctionReference | FormulaScalarValue;
+  /** Evaluate in a child lexical scope; optionally preserve reference provenance for LET/LAMBDA values and returns. */
+  withBindings(bindings: ReadonlyMap<string, FunctionValue>, expression: FormulaExpression, preserveReference?: boolean): FunctionValue;
+  /** Resolve geometry in the caller's sheet, or an explicit source sheet scope. */
+  reference(expression: FormulaExpression, sheet?: string): FunctionReference | FormulaScalarValue;
   readReference(reference: FunctionReference): FunctionValue;
   cell(address: FormulaCellAddress): FormulaCellInput | undefined;
   /** Charge work to the evaluator's bounded operation budget. */

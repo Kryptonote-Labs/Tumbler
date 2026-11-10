@@ -10,6 +10,17 @@ console.log(document.pages.map(page => ({ id: page.id, width: page.width, height
 const unchanged = document.bytes();
 ```
 
+For headless editing imports, `iteratePdfText(document)` yields completed text regions one page
+at a time. Pass the iterator directly to `PdfTextModel.initialize` to avoid collecting the
+entire document's imported regions before building collaborative state. It preserves the same
+region identities and page order as `importPdfText(document)`, which still returns an array.
+
+Headless callers that only inspect text can construct
+`new PdfInterpreter(document, undefined, { deferImages: true })`. Image elements and source
+identities stay in the scene, while pixels are decoded and cached only when `element.image`
+is accessed. Rendering uses eager decoding by default. Text editing import and editing-font
+discovery use deferred images automatically.
+
 The source reader follows ISO 32000-1 object syntax, classic and stream cross-references,
 incremental revisions, compressed object streams, content filters and page-tree inheritance.
 It does not replace malformed cross-reference data with a heuristic repair scan.
@@ -282,3 +293,79 @@ selection to the current collaborative layout, including reordered and continuat
 pages. It rejects duplicates and deletion of every page before mutation. It uses
 the same page model as interactive deletion and preserves source identities and undo;
 it is not a redaction API. File replacement uses the CLI's separate extraction safeguards.
+
+
+For interactive hosts, `await fonts.forkAsync(document, yieldControl)` prepares the same
+source font mappings as `fork(document)`, but calls the host's async callback before
+scanning and between pages. Yield to the event loop there to keep the viewer responsive,
+and throw on cancellation to stop preparation. Headless callers can keep using `fork`.
+The editable Svelte view mounts editing controls for nearby pages and retains selected
+regions off screen; page geometry remains mounted for stable scrolling.
+
+`createEditablePdfCopy(document)` rewrites an authenticated document into a fresh,
+unencrypted PDF. It retains the full reachable catalog graph and metadata, including
+forms, annotations, attachments and shared object references. It does not append
+plaintext objects to an encrypted revision. Hosts own user consent and storage of
+the new copy; the source remains unchanged. Password-protected inputs must first
+be opened with a valid password. Rewriting a PDF invalidates existing signatures.
+
+## Added images
+
+`PdfTextModel.images` stores reference-only image placements in the same collaborative document and undo manager as text and pages. Use `place(id, { page, continuation, asset, x, y, width, height, rotation })`, `move`, `rotate`, `duplicate` and `hide`. Coordinates are source page viewport points, before additional page rotation. Rotation uses quarter turns around the image centre. Hosts own durable assets and must upload them before committing a placement.
+
+Pass a synchronous asset resolver as the fourth argument to `exportEditedPdf`. It returns `{ width, height, rgba }` with eight-bit RGBA samples. The writer embeds compressed image XObjects and transparency masks as ordinary page content. Load editing fonts before export, including when clean source text shares a page with an added image. Missing referenced assets fail export rather than silently omitting content.
+
+`PdfEditableDocument` accepts `imageUrls` and `onimagefiles(files, target)` for device paste and page drop. The host can use `imageTarget(pageIndex)` for ribbon insertion and `imageAction` for rotation, duplication and deletion. Mixed image/text selection uses Shift-click. Drag previews use compositor transforms; pointer release commits one undo step. Resizing preserves aspect ratio.
+
+Images cover existing content visually. They do not redact or remove the underlying content.
+Editable text supports `strike` and RGB `background` character formatting through
+`PdfTextModel.format`. `formatParagraph` sets region `alignment` and positive
+`lineSpacing` multipliers. These properties merge through Yjs, share the text undo
+manager, and use the same glyph and caret layout for painting and export. Alignment
+supports left, center, right and justification of soft-wrapped lines. Explicit and
+final lines are not stretched. Omitting line spacing retains recovered source spacing.
+These text properties do not create PDF markup annotations.
+
+`PdfEditingFonts.choices` lists loaded TrueType faces that the writer can encode.
+Complete, non-subset embedded TrueType fonts with printable Latin coverage also
+appear as independently encodable faces. Subsets and CFF source faces retain their
+original encoding for existing text without becoming selectable replacement fonts.
+`selection(key)` supplies the chosen face's weight and slant with its identity.
+Missing characters still use the configured fallback fonts.
+`PdfNavigation` resolves Link annotations and nested outlines without interpreting page content.
+`links(page)` returns viewport rectangles and typed external URI or internal targets;
+`outline()` returns titles, targets and children. Internal targets carry source page IDs and
+cropped, rotated viewport coordinates. Resolve IDs against the displayed page list after page edits;
+a deleted target must do nothing. URI actions are data, never executable actions. Browser consumers
+must use `isSafePdfUri` and open external targets with `noopener,noreferrer`.
+`duplicatePdfModelPages(document, model, fonts, ids)` copies selected visible pages in
+page order after the last selected page. Copies freeze the current exported content,
+including local text changes and continuation pages, in immutable page snapshots.
+Visibility is one undo step; the source bytes remain available to peers through undo
+and reload. Copies support the regular page ordering, rotation and deletion APIs,
+and can receive new text regions without sharing text ownership with their originals.
+
+`insertPdfModelPages(document, model, fonts, source, afterId)` uses the same frozen
+page ownership for another document's pages. The caller authorizes the source read
+before insertion. Source bytes travel with the destination model, so undo and reload
+never require continued access to the source document. Merge hosts can hide the output
+filename with `showFilename={false}` when using the picker for insertion.
+### Text markup
+
+`model.annotations.set` creates highlight, underline and strikeout annotations using
+PDF user-space quads. `pdfMarkupFromRects` converts viewport selection rectangles,
+including cropped and rotated pages. Supply a unique ID for each new annotation and
+its logical source page and continuation. Markup stays anchored to page coordinates
+when text is subsequently edited.
+
+`model.annotations.items(document)` includes supported imported annotations.
+Use `model.annotations.update(document, id, { color, kind, hidden })` to edit or
+delete one. Imported ownership initializes deterministically, so concurrent patches
+merge and local undo does not erase peer edits. Annotation updates share the text
+model's Yjs document and undo manager. Hosts must validate received updates with
+`model.annotations.validate(allowedSourcePageIndices)` before persistence.
+
+`exportEditedPdf` writes real annotation dictionaries with appearance streams and
+preserves untouched annotation objects. `PdfEditableDocument.annotate(kind, color)`
+marks the current text selection. This API does not yet author comments, ink or
+signatures.

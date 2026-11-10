@@ -275,8 +275,18 @@ for (const name of ['BESSELI','BESSELJ','BESSELK','BESSELY']) numeric(name, 2, 2
   }
   if (name === 'BESSELK') {
     if (x > 750 && n < Math.sqrt(x)) return number(0);
-    const end = Math.max(1, Math.log(2 * (750 + n * 16) / x));
-    return number(integrate(t => Math.exp(-x * Math.cosh(t) + logCosh(n * t)), 0, end, ctx));
+    const logX = Math.log(x);
+    const end = Math.max(1, Math.log(2 * (750 + n * 16)) - logX);
+    // Scale large integrands so Simpson's weighted sums remain finite even when
+    // the final K value approaches the largest representable number.
+    const ratio = n / x;
+    const peak = Math.min(end, Number.isFinite(ratio) ? Math.asinh(ratio) : Math.log(2 * n) - logX);
+    const exponent = (t: number) => -Math.exp(logX + logCosh(t)) + logCosh(n * t);
+    const shift = exponent(peak);
+    const scaled = (t: number) => Math.exp(exponent(t) - shift);
+    // Both intervals sample the mode, even when all distant samples underflow.
+    const integral = (peak > 0 ? integrate(scaled, 0, peak, ctx) : 0) + (peak < end ? integrate(scaled, peak, end, ctx) : 0);
+    return number(Math.exp(Math.log(integral) + shift));
   }
   if (x >= 32 && n * n < x) return number(sign * besselAsymptotic(x, n, name === 'BESSELY', ctx));
   if (x > 10000) return error('#NUM!');

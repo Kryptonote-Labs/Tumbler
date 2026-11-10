@@ -201,6 +201,17 @@ export async function paintPdfPage<Image, Path>(
           element.mode === 7)
       )
         continue;
+      // Fill-only outlines cannot affect a tile outside their transformed ink bounds.
+      // Keep fallback fonts, stroked text and non-normal blends on the conservative path.
+      if (region && element.kind === "glyph" && (element.mode === 0 || element.mode === 4) &&
+          element.state.blend === "source-over" && element.glyph.bounds) {
+        const [left, bottom, right, top] = element.glyph.bounds;
+        const [a,b,c,d,e,f] = multiply(viewport, element.state.transform);
+        const xs = [a*left+c*bottom+e,a*right+c*bottom+e,a*left+c*top+e,a*right+c*top+e];
+        const ys = [b*left+d*bottom+f,b*right+d*bottom+f,b*left+d*top+f,b*right+d*top+f];
+        if (Math.max(...xs) < -2 || Math.min(...xs) > width+2 ||
+            Math.max(...ys) < -2 || Math.min(...ys) > height+2) continue;
+      }
       context.save();
       try {
         for (const clip of element.state.clips) {
