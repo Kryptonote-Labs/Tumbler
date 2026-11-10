@@ -20,11 +20,11 @@ export const pdfExportInput = z.object({
     } catch {
       return false;
     }
-  }, 'Use positive page numbers or ranges, such as 5,2-4.'),
+  }, 'Use positive page numbers or ranges, such as 5,2-4.').optional(),
   output: z.string().min(1),
   format: z.literal('pdf').default('pdf'),
 }).strict();
-export const pdfDeletePagesInput = pdfExportInput.pick({ pages: true });
+export const pdfDeletePagesInput = pdfExportInput.pick({ pages: true }).required();
 export type PdfDeletePagesInput = z.infer<typeof pdfDeletePagesInput>;
 export type PdfExportInput = z.infer<typeof pdfExportInput>;
 

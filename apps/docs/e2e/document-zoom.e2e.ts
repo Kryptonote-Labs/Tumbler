@@ -84,8 +84,20 @@ test('sheet zoom scales cells and headers while retaining editing and scrolling'
   await page.mouse.wheel(0, 150);
   await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(top);
   await page.getByLabel('Zoom', { exact: true }).selectOption('0.5');
-  await scroller.evaluate(element => { element.scrollTop = 0; element.scrollLeft = 0; });
-  await expect(page.getByRole('gridcell', { name: 'Research', exact: true })).toBeVisible();
+  await scroller.hover();
+  await page.mouse.wheel(-1000, -1000);
+  await expect(page.locator('.painted-row').first()).toBeVisible();
+  await expect.poll(async () => {
+    const frozen = (await grid.locator('[data-row="1"]').boundingBox())!;
+    const body = (await grid.locator('[data-row="2"]').boundingBox())!;
+    return body.y - frozen.y - frozen.height;
+  }).toBeCloseTo(0, 0);
+  const column = (await grid.locator('[data-column="1"]').boundingBox())!;
+  const row = (await grid.locator('[data-row="2"]').boundingBox())!;
+  await page.mouse.click(column.x + column.width / 2, row.y + row.height / 2);
+  const research = page.getByRole('gridcell', { name: 'Research', exact: true });
+  await expect(research).toBeVisible();
+  await expect(grid).toHaveAttribute('aria-activedescendant', (await research.getAttribute('id'))!);
 });
 
 
@@ -129,7 +141,12 @@ test('empty cells remain selectable and editable at 25% without mounting thousan
   const editor = page.getByRole('textbox', { name: `Edit ${reference}`, exact: true });
   await editor.fill('Previously empty');
   await editor.press('Enter');
-  await expect(page.getByRole('gridcell', { name: 'Previously empty', exact: true })).toBeVisible();
+  // Enter advances focus; navigate back to read the committed bitmap cell through the accessible head.
+  await grid.press('ArrowUp');
+  const edited = page.getByRole('gridcell', { name: 'Previously empty', exact: true });
+  await expect(edited).toBeVisible();
+  await expect(edited).toHaveAttribute('data-reference', reference);
+  await expect(grid).toHaveAttribute('aria-activedescendant', (await edited.getAttribute('id'))!);
   await expect(page.getByText('Modified locally', { exact: true })).toBeVisible();
 });
 

@@ -92,12 +92,12 @@ export function tokenizeFormula(source: string): readonly FormulaToken[] {
       continue;
     }
     const word = /^\$?[A-Za-z]{1,3}\$?[1-9][0-9]*/.exec(remaining)?.[0];
-    if (word !== undefined && isBoundedReference(word) && !/[A-Za-z0-9_.(]/.test(source[offset + word.length] ?? " ")) {
+    if (word !== undefined && isBoundedReference(word) && !/[\p{L}\p{N}_.(]/u.test(String.fromCodePoint(source.codePointAt(offset + word.length) ?? 32))) {
       offset += word.length;
       tokens.push({ kind: "reference", value: word, start, end: offset });
       continue;
     }
-    const identifier = /^(?:_xlfn\.)?[A-Za-z_\\][A-Za-z0-9_.]*/i.exec(remaining)?.[0];
+    const identifier = /^(?:_xlfn\.)?[\p{L}_\\][\p{L}\p{N}_.]*/iu.exec(remaining)?.[0];
     if (identifier !== undefined) {
       offset += identifier.length;
       if (source[offset] === "[") {

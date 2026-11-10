@@ -48,6 +48,7 @@ function context(
     };
   };
   const c: FunctionContext = {
+    evaluateAggregate(expression) { return this.evaluate(expression); },
     address: { sheet: "Results", row: 1, column: 1 },
     source: {
       formulaCells: [],
