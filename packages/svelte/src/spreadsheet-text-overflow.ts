@@ -6,7 +6,7 @@ import {
 
 export interface SpreadsheetTextOverflowInput {
   readonly worksheet: SpreadsheetWorksheet;
-  readonly calculation?: SpreadsheetCalculationSnapshot;
+  readonly calculation?: SpreadsheetCalculationSnapshot | undefined;
   readonly row: number;
   readonly column: number;
   readonly columnGeometry: SparseAxisGeometry;
