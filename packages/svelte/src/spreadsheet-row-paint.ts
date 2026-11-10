@@ -106,8 +106,8 @@ export function paintSpreadsheetCell(
             ? 1
             : 0;
   };
-  const contentTop = borderWidth('top') + 2;
-  const contentHeight = height - contentTop - borderWidth('bottom') - 2;
+  const contentTop = borderWidth('top') + 1;
+  const contentHeight = height - contentTop - borderWidth('bottom') - 1;
   const top =
     style.alignment.vertical === 'top'
       ? contentTop
@@ -196,7 +196,8 @@ function paintFont(
     const metrics = context.measureText('Mg');
     const ascent = metrics.fontBoundingBoxAscent ?? metrics.actualBoundingBoxAscent;
     const descent = metrics.fontBoundingBoxDescent ?? metrics.actualBoundingBoxDescent;
-    const lineHeight = fontSize * 1.3;
+    // Match the DOM cell's normal font strut instead of inheriting the grid heading line height.
+    const lineHeight = Math.max(fontSize, ascent + descent);
     result = {
       shorthand,
       fontSize,

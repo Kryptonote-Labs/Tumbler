@@ -9,6 +9,7 @@ export function spreadsheetCellCss(
   worksheet: SpreadsheetWorksheet,
   reference: string,
   differentialFormats: readonly SpreadsheetDifferentialFormat[] = [],
+  displayValue: SpreadsheetCellValue | undefined = worksheet.cell(reference)?.value,
 ): string {
   const style = applySpreadsheetDifferentialFormats(worksheet.cellStyle(reference), differentialFormats);
   const declarations: string[] = [];
@@ -30,7 +31,7 @@ export function spreadsheetCellCss(
   if (foreground !== undefined) declarations.push(`color:${foreground}`);
   if (background !== undefined) declarations.push(`background-color:${background}`);
 
-  const horizontal = alignmentForValue(style.alignment.horizontal, worksheet.cell(reference)?.value);
+  const horizontal = alignmentForValue(style.alignment.horizontal, displayValue);
   declarations.push(`text-align:${textAlignment(horizontal)}`);
   declarations.push(`justify-content:${horizontalPosition(horizontal)}`);
   declarations.push(`align-items:${verticalPosition(style.alignment.vertical)}`);
