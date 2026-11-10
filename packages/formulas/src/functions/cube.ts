@@ -1,6 +1,6 @@
 import type { FormulaScalarValue } from "../evaluator.ts";
 import {
-  functionError, functionNumber, functionNumeric, functionScalar, functionText,
+  functionError, functionNumber, functionNumeric, functionScalar, functionText, hostFunction,
   type ExtendedFunction, type FunctionContext, type FunctionRegistry,
   type FunctionValue, type FormulaFunctionServices,
 } from "../function-runtime.ts";
@@ -49,7 +49,7 @@ function handler(name: CubeName): ExtendedFunction {
 }
 
 export const cubeFunctions: FunctionRegistry = new Map(
-  (Object.keys(signatures) as CubeName[]).map(name => [name, handler(name)]),
+  (Object.keys(signatures) as CubeName[]).map(name => [name, hostFunction(handler(name))]),
 );
 
 export interface CubeSnapshotMember {

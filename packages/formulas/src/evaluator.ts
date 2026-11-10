@@ -1,4 +1,5 @@
 import { compileCriterion, matchesCriterion, tokenizeWildcard, wildcardMatches, type FormulaCriterion } from "./criteria.ts";
+import type { CoreFunctionName } from "./core-functions.ts";
 import { extendedFunctions } from "./extended-functions.ts";
 import { indirectReference } from "./indirect-reference.ts";
 import type { FunctionValue, FunctionArray, FunctionReference, FunctionContext, FunctionRegistry, FormulaFunctionServices } from "./function-runtime.ts";
@@ -1195,7 +1196,7 @@ export function calculateFormulas(
     return isFormulaError(values) ? values : reduceAggregate(functionNumber, values, kValue?.value);
   };
 
-  const functions = new Map<string, FormulaFunction>([
+  const functions: ReadonlyMap<string, FormulaFunction> = new Map<CoreFunctionName, FormulaFunction>([
     ["IF", callIf],
     ["IFERROR", callIfError(false)],
     ["IFNA", callIfError(true)],

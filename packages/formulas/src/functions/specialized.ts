@@ -1,6 +1,7 @@
 import type { FormulaExpression } from "../ast.ts";
 import {
   functionError,
+  hostFunction,
   type FunctionContext,
   type FunctionRegistry,
   type FunctionValue,
@@ -63,6 +64,6 @@ function py(arguments_: readonly FormulaExpression[], context: FunctionContext):
 }
 
 export const specializedFunctions: FunctionRegistry = new Map([
-  ["FIELDVALUE", fieldvalue],
-  ["PY", py],
+  ["FIELDVALUE", hostFunction(fieldvalue)],
+  ["PY", hostFunction(py)],
 ]);

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { compile } from "svelte/compiler";
-import { spreadsheetFormulaBarEdit, spreadsheetFormulaBarText } from "../src/index.ts";
+import { insertSpreadsheetFormulaFunction, spreadsheetFormulaBarEdit, spreadsheetFormulaBarText } from "../src/index.ts";
 
 describe("Svelte spreadsheet formula bar", () => {
   test("reserves leading equals interpretation for the formula bar", () => {
@@ -38,6 +38,18 @@ describe("Svelte spreadsheet formula bar", () => {
   test("shows formula source and literal lexical values", () => {
     expect(spreadsheetFormulaBarText({ address: { row: 7, column: 3 }, reference: "C7", styleIndex: 0, formula: "SUM(C5:C6)", value: { type: "number", value: 12, lexical: "12" } })).toBe("=SUM(C5:C6)");
     expect(spreadsheetFormulaBarText({ address: { row: 1, column: 1 }, reference: "A1", styleIndex: 0, formula: undefined, value: { type: "number", value: 1, lexical: "1.00" } })).toBe("1.00");
+  });
+
+  test("inserts a function call with the caret between its parentheses", () => {
+    expect(insertSpreadsheetFormulaFunction("", "SUM", 0, 0)).toEqual({ draft: "=SUM()", selectionStart: 5, selectionEnd: 5 });
+    expect(insertSpreadsheetFormulaFunction("=A1+", "ROUND", 4, 4)).toEqual({ draft: "=A1+ROUND()", selectionStart: 10, selectionEnd: 10 });
+    expect(insertSpreadsheetFormulaFunction("=SUM(B2:B9)", "ABS", 5, 10)).toEqual({ draft: "=SUM(ABS())", selectionStart: 9, selectionEnd: 9 });
+  });
+
+  test("keeps the leading equals and turns typed text into a formula", () => {
+    expect(insertSpreadsheetFormulaFunction("=A1", "MAX", 0, 0).draft).toBe("=MAX()A1");
+    expect(insertSpreadsheetFormulaFunction("2*", "PI", 2, 2)).toEqual({ draft: "=2*PI()", selectionStart: 6, selectionEnd: 6 });
+    expect(() => insertSpreadsheetFormulaFunction("", "SUM(", 0, 0)).toThrow(TypeError);
   });
 
   test("compiles an explicit accessible formula editor without autofill", async () => {

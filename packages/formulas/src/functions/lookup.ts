@@ -8,6 +8,7 @@ import {
   functionNumeric,
   functionScalar,
   functionText,
+  hostFunction,
   type FunctionContext,
   type FunctionReference,
   type FunctionValue,
@@ -184,8 +185,8 @@ function define(
   min: number,
   max: number,
   run: ExtendedFunction,
-): void {
-  registry.set(name, (a, c) => {
+): ExtendedFunction {
+  const handler: ExtendedFunction = (a, c) => {
     if (a.length < min || a.length > max) return err();
     try {
       c.operation();
@@ -194,7 +195,9 @@ function define(
       if (e instanceof ExcelFailure) return e.value;
       throw e;
     }
-  });
+  };
+  registry.set(name, handler);
+  return handler;
 }
 
 define("ADDRESS", 2, 5, (a, c) => {
@@ -563,7 +566,7 @@ define("LOOKUP", 2, 3, (a, c) => {
 
 /** Host responses are explicit modeled results; undefined never becomes a fabricated Excel result. */
 for (const name of ["GETPIVOTDATA", "RTD", "IMAGE"] as const)
-  define(
+  hostFunction(define(
     name,
     name === "GETPIVOTDATA" ? 2 : name === "RTD" ? 3 : 1,
     name === "GETPIVOTDATA" ? 254 : name === "RTD" ? 255 : 5,
@@ -616,7 +619,7 @@ for (const name of ["GETPIVOTDATA", "RTD", "IMAGE"] as const)
       matrix(response, c);
       return response;
     },
-  );
+  ));
 
 /** Grouping supports scalar aggregators and flat groups; advanced layouts stay explicitly unavailable. */
 function aggregateHandler(pivot: boolean): ExtendedFunction {

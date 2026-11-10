@@ -105,7 +105,7 @@ separately exposes the selected cell's literal or `=`-prefixed formula source so
 formula interpretation remains explicit. During formula authoring, host-issued
 grid selections insert same-sheet or safely quoted cross-sheet A1 references at
 the caret. Pointer-drag updates replace the in-progress pick, and switching
-worksheets does not move the original formula target. Hyperlink cells and chart frames are accessible buttons;
+worksheets does not move the original formula target. `insertFunction(name)` puts `NAME()` into the uncommitted draft with the caret between the parentheses, ready for picked references; `onfunctions` turns the fx mark into a button for a host function picker. Hyperlink cells and chart frames are accessible buttons;
 the host owns navigation so document targets never become automatic browser loads.
 Table controls project source rows into visual
 slots; filtered slots collapse through sparse geometry and the source package is

@@ -1,5 +1,5 @@
 import type { FormulaScalarValue } from "../evaluator.ts";
-import { functionError, functionScalar, functionText, type FunctionContext, type FunctionRegistry, type FunctionValue } from "../function-runtime.ts";
+import { functionError, functionScalar, functionText, hostFunction, type FunctionContext, type FunctionRegistry, type FunctionValue } from "../function-runtime.ts";
 
 const CELL_LIMIT = 32767;
 const textValue = (value: string): FormulaScalarValue => ({ type: "string", value });
@@ -34,7 +34,7 @@ export const webFunctions: FunctionRegistry = new Map([
       return encoded.length > CELL_LIMIT ? functionError() : textValue(encoded);
     } catch { return functionError(); } // Unpaired UTF-16 surrogate.
   }],
-  ["WEBSERVICE", (args, context) => {
+  ["WEBSERVICE", hostFunction((args, context) => {
     if (args.length !== 1) return functionError();
     const value = functionScalar(context.evaluate(args[0]!));
     if (value.type === "error") return value;
@@ -44,7 +44,7 @@ export const webFunctions: FunctionRegistry = new Map([
     try { new URL(url); } catch { return functionError(); }
     const result = host(context, "WEBSERVICE", [textValue(url)]);
     return !("kind" in result) && (result.type === "string" || result.type === "error") ? result : functionError();
-  }],
+  })],
   ["FILTERXML", (args, context) => {
     if (args.length !== 2) return functionError();
     const xml = functionScalar(context.evaluate(args[0]!));
