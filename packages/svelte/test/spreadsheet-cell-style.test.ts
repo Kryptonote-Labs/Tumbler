@@ -16,6 +16,20 @@ describe("Svelte spreadsheet cell styles", () => {
     expect(artifact.formattingState("A1").text.fontFamily).toEqual({ state: "value", value: "Aptos" });
   });
 
+  test("General alignment follows calculated values while explicit alignment wins", () => {
+    const artifact = applySpreadsheetCommand(createSpreadsheet(), {
+      name: "set-range", sheetId: "1", reference: "A1", values: [["=1+2", "=TRUE()", '=1/0', '="text"']],
+    });
+    const css = (reference: string) => spreadsheetCellCss(artifact.worksheet, reference, [], artifact.calculation.value(reference));
+    expect(artifact.worksheet.cell("A1")?.value.type).toBe("blank");
+    expect(css("A1")).toContain("text-align:right");
+    expect(css("B1")).toContain("text-align:center");
+    expect(css("C1")).toContain("text-align:center");
+    expect(css("D1")).toContain("text-align:left");
+    const aligned = applySpreadsheetCommand(artifact, { name: "format-cells", sheetId: "1", range: "A1", patch: { block: { horizontalAlignment: { set: "start" } } } });
+    expect(spreadsheetCellCss(aligned.worksheet, "A1", [], aligned.calculation.value("A1"))).toContain("text-align:left");
+  });
+
   test("lets authored font and fill colours override the light canvas defaults", () => {
     const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
       stylesXml: `<styleSheet xmlns="${namespace}"><fonts count="2"><font/><font><color rgb="FFFFFFFF"/></font></fonts><fills count="2"><fill/><fill><patternFill patternType="solid"><fgColor rgb="FF1F4E78"/></patternFill></fill></fills><borders count="1"><border/></borders><cellXfs count="2"><xf/><xf fontId="1" fillId="1" applyFont="1" applyFill="1"/></cellXfs></styleSheet>`,

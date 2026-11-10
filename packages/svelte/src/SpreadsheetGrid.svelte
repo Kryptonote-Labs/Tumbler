@@ -801,7 +801,7 @@
     style:width={`${width}px`}
     style:height={`${height}px`}
     style:z-index={overflowWidth === undefined ? zIndex : zIndex + 1}
-    style={spreadsheetCellCss(worksheet, reference, conditionalFormats)}
+    style={spreadsheetCellCss(worksheet, reference, conditionalFormats, viewCalculation?.value(reference))}
     onpointerdown={(event) => cellPointerDown(event, sourceRow, column)}
     onpointerenter={(event) => cellPointerEnter(event, sourceRow, column)}
     onclick={(event) => cellClick(event, sourceRow, column)}
@@ -1164,7 +1164,7 @@
   .corner { left: 0; top: 0; width: 52px; height: 28px; border-right-width: 1px; border-bottom-width: 1px; z-index: 4; pointer-events: none; }
   .column-header { top: 0; height: 28px; display: grid; place-items: center; border-right-width: 1px; border-bottom-width: 1px; }
   .row-header { left: 0; width: 52px; display: grid; place-items: center; border-right-width: 1px; border-bottom-width: 1px; }
-  .tumbler-grid :global(.cell) { position: absolute; z-index: 1; box-sizing: border-box; display: flex; align-items: flex-end; overflow: hidden; padding: 2px 8px; white-space: nowrap; text-overflow: ellipsis; color: var(--tumbler-sheet-fg, #111111); border-right: 1px solid var(--tumbler-sheet-line, #d9ded9); border-bottom: 1px solid var(--tumbler-sheet-line, #d9ded9); background: var(--tumbler-sheet-bg, #ffffff); }
+  .tumbler-grid :global(.cell) { position: absolute; z-index: 1; box-sizing: border-box; display: flex; align-items: flex-end; overflow: hidden; padding: 1px 8px; line-height: normal; white-space: nowrap; text-overflow: ellipsis; color: var(--tumbler-sheet-fg, #111111); border-right: 1px solid var(--tumbler-sheet-line, #d9ded9); border-bottom: 1px solid var(--tumbler-sheet-line, #d9ded9); background: var(--tumbler-sheet-bg, #ffffff); }
   .tumbler-grid :global(.cell.text-overflow) { overflow: visible; }
   .tumbler-grid :global(.cell > .overflow-content) { flex: none; max-width: none; overflow: hidden; pointer-events: none; }
   .chart-frame { position: absolute; z-index: 2; overflow: hidden; box-sizing: border-box; padding: 0; border: 0; outline: 0; background: transparent; cursor: default; }

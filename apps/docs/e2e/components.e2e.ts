@@ -8,6 +8,14 @@ test('component examples render, apply edits, reset, and show their source', asy
   await expect(page.getByText('A quieter workspace', { exact: true })).toBeVisible();
   await expect(page.locator('.code-block .shiki')).toBeVisible();
   await page.getByRole('button', { name: 'SpreadsheetGrid', exact: true }).click();
+  // Default 20px rows must contain their full text line box without clipping its top.
+  const lineBox = await page.locator('[data-reference="C2"]').evaluate(cell => {
+    const bounds = cell.getBoundingClientRect();
+    const text = cell.querySelector('span')!.getBoundingClientRect();
+    return { top: text.top - bounds.top, bottom: text.bottom - bounds.top, height: bounds.height };
+  });
+  expect(lineBox.top).toBeGreaterThanOrEqual(0);
+  expect(lineBox.bottom).toBeLessThanOrEqual(lineBox.height);
   await page.getByRole('gridcell', { name: '85', exact: true }).first().dblclick();
   const cell = page.getByLabel('Edit C2', { exact: true });
   await cell.fill('100');

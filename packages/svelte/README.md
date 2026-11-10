@@ -417,3 +417,5 @@ Callbacks and authenticated documents remain in memory only.
 Spreadsheet cell editors and the formula bar suggest local functions while typing a formula.
 Arrow keys select a suggestion; Enter or Tab inserts the function and keeps the draft open.
 Escape dismisses suggestions before cancelling the edit. Text-formatted cells and quoted text do not trigger suggestions.
+
+Spreadsheet cells resolve General alignment from the displayed calculation result, while explicit alignment remains authoritative. Grid text uses the font's normal line box and one-pixel vertical padding; retained canvas rows use matching font metrics.
