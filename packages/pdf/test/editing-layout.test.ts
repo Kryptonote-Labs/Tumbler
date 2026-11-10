@@ -298,3 +298,31 @@ test('headless replacement inherits the original selected character style before
   ]);
   model.doc.destroy();
 });
+
+test('layout follows local, remote and in-transaction text changes while unchanged regions retain metrics', () => {
+  const pdf = document('BT /F 12 Tf 20 150 Td (First) Tj 0 -40 Td (Second) Tj ET');
+  const model = new PdfTextModel();
+  model.initialize(importPdfText(pdf));
+  const [first, second] = model.ids();
+  const original = layoutPdfTextFlow(model, fonts, pdf.pages);
+  const secondLayout = layoutPdfText(model, second!, fonts);
+  model.doc.transact(() => {
+    model.text(first!).insert(5, ' changed');
+    expect(layoutPdfText(model, first!, fonts).glyphs.map((glyph) => glyph.text).join('')).toBe('First changed');
+    expect(model.contentDirty(first!)).toBe(true);
+  }, model.origin);
+  expect(layoutPdfText(model, second!, fonts)).toBe(secondLayout);
+  expect(layoutPdfTextFlow(model, fonts, pdf.pages).regions[0]!.glyphs.map((glyph) => glyph.text).join('')).toBe('First changed');
+  model.undo.undo();
+  expect(layoutPdfTextFlow(model, fonts, pdf.pages)).toEqual(original);
+
+  const peer = new PdfTextModel();
+  Y.applyUpdate(peer.doc, Y.encodeStateAsUpdate(model.doc));
+  peer.replace(second!, 0, 6, 'Remote');
+  Y.applyUpdate(model.doc, Y.encodeStateAsUpdate(peer.doc));
+  expect(layoutPdfText(model, second!, fonts).glyphs.map((glyph) => glyph.text).join('')).toBe('Remote');
+  model.pages.rotate(pdf.pages, [pdf.pages[0]!.id], 90);
+  expect(layoutPdfTextFlow(model, fonts, pdf.pages).pages[0]!.rotation).toBe(90);
+  peer.doc.destroy();
+  model.doc.destroy();
+});

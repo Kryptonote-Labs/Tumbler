@@ -10,6 +10,7 @@ function context(cells: Record<string, FormulaScalarValue> = {}, dateSystem: "19
   let operations = 0;
   const read = (row: number, column: number) => cells[`${String.fromCharCode(64 + column)}${row}`] ?? { type: "blank" } as const;
   const c: FunctionContext = {
+    evaluateAggregate(expression) { return this.evaluate(expression); },
     address: { sheet: "Results", row: 1, column: 1 }, dateSystem, maxArrayCells: 10000, services: undefined,
     source: { formulaCells: [], cell: () => undefined, resolveSheet: (_, name) => name },
     cell: () => undefined, now: () => new Date(now), random: () => 0.5,

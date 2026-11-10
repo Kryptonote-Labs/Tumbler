@@ -1,7 +1,6 @@
 <script lang="ts">
   import * as Y from 'yjs';
   import {
-    pdfFontKey,
     type PdfTextModel,
     type PdfTextLayout,
     type PdfFlowRegion,
@@ -62,32 +61,17 @@
       style:width={`${model.geometry(layout.id).width}px`}
       style:height={`${layout.bottom - layout.top}px`}
     ></button>
-    {#each layout.glyphs as glyph}
-      {#if glyph.text !== '\n'}<svg
-          class="glyph"
-          aria-hidden="true"
-          width={Math.max(1, glyph.width + glyph.style.size)}
-          height={glyph.style.size * 2}
-          style:left={`${glyph.x}px`}
-          style:top={`${glyph.y - glyph.style.size}px`}
-          style:overflow="visible"
-          ><text
-            x="0"
-            y={glyph.style.size}
-            font-family={`PDF-${pdfFontKey(glyph.style)}`}
-            font-size={glyph.style.size}
-            fill="transparent"
-            text-decoration={glyph.style.underline ? 'underline' : 'none'}>{glyph.text}</text
-          ></svg
-        >{/if}
-      {#if active === layout.id && glyph.end > start && glyph.start < end}<span
+    {#if active === layout.id && end > start}
+      {#each layout.glyphs.filter((glyph) => glyph.end > start && glyph.start < end) as glyph}
+      <span
           class="selection"
           style:left={`${glyph.x}px`}
           style:top={`${glyph.y - glyph.style.size * 0.85}px`}
           style:width={`${Math.max(1, glyph.width)}px`}
           style:height={`${glyph.style.size * 1.15}px`}
-        ></span>{/if}
-    {/each}
+        ></span>
+      {/each}
+    {/if}
     {#if active === layout.id && start === end}
       {@const caret = layout.carets.find((c) => c.offset === start)}
       {#if caret}<span
@@ -125,12 +109,6 @@
     position: absolute;
     left: 0;
     top: 0;
-  }
-  .glyph {
-    position: absolute;
-    white-space: pre;
-    line-height: 1;
-    user-select: none;
   }
   .selection {
     position: absolute;

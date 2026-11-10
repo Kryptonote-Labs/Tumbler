@@ -1,65 +1,47 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import type { PdfSearchIndex } from "@tumblerjs/pdf";
+  import type { PdfSearchIndex, PdfTextModel } from "@tumblerjs/pdf";
+  import { createPdfSearch, type PdfSearchController } from "./search.svelte.ts";
   let {
     root,
     scale,
     index,
+    controller,
+    enabled = true,
+    model,
   }: {
     root: HTMLDivElement | undefined;
     scale: number;
     index: () => PdfSearchIndex;
+    controller?: PdfSearchController;
+    enabled?: boolean;
+    model?: () => PdfTextModel | undefined;
   } = $props();
-  let open = $state(false),
-    query = $state(""),
-    matchCase = $state(false),
-    active = $state(0);
+  const fallback = createPdfSearch();
+  const search = $derived(controller ?? fallback);
   let input = $state<HTMLInputElement>();
-  let error = $state("");
-  const result = $derived.by(() => {
-    if (!open || !query.trim()) return { matches: [], total: 0 };
-    try {
-      return index().find(query, { matchCase });
-    } catch (cause) {
-      return {
-        matches: [],
-        total: 0,
-        error: cause instanceof Error ? cause.message : String(cause),
-      };
-    }
-  });
-  $effect(() => {
-    error = "error" in result ? (result.error ?? "") : "";
-  });
-  $effect(() => {
-    void query;
-    void matchCase;
-    active = 0;
-  });
-  $effect(() => {
-    if (active >= result.total) active = Math.max(0, result.total - 1);
-  });
-  function move(direction: number) {
-    if (result.total)
-      active = (active + direction + result.total) % result.total;
-  }
+  let replacement = $state("");
+  $effect(() => { if (enabled) return search.connect({ index, model }); });
+  const result = $derived({ matches: search.matches, total: search.total });
+  function move(direction: number) { search.move(direction); }
   async function key(event: KeyboardEvent) {
-    if (!root?.getClientRects().length || root.closest("[hidden],[inert]"))
+    if (!enabled || !root?.getClientRects().length || root.closest("[hidden],[inert]"))
       return;
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
       event.preventDefault();
-      open = true;
+      if (controller) return;
+      search.open = true;
       await tick();
       input?.focus({ preventScroll: true });
       input?.select();
-    } else if (open && event.key === "Escape") {
+    } else if (search.open && event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      open = false;
+      search.open = false;
     }
   }
   $effect(() => {
-    if (!root || !open) return;
+    if (!enabled || !root || !search.open) return;
     const marks: HTMLElement[] = [];
     for (const [i, match] of result.matches.entries()) {
       const page = root.querySelector<HTMLElement>(
@@ -78,15 +60,15 @@
           top: `${rect.y * scale}px`,
           width: `${rect.width * scale}px`,
           height: `${rect.height * scale}px`,
-          background: i === active ? "#ff8a0080" : "#ffe60066",
-          outline: i === active ? "1px solid #b85d00" : "none",
+          background: i === search.active ? "#ff8a0080" : "#ffe60066",
+          outline: i === search.active ? "1px solid #b85d00" : "none",
         });
         page.append(mark);
         marks.push(mark);
       }
     }
     const current = marks.find(
-      (mark) => mark.dataset.pdfSearchMatch === String(active),
+      (mark) => mark.dataset.pdfSearchMatch === String(search.active),
     );
     current?.scrollIntoView({ block: "nearest", inline: "nearest" });
     return () => marks.forEach((mark) => mark.remove());
@@ -94,11 +76,11 @@
 </script>
 
 <svelte:window onkeydown={key} />
-{#if open}
+{#if search.open && !controller}
   <div class="pdf-search" role="search" aria-label="Find in PDF">
     <input
       bind:this={input}
-      bind:value={query}
+      bind:value={search.query}
       aria-label="Search document"
       placeholder="Search document…"
       onkeydown={(event) => {
@@ -109,12 +91,12 @@
       }}
     />
     <span role="status"
-      >{error || `${result.total ? active + 1 : 0} of ${result.total}`}</span
+      >{search.error || `${result.total ? search.active + 1 : 0} of ${result.total}`}</span
     >
     <button
       aria-label="Match case"
-      aria-pressed={matchCase}
-      onclick={() => (matchCase = !matchCase)}>Aa</button
+      aria-pressed={search.matchCase}
+      onclick={() => (search.matchCase = !search.matchCase)}>Aa</button
     >
     <button
       aria-label="Previous match"
@@ -126,14 +108,19 @@
       disabled={!result.total}
       onclick={() => move(1)}>↓</button
     >
-    <button aria-label="Close search" onclick={() => (open = false)}>×</button>
+    {#if model?.()}
+      <input aria-label="Replace with" placeholder="Replace with" bind:value={replacement} />
+      <button disabled={!search.canReplace} onclick={() => search.replace(replacement)}>Replace</button>
+      <button disabled={!search.total} onclick={() => search.replace(replacement, true)}>Replace all</button>
+    {/if}
+    <button aria-label="Close search" onclick={() => (search.open = false)}>×</button>
   </div>
 {/if}
 
 <style>
   .pdf-search {
     position: fixed;
-    top: 72px;
+    top: var(--tumbler-pdf-search-top, 8px);
     right: 24px;
     z-index: 100;
     display: flex;
