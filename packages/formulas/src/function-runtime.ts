@@ -43,7 +43,8 @@ export interface FunctionContext {
   call(name: string, arguments_: readonly FunctionValue[]): FunctionValue;
   /** Evaluate in a child lexical scope; optionally preserve reference provenance for LET/LAMBDA values and returns. */
   withBindings(bindings: ReadonlyMap<string, FunctionValue>, expression: FormulaExpression, preserveReference?: boolean): FunctionValue;
-  reference(expression: FormulaExpression): FunctionReference | FormulaScalarValue;
+  /** Resolve geometry in the caller's sheet, or an explicit source sheet scope. */
+  reference(expression: FormulaExpression, sheet?: string): FunctionReference | FormulaScalarValue;
   readReference(reference: FunctionReference): FunctionValue;
   cell(address: FormulaCellAddress): FormulaCellInput | undefined;
   /** Charge work to the evaluator's bounded operation budget. */

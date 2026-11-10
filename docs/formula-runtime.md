@@ -60,12 +60,15 @@ contiguous range. Workbook calculations enumerate sheets to discover spills
 referenced from other sheets, including sheets later in workbook order.
 
 `context.reference` resolves ordinary geometry plus nested reference-valued
-OFFSET, A1-style INDIRECT, INDEX, names, and spill references. `readReference`
+OFFSET, A1/R1C1-style INDIRECT, INDEX, names, and spill references. `readReference`
 validates bounds, enforces array limits, evaluates dependencies, and records
 reads. Whole-column and whole-row references, including absolute axes, use
 full worksheet reference geometry. Blank-insensitive aggregates can bound scans by
 source used dimensions; materializing the full reference is subject
 to the explicit calculation budget. Arrays are never silently truncated to fit.
+Scoped whole-axis aliases retain geometry without eagerly allocating the axis.
+Geometry probes reuse computed values and final reference errors when falling
+back to value evaluation, so volatile arguments run once.
 
 ## Budgets, time, and services
 

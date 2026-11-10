@@ -77,6 +77,9 @@ not acquire invented reference geometry, and one-cell reference arithmetic stays
 scalar at merged anchors. Computed INDEX inputs are evaluated once when trying
 reference and value forms. Binding names support Unicode letters, and LET rejects
 a repeated name in the same scope (nested shadowing remains supported).
+Whole-axis bindings retain geometry until a consumer requests their cells;
+blank-insensitive aggregates scan the used extent. MAP retains the full input
+shape and reports an exceeded calculation budget instead of trimming its output.
 
 ## Tests and generated-document fixtures
 

@@ -37,6 +37,46 @@ function run(formula: string, options = {}) { return calculateFormulas(workbook(
 const rows = (calculation: ReturnType<typeof run>) => calculation.arrayValue(at())?.rows;
 
 describe("shared extension runtime", () => {
+  test("explicit reference-function overrides retain handler dispatch", () => {
+    const registry:FunctionRegistry = new Map([["OFFSET",()=>n(123)],["INDIRECT",()=>n(456)]]);
+    const result=calculateFormulas(workbook({"1,1":'OFFSET(S!B1,0,0)+INDIRECT("S!B1")'}),{functionRegistries:[registry]});
+    expect(result.value(at())).toEqual(n(579));
+    expect(result.diagnostics).toEqual([]);
+  });
+  test.each([
+    ['ROWS(INDIRECT("S!B1"))',"INDIRECT",[[n(1)],[n(2)]]],
+    ['COLUMNS(OFFSET(S!B1,0,0))',"OFFSET",[[n(1),n(2)]]],
+  ] as const)("dimension probes honor reference-function overrides once: %s", (formula,name,rows) => {
+    let calls=0;
+    const registry:FunctionRegistry=new Map([[name,()=>{calls++;return {kind:"array",rows};}]]);
+    const result=calculateFormulas(workbook({"1,1":formula}),{functionRegistries:[registry]});
+    expect(result.value(at())).toEqual(n(2));
+    expect(calls).toBe(1);
+    expect(result.diagnostics).toEqual([]);
+  });
+  test.each([
+    ['ROWS(INDEX(INDIRECT("S!B1"),0))',2],
+    ['ROWS(INDEX(INDIRECT("S!B1"),1))',1],
+    ['ROWS(INDEX(INDEX(INDIRECT("S!B1"),0),0))',2],
+    ['ROWS(INDEX(INDEX(INDEX(INDIRECT("S!B1"),0),0),0))',2],
+  ] as const)("nested INDEX evaluates an overridden reference function once: %s", (formula,expected) => {
+    let calls=0;
+    const registry:FunctionRegistry=new Map([["INDIRECT",()=>({kind:"array",rows:Array.from({length:++calls+1},()=>[n(1)])})]]);
+    const result=calculateFormulas(workbook({"1,1":formula}),{functionRegistries:[registry]});
+    expect(result.value(at())).toEqual(n(expected));
+    expect(calls).toBe(1);
+    expect(result.diagnostics).toEqual([]);
+  });
+  test.each(["INDEX(DynamicData,0)","ROWS(DynamicData)","ROWS(INDEX(DynamicData,0))","ROWS(INDEX(INDEX(AliasData,0),0))"])("computed workbook names evaluate once even with fresh AST definitions: %s", formula => {
+    let calls=0;
+    const source:FormulaWorkbookSource={...workbook({"1,1":formula}),resolveName:name=>name==="DynamicData" ? parseFormula('INDIRECT("S!B1")').expression : name==="AliasData" ? parseFormula("DynamicData").expression : undefined};
+    const registry:FunctionRegistry=new Map([["INDIRECT",()=>({kind:"array",rows:Array.from({length:++calls+1},()=>[n(1)])})]]);
+    const result=calculateFormulas(source,{functionRegistries:[registry]});
+    if (formula.startsWith("ROWS")) expect(result.value(at())).toEqual(n(2));
+    else expect(result.arrayValue(at())?.rows).toEqual([[n(1)],[n(1)]]);
+    expect(calls).toBe(1);
+    expect(result.diagnostics).toEqual([]);
+  });
   test("parses names, omitted arguments, TRUE/FALSE calls and base conversion names", () => {
     const named = parseFormula("LET(total,1,total)").expression;
     expect(named.kind === "function" && named.arguments[0]).toMatchObject({kind: "name", name: "total"});

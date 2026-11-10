@@ -1,5 +1,6 @@
 import { compileCriterion, matchesCriterion, tokenizeWildcard, wildcardMatches, type FormulaCriterion } from "./criteria.ts";
 import { extendedFunctions } from "./extended-functions.ts";
+import { indirectReference } from "./indirect-reference.ts";
 import type { FunctionValue, FunctionArray, FunctionReference, FunctionContext, FunctionRegistry, FormulaFunctionServices } from "./function-runtime.ts";
 import type { FormulaErrorValue, FormulaExpression, FormulaReferenceExpression, ParsedFormula } from "./ast.ts";
 import { FormulaParseError, parseFormula } from "./parser.ts";
@@ -126,6 +127,7 @@ export function calculateFormulas(
   let activeAddress: FormulaCellAddress = { sheet: "", row: 1, column: 1 };
   let bindings: ReadonlyMap<string, FunctionValue> = new Map();
   let publicExpression: FormulaExpression | undefined;
+  let referenceFallback: Map<FormulaExpression, EvaluationValue> | undefined;
   const registries = [extendedFunctions, ...(options.functionRegistries ?? [])];
   const bindingReferences = new WeakMap<FunctionArray, RangeEvaluationValue>();
   const arrays = new Map<string, FunctionArray>();
@@ -229,7 +231,7 @@ export function calculateFormulas(
 
   function bindingValue(value: EvaluationValue): FunctionValue {
     if (isRange(value)) {
-      const bound: FunctionArray = {kind: "array", rows: value.rows};
+      const bound: FunctionArray = {kind: "array", get rows() { return value.rows; }};
       bindingReferences.set(bound, value);
       return bound;
     }
@@ -240,7 +242,7 @@ export function calculateFormulas(
     return "kind" in value && value.kind === "array" ? bindingReferences.get(value) ?? value : value;
   }
 
-  function scopedReferenceCall(expression: FormulaExpression): boolean {
+  function computedReferenceCall(expression: FormulaExpression): boolean {
     if (expression.kind === "invoke") return true;
     if (expression.kind !== "function") return false;
     const callable = bindings.get(normalizeBindingName(expression.name));
@@ -249,7 +251,26 @@ export function calculateFormulas(
     // Inspect name metadata only; evaluate its callable body through the normal
     // call path once, so defined-name aliases preserve reference returns too.
     const named = source.resolveName?.(expression.name, activeAddress);
-    return named !== undefined && "kind" in named;
+    if (named !== undefined && "kind" in named) return true;
+    const name = normalizeFunctionName(expression.name);
+    for (let index = registries.length - 1; index >= 0; index--) {
+      const handler = registries[index]!.get(name);
+      if (handler !== undefined) return handler !== extendedFunctions.get(name);
+    }
+    return false;
+  }
+
+  function computedIndexInput(expression: FormulaExpression, depth = 0): boolean {
+    operation();
+    if (depth > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Reference depth exceeded.");
+    if (expression.kind === "name" && !bindings.has(normalizeBindingName(expression.name))) {
+      const definition = source.resolveName?.(expression.name, activeAddress);
+      return definition !== undefined && "kind" in definition ? computedIndexInput(definition, depth + 1) : false;
+    }
+    if (computedReferenceCall(expression)) return true;
+    return expression.kind === "function" && normalizeFunctionName(expression.name) === "INDEX" && expression.arguments[0] !== undefined
+      ? computedIndexInput(expression.arguments[0], depth + 1)
+      : false;
   }
 
   const cellValue = (address: FormulaCellAddress, depth: number, asDependency: boolean): FormulaScalarValue => {
@@ -358,6 +379,11 @@ export function calculateFormulas(
 
   const evaluate = (expression: FormulaExpression, sheet: string, depth: number): EvaluationValue => {
     operation();
+    const cached = referenceFallback?.get(expression);
+    if (cached !== undefined) {
+      referenceFallback!.delete(expression);
+      return cached;
+    }
     evaluationFrames++;
     try {
     if (evaluationFrames > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Formula evaluation depth exceeded.");
@@ -370,7 +396,7 @@ export function calculateFormulas(
         if (bound !== undefined) return boundResult(bound);
         if (/^_xlpm\./i.test(expression.name)) return error("#NAME?");
         const named = source.resolveName?.(expression.name, activeAddress);
-        return named === undefined ? error("#NAME?") : "kind" in named ? evaluate(named, sheet, depth + 1) : referenceResult(readReference(named, depth), named);
+        return named === undefined ? error("#NAME?") : "kind" in named ? evaluate(named, sheet, depth + 1) : referenceFromGeometry(named, depth);
       }
       case "array": {
         assertArray(expression.rows.length, expression.rows[0]?.length ?? 0);
@@ -422,8 +448,30 @@ export function calculateFormulas(
   const referenceValue = (expression: FormulaReferenceExpression, currentSheet: string, depth: number): EvaluationValue => {
     const ref = resolveReference(expression, currentSheet, depth + 1);
     if ("type" in ref) return ref;
-    return referenceResult(readReference(ref, depth + 1), ref);
+    return referenceFromGeometry(ref, depth);
   };
+
+  function referenceFromGeometry(ref: FunctionReference, depth: number): EvaluationValue {
+    if (ref.height === MAX_SPREADSHEET_ROW || ref.width === MAX_SPREADSHEET_COLUMN) {
+      let materialized: RangeEvaluationValue | undefined;
+      const read = () => {
+        if (!materialized) {
+          const rows = matrix(readReference(ref, depth + 1));
+          materialized = {kind: "range", reference: ref, rows, values: rows.flat()};
+        }
+        return materialized;
+      };
+      return {kind: "range", reference: ref, get rows() { return read().rows; }, get values() { return read().values; }};
+    }
+    return referenceResult(readReference(ref, depth + 1), ref);
+  }
+
+  function aggregateValue(expression: FormulaExpression, sheet: string, depth: number): EvaluationValue {
+    const value = evaluate(expression, sheet, depth + 1);
+    const ref = isRange(value) ? value.reference : undefined;
+    if (!ref || ref.height !== MAX_SPREADSHEET_ROW && ref.width !== MAX_SPREADSHEET_COLUMN) return value;
+    return referenceResult(readReference(scanReference(ref), depth + 1));
+  }
 
   const binary = (expression: Extract<FormulaExpression, { kind: "binary" }>, sheet: string, depth: number): EvaluationValue => mapValues(evaluate(expression.left, sheet, depth + 1), evaluate(expression.right, sheet, depth + 1), (left, right) => {
     if (left.type === "error") return left;
@@ -598,16 +646,7 @@ export function calculateFormulas(
 
   const callAggregate = (name: "SUM" | "COUNT" | "AVERAGE" | "MIN" | "MAX" | "AND" | "OR" | "XOR" | "NOT"): FormulaFunction =>
     (args, sheet, depth) => {
-    const evaluated = args.map((argument): EvaluationValue => {
-      if (argument.kind === "reference" && argument.whole) {
-        const ref = resolveReference(argument, sheet, depth + 1);
-        if ("type" in ref) return ref;
-        const value = readReference(scanReference(ref), depth + 1);
-        const rows = matrix(value);
-        return {kind: "range", rows, values: rows.flat()};
-      }
-      return evaluate(argument, sheet, depth + 1);
-    });
+    const evaluated = args.map(argument => aggregateValue(argument, sheet, depth));
     const firstError = flatten(evaluated).find((value) => value.type === "error");
     if (firstError?.type === "error") return firstError;
     switch (name) {
@@ -642,7 +681,7 @@ export function calculateFormulas(
 
   const callMath = (name: string): FormulaFunction => (args, sheet, depth) => {
     const aggregate = name === "PRODUCT";
-    const evaluated = args.map((argument) => evaluate(argument, sheet, depth + 1));
+    const evaluated = args.map(argument => aggregate ? aggregateValue(argument, sheet, depth) : evaluate(argument, sheet, depth + 1));
     const firstError = flatten(evaluated).find((value) => value.type === "error");
     if (firstError?.type === "error") return firstError;
     if (aggregate) {
@@ -704,7 +743,7 @@ export function calculateFormulas(
 
   const callStatistic = (name: string): FormulaFunction => (args, sheet, depth) => {
     if (args.length === 0 || name === "COUNTBLANK" && args.length !== 1) return error("#VALUE!");
-    const evaluated = args.map((argument) => evaluate(argument, sheet, depth + 1));
+    const evaluated = args.map(argument => name === "COUNTBLANK" ? evaluate(argument, sheet, depth + 1) : aggregateValue(argument, sheet, depth));
     if (name === "COUNTA" || name === "COUNTBLANK") {
       const values = flatten(evaluated);
       const count = values.filter((value) => name === "COUNTA"
@@ -1246,7 +1285,7 @@ export function calculateFormulas(
     return ref;
   }
 
-  function resolveReference(expression: FormulaExpression, sheet: string, depth: number, form?: {reference: boolean}): FunctionReference | FormulaScalarValue {
+  function resolveReference(expression: FormulaExpression, sheet: string, depth: number, form?: {reference: boolean}, evaluated?: Map<FormulaExpression, EvaluationValue>): FunctionReference | FormulaScalarValue {
     operation();
     if (depth > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Reference depth exceeded.");
     if (expression.kind === "value") {
@@ -1254,7 +1293,7 @@ export function calculateFormulas(
       return isRange(value) && value.reference ? checkedReference(value.reference) : error("#VALUE!");
     }
     if (expression.kind === "spill") {
-      const base = resolveReference(expression.operand, sheet, depth + 1, form);
+      const base = resolveReference(expression.operand, sheet, depth + 1, form, evaluated);
       if ("type" in base) return base;
       const address = {sheet: base.sheet, row: base.firstRow, column: base.firstColumn};
       cellValue(address, depth + 1, true);
@@ -1268,7 +1307,17 @@ export function calculateFormulas(
         return isRange(value) && value.reference ? checkedReference(value.reference) : error("#VALUE!");
       }
       const named = source.resolveName?.(expression.name, activeAddress);
-      return named === undefined ? error("#NAME?") : "kind" in named ? resolveReference(named, sheet, depth + 1, form) : checkedReference(named);
+      if (named !== undefined && "kind" in named && computedIndexInput(named)) {
+        const value = evaluate(named, sheet, depth + 1);
+        evaluated?.set(expression, value);
+        return isRange(value) && value.reference ? checkedReference(value.reference) : error("#VALUE!");
+      }
+      return named === undefined ? error("#NAME?") : "kind" in named ? resolveReference(named, sheet, depth + 1, form, evaluated) : checkedReference(named);
+    }
+    if (computedReferenceCall(expression)) {
+      const value = evaluate(expression, sheet, depth + 1);
+      evaluated?.set(expression, value);
+      return isRange(value) && value.reference ? checkedReference(value.reference) : error("#VALUE!");
     }
     if (expression.kind === "function") {
       const name = normalizeFunctionName(expression.name), args = expression.arguments;
@@ -1280,19 +1329,18 @@ export function calculateFormulas(
         const styleValue = args[1] === undefined ? {kind: "omitted"} as const : evaluate(args[1], sheet, depth + 1);
         const style = "kind" in styleValue && styleValue.kind === "omitted" ? boolean(true) : logical(scalar(styleValue));
         if (style.type === "error") return style;
-        const target = text(value);
-        // A1/R1C1 mode does not change a structured reference's geometry.
-        // Resolve the complete token before cell-style parsing or sheet splitting.
-        if (/^[^![\]]+\[.*\]$/.test(target)) {
-          const named = source.resolveName?.(target, activeAddress);
-          return named === undefined ? error("#REF!") : "kind" in named ? resolveReference(named, sheet, depth + 1, form) : checkedReference(named);
-        }
-        if (!style.value) return error("#REF!");
-        try { return resolveReference(parseFormula(target).expression, sheet, depth + 1, form); } catch (cause) { if (cause instanceof FormulaParseError) return error("#REF!"); throw cause; }
+        const reference = indirectReference(text(value), style.value, activeAddress, source,
+          (expression, targetSheet) => {
+            const previousAddress = activeAddress;
+            activeAddress = {...activeAddress, sheet: targetSheet};
+            try { return resolveReference(expression, targetSheet, depth + 1, form, evaluated); }
+            finally { activeAddress = previousAddress; }
+          }, message => { throw new EvaluationUnavailable("unavailable-dependency", message); });
+        return "type" in reference ? reference : checkedReference(reference);
       }
       if ((name === "OFFSET" && args.length >= 3 && args.length <= 5) || (name === "INDEX" && args.length >= 2 && args.length <= 3)) {
         if (name === "OFFSET" && form) form.reference = true;
-        const base = resolveReference(args[0]!, sheet, depth + 1, form);
+        const base = resolveReference(args[0]!, sheet, depth + 1, form, evaluated);
         if ("type" in base) return base;
         if (form) form.reference = true;
         const row = n(1, 0), col = n(2, name === "INDEX" ? 1 : 0);
@@ -1311,16 +1359,15 @@ export function calculateFormulas(
         return {...base, firstRow: base.firstRow + (rr ? rr - 1 : 0), firstColumn: base.firstColumn + (cc ? cc - 1 : 0), height: rr ? 1 : base.height, width: cc ? 1 : base.width};
       }
     }
-    if (scopedReferenceCall(expression)) {
-      const value = evaluate(expression, sheet, depth + 1);
-      return isRange(value) && value.reference ? checkedReference(value.reference) : error("#VALUE!");
-    }
     const ref = referenceGeometry(expression, sheet, source);
     return "type" in ref ? ref : checkedReference(ref);
   }
 
   function context(sheet: string, depth: number): FunctionContext {
     const capturedAddress = activeAddress, capturedBindings = new Map(bindings);
+    // Geometry probes may evaluate a scoped expression returning an array. Reuse
+    // that result once if the handler falls back to evaluating its values.
+    const evaluatedReferences = new Map<FormulaExpression, EvaluationValue>();
     const scoped = <T>(action: () => T, additions?: ReadonlyMap<string, FunctionValue>): T => {
       const priorAddress = activeAddress, priorBindings = bindings;
       activeAddress = capturedAddress;
@@ -1329,15 +1376,14 @@ export function calculateFormulas(
     };
     return {
       address: capturedAddress, source, dateSystem, maxArrayCells: limits.maxArrayCells, services: options.services,
-      evaluate: expression => scoped(() => toFunction(evaluate(expression, sheet, depth + 1))),
+      evaluate: expression => scoped(() => {
+        const previous = referenceFallback;
+        referenceFallback = evaluatedReferences;
+        try { return toFunction(evaluate(expression, sheet, depth + 1)); }
+        finally { referenceFallback = previous; evaluatedReferences.clear(); }
+      }),
       evaluateAggregate: expression => scoped(() => {
-        if (expression.kind === "reference" && expression.whole) {
-          const ref = resolveReference(expression, sheet, depth + 1);
-          if ("type" in ref) return ref;
-          const value = readReference(scanReference(ref), depth + 1);
-          return {kind: "array", rows: matrix(value)};
-        }
-        const value = evaluate(expression, sheet, depth + 1);
+        const value = aggregateValue(expression, sheet, depth);
         return isRange(value) ? {kind: "array", rows: value.rows} : value;
       }),
       withBindings: (additions, expression, preserveReference = false) => scoped(() => {
@@ -1345,7 +1391,16 @@ export function calculateFormulas(
         return preserveReference ? bindingValue(value) : toFunction(value);
       }, additions),
       call: (name, args) => scoped(() => toFunction(call(name.toUpperCase(), args.map(value => ({kind: "value", value, start: 0, end: 0})), sheet, depth + 1))),
-      reference: expression => scoped(() => resolveReference(expression, sheet, depth + 1)),
+      reference: (expression, targetSheet = sheet) => scoped(() => {
+        const form = {reference: false};
+        const previousAddress = activeAddress;
+        activeAddress = {...activeAddress, sheet: targetSheet};
+        let result: FunctionReference | FormulaScalarValue;
+        try { result = resolveReference(expression, targetSheet, depth + 1, form, evaluatedReferences); }
+        finally { activeAddress = previousAddress; }
+        if (form.reference && "type" in result) evaluatedReferences.set(expression, result);
+        return result;
+      }),
       readReference: ref => scoped(() => readReference(ref, depth + 1)),
       cell: address => readCell(source, address), operation,
       now: () => new Date(capturedNow.getTime()), random: options.random ?? Math.random,
@@ -1365,11 +1420,17 @@ export function calculateFormulas(
     for (const registry of [...registries].reverse()) {
       const handler = registry.get(normalized);
       if (handler !== undefined) {
+        if ((normalized === "OFFSET" || normalized === "INDIRECT") && handler === extendedFunctions.get(normalized)) {
+          // Reference functions retain geometry until a value consumer needs cells.
+          // Explicit registry overrides still receive their normal handler call.
+          const ref = resolveReference({kind: "function", name: normalized, arguments: args, start: 0, end: 0}, sheet, depth + 1);
+          return "type" in ref ? ref : referenceFromGeometry(ref, depth + 1);
+        }
         const result = handler(args, context(sheet, depth));
         return normalized === "OFFSET" || normalized === "INDIRECT" ? referenceResult(result) : boundResult(result);
       }
     }
-    if (normalized === "INDEX" && args[0] && scopedReferenceCall(args[0])) {
+    if (normalized === "INDEX" && args[0] && computedIndexInput(args[0])) {
       // The reference/value fallback must not execute a computed argument twice.
       args = [{kind: "value", value: bindingValue(evaluate(args[0], sheet, depth + 1)), start: 0, end: 0}, ...args.slice(1)];
     }
