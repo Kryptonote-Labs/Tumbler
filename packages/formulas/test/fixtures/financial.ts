@@ -110,7 +110,6 @@ const samples: readonly [string, number, string, `#${string}`?][] = [
     "TBILLEQ(43831,44197,0.05)",
   ],
   ["TBILLPRICE(43831,44011,0.05)", 97.5, "TBILLPRICE(43831,44011,0)"],
-  ["TBILLPRICE(45292,45293,0.05)", 100 * (1 - 0.05 / 360), "TBILLPRICE(45292,45292,0.05)"],
   [
     "TBILLYIELD(43831,44011,97.5)",
     (2.5 / 97.5) * 2,
@@ -163,6 +162,7 @@ export const cases: FinancialFixture[] = samples.flatMap(
   ],
 );
 cases.push(
+  { name: "treasury bill price rejects equal dates", formula: "TBILLPRICE(45292,45292,0.05)", expected: { type: "error", value: "#NUM!" } },
   {
     name: "financial nested loan",
     formula: "PV(0,10,PMT(0,10,100))",
