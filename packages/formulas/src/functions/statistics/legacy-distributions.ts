@@ -88,7 +88,7 @@ for (const name of ["FDIST", "FINV"])
 scalar("GAMMADIST", 4, 4, ([x = 0, a = 0, b = 0, cum = 0], c) => {
   check(x >= 0 && a > 0 && b > 0);
   if (cum) return gamma(a, x / b, false, c);
-  if (x === 0) return a > 1 ? 0 : fail();
+  if (x === 0) return a > 1 ? 0 : a === 1 ? 1 / b : fail();
   return Math.exp((a - 1) * Math.log(x) - x / b - lg(a) - a * Math.log(b));
 });
 scalar("GAMMAINV", 3, 3, ([p = 0, a = 0, b = 0], c) => {
@@ -103,7 +103,7 @@ scalar("HYPGEOMDIST", 4, 4, ([k = 0, n = 0, m = 0, N = 0]) => {
   m = Math.trunc(m);
   N = Math.trunc(N);
   check(N > 0 && n >= 0 && n <= N && m >= 0 && m <= N && k >= 0);
-  if (k < Math.max(0, n - N + m) || k > Math.min(n, m)) return 0;
+  check(k >= Math.max(0, n - N + m) && k <= Math.min(n, m));
   const choose = (a: number, b: number) =>
     lg(a + 1) - lg(b + 1) - lg(a - b + 1);
   return Math.exp(choose(m, k) + choose(N - m, n - k) - choose(N, n));
