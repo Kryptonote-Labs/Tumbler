@@ -34,7 +34,7 @@ function round(value: number, digits: number): number {
   const [mantissa = "0", exponent = "0"] = Math.abs(value).toExponential().split("e");
   const shifted = Number(`${mantissa}e${Number(exponent) + digits}`);
   if (!Number.isFinite(shifted) || shifted >= 1e16) return value;
-  const rounded = Math.floor(shifted + 0.5);
+  const rounded = Math.round(shifted);
   const [m = "0", e = "0"] = rounded.toExponential().split("e");
   return Math.sign(value) * Number(`${m}e${Number(e) - digits}`);
 }

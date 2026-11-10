@@ -125,6 +125,9 @@ test("invalid arities and header types do not invoke host", () => {
 });
 
 test("half boundaries, symmetry, and extremes use bounded rounding", () => {
+  for (const amount of [200000000000002, -200000000000002]) {
+    expect(evaluate(`EUROCONVERT(${amount},"EUR","BEF",FALSE)`)).toEqual(evaluate(`EUROCONVERT(${amount},"EUR","BEF",TRUE)`));
+  }
   expect(evaluate('EUROCONVERT(1.005,"BEF","LUF")')).toEqual(functionNumber(1));
   expect(evaluate('EUROCONVERT(0.5,"BEF","LUF")')).toEqual(functionNumber(1));
   expect(evaluate('EUROCONVERT(-0.5,"BEF","LUF")')).toEqual(functionNumber(-1));
