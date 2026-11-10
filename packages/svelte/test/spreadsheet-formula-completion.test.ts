@@ -21,3 +21,11 @@ test("keeps existing arguments and opening parentheses when completing an existi
   const draft = "=su (A1:A3)+2";
   expect(accept(draft, completion(draft, 3)!, "SUM")).toEqual({ draft: "=SUM (A1:A3)+2", caret: 6 });
 });
+
+
+test("does not replace an existing cell reference when the caret moves into it", () => {
+  expect(completion("=A1", 2)).toBeUndefined();
+  expect(completion("=SUM(A10)", 6)).toBeUndefined();
+  expect(completion("=LOG10(A1)", 3)?.names).toContain("LOG10");
+  expect(completion("=LOG10", 6)?.names).toContain("LOG10");
+});

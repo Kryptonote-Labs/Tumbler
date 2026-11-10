@@ -1,3 +1,4 @@
+import { parseCellReference } from "@tumblerjs/sheets";
 import { formulaFunctionCatalog } from "@tumblerjs/formulas";
 
 const localNames = formulaFunctionCatalog.filter(entry => entry.availability === "local").map(entry => entry.name);
@@ -31,6 +32,14 @@ export function spreadsheetFormulaCompletion(draft: string, start: number, end =
   if (!/[=+\-*/^(,;{<>&]/.test(before.slice(0, offset).trimEnd().slice(-1))) return;
   const tail = /^[A-Za-z0-9_.]*/.exec(draft.slice(start))![0];
   if (/^\s*[!\[]/.test(draft.slice(start + tail.length))) return;
+  if (tail && !/^\s*\(/.test(draft.slice(start + tail.length))) {
+    try {
+      parseCellReference(draft.slice(offset, start + tail.length));
+      return;
+    } catch (cause) {
+      if (!(cause instanceof RangeError)) throw cause;
+    }
+  }
   const names = localNames.filter(name => name.startsWith(token[0].toUpperCase()));
   if (!names.length) return;
   return { start: offset, end: start + tail.length, names };

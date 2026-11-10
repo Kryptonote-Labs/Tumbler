@@ -55,18 +55,20 @@
     element.setAttribute("role", "combobox");
     element.setAttribute("aria-autocomplete", "list");
     element.setAttribute("aria-controls", id);
+    // Removing a focused editor can fire blur during Svelte's DOM teardown.
+    const blur = () => queueMicrotask(() => { if (input === element && document.activeElement !== element) close(); });
     const begin = () => { composing = true; completion = undefined; };
     const end = () => { composing = false; refresh(); };
     for (const name of ["input", "click", "select", "keyup", "focus"]) element.addEventListener(name, refresh);
     element.addEventListener("keydown", keydown, true);
-    element.addEventListener("blur", close);
+    element.addEventListener("blur", blur);
     element.addEventListener("compositionstart", begin);
     element.addEventListener("compositionend", end);
     refresh();
     return () => {
       for (const name of ["input", "click", "select", "keyup", "focus"]) element.removeEventListener(name, refresh);
       element.removeEventListener("keydown", keydown, true);
-      element.removeEventListener("blur", close);
+      element.removeEventListener("blur", blur);
       element.removeEventListener("compositionstart", begin);
       element.removeEventListener("compositionend", end);
       attributes.forEach((name, index) => { const value = original[index]; if (value === null || value === undefined) element.removeAttribute(name); else element.setAttribute(name, value); });
