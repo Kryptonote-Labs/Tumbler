@@ -244,7 +244,12 @@ export function calculateFormulas(
     if (expression.kind === "invoke") return true;
     if (expression.kind !== "function") return false;
     const callable = bindings.get(normalizeBindingName(expression.name));
-    return normalizeFunctionName(expression.name) === "LET" || !!(callable && "kind" in callable && callable.kind === "lambda");
+    if (callable !== undefined) return "kind" in callable && callable.kind === "lambda";
+    if (normalizeFunctionName(expression.name) === "LET") return true;
+    // Inspect name metadata only; evaluate its callable body through the normal
+    // call path once, so defined-name aliases preserve reference returns too.
+    const named = source.resolveName?.(expression.name, activeAddress);
+    return named !== undefined && "kind" in named;
   }
 
   const cellValue = (address: FormulaCellAddress, depth: number, asDependency: boolean): FormulaScalarValue => {
@@ -1241,7 +1246,7 @@ export function calculateFormulas(
     return ref;
   }
 
-  function resolveReference(expression: FormulaExpression, sheet: string, depth: number): FunctionReference | FormulaScalarValue {
+  function resolveReference(expression: FormulaExpression, sheet: string, depth: number, form?: {reference: boolean}): FunctionReference | FormulaScalarValue {
     operation();
     if (depth > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Reference depth exceeded.");
     if (expression.kind === "value") {
@@ -1249,7 +1254,7 @@ export function calculateFormulas(
       return isRange(value) && value.reference ? checkedReference(value.reference) : error("#VALUE!");
     }
     if (expression.kind === "spill") {
-      const base = resolveReference(expression.operand, sheet, depth + 1);
+      const base = resolveReference(expression.operand, sheet, depth + 1, form);
       if ("type" in base) return base;
       const address = {sheet: base.sheet, row: base.firstRow, column: base.firstColumn};
       cellValue(address, depth + 1, true);
@@ -1263,12 +1268,13 @@ export function calculateFormulas(
         return isRange(value) && value.reference ? checkedReference(value.reference) : error("#VALUE!");
       }
       const named = source.resolveName?.(expression.name, activeAddress);
-      return named === undefined ? error("#NAME?") : "kind" in named ? resolveReference(named, sheet, depth + 1) : checkedReference(named);
+      return named === undefined ? error("#NAME?") : "kind" in named ? resolveReference(named, sheet, depth + 1, form) : checkedReference(named);
     }
     if (expression.kind === "function") {
       const name = normalizeFunctionName(expression.name), args = expression.arguments;
       const n = (index: number, fallback: number) => args[index] === undefined || args[index]!.kind === "omitted" ? number(fallback) : numeric(scalar(evaluate(args[index]!, sheet, depth + 1)));
       if (name === "INDIRECT" && args.length >= 1 && args.length <= 2) {
+        if (form) form.reference = true;
         const value = scalar(evaluate(args[0]!, sheet, depth + 1));
         if (value.type === "error") return value;
         const styleValue = args[1] === undefined ? {kind: "omitted"} as const : evaluate(args[1], sheet, depth + 1);
@@ -1279,14 +1285,16 @@ export function calculateFormulas(
         // Resolve the complete token before cell-style parsing or sheet splitting.
         if (/^[^![\]]+\[.*\]$/.test(target)) {
           const named = source.resolveName?.(target, activeAddress);
-          return named === undefined ? error("#REF!") : "kind" in named ? resolveReference(named, sheet, depth + 1) : checkedReference(named);
+          return named === undefined ? error("#REF!") : "kind" in named ? resolveReference(named, sheet, depth + 1, form) : checkedReference(named);
         }
         if (!style.value) return error("#REF!");
-        try { return resolveReference(parseFormula(target).expression, sheet, depth + 1); } catch (cause) { if (cause instanceof FormulaParseError) return error("#REF!"); throw cause; }
+        try { return resolveReference(parseFormula(target).expression, sheet, depth + 1, form); } catch (cause) { if (cause instanceof FormulaParseError) return error("#REF!"); throw cause; }
       }
       if ((name === "OFFSET" && args.length >= 3 && args.length <= 5) || (name === "INDEX" && args.length >= 2 && args.length <= 3)) {
-        const base = resolveReference(args[0]!, sheet, depth + 1);
+        if (name === "OFFSET" && form) form.reference = true;
+        const base = resolveReference(args[0]!, sheet, depth + 1, form);
         if ("type" in base) return base;
+        if (form) form.reference = true;
         const row = n(1, 0), col = n(2, name === "INDEX" ? 1 : 0);
         if (row.type === "error") return row;
         if (col.type === "error") return col;
@@ -1367,9 +1375,12 @@ export function calculateFormulas(
     }
     const firstValue = args[0]?.kind === "value" ? boundResult(args[0].value) : undefined;
     if (["OFFSET", "INDIRECT", "INDEX"].includes(normalized) && args[0]?.kind !== "array" && (args[0]?.kind !== "value" || firstValue && isRange(firstValue) && firstValue.reference)) {
-      const ref = resolveReference({kind: "function", name: normalized, arguments: args, start: 0, end: 0}, sheet, depth + 1);
+      const form = {reference: false};
+      const ref = resolveReference({kind: "function", name: normalized, arguments: args, start: 0, end: 0}, sheet, depth + 1, form);
       if (!("type" in ref)) return referenceResult(readReference(ref, depth + 1), ref);
-      if (normalized !== "INDEX") return ref;
+      // Once a reference base is established, an invalid row/column is final.
+      // Retrying as a value would re-run index expressions (including volatile ones).
+      if (normalized !== "INDEX" || form.reference) return ref;
     }
     if (normalized === "TRUE" || normalized === "FALSE") return args.length === 0 ? boolean(normalized === "TRUE") : error("#VALUE!");
     const implementation = functions.get(normalized);

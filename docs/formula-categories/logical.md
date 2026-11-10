@@ -126,3 +126,9 @@ labels for saved error cells, because modern errors such as #CALC! can serialize
 as legacy #VALUE! caches plus rich metadata. Resume requires that error-label
 evidence for error expectations. Tests do not treat a plain error-looking string
 as an error, since the saved cell must also have error type.
+
+## Reference-path review follow-up
+
+Workbook-defined callable names and aliases now use the same provenance-preserving reference path as lexical lambdas. Classification inspects name metadata; the callable body is evaluated once. Two supplemental native Excel workbooks confirm `SUMIF(Identity(Inputs!A1:A2),">1")` and its workbook-name alias both return 6 for inputs 2 and 4.
+
+Once INDEX has established a reference form, row/column errors are final and are not retried as value-form arguments. Regression workbooks check changing callback results, original error propagation, nested INDEX, bare/scoped/named references, edits and reopen, with exactly one callback evaluation.

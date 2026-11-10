@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { openSpreadsheetArtifact } from "../../sheets/src/index.ts";
+import { openSpreadsheetArtifact, calculateSpreadsheetWorksheet } from "../../sheets/src/index.ts";
 import { buildWorkbookFixture } from "../../sheets/test/workbook-fixture.ts";
 
 for (const [formula, input, expected] of [
@@ -52,4 +52,64 @@ test("INDEX evaluates a computed lambda or LET input once", () => {
     expect(calls).toBe(1);
     expect(calculated.diagnostics).toEqual([]);
   }
+});
+
+function namedLambdaWorkbook(formula: string): Uint8Array {
+  const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+  return buildWorkbookFixture({
+    workbookXml:`<workbook xmlns="${namespace}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Data" sheetId="1" r:id="data"/></sheets><definedNames><definedName name="Identity">_xlfn.LAMBDA(_xlpm.items,_xlpm.items)</definedName><definedName name="AliasIdentity">Identity</definedName><definedName name="MakeValue">_xlfn.LAMBDA(COUNTED())</definedName><definedName name="AliasValue">MakeValue</definedName></definedNames></workbook>`,
+    sheets:[{name:"Data",sheetId:1,relationshipId:"data",xml:`<worksheet xmlns="${namespace}"><sheetData><row r="1"><c r="A1"><v>2</v></c><c r="B1"><v>3</v></c><c r="C1"><f>${formula.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")}</f></c></row><row r="2"><c r="A2"><v>4</v></c><c r="B2"><v>5</v></c></row></sheetData></worksheet>`}],
+  });
+}
+
+for (const name of ["Identity","AliasIdentity"]) test(`workbook-defined ${name} retains reference returns`, () => {
+  const bytes = namedLambdaWorkbook(`SUMIF(${name}(A1:A2),">1")`), original = openSpreadsheetArtifact(bytes);
+  for (const artifact of [original,openSpreadsheetArtifact(original.bytes())]) {
+    expect(artifact.calculation.displayText("C1")).toBe("6");
+    expect(artifact.calculation.diagnostics).toEqual([]);
+  }
+  const edited = original.editCell("A2",8);
+  for (const artifact of [edited,openSpreadsheetArtifact(edited.bytes())]) {
+    expect(artifact.calculation.displayText("C1")).toBe("10");
+    expect(artifact.calculation.diagnostics).toEqual([]);
+  }
+  expect(original.bytes()).toEqual(bytes);
+});
+
+for (const base of ["A1:B2","LET(items,A1:B2,items)","LAMBDA(items,items)(A1:B2)","Identity(A1:B2)","AliasIdentity(A1:B2)","OFFSET(A1,0,0,2,2)", 'INDIRECT("A1:B2")']) {
+  for (const axis of ["row","column"]) test(`INDEX reference ${axis} errors are final: ${base}`, () => {
+    const formula = axis === "row" ? `INDEX(${base},COUNTED(),1)` : `INDEX(${base},1,COUNTED())`;
+    const bytes = namedLambdaWorkbook(formula), original = openSpreadsheetArtifact(bytes), edited = original.editCell("A2",8);
+    for (const artifact of [original,openSpreadsheetArtifact(bytes),edited,openSpreadsheetArtifact(edited.bytes())]) {
+      let calls = 0;
+      const calculated = calculateSpreadsheetWorksheet(artifact.worksheet,{functionRegistries:[new Map([["COUNTED",()=>({type:"number" as const,value:++calls === 1 ? 3 : 1})]])]});
+      expect(calculated.displayText("C1")).toBe("#REF!");
+      expect(calls).toBe(1);
+      expect(calculated.diagnostics).toEqual([]);
+    }
+    expect(original.bytes()).toEqual(bytes);
+  });
+}
+
+for (const formula of ["INDEX(INDEX(A1:B2,COUNTED(),1),1)","INDEX(LET(items,A1:B2,items),COUNTED())"]) {
+  for (const first of [{type:"error" as const,value:"#N/A" as const},{type:"string" as const,value:"not an index"}]) test(`INDEX retains original argument error: ${formula} ${first.type}`, () => {
+    const artifact = openSpreadsheetArtifact(namedLambdaWorkbook(formula));
+    let calls = 0;
+    const calculated = calculateSpreadsheetWorksheet(artifact.worksheet,{functionRegistries:[new Map([["COUNTED",()=> ++calls === 1 ? first : {type:"number" as const,value:1}]]) ]});
+    expect(calculated.displayText("C1")).toBe(first.type === "error" ? "#N/A" : "#VALUE!");
+    expect(calls).toBe(1);
+    expect(calculated.diagnostics).toEqual([]);
+  });
+}
+
+for (const name of ["MakeValue","AliasValue"]) test(`INDEX evaluates workbook callable ${name} once`, () => {
+  const bytes = namedLambdaWorkbook(`INDEX(${name}(),1)`), original = openSpreadsheetArtifact(bytes);
+  for (const artifact of [original,openSpreadsheetArtifact(bytes)]) {
+    let calls = 0;
+    const calculated = calculateSpreadsheetWorksheet(artifact.worksheet,{functionRegistries:[new Map([["COUNTED",()=>({type:"number" as const,value:++calls})]])]});
+    expect(calculated.displayText("C1")).toBe("1");
+    expect(calls).toBe(1);
+    expect(calculated.diagnostics).toEqual([]);
+  }
+  expect(original.bytes()).toEqual(bytes);
 });
