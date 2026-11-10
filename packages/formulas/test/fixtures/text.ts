@@ -16,6 +16,16 @@ const E = (value: `#${string}` = "#VALUE!"): Scalar => ({
   value,
 });
 export const cases: TextCase[] = [];
+cases.push(
+  { name: "textsplit explicit error pad", formula: 'TEXTSPLIT("a,b;c",",",";",FALSE,0,#N/A)', expected: [[S("a"), S("b")], [S("c"), E("#N/A")]] },
+  { name: "textsplit unused error pad", formula: 'TEXTSPLIT("a,b",",",,,,#N/A)', expected: [[S("a"), S("b")]] },
+  { name: "textafter unused error fallback", formula: 'TEXTAFTER("a:b",":",1,0,0,#N/A)', expected: S("b") },
+  { name: "textbefore unused error fallback", formula: 'TEXTBEFORE("a:b",":",1,0,0,#N/A)', expected: S("a") },
+  { name: "textbefore overlapping reverse delimiter", formula: 'TEXTBEFORE("aaa","aa",-1)', expected: S("a") },
+  { name: "textafter overlapping reverse delimiter", formula: 'TEXTAFTER("aaa","aa",-1)', expected: S("") },
+  { name: "searchb question matches linebreak", formula: 'SEARCHB("?",CHAR(10))', expected: N(1) },
+  { name: "searchb star matches linebreak", formula: 'SEARCHB("*b",Inputs!A1)', cells: { A1: S("a\nb") }, expected: N(1) },
+);
 function add(
   name: string,
   formula: string,

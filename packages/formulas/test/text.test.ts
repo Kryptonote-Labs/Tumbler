@@ -67,6 +67,7 @@ function context(
     },
     evaluate: (e: FormulaExpression): FunctionValue => {
       switch (e.kind) {
+        case "omitted": return { kind: "omitted" };
         case "array": return {kind: "array", rows: e.rows.map(row => row.map(item => {
           const value = c.evaluate(item);
           return "kind" in value ? {type: "error" as const, value: "#VALUE!" as const} : value;
