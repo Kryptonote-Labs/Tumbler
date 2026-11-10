@@ -44,6 +44,9 @@ Category registration is assembled separately in `src/extended-functions.ts`.
 See [shared runtime integration](../../docs/formula-runtime.md) for the API,
 budgets, service boundaries, and remaining syntax limits.
 
+`formulaFunctionCatalog` lists the built-in functions by name, category and
+whether they need a host service, for function pickers and agent discovery.
+
 Tumbler is developed at
 [Kryptonote-Labs/Tumbler](https://github.com/Kryptonote-Labs/Tumbler).
 

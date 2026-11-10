@@ -1,4 +1,5 @@
 import type { FunctionRegistry } from "./function-runtime.ts";
+import type { FormulaFunctionCategory } from "./function-catalog.ts";
 import { statisticalFunctions } from "./functions/statistical.ts";
 import { logicalFunctions } from "./functions/logical.ts";
 import { datetimeFunctions } from "./functions/datetime.ts";
@@ -15,20 +16,25 @@ import { automationFunctions } from "./functions/automation.ts";
 import { cubeFunctions } from "./functions/cube.ts";
 import { specializedFunctions } from "./functions/specialized.ts";
 
-export const extendedFunctions: FunctionRegistry = new Map([
-  ...statisticalFunctions,
-  ...logicalFunctions,
-  ...datetimeFunctions,
-  ...mathFunctions,
-  ...financialFunctions,
-  ...engineeringFunctions,
-  ...compatibilityFunctions,
-  ...textFunctions,
-  ...lookupFunctions,
-  ...informationFunctions,
-  ...databaseFunctions,
-  ...webFunctions,
-  ...automationFunctions,
-  ...cubeFunctions,
-  ...specializedFunctions,
-]);
+/** Category registries in override order: a later family replaces an earlier family's handler. */
+export const categoryRegistries = [
+  ["statistical", statisticalFunctions],
+  ["logical", logicalFunctions],
+  ["date-time", datetimeFunctions],
+  ["math", mathFunctions],
+  ["financial", financialFunctions],
+  ["engineering", engineeringFunctions],
+  ["compatibility", compatibilityFunctions],
+  ["text", textFunctions],
+  ["lookup", lookupFunctions],
+  ["information", informationFunctions],
+  ["database", databaseFunctions],
+  ["web", webFunctions],
+  ["automation", automationFunctions],
+  ["cube", cubeFunctions],
+  ["specialized", specializedFunctions],
+] as const satisfies readonly (readonly [FormulaFunctionCategory, FunctionRegistry])[];
+
+export const extendedFunctions: FunctionRegistry = new Map(
+  categoryRegistries.flatMap(([, registry]) => [...registry]),
+);

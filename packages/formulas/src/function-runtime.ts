@@ -97,3 +97,15 @@ export function functionText(value: FormulaScalarValue): string {
     case "error": return value.value;
   }
 }
+
+const hostFunctions = new WeakSet<ExtendedFunction>();
+
+/** Marks a handler that never calculates without `FormulaFunctionServices`; the catalog reports it as host-only. */
+export function hostFunction(handler: ExtendedFunction): ExtendedFunction {
+  hostFunctions.add(handler);
+  return handler;
+}
+
+export function isHostFunction(handler: ExtendedFunction): boolean {
+  return hostFunctions.has(handler);
+}

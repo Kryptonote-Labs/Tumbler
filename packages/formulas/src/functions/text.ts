@@ -6,6 +6,7 @@ import {
   functionScalar,
   functionText as text,
   functionMatrix,
+  hostFunction,
   type FunctionContext,
   type FunctionRegistry,
   type FunctionValue,
@@ -26,8 +27,8 @@ function define(
   max: number,
   fn: Handler,
   propagate = true,
-) {
-  registry.set(name, (args, c) => {
+): ExtendedFunction {
+  const handler: ExtendedFunction = (args, c) => {
     c.operation();
     if (args.length < min || args.length > max) return err();
     const v = args.map((a) => c.evaluate(a));
@@ -72,7 +73,9 @@ function define(
       };
     }
     return invoke(v);
-  });
+  };
+  registry.set(name, handler);
+  return handler;
 }
 function omitted(v: FunctionValue | undefined): boolean {
   return v === undefined || ("kind" in v && String(v.kind) === "omitted");
@@ -565,7 +568,7 @@ for (const [name, min, max] of [
   ["TRANSLATE", 1, 3],
   ["PHONETIC", 1, 1],
 ] as const)
-  define(name, min, max, (v, c) => host(name, v, c));
+  hostFunction(define(name, min, max, (v, c) => host(name, v, c)));
 for (const name of ["REGEXTEST", "REGEXEXTRACT", "REGEXREPLACE"])
   define(
     name,

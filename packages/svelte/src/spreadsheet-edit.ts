@@ -7,6 +7,7 @@ export interface SpreadsheetGridEdit {
   readonly kind?: "value" | "formula";
 }
 
+/** True when the cell's number format is Text, so typed input (including a leading equals) stays literal. */
 export function spreadsheetCellUsesTextFormat(worksheet: SpreadsheetWorksheet, reference: string): boolean {
   const state = spreadsheetNumberFormatState(worksheet, reference);
   return (state.state === "value" || state.state === "inherited") && state.value.category === "text";

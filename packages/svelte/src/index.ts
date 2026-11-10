@@ -32,10 +32,10 @@ export type {
 } from "./spreadsheet-viewport.ts";
 export { composeSpreadsheetGridLayout, frozenGridTranslation, placeSpreadsheetDrawing, spreadsheetDrawingRegion } from "./spreadsheet-grid-layout.ts";
 export type { SpreadsheetDrawingViewportPlacement, SpreadsheetGridLayout, SpreadsheetMergeLayout } from "./spreadsheet-grid-layout.ts";
-export { coerceSpreadsheetEditValue } from "./spreadsheet-edit.ts";
+export { coerceSpreadsheetEditValue, spreadsheetCellUsesTextFormat } from "./spreadsheet-edit.ts";
 export type { SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
-export { spreadsheetFormulaBarEdit, spreadsheetFormulaBarText } from "./spreadsheet-formula-bar.ts";
-export type { SpreadsheetFormulaBarEdit } from "./spreadsheet-formula-bar.ts";
+export { insertSpreadsheetFormulaFunction, spreadsheetFormulaBarEdit, spreadsheetFormulaBarText } from "./spreadsheet-formula-bar.ts";
+export type { SpreadsheetFormulaBarEdit, SpreadsheetFormulaFunctionInsertion } from "./spreadsheet-formula-bar.ts";
 export {
   insertSpreadsheetFormulaReference,
   spreadsheetFormulaReferenceText,
@@ -71,3 +71,6 @@ export { default as WordPageLayoutDecorations } from './WordPageLayoutDecoration
 export { loadEmbeddedFonts, type EmbeddedFont, type EmbeddedFontContext } from './embedded-fonts.ts';
 
 export { default as SpreadsheetPrintView } from './SpreadsheetPrintView.svelte';
+
+export { spreadsheetFormulaCompletion, acceptSpreadsheetFormulaCompletion } from "./spreadsheet-formula-completion.ts";
+export type { SpreadsheetFormulaCompletion } from "./spreadsheet-formula-completion.ts";

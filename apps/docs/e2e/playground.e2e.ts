@@ -119,7 +119,7 @@ test('spreadsheet edits recalculate and survive export across sheets', async ({ 
   await expect(page.getByRole('gridcell', { name: 'Research', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.getByRole('gridcell', { name: '85', exact: true }).first().dblclick();
-  const input = page.getByRole('textbox', { name: 'Edit C2', exact: true });
+  const input = page.getByLabel('Edit C2', { exact: true });
   await input.fill('100');
   await input.press('Enter');
   await expect(page.getByRole('gridcell', { name: '1200', exact: true })).toBeVisible();

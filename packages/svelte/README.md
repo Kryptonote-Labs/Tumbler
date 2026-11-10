@@ -413,3 +413,7 @@ Hosted PDF merge sources can provide a `read(signal)` callback alongside their i
 and position. Reads may return fresh bytes or an already authenticated `PdfDocument`. Give initial
 sources a stable `key` when retaining `session` across mounts to replace the host read callback.
 Callbacks and authenticated documents remain in memory only.
+
+Spreadsheet cell editors and the formula bar suggest local functions while typing a formula.
+Arrow keys select a suggestion; Enter or Tab inserts the function and keeps the draft open.
+Escape dismisses suggestions before cancelling the edit. Text-formatted cells and quoted text do not trigger suggestions.

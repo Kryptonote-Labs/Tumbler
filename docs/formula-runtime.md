@@ -93,6 +93,21 @@ indices require script-part resolution, which is not implemented: those formulas
 retain caches without reaching a host handler. There is no implicit network,
 DLL loading, Python interpreter, or other arbitrary code execution.
 
+## Function catalog
+
+`formulaFunctionCatalog` lists every built-in function the evaluator dispatches,
+sorted by name, as `{name, category, availability}`. It is derived from the core
+handler names in `src/core-functions.ts` and the ordered `categoryRegistries` in
+`src/extended-functions.ts`; a name in several families takes the category of the
+handler that wins dispatch. `formulaFunctionCategories` lists the categories.
+Extension registries passed through `functionRegistries` are not catalogued.
+
+`availability` is `host` for handlers wrapped with `hostFunction(handler)`,
+which never calculate without `services`, such as `WEBSERVICE` and the cube
+functions. Functions with a local subset that defer some inputs to a host, such
+as `FILTERXML`, `TEXT` and `CELL`, are `local`. Picker UIs can hide `host`
+functions when they supply no services.
+
 ## Remaining integration limits
 
 This runtime is not a claim of complete Excel parity. Union/intersection

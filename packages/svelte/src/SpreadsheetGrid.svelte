@@ -43,6 +43,7 @@
   import { spreadsheetCellLayer } from "./spreadsheet-cell-layer.ts";
   import SpreadsheetDrawingObject from "./SpreadsheetDrawingObject.svelte";
   import SpreadsheetChart from "./SpreadsheetChart.svelte";
+  import SpreadsheetFormulaAutocomplete from "./SpreadsheetFormulaAutocomplete.svelte";
 
   interface RenderableChart {
     readonly frame: SpreadsheetChartFrame;
@@ -1108,6 +1109,13 @@
     </div>
   </div>
 {/if}
+
+<SpreadsheetFormulaAutocomplete input={editor} disabled={!editable || !editing || spreadsheetCellUsesTextFormat(worksheet, editing)}
+  oncomplete={(value, caret) => {
+    draft = value;
+    editingText = true;
+    void tick().then(() => { editor?.focus({ preventScroll: true }); editor?.setSelectionRange(caret, caret); });
+  }} />
 
 <style>
   .remote-selection { position: absolute; pointer-events: none; z-index: 8; box-sizing: border-box; border: 0 solid var(--peer-color); background: color-mix(in srgb, var(--peer-color) 10%, transparent); }

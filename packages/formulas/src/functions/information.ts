@@ -1,7 +1,7 @@
 import type { FormulaScalarValue } from "../evaluator.ts";
 import {
   type ExtendedFunction, type FunctionContext, type FunctionRegistry, type FunctionValue,
-  functionError as err, functionNumber as num, functionNumeric, functionScalar,
+  functionError as err, functionNumber as num, functionNumeric, functionScalar, hostFunction,
 } from "../function-runtime.ts";
 
 const text = (value: string): FormulaScalarValue => ({ type: "string", value });
@@ -173,7 +173,7 @@ export const informationFunctions: FunctionRegistry = new Map<string, ExtendedFu
     }
     return service(context, "CELL", [text(key), text(ref.sheet), num(ref.firstRow), num(ref.firstColumn)]);
   }],
-  ["STOCKHISTORY", (args, context) => {
+  ["STOCKHISTORY", hostFunction((args, context) => {
     if (args.length < 2 || args.length > 11) return err();
     const values = args.map(arg => (arg.kind as string) === "omitted" ? undefined : functionScalar(context.evaluate(arg)));
     const error = values.find(v => v?.type === "error");
@@ -199,5 +199,5 @@ export const informationFunctions: FunctionRegistry = new Map<string, ExtendedFu
       if (v.value < 0 || v.value > (i < 2 ? 2 : 5) || !Number.isInteger(v.value)) return err();
     }
     return service(context, "STOCKHISTORY", [stock, start, end, ...options, text(context.dateSystem)]);
-  }],
+  })],
 ]);

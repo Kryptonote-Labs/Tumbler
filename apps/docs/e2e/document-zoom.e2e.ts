@@ -75,7 +75,7 @@ test('sheet zoom scales cells and headers while retaining editing and scrolling'
   // Pointer-anchored zoom can leave C2 partly behind the frozen header. Edit its visible portion.
   const zoomedCell = (await cell.boundingBox())!;
   await cell.dblclick({ position: { x: zoomedCell.width / 2, y: zoomedCell.height - 2 } });
-  const input = page.getByRole('textbox', { name: 'Edit C2', exact: true });
+  const input = page.getByLabel('Edit C2', { exact: true });
   await input.fill('100');
   await input.press('Enter');
   await expect(page.getByRole('gridcell', { name: '1200', exact: true })).toBeVisible();
@@ -138,7 +138,7 @@ test('empty cells remain selectable and editable at 25% without mounting thousan
   expect(selection.height).toBeGreaterThan(20);
   await page.mouse.dblclick(x, y);
   const reference = await page.getByLabel('Formula target', { exact: true }).innerText();
-  const editor = page.getByRole('textbox', { name: `Edit ${reference}`, exact: true });
+  const editor = page.getByLabel(`Edit ${reference}`, { exact: true });
   await editor.fill('Previously empty');
   await editor.press('Enter');
   // Enter advances focus; navigate back to read the committed bitmap cell through the accessible head.

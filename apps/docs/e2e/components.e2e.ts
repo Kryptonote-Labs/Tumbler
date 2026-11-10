@@ -1,20 +1,22 @@
 import { test, expect } from '@playwright/test';
 
 test('component examples render, apply edits, reset, and show their source', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
   await page.goto('/components');
   await expect(page.getByRole('heading', { name: 'Components', exact: true })).toBeVisible();
   await expect(page.getByText('A quieter workspace', { exact: true })).toBeVisible();
   await expect(page.locator('.code-block .shiki')).toBeVisible();
   await page.getByRole('button', { name: 'SpreadsheetGrid', exact: true }).click();
   await page.getByRole('gridcell', { name: '85', exact: true }).first().dblclick();
-  const cell = page.getByRole('textbox', { name: 'Edit C2', exact: true });
+  const cell = page.getByLabel('Edit C2', { exact: true });
   await cell.fill('100');
   await cell.press('Enter');
   await expect(page.getByRole('gridcell', { name: '1200', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Reset example' }).click();
   await expect(page.getByRole('gridcell', { name: '1020', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'SpreadsheetFormulaBar', exact: true }).click();
-  const formula = page.getByRole('textbox', { name: 'Value or formula for D2', exact: true });
+  const formula = page.getByLabel('Value or formula for D2', { exact: true });
   await formula.fill('=B2*C2*2');
   await formula.press('Enter');
   await expect(page.getByLabel('Calculated value', { exact: true })).toHaveText('2040');
@@ -27,6 +29,7 @@ test('component examples render, apply edits, reset, and show their source', asy
   await expect(page.getByRole('img', { name: 'Quarterly deliveries' })).toBeVisible();
   await page.getByLabel('Chart type').selectOption('pie');
   await expect(page.getByRole('img', { name: 'Quarterly deliveries' }).locator('path')).not.toHaveCount(0);
+  expect(errors).toEqual([]);
 });
 
 test('components are reachable from navigation and fit a narrow screen', async ({ page }) => {

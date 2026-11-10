@@ -23,7 +23,7 @@ test('F2 keeps arrows inside the cell text and blocks vertical page scrolling', 
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.locator('[data-reference="C2"]').click();
   await page.keyboard.press('F2');
-  const editor = page.getByRole('textbox', { name: 'Edit C2', exact: true });
+  const editor = page.getByLabel('Edit C2', { exact: true });
   await editor.press('End');
   await editor.press('ArrowLeft');
   await page.keyboard.type('x');
@@ -42,7 +42,7 @@ test('Backspace starts a blank edit in the first selected cell and preserves its
   await page.locator('[data-reference="C3"]').click();
   await page.keyboard.press('Shift+ArrowUp');
   await page.keyboard.press('Backspace');
-  const editor = page.getByRole('textbox', { name: 'Edit C3', exact: true });
+  const editor = page.getByLabel('Edit C3', { exact: true });
   await expect(editor).toBeFocused();
   await expect(editor).toHaveValue('');
   await editor.press('Escape');

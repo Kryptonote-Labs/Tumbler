@@ -28,3 +28,34 @@ export function spreadsheetFormulaBarEdit(
     : { kind: "value", reference, value: coerceSpreadsheetEditValue(draft, cell?.value, asText) };
   return sheet === undefined ? edit : Object.freeze({ ...edit, sheet });
 }
+
+export interface SpreadsheetFormulaFunctionInsertion {
+  readonly draft: string;
+  readonly selectionStart: number;
+  readonly selectionEnd: number;
+}
+
+/**
+ * Replaces the draft selection with `NAME()` and places the caret between the
+ * parentheses, ready for arguments or picked references. A draft without a
+ * leading equals becomes a formula, so `2*` yields `=2*NAME()`.
+ */
+export function insertSpreadsheetFormulaFunction(
+  draft: string,
+  name: string,
+  selectionStart: number,
+  selectionEnd: number,
+): SpreadsheetFormulaFunctionInsertion {
+  if (!/^[A-Za-z_][A-Za-z0-9_.]*$/u.test(name)) throw new TypeError(`"${name}" is not a function name.`);
+  const prefix = draft.startsWith("=") ? "" : "=";
+  const source = `${prefix}${draft}`;
+  const clamp = (offset: number) => Math.min(Math.max(offset + prefix.length, 1), source.length);
+  const start = clamp(Math.min(selectionStart, selectionEnd));
+  const end = clamp(Math.max(selectionStart, selectionEnd));
+  const caret = start + name.length + 1;
+  return Object.freeze({
+    draft: `${source.slice(0, start)}${name}()${source.slice(end)}`,
+    selectionStart: caret,
+    selectionEnd: caret,
+  });
+}

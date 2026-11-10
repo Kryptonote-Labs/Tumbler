@@ -23,6 +23,9 @@ export type {
   FormulaWorkbookSource,
 } from "./evaluator.ts";
 
+export { formulaFunctionCatalog, formulaFunctionCategories } from "./function-catalog.ts";
+export type { FormulaFunctionAvailability, FormulaFunctionCatalogEntry, FormulaFunctionCategory } from "./function-catalog.ts";
+
 export type { FunctionValue, FunctionArray, FunctionLambda, FunctionOmitted, FunctionReference, FunctionContext, FunctionRegistry, ExtendedFunction, FormulaFunctionServices } from "./function-runtime.ts";
 
 export { createCubeSnapshotServices } from "./functions/cube.ts";

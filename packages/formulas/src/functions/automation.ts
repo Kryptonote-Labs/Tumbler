@@ -1,7 +1,7 @@
 import type { FormulaExpression } from "../ast.ts";
 import type { FormulaScalarValue } from "../evaluator.ts";
 import {
-  functionError, functionNumber, functionNumeric, functionScalar,
+  functionError, functionNumber, functionNumeric, functionScalar, hostFunction,
   type ExtendedFunction, type FunctionContext, type FunctionRegistry, type FunctionValue,
 } from "../function-runtime.ts";
 
@@ -167,5 +167,5 @@ const call: ExtendedFunction = (arguments_, context) => {
 };
 
 export const automationFunctions: FunctionRegistry = new Map([
-  ["CALL", call], ["EUROCONVERT", euroconvert], ["REGISTER.ID", registerId],
+  ["CALL", hostFunction(call)], ["EUROCONVERT", euroconvert], ["REGISTER.ID", hostFunction(registerId)],
 ]);
