@@ -184,3 +184,59 @@ test("reference geometry preserves whole axes while materialization honors budge
   expect(calc.diagnostics).toEqual([]);
   expect(run("A:A").diagnostics[0]?.code).toBe("evaluation-limit");
 });
+
+test("spill budget failure leaves producer caches and prior consumers untouched", () => {
+  const source = workbook({"1,5":"B1+1", "1,1":"{1,2}"});
+  const calc = calculateFormulas(source, {maxOperations:12});
+  expect(calc.diagnostics).toContainEqual(expect.objectContaining({code:"evaluation-limit",address:at()}));
+  expect(calc.arrayValue(at())).toBeUndefined();
+  expect(calc.value(at())).toBeUndefined();
+  expect(calc.value(at(1,2))).toBeUndefined();
+  expect(calc.value(at(1,5))).toEqual(n(1));
+  expect(source.cell(at())?.value).toEqual(n(99));
+});
+
+test("spill commits remain atomic across budget cutoffs and transitive array invalidation", () => {
+  for (let maxOperations = 1; maxOperations <= 250; maxOperations++) {
+    const calc = calculateFormulas(workbook({"1,5":"B1+1", "2,5":"E1*2", "3,4":"{E1;E2}", "1,1":"{1,2}"}), {maxOperations});
+    const failed = calc.diagnostics.some(d => d.code === "evaluation-limit" && d.address.row === 1 && d.address.column === 1);
+    const producer = calc.arrayValue(at());
+    if (failed) {
+      expect(producer).toBeUndefined();
+      expect(calc.value(at())).toBeUndefined();
+      expect(calc.value(at(1,2))).toBeUndefined();
+      const consumer = calc.arrayValue(at(3,4));
+      if (consumer) expect(consumer.rows).toEqual([[n(1)],[n(2)]]);
+    }
+    if (producer) {
+      expect(calc.value(at(1,2))).toEqual(n(2));
+      expect(calc.value(at(1,5))).not.toEqual(n(1));
+      expect(calc.value(at(2,5))).not.toEqual(n(2));
+      const consumer = calc.arrayValue(at(3,4));
+      if (consumer) expect(consumer.rows).toEqual([[n(3)],[n(6)]]);
+    }
+  }
+});
+
+test("budget exhaustion does not misdiagnose an already committed nested producer", () => {
+  for (let maxOperations = 1; maxOperations <= 120; maxOperations++) {
+    const calc = calculateFormulas(workbook({"1,5":"B1+A1", "1,1":"{1,2}"}), {maxOperations});
+    if (calc.arrayValue(at())) {
+      expect(calc.diagnostics.some(d => d.address.row === 1 && d.address.column === 1)).toBe(false);
+      expect(calc.value(at(1,2))).toEqual(n(2));
+      expect(calc.value(at(1,5))).not.toEqual(n(1));
+    }
+  }
+});
+
+test.each([
+  [0,1,2], [0,2,1], [1,0,2], [1,2,0], [2,0,1], [2,1,0],
+] as const)("temporary spill obstructions resolve independently of formula enumeration: %j", (first, second, third) => {
+  const order = [first, second, third];
+  const formulas = [["1,2", "IF(A5,1,{1;2})"], ["2,1", "{3,4}"], ["4,1", "{1;2}"]] as const;
+  const result = calculateFormulas(workbook(Object.fromEntries(order.map(index => formulas[index]!))));
+  expect(result.value(at(1,2))).toEqual(n(1));
+  expect(result.value(at(2,1))).toEqual(n(3));
+  expect(result.value(at(2,2))).toEqual(n(4));
+  expect(result.diagnostics).toEqual([]);
+});
