@@ -68,7 +68,7 @@ Independent GPT-6.1 sol high reviews remain the coordinator's readiness gate.
 full scalar values or rectangular scalar matrices, optional Inputs-sheet cells,
 absolute tolerance, date system and RNG/oracle metadata. Inputs use `Inputs!A1`
 references and contain no calculated caches. Every case can be placed in its own
-Inputs/Results workbook. There are 227 corpus cases: 223 ordinary and four
+Inputs/Results workbook. There are 233 corpus cases: 229 ordinary and four
 nondeterministic RNG cases. The corpus includes every assigned name, nested
 engineering calculations, range aggregates, matrix operations and date serials.
 
@@ -90,3 +90,5 @@ Primary Microsoft sources consulted (2026-11-08):
 ## Independent review follow-up
 
 Review regressions cover FACT fractional arguments in (170,171), which truncate before overflow checking, and MROUND opposite-sign normal inputs whose product would underflow to signed zero. Sign validation compares signs directly.
+COMBINA keeps the smaller factor count before adding large integers, avoiding
+cancellation when one argument is much larger than the other.

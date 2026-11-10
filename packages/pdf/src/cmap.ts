@@ -18,11 +18,12 @@ function code(value: PdfValue): PdfCode {
   for (const byte of value.bytes) result = result * 256 + byte;
   return { code: result, length: value.bytes.length };
 }
+const unicodeDecoder = new TextDecoder("utf-16be");
 export function utf16(bytes: Uint8Array): string {
   if (bytes.length % 2)
     return invalid("CMap Unicode destination must contain complete UTF-16BE code units.");
   // Broken destinations must not prevent valid entries in the same font from rendering.
-  return new TextDecoder("utf-16be").decode(bytes);
+  return unicodeDecoder.decode(bytes);
 }
 
 /** Character codes remain separate from CIDs and Unicode sequences, including ligature expansion. */

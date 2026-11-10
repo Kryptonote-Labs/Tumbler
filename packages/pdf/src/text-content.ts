@@ -1,3 +1,4 @@
+import type { PdfFont } from "./fonts.ts";
 import { multiply, type PdfMatrix } from "./matrix.ts";
 import type { PdfPageScene, PdfSceneSource } from "./scene.ts";
 
@@ -35,6 +36,7 @@ const rtl = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u;
  * Line changes and explicit positioning gaps become copyable separators, while character spacing stays inside words. */
 export function pdfTextContent(scene: PdfPageScene): PdfTextContent {
   const lines: Positioned[][] = [];
+  const fonts = new Map<PdfFont, PdfTextItem["font"]>();
   for (const element of scene.elements) {
     if (element.kind !== "glyph" || !element.glyph.unicode) continue;
     const font = element.font,
@@ -43,6 +45,11 @@ export function pdfTextContent(scene: PdfPageScene): PdfTextContent {
       scene.viewport,
       multiply(element.state.transform, [units, 0, 0, -units, 0, 0]),
     );
+    let css = fonts.get(font);
+    if (!css) {
+      css = { ...font.css, name: font.baseName, ...(font.sourceId ? { source: font.sourceId } : {}) };
+      fonts.set(font, css);
+    }
     const ascent = font.ascent / units,
       height = (font.ascent - font.descent) / units;
     const em = Math.max(Math.hypot(matrix[0], matrix[1]), Math.hypot(matrix[2], matrix[3]));
@@ -61,7 +68,7 @@ export function pdfTextContent(scene: PdfPageScene): PdfTextContent {
         width: element.glyph.width / (font.kind === "Type3" ? units : 1000),
         ascent,
         height,
-        font: {...font.css,name:font.baseName,...(font.sourceId?{source:font.sourceId}:{})},
+        font: css,
         source: element.source,
       },
       direction: [flow[0] / length, flow[1] / length],

@@ -36,9 +36,13 @@ function define(
       if (!("kind" in x) && x.type === "string") c.operation(x.value.length);
     }
     const invoke = (values: readonly FunctionValue[]) => {
-      if (propagate)
-        for (const x of values)
+      if (propagate) {
+        for (const [index, x] of values.entries()) {
+          // Padding and missing-delimiter fallbacks are result values.
+          if (index === 5 && ["TEXTSPLIT", "TEXTBEFORE", "TEXTAFTER"].includes(name)) continue;
           if (!("kind" in x) && x.type === "error") return x;
+        }
+      }
       return fn(values, c);
     };
     const arrays = v.filter((x) => "kind" in x && x.kind === "array");
@@ -200,7 +204,7 @@ for (const name of [
         const x = needle[i]!;
         if (x === "~" && i + 1 < needle.length)
           pattern += literal(needle[++i]!);
-        else pattern += x === "*" ? ".*" : x === "?" ? "." : literal(x);
+        else pattern += x === "*" ? "[\\s\\S]*" : x === "?" ? "[\\s\\S]" : literal(x);
       }
       try {
         const hit = boundedRegex(pattern, true, c).find(
@@ -473,14 +477,14 @@ for (const name of ["TEXTAFTER", "TEXTBEFORE"])
     const hay = mode ? t.toLowerCase() : t,
       needle = mode ? delim.toLowerCase() : delim,
       positions: number[] = [];
-    for (let from = 0; from <= hay.length;) {
+    for (let from = k > 0 ? 0 : hay.length - needle.length; from >= 0 && from <= hay.length;) {
       c.operation();
-      const at = hay.indexOf(needle, from);
+      const at = k > 0 ? hay.indexOf(needle, from) : hay.lastIndexOf(needle, from);
       if (at < 0) break;
       positions.push(at);
-      from = at + needle.length;
+      from = k > 0 ? at + needle.length : at - needle.length;
     }
-    const at = k > 0 ? positions[k - 1] : positions[positions.length + k];
+    const at = positions[Math.abs(k) - 1];
     if (at === undefined) {
       if (end === 1 && Math.abs(k) === positions.length + 1)
         return str(name === "TEXTAFTER" ? (k > 0 ? "" : t) : k > 0 ? t : "");

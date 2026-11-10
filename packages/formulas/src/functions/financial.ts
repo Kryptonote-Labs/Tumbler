@@ -611,7 +611,10 @@ for (const name of ["TBILLEQ", "TBILLPRICE", "TBILLYIELD"])
     const d = trunc(m!) - trunc(s!);
     check(d >= 0 && d <= 365 && v! > 0);
     if (name === "TBILLEQ") return (365 * v!) / (360 - v! * d);
-    if (name === "TBILLPRICE") return 100 * (1 - (v! * d) / 360);
+    if (name === "TBILLPRICE") {
+      check(d > 0);
+      return 100 * (1 - (v! * d) / 360);
+    }
     check(d !== 0);
     return (((100 - v!) / v!) * 360) / d;
   });

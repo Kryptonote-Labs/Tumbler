@@ -44,13 +44,12 @@ registration and the existing FunctionContext evaluation/array/operation hooks.
 No changes to the shared runtime, evaluator, parser, lexer, AST, or sheets are
 included in this category commit.
 
-The numerical kernels use Lanczos log-gamma, bounded incomplete-beta continued
-fractions, incomplete-gamma series/continued fractions, and bracketed inverses.
-Continued fractions/series allow at most 1024/4096 iterations; inverses allow
-1024 bracket expansions and 1100 bisections. Iterations charge context.operation;
-array processing charges work and checks maxArrayCells before allocating output.
-Operation-budget exceptions remain owned by the evaluator and are not swallowed.
-Nonconvergence and nonfinite numeric results return #NUM!.
+Legacy statistics reuse the canonical statistical registry's stable numerical
+kernels, reference coercion and operation-bounded convergence. This avoids
+overriding its probability-tail and large-shape fixes. Legacy MODE and WEIBULL
+retain their documented coercion and native endpoint policies separately from
+modern aliases. Rounding functions remain local. Nonconvergence preserves caches
+through the evaluator's unavailable path; numeric overflow returns #NUM!.
 
 ## Fixture inventory and provenance
 
@@ -61,7 +60,7 @@ metadata. Each case is suitable for an individual uncached XLSX workbook. All
 references explicitly use `Inputs!A1`-style addresses. No services or nondeterminism
 are involved, so no case is excluded from ordinary local calculation.
 
-The 314 fixtures comprise:
+The 316 fixtures comprise:
 
 - 40 numeric successes, 40 domain/coercion errors, 40 propagation errors, and 40
   nested expressions (every name has all four).
@@ -73,6 +72,7 @@ The 314 fixtures comprise:
 - Eight endpoint cases independently observed by the coordinator in native
   Microsoft Excel for Mac 16.114.4, explicitly marked `oracle: 'excel'`.
 - Two array-result cases exercising numeric results and per-cell errors.
+- Two impossible hypergeometric support cases returning #NUM!.
 
 Synthetic fixture inputs and numeric expectations are original project test data,
 distributed under the repository's MIT license. Most distribution expectations
