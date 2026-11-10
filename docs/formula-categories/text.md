@@ -87,7 +87,7 @@ metadata is supplied. No shared engine change is part of this commit.
 ## Fixtures, provenance, and verification
 
 `packages/formulas/test/fixtures/text.ts` exports the exact corpus `cases` schema.
-It contains 154 independently authored formula/expectation cases: 151 local and
+It contains 173 independently authored formula/expectation cases: 170 local and
 3 modeled host successes marked `requiresService:true, oracle:'host'`. It covers
 all 35 names, standalone and nested expressions, Inputs!A1 references, defaults,
 errors, Unicode, dates, arrays, overflow, and boundary values. Expected values
