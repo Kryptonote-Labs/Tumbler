@@ -31,7 +31,8 @@
     "@tumblerjs/word": "0.1.0-alpha.26",
     "rtf.js": "3.0.9",
     "@tumblerjs/pdf": "0.1.0-alpha.26",
-    "@tumblerjs/ooxml": "0.1.0-alpha.26"
+    "@tumblerjs/ooxml": "0.1.0-alpha.26",
+    "@tumblerjs/formulas": "0.1.0-alpha.26"
   },
   "peerDependencies": {
     "svelte": "^5.0.0",

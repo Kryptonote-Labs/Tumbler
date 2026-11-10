@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from "svelte";
+  import SpreadsheetFormulaAutocomplete from "./SpreadsheetFormulaAutocomplete.svelte";
   import type { SpreadsheetWorksheet } from "@tumblerjs/sheets";
   import { insertSpreadsheetFormulaFunction, spreadsheetFormulaBarEdit, spreadsheetFormulaBarText, type SpreadsheetFormulaBarEdit } from "./spreadsheet-formula-bar.ts";
   import { spreadsheetCellUsesTextFormat } from "./spreadsheet-edit.ts";
@@ -188,6 +189,13 @@
     onkeydown={handleKeydown}
   />
 </form>
+<SpreadsheetFormulaAutocomplete {input} disabled={!functionInsertable || !authoring || functionsOpen}
+  oncomplete={(value, caret) => {
+    draft = value;
+    selectionStart = selectionEnd = caret;
+    insertedReferenceSpan = undefined;
+    void tick().then(() => { input?.focus({ preventScroll: true }); input?.setSelectionRange(caret, caret); });
+  }} />
 
 <style>
   .formula-bar { display: grid; grid-template-columns: minmax(64px, auto) 32px minmax(0, 1fr); min-width: 0; height: 32px; box-sizing: border-box; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); border-bottom: 1px solid var(--tumbler-grid-line, #2a302a); font: 13px/1.3 system-ui, sans-serif; }

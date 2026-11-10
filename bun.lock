@@ -147,6 +147,7 @@
       "dependencies": {
         "@tumblerjs/charts": "0.1.0-alpha.26",
         "@tumblerjs/core": "0.1.0-alpha.26",
+        "@tumblerjs/formulas": "0.1.0-alpha.26",
         "@tumblerjs/ooxml": "0.1.0-alpha.26",
         "@tumblerjs/pdf": "0.1.0-alpha.26",
         "@tumblerjs/sheets": "0.1.0-alpha.26",

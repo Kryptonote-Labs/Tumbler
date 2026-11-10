@@ -71,3 +71,6 @@ export { default as WordPageLayoutDecorations } from './WordPageLayoutDecoration
 export { loadEmbeddedFonts, type EmbeddedFont, type EmbeddedFontContext } from './embedded-fonts.ts';
 
 export { default as SpreadsheetPrintView } from './SpreadsheetPrintView.svelte';
+
+export { spreadsheetFormulaCompletion, acceptSpreadsheetFormulaCompletion } from "./spreadsheet-formula-completion.ts";
+export type { SpreadsheetFormulaCompletion } from "./spreadsheet-formula-completion.ts";
