@@ -6,7 +6,6 @@ import { openSpreadsheetArtifact } from "../../packages/sheets/src/index.ts";
 import { assertScalarResult, buildFormulaDocument, expectedMatrix, loadCategoryCases, reference } from "./corpus.ts";
 import type { FormulaScalarValue } from "../../packages/formulas/src/index.ts";
 import { tokenizeFormula } from "../../packages/formulas/src/index.ts";
-import { nativeExcelFormula } from "./excel-spelling.ts";
 
 const args = process.argv.slice(2);
 const option = (name: string) => { const i = args.indexOf(name); return i < 0 ? undefined : args[i + 1]; };
@@ -18,7 +17,7 @@ const limit = Number(option("--limit") ?? "Infinity");
 const timeout = Number(option("--timeout-ms") ?? "60000");
 await mkdir(output, { recursive: true });
 const script = resolve(import.meta.dir, "recalculate.applescript");
-interface OracleResult { category: string; name: string; formula: string; status: string; detail?: string; version?: string; inputHash?: string; expectationHash?: string }
+interface OracleResult { category: string; name: string; formula: string; status: string; detail?: string; version?: string; inputHash?: string; expectationHash?: string; observedErrorLabels?: Record<string, string> }
 const results: OracleResult[] = [];
 const resumePath = option("--resume");
 const previous = new Map<string, OracleResult>();
@@ -49,8 +48,9 @@ for (const category of await loadCategoryCases()) {
     const bytes = buildFormulaDocument(fixture, true);
     const inputHash = createHash("sha256").update(bytes).digest("hex");
     const expectationHash = createHash("sha256").update(JSON.stringify([fixture.expected, fixture.tolerance])).digest("hex");
+    const errorAddresses = expectedMatrix(fixture).flatMap((row, r) => row.flatMap((value, c) => value.type === "error" ? [reference(r + 1, c + 1)] : []));
     const prior = previous.get(`${category.category}\u0000${fixture.name}`);
-    if (prior?.status === "pass" && prior.inputHash === inputHash && prior.expectationHash === expectationHash) { results.push(prior); continue; }
+    if (prior?.status === "pass" && prior.inputHash === inputHash && prior.expectationHash === expectationHash && errorAddresses.every(address => prior.observedErrorLabels?.[address] !== undefined)) { results.push(prior); continue; }
     total++;
     const directory = resolve(output, category.category);
     await mkdir(directory, { recursive: true });
@@ -61,13 +61,19 @@ for (const category of await loadCategoryCases()) {
     // Reusing an explicitly granted generated file avoids repeated Mac sandbox
     // file-picker grants. User documents are never opened or overwritten.
     await writeFile(workingFile, bytes);
-    const child = Bun.spawn(["osascript", script, workingFile, nativeExcelFormula(fixture.formula)], { stdout: "pipe", stderr: "pipe" });
+    const child = Bun.spawn(["osascript", script, workingFile, fixture.formula, ...errorAddresses], { stdout: "pipe", stderr: "pipe" });
     const timer = setTimeout(() => child.kill(), timeout);
     let version: string;
+    const observedErrorLabels: Record<string, string> = {};
     try {
       const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
       if (code !== 0) throw new Error(`Native recalculation failed (${code}): ${stderr.trim()}. A Mac Excel file-access dialog may need a one-time grant for the generated working file.`);
-      version = stdout.trim();
+      const [header, ...lines] = stdout.trim().split(/\r?\n/);
+      version = header!;
+      for (const line of lines) {
+        const separator = line.indexOf("\t"), address = line.slice(0, separator), label = line.slice(separator + 1);
+        if (separator > 0 && /^[A-Z]{1,3}[1-9]\d*$/.test(address) && /^#[A-Z][A-Z0-9_/!?]*$/.test(label)) observedErrorLabels[address] = label;
+      }
     } finally { clearTimeout(timer); }
     if (version === "ENTRY_REJECTED") {
       results.push({ ...base, status: "native-entry-rejected", detail: "Excel rejected formula entry before calculation; not counted as a matching native cell-error result." });
@@ -83,16 +89,16 @@ for (const category of await loadCategoryCases()) {
           const address = reference(row + 1, column + 1);
           const raw = artifact.worksheet.cell(address)?.value;
           const actual: FormulaScalarValue = raw === undefined || raw.type === "blank" ? { type: "blank" }
-            : raw.type === "error" ? { type: "error", value: raw.value as `#${string}` }
+            : raw.type === "error" ? { type: "error", value: (observedErrorLabels[address] ?? raw.value) as `#${string}` }
             : raw.type === "number" ? { type: "number", value: raw.value }
             : raw.type === "boolean" ? { type: "boolean", value: raw.value }
             : { type: "string", value: raw.value };
           assertScalarResult(actual, expected, `${fixture.name}!${address}`, fixture.tolerance);
         }
       }
-      results.push({ ...base, status: "pass", version });
+      results.push({ ...base, status: "pass", version, observedErrorLabels });
     } catch (cause) {
-      results.push({ ...base, status: "mismatch", version, detail: String(cause) });
+      results.push({ ...base, status: "mismatch", version, observedErrorLabels, detail: String(cause) });
     }
     if (total % 25 === 0) console.log(`${total} native workbooks checked; ${results.filter(result => result.status === "mismatch").length} mismatches`);
     await writeFile(resolve(output, "results.json"), JSON.stringify({ workingFile, results }, null, 2) + "\n");

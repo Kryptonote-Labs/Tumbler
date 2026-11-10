@@ -41,8 +41,8 @@ export interface FunctionContext {
   evaluateAggregate(expression: FormulaExpression): FunctionValue;
   /** Invoke a registered function with already evaluated values. */
   call(name: string, arguments_: readonly FunctionValue[]): FunctionValue;
-  /** Evaluate an expression in a child lexical scope (LET/LAMBDA). */
-  withBindings(bindings: ReadonlyMap<string, FunctionValue>, expression: FormulaExpression): FunctionValue;
+  /** Evaluate in a child lexical scope; optionally preserve reference provenance for LET/LAMBDA values and returns. */
+  withBindings(bindings: ReadonlyMap<string, FunctionValue>, expression: FormulaExpression, preserveReference?: boolean): FunctionValue;
   reference(expression: FormulaExpression): FunctionReference | FormulaScalarValue;
   readReference(reference: FunctionReference): FunctionValue;
   cell(address: FormulaCellAddress): FormulaCellInput | undefined;
