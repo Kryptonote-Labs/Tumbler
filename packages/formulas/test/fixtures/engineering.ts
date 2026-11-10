@@ -245,6 +245,8 @@ cases.push({name:"numerical grid BESSELY(32,1)",formula:"BESSELY(32,1)",expected
 cases.push({name:"besselk finite tiny positive input",formula:"BESSELK(1e-306,0)",expected:n(704.7069699718363),tolerance:1e-8});
 cases.push({name:"besselk finite subnormal input",formula:"BESSELK(5e-324,0)",expected:n(744.5560034370395),tolerance:1e-8});
 cases.push({name:"besselk finite near-overflow integral",formula:"BESSELK(3e-308,1)",expected:n(3.333333333333333e307),tolerance:3.4e295});
+cases.push({name:"besselk large order overflow is an error",formula:"BESSELK(1e-150,10)",expected:e("#NUM!")});
+cases.push({name:"besselk small large-order integral retains relative accuracy",formula:"BESSELK(2400,3000)",expected:n(4.925707791278618e-306),tolerance:5e-316});
 cases.push({name:"numerical grid BESSELY(32,5)",formula:"BESSELY(32,5)",expected:n(-0.13946415344761096),tolerance:2.7892830689522193e-11});
 cases.push({name:"numerical grid BESSELY(32,20)",formula:"BESSELY(32,20)",expected:n(-0.0019371698216246785),tolerance:3.8743396432493573e-13});
 cases.push({name:"numerical grid BESSELY(100,0)",formula:"BESSELY(100,0)",expected:n(-0.07724431336508318),tolerance:1.5448862673016637e-11});
