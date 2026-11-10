@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { FormulaScalarValue } from "../src/evaluator.ts";
 import type { FormulaExpression } from "../src/ast.ts";
 import { functionError, type FunctionContext, type FunctionValue } from "../src/function-runtime.ts";
 import { webFunctions } from "../src/functions/web.ts";
@@ -8,6 +9,7 @@ import { cases } from "./fixtures/web.ts";
 function context(cells: Record<string, FunctionValue> = {}, overrides: Partial<FunctionContext> = {}): FunctionContext {
   let operations = 0;
   const result: FunctionContext = {
+    evaluateAggregate(expression) { return this.evaluate(expression); },
     address: { sheet: "Results", row: 1, column: 1 }, source: { formulaCells: [], resolveSheet: (_, name) => name, cell: () => undefined },
     dateSystem: "1900", maxArrayCells: 10000, services: undefined,
     evaluate(expression) {
@@ -28,7 +30,7 @@ function context(cells: Record<string, FunctionValue> = {}, overrides: Partial<F
   };
   return result;
 }
-const s = (value: string): FunctionValue => ({ type: "string", value });
+const s = (value: string): FormulaScalarValue => ({ type: "string", value });
 function run(formula: string, ctx = context()): FunctionValue { return ctx.evaluate(parseFormula(formula).expression); }
 function input(name: string, values: FunctionValue[], overrides: Partial<FunctionContext> = {}): FunctionValue {
   const expressions: FormulaExpression[] = values.map((_, i) => ({ kind: "number", value: i, lexical: String(i), start: 0, end: 1 }));

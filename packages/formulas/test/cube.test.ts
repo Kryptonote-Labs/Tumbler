@@ -19,6 +19,7 @@ function setup(cells: Record<string, FunctionValue> = {}, maxArrayCells = 1000) 
     formulaCells: [], cell: () => undefined, resolveSheet: (_current, name) => name,
   };
   const context: FunctionContext = {
+    evaluateAggregate(expression) { return this.evaluate(expression); },
     address: { sheet: "Results", row: 1, column: 1 }, source, dateSystem: "1900", maxArrayCells,
     services: createCubeSnapshotServices(cubeFixtureConnections, { operation, maxArrayCells }),
     operation, evaluate: evaluate,

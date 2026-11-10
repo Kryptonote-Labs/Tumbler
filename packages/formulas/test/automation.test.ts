@@ -9,6 +9,7 @@ import { cases, modeledAutomationServices } from "./fixtures/automation.ts";
 function context(cells: Record<string, FormulaScalarValue> = {}, overrides: Partial<FunctionContext> = {}): FunctionContext {
   let operations = 0;
   const ctx: FunctionContext = {
+    evaluateAggregate(expression) { return this.evaluate(expression); },
     address: { sheet: "Results", row: 1, column: 1 },
     source: { formulaCells: [], cell: () => undefined, resolveSheet: (_current, name) => name },
     dateSystem: "1900", maxArrayCells: 100, services: undefined,

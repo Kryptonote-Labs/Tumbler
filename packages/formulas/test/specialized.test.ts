@@ -18,6 +18,7 @@ function context(cells: Record<string, FormulaScalarValue> = {}, services?: Form
     cell: address => ({ formula: undefined, value: cells[`${String.fromCharCode(64 + address.column)}${address.row}`] ?? { type: "blank" } }),
   };
   const ctx: FunctionContext = {
+    evaluateAggregate(expression) { return this.evaluate(expression); },
     address: { sheet: "Results", row: 1, column: 1 }, source, services,
     dateSystem: "1900", maxArrayCells: 100,
     operation(count = 1) { operations += count; if (operations > 1000) throw new Error("operation budget"); },
