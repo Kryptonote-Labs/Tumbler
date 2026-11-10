@@ -1,6 +1,6 @@
 <script lang="ts">
   import "./controls.css";
-  import { tick, untrack } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { createGridSelection, moveGridSelection, type GridDirection, type GridSelection } from "@tumblerjs/core";
   import type { ChartModel } from "@tumblerjs/charts";
   import {
@@ -30,15 +30,17 @@
     type SpreadsheetWorksheet,
   } from "@tumblerjs/sheets";
   import { calculateSpreadsheetViewport, type SpreadsheetViewport } from "./spreadsheet-viewport.ts";
-  import { composeSpreadsheetGridLayout, frozenAxisExtent, placeSpreadsheetDrawing } from "./spreadsheet-grid-layout.ts";
+  import { composeSpreadsheetGridLayout, frozenAxisExtent, placeSpreadsheetDrawing, type SpreadsheetGridLayout } from "./spreadsheet-grid-layout.ts";
   import { coerceSpreadsheetEditValue, spreadsheetCellUsesTextFormat, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
   import { measureMaximumDigitWidth, spreadsheetFontShorthand } from "./spreadsheet-font-metrics.ts";
   import { spreadsheetCellContentCss, spreadsheetCellCss } from "./spreadsheet-cell-style.ts";
   import { spreadsheetTextOverflowWidth } from "./spreadsheet-text-overflow.ts";
   import { spreadsheetEmptyRegionStart } from "./spreadsheet-empty-region.ts";
   import { zoomGesture, type ZoomGesture } from "./zoom-gesture.ts";
+  import { spreadsheetWheelScroll } from "./spreadsheet-wheel.ts";
   import { spreadsheetScrollAxis } from "./spreadsheet-scroll.ts";
   import { spreadsheetSelectionRects, spreadsheetSelectionRanges } from "./spreadsheet-selection.ts";
+  import { spreadsheetCellLayer } from "./spreadsheet-cell-layer.ts";
   import SpreadsheetDrawingObject from "./SpreadsheetDrawingObject.svelte";
   import SpreadsheetChart from "./SpreadsheetChart.svelte";
 
@@ -106,6 +108,7 @@
     columnWidth = 112,
   }: Props = $props();
 
+  const gridId = $props.id();
   let scroller = $state<HTMLDivElement>();
   let viewportWidth = $state(800);
   let viewportHeight = $state(500);
@@ -131,7 +134,8 @@
   };
   const rowHeaderWidth = $derived(showHeadings ? 52 : 0);
   const columnHeaderHeight = $derived(showHeadings ? 28 : 0);
-  let viewCalculation = $derived(calculation === undefined ? undefined : calculateSpreadsheetWorksheet(worksheet, {
+  // The host snapshot already contains the calculation unless local table views need a projection.
+  let viewCalculation = $derived(calculation === undefined || worksheet.tables.length === 0 ? calculation : calculateSpreadsheetWorksheet(worksheet, {
     tableViewStates: tableStates,
   }));
   let tableProjections = $derived(worksheet.tables.map((table) => ({
@@ -225,29 +229,39 @@
   let frozenColumns = $derived(Math.min(columnCount, Math.max(0, Math.floor(frozenPane?.xSplit ?? 0))));
   let frozenRowsHeight = $derived(frozenAxisExtent(rowGeometry, frozenRows));
   let frozenColumnsWidth = $derived(frozenAxisExtent(columnGeometry, frozenColumns));
+
   let previousViewport: SpreadsheetViewport | undefined;
-  let viewport = $derived.by(() => previousViewport = calculateSpreadsheetViewport({
-    rowCount,
-    columnCount,
-    rowHeight,
-    columnWidth,
-    scrollTop: Math.max(0, scrollTop - columnHeaderHeight),
-    scrollLeft: Math.max(0, scrollLeft - rowHeaderWidth),
-    viewportHeight,
-    viewportWidth,
-    overscan: 3,
-    rowGeometry,
-    columnGeometry,
-  }, previousViewport));
-  let layout = $derived(composeSpreadsheetGridLayout({ viewport, rowGeometry, columnGeometry, frozenRows, frozenColumns, merges: worksheet.merges }));
+  let renderedRows = $state.raw<SpreadsheetGridLayout["rows"]>([]);
+  let renderedColumns = $state.raw<SpreadsheetGridLayout["columns"]>([]);
+  let renderedMerges = $state.raw<SpreadsheetGridLayout["merges"]>([]);
+  $effect.pre(() => {
+    const viewport = calculateSpreadsheetViewport({
+      rowCount, columnCount, rowHeight, columnWidth,
+      scrollTop: Math.max(0, scrollTop - columnHeaderHeight), scrollLeft: Math.max(0, scrollLeft - rowHeaderWidth),
+      viewportHeight, viewportWidth,
+      overscan: Math.max(3, Math.ceil(4 / scale)), rowGeometry, columnGeometry,
+    }, previousViewport);
+    previousViewport = viewport;
+    const layout = composeSpreadsheetGridLayout({ viewport, rowGeometry, columnGeometry, frozenRows, frozenColumns, merges: worksheet.merges });
+    renderedRows = layout.rows;
+    renderedColumns = layout.columns;
+    renderedMerges = layout.merges;
+  });
+  // Keep child coordinates within browser layout limits even near Excel's last row.
+  let rowOrigin = $state(0);
+  let columnOrigin = $state(0);
+  $effect.pre(() => {
+    rowOrigin = Math.floor(scrollTop / 65_536) * 65_536;
+    columnOrigin = Math.floor(scrollLeft / 65_536) * 65_536;
+  });
   const selectionRects = $derived(spreadsheetSelectionRanges(selection.range,projectedRows).flatMap(range=>spreadsheetSelectionRects({rowHeaderWidth,columnHeaderHeight,range,rows:rowGeometry,columns:columnGeometry,scrollTop,scrollLeft,width:viewportWidth,height:viewportHeight,frozenRows,frozenColumns})));
   const remoteRects = $derived(remoteSelections.map(peer => ({ ...peer, rects: spreadsheetSelectionRanges(peer.range,projectedRows).flatMap(range=>spreadsheetSelectionRects({rowHeaderWidth,columnHeaderHeight,range,rows:rowGeometry,columns:columnGeometry,scrollTop,scrollLeft,width:viewportWidth,height:viewportHeight,frozenRows,frozenColumns})) })));
-  let maximumVisibleColumn = $derived(layout.columns.at(-1)?.index ?? 1);
+  let maximumVisibleColumn = $derived(renderedColumns.at(-1)?.index ?? 1);
   let emptyRegionStart = $derived(spreadsheetEmptyRegionStart(worksheet));
   let emptyCorner = $derived.by(() => {
     if (emptyRegionStart === undefined) return undefined;
-    const rows = layout.rows.filter(row => row.index > Math.max(emptyRegionStart.row, frozenRows));
-    const columns = layout.columns.filter(column => column.index > Math.max(emptyRegionStart.column, frozenColumns));
+    const rows = renderedRows.filter(row => row.index > Math.max(emptyRegionStart.row, frozenRows));
+    const columns = renderedColumns.filter(column => column.index > Math.max(emptyRegionStart.column, frozenColumns));
     if (rows.length === 0 || columns.length === 0) return undefined;
     const left = columns[0]!.start;
     const top = rows[0]!.start;
@@ -264,9 +278,54 @@
     return emptyRegionStart !== undefined && row > Math.max(emptyRegionStart.row, frozenRows) && column > Math.max(emptyRegionStart.column, frozenColumns);
   }
 
-  let protectedColumns = $derived(emptyRegionStart === undefined ? layout.columns : layout.columns.filter(column => column.index <= Math.max(emptyRegionStart!.column, frozenColumns)));
-  function columnsForRow(row: number) {
-    return emptyRegionStart !== undefined && row > Math.max(emptyRegionStart.row, frozenRows) ? protectedColumns : layout.columns;
+  const denseGrid = $derived(renderedRows.length * renderedColumns.length > 1500);
+  const verticalText = $derived(worksheet.styles.cellFormats.some(style => style.alignment.textRotation === 255));
+  let specialCells = $derived.by(() => {
+    if (!denseGrid && !editing) return [];
+    const cells = new Map<string, { row: (typeof renderedRows)[number]; column: (typeof renderedColumns)[number]; sourceRow: number; reference: string }>();
+    const add = (address: { row: number; column: number }) => {
+      const row = renderedRows.find(row => sourceRow(row.index) === address.row);
+      const column = renderedColumns.find(column => column.index === address.column);
+      if (!row || !column || row.index <= frozenRows || column.index <= frozenColumns || isEmptyCorner(row.index, column.index)) return;
+      const reference = formatCellReference(address);
+      if (worksheet.mergedRange(reference) === undefined) cells.set(reference, { row, column, sourceRow: address.row, reference });
+    };
+    if (denseGrid) { add(selection.focus); add(selection.anchor); }
+    if (editing) add(parseCellReference(editing));
+    if (denseGrid && (worksheet.hyperlinks.length || worksheet.tables.length || verticalText)) {
+      for (const row of renderedRows) {
+        const source = sourceRow(row.index);
+        if (source === undefined) continue;
+        for (const column of renderedColumns) {
+          const address = { row: source, column: column.index };
+          if (worksheet.hyperlink(address) !== undefined || tableHeader(source, column.index) !== undefined || worksheet.cellStyle(address).alignment.textRotation === 255) add(address);
+        }
+      }
+    }
+    return [...cells.values()];
+  });
+  const activeOwner = $derived(worksheet.mergedRange(selection.focus)?.start ?? selection.focus);
+  const activeReference = $derived(formatCellReference(activeOwner));
+  const activeCellId = $derived(denseGrid && (
+    specialCells.some(cell => cell.reference === activeReference) ||
+    renderedMerges.some(merge => formatCellReference(merge.range.start) === activeReference) ||
+    (renderedRows.some(row => sourceRow(row.index) === activeOwner.row) && renderedColumns.some(column => column.index === activeOwner.column) &&
+      (activeOwner.row <= frozenRows || activeOwner.column <= frozenColumns || isEmptyCorner(activeOwner.row, activeOwner.column)))
+  ) ? `${gridId}-${activeReference}` : undefined);
+
+  function bodyCell(event: MouseEvent) {
+    const cell = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-reference]') : null;
+    if (cell?.dataset.reference) return parseCellReference(cell.dataset.reference);
+    if (!scroller) return undefined;
+    const rect = scroller.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / scale + scrollLeft - rowHeaderWidth;
+    const y = (event.clientY - rect.top) / scale + scrollTop - columnHeaderHeight;
+    if (x < 0 || y < 0) return undefined;
+    const visual = rowGeometry.indexAt(y);
+    const column = columnGeometry.indexAt(x);
+    if (isEmptyCorner(visual, column)) return undefined;
+    const row = sourceRow(visual);
+    return row === undefined ? undefined : { row, column };
   }
 
   function emptyCellAt(event: MouseEvent) {
@@ -416,7 +475,14 @@
   }
 
 
+  let wheelScroll: ReturnType<typeof spreadsheetWheelScroll> | undefined;
+  onMount(() => {
+    wheelScroll = spreadsheetWheelScroll((x, y) => setScroll(scrollLeft + x, scrollTop + y));
+    return () => { wheelScroll?.cancel(); wheelScroll = undefined; };
+  });
+
   function setScroll(left: number, top: number) {
+    wheelScroll?.cancel();
     if (!scroller) return;
     scrollLeft = horizontalScroll.logical(horizontalScroll.physical(left));
     scrollTop = verticalScroll.logical(verticalScroll.physical(top));
@@ -430,8 +496,8 @@
     if (event.ctrlKey || event.metaKey || (!horizontalScroll.compressed && !verticalScroll.compressed)) return;
     event.preventDefault();
     const unit = event.deltaMode === 1 ? rowHeight : event.deltaMode === 2 ? viewportHeight : 1;
-    setScroll(scrollLeft + (event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX) * unit / scale,
-      scrollTop + (event.shiftKey && !event.deltaX ? 0 : event.deltaY) * unit / scale);
+    wheelScroll?.add((event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX) * unit / scale,
+      (event.shiftKey && !event.deltaX ? 0 : event.deltaY) * unit / scale);
   }
 
   function cellPointerDown(event: PointerEvent, row: number, column: number) {
@@ -444,7 +510,7 @@
   }
 
   function cellPointerEnter(event: PointerEvent, row: number, column: number) {
-    if (selectingPointer !== event.pointerId || (event.buttons & 1) === 0) return;
+    if (selectingPointer !== event.pointerId || (event.buttons & 1) === 0 || selection.focus.row === row && selection.focus.column === column) return;
     event.preventDefault();
     selectionDragged = true;
     select(row, column, true);
@@ -722,14 +788,15 @@
     class:table-header={header !== undefined}
     class:text-overflow={overflowWidth !== undefined}
     class="cell"
+    id={`${gridId}-${reference}`}
     role="gridcell"
     data-reference={reference}
     aria-rowindex={sourceRow}
     aria-colindex={column}
     tabindex="-1"
     aria-selected={selected(sourceRow, column)}
-    style:left={`${zIndex === 1 ? left - scrollLeft + physicalScrollLeft : left}px`}
-    style:top={`${zIndex === 1 ? top - scrollTop + physicalScrollTop : top}px`}
+    style:left={`${zIndex === 1 ? left - columnOrigin : left}px`}
+    style:top={`${zIndex === 1 ? top - rowOrigin : top}px`}
     style:width={`${width}px`}
     style:height={`${height}px`}
     style:z-index={overflowWidth === undefined ? zIndex : zIndex + 1}
@@ -818,12 +885,13 @@
   class:no-gridlines={!showGridlines}
   class:no-headings={!showHeadings}
   role="grid"
+  aria-activedescendant={activeCellId}
   aria-rowcount={rowCount}
   aria-colcount={columnCount}
   tabindex="0"
   oncontextmenu={(event) => {
     if (!(event.target instanceof Element) || !event.target.closest('.canvas') || event.target.closest('.chart-frame')) return;
-    const cell = emptyCellAt(event);
+    const cell = event.target.closest('.body-cells') ? bodyCell(event) : emptyCellAt(event);
     if (cell && (cell.row < selection.range.start.row || cell.row > selection.range.end.row || cell.column < selection.range.start.column || cell.column > selection.range.end.column)) {
       selection = createGridSelection(cell);
       onselectionchange?.(selection);
@@ -846,60 +914,80 @@
       onclick={(event) => { const cell = emptyCellAt(event); if (cell !== undefined) cellClick(event, cell.row, cell.column); }}
       ondblclick={(event) => { const cell = emptyCellAt(event); if (cell !== undefined) beginEdit(cell.row, cell.column); }}
     >
+      <div class="scrolling-cells" style:transform={`translate(${physicalScrollLeft - scrollLeft + columnOrigin}px,${physicalScrollTop - scrollTop + rowOrigin}px)`}>
       {#if emptyCorner !== undefined}
-        <svg class="empty-grid" aria-hidden="true" width={emptyCorner.width} height={emptyCorner.height} style:left={`${rowHeaderWidth + emptyCorner.left - scrollLeft + physicalScrollLeft}px`} style:top={`${columnHeaderHeight + emptyCorner.top - scrollTop + physicalScrollTop}px`}>
+        <svg class="empty-grid" aria-hidden="true" width={emptyCorner.width} height={emptyCorner.height} style:left={`${rowHeaderWidth + emptyCorner.left - columnOrigin}px`} style:top={`${columnHeaderHeight + emptyCorner.top - rowOrigin}px`}>
           <path d={emptyCorner.lines} />
         </svg>
-        {@const startRow = Math.max(selection.range.start.row, emptyRegionStart!.row + 1, frozenRows + 1, layout.rows[0]?.index ?? 1)}
-        {@const startColumn = Math.max(selection.range.start.column, emptyRegionStart!.column + 1, frozenColumns + 1, layout.columns[0]?.index ?? 1)}
-        {@const endRow = Math.min(selection.range.end.row, layout.rows.at(-1)?.index ?? startRow)}
-        {@const endColumn = Math.min(selection.range.end.column, layout.columns.at(-1)?.index ?? startColumn)}
+        {@const startRow = Math.max(selection.range.start.row, emptyRegionStart!.row + 1, frozenRows + 1, renderedRows[0]?.index ?? 1)}
+        {@const startColumn = Math.max(selection.range.start.column, emptyRegionStart!.column + 1, frozenColumns + 1, renderedColumns[0]?.index ?? 1)}
+        {@const endRow = Math.min(selection.range.end.row, renderedRows.at(-1)?.index ?? startRow)}
+        {@const endColumn = Math.min(selection.range.end.column, renderedColumns.at(-1)?.index ?? startColumn)}
         {#if startRow <= endRow && startColumn <= endColumn}
-          <div class="empty-selection" style:left={`${rowHeaderWidth + columnGeometry.start(startColumn) - scrollLeft + physicalScrollLeft}px`} style:top={`${columnHeaderHeight + rowGeometry.start(startRow) - scrollTop + physicalScrollTop}px`}
+          <div class="empty-selection" style:left={`${rowHeaderWidth + columnGeometry.start(startColumn) - columnOrigin}px`} style:top={`${columnHeaderHeight + rowGeometry.start(startRow) - rowOrigin}px`}
             style:width={`${columnGeometry.start(endColumn) + columnGeometry.size(endColumn) - columnGeometry.start(startColumn)}px`}
             style:height={`${rowGeometry.start(endRow) + rowGeometry.size(endRow) - rowGeometry.start(startRow)}px`}></div>
         {/if}
-        {#if isEmptyCorner(selection.focus.row, selection.focus.column) && selection.focus.row >= (layout.rows[0]?.index ?? 1) && selection.focus.row <= (layout.rows.at(-1)?.index ?? 0) && selection.focus.column >= (layout.columns[0]?.index ?? 1) && selection.focus.column <= (layout.columns.at(-1)?.index ?? 0)}
+        {#if isEmptyCorner(selection.focus.row, selection.focus.column) && selection.focus.row >= (renderedRows[0]?.index ?? 1) && selection.focus.row <= (renderedRows.at(-1)?.index ?? 0) && selection.focus.column >= (renderedColumns[0]?.index ?? 1) && selection.focus.column <= (renderedColumns.at(-1)?.index ?? 0)}
           {@const focus = selection.focus}
           <div class="empty-corner-cell" class:empty-focus={editing === undefined}>
             {@render gridCell(formatCellReference(focus), focus.row, focus.column, rowHeaderWidth + columnGeometry.start(focus.column), columnHeaderHeight + rowGeometry.start(focus.row), columnGeometry.size(focus.column), rowGeometry.size(focus.row), 1)}
           </div>
         {/if}
       {/if}
-      {#if isEmptyCorner(selection.anchor.row,selection.anchor.column) && (selection.anchor.row !== selection.focus.row || selection.anchor.column !== selection.focus.column) && selection.anchor.row >= (layout.rows[0]?.index ?? 1) && selection.anchor.row <= (layout.rows.at(-1)?.index ?? 0) && selection.anchor.column >= (layout.columns[0]?.index ?? 1) && selection.anchor.column <= (layout.columns.at(-1)?.index ?? 0)}
+      {#if isEmptyCorner(selection.anchor.row,selection.anchor.column) && (selection.anchor.row !== selection.focus.row || selection.anchor.column !== selection.focus.column) && selection.anchor.row >= (renderedRows[0]?.index ?? 1) && selection.anchor.row <= (renderedRows.at(-1)?.index ?? 0) && selection.anchor.column >= (renderedColumns[0]?.index ?? 1) && selection.anchor.column <= (renderedColumns.at(-1)?.index ?? 0)}
         {@const anchor=selection.anchor}
         {@render gridCell(formatCellReference(anchor),anchor.row,anchor.column,rowHeaderWidth+columnGeometry.start(anchor.column),columnHeaderHeight+rowGeometry.start(anchor.row),columnGeometry.size(anchor.column),rowGeometry.size(anchor.row),1)}
       {/if}
-      {#each layout.rows as row (row.index)}
-        {#each columnsForRow(row.index) as column (column.index)}
+      {#if denseGrid}
+      <!-- Ordinary cells use delegated interaction and no per-cell reactive subscriptions. -->
+      <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+      <div class="body-cells"
+        use:spreadsheetCellLayer={{ scrollTop, scrollLeft, viewportWidth, viewportHeight, scale, gridlines: showGridlines, worksheet, calculation: viewCalculation, conditional: conditionalStyles,
+          rows: renderedRows, columns: renderedColumns, columnGeometry, projectedRows, selection, editing,
+          frozenRows, frozenColumns, rowOrigin, columnOrigin, rowHeaderWidth, columnHeaderHeight, emptyRegion: emptyRegionStart }}
+        onpointerdown={event => { const cell = bodyCell(event); if (cell) cellPointerDown(event, cell.row, cell.column); }}
+        onpointermove={event => { const cell = bodyCell(event); if (cell) cellPointerEnter(event, cell.row, cell.column); }}
+        onclick={event => { const cell = bodyCell(event); if (cell) cellClick(event, cell.row, cell.column); }}
+        ondblclick={event => { const cell = bodyCell(event); if (cell) beginEdit(cell.row, cell.column); }}
+
+      ></div>
+      {:else}
+      {#each renderedRows as row (row.index)}
+        {#each renderedColumns as column (column.index)}
           {@const projectedRow = sourceRow(row.index)}
           {@const reference = formatCellReference({ row: projectedRow ?? row.index, column: column.index })}
-          {#if row.index > frozenRows && column.index > frozenColumns && projectedRow !== undefined && worksheet.mergedRange(reference) === undefined}
+          {#if row.index > frozenRows && column.index > frozenColumns && projectedRow !== undefined && !isEmptyCorner(row.index, column.index) && reference !== editing && worksheet.mergedRange(reference) === undefined}
             {@render gridCell(reference, projectedRow, column.index, rowHeaderWidth + column.start, columnHeaderHeight + row.start, column.size, row.size, 1)}
           {/if}
         {/each}
       {/each}
-      {#each layout.merges as merge (`${merge.range.start.row}:${merge.range.start.column}`)}
+      {/if}
+      {#each specialCells as cell (cell.reference)}
+        {@render gridCell(cell.reference, cell.sourceRow, cell.column.index, rowHeaderWidth + cell.column.start, columnHeaderHeight + cell.row.start, cell.column.size, cell.row.size, 1)}
+      {/each}
+      {#each renderedMerges as merge (`${merge.range.start.row}:${merge.range.start.column}`)}
         {#if merge.range.start.row > frozenRows && merge.range.start.column > frozenColumns}
           {@const reference = formatCellReference(merge.range.start)}
           {@render gridCell(reference, merge.range.start.row, merge.range.start.column, rowHeaderWidth + merge.left, columnHeaderHeight + merge.top, merge.width, merge.height, 1)}
         {/if}
       {/each}
       {#each visibleObjects.filter(frame => frame.placement.region === "body") as frame (frame.object.elementId)}
-        <button type="button" aria-label={`Select ${frame.object.name}`} class="drawing-object" style:transform-origin="top left" style:transform={drawingTransform(frame.object.objectId)} data-drawing-id={frame.object.objectId} onclick={(event)=>{event.stopPropagation();onobjectselectionchange?.(frame.object.objectId);}} class:selected={objectSelection===frame.object.objectId} onpointerdown={event=>drawingPointerDown(event,frame.object.objectId,frame.bounds)} style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${frame.placement.left - scrollLeft + physicalScrollLeft}px`} style:top={`${frame.placement.top - scrollTop + physicalScrollTop}px`} style:width={`${Math.max(1, frame.bounds.width)}px`} style:height={`${Math.max(1, frame.bounds.height)}px`}>
+        <button type="button" aria-label={`Select ${frame.object.name}`} class="drawing-object" style:transform-origin="top left" style:transform={drawingTransform(frame.object.objectId)} data-drawing-id={frame.object.objectId} onclick={(event)=>{event.stopPropagation();onobjectselectionchange?.(frame.object.objectId);}} class:selected={objectSelection===frame.object.objectId} onpointerdown={event=>drawingPointerDown(event,frame.object.objectId,frame.bounds)} style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${frame.placement.left - columnOrigin}px`} style:top={`${frame.placement.top - rowOrigin}px`} style:width={`${Math.max(1, frame.bounds.width)}px`} style:height={`${Math.max(1, frame.bounds.height)}px`}>
           <SpreadsheetDrawingObject object={frame.object} />
           {#if !readonly && objectSelection===frame.object.objectId}<span class="drawing-resize" data-resize></span>{/if}
         </button>
       {/each}
       {#each visibleCharts.filter((chart) => chart.placement.region === "body") as chart (chart.frame.anchor.elementId)}
-        {@render chartFrame(chart, chart.placement.left - scrollLeft + physicalScrollLeft, chart.placement.top - scrollTop + physicalScrollTop)}
+        {@render chartFrame(chart, chart.placement.left - columnOrigin, chart.placement.top - rowOrigin)}
       {/each}
+      </div>
     </div>
   </div>
   {#if frozenRowsHeight > 0}
     <div class="frozen-row-pane" style:height={`${frozenRowsHeight}px`}>
-      {#each layout.rows.filter((row) => row.index <= frozenRows) as row (row.index)}
-        {#each layout.columns as column (column.index)}
+      {#each renderedRows.filter((row) => row.index <= frozenRows) as row (row.index)}
+        {#each renderedColumns as column (column.index)}
           {@const projectedRow = sourceRow(row.index)}
           {@const reference = formatCellReference({ row: projectedRow ?? row.index, column: column.index })}
           {#if projectedRow !== undefined && worksheet.mergedRange(reference) === undefined}
@@ -907,7 +995,7 @@
           {/if}
         {/each}
       {/each}
-      {#each layout.merges.filter((merge) => merge.range.start.row <= frozenRows) as merge (`${merge.range.start.row}:${merge.range.start.column}`)}
+      {#each renderedMerges.filter((merge) => merge.range.start.row <= frozenRows) as merge (`${merge.range.start.row}:${merge.range.start.column}`)}
         {@const reference = formatCellReference(merge.range.start)}
         {@render gridCell(reference, merge.range.start.row, merge.range.start.column, merge.left - (merge.range.start.column <= frozenColumns ? 0 : scrollLeft), merge.top, merge.width, merge.height, 2)}
       {/each}
@@ -924,8 +1012,8 @@
   {/if}
   {#if frozenColumnsWidth > 0}
     <div class="frozen-column-pane" style:width={`${frozenColumnsWidth}px`} style:top={`${columnHeaderHeight + frozenRowsHeight}px`}>
-      {#each layout.rows.filter((row) => row.index > frozenRows) as row (row.index)}
-        {#each layout.columns.filter((column) => column.index <= frozenColumns) as column (column.index)}
+      {#each renderedRows.filter((row) => row.index > frozenRows) as row (row.index)}
+        {#each renderedColumns.filter((column) => column.index <= frozenColumns) as column (column.index)}
           {@const projectedRow = sourceRow(row.index)}
           {@const reference = formatCellReference({ row: projectedRow ?? row.index, column: column.index })}
           {#if projectedRow !== undefined && worksheet.mergedRange(reference) === undefined}
@@ -933,7 +1021,7 @@
           {/if}
         {/each}
       {/each}
-      {#each layout.merges.filter((merge) => merge.range.start.row > frozenRows && merge.range.start.column <= frozenColumns) as merge (`${merge.range.start.row}:${merge.range.start.column}`)}
+      {#each renderedMerges.filter((merge) => merge.range.start.row > frozenRows && merge.range.start.column <= frozenColumns) as merge (`${merge.range.start.row}:${merge.range.start.column}`)}
         {@const reference = formatCellReference(merge.range.start)}
         {@render gridCell(reference, merge.range.start.row, merge.range.start.column, merge.left, merge.top - scrollTop - frozenRowsHeight, merge.width, merge.height, 2)}
       {/each}
@@ -950,7 +1038,7 @@
   {/if}
   <div class="column-gutter">
     <div class="scrolling-column-headers" style:left={`${frozenColumnsWidth}px`}>
-      {#each layout.columns.filter((column) => column.index > frozenColumns) as column (column.index)}
+      {#each renderedColumns.filter((column) => column.index > frozenColumns) as column (column.index)}
         <div
           data-column={column.index} tabindex="0" role="button" onclick={(event) => selectHeader(column.index, false, event.shiftKey)} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); selectHeader(column.index, false, event.shiftKey); } }} aria-label={`Column ${columnLabel(column.index)}`} class="column-header" class:selected-header={column.index >= selection.range.start.column && column.index <= selection.range.end.column}
           style:left={`${column.start - scrollLeft - frozenColumnsWidth}px`}
@@ -960,7 +1048,7 @@
     </div>
     {#if frozenColumnsWidth > 0}
       <div class="frozen-column-headers" style:width={`${frozenColumnsWidth}px`}>
-        {#each layout.columns.filter((column) => column.index <= frozenColumns) as column (column.index)}
+        {#each renderedColumns.filter((column) => column.index <= frozenColumns) as column (column.index)}
           <div data-column={column.index} tabindex="0" role="button" onclick={(event) => selectHeader(column.index, false, event.shiftKey)} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); selectHeader(column.index, false, event.shiftKey); } }} aria-label={`Column ${columnLabel(column.index)}`} class="column-header" class:selected-header={column.index >= selection.range.start.column && column.index <= selection.range.end.column} style:left={`${column.start}px`} style:width={`${column.size}px`}>{columnLabel(column.index)}</div>
         {/each}
       </div>
@@ -968,7 +1056,7 @@
   </div>
   <div class="row-gutter">
     <div class="scrolling-row-headers" style:top={`${frozenRowsHeight}px`}>
-      {#each layout.rows.filter((row) => row.index > frozenRows) as row (row.index)}
+      {#each renderedRows.filter((row) => row.index > frozenRows) as row (row.index)}
         <div
           data-row={sourceRow(row.index) ?? row.index} tabindex="0" role="button" onclick={(event) => selectHeader(sourceRow(row.index) ?? row.index, true, event.shiftKey)} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); selectHeader(sourceRow(row.index) ?? row.index, true, event.shiftKey); } }} aria-label={`Row ${sourceRow(row.index) ?? row.index}`} class="row-header" class:selected-header={(sourceRow(row.index) ?? 0) >= selection.range.start.row && (sourceRow(row.index) ?? 0) <= selection.range.end.row}
           style:top={`${row.start - scrollTop - frozenRowsHeight}px`}
@@ -978,7 +1066,7 @@
     </div>
     {#if frozenRowsHeight > 0}
       <div class="frozen-row-headers" style:height={`${frozenRowsHeight}px`}>
-        {#each layout.rows.filter((row) => row.index <= frozenRows) as row (row.index)}
+        {#each renderedRows.filter((row) => row.index <= frozenRows) as row (row.index)}
           <div data-row={sourceRow(row.index) ?? row.index} tabindex="0" role="button" onclick={(event) => selectHeader(sourceRow(row.index) ?? row.index, true, event.shiftKey)} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); selectHeader(sourceRow(row.index) ?? row.index, true, event.shiftKey); } }} aria-label={`Row ${sourceRow(row.index) ?? row.index}`} class="row-header" class:selected-header={(sourceRow(row.index) ?? 0) >= selection.range.start.row && (sourceRow(row.index) ?? 0) <= selection.range.end.row} style:top={`${row.start}px`} style:height={`${row.size}px`}>{row.index}</div>
         {/each}
       </div>
@@ -1029,13 +1117,21 @@
   .remote-selection.right-edge { border-right-width: 2px; }
   .remote-name { position: absolute; left: -2px; top: 0; padding: 2px 5px; background: var(--peer-color); color: white; font-size: 11px; white-space: nowrap; border-radius: 3px 3px 0 0; }
 
+  .scrolling-cells {
+    will-change: transform;
+    contain: layout style;
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+  .body-cells :global(.painted-row) { position: absolute; pointer-events: auto; z-index: 0; }
   .grid-viewport { width: 100%; height: 100%; overflow: hidden; touch-action: pan-x pan-y; }
   .tumbler-grid { transform-origin: top left; touch-action: pan-x pan-y; position: relative; overflow: hidden; color: var(--tumbler-grid-fg, #d8e2d8); background: var(--tumbler-grid-bg, #111411); outline: none; font: 13px/1.3 system-ui, sans-serif; user-select: none; -webkit-user-select: none; }
   .grid-scroller { width: 100%; height: 100%; overflow: auto; overscroll-behavior: contain; }
   .empty-grid { background: var(--tumbler-sheet-bg, #ffffff); position: absolute; pointer-events: none; fill: none; stroke: var(--tumbler-sheet-line, #d9ded9); stroke-width: 1; }
   .empty-selection { position: absolute; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(0, 0, 0, 0.16)); }
   .empty-focus { pointer-events: none; }
-  .cell.active.selected::after { background: transparent; }
+  .tumbler-grid :global(.cell.active.selected::after) { background: transparent; }
   .drawing-resize { position:absolute;right:0;bottom:0;width:10px;height:10px;background:var(--tumbler-grid-accent,#42ff53);cursor:nwse-resize;z-index:1; }
   .drawing-object.selected { outline:2px solid var(--tumbler-grid-accent,#42ff53); }
   .drawing-object { padding:0;border:0;background:transparent;pointer-events:auto; }
@@ -1044,8 +1140,8 @@
   .frozen-row-pane, .frozen-column-pane { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; background: var(--tumbler-sheet-bg, #ffffff); }
   .frozen-row-pane { left: var(--tumbler-header-width); right: 0; top: var(--tumbler-header-height); }
   .frozen-column-pane { left: var(--tumbler-header-width); bottom: 0; }
-  .frozen-row-pane .cell, .frozen-column-pane .cell, .frozen-row-pane .chart-frame, .frozen-column-pane .chart-frame { pointer-events: auto; }
-  .no-gridlines .cell { border-color: transparent; }
+  .frozen-row-pane :global(.cell), .frozen-column-pane :global(.cell), .frozen-row-pane .chart-frame, .frozen-column-pane .chart-frame { pointer-events: auto; }
+  .no-gridlines :global(.cell) { border-color: transparent; }
   .no-gridlines .empty-grid { stroke: transparent; }
   .no-headings .column-gutter, .no-headings .row-gutter, .no-headings .corner { visibility: hidden; }
   .column-header, .row-header { pointer-events: auto; }
@@ -1060,22 +1156,22 @@
   .corner { left: 0; top: 0; width: 52px; height: 28px; border-right-width: 1px; border-bottom-width: 1px; z-index: 4; pointer-events: none; }
   .column-header { top: 0; height: 28px; display: grid; place-items: center; border-right-width: 1px; border-bottom-width: 1px; }
   .row-header { left: 0; width: 52px; display: grid; place-items: center; border-right-width: 1px; border-bottom-width: 1px; }
-  .cell { position: absolute; z-index: 1; box-sizing: border-box; display: flex; align-items: flex-end; overflow: hidden; padding: 2px 8px; white-space: nowrap; text-overflow: ellipsis; color: var(--tumbler-sheet-fg, #111111); border-right: 1px solid var(--tumbler-sheet-line, #d9ded9); border-bottom: 1px solid var(--tumbler-sheet-line, #d9ded9); background: var(--tumbler-sheet-bg, #ffffff); }
-  .cell.text-overflow { overflow: visible; }
-  .cell > .overflow-content { flex: none; max-width: none; overflow: hidden; pointer-events: none; }
+  .tumbler-grid :global(.cell) { position: absolute; z-index: 1; box-sizing: border-box; display: flex; align-items: flex-end; overflow: hidden; padding: 2px 8px; white-space: nowrap; text-overflow: ellipsis; color: var(--tumbler-sheet-fg, #111111); border-right: 1px solid var(--tumbler-sheet-line, #d9ded9); border-bottom: 1px solid var(--tumbler-sheet-line, #d9ded9); background: var(--tumbler-sheet-bg, #ffffff); }
+  .tumbler-grid :global(.cell.text-overflow) { overflow: visible; }
+  .tumbler-grid :global(.cell > .overflow-content) { flex: none; max-width: none; overflow: hidden; pointer-events: none; }
   .chart-frame { position: absolute; z-index: 2; overflow: hidden; box-sizing: border-box; padding: 0; border: 0; outline: 0; background: transparent; cursor: default; }
   .chart-frame.selected, .chart-frame:focus-visible { box-shadow: inset 0 0 0 2px var(--tumbler-grid-accent, #42ff53); }
-  .cell.selected::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(0, 0, 0, 0.16)); }
-  .cell.focused { z-index: 2; }
-  .cell.active { z-index: 2; }
+  .tumbler-grid :global(.cell.selected::after) { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(0, 0, 0, 0.16)); }
+  .tumbler-grid :global(.cell.focused) { z-index: 2; }
+  .tumbler-grid :global(.cell.active) { z-index: 2; }
   .selection-outline { position:absolute; z-index:5; pointer-events:none; box-sizing:border-box; border:0 solid var(--tumbler-grid-accent,#42ff53); }
   .selection-outline.top-edge { border-top-width:2px; }
   .selection-outline.bottom-edge { border-bottom-width:2px; }
   .selection-outline.left-edge { border-left-width:2px; }
   .selection-outline.right-edge { border-right-width:2px; }
   .selected-header { background:var(--tumbler-grid-selected-header-bg,#525852); color:var(--tumbler-grid-selected-header-fg,#fff); }
-  .cell > * { position: relative; z-index: 1; min-width: 0; max-width: 100%; transform-origin: center; }
-  .cell.table-header { align-items: center; font-weight: 600; padding-right: 30px; }
+  .tumbler-grid :global(.cell > *) { position: relative; z-index: 1; min-width: 0; max-width: 100%; transform-origin: center; }
+  .tumbler-grid :global(.cell.table-header) { align-items: center; font-weight: 600; padding-right: 30px; }
   .table-menu-button { position: absolute; right: 4px; top: 50%; width: 20px; height: 20px; padding: 0; translate: 0 -50%; border: 1px solid transparent; border-radius: 3px; color: inherit; background: color-mix(in srgb, currentColor 10%, transparent); cursor: pointer; }
   .table-menu-button:hover, .table-menu-button:focus-visible, .table-menu-button.active { border-color: var(--tumbler-grid-accent, #42ff53); outline: none; }
   .cell-hyperlink { overflow: hidden; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: inherit; text-decoration: inherit; text-overflow: inherit; white-space: inherit; cursor: pointer; }
@@ -1087,5 +1183,5 @@
   .menu-values { max-height: 220px; overflow: auto; padding: 6px 0; border-top: 1px solid var(--tumbler-grid-line, #2a302a); }
   .menu-values label { display: flex; gap: 8px; align-items: center; padding: 6px 12px; cursor: pointer; }
   .menu-values label:hover { background: color-mix(in srgb, var(--tumbler-grid-accent, #42ff53) 8%, transparent); }
-  .cell input { width: 100%; height: 100%; box-sizing: border-box; border: 0; outline: 0; padding: 0; color: inherit; background: transparent; font: inherit; user-select: text; -webkit-user-select: text; }
+  .tumbler-grid :global(.cell input) { width: 100%; height: 100%; box-sizing: border-box; border: 0; outline: 0; padding: 0; color: inherit; background: transparent; font: inherit; user-select: text; -webkit-user-select: text; }
 </style>

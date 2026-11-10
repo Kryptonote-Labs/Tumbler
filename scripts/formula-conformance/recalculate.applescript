@@ -10,7 +10,8 @@ on run arguments
       set validationWorkbook to make new workbook
       try
         set name of worksheet 1 of validationWorkbook to "Inputs"
-        set validationSheet to make new worksheet at end of worksheets of validationWorkbook with properties {name:"Results"}
+        set validationSheet to make new worksheet at end of validationWorkbook
+        set name of validationSheet to "Results"
         set enteredFormula to ""
         try
           set formula of range "A1" of validationSheet to "=" & item 2 of arguments
@@ -29,9 +30,16 @@ on run arguments
       if oracleWorkbook is missing value then error "Excel declined the generated workbook; import must succeed without repair."
       calculate worksheet "Results" of oracleWorkbook
       save oracleWorkbook
-      set oracleVersion to version
+      set nativeOutput to version as text
+      -- New Excel errors can use a legacy #VALUE! cache plus rich metadata.
+      -- Read requested error labels while this disposable workbook is open.
+      repeat with itemIndex from 3 to count of arguments
+        set cellAddress to item itemIndex of arguments
+        set displayedError to string value of range cellAddress of worksheet "Results" of oracleWorkbook
+        set nativeOutput to nativeOutput & linefeed & cellAddress & (character id 9) & displayedError
+      end repeat
       close oracleWorkbook saving no
-      return oracleVersion
+      return nativeOutput
     on error messageText number errorNumber
       if oracleWorkbook is not missing value then close oracleWorkbook saving no
       error messageText number errorNumber

@@ -5,8 +5,7 @@ import {
   type FunctionContext, type FunctionLambda, type FunctionRegistry, type FunctionValue,
 } from "../function-runtime.ts";
 
-// Names and omitted arguments are inspected structurally until the shared AST
-// integration lands. No evaluation or scope machinery is duplicated here.
+// The shared evaluator owns name resolution, lexical scopes and invocation.
 function bindingName(expression: FormulaExpression, lambda: boolean): string | undefined {
   const node = expression as { kind: string; name?: string };
   if (node.kind !== "name" || typeof node.name !== "string") return undefined;
@@ -73,7 +72,7 @@ const lambda: NonNullable<ReturnType<FunctionRegistry["get"]>> = (args, context)
     invoke(values) {
       context.operation();
       if (values.length !== parameters.length) return error();
-      return context.withBindings(new Map(parameters.map((name, index) => [name, values[index]!])), args[args.length - 1]!);
+      return context.withBindings(new Map(parameters.map((name, index) => [name, values[index]!])), args[args.length - 1]!, true);
     },
   };
 };
@@ -83,12 +82,12 @@ const letFunction: NonNullable<ReturnType<FunctionRegistry["get"]>> = (args, con
   for (let index = 0; index < args.length - 1; index += 2) {
     context.operation();
     const name = bindingName(args[index]!, false);
-    if (!name) return error();
+    if (!name || bindings.has(name)) return error();
     // Snapshot the bindings: a closure created by this value must retain this scope.
-    const value = context.withBindings(new Map(bindings), args[index + 1]!);
+    const value = context.withBindings(new Map(bindings), args[index + 1]!, true);
     bindings.set(name, value);
   }
-  return context.withBindings(bindings, args[args.length - 1]!);
+  return context.withBindings(bindings, args[args.length - 1]!, true);
 };
 function byAxis(byRow: boolean): NonNullable<ReturnType<FunctionRegistry["get"]>> {
   return (args, context) => {
@@ -132,7 +131,9 @@ const map: NonNullable<ReturnType<FunctionRegistry["get"]>> = (args, context) =>
   let height = 0, width = 0;
   for (const arg of args.slice(0, -1)) {
     context.operation();
-    const input = matrix(context.evaluate(arg), context);
+    const value = context.evaluateAggregate(arg);
+    if (args.length > 2 && (!("kind" in value) || value.kind !== "array")) return isError(value) ? value : error();
+    const input = matrix(value, context);
     if (!Array.isArray(input)) return input as FormulaScalarValue;
     inputs.push(input);
     height = Math.max(height, input.length);
@@ -149,8 +150,9 @@ const map: NonNullable<ReturnType<FunctionRegistry["get"]>> = (args, context) =>
 function fold(scan: boolean): NonNullable<ReturnType<FunctionRegistry["get"]>> {
   return (args, context) => {
     if (args.length !== 3) return error();
-    const omitted = (args[0] as { kind: string }).kind === "omitted";
-    let accumulator: FunctionValue = omitted ? number(0) : context.evaluate(args[0]!);
+    const initial = context.evaluate(args[0]!);
+    const omitted = "kind" in initial && initial.kind === "omitted";
+    let accumulator: FunctionValue = omitted ? number(0) : initial;
     const input = matrix(context.evaluate(args[1]!), context);
     if (!Array.isArray(input)) return input as FormulaScalarValue;
     const fn = context.evaluate(args[2]!);

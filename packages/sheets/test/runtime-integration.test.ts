@@ -134,3 +134,59 @@ test("one-cell structured references preserve aggregate coercion after reopen an
     expect(original.bytes()).toEqual(bytes);
   }
 });
+
+for (const tableName of ["Items", "Receipts"]) for (const columnName of ["Amount", "Net!Amount"])
+  test(`core INDIRECT structured geometry is independent of cell style: ${tableName}[${columnName}]`, () => {
+    const token = `${tableName}[${columnName}]`;
+    const bytes = buildWorkbookFixture({sheets:[{name:"Data",sheetId:1,relationshipId:"data",
+      xml:`<worksheet xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>${columnName}</t></is></c><c r="C1"><f>SUM(INDIRECT("${token}",FALSE))</f></c><c r="D1"><f>SUM(OFFSET(INDIRECT("${token}",FALSE),0,0))</f></c><c r="E1"><f>INDEX(INDIRECT("${token}",FALSE),1)</f></c><c r="F1"><f>SUMIF(A2:A2,"&gt;0",INDIRECT("${token}",FALSE))</f></c></row><row r="2"><c r="A2"><v>7</v></c></row></sheetData><tableParts count="1"><tablePart r:id="table"/></tableParts></worksheet>`,
+      tables:[{relationshipId:"table",target:"tables/table1.xml",xml:`<table xmlns="${ns}" id="1" name="${tableName}" displayName="${tableName}" ref="A1:A2" totalsRowShown="0"><tableColumns count="1"><tableColumn id="1" name="${columnName}"/></tableColumns></table>`}],
+    }]});
+    const artifact = openSpreadsheetArtifact(bytes);
+    for (const current of [artifact,openSpreadsheetArtifact(artifact.bytes())]) {
+      for (const cell of ["C1","D1","E1","F1"]) expect(current.calculation.displayText(cell)).toBe("7");
+      expect(current.calculation.diagnostics).toEqual([]);
+    }
+    const edited = artifact.editCell("A2", 8);
+    for (const current of [edited,openSpreadsheetArtifact(edited.bytes())]) {
+      for (const cell of ["C1","D1","E1","F1"]) expect(current.calculation.displayText(cell)).toBe("8");
+      expect(current.calculation.diagnostics).toEqual([]);
+    }
+    expect(artifact.bytes()).toEqual(bytes);
+  });
+
+test("budget-limited workbook calculation publishes no partial spill and preserves producer cache", () => {
+  const bytes = buildWorkbookFixture({sheets:[{name:"Data",sheetId:1,relationshipId:"data",xml:sheet('<row r="1"><c r="E1"><f>B2+1</f><v>88</v></c></row><row r="2"><c r="A2"><f>{1,2}</f><v>99</v></c></row>')} ]});
+  const original = openSpreadsheetArtifact(bytes);
+  for (const artifact of [original,openSpreadsheetArtifact(original.bytes())]) {
+    const limited = calculateSpreadsheetWorksheet(artifact.worksheet,{maxOperations:12});
+    expect(limited.diagnostics).toContainEqual(expect.objectContaining({code:"evaluation-limit",address:expect.objectContaining({row:2,column:1})}));
+    expect(limited.arrayValue("A2")).toBeUndefined();
+    expect(limited.value("A2")).toBeUndefined();
+    expect(limited.value("B2")).toBeUndefined();
+    expect(limited.displayText("A2")).toBe("99");
+    expect(limited.displayText("E1")).toBe("1");
+    expect(artifact.worksheet.cell("A2")?.value).toMatchObject({type:"number",value:99});
+    expect(artifact.worksheet.cell("B2")).toBeUndefined();
+    expect(artifact.bytes()).toEqual(bytes);
+  }
+});
+
+test("blocked arrays recalculate after a temporary occupying spill shrinks", () => {
+  const bytes = buildWorkbookFixture({sheets: [{name: "Data", sheetId: 1, relationshipId: "data", xml: sheet(
+    '<row r="1"><c r="B1"><f>IF(A5,1,{1;2})</f></c></row>' +
+    '<row r="2"><c r="A2"><f>{3,4}</f></c><c r="C2"><f>B2+1</f></c></row>' +
+    '<row r="4"><c r="A4"><f>{1;2}</f></c></row>'
+  )}]});
+  const original = openSpreadsheetArtifact(bytes);
+  for (const artifact of [original, openSpreadsheetArtifact(original.bytes()), original.editCell("E1", "unrelated")]) {
+    expect(artifact.calculation.displayText("B1")).toBe("1");
+    expect(artifact.calculation.displayText("A2")).toBe("3");
+    expect(artifact.calculation.displayText("B2")).toBe("4");
+    expect(artifact.calculation.displayText("C2")).toBe("5");
+    expect(artifact.calculation.arrayValue("A2")?.rows).toEqual([[{type:"number",value:3},{type:"number",value:4}]]);
+    expect(artifact.calculation.diagnostics).toEqual([]);
+    expect(artifact.worksheet.cell("B2")).toBeUndefined();
+  }
+  expect(original.bytes()).toEqual(bytes);
+});

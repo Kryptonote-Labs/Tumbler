@@ -334,3 +334,17 @@ returns semantic commands that keep destination text and geometry.
 The `format-table` command accepts a cell coordinate and `cell`, `row`, `column` or
 `table` scope. It updates fill, individual borders, vertical alignment and padding
 without replacing text or merged geometry. Padding and border widths use CSS pixels.
+
+### PDF export
+
+`exportPresentationPdf(document, backend, options)` paints slides through the same
+canvas painter as the headless renderer. Hosts supply a vector PDF canvas backend,
+font registration, image decoding and SVG path construction. For example Skia's
+`PDFDocument` embeds fonts and retains selectable text, paths and images. Pages
+use slide dimensions converted from CSS pixels to points at 96 dpi. All slides,
+including hidden slides, are exported in document order.
+
+This shares the canvas painter's limitations: font substitution can change line
+breaks, and it does not guarantee fidelity for unsupported Office effects,
+SmartArt, embedded objects, animation, or speaker notes. This API does not export
+Word documents or spreadsheets.

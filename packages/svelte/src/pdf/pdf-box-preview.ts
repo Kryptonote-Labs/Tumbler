@@ -13,9 +13,9 @@ export function registerPdfDragPreview(page: HTMLElement, painter: PdfPageDragPr
 export function beginPdfBoxPreview(node: HTMLElement, ids: readonly string[]) {
   const root = node.closest('.pdf-editable')!;
   const elements = [
-    ...root.querySelectorAll<HTMLElement>('[data-pdf-text-region], [data-pdf-text-box]'),
+    ...root.querySelectorAll<HTMLElement>('[data-pdf-text-region], [data-pdf-text-box], [data-pdf-image-box]'),
   ].filter((element) =>
-    ids.includes(element.dataset.pdfTextRegion ?? element.dataset.pdfTextBox ?? ''),
+    ids.includes(element.dataset.pdfTextRegion ?? element.dataset.pdfTextBox ?? element.dataset.pdfImageBox ?? ''),
   );
   const pages = [...root.querySelectorAll<HTMLElement>('.pdf-page')].flatMap((page) => {
     const painter = painters.get(page);
