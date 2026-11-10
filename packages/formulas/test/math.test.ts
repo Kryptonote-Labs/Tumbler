@@ -10,6 +10,7 @@ function context(fixture: Partial<MathCase> = {}, maxArrayCells = 10000, budget 
   const blank: FormulaScalarValue = { type:"blank" };
   const cell = (row:number,column:number): FormulaScalarValue => fixture.cells?.[`${String.fromCharCode(64+column)}${row}`] ?? blank;
   const c: FunctionContext = {
+    evaluateAggregate(expression) { return this.evaluate(expression); },
     address:{sheet:"Results",row:1,column:1}, dateSystem:fixture.dateSystem??"1900", maxArrayCells, services:undefined,
     source:{formulaCells:[],cell:()=>undefined,resolveSheet:(_,name)=>name},
     operation:(count=1)=>{budget-=count;if(budget<0)throw new Error("operation budget");},

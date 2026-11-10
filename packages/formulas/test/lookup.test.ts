@@ -30,6 +30,7 @@ function context(
     return { value: cells[key] ?? { type: "blank" }, formula: formulas[key] };
   };
   const c: FunctionContext = {
+    evaluateAggregate(expression) { return this.evaluate(expression); },
     address: { sheet: "Results", row: 1, column: 1 },
     dateSystem: "1900",
     maxArrayCells: 10000,

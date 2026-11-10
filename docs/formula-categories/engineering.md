@@ -57,7 +57,9 @@ Bessel order is truncated, must be nonnegative, and is bounded to 4096. I is
 bounded to |x| <= 10000; J/Y quadrature is bounded to |x| <= 10000 unless the
 large-argument asymptotic branch applies (x >= 32, n² < x). Inputs beyond these
 implementation bounds produce NUM errors even where Excel might return a finite
-value. Quadrature recursion is capped at 18 levels; accuracy outside the tested
+value. K quadrature uses log-domain scaling and samples its mode explicitly to
+retain finite results near numeric overflow and underflow. Quadrature recursion
+is capped at 18 levels; accuracy outside the tested
 grid is not independently certified. Overflow returns NUM and floating-point
 underflow returns zero. These are substantive numeric implementations, but not a
 claim of unlimited Excel numerical parity.
@@ -82,7 +84,7 @@ not mean the integrated project is ready.
 
 `packages/formulas/test/fixtures/engineering.ts` exports `cases` in the shared
 schema: name, formula without equals, full scalar expected values or rectangular
-scalar matrices, optional Inputs cells, tolerance, and dateSystem. There are 363 cases: 61 error cases, one array case, 57 cases with input cells,
+scalar matrices, optional Inputs cells, tolerance, and dateSystem. There are 378 cases: 62 error cases, one array case, 57 cases with input cells,
 and 112 Bessel grid cases. Every function has a success case and an error case. Additional cases cover reference coercion,
 error propagation, defaults, two's-complement boundaries, 48-bit values, reverse
 shifts, fractional truncation, nonzero complex identities, range reductions,

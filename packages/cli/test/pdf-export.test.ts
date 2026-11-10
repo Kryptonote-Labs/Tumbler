@@ -41,6 +41,11 @@ test('PDF export preserves requested mixed-range order and source content in a s
     expect(exported.source.revisions).toHaveLength(1);
     expect(readFileSync(output).toString()).not.toContain('PAGE 4');
     expect(readFileSync(input)).toEqual(Buffer.from(sourceBytes));
+    const all = join(dir, 'all.pdf');
+    const full = await run([input, 'export', '--output', all]);
+    expect(full.code).toBe(0);
+    expect(JSON.parse(full.stdout).pages).toEqual([1, 2, 3, 4, 5]);
+    expect(openPdfDocument(readFileSync(all)).pages).toHaveLength(5);
     const reversed = join(dir, 'reversed.pdf');
     expect((await run([input, 'export', '--pages', '5-3,1', '--output', reversed])).code).toBe(0);
     const reverseDoc = openPdfDocument(readFileSync(reversed)), reverseInterpreter = new PdfInterpreter(reverseDoc);
@@ -60,7 +65,7 @@ test('invalid export selections and flags fail without producing a file', async 
       expect(existsSync(output)).toBe(false);
     }
     for (const flags of [
-      ['--output', output], ['--pages', '1'],
+      ['--pages', '1'],
       ['--pages', '1', '--output', output, '--format', 'png'],
       ['--pages', '1', '--output', output, '--pages', '2'],
       ['--pages', '1', '--output', output, '--unknown', 'x'],
