@@ -64,6 +64,10 @@ The adapter implements member/tuple display, properties, set captions/counts,
 ranking, all seven sort modes, KPI lookup and aggregate selection. Array inputs
 form tuples for CUBEMEMBER and member lists for CUBESET. A WeakMap retains identity
 behind returned captions, including empty set captions and duplicate captions.
+Tuple-valued cells remain single set elements when counted or ranked. Sort measures
+resolve member identity even when their displayed captions differ. Numeric sorting
+of tuple elements requires a richer host; snapshot numeric sort keys describe
+individual members.
 Unknown connections return `#NAME?`; unknown snapshot expressions/properties/cells
 return `#N/A`; a plain caption cannot substitute for a CUBESET identity.
 Empty sets count as zero. Numeric rank and enum inputs use runtime numeric

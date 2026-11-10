@@ -1,4 +1,5 @@
 import type { FormulaExpression } from "../ast.ts";
+import { indirectReference } from "../indirect-reference.ts";
 import type { FormulaScalarValue } from "../evaluator.ts";
 import {
   functionError as err,
@@ -245,8 +246,8 @@ for (const name of ["ROW", "COLUMN"] as const)
   });
 for (const name of ["ROWS", "COLUMNS"] as const)
   define(name, 1, 1, (a, c) => {
-    if (a[0]!.kind === "reference") {
-      const r = ref(a[0]!, c);
+    const r = c.reference(a[0]!);
+    if (!("type" in r)) {
       return num(name === "ROWS" ? r.height : r.width);
     }
     const value = c.evaluate(a[0]!);
@@ -281,76 +282,13 @@ define("OFFSET", 3, 5, (a, c) => {
     }),
   );
 });
-define("INDIRECT", 1, 2, (a, c) => {
-  const s = functionText(scalar(c.evaluate(a[0]!))),
-    a1 = optionBool(a, c, 1, true);
-  const match = /^(?:(?:'((?:[^']|'')+)'|([^!]+))!)?([^!]+)$/.exec(s);
-  if (!match) fail("#REF!");
-  const sheetName = match[1]?.replaceAll("''", "'") ?? match[2];
-  if (sheetName?.includes("["))
-    return c.unavailable(
-      "INDIRECT external workbook requires a host reference resolver",
-    );
-  const sheet =
-    sheetName === undefined
-      ? c.address.sheet
-      : c.source.resolveSheet(c.address.sheet, sheetName);
-  if (sheet === undefined) fail("#REF!");
-  const token = match[3]!;
-  if (
-    (/^[A-Za-z_][A-Za-z0-9_.]*$/.test(token) || /^[^[]+\[.*\]$/.test(token)) &&
-    !(a1 && /^\$?[A-Za-z]{1,3}\$?[1-9]\d*$/.test(token)) &&
-    !(!a1 && /^R.*C/i.test(token))
-  ) {
-    const resolver = (
-      c.source as typeof c.source & {
-        resolveName?(
-          name: string,
-          address: typeof c.address,
-        ): FormulaExpression | FunctionReference | undefined;
-      }
-    ).resolveName;
-    if (!resolver)
-      return c.unavailable("INDIRECT defined names require source.resolveName");
-    const resolved = resolver.call(c.source, token, { ...c.address, sheet });
-    if (!resolved) fail("#REF!");
-    return "firstRow" in resolved
-      ? readBoundedReference(c, boundedReference(resolved))
-      : c.evaluate(resolved);
-  }
-  const parts = token.split(":");
-  if (parts.length > 2) fail("#REF!");
-  const parse = (part: string): [number, number] => {
-    if (a1) {
-      const m = /^\$?([A-Za-z]{1,3})\$?([1-9]\d*)$/.exec(part);
-      if (!m) fail("#REF!");
-      let col = 0;
-      for (const ch of m[1]!.toUpperCase())
-        col = col * 26 + ch.charCodeAt(0) - 64;
-      return [Number(m[2]), col];
-    }
-    const m = /^R(\[-?\d+\]|\d*)C(\[-?\d+\]|\d*)$/i.exec(part);
-    if (!m) fail("#REF!");
-    const axis = (s: string, base: number) =>
-      s.startsWith("[")
-        ? base + Number(s.slice(1, -1))
-        : s === ""
-          ? base
-          : Number(s);
-    return [axis(m[1]!, c.address.row), axis(m[2]!, c.address.column)];
-  };
-  const [r, col] = parse(parts[0]!),
-    [er, ec] = parse(parts[1] ?? parts[0]!);
-  return readBoundedReference(
-    c,
-    boundedReference({
-      sheet,
-      firstRow: Math.min(r, er),
-      firstColumn: Math.min(col, ec),
-      height: Math.abs(er - r) + 1,
-      width: Math.abs(ec - col) + 1,
-    }),
-  );
+define("INDIRECT", 1, 2, (args, context) => {
+  const target = functionText(scalar(context.evaluate(args[0]!)));
+  const a1 = optionBool(args, context, 1, true);
+  const reference = indirectReference(target, a1, context.address, context.source,
+    (expression, sheet) => context.reference(expression, sheet),
+    message => context.unavailable(message));
+  return "type" in reference ? reference : readBoundedReference(context, boundedReference(reference));
 });
 define("HYPERLINK", 1, 2, (a, c) => {
   const location = scalar(c.evaluate(a[0]!));

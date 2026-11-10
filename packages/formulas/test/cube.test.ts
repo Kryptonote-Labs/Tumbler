@@ -19,6 +19,7 @@ function setup(cells: Record<string, FunctionValue> = {}, maxArrayCells = 1000) 
     formulaCells: [], cell: () => undefined, resolveSheet: (_current, name) => name,
   };
   const context: FunctionContext = {
+    evaluateAggregate(expression) { return this.evaluate(expression); },
     address: { sheet: "Results", row: 1, column: 1 }, source, dateSystem: "1900", maxArrayCells,
     services: createCubeSnapshotServices(cubeFixtureConnections, { operation, maxArrayCells }),
     operation, evaluate: evaluate,
@@ -134,6 +135,28 @@ describe("cube snapshot service and function bridge", () => {
     const env = setup({ A1: s("[Product].[Apple]"), A2: s("[Measures].[Sales]") });
     expect(env.run('CUBEMEMBER("Sales",Inputs!A1:A2)')).toEqual(s("Sales"));
     expect(env.run('CUBESETCOUNT(CUBESET("Sales",Inputs!A1:A2))')).toEqual(n(2));
+  });
+  test("sets count and rank complete tuples without losing their intersection", () => {
+    const cells: Record<string, FunctionValue> = { A1: s("[Product].[Apple]"), A2: s("[Measures].[Sales]") };
+    const env = setup(cells);
+    cells.B1 = env.run('CUBEMEMBER("Sales",Inputs!A1:A2)');
+    cells.B2 = env.run('CUBESET("Sales",Inputs!B1:B1)');
+    expect(env.run('CUBESETCOUNT(Inputs!B2)')).toEqual(n(1));
+    cells.B3 = env.run('CUBERANKEDMEMBER("Sales",Inputs!B2,1)');
+    expect(env.run('CUBEVALUE("Sales",Inputs!B3)')).toEqual(n(20));
+    expect(env.run('CUBERANKEDMEMBER("Sales",Inputs!B2,2)')).toEqual(error("#N/A"));
+    cells.C1 = env.run('CUBEMEMBER("Sales",Inputs!A1:A1)');
+    cells.C2 = cells.B1;
+    expect(env.run('CUBERANKEDMEMBER("Sales",CUBESET("Sales",Inputs!C1:C2,"",3),1)')).toEqual(s("Apple"));
+    expect(env.run('CUBERANKEDMEMBER("Sales",CUBESET("Sales",Inputs!C1:C2,"",4),1)')).toEqual(s("Sales"));
+    expect(env.run('CUBEVALUE("Sales",CUBERANKEDMEMBER("Sales",CUBESET("Sales",Inputs!C1:C2,"",4),1))')).toEqual(n(20));
+  });
+  test("sort measures use member identity, including custom captions", () => {
+    const env = setup();
+    expect(env.run('CUBERANKEDMEMBER("Sales",CUBESET("Sales","Products","",1,CUBEMEMBER("Sales","[Measures].[Sales]","Custom")),1)')).toEqual(s("Banana"));
+    const services = createCubeSnapshotServices({ ...cubeFixtureConnections, Other: cubeFixtureConnections.Sales! }, env.context);
+    Object.assign(env.context, { services });
+    expect(env.run('CUBESET("Sales","Products","",1,CUBEMEMBER("Other","[Measures].[Sales]"))')).toEqual(error("#N/A"));
   });
   test("long MDX reference bypasses literal-only limit", () => {
     const env = setup({ A1: s("x".repeat(32767)) });

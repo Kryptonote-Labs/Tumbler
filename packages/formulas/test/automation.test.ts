@@ -9,6 +9,7 @@ import { cases, modeledAutomationServices } from "./fixtures/automation.ts";
 function context(cells: Record<string, FormulaScalarValue> = {}, overrides: Partial<FunctionContext> = {}): FunctionContext {
   let operations = 0;
   const ctx: FunctionContext = {
+    evaluateAggregate(expression) { return this.evaluate(expression); },
     address: { sheet: "Results", row: 1, column: 1 },
     source: { formulaCells: [], cell: () => undefined, resolveSheet: (_current, name) => name },
     dateSystem: "1900", maxArrayCells: 100, services: undefined,
@@ -125,6 +126,9 @@ test("invalid arities and header types do not invoke host", () => {
 });
 
 test("half boundaries, symmetry, and extremes use bounded rounding", () => {
+  for (const amount of [200000000000002, -200000000000002]) {
+    expect(evaluate(`EUROCONVERT(${amount},"EUR","BEF",FALSE)`)).toEqual(evaluate(`EUROCONVERT(${amount},"EUR","BEF",TRUE)`));
+  }
   expect(evaluate('EUROCONVERT(1.005,"BEF","LUF")')).toEqual(functionNumber(1));
   expect(evaluate('EUROCONVERT(0.5,"BEF","LUF")')).toEqual(functionNumber(1));
   expect(evaluate('EUROCONVERT(-0.5,"BEF","LUF")')).toEqual(functionNumber(-1));

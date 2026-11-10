@@ -36,11 +36,19 @@ export function selectedPdfText(selection: Selection | null, host: Element): str
 /** Expand a double-click using the page's Unicode text rather than browser word boundaries. */
 export function selectPdfWord(event: MouseEvent, content: PdfTextContent, layer: HTMLElement) {
   const target = event.target instanceof Element ? event.target.closest("[data-pdf-glyph]") : null;
-  const id = target?.getAttribute("data-pdf-glyph") ?? pdfTextCaretAt(layer, event.clientX, event.clientY)?.id;
+  const glyph = target?.getAttribute("data-pdf-glyph");
+  const caret = glyph ? undefined : pdfTextCaretAt(layer, event.clientX, event.clientY);
+  const id = glyph ?? caret?.id;
   if (!id) return;
   let offset = 0;
   for (const item of content.items) {
-    if (item.id === id) break;
+    if (item.id === id) {
+      // At a shared boundary the caret may belong to the preceding space. Advance
+      // through whitespace, but keep a clicked glyph inside its own word.
+      const within = caret?.offset ?? 0;
+      offset += /^\s*$/u.test(item.text) ? within : Math.min(within, Math.max(0, item.text.length - 1));
+      break;
+    }
     offset += item.text.length;
   }
   const segment = Array.from(

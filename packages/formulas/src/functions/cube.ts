@@ -76,7 +76,8 @@ export function createCubeSnapshotServices(
   connections: Readonly<Record<string, CubeSnapshot>>,
   limits: Pick<FunctionContext, "operation" | "maxArrayCells">,
 ): FormulaFunctionServices {
-  const identities = new WeakMap<FunctionValue, { connection: string; members: readonly string[]; set: boolean }>();
+  type Tuple = readonly string[];
+  const identities = new WeakMap<FunctionValue, { connection: string; tuples: readonly Tuple[]; set: boolean }>();
   const own = <T>(record: Readonly<Record<string, T>>, key: string): T | undefined =>
     Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
   const omitted = (v: FunctionValue | undefined): boolean => v !== undefined && "kind" in v && String(v.kind) === "omitted";
@@ -87,41 +88,51 @@ export function createCubeSnapshotServices(
       limits.operation();
       if (name === "CUBESETCOUNT") {
         const id = identities.get(args[0]!);
-        return id?.set ? functionNumber(id.members.length) : functionError("#VALUE!");
+        return id?.set ? functionNumber(id.tuples.length) : functionError("#VALUE!");
       }
       const optional = (index: number) => omitted(args[index]) ? undefined : args[index];
       const connection = text(args[0]!);
       const cube = own(connections, connection);
       if (!cube) return functionError("#NAME?");
-      const bounded = (ids: readonly string[]): readonly string[] => {
-        if (ids.length > limits.maxArrayCells) throw new RangeError("Cube snapshot exceeds maxArrayCells");
-        limits.operation(ids.length);
+      const bounded = (ids: readonly Tuple[]): readonly Tuple[] => {
+        let cells = 0;
+        for (const tuple of ids) {
+          limits.operation();
+          cells += tuple.length;
+          if (cells > limits.maxArrayCells) throw new RangeError("Cube snapshot exceeds maxArrayCells");
+          limits.operation(tuple.length);
+        }
         return ids;
       };
-      const resolve = (v: FunctionValue, set: boolean): readonly string[] | undefined => {
+      const resolve = (v: FunctionValue, set: boolean): readonly Tuple[] | undefined => {
         const id = identities.get(v);
-        if (id) return id.connection === connection ? bounded(id.members) : undefined;
+        if (id) return id.connection === connection && (set || !id.set) ? bounded(id.tuples) : undefined;
         if ("kind" in v) {
           if (v.kind !== "array") return undefined;
-          const result: string[] = [];
+          const result: Tuple[] = [];
+          let cells = 0;
           for (const row of v.rows) for (const cell of row) {
             limits.operation();
-            const ids = resolve(cell, false);
-            if (!ids || result.length + ids.length > limits.maxArrayCells) return undefined;
-            for (const id of ids) result.push(id);
+            const ids = resolve(cell, set);
+            if (!ids) return undefined;
+            for (const tuple of ids) {
+              cells += tuple.length;
+              if (cells > limits.maxArrayCells) return undefined;
+              result.push(tuple);
+            }
           }
-          return result;
+          return set ? result : [result.flat()];
         }
         const key = text(v);
         const members = set ? own(cube.sets, key) : undefined;
-        if (members) return bounded(members);
-        return own(cube.members, key) ? [key] : undefined;
+        if (members) return bounded(members.map(member => [member]));
+        return own(cube.members, key) ? [[key]] : undefined;
       };
-      const display = (ids: readonly string[], set: boolean, caption?: FunctionValue): FunctionValue => {
+      const display = (ids: readonly Tuple[], set: boolean, caption?: FunctionValue): FunctionValue => {
         bounded(ids);
         const value: FormulaScalarValue = { type: "string", value: caption === undefined ?
-          (set ? "" : own(cube.members, ids.at(-1) ?? "")?.caption ?? "") : text(caption) };
-        identities.set(value, { connection, members: ids, set });
+          (set ? "" : own(cube.members, ids[0]?.at(-1) ?? "")?.caption ?? "") : text(caption) };
+        identities.set(value, { connection, tuples: ids, set });
         return value;
       };
       if (name === "CUBEKPIMEMBER") {
@@ -129,27 +140,29 @@ export function createCubeSnapshotServices(
         if (property.type !== "number" || !Number.isInteger(property.value) || property.value < 1 || property.value > 6) return functionError("#N/A");
         const id = own(cube.kpis ?? {}, text(args[1]!))?.[property.value - 1];
         if (!id || !own(cube.members, id)) return functionError("#N/A");
-        return display([id], false, optional(3) ?? (property.value === 1 ? { type: "string", value: text(args[1]!) } : undefined));
+        return display([[id]], false, optional(3) ?? (property.value === 1 ? { type: "string", value: text(args[1]!) } : undefined));
       }
       if (name === "CUBEVALUE") {
         const ids: string[] = [];
         for (const value of args.slice(1)) {
           const members = resolve(value, true);
           if (!members) return functionError("#N/A");
-          if (ids.length + members.length > limits.maxArrayCells) throw new RangeError("Cube tuple exceeds maxArrayCells");
-          for (const member of members) ids.push(member);
+          for (const tuple of members) {
+            if (ids.length + tuple.length > limits.maxArrayCells) throw new RangeError("Cube tuple exceeds maxArrayCells");
+            for (const member of tuple) ids.push(member);
+          }
         }
-        bounded(ids);
+        bounded([ids]);
         // Sort only identity keys; sets' display order does not affect aggregation.
         limits.operation(ids.length * Math.ceil(Math.log2(ids.length + 1)));
         return own(cube.aggregates, JSON.stringify(ids.sort())) ?? functionError("#N/A");
       }
       const ids = resolve(args[1]!, name === "CUBESET" || name === "CUBERANKEDMEMBER");
-      if (!ids || ids.some(id => !own(cube.members, id))) return functionError("#N/A");
+      if (!ids || ids.some(tuple => tuple.some(id => !own(cube.members, id)))) return functionError("#N/A");
       if (name === "CUBEMEMBER") return display(ids, false, optional(2));
       if (name === "CUBEMEMBERPROPERTY") {
-        if (ids.length !== 1) return functionError("#N/A");
-        return own(own(cube.members, ids[0]!)!.properties ?? {}, text(args[2]!)) ?? functionError("#N/A");
+        if (ids.length !== 1 || ids[0]!.length !== 1) return functionError("#N/A");
+        return own(own(cube.members, ids[0]![0]!)!.properties ?? {}, text(args[2]!)) ?? functionError("#N/A");
       }
       if (name === "CUBERANKEDMEMBER") {
         const rank = functionNumeric(functionScalar(args[2]!));
@@ -165,10 +178,13 @@ export function createCubeSnapshotServices(
       if (order.value === 6) sorted.reverse();
       if (order.value >= 1 && order.value <= 4) {
         limits.operation(ids.length * Math.ceil(Math.log2(ids.length + 1)));
-        const measure = sortBy === undefined ? "" : text(sortBy);
-        if (order.value <= 2 && ids.some(id => !Number.isFinite(own(cube.members, id)!.sortValues?.[measure]))) return functionError("#N/A");
+        const measureIdentity = sortBy === undefined ? undefined : resolve(sortBy, false);
+        const measure = measureIdentity?.length === 1 && measureIdentity[0]!.length === 1 ? measureIdentity[0]![0]! : "";
+        // Snapshot sort keys describe individual members, not tuple intersections.
+        if (order.value <= 2 && ids.some(tuple => tuple.length !== 1)) return functionError("#N/A");
+        if (order.value <= 2 && (!measure || ids.some(tuple => !Number.isFinite(own(cube.members, tuple[0]!)!.sortValues?.[measure])))) return functionError("#N/A");
         sorted.sort((a, b) => {
-          const left = own(cube.members, a)!; const right = own(cube.members, b)!;
+          const left = own(cube.members, a.at(-1)!)!; const right = own(cube.members, b.at(-1)!)!;
           const result = order.value <= 2 ? left.sortValues![measure]! - right.sortValues![measure]! :
             (left.caption < right.caption ? -1 : left.caption > right.caption ? 1 : 0);
           return order.value % 2 === 0 ? -result : result;

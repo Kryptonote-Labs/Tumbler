@@ -162,6 +162,7 @@ export const cases: FinancialFixture[] = samples.flatMap(
   ],
 );
 cases.push(
+  { name: "treasury bill price rejects equal dates", formula: "TBILLPRICE(45292,45292,0.05)", expected: { type: "error", value: "#NUM!" } },
   {
     name: "financial nested loan",
     formula: "PV(0,10,PMT(0,10,100))",
