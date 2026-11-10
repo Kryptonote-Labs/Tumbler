@@ -74,8 +74,9 @@ interface XmlNode {
   name: string;
   order: number;
   attributes: Map<string, string>;
-  children: (XmlNode | string)[];
+  children: (XmlNode | XmlText)[];
 }
+interface XmlText { text: string; order: number; }
 const NAME = "[A-Za-z_][A-Za-z0-9_.:-]*";
 function decode(text: string): string {
   if (/&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[\dA-Fa-f]+;)/.test(text)) throw new InvalidXml();
@@ -96,18 +97,31 @@ function parseXml(input: string, context: FunctionContext): XmlNode {
   const document: XmlNode = { name: "", order: 0, attributes: new Map(), children: [] };
   const stack = [document];
   let position = 0, nodes = 0;
+  let textParent: XmlNode | undefined;
+  const appendText = (parent: XmlNode, text: string) => {
+    if (!text) return;
+    const last = parent.children.length - 1;
+    const previous = parent.children[last];
+    if (textParent === parent && previous && "text" in previous) previous.text += text;
+    else parent.children.push({ text, order: ++nodes });
+    textParent = parent;
+  };
   while (position < source.length) {
     context.operation();
     const parent = stack[stack.length - 1]!;
     if (source.startsWith("<!--", position)) {
+      textParent = undefined;
       const end = source.indexOf("-->", position + 4);
       if (end < 0 || (source.slice(position + 4, end).includes("--") || source.slice(position + 4, end).endsWith("-"))) throw new InvalidXml();
       position = end + 3; continue;
     }
     if (source.startsWith("<?", position)) {
+      textParent = undefined;
       const end = source.indexOf("?>", position + 2);
       if (end < 0) throw new InvalidXml();
       const instruction = source.slice(position + 2, end);
+      const target = /^([^\s?]+)/.exec(instruction)?.[1];
+      if (target && /[^\x00-\x7f]/.test(target)) throw new UnsupportedXml("Unicode XML names require host support");
       const match = new RegExp(`^(${NAME})(?:[ \t\n\r]+([\\s\\S]*))?$`).exec(instruction);
       if (!match) throw new InvalidXml();
       if (match[1]!.toLowerCase() === "xml") {
@@ -119,16 +133,19 @@ function parseXml(input: string, context: FunctionContext): XmlNode {
     if (source.startsWith("<![CDATA[", position)) {
       const end = source.indexOf("]]>", position + 9);
       if (end < 0 || stack.length === 1) throw new InvalidXml();
-      parent.children.push(source.slice(position + 9, end)); position = end + 3; continue;
+      appendText(parent, source.slice(position + 9, end)); position = end + 3; continue;
     }
     if (source.startsWith("<!", position)) throw new UnsupportedXml("DTD declarations require host XML support");
     if (source[position] !== "<") {
       const end = source.indexOf("<", position);
       const text = source.slice(position, end < 0 ? source.length : end);
       if (text.includes("]]>") || stack.length === 1 && /[^ \t\r\n]/.test(text)) throw new InvalidXml();
-      if (stack.length > 1) parent.children.push(decode(text));
+      if (stack.length > 1) appendText(parent, decode(text));
       position += text.length; continue;
     }
+    textParent = undefined;
+    const elementName = /^<\/?([^\s/>]+)/.exec(source.slice(position))?.[1];
+    if (elementName && /[^\x00-\x7f]/.test(elementName)) throw new UnsupportedXml("Unicode XML names require host support");
     const close = new RegExp(`^</(${NAME})[ \\t\\r\\n]*>`).exec(source.slice(position));
     if (close) {
       if (stack.length === 1 || parent.name !== close[1]) throw new InvalidXml();
@@ -145,6 +162,8 @@ function parseXml(input: string, context: FunctionContext): XmlNode {
     position += open[0].length;
     while (!/^[ \t\r\n]*\/?>/.test(source.slice(position))) {
       context.operation();
+      const attributeName = /^[ \t\r\n]+([^\s=]+)[ \t\r\n]*=/.exec(source.slice(position))?.[1];
+      if (attributeName && /[^\x00-\x7f]/.test(attributeName)) throw new UnsupportedXml("Unicode XML names require host support");
       const attribute = new RegExp(`^[ \\t\\r\\n]+(${NAME})[ \\t\\r\\n]*=[ \\t\\r\\n]*(?:"([^"<]*)"|'([^'<]*)')`).exec(source.slice(position));
       if (!attribute || node.attributes.has(attribute[1]!)) throw new InvalidXml();
       if (attribute[1]!.includes(":") || attribute[1] === "xmlns") throw new UnsupportedXml("Namespaces require host support");
@@ -155,7 +174,7 @@ function parseXml(input: string, context: FunctionContext): XmlNode {
     parent.children.push(node); position += end[0].length;
     if (!end[1]) stack.push(node);
   }
-  if (stack.length !== 1 || document.children.filter(child => typeof child !== "string").length !== 1) throw new InvalidXml();
+  if (stack.length !== 1 || document.children.filter(child => !("text" in child)).length !== 1) throw new InvalidXml();
   return document;
 }
 
@@ -169,11 +188,11 @@ function xmlValue(text: string): FormulaScalarValue {
   return textValue(text);
 }
 function nodeText(node: XmlNode, context: FunctionContext): string {
-  const parts: string[] = [], pending: (XmlNode | string)[] = [node];
+  const parts: string[] = [], pending: (XmlNode | XmlText)[] = [node];
   while (pending.length) {
     context.operation();
     const item = pending.pop()!;
-    if (typeof item === "string") parts.push(item);
+    if ("text" in item) parts.push(item.text);
     else for (let i = item.children.length - 1; i >= 0; i--) pending.push(item.children[i]!);
   }
   return parts.join("");
@@ -194,11 +213,26 @@ function select(document: XmlNode, path: string, context: FunctionContext): stri
   }
   let current = [document];
   for (let index = 0; index < steps.length; index++) {
-    const step = steps[index]!, next: XmlNode[] = [], results: string[] = [];
+    const step = steps[index]!, next: XmlNode[] = [], results: { value: string; order: number }[] = [];
     const visited = new Set<XmlNode>();
     const terminal = step.name[0] === "@" || step.name === "text()";
     if (terminal && index !== steps.length - 1 || terminal && (step.position !== undefined || step.attribute !== undefined)) throw new UnsupportedXml();
     for (const parent of current) {
+      if (step.descendant && step.name === "text()") {
+        const pending: (XmlNode | XmlText)[] = [parent];
+        while (pending.length) {
+          context.operation();
+          const item = pending.pop()!;
+          if ("text" in item) {
+            results.push({ value: item.text, order: item.order });
+            if (results.length > context.maxArrayCells) throw new UnsupportedXml("XPath result budget exceeded");
+          } else if (!visited.has(item)) {
+            visited.add(item);
+            for (let i = item.children.length - 1; i >= 0; i--) pending.push(item.children[i]!);
+          }
+        }
+        continue;
+      }
       const parents = [parent];
       while (parents.length) {
         context.operation();
@@ -207,16 +241,16 @@ function select(document: XmlNode, path: string, context: FunctionContext): stri
         visited.add(candidate);
         if (step.descendant) for (let i = candidate.children.length - 1; i >= 0; i--) {
           const child = candidate.children[i]!;
-          if (typeof child !== "string") parents.push(child);
+          if (!("text" in child)) parents.push(child);
         }
         if (terminal) {
-          if (step.name === "text()") { for (const child of candidate.children) if (typeof child === "string") results.push(child); }
-          else { const value = candidate.attributes.get(step.name.slice(1)); if (value !== undefined) results.push(value); }
+          if (step.name === "text()") { for (const child of candidate.children) if ("text" in child) results.push({ value: child.text, order: child.order }); }
+          else { const value = candidate.attributes.get(step.name.slice(1)); if (value !== undefined) results.push({ value, order: candidate.order }); }
         } else {
           let matched = 0;
           for (const child of candidate.children) {
             context.operation();
-            if (typeof child === "string" || step.name !== "*" && step.name !== child.name) continue;
+            if ("text" in child || step.name !== "*" && step.name !== child.name) continue;
             if (step.attribute && child.attributes.get(step.attribute) !== step.equals) continue;
             if (step.position === undefined || ++matched === step.position) next.push(child);
           }
@@ -224,7 +258,10 @@ function select(document: XmlNode, path: string, context: FunctionContext): stri
         if (next.length + results.length > context.maxArrayCells) throw new UnsupportedXml("XPath result budget exceeded");
       }
     }
-    if (terminal) return results;
+    if (terminal) {
+      context.operation(results.length * Math.ceil(Math.log2(results.length + 1)));
+      return results.sort((a, b) => a.order - b.order).map(result => result.value);
+    }
     current = [...new Set(next)].sort((a, b) => a.order - b.order);
   }
   return current.map(node => nodeText(node, context));

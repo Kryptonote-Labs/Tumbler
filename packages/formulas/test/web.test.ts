@@ -100,6 +100,22 @@ describe("web service capability and bounds", () => {
     expect(run('FILTERXML("<r> -1.25e2 </r>","/r")')).toEqual({ type: "number", value: -125 });
     expect(run('FILTERXML("<r> abc </r>","/r")')).toEqual(s(" abc "));
   });
+  test("XPath text nodes coalesce CDATA and retain document order", () => {
+    expect(input("FILTERXML", [s("<r>a<![CDATA[b]]>c</r>"), s("/r/text()")])).toEqual(s("abc"));
+    expect(input("FILTERXML", [s("<r>a<b>b</b>c</r>"), s("//text()")])).toEqual({ kind: "array", rows: [[s("a")], [s("b")], [s("c")]] });
+    expect(input("FILTERXML", [s("<r>a<r>b</r>c</r>"), s("//r/text()")])).toEqual({ kind: "array", rows: [[s("a")], [s("b")], [s("c")]] });
+    expect(input("FILTERXML", [s("<r>a<!-- comment -->b</r>"), s("/r/text()")])).toEqual({ kind: "array", rows: [[s("a")], [s("b")]] });
+  });
+  test("Unicode element and attribute names delegate to the XML host", () => {
+    for (const xml of ['<café>ok</café>', '<r café="v">ok</r>', '<r><café>ok</café></r>', '<r><?café ok?>ok</r>', '<r><?é ok?>ok</r>']) {
+      expect(() => input("FILTERXML", [s(xml), s("/*")])).toThrow("unavailable");
+      expect(input("FILTERXML", [s(xml), s("/*")], { services: { invoke(name, args) {
+        expect(name).toBe("FILTERXML");
+        expect(args).toEqual([s(xml), s("/*")]);
+        return s("ok");
+      } } })).toEqual(s("ok"));
+    }
+  });
   test("arity and scalar array coercion", () => {
     for (const [name, counts] of [["ENCODEURL", [0, 2]], ["WEBSERVICE", [0, 2]], ["FILTERXML", [0, 1, 3]]] as const) for (const count of counts) expect(input(name, Array.from({ length: count }, () => s("x")))).toEqual(functionError());
     for (const name of ["ENCODEURL", "WEBSERVICE"]) expect(input(name, [{ kind: "array", rows: [[{ type: "number", value: 1 }]] }])).toEqual(functionError());
