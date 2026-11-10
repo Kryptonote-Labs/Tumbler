@@ -376,7 +376,7 @@ function overflow(cell: PaintedCell, input: SpreadsheetCellLayerInput): number |
   return cell.canOverflow
     ? spreadsheetTextOverflowWidth({
         worksheet: input.worksheet,
-        ...(input.calculation ? { calculation: input.calculation } : {}),
+        calculation: input.calculation,
         ...cell.address,
         columnGeometry: input.columnGeometry,
         maximumColumn: input.columns.at(-1)?.index ?? cell.address.column,
