@@ -1,5 +1,6 @@
-import type { PdfTextContent } from '@tumblerjs/pdf';
-import type { PdfPageRenderer } from './page-renderer.ts';
+import { observePdfPageVisibility } from "./page-visibility.ts";
+import type { PdfTextContent } from "@tumblerjs/pdf";
+import type { PdfPageRenderer } from "./page-renderer.ts";
 type Options = {
   renderer: PdfPageRenderer;
   index: number;
@@ -21,6 +22,7 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
     disposed = false,
     running = false,
     again = false;
+  let settling: ReturnType<typeof setTimeout> | undefined;
   let frame: number | undefined,
     controller = new AbortController();
   let preview: HTMLCanvasElement | undefined,
@@ -33,13 +35,13 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
     if (!node) return;
     for (const canvas of node instanceof HTMLCanvasElement
       ? [node]
-      : node.querySelectorAll('canvas')) {
+      : node.querySelectorAll("canvas")) {
       canvas.width = 0;
       canvas.height = 0;
     }
     node.remove();
   };
-  const zooming = () => viewport.hasAttribute('data-pdf-zooming');
+  const zooming = () => viewport.hasAttribute("data-pdf-zooming");
   function schedule() {
     if (disposed || !visible || (zooming() && preview)) return;
     again = true;
@@ -50,13 +52,13 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
       });
   }
   function bitmapCanvas(bitmap: ImageBitmap) {
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
-    const context = canvas.getContext('bitmaprenderer');
+    const context = canvas.getContext("bitmaprenderer");
     if (context) context.transferFromImageBitmap(bitmap);
     else {
-      canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+      canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
       bitmap.close();
     }
     return canvas;
@@ -73,8 +75,8 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
       if (!preview) {
         const small = Math.min(
           scale,
-          (element.getBoundingClientRect().width / active.width) * ratio,
-          1024 / Math.max(active.width, active.height),
+          element.getBoundingClientRect().width / active.width,
+          2048 / Math.max(active.width, active.height),
         );
         const result = await active.renderer.render(
           {
@@ -96,10 +98,10 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
         }
         preview = bitmapCanvas(result.bitmap);
         Object.assign(preview.style, {
-          position: 'absolute',
-          inset: '0',
-          width: '100%',
-          height: '100%',
+          position: "absolute",
+          inset: "0",
+          width: "100%",
+          height: "100%",
         });
         element.prepend(preview);
         if (result.text) {
@@ -107,18 +109,18 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
           active.ontext(result.text);
         }
       }
-      if (zooming()) return;
+      if (zooming() || settling !== undefined) return;
       if (rasterScale !== scale) {
         disposeCanvas(previous);
         previous = layer;
-        layer = document.createElement('div');
+        layer = document.createElement("div");
         Object.assign(layer.style, {
-          position: 'absolute',
-          left: '0',
-          top: '0',
+          position: "absolute",
+          left: "0",
+          top: "0",
           width: `${active.width * scale}px`,
           height: `${active.height * scale}px`,
-          transformOrigin: '0 0',
+          transformOrigin: "0 0",
           transform: `scale(${active.scale / scale})`,
         });
         layer.dataset.rasterScale = String(scale);
@@ -156,25 +158,29 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
             result.bitmap.close();
             return;
           }
+          if (settling !== undefined || zooming()) {
+            result.bitmap.close();
+            return;
+          }
           if (result.text) {
             hasText = true;
             active.ontext(result.text);
           }
-          const tile = document.createElement('div'),
+          const tile = document.createElement("div"),
             canvas = bitmapCanvas(result.bitmap);
           Object.assign(tile.style, {
-            position: 'absolute',
-            overflow: 'hidden',
+            position: "absolute",
+            overflow: "hidden",
             left: `${x}px`,
             top: `${y}px`,
             width: `${width}px`,
             height: `${height}px`,
           });
           Object.assign(canvas.style, {
-            position: 'absolute',
-            left: '0',
-            top: '0',
-            transform: 'translate(-1px, -1px)',
+            position: "absolute",
+            left: "0",
+            top: "0",
+            transform: "translate(-1px, -1px)",
             width: `${width + 2}px`,
             height: `${height + 2}px`,
           });
@@ -218,19 +224,26 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
     hasText = false;
     options.renderer.release(options.index);
   }
-  const observer = new IntersectionObserver(
-    (entries) => {
-      visible = entries.some((entry) => entry.isIntersecting);
-      if (visible) schedule();
-      else if (zooming()) cancel();
-      else release();
-    },
-    { root: viewport, rootMargin: '128px' },
-  );
-  observer.observe(element);
+  const stopVisibility = observePdfPageVisibility(element, viewport, (next) => {
+    visible = next;
+    if (visible) schedule();
+    else if (zooming()) cancel();
+    else release();
+  });
   const resize = new ResizeObserver(schedule);
   resize.observe(viewport);
-  viewport.addEventListener('scroll', schedule, { passive: true });
+  // A readable page preview travels with the scroll. Device-resolution tiles resume
+  // after motion stops, avoiding a burst of new canvases on every scroll frame.
+  const scroll = () => {
+    if (!visible || disposed) return;
+    if (settling !== undefined) clearTimeout(settling);
+    settling = setTimeout(() => {
+      settling = undefined;
+      schedule();
+    }, 100);
+    schedule();
+  };
+  viewport.addEventListener("scroll", scroll, { passive: true });
   const pauseZoom = () => {
     cancel();
     if (!preview) schedule();
@@ -239,9 +252,9 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
     if (visible) schedule();
     else release();
   };
-  viewport.addEventListener('pdfzoomstart', pauseZoom);
-  viewport.addEventListener('pdfzoomend', finishZoom);
-  window.addEventListener('resize', schedule);
+  viewport.addEventListener("pdfzoomstart", pauseZoom);
+  viewport.addEventListener("pdfzoomend", finishZoom);
+  window.addEventListener("resize", schedule);
   return {
     update(next: Options) {
       const previousOptions = options;
@@ -259,13 +272,14 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
     },
     destroy() {
       disposed = true;
-      observer.disconnect();
+      stopVisibility();
       resize.disconnect();
       if (frame !== undefined) cancelAnimationFrame(frame);
-      viewport.removeEventListener('scroll', schedule);
-      viewport.removeEventListener('pdfzoomstart', pauseZoom);
-      viewport.removeEventListener('pdfzoomend', finishZoom);
-      window.removeEventListener('resize', schedule);
+      viewport.removeEventListener("scroll", scroll);
+      if (settling !== undefined) clearTimeout(settling);
+      viewport.removeEventListener("pdfzoomstart", pauseZoom);
+      viewport.removeEventListener("pdfzoomend", finishZoom);
+      window.removeEventListener("resize", schedule);
       release();
     },
   };

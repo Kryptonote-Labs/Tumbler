@@ -73,3 +73,30 @@ export const cases: Case[] = [
   { name: "scan scalar", formula: "SCAN(10,3,LAMBDA(total,item,total-item))", expected: [[n(7)]] },
   ...(["1900", "1904"] as const).map(dateSystem => ({ name: `date serial identity ${dateSystem}`, formula: "LET(serial,Inputs!A1,MAP(serial,LAMBDA(item,item)))", cells: { A1: n(60) }, dateSystem, expected: [[n(60)]] })),
 ];
+cases.push(
+ {name:"map unequal row counts",formula:"MAP(Inputs!A1:A2,Inputs!B1,LAMBDA(a,b,a+b))",cells:{A1:n(2),A2:n(4),B1:n(3)},expected:[[n(5)],[e("#N/A")]]},
+ {name:"map scalar alongside column",formula:"MAP(Inputs!A1:A2,10,LAMBDA(a,b,a+b))",cells:{A1:n(2),A2:n(4)},expected:e("#VALUE!")},
+ {name:"map crossing row and column shapes",formula:"MAP(Inputs!A1:A2,Inputs!B1:C1,LAMBDA(a,b,a+b))",cells:{A1:n(2),A2:n(4),B1:n(3),C1:n(6)},expected:[[n(5),e("#N/A")],[e("#N/A"),e("#N/A")]]},
+ {name:"let repeated name in same scope",formula:"LET(item,1,item,2,item)",expected:e("#VALUE!")},
+ {name:"reduce forwarded omitted seed",formula:"LET(f,LAMBDA(seed,ignored,REDUCE(seed,Inputs!A1:A2,LAMBDA(total,item,total*item))),f(,0))",cells:{A1:n(2),A2:n(4)},expected:n(8)},
+ {name:"byrow scalar array callback result",formula:"BYROW(Inputs!A1:A2,LAMBDA(item,MAKEARRAY(1,1,LAMBDA(row,col,1))))",cells:{A1:n(2),A2:n(4)},expected:[[n(1)],[n(1)]]},
+);
+cases.push(
+ {name:"map multiple literal scalars reject",formula:"MAP(1,2,LAMBDA(a,b,a+b))",expected:e("#VALUE!")},
+ {name:"map scalar array counterpart pads",formula:"MAP(Inputs!A1:A2,{10},LAMBDA(a,b,a+b))",cells:{A1:n(2),A2:n(4)},expected:[[n(12)],[e("#N/A")]]},
+ {name:"map let scalar binding rejects",formula:"LET(seedValue,10,MAP(Inputs!A1:A2,seedValue,LAMBDA(a,b,a+b)))",cells:{A1:n(2),A2:n(4)},expected:e("#VALUE!")},
+ {name:"map let reference binding preserves array input",formula:"LET(seedValue,Inputs!B1,MAP(Inputs!A1:A2,seedValue,LAMBDA(a,b,a+b)))",cells:{A1:n(2),A2:n(4),B1:n(3)},expected:[[n(5)],[e("#N/A")]]},
+ {name:"let reference retains aggregate coercion",formula:"LET(amount,Inputs!A1,SUM(amount))",cells:{A1:s("7")},expected:n(0)},
+);
+cases.push(
+ {name:"lambda parameter retains reference aggregation",formula:"LET(fn,LAMBDA(x,SUM(x)),fn(Inputs!A1))",cells:{A1:s("7")},expected:n(0)},
+ {name:"lambda direct invocation retains reference aggregation",formula:"LAMBDA(x,SUM(x))(Inputs!A1)",cells:{A1:s("7")},expected:n(0)},
+ {name:"lambda reference return retains aggregate provenance",formula:"SUM(LAMBDA(x,x)(Inputs!A1))",cells:{A1:s("7")},expected:n(0)},
+ {name:"let alias through lambda retains aggregate provenance",formula:"LET(amount,Inputs!A1,fn,LAMBDA(x,x),SUM(fn(amount)))",cells:{A1:s("7")},expected:n(0)},
+ {name:"lambda parameter retains MAP reference input",formula:"LET(fn,LAMBDA(x,MAP(Inputs!A1:A2,x,LAMBDA(a,b,a+b))),fn(Inputs!B1))",cells:{A1:n(2),A2:n(4),B1:s("7")},expected:[[n(9)],[e("#N/A")]]},
+);
+cases.push(
+ {name:"let Unicode binding name",formula:"LET(税率,2,税率*3)",expected:n(6)},
+ {name:"lambda Unicode parameter",formula:"LAMBDA(数量,数量+1)(Inputs!A1)",cells:{A1:n(2)},expected:n(3)},
+ {name:"binding name extends a cell-reference prefix",formula:"LET(A1税,2,A1税+1)",expected:n(3)},
+);

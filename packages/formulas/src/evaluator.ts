@@ -1,4 +1,6 @@
+import { compileCriterion, matchesCriterion, tokenizeWildcard, wildcardMatches, type FormulaCriterion } from "./criteria.ts";
 import { extendedFunctions } from "./extended-functions.ts";
+import { indirectReference } from "./indirect-reference.ts";
 import type { FunctionValue, FunctionArray, FunctionReference, FunctionContext, FunctionRegistry, FormulaFunctionServices } from "./function-runtime.ts";
 import type { FormulaErrorValue, FormulaExpression, FormulaReferenceExpression, ParsedFormula } from "./ast.ts";
 import { FormulaParseError, parseFormula } from "./parser.ts";
@@ -125,7 +127,9 @@ export function calculateFormulas(
   let activeAddress: FormulaCellAddress = { sheet: "", row: 1, column: 1 };
   let bindings: ReadonlyMap<string, FunctionValue> = new Map();
   let publicExpression: FormulaExpression | undefined;
+  let referenceFallback: Map<FormulaExpression, EvaluationValue> | undefined;
   const registries = [extendedFunctions, ...(options.functionRegistries ?? [])];
+  const bindingReferences = new WeakMap<FunctionArray, RangeEvaluationValue>();
   const arrays = new Map<string, FunctionArray>();
   const spillOwners = new Map<string, string>();
   const parsed = new Map<string, ParsedFormula>();
@@ -135,6 +139,7 @@ export function calculateFormulas(
   const dependencies = new Map<string, FormulaCellAddress[]>();
   const dependencyKeys = new Map<string, Set<string>>();
   const wholeDependencies = new Map<string, FunctionReference[]>();
+  const spillObstructions = new Map<string, Set<string>>();
   const diagnostics: FormulaDiagnostic[] = [];
   const diagnosed = new Set<string>();
   const visiting = new Set<string>();
@@ -188,26 +193,84 @@ export function calculateFormulas(
     refs.push(freezeAddress(address)); dependencies.set(owner, refs);
   }
 
-  function invalidateDependants(changed: ReadonlySet<string>): void {
-    const pending = new Set(changed);
+  function planInvalidation(changed: ReadonlySet<string>): {formulas: Set<string>; spills: Set<string>} {
+    const pending = new Set(changed), formulas = new Set<string>(), spills = new Set<string>();
     let invalidated = true;
     while (invalidated) {
       invalidated = false;
       for (const [key, refs] of dependencies) {
         operation();
-        if (pending.has(key) || (!visiting.has(key) && !memo.has(key)) || !(refs.some(ref => pending.has(addressKey(ref))) || (wholeDependencies.get(key) ?? []).some(ref => [...pending].some(target => {
+        if (pending.has(key) || (!visiting.has(key) && !memo.has(key)) || !(refs.some(ref => {
+          operation(); return pending.has(addressKey(ref));
+        }) || [...(spillObstructions.get(key) ?? [])].some(target => { operation(); return pending.has(target); }) || (wholeDependencies.get(key) ?? []).some(ref => [...pending].some(target => {
           operation();
           const [sheet, row, column] = target.split("\u0000");
           return sheet === ref.sheet && Number(row) >= ref.firstRow && Number(row) < ref.firstRow + ref.height && Number(column) >= ref.firstColumn && Number(column) < ref.firstColumn + ref.width;
         })))) continue;
-        if (visiting.has(key)) dirtyActive.add(key);
-        memo.delete(key); values.delete(key);
-        if (arrays.delete(key)) {
-          for (const [target, owner] of spillOwners) if (owner === key) { spillOwners.delete(target); values.delete(target); pending.add(target); }
+        formulas.add(key);
+        if (arrays.has(key)) {
+          for (const [target, owner] of spillOwners) {
+            operation();
+            if (owner === key) { spills.add(target); pending.add(target); }
+          }
         }
         pending.add(key); invalidated = true;
       }
     }
+    return {formulas, spills};
+  }
+
+  function commitInvalidation(plan: ReturnType<typeof planInvalidation>): void {
+    // All budgeted discovery finishes before any output or memo mutation.
+    for (const key of plan.formulas) {
+      if (visiting.has(key)) dirtyActive.add(key);
+      memo.delete(key); values.delete(key); arrays.delete(key);
+    }
+    for (const target of plan.spills) { spillOwners.delete(target); values.delete(target); }
+  }
+
+  function bindingValue(value: EvaluationValue): FunctionValue {
+    if (isRange(value)) {
+      const bound: FunctionArray = {kind: "array", get rows() { return value.rows; }};
+      bindingReferences.set(bound, value);
+      return bound;
+    }
+    return toFunction(value);
+  }
+
+  function boundResult(value: FunctionValue): EvaluationValue {
+    return "kind" in value && value.kind === "array" ? bindingReferences.get(value) ?? value : value;
+  }
+
+  function computedReferenceCall(expression: FormulaExpression): boolean {
+    if (expression.kind === "invoke") return true;
+    if (expression.kind !== "function") return false;
+    const callable = bindings.get(normalizeBindingName(expression.name));
+    if (callable !== undefined) return "kind" in callable && callable.kind === "lambda";
+    if (normalizeFunctionName(expression.name) === "LET") return true;
+    // Inspect name metadata only; evaluate its callable body through the normal
+    // call path once, so defined-name aliases preserve reference returns too.
+    const named = source.resolveName?.(expression.name, activeAddress);
+    if (named !== undefined && "kind" in named) return true;
+    const name = normalizeFunctionName(expression.name);
+    for (let index = registries.length - 1; index >= 0; index--) {
+      const handler = registries[index]!.get(name);
+      if (handler !== undefined) return handler !== extendedFunctions.get(name);
+    }
+    return false;
+  }
+
+  function computedIndexInput(expression: FormulaExpression, depth = 0): boolean {
+    operation();
+    if (depth > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Reference depth exceeded.");
+    if (expression.kind === "name" && !bindings.has(normalizeBindingName(expression.name))) {
+      const definition = source.resolveName?.(expression.name, activeAddress);
+      return definition !== undefined && "kind" in definition ? computedIndexInput(definition, depth + 1) : false;
+    }
+    if (computedReferenceCall(expression)) return true;
+    return expression.kind === "function" && normalizeFunctionName(expression.name) === "INDEX" && expression.arguments[0] !== undefined
+      ? computedIndexInput(expression.arguments[0], depth + 1)
+      : false;
   }
 
   const cellValue = (address: FormulaCellAddress, depth: number, asDependency: boolean): FormulaScalarValue => {
@@ -237,6 +300,9 @@ export function calculateFormulas(
     }
     if (visiting.has(key)) throw new EvaluationUnavailable("circular-reference", "Formula contains a circular reference.");
     visiting.add(key);
+    // Obstructions belong to the previous attempted spill, not the formula's
+    // read dependencies. Rechecking must not depend on our own future output.
+    spillObstructions.delete(key);
     const previousAddress = activeAddress, previousBindings = bindings, previousPublic = publicExpression;
     activeAddress = Object.freeze({...address});
     bindings = new Map();
@@ -250,25 +316,39 @@ export function calculateFormulas(
         const rows = evaluated.rows, height = rows.length, width = rows[0]?.length ?? 0;
         assertArray(height, width);
         if (rows.some(row => row.length !== width)) throw new EvaluationUnavailable("unavailable-dependency", "Function returned a nonrectangular array.");
+        const obstructions = new Set<string>();
         let blocked = source.spillBlocked?.(address) === true || address.row + height - 1 > MAX_SPREADSHEET_ROW || address.column + width - 1 > MAX_SPREADSHEET_COLUMN;
         for (let r = 0; r < height; r++) for (let c = 0; c < width; c++) {
           operation();
           if (!r && !c) continue;
           const target = {sheet: address.sheet, row: address.row + r, column: address.column + c};
           const input = readCell(source, target);
-          if (input?.formula !== undefined || input !== undefined && input.value.type !== "blank" || spillOwners.has(addressKey(target)) || source.spillBlocked?.(target)) blocked = true;
+          const targetKey = addressKey(target), owner = spillOwners.get(targetKey);
+          if (owner !== undefined) {
+            // Track both the occupied coordinate and its shape-changing owner.
+            obstructions.add(targetKey); obstructions.add(owner);
+          }
+          if (input?.formula !== undefined || input !== undefined && input.value.type !== "blank" || owner !== undefined || source.spillBlocked?.(target)) blocked = true;
         }
+        if (blocked && obstructions.size) spillObstructions.set(key, obstructions);
         result = blocked ? error("#SPILL!") : rows[0]![0]!;
         if (!blocked) {
           const copy: FunctionArray = Object.freeze({kind: "array", rows: Object.freeze(rows.map(row => Object.freeze([...row])))});
-          arrays.set(key, copy);
-          const changed = new Set<string>();
+          const entries: [string, FormulaScalarValue][] = [], changed = new Set<string>();
           for (let r = 0; r < height; r++) for (let c = 0; c < width; c++) {
             const target = addressKey({sheet: address.sheet, row: address.row + r, column: address.column + c});
-            values.set(target, rows[r]![c]!);
-            if (r || c) { spillOwners.set(target, key); changed.add(target); }
+            entries.push([target, rows[r]![c]!]);
+            if (r || c) changed.add(target);
           }
-          if (changed.size) invalidateDependants(changed);
+          const plan = changed.size ? planInvalidation(changed) : {formulas: new Set<string>(), spills: new Set<string>()};
+          // Commit cannot exhaust the operation budget: discovery/validation above
+          // is complete, and no evaluator or source callbacks run during mutation.
+          commitInvalidation(plan);
+          arrays.set(key, copy);
+          for (const [target, value] of entries) {
+            values.set(target, value);
+            if (target !== key) spillOwners.set(target, key);
+          }
         }
       }
       if (dirtyActive.delete(key)) {
@@ -299,19 +379,24 @@ export function calculateFormulas(
 
   const evaluate = (expression: FormulaExpression, sheet: string, depth: number): EvaluationValue => {
     operation();
+    const cached = referenceFallback?.get(expression);
+    if (cached !== undefined) {
+      referenceFallback!.delete(expression);
+      return cached;
+    }
     evaluationFrames++;
     try {
     if (evaluationFrames > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Formula evaluation depth exceeded.");
     if (depth > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Formula evaluation depth exceeded.");
     switch (expression.kind) {
-      case "value": return expression.value;
+      case "value": return boundResult(expression.value);
       case "omitted": return {kind: "omitted"};
       case "name": {
         const bound = bindings.get(normalizeBindingName(expression.name));
-        if (bound !== undefined) return bound;
+        if (bound !== undefined) return boundResult(bound);
         if (/^_xlpm\./i.test(expression.name)) return error("#NAME?");
         const named = source.resolveName?.(expression.name, activeAddress);
-        return named === undefined ? error("#NAME?") : "kind" in named ? evaluate(named, sheet, depth + 1) : referenceResult(readReference(named, depth));
+        return named === undefined ? error("#NAME?") : "kind" in named ? evaluate(named, sheet, depth + 1) : referenceFromGeometry(named, depth);
       }
       case "array": {
         assertArray(expression.rows.length, expression.rows[0]?.length ?? 0);
@@ -319,7 +404,7 @@ export function calculateFormulas(
       }
       case "invoke": {
         const callee = toFunction(evaluate(expression.callee, sheet, depth + 1));
-        return "kind" in callee && callee.kind === "lambda" ? callee.invoke(expression.arguments.map(arg => toFunction(evaluate(arg, sheet, depth + 1)))) : error("#VALUE!");
+        return "kind" in callee && callee.kind === "lambda" ? boundResult(callee.invoke(expression.arguments.map(arg => bindingValue(evaluate(arg, sheet, depth + 1))))) : error("#VALUE!");
       }
       case "spill": {
         const ref = resolveReference(expression.operand, sheet, depth);
@@ -354,17 +439,39 @@ export function calculateFormulas(
     } finally { evaluationFrames--; }
   };
 
-  function referenceResult(value: FunctionValue): EvaluationValue {
+  function referenceResult(value: FunctionValue, reference?: FunctionReference): EvaluationValue {
     if ("kind" in value && value.kind !== "array") return value;
     const rows = matrix(value);
-    return {kind: "range", rows, values: rows.flat()};
+    return {kind: "range", rows, values: rows.flat(), ...(reference ? {reference} : {})};
   }
 
   const referenceValue = (expression: FormulaReferenceExpression, currentSheet: string, depth: number): EvaluationValue => {
     const ref = resolveReference(expression, currentSheet, depth + 1);
     if ("type" in ref) return ref;
-    return referenceResult(readReference(ref, depth + 1));
+    return referenceFromGeometry(ref, depth);
   };
+
+  function referenceFromGeometry(ref: FunctionReference, depth: number): EvaluationValue {
+    if (ref.height === MAX_SPREADSHEET_ROW || ref.width === MAX_SPREADSHEET_COLUMN) {
+      let materialized: RangeEvaluationValue | undefined;
+      const read = () => {
+        if (!materialized) {
+          const rows = matrix(readReference(ref, depth + 1));
+          materialized = {kind: "range", reference: ref, rows, values: rows.flat()};
+        }
+        return materialized;
+      };
+      return {kind: "range", reference: ref, get rows() { return read().rows; }, get values() { return read().values; }};
+    }
+    return referenceResult(readReference(ref, depth + 1), ref);
+  }
+
+  function aggregateValue(expression: FormulaExpression, sheet: string, depth: number): EvaluationValue {
+    const value = evaluate(expression, sheet, depth + 1);
+    const ref = isRange(value) ? value.reference : undefined;
+    if (!ref || ref.height !== MAX_SPREADSHEET_ROW && ref.width !== MAX_SPREADSHEET_COLUMN) return value;
+    return referenceResult(readReference(scanReference(ref), depth + 1));
+  }
 
   const binary = (expression: Extract<FormulaExpression, { kind: "binary" }>, sheet: string, depth: number): EvaluationValue => mapValues(evaluate(expression.left, sheet, depth + 1), evaluate(expression.right, sheet, depth + 1), (left, right) => {
     if (left.type === "error") return left;
@@ -450,7 +557,7 @@ export function calculateFormulas(
       if (isFormulaError(inspected)) return inspected;
       const criterionValue = scalar(evaluate(args[1]!, sheet, depth + 1));
       if (criterionValue.type === "error") return criterionValue;
-      const criterion = compileCriterion(criterionValue);
+      const criterion = compileCriterion(criterionValue, message => { throw new EvaluationUnavailable("evaluation-limit", message); });
       const resultStart = args[2] === undefined
         ? inspected
         : resolveReference(args[2], sheet, depth + 1);
@@ -504,7 +611,7 @@ export function calculateFormulas(
         if (range.height !== resultRange.height || range.width !== resultRange.width) return error("#VALUE!");
         const criterionValue = scalar(evaluate(args[index + 1]!, sheet, depth + 1));
         if (criterionValue.type === "error") return criterionValue;
-        criteria.push(Object.freeze({ range, criterion: compileCriterion(criterionValue) }));
+        criteria.push(Object.freeze({ range, criterion: compileCriterion(criterionValue, message => { throw new EvaluationUnavailable("evaluation-limit", message); }) }));
       }
 
       let count = 0;
@@ -539,16 +646,7 @@ export function calculateFormulas(
 
   const callAggregate = (name: "SUM" | "COUNT" | "AVERAGE" | "MIN" | "MAX" | "AND" | "OR" | "XOR" | "NOT"): FormulaFunction =>
     (args, sheet, depth) => {
-    const evaluated = args.map((argument): EvaluationValue => {
-      if (argument.kind === "reference" && argument.whole) {
-        const ref = resolveReference(argument, sheet, depth + 1);
-        if ("type" in ref) return ref;
-        const value = readReference(scanReference(ref), depth + 1);
-        const rows = matrix(value);
-        return {kind: "range", rows, values: rows.flat()};
-      }
-      return evaluate(argument, sheet, depth + 1);
-    });
+    const evaluated = args.map(argument => aggregateValue(argument, sheet, depth));
     const firstError = flatten(evaluated).find((value) => value.type === "error");
     if (firstError?.type === "error") return firstError;
     switch (name) {
@@ -583,7 +681,7 @@ export function calculateFormulas(
 
   const callMath = (name: string): FormulaFunction => (args, sheet, depth) => {
     const aggregate = name === "PRODUCT";
-    const evaluated = args.map((argument) => evaluate(argument, sheet, depth + 1));
+    const evaluated = args.map(argument => aggregate ? aggregateValue(argument, sheet, depth) : evaluate(argument, sheet, depth + 1));
     const firstError = flatten(evaluated).find((value) => value.type === "error");
     if (firstError?.type === "error") return firstError;
     if (aggregate) {
@@ -645,7 +743,7 @@ export function calculateFormulas(
 
   const callStatistic = (name: string): FormulaFunction => (args, sheet, depth) => {
     if (args.length === 0 || name === "COUNTBLANK" && args.length !== 1) return error("#VALUE!");
-    const evaluated = args.map((argument) => evaluate(argument, sheet, depth + 1));
+    const evaluated = args.map(argument => name === "COUNTBLANK" ? evaluate(argument, sheet, depth + 1) : aggregateValue(argument, sheet, depth));
     if (name === "COUNTA" || name === "COUNTBLANK") {
       const values = flatten(evaluated);
       const count = values.filter((value) => name === "COUNTA"
@@ -1187,11 +1285,15 @@ export function calculateFormulas(
     return ref;
   }
 
-  function resolveReference(expression: FormulaExpression, sheet: string, depth: number): FunctionReference | FormulaScalarValue {
+  function resolveReference(expression: FormulaExpression, sheet: string, depth: number, form?: {reference: boolean}, evaluated?: Map<FormulaExpression, EvaluationValue>): FunctionReference | FormulaScalarValue {
     operation();
     if (depth > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Reference depth exceeded.");
+    if (expression.kind === "value") {
+      const value = boundResult(expression.value);
+      return isRange(value) && value.reference ? checkedReference(value.reference) : error("#VALUE!");
+    }
     if (expression.kind === "spill") {
-      const base = resolveReference(expression.operand, sheet, depth + 1);
+      const base = resolveReference(expression.operand, sheet, depth + 1, form, evaluated);
       if ("type" in base) return base;
       const address = {sheet: base.sheet, row: base.firstRow, column: base.firstColumn};
       cellValue(address, depth + 1, true);
@@ -1199,24 +1301,48 @@ export function calculateFormulas(
       return array ? {...base, height: array.rows.length, width: array.rows[0]!.length} : error("#REF!");
     }
     if (expression.kind === "name") {
+      const bound = bindings.get(normalizeBindingName(expression.name));
+      if (bound !== undefined) {
+        const value = boundResult(bound);
+        return isRange(value) && value.reference ? checkedReference(value.reference) : error("#VALUE!");
+      }
       const named = source.resolveName?.(expression.name, activeAddress);
-      return named === undefined ? error("#NAME?") : "kind" in named ? resolveReference(named, sheet, depth + 1) : checkedReference(named);
+      if (named !== undefined && "kind" in named && computedIndexInput(named)) {
+        const value = evaluate(named, sheet, depth + 1);
+        evaluated?.set(expression, value);
+        return isRange(value) && value.reference ? checkedReference(value.reference) : error("#VALUE!");
+      }
+      return named === undefined ? error("#NAME?") : "kind" in named ? resolveReference(named, sheet, depth + 1, form, evaluated) : checkedReference(named);
+    }
+    if (computedReferenceCall(expression)) {
+      const value = evaluate(expression, sheet, depth + 1);
+      evaluated?.set(expression, value);
+      return isRange(value) && value.reference ? checkedReference(value.reference) : error("#VALUE!");
     }
     if (expression.kind === "function") {
       const name = normalizeFunctionName(expression.name), args = expression.arguments;
       const n = (index: number, fallback: number) => args[index] === undefined || args[index]!.kind === "omitted" ? number(fallback) : numeric(scalar(evaluate(args[index]!, sheet, depth + 1)));
       if (name === "INDIRECT" && args.length >= 1 && args.length <= 2) {
+        if (form) form.reference = true;
         const value = scalar(evaluate(args[0]!, sheet, depth + 1));
         if (value.type === "error") return value;
         const styleValue = args[1] === undefined ? {kind: "omitted"} as const : evaluate(args[1], sheet, depth + 1);
         const style = "kind" in styleValue && styleValue.kind === "omitted" ? boolean(true) : logical(scalar(styleValue));
         if (style.type === "error") return style;
-        if (!style.value) return error("#REF!");
-        try { return resolveReference(parseFormula(text(value)).expression, sheet, depth + 1); } catch (cause) { if (cause instanceof FormulaParseError) return error("#REF!"); throw cause; }
+        const reference = indirectReference(text(value), style.value, activeAddress, source,
+          (expression, targetSheet) => {
+            const previousAddress = activeAddress;
+            activeAddress = {...activeAddress, sheet: targetSheet};
+            try { return resolveReference(expression, targetSheet, depth + 1, form, evaluated); }
+            finally { activeAddress = previousAddress; }
+          }, message => { throw new EvaluationUnavailable("unavailable-dependency", message); });
+        return "type" in reference ? reference : checkedReference(reference);
       }
       if ((name === "OFFSET" && args.length >= 3 && args.length <= 5) || (name === "INDEX" && args.length >= 2 && args.length <= 3)) {
-        const base = resolveReference(args[0]!, sheet, depth + 1);
+        if (name === "OFFSET" && form) form.reference = true;
+        const base = resolveReference(args[0]!, sheet, depth + 1, form, evaluated);
         if ("type" in base) return base;
+        if (form) form.reference = true;
         const row = n(1, 0), col = n(2, name === "INDEX" ? 1 : 0);
         if (row.type === "error") return row;
         if (col.type === "error") return col;
@@ -1239,6 +1365,9 @@ export function calculateFormulas(
 
   function context(sheet: string, depth: number): FunctionContext {
     const capturedAddress = activeAddress, capturedBindings = new Map(bindings);
+    // Geometry probes may evaluate a scoped expression returning an array. Reuse
+    // that result once if the handler falls back to evaluating its values.
+    const evaluatedReferences = new Map<FormulaExpression, EvaluationValue>();
     const scoped = <T>(action: () => T, additions?: ReadonlyMap<string, FunctionValue>): T => {
       const priorAddress = activeAddress, priorBindings = bindings;
       activeAddress = capturedAddress;
@@ -1247,10 +1376,31 @@ export function calculateFormulas(
     };
     return {
       address: capturedAddress, source, dateSystem, maxArrayCells: limits.maxArrayCells, services: options.services,
-      evaluate: expression => scoped(() => toFunction(evaluate(expression, sheet, depth + 1))),
-      withBindings: (additions, expression) => scoped(() => toFunction(evaluate(expression, sheet, depth + 1)), additions),
+      evaluate: expression => scoped(() => {
+        const previous = referenceFallback;
+        referenceFallback = evaluatedReferences;
+        try { return toFunction(evaluate(expression, sheet, depth + 1)); }
+        finally { referenceFallback = previous; evaluatedReferences.clear(); }
+      }),
+      evaluateAggregate: expression => scoped(() => {
+        const value = aggregateValue(expression, sheet, depth);
+        return isRange(value) ? {kind: "array", rows: value.rows} : value;
+      }),
+      withBindings: (additions, expression, preserveReference = false) => scoped(() => {
+        const value = evaluate(expression, sheet, depth + 1);
+        return preserveReference ? bindingValue(value) : toFunction(value);
+      }, additions),
       call: (name, args) => scoped(() => toFunction(call(name.toUpperCase(), args.map(value => ({kind: "value", value, start: 0, end: 0})), sheet, depth + 1))),
-      reference: expression => scoped(() => resolveReference(expression, sheet, depth + 1)),
+      reference: (expression, targetSheet = sheet) => scoped(() => {
+        const form = {reference: false};
+        const previousAddress = activeAddress;
+        activeAddress = {...activeAddress, sheet: targetSheet};
+        let result: FunctionReference | FormulaScalarValue;
+        try { result = resolveReference(expression, targetSheet, depth + 1, form, evaluatedReferences); }
+        finally { activeAddress = previousAddress; }
+        if (form.reference && "type" in result) evaluatedReferences.set(expression, result);
+        return result;
+      }),
       readReference: ref => scoped(() => readReference(ref, depth + 1)),
       cell: address => readCell(source, address), operation,
       now: () => new Date(capturedNow.getTime()), random: options.random ?? Math.random,
@@ -1263,21 +1413,35 @@ export function calculateFormulas(
     if (depth > limits.maxEvaluationDepth) throw new EvaluationUnavailable("evaluation-limit", "Function evaluation depth exceeded.");
     const normalized = normalizeFunctionName(name);
     if (normalized === "PY" && (publicExpression?.kind !== "function" || normalizeFunctionName(publicExpression.name) !== "PY" || publicExpression.arguments !== args)) throw new EvaluationUnavailable("unsupported-function", "PY must be a standalone public formula.");
-    if (normalized === "PY" && args[0]?.kind !== "string") throw new EvaluationUnavailable("unavailable-dependency", "OOXML Python script indices require explicit script resolution; only public literal code syntax can be passed to a host.");
+    if (normalized === "PY" && args[0]?.kind === "number" && Number.isInteger(args[0].value) && args[0].value >= 0) throw new EvaluationUnavailable("unavailable-dependency", "OOXML Python script indices require explicit script resolution; only public literal code syntax can be passed to a host.");
     const named = source.resolveName?.(name, activeAddress);
     const bound = bindings.get(normalizeBindingName(normalized)) ?? (named && "kind" in named ? toFunction(evaluate(named, sheet, depth + 1)) : undefined);
-    if (bound !== undefined) return "kind" in bound && bound.kind === "lambda" ? bound.invoke(args.map(arg => toFunction(evaluate(arg, sheet, depth + 1)))) : error("#VALUE!");
+    if (bound !== undefined) return "kind" in bound && bound.kind === "lambda" ? boundResult(bound.invoke(args.map(arg => bindingValue(evaluate(arg, sheet, depth + 1))))) : error("#VALUE!");
     for (const registry of [...registries].reverse()) {
       const handler = registry.get(normalized);
       if (handler !== undefined) {
+        if ((normalized === "OFFSET" || normalized === "INDIRECT") && handler === extendedFunctions.get(normalized)) {
+          // Reference functions retain geometry until a value consumer needs cells.
+          // Explicit registry overrides still receive their normal handler call.
+          const ref = resolveReference({kind: "function", name: normalized, arguments: args, start: 0, end: 0}, sheet, depth + 1);
+          return "type" in ref ? ref : referenceFromGeometry(ref, depth + 1);
+        }
         const result = handler(args, context(sheet, depth));
-        return normalized === "OFFSET" || normalized === "INDIRECT" ? referenceResult(result) : result;
+        return normalized === "OFFSET" || normalized === "INDIRECT" ? referenceResult(result) : boundResult(result);
       }
     }
-    if (["OFFSET", "INDIRECT", "INDEX"].includes(normalized) && args[0]?.kind !== "array" && args[0]?.kind !== "value") {
-      const ref = resolveReference({kind: "function", name: normalized, arguments: args, start: 0, end: 0}, sheet, depth + 1);
-      if (!("type" in ref)) return referenceResult(readReference(ref, depth + 1));
-      if (normalized !== "INDEX") return ref;
+    if (normalized === "INDEX" && args[0] && computedIndexInput(args[0])) {
+      // The reference/value fallback must not execute a computed argument twice.
+      args = [{kind: "value", value: bindingValue(evaluate(args[0], sheet, depth + 1)), start: 0, end: 0}, ...args.slice(1)];
+    }
+    const firstValue = args[0]?.kind === "value" ? boundResult(args[0].value) : undefined;
+    if (["OFFSET", "INDIRECT", "INDEX"].includes(normalized) && args[0]?.kind !== "array" && (args[0]?.kind !== "value" || firstValue && isRange(firstValue) && firstValue.reference)) {
+      const form = {reference: false};
+      const ref = resolveReference({kind: "function", name: normalized, arguments: args, start: 0, end: 0}, sheet, depth + 1, form);
+      if (!("type" in ref)) return referenceResult(readReference(ref, depth + 1), ref);
+      // Once a reference base is established, an invalid row/column is final.
+      // Retrying as a value would re-run index expressions (including volatile ones).
+      if (normalized !== "INDEX" || form.reference) return ref;
     }
     if (normalized === "TRUE" || normalized === "FALSE") return args.length === 0 ? boolean(normalized === "TRUE") : error("#VALUE!");
     const implementation = functions.get(normalized);
@@ -1310,6 +1474,7 @@ export function calculateFormulas(
   let pendingCells = formulaCells;
   while (pendingCells.length) {
   for (const formulaCell of pendingCells) {
+    if (memo.has(addressKey(formulaCell.address)) || unavailable.has(addressKey(formulaCell.address))) continue;
     try {
       cellValue(formulaCell.address, 0, false);
     } catch (cause) {
@@ -1323,7 +1488,7 @@ export function calculateFormulas(
   return new FormulaCalculation(values, dependencies, diagnostics, arrays);
 }
 
-type RangeEvaluationValue = { readonly kind: "range"; readonly values: readonly FormulaScalarValue[]; readonly rows: readonly (readonly FormulaScalarValue[])[] };
+type RangeEvaluationValue = { readonly reference?: FunctionReference; readonly kind: "range"; readonly values: readonly FormulaScalarValue[]; readonly rows: readonly (readonly FormulaScalarValue[])[] };
 type EvaluationValue = FunctionValue | RangeEvaluationValue;
 
 class EvaluationUnavailable extends Error {
@@ -1478,134 +1643,10 @@ function assertRangeSize(height: number, width: number, maxRangeCells: number): 
   }
 }
 
-type CriterionOperator = "=" | "<>" | "<" | "<=" | ">" | ">=";
-
-interface FormulaCriterion {
-  readonly operator: CriterionOperator;
-  readonly operand: Exclude<FormulaScalarValue, { type: "error" }>;
-  readonly wildcard: readonly WildcardToken[] | undefined;
-}
-
-type WildcardToken =
-  | { readonly kind: "many" }
-  | { readonly kind: "one" }
-  | { readonly kind: "literal"; readonly value: string };
-
-function compileCriterion(value: Exclude<FormulaScalarValue, { type: "error" }>): FormulaCriterion {
-  if (value.type === "blank") return Object.freeze({ operator: "=", operand: number(0), wildcard: undefined });
-  if (value.type !== "string") return Object.freeze({ operator: "=", operand: value, wildcard: undefined });
-  if ([...value.value].length > MAX_CRITERION_CHARACTERS) {
-    throw new EvaluationUnavailable("evaluation-limit", "Formula criterion exceeds the character limit.");
-  }
-  const operatorMatch = /^(<=|>=|<>|=|<|>)/.exec(value.value);
-  const operator = (operatorMatch?.[1] ?? "=") as CriterionOperator;
-  const source = value.value.slice(operatorMatch?.[1]?.length ?? 0);
-  const trimmed = source.trim();
-  if (NUMBER_CRITERION.test(trimmed)) {
-    return Object.freeze({ operator, operand: number(Number(trimmed)), wildcard: undefined });
-  }
-  if (/^(?:TRUE|FALSE)$/i.test(trimmed)) {
-    return Object.freeze({ operator, operand: boolean(trimmed.toUpperCase() === "TRUE"), wildcard: undefined });
-  }
-  if (source.length === 0) return Object.freeze({ operator, operand: string(""), wildcard: undefined });
-  const wildcard = operator === "=" || operator === "<>" ? tokenizeWildcard(source) : undefined;
-  const hasWildcard = wildcard?.some((token) => token.kind !== "literal") ?? false;
-  const operand = string(wildcard === undefined ? source : wildcard.map((token) => token.kind === "literal" ? token.value : token.kind === "one" ? "?" : "*").join(""));
-  return Object.freeze({ operator, operand, wildcard: hasWildcard ? wildcard : undefined });
-}
-
-function matchesCriterion(value: FormulaScalarValue, criterion: FormulaCriterion): boolean {
-  const equal = criterion.wildcard === undefined
-    ? criterionEquals(value, criterion.operand)
-    : value.type === "string" && wildcardMatches(criterion.wildcard, value.value);
-  if (criterion.operator === "=") return equal;
-  if (criterion.operator === "<>") return !equal;
-  if (!sameComparableType(value, criterion.operand)) return false;
-  const comparison = compareCriterion(value, criterion.operand);
-  switch (criterion.operator) {
-    case "<": return comparison < 0;
-    case "<=": return comparison <= 0;
-    case ">": return comparison > 0;
-    case ">=": return comparison >= 0;
-  }
-}
-
-function criterionEquals(value: FormulaScalarValue, operand: Exclude<FormulaScalarValue, { type: "error" }>): boolean {
-  if (operand.type === "string" && operand.value === "") return value.type === "blank" || value.type === "string" && value.value === "";
-  if (value.type === "error" && operand.type === "string") return value.value.toLocaleLowerCase("en-US") === operand.value.toLocaleLowerCase("en-US");
-  if (value.type !== operand.type) return false;
-  return compareCriterion(value, operand) === 0;
-}
-
-function sameComparableType(value: FormulaScalarValue, operand: Exclude<FormulaScalarValue, { type: "error" }>): boolean {
-  return value.type === operand.type && value.type !== "blank";
-}
-
-function compareCriterion(value: FormulaScalarValue, operand: Exclude<FormulaScalarValue, { type: "error" }>): number {
-  if (value.type === "number" && operand.type === "number") return value.value - operand.value;
-  if (value.type === "boolean" && operand.type === "boolean") return Number(value.value) - Number(operand.value);
-  return text(value).localeCompare(text(operand), "en-US", { sensitivity: "base" });
-}
-
-function tokenizeWildcard(source: string): readonly WildcardToken[] {
-  const tokens: WildcardToken[] = [];
-  const characters = [...source];
-  for (let index = 0; index < characters.length; index += 1) {
-    const character = characters[index]!;
-    if (character === "~" && (characters[index + 1] === "~" || characters[index + 1] === "*" || characters[index + 1] === "?")) {
-      tokens.push(Object.freeze({ kind: "literal", value: characters[index + 1]! }));
-      index += 1;
-    } else if (character === "*") {
-      if (tokens.at(-1)?.kind !== "many") tokens.push(Object.freeze({ kind: "many" }));
-    } else if (character === "?") tokens.push(Object.freeze({ kind: "one" }));
-    else tokens.push(Object.freeze({ kind: "literal", value: character }));
-  }
-  return Object.freeze(tokens);
-}
-
-/** The capped pattern keeps greedy matching linear in candidate length without regex backtracking. */
-function wildcardMatches(tokens: readonly WildcardToken[], candidate: string): boolean {
-  const text = [...candidate.toLocaleLowerCase("en-US")];
-  const pattern: WildcardToken[] = [];
-  for (const token of tokens) {
-    if (token.kind !== "literal") pattern.push(token);
-    else for (const value of token.value.toLocaleLowerCase("en-US")) pattern.push(Object.freeze({ kind: "literal", value }));
-  }
-  let textIndex = 0;
-  let patternIndex = 0;
-  let starIndex = -1;
-  let starTextIndex = -1;
-  while (textIndex < text.length) {
-    const token = pattern[patternIndex];
-    if (token?.kind === "one" || token?.kind === "literal" && token.value === text[textIndex]) {
-      textIndex += 1;
-      patternIndex += 1;
-      continue;
-    }
-    if (token?.kind === "many") {
-      starIndex = patternIndex;
-      starTextIndex = textIndex;
-      patternIndex += 1;
-      continue;
-    }
-    if (starIndex >= 0) {
-      starTextIndex += 1;
-      textIndex = starTextIndex;
-      patternIndex = starIndex + 1;
-      continue;
-    }
-    return false;
-  }
-  while (pattern[patternIndex]?.kind === "many") patternIndex += 1;
-  return patternIndex === pattern.length;
-}
-
 function isFormulaError<T>(value: T | Extract<FormulaScalarValue, { type: "error" }>): value is Extract<FormulaScalarValue, { type: "error" }> {
   return typeof value === "object" && value !== null && "type" in value && value.type === "error";
 }
 
-const NUMBER_CRITERION = /^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[Ee][+-]?[0-9]+)?$/;
-const MAX_CRITERION_CHARACTERS = 8_192;
 const MAX_FORMULA_TEXT_CHARACTERS = 32_767;
 const MAX_SPREADSHEET_ROW = 1_048_576;
 const MAX_SPREADSHEET_COLUMN = 16_384;
