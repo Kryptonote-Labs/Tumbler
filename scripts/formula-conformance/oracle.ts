@@ -88,6 +88,9 @@ for (const category of await loadCategoryCases()) {
         for (const [column, expected] of values.entries()) {
           const address = reference(row + 1, column + 1);
           const raw = artifact.worksheet.cell(address)?.value;
+          if (expected.type === "error" && raw?.type === "error" && observedErrorLabels[address] === undefined) {
+            throw new Error(`${fixture.name}!${address}: native error label was not captured; a legacy error cache alone is insufficient evidence.`);
+          }
           const actual: FormulaScalarValue = raw === undefined || raw.type === "blank" ? { type: "blank" }
             : raw.type === "error" ? { type: "error", value: (observedErrorLabels[address] ?? raw.value) as `#${string}` }
             : raw.type === "number" ? { type: "number", value: raw.value }
