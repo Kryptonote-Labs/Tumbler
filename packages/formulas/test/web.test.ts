@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { FormulaScalarValue } from "../src/evaluator.ts";
 import type { FormulaExpression } from "../src/ast.ts";
 import { functionError, type FunctionContext, type FunctionValue } from "../src/function-runtime.ts";
 import { webFunctions } from "../src/functions/web.ts";
@@ -8,6 +9,7 @@ import { cases } from "./fixtures/web.ts";
 function context(cells: Record<string, FunctionValue> = {}, overrides: Partial<FunctionContext> = {}): FunctionContext {
   let operations = 0;
   const result: FunctionContext = {
+    evaluateAggregate(expression) { return this.evaluate(expression); },
     address: { sheet: "Results", row: 1, column: 1 }, source: { formulaCells: [], resolveSheet: (_, name) => name, cell: () => undefined },
     dateSystem: "1900", maxArrayCells: 10000, services: undefined,
     evaluate(expression) {
@@ -28,7 +30,7 @@ function context(cells: Record<string, FunctionValue> = {}, overrides: Partial<F
   };
   return result;
 }
-const s = (value: string): FunctionValue => ({ type: "string", value });
+const s = (value: string): FormulaScalarValue => ({ type: "string", value });
 function run(formula: string, ctx = context()): FunctionValue { return ctx.evaluate(parseFormula(formula).expression); }
 function input(name: string, values: FunctionValue[], overrides: Partial<FunctionContext> = {}): FunctionValue {
   const expressions: FormulaExpression[] = values.map((_, i) => ({ kind: "number", value: i, lexical: String(i), start: 0, end: 1 }));
@@ -99,6 +101,22 @@ describe("web service capability and bounds", () => {
   test("XML numeric conversion and preserved whitespace", () => {
     expect(run('FILTERXML("<r> -1.25e2 </r>","/r")')).toEqual({ type: "number", value: -125 });
     expect(run('FILTERXML("<r> abc </r>","/r")')).toEqual(s(" abc "));
+  });
+  test("XPath text nodes coalesce CDATA and retain document order", () => {
+    expect(input("FILTERXML", [s("<r>a<![CDATA[b]]>c</r>"), s("/r/text()")])).toEqual(s("abc"));
+    expect(input("FILTERXML", [s("<r>a<b>b</b>c</r>"), s("//text()")])).toEqual({ kind: "array", rows: [[s("a")], [s("b")], [s("c")]] });
+    expect(input("FILTERXML", [s("<r>a<r>b</r>c</r>"), s("//r/text()")])).toEqual({ kind: "array", rows: [[s("a")], [s("b")], [s("c")]] });
+    expect(input("FILTERXML", [s("<r>a<!-- comment -->b</r>"), s("/r/text()")])).toEqual({ kind: "array", rows: [[s("a")], [s("b")]] });
+  });
+  test("Unicode element and attribute names delegate to the XML host", () => {
+    for (const xml of ['<café>ok</café>', '<r café="v">ok</r>', '<r><café>ok</café></r>', '<r><?café ok?>ok</r>', '<r><?é ok?>ok</r>']) {
+      expect(() => input("FILTERXML", [s(xml), s("/*")])).toThrow("unavailable");
+      expect(input("FILTERXML", [s(xml), s("/*")], { services: { invoke(name, args) {
+        expect(name).toBe("FILTERXML");
+        expect(args).toEqual([s(xml), s("/*")]);
+        return s("ok");
+      } } })).toEqual(s("ok"));
+    }
   });
   test("arity and scalar array coercion", () => {
     for (const [name, counts] of [["ENCODEURL", [0, 2]], ["WEBSERVICE", [0, 2]], ["FILTERXML", [0, 1, 3]]] as const) for (const count of counts) expect(input(name, Array.from({ length: count }, () => s("x")))).toEqual(functionError());

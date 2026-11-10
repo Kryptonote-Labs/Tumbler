@@ -75,6 +75,8 @@ export class SpreadsheetConditionalStyleProjection {
   readonly #calculation: SpreadsheetCalculationSnapshot | undefined;
   readonly #rules: readonly ApplicableRule[];
   readonly #cache = new Map<string, readonly SpreadsheetDifferentialFormat[]>();
+  readonly #rowRules = new Map<number, readonly (ApplicableRule & { ranges: readonly CellRange[] })[]>();
+  readonly #numericMatches = new Map<SpreadsheetConditionalFormattingRule, Map<number, boolean>>();
   readonly #diagnostics = new Map<string, SpreadsheetConditionalFormattingDiagnostic>();
 
   constructor(worksheet: SpreadsheetWorksheet, calculation?: SpreadsheetCalculationSnapshot) {
@@ -83,6 +85,13 @@ export class SpreadsheetConditionalStyleProjection {
     this.#rules = Object.freeze(worksheet.conditionalFormatting
       .flatMap((format) => format.rules.map((rule) => ({ format, rule })))
       .sort((left, right) => left.rule.priority - right.rule.priority || left.rule.sourceOrder - right.rule.sourceOrder));
+    // Literal numeric comparisons depend only on the calculated value, not the cell address.
+    // Share their results without changing the formula engine's comparison semantics.
+    for (const { rule } of this.#rules) {
+      if (rule.kind === "cellIs" && rule.formulas.every(formula => /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(formula.trim()))) {
+        this.#numericMatches.set(rule, new Map());
+      }
+    }
   }
 
   get diagnostics(): readonly SpreadsheetConditionalFormattingDiagnostic[] {
@@ -94,14 +103,30 @@ export class SpreadsheetConditionalStyleProjection {
     const normalized = formatCellReference(address);
     const cached = this.#cache.get(normalized);
     if (cached !== undefined) return cached;
+    let rules = this.#rowRules.get(address.row);
+    if (rules === undefined) {
+      const byFormat = new Map<SpreadsheetConditionalFormatting, readonly CellRange[]>();
+      rules = this.#rules.flatMap(({ format, rule }) => {
+        let ranges = byFormat.get(format);
+        if (ranges === undefined) {
+          ranges = format.ranges.filter(range => address.row >= range.start.row && address.row <= range.end.row);
+          byFormat.set(format, ranges);
+        }
+        return ranges.length ? [{ format, rule, ranges }] : [];
+      });
+      if (this.#rowRules.size >= 512) this.#rowRules.delete(this.#rowRules.keys().next().value!);
+      this.#rowRules.set(address.row, rules);
+    }
+    const targetValue = this.#calculation?.value(address) ?? this.#worksheet.cell(address)?.value;
+    const numericValue = targetValue?.type === "number" ? targetValue.value : undefined;
     const matched: SpreadsheetDifferentialFormat[] = [];
-    for (const { format, rule } of this.#rules) {
-      if (!format.ranges.some((range) => contains(range, address))) continue;
+    for (const { format, rule, ranges } of rules) {
+      if (!ranges.some(range => address.column >= range.start.column && address.column <= range.end.column)) continue;
       if (format.pivot) {
         this.#diagnose("unsupported-rule", rule, normalized, "PivotTable conditional formatting is unsupported.");
         continue;
       }
-      const result = this.#matches(rule, format.ranges[0]!.start, address, normalized);
+      const result = this.#matches(rule, format.ranges[0]!.start, address, normalized, numericValue);
       if (result !== true) continue;
       const differential = rule.differentialFormatId === undefined
         ? undefined
@@ -121,11 +146,15 @@ export class SpreadsheetConditionalStyleProjection {
     origin: CellAddress,
     target: CellAddress,
     reference: string,
+    numericValue: number | undefined,
   ): boolean | undefined {
     if (rule.kind === "unsupported") {
       this.#diagnose("unsupported-rule", rule, reference, rule.reason);
       return undefined;
     }
+    const numericMatches = this.#numericMatches.get(rule);
+    const cached = numericValue === undefined ? undefined : numericMatches?.get(numericValue);
+    if (cached !== undefined) return cached;
     let formula: string;
     try {
       if (rule.kind === "expression") {
@@ -148,7 +177,9 @@ export class SpreadsheetConditionalStyleProjection {
         return undefined;
       }
       const value = calculation.value(CONDITION_CELL);
-      return value?.type === "boolean" ? value.value : undefined;
+      if (value?.type !== "boolean") return undefined;
+      if (numericValue !== undefined && numericMatches && numericMatches.size < 1024) numericMatches.set(numericValue, value.value);
+      return value.value;
     } catch (cause) {
       this.#diagnose("unsupported-formula", rule, reference, cause instanceof Error ? cause.message : "The formula could not be evaluated.");
       return undefined;
@@ -319,11 +350,6 @@ function conditionalRange(raw: string): CellRange {
   } catch (cause) {
     throw conditionalError(`Conditional formatting has invalid range ${JSON.stringify(raw)}.`, cause);
   }
-}
-
-function contains(range: CellRange, address: CellAddress): boolean {
-  return address.row >= range.start.row && address.row <= range.end.row &&
-    address.column >= range.start.column && address.column <= range.end.column;
 }
 
 function isCellIsOperator(value: string | undefined): value is SpreadsheetConditionalFormattingOperator {

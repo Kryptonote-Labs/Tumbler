@@ -19,6 +19,7 @@ function context(cells: DatabaseFixture["cells"], options: { budget?: number; ma
     return name + row;
   };
   const ctx: FunctionContext = {
+    evaluateAggregate(expression) { return this.evaluate(expression); },
     address: { sheet: "Results", row: 1, column: 1 },
     source: { formulaCells: [], cell: () => undefined, resolveSheet: (_, name) => name },
     dateSystem: options.dateSystem ?? "1900", maxArrayCells: options.maxArrayCells ?? 100_000, services: undefined,

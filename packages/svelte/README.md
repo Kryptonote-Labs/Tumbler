@@ -281,8 +281,8 @@ only for the document revision currently rendered.
 PDF pages are available through `@tumblerjs/svelte/pdf`. `PdfDocumentView` accepts an
 `@tumblerjs/pdf` document, a display scale and page/error callbacks. It keeps page dimensions
 stable while a shared module worker interprets and paints nearby pages. The viewer retains a
-small page preview while replacing visible regions with 512-device-pixel tiles at the exact
-screen density. It releases offscreen rasters, page scenes and decoded images. Large zooms
+page preview at display resolution, capped at 2048 pixels on its longest side. After scrolling
+settles for 100 ms, it replaces visible regions with 512-device-pixel tiles at the exact screen density. It releases offscreen rasters, page scenes and decoded images. Large zooms
 allocate tiles around the viewport rather than full-page canvases. Source content and final
 render resolution are unchanged. `goToPage(index)` scrolls to a zero-based page index. Product navigation,
 authorization, uploads and download controls belong to the host application.
@@ -307,8 +307,15 @@ Its worker must be allowed by the host's content security policy. When consuming
 outside the app directory in development, include their directory in Vite's `server.fs.allow` so
 it can serve the worker module.
 
-The transparent selection layer groups affine glyphs into SVG text runs. Per-glyph positions, advances, Unicode node
-identity and the headless hit-test index still determine native selection and copying.
+`PdfEditableDocument` shares a worker across nearby pages for source interpretation, source placement
+and painting. It transfers source bitmaps into a background canvas and paints changed text on a separate
+transparent canvas. Unchanged pages allocate no text canvas. Drag previews reuse prepared source and
+text layers. Both views prepare two viewport heights ahead and release rasters outside that window.
+
+The transparent selection layer batches compatible glyphs into SVG text spans with explicit character
+positions. Contextually shaped scripts and multi-character glyphs retain independent source widths.
+Per-item UTF-16 offsets and the headless hit-test index still determine native selection and copying.
+Worker text projections share immutable font descriptors across glyphs to reduce message allocation.
 
 Hosts can call `PresentationSlideView.editText(objectKey)` after rendering an inserted
 text box or table to focus its text editor. Tables start in the first editable cell.
@@ -367,6 +374,19 @@ browser memory. The docs example is `/playground/pdf-merge`.
 
 Pass `remoteSelections` to `SpreadsheetGrid` as an array of `{ id, name, color, range }`. Ranges use one-based, inclusive `start` and `end` cell coordinates. The host supplies selections for the displayed worksheet and owns presence transport. The grid projects ranges through filtered rows and clips them against scrolling and frozen panes. Overlays do not intercept pointer input.
 
+### Dense spreadsheet viewports
+
+`SpreadsheetGrid` uses retained canvas row bitmaps above 1,500 visible row/column
+intersections, including overscan. Focused cells, editing inputs, merged cells,
+hyperlinks, table controls and vertical text keep DOM rendering. Pointer input uses
+the same selection and editing paths, and `aria-activedescendant` exposes the
+focused cell. Wheel input is combined once per animation frame.
+
+Recently scrolled rows retain at most 32 MiB of bitmaps and 512 rows, separately
+from mounted rows. These are cache bounds, not worksheet limits. Worksheet,
+calculation, geometry, scale, display density and font changes refresh the relevant
+bitmaps. This changes rendering only; formula compatibility is unchanged.
+
 ### Visual PDF merging
 
 `PdfMerge` shows expandable source rows with lazy page thumbnails, checkbox and Shift-click
@@ -383,3 +403,13 @@ for an Open link; the merge setup remains intact. Host `disabled` prevents creat
 between visible thumbnails of the same source document.
 
 Hosts can retain a reactive `createPdfMergeState()` per document and pass it as `session` to preserve source choices, output name and expanded row across mounts.
+
+PDF viewers follow internal destinations and safe HTTP, HTTPS and mailto links. In
+`PdfEditableDocument`, Ctrl/Cmd-click follows links while plain clicks still edit or select.
+Both PDF document components expose `goToDestination(target)` for outline navigation.
+Navigation follows source page identities through reorder, insertion and deletion.
+Hosted PDF merge sources can provide a `read(signal)` callback alongside their initial `bytes`.
+`PdfMerge` calls it when adding the source and immediately before creation, preserving page choices
+and position. Reads may return fresh bytes or an already authenticated `PdfDocument`. Give initial
+sources a stable `key` when retaining `session` across mounts to replace the host read callback.
+Callbacks and authenticated documents remain in memory only.

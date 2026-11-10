@@ -12,6 +12,7 @@ const s = (value: string): FormulaScalarValue => ({ type: "string", value });
 function harness(cells: Record<string, FormulaScalarValue> = {}) {
   let operations = 0;
   const context: FunctionContext = {
+    evaluateAggregate(expression) { return this.evaluate(expression); },
     address: { sheet: "Results", row: 1, column: 1 }, dateSystem: "1900", maxArrayCells: 1000,
     source: {
       formulaCells: [], cell: () => undefined,

@@ -1,3 +1,5 @@
+import { pdfEdits, pdfEditInput, type PdfEditInput } from './pdf-edit.ts';
+import { z } from 'zod';
 import { pdfDeletePagesInput } from "./pdf-pages.ts";
 import type { OperationHost } from "./registry.ts";
 import type { PdfSearchOptions, PdfSearchResult } from "@tumblerjs/pdf";
@@ -6,6 +8,9 @@ export interface PdfMergeInput {
   output: string;
 }
 export interface PdfOperationHost {
+  editPdf?(document: string, input: PdfEditInput): Promise<unknown>;
+  inspectPdf?(document: string, page: number): Promise<unknown>;
+  renderPdf?(document: string, page: number): Promise<unknown>;
   mergePdf?(input: PdfMergeInput): Promise<unknown>;
   findPdf?(
     document: string,
@@ -66,6 +71,8 @@ async function runPdfFind(
 }
 
 export function pdfHelp(commandName = "tumbler", name?: string): string {
+  if (name && Object.hasOwn(pdfEdits, name)) return `Usage: ${commandName} <document> pdf ${name} --input JSON\n${JSON.stringify(z.toJSONSchema(pdfEdits[name as keyof typeof pdfEdits], { io: "input" }), null, 2)}\nRead or inspect first. Offsets are UTF-16; coordinates and widths are points in unrotated page space. place-text resizes width; height follows text flow. hide-text removes from output, hidden:false restores it.\n`;
+  if (name === 'inspect' || name === 'render') return `Usage: ${commandName} <document> pdf ${name} --page N\nPages start at 1. Inspect returns region IDs, text, bounds, runs and style. Render returns page pixels.\n`;
   if (name && !["delete-pages", "find", "merge"].includes(name))
     throw new Error(`Unknown PDF command: ${name}`);
   const findHelp = `Usage: ${commandName} <document.pdf> pdf find <text> [--match-case] [--pages 2-8]\nReturns matches, total, one-based pages, context, and top-left page rectangles in points.\n`;
@@ -77,7 +84,7 @@ Creates a new PDF without overwriting an existing file. Passwords unlock inputs;
   if (name === "merge") return mergeHelp;
   if (name === "find") return findHelp;
   return (
-    (name ? "" : findHelp + mergeHelp) +
+    (name ? "" : `PDF operations: inspect, render, ${Object.keys(pdfEdits).join(", ")}\nUse pdf <operation> --help for its input schema.\n` + findHelp + mergeHelp) +
     [
       `Usage: ${commandName} <document.pdf> pdf delete-pages 2,4-6`,
       "Delete pages in place. Page numbers start at 1 and refer to the original document.",
@@ -103,6 +110,20 @@ export async function runPdf(
     options.stdout(
       pdfHelp(options.commandName, name === "--help" ? undefined : name),
     );
+    return;
+  }
+  if (Object.hasOwn(pdfEdits, name)) {
+    if (!document || args.length !== 2 || args[0] !== '--input') throw new Error('Use --input JSON.');
+    if (!options.host.editPdf) throw new Error('PDF editing is unavailable on this host.');
+    options.stdout(JSON.stringify(await options.host.editPdf(document, pdfEditInput.parse({ operation: name, input: JSON.parse(args[1]!) }))) + '\n');
+    return;
+  }
+  if (name === 'inspect' || name === 'render') {
+    if (!document || args.length !== 2 || args[0] !== '--page') throw new Error('Use --page N.');
+    const page = z.coerce.number().int().positive().safe().parse(args[1]);
+    const method = name === 'inspect' ? options.host.inspectPdf : options.host.renderPdf;
+    if (!method) throw new Error('PDF operation is unavailable on this host.');
+    options.stdout(JSON.stringify(await method(document, page)) + '\n');
     return;
   }
   if (name === "merge") {
