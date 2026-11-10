@@ -40,19 +40,27 @@ import {
   type PdfSceneElement,
   type PdfSceneSource,
   type PdfPaint,
+  type PdfImageElement,
+  type PdfImageData,
 } from "./scene.ts";
 import { PdfSyntax } from "./syntax.ts";
 
+const documentFonts = new WeakMap<PdfDocument, WeakMap<PdfDictionary, PdfFont>>();
+
 /** Compile a page to a reusable scene; the browser is a painter, not the canonical PDF document. */
 export class PdfInterpreter {
-  private readonly fonts = new WeakMap<PdfDictionary, PdfFont>();
+  private readonly fonts: WeakMap<PdfDictionary, PdfFont>;
   private readonly scenes = new Map<number, PdfPageScene>();
   private readonly activeForms = new Set<PdfStream>();
   private budget = new PdfExecutionBudget();
   constructor(
     readonly document: PdfDocument,
     private limits: PdfExecutionLimits = {},
-  ) {}
+    private options: { deferImages?: boolean } = {},
+  ) {
+    this.fonts = documentFonts.get(document) ?? new WeakMap<PdfDictionary, PdfFont>();
+    documentFonts.set(document, this.fonts);
+  }
   /** Carry the same execution budget into isolated renderers. */
   get executionLimits(): PdfExecutionLimits { return { ...this.limits }; }
   page(index: number): PdfPageScene {
@@ -101,6 +109,18 @@ export class PdfInterpreter {
   /** Drop a rebuildable page projection when its viewer leaves the viewport. */
   releasePage(index: number) {
     this.scenes.delete(index);
+  }
+  private image(
+    base: { id: string; source: PdfSceneSource; state: PdfPaintState },
+    read: () => PdfImageData,
+  ): PdfImageElement {
+    if (!this.options.deferImages) return { ...base, kind: "image", image: read() };
+    let decoded: PdfImageData | undefined;
+    return {
+      ...base,
+      kind: "image",
+      get image() { return decoded ??= read(); },
+    };
   }
   private resource(resources: PdfDictionary, category: string, key: string) {
     const source = this.document.source,
@@ -206,16 +226,12 @@ export class PdfInterpreter {
             if (kind === "Form")
               this.form(resource, resources, context, elements, `${instance}:form:${start}`);
             else if (kind === "Image")
-              elements.push({
-                ...base(),
-                kind: "image",
-                image: decodePdfImage(
-                  source,
-                  resource.dictionary,
-                  source.encodedStream(resource),
-                  resources,
-                ),
-              });
+              elements.push(this.image(base(), () => decodePdfImage(
+                source,
+                resource.dictionary,
+                source.encodedStream(resource),
+                resources,
+              )));
             else unsupported(`PDF XObject /${kind} is not supported.`);
           }
           break;
@@ -254,11 +270,7 @@ export class PdfInterpreter {
             syntax,
             Math.ceil((width * space.components * bits) / 8) * height,
           );
-          elements.push({
-            ...base(),
-            kind: "image",
-            image: decodePdfImage(source, canonical, bytes, resources),
-          });
+          elements.push(this.image(base(), () => decodePdfImage(source, canonical, bytes, resources)));
           break;
         }
         case "d0":

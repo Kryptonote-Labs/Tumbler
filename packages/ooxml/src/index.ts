@@ -5,6 +5,7 @@ export {
   LosslessXmlDocument,
   LosslessXmlError,
   parseLosslessXml,
+  projectLosslessXml,
 } from "./xml/source-document.ts";
 export type {
   LosslessXmlAttribute,

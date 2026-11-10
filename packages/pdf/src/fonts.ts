@@ -31,6 +31,7 @@ export interface PdfGlyph {
   readonly renderText: string;
   readonly width: number;
   readonly path: string | undefined;
+  readonly bounds?: readonly [number, number, number, number];
   readonly procedure: PdfStream | undefined;
   readonly vertical: readonly [number, number, number] | undefined;
 }
@@ -55,6 +56,7 @@ export class PdfFont {
   private readonly widths = new Map<number, number>();
   private readonly verticalWidths = new Map<number, readonly [number, number, number]>();
   private readonly paths = new Map<number, string>();
+  private readonly bounds = new Map<number, readonly [number, number, number, number]>();
   private outlineNames: Map<string, number> | undefined;
   private rawCff = false;
   private readonly cidMap: Uint8Array | undefined;
@@ -352,6 +354,9 @@ export class PdfFont {
       if (path === undefined) {
         path = this.outline.getGlyph(glyphId).path.toSVG();
         this.paths.set(glyphId, path);
+        const box = this.outline.getGlyph(glyphId).bbox;
+        if ([box.minX,box.minY,box.maxX,box.maxY].every(Number.isFinite))
+          this.bounds.set(glyphId,[box.minX,box.minY,box.maxX,box.maxY]);
       }
     }
     const width =
@@ -373,6 +378,7 @@ export class PdfFont {
       renderText: simple?.unicode ?? '\ufffd',
       width,
       path,
+      ...(this.bounds.has(glyphId) ? { bounds: this.bounds.get(glyphId)! } : {}),
       procedure: procedure instanceof PdfStream ? procedure : undefined,
       vertical: this.vertical
         ? (this.verticalWidths.get(cid) ?? [

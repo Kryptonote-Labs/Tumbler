@@ -1,37 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { FormulaExpression } from "../src/ast.ts";
 import type { FormulaScalarValue } from "../src/evaluator.ts";
-import { functionError, functionFlatten, functionNumber, functionNumeric, functionText, type FunctionContext, type FunctionValue } from "../src/function-runtime.ts";
+import { functionError, functionFlatten, functionNumber, functionNumeric, functionText, functionScalar, type FunctionContext, type FunctionValue } from "../src/function-runtime.ts";
 import { logicalFunctions } from "../src/functions/logical.ts";
 import { parseFormula } from "../src/parser.ts";
-import { tokenizeFormula } from "../src/lexer.ts";
 import { cases } from "./fixtures/logical.ts";
 
-// Temporary category-local adapter only: shared parser lacks name and omitted
-// nodes. Reuse its existing grammar via sentinel calls, then restore those nodes.
-function expression(source: string): FormulaExpression {
-  const tokens = tokenizeFormula(source);
-  let text = "";
-  for (let index = 0; index < tokens.length - 1; index++) {
-    const token = tokens[index]!, next = tokens[index + 1];
-    const previous = tokens[index - 1];
-    if (token.kind === "symbol" && token.value === "," && previous?.kind === "symbol" && ["(", ","].includes(previous.value)) text += "TESTOMITTED()";
-    if (token.kind === "identifier" && /^(TRUE|FALSE)$/i.test(token.value) && next?.kind === "symbol" && next.value === "(") text += `TEST${token.value.toUpperCase()}`;
-    else if (token.kind === "identifier" && !(next?.kind === "symbol" && ["(", "!"].includes(next.value)) && !/^(TRUE|FALSE)$/i.test(token.value)) text += `TESTNAME("${token.value}")`;
-    else text += source.slice(token.start, token.end);
-  }
-  function restore(node: FormulaExpression): FormulaExpression {
-    if (node.kind === "function") {
-      if (node.name === "TESTNAME") return { kind: "name", name: (node.arguments[0] as { value: string }).value, start: 0, end: 0 } as unknown as FormulaExpression;
-      if (node.name === "TESTOMITTED") return { kind: "omitted", start: 0, end: 0 } as unknown as FormulaExpression;
-      return { ...node, name: node.name.replace(/^TEST(TRUE|FALSE)$/, "$1"), arguments: node.arguments.map(restore) };
-    }
-    if (node.kind === "binary") return { ...node, left: restore(node.left), right: restore(node.right) };
-    if (node.kind === "unary" || node.kind === "percent") return { ...node, operand: restore(node.operand) };
-    return node;
-  }
-  return restore(parseFormula(text).expression);
-}
+function expression(source: string): FormulaExpression { return parseFormula(source).expression; }
 function context(cells: Record<string, FormulaScalarValue> = {}, maxArrayCells = 10000, budget = 100000): FunctionContext {
   let operations = 0;
   function scoped(bindings: ReadonlyMap<string, FunctionValue>): FunctionContext {
@@ -54,13 +29,19 @@ function context(cells: Record<string, FormulaScalarValue> = {}, maxArrayCells =
         }
         return functionError("#NAME?");
       },
+      evaluateAggregate(node) { return ctx.evaluate(node); },
       evaluate(node) {
         ctx.operation();
         const structural = node as unknown as { kind: string; name: string };
         if (structural.kind === "name") return bindings.get(structural.name.toUpperCase()) ?? functionError("#NAME?");
-        if (structural.kind === "omitted") return { type: "blank" };
+        if (structural.kind === "omitted") return { kind: "omitted" };
         switch (node.kind) {
           case "number": case "string": case "boolean": case "error": return { type: node.kind, value: node.value } as FormulaScalarValue;
+          case "invoke": {
+            const fn = ctx.evaluate(node.callee);
+            return "kind" in fn && fn.kind === "lambda" ? fn.invoke(node.arguments.map(ctx.evaluate)) : functionError();
+          }
+          case "array": return {kind: "array", rows: node.rows.map(row => row.map(item => functionScalar(ctx.evaluate(item))))};
           case "reference": {
             const start = node.startReference, end = node.endReference ?? start;
             const rows: FormulaScalarValue[][] = [];

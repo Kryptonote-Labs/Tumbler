@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { observePdfPageVisibility } from './page-visibility.ts';
   import { onMount } from 'svelte';
   import { PdfPageRenderer } from './page-renderer.ts';
   import { paintPdfTiles } from './paint-tiles.ts';
@@ -46,13 +47,10 @@
     let root = host.parentElement;
     while (root && !/(auto|scroll)/.test(getComputedStyle(root).overflowY))
       root = root.parentElement;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        near = entries.some((entry) => entry.isIntersecting);
+    const stopVisibility = observePdfPageVisibility(host, root, (next) => {
+        near = next;
         if (!host.closest('[data-pdf-zooming]')) applyVisibility();
-      },
-      { root, rootMargin: '128px' },
-    );
+      });
     let position: IntersectionObserver;
     const trackPosition = () => {
       position?.disconnect();
@@ -68,7 +66,6 @@
     const resize = new ResizeObserver(trackPosition);
     resize.observe(root ?? document.documentElement);
     trackPosition();
-    observer.observe(host);
     const selectionChanged = () => {
       const selection = window.getSelection();
       selected =
@@ -80,7 +77,7 @@
     };
     document.addEventListener('selectionchange', selectionChanged);
     return () => {
-      observer.disconnect();
+      stopVisibility();
       position.disconnect();
       resize.disconnect();
       document.removeEventListener('selectionchange', selectionChanged);

@@ -9,6 +9,9 @@ import {
   extractPdfPages,
   importPdfText,
   layoutPdfTextFlow,
+  insertPdfModelPages,
+  PdfReference,
+  pdfModelLinks,
 } from '../src/index.ts';
 import { pdfFixture, pdfStream } from './pdf-fixture.ts';
 const data = pdfFixture([
@@ -272,5 +275,95 @@ test('numbered collaborative deletion follows reordered pages and rejects invali
     }
     expect(deletePdfModelPages(pdf, model, fonts, '2')).toEqual({ deletedPages: [2], pageCount: 2 });
     expect(texts(openPdfDocument(exportEditedPdf(pdf, model, fonts)))).toEqual(['THIRD', 'SECOND SECRET']);
+  } finally { model.doc.destroy(); }
+});
+
+test('duplicate selected pages freezes local edits, preserves order and reloads with one undo step', async () => {
+  const { duplicatePdfModelPages } = await import('../src/index.ts');
+  const model = new PdfTextModel();
+  model.initialize(importPdfText(pdf));
+  model.pages.initialize(pdf.pages);
+  model.replace(model.ids(0)[0]!, 0, 5, 'EDITED');
+  model.undo.stopCapturing();
+  const ids = duplicatePdfModelPages(pdf, model, fonts, [pdf.pages[2]!.id, pdf.pages[0]!.id]);
+  expect(ids).toHaveLength(2);
+  expect(texts(openPdfDocument(exportEditedPdf(pdf, model, fonts)))).toEqual(['EDITED', 'SECOND SECRET', 'THIRD', 'EDITED', 'THIRD']);
+  model.undo.undo();
+  expect(layoutPdfTextFlow(model, fonts, pdf.pages).pages).toHaveLength(3);
+  expect(model.text(model.ids(0)[0]!).toString()).toBe('EDITED');
+  model.undo.redo();
+  const peer = new PdfTextModel();
+  Y.applyUpdate(peer.doc, Y.encodeStateAsUpdate(model.doc));
+  peer.pages.validate(pdf.pages);
+  peer.replace(peer.ids(0)[0]!, 0, 6, 'LATER');
+  const output = openPdfDocument(exportEditedPdf(pdf, peer, fonts));
+  expect(texts(output)).toEqual(['LATER', 'SECOND SECRET', 'THIRD', 'EDITED', 'THIRD']);
+  expect(output.pages[3]!.rotation).toBe(90);
+  model.doc.destroy(); peer.doc.destroy();
+});
+
+test('copies retain source graphics when adding text, rotating and deleting their original', async () => {
+  const { duplicatePdfModelPages } = await import('../src/index.ts');
+  const model = new PdfTextModel();
+  model.initialize(importPdfText(pdf));
+  const [id] = duplicatePdfModelPages(pdf, model, fonts, [pdf.pages[0]!.id]);
+  const copy = model.pages.sourcePages(pdf.pages).find(page => page.id === id)!;
+  const seed = model.seed(model.ids(0)[0]!);
+  model.add({ ...seed, id: 'copy-overlay', page: copy.index, sources: [], delta: [], spacing: [] });
+  model.replace('copy-overlay', 0, 0, 'ADDED');
+  model.pages.rotate(pdf.pages, [id!], 90);
+  model.pages.remove(pdf.pages, [pdf.pages[0]!.id]);
+  const output = openPdfDocument(exportEditedPdf(pdf, model, fonts));
+  expect(texts(output)[0]).toContain('FIRST');
+  expect(texts(output)[0]).toContain('ADDED');
+  expect(output.pages[0]!.rotation).toBe(180);
+  model.doc.destroy();
+});
+
+test('foreign page insertion retains independent source bytes and one undo step after reload', async () => {
+  const { insertPdfModelPages } = await import('../src/index.ts');
+  const source = openPdfDocument(extractPdfPages(pdf, [2, 0]));
+  const model = new PdfTextModel();
+  model.pages.initialize(pdf.pages);
+  const updates: Uint8Array[] = [];
+  model.doc.on('update', (update: Uint8Array) => updates.push(update));
+  insertPdfModelPages(pdf, model, fonts, source, pdf.pages[0]!.id);
+  const peer = new PdfTextModel();
+  for (const update of updates) {
+    Y.applyUpdate(peer.doc, update);
+    peer.pages.validate(pdf.pages);
+  }
+  expect(texts(openPdfDocument(exportEditedPdf(pdf, peer, fonts)))).toEqual(['FIRST', 'THIRD', 'FIRST', 'SECOND SECRET', 'THIRD']);
+  model.undo.undo();
+  expect(model.pages.items(pdf.pages)).toHaveLength(3);
+  model.undo.redo();
+  expect(model.pages.items(pdf.pages)).toHaveLength(5);
+  model.doc.destroy(); peer.doc.destroy();
+});
+
+test('inserted pages retain internal destinations across snapshots', () => {
+  const source = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /Annots [5 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] >>',
+    '<< /Type /Annot /Subtype /Link /Rect [0 0 20 20] /Dest [4 0 R /Fit] >>',
+  ]));
+  const model = new PdfTextModel();
+  try {
+    const ids = insertPdfModelPages(pdf, model, fonts, source);
+    model.pages.validate(pdf.pages);
+    const output = openPdfDocument(exportEditedPdf(pdf, model, fonts));
+    const annots = output.source.resolve(output.pages[3]!.dictionary.get('Annots')) as PdfReference[];
+    const annotation = output.source.resolve(annots[0]) as Map<string, unknown>;
+    const destination = annotation.get('Dest') as PdfReference[];
+    expect(destination[0]!.key).toBe(output.pages[4]!.reference.key);
+    const inserted = model.pages.sourcePages(pdf.pages).find(page => page.id === ids[0])!;
+    expect(pdfModelLinks(pdf, model, inserted)[0]?.target).toMatchObject({ kind: 'internal', pageId: ids[1] });
+    model.annotations.set({ id: 'new-markup', page: inserted.index, continuation: 0, kind: 'Highlight', color: '#ffff00', quads: [[10, 30, 40, 30, 10, 10, 40, 10]], hidden: false });
+    const marked = openPdfDocument(exportEditedPdf(pdf, model, fonts));
+    expect(marked.source.resolve(marked.pages[3]!.dictionary.get('Annots'))).toHaveLength(2);
+    model.pages.remove(pdf.pages, [ids[1]!]);
+    expect(openPdfDocument(exportEditedPdf(pdf, model, fonts)).pages).toHaveLength(4);
   } finally { model.doc.destroy(); }
 });
