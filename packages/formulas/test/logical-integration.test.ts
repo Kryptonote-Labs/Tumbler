@@ -1,6 +1,25 @@
 import { expect, test } from "bun:test";
 import { openSpreadsheetArtifact, calculateSpreadsheetWorksheet } from "../../sheets/src/index.ts";
 import { buildWorkbookFixture } from "../../sheets/test/workbook-fixture.ts";
+import { buildFormulaDocument, openFormulaDocument, verifyFormulaDocument, type FormulaFixtureCase } from "../../../scripts/formula-conformance/corpus.ts";
+
+for (const formula of [
+  "LET(items,Inputs!A:A,SUM(items))",
+  'LET(items,INDIRECT("Inputs!A:A"),SUM(items))',
+  "LET(items,OFFSET(Inputs!A1,0,0,1048576,1),SUM(items))",
+  "LAMBDA(items,SUM(items))(Inputs!A:A)",
+  "LET(items,Inputs!A:A,INDEX(items,1))",
+  "LET(items,Inputs!A:A,SUM(LAMBDA(values,values)(items)))",
+  "LET(items,Inputs!1:1,SUM(items))",
+  "LET(items,Inputs!A:A,MAX(items))",
+  "LET(items,Inputs!A:A,STDEVP(items,7))",
+]) test(`whole-axis bindings retain geometry without eager allocation: ${formula}`, () => {
+  const fixture: FormulaFixtureCase = {name: "whole-axis binding", formula, cells: {A1:{type:"number",value:7}}, expected:{type:"number",value:formula.includes("STDEVP") ? 0 : 7}};
+  const bytes = buildFormulaDocument(fixture), artifact = openFormulaDocument(fixture, bytes);
+  verifyFormulaDocument(fixture, artifact);
+  verifyFormulaDocument(fixture, openFormulaDocument(fixture, artifact.editCell("D5", 1).bytes()));
+  expect(artifact.bytes()).toEqual(bytes);
+});
 
 for (const [formula, input, expected] of [
   ["LET(amount,A1,amount)", '<v>2</v>', "2"],
@@ -26,7 +45,6 @@ for (const [formula, input, expected] of [
   expect(original.bytes()).toEqual(bytes);
 });
 
-import { buildFormulaDocument, openFormulaDocument, verifyFormulaDocument, type FormulaFixtureCase } from "../../../scripts/formula-conformance/corpus.ts";
 for (const fixture of [
   {name:"LET range binding supplies criteria aggregate geometry",formula:'LET(items,Inputs!A1:A2,SUMIF(items,">1"))',expected:{type:"number",value:6}},
   {name:"named lambda return supplies criteria aggregate geometry",formula:'LET(fn,LAMBDA(items,items),SUMIF(fn(Inputs!A1:A2),">1"))',expected:{type:"number",value:6}},
@@ -42,6 +60,29 @@ for (const fixture of [
 });
 
 import { calculateFormulas, type FormulaWorkbookSource } from "../src/index.ts";
+test("MAP preserves whole-column shape instead of trimming to used cells", () => {
+  const fixture: FormulaFixtureCase = {name:"map full shape",formula:"ROWS(MAP(Inputs!A:A,LAMBDA(item,item)))",cells:{A1:{type:"number",value:7}},expected:{type:"number",value:99}};
+  const bytes = buildFormulaDocument(fixture), artifact = openFormulaDocument(fixture,bytes);
+  expect(artifact.calculation.value("A1")).toBeUndefined();
+  expect(artifact.calculation.diagnostics.map(diagnostic=>diagnostic.code)).toEqual(["evaluation-limit"]);
+  expect(artifact.bytes()).toEqual(bytes);
+});
+
+for (const formula of ["SUM(ColumnData)","LET(items,ColumnData,SUM(items))","LAMBDA(items,INDEX(items,1))(ColumnData)","LET(items,ColumnData,PRODUCT(items))","LET(items,ColumnData,COUNTA(items))"]) test(`whole-axis name metadata retains reference semantics: ${formula}`, () => {
+  const address={sheet:"Results",row:1,column:1};
+  const source: FormulaWorkbookSource={formulaCells:[{address,formula}],cell:at=>at.sheet === "Inputs" && at.row===1 && at.column===1 ? {formula:undefined,value:{type:"number",value:7}} : at.sheet === "Results" ? {formula,value:{type:"blank"}} : undefined,resolveSheet:(_,name)=>name,resolveName:name=>name==="ColumnData" ? {sheet:"Inputs",firstRow:1,firstColumn:1,height:1048576,width:1} : undefined,usedDimensions:()=>({rows:1,columns:1})};
+  const result=calculateFormulas(source);
+  expect(result.value(address)).toEqual({type:"number",value:formula.includes("COUNTA") ? 1 : 7});
+  expect(result.diagnostics).toEqual([]);
+});
+
+for (const reference of ["OFFSET(Inputs!A1,0,0,2,1)", 'INDIRECT("Inputs!A1:A2")']) test(`scoped dynamic references retain criteria geometry: ${reference}`, () => {
+  const fixture: FormulaFixtureCase = {name:"scoped dynamic reference",formula:`LET(items,${reference},SUMIF(items,">1"))`,cells:{A1:{type:"number",value:2},A2:{type:"number",value:4}},expected:{type:"number",value:6}};
+  const bytes=buildFormulaDocument(fixture),artifact=openFormulaDocument(fixture,bytes);
+  verifyFormulaDocument(fixture,artifact);
+  verifyFormulaDocument(fixture,openFormulaDocument(fixture,artifact.editCell("D5",1).bytes()));
+  expect(artifact.bytes()).toEqual(bytes);
+});
 test("INDEX evaluates a computed lambda or LET input once", () => {
   for (const formula of ["INDEX(LAMBDA(COUNTED())(),1)", "LET(fn,LAMBDA(COUNTED()),INDEX(fn(),1))", "INDEX(LET(amount,COUNTED(),amount),1)"]) {
     let calls = 0;
@@ -57,7 +98,7 @@ test("INDEX evaluates a computed lambda or LET input once", () => {
 function namedLambdaWorkbook(formula: string): Uint8Array {
   const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
   return buildWorkbookFixture({
-    workbookXml:`<workbook xmlns="${namespace}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Data" sheetId="1" r:id="data"/></sheets><definedNames><definedName name="Identity">_xlfn.LAMBDA(_xlpm.items,_xlpm.items)</definedName><definedName name="AliasIdentity">Identity</definedName><definedName name="MakeValue">_xlfn.LAMBDA(COUNTED())</definedName><definedName name="AliasValue">MakeValue</definedName></definedNames></workbook>`,
+    workbookXml:`<workbook xmlns="${namespace}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Data" sheetId="1" r:id="data"/></sheets><definedNames><definedName name="Revenue">Data!$A$1:$A$2</definedName><definedName name="Identity">_xlfn.LAMBDA(_xlpm.items,_xlpm.items)</definedName><definedName name="AliasIdentity">Identity</definedName><definedName name="MakeValue">_xlfn.LAMBDA(COUNTED())</definedName><definedName name="AliasValue">MakeValue</definedName></definedNames></workbook>`,
     sheets:[{name:"Data",sheetId:1,relationshipId:"data",xml:`<worksheet xmlns="${namespace}"><sheetData><row r="1"><c r="A1"><v>2</v></c><c r="B1"><v>3</v></c><c r="C1"><f>${formula.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")}</f></c></row><row r="2"><c r="A2"><v>4</v></c><c r="B2"><v>5</v></c></row></sheetData></worksheet>`}],
   });
 }
@@ -112,4 +153,14 @@ for (const name of ["MakeValue","AliasValue"]) test(`INDEX evaluates workbook ca
     expect(calculated.diagnostics).toEqual([]);
   }
   expect(original.bytes()).toEqual(bytes);
+});
+
+test("INDIRECT retains workbook-defined AST geometry through LET", () => {
+  const bytes = namedLambdaWorkbook('LET(items,INDIRECT("Revenue"),SUMIF(items,">1"))');
+  const artifact = openSpreadsheetArtifact(bytes);
+  for (const current of [artifact, openSpreadsheetArtifact(artifact.bytes())]) {
+    expect(current.calculation.displayText("C1")).toBe("6");
+    expect(current.calculation.diagnostics).toEqual([]);
+  }
+  expect(artifact.bytes()).toEqual(bytes);
 });

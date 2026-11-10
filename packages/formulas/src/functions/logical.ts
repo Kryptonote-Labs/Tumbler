@@ -131,7 +131,7 @@ const map: NonNullable<ReturnType<FunctionRegistry["get"]>> = (args, context) =>
   let height = 0, width = 0;
   for (const arg of args.slice(0, -1)) {
     context.operation();
-    const value = context.evaluateAggregate(arg);
+    const value = context.withBindings(new Map(), arg, true);
     if (args.length > 2 && (!("kind" in value) || value.kind !== "array")) return isError(value) ? value : error();
     const input = matrix(value, context);
     if (!Array.isArray(input)) return input as FormulaScalarValue;
