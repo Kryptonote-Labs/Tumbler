@@ -40,3 +40,10 @@ export { paintChartScene, type ChartCanvasContext } from "./canvas.ts";
 export { updateChartTitle } from './title-edit.ts';
 
 export type { ChartTextParagraph } from './model.ts';
+
+export { OOXML_CHART_TYPES, isOoxmlChartType } from './chart-types.ts';
+export type { OoxmlChartType } from './chart-types.ts';
+export { inspectChartSource, editChartSource } from './source-edit.ts';
+export type { ChartSourceNode, ChartSourceEdit } from './source-edit.ts';
+export { createOoxmlChart } from './create.ts';
+export type { CreateChartOptions, ChartSourceSeries } from './create.ts';

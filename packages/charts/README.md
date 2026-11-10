@@ -128,3 +128,35 @@ counts cache-index reads with getters, outside the timed samples. Heap deltas ar
 observations of Bun's reported live heap, not total allocated bytes; zero deltas do
 not imply zero allocation. Other processes that do not use the lock can still
 contend for this shared host.
+
+## Source authoring
+
+`createOoxmlChart(options)` creates a chart XML part for any of the 16
+ECMA-376 Part 1 §21.2.2 plot elements, listed in `OOXML_CHART_TYPES`.
+It accepts Strict or Transitional conformance, titles, series, category labels,
+XY values, bubble sizes and family-specific grouping/style options. Null data
+points remain blank. Series colours use theme accent references. The caller
+must attach the part to a host drawing. Source creation does **not** extend the
+renderer coverage described above, create an embedded workbook, or bind sheet
+formulas. Combination charts are composed of multiple plot elements and are not
+created by this helper.
+
+`inspectChartSource(bytes)` returns every element and attribute, including
+Microsoft extension properties. `editChartSource(bytes, edits)` applies atomic
+lexical edits by snapshot node ID, preserving unrelated source bytes. Supported
+edits set/remove attributes, set leaf text, replace/remove elements, and insert
+markup before or inside elements. Inserted markup must declare its namespaces
+or use bindings already in scope. All addresses refer to the original snapshot;
+overlapping edits fail. Hosts must guard the snapshot with a document revision
+and reread after edits.
+
+Source edits check XML well-formedness and the chart root, **not** OOXML schema
+validity, formula correctness, or cross-part consistency. Use the sheet engine
+and the same package transaction when changing referenced workbook data. This
+low-level API keeps properties accessible before typed editing controls exist;
+it is not a replacement for those controls.
+
+Generate references with `bun scripts/generate-chart-authoring-fixtures.ts <dir>`.
+This produces one PPTX and chart XML per plot element, retaining the reference
+presentation's theme and layout. Validate PPTX files with the repository's
+Open XML SDK validator and export them through LibreOffice for visual references.
