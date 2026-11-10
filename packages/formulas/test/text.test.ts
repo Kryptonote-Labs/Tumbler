@@ -14,6 +14,7 @@ function context(
   limit = 100000,
 ): FunctionContext {
   const c: FunctionContext = {
+    evaluateAggregate(expression) { return this.evaluate(expression); },
     address: { sheet: "Results", row: 1, column: 1 },
     source: {
       formulaCells: [],
@@ -67,6 +68,7 @@ function context(
     },
     evaluate: (e: FormulaExpression): FunctionValue => {
       switch (e.kind) {
+        case "omitted": return { kind: "omitted" };
         case "array": return {kind: "array", rows: e.rows.map(row => row.map(item => {
           const value = c.evaluate(item);
           return "kind" in value ? {type: "error" as const, value: "#VALUE!" as const} : value;

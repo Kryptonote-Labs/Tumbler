@@ -187,3 +187,5 @@ export async function runTumbler(
     return 1;
   }
 }
+
+export { pdfEditInput, pdfEdits, editPdfModel, inspectPdfModel, type PdfEditInput } from './pdf-edit.ts';

@@ -195,6 +195,23 @@ export function parseLosslessXml(
   bytes: Uint8Array,
   limitOverrides: Partial<LosslessXmlLimits> = {},
 ): LosslessXmlDocument {
+  return parseXml(bytes, limitOverrides);
+}
+
+/** Consume completed elements and return a read-only projection. Returning false releases
+ * an element's lexical tree. Keep the original bytes separately for subsequent editing. */
+export function projectLosslessXml(
+  bytes: Uint8Array,
+  consume: (element: LosslessXmlElement, parent: LosslessXmlElement | undefined, depth: number) => boolean,
+): LosslessXmlDocument {
+  return parseXml(bytes, {}, consume);
+}
+
+function parseXml(
+  bytes: Uint8Array,
+  limitOverrides: Partial<LosslessXmlLimits>,
+  consume?: (element: LosslessXmlElement, parent: LosslessXmlElement | undefined, depth: number) => boolean,
+): LosslessXmlDocument {
   const limits = { ...DEFAULT_LOSSLESS_XML_LIMITS, ...limitOverrides };
   let decoded: ReturnType<typeof decodeXml>;
   try {
@@ -209,17 +226,9 @@ export function parseLosslessXml(
     );
   }
 
-  let tokens: readonly LexicalToken[];
-  try {
-    tokens = scanXml(decoded.source);
-  } catch (cause) {
-    if (cause instanceof LosslessXmlError) {
-      throw cause;
-    }
-    throw new LosslessXmlError("invalid_xml", "XML lexical structure is invalid.", { cause });
-  }
+  const tokens = lexicalTokens(decoded.source);
   const semanticTags = validateSemantics(decoded.source, decoded.encoding, limits);
-  const root = buildTree(tokens, semanticTags);
+  const root = buildTree(tokens, semanticTags, consume);
   return new LosslessXmlDocument(
     decoded.source,
     decoded.encoding,
@@ -285,11 +294,11 @@ function decodeXml(bytes: Uint8Array): {
   };
 }
 
-function validateSemantics(
+function* validateSemantics(
   source: string,
   encoding: XmlEncoding,
   limits: LosslessXmlLimits,
-): readonly SemanticTag[] {
+): Generator<SemanticTag> {
   const tags: SemanticTag[] = [];
   const parser = new SaxesParser({ xmlns: true, position: true });
   let depth = 0;
@@ -334,7 +343,14 @@ function validateSemantics(
     failure = error;
   });
   try {
-    parser.write(source).close();
+    // Drain semantic events in chunks instead of retaining a second tree of every tag.
+    for (let offset = 0; offset < source.length; offset += 4096) {
+      parser.write(source.slice(offset, offset + 4096));
+      yield* tags;
+      tags.length = 0;
+    }
+    parser.close();
+    yield* tags;
   } catch (cause) {
     if (cause instanceof LosslessXmlError) {
       throw cause;
@@ -344,35 +360,42 @@ function validateSemantics(
   if (failure !== undefined) {
     throw new LosslessXmlError("invalid_xml", "XML is not well formed.", { cause: failure });
   }
-  return tags;
 }
 
 // XML 1.0 §2.11 normalizes literal line ends before resolving character references.
 function normalizeLineEnds(value: string) { return value.replace(/\r\n?/g, '\n'); }
 
-function scanXml(source: string): readonly LexicalToken[] {
-  const tokens: LexicalToken[] = [];
+function* lexicalTokens(source: string): Generator<LexicalToken> {
+  try {
+    yield* scanXml(source);
+  } catch (cause) {
+    if (cause instanceof LosslessXmlError) throw cause;
+    throw new LosslessXmlError("invalid_xml", "XML lexical structure is invalid.", { cause });
+  }
+}
+
+function* scanXml(source: string): Generator<LexicalToken> {
   let cursor = 0;
   while (cursor < source.length) {
     const open = source.indexOf("<", cursor);
     if (open < 0) {
       if (cursor < source.length) {
-        tokens.push({ kind: "text", span: { start: cursor, end: source.length }, value: decodeEntities(normalizeLineEnds(source.slice(cursor))) });
+        yield { kind: "text", span: { start: cursor, end: source.length }, value: decodeEntities(normalizeLineEnds(source.slice(cursor))) };
       }
       break;
     }
     if (open > cursor) {
-      tokens.push({ kind: "text", span: { start: cursor, end: open }, value: decodeEntities(normalizeLineEnds(source.slice(cursor, open))) });
+      yield { kind: "text", span: { start: cursor, end: open }, value: decodeEntities(normalizeLineEnds(source.slice(cursor, open))) };
     }
     if (source.startsWith("<!--", open)) {
       const end = requireTerminator(source, "-->", open + 4) + 3;
-      tokens.push({ kind: "comment", span: { start: open, end }, value: source.slice(open + 4, end - 3) });
+      yield { kind: "comment", span: { start: open, end }, value: source.slice(open + 4, end - 3) };
       cursor = end;
       continue;
     }
     if (source.startsWith("<![CDATA[", open)) {
       const end = requireTerminator(source, "]]>", open + 9) + 3;
-      tokens.push({ kind: "cdata", span: { start: open, end }, value: normalizeLineEnds(source.slice(open + 9, end - 3)) });
+      yield { kind: "cdata", span: { start: open, end }, value: normalizeLineEnds(source.slice(open + 9, end - 3)) };
       cursor = end;
       continue;
     }
@@ -384,25 +407,24 @@ function scanXml(source: string): readonly LexicalToken[] {
     }
     if (source.startsWith("<?", open)) {
       const end = requireTerminator(source, "?>", open + 2) + 2;
-      tokens.push({ kind: "processing_instruction", span: { start: open, end }, value: source.slice(open + 2, end - 2) });
+      yield { kind: "processing_instruction", span: { start: open, end }, value: source.slice(open + 2, end - 2) };
       cursor = end;
       continue;
     }
     if (source.startsWith("</", open)) {
       const close = requireTerminator(source, ">", open + 2);
-      tokens.push({
+      yield {
         kind: "end",
         name: source.slice(open + 2, close).trim(),
         span: { start: open, end: close + 1 },
-      });
+      };
       cursor = close + 1;
       continue;
     }
     const end = findStartTagEnd(source, open + 1);
-    tokens.push(parseStartTag(source, open, end + 1));
+    yield parseStartTag(source, open, end + 1);
     cursor = end + 1;
   }
-  return tokens;
 }
 
 function parseStartTag(source: string, start: number, end: number): LexicalToken {
@@ -444,16 +466,16 @@ function parseStartTag(source: string, start: number, end: number): LexicalToken
 }
 
 function buildTree(
-  tokens: readonly LexicalToken[],
-  semanticTags: readonly SemanticTag[],
+  tokens: Iterable<LexicalToken>,
+  semanticTags: Iterator<SemanticTag>,
+  consume?: (element: LosslessXmlElement, parent: LosslessXmlElement | undefined, depth: number) => boolean,
 ): LosslessXmlElement {
   const stack: MutableElement[] = [];
   let root: MutableElement | undefined;
-  let semanticIndex = 0;
   let nextId = 1;
   for (const token of tokens) {
     if (token.kind === "start") {
-      const semantic = semanticTags[semanticIndex++];
+      const semantic = semanticTags.next().value;
       if (semantic === undefined || semantic.name !== token.name) {
         throw new LosslessXmlError("invalid_xml", "Lexical and semantic XML structures disagree.");
       }
@@ -475,6 +497,7 @@ function buildTree(
       if (parent !== undefined) parent.children.push(element);
       else if (root === undefined) root = element;
       if (!token.selfClosing) stack.push(element);
+      else if (consume?.(element, parent, stack.length) === false) parent?.children.pop();
       continue;
     }
     if (token.kind === "end") {
@@ -484,6 +507,8 @@ function buildTree(
       }
       element.endTagSpan = token.span;
       element.span = { start: element.span.start, end: token.span.end };
+      const parent = stack.at(-1);
+      if (consume?.(element, parent, stack.length) === false) parent?.children.pop();
       continue;
     }
     const parent = stack.at(-1);
@@ -491,7 +516,7 @@ function buildTree(
       parent.children.push({ ...token, id: nextId++ });
     }
   }
-  if (root === undefined || stack.length !== 0 || semanticIndex !== semanticTags.length) {
+  if (root === undefined || stack.length !== 0 || !semanticTags.next().done) {
     throw new LosslessXmlError("invalid_xml", "XML document structure is incomplete.");
   }
   return root;

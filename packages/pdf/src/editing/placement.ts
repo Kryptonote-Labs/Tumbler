@@ -3,22 +3,27 @@ import { pdfSourceKey } from './import-text.ts';
 import { inverse, multiply, type PdfMatrix } from '../matrix.ts';
 import type { PdfPageScene } from '../scene.ts';
 
+export type PdfScenePlacement = { source: string; x: number; y: number };
+/** Serializable source translations, shared by interactive and worker renderers. */
+export function pdfScenePlacements(model: PdfTextModel, page: number): PdfScenePlacement[] {
+  return model.ids(page).flatMap((id) => {
+    if (!model.sourcePreserved(id)) return [];
+    const seed = model.seed(id), frame = model.geometry(id);
+    return seed.sources.map((source) => ({
+      source: `${source.instance}/${source.object}/${source.start}`,
+      x: frame.x - seed.x, y: frame.y - seed.y,
+    }));
+  });
+}
 /** Translate source glyphs in viewport coordinates without changing their font, paint or orientation. */
 export function placePdfScene(scene: PdfPageScene, model: PdfTextModel): PdfPageScene {
-  const targets = new Map<string, PdfMatrix>(
-    model.ids(scene.page.index).flatMap((id) => {
-      if (!model.sourcePreserved(id)) return [];
-      const seed = model.seed(id),
-        frame = model.geometry(id);
-      const m = inverse(scene.viewport),
-        dx = frame.x - seed.x,
-        dy = frame.y - seed.y;
-      const translation: PdfMatrix = [1, 0, 0, 1, m[0] * dx + m[2] * dy, m[1] * dx + m[3] * dy];
-      return seed.sources.map(
-        (s) => [`${s.instance}/${s.object}/${s.start}`, translation] as const,
-      );
-    }),
-  );
+  return placePdfSceneSources(scene, pdfScenePlacements(model, scene.page.index));
+}
+export function placePdfSceneSources(scene: PdfPageScene, placements: readonly PdfScenePlacement[]): PdfPageScene {
+  const m = inverse(scene.viewport);
+  const targets = new Map<string, PdfMatrix>(placements.map(({source,x,y}) => [
+    source, [1, 0, 0, 1, m[0] * x + m[2] * y, m[1] * x + m[3] * y],
+  ]));
   const procedures = new Map<string, (typeof scene.elements)[number]['source']>();
   scene.elements.forEach((e, index) => {
     if (e.kind === 'glyph' && e.glyph.procedure)

@@ -8,6 +8,10 @@ export type PdfTextStyle = {
   bold: boolean;
   italic: boolean;
   underline: boolean;
+  strike?: boolean;
+  background?: string;
+  alignment?: 'left' | 'center' | 'right' | 'justify' | undefined;
+  lineSpacing?: number | undefined;
   size: number;
   family: 'Sans' | 'Serif' | 'Mono';
   color: string;
@@ -55,6 +59,8 @@ const familyKey = (family: string) =>
 /** Source programs and source code-to-glyph mappings remain authoritative for existing text.
  * Full matching faces extend subset fonts for new characters. Fallback affects only missing glyphs. */
 export class PdfEditingFonts {
+  revision = 0;
+  private shapes = new WeakMap<PdfEditingFont, Map<string, Pick<PdfEditingShape, 'glyphs' | 'positions'>>>();
   private fonts = new Map<string, PdfEditingFont>();
   private documents = new WeakSet<PdfDocument>();
   add(key: string, bytes: Uint8Array, source?: PdfFont) {
@@ -64,6 +70,7 @@ export class PdfEditingFonts {
     const name = typeof font.postscriptName === 'string' ? font.postscriptName : source?.baseName ?? key;
     const family = typeof font.familyName === 'string' ? font.familyName : source?.baseName ?? key;
     const subfamily = typeof font.subfamilyName === 'string' ? font.subfamilyName : source?.baseName ?? key;
+    this.revision++;
     this.fonts.set(key, {
       key,
       name,
@@ -75,9 +82,9 @@ export class PdfEditingFonts {
       italic: /italic|oblique/i.test(subfamily),
     });
   }
-  importDocument(document: PdfDocument) {
+  private *importPages(document: PdfDocument) {
     if (this.documents.has(document)) return;
-    const interpreter = new PdfInterpreter(document);
+    const interpreter = new PdfInterpreter(document, undefined, { deferImages: true });
     for (const page of document.pages) {
       for (const element of interpreter.page(page.index).elements) {
         if (element.kind !== 'glyph' || !element.font.program || !element.font.sourceId) continue;
@@ -96,15 +103,54 @@ export class PdfEditingFonts {
             width: (element.glyph.width * face.font.unitsPerEm) / 1000,
           });
       }
+      this.revision++;
       interpreter.releasePage(page.index);
+      yield;
+    }
+    for (const face of [...this.fonts.values()]) {
+      if (!face.source || /^[A-Z]{6}\+/.test(face.source.baseName) ||
+          face.bytes[0] !== 0 || face.bytes[1] !== 1 ||
+          !Array.from({ length: 95 }, (_, i) => i + 32).every(c => face.font.hasGlyphForCodePoint(c))) continue;
+      const key = `full:${face.key}`;
+      if (!this.fonts.has(key)) {
+        const full = { ...face, key, source: undefined };
+        delete full.sourceGlyphs;
+        this.fonts.set(key, full);
+      }
     }
     this.documents.add(document);
+  }
+  importDocument(document: PdfDocument) {
+    const pages = this.importPages(document);
+    while (!pages.next().done) { /* Consume synchronously for headless callers. */ }
+  }
+  /** Prepare source fonts a page at a time, allowing the host to paint or cancel between pages. */
+  async forkAsync(document: PdfDocument, yieldControl: () => Promise<void>) {
+    const result = new PdfEditingFonts();
+    result.fonts = new Map(this.fonts);
+    await yieldControl();
+    for (const _ of result.importPages(document)) await yieldControl();
+    return result;
   }
   fork(document: PdfDocument) {
     const result = new PdfEditingFonts();
     result.fonts = new Map(this.fonts);
     result.importDocument(document);
     return result;
+  }
+  /** Only full TrueType programs can be newly encoded by the export writer. */
+  get choices() {
+    return [...this.fonts.values()]
+      .filter(face => !face.source && face.bytes[0] === 0 && face.bytes[1] === 1)
+      .map(face => ({ value: face.key, label: face.name.replace(/^[A-Z]{6}\+/, '') }));
+  }
+  selection(key: string): Partial<PdfTextStyle> {
+    const face = this.fonts.get(key);
+    if (!face || !this.choices.some(choice => choice.value === key)) throw new Error('Font is not available for PDF export.');
+    return { font: key, bold: face.bold, italic: face.italic };
+  }
+  fontName(style: PdfTextStyle) {
+    return this.get(style).name.replace(/^[A-Z]{6}\+/, '');
   }
   get sourceFamilies() {
     return new Set(
@@ -115,7 +161,7 @@ export class PdfEditingFonts {
     const source = style.font ? this.fonts.get(style.font) : undefined;
     if (source) {
       const matches = source.bold === style.bold && source.italic === style.italic;
-      if (matches && (!text || source.sourceGlyphs?.has(text))) return source;
+      if (matches && (!text || source.sourceGlyphs?.has(text) || (!source.source && [...text].every(c => source.font.hasGlyphForCodePoint(c.codePointAt(0)!))))) return source;
       const full = [...this.fonts.values()].find(
         (face) =>
           !face.sourceGlyphs &&
@@ -134,12 +180,18 @@ export class PdfEditingFonts {
   shape(text: string, style: PdfTextStyle): PdfEditingShape {
     const face = this.get(style, text),
       original = face.sourceGlyphs?.get(text);
-    const run = original
+    let cache = this.shapes.get(face);
+    if (!cache) this.shapes.set(face, cache = new Map());
+    let run = cache.get(text);
+    if (!run) {
+      run = original
       ? {
           glyphs: [face.font.getGlyph(original.id)],
           positions: [{ xAdvance: original.width, yAdvance: 0, xOffset: 0, yOffset: 0 }],
         }
       : face.font.layout(text);
+      cache.set(text, run);
+    }
     return {
       face,
       glyphs: run.glyphs,

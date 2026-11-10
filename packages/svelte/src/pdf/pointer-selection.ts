@@ -6,15 +6,18 @@ interface Caret {
 }
 const layers = new WeakMap<
   HTMLElement,
-  { content: PdfTextContent; index: PdfTextSelectionIndex; nodes: Map<string, Node> }
+  { content: PdfTextContent; index: PdfTextSelectionIndex; nodes: Map<string, Caret> }
 >();
 
 /** Keep the headless hit-test index paired with the mounted browser text nodes. */
-export function registerPdfTextLayer(layer: HTMLElement, content: PdfTextContent) {
-  const nodes = new Map<string, Node>();
+export function registerPdfTextLayer(layer: HTMLElement, content: PdfTextContent,
+  bindings?: ReadonlyMap<string, readonly { id: string; offset: number }[]>) {
+  const nodes = new Map<string, Caret>();
   for (const span of layer.querySelectorAll<HTMLElement | SVGElement>("[data-pdf-text]")) {
     const id = span.getAttribute("data-pdf-text-id");
-    if (span.firstChild && id) nodes.set(id, span.firstChild);
+    if (!span.firstChild || !id) continue;
+    for (const item of bindings?.get(id) ?? [{ id, offset: 0 }])
+      nodes.set(item.id, { node: span.firstChild, offset: item.offset });
   }
   layers.set(layer, { content, index: new PdfTextSelectionIndex(content), nodes });
   return () => {
@@ -47,8 +50,8 @@ function caretAt(host: HTMLElement, x: number, y: number): Caret | undefined {
   if (!closest) return;
   const entry = layers.get(closest)!;
   const caret = pdfTextCaretAt(closest, x, y);
-  const node = caret && entry.nodes.get(caret.id);
-  return node && caret ? { node, offset: caret.offset } : undefined;
+  const bound = caret && entry.nodes.get(caret.id);
+  return bound && caret ? { node: bound.node, offset: bound.offset + caret.offset } : undefined;
 }
 
 /** Correct native drag endpoints before paint. The browser retains highlighting, copying and autoscroll. */
