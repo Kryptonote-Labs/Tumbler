@@ -1,3 +1,6 @@
+import { runCharts } from './charts.ts';
+export { chartHelp, chartEditInput, chartSourceEdit } from './charts.ts';
+export type { ChartEditInput, ChartOperationHost } from './charts.ts';
 import { runSpreadsheet } from './spreadsheets.ts';
 export { spreadsheetHelp } from './spreadsheets.ts';
 export type { SpreadsheetReadInput, SpreadsheetOperationHost } from './spreadsheets.ts';
@@ -35,6 +38,10 @@ export async function runTumbler(
   },
 ): Promise<number> {
   try {
+    if (argv[1] === 'charts') {
+      await runCharts(argv, options);
+      return 0;
+    }
     if (argv[1] === 'sheets') {
       await runSpreadsheet(argv, options);
       return 0;
