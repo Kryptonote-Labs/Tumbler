@@ -119,7 +119,17 @@ numeric("COMBIN", 2, 2, ([n, k], c) => n! < 0 || k! < 0 ? NUM() : combination(Ma
 numeric("COMBINA", 2, 2, ([n, k], c) => {
   if (n! < 0 || k! < 0) return NUM();
   n = Math.trunc(n!); k = Math.trunc(k!);
-  return k === 0 ? 1 : combination(n + k - 1, k, c);
+  if (k === 0) return 1;
+  if (n === 0) return NUM();
+  // Keep the smaller factor count before adding differently sized integers.
+  const count = Math.min(k, n - 1), base = Math.max(k, n - 1);
+  let result = 1;
+  for (let i = 1; i <= count; i++) {
+    c.operation();
+    result *= (base + i) / i;
+    if (!Number.isFinite(result)) return NUM();
+  }
+  return result;
 });
 numeric("BASE", 2, 3, ([n, b, len]) => {
   if (n! < 0 || n! >= 2 ** 53 || b! < 2 || b! >= 37 || len! < 0 || len! >= 256) return NUM();

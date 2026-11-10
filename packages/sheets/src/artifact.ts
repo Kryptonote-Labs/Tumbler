@@ -22,14 +22,17 @@ export class SpreadsheetArtifact implements FormattingAdapter<SpreadsheetFormatt
   readonly workbook: SpreadsheetWorkbook;
   readonly activeSheet: SpreadsheetSheet;
   readonly worksheet: SpreadsheetWorksheet;
-  readonly calculation: SpreadsheetCalculationSnapshot;
+  #calculation: SpreadsheetCalculationSnapshot | undefined;
+  get calculation(): SpreadsheetCalculationSnapshot {
+    return this.#calculation ??= calculateSpreadsheetWorksheet(this.worksheet);
+  }
 
   constructor(workbook: SpreadsheetWorkbook, activeSheet: SpreadsheetSheet) {
     if (!workbook.sheets.includes(activeSheet)) throw new TypeError("The active sheet does not belong to this workbook.");
     this.workbook = workbook;
     this.activeSheet = activeSheet;
     this.worksheet = openWorksheet(workbook, activeSheet);
-    this.calculation = calculateSpreadsheetWorksheet(this.worksheet);
+
   }
 
   bytes(): Uint8Array {

@@ -291,7 +291,7 @@ export function createFileHost(): OperationHost {
       if (extname(path).toLowerCase() !== '.pdf' || extname(input.output).toLowerCase() !== '.pdf')
         throw new Error('PDF export requires .pdf input and output paths.');
       const document = openPdfDocument(readFileSync(path));
-      const indices = pdfPageIndices(input.pages, document.pages.length);
+      const indices = input.pages === undefined ? document.pages.map((_, index) => index) : pdfPageIndices(input.pages, document.pages.length);
       const output = extractPdfPages(document, indices);
       writeFileSync(input.output, output, { flag: 'wx' });
       return {

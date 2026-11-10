@@ -269,3 +269,32 @@ test("automatic wraps retain word adjacency and original whitespace", async () =
     model.doc.destroy();
   }
 });
+
+test('search ranges replace original and reflowed text in one collaborative undo step', async () => {
+  const Y = await import('yjs');
+  const pdf = document('BT /F 12 Tf 20 150 Td (cat cat catalog) Tj ET');
+  const model = new PdfTextModel(), fonts = new PdfEditingFonts();
+  fonts.add('Sans-Regular', await Bun.file(new URL('./fixtures/editing-fonts/LiberationSans-Regular.ttf', import.meta.url)).bytes());
+  model.initialize(importPdfText(pdf));
+  const remote = new PdfTextModel();
+  Y.applyUpdate(remote.doc, Y.encodeStateAsUpdate(model.doc));
+  const updates: Uint8Array[] = [];
+  model.doc.on('update', (update: Uint8Array) => updates.push(update));
+  const index = new PdfSearchIndex(pdf, { model, fonts });
+  const matches = index.find('cat', { wholeWord: true }).matches;
+  expect(matches).toHaveLength(2);
+  expect(matches.every(match => match.range)).toBe(true);
+  model.replaceMatches(matches.flatMap(match => match.range ? [match.range] : []), 'dog');
+  expect(updates).toHaveLength(1);
+  Y.applyUpdate(remote.doc, updates[0]!);
+  const id = model.ids()[0]!;
+  expect(model.text(id).toString()).toBe('dog dog catalog');
+  expect(remote.text(id).toString()).toBe('dog dog catalog');
+  const edited = new PdfSearchIndex(pdf, { model, fonts }).find('dog');
+  expect(edited.total).toBe(2);
+  expect(edited.matches.every(match => match.range)).toBe(true);
+  model.undo.undo();
+  expect(model.text(id).toString()).toBe('cat cat catalog');
+  expect(new PdfSearchIndex(pdf).find('cat').matches.every(match => !match.range)).toBe(true);
+  model.doc.destroy(); remote.doc.destroy();
+});
