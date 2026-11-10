@@ -116,6 +116,8 @@ cases.push(
 );
 cases.push(
  {name:"factorial truncates before overflow check",formula:"FACT(170.5)",expected:n(7.257415615307999e306)},
+ {name:"combina retains small side at large k",formula:"COMBINA(2,1e16)",expected:n(1e16)},
+ {name:"combina retains small side at large n",formula:"COMBINA(1e16,2)",expected:n(5e31)},
  {name:"factorial rejects next integer",formula:"FACT(171)",expected:e()},
  {name:"mround opposite tiny normal signs",formula:"MROUND(-1e-200,1e-200)",expected:e()},
  {name:"mround reverse tiny normal signs",formula:"MROUND(1e-200,-1e-200)",expected:e()},

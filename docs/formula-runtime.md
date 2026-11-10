@@ -60,12 +60,15 @@ contiguous range. Workbook calculations enumerate sheets to discover spills
 referenced from other sheets, including sheets later in workbook order.
 
 `context.reference` resolves ordinary geometry plus nested reference-valued
-OFFSET, A1-style INDIRECT, INDEX, names, and spill references. `readReference`
+OFFSET, A1/R1C1-style INDIRECT, INDEX, names, and spill references. `readReference`
 validates bounds, enforces array limits, evaluates dependencies, and records
 reads. Whole-column and whole-row references, including absolute axes, use
 full worksheet reference geometry. Blank-insensitive aggregates can bound scans by
 source used dimensions; materializing the full reference is subject
 to the explicit calculation budget. Arrays are never silently truncated to fit.
+Scoped whole-axis aliases retain geometry without eagerly allocating the axis.
+Geometry probes reuse computed values and final reference errors when falling
+back to value evaluation, so volatile arguments run once.
 
 ## Budgets, time, and services
 
@@ -115,3 +118,7 @@ and independent reviews; those are not claimed by this branch.
 Single-cell workbook/table reference objects retain the same internal range provenance as direct references, including text/boolean exclusion in aggregates.
 
 PRODUCT returns zero when its referenced/array arguments contain no numeric values. Referenced text, booleans and blanks remain ignored; adding a numeric argument still multiplies that argument normally.
+
+The INDIRECT geometry resolver sends complete supported structured-reference tokens to the workbook resolver before applying cell-address style restrictions. The A1/R1C1 switch does not change table geometry, including table names beginning with R and column labels containing `!`.
+
+Spill publication is transactional with dependency invalidation: budgeted discovery builds a read-only invalidation plan before any memo/overlay changes. Only after discovery succeeds are invalidated results removed and the new spill committed, without evaluator/source callbacks. A failed plan leaves existing consumers untouched and the producer cache source-owned. Already completed top-level formulas are skipped rather than charged and diagnosed again after a later budget failure.
