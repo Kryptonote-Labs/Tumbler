@@ -86,6 +86,7 @@ export class SpreadsheetWorksheet {
   readonly defaultColumnWidth: number;
   readonly #cells: ReadonlyMap<string, SpreadsheetCell>;
   readonly #rows: ReadonlyMap<number, SpreadsheetRow>;
+  readonly #mergeRows = new Map<number, readonly CellRange[]>();
   readonly #automaticRowHeights: ReadonlyMap<number, number>;
 
   constructor(input: {
@@ -158,10 +159,13 @@ export class SpreadsheetWorksheet {
 
   mergedRange(reference: string | CellAddress): CellRange | undefined {
     const address = typeof reference === "string" ? parseCellReference(reference) : reference;
-    return this.merges.find((range) =>
-      address.row >= range.start.row && address.row <= range.end.row &&
-      address.column >= range.start.column && address.column <= range.end.column
-    );
+    let ranges = this.#mergeRows.get(address.row);
+    if (ranges === undefined) {
+      ranges = this.merges.filter(range => address.row >= range.start.row && address.row <= range.end.row);
+      if (this.#mergeRows.size >= 512) this.#mergeRows.delete(this.#mergeRows.keys().next().value!);
+      this.#mergeRows.set(address.row, ranges);
+    }
+    return ranges.find(range => address.column >= range.start.column && address.column <= range.end.column);
   }
 
   hyperlink(reference: string | CellAddress): SpreadsheetHyperlink | undefined {
