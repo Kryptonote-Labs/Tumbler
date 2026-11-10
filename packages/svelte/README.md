@@ -374,6 +374,19 @@ browser memory. The docs example is `/playground/pdf-merge`.
 
 Pass `remoteSelections` to `SpreadsheetGrid` as an array of `{ id, name, color, range }`. Ranges use one-based, inclusive `start` and `end` cell coordinates. The host supplies selections for the displayed worksheet and owns presence transport. The grid projects ranges through filtered rows and clips them against scrolling and frozen panes. Overlays do not intercept pointer input.
 
+### Dense spreadsheet viewports
+
+`SpreadsheetGrid` uses retained canvas row bitmaps above 1,500 visible row/column
+intersections, including overscan. Focused cells, editing inputs, merged cells,
+hyperlinks, table controls and vertical text keep DOM rendering. Pointer input uses
+the same selection and editing paths, and `aria-activedescendant` exposes the
+focused cell. Wheel input is combined once per animation frame.
+
+Recently scrolled rows retain at most 32 MiB of bitmaps and 512 rows, separately
+from mounted rows. These are cache bounds, not worksheet limits. Worksheet,
+calculation, geometry, scale, display density and font changes refresh the relevant
+bitmaps. This changes rendering only; formula compatibility is unchanged.
+
 ### Visual PDF merging
 
 `PdfMerge` shows expandable source rows with lazy page thumbnails, checkbox and Shift-click
