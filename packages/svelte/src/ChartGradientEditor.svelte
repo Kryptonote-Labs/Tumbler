@@ -16,6 +16,7 @@
   const bytes = $derived(draft ?? source);
   const gradient = $derived.by(() => { try { return readChartGradientFill(bytes, draft ? owner : target.id); } catch { return undefined; } });
   const current = $derived(gradient?.stops[selected]);
+  const selectedNumber = $derived((gradient?.stops.toSorted((a, b) => a.position - b.position).findIndex(stop => stop.node === current?.node) ?? selected) + 1);
   const rebased = $derived.by(() => {
     if (!open || !original || !draft) return {};
     try { return { bytes: mergeChartFillDraft({ bytes: source, node: target.id }, { bytes: original, node: owner }, { bytes: draft, node: owner }) }; }
@@ -81,7 +82,7 @@
         <ChartGradientStops bind:this={stopEditor} stops={gradient.stops} {keys} bind:selected {label} {themeColors} {disabled} onposition={(index, position) => { selected = index; stop({ position }); }} onadd={add} onremove={(index) => { const item = gradient?.stops[index]; if (item) run({ kind: 'remove', node: item.node }); }} />
         {#if current}
           <label class="row"><span>Position</span><input type="number" {disabled} min="0" max="100" step="0.1" aria-label={`Gradient stop position for ${label}`} value={Math.round(current.position * 10000) / 100} onchange={(event) => { if (event.currentTarget.value !== '' && event.currentTarget.validity.valid) stop({ position: event.currentTarget.valueAsNumber / 100 }); }} /></label>
-          <ChartFillColor label="Colour" target={`${label} gradient stop ${selected + 1}`} color={current.color ?? { kind: 'scheme', value: 'accent1' }} unresolved={!current.color} {themeColors} {disabled} onchange={(color) => stop({ color })} />
+          <ChartFillColor label="Colour" target={`${label} gradient stop ${selectedNumber}`} color={current.color ?? { kind: 'scheme', value: 'accent1' }} unresolved={!current.color} {themeColors} {disabled} onchange={(color) => stop({ color })} />
           <label class="row"><span>Opacity</span><input type="number" {disabled} min="0" max="100" step="1" aria-label={`Gradient stop opacity for ${label}`} value={Math.round(current.opacity * 10000) / 100} onchange={(event) => { if (event.currentTarget.value !== '' && event.currentTarget.validity.valid) stop({ opacity: event.currentTarget.valueAsNumber / 100 }); }} /></label>
         {/if}
           <div class="buttons"><button type="button" {disabled} onclick={() => add()}>Add stop</button><button type="button" disabled={disabled || gradient.stops.length <= 2} onclick={() => current && run({ kind: 'remove', node: current.node })}>Remove stop</button></div>

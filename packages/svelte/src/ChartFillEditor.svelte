@@ -22,7 +22,7 @@
   const background = $derived(fill ? resolveChartColor(fill.background, { themeColors }) ?? '#ffffff' : '#ffffff');
   const value = $derived(fill?.pattern ? chartPatternLabels[fill.pattern.preset as DrawingPatternPreset] ?? fill.pattern.preset : ({ automatic: 'Automatic', none: 'No fill', solid: 'Solid', gradient: 'Gradient', picture: 'Picture', group: 'Group fill', pattern: 'Pattern' }[fill?.kind ?? 'automatic']));
   let root = $state<HTMLDivElement>(), popup = $state<HTMLDivElement>();
-  let gradientOpen = $state(false);
+  let gradientOpen = $state(false), gradientPreview = $state<Uint8Array>();
   const activeKind = $derived(gradientOpen ? 'gradient' : fill?.kind);
   const ramp = $derived.by(() => {
     try { const stops = readChartGradientFill(bytes, target.id)?.stops ?? [{ node: 0, position: 0, color: fill?.solidSeed, opacity: 1 }, { node: 1, position: 1, color: { kind: 'scheme' as const, value: 'bg1' }, opacity: 1 }]; return chartGradientRamp(stops, themeColors); }
@@ -33,7 +33,7 @@
   $effect(() => { void targetKey; void disabled; open = false; gradientOpen = false; error = undefined; untrack(() => onpreview?.(undefined)); });
   $effect(() => { void content.xml; error = undefined; untrack(() => onpreview?.(undefined)); });
   onDestroy(() => onpreview?.(undefined));
-  function close(restore = true) { const wasOpen = open; open = false; if (wasOpen) onpreview?.(undefined); if (restore) trigger?.focus(); }
+  function close(restore = true) { const wasOpen = open; open = false; if (wasOpen) onpreview?.(gradientOpen ? gradientPreview : undefined); if (restore) trigger?.focus(); }
   function change(next: Uint8Array, restore = open) {
     try {
       const xml = new TextDecoder().decode(next);
@@ -46,9 +46,9 @@
     catch (cause) { error = cause instanceof Error ? cause.message : 'The pattern could not be applied.'; }
   }
   function previewPattern(preset: DrawingPatternPreset | undefined) {
-    if (!preset) { onpreview?.(undefined); return; }
+    if (!preset) { onpreview?.(gradientOpen ? gradientPreview : undefined); return; }
     try { onpreview?.(setChartPatternFill(bytes, target.id, { preset })); }
-    catch { onpreview?.(undefined); }
+    catch { onpreview?.(gradientOpen ? gradientPreview : undefined); }
   }
   function color(which: 'foreground' | 'background', value: ChartColor) {
     if (!fill?.pattern) return;
@@ -66,7 +66,7 @@
 {#if fill && capable}
   <div bind:this={root} class="fill-editor" onfocusout={(event) => { if (open && event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) close(false); }}>
     <div class="row"><span>Fill</span><div class="actions">
-        <button bind:this={trigger} type="button" class="trigger" {disabled} aria-haspopup="dialog" aria-expanded={open} aria-controls={`${id}-fill`} aria-label={`Fill for ${label}: ${activeKind === 'gradient' ? 'Gradient' : `${fill.kind === 'pattern' ? 'Pattern, ' : ''}${value}`}`} title={value} onclick={() => { if (open) close(); else { mode = fill?.kind === 'pattern' ? 'pattern' : 'choices'; open = true; } }}>
+        <button bind:this={trigger} type="button" class="trigger" {disabled} aria-haspopup="dialog" aria-expanded={open} aria-controls={`${id}-fill`} aria-label={`Fill for ${label}: ${activeKind === 'gradient' ? 'Gradient' : `${fill.kind === 'pattern' ? 'Pattern, ' : ''}${value}`}`} title={value} onclick={() => { if (open) close(); else { mode = activeKind === 'pattern' ? 'pattern' : 'choices'; open = true; } }}>
           {#if activeKind === 'gradient'}<span class="swatch"><svg viewBox="0 0 16 16" aria-hidden="true"><defs><DrawingGradientPaint gradient={ramp} bounds={{ x: 0, y: 0, width: 16, height: 16 }} id={`${id}-swatch`} /></defs><rect width="16" height="16" fill={`url(#${id}-swatch)`}/></svg></span>{:else if fill.pattern}<span class="swatch"><ChartPatternSwatch preset={fill.pattern.preset} {foreground} {background} /></span>{:else if fill.kind === 'solid'}<span class="swatch" style:background={foreground}></span>{/if}<span class="value">{activeKind === 'gradient' ? 'Gradient' : value}</span>
         </button>
         {#if fill.kind !== 'automatic'}<button type="button" class="remove" {disabled} aria-label={`Reset fill to automatic for ${label}`} title="Reset to automatic" onclick={automatic}>×</button>{/if}
@@ -78,7 +78,7 @@
       <ChartFillColor label="Foreground" target={label} color={fill.foreground} {themeColors} {disabled} onchange={(value) => color('foreground', value)} />
       <ChartFillColor label="Background" target={label} color={fill.background} {themeColors} {disabled} onchange={(value) => color('background', value)} />
     {/if}
-    {#if fill.kind === 'gradient' || gradientOpen}<ChartGradientEditor {content} {target} {targetKey} {label} {themeColors} {disabled} {preview} {onpreview} {onchange} bind:open={gradientOpen} showTrigger={fill.kind === 'gradient'} onclose={() => trigger?.focus()} />{/if}
+    {#if fill.kind === 'gradient' || gradientOpen}<ChartGradientEditor {content} {target} {targetKey} {label} {themeColors} {disabled} {preview} onpreview={(source) => { gradientPreview = source; onpreview?.(source); }} {onchange} bind:open={gradientOpen} showTrigger={fill.kind === 'gradient'} onclose={() => trigger?.focus()} />{/if}
     <div bind:this={popup} id={`${id}-fill`} class="popup" hidden={!open} role="dialog" aria-label={`Fill for ${label}`} tabindex="-1"
       onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } }}
       onfocusout={(event) => { if (event.relatedTarget && !popup?.contains(event.relatedTarget as Node)) close(false); }}>
