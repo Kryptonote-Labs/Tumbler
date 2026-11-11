@@ -22,7 +22,7 @@ test('inactive depth-axis formatting survives XY and pie conversions', () => {
   const depth = source.children(source.plotArea, 'serAx')[0]!;
   const xml = new TextDecoder().decode(source.document.originalBytes());
   const raw = standaloneChartElement(source.document, depth);
-  let bytes = new TextEncoder().encode(xml.replace(/<c:serAx>[\s\S]*?<\/c:serAx>/, raw.replace('</c:scaling>', '<c:max val="42"/></c:scaling>')));
+  let bytes: Uint8Array = new TextEncoder().encode(xml.replace(/<c:serAx>[\s\S]*?<\/c:serAx>/, raw.replace('</c:scaling>', '<c:max val="42"/></c:scaling>')));
   for (const type of ['pieChart', 'scatterChart', 'line3DChart', 'bar3DChart'] as const) bytes = convertChartType(bytes, { type });
   const model = parseOoxmlChart(bytes, 'transitional');
   if (model.status !== 'supported') throw new Error(model.reason);
@@ -57,4 +57,16 @@ test('axis allocation handles the largest schema-valid unsigned ID', () => {
     expect(id).toBeGreaterThanOrEqual(0);
     expect(id).toBeLessThanOrEqual(4294967295);
   }
+});
+
+test('removing a primary plot axis retains the crossing dependency of its peer', () => {
+  const xml = new TextDecoder().decode(createOoxmlChart({ ...base, type: 'lineChart' }));
+  const second = xml.match(/<c:lineChart>[\s\S]*?<\/c:lineChart>/)![0].replace('<c:axId val="2"/>', '<c:axId val="3"/>');
+  const secondaryAxis = xml.match(/<c:valAx>[\s\S]*?<\/c:valAx>/)![0].replace('<c:axId val="2"/>', '<c:axId val="3"/>').replace('<c:axPos val="l"/>', '<c:axPos val="r"/>');
+  const bytes = new TextEncoder().encode(xml.replace('</c:lineChart>', `</c:lineChart>${second}`).replace('</c:plotArea>', `${secondaryAxis}</c:plotArea>`));
+  const source = chartXml(convertChartType(bytes, { type: 'pieChart' }, 0));
+  const axes = source.children(source.plotArea).filter(axis => kinds.has(axis.localName));
+  const ids = new Set(axes.map(axis => source.children(axis, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value));
+  expect(ids).toEqual(new Set(['1', '2', '3']));
+  for (const axis of axes) expect(ids.has(source.children(axis, 'crossAx')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value)).toBe(true);
 });

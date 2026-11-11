@@ -5,7 +5,7 @@ export const CHART_AUTHORING_NS = 'urn:tumblerjs:chart-authoring';
 type ChartXml = ReturnType<typeof chartXml>;
 const axisKinds = new Set(['catAx', 'valAx', 'dateAx', 'serAx']);
 
-/** Retain inactive axis formatting in history, with only referenced axes in the native plot. */
+/** Retain inactive axis formatting in history; native axes also retain their crossing dependencies. */
 export function convertChartAxes({ source, created, original, archived, peers, historyExtension, edit }: {
   source: ChartXml;
   created: ChartXml;
@@ -21,6 +21,7 @@ export function convertChartAxes({ source, created, original, archived, peers, h
   const axisId = (axis: LosslessXmlElement) => Number(value(axis, 'axId'));
   const axisIds = (plot: LosslessXmlElement) => source.children(plot, 'axId').map(axis => Number(axis.attributes.find(attribute => attribute.localName === 'val')?.value));
   const native = new Map(axes.map(axis => [axisId(axis), axis]));
+  const crossings = new Map(axes.map(axis => [axisId(axis), Number(value(axis, 'crossAx'))]));
   const history = new Map<number, string>();
   if (historyExtension) for (const entry of source.document.elements(CHART_AUTHORING_NS, 'axis')) {
     if (entry.span.start <= historyExtension.span.start || entry.span.end >= historyExtension.span.end) continue;
@@ -78,9 +79,18 @@ export function convertChartAxes({ source, created, original, archived, peers, h
     if (!existing || peerIds.has(assigned)) continue;
     const reference = source.children(existing, 'crossAx')[0]?.attributes.find(attribute => attribute.localName === 'val');
     const target = mapping.get(Number(value(template, 'crossAx')));
-    if (reference && target !== undefined && reference.value !== String(target)) edit.setAttribute(reference, String(target));
+    if (reference && target !== undefined) {
+      crossings.set(assigned, target);
+      if (reference.value !== String(target)) edit.setAttribute(reference, String(target));
+    }
   }
-  for (const axis of axes) if (!used.has(axisId(axis)) && !peerIds.has(axisId(axis))) edit.removeElement(axis);
+  const retained = new Set([...used, ...peerIds]);
+  const pending = [...retained];
+  while (pending.length) {
+    const target = crossings.get(pending.pop()!);
+    if (target !== undefined && native.has(target) && !retained.has(target)) { retained.add(target); pending.push(target); }
+  }
+  for (const axis of axes) if (!retained.has(axisId(axis))) edit.removeElement(axis);
   const before = source.children(source.plotArea).find(element => ['dTable', 'spPr', 'extLst'].includes(element.localName));
   for (const addition of additions) {
     const document = parseLosslessXml(new TextEncoder().encode(addition.xml)), axisEdit = beginLosslessXmlEdit(document);
