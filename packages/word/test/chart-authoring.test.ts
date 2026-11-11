@@ -67,3 +67,69 @@ test('new and imported charts compose inline titles with type/data edits before 
 test('chart authoring rejects a base64 payload that is not a workbook package', () => {
   expect(() => createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', chart: { ...chart(), content: { ...chart().content, workbook: 'YQ==' } } }] }] })).toThrow();
 });
+
+test('editing a transparent theme-coloured chart title keeps its colour source and opacity', async () => {
+  const { updateChartTitle, resolveChartColor } = await import('@tumblerjs/charts');
+  const { wordChartTitleText } = await import('../src/index.ts');
+  const { WordShapeText } = await import('../src/collaboration/index.ts');
+  const authored = chart();
+  const title = new TextDecoder().decode(updateChartTitle(new TextEncoder().encode(authored.content.xml), 'Alpha')).replace('<a:r>', '<a:r><a:rPr><a:solidFill><a:schemeClr val="accent1"><a:alpha val="50000"/></a:schemeClr></a:solidFill></a:rPr>');
+  const run = { text: '\uFFFC', chart: { ...authored, content: { ...authored.content, xml: title } } };
+  const native = new NativeWordDocument({ content: [{ kind: 'paragraph', runs: [run] }] });
+  const drawing = [...native.drawings.values()][0]!;
+  if (drawing.kind !== 'chart') throw new Error('Missing chart');
+  const editor = new WordShapeText({ textBody: wordChartTitleText(drawing.model) });
+  editor.replace({ start: 0, end: 5 }, 'Revised');
+  native.update([{ kind: 'paragraph', runs: [{ ...run, chartTitleText: editor.paragraphs() }] }]);
+  const saved = native.artifact();
+  const result = [...saved.document.drawings.values()][0]!;
+  if (result.kind !== 'chart') throw new Error('Missing saved chart');
+  expect(result.model.title).toBe('Revised');
+  const source = new TextDecoder().decode(saved.document.package.readPart(saved.document.package.getPart(result.partName)!));
+  expect(source).toContain('alpha');
+  expect(source).toContain('schemeClr');
+  expect(resolveChartColor(result.model.titleText![0]!.runs[0]!.style!.color!, result.model)).toBe('rgba(21,96,130,0.5)');
+});
+
+test('merged editor runs keep distinct chart opacity on unchanged text', async () => {
+  const { updateChartTitle, resolveChartColor } = await import('@tumblerjs/charts');
+  const { wordChartTitleText } = await import('../src/index.ts');
+  const { WordShapeText } = await import('../src/collaboration/index.ts');
+  const authored = chart();
+  let title = new TextDecoder().decode(updateChartTitle(new TextEncoder().encode(authored.content.xml), 'One'));
+  title = title.replace('<a:r>', '<a:r><a:rPr><a:solidFill><a:schemeClr val="accent1"><a:alpha val="25000"/></a:schemeClr></a:solidFill></a:rPr>').replace('</a:r>', '</a:r><a:r><a:rPr><a:solidFill><a:schemeClr val="accent1"><a:alpha val="75000"/></a:schemeClr></a:solidFill></a:rPr><a:t>Two</a:t></a:r>');
+  const run = { text: '\uFFFC', chart: { ...authored, content: { ...authored.content, xml: title } } };
+  const native = new NativeWordDocument({ content: [{ kind: 'paragraph', runs: [run] }] });
+  const drawing = [...native.drawings.values()][0]!;
+  if (drawing.kind !== 'chart') throw new Error('Missing chart');
+  const editor = new WordShapeText({ textBody: wordChartTitleText(drawing.model) });
+  expect(editor.paragraphs()[0]?.runs).toHaveLength(1);
+  editor.replace({ start: 1, end: 2 }, 'X');
+  native.update([{ kind: 'paragraph', runs: [{ ...run, chartTitleText: editor.paragraphs() }] }]);
+  const saved = native.artifact();
+  const result = [...saved.document.drawings.values()][0]!;
+  if (result.kind !== 'chart') throw new Error('Missing chart');
+  expect(result.model.title).toBe('OXeTwo');
+  const runs = result.model.titleText![0]!.runs;
+  expect(runs.map(run => [run.text, resolveChartColor(run.style!.color!, result.model)])).toEqual([['OXe', 'rgba(21,96,130,0.25)'], ['Two', 'rgba(21,96,130,0.75)']]);
+});
+
+
+test('an imported inline title remains current when the property editor changes its type', () => {
+  const authored = chart();
+  const source = createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', chart: authored }] }] });
+  const imported = importWordContent(source);
+  const document = new NativeWordDocument({ source });
+  document.update(imported.map(block => block.kind !== 'paragraph' ? block : { ...block, runs: block.runs.map(run => run.text === '\uFFFC' ? { ...run, chartTitle: 'Current title' } : run) }));
+  const drawing = [...document.drawings.values()][0]!;
+  if (drawing.kind !== 'chart' || !drawing.content) throw new Error('Missing editable chart source');
+  expect(drawing.content.xml).toContain('Current title');
+  expect(drawing.content.workbook).toBeUndefined();
+  const content = { ...drawing.content, xml: new TextDecoder().decode(convertChartType(new TextEncoder().encode(drawing.content.xml), { type: 'lineChart' })) };
+  document.update(imported.map(block => block.kind !== 'paragraph' ? block : { ...block, runs: block.runs.map(run => run.text === '\uFFFC' ? { ...run, chartContent: content } : run) }));
+  const saved = openWordArtifact(document.artifact().bytes());
+  const changed = [...saved.document.drawings.values()][0]!;
+  expect(changed).toMatchObject({ kind: 'chart', model: { title: 'Current title', kind: 'line' } });
+  if (changed.kind !== 'chart') return;
+  expect(readChartContent(saved.document.package, changed.partName).workbook).toBe(authored.content.workbook);
+});

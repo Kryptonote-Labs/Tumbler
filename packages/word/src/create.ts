@@ -65,7 +65,7 @@ export function createWordArtifact(options: CreateWordOptions = {}): WordArtifac
     pageWidthTwips: Math.round(page.width * 20), pageHeightTwips: Math.round(page.height * 20),
     marginTopTwips: Math.round(page.margin * 20), marginBottomTwips: Math.round(page.margin * 20),
     marginLeftTwips: Math.round(page.margin * 20), marginRightTwips: Math.round(page.margin * 20),
-  });
+  }, options.themeColours);
   const content = authored.content;
   const parts = [
     ['word/theme/theme1.xml', wordThemeXml(options.themeColours)],
