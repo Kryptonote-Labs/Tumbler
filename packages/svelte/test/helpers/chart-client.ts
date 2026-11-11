@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 interface Runtime {
   mount: typeof mount; unmount: typeof unmount; flushSync: typeof flushSync; tick: typeof tick;
-  Harness: Component<{ initial: ChartModel; content?: ChartContent }, { setModel(model: ChartModel): void }>;
+  Harness: Component<{ initial: ChartModel; content?: ChartContent; workbench?: boolean }, { setModel(model: ChartModel): void; getContent(): ChartContent | undefined }>;
 }
 const globals = ['window', 'document', 'navigator', 'Node', 'Element', 'HTMLElement', 'SVGElement', 'HTMLMediaElement', 'Text', 'Comment', 'Document', 'DocumentFragment', 'ShadowRoot', 'Event', 'CustomEvent', 'MutationObserver', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame'] as const;
 

@@ -30,7 +30,12 @@
   });
   let mode = $state<'choices' | 'pattern'>('choices');
   let open = $state(false), trigger = $state<HTMLButtonElement>(), error = $state<string>();
-  $effect(() => { void targetKey; void disabled; open = false; gradientOpen = false; error = undefined; untrack(() => onpreview?.(undefined)); });
+  let sessionKey = untrack(() => targetKey);
+  $effect(() => {
+    const key = targetKey;
+    untrack(() => { if (key !== sessionKey) { sessionKey = key; close(false); gradientOpen = false; error = undefined; onpreview?.(undefined); } });
+  });
+  $effect(() => { if (disabled) untrack(() => { close(false); gradientOpen = false; error = undefined; onpreview?.(undefined); }); });
   $effect(() => { void content.xml; error = undefined; untrack(() => onpreview?.(undefined)); });
   onDestroy(() => onpreview?.(undefined));
   function close(restore = true) { const wasOpen = open; open = false; if (wasOpen) onpreview?.(gradientOpen ? gradientPreview : undefined); if (restore) trigger?.focus(); }

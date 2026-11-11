@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { chartBytesToBase64, chartContentModel, chartPropertyTree, createOoxmlChart, setChartPictureFill, type ChartContent } from '@tumblerjs/charts';
+import { chartBytesToBase64, chartContentModel, chartPropertyTree, createOoxmlChart, readChartGradientFill, setChartPictureFill, type ChartContent } from '@tumblerjs/charts';
 import { encodeRgbaPng } from '@tumblerjs/ooxml';
 import { chartClient } from './helpers/chart-client.ts';
 
@@ -47,5 +47,32 @@ test('a saved gradient opens with stable stop keys before rendering its editor',
     target.querySelector<HTMLButtonElement>('.gradient-editor .footer button')!.click();
     client.flushSync();
     expect(target.querySelector('[role="dialog"][aria-label="Gradient for Entire chart"]')).toBeNull();
+  } finally { await client.unmount(app); await client.dispose(); }
+});
+
+
+test('an open gradient draft survives a title edit in the chart workbench', async () => {
+  const client = await chartClient();
+  const content = { xml: new TextDecoder().decode(createOoxmlChart({ type: 'bubbleChart', categories: ['A'], series: [{ name: 'Data', values: [2], xValues: [1], bubbleSizes: [3] }] })) };
+  const target = document.createElement('div'); document.body.append(target);
+  const app = client.mount(client.Harness, { target, props: { initial: chartContentModel(content), content, workbench: true } });
+  const click = (selector: string) => { target.querySelector<HTMLButtonElement>(selector)!.click(); client.flushSync(); };
+  try {
+    client.flushSync();
+    click('.fill-editor > .row .trigger');
+    click('.fill-editor .choices button:nth-child(4)');
+    expect(target.querySelector('.gradient-editor [role="dialog"]')).not.toBeNull();
+    click('.gradient-editor .buttons:not(.footer) button');
+    const position = target.querySelector<HTMLInputElement>('[aria-label="Gradient stop position for Entire chart"]')!;
+    position.value = '67.5'; position.dispatchEvent(new Event('change', { bubbles: true })); client.flushSync();
+    const title = [...target.querySelectorAll('label')].find(label => label.textContent?.trim() === 'Title')!.querySelector('input')!;
+    title.click(); client.flushSync();
+    expect(app.getContent()?.xml).toContain('Chart Title');
+    expect(app.getContent()?.xml).not.toContain('gradFill');
+    expect(target.querySelector('.gradient-editor [role="dialog"]')).not.toBeNull();
+    click('.gradient-editor .footer button:nth-child(2)');
+    expect(app.getContent()?.xml).toContain('Chart Title');
+    const source = new TextEncoder().encode(app.getContent()!.xml);
+    expect(readChartGradientFill(source, chartPropertyTree(source).id)?.stops.map(stop => stop.position)).toEqual([0, 1, .675]);
   } finally { await client.unmount(app); await client.dispose(); }
 });
