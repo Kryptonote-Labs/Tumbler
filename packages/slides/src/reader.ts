@@ -13,7 +13,7 @@ import type {
 } from "./appearance.ts";
 import { resolveDrawingColor } from "./drawing-color.ts";
 import { resolveDrawingGeometry } from "./drawing-geometry.ts";
-import { parseOoxmlChart } from "@tumblerjs/charts";
+import { parseOoxmlChart, bindChartTheme } from "@tumblerjs/charts";
 import {
   createMarkupCompatibilityView,
   OOXML_NAMESPACES,
@@ -159,6 +159,9 @@ export function presentationThemeColours(document: PresentationDocument, slideId
   const slide = document.slides.find(slide => slide.id === slideId);
   if (!slide) throw new Error('Slide not found.');
   const context = slideContexts.get(slide);
+  return contextThemeColours(context);
+}
+function contextThemeColours(context: Context | undefined): ThemeColorScheme {
   const scheme = context?.colors ?? DEFAULT_OFFICE_THEME;
   const aliases = new Map([['lt1', 'bg1'], ['dk1', 'tx1'], ['lt2', 'bg2'], ['dk2', 'tx2']]);
   return new ThemeColorScheme(scheme.name, new Map(THEME_COLOR_SLOTS.map(slot => {
@@ -1413,7 +1416,7 @@ class Reader {
           part =
             id === undefined ? undefined : this.related(source, "chart", id);
         if (part) {
-          chart = parseOoxmlChart(this.pkg.readPart(part), this.conformance);
+          chart = bindChartTheme(parseOoxmlChart(this.pkg.readPart(part), this.conformance), contextThemeColours(context), context.fonts);
           kind = "chart";
           if (chart.status === "unsupported") diagnostics.push(chart.reason);
         }

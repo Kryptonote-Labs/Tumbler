@@ -10,5 +10,5 @@ export function bindChartTheme(model: ChartModel, colors: ThemeColorScheme, font
     const face = fonts?.typeface(role, 'latin');
     if (face) themeFonts[role === 'major' ? '+mj-lt' : '+mn-lt'] = face;
   }
-  return { ...model, themeColors, themeFonts };
+  return { ...model, themeColors, themeFonts, ...(model.status === 'supported' && model.plots ? { plots: model.plots.map(plot => ({ ...plot, themeColors, themeFonts })) } : {}) };
 }

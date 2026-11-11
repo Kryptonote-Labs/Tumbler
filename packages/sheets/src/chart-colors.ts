@@ -1,9 +1,14 @@
+import { resolveDrawingColor } from "@tumblerjs/ooxml";
 import { transformChartColor, type ChartColor } from "@tumblerjs/charts";
 import type { ThemeColorSlot } from "@tumblerjs/ooxml";
 import type { SpreadsheetStyles } from "./styles.ts";
 
 /** Resolves the chart color subset through the workbook's DrawingML theme. */
 export function resolveSpreadsheetChartColor(styles: SpreadsheetStyles, color: ChartColor): string | undefined {
+  if (color.source) return resolveDrawingColor(color.source, name => {
+    const slot = themeSlot(name), value = slot && styles.theme?.color(slot);
+    return value ? `#${value}` : undefined;
+  }, undefined, () => color.kind === 'rgb' ? color.value : undefined);
   if (color.kind === "rgb") return transformChartColor(color.value, color);
   const slot = themeSlot(color.value);
   const rgb = slot === undefined ? undefined : styles.theme?.color(slot);

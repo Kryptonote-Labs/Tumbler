@@ -1,4 +1,5 @@
-import { chartContentModel, mergeChartContent } from '@tumblerjs/charts';
+import { ThemeColorScheme } from '@tumblerjs/ooxml';
+import { chartContentModel, mergeChartContent, bindChartTheme } from '@tumblerjs/charts';
 import { linkedText } from './authoring-metadata.ts';
 import type { PresentationCommand } from './commands.ts';
 import type { NativePresentationState, NativeSlide, NativeChange } from './native-document.ts';
@@ -224,8 +225,8 @@ export function applyNativeModelCommand(
       const key = nextId();
       const geometry = insertNativeObject({ name: 'insert-object', slideId: command.slideId, bounds: command.bounds, object: { kind: 'shape', geometry: 'rect' } }, key, key, target!.slide.part);
       const chart = chartContentModel(command.content);
-      const themeColors = Object.fromEntries(target!.palette.flatMap(([slot, value]) => value ? [[slot, value.startsWith('#') ? value : `#${value}`]] : []));
-      const object: SlideObject = { ...geometry, kind: 'chart', name: `Chart ${key}`, text: undefined, textEditable: false, chartContent: command.content, chart: { ...chart, themeColors } };
+      const theme = new ThemeColorScheme('Slide theme', new Map(target!.palette.map(([slot, value]) => [slot, value?.replace(/^#/, '')])));
+      const object: SlideObject = { ...geometry, kind: 'chart', name: `Chart ${key}`, text: undefined, textEditable: false, chartContent: command.content, chart: bindChartTheme(chart, theme, target!.themeFonts) };
       patchSlide({ ...target!, slide: { ...target!.slide, objects: [...target!.slide.objects, object] } });
       addObjects(command.slideId, [object]);
       break;

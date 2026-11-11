@@ -1,7 +1,7 @@
-import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
+import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement, type ThemeColorScheme, type ThemeFontScheme } from "@tumblerjs/ooxml";
 import type { OpcPart, PartName } from "@tumblerjs/opc";
 import type { SparseAxisGeometry } from "@tumblerjs/core";
-import { ChartParseError, parseOoxmlChart, type ChartModel } from "@tumblerjs/charts";
+import { ChartParseError, parseOoxmlChart, bindChartTheme, type ChartModel } from "@tumblerjs/charts";
 import { SpreadsheetError, type SpreadsheetWorkbook } from "./workbook.ts";
 
 const DRAWING_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.drawing+xml";
@@ -52,6 +52,8 @@ export function readSpreadsheetDrawing(input: {
   worksheetRoot: LosslessXmlElement;
   spreadsheetNamespace: string;
   relationshipsNamespace: string;
+  theme?: ThemeColorScheme | undefined;
+  themeFonts?: ThemeFontScheme | undefined;
 }): SpreadsheetDrawing | undefined {
   const elements = children(input.worksheetRoot, input.spreadsheetNamespace, "drawing");
   if (elements.length > 1) invalid("A worksheet must not repeat drawing.");
@@ -87,7 +89,7 @@ export function readSpreadsheetDrawing(input: {
     part,
     document,
     anchors,
-    charts: readChartFrames(input.workbook, part, document, anchors, namespace, input.relationshipsNamespace),
+    charts: readChartFrames(input.workbook, part, document, anchors, namespace, input.relationshipsNamespace, input.theme, input.themeFonts),
   });
 }
 
@@ -98,6 +100,8 @@ function readChartFrames(
   anchors: readonly SpreadsheetDrawingAnchor[],
   spreadsheetDrawingNamespace: string,
   relationshipsNamespace: string,
+  theme?: ThemeColorScheme,
+  themeFonts?: ThemeFontScheme,
 ): readonly SpreadsheetChartFrame[] {
   const chartNamespace = OOXML_NAMESPACES[workbook.conformance].chart;
   const drawingNamespace = OOXML_NAMESPACES[workbook.conformance].drawing;
@@ -125,7 +129,8 @@ function readChartFrames(
       const chartPart = workbook.package.getPart(relationship.targetPartName);
       if (chartPart?.contentType !== CHART_CONTENT_TYPE) return [unsupportedFrame(anchor, relationshipId, chartPart?.name, "Chart relationship has an unsupported content type.")];
       try {
-        return [Object.freeze({ anchor, relationshipId, partName: chartPart.name, model: parseOoxmlChart(workbook.package.readPart(chartPart), workbook.conformance) })];
+        const model = parseOoxmlChart(workbook.package.readPart(chartPart), workbook.conformance);
+        return [Object.freeze({ anchor, relationshipId, partName: chartPart.name, model: theme ? bindChartTheme(model, theme, themeFonts) : model })];
       } catch (cause) {
         if (!(cause instanceof ChartParseError)) throw cause;
         return [unsupportedFrame(anchor, relationshipId, chartPart.name, cause.message)];
