@@ -1,3 +1,4 @@
+import { chartContentModel } from '@tumblerjs/charts';
 import { linkedText } from './authoring-metadata.ts';
 import type { PresentationCommand } from './commands.ts';
 import type { NativePresentationState, NativeSlide, NativeChange } from './native-document.ts';
@@ -211,6 +212,22 @@ export function applyNativeModelCommand(
         slide: { ...target!.slide, objects: [...target!.slide.objects, copy] },
       });
       addObjects(command.slideId, [copy]);
+      break;
+    }
+    case 'edit-chart': {
+      if (selected?.kind !== 'chart') throw new TypeError('Select a chart.');
+      const chart = chartContentModel(command.content);
+      patchObject({ ...selected, chartContent: command.content, chart: { ...chart, ...(selected.chart?.themeColors ? { themeColors: selected.chart.themeColors } : {}), ...(selected.chart?.themeFonts ? { themeFonts: selected.chart.themeFonts } : {}) } });
+      break;
+    }
+    case 'insert-chart': {
+      const key = nextId();
+      const geometry = insertNativeObject({ name: 'insert-object', slideId: command.slideId, bounds: command.bounds, object: { kind: 'shape', geometry: 'rect' } }, key, key, target!.slide.part);
+      const chart = chartContentModel(command.content);
+      const themeColors = Object.fromEntries(target!.palette.flatMap(([slot, value]) => value ? [[slot, value.startsWith('#') ? value : `#${value}`]] : []));
+      const object: SlideObject = { ...geometry, kind: 'chart', name: `Chart ${key}`, text: undefined, textEditable: false, chartContent: command.content, chart: { ...chart, themeColors } };
+      patchSlide({ ...target!, slide: { ...target!.slide, objects: [...target!.slide.objects, object] } });
+      addObjects(command.slideId, [object]);
       break;
     }
     case 'insert-object': {

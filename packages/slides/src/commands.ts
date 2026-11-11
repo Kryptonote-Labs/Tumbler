@@ -1,3 +1,4 @@
+import { editPresentationChart, insertPresentationChart } from './chart-authoring.ts';
 import { formatPresentationTable } from './table-format.ts';
 import { gradientFill } from './gradient-authoring.ts';
 import { backgroundFill, setSlideBackground } from "./background-authoring.ts";
@@ -68,7 +69,10 @@ const patch = z
   .strict()
   .transform((value) => normalizeFormattingPatch(value as FormattingPatch));
 const tableBorder = z.object({ color, width: number.nonnegative(), dash: z.enum(['solid', 'dash', 'dot', 'double']) }).strict();
+const chartContent = z.object({ xml: z.string(), workbook: z.string().optional() }).strict();
 const singlePresentationCommand = z.discriminatedUnion("name", [
+  z.object({ name: z.literal('edit-chart'), ...target, content: chartContent }).strict(),
+  z.object({ name: z.literal('insert-chart'), slideId: id, bounds, content: chartContent }).strict(),
   z.object({ name: z.literal('format-table'), ...target,
     row: z.number().int().nonnegative(), column: z.number().int().nonnegative(),
     scope: z.enum(['cell', 'row', 'column', 'table']),
@@ -277,6 +281,8 @@ export function applyPresentationCommand(
   if (artifact.nativeCommand) return artifact.nativeCommand(input);
   const command = presentationCommand.parse(input);
   switch (command.name) {
+    case 'edit-chart': return editPresentationChart(artifact, command.slideId, command.objectKey, command.content);
+    case 'insert-chart': return insertPresentationChart(artifact, command.slideId, command.bounds, command.content);
     case "batch":
       return command.commands.reduce(applyPresentationCommand, artifact);
     case "format-table":
