@@ -12,7 +12,8 @@ import type { SupportedChartModel, ChartSeries, ChartPointFormat } from "./model
 import { cartesianScene } from "./scene-cartesian.ts";
 import { combinationScene } from "./scene-combination.ts";
 import type { ChartMark, ChartScene, ChartSceneOptions, SceneContext } from "./scene-marks.ts";
-import { pieScene } from "./scene-pie.ts";
+import { layoutCartesianChart, layoutScatterChart } from './layout.ts';
+import { pieScene, pieChartFrame } from "./scene-pie.ts";
 import { chartFont, chartFontShorthand } from "./scene-style.ts";
 import { xyScene } from "./scene-xy.ts";
 
@@ -55,15 +56,30 @@ function buildChartScene(model: SupportedChartModel, width: number, height: numb
   const title = chartTitleMarks(context), titleBounds = chartMarksBounds(context, title);
   const titleMarks = [...(titleBounds ? chartShapeMarks(context, { x: titleBounds.x - 4, y: titleBounds.y - 3, width: titleBounds.width + 8, height: titleBounds.height + 6 }, model.titleArea) : []), ...title];
   if (!model.titleOverlay) marks.push(...titleMarks);
-  marks.push(...(model.plots ? combinationScene(context)
+  const manual = model.plotLayout;
+  const possiblyCollapsed = manual && (manual.width === 0 || manual.height === 0 || manual.widthMode === 'edge' || manual.heightMode === 'edge');
+  const plot = possiblyCollapsed ? model.kind === 'pie' || model.kind === 'doughnut' || model.kind === 'of-pie'
+    ? pieChartFrame(context, model.series[0]?.values?.points.length ?? 0).plot
+    : model.kind === 'scatter' || model.kind === 'bubble' ? layoutScatterChart(model, width, height, context.measure).plot
+    : layoutCartesianChart(model, width, height, context.measure).plot : undefined;
+  if (plot && (plot.width <= 0 || plot.height <= 0)) {
+    const { plotLayout: _manual, ...automatic } = model;
+    marks.push(...chartPlotScene({ ...context, model: automatic }).filter(mark => mark.kind === 'group' && mark.role === 'legend'));
+  } else marks.push(...chartPlotScene(context));
+  if (model.titleOverlay) marks.push(...titleMarks);
+  return { width, height, label: model.title ?? (model.plots ? "Combination chart" : `${model.kind} chart`), marks: chartStrokeBounds(chartLegendShape(context, marks), options.viewport ?? { x: 0, y: 0, width, height }) };
+}
+
+
+function chartPlotScene(context: SceneContext): ChartMark[] {
+  const { model } = context;
+  return model.plots ? combinationScene(context)
     : model.kind === 'of-pie' ? ofPieScene(context)
-    : model.kind === "pie" || model.kind === "doughnut" ? pieScene(context)
-    : model.kind === "scatter" || model.kind === "bubble" ? xyScene(context)
+    : model.kind === 'pie' || model.kind === 'doughnut' ? pieScene(context)
+    : model.kind === 'scatter' || model.kind === 'bubble' ? xyScene(context)
     : model.kind === 'surface' ? surfaceScene(context)
     : model.threeD ? threeDScene(context)
     : model.kind === 'radar' ? radarScene(context)
     : model.kind === 'stock' ? stockScene(context)
-    : cartesianScene(context)));
-  if (model.titleOverlay) marks.push(...titleMarks);
-  return { width, height, label: model.title ?? (model.plots ? "Combination chart" : `${model.kind} chart`), marks: chartStrokeBounds(chartLegendShape(context, marks), options.viewport ?? { x: 0, y: 0, width, height }) };
+    : cartesianScene(context);
 }

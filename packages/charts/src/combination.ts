@@ -1,3 +1,4 @@
+import { chartManualPlot, chartOuterPlot } from './manual-layout.ts';
 import { chartStacks } from './indexed-data.ts';
 import { assertChartSceneBudget } from './scene-budget.ts';
 import { chartFont, type ChartFont } from './scene-style.ts';
@@ -48,10 +49,11 @@ export function layoutCombinationChart(
         plot.axisIds?.includes(axis.id),
     ),
   );
-  const rect = {
-    ...common.plot,
-    width: Math.max(1, common.plot.width - (rightAxis ? 40 : 0)),
-  };
+  const { plotLayout: _manual, ...automaticModel } = model;
+  const automatic = layoutCartesianChart(automaticModel, width, height, measure);
+  const inner = { ...automatic.plot, width: Math.max(1, automatic.plot.width - (rightAxis ? 40 : 0)) };
+  const outer = chartOuterPlot(model, { ...automatic, plot: inner }, measure ?? ((text, font) => text.length * font.size * .55));
+  const rect = chartManualPlot(model.plotLayout, inner, { ...outer, width: outer.width + (rightAxis ? 40 : 0) }, width, height);
   return plots.map((plot, i) => {
     const axis = plot.axes.find(
       (a) =>
@@ -76,7 +78,7 @@ export function layoutCombinationChart(
       );
     const stacks = chartStacks(plot, common.categories.length);
     const ticks = axis?.logBase ? chartLogarithmicScale([minimum, maximum], { ...axis, minimum, maximum }).ticks : chartAxisTicks(minimum, maximum, axis?.majorUnit, {
-      length: plot.kind === 'bar' ? rect.width : rect.height,
+      length: Math.max(1, plot.kind === 'bar' ? rect.width : rect.height),
       labelSize: chartFont('tick', axis?.textStyle, plot).size * (plot.kind === 'bar' ? 2 : 1),
     });
     return {

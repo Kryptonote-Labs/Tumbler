@@ -1,3 +1,4 @@
+import { parseChartManualLayout } from './manual-layout.ts';
 import { parseChart3DProperties, parseBarShape } from './three-d-properties.ts';
 import { parseSurfaceBands } from './surface-bands.ts';
 import { parsePlotDecorations } from './plot-decorations.ts';
@@ -143,8 +144,10 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
   const bubbleScale = kind === "bubble" ? parseBubbleScale(val(children(chartType, chartNamespace, "bubbleScale")[0]) ?? "100%") : undefined;
   const showNegativeBubbles = kind === "bubble" ? booleanVal(children(chartType, chartNamespace, "showNegBubbles")[0], false) : undefined;
   const bubbleSizeRepresentation = kind === "bubble" ? parseBubbleSizeRepresentation(val(children(chartType, chartNamespace, "sizeRepresents")[0]) ?? "area") : undefined;
+  const plotLayout = parseChartManualLayout(plotArea, chartNamespace);
   return Object.freeze({
     status: "supported", kind, grouping, holeSize,
+    ...(plotLayout ? { plotLayout } : {}),
     ...parsePlotDecorations(chartType, chartNamespace, drawingNamespace),
     ...areaStyleProperties(document.root, chartNamespace, drawingNamespace, 'chartArea'),
     ...areaStyleProperties(plotArea, chartNamespace, drawingNamespace, 'plotArea'),

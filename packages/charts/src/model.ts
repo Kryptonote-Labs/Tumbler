@@ -203,6 +203,7 @@ interface ChartModelBase {
 }
 
 export interface SupportedChartModel extends ChartModelBase {
+  readonly plotLayout?: import('./manual-layout.ts').ChartManualLayout;
   readonly dropLines?: ChartLineStyle;
   readonly highLowLines?: ChartLineStyle;
   readonly upDownBars?: import('./plot-decorations.ts').ChartUpDownBars;
