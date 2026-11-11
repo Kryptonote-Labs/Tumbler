@@ -38,7 +38,7 @@ for (const conformance of ['strict', 'transitional'] as const) test(`${conforman
 
 test('repeated field text edits retain field metadata without duplicating opaque properties', () => {
   const f = fixture();
-  let bytes = f.source;
+  let bytes: Uint8Array = f.source;
   for (const text of ['Q3', 'Q4', 'Final quarter']) bytes = change(bytes, f.conformance, paragraph => ({ ...paragraph, runs: paragraph.runs.map(run => run.sourceWrapper?.localName === 'fld' ? { ...run, text, style: { ...run.style, italic: true } } : run) }));
   const xml = parseLosslessXml(bytes);
   expect(xml.elements(f.drawing, 'fld')).toHaveLength(1);
