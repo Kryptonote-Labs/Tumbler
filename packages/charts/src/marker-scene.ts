@@ -15,7 +15,8 @@ export function chartMarkerMarks(context: SceneContext, series: ChartSeries, ser
   const radius = marker?.symbol === 'dot' ? Math.max(1, nominalRadius / 3) : nominalRadius;
   const resolve = (color: NonNullable<typeof marker>['fill']) => color && (context.options.resolveColor?.(color) ?? resolveChartColor(color, context.model));
   const fill = marker?.noFill ? 'none' : resolve(marker?.fill) ?? chartPointColor(context, series, seriesIndex, index);
-  const stroke = marker?.lineStyle?.noFill ? undefined : resolve(marker?.lineStyle?.color) ?? chartPointColor(context, series, seriesIndex, index, true);
+  const inheritedStroke = chartPointColor(context, series, seriesIndex, index, true);
+  const stroke = marker?.lineStyle?.noFill ? undefined : resolve(marker?.lineStyle?.color) ?? (inheritedStroke === 'none' ? fill : inheritedStroke);
   if (marker?.lineStyle?.noFill && ['plus', 'x', 'dash'].includes(marker.symbol ?? 'auto')) return [];
   const line = chartStroke('axis', marker?.lineStyle, context.model, context.options.resolveColor);
   const bounds = { x: x - radius, y: y - radius, width: radius * 2, height: radius * 2 };

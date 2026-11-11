@@ -194,6 +194,9 @@ interface ChartModelBase {
 }
 
 export interface SupportedChartModel extends ChartModelBase {
+  readonly dropLines?: ChartLineStyle;
+  readonly highLowLines?: ChartLineStyle;
+  readonly upDownBars?: import('./plot-decorations.ts').ChartUpDownBars;
   readonly plotArea?: ChartShapeStyle;
   readonly plots?: readonly SupportedChartModel[];
   readonly status: "supported";

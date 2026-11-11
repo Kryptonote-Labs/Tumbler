@@ -81,12 +81,12 @@ export function createOoxmlChart(options: CreateChartOptions): Uint8Array {
       if (values && values.length !== series.values.length) throw new TypeError('X, Y and bubble-size counts must match.');
     if (type === 'bubbleChart' && !series.bubbleSizes) throw new TypeError('Bubble charts require bubble sizes.');
     const color = `accent${index % 6 + 1}`;
-    const style = `<c:spPr><a:solidFill><a:schemeClr val="${color}"/></a:solidFill><a:ln><a:solidFill><a:schemeClr val="${color}"/></a:solidFill></a:ln></c:spPr>`;
+    const style = `<c:spPr><a:solidFill><a:schemeClr val="${color}"/></a:solidFill><a:ln>${type === 'stockChart' ? '<a:noFill/>' : `<a:solidFill><a:schemeClr val="${color}"/></a:solidFill>`}</a:ln></c:spPr>`;
     const categories = `<c:cat><c:strLit><c:ptCount val="${options.categories.length}"/>${options.categories.map((value, i) => `<c:pt idx="${i}"><c:v>${escape(value)}</c:v></c:pt>`).join('')}</c:strLit></c:cat>`;
     const values = xy
       ? numericData('xVal', series.xValues ?? series.values.map((_, i) => i + 1)) + numericData('yVal', series.values) + (type === 'bubbleChart' ? numericData('bubbleSize', series.bubbleSizes!) : '')
       : categories + numericData('val', series.values);
-    return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/><c:tx><c:v>${escape(series.name)}</c:v></c:tx>${style}${values}</c:ser>`;
+    return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/><c:tx><c:v>${escape(series.name)}</c:v></c:tx>${style}${type === 'stockChart' ? `<c:marker><c:symbol val="${options.series.length === 3 && index === 2 ? 'dash' : 'none'}"/>${options.series.length === 3 && index === 2 ? '<c:spPr><a:ln><a:solidFill><a:schemeClr val="tx1"/></a:solidFill></a:ln></c:spPr>' : ''}</c:marker>` : ''}${values}</c:ser>`;
   }).join('');
   let before = '';
   let after = '';
@@ -98,7 +98,7 @@ export function createOoxmlChart(options: CreateChartOptions): Uint8Array {
   if (type.startsWith('surface')) before += `<c:wireframe val="${options.wireframe ? 1 : 0}"/>`;
   else if (type !== 'stockChart') before += `<c:varyColors val="${pie ? 1 : 0}"/>`;
   if (type === 'doughnutChart') after += '<c:holeSize val="50"/>';
-  if (type === 'stockChart') after += '<c:hiLowLines/>';
+  if (type === 'stockChart') after += '<c:hiLowLines/>' + (options.series.length === 4 ? '<c:upDownBars><c:gapWidth val="150"/><c:upBars/><c:downBars/></c:upDownBars>' : '');
   if (bar && type === 'barChart' && ['stacked', 'percentStacked'].includes(grouping)) after += '<c:overlap val="100"/>';
   const ids = pie ? [] : depth ? [1, 2, 3] : [1, 2];
   after += ids.map(id => `<c:axId val="${id}"/>`).join('');

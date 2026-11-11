@@ -1,3 +1,4 @@
+import { parsePlotDecorations } from './plot-decorations.ts';
 import { parseChartGradient } from './gradient-parser.ts';
 import { parseChartAxisProperties } from './axis-properties.ts';
 import { parseChartAnalytics } from './analytics-parser.ts';
@@ -85,7 +86,7 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
       const edit = beginLosslessXmlEdit(document);
       for (const other of candidates) if (candidate !== other) edit.removeElement(other);
       const parsed = parseOoxmlChart(edit.commit().bytes, conformance, options);
-      if (parsed.status !== "supported" || !["column", "bar", "line", "area"].includes(parsed.kind))
+      if (parsed.status !== "supported" || !["column", "bar", "line", "area", "stock"].includes(parsed.kind))
         return unsupported(candidate.localName, "This combination contains an unsupported plot type.", title, titleFormula, legend);
       plots.push(Object.freeze({ ...parsed, title }));
     }
@@ -145,6 +146,7 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
   const bubbleSizeRepresentation = kind === "bubble" ? parseBubbleSizeRepresentation(val(children(chartType, chartNamespace, "sizeRepresents")[0]) ?? "area") : undefined;
   return Object.freeze({
     status: "supported", kind, grouping, holeSize,
+    ...parsePlotDecorations(chartType, chartNamespace, drawingNamespace),
     ...areaStyleProperties(document.root, chartNamespace, drawingNamespace, 'chartArea'),
     ...areaStyleProperties(plotArea, chartNamespace, drawingNamespace, 'plotArea'),
     ...(titleElement ? { ...areaStyleProperties(titleElement, chartNamespace, drawingNamespace, 'titleArea'), titleOverlay: booleanVal(children(titleElement, chartNamespace, 'overlay')[0], false) } : {}),
@@ -226,7 +228,7 @@ function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespac
   const titleCache = titleRef === undefined ? undefined : parseSequenceContainer(titleRef, chartNamespace, "string");
   const xValues = kind === "scatter" || kind === "bubble" ? parseData(children(element, chartNamespace, "xVal")[0], chartNamespace) : undefined;
   const bubbleSizes = kind === "bubble" ? parseData(children(element, chartNamespace, "bubbleSize")[0], chartNamespace) : undefined;
-  const marker = ["scatter", "line", "radar"].includes(kind) ? parseMarker(children(element, chartNamespace, "marker")[0], chartNamespace) : undefined;
+  const marker = ["scatter", "line", "radar", "stock"].includes(kind) ? parseMarker(children(element, chartNamespace, "marker")[0], chartNamespace) : undefined;
   const points = children(element, chartNamespace, 'dPt');
   if (points.length > MAX_CACHE_POINTS) throw new ChartPreviewLimitError('Chart point formatting exceeds preview limits.');
   const shape = children(element, chartNamespace, 'spPr')[0];

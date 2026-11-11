@@ -71,3 +71,5 @@ export { convertChartConformance } from './conformance.ts';
 
 export type { ChartGradient } from './model.ts';
 export type { ChartGradientPaint } from './gradient-scene.ts';
+
+export type { ChartUpDownBars } from './plot-decorations.ts';
