@@ -1,3 +1,4 @@
+import { stockScene } from './scene-stock.ts';
 import { chartLegendFill } from './gradient-scene.ts';
 import { layoutCombinationChart } from './combination.ts';
 import { cartesianScene } from './scene-cartesian.ts';
@@ -17,7 +18,7 @@ export function combinationScene(context: SceneContext): ChartMark[] {
       model: { ...plotModel, ...(plotIndex === 0 && plotArea ? { plotArea } : {}), title: undefined, legend: undefined, axes, ...(model.themeColors ? { themeColors: model.themeColors } : {}), ...(model.themeFonts ? { themeFonts: model.themeFonts } : {}) },
       color: (series, index, line) => context.color(series, Math.max(0, model.series.findIndex(item => item.index === series.index)), line),
     };
-    marks.push(...cartesianScene(current, true, plot.layout));
+    marks.push(...(current.model.kind === 'stock' ? stockScene(current, plot.layout) : cartesianScene(current, true, plot.layout)));
   }
   if (model.legend) marks.push(...legendMarks(context, model.series.map((series, index) => ({
     label: series.title ?? `Series ${index + 1}`,

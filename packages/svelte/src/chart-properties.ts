@@ -8,7 +8,7 @@ import {
 } from "@tumblerjs/charts";
 
 /** A chart type and its variant. Hosts convert the chart; the properties pane only proposes. */
-export type ChartTypeChange = Pick<CreateChartOptions, "type" | "direction" | "grouping" | "radarStyle" | "scatterStyle" | "splitType" | "wireframe">;
+export type ChartTypeChange = Pick<CreateChartOptions, "type" | "direction" | "grouping" | "radarStyle" | "scatterStyle" | "splitType" | "wireframe" | "shape">;
 
 export interface ChartTypeOption {
   readonly label: string;
@@ -50,6 +50,7 @@ export const CHART_TYPE_FAMILIES: readonly ChartTypeFamily[] = [
     options: [
       ...groupings.map(([grouping, label]) => ({ label: `${label} column`, change: { type: "barChart", direction: "col", grouping } }) as const),
       ...groupings.map(([grouping, label]) => ({ label: `3-D ${label.toLowerCase()} column`, change: { type: "bar3DChart", direction: "col", grouping } }) as const),
+      { label: "3-D column", change: { type: "bar3DChart", direction: "col", grouping: "standard" } },
     ],
   },
   {
@@ -57,6 +58,7 @@ export const CHART_TYPE_FAMILIES: readonly ChartTypeFamily[] = [
     options: [
       ...groupings.map(([grouping, label]) => ({ label: `${label} bar`, change: { type: "barChart", direction: "bar", grouping } }) as const),
       ...groupings.map(([grouping, label]) => ({ label: `3-D ${label.toLowerCase()} bar`, change: { type: "bar3DChart", direction: "bar", grouping } }) as const),
+      { label: "3-D bar", change: { type: "bar3DChart", direction: "bar", grouping: "standard" } },
     ],
   },
   {

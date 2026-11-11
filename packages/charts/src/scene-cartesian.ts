@@ -1,3 +1,4 @@
+import { cartesianDecorationMarks } from './plot-decorations.ts';
 import { chartLegendFill } from './gradient-scene.ts';
 import { chartGradientPaint, chartPointGradient } from './gradient-scene.ts';
 import { chartShapeMarks } from './shape-scene.ts';
@@ -24,6 +25,7 @@ export function cartesianScene(context: SceneContext, drawSeries = true, supplie
   const marks: ChartMark[] = [...chartShapeMarks(context, plot, model.plotArea), ...cartesianAxisMarks(context, layout)];
 
   const dataStart = marks.length;
+  if (drawSeries) marks.push(...cartesianDecorationMarks(context, layout));
   const order = model.series.map((series, seriesIndex) => ({ series, seriesIndex }));
   if (model.kind === 'area' && model.grouping === 'standard') order.reverse();
   if (drawSeries) order.forEach(({ series, seriesIndex }) => {

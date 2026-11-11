@@ -95,6 +95,7 @@ export interface ChartPointFormat {
 }
 
 export interface ChartSeries {
+  readonly barShape?: import('./bar-shapes.ts').ChartBarShape;
   readonly gradient?: ChartGradient;
   readonly trendlines?: readonly import('./analytics-parser.ts').ChartTrendline[];
   readonly errorBars?: readonly import('./analytics-parser.ts').ChartErrorBars[];
@@ -194,6 +195,9 @@ interface ChartModelBase {
 }
 
 export interface SupportedChartModel extends ChartModelBase {
+  readonly dropLines?: ChartLineStyle;
+  readonly highLowLines?: ChartLineStyle;
+  readonly upDownBars?: import('./plot-decorations.ts').ChartUpDownBars;
   readonly plotArea?: ChartShapeStyle;
   readonly plots?: readonly SupportedChartModel[];
   readonly status: "supported";
@@ -201,8 +205,12 @@ export interface SupportedChartModel extends ChartModelBase {
   readonly sourceType?: string;
   readonly varyColors?: boolean;
   readonly dataLabels?: import('./data-labels.ts').ChartDataLabels;
-  readonly threeD?: { readonly rotationX: number; readonly rotationY: number; readonly perspective: number; readonly rightAngleAxes: boolean; readonly depthPercent: number };
+  readonly threeD?: import('./three-d-properties.ts').ChartView3D;
+  readonly walls?: import('./three-d-properties.ts').ChartWalls;
+  readonly gapDepth?: number;
+  readonly barShape?: import('./bar-shapes.ts').ChartBarShape;
   readonly radarStyle?: 'standard' | 'marker' | 'filled';
+  readonly bandFormats?: readonly import('./surface-bands.ts').ChartSurfaceBand[];
   readonly wireframe?: boolean;
   readonly splitType?: 'pie' | 'bar';
   readonly splitBy?: 'auto' | 'cust' | 'percent' | 'pos' | 'val';

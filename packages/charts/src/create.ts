@@ -1,3 +1,4 @@
+import { CHART_BAR_SHAPES, type ChartBarShape } from './bar-shapes.ts';
 import { isOoxmlChartType, type OoxmlChartType } from './chart-types.ts';
 import { updateChartTitle } from './title-edit.ts';
 
@@ -10,6 +11,7 @@ export interface ChartSourceSeries {
 
 export interface CreateChartOptions {
   readonly type: OoxmlChartType;
+  readonly shape?: ChartBarShape | undefined;
   readonly conformance?: 'strict' | 'transitional' | undefined;
   readonly title?: string | undefined;
   readonly categories: readonly string[];
@@ -53,6 +55,7 @@ export function createOoxmlChart(options: CreateChartOptions): Uint8Array {
     [options.radarStyle, ['standard', 'marker', 'filled']],
     [options.scatterStyle, ['none', 'line', 'lineMarker', 'marker', 'smooth', 'smoothMarker']],
     [options.splitType, ['pie', 'bar']],
+    [options.shape, CHART_BAR_SHAPES],
   ] as const) {
     if (value !== undefined && !allowed.some(candidate => candidate === value))
       throw new TypeError(`Invalid chart option: ${value}`);
@@ -68,12 +71,13 @@ export function createOoxmlChart(options: CreateChartOptions): Uint8Array {
   const depth = ['area3DChart', 'bar3DChart', 'line3DChart', 'surfaceChart', 'surface3DChart'].includes(type);
   if (options.grouping && !(bar || line || area)) throw new TypeError('Grouping does not apply to this chart type.');
   const grouping = options.grouping ?? (bar ? 'clustered' : 'standard');
-  if (bar && grouping === 'standard' || !bar && grouping === 'clustered')
+  if (!bar && grouping === 'clustered')
     throw new TypeError('Invalid grouping for this chart type.');
   if (options.direction !== undefined && !bar) throw new TypeError('Direction applies only to bar charts.');
   if (options.radarStyle !== undefined && type !== 'radarChart') throw new TypeError('Radar style applies only to radar charts.');
   if (options.scatterStyle !== undefined && type !== 'scatterChart') throw new TypeError('Scatter style applies only to scatter charts.');
   if (options.splitType !== undefined && type !== 'ofPieChart') throw new TypeError('Split type applies only to of-pie charts.');
+  if (options.shape !== undefined && type !== 'bar3DChart') throw new TypeError('Bar shape applies only to 3D bar and column charts.');
   if (options.wireframe !== undefined && !type.startsWith('surface')) throw new TypeError('Wireframe applies only to surface charts.');
   const series = options.series.map((series, index) => {
     if (!xy && series.values.length !== options.categories.length) throw new TypeError('Series and category counts must match.');
@@ -81,12 +85,12 @@ export function createOoxmlChart(options: CreateChartOptions): Uint8Array {
       if (values && values.length !== series.values.length) throw new TypeError('X, Y and bubble-size counts must match.');
     if (type === 'bubbleChart' && !series.bubbleSizes) throw new TypeError('Bubble charts require bubble sizes.');
     const color = `accent${index % 6 + 1}`;
-    const style = `<c:spPr><a:solidFill><a:schemeClr val="${color}"/></a:solidFill><a:ln><a:solidFill><a:schemeClr val="${color}"/></a:solidFill></a:ln></c:spPr>`;
+    const style = `<c:spPr><a:solidFill><a:schemeClr val="${color}"/></a:solidFill><a:ln>${type === 'stockChart' ? '<a:noFill/>' : `<a:solidFill><a:schemeClr val="${color}"/></a:solidFill>`}</a:ln></c:spPr>`;
     const categories = `<c:cat><c:strLit><c:ptCount val="${options.categories.length}"/>${options.categories.map((value, i) => `<c:pt idx="${i}"><c:v>${escape(value)}</c:v></c:pt>`).join('')}</c:strLit></c:cat>`;
     const values = xy
       ? numericData('xVal', series.xValues ?? series.values.map((_, i) => i + 1)) + numericData('yVal', series.values) + (type === 'bubbleChart' ? numericData('bubbleSize', series.bubbleSizes!) : '')
       : categories + numericData('val', series.values);
-    return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/><c:tx><c:v>${escape(series.name)}</c:v></c:tx>${style}${values}</c:ser>`;
+    return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/><c:tx><c:v>${escape(series.name)}</c:v></c:tx>${style}${type === 'stockChart' ? `<c:marker><c:symbol val="${options.series.length === 3 && index === 2 ? 'dash' : 'none'}"/>${options.series.length === 3 && index === 2 ? '<c:spPr><a:ln><a:solidFill><a:schemeClr val="tx1"/></a:solidFill></a:ln></c:spPr>' : ''}</c:marker>` : ''}${values}</c:ser>`;
   }).join('');
   let before = '';
   let after = '';
@@ -98,8 +102,9 @@ export function createOoxmlChart(options: CreateChartOptions): Uint8Array {
   if (type.startsWith('surface')) before += `<c:wireframe val="${options.wireframe ? 1 : 0}"/>`;
   else if (type !== 'stockChart') before += `<c:varyColors val="${pie ? 1 : 0}"/>`;
   if (type === 'doughnutChart') after += '<c:holeSize val="50"/>';
-  if (type === 'stockChart') after += '<c:hiLowLines/>';
+  if (type === 'stockChart') after += '<c:hiLowLines/>' + (options.series.length === 4 ? '<c:upDownBars><c:gapWidth val="150"/><c:upBars/><c:downBars/></c:upDownBars>' : '');
   if (bar && type === 'barChart' && ['stacked', 'percentStacked'].includes(grouping)) after += '<c:overlap val="100"/>';
+  if (options.shape) after += `<c:shape val="${options.shape}"/>`;
   const ids = pie ? [] : depth ? [1, 2, 3] : [1, 2];
   after += ids.map(id => `<c:axId val="${id}"/>`).join('');
   const horizontal = bar && options.direction === 'bar';

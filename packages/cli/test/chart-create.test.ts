@@ -23,12 +23,13 @@ for (const type of OOXML_CHART_TYPES) for (const family of ['word', 'presentatio
       const target = family === 'word' ? { family, start: 0 } : family === 'presentation' ? { family, slideId: snapshot.slide!.id } : { family, sheetId: '1' };
       const series = Array.from({ length: type === 'stockChart' ? 3 : 1 }, (_, index) => ({ name: `Series ${index + 1}`, values: [2, 4], xValues: [1, 2], bubbleSizes: [3, 6] }));
       let stdout = '', stderr = '';
-      const status = await runTumbler([path, 'charts', 'create', '--input', JSON.stringify({ page: snapshot.page, target, chart: { type, categories: ['Jan', 'Feb'], series } })], { host, stdout: value => { stdout += value; }, stderr: value => { stderr += value; } });
+      const status = await runTumbler([path, 'charts', 'create', '--input', JSON.stringify({ page: snapshot.page, target, chart: { type, categories: ['Jan', 'Feb'], series, ...(type === 'bar3DChart' ? { shape: 'cylinder', grouping: 'standard' } : {}) } })], { host, stdout: value => { stdout += value; }, stderr: value => { stderr += value; } });
       expect(stderr).toBe(''); expect(status).toBe(0); expect(JSON.parse(stdout).page).toBeTruthy();
       const bytes = await Bun.file(path).bytes(), pkg = openOpcPackage(bytes);
       const part = pkg.parts.find(part => part.contentType === 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml')!;
       const content = readChartContent(pkg, part.name);
       expect(readChartData(new TextEncoder().encode(content.xml))[0]?.type).toBe(type);
+      if (type === 'bar3DChart') { expect(content.xml).toContain('<c:shape val="cylinder"/>'); expect(content.xml).toContain('<c:grouping val="standard"/>'); }
       if (family === 'spreadsheet') {
         expect(content.workbook).toBeUndefined();
         const saved = openSpreadsheetArtifact(bytes);
@@ -43,7 +44,7 @@ test('chart creation validates input without accessing a document and exposes it
   let output = '';
   const options = { host: createFileHost(), stdout: (text: string) => { output += text; }, stderr: (text: string) => { output += text; } };
   expect(await runTumbler(['missing.docx', 'charts', 'create', '--help'], options)).toBe(0);
-  expect(output).toContain('bubbleChart'); expect(output).toContain('family');
+  expect(output).toContain('bubbleChart'); expect(output).toContain('family'); expect(output).toContain('coneToMax');
   expect(await runTumbler(['missing.docx', 'charts', 'create', '--input', '{"page":"x","chart":{"type":"invalid"}}'], options)).toBe(1);
 });
 

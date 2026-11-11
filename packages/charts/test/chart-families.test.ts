@@ -51,7 +51,7 @@ test('surface holes remain holes and wireframes have no filled bands', () => {
   const wire = flat(layoutChartScene(model({ ...options, wireframe: true }), 600, 400).marks);
   const missing = flat(layoutChartScene(model({ ...options, series: [options.series[0]!, { name: 'Two', values: [4, null] }] }), 600, 400).marks);
   expect(solid.some(mark => mark.kind === 'path' && mark.fill)).toBe(true);
-  expect(wire.some(mark => mark.kind === 'path' && mark.fill)).toBe(false);
+  expect(wire.some(mark => mark.kind === 'path' && mark.fill && mark.fill !== 'none')).toBe(false);
   expect(missing.filter(mark => mark.kind === 'path')).toHaveLength(0);
 });
 
