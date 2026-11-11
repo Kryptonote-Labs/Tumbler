@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { chartBase64ToBytes, chartBytesToBase64, chartContentModel, convertChartType, type ChartContent, type ChartModel } from '@tumblerjs/charts';
+  import { chartBase64ToBytes, chartBytesToBase64, chartContentModel, convertChartType, readChartData, type ChartContent, type ChartModel } from '@tumblerjs/charts';
   import { createChartWorkbook, extendChartWorkbook, openSpreadsheetArtifact, refreshChartWorkbook, type SpreadsheetArtifact } from '@tumblerjs/sheets';
   import ChartSeriesProperties from './ChartSeriesProperties.svelte';
   import ChartProperties from './ChartProperties.svelte';
@@ -28,17 +28,18 @@
   let dataOpen = $state(false);
   let preview = $state<ChartTypeChange>();
   let plotIndex = $state(0);
+  const selectedPlot = $derived(Math.max(0, Math.min(plotIndex, readChartData(bytes).length - 1)));
   let error = $state<string>();
   const previewModel = $derived.by((): ChartModel => {
     try {
-      const xml = preview ? new TextDecoder().decode(convertChartType(bytes, preview, plotIndex)) : current.xml;
+      const xml = preview ? new TextDecoder().decode(convertChartType(bytes, preview, selectedPlot)) : current.xml;
       return { ...chartContentModel({ xml }), themeColors };
     } catch (cause) { return { status: 'unsupported', chartType: undefined, reason: cause instanceof Error ? cause.message : 'This data cannot use that chart type.', title: undefined, legend: undefined }; }
   });
   function publish(content: ChartContent) { if (disabled) return; current = content; error = undefined; onchange(content); }
   function changeType(change: ChartTypeChange) {
     try {
-      const source = convertChartType(bytes, change, plotIndex);
+      const source = convertChartType(bytes, change, selectedPlot);
       if (embeddedData && workbook) {
         const bound = extendChartWorkbook(source, workbook);
         publish({ xml: new TextDecoder().decode(bound.source), workbook: chartBytesToBase64(bound.artifact.bytes()) });
@@ -73,7 +74,7 @@
   }
 </script>
 
-<ChartProperties {bytes} {disabled} {themeColors} {plotIndex} onplotselect={(index) => { plotIndex = index; preview = undefined; }}
+<ChartProperties {bytes} {disabled} {themeColors} plotIndex={selectedPlot} onplotselect={(index) => { plotIndex = index; preview = undefined; }}
   onchange={(source) => publish({ ...current, xml: new TextDecoder().decode(source) })}
   ontypechange={changeType} ontypepreview={(value) => { preview = value; }} oneditdata={embeddedData ? openData : oneditdata}>
   {#snippet typePreview()}

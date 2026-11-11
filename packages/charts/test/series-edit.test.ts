@@ -22,3 +22,11 @@ test('duplicating and moving retain namespace bindings declared on their plot', 
     expect(result).toContain('xmlns:test="urn:series-test"');
   }
 });
+
+test('series changes reject invalid data roles and retain the stock series constraint', () => {
+  expect(() => editChartSeries(source, { action: 'add', series: { name: 'Invalid', values: { kind: 'string', values: ['3'] } } })).toThrow('numeric');
+  const stock = createOoxmlChart({ type: 'stockChart', categories: ['A'], series: [{ name: 'High', values: [9] }, { name: 'Low', values: [2] }, { name: 'Close', values: [5] }] });
+  expect(() => editChartSeries(stock, { action: 'remove', series: 0 })).toThrow('three or four');
+  const four = editChartSeries(stock, { action: 'duplicate', series: 0 });
+  expect(() => editChartSeries(four, { action: 'duplicate', series: 0 })).toThrow('three or four');
+});

@@ -15,6 +15,8 @@ export function editChartSeries(bytes: Uint8Array, input: ChartSeriesEdit): Uint
   const plot = plots[input.plot ?? 0];
   if (!plot) throw new RangeError('Chart plot is missing.');
   const series = source.children(plot, 'ser');
+  const count = series.length + (input.action === 'add' || input.action === 'duplicate' ? 1 : input.action === 'remove' ? -1 : 0);
+  if (plot.localName === 'stockChart' && (count < 3 || count > 4)) throw new TypeError('ECMA-376 stock charts require three or four price series.');
   const all = plots.flatMap(plot => source.children(plot, 'ser'));
   const value = (element: typeof plot, name: string) => Number(source.children(element, name)[0]?.attributes.find(attribute => attribute.localName === 'val')?.value ?? 0);
   const nextIndex = all.reduce((maximum, element) => Math.max(maximum, value(element, 'idx')), -1) + 1;
@@ -29,6 +31,8 @@ export function editChartSeries(bytes: Uint8Array, input: ChartSeriesEdit): Uint
     const xy = plot.localName === 'scatterChart' || plot.localName === 'bubbleChart';
     if (!data.values || xy && !data.xValues || plot.localName === 'bubbleChart' && !data.bubbleSizes)
       throw new TypeError('Supply the value, X and size sequences required by this chart type.');
+    if (data.values.kind !== 'number' || data.bubbleSizes && data.bubbleSizes.kind !== 'number') throw new TypeError('Values and bubble sizes require numeric sequences.');
+    if (xy && data.categories || !xy && data.xValues || data.bubbleSizes && plot.localName !== 'bubbleChart') throw new TypeError('This data role does not belong to the chart type.');
     const name = data.nameFormula === undefined ? `<c:v>${chartXmlText(data.name)}</c:v>`
       : `<c:strRef><c:f>${chartXmlText(data.nameFormula)}</c:f><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>${chartXmlText(data.name)}</c:v></c:pt></c:strCache></c:strRef>`;
     const sequences = xy ? chartSequenceXml('xVal', data.xValues!) + chartSequenceXml('yVal', data.values)
