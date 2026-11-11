@@ -148,3 +148,8 @@ test("reads flat and hierarchical category caches without replacing labels with 
   if (chart.status !== "supported") throw new Error("Expected chart");
   expect(chart.series[0]?.categories).toMatchObject({ formula: "Sheet1!$A$2:$B$3", points: [{index:0,value:"Q1"},{index:1,value:"Q2"}], levels: [[{index:0,value:"Q1"},{index:1,value:"Q2"}],[{index:0,value:"2026"}]] });
 });
+
+test('a valid cache beyond the preview budget remains an unsupported chart rather than malformed XML', () => {
+  const source = '<?xml version="1.0"?><c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart><c:plotArea><c:pieChart><c:ser><c:idx val="0"/><c:order val="0"/><c:val><c:numLit><c:ptCount val="100001"/><c:pt idx="0"><c:v>2</c:v></c:pt></c:numLit></c:val></c:ser></c:pieChart></c:plotArea></c:chart></c:chartSpace>';
+  expect(parseOoxmlChart(new TextEncoder().encode(source), 'transitional')).toMatchObject({ status: 'unsupported' });
+});

@@ -1,3 +1,5 @@
+import { chartDataLabelMarks } from './label-scene.ts';
+import { chartMarkerMarks } from './marker-scene.ts';
 import { layoutCartesianChart } from './layout.ts';
 import { indexChartSequence } from './indexed-data.ts';
 import { chartTickLabel } from './tick-label.ts';
@@ -62,8 +64,12 @@ export function radarScene(context: SceneContext): ChartMark[] {
       if (gap < 0) d += ' Z';
       marks.push({ kind: 'path', d: d.trim(), stroke: color, strokeWidth: 2 });
     }
-    if (model.radarStyle === 'marker' && series.marker?.symbol !== 'none') for (const point of points) {
-      if (point) marks.push({ kind: 'circle', cx: point.x, cy: point.y, r: (series.marker?.size ?? 5) / 2, fill: color });
+    points.forEach((point, index) => {
+      const value = values.get(index);
+      if (point && typeof value === 'number') marks.push(...chartDataLabelMarks(context, series, seriesIndex, { index, ...point, category: layout.categories[index] ?? String(index + 1), value }));
+    });
+    if (model.radarStyle === 'marker' && series.marker?.symbol !== 'none') for (const [index, point] of points.entries()) {
+      if (point) marks.push(...chartMarkerMarks(context, series, seriesIndex, index, point.x, point.y));
     }
   });
   if (model.legend) marks.push(...legendMarks(context, model.series.map((series, index) => ({ label: series.title ?? `Series ${index + 1}`, swatch: (x: number, y: number): ChartMark => ({ kind: 'rect', x, y: y - 7, width: 8, height: 8, fill: context.color(series, index) }) })), 12));

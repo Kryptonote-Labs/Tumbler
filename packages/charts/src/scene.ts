@@ -6,7 +6,7 @@ import { stockScene } from './scene-stock.ts';
 import { assertChartSceneBudget } from './scene-budget.ts';
 import { chartTitleMarks } from './title-scene.ts';
 import { resolveChartColor } from "./colors.ts";
-import type { SupportedChartModel } from "./model.ts";
+import type { SupportedChartModel, ChartSeries, ChartPointFormat } from "./model.ts";
 import { cartesianScene } from "./scene-cartesian.ts";
 import { combinationScene } from "./scene-combination.ts";
 import type { ChartMark, ChartScene, ChartSceneOptions, SceneContext } from "./scene-marks.ts";
@@ -34,12 +34,18 @@ export function layoutChartScene(model: SupportedChartModel, width: number, heig
 
 function buildChartScene(model: SupportedChartModel, width: number, height: number, options: ChartSceneOptions): ChartScene {
   assertChartSceneBudget(model);
+  const pointStyles = new Map<ChartSeries, ReadonlyMap<number, ChartPointFormat>>();
   const context: SceneContext = {
     model, width, height, options,
     color(series, index, line = false) {
       const authored = line ? series.line ?? series.fill : series.fill ?? series.line;
       const themed = authored ?? { kind: "scheme" as const, value: `accent${index % 6 + 1}` };
       return options.resolveColor?.(themed) ?? resolveChartColor(themed, model) ?? PALETTE[index % PALETTE.length]!;
+    },
+    pointFormat(series, index) {
+      let indexed = pointStyles.get(series);
+      if (!indexed) { indexed = new Map(series.pointFormats?.map(point => [point.index, point])); pointStyles.set(series, indexed); }
+      return indexed.get(index);
     },
     measure: (text, font) => options.measureText?.(text, chartFontShorthand(font)) ?? text.length * font.size * 0.55,
   };

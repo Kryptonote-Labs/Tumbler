@@ -1,6 +1,10 @@
+import { indexChartSequence } from './indexed-data.ts';
+import { chartDataLabelMarks } from './label-scene.ts';
+import { chartMarkerMarks } from './marker-scene.ts';
+import { chartPointColor } from './point-style.ts';
 import { chartTickLabel } from './tick-label.ts';
 import { layoutBarBand } from "./bar-layout.ts";
-import { chartValueCoordinate, layoutCartesianChart } from "./layout.ts";
+import { chartValueCoordinate, layoutCartesianChart, scatterLinePath } from "./layout.ts";
 import { legendMarks, line, type ChartMark, type SceneContext } from "./scene-marks.ts";
 import { chartFont, chartStroke } from "./scene-style.ts";
 
@@ -39,7 +43,9 @@ export function cartesianScene(context: SceneContext, drawSeries = true): ChartM
   const spine = horizontal ? x(0) : plot.x;
   if (!(horizontal ? categoryAxis : valueAxis)?.deleted) marks.push(...line(spine, plot.y, spine, plot.y + plot.height, down));
 
-  if (drawSeries) model.series.forEach((series, seriesIndex) => {
+  const order = model.series.map((series, seriesIndex) => ({ series, seriesIndex }));
+  if (model.kind === 'area' && model.grouping === 'standard') order.reverse();
+  if (drawSeries) order.forEach(({ series, seriesIndex }) => {
     if (model.kind === 'area') {
       const points = layout.stacks[seriesIndex] ?? [];
       let segment: { index: number; start: number; end: number }[] = [];
@@ -59,10 +65,10 @@ export function cartesianScene(context: SceneContext, drawSeries = true): ChartM
       return;
     }
     if (model.kind === "line") {
-      marks.push({ kind: "path", d: linePath(seriesIndex, layout), stroke: context.color(series, seriesIndex, true), strokeWidth: 2 });
+      marks.push({ kind: "path", d: linePath(seriesIndex, layout, series.smooth), stroke: context.color(series, seriesIndex, true), strokeWidth: series.lineStyle?.noFill ? 0 : (series.lineStyle?.width ?? 1.5) * 4 / 3 });
       layout.categories.forEach((_, index) => {
         const current = layout.stacks[seriesIndex]?.[index]?.end;
-        if (current !== undefined) marks.push({ kind: "circle", cx: plot.x + (index + 0.5) / count * plot.width, cy: y(current), r: 3, fill: context.color(series, seriesIndex, true) });
+        if (current !== undefined) marks.push(...chartMarkerMarks(context, series, seriesIndex, index, plot.x + (index + 0.5) / count * plot.width, y(current)));
       });
       return;
     }
@@ -73,10 +79,25 @@ export function cartesianScene(context: SceneContext, drawSeries = true): ChartM
       if (current === undefined) return;
       const start = layout.stacks[seriesIndex]?.[index]?.start ?? 0;
       const offset = index * band + bars.inset + seriesIndex * bars.stride;
-      const fill = context.color(series, seriesIndex);
+      const fill = chartPointColor(context, series, seriesIndex, index);
       marks.push(horizontal
         ? { kind: "rect", x: Math.min(x(current), x(start)), y: plot.y + offset, width: Math.max(0.5, Math.abs(x(start) - x(current))), height: bars.thickness, fill }
         : { kind: "rect", x: plot.x + offset, y: Math.min(y(current), y(start)), width: bars.thickness, height: Math.max(0.5, Math.abs(y(start) - y(current))), fill });
+    });
+  });
+
+  if (drawSeries) model.series.forEach((series, seriesIndex) => {
+    if (!model.dataLabels && !series.dataLabels) return;
+    const values = indexChartSequence(series.values);
+    const bars = layoutBarBand(model, (horizontal ? plot.height : plot.width) / count);
+    layout.categories.forEach((category, index) => {
+      const value = layout.stacks[seriesIndex]?.[index];
+      if (!value) return;
+      const across = model.kind === 'area' ? index / Math.max(1, count - 1) * plot.width
+        : (horizontal ? plot.height : plot.width) / count * index + (model.kind === 'line' ? plot.width / count / 2 : bars.inset + seriesIndex * bars.stride + bars.thickness / 2);
+      const end = horizontal ? { x: x(value.end), y: plot.y + across, baseX: x(value.start) }
+        : { x: plot.x + across, y: y(value.end), baseY: y(value.start) };
+      marks.push(...chartDataLabelMarks(context, series, seriesIndex, { index, ...end, category, value: typeof values.get(index) === 'number' ? Number(values.get(index)) : value.end - value.start }));
     });
   });
 
@@ -98,17 +119,8 @@ export function cartesianScene(context: SceneContext, drawSeries = true): ChartM
 }
 
 /** Gaps in a series break the line rather than bridging missing categories. */
-function linePath(seriesIndex: number, layout: ReturnType<typeof layoutCartesianChart>): string {
+function linePath(seriesIndex: number, layout: ReturnType<typeof layoutCartesianChart>, smooth = false): string {
   const count = Math.max(1, layout.categories.length);
-  let path = "";
-  let previous = -2;
-  for (let index = 0; index < count; index += 1) {
-    const current = layout.stacks[seriesIndex]?.[index]?.end;
-    if (current === undefined) continue;
-    const x = layout.plot.x + (index + 0.5) / count * layout.plot.width;
-    const y = chartValueCoordinate(current, layout.minimum, layout.maximum, layout.plot.y, layout.plot.height, true);
-    path += `${index === previous + 1 ? " L" : " M"} ${x} ${y}`;
-    previous = index;
-  }
-  return path.trim();
+  const points = layout.stacks[seriesIndex]?.flatMap((point, index) => point ? [{ index, x: index, y: point.end, plotX: layout.plot.x + (index + .5) / count * layout.plot.width, plotY: chartValueCoordinate(point.end, layout.minimum, layout.maximum, layout.plot.y, layout.plot.height, true) }] : []) ?? [];
+  return scatterLinePath(points, smooth);
 }

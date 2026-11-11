@@ -34,9 +34,9 @@
 {#snippet marks(list: readonly ChartMark[], path: string)}
   {#each list as mark, index}
     {#if mark.kind === "rect"}
-      <rect x={mark.x} y={mark.y} width={mark.width} height={mark.height} fill={mark.fill} stroke={mark.stroke} />
+      <rect x={mark.x} y={mark.y} width={mark.width} height={mark.height} fill={mark.fill} stroke={mark.stroke} stroke-width={mark.strokeWidth} />
     {:else if mark.kind === "circle"}
-      <circle cx={mark.cx} cy={mark.cy} r={mark.r} fill={mark.fill} stroke={mark.stroke} fill-opacity={mark.fillOpacity} />
+      <circle cx={mark.cx} cy={mark.cy} r={mark.r} fill={mark.fill} stroke={mark.stroke} stroke-width={mark.strokeWidth} fill-opacity={mark.fillOpacity} />
     {:else if mark.kind === "path"}
       <path d={mark.d} fill={mark.fill ?? "none"} stroke={mark.stroke} stroke-width={mark.strokeWidth} />
     {:else if mark.kind === "line"}

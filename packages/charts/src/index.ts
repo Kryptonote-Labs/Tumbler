@@ -59,3 +59,5 @@ export { bindChartData } from './data-binding.ts';
 export { bindChartTheme } from './theme.ts';
 export { editChartSeries } from './series-edit.ts';
 export type { ChartSeriesEdit } from './series-edit.ts';
+
+export type { ChartDataLabels, ChartDataLabelOptions } from './data-labels.ts';

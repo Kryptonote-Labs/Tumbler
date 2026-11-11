@@ -10,6 +10,9 @@ export const BUBBLE_CHART_POINT_LIMIT = 10_000;
 export type ChartMarkerSymbol = "auto" | "circle" | "dash" | "diamond" | "dot" | "none" | "picture" | "plus" | "square" | "star" | "triangle" | "x";
 
 export interface ChartMarker {
+  readonly fill?: ChartColor;
+  readonly noFill?: boolean;
+  readonly lineStyle?: ChartLineStyle;
   readonly symbol: ChartMarkerSymbol;
   readonly size: number;
 }
@@ -59,7 +62,21 @@ export interface ChartDataSequence {
   readonly levels?: readonly (readonly ChartDataPoint[])[];
 }
 
+export interface ChartPointFormat {
+  readonly index: number;
+  readonly fill?: ChartColor | undefined;
+  readonly noFill?: boolean | undefined;
+  readonly lineStyle?: ChartLineStyle | undefined;
+  readonly marker?: ChartMarker | undefined;
+  readonly explosion?: number | undefined;
+}
+
 export interface ChartSeries {
+  readonly dataLabels?: import('./data-labels.ts').ChartDataLabels;
+  readonly noFill?: boolean;
+  readonly lineStyle?: ChartLineStyle;
+  readonly pointFormats?: readonly ChartPointFormat[];
+  readonly explosion?: number;
   readonly index: number;
   readonly order: number;
   readonly title: string | undefined;
@@ -125,6 +142,8 @@ export interface SupportedChartModel extends ChartModelBase {
   readonly status: "supported";
   readonly kind: ChartKind;
   readonly sourceType?: string;
+  readonly varyColors?: boolean;
+  readonly dataLabels?: import('./data-labels.ts').ChartDataLabels;
   readonly threeD?: { readonly rotationX: number; readonly rotationY: number; readonly perspective: number; readonly rightAngleAxes: boolean; readonly depthPercent: number };
   readonly radarStyle?: 'standard' | 'marker' | 'filled';
   readonly wireframe?: boolean;

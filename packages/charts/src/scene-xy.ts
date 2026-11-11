@@ -1,3 +1,6 @@
+import { chartDataLabelMarks } from './label-scene.ts';
+import { chartMarkerMarks } from './marker-scene.ts';
+import { chartPointColor } from './point-style.ts';
 import { chartTickLabel } from './tick-label.ts';
 import { chartValueCoordinate, layoutBubbleChart, layoutScatterChart, scatterLinePath, type ScatterPoint } from "./layout.ts";
 import type { ChartAxis, ChartSeries, SupportedChartModel } from "./model.ts";
@@ -40,14 +43,16 @@ export function xyScene(context: SceneContext): ChartMark[] {
   model.series.forEach((item, index) => {
     if (bubbles) {
       for (const point of bubbles.series[index] ?? []) {
-        if (point.radius > 0) series.push({ kind: "circle", cx: point.plotX, cy: point.plotY, r: point.radius, fill: context.color(item, index), stroke: context.color(item, index, true), fillOpacity: 0.72 });
+        if (point.radius > 0) series.push({ kind: "circle", cx: point.plotX, cy: point.plotY, r: point.radius, fill: chartPointColor(context, item, index, point.index), stroke: chartPointColor(context, item, index, point.index, true), fillOpacity: 0.72 });
       }
+      for (const point of bubbles.series[index] ?? []) series.push(...chartDataLabelMarks(context, item, index, { index: point.index, x: point.plotX, y: point.plotY, category: String(point.x), value: point.y, bubbleSize: point.size }));
       return;
     }
     const points = layout.series[index] ?? [];
     const stroke = context.color(item, index, true);
-    if (lineVisible(model, item)) series.push({ kind: "path", d: scatterLinePath(points, smooth(model, item)), stroke, strokeWidth: 2 });
-    if (markerVisible(model, item)) for (const point of points) series.push(marker(item, point, stroke));
+    if (lineVisible(model, item)) series.push({ kind: "path", d: scatterLinePath(points, smooth(model, item)), stroke, strokeWidth: item.lineStyle?.noFill ? 0 : (item.lineStyle?.width ?? 1.5) * 4 / 3 });
+    if (markerVisible(model, item)) for (const point of points) series.push(...chartMarkerMarks(context, item, index, point.index, point.plotX, point.plotY));
+    for (const point of points) series.push(...chartDataLabelMarks(context, item, index, { index: point.index, x: point.plotX, y: point.plotY, category: String(point.x), value: point.y }));
   });
   marks.push({ kind: "group", clip: plot, marks: series });
 
@@ -81,18 +86,4 @@ function markerVisible(model: SupportedChartModel, series: ChartSeries): boolean
 
 function smooth(model: SupportedChartModel, series: ChartSeries): boolean {
   return series.smooth === true || model.scatterStyle === "smooth" || model.scatterStyle === "smooth-marker";
-}
-
-function marker(series: ChartSeries, { plotX: x, plotY: y }: ScatterPoint, fill: string): ChartMark {
-  const size = series.marker?.size ?? 5;
-  switch (series.marker?.symbol ?? "auto") {
-    case "square": return { kind: "rect", x: x - size / 2, y: y - size / 2, width: size, height: size, fill };
-    case "diamond": return { kind: "path", d: `M ${x} ${y - size / 1.5} L ${x + size / 1.5} ${y} L ${x} ${y + size / 1.5} L ${x - size / 1.5} ${y} Z`, fill };
-    case "triangle": return { kind: "path", d: `M ${x} ${y - size / 1.3} L ${x + size / 1.2} ${y + size / 1.5} L ${x - size / 1.2} ${y + size / 1.5} Z`, fill };
-    case "plus": return { kind: "path", d: `M ${x - size} ${y} L ${x + size} ${y} M ${x} ${y - size} L ${x} ${y + size}`, stroke: fill, strokeWidth: 2 };
-    case "x": return { kind: "path", d: `M ${x - size} ${y - size} L ${x + size} ${y + size} M ${x + size} ${y - size} L ${x - size} ${y + size}`, stroke: fill, strokeWidth: 2 };
-    case "dash": return { kind: "path", d: `M ${x - size} ${y} L ${x + size} ${y}`, stroke: fill, strokeWidth: 2 };
-    case "dot": return { kind: "circle", cx: x, cy: y, r: Math.max(1, size / 3), fill };
-    default: return { kind: "circle", cx: x, cy: y, r: size / 2, fill };
-  }
 }
