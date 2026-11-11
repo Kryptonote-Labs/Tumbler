@@ -1,3 +1,5 @@
+import { fitBubbleAxis } from './bubble-axis.ts';
+import { xyGeometry } from './xy-geometry.ts';
 import { chartDateScale, type ChartDateScale } from './date-axis.ts';
 import { chartAnalyticalBounds, cartesianAnalyticalData } from './analytics-bounds.ts';
 import { chartLogarithmicScale, chartAxisCoordinate } from './axis-scale.ts';
@@ -206,8 +208,12 @@ export function layoutBubbleChart(model: SupportedChartModel, width: number, hei
   const visibleMagnitudes = paired.flatMap((points) => points.flatMap((point) =>
     point.size > 0 || (point.size < 0 && model.showNegativeBubbles === true) ? [Math.abs(point.size)] : []
   ));
-  const maximumMagnitude = Math.max(1, ...visibleMagnitudes);
+  const maximumMagnitude = Math.max(0, ...visibleMagnitudes) || 1;
   const maximumRadius = Math.min(xy.plot.width, xy.plot.height) * 0.1 * (model.bubbleScale ?? 100) / 100;
+  const { xAxis, yAxis } = xyGeometry(model, xy);
+  const visibleRadius = visibleMagnitudes.length ? maximumRadius : 0;
+  const xScale = fitBubbleAxis(xy.xMinimum, xy.xMaximum, xy.series.flatMap(series => series.map(point => point.x)), xAxis, visibleRadius, xy.plot.width, chartFont('tick', xAxis?.textStyle, model).size * 2);
+  const yScale = fitBubbleAxis(xy.yMinimum, xy.yMaximum, xy.series.flatMap(series => series.map(point => point.y)), yAxis, visibleRadius, xy.plot.height, chartFont('tick', yAxis?.textStyle, model).size, true);
   const series = paired.map((points, seriesIndex) => {
     const xyByIndex = new Map((xy.series[seriesIndex] ?? []).map((point) => [point.index, point] as const));
     return Object.freeze(points.filter(point => xyByIndex.has(point.index)).map((point): BubblePoint => {
@@ -216,10 +222,10 @@ export function layoutBubbleChart(model: SupportedChartModel, width: number, hei
       const visible = point.size > 0 || (point.size < 0 && model.showNegativeBubbles === true);
       const ratio = visible ? magnitude / maximumMagnitude : 0;
       const radius = maximumRadius * (model.bubbleSizeRepresentation === "width" ? ratio : Math.sqrt(ratio));
-      return Object.freeze({ ...position, size: point.size, radius, negative: point.size < 0 });
+      return Object.freeze({ ...position, plotX: chartAxisCoordinate(point.x, xScale.minimum, xScale.maximum, xy.plot.x, xy.plot.width, xAxis), plotY: chartAxisCoordinate(point.y, yScale.minimum, yScale.maximum, xy.plot.y, xy.plot.height, yAxis, true), size: point.size, radius, negative: point.size < 0 });
     }));
   });
-  return Object.freeze({ ...xy, series: Object.freeze(series) });
+  return Object.freeze({ ...xy, xMinimum: xScale.minimum, xMaximum: xScale.maximum, xTicks: xScale.ticks, yMinimum: yScale.minimum, yMaximum: yScale.maximum, yTicks: yScale.ticks, series: Object.freeze(series) });
 }
 
 /** Produces disconnected straight or Catmull-Rom-smoothed paths across consecutive cache indexes. */

@@ -30,7 +30,10 @@ modes, 0–300% scaling, and opt-in negative values. Deterministic headless layo
 is available through `layoutBubbleChart`. Bubble sphere effects retain plot, series
 and point precedence. Typed creation and gallery conversion use the series-level
 flag required by Office; raw ECMA plot-level flags remain supported. SVG and
-canvas share the shading, with authored gradients and no-fill retained.
+canvas share the shading, with authored gradients and no-fill retained. Automatic
+XY bounds reserve the full bubble footprint, including logarithmic/reversed axes.
+Explicit endpoints still clip exactly as authored. Relative bubble sizing is
+independent of the units used for magnitudes, including fractions below one.
 
 `layoutChartScene(model, width, height, options)` lays a supported chart out as
 drawing marks (rects, circles, SVG paths, crisp lines, styled text and clip

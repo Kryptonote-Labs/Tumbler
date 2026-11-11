@@ -66,13 +66,22 @@ function niceStep(raw: number): number {
 export function chartLogarithmicScale(values: readonly number[], axis: ChartAxis) {
   const base = axis.logBase ?? 10;
   const positive = values.filter(value => Number.isFinite(value) && value > 0);
-  let minimum = axis.minimum !== undefined && axis.minimum > 0 ? axis.minimum : positive.length ? base ** Math.floor(Math.log(Math.min(...positive)) / Math.log(base)) : 1;
-  let maximum = axis.maximum !== undefined && axis.maximum > minimum ? axis.maximum : positive.length ? base ** Math.ceil(Math.log(Math.max(...positive)) / Math.log(base)) : base;
-  if (!(maximum > minimum)) maximum = minimum * base;
+  const power = (exponent: number) => Math.min(Number.MAX_VALUE, Math.max(Number.MIN_VALUE, base ** exponent));
+  let minimum = axis.minimum !== undefined && axis.minimum > 0 ? axis.minimum : positive.length ? power(Math.floor(Math.log(Math.min(...positive)) / Math.log(base))) : 1;
+  let maximum = axis.maximum !== undefined && axis.maximum > minimum ? axis.maximum : positive.length ? power(Math.ceil(Math.log(Math.max(...positive)) / Math.log(base))) : base;
+  if (!(maximum > minimum)) {
+    maximum = Math.min(Number.MAX_VALUE, minimum * base);
+    if (!(maximum > minimum) && axis.minimum === undefined) minimum = maximum / base;
+  }
+  if (!Number.isFinite(minimum) || !Number.isFinite(maximum) || !(minimum > 0 && maximum > minimum)) throw new RangeError('Logarithmic chart bounds must span finite positive values.');
   const ticks: number[] = [];
   const first = Math.ceil(Math.log(minimum) / Math.log(base) - 1e-12), last = Math.floor(Math.log(maximum) / Math.log(base) + 1e-12);
   const stride = Math.max(1, Math.ceil((last - first) / 1000));
-  for (let exponent = first; exponent <= last; exponent += stride) ticks.push(roundChartTick(base ** exponent, base ** exponent * 1e-12));
+  const count = Math.max(0, Math.floor((last - first) / stride) + 1);
+  for (let index = 0; index < count; index++) {
+    const value = power(first + index * stride);
+    ticks.push(roundChartTick(value, value * 1e-12));
+  }
   return { minimum, maximum, ticks };
 }
 
