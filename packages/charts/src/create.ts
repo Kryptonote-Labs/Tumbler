@@ -109,6 +109,7 @@ export function createOoxmlChart(options: CreateChartOptions): Uint8Array {
   if (type.startsWith('surface')) before += `<c:wireframe val="${options.wireframe ? 1 : 0}"/>`;
   else if (type !== 'stockChart') before += `<c:varyColors val="${pie ? 1 : 0}"/>`;
   if (type === 'doughnutChart') after += '<c:holeSize val="50"/>';
+  if (type === 'ofPieChart') after += '<c:serLines/>';
   if (type === 'stockChart') after += '<c:hiLowLines/>' + (options.series.length === 4 ? '<c:upDownBars><c:gapWidth val="150"/><c:upBars/><c:downBars/></c:upDownBars>' : '');
   if (bar && type === 'barChart' && ['stacked', 'percentStacked'].includes(grouping)) after += '<c:overlap val="100"/>';
   if (options.shape) after += `<c:shape val="${options.shape}"/>`;
