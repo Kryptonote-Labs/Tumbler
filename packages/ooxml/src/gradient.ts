@@ -113,7 +113,7 @@ export function readGradientFill(element: import('./xml/source-document.ts').Los
   const rect = path && children(path).find(n => n.localName === 'fillToRect');
   if (path && !['circle','rect'].includes(attr(path,'path') ?? '')) return;
   if (path && (!rect || Number(attr(rect,'l')) + Number(attr(rect,'r')) !== 100000 || Number(attr(rect,'t')) + Number(attr(rect,'b')) !== 100000)) return;
-  const value = { kind: 'gradient', type: linear ? 'linear' : attr(path,'path') === 'circle' ? 'radial' : 'rectangular', ...(linear ? { angle: Number(attr(linear,'ang') ?? 0) / 60000, scaled: attr(linear,'scaled') !== '0' } : { center: [Number(attr(rect,'l') ?? 50000) / 100000, Number(attr(rect,'t') ?? 50000) / 100000] }), stops };
+  const value = { kind: 'gradient', type: linear ? 'linear' : attr(path,'path') === 'circle' ? 'radial' : 'rectangular', ...(linear ? { angle: Number(attr(linear,'ang') ?? 0) / 60000, scaled: ['1', 'true'].includes(attr(linear,'scaled') ?? '0') } : { center: [Number(attr(rect,'l') ?? 50000) / 100000, Number(attr(rect,'t') ?? 50000) / 100000] }), stops };
   const result = gradientFill.safeParse(value);
   return result.success ? result.data : undefined;
 }

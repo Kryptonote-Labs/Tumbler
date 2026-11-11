@@ -21,5 +21,5 @@ export function parseChartGradient(parent: LosslessXmlElement | undefined, ns: s
   const linear = child(gradient, ns, 'lin'), path = child(gradient, ns, 'path'), rect = child(path, ns, 'fillToRect');
   const center = [(percentage(attr(rect, 'l')) + 1 - percentage(attr(rect, 'r'))) / 2, (percentage(attr(rect, 't')) + 1 - percentage(attr(rect, 'b'))) / 2] as const;
   return { kind: !path ? 'linear' : attr(path, 'path') === 'circle' ? 'radial' : 'rectangular',
-    angle: Number(attr(linear, 'ang') ?? 0) / 60000, scaled: !['0', 'false'].includes(attr(linear, 'scaled') ?? '1'), center, ...(path ? { focusRect: [percentage(attr(rect, 'l')), percentage(attr(rect, 't')), 1 - percentage(attr(rect, 'r')), 1 - percentage(attr(rect, 'b'))] as const } : {}), stops };
+    angle: Number(attr(linear, 'ang') ?? 0) / 60000, scaled: ['1', 'true'].includes(attr(linear, 'scaled') ?? '0'), center, ...(path ? { focusRect: [percentage(attr(rect, 'l')), percentage(attr(rect, 't')), 1 - percentage(attr(rect, 'r')), 1 - percentage(attr(rect, 'b'))] as const } : {}), stops };
 }

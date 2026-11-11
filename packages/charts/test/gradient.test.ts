@@ -84,3 +84,11 @@ test('dot marker gradient bounds fit its actual circle instead of the nominal ma
   const mark = flatten(layoutChartScene({ ...model, kind: 'line', series }, 400, 300).marks).find(mark => mark.kind === 'circle' && mark.fillGradient);
   expect(mark).toMatchObject({ r: 4, fillGradient: { bounds: { width: 8, height: 8 } } });
 });
+
+test('omitted linear scaling uses the native unscaled default', () => {
+  const absent = modelWithGradient('<a:lin ang="2700000"/>');
+  const explicit = modelWithGradient('<a:lin ang="2700000" scaled="0"/>');
+  expect(absent.series[0]?.gradient?.scaled).toBe(false);
+  expect(layoutChartScene(absent, 400, 300)).toEqual(layoutChartScene(explicit, 400, 300));
+  expect(modelWithGradient('<a:lin ang="2700000" scaled="true"/>').series[0]?.gradient?.scaled).toBe(true);
+});
