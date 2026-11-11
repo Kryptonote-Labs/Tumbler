@@ -22,12 +22,12 @@ const FAMILY = "Calibri, Aptos, system-ui, sans-serif";
 
 /** Default type per text role, before authored chart properties apply. */
 export const CHART_TEXT_DEFAULTS = {
-  title: { size: 15, family: FAMILY, weight: 600, italic: false, color: "#222222" },
-  dataLabel: { size: 11, family: FAMILY, weight: 400, italic: false, color: "#333333" },
-  tick: { size: 10, family: FAMILY, weight: 400, italic: false, color: "#555555" },
-  category: { size: 10, family: FAMILY, weight: 400, italic: false, color: "#555555" },
+  title: { size: 24, family: FAMILY, weight: 600, italic: false, color: "#222222" },
+  dataLabel: { size: 40 / 3, family: FAMILY, weight: 400, italic: false, color: "#333333" },
+  tick: { size: 40 / 3, family: FAMILY, weight: 400, italic: false, color: "#555555" },
+  category: { size: 40 / 3, family: FAMILY, weight: 400, italic: false, color: "#555555" },
   axisTitle: { size: 11, family: FAMILY, weight: 600, italic: false, color: "#333333" },
-  legend: { size: 11, family: FAMILY, weight: 400, italic: false, color: "#000000" },
+  legend: { size: 40 / 3, family: FAMILY, weight: 400, italic: false, color: "#000000" },
 } as const satisfies Record<string, ChartFont>;
 
 export type ChartTextRole = keyof typeof CHART_TEXT_DEFAULTS;
