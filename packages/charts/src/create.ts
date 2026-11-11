@@ -58,7 +58,6 @@ export function createOoxmlChart(options: CreateChartOptions): Uint8Array {
       throw new TypeError(`Invalid chart option: ${value}`);
   }
   if (!isOoxmlChartType(type)) throw new TypeError('Unknown ECMA-376 chart type.');
-  if (!options.series.length) throw new TypeError('Supply at least one chart series.');
   if (type === 'stockChart' && ![3, 4].includes(options.series.length))
     throw new TypeError('Stock charts require three or four price series.');
   const bar = type === 'barChart' || type === 'bar3DChart';

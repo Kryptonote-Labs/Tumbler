@@ -58,3 +58,21 @@ test('inactive type settings belong to their own combo plot', () => {
   expect(first).toContain('val="diamond"');
   expect(first).not.toContain('val="square"');
 });
+
+test('inactive formatting follows series identities through reordering and replacement', async () => {
+  const { editChartSeries } = await import('../src/index.ts');
+  let source = new TextDecoder().decode(createOoxmlChart({ type: 'lineChart', categories: ['A'], series: [{ name: 'One', values: [1] }, { name: 'Two', values: [2] }] }));
+  let n = 0;
+  source = source.replaceAll('<c:cat>', () => `<c:marker><c:symbol val="${n++ === 0 ? 'diamond' : 'square'}"/></c:marker><c:cat>`);
+  let bytes = convertChartType(new TextEncoder().encode(source), { type: 'barChart' });
+  bytes = editChartSeries(bytes, { action: 'move', series: 1, to: 0 });
+  const restored = parseOoxmlChart(convertChartType(bytes, { type: 'lineChart' }), 'transitional');
+  if (restored.status !== 'supported') throw new Error(restored.reason);
+  expect(restored.series.map(series => [series.title, series.marker?.symbol])).toEqual([['Two', 'square'], ['One', 'diamond']]);
+  bytes = editChartSeries(bytes, { action: 'remove', series: 0 });
+  bytes = editChartSeries(bytes, { action: 'add', series: { name: 'New', values: { kind: 'number', values: [3] } } });
+  const replacement = parseOoxmlChart(convertChartType(bytes, { type: 'lineChart' }), 'transitional');
+  if (replacement.status !== 'supported') throw new Error(replacement.reason);
+  expect(replacement.series[1]?.index).toBe(2);
+  expect(replacement.series[1]?.marker).toBeUndefined();
+});

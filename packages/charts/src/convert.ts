@@ -71,7 +71,7 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
     const content = names.flatMap(name => {
       const generated = fresh.filter(child => child.localName === name);
       if (!series && overrides.has(name)) {
-        if (name === 'ser') return generated.map((element, index) => merge(element, findNode(properties, element.id)!, currentSeries[index], archivedSeries[index], true));
+        if (name === 'ser') return generated.map((element, index) => merge(element, findNode(properties, element.id)!, currentSeries[index], archivedSeries.find(saved => elementChildren(saved).find(child => child.localName === 'idx')?.attributes.find(attribute => attribute.localName === 'val')?.value === source.children(currentSeries[index]!, 'idx')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value), true));
         return generated.map(element => standalone(created.document, element));
       }
       const role = (name === 'val' || name === 'yVal') ? ['val', 'yVal'] : [name];

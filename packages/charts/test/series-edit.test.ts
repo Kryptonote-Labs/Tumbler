@@ -30,3 +30,10 @@ test('series changes reject invalid data roles and retain the stock series const
   const four = editChartSeries(stock, { action: 'duplicate', series: 0 });
   expect(() => editChartSeries(four, { action: 'duplicate', series: 0 })).toThrow('three or four');
 });
+
+test('an empty self-closing plot can receive a new series', () => {
+  const bytes = createOoxmlChart({ type: 'pieChart', categories: [], series: [] });
+  const source = new TextDecoder().decode(bytes).replace(/<c:pieChart>[\s\S]*?<\/c:pieChart>/, '<c:pieChart/>');
+  const result = editChartSeries(new TextEncoder().encode(source), { action: 'add', series: { name: 'New', values: { kind: 'number', values: [3] } } });
+  expect(readChartData(result)[0]?.series[0]?.name).toBe('New');
+});

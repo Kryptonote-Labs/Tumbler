@@ -19,12 +19,26 @@ export function editChartSeries(bytes: Uint8Array, input: ChartSeriesEdit): Uint
   if (plot.localName === 'stockChart' && (count < 3 || count > 4)) throw new TypeError('ECMA-376 stock charts require three or four price series.');
   const all = plots.flatMap(plot => source.children(plot, 'ser'));
   const value = (element: typeof plot, name: string) => Number(source.children(element, name)[0]?.attributes.find(attribute => attribute.localName === 'val')?.value ?? 0);
-  const nextIndex = all.reduce((maximum, element) => Math.max(maximum, value(element, 'idx')), -1) + 1;
+  const reserved = new Set(all.map(element => value(element, 'idx')));
+  for (const history of source.document.elements('urn:tumblerjs:chart-authoring', 'plot')) {
+    const saved = parseLosslessXml(new TextEncoder().encode(source.document.textContent(history)));
+    for (const series of saved.root.children) if (series.kind === 'element' && series.namespaceUri === source.namespace && series.localName === 'ser') {
+      const index = series.children.find((child): child is LosslessXmlElement => child.kind === 'element' && child.namespaceUri === source.namespace && child.localName === 'idx');
+      const number = Number(index?.attributes.find(attribute => attribute.localName === 'val')?.value);
+      if (Number.isInteger(number) && number >= 0) reserved.add(number);
+    }
+  }
+  let nextIndex = 0;
+  for (const index of reserved) nextIndex = Math.max(nextIndex, index + 1);
+  if (nextIndex > 4294967295) { nextIndex = 0; while (reserved.has(nextIndex)) nextIndex++; }
+  if (nextIndex > 4294967295) throw new RangeError('No unused chart series identity remains.');
   const nextOrder = all.reduce((maximum, element) => Math.max(maximum, value(element, 'order')), -1) + 1;
   const edit = beginLosslessXmlEdit(source.document);
   const insert = (markup: string) => {
     const following = source.children(plot).find(child => !['barDir', 'grouping', 'radarStyle', 'scatterStyle', 'ofPieType', 'wireframe', 'varyColors', 'ser'].includes(child.localName));
-    if (following) edit.insertMarkupBefore(following, markup); else edit.appendMarkup(plot, markup);
+    if (following) edit.insertMarkupBefore(following, markup);
+    else if (plot.selfClosing) edit.replaceElementMarkup(plot, source.markup(plot).replace(/\/\s*>$/, '>') + markup + `</${plot.qualified}>`);
+    else edit.appendMarkup(plot, markup);
   };
   if (input.action === 'add') {
     const data = input.series;

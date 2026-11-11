@@ -26,7 +26,8 @@ export function pieScene(context: SceneContext): ChartMark[] {
   const cx = (left + right) / 2, cy = (top + bottom) / 2;
   const radius = Math.max(1, Math.min(right - left, bottom - top) / 2);
   const hole = model.kind === "doughnut" ? radius * (model.holeSize ?? 50) / 100 : 0;
-  const first = model.series[0]!;
+  const first = model.series[0];
+  if (!first) return [];
   const marks: ChartMark[] = [];
   const rings = model.kind === 'doughnut' ? model.series : model.series.slice(0, 1);
   rings.forEach((series, ring) => {
