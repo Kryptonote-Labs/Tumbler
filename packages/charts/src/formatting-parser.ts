@@ -22,7 +22,8 @@ export function parseChartColorContainer(fill: LosslessXmlElement | undefined, n
   const rgb = source?.localName === 'srgbClr';
   const raw = attribute(source, 'val');
   if (!source || rgb && (!raw || !/^[0-9a-f]{6}$/i.test(raw))) return undefined;
-  const complete = !['srgbClr', 'schemeClr'].includes(source.localName) || source.children.some(node => node.kind === 'element' && node.namespaceUri === ns && !['lumMod', 'lumOff'].includes(node.localName));
+  const extraAttributes = (node: LosslessXmlElement) => node.attributes.some(attribute => attribute.namespaceUri !== 'http://www.w3.org/2000/xmlns/' && (attribute.namespaceUri !== '' || attribute.localName !== 'val'));
+  const complete = !['srgbClr', 'schemeClr'].includes(source.localName) || extraAttributes(source) || source.children.some(node => node.kind === 'element' && (node.namespaceUri !== ns || !['lumMod', 'lumOff'].includes(node.localName) || extraAttributes(node) || node.children.some(child => child.kind === 'element')));
   if (complete) {
     const value = source.localName === 'schemeClr' ? raw : fill && (resolveDrawingColor({ ...fill, children: [{ ...source, children: [] }] }, () => '#000000') ?? (source.localName === 'sysClr' ? '#000000' : undefined));
     if (!value || !fill) return undefined;

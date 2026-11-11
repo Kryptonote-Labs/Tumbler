@@ -233,6 +233,19 @@ tumbler report.docx charts read --part /word/charts/chart1.xml
 tumbler report.docx charts edit --input '{"page":"<revision>","part":"/word/charts/chart1.xml","edits":[{"kind":"attribute","node":12,"name":"val","value":"0"}]}'
 ```
 
+Solid and gradient fills have typed operations too:
+
+```sh
+tumbler report.docx charts edit --input '{"page":"<revision>","part":"/word/charts/chart1.xml","fill":{"kind":"solid","node":0,"color":{"kind":"scheme","value":"accent2"},"opacity":0.7}}'
+tumbler report.docx charts edit --input '{"page":"<revision>","part":"/word/charts/chart1.xml","fill":{"kind":"gradient","node":0,"edit":{"kind":"settings","type":"linear","angle":45}}}'
+tumbler report.docx charts edit --input '{"page":"<revision>","part":"/word/charts/chart1.xml","fill":{"kind":"gradient","node":0,"edit":{"kind":"add","position":0.4,"color":{"kind":"scheme","value":"accent3"},"opacity":0.8}}}'
+```
+
+Gradient `stop` edits take the stop's snapshot `node` plus optional `position`,
+`color` and `opacity`. `remove` takes that stop node. Read again between edits;
+positions and opacity are fractions from 0 to 1. Unedited theme references,
+transforms, focal/tile rectangles and other chart properties survive.
+
 Use the current read's revision and node IDs, not the example ID. Each edit
 changes one chart part atomically and returns a new property tree and revision.
 All source properties, including extension markup, are accessible. These commands

@@ -313,3 +313,18 @@ Generate the synthetic nine-page shape/chart atlas with
 each page with `pdftocairo -f N -l N -svg reference.pdf microsoft-N.svg`, then run
 `bun scripts/derive-drawing-pattern-tiles.ts <svg-directory>` to reproduce the masks.
 The shared PNG encoder also retains the existing `encodeInkPng` API.
+
+
+`readChartFill` and `readChartGradientFill` inspect the native fill and source-ordered
+gradient stops without resolving away theme references. `setChartSolidFill` changes
+colour or opacity; `editChartGradientFill` changes type/angle, moves or recolours a
+source-addressed stop, or adds/removes stops. Positions and opacity use fractions
+from 0 to 1. A gradient retains at least two stops. Only the edited properties
+change: focal/tile rectangles, unrelated transforms and extension markup survive.
+`editChartFill` dispatches these commands along with pattern, automatic and no-fill
+choices. The CLI uses the same operations in DOCX, PPTX and XLSX.
+
+The shared workbench previews a gradient draft before committing it. Cancel or
+Escape discards it; Apply creates one edit. `mergeChartFillDraft` rebases the fill
+onto newer chart data or other formatting without overwriting those changes. A
+concurrent edit to the same fill rejects the merge and leaves both sources intact.
