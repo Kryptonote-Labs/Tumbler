@@ -1,6 +1,6 @@
 import { wordSectionFormatSchema } from '../section-format.ts';
 import { isWordColour, type WordColour } from '../theme-colours.ts';
-import { objectPatch, ink } from "./schemas.ts";
+import { objectPatch, ink, chart } from "./schemas.ts";
 import * as z from 'zod';
 import { WORD_PAGE_NUMBER_PRESETS } from "../page-fields.ts";
 import { WORD_LIST_KINDS } from "../authored-list.ts";
@@ -199,6 +199,12 @@ export const wordOperations = {
     () => (z.object({ ...search, value: z.string() }).strict()),
     { query: "draft", value: "final", wholeWord: true },
   ),
+  "insert-chart": operation(
+    'insert-chart',
+    'Insert an editable native chart and its optional embedded source workbook.',
+    () => z.object({ chart }).strict(),
+    { chart: { width: 360, height: 240, content: { xml: '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart><c:plotArea><c:pieChart/></c:plotArea></c:chart></c:chartSpace>' } } },
+  ),
   "insert-shape": operation(
     "insert-shape",
     "Insert a native Word shape with explicit geometry and text.",
@@ -245,6 +251,7 @@ export const wordOperation = z.lazy(() => z.discriminatedUnion("name", [
   wordOperations["edit-table"].schema,
   wordOperations["format-table"].schema,
   wordOperations["replace-all"].schema,
+  wordOperations["insert-chart"].schema,
   wordOperations["insert-shape"].schema,
   wordOperations["insert-image"].schema,
 ]));

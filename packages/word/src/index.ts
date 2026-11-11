@@ -204,3 +204,6 @@ export { wordParagraphById } from './text.ts';
 export { wordHeadingOutline } from './outline.ts';
 export { wordFormatPainterSample, type WordFormatPainterSample } from './format-painter.ts';
 export { wordVerticalTextMetrics } from './vertical-align.ts';
+
+export { isWordAuthoredChart, isWordChartContent } from './authored-chart.ts';
+export type { WordAuthoredChart } from './authored-chart.ts';

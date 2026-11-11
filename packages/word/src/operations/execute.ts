@@ -277,11 +277,12 @@ export function createWordOperations(commands = createWordCommands()) {
           );
           return { start: range.start, end: range.start };
         }
+        case "insert-chart":
         case "insert-ink":
         case "insert-shape":
         case "insert-image": {
           const attributes =
-            operation.name === "insert-ink"
+            operation.name === "insert-chart" ? { chart: operation.input.chart } : operation.name === "insert-ink"
               ? { ink: operation.input.ink }
               : operation.name === "insert-shape"
                 ? { shape: operation.input.shape }

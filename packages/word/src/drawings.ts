@@ -69,6 +69,7 @@ export interface WordImageDrawing extends WordDrawingBase {
 }
 
 export interface WordChartDrawing extends WordDrawingBase {
+  readonly content?: import('@tumblerjs/charts').ChartContent;
   readonly kind: "chart";
   readonly relationshipId: string;
   readonly partName: PartName;

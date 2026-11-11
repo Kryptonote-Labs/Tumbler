@@ -1,3 +1,4 @@
+import { isWordAuthoredChart, isWordChartContent } from '../authored-chart.ts';
 import { isWordParagraphPositioning } from '../positioning.ts';
 import { isWordDrawingGeometry } from '../drawing-geometry.ts';
 import { isWordAuthoredInk } from '../authored-ink.ts';
@@ -115,6 +116,8 @@ export const ink = z
   .describe(
     'Ink drawing: required width/height in points and nonempty strokes array. Each stroke has points [[x,y,pressure],...], color #RRGGBB, positive size in points, optional highlighter boolean. Pressure 0..1. All strokes share one coordinate frame. A one-point stroke is a dot. Optional layout inline|front|behind, x/y, horizontalRelativeTo page|column, verticalRelativeTo page|line|paragraph, alignment left|center|right, moveWithText boolean, wrap none. Legacy points/color/size at the top level replace strokes and fit a single stroke to the frame.',
   );
+export const chart = z.custom<import('../authored-chart.ts').WordAuthoredChart>(isWordAuthoredChart).describe('Native chart with width/height in points, content:{xml,workbook?:base64 XLSX}, and optional drawing placement.');
+export const chartContent = z.custom<import('@tumblerjs/charts').ChartContent>(isWordChartContent).describe('Complete chart XML plus optional embedded XLSX base64; chart and data save together.');
 export const objectPatch = z
   .object({
     shape: shape.optional(),
@@ -129,6 +132,8 @@ export const objectPatch = z
         'Array of {traceIndex,points}; retain the native channel units and ordering returned by object inspection. These are source device samples, not authored point coordinates.',
       )
       .optional(),
+    chart: chart.optional(),
+    chartContent: chartContent.optional(),
     chartTitle: z.string().optional(),
     chartTitleText: z
       .custom<readonly import('../create.ts').WordTextParagraph[]>(isShapeTextBody)

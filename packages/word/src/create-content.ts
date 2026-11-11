@@ -1,3 +1,5 @@
+import { isWordAuthoredChart, type WordAuthoredChart } from './authored-chart.ts';
+import { chartBase64ToBytes, editChartSource, inspectChartSource } from '@tumblerjs/charts';
 import { sectionFormatXml, type WordSectionFormat } from './section-format.ts';
 import { orderedPropertyXml } from './property-order.ts';
 import { authoredInkMarkup } from './authored-ink.ts';
@@ -51,6 +53,29 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
     contentTypes += `<Override PartName="/${name}" ContentType="application/inkml+xml"/>`;
     return markup;
   };
+  const chartMarkup = (chart: WordAuthoredChart, availableWidth: number) => {
+    if (!isWordAuthoredChart(chart)) throw new TypeError('Invalid chart content or geometry.');
+    const id = ++imageId;
+    const placement = imagePlacement(chart, chart.width, availableWidth);
+    const cx = Math.round(chart.width * 12700), cy = Math.round(chart.height * 12700);
+    const chartName = `word/charts/chart${id}.xml`;
+    let chartBytes: Uint8Array = new TextEncoder().encode(chart.content.xml);
+    const source = inspectChartSource(chartBytes);
+    if (chart.content.workbook !== undefined) {
+      const workbookName = `word/embeddings/chart${id}-data.xlsx`;
+      parts.push({ name: workbookName, data: chartBase64ToBytes(chart.content.workbook) });
+      parts.push({ name: `word/charts/_rels/chart${id}.xml.rels`, data: new TextEncoder().encode(`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="workbook" Type="${office}package" Target="../embeddings/chart${id}-data.xlsx"/></Relationships>`) });
+      contentTypes += `<Override PartName="/${workbookName}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/>`;
+      const markup = `<c:externalData xmlns:c="${source.namespace}" xmlns:r="${office.slice(0, -1)}" r:id="workbook"><c:autoUpdate val="0"/></c:externalData>`;
+      const existing = source.children.find(child => child.name.split(':').at(-1) === 'externalData');
+      const following = source.children.find(child => ['printSettings', 'userShapes', 'extLst'].includes(child.name.split(':').at(-1)!));
+      chartBytes = editChartSource(chartBytes, [existing ? { kind: 'replace', node: existing.id, markup } : following ? { kind: 'before', node: following.id, markup } : { kind: 'append', node: source.id, markup }]);
+    }
+    parts.push({ name: chartName, data: chartBytes });
+    contentTypes += `<Override PartName="/${chartName}" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`;
+    relationships += `<Relationship Id="chart${id}" Type="${office}chart" Target="charts/chart${id}.xml"/>`;
+    return `<w:r><w:drawing>${placement.open}<wp:extent cx="${cx}" cy="${cy}"/>${placement.wrap}<wp:docPr id="${id}" name="Chart ${id}" descr="${xmlAttribute(chart.alt ?? '')}"/><a:graphic><a:graphicData uri="${source.namespace}"><c:chart xmlns:c="${source.namespace}" r:id="chart${id}"/></a:graphicData></a:graphic>${placement.close}</w:drawing></w:r>`;
+  };
   const media = new Map<Uint8Array, Map<string, number>>();
   const imageMarkup = (image: WordAuthoredImage, availableWidth: number) => {
           const placement = imagePlacement(image, image.width, availableWidth);
@@ -96,7 +121,7 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
           const markFormat = block.runs.every(run => !run.text) ? block.runs[0]?.format : undefined;
           const mark = markFormat ? `<w:rPr>${runProperties(markFormat)}</w:rPr>` : '';
           const properties = (block.styleId ? `<w:pStyle w:val="${xmlAttribute(block.styleId)}"/>` : '') + early.map(key => paragraph.get(key) ?? '').join('') + numbering + (paragraph.get('suppressLineNumbers') ?? '') + (paragraph.get('pBdr') ?? '') + (paragraph.get('shd') ?? '') + (positioning.tabs ?? '') + (paragraph.get('spacing') ?? '') + (positioning.ind ?? '') + (paragraph.get('contextualSpacing') ?? '') + (block.alignment ? `<w:jc w:val="${block.alignment === 'justify' ? 'both' : block.alignment}"/>` : '') + (paragraph.get('outlineLvl') ?? '') + mark + section;
-          return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => linked(run.link, run.ink ? (run.text === '\uFFFC' && !run.shape && !run.image && !run.field ? inkMarkup(run.ink, availableWidth) : (() => { throw new TypeError('Ink occupies one object character.'); })()) : run.shape ? (run.text === '\uFFFC' ? wordShapeXml(run.shape, ++imageId, availableWidth, paragraphs => visit(paragraphs.map(p => ({ kind: 'paragraph', ...p })), run.shape!.width)) : (() => { throw new TypeError('Shape runs occupy one object character.'); })()) : run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${run.breakType ? wordBreakXml(run.breakType, run.text) : run.tab ? positionalTabXml(run.tab, run.text) : textContent(run.text)}</w:r>`)).join('')}</w:p>`;
+          return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => linked(run.link, run.chart ? (run.text === '\uFFFC' ? chartMarkup({ ...run.chart, ...(run.chartContent ? { content: run.chartContent } : {}) }, availableWidth) : (() => { throw new TypeError('Charts occupy one object character.'); })()) : run.ink ? (run.text === '\uFFFC' && !run.shape && !run.image && !run.field ? inkMarkup(run.ink, availableWidth) : (() => { throw new TypeError('Ink occupies one object character.'); })()) : run.shape ? (run.text === '\uFFFC' ? wordShapeXml(run.shape, ++imageId, availableWidth, paragraphs => visit(paragraphs.map(p => ({ kind: 'paragraph', ...p })), run.shape!.width)) : (() => { throw new TypeError('Shape runs occupy one object character.'); })()) : run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${run.breakType ? wordBreakXml(run.breakType, run.text) : run.tab ? positionalTabXml(run.tab, run.text) : textContent(run.text)}</w:r>`)).join('')}</w:p>`;
         }
         case 'table': {
           const grid = authoredTableGrid(block.rows, block.columnWidths, availableWidth, block.rowGrids);

@@ -1,6 +1,6 @@
 import { strictThemeMarkup } from './strict-resources.ts';
 import { chartTitleFromWord } from './chart-title.ts';
-import { updateChartTitle } from '@tumblerjs/charts';
+import { addChartContent, readChartContent, writeChartContent, updateChartTitle } from '@tumblerjs/charts';
 import { mergeAuthoredStyles, missingAuthoredStyles } from './package-styles.ts';
 import { wordStoryArtifact } from './stories.ts';
 import type { WordBlock } from './document.ts';
@@ -173,6 +173,7 @@ export function prepareWordContent(
       runs: p.runs.map((run) => ({
         // This package supplies resources only. Source text leaves are rendered below.
         text: (originalRuns.get(run.source!)?.text === run.text ? run.text.replace(/[\r\n]/g, '') : run.text).replaceAll('\u2028', ''),
+        ...(run.chart ? { chart: { ...run.chart, ...(run.chartContent ? { content: run.chartContent } : {}) } } : {}),
         ...(run.shape ? { shape: run.shape } : {}),
         ...(run.ink ? { ink: { ...run.ink, ...run.drawing } } : {}),
         ...(run.link === undefined ? {} : { link: run.link }),
@@ -205,14 +206,16 @@ export function prepareWordContent(
     paragraphs.some(p => p.runs.some(run => {
       const drawing = document.drawings.get(run.source!);
       const geometry = run.drawing ?? run.image;
-      if (run.inkTraces?.length || run.chartTitle !== undefined || run.chartTitleText !== undefined) return true;
+      if (run.inkTraces?.length || run.chartContent || run.chartTitle !== undefined || run.chartTitleText !== undefined) return true;
       return drawing && geometry && drawingNeedsUpdate(drawing, geometry, run.drawing !== undefined);
     }))
   )) return undefined;
   const transaction = batchTransaction ?? beginPackageTransaction(document.package);
   for (const paragraph of paragraphs) for (const run of paragraph.runs) {
     const drawing = document.drawings.get(run.source!);
-    if (drawing?.kind !== 'chart' || (run.chartTitle === undefined && run.chartTitleText === undefined)) continue;
+    if (drawing?.kind !== 'chart') continue;
+    if (run.chartContent) writeChartContent(transaction, drawing.partName, run.chartContent);
+    if (run.chartTitle === undefined && run.chartTitleText === undefined) continue;
     const part = document.package.getPart(drawing.partName)!;
     transaction.replacePart(drawing.partName, updateChartTitle(document.package.readPart(part), run.chartTitleText ? chartTitleFromWord(run.chartTitleText) : run.chartTitle!));
   }
@@ -278,7 +281,7 @@ export function prepareWordContent(
     if (rel.targetMode === 'External' && /\/hyperlink$/.test(rel.type)) {
       continue;
     }
-    if (rel.targetMode !== 'Internal' || !/\/(image|numbering|theme|customXml)$/.test(rel.type)) continue;
+    if (rel.targetMode !== 'Internal' || !/\/(image|numbering|theme|customXml|chart)$/.test(rel.type)) continue;
     if (/\/theme$/.test(rel.type) && !needsTheme) continue;
     const part = generated.document.package.getPart(rel.targetPartName)!;
     const name = PartName.parse(`/word/${prefix}${part.name.value.split('/').at(-1)}`);
@@ -288,7 +291,8 @@ export function prepareWordContent(
     }
     const isTheme = /\/theme$/.test(rel.type);
     const bytes = generated.document.package.readPart(part);
-    transaction.addPart(name, part.contentType, isTheme && document.conformance === 'strict'
+    if (/\/chart$/.test(rel.type)) addChartContent(transaction, name, readChartContent(generated.document.package, part.name));
+    else transaction.addPart(name, part.contentType, isTheme && document.conformance === 'strict'
       ? new TextEncoder().encode(strictThemeMarkup(conformanceMarkup(new TextDecoder().decode(bytes))))
       : bytes);
     // Themes and styles are shared; images and custom XML stay with this story.

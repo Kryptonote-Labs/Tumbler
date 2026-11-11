@@ -138,6 +138,8 @@ export function importOperationDelta(artifact: WordArtifact) {
             ...(run.drawing ? { drawing: run.drawing } : {}),
             ...(run.ink ? { ink: run.ink } : {}),
             ...(run.inkTraces ? { inkTraces: run.inkTraces } : {}),
+            ...(run.chart ? { chart: run.chart } : {}),
+            ...(run.chartContent ? { chartContent: run.chartContent } : {}),
             ...(run.chartTitle !== undefined ? { chartTitle: run.chartTitle } : {}),
             ...(run.chartTitleText ? { chartTitleText: run.chartTitleText } : {}),
           };
