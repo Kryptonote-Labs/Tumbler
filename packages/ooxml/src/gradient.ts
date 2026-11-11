@@ -48,8 +48,8 @@ export interface DrawingGradient {
 /** Shared SVG/canvas endpoints, including DrawingML's aspect-scaled linear shading. */
 export function linearGradientLine(value: DrawingGradient, width: number, height: number) {
   const angle = (value.angle * Math.PI) / 180;
-  const gx = Math.cos(angle) * (value.scaled ? width : 1),
-    gy = Math.sin(angle) * (value.scaled ? height : 1);
+  const gx = Math.cos(angle) / (value.scaled ? width || 1 : 1),
+    gy = Math.sin(angle) / (value.scaled ? height || 1 : 1);
   const length = (Math.abs(width * gx) + Math.abs(height * gy)) / (gx * gx + gy * gy || 1);
   return [
     width / 2 - (gx * length) / 2,
