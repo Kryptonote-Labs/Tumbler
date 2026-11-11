@@ -7,6 +7,9 @@ import type { ChartMark, SceneContext } from './scene-marks.ts';
 import { chartRichTextMarks, layoutChartText } from './text-layout.ts';
 import { positionChartText } from './text-position.ts';
 import { chartTextBoxMarks } from './text-box-scene.ts';
+import { positionPieLabel, pieLabelLeader, type PieLabelGeometry, type PieLabelFrame } from './pie-label-position.ts';
+import { mergeChartLineStyles } from './line-style.ts';
+import { chartMarksBounds } from './shape-scene.ts';
 
 export interface ChartLabelPoint {
   readonly index: number;
@@ -18,13 +21,15 @@ export interface ChartLabelPoint {
   readonly value: number;
   readonly percent?: number;
   readonly bubbleSize?: number;
+  readonly pie?: PieLabelGeometry;
 }
 
 /** Compose a label from its flags, preserving explicit point overrides and source number formats. */
-export function chartDataLabelMarks(context: SceneContext, series: ChartSeries, seriesIndex: number, point: ChartLabelPoint): ChartMark[] {
+export function chartDataLabelMarks(context: SceneContext, series: ChartSeries, seriesIndex: number, point: ChartLabelPoint, leaders?: ChartMark[]): ChartMark[] {
   const plot = context.model.dataLabels, labels = series.dataLabels;
   if (!plot && !labels) return [];
-  const settings = mergeChartFillLayers([plot, labels, plot?.points?.[point.index], labels?.points?.[point.index]]) ?? {};
+  const layers = [plot, labels, plot?.points?.[point.index], labels?.points?.[point.index]];
+  const settings = mergeChartFillLayers(layers) ?? {};
   if (settings.deleted) return [];
   const fields = [
     settings.showSeries ? series.title ?? `Series ${seriesIndex + 1}` : undefined,
@@ -64,5 +69,20 @@ export function chartDataLabelMarks(context: SceneContext, series: ChartSeries, 
     : lines.map((text, index): ChartMark => ({ kind: 'text', text, x, y: y + index * font.size * 1.2, anchor, font }));
   if (settings.showLegendKey) content.unshift({ kind: 'rect', x: left - font.size - 4, y: top, width: font.size * .8, height: font.size * .8, fill: chartPointColor(context, series, seriesIndex, point.index) });
   const marks = chartTextBoxMarks(context, content, settings, style.rotation);
-  return positionChartText(context, marks, settings.layout, !!style.rotation);
+  const positioned = point.pie ? positionPieLabel(context, marks, point.pie, settings.position ?? (context.model.kind === 'doughnut' ? 'ctr' : 'bestFit')) : marks;
+  const final = positionChartText(context, positioned, settings.layout, !!style.rotation);
+  if (!point.pie) return final;
+  const leaderLineStyle = mergeChartLineStyles(layers.map(layer => layer?.leaderLineStyle));
+  let frame: PieLabelFrame | undefined;
+  if (style.rotation && settings.showLeaderLines && settings.layout) {
+    const before = chartMarksBounds(context, marks), after = chartMarksBounds(context, final), original = chartMarksBounds(context, content);
+    if (before && after && original) {
+      const padding = marks.length > content.length ? { x: 3, y: 2 } : { x: 0, y: 0 };
+      frame = { bounds: { x: original.x + after.x - before.x - padding.x, y: original.y + after.y - before.y - padding.y,
+        width: original.width + padding.x * 2, height: original.height + padding.y * 2 }, rotation: style.rotation };
+    }
+  }
+  const leaderMarks = pieLabelLeader(context, final, point.pie, leaderLineStyle ? { ...settings, leaderLineStyle } : settings, frame);
+  if (leaders) { leaders.push(...leaderMarks); return final; }
+  return [...leaderMarks, ...final];
 }
