@@ -75,7 +75,7 @@ export function chartFileHost(): Required<ChartOperationHost> {
         const part = chartPart(pkg, input.part);
         if ('cells' in input && extname(path).toLowerCase() === '.xlsx') throw new TypeError('Edit source cells with sheets commands in the owning workbook.');
         let bytes: Uint8Array;
-        if (!('edits' in input) && !('picture' in input) && extname(path).toLowerCase() === '.xlsx') {
+        if (!('edits' in input) && !('picture' in input) && !('fill' in input) && extname(path).toLowerCase() === '.xlsx') {
           const { artifact, objectId } = spreadsheetOwner(original, part);
           const content = applyChartContentEdit({ ...readChartContent(pkg, part.name), xml: new TextDecoder().decode(refreshChartWorkbook(pkg.readPart(part), artifact)) }, input);
           bytes = applySpreadsheetCommand(artifact, { name: 'edit-chart', sheetId: String(artifact.activeSheet.sheetId), objectId, content, bindUnboundData: 'type' in input || 'series' in input || 'data' in input }).bytes();

@@ -179,3 +179,25 @@ test('combined XLSX resource and source edits keep node addresses from the inspe
     expect(savedAxis.children.flatMap(node => node.attributes)).not.toContainEqual(expect.objectContaining({ name: 'custom' }));
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test.each(['docx', 'pptx', 'xlsx'])('CLI pattern, no-fill and automatic edits retain %s resources and workbook bindings', async extension => {
+  const directory = await mkdtemp(join(tmpdir(), 'tumbler-chart-pattern-'));
+  try {
+    const path = join(directory, `pattern.${extension}`), content = { xml: new TextDecoder().decode(createOoxmlChart({ type: 'barChart', categories: ['A', 'B'], series: [{ name: 'Data', values: [2, 4] }] })) };
+    const presentation = createPresentation();
+    const bytes = extension === 'docx' ? createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', chart: { width: 300, height: 200, content } }] }] }).bytes()
+      : extension === 'pptx' ? applyPresentationCommand(presentation, { name: 'insert-chart', slideId: presentation.document.slides[0]!.id, bounds: { x: 10, y: 10, width: 400, height: 300 }, content }).bytes()
+      : applySpreadsheetCommand(createSpreadsheet(), { name: 'insert-chart', sheetId: '1', x: 10, y: 10, width: 400, height: 300, content, bindUnboundData: true }).bytes();
+    await Bun.write(path, bytes);
+    const host = createFileHost();
+    const list = await host.readCharts!(path, {}) as { parts: { part: string }[] }, part = list.parts[0]!.part;
+    const before = await host.readCharts!(path, { part }) as { page: string; source: ChartSourceNode; resources: ChartResources };
+    const changed = await host.editChart!(path, { page: before.page, part, fill: { node: before.source.id, kind: 'pattern', preset: 'zigZag', foreground: { kind: 'scheme', value: 'accent2' } } }) as { page: string; source: ChartSourceNode; resources: ChartResources };
+    expect(JSON.stringify(changed.source)).toContain('zigZag');
+    expect(changed.resources).toEqual(before.resources);
+    const empty = await host.editChart!(path, { page: changed.page, part, fill: { node: changed.source.id, kind: 'none' } }) as { page: string; source: ChartSourceNode };
+    expect(empty.source.children.find(node => node.name === 'c:spPr')?.children[0]?.name).toBe('a:noFill');
+    const automatic = await host.editChart!(path, { page: empty.page, part, fill: { node: empty.source.id, kind: 'automatic' } }) as { source: ChartSourceNode };
+    expect(automatic.source.children.find(node => node.name === 'c:spPr')?.children).toEqual([]);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
