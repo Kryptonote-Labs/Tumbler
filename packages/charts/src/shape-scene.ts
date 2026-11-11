@@ -40,14 +40,15 @@ export function chartMarksBounds(context: Pick<SceneContext, 'measure'>, marks: 
   return { x, y, width: Math.max(...boxes.map(box => box.x + box.width)) - x, height: Math.max(...boxes.map(box => box.y + box.height)) - y };
 }
 
-export function chartLegendShape(context: SceneContext, marks: readonly ChartMark[]): readonly ChartMark[] {
+export function chartLegendShape(context: SceneContext, marks: readonly ChartMark[], frame?: ChartRect): ChartMark[] {
   const style = context.model.legend?.shapeStyle;
-  if (!style) return marks;
+  if (!style) return [...marks];
   return marks.map(mark => {
     if (mark.kind !== 'group') return mark;
     if (mark.role !== 'legend') return { ...mark, marks: chartLegendShape(context, mark.marks) };
     const bounds = chartMarksBounds(context, mark.marks);
-    const shape = bounds ? chartShapeMarks(context, { x: bounds.x - 5, y: bounds.y - 4, width: bounds.width + 10, height: bounds.height + 8 }, style) : [];
+    const area = frame ?? (bounds ? { x: bounds.x - 5, y: bounds.y - 4, width: bounds.width + 10, height: bounds.height + 8 } : undefined);
+    const shape = area ? chartShapeMarks(context, area, style) : [];
     return { ...mark, marks: [...shape, ...mark.marks] };
   });
 }

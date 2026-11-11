@@ -4,6 +4,7 @@ import { chartFont, type ChartColorResolver, type ChartFont } from './scene-styl
 import { chartLegendEntries } from './legend-style.ts';
 import { chartLegendItems } from './legend-items.ts';
 import { chartTitleHeight } from './title-scene.ts';
+import { layoutManualChartLegend } from './legend-manual-layout.ts';
 
 type Measure = (text: string, font: ChartFont) => number;
 
@@ -22,7 +23,15 @@ function wrap(text: string, font: ChartFont, width: number, measure: Measure): s
 }
 
 /** One measured list supplies both painted entries and automatic plot reservation. */
-export function layoutChartLegend(model: SupportedChartModel, width: number, height: number, measure: Measure, bands?: readonly number[], resolve?: ChartColorResolver, options: ChartSceneOptions = {}) {
+export type ChartLegendLayout = ReturnType<typeof automaticChartLegend>;
+
+export function layoutChartLegend(model: SupportedChartModel, width: number, height: number, measure: Measure, bands?: readonly number[], resolve?: ChartColorResolver, options: ChartSceneOptions = {}): ChartLegendLayout {
+  const automatic = automaticChartLegend(model, width, height, measure, bands, resolve, options);
+  const layout = model.legend?.layout;
+  return layout && [layout.x, layout.y, layout.width, layout.height].some(value => value !== undefined) ? layoutManualChartLegend(automatic, layout, width, height, measure, wrap) : automatic;
+}
+
+function automaticChartLegend(model: SupportedChartModel, width: number, height: number, measure: Measure, bands?: readonly number[], resolve?: ChartColorResolver, options: ChartSceneOptions = {}) {
   const pie = ['pie', 'doughnut', 'of-pie'].includes(model.kind);
   const labelX = pie || model.kind === 'bubble' || model.kind === 'scatter' ? 15 : model.kind === 'surface' ? 14 : 12;
   const position = model.legend?.position ?? 'right', horizontal = position === 'top' || position === 'bottom';
@@ -65,7 +74,7 @@ export function layoutChartLegend(model: SupportedChartModel, width: number, hei
   const bounds = { x: Math.min(width, ...placed.map(entry => entry.x)), y: Math.min(height, ...placed.map(entry => entry.y - entry.font.size)),
     width: maxWidth, height: inkHeight };
   const reserve = !!model.legend && !model.legend.overlay && placed.length > 0;
-  return { entries: placed, labelX, bounds, rowsHeight, space: {
+  return { entries: placed, labelX, bounds, rowsHeight, manual: false, space: {
     left: reserve && position === 'left' ? Math.max(pie ? Math.min(120, width * .25) : 0, maxWidth + padding * 2) : 0,
     right: reserve && (position === 'right' || position === 'top-right') ? Math.max(pie ? Math.min(120, width * .25) : 0, maxWidth + padding * 2) : 0,
     top: reserve && position === 'top' ? pie ? rowsHeight + 8 : Math.max(28, inkHeight + 44 / 3) : 0,

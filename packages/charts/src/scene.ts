@@ -1,4 +1,4 @@
-import { chartShapeMarks, chartMarksBounds, chartLegendShape } from './shape-scene.ts';
+import { chartShapeMarks, chartMarksBounds } from './shape-scene.ts';
 import { chartStrokeBounds } from './stroke-bounds.ts';
 import { ofPieScene } from './scene-of-pie.ts';
 import { surfaceScene } from './scene-surface.ts';
@@ -69,7 +69,7 @@ function buildChartScene(model: SupportedChartModel, width: number, height: numb
     marks.push(...chartPlotScene({ ...context, model: automatic }).filter(mark => mark.kind === 'group' && mark.role === 'legend'));
   } else marks.push(...chartPlotScene(context));
   marks.push(...titleMarks);
-  return { width, height, label: model.title ?? (model.plots ? "Combination chart" : `${model.kind} chart`), marks: chartStrokeBounds(chartLegendShape(context, marks), options.viewport ?? { x: 0, y: 0, width, height }) };
+  return { width, height, label: model.title ?? (model.plots ? "Combination chart" : `${model.kind} chart`), marks: chartStrokeBounds(marks, options.viewport ?? { x: 0, y: 0, width, height }) };
 }
 
 

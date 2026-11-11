@@ -137,6 +137,7 @@ export interface ChartLegendEntry {
 }
 
 export interface ChartLegend {
+  readonly layout?: import('./manual-layout.ts').ChartManualLayout;
   readonly entries?: Readonly<Record<number, ChartLegendEntry>>;
   readonly shapeStyle?: ChartShapeStyle;
   readonly textStyle?: ChartTextStyle;
