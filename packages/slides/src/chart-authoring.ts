@@ -11,7 +11,7 @@ function chartTarget(document: PresentationDocument, slideId: string, objectKey:
   const slide = document.slides.find(slide => slide.id === slideId);
   const object = slide?.objects.find(object => object.key === objectKey);
   const pkg = document.package;
-  const part = slide && pkg.getPart(slide.part);
+  const part = slide && object && pkg.getPart(object.sourcePart);
   if (!slide || !object || object.kind !== 'chart' || !part) throw new TypeError('Select a chart on this slide.');
   const source = parseLosslessXml(pkg.readPart(part));
   const element = source.element(object.elementId);

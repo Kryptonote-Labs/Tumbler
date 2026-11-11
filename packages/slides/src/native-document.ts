@@ -117,6 +117,9 @@ type Chain = { previous: Chain | undefined; change: NativeChange };
 const importedPresentations = new WeakMap<PresentationArtifact, NativePresentationDocument>();
 /** Immutable native authoring state. Source markup is resolved only for explicit export. */
 export class NativePresentationDocument extends PresentationArtifact {
+  private chartContentsUpgraded = false;
+  /** A host may refresh cached compiled views after restoring an older archive. */
+  get requiresChartContentCheckpoint() { return this.chartContentsUpgraded; }
   private exported: PresentationArtifact | undefined;
   private exportSlides = new Map<string, string>();
   private exportObjects = new Map<string, string>();
@@ -262,7 +265,9 @@ export class NativePresentationDocument extends PresentationArtifact {
       const content = presentationChartContent(exported.document, this.exportSlides.get(native.slide.id) ?? native.slide.id, this.exportObjects.get(object.key) ?? object.key);
       return { ...object, chartContent: object.chartContent ? mergeChartContent(content, object.chartContent) : content };
     }) } }));
-    return new NativePresentationDocument({ ...this.state, slides }, this.source, this.chain, this.options);
+    const completed = new NativePresentationDocument({ ...this.state, slides }, this.source, this.chain, this.options);
+    completed.chartContentsUpgraded = true;
+    return completed;
   }
   /** Existing OOXML writers remain the lossless export reconciler, outside the editing path. */
   exportArtifact(): PresentationArtifact {
