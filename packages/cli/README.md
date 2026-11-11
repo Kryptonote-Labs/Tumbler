@@ -215,9 +215,17 @@ Sources are read in command order. `--pages` and `--password` apply to the most 
 
 The shared `@tumblerjs/pdf` merge API also powers the Svelte docs PDF merge playground. Both interfaces use the same page-selection rules and preservation checks. See the PDF package README for document structure support and limitations.
 
-### Chart source properties
+### Charts
 
-The file host supports advanced chart-part edits in DOCX, PPTX and XLSX:
+Create and edit native charts in DOCX, PPTX and XLSX. First read the document through its Word, slides or sheets command to obtain a native page handle. For example:
+
+```sh
+tumbler report.docx charts create --input '{"page":"<word-page>","target":{"family":"word","start":0},"chart":{"type":"lineChart","categories":["Jan","Feb"],"series":[{"name":"Sales","values":[12,18]}]}}'
+```
+
+`charts create --help` lists all 16 ECMA-376 chart types and their variants. Word and slides receive an editable embedded XLSX; spreadsheets receive actual host worksheet cells. Word dimensions are points, while slide and sheet bounds are pixels. Creation uses the same insertion and revision checks as native document commands.
+
+For property editing:
 
 ```sh
 tumbler report.docx charts read
@@ -238,9 +246,9 @@ edits a real embedded workbook and refreshes the chart cache in the same transac
 For XLSX, use ordinary `sheets` commands to edit the host workbook cells. A `series`
 request adds, duplicates, removes or reorders series; a `data` request updates the
 source ranges returned by `charts read`. Inspect `charts --help` for these schemas.
-New drawings use the native `insert-chart` operation in each document family's command API.
+Typed XLSX type and series edits bind newly introduced numeric roles to fresh host cells while retaining existing formulas and ranges. Raw source edits preserve their authored binding choices. Native hosts can opt into the same binding with `bindUnboundData` on `insert-chart` or `edit-chart`.
 
-Hosted integrations implement `ChartOperationHost` to supply their
+Hosted integrations implement `ChartOperationHost` for reads/edits and the existing native family operations for creation, supplying their
 own permissions, storage and collaboration transactions; an unsupported host
 returns an explicit capability error. Run `tumbler <document> charts --help` for
 the complete edit schema.

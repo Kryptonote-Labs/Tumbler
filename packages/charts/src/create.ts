@@ -4,8 +4,8 @@ import { updateChartTitle } from './title-edit.ts';
 export interface ChartSourceSeries {
   readonly name: string;
   readonly values: readonly (number | null)[];
-  readonly xValues?: readonly (number | null)[];
-  readonly bubbleSizes?: readonly (number | null)[];
+  readonly xValues?: readonly (number | null)[] | undefined;
+  readonly bubbleSizes?: readonly (number | null)[] | undefined;
 }
 
 export interface CreateChartOptions {
