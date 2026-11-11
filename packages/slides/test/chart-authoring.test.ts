@@ -52,3 +52,27 @@ test('imported and native chart rendering uses the slide template colours and fo
     }
   }
 });
+
+test('compiled imported charts expose their data without export-only preservation', async () => {
+  const { createPresentationNativeArchive, createPresentationNativeView, openPresentationNativeArchive } = await import('../src/index.ts');
+  const empty = createPresentation(), slideId = empty.document.slides[0]!.id;
+  const inserted = applyPresentationCommand(empty, { name: 'insert-chart', slideId, bounds: { x: 10, y: 10, width: 480, height: 320 }, content });
+  const archive = createPresentationNativeArchive(inserted);
+  const partial = openPresentationNativeArchive({ ...createPresentationNativeView(openPresentationNativeArchive(archive)), preservation: new Uint8Array() });
+  const chart = partial.document.slides[0]!.objects.find(object => object.kind === 'chart')!;
+  expect(presentationChartContent(partial.document, slideId, chart.key)).toMatchObject({ xml: content.xml, resources: { parts: [], relationships: [] } });
+});
+
+test('older native chart snapshots gain portable resources before partial loading', async () => {
+  const { restoreNativePresentation, createPresentationNativeArchive, createPresentationNativeView, openPresentationNativeArchive } = await import('../src/index.ts');
+  const original = createPresentation(), native = importNativePresentation(original), slideId = native.document.slides[0]!.id;
+  const inserted = importNativePresentation(applyPresentationCommand(native, { name: 'insert-chart', slideId, bounds: { x: 10, y: 10, width: 480, height: 320 }, content }));
+  const snapshot = inserted.snapshot();
+  const legacy = restoreNativePresentation({ ...snapshot, slides: snapshot.slides.map(s => ({ ...s, slide: { ...s.slide, objects: s.slide.objects.map(o => o.kind === 'chart' ? { ...o, chartContent: { xml: content.xml } } : o) } })) }, () => original);
+  const restored = openPresentationNativeArchive(createPresentationNativeArchive(legacy));
+  const partial = openPresentationNativeArchive({ ...createPresentationNativeView(restored), preservation: new Uint8Array() });
+  const chart = partial.document.slides[0]!.objects.find(object => object.kind === 'chart')!;
+  expect(presentationChartContent(partial.document, slideId, chart.key).resources).toEqual({ parts: [], relationships: [] });
+  expect(partial.state.revisionKey).toBe(inserted.state.revisionKey);
+  expect(openPresentationArtifact(restored.bytes()).document.slides[0]!.objects.some(o => o.kind === 'chart')).toBe(true);
+});

@@ -34,6 +34,8 @@ import { isPresentationBlock } from './native-block.ts';
 import { openPresentationArtifact } from './artifact.ts';
 import { bindPresentationThemeColours } from './reader.ts';
 import { ThemeColorScheme, THEME_COLOR_SLOTS } from '@tumblerjs/ooxml';
+import { presentationChartContent } from './chart-authoring.ts';
+import { mergeChartContent } from '@tumblerjs/charts';
 import type { PresentationLayout } from './authoring-layout.ts';
 
 export type NativeSlideTemplate = {
@@ -250,6 +252,17 @@ export class NativePresentationDocument extends PresentationArtifact {
   }
   preservationSource() {
     return this.source();
+  }
+  /** Upgrade older compiled charts while their full preservation source is available. */
+  completeChartContents(): NativePresentationDocument {
+    if (!this.state.slides.some(({ slide }) => slide.objects.some(object => object.kind === 'chart' && object.chartContent?.resources === undefined))) return this;
+    const exported = this.exportArtifact();
+    const slides = this.state.slides.map(native => ({ ...native, slide: { ...native.slide, objects: native.slide.objects.map(object => {
+      if (object.kind !== 'chart' || object.chartContent?.resources !== undefined) return object;
+      const content = presentationChartContent(exported.document, this.exportSlides.get(native.slide.id) ?? native.slide.id, this.exportObjects.get(object.key) ?? object.key);
+      return { ...object, chartContent: object.chartContent ? mergeChartContent(content, object.chartContent) : content };
+    }) } }));
+    return new NativePresentationDocument({ ...this.state, slides }, this.source, this.chain, this.options);
   }
   /** Existing OOXML writers remain the lossless export reconciler, outside the editing path. */
   exportArtifact(): PresentationArtifact {

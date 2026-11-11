@@ -181,11 +181,12 @@ export function openPresentationNativeArchive(
     () => (source ??= openPresentationArtifact(packageSource().archive.originalBytes(), options)),
     { package: packageSource },
   );
-  return restoreNativePresentation(
+  const model = restoreNativePresentation(
     { ...metadata, embeddedFonts: metadata.embeddedFonts, slides },
     sourceArtifact,
     options,
   );
+  return archive.preservation?.length ? model.completeChartContents() : model;
 }
 
 /** Recovery stores the native branch without forcing export preservation to load. */
