@@ -87,6 +87,7 @@ export function createWordOperations(commands = createWordCommands()) {
           const current = wordObjectAttributes(staged, range.start);
           if (operation.name === "edit-object") {
             const patch = defined(operation.input);
+            if (patch.chartContent) staged.format(range.start, 1, { ...(patch.chartTitle === undefined ? { chartTitle: null } : {}), ...(patch.chartTitleText === undefined ? { chartTitleText: null } : {}) });
             if (
               (patch.image && !current.image) ||
               (patch.shape && !current.shape) ||

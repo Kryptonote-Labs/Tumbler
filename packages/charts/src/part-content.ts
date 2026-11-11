@@ -2,7 +2,7 @@ import { ChartParseError, parseOoxmlChart } from './parser.ts';
 import type { ChartModel } from './model.ts';
 import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
 import { openOpcPackage, PartName, Relationships, RelationshipsError, type OpcPackage, type PackageTransaction } from '@tumblerjs/opc';
-import { chartXml } from './source-xml.ts';
+import { chartXml, chartXmlText } from './source-xml.ts';
 
 /** Portable chart content for host commands and collaboration, independent of local part names. */
 export interface ChartContent {
@@ -18,6 +18,17 @@ export function chartBytesToBase64(bytes: Uint8Array): string {
 export function chartBase64ToBytes(value: string): Uint8Array {
   if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) throw new TypeError('Invalid workbook encoding.');
   return Uint8Array.from(atob(value), character => character.charCodeAt(0));
+}
+
+
+/** Validate the embedded package, not just its base64 envelope. */
+export function decodeChartWorkbook(value: string): Uint8Array {
+  const bytes = chartBase64ToBytes(value);
+  if (openOpcPackage(bytes).mainOfficeDocumentPart().family !== 'spreadsheet') throw new TypeError('Chart data requires an XLSX workbook.');
+  return bytes;
+}
+export function mergeChartContent(previous: ChartContent, next: ChartContent): ChartContent {
+  return next.workbook === undefined && previous.workbook !== undefined ? { ...next, workbook: previous.workbook } : next;
 }
 
 /** Read the embedded source only through the chart's explicit relationship, never a network URL. */
@@ -40,11 +51,22 @@ function stageChartContent(transaction: PackageTransaction, partName: PartName |
   const original = transaction.package.getPart(name);
   if (!addition && (!original || original.contentType !== 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml')) throw new TypeError('Chart part is missing.');
   let bytes: Uint8Array = new TextEncoder().encode(content.xml);
-  const source = chartXml(bytes);
+  let source = chartXml(bytes);
+  const old = original && chartXml(transaction.package.readPart(original));
+  const oldExternal = old && old.children(old.document.root, 'externalData')[0];
+  const incomingExternal = source.children(source.document.root, 'externalData')[0];
+  if (!incomingExternal && oldExternal && old) {
+    const declarations = old.document.root.attributes.filter(attribute => attribute.namespaceUri === 'http://www.w3.org/2000/xmlns/' && !oldExternal.attributes.some(own => own.qualified === attribute.qualified)).map(attribute => ` ${attribute.qualified}="${chartXmlText(attribute.value)}"`).join('');
+    const markup = old.markup(oldExternal).replace(new RegExp(`^<${oldExternal.qualified}(?=[\\s/>])`), `<${oldExternal.qualified}${declarations}`);
+    const edit = beginLosslessXmlEdit(source.document);
+    const following = source.children(source.document.root).find(child => ['printSettings', 'userShapes', 'extLst'].includes(child.localName));
+    if (following) edit.insertMarkupBefore(following, markup); else edit.appendMarkup(source.document.root, markup);
+    bytes = edit.commit().bytes;
+    source = chartXml(bytes);
+  }
   if (addition) transaction.addPart(name, 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml', bytes);
   if (content.workbook !== undefined) {
-    const workbook = chartBase64ToBytes(content.workbook);
-    if (openOpcPackage(workbook).mainOfficeDocumentPart().family !== 'spreadsheet') throw new TypeError('Chart data requires an XLSX workbook.');
+    const workbook = decodeChartWorkbook(content.workbook);
     const relNs = source.namespace.includes('purl.oclc.org') ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
     const external = source.children(source.document.root, 'externalData')[0];
     const id = external?.attributes.find(attribute => attribute.namespaceUri === relNs && attribute.localName === 'id')?.value;

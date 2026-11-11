@@ -194,7 +194,8 @@ export function updateChartData(bytes: Uint8Array, plots: readonly ChartEditable
       const content = data.nameFormula === undefined ? `<c:v>${chartXmlText(data.name)}</c:v>` : `<c:strRef><c:f>${chartXmlText(data.nameFormula)}</c:f><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>${chartXmlText(data.name)}</c:v></c:pt></c:strCache></c:strRef>`;
       const titleXml = `<c:tx xmlns:c="${namespace}">${content}</c:tx>`;
       if (data.name !== before.name || data.nameFormula !== before.nameFormula) {
-      if (title) edit.replaceElementMarkup(title, titleXml);
+      if (title && before.nameFormula !== undefined && data.nameFormula !== undefined) patchSequence(title, { kind: 'string', values: [data.name], formula: data.nameFormula }, { kind: 'string', values: [before.name], formula: before.nameFormula });
+      else if (title) edit.replaceElementMarkup(title, titleXml);
       else {
         const following = children(element).find(child => !['idx', 'order'].includes(child.localName));
         if (following) edit.insertMarkupBefore(following, titleXml); else edit.appendMarkup(element, titleXml);

@@ -188,3 +188,5 @@ export { spreadsheetFormatPainterSample } from './format-painter.ts';
 export { createChartWorkbook, extendChartWorkbook, refreshChartWorkbook } from './chart-workbook.ts';
 export type { ChartWorkbookEdit } from './chart-workbook.ts';
 export { spreadsheetChartContent } from './chart-content.ts';
+export { applyChartContentEdit } from './chart-operations.ts';
+export type { ChartContentEdit } from './chart-operations.ts';

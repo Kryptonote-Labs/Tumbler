@@ -53,6 +53,7 @@ export { chartPropertyTree, chartPropertyDefinition, insertChartProperty } from 
 export type { ChartPropertyNode, ChartPropertyDefinition, ChartPropertyAttribute } from './properties.ts';
 export { convertChartType } from './convert.ts';
 export type { ChartTypeChange } from './convert.ts';
-export { readChartContent, writeChartContent, addChartContent, chartContentModel, chartBytesToBase64, chartBase64ToBytes } from './part-content.ts';
+export { readChartContent, writeChartContent, addChartContent, chartContentModel, decodeChartWorkbook, mergeChartContent, chartBytesToBase64, chartBase64ToBytes } from './part-content.ts';
 export type { ChartContent } from './part-content.ts';
 export { bindChartData } from './data-binding.ts';
+export { bindChartTheme } from './theme.ts';

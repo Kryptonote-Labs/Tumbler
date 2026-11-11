@@ -45,7 +45,7 @@ function bindWorkbook(source: Uint8Array, input: SpreadsheetArtifact, onlyUnboun
   const categoryBindings = new Map<string, ChartEditableSequence>();
   const plots = readChartData(source).map(plot => ({ ...plot, series: plot.series.map(series => {
     const categoryKey = series.categories && JSON.stringify({ kind: series.categories.kind, values: series.categories.values, levels: series.categories.levels });
-    const categories = categoryKey && categoryBindings.has(categoryKey) ? categoryBindings.get(categoryKey) : sequence(series.categories, 'Category');
+    const categories = onlyUnbound && series.categories?.formula !== undefined ? series.categories : categoryKey && categoryBindings.has(categoryKey) ? categoryBindings.get(categoryKey) : sequence(series.categories, 'Category');
     if (categoryKey && categories) categoryBindings.set(categoryKey, categories);
     const xValues = sequence(series.xValues, 'X');
     const valueColumn = column;

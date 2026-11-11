@@ -10,16 +10,16 @@ export interface ChartSourceSeries {
 
 export interface CreateChartOptions {
   readonly type: OoxmlChartType;
-  readonly conformance?: 'strict' | 'transitional';
-  readonly title?: string;
+  readonly conformance?: 'strict' | 'transitional' | undefined;
+  readonly title?: string | undefined;
   readonly categories: readonly string[];
   readonly series: readonly ChartSourceSeries[];
-  readonly direction?: 'bar' | 'col';
-  readonly grouping?: 'standard' | 'clustered' | 'stacked' | 'percentStacked';
-  readonly radarStyle?: 'standard' | 'marker' | 'filled';
-  readonly scatterStyle?: 'none' | 'line' | 'lineMarker' | 'marker' | 'smooth' | 'smoothMarker';
-  readonly splitType?: 'pie' | 'bar';
-  readonly wireframe?: boolean;
+  readonly direction?: 'bar' | 'col' | undefined;
+  readonly grouping?: 'standard' | 'clustered' | 'stacked' | 'percentStacked' | undefined;
+  readonly radarStyle?: 'standard' | 'marker' | 'filled' | undefined;
+  readonly scatterStyle?: 'none' | 'line' | 'lineMarker' | 'marker' | 'smooth' | 'smoothMarker' | undefined;
+  readonly splitType?: 'pie' | 'bar' | undefined;
+  readonly wireframe?: boolean | undefined;
 }
 
 function escape(value: string): string {

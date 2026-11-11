@@ -7,6 +7,7 @@ import { isOoxmlChartType } from './chart-types.ts';
 
 export type ChartTypeChange = Pick<CreateChartOptions, 'type' | 'direction' | 'grouping' | 'radarStyle' | 'scatterStyle' | 'splitType' | 'wireframe'>;
 const HISTORY_NS = 'urn:tumblerjs:chart-authoring';
+const IDENTITY_URI = 'https://tumblerjs.org/chart-authoring/plot-identity/v1';
 const HISTORY_URI = 'https://tumblerjs.org/chart-authoring/type-history/v1';
 
 /** Capture namespace bindings so moved or temporarily inactive properties remain self-contained. */
@@ -55,14 +56,17 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
   const properties = findNode(chartPropertyTree(created.document.originalBytes()), target.id)!;
   const historyContainer = source.children(source.document.root, 'extLst')[0];
   const historyExtension = historyContainer?.children.find((child): child is LosslessXmlElement => child.kind === 'element' && child.attributes.some(attribute => attribute.localName === 'uri' && attribute.value === HISTORY_URI));
+  const identity = source.document.elements(HISTORY_NS, 'identity').find(element => element.span.start >= original.span.start && element.span.end <= original.span.end);
+  const plotId = identity?.attributes.find(attribute => attribute.localName === 'id')?.value ?? crypto.randomUUID();
   const histories = new Map<string, string>();
   if (historyExtension) for (const entry of source.document.elements(HISTORY_NS, 'plot').filter(entry => entry.span.start > historyExtension.span.start && entry.span.end < historyExtension.span.end)) {
     const type = entry.attributes.find(attribute => attribute.localName === 'type')?.value;
-    if (type) histories.set(type, source.document.textContent(entry));
+    const id = entry.attributes.find(attribute => attribute.localName === 'plot')?.value ?? (plots.length === 1 ? plotId : undefined);
+    if (type && id) histories.set(`${id}/${type}`, source.document.textContent(entry));
   }
-  const archivedXml = histories.get(change.type);
+  const archivedXml = histories.get(`${plotId}/${change.type}`);
   const archived = archivedXml ? parseLosslessXml(new TextEncoder().encode(archivedXml)) : undefined;
-  histories.set(original.localName, standalone(source.document, original));
+  histories.set(`${plotId}/${original.localName}`, standalone(source.document, original));
   const elementChildren = (element: LosslessXmlElement | undefined) => element?.children.filter((child): child is LosslessXmlElement => child.kind === 'element' && child.namespaceUri === source.namespace) ?? [];
   const currentSeries = source.children(original, 'ser');
   const archivedSeries = elementChildren(archived?.root).filter(child => child.localName === 'ser');
@@ -109,13 +113,20 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
   const axes = source.children(source.plotArea).filter(element => ['catAx', 'valAx', 'dateAx', 'serAx'].includes(element.localName));
   let nextId = Math.max(0, ...axes.map(axis => Number(source.children(axis, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value ?? 0))) + 1;
   const generatedAxes = created.children(created.plotArea).filter(element => ['catAx', 'valAx', 'serAx'].includes(element.localName));
+  const originalAxisIds = source.children(original, 'axId').map(axis => Number(axis.attributes.find(attribute => attribute.localName === 'val')?.value));
+  const archivedAxisIds = elementChildren(archived?.root).filter(axis => axis.localName === 'axId').map(axis => Number(axis.attributes.find(attribute => attribute.localName === 'val')?.value));
+  const archivedAxes = archivedAxisIds.map(id => axes.find(axis => Number(source.children(axis, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value) === id));
+  const otherAxisIds = new Set(plots.filter(plot => plot !== original).flatMap(plot => source.children(plot, 'axId').map(axis => Number(axis.attributes.find(attribute => attribute.localName === 'val')?.value))));
+  const originalAxes = originalAxisIds.map(id => axes.find(axis => Number(source.children(axis, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value) === id));
   const used = new Set<number>();
   const mapping = new Map<number, number>();
   const additions: string[] = [];
   for (const axis of generatedAxes) {
     const originalId = Number(created.children(axis, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value);
     const position = created.children(axis, 'axPos')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value;
-    const existing = axes.find(candidate => candidate.localName === axis.localName && !used.has(candidate.id) && source.children(candidate, 'axPos')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value === position);
+    const owned = originalAxes[generatedAxes.indexOf(axis)];
+    const savedAxis = archivedAxes[generatedAxes.indexOf(axis)];
+    const existing = owned?.localName === axis.localName && !used.has(owned.id) ? owned : savedAxis?.localName === axis.localName && !used.has(savedAxis.id) ? savedAxis : axes.find(candidate => !originalAxisIds.length && !otherAxisIds.has(Number(source.children(candidate, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value)) && candidate.localName === axis.localName && !used.has(candidate.id) && source.children(candidate, 'axPos')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value === position);
     if (existing) {
       used.add(existing.id);
       mapping.set(originalId, Number(source.children(existing, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value));
@@ -138,6 +149,18 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
     const targetId = mapping.get(cross);
     if (reference && targetId !== undefined && reference.value !== String(targetId)) edit.setAttribute(reference, String(targetId));
   }
+  {
+    const document = parseLosslessXml(new TextEncoder().encode(converted));
+    if (!document.elements(HISTORY_NS, 'identity').length) {
+      const edit = beginLosslessXmlEdit(document);
+      const ext = document.root.children.find((child): child is LosslessXmlElement => child.kind === 'element' && child.namespaceUri === source.namespace && child.localName === 'extLst');
+      const content = `<c:ext xmlns:c="${source.namespace}" uri="${IDENTITY_URI}"><tb:identity xmlns:tb="${HISTORY_NS}" id="${plotId}"/></c:ext>`;
+      if (ext && !ext.selfClosing) edit.appendMarkup(ext, content);
+      else if (ext) edit.replaceElementMarkup(ext, `<c:extLst xmlns:c="${source.namespace}">${content}</c:extLst>`);
+      else edit.appendMarkup(document.root, `<c:extLst xmlns:c="${source.namespace}">${content}</c:extLst>`);
+      converted = new TextDecoder().decode(edit.commit().bytes);
+    }
+  }
   converted = remap(converted);
   edit.replaceElementMarkup(original, converted);
   for (const axis of additions) {
@@ -148,7 +171,7 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
     const view = created.children(created.chart, 'view3D')[0];
     if (view) edit.insertMarkupBefore(source.plotArea, standalone(created.document, view));
   }
-  const history = `<c:ext xmlns:c="${source.namespace}" uri="${HISTORY_URI}"><tb:history xmlns:tb="${HISTORY_NS}">${[...histories].map(([type, xml]) => `<tb:plot type="${chartXmlText(type)}">${chartXmlText(xml)}</tb:plot>`).join('')}</tb:history></c:ext>`;
+  const history = `<c:ext xmlns:c="${source.namespace}" uri="${HISTORY_URI}"><tb:history xmlns:tb="${HISTORY_NS}">${[...histories].map(([key, xml]) => { const [plot, type] = key.split('/'); return `<tb:plot plot="${chartXmlText(plot!)}" type="${chartXmlText(type!)}">${chartXmlText(xml)}</tb:plot>`; }).join('')}</tb:history></c:ext>`;
   if (historyExtension) edit.replaceElementMarkup(historyExtension, history);
   else if (historyContainer && !historyContainer.selfClosing) edit.appendMarkup(historyContainer, history);
   else if (historyContainer) edit.replaceElementMarkup(historyContainer, `<c:extLst xmlns:c="${source.namespace}">${history}</c:extLst>`);

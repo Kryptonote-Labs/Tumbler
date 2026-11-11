@@ -50,3 +50,20 @@ test('chart insertion into an existing document copies the complete workbook rel
   if (drawing?.kind !== 'chart') return;
   expect(readChartContent(saved.document.package, drawing.partName).workbook).toBeDefined();
 });
+
+test('new and imported charts compose inline titles with type/data edits before export', () => {
+  const authored = chart();
+  const native = new NativeWordDocument({ content: [{ kind: 'paragraph', runs: [{ text: '\uFFFC', chart: authored, chartTitle: 'Authored title' }] }] });
+  expect([...native.drawings.values()][0]).toMatchObject({ kind: 'chart', model: { title: 'Authored title' } });
+  expect([...native.artifact().document.drawings.values()][0]).toMatchObject({ kind: 'chart', model: { title: 'Authored title' } });
+  const source = createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', chart: authored }] }] });
+  const document = new NativeWordDocument({ source });
+  const changed = { ...authored.content, xml: new TextDecoder().decode(convertChartType(new TextEncoder().encode(authored.content.xml), { type: 'areaChart' })) };
+  document.update(importWordContent(source).map(block => block.kind !== 'paragraph' ? block : { ...block, runs: block.runs.map(run => run.text === '\uFFFC' ? { ...run, chartContent: changed, chartTitle: 'Updated title' } : run) }));
+  expect([...document.drawings.values()][0]).toMatchObject({ kind: 'chart', model: { kind: 'area', title: 'Updated title' } });
+  expect([...document.artifact().document.drawings.values()][0]).toMatchObject({ kind: 'chart', model: { kind: 'area', title: 'Updated title' } });
+});
+
+test('chart authoring rejects a base64 payload that is not a workbook package', () => {
+  expect(() => createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', chart: { ...chart(), content: { ...chart().content, workbook: 'YQ==' } } }] }] })).toThrow();
+});

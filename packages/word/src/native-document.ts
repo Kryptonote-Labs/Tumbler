@@ -1,5 +1,5 @@
-import { nativeChartDrawing } from './authored-chart.ts';
-import { chartContentModel } from '@tumblerjs/charts';
+import { authoredChartContent, nativeChartDrawing } from './authored-chart.ts';
+import { chartContentModel, bindChartTheme, readChartContent, mergeChartContent } from '@tumblerjs/charts';
 import { nativeTableRowGrids } from './native-table-grid.ts';
 import { validateWordSectionReferences } from './section-format.ts';
 import { wordKerningHalfPoints } from './font-kerning.ts';
@@ -574,7 +574,8 @@ export class NativeWordDocument implements WordLayoutSource {
               if (authoredRun.chart) {
                 if (authoredRun.text !== '\uFFFC') throw new TypeError('Charts occupy one object character.');
                 const id = allocate(); contents.push({ kind: 'drawing', elementId: id });
-                media.push(withWordDrawingGeometry(nativeChartDrawing(id, { ...authoredRun.chart, ...(authoredRun.chartContent ? { content: authoredRun.chartContent } : {}) }, width), authoredRun.drawing));
+                const chart = nativeChartDrawing(id, { ...authoredRun.chart, content: authoredChartContent(authoredRun)! }, width);
+                media.push(withWordDrawingGeometry({ ...chart, model: bindChartTheme(chart.model, this.themeColours, this.namedStyles.themeFonts) }, authoredRun.drawing));
               } else if (authoredRun.ink) {
                 if (authoredRun.text !== '\uFFFC' || authoredRun.shape || authoredRun.image || authoredRun.field) throw new TypeError('Ink occupies one object character.');
                 const id = allocate(); contents.push({ kind: 'drawing', elementId: id });
@@ -623,8 +624,9 @@ export class NativeWordDocument implements WordLayoutSource {
                 if (drawing) {
                   let updated = withWordInkTraces(withWordDrawingGeometry(drawing, authoredRun.drawing), authoredRun.inkTraces);
                   if (updated.kind === 'chart' && authoredRun.chartContent) {
-                    const model = chartContentModel(authoredRun.chartContent);
-                    updated = { ...updated, content: authoredRun.chartContent, model: { ...model, ...(updated.model.themeColors ? { themeColors: updated.model.themeColors } : {}), ...(updated.model.themeFonts ? { themeFonts: updated.model.themeFonts } : {}) } };
+                    const content = authoredRun.chartContent.workbook === undefined ? mergeChartContent(readChartContent(compiled!.artifact.document.package, updated.partName), authoredRun.chartContent) : authoredRun.chartContent;
+                    const model = chartContentModel(content);
+                    updated = { ...updated, content, model: { ...model, ...(updated.model.themeColors ? { themeColors: updated.model.themeColors } : {}), ...(updated.model.themeFonts ? { themeFonts: updated.model.themeFonts } : {}) } };
                   }
                   if (updated.kind === 'chart' && (authoredRun.chartTitle !== undefined || authoredRun.chartTitleText !== undefined)) {
                     const { titleFormula: _formula, titleText: _text, ...model } = updated.model;

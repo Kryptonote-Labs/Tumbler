@@ -23,3 +23,14 @@ test('formula-backed cached data retains the reference, numeric format and categ
   expect(updated.values).toMatchObject({ values: [3, 4], formula: 'Sheet1!C1:C2', formatCode: '0.00' });
   expect(updated.categories?.levels).toEqual(data[0]?.series[0]?.categories?.levels);
 });
+
+test('changing a referenced series title retains cache and reference extension metadata', () => {
+  const original = createOoxmlChart({ type: 'lineChart', categories: ['A'], series: [{ name: 'Old', values: [1] }] });
+  const metadata = '<c:extLst><c:ext uri="cache"><x:keep xmlns:x="urn:test"/></c:ext></c:extLst>';
+  const referenceMetadata = '<c:extLst><c:ext uri="reference"><x:keep xmlns:x="urn:test"/></c:ext></c:extLst>';
+  const source = new TextEncoder().encode(new TextDecoder().decode(original).replace('<c:tx><c:v>Old</c:v></c:tx>', `<c:tx><c:strRef><c:f>Sheet1!B1</c:f><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>Old</c:v></c:pt>${metadata}</c:strCache>${referenceMetadata}</c:strRef></c:tx>`));
+  const updated = updateChartData(source, readChartData(source).map(plot => ({ ...plot, series: plot.series.map(series => ({ ...series, name: 'New' })) })));
+  expect(new TextDecoder().decode(updated)).toContain(metadata);
+  expect(new TextDecoder().decode(updated)).toContain(referenceMetadata);
+  expect(readChartData(updated)[0]?.series[0]?.name).toBe('New');
+});

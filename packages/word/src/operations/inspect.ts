@@ -1,3 +1,4 @@
+import { readChartContent, mergeChartContent } from '@tumblerjs/charts';
 import { wordChartTitleText } from "../chart-title.ts";
 import type * as Y from "yjs";
 import * as z from 'zod';
@@ -57,4 +58,22 @@ export function inspectWordObjects(text: Y.Text, source: WordArtifact | undefine
 }
 export function inspectWordStyles(source?: WordArtifact) {
   return { styles: source?.document.styles.styles ?? [], builtins: WORD_BUILTIN_STYLES };
+}
+
+/** Explicit chart inspection exposes source only when requested, with exact object ranges. */
+export function inspectWordCharts(text: Y.Text, source: WordArtifact | undefined, region = 'body') {
+  const charts: { part: string; name: string; start: number; end: number; content: import('@tumblerjs/charts').ChartContent }[] = [];
+  let offset = 0;
+  for (const item of text.toDelta() as { insert: string; attributes?: TextAttributes }[]) {
+    const attributes = item.attributes ?? {};
+    const original = attributes.wordSource === undefined ? undefined : source?.document.drawings.get(attributes.wordSource);
+    const originalContent = attributes.chart?.content ?? (original?.kind === 'chart' && source ? readChartContent(source.document.package, original.partName) : undefined);
+    const content = attributes.chartContent ? originalContent ? mergeChartContent(originalContent, attributes.chartContent) : attributes.chartContent : originalContent;
+    if (content) for (let index = 0; index < item.insert.length; index++) if (item.insert[index] === '\uFFFC') {
+      const start = offset + index;
+      charts.push({ part: `chart:${encodeURIComponent(region)}:${start}`, name: original?.name ?? `Chart ${charts.length + 1}`, start, end: start + 1, content });
+    }
+    offset += item.insert.length;
+  }
+  return charts;
 }

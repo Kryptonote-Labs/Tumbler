@@ -26,3 +26,12 @@ test('embedded chart workbook recalculates formulas and preserves unchanged lite
   expect(chart[0]?.series[0]?.values?.values).toEqual([15, 4]);
   expect(chart[0]?.series[0]?.categories?.values).toEqual(['A', 'Changed']);
 });
+
+test('extending a chart workbook preserves separate bound ranges with identical cached labels', async () => {
+  const { extendChartWorkbook } = await import('../src/index.ts');
+  const { bindChartData } = await import('@tumblerjs/charts');
+  const source = createOoxmlChart({ type: 'lineChart', categories: ['A', 'B'], series: [{ name: 'One', values: [1, 2] }, { name: 'Two', values: [3, 4] }] });
+  const bound = bindChartData(source, readChartData(source).map(plot => ({ ...plot, series: plot.series.map((series, index) => ({ ...series, categories: { ...series.categories!, formula: `Sheet1!${index ? 'C' : 'A'}2:${index ? 'C' : 'A'}3` } })) })));
+  const extended = readChartData(extendChartWorkbook(bound, createSpreadsheet()).source);
+  expect(extended[0]?.series.map(series => series.categories?.formula)).toEqual(['Sheet1!A2:A3', 'Sheet1!C2:C3']);
+});

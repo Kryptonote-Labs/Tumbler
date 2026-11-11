@@ -1,4 +1,5 @@
-import { inspectChartSource, chartContentModel, chartBase64ToBytes, type ChartContent } from '@tumblerjs/charts';
+import { chartTitleFromWord } from './chart-title.ts';
+import { inspectChartSource, chartContentModel, updateChartTitle, decodeChartWorkbook, mergeChartContent, type ChartContent } from '@tumblerjs/charts';
 import { PartName } from '@tumblerjs/opc';
 import type { WordChartDrawing } from './drawings.ts';
 import { imagePlacement, type WordImagePosition } from './image-placement.ts';
@@ -16,7 +17,7 @@ export function isWordChartContent(value: unknown): value is ChartContent {
     const bytes = new TextEncoder().encode(value.xml);
     const root = inspectChartSource(bytes);
     if (!root.namespace.endsWith('/chart') || !root.children.some(child => child.name.split(':').at(-1) === 'chart' && child.children.some(child => child.name.split(':').at(-1) === 'plotArea'))) return false;
-    if ('workbook' in value && typeof value.workbook === 'string') chartBase64ToBytes(value.workbook);
+    if ('workbook' in value && typeof value.workbook === 'string') decodeChartWorkbook(value.workbook);
     return true;
   } catch { return false; }
 }
@@ -29,4 +30,12 @@ export function isWordAuthoredChart(value: unknown): value is WordAuthoredChart 
 export function nativeChartDrawing(id: number, chart: WordAuthoredChart, availableWidth: number): WordChartDrawing {
   if (!isWordAuthoredChart(chart)) throw new TypeError('Invalid chart content or geometry.');
   return { ...nativeDrawingGeometry(id, chart, availableWidth, 'Chart'), kind: 'chart', partName: PartName.parse(`/word/charts/native-${id}.xml`), relationshipId: `native-chart-${id}`, model: chartContentModel(chart.content), content: chart.content };
+}
+
+/** Inline title editing and property-pane edits compose before persistence. */
+export function authoredChartContent(run: Pick<import('./create.ts').WordTextRun, 'chart' | 'chartContent' | 'chartTitle' | 'chartTitleText'>): ChartContent | undefined {
+  const content = run.chartContent ? run.chart ? mergeChartContent(run.chart.content, run.chartContent) : run.chartContent : run.chart?.content;
+  if (!content || run.chartTitle === undefined && run.chartTitleText === undefined) return content;
+  const source = new TextEncoder().encode(content.xml);
+  return { ...content, xml: new TextDecoder().decode(updateChartTitle(source, run.chartTitleText ? chartTitleFromWord(run.chartTitleText) : run.chartTitle!)) };
 }

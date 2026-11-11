@@ -25,8 +25,9 @@ function chartTarget(document: PresentationDocument, slideId: string, objectKey:
 
 export function presentationChartContent(document: PresentationDocument, slideId: string, objectKey: string): ChartContent {
   const existing = document.slides.find(slide => slide.id === slideId)?.objects.find(object => object.key === objectKey)?.chartContent;
-  if (existing) return existing;
-  return readChartContent(document.package, chartTarget(document, slideId, objectKey).partName);
+  if (existing?.workbook !== undefined) return existing;
+  const content = readChartContent(document.package, chartTarget(document, slideId, objectKey).partName);
+  return existing ? { ...content, ...existing, ...(existing.workbook === undefined && content.workbook !== undefined ? { workbook: content.workbook } : {}) } : content;
 }
 
 export function editPresentationChart(artifact: PresentationArtifact, slideId: string, objectKey: string, content: ChartContent): PresentationArtifact {
