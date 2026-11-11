@@ -91,10 +91,11 @@ Authored preset/custom dash patterns, caps and joins reach SVG and canvas stroke
 Linear, radial and rectangular gradients retain theme colours and alpha transforms on
 2D series, points, markers, labels, areas and legend swatches. Rectangular path gradients
 retain the full focus rectangle. Radial focus size, tiled/flipped gradients, gradient
-strokes, picture/pattern fills and effects still need renderer work. Their XML remains editable.
+strokes, pattern fills and effects still need renderer work. Their XML remains editable.
 Data labels support value/category/series/percentage/bubble-size flags, custom text,
 point deletion and number formats. Rich label text, leader lines, exact Office
-bubble-size normalization and three-dimensional bubble effects remain incomplete.
+bubble-size normalization remain incomplete. Three-dimensional bubble shading is rendered
+when enabled at the plot, series or point.
 
 Unstacked categorical and XY plots support linear, exponential, logarithmic,
 polynomial, power and moving-average trendlines. Forecasts reserve visible domain

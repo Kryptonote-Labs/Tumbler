@@ -76,3 +76,29 @@ test('older native chart snapshots gain portable resources before partial loadin
   expect(partial.state.revisionKey).toBe(inserted.state.revisionKey);
   expect(openPresentationArtifact(restored.bytes()).document.slides[0]!.objects.some(o => o.kind === 'chart')).toBe(true);
 });
+
+test.each(['layout', 'master'] as const)('native chart content follows its %s owner', async owner => {
+  const { beginPackageTransaction } = await import('@tumblerjs/opc');
+  const base = createPresentation(), slideId = base.document.slides[0]!.id;
+  const inserted = applyPresentationCommand(base, { name: 'insert-chart', slideId, bounds: { x: 10, y: 10, width: 400, height: 300 }, content });
+  const pkg = inserted.document.package, part = pkg.getPart(inserted.document.slides[0]!.part)!;
+  const relations = pkg.relationships(part.name), layoutRel = relations.items.find(r => r.type.endsWith('/slideLayout'))!, chartRel = relations.items.find(r => r.type.endsWith('/chart'))!;
+  if (layoutRel.targetMode !== 'Internal' || chartRel.targetMode !== 'Internal') throw Error('Internal chart and layout expected.');
+  let target = pkg.getPart(layoutRel.targetPartName)!;
+  if (owner === 'master') {
+    const relation = pkg.relationships(target.name).items.find(r => r.type.endsWith('/slideMaster'))!;
+    if (relation.targetMode !== 'Internal') throw Error('Internal master expected.');
+    target = pkg.getPart(relation.targetPartName)!;
+  }
+  const source = new TextDecoder().decode(pkg.readPart(part)), inherited = new TextDecoder().decode(pkg.readPart(target));
+  const frame = source.match(/<p:graphicFrame[\s\S]*?<\/p:graphicFrame>/)![0];
+  const edit = beginPackageTransaction(pkg);
+  edit.replacePart(part.name, new TextEncoder().encode(source.replace(frame, '')));
+  edit.replacePart(target.name, new TextEncoder().encode(inherited.replace('</p:spTree>', frame.replace(/<p:cNvPr id="\d+"/, '<p:cNvPr id="900"') + '</p:spTree>')));
+  edit.removeRelationship(part.name, chartRel.id);
+  edit.addRelationship(target.name, { id: chartRel.id, type: chartRel.type, target: chartRel.targetPartName });
+  const native = importNativePresentation(openPresentationArtifact(edit.commit()));
+  const chart = native.document.slides[0]!.objects.find(o => o.kind === 'chart')!;
+  expect(chart.layer).toBe(owner);
+  expect(presentationChartContent(native.document, slideId, chart.key).xml).toBe(content.xml);
+});
