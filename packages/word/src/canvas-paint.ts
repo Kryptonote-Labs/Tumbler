@@ -20,7 +20,7 @@ import { resolveWordColour } from "./theme-colours.ts";
  * The drawing subset of a Canvas 2D context. Browser, OffscreenCanvas and server canvases satisfy
  * it; `Path` is the host's Path2D.
  */
-export interface WordCanvasContext<Image, Path = unknown> extends Omit<DrawingGradientCanvasContext, "fill">, Omit<ChartCanvasContext<Path>, "createLinearGradient" | "createRadialGradient">, WordCanvasTextContext, WordInkPixelContext {
+export interface WordCanvasContext<Image, Path = unknown> extends Omit<DrawingGradientCanvasContext, "fill">, Omit<ChartCanvasContext<Path, Image>, "createLinearGradient" | "createRadialGradient">, WordCanvasTextContext, WordInkPixelContext {
   clip(path?: Path): void;
   direction: "inherit" | "ltr" | "rtl";
   fontKerning?: "auto" | "none" | "normal";
@@ -270,6 +270,7 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
     // Charts lay out in CSS pixels, as the editor draws them.
     const pixels = 4 / 3;
     const scene = layoutChartScene(drawing.model, fragment.width * pixels, fragment.height * pixels, {
+      patternOrigin: { x: fragment.x * pixels, y: fragment.y * pixels },
       measureText: (text, font) => {
         options.prepareFont?.(font);
         context.font = font;
@@ -281,7 +282,7 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
     context.translate(fragment.x, fragment.y);
     context.scale(1 / pixels, 1 / pixels);
     for (const mark of scene.marks) if (mark.kind === 'text') options.prepareFont?.(mark.font.family);
-    paintChartScene(context, scene, options.path, { picture: (fill, width, height) => {
+    paintChartScene(context, scene, options.path, { image: options.chartImage, picture: (fill, width, height) => {
       const decoded = options.chartImage?.(fill);
       if (decoded) paintDrawingPicture(context, fill, width, height, decoded);
     } });

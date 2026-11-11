@@ -2,7 +2,7 @@ import type { ChartCanvasContext } from '@tumblerjs/charts';
 import type { DrawingPictureFill } from './appearance.ts';
 
 /** Portable subset satisfied by browser and server Canvas 2D implementations. */
-export interface SlideCanvasContext<Path, Image> extends ChartCanvasContext<Path> {
+export interface SlideCanvasContext<Path, Image> extends ChartCanvasContext<Path, Image> {
   transform(a: number, b: number, c: number, d: number, e: number, f: number): void;
   scale(x: number, y: number): void;
   fillRect(x: number, y: number, width: number, height: number): void;

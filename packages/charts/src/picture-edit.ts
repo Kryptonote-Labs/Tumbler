@@ -4,42 +4,17 @@ import { chartPropertyTree, insertChartProperty, type ChartPropertyNode } from '
 import { editChartSource } from './source-edit.ts';
 import { chartXml, chartXmlText } from './source-xml.ts';
 
-const local = (node: ChartPropertyNode) => node.name.split(':').at(-1);
-function pathTo(node: ChartPropertyNode, id: number): readonly number[] | undefined {
-  if (node.id === id) return [];
-  for (const [index, child] of node.children.entries()) { const path = pathTo(child, id); if (path) return [index, ...path]; }
-  return undefined;
-}
-function at(root: ChartPropertyNode, path: readonly number[]) { return path.reduce((node, index) => node.children[index]!, root); }
+import { chartPropertyLocalName as local, chartPropertyAt as at, canSetChartFill, prepareChartFill } from './fill-target.ts';
 
-export function canSetChartPicture(node: ChartPropertyNode): boolean {
-  const shape = local(node) === 'spPr' ? node : node.children.find(child => local(child) === 'spPr');
-  return shape ? shape.children.some(child => local(child) === 'blipFill') || shape.availableChildren.some(child => child.definition.endsWith('/a:blipFill')) : node.availableChildren.some(child => child.definition.endsWith('/c:spPr'));
-}
+export function canSetChartPicture(node: ChartPropertyNode): boolean { return canSetChartFill(node, 'blipFill'); }
 
 /** Attach an image to a snapshot-addressed fill, retaining crop, tiling and other existing effects.
  * Pass complete content from readChartContent to preserve all other related parts.
  */
 export function setChartPictureFill(content: ChartContent, nodeId: number, image: { readonly data: string; readonly contentType: string }): ChartContent {
   if (!image.contentType.startsWith('image/') || !chartBase64ToBytes(image.data).length) throw new TypeError('A picture fill requires image bytes and an image content type.');
-  let source: Uint8Array = new TextEncoder().encode(content.xml);
-  let tree = chartPropertyTree(source);
-  const path = pathTo(tree, nodeId);
-  if (!path) throw new RangeError('The chart fill target changed. Read the chart again.');
-  let owner = at(tree, path);
-  if (!canSetChartPicture(owner)) throw new TypeError('This chart property has no picture fill.');
-  let shapePath = path;
-  if (local(owner) !== 'spPr') {
-    let index = owner.children.findIndex(child => local(child) === 'spPr');
-    if (index < 0) {
-      const definition = owner.availableChildren.find(child => child.definition.endsWith('/c:spPr'))!;
-      source = insertChartProperty(source, owner.id, definition.definition);
-      tree = chartPropertyTree(source); owner = at(tree, path);
-      index = owner.children.findIndex(child => local(child) === 'spPr');
-    }
-    shapePath = [...path, index];
-  }
-  let shape = at(tree, shapePath), fill = shape.children.find(child => local(child) === 'blipFill');
+  let { source, tree, shapePath, shape } = prepareChartFill(new TextEncoder().encode(content.xml), nodeId, 'blipFill');
+  let fill = shape.children.find(child => local(child) === 'blipFill');
   const resources = content.resources ?? { parts: [], relationships: [] };
   const sourceXml = chartXml(source), drawing = sourceXml.namespace.replace(/chart$/, 'main');
   const relationshipNamespace = sourceXml.namespace.includes('purl.oclc.org') ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';

@@ -6,40 +6,8 @@ import { openPresentationArtifact, type PresentationArtifact } from './artifact.
 import { children, editable, slideById } from './authoring-slides.ts';
 import { partXml, A, R } from './authoring-xml.ts';
 
-/** Common presets currently read and displayed by the SVG renderer. */
-export const backgroundPatterns = [
-  'pct5',
-  'pct10',
-  'pct20',
-  'pct25',
-  'pct30',
-  'pct40',
-  'pct50',
-  'pct60',
-  'pct70',
-  'pct75',
-  'pct80',
-  'pct90',
-  'horz',
-  'vert',
-  'cross',
-  'diagCross',
-  'ltDnDiag',
-  'dkDnDiag',
-  'wdDnDiag',
-  'ltUpDiag',
-  'dkUpDiag',
-  'wdUpDiag',
-  'ltHorz',
-  'narHorz',
-  'dkHorz',
-  'ltVert',
-  'narVert',
-  'dkVert',
-  'smCheck',
-  'lgCheck',
-  'dotGrid',
-] as const;
+import { DRAWING_PATTERN_PRESETS } from '@tumblerjs/ooxml';
+export const backgroundPatterns = DRAWING_PATTERN_PRESETS;
 const color = z.string().regex(/^#[a-f\d]{6}$/i);
 const ratio = z.number().finite().min(0).max(1);
 const rect = z

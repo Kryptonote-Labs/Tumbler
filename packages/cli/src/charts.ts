@@ -1,5 +1,5 @@
 import { chartCreateInput, runChartCreation, type ChartCreationHost } from './chart-create.ts';
-import { CHART_BAR_SHAPES, OOXML_CHART_TYPES, chartResourcesSchema } from '@tumblerjs/charts';
+import { CHART_BAR_SHAPES, OOXML_CHART_TYPES, DRAWING_PATTERN_PRESETS, chartResourcesSchema } from '@tumblerjs/charts';
 import { z } from 'zod';
 
 const address = { node: z.number().int().nonnegative() };
@@ -19,7 +19,18 @@ const seriesEdit = z.discriminatedUnion('action', [
   z.object({ action: z.enum(['duplicate', 'remove']), plot: z.number().int().nonnegative().optional(), series: z.number().int().nonnegative() }).strict(),
   z.object({ action: z.literal('move'), plot: z.number().int().nonnegative().optional(), series: z.number().int().nonnegative(), to: z.number().int().nonnegative() }).strict(),
 ]);
+const colorTransforms = { transforms: z.array(z.object({ kind: z.enum(['lumMod', 'lumOff']), value: z.number().finite() }).strict()).optional() };
+const fillColor = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('rgb'), value: z.string().regex(/^#?[a-f\d]{6}$/i), ...colorTransforms }).strict(),
+  z.object({ kind: z.literal('scheme'), value: z.enum(['bg1', 'tx1', 'bg2', 'tx2', 'lt1', 'dk1', 'lt2', 'dk2', 'accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6', 'hlink', 'folHlink', 'phClr']), ...colorTransforms }).strict(),
+]);
+const normalizedFillColor = fillColor.transform(({ transforms, ...color }) => transforms === undefined ? color : { ...color, transforms });
+const fillEdit = z.discriminatedUnion('kind', [
+  z.object({ ...address, kind: z.literal('pattern'), preset: z.enum(DRAWING_PATTERN_PRESETS), foreground: normalizedFillColor.optional(), background: normalizedFillColor.optional() }).strict(),
+  z.object({ ...address, kind: z.enum(['automatic', 'none']) }).strict(),
+]);
 export const chartEditInput = z.union([
+  z.object({ ...chartTarget, fill: fillEdit }).strict(),
   z.object({ ...chartTarget, picture: z.object({ node: z.number().int().nonnegative(), data: z.string().min(1), contentType: z.string().min(1) }).strict() }).strict(),
   z.object({ ...chartTarget, resources: chartResourcesSchema, edits: z.array(chartSourceEdit).optional() }).strict(),
   z.object({ ...chartTarget, edits: z.array(chartSourceEdit).min(1) }).strict(),
@@ -44,6 +55,7 @@ export function chartHelp(commandName = 'tumbler', command?: string): string {
     'Source edits retain unknown properties and theme references. They validate XML, not chart schema, formulas, or referenced workbook consistency. Update linked workbook data through the sheet engine in the same host transaction.',
     'edit changes source properties, convert changes a plot type while retaining data and inactive formatting, and data changes embedded workbook cells and refreshes the chart. For XLSX source cells use sheets operations.',
     'Resource edits replace the complete related-part snapshot. Internal targets use resource keys; $chart refers to the owning chart. Each part contains base64 bytes, contentType and optional relationships. External URLs are retained and never fetched. Combine resources and source edits in one atomic edit.',
+    'Fill edits select any native pattern preset with optional theme/RGB colours, restore automatic inheritance, or author an explicit no-fill. Pattern selection retains existing colours and transforms unless new colours are supplied.',
     'A picture edit takes a snapshot node ID for a fill owner plus base64 image data and contentType. It attaches the native image and retains existing crop, tiling, effects and other resources.',
     JSON.stringify(z.toJSONSchema(command === 'create' ? chartCreateInput : chartEditInput, { io: 'input' }), null, 2),
   ].join('\n') + '\n';

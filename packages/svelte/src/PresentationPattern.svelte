@@ -1,16 +1,10 @@
 <script lang="ts">
-  import { drawingPatternGeometry, type SlideObject } from '@tumblerjs/slides';
-  let { pattern, id }: { pattern: NonNullable<SlideObject['pattern']>; id: string } = $props();
-  const geometry = $derived(drawingPatternGeometry(pattern.preset));
+  import { drawingPatternPicture, type DrawingPattern } from '@tumblerjs/ooxml';
+  let { pattern, id, light = 1, origin = { x: 0, y: 0 } }: { pattern: DrawingPattern; id: string; light?: number | undefined; origin?: { readonly x: number; readonly y: number } } = $props();
+  const href = $derived(`data:image/png;base64,${btoa(String.fromCharCode(...drawingPatternPicture(pattern).bytes))}`);
 </script>
 
-<pattern {id} patternUnits="userSpaceOnUse" width={geometry.size} height={geometry.size}>
-  <rect width="100%" height="100%" fill={pattern.background} />
-  {#each geometry.rects as rect}<rect {...rect} fill={pattern.foreground} />{/each}
-  {#if geometry.path}<path
-      d={geometry.path}
-      fill={geometry.filled ? pattern.foreground : 'none'}
-      stroke={geometry.filled ? 'none' : pattern.foreground}
-      stroke-width={geometry.strokeWidth}
-    />{/if}
+<pattern {id} patternUnits="userSpaceOnUse" x={-origin.x} y={-origin.y} width="8" height="8">
+  {#if light !== 1}<defs><filter id={`${id}-light`} x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB"><feComponentTransfer><feFuncR type="linear" slope={light}/><feFuncG type="linear" slope={light}/><feFuncB type="linear" slope={light}/></feComponentTransfer></filter></defs>{/if}
+  <image {href} width="8" height="8" filter={light !== 1 ? `url(#${id}-light)` : undefined} />
 </pattern>

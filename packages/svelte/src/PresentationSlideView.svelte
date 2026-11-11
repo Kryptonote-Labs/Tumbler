@@ -1093,6 +1093,7 @@
                   ><div class="chart-frame">
                     <OoxmlChart
                       model={object.chart}
+                      patternOrigin={{ x: object.matrix[4], y: object.matrix[5] }}
                       width={w}
                       height={h}
                       clipId={`${viewId}-slide-chart-${object.elementId}`}

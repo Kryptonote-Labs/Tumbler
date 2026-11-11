@@ -184,7 +184,7 @@
       <img data-word-ink-rendering={drawing.inkRendering} src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading={imageLoading} decoding="async" style={`position:absolute;left:${painted.x / drawing.widthPoints * 100}%;top:${painted.y / drawing.heightPoints * 100}%;width:${painted.width / drawing.widthPoints * 100}%;height:${painted.height / drawing.heightPoints * 100}%`} />
     {/if}
   {:else if drawing.kind === 'chart'}
-    <OoxmlChart model={drawing.model} width={displayWidth} height={displayHeight} clipId={`word-drawing-${drawing.elementId}`} />
+    <OoxmlChart patternOrigin={{ x: wordPointsToCssPixels(preview?.x ?? pageX), y: wordPointsToCssPixels(preview?.y ?? pageY) }} model={drawing.model} width={displayWidth} height={displayHeight} clipId={`word-drawing-${drawing.elementId}`} />
   {:else}
     <div class="fallback" role="img" aria-label={drawing.altText ?? 'Drawing preview unavailable'}></div>
   {/if}

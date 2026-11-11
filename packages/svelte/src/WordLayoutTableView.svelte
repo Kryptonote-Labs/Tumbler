@@ -111,7 +111,7 @@
           {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "shape"}
             <div class="document-drawing shape-drawing" style={drawingStyle(fragment)}><WordShapeView shape={fragment.drawing.shape} /></div>
           {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
-            <div class="document-drawing" style={drawingStyle(fragment)}><OoxmlChart model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-table-chart-${pageIndex}-${fragment.contentElementId}`} /></div>
+            <div class="document-drawing" style={drawingStyle(fragment)}><OoxmlChart patternOrigin={{ x: wordPointsToCssPixels(fragment.x), y: wordPointsToCssPixels(fragment.y) }} model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-table-chart-${pageIndex}-${fragment.contentElementId}`} /></div>
           {:else if fragment.kind === "drawing"}
             <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment)}></div>
           {/if}

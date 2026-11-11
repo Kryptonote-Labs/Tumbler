@@ -44,6 +44,7 @@
     />{/if}
   {#if object.pattern}<PresentationPattern
       pattern={object.pattern}
+      origin={{ x: object.matrix[4], y: object.matrix[5] }}
       id={`${id}-pattern`}
     />{/if}
   {#if object.shadow || object.effects?.length}<PresentationEffects

@@ -35,7 +35,7 @@
     </table>
     {#each sheet.drawing?.charts ?? [] as chart,n}
       {@const bounds = spreadsheetDrawingBounds(chart.anchor,rows,columns)}
-      <div style={`position:absolute;left:${bounds.x-columns.start(page.range.start.column)}px;top:${bounds.y-rows.start(page.range.start.row)}px;width:${bounds.width}px;height:${bounds.height}px`}><SpreadsheetChart worksheet={sheet} model={charts[n]!} width={bounds.width} height={bounds.height} clipId={`print-${i}-${n}`} /></div>
+      <div style={`position:absolute;left:${bounds.x-columns.start(page.range.start.column)}px;top:${bounds.y-rows.start(page.range.start.row)}px;width:${bounds.width}px;height:${bounds.height}px`}><SpreadsheetChart patternOrigin={{ x: bounds.x, y: bounds.y }} worksheet={sheet} model={charts[n]!} width={bounds.width} height={bounds.height} clipId={`print-${i}-${n}`} /></div>
     {/each}
     </div>
   </section>

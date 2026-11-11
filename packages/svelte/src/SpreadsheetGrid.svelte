@@ -874,6 +874,7 @@
   >
     {#if !readonly && worksheet.drawing && objectSelection===spreadsheetDrawingObjectId(worksheet.drawing,chart.frame.anchor)}<span class="drawing-resize" data-resize></span>{/if}
     <SpreadsheetChart
+      patternOrigin={{ x: chart.bounds.x, y: chart.bounds.y }}
       {worksheet}
       model={chart.model}
       width={Math.max(1, chart.bounds.width)}

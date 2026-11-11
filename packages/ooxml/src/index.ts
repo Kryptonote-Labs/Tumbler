@@ -87,3 +87,6 @@ export { formatOoxmlNumber } from './number-format.ts';
 
 export { readDrawingStrokeProperties, type DrawingStrokeProperties } from './drawing-line.ts';
 export { drawingPictureGeometry, paintDrawingPicture, type DrawingPictureFill, type DrawingPictureCanvasContext } from './picture-fill.ts';
+export { DRAWING_PATTERN_PRESETS, type DrawingPatternPreset } from './pattern-presets.ts';
+export { drawingPatternGeometry, drawingPatternPaint, drawingPatternPicture, paintDrawingPattern, isDrawingPatternPreset, type DrawingPattern, type DrawingPatternCanvasContext, type DrawingCanvasPattern } from './pattern-fill.ts';
+export { encodeRgbaPng } from './png.ts';

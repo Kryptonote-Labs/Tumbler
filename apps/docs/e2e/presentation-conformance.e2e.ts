@@ -222,7 +222,7 @@ test("rendering example shows decimal tabs, drawings, charts and playback togeth
     );
   expect(Math.max(...decimals) - Math.min(...decimals)).toBeLessThan(2);
   await page.getByLabel("Slide", { exact: true }).selectOption("1");
-  await expect(stage.locator("pattern image")).toHaveAttribute(
+  await expect(stage.getByRole('group', { name: 'Picture fill', exact: true }).locator("pattern image")).toHaveAttribute(
     "href",
     /^blob:/,
   );

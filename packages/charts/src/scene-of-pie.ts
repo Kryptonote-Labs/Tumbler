@@ -9,6 +9,7 @@ import type { ChartMark, SceneContext } from './scene-marks.ts';
 /** Translate generated subchart marks without changing their authored text or colours. */
 function move(mark: ChartMark, x: number, y: number): ChartMark {
   if (mark.fillGradient) mark = { ...mark, fillGradient: { ...mark.fillGradient, bounds: { ...mark.fillGradient.bounds, x: mark.fillGradient.bounds.x + x, y: mark.fillGradient.bounds.y + y } } };
+  if (mark.fillPattern) mark = { ...mark, fillPattern: { ...mark.fillPattern, bounds: { ...mark.fillPattern.bounds, x: mark.fillPattern.bounds.x + x, y: mark.fillPattern.bounds.y + y } } };
   if (mark.fillPicture) mark = { ...mark, fillPicture: { ...mark.fillPicture, bounds: { ...mark.fillPicture.bounds, x: mark.fillPicture.bounds.x + x, y: mark.fillPicture.bounds.y + y } } };
   switch (mark.kind) {
     case 'group': return { ...mark, ...(mark.clip ? { clip: { ...mark.clip, x: mark.clip.x + x, y: mark.clip.y + y } } : {}), marks: mark.marks.map(mark => move(mark, x, y)) };

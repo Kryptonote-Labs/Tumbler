@@ -87,3 +87,5 @@ export type { ChartPicturePaint } from './fill-scene.ts';
 export { chartScenePictures } from './fill-scene.ts';
 export { setChartPictureFill, canSetChartPicture } from './picture-edit.ts';
 export type { ChartView3D, ChartWall, ChartWalls } from './three-d-properties.ts';
+export { readChartFill, setChartPatternFill, setChartNoFill, clearChartFill } from './pattern-edit.ts';
+export { DRAWING_PATTERN_PRESETS, type DrawingPatternPreset } from '@tumblerjs/ooxml';

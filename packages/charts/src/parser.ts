@@ -26,7 +26,7 @@ import type {
   ChartMarkerSymbol,
 } from "./model.ts";
 
-import { parseChartFill, parseChartLine, parseChartTextStyle, parseChartShapeStyle } from "./formatting-parser.ts";
+import { parseChartFill, parseChartPattern, parseChartLine, parseChartTextStyle, parseChartShapeStyle } from "./formatting-parser.ts";
 
 const MAX_CACHE_POINTS = 100_000;
 const MAX_SERIES = 1_024;
@@ -221,20 +221,20 @@ function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespac
   const points = children(element, chartNamespace, 'dPt');
   if (points.length > MAX_CACHE_POINTS) throw new ChartPreviewLimitError('Chart point formatting exceeds preview limits.');
   const shape = children(element, chartNamespace, 'spPr')[0];
-  const lineStyle = parseChartLine(shape, drawingNamespace), gradient = parseChartGradient(shape, drawingNamespace), picture = parseChartPicture(shape, drawingNamespace);
+  const lineStyle = parseChartLine(shape, drawingNamespace), pattern = parseChartPattern(shape, drawingNamespace), gradient = parseChartGradient(shape, drawingNamespace), picture = parseChartPicture(shape, drawingNamespace);
   return Object.freeze({
     ...(children(shape ?? element, drawingNamespace, 'noFill').length ? { noFill: true } : {}),
     ...(lineStyle ? { lineStyle } : {}),
-    ...(picture ? { picture } : {}), ...(gradient ? { gradient } : {}),
+    ...(pattern ? { pattern } : {}), ...(picture ? { picture } : {}), ...(gradient ? { gradient } : {}),
     ...(parseChartDataLabels(children(element, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace) ? { dataLabels: parseChartDataLabels(children(element, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace)! } : {}),
     ...parseChartAnalytics(element, chartNamespace, drawingNamespace, node => parseData(node, chartNamespace)),
     ...(parseBarShape(children(element, chartNamespace, 'shape')[0]) ? { barShape: parseBarShape(children(element, chartNamespace, 'shape')[0])! } : {}),
     explosion: Number(val(children(element, chartNamespace, 'explosion')[0]) ?? 0),
     pointFormats: points.map(point => {
-      const shape = children(point, chartNamespace, 'spPr')[0], gradient = parseChartGradient(shape, drawingNamespace), picture = parseChartPicture(shape, drawingNamespace);
+      const shape = children(point, chartNamespace, 'spPr')[0], pattern = parseChartPattern(shape, drawingNamespace), gradient = parseChartGradient(shape, drawingNamespace), picture = parseChartPicture(shape, drawingNamespace);
       return { index: requiredUnsignedVal(point, chartNamespace, 'idx', 'point index'),
         ...(kind === 'bubble' && children(point, chartNamespace, 'bubble3D').length ? { bubble3D: booleanVal(children(point, chartNamespace, 'bubble3D')[0], true) } : {}),
-        ...(picture ? { picture } : {}), ...(gradient ? { gradient } : {}),
+        ...(pattern ? { pattern } : {}), ...(picture ? { picture } : {}), ...(gradient ? { gradient } : {}),
         fill: parseChartFill(shape, drawingNamespace), noFill: shape && children(shape, drawingNamespace, 'noFill').length ? true : undefined,
         lineStyle: parseChartLine(shape, drawingNamespace), marker: parseMarker(children(point, chartNamespace, 'marker')[0], chartNamespace),
         explosion: val(children(point, chartNamespace, 'explosion')[0]) === undefined ? undefined : Number(val(children(point, chartNamespace, 'explosion')[0])) };
@@ -365,11 +365,11 @@ function parseMarker(element: LosslessXmlElement | undefined, namespace: string)
   if (!Number.isInteger(size) || size < 2 || size > 72) throw new ChartParseError("Chart marker size must be an integer between 2 and 72.");
   const drawing = namespace.replace(/chart$/, 'main');
   const shape = children(element, namespace, 'spPr')[0];
-  const fill = parseChartFill(shape, drawing), lineStyle = parseChartLine(shape, drawing), gradient = parseChartGradient(shape, drawing), picture = parseChartPicture(shape, drawing);
+  const fill = parseChartFill(shape, drawing), lineStyle = parseChartLine(shape, drawing), pattern = parseChartPattern(shape, drawing), gradient = parseChartGradient(shape, drawing), picture = parseChartPicture(shape, drawing);
   return Object.freeze({
     ...(children(element, namespace, "symbol").length ? { symbol: rawSymbol as ChartMarkerSymbol } : {}),
     ...(children(element, namespace, "size").length ? { size } : {}),
-    ...(picture ? { picture } : {}), ...(gradient ? { gradient } : {}),
+    ...(pattern ? { pattern } : {}), ...(picture ? { picture } : {}), ...(gradient ? { gradient } : {}),
     ...(fill ? { fill } : {}), ...(shape && children(shape, drawing, 'noFill').length ? { noFill: true } : {}), ...(lineStyle ? { lineStyle } : {}) });
 }
 
