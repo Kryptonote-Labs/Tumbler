@@ -103,7 +103,7 @@ Corner resizing preserves picture proportions; Shift preserves proportions for
 other objects. Side handles resize freely. `resizeSlideTransform` exposes the
 same corner constraint through `{ preserveAspectRatio: true }` as its fifth argument.
 
-See the [PowerPoint guide](https://tumbler.alexco.dev/docs/powerpoint) for complete
+See the [PowerPoint guide](https://oss.kryptonote.com/docs/powerpoint) for complete
 viewer, navigation, editing, and download examples.
 
 ## Save
@@ -125,7 +125,7 @@ transformed groups. Shared master/layout objects, fields, signed packages,
 SmartArt cached drawings, and unknown alternate representations remain restricted.
 Full Office layout and animation fidelity remain incomplete.
 
-Use [the compatibility guide](https://tumbler.alexco.dev/docs/compatibility#powerpoint)
+Use [the compatibility guide](https://oss.kryptonote.com/docs/compatibility#powerpoint)
 for feature coverage, and [the implementation notes](../../docs/presentationml-implementation.md)
 for preservation rules and validation commands.
 

@@ -193,7 +193,7 @@ Use `onobjectschange` to receive a group move as one array of object changes. Ho
 apply these through a `batch` presentation command to persist and undo the move together.
 Without this callback, the view calls `onobjectchange` for each changed object.
 
-The [PowerPoint guide](https://tumbler.alexco.dev/docs/powerpoint) provides complete
+The [PowerPoint guide](https://oss.kryptonote.com/docs/powerpoint) provides complete
 examples, including undo, redo, and downloading edits. The same guide describes
 text editing, table-cell navigation, resize handles, and rotation controls.
 

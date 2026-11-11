@@ -4,9 +4,9 @@ Read, render, and edit Word documents, spreadsheets, and PowerPoint presentation
 in the browser. Use the headless TypeScript packages with your own UI, or add the
 Svelte 5 components.
 
-[Documentation](https://tumbler.alexco.dev/) ·
-[Playground](https://tumbler.alexco.dev/playground) ·
-[Compatibility](https://tumbler.alexco.dev/docs/compatibility)
+[Documentation](https://oss.kryptonote.com/) ·
+[Playground](https://oss.kryptonote.com/playground) ·
+[Compatibility](https://oss.kryptonote.com/docs/compatibility)
 
 Tumbler edits OOXML directly. Your application owns file loading, navigation,
 storage, and downloads. No hosted Office editor or PDF conversion is required.
@@ -55,11 +55,11 @@ Call `bytes()` when saving or downloading, rather than after every interaction.
 
 | Format | What you can do | Guide |
 | --- | --- | --- |
-| Word `.docx` | Render pages, edit and format text, move and resize supported drawings, undo and save. | [Word documents](https://tumbler.alexco.dev/docs/word) |
-| Excel `.xlsx` | Render a virtualized grid, edit cells and supported formulas, format ranges, and save. | [Spreadsheets](https://tumbler.alexco.dev/docs/spreadsheets) |
-| PowerPoint `.pptx` | Navigate thumbnails, edit text and table cells, format shapes, move, resize and rotate supported objects, undo and save. | [PowerPoint](https://tumbler.alexco.dev/docs/powerpoint) |
+| Word `.docx` | Render pages, edit and format text, move and resize supported drawings, undo and save. | [Word documents](https://oss.kryptonote.com/docs/word) |
+| Excel `.xlsx` | Render a virtualized grid, edit cells and supported formulas, format ranges, and save. | [Spreadsheets](https://oss.kryptonote.com/docs/spreadsheets) |
+| PowerPoint `.pptx` | Navigate thumbnails, edit text and table cells, format shapes, move, resize and rotate supported objects, undo and save. | [PowerPoint](https://oss.kryptonote.com/docs/powerpoint) |
 
-Format coverage is incomplete. See [compatibility](https://tumbler.alexco.dev/docs/compatibility)
+Format coverage is incomplete. See [compatibility](https://oss.kryptonote.com/docs/compatibility)
 for limitations, including unsupported editing operations and differences from
 Office layout. Legacy binary `.doc`, `.xls`, and `.ppt` files are not supported.
 

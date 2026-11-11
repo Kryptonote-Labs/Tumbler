@@ -3,7 +3,7 @@
 Research date: 2026-09-21. This document records the original scope and sequencing.
 Its proposed restrictions and deferred features are historical, not the current
 capability list. See [PresentationML implementation](presentationml-implementation.md)
-for current support and [the PowerPoint guide](https://tumbler.alexco.dev/docs/powerpoint)
+for current support and [the PowerPoint guide](https://oss.kryptonote.com/docs/powerpoint)
 for integration examples.
 
 ## Recommendation
