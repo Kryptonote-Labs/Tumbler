@@ -3,7 +3,6 @@ import { Window } from 'happy-dom';
 import type { Component, mount, unmount, flushSync, tick } from 'svelte';
 import type { ChartModel, ChartContent } from '@tumblerjs/charts';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,8 +14,9 @@ const globals = ['window', 'document', 'navigator', 'Node', 'Element', 'HTMLElem
 
 /** Bundle an isolated client runtime so DOM tests cannot share Svelte's cached window/prototypes. */
 export async function chartClient() {
-  const directory = await mkdtemp(join(tmpdir(), 'tumbler-chart-client-'));
   const packageDirectory = fileURLToPath(new URL('../../', import.meta.url));
+  // Older Bun bundlers retain external package names, so their imports need the workspace's node_modules.
+  const directory = await mkdtemp(join(packageDirectory, 'node_modules', '.chart-client-'));
   const svelteClient = join(dirname(Bun.resolveSync('svelte/package.json', packageDirectory)), 'src/index-client.js');
   const entry = join(directory, 'entry.ts');
   await Bun.write(entry, `export { mount, unmount, flushSync, tick } from ${JSON.stringify(svelteClient)}; export { default as Harness } from ${JSON.stringify(fileURLToPath(new URL('../fixtures/ChartPaintHarness.svelte', import.meta.url)))};`);
@@ -38,7 +38,7 @@ export async function chartClient() {
   }
   Object.defineProperty(window.document, 'fonts', { value: new window.EventTarget() });
   async function dispose() {
-    await window.happyDOM.abort();
+    await window.happyDOM.close();
     for (const [name, descriptor] of previous) { if (descriptor) Object.defineProperty(globalThis, name, descriptor); else Reflect.deleteProperty(globalThis, name); }
     await rm(directory, { recursive: true, force: true });
   }

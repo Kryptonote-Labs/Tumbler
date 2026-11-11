@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { afterEach, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import { createCanvas, type Canvas } from '@napi-rs/canvas';
 import { createGridSelection } from '../../core/src/index.ts';
@@ -12,8 +12,15 @@ import {
   type SpreadsheetCellLayerInput,
 } from '../src/spreadsheet-cell-layer.ts';
 
+const cleanups: (() => Promise<void>)[] = [];
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+});
+
 function fixture() {
   const window = new Window();
+  const canvasPrototype = window.HTMLCanvasElement.prototype;
+  const getContext = Object.getOwnPropertyDescriptor(canvasPrototype, 'getContext')!;
   const canvases = new WeakMap<object, Canvas>();
   Object.defineProperty(window.HTMLCanvasElement.prototype, 'getContext', {
     value(this: object) {
@@ -68,6 +75,11 @@ function fixture() {
     gridlines: true,
   };
   const layer = spreadsheetCellLayer(host, input);
+  cleanups.push(async () => {
+    layer.destroy();
+    Object.defineProperty(canvasPrototype, 'getContext', getContext);
+    await window.happyDOM.close();
+  });
   return { host, layer, input, canvases, thirdRow: item(rows, 3) };
 }
 
@@ -108,7 +120,6 @@ test('resizing a retained row replaces its bitmap without leaving an obsolete ca
   expect(canvases).toHaveLength(2);
   expect(canvases).not.toContain(first);
   expect(canvases.some((canvas) => canvas.height === first.height * 2)).toBe(true);
-  f.layer.destroy();
 });
 
 test('zoom replaces row bitmaps at the new raster resolution', () => {
@@ -118,7 +129,6 @@ test('zoom replaces row bitmaps at the new raster resolution', () => {
   const zoomed = f.host.querySelector('canvas')!;
   expect(zoomed).not.toBe(first);
   expect(zoomed.height).toBe(Math.ceil(first.height / 2));
-  f.layer.destroy();
 });
 
 test('moving to a higher-density display refreshes retained bitmap resolution', () => {
@@ -132,5 +142,4 @@ test('moving to a higher-density display refreshes retained bitmap resolution', 
   const refreshed = f.host.querySelector('canvas')!;
   expect(refreshed).not.toBe(first);
   expect(refreshed.height).toBe(first.height * 2);
-  f.layer.destroy();
 });
