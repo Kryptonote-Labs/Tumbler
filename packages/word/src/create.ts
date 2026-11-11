@@ -4,7 +4,8 @@ import { WORD_BUILTIN_STYLES, builtinStyleXml } from './authored-styles.ts';
 import type { WordParagraphPositioning } from './positioning.ts';
 import type { WordPositionalTab } from './document.ts';
 import type { WordPageField } from './page-fields.ts';
-import { openZipArchive, writeZipArchiveChanges } from '@tumblerjs/opc';
+import { openZipArchive, writeZipArchiveChanges, openOpcPackage, beginPackageTransaction } from '@tumblerjs/opc';
+import { writeChartContent } from '@tumblerjs/charts';
 import { openWordArtifact, type WordArtifact } from './artifact.ts';
 import type { ComputedWordTextFormat } from './styles.ts';
 import { xml, runProperties } from './create-xml.ts';
@@ -47,7 +48,7 @@ export interface CreateWordOptions {
   readonly lastModifiedBy?: string;
 }
 
-/** Creates an editable, standards-shaped DOCX in one package write, without per-run editing sessions. */
+/** Creates an editable DOCX, staging chart data and related parts with the shared chart engine. */
 export function createWordArtifact(options: CreateWordOptions = {}): WordArtifact {
   const namespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   const relationships = 'http://schemas.openxmlformats.org/package/2006/relationships';
@@ -80,8 +81,14 @@ export function createWordArtifact(options: CreateWordOptions = {}): WordArtifac
   const empty = new Uint8Array(22);
   empty.set([0x50, 0x4b, 0x05, 0x06]);
   const encode = new TextEncoder();
-  return openWordArtifact(writeZipArchiveChanges(openZipArchive(empty), {
+  let bytes = writeZipArchiveChanges(openZipArchive(empty), {
     additions: [...parts.map(([name, content]) => ({ name: name!, data: encode.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>${content}`) })), ...authored.parts],
-  }), { maxBlocks: Number.MAX_SAFE_INTEGER, maxInlineItems: Number.MAX_SAFE_INTEGER, maxTextCharacters: Number.MAX_SAFE_INTEGER });
+  });
+  if (authored.charts.length) {
+    const transaction = beginPackageTransaction(openOpcPackage(bytes));
+    for (const chart of authored.charts) writeChartContent(transaction, chart.name.startsWith('/') ? chart.name : `/${chart.name}`, chart.content);
+    bytes = transaction.commit();
+  }
+  return openWordArtifact(bytes, { maxBlocks: Number.MAX_SAFE_INTEGER, maxInlineItems: Number.MAX_SAFE_INTEGER, maxTextCharacters: Number.MAX_SAFE_INTEGER });
 }
 

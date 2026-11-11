@@ -224,9 +224,10 @@ export function applyNativeModelCommand(
     case 'insert-chart': {
       const key = nextId();
       const geometry = insertNativeObject({ name: 'insert-object', slideId: command.slideId, bounds: command.bounds, object: { kind: 'shape', geometry: 'rect' } }, key, key, target!.slide.part);
-      const chart = chartContentModel(command.content);
+      const content = { ...command.content, resources: command.content.resources ?? { parts: [], relationships: [] } };
+      const chart = chartContentModel(content);
       const theme = new ThemeColorScheme('Slide theme', new Map(target!.palette.map(([slot, value]) => [slot, value?.replace(/^#/, '')])));
-      const object: SlideObject = { ...geometry, kind: 'chart', name: `Chart ${key}`, text: undefined, textEditable: false, chartContent: command.content, chart: bindChartTheme(chart, theme, target!.themeFonts) };
+      const object: SlideObject = { ...geometry, kind: 'chart', name: `Chart ${key}`, text: undefined, textEditable: false, chartContent: content, chart: bindChartTheme(chart, theme, target!.themeFonts) };
       patchSlide({ ...target!, slide: { ...target!.slide, objects: [...target!.slide.objects, object] } });
       addObjects(command.slideId, [object]);
       break;

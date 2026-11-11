@@ -1,4 +1,4 @@
-import { addChartContent, readChartContent, writeChartContent, type ChartContent } from '@tumblerjs/charts';
+import { addChartContent, readChartContent, writeChartContent, mergeChartContent, type ChartContent } from '@tumblerjs/charts';
 import { beginLosslessXmlEdit, parseLosslessXml, type LosslessXmlElement } from '@tumblerjs/ooxml';
 import { beginPackageTransaction } from '@tumblerjs/opc';
 import type { PresentationDocument } from './model.ts';
@@ -25,9 +25,9 @@ function chartTarget(document: PresentationDocument, slideId: string, objectKey:
 
 export function presentationChartContent(document: PresentationDocument, slideId: string, objectKey: string): ChartContent {
   const existing = document.slides.find(slide => slide.id === slideId)?.objects.find(object => object.key === objectKey)?.chartContent;
-  if (existing?.workbook !== undefined) return existing;
-  const content = readChartContent(document.package, chartTarget(document, slideId, objectKey).partName);
-  return existing ? { ...content, ...existing, ...(existing.workbook === undefined && content.workbook !== undefined ? { workbook: content.workbook } : {}) } : content;
+  if (existing?.workbook !== undefined && existing.resources !== undefined) return existing;
+  const content = readChartContent(document.package, chartTarget(document, slideId, objectKey).partName, { includeWorkbook: existing?.workbook === undefined });
+  return existing ? mergeChartContent(content, existing) : content;
 }
 
 export function editPresentationChart(artifact: PresentationArtifact, slideId: string, objectKey: string, content: ChartContent): PresentationArtifact {

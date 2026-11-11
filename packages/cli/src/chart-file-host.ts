@@ -51,7 +51,7 @@ function inspect(bytes: Uint8Array, pkg: OpcPackage, part?: string) {
   return {
     page: revision(bytes),
     parts: pkg.parts.filter(part => chartContentTypes.has(part.contentType)).map(part => ({ part: part.name.value, contentType: part.contentType })),
-    ...(part === undefined ? {} : { part, source: inspectChartSource(source!), ...(data === undefined ? {} : { data }) }),
+    ...(part === undefined ? {} : { part, source: inspectChartSource(source!), ...(classic ? { resources: readChartContent(pkg, selected!.name, { includeWorkbook: false }).resources } : {}), ...(data === undefined ? {} : { data }) }),
   };
 }
 
@@ -78,10 +78,10 @@ export function chartFileHost(): Required<ChartOperationHost> {
         if (!('edits' in input) && extname(path).toLowerCase() === '.xlsx') {
           const { artifact, objectId } = spreadsheetOwner(original, part);
           const content = applyChartContentEdit({ ...readChartContent(pkg, part.name), xml: new TextDecoder().decode(refreshChartWorkbook(pkg.readPart(part), artifact)) }, input);
-          bytes = applySpreadsheetCommand(artifact, { name: 'edit-chart', sheetId: String(artifact.activeSheet.sheetId), objectId, content, bindUnboundData: true }).bytes();
+          bytes = applySpreadsheetCommand(artifact, { name: 'edit-chart', sheetId: String(artifact.activeSheet.sheetId), objectId, content, bindUnboundData: 'type' in input || 'series' in input || 'data' in input }).bytes();
         } else {
           const transaction = beginPackageTransaction(pkg);
-          if ('edits' in input) transaction.replacePart(part.name, editChartSource(pkg.readPart(part), input.edits));
+          if ('edits' in input && !('resources' in input)) transaction.replacePart(part.name, editChartSource(pkg.readPart(part), input.edits));
           else writeChartContent(transaction, part.name, applyChartContentEdit(readChartContent(pkg, part.name), input));
           bytes = transaction.commit();
         }

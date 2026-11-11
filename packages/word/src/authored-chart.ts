@@ -1,7 +1,7 @@
 import { DEFAULT_WORD_THEME } from './theme-colours.ts';
 import type { ThemeColorScheme, ThemeFontScheme } from '@tumblerjs/ooxml';
 import { chartTitleFromWord } from './chart-title.ts';
-import { inspectChartSource, chartContentModel, updateChartTitle, decodeChartWorkbook, mergeChartContent, bindChartTheme, type ChartContent } from '@tumblerjs/charts';
+import { inspectChartSource, chartContentModel, updateChartTitle, decodeChartWorkbook, mergeChartContent, bindChartTheme, isChartResources, type ChartContent } from '@tumblerjs/charts';
 import { PartName } from '@tumblerjs/opc';
 import type { WordChartDrawing } from './drawings.ts';
 import { imagePlacement, type WordImagePosition } from './image-placement.ts';
@@ -20,6 +20,7 @@ export function isWordChartContent(value: unknown): value is ChartContent {
     const root = inspectChartSource(bytes);
     if (!root.namespace.endsWith('/chart') || !root.children.some(child => child.name.split(':').at(-1) === 'chart' && child.children.some(child => child.name.split(':').at(-1) === 'plotArea'))) return false;
     if ('workbook' in value && typeof value.workbook === 'string') decodeChartWorkbook(value.workbook);
+    if ('resources' in value && value.resources !== undefined && !isChartResources(value.resources)) return false;
     return true;
   } catch { return false; }
 }

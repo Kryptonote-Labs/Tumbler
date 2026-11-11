@@ -51,7 +51,7 @@
       const source = convertChartType(bytes, change, selectedPlot);
       if (embeddedData && workbook) {
         const bound = extendChartWorkbook(source, workbook);
-        publish({ xml: new TextDecoder().decode(bound.source), workbook: chartBytesToBase64(bound.artifact.bytes()) }, 'type');
+        publish({ ...current, xml: new TextDecoder().decode(bound.source), workbook: chartBytesToBase64(bound.artifact.bytes()) }, 'type');
       } else publish({ ...current, xml: new TextDecoder().decode(source) }, 'type');
     } catch (cause) { typeError = cause instanceof Error ? cause.message : 'This chart type could not be applied.'; }
   }
@@ -61,13 +61,13 @@
       if (embeddedData && workbook) {
         const bound = extendChartWorkbook(source, workbook);
         const refreshed = refreshChartWorkbook(bound.source, bound.artifact);
-        publish({ xml: new TextDecoder().decode(refreshed), workbook: chartBytesToBase64(bound.artifact.bytes()) }, 'series');
+        publish({ ...current, xml: new TextDecoder().decode(refreshed), workbook: chartBytesToBase64(bound.artifact.bytes()) }, 'series');
       } else publish({ ...current, xml: new TextDecoder().decode(source) }, 'series');
     } catch (cause) { error = cause instanceof Error ? cause.message : 'The series could not be changed.'; }
   }
   function changeData(artifact: SpreadsheetArtifact) {
     const source = refreshChartWorkbook(dataBytes, artifact);
-    publish({ xml: new TextDecoder().decode(source), workbook: chartBytesToBase64(artifact.bytes()) });
+    publish({ ...current, xml: new TextDecoder().decode(source), workbook: chartBytesToBase64(artifact.bytes()) });
     sheet = artifact.activeSheet.name;
   }
 </script>

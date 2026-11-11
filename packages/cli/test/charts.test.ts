@@ -8,6 +8,9 @@ import { createSpreadsheet } from '@tumblerjs/sheets';
 import { createOoxmlChart, type ChartSourceNode } from '@tumblerjs/charts';
 import { createFileHost } from '../src/file-host.ts';
 import { runTumbler } from '../src/index.ts';
+import { createPresentation, applyPresentationCommand } from '@tumblerjs/slides';
+import { applySpreadsheetCommand } from '@tumblerjs/sheets';
+import { type ChartResources } from '@tumblerjs/charts';
 
 for (const extension of ['docx', 'xlsx', 'pptx']) {
   test(`chart CLI preserves unrelated ${extension} parts and rejects stale edits`, async () => {
@@ -120,5 +123,53 @@ test('XLSX chart reads report live worksheet values while property IDs address t
     await host.editChart!(path, { page: changed.page, part, type: 'scatterChart' });
     const saved = openOpcPackage(await Bun.file(path).bytes());
     expect(readChartData(saved.readPart(saved.getPart(part)!))[0]?.series[0]?.xValues?.values).toEqual([1, 2, 3, 4]);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+for (const extension of ['docx', 'pptx', 'xlsx'] as const) test(`chart CLI atomically edits ${extension} resources and source properties`, async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tumbler-chart-resources-'));
+  try {
+    const path = join(directory, `chart.${extension}`), content = { xml: new TextDecoder().decode(createOoxmlChart({ type: 'barChart', categories: ['A'], series: [{ name: 'Data', values: [2] }] })) };
+    const presentation = createPresentation();
+    const bytes = extension === 'docx' ? createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', chart: { width: 360, height: 240, content } }] }] }).bytes()
+      : extension === 'pptx' ? applyPresentationCommand(presentation, { name: 'insert-chart', slideId: presentation.document.slides[0]!.id, bounds: { x: 10, y: 10, width: 480, height: 320 }, content }).bytes()
+      : applySpreadsheetCommand(createSpreadsheet(), { name: 'insert-chart', sheetId: '1', x: 10, y: 10, width: 480, height: 320, content, bindUnboundData: true }).bytes();
+    await Bun.write(path, bytes);
+    const host = createFileHost();
+    const list = await host.readCharts!(path, {}) as { parts: { part: string }[] }, part = list.parts[0]!.part;
+    const before = await host.readCharts!(path, { part }) as { page: string; source: ChartSourceNode };
+    const flag = before.source.children.find(node => node.name === 'c:chart')!.children.find(node => node.name === 'c:autoTitleDeleted')!;
+    const resources: ChartResources = { parts: [{ key: 'custom', contentType: 'application/octet-stream', data: 'AQID' }], relationships: [{ id: 'custom', type: 'urn:test:resource', target: 'custom' }] };
+    const input = { page: before.page, part, resources, edits: [{ kind: 'attribute' as const, node: flag.id, name: 'val', value: '0' }] };
+    const changed = await host.editChart!(path, input) as { page: string; resources: ChartResources; source: ChartSourceNode };
+    expect(changed.resources.parts[0]?.data).toBe('AQID');
+    expect(changed.source.children.find(node => node.name === 'c:chart')?.children.find(node => node.name === 'c:autoTitleDeleted')?.attributes).toContainEqual(expect.objectContaining({ name: 'val', value: '0' }));
+    await expect(host.editChart!(path, input)).rejects.toThrow('changed');
+    const converted = await host.editChart!(path, { page: changed.page, part, type: 'lineChart' }) as { page: string; resources: ChartResources };
+    expect(converted.resources.parts[0]?.data).toBe('AQID');
+    if (extension !== 'xlsx') {
+      const edited = await host.editChart!(path, { page: converted.page, part, cells: [{ reference: 'B2', value: 8 }] }) as { resources: ChartResources };
+      expect(edited.resources.parts[0]?.data).toBe('AQID');
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('combined XLSX resource and source edits keep node addresses from the inspected snapshot', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tumbler-chart-resource-addresses-'));
+  try {
+    const { bindChartData, readChartData } = await import('@tumblerjs/charts');
+    const source = createOoxmlChart({ type: 'barChart', categories: ['A'], series: [{ name: 'Data', values: [2] }] });
+    const bound = bindChartData(source, readChartData(source).map(plot => ({ ...plot, series: plot.series.map(series => ({ ...series, values: { ...series.values!, formula: 'Sheet1!$B$2:$B$4' } })) })));
+    let artifact = applySpreadsheetCommand(createSpreadsheet(), { name: 'insert-chart', sheetId: '1', x: 0, y: 0, width: 480, height: 320, content: { xml: new TextDecoder().decode(bound) } });
+    artifact = applySpreadsheetCommand(artifact, { name: 'set-range', sheetId: '1', reference: 'B2', values: [[2], [4], [6]] });
+    const path = join(directory, 'stale-cache.xlsx'); await Bun.write(path, artifact.bytes());
+    const host = createFileHost(), list = await host.readCharts!(path, {}) as { parts: { part: string }[] }, part = list.parts[0]!.part;
+    const snapshot = await host.readCharts!(path, { part }) as { page: string; source: ChartSourceNode };
+    const plot = snapshot.source.children.find(node => node.name === 'c:chart')!.children.find(node => node.name === 'c:plotArea')!;
+    const axis = plot.children.find(node => node.name === 'c:valAx')!;
+    const result = await host.editChart!(path, { page: snapshot.page, part, resources: { parts: [], relationships: [] }, edits: [{ kind: 'attribute', node: axis.id, name: 'custom', value: 'selected-axis' }] }) as { source: ChartSourceNode };
+    const savedAxis = result.source.children.find(node => node.name === 'c:chart')!.children.find(node => node.name === 'c:plotArea')!.children.find(node => node.name === 'c:valAx')!;
+    expect(savedAxis.attributes).toContainEqual(expect.objectContaining({ name: 'custom', value: 'selected-axis' }));
+    expect(savedAxis.children.flatMap(node => node.attributes)).not.toContainEqual(expect.objectContaining({ name: 'custom' }));
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
