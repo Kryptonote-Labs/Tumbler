@@ -35,3 +35,16 @@ test('extending a chart workbook preserves separate bound ranges with identical 
   const extended = readChartData(extendChartWorkbook(bound, createSpreadsheet()).source);
   expect(extended[0]?.series.map(series => series.categories?.formula)).toEqual(['Sheet1!A2:A3', 'Sheet1!C2:C3']);
 });
+
+test('chart inspection reflects live source formulas without mutating the workbook', () => {
+  const created = createChartWorkbook(source());
+  let artifact = applySpreadsheetCommand(created.artifact, { name: 'insert-chart', sheetId: '1', x: 10, y: 10, width: 480, height: 320, content: { xml: new TextDecoder().decode(created.source) } });
+  artifact = applySpreadsheetCommand(artifact, { name: 'set-formula', sheetId: '1', reference: 'B2', formula: '6*7' });
+  const drawing = artifact.worksheet.drawing!;
+  const objectId = spreadsheetDrawingObjectId(drawing, drawing.charts[0]!.anchor);
+  if (objectId === undefined) throw new Error('Chart object ID is missing.');
+  const before = artifact.bytes();
+  const content = spreadsheetChartContent(artifact, objectId);
+  expect(readChartData(new TextEncoder().encode(content.xml))[0]?.series[0]?.values?.values).toEqual([42, 4]);
+  expect(artifact.bytes()).toEqual(before);
+});

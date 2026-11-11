@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { chmodSync, closeSync, openSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { extname } from 'node:path';
-import { editChartSource, inspectChartSource, readChartContent, writeChartContent } from '@tumblerjs/charts';
-import { applyChartContentEdit } from '@tumblerjs/sheets';
+import { editChartSource, inspectChartSource, readChartData, readChartContent, writeChartContent } from '@tumblerjs/charts';
+import { applyChartContentEdit, refreshChartWorkbook, openSpreadsheetArtifact } from '@tumblerjs/sheets';
 import { beginPackageTransaction, openOpcPackage, type OpcPackage } from '@tumblerjs/opc';
 import { chartEditInput, type ChartOperationHost } from './charts.ts';
 
@@ -22,10 +22,15 @@ function chartPart(pkg: OpcPackage, name: string) {
   return part;
 }
 function inspect(bytes: Uint8Array, pkg: OpcPackage, part?: string) {
+  const selected = part === undefined ? undefined : chartPart(pkg, part);
+  const source = selected && pkg.readPart(selected);
+  const classic = selected?.contentType === 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml';
+  const spreadsheet = pkg.parts.some(part => part.contentType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml');
+  const data = classic && source ? readChartData(spreadsheet ? refreshChartWorkbook(source, openSpreadsheetArtifact(bytes)) : source) : undefined;
   return {
     page: revision(bytes),
     parts: pkg.parts.filter(part => chartContentTypes.has(part.contentType)).map(part => ({ part: part.name.value, contentType: part.contentType })),
-    ...(part === undefined ? {} : { part, source: inspectChartSource(pkg.readPart(chartPart(pkg, part))) }),
+    ...(part === undefined ? {} : { part, source: inspectChartSource(source!), ...(data === undefined ? {} : { data }) }),
   };
 }
 

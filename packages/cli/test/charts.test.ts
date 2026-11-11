@@ -93,3 +93,26 @@ test('chartEx source editing remains available without classic chart conversion'
     expect(result.source.attributes).toContainEqual(expect.objectContaining({ name: 'custom', value: 'retained' }));
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test('XLSX chart reads report live worksheet values while property IDs address the saved source', async () => {
+  const { createChartWorkbook, applySpreadsheetCommand } = await import('@tumblerjs/sheets');
+  const directory = await mkdtemp(join(tmpdir(), 'tumbler-live-chart-cli-'));
+  try {
+    const created = createChartWorkbook(createOoxmlChart({ type: 'barChart', categories: ['A', 'B'], series: [{ name: 'One', values: [2, 4] }] }));
+    let artifact = applySpreadsheetCommand(created.artifact, { name: 'insert-chart', sheetId: '1', x: 10, y: 10, width: 480, height: 320, content: { xml: new TextDecoder().decode(created.source) } });
+    artifact = applySpreadsheetCommand(artifact, { name: 'set-formula', sheetId: '1', reference: 'B2', formula: '6*7' });
+    const path = join(directory, 'live.xlsx');
+    await Bun.write(path, artifact.bytes());
+    const host = createFileHost();
+    const list = await host.readCharts!(path, {}) as { parts: { part: string }[] };
+    const part = list.parts[0]!.part;
+    const before = await Bun.file(path).bytes();
+    const snapshot = await host.readCharts!(path, { part }) as { page: string; source: ChartSourceNode; data: { series: { values: { values: number[] } }[] }[] };
+    expect(snapshot.data[0]?.series[0]?.values.values).toEqual([42, 4]);
+    expect(await Bun.file(path).bytes()).toEqual(before);
+    const chart = snapshot.source.children.find(child => child.name === 'c:chart')!;
+    const titleFlag = chart.children.find(child => child.name === 'c:autoTitleDeleted')!;
+    const changed = await host.editChart!(path, { page: snapshot.page, part, edits: [{ kind: 'attribute', node: titleFlag.id, name: 'val', value: '0' }] }) as { data: typeof snapshot.data };
+    expect(changed.data[0]?.series[0]?.values.values).toEqual([42, 4]);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
