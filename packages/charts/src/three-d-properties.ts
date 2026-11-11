@@ -34,7 +34,7 @@ export function parseBarShape(node: LosslessXmlElement | undefined): ChartBarSha
 }
 
 export function parseChart3DProperties(chart: LosslessXmlElement, plot: LosslessXmlElement, c: string, a: string): Pick<SupportedChartModel, 'threeD' | 'walls' | 'gapDepth' | 'barShape'> {
-  if (!plot.localName.includes('3D')) return {};
+  if (!plot.localName.includes('3D') && plot.localName !== 'surfaceChart') return {};
   const view = child(chart, c, 'view3D'), height = child(view, c, 'hPercent');
   const rightAngle = value(child(view, c, 'rAngAx')) ?? '1';
   if (!['0', '1', 'true', 'false'].includes(rightAngle)) throw new ChartParseError('Invalid 3D right-angle setting.');

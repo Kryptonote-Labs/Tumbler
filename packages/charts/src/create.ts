@@ -108,10 +108,10 @@ export function createOoxmlChart(options: CreateChartOptions): Uint8Array {
   const ids = pie ? [] : depth ? [1, 2, 3] : [1, 2];
   after += ids.map(id => `<c:axId val="${id}"/>`).join('');
   const horizontal = bar && options.direction === 'bar';
-  const axes = pie ? '' : axis(xy ? 'valAx' : 'catAx', 1, 2, horizontal ? 'l' : 'b') + axis('valAx', 2, 1, horizontal ? 'b' : 'l') + (depth ? axis('serAx', 3, 2, 'r') : '');
+  const axes = pie ? '' : axis(xy ? 'valAx' : 'catAx', 1, 2, horizontal ? 'l' : 'b') + axis('valAx', 2, 1, horizontal ? 'b' : 'l').replace('<c:axPos', type === 'surfaceChart' ? '<c:delete val="1"/><c:axPos' : '<c:axPos') + (depth ? axis('serAx', 3, 2, 'r') : '');
   const strict = options.conformance === 'strict';
   const ns = strict ? 'http://purl.oclc.org/ooxml/drawingml/' : 'http://schemas.openxmlformats.org/drawingml/2006/';
-  const view = type.includes('3D') ? '<c:view3D><c:rotX val="15"/><c:rotY val="20"/><c:rAngAx val="1"/></c:view3D>' : '';
+  const view = type === 'surfaceChart' ? '<c:view3D><c:rotX val="90"/><c:rotY val="0"/><c:rAngAx val="0"/><c:perspective val="0"/></c:view3D>' : type.includes('3D') ? '<c:view3D><c:rotX val="15"/><c:rotY val="20"/><c:rAngAx val="1"/></c:view3D>' : '';
   const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="${ns}chart" xmlns:a="${ns}main"><c:chart><c:autoTitleDeleted val="1"/>${view}<c:plotArea><c:layout/><c:${type}>${before}${series}${after}</c:${type}>${axes}</c:plotArea><c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>`;
   const bytes = new TextEncoder().encode(xml);
   return options.title === undefined ? bytes : updateChartTitle(bytes, options.title);

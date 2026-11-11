@@ -154,7 +154,7 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
     const extension = source.children(source.plotArea, 'extLst')[0];
     if (extension) edit.insertMarkupBefore(extension, remap(axis)); else edit.appendMarkup(source.plotArea, remap(axis));
   }
-  if (change.type.includes('3D') && !source.children(source.chart, 'view3D').length) {
+  if ((change.type.includes('3D') || change.type === 'surfaceChart') && !source.children(source.chart, 'view3D').length) {
     const view = created.children(created.chart, 'view3D')[0];
     if (view) edit.insertMarkupBefore(source.plotArea, standalone(created.document, view));
   }
