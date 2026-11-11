@@ -2,7 +2,7 @@ import { ChartParseError, ChartPreviewLimitError } from './parser-errors.ts';
 import type { LosslessXmlElement } from '@tumblerjs/ooxml';
 import { parseChartShapeStyle, parseChartTextStyle } from './formatting-parser.ts';
 import { readChartTitleText } from './rich-text.ts';
-import type { ChartShapeStyle, ChartTextStyle, ChartTextParagraph } from './model.ts';
+import type { ChartLineStyle, ChartShapeStyle, ChartTextStyle, ChartTextParagraph } from './model.ts';
 import { parseChartManualLayout, type ChartManualLayout } from './manual-layout.ts';
 
 export interface ChartDataLabelOptions extends ChartShapeStyle {
@@ -14,6 +14,8 @@ export interface ChartDataLabelOptions extends ChartShapeStyle {
   readonly showPercent?: boolean;
   readonly showBubbleSize?: boolean;
   readonly showLegendKey?: boolean;
+  readonly showLeaderLines?: boolean;
+  readonly leaderLineStyle?: ChartLineStyle;
   readonly position?: string;
   readonly separator?: string;
   readonly formatCode?: string;
@@ -34,7 +36,7 @@ export function parseChartDataLabels(element: LosslessXmlElement | undefined, c:
   function options(element: LosslessXmlElement): ChartDataLabelOptions {
     const flags = Object.fromEntries([
       ['deleted', 'delete'], ['showValue', 'showVal'], ['showCategory', 'showCatName'], ['showSeries', 'showSerName'],
-      ['showPercent', 'showPercent'], ['showBubbleSize', 'showBubbleSize'], ['showLegendKey', 'showLegendKey'],
+      ['showPercent', 'showPercent'], ['showBubbleSize', 'showBubbleSize'], ['showLegendKey', 'showLegendKey'], ['showLeaderLines', 'showLeaderLines'],
     ].flatMap(([key, name]) => {
       const node = children(element, c, name!)[0];
       const value = attribute(node, 'val') ?? '1';
@@ -50,10 +52,11 @@ export function parseChartDataLabels(element: LosslessXmlElement | undefined, c:
     const value = children(children(cache, c, 'pt')[0], c, 'v')[0];
     const textStyle = parseChartTextStyle(element, c, a), shape = children(element, c, 'spPr')[0];
     const shapeStyle = parseChartShapeStyle(shape, a);
+    const leaderLineStyle = parseChartShapeStyle(children(children(element, c, 'leaderLines')[0], c, 'spPr')[0], a)?.lineStyle;
     const layout = parseChartManualLayout(element, c);
     return { ...flags, ...(position ? { position } : {}), ...(separator ? { separator: text(separator) } : {}),
       ...(formatCode ? { formatCode } : {}), ...(richText ? { richText, text: richText.map(paragraph => paragraph.runs.map(run => run.text).join('')).join('\n') } : value ? { text: text(value) } : {}),
-      ...(textStyle ? { textStyle } : {}), ...(layout ? { layout } : {}), ...shapeStyle };
+      ...(textStyle ? { textStyle } : {}), ...(layout ? { layout } : {}), ...(leaderLineStyle ? { leaderLineStyle } : {}), ...shapeStyle };
   }
   const points = children(element, c, 'dLbl');
   if (points.length > 100_000) throw new ChartPreviewLimitError('Data labels exceed preview limits.');

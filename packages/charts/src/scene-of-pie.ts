@@ -40,8 +40,9 @@ function splitPieScene(context: SceneContext): ChartMark[] {
   const secondarySeries = { ...first, values: { kind: 'number' as const, formula: undefined, formatCode: first.values?.formatCode, points: secondary } };
   const secondaryFractions = chartPieData(secondarySeries).fractions;
   const primaryPoints = [...primary, { index: otherIndex, value: other }], primaryFractions = new Map([...fractions, [otherIndex, otherFraction]]);
+  const layers: { leaders: ChartMark[]; labels: ChartMark[] } = { leaders: [], labels: [] };
   const main = pieScene({ ...context, model: { ...model, kind: 'pie', legend: undefined, series: [{ ...first, values: { ...secondarySeries.values, points: primaryPoints } }] } }, {
-    frame: frame.primary, fractions: primaryFractions, categories: new Map([[otherIndex, context.options.otherLabel ?? 'Other']]),
+    frame: frame.primary, fractions: primaryFractions, categories: new Map([[otherIndex, context.options.otherLabel ?? 'Other']]), layers,
     // The combined slice faces the secondary plot; ofPieChart has no firstSliceAng.
     slices: chartPieSlices(primaryPoints, primaryFractions, 90 + 180 * otherFraction),
   });
@@ -53,11 +54,11 @@ function splitPieScene(context: SceneContext): ChartMark[] {
       const h = secondaryFractions.get(point.index)! * bar.height;
       const rect = { x: bar.x, y: bottom - h, width: bar.width, height: h };
       marks.push({ kind: 'rect', ...rect, fill: chartPointColor(context, first, 0, point.index), ...chartPointFill(context, first, point.index, rect), ...chartPointStroke(context, first, 0, point.index, '#ffffff') });
-      marks.push(...chartDataLabelMarks(context, first, 0, { index: point.index, x: bar.x + bar.width / 2, y: rect.y + h / 2, category: String(indexChartSequence(first.categories).get(point.index) ?? point.index + 1), value: point.value, percent: fractions.get(point.index)! }));
+      layers.labels.push(...chartDataLabelMarks(context, first, 0, { index: point.index, x: bar.x + bar.width / 2, y: rect.y + h / 2, category: String(indexChartSequence(first.categories).get(point.index) ?? point.index + 1), value: point.value, percent: fractions.get(point.index)! }));
       bottom -= h;
     }
   } else {
-    marks.push(...pieScene({ ...context, model: { ...model, kind: 'pie', title: undefined, legend: undefined, series: [secondarySeries] } }, { fractions, frame: frame.secondary }));
+    marks.push(...pieScene({ ...context, model: { ...model, kind: 'pie', title: undefined, legend: undefined, series: [secondarySeries] } }, { fractions, frame: frame.secondary, layers }));
   }
   if (model.seriesLines) {
     const stroke = chartStroke('axis', model.seriesLines, model, context.options.resolveColor);
@@ -67,5 +68,5 @@ function splitPieScene(context: SceneContext): ChartMark[] {
       marks.push(...line(connector.x1, connector.y1, connector.x2, connector.y2, stroke));
     }
   }
-  return marks;
+  return marks.concat(layers.leaders, layers.labels);
 }

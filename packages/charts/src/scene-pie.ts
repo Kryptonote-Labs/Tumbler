@@ -30,7 +30,7 @@ export function pieChartFrame(context: SceneContext) {
 }
 
 /** Pie and doughnut charts. The legend lists categories of the first series, one entry per slice. */
-export function pieScene(context: SceneContext, labels?: { readonly fractions?: ReadonlyMap<number, number>; readonly slices?: readonly PieSlice[]; readonly categories?: ReadonlyMap<number, string>; readonly frame?: ChartRect }): ChartMark[] {
+export function pieScene(context: SceneContext, labels?: { readonly fractions?: ReadonlyMap<number, number>; readonly slices?: readonly PieSlice[]; readonly categories?: ReadonlyMap<number, string>; readonly frame?: ChartRect; readonly layers?: { readonly leaders: ChartMark[]; readonly labels: ChartMark[] } }): ChartMark[] {
   const { model, width, height, options } = context;
   const plot = labels?.frame ?? pieChartFrame(context).plot;
   const left = plot.x, right = left + plot.width, top = plot.y, bottom = top + plot.height;
@@ -44,6 +44,8 @@ export function pieScene(context: SceneContext, labels?: { readonly fractions?: 
   const first = model.series[0];
   if (!first) return [];
   const marks: ChartMark[] = chartShapeMarks(context, { x: left, y: top, width: right - left, height: bottom - top }, model.plotArea);
+  const dataLabels: ChartMark[] = labels?.layers?.labels ?? [];
+  const leaders: ChartMark[] = labels?.layers?.leaders ?? [];
   const rings = model.kind === 'doughnut' ? model.series : model.series.slice(0, 1);
   rings.forEach((series, ring) => {
     const outer = radius - (radius - hole) * (rings.length - ring - 1) / rings.length;
@@ -80,11 +82,12 @@ export function pieScene(context: SceneContext, labels?: { readonly fractions?: 
       const angle = (slice.startAngle + slice.endAngle) / 2;
       const labelRadius = inner + (outer - inner) * .65;
       const category = labels?.categories?.get(slice.index) ?? String(categories.get(slice.index) ?? slice.index + 1);
-      marks.push(...chartDataLabelMarks(context, series, ring, { index: slice.index,
+      dataLabels.push(...chartDataLabelMarks(context, series, ring, { index: slice.index,
         x: cx + dx + Math.cos(angle) * labelRadius, y: cy + dy + Math.sin(angle) * labelRadius * tilt,
-        category, value: slice.value, percent: fractions.get(slice.index) ?? 0 }));
+        pie: { cx: cx + dx, cy: cy + dy, inner, outer, startAngle: slice.startAngle, endAngle: slice.endAngle, tilt },
+        category, value: slice.value, percent: fractions.get(slice.index) ?? 0 }, leaders));
     });
   });
-  marks.push(...chartLegendScene(context));
-  return marks;
+  const annotations = labels?.layers ? [] : leaders.concat(dataLabels);
+  return marks.concat(annotations, chartLegendScene(context));
 }
