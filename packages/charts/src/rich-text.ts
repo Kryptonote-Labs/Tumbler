@@ -1,6 +1,6 @@
 import type { LosslessXmlElement } from '@tumblerjs/ooxml';
 import type { ChartTextParagraph, ChartTextStyle } from './model.ts';
-import { parseChartFill } from './formatting-parser.ts';
+import { parseChartFill, chartColorFillXml } from './formatting-parser.ts';
 
 const children = (node: LosslessXmlElement | undefined, ns: string, name: string) => node?.children.filter((c): c is LosslessXmlElement => c.kind === 'element' && c.namespaceUri === ns && c.localName === name) ?? [];
 const attr = (node: LosslessXmlElement | undefined, name: string) => node?.attributes.find(a => a.localName === name && !a.namespaceUri)?.value;
@@ -46,7 +46,7 @@ export function chartTitleTextXml(paragraphs: readonly ChartTextParagraph[]): st
     const f = run.style ?? {};
     const properties = [f.verticalAlign === undefined ? '' : `baseline="${f.verticalAlign === 'superscript' ? 30000 : f.verticalAlign === 'subscript' ? -25000 : 0}"`, f.characterSpacingPoints === undefined ? '' : `spc="${Math.round(f.characterSpacingPoints * 100)}"`, f.bold === undefined ? '' : `b="${+f.bold}"`, f.italic === undefined ? '' : `i="${+f.italic}"`, f.fontSize === undefined ? '' : `sz="${Math.round(f.fontSize * 100)}"`, f.underline === undefined ? '' : `u="${f.underline === 'single' ? 'sng' : f.underline === 'double' ? 'dbl' : 'none'}"`, f.strike === undefined ? '' : `strike="${f.strike ? 'sngStrike' : 'noStrike'}"`].filter(Boolean).join(' ');
     const color = f.color;
-    const fill = color ? `<a:solidFill><a:${color.kind === 'rgb' ? 'srgbClr' : 'schemeClr'} val="${escape(color.value.replace(/^#/,''))}">${color.transforms?.map(t => `<a:${t.kind} val="${Math.round(t.value * 100000)}"/>`).join('') ?? ''}</a:${color.kind === 'rgb' ? 'srgbClr' : 'schemeClr'}></a:solidFill>` : '';
+    const fill = color ? chartColorFillXml(color) : '';
     return `<a:r><a:rPr ${properties}>${fill}${f.highlight ? `<a:highlight><a:srgbClr val="${escape(f.highlight.replace(/^#/,''))}"/></a:highlight>` : ''}${f.fontFamily ? `<a:latin typeface="${escape(f.fontFamily)}"/>` : ''}</a:rPr><a:t xml:space="preserve">${escape(run.text)}</a:t></a:r>`;
   }).join('')}</a:p>`).join('');
 }

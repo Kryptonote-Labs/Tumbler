@@ -1,4 +1,4 @@
-import type { LosslessXmlElement } from "@tumblerjs/ooxml";
+import { resolveDrawingColor, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import type { ChartColor, ChartColorTransform, ChartLineStyle, ChartTextStyle } from "./model.ts";
 
 function child(parent: LosslessXmlElement | undefined, ns: string, name: string) {
@@ -11,10 +11,18 @@ function attribute(element: LosslessXmlElement | undefined, name: string) {
 /** Retain ordered luminance transforms used by Office chart text and gridlines. */
 export function parseChartFill(parent: LosslessXmlElement | undefined, ns: string): ChartColor | undefined {
   const fill = child(parent, ns, "solidFill");
-  const rgb = child(fill, ns, "srgbClr");
-  const source = rgb ?? child(fill, ns, "schemeClr");
-  const value = attribute(source, "val");
-  if (!source || !value || (rgb && !/^[0-9a-f]{6}$/i.test(value))) return undefined;
+  const source = fill?.children.find((node): node is LosslessXmlElement => node.kind === 'element' && node.namespaceUri === ns && ['srgbClr', 'schemeClr', 'sysClr', 'prstClr', 'scrgbClr', 'hslClr'].includes(node.localName));
+  const rgb = source?.localName === 'srgbClr';
+  const raw = attribute(source, 'val');
+  if (!source || rgb && (!raw || !/^[0-9a-f]{6}$/i.test(raw))) return undefined;
+  const complete = !['srgbClr', 'schemeClr'].includes(source.localName) || source.children.some(node => node.kind === 'element' && node.namespaceUri === ns && !['lumMod', 'lumOff'].includes(node.localName));
+  if (complete) {
+    const value = source.localName === 'schemeClr' ? raw : fill && resolveDrawingColor({ ...fill, children: [{ ...source, children: [] }] }, () => '#000000');
+    if (!value || !fill) return undefined;
+    return Object.freeze({ kind: source.localName === 'schemeClr' ? 'scheme' : 'rgb', value, source: fill });
+  }
+  const value = raw;
+  if (!value) return undefined;
   const transforms = source.children.flatMap((node): ChartColorTransform[] => {
     if (node.kind !== "element" || node.namespaceUri !== ns || (node.localName !== "lumMod" && node.localName !== "lumOff")) return [];
     const raw = attribute(node, "val") ?? "";
@@ -61,4 +69,22 @@ export function parseChartTextStyle(parent: LosslessXmlElement | undefined, char
     ...(italic === undefined ? {} : { italic }),
     ...(color === undefined ? {} : { color }),
   });
+}
+
+/** Rich text keeps complete colour choices and ordered transforms when title text is edited. */
+export function chartColorFillXml(color: ChartColor): string {
+  const escape = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+  function markup(node: LosslessXmlElement): string {
+    const namespaces = new Map<string, string>();
+    if (node.prefix) namespaces.set(node.prefix, node.namespaceUri);
+    else if (node.namespaceUri) namespaces.set('', node.namespaceUri);
+    for (const attribute of node.attributes) if (attribute.prefix && attribute.prefix !== 'xmlns' && attribute.prefix !== 'xml') namespaces.set(attribute.prefix, attribute.namespaceUri);
+    for (const attribute of node.attributes) if (attribute.namespaceUri === 'http://www.w3.org/2000/xmlns/') namespaces.delete(attribute.localName === 'xmlns' ? '' : attribute.localName);
+    const attributes = node.attributes.map(attribute => ` ${attribute.qualified}="${escape(attribute.value)}"`).join('') + [...namespaces].map(([prefix, ns]) => ` xmlns${prefix ? `:${prefix}` : ''}="${escape(ns)}"`).join('');
+    const contents = node.children.map(child => child.kind === 'element' ? markup(child) : child.kind === 'text' || child.kind === 'cdata' ? escape(child.value) : '').join('');
+    return `<${node.qualified}${attributes}>${contents}</${node.qualified}>`;
+  }
+  if (color.source) return markup(color.source);
+  const kind = color.kind === 'rgb' ? 'srgbClr' : 'schemeClr';
+  return `<a:solidFill><a:${kind} val="${escape(color.value.replace(/^#/, ''))}">${color.transforms?.map(transform => `<a:${transform.kind} val="${Math.round(transform.value * 100000)}"/>`).join('') ?? ''}</a:${kind}></a:solidFill>`;
 }

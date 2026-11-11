@@ -26,6 +26,7 @@ export type ChartColor = (
   | { readonly kind: "rgb"; readonly value: string }
   | { readonly kind: "scheme"; readonly value: string }) & {
   readonly transforms?: readonly ChartColorTransform[];
+  readonly source?: import("@tumblerjs/ooxml").LosslessXmlElement;
 };
 
 export interface ChartTextStyle {
