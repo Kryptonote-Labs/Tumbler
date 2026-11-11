@@ -1,5 +1,5 @@
 import { extendChartWorkbook } from './chart-workbook.ts';
-import { addChartContent, writeChartContent } from '@tumblerjs/charts';
+import { addChartContent, writeChartContent, chartResourcesSchema } from '@tumblerjs/charts';
 import { z } from 'zod';
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, parseLosslessXml, presetGeometries, type LosslessXmlElement } from '@tumblerjs/ooxml';
 import { beginPackageTransaction, PartName, relationshipItemName } from '@tumblerjs/opc';
@@ -10,7 +10,7 @@ import { spreadsheetDrawingBounds, spreadsheetDrawingObjectId } from './drawings
 
 const id = z.string().min(1);
 const position = { x: z.number().finite(), y: z.number().finite(), width: z.number().finite().positive(), height: z.number().finite().positive() };
-const chartContent = z.object({ xml: z.string(), workbook: z.string().optional() }).strict();
+const chartContent = z.object({ xml: z.string(), workbook: z.string().optional(), resources: chartResourcesSchema.optional() }).strict();
 const target = { sheetId: id, objectId: z.number().int().nonnegative() };
 export const spreadsheetDrawingCommand = z.discriminatedUnion('name', [
   z.object({ name: z.literal('insert-chart'), sheetId: id, ...position, content: chartContent, bindUnboundData: z.boolean().optional() }).strict(),

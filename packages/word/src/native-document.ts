@@ -623,7 +623,7 @@ export class NativeWordDocument implements WordLayoutSource {
                 if (drawing) {
                   let updated = withWordInkTraces(withWordDrawingGeometry(drawing, authoredRun.drawing), authoredRun.inkTraces);
                   if (updated.kind === 'chart' && authoredRun.chartContent) {
-                    const content = authoredRun.chartContent.workbook === undefined ? mergeChartContent(readChartContent(compiled!.artifact.document.package, updated.partName), authoredRun.chartContent) : authoredRun.chartContent;
+                    const content = mergeChartContent(readChartContent(compiled!.artifact.document.package, updated.partName, { includeWorkbook: authoredRun.chartContent.workbook === undefined }), authoredRun.chartContent);
                     const model = chartContentModel(content);
                     updated = { ...updated, content, model: { ...model, ...(updated.model.themeColors ? { themeColors: updated.model.themeColors } : {}), ...(updated.model.themeFonts ? { themeFonts: updated.model.themeFonts } : {}) } };
                   }

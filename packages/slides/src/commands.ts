@@ -1,4 +1,5 @@
 import { editPresentationChart, insertPresentationChart } from './chart-authoring.ts';
+import { chartResourcesSchema } from '@tumblerjs/charts';
 import { formatPresentationTable } from './table-format.ts';
 import { gradientFill } from './gradient-authoring.ts';
 import { backgroundFill, setSlideBackground } from "./background-authoring.ts";
@@ -69,7 +70,7 @@ const patch = z
   .strict()
   .transform((value) => normalizeFormattingPatch(value as FormattingPatch));
 const tableBorder = z.object({ color, width: number.nonnegative(), dash: z.enum(['solid', 'dash', 'dot', 'double']) }).strict();
-const chartContent = z.object({ xml: z.string(), workbook: z.string().optional() }).strict();
+const chartContent = z.object({ xml: z.string(), workbook: z.string().optional(), resources: chartResourcesSchema.optional() }).strict();
 const singlePresentationCommand = z.discriminatedUnion("name", [
   z.object({ name: z.literal('edit-chart'), ...target, content: chartContent }).strict(),
   z.object({ name: z.literal('insert-chart'), slideId: id, bounds, content: chartContent }).strict(),

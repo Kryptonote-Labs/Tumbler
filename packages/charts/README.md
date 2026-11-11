@@ -234,6 +234,25 @@ coverage or semantic validity for arbitrary combinations of property edits.
 The Svelte `ChartWorkbench` combines type previews, property fields, series/range
 controls and a real embedded spreadsheet. DOCX and PPTX hosts serialize the chart
 and workbook together; XLSX hosts edit their existing worksheet data.
+Its collapsed Source XML editor supports extension properties, retains drafts across
+collapse, and requires reloading before applying over a concurrent host edit.
+
+`ChartContent.resources` carries pictures, styles, user drawings and other related
+parts as a portable graph. `parts` have unique keys, content types, base64 bytes and
+optional relationships; root `relationships` belong to the chart. Internal targets
+use part keys, or `$chart` for the owning chart. `fragment` is decoded text. External
+targets remain URLs and are never fetched. The source workbook stays in `workbook`.
+Omitting `resources` preserves existing parts. Supplying a complete snapshot replaces
+the related relationships, preserving shared targets and cycles. Asset edits copy
+related parts so another chart sharing an image retains its original bytes. Unchanged
+graphs are reused. XML declarations and standard relationship types follow the host
+conformance profile; embedded packages remain opaque.
+
+CLI `charts read --part ...` returns the resource graph. `charts edit --input ...`
+accepts `resources` and optional source `edits` in the same revision-checked operation.
+Source node IDs always refer to the inspected source, including when worksheet caches
+are stale. Generate native picture-resource fixtures with
+`bun scripts/generate-chart-resource-fixtures.ts <dir>`.
 
 Generate native authoring fixtures for all sixteen chart types across all three
 formats with `bun scripts/generate-chart-editing-fixtures.ts <output-directory>`.

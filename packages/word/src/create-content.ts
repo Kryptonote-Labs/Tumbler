@@ -1,5 +1,5 @@
 import { authoredChartContent, isWordAuthoredChart, type WordAuthoredChart } from './authored-chart.ts';
-import { chartBase64ToBytes, convertChartConformance, editChartSource, inspectChartSource } from '@tumblerjs/charts';
+import { convertChartConformance, inspectChartSource, type ChartContent } from '@tumblerjs/charts';
 import { sectionFormatXml, type WordSectionFormat } from './section-format.ts';
 import { orderedPropertyXml } from './property-order.ts';
 import { authoredInkMarkup } from './authored-ink.ts';
@@ -31,6 +31,7 @@ const office = 'http://schemas.openxmlformats.org/officeDocument/2006/relationsh
 /** One traversal writes structure, numbering and media relationships together. */
 export function authoredContent(blocks: readonly WordContentBlock[], width: number, sectionDefaults: WordSectionFormat = {}, themeColors?: import('@tumblerjs/ooxml').ThemeColorScheme) {
   const parts: { name: string; data: Uint8Array }[] = [];
+  const charts: { name: string; content: ChartContent }[] = [];
   const lists = new Map<string, { id: number; defaults: WordAuthoredList; levels: Map<number, WordAuthoredList> }>();
   let relationships = '';
   let contentTypes = '';
@@ -59,18 +60,9 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
     const placement = imagePlacement(chart, chart.width, availableWidth);
     const cx = Math.round(chart.width * 12700), cy = Math.round(chart.height * 12700);
     const chartName = `word/charts/chart${id}.xml`;
-    let chartBytes: Uint8Array = convertChartConformance(new TextEncoder().encode(chart.content.xml), 'transitional');
+    const chartBytes = convertChartConformance(new TextEncoder().encode(chart.content.xml), 'transitional');
     const source = inspectChartSource(chartBytes);
-    if (chart.content.workbook !== undefined) {
-      const workbookName = `word/embeddings/chart${id}-data.xlsx`;
-      parts.push({ name: workbookName, data: chartBase64ToBytes(chart.content.workbook) });
-      parts.push({ name: `word/charts/_rels/chart${id}.xml.rels`, data: new TextEncoder().encode(`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="workbook" Type="${office}package" Target="../embeddings/chart${id}-data.xlsx"/></Relationships>`) });
-      contentTypes += `<Override PartName="/${workbookName}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/>`;
-      const markup = `<c:externalData xmlns:c="${source.namespace}" xmlns:r="${office.slice(0, -1)}" r:id="workbook"><c:autoUpdate val="0"/></c:externalData>`;
-      const existing = source.children.find(child => child.name.split(':').at(-1) === 'externalData');
-      const following = source.children.find(child => ['printSettings', 'userShapes', 'extLst'].includes(child.name.split(':').at(-1)!));
-      chartBytes = editChartSource(chartBytes, [existing ? { kind: 'replace', node: existing.id, markup } : following ? { kind: 'before', node: following.id, markup } : { kind: 'append', node: source.id, markup }]);
-    }
+    charts.push({ name: chartName, content: chart.content });
     parts.push({ name: chartName, data: chartBytes });
     contentTypes += `<Override PartName="/${chartName}" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`;
     relationships += `<Relationship Id="chart${id}" Type="${office}chart" Target="charts/chart${id}.xml"/>`;
@@ -140,5 +132,5 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
     relationships += `<Relationship Id="numbering" Type="${office}numbering" Target="numbering.xml"/>`;
     contentTypes += '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>';
   }
-  return { content, relationships, contentTypes, parts };
+  return { content, relationships, contentTypes, parts, charts };
 }
