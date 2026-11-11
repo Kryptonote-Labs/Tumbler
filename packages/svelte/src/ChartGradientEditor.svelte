@@ -14,7 +14,7 @@
   let sessionKey = untrack(() => targetKey), lastAngle = 90, frame: number | undefined;
   const source = $derived(new TextEncoder().encode(content.xml));
   const bytes = $derived(draft ?? source);
-  const gradient = $derived.by(() => { try { return readChartGradientFill(bytes, draft ? owner : target.id); } catch { return undefined; } });
+  const gradient = $derived.by(() => { try { return draft ? readChartGradientFill(draft, owner) : undefined; } catch { return undefined; } });
   const current = $derived(gradient?.stops[selected]);
   const selectedNumber = $derived((gradient?.stops.toSorted((a, b) => a.position - b.position).findIndex(stop => stop.node === current?.node) ?? selected) + 1);
   const rebased = $derived.by(() => {

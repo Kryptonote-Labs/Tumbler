@@ -1,7 +1,7 @@
 import { compile } from 'svelte/compiler';
 import { Window } from 'happy-dom';
 import type { Component, mount, unmount, flushSync, tick } from 'svelte';
-import type { ChartModel } from '@tumblerjs/charts';
+import type { ChartModel, ChartContent } from '@tumblerjs/charts';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -9,9 +9,9 @@ import { fileURLToPath } from 'node:url';
 
 interface Runtime {
   mount: typeof mount; unmount: typeof unmount; flushSync: typeof flushSync; tick: typeof tick;
-  Harness: Component<{ initial: ChartModel }, { setModel(model: ChartModel): void }>;
+  Harness: Component<{ initial: ChartModel; content?: ChartContent }, { setModel(model: ChartModel): void }>;
 }
-const globals = ['window', 'document', 'navigator', 'Node', 'Element', 'HTMLElement', 'SVGElement', 'Text', 'Comment', 'Document', 'DocumentFragment', 'ShadowRoot', 'Event', 'CustomEvent', 'MutationObserver', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame'] as const;
+const globals = ['window', 'document', 'navigator', 'Node', 'Element', 'HTMLElement', 'SVGElement', 'HTMLMediaElement', 'Text', 'Comment', 'Document', 'DocumentFragment', 'ShadowRoot', 'Event', 'CustomEvent', 'MutationObserver', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame'] as const;
 
 /** Bundle an isolated client runtime so DOM tests cannot share Svelte's cached window/prototypes. */
 export async function chartClient() {

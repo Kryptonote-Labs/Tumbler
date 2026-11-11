@@ -29,3 +29,23 @@ test('native fill changes keep valid SVG paint, and gradient edits reuse the exi
     expect(paint().localName).toBe('linearGradient'); expect(target.querySelectorAll('svg.chart')).toHaveLength(1);
   } finally { await client.unmount(app); await client.dispose(); }
 });
+
+
+test('a saved gradient opens with stable stop keys before rendering its editor', async () => {
+  const client = await chartClient();
+  const xml = new TextDecoder().decode(createOoxmlChart({ type: 'barChart', categories: ['A'], series: [{ name: 'Data', values: [2] }] }));
+  const content = { xml: xml.replace('</c:chartSpace>', '<c:spPr><a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs><a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs></a:gsLst><a:path path="rect"/></a:gradFill></c:spPr></c:chartSpace>') };
+  const target = document.createElement('div'); document.body.append(target);
+  const app = client.mount(client.Harness, { target, props: { initial: chartContentModel(content), content } });
+  try {
+    client.flushSync();
+    target.querySelector<HTMLButtonElement>('[aria-label="Edit gradient for Entire chart"]')!.click();
+    client.flushSync();
+    expect(target.querySelectorAll('[role="slider"]')).toHaveLength(2);
+    expect(new Set([...target.querySelectorAll('[data-stop]')].map(stop => stop.getAttribute('data-stop'))).size).toBe(2);
+    expect(target.querySelector('[role="dialog"][aria-label="Gradient for Entire chart"]')).not.toBeNull();
+    target.querySelector<HTMLButtonElement>('.gradient-editor .footer button')!.click();
+    client.flushSync();
+    expect(target.querySelector('[role="dialog"][aria-label="Gradient for Entire chart"]')).toBeNull();
+  } finally { await client.unmount(app); await client.dispose(); }
+});
