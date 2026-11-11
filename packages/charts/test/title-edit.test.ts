@@ -43,3 +43,12 @@ test('plain title edits retain styled runs, colour transforms and text-box prope
   expect(result).toContain('New ');
   expect(result).not.toContain('Old ');
 });
+
+
+test('self-closing imported title text accepts preserved leading whitespace', async () => {
+  const { createOoxmlChart } = await import('../src/index.ts');
+  const source = updateChartTitle(createOoxmlChart({ type: 'pieChart', categories: [], series: [] }), 'Original');
+  const empty = new TextEncoder().encode(new TextDecoder().decode(source).replace('<a:t>Original</a:t>', '<a:t/>'));
+  const changed = new TextDecoder().decode(updateChartTitle(empty, ' New'));
+  expect(changed).toContain('<a:t xml:space="preserve"> New</a:t>');
+});

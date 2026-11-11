@@ -1,3 +1,4 @@
+import diff from 'fast-diff';
 import type { ChartModel } from '@tumblerjs/charts';
 import type { WordTextParagraph } from './create.ts';
 
@@ -13,19 +14,31 @@ export function chartTitleRuns(paragraphs: readonly WordTextParagraph[], previou
   });
   const before = previous?.titleText?.map(paragraph => paragraph.runs.map(run => run.text).join('')).join('\n') ?? '';
   const after = paragraphs.map(paragraph => paragraph.runs.map(run => run.text).join('')).join('\n');
-  let prefix = 0, suffix = 0;
-  while (prefix < before.length && prefix < after.length && before[prefix] === after[prefix]) prefix++;
-  while (suffix < before.length - prefix && suffix < after.length - prefix && before.at(-suffix - 1) === after.at(-suffix - 1)) suffix++;
-  if (prefix && /[\uD800-\uDBFF]/.test(before[prefix - 1]!) && /[\uDC00-\uDFFF]/.test(before[prefix] ?? '')) prefix--;
-  if (suffix && /[\uDC00-\uDFFF]/.test(before[before.length - suffix]!) && /[\uD800-\uDBFF]/.test(before[before.length - suffix - 1] ?? '')) suffix--;
-  const delta = after.length - before.length;
-  const changedEnd = after.length - suffix;
-  const sourcePosition = (position: number) => position < prefix ? position : position >= changedEnd ? position - delta : prefix;
-  const boundaries = [...new Set(old.flatMap(run => [run.start, run.end]).map(position => position <= prefix ? position : position >= before.length - suffix ? position + delta : prefix))];
+  const segments: { start: number; end: number; source: number; equal: boolean }[] = [];
+  let from = 0, to = 0, replacement: number | undefined;
+  for (const [operation, text] of diff(before, after)) {
+    if (operation === diff.DELETE) { replacement ??= from; from += text.length; continue; }
+    segments.push({ start: to, end: to + text.length, source: operation === diff.EQUAL ? from : replacement ?? from, equal: operation === diff.EQUAL });
+    to += text.length;
+    if (operation === diff.EQUAL) { from += text.length; replacement = undefined; }
+  }
+  const originalBoundaries = [...new Set(old.flatMap(run => [run.start, run.end]))];
+  let oldBoundary = 0;
+  const boundaries: number[] = [];
+  for (const segment of segments) {
+    boundaries.push(segment.start);
+    if (segment.equal) {
+      while (oldBoundary < originalBoundaries.length && originalBoundaries[oldBoundary]! <= segment.source) oldBoundary++;
+      while (oldBoundary < originalBoundaries.length && originalBoundaries[oldBoundary]! < segment.source + segment.end - segment.start) boundaries.push(segment.start + originalBoundaries[oldBoundary++]! - segment.source);
+    }
+    boundaries.push(segment.end);
+  }
   offset = 0;
-  let boundaryIndex = 0, sourceIndex = 0;
+  let boundaryIndex = 0, sourceIndex = 0, segmentIndex = 0;
   const sourceAt = (at: number) => {
-    const position = sourcePosition(at);
+    while (segmentIndex < segments.length - 1 && segments[segmentIndex]!.end <= at) segmentIndex++;
+    const segment = segments[segmentIndex];
+    const position = segment ? segment.source + (segment.equal ? at - segment.start : 0) : 0;
     while (sourceIndex < old.length && old[sourceIndex]!.end <= position) sourceIndex++;
     const candidate = old[sourceIndex];
     return candidate && candidate.start <= position ? candidate : old[Math.max(0, sourceIndex - 1)] ?? old.at(-1);
@@ -37,12 +50,16 @@ export function chartTitleRuns(paragraphs: readonly WordTextParagraph[], previou
       if (!run.text.length) return [{ run, source: old[0] }];
       while (boundaryIndex < boundaries.length && boundaries[boundaryIndex]! <= start) boundaryIndex++;
       const points = [start];
-      while (boundaryIndex < boundaries.length && boundaries[boundaryIndex]! < end) points.push(boundaries[boundaryIndex++]!);
+      while (boundaryIndex < boundaries.length && boundaries[boundaryIndex]! < end) { const boundary = boundaries[boundaryIndex++]!; if (boundary > points.at(-1)!) points.push(boundary); }
       points.push(end);
-      return points.slice(0, -1).map((at, index) => {
-        const source = sourceAt(at);
-        return { run: { ...run, text: run.text.slice(at - start, points[index + 1]! - start) }, source };
+      const pieces: { run: typeof run; source: ReturnType<typeof sourceAt> }[] = [];
+      points.slice(0, -1).forEach((at, index) => {
+        const source = sourceAt(at), text = run.text.slice(at - start, points[index + 1]! - start);
+        const previous = pieces.at(-1);
+        if (previous && previous.source === source) previous.run = { ...previous.run, text: previous.run.text + text };
+        else pieces.push({ run: { ...run, text }, source });
       });
+      return pieces;
     });
     offset++;
     return { paragraph, runs };

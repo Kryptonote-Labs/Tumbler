@@ -1,3 +1,4 @@
+import { chartXmlText } from './source-xml.ts';
 import { chartTitleTextXml } from './rich-text.ts';
 import type { ChartTextParagraph } from './model.ts';
 import { beginLosslessXmlEdit, parseLosslessXml, type LosslessXmlElement } from '@tumblerjs/ooxml';
@@ -40,7 +41,13 @@ export function updateChartTitle(bytes: Uint8Array, title: string | readonly Cha
       last = Math.max(first, last);
       for (let index = first; index <= last; index++) {
         const value = (index === first ? values[index]!.slice(0, prefix - starts[index]!) + title.slice(prefix, title.length - suffix) : '') + (index === last ? values[index]!.slice(end - starts[index]!) : '');
-        if (value !== values[index]) edit.setText(nodes[index]!, value);
+        const node = nodes[index]!;
+        if (node.selfClosing && /^\s|\s$/.test(value)) {
+          const attributes = node.attributes.filter(attribute => !(attribute.namespaceUri === 'http://www.w3.org/XML/1998/namespace' && attribute.localName === 'space')).map(attribute => ` ${attribute.qualified}="${chartXmlText(attribute.value)}"`).join('');
+          edit.replaceElementMarkup(node, `<${node.qualified}${attributes} xml:space="preserve">${chartXmlText(value)}</${node.qualified}>`);
+          continue;
+        }
+        if (value !== values[index]) edit.setText(node, value);
         if (/^\s|\s$/.test(value)) {
           const space = nodes[index]!.attributes.find(attribute => attribute.namespaceUri === 'http://www.w3.org/XML/1998/namespace' && attribute.localName === 'space');
           if (space && space.value !== 'preserve') edit.setAttribute(space, 'preserve');

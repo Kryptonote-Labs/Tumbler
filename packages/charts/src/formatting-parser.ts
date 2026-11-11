@@ -17,7 +17,7 @@ export function parseChartFill(parent: LosslessXmlElement | undefined, ns: strin
   if (!source || rgb && (!raw || !/^[0-9a-f]{6}$/i.test(raw))) return undefined;
   const complete = !['srgbClr', 'schemeClr'].includes(source.localName) || source.children.some(node => node.kind === 'element' && node.namespaceUri === ns && !['lumMod', 'lumOff'].includes(node.localName));
   if (complete) {
-    const value = source.localName === 'schemeClr' ? raw : fill && resolveDrawingColor({ ...fill, children: [{ ...source, children: [] }] }, () => '#000000');
+    const value = source.localName === 'schemeClr' ? raw : fill && (resolveDrawingColor({ ...fill, children: [{ ...source, children: [] }] }, () => '#000000') ?? (source.localName === 'sysClr' ? '#000000' : undefined));
     if (!value || !fill) return undefined;
     return Object.freeze({ kind: source.localName === 'schemeClr' ? 'scheme' : 'rgb', value, source: fill });
   }

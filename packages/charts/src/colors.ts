@@ -5,7 +5,7 @@ const DEFAULT_CHART_COLORS: Readonly<Record<string, string>> = { accent1: '#4472
 
 /** Resolve host theme bindings without replacing the authored chart colour reference. */
 export function resolveChartColor(color: ChartColor, model: ChartModel): string | undefined {
-  if (color.source) return resolveDrawingColor(color.source, name => model.themeColors?.[name] ?? DEFAULT_CHART_COLORS[name]);
+  if (color.source) return resolveDrawingColor(color.source, name => model.themeColors?.[name] ?? DEFAULT_CHART_COLORS[name], undefined, () => color.kind === "rgb" ? color.value : undefined);
   const value = color.kind === "rgb" ? color.value : model.themeColors?.[color.value] ?? DEFAULT_CHART_COLORS[color.value];
   return value === undefined ? undefined : transformChartColor(value, color);
 }

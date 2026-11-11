@@ -70,6 +70,7 @@ export function resolveDrawingColor(
   element: LosslessXmlElement | undefined,
   scheme: (name: string) => string | undefined,
   placeholder?: string,
+  systemColor?: (name: string) => string | undefined,
 ): string | undefined {
   const node = element?.children.find(
     (n): n is LosslessXmlElement =>
@@ -90,7 +91,7 @@ export function resolveDrawingColor(
         ? placeholder
         : scheme(attr(node, "val") ?? "")
       : node.localName === "sysClr"
-        ? attr(node, "lastClr")
+        ? attr(node, "lastClr") ?? systemColor?.(attr(node, "val") ?? "")
         : node.localName === "prstClr"
           ? DRAWING_PRESET_COLORS[attr(node, "val") ?? ""]
           : attr(node, "val"),

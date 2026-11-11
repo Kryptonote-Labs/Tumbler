@@ -133,3 +133,47 @@ test('an imported inline title remains current when the property editor changes 
   if (changed.kind !== 'chart') return;
   expect(readChartContent(saved.document.package, changed.partName).workbook).toBe(authored.content.workbook);
 });
+
+
+test('recolouring a title run never borrows opacity from another run', async () => {
+  const { chartTitleFromWord, wordChartTitleText } = await import('../src/chart-title.ts');
+  const { chartContentModel, resolveChartColor } = await import('@tumblerjs/charts');
+  const model = { ...chartContentModel(chart().content), titleText: [{ runs: [
+    { text: 'One', style: { color: { kind: 'rgb' as const, value: '#FF0000' } } },
+    { text: 'Two', style: { color: { kind: 'rgb' as const, value: '#0000FF', transforms: [{ kind: 'lumMod' as const, value: .5 }] } } },
+  ] }] };
+  const previous = wordChartTitleText(model);
+  const secondColour = previous[0]!.runs[1]!.format!.color!;
+  const recoloured = previous.map(paragraph => ({ ...paragraph, runs: paragraph.runs.map((run, index) => index === 0 ? { ...run, format: { ...run.format, color: secondColour } } : run) }));
+  const result = chartTitleFromWord(recoloured, model);
+  expect(result[0]!.runs[0]!.style!.color).toEqual({ kind: 'rgb', value: '#000080' });
+  expect(resolveChartColor(result[0]!.runs[1]!.style!.color!, model)).toBe('#000080');
+  expect(result[0]!.runs[1]!.style!.color!.transforms).toEqual([{ kind: 'lumMod', value: .5 }]);
+});
+
+test('separate text edits retain intermediate title run opacity after editor merging', async () => {
+  const { chartTitleFromWord, wordChartTitleText } = await import('../src/chart-title.ts');
+  const { chartContentModel, resolveChartColor } = await import('@tumblerjs/charts');
+  const { WordShapeText } = await import('../src/collaboration/index.ts');
+  const { parseLosslessXml } = await import('@tumblerjs/ooxml');
+  const { parseChartFill } = await import('../../charts/src/formatting-parser.ts');
+  const color = (alpha: number) => {
+    const xml = parseLosslessXml(new TextEncoder().encode(`<a:spPr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:solidFill><a:srgbClr val="112233"><a:alpha val="${alpha}"/></a:srgbClr></a:solidFill></a:spPr>`));
+    return parseChartFill(xml.root, xml.root.namespaceUri)!;
+  };
+  const model = { ...chartContentModel(chart().content), titleText: [{ runs: [{ text: 'One', style: { color: color(25000) } }, { text: 'Two', style: { color: color(50000) } }, { text: 'Three', style: { color: color(75000) } }] }] };
+  const editor = new WordShapeText({ textBody: wordChartTitleText(model) });
+  editor.replace({ start: 0, end: 1 }, 'X');
+  editor.replace({ start: 10, end: 11 }, 'Z');
+  const runs = chartTitleFromWord(editor.paragraphs(), model)[0]!.runs;
+  expect(runs.map(run => [run.text, resolveChartColor(run.style!.color!, model)])).toEqual([
+    ['Xne', 'rgba(17,34,51,0.25)'], ['Two', 'rgba(17,34,51,0.5)'], ['ThreZ', 'rgba(17,34,51,0.75)'],
+  ]);
+});
+
+
+test('theme selections made in the inline chart editor retain their theme and luminance transforms', async () => {
+  const { chartTitleFromWord } = await import('../src/chart-title.ts');
+  const runs = chartTitleFromWord([{ runs: [{ text: 'Theme', format: { color: { theme: 'accent2', fallback: '#00FF00', tint: 128 } } }] }]);
+  expect(runs[0]!.runs[0]!.style!.color).toEqual({ kind: 'scheme', value: 'accent2', transforms: [{ kind: 'lumMod', value: 128 / 255 }, { kind: 'lumOff', value: 127 / 255 }] });
+});

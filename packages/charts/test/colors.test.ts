@@ -34,10 +34,19 @@ test('preset, system, HSL and linear RGB colour choices reach the shared chart r
   for (const [choice, expected] of [
     ['<a:prstClr val="dkSeaGreen"/>', 'rgba(143,188,143,1)'],
     ['<a:sysClr val="windowText" lastClr="102030"/>', 'rgba(16,32,48,1)'],
+    ['<a:sysClr val="windowText"/>', 'rgba(0,0,0,1)'],
+    ['<a:sysClr val="windowText"><a:alpha val="0"/></a:sysClr>', 'rgba(0,0,0,0)'],
     ['<a:hslClr hue="0" sat="100000" lum="50000"/>', 'rgba(255,0,0,1)'],
     ['<a:scrgbClr r="100000" g="0" b="0"/>', 'rgba(255,0,0,1)'],
   ]) {
     const document = parseLosslessXml(new TextEncoder().encode(`<a:spPr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:solidFill>${choice}</a:solidFill></a:spPr>`));
     expect(resolveChartColor(parseChartFill(document.root, document.root.namespaceUri)!, model)).toBe(expected);
   }
+});
+
+
+test('3D shading changes RGB channels while preserving colour-source transparency', async () => {
+  const { chartShade } = await import('../src/projection.ts');
+  expect(chartShade('rgba(100,200,50,0.25)', .5)).toBe('rgba(50,100,25,0.25)');
+  expect(chartShade('rgba(100,200,50,1)', .5)).toBe('rgba(50,100,25,1)');
 });

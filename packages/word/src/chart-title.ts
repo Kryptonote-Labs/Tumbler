@@ -1,7 +1,7 @@
 import { chartTitleRuns } from './chart-title-runs.ts';
 import { wordHighlightColor } from './highlight.ts';
 import { WORD_HIGHLIGHTS } from './text-properties.ts';
-import { chartFont, type ChartModel, type ChartTextParagraph } from '@tumblerjs/charts';
+import { chartFont, type ChartModel, type ChartColor, type ChartTextParagraph } from '@tumblerjs/charts';
 import type { WordTextParagraph } from './create.ts';
 import { resolveWordColour } from './theme-colours.ts';
 
@@ -27,16 +27,19 @@ export function chartTitleFromWord(paragraphs: readonly WordTextParagraph[], pre
     const f = run.format ?? {};
     const prior = previous?.titleText?.[source?.paragraph ?? paragraphIndex]?.runs;
     const referenceRuns = references?.[source?.paragraph ?? paragraphIndex]?.runs;
-    const matchesColor = (index: number) => f.color !== undefined && resolveWordColour(f.color).toLowerCase() === String(referenceRuns?.[index]?.format?.color).toLowerCase();
+    const matchesColor = (index: number) => typeof f.color === 'string' && resolveWordColour(f.color).toLowerCase() === String(referenceRuns?.[index]?.format?.color).toLowerCase();
     const preferred = source?.run ?? runIndex;
-    const matched = matchesColor(preferred) ? preferred : referenceRuns?.findIndex((_, index) => matchesColor(index)) ?? -1;
+    const matched = matchesColor(preferred) ? preferred : -1;
     const reference = referenceRuns?.[matched >= 0 ? matched : preferred]?.format;
     const style = prior?.[matched >= 0 ? matched : preferred]?.style;
     const fontFamily = reference && f.fontFamily === reference.fontFamily ? style?.fontFamily : f.fontFamily;
     const fontSize = reference && f.fontSizePoints === reference.fontSizePoints ? style?.fontSize : f.fontSizePoints;
     const bold = reference && f.bold === reference.bold ? style?.bold : f.bold;
     const italic = reference && f.italic === reference.italic ? style?.italic : f.italic;
-    const color = matched >= 0 ? style?.color : f.color === undefined ? undefined : { kind: 'rgb' as const, value: resolveWordColour(f.color) };
+    const color: ChartColor | undefined = matched >= 0 ? style?.color : f.color === undefined ? undefined : typeof f.color === 'string' ? { kind: 'rgb', value: f.color } : {
+      kind: 'scheme', value: f.color.theme,
+      transforms: f.color.tint !== undefined ? [{ kind: 'lumMod', value: f.color.tint / 255 }, { kind: 'lumOff', value: 1 - f.color.tint / 255 }] : f.color.shade !== undefined ? [{ kind: 'lumMod', value: f.color.shade / 255 }] : [],
+    };
     return { text: run.text, style: {
       ...(fontFamily === undefined ? {} : { fontFamily }),
       ...(fontSize === undefined ? {} : { fontSize }),
