@@ -27,10 +27,10 @@ export function chartTitleFromWord(paragraphs: readonly WordTextParagraph[], pre
     const f = run.format ?? {};
     const prior = previous?.titleText?.[source?.paragraph ?? paragraphIndex]?.runs;
     const referenceRuns = references?.[source?.paragraph ?? paragraphIndex]?.runs;
-    const matchesColor = (index: number) => typeof f.color === 'string' && resolveWordColour(f.color).toLowerCase() === String(referenceRuns?.[index]?.format?.color).toLowerCase();
+    const matchesColor = (index: number) => source !== undefined && typeof f.color === 'string' && resolveWordColour(f.color).toLowerCase() === String(referenceRuns?.[index]?.format?.color).toLowerCase();
     const preferred = source?.run ?? runIndex;
     const matched = matchesColor(preferred) ? preferred : -1;
-    const reference = referenceRuns?.[matched >= 0 ? matched : preferred]?.format;
+    const reference = source && referenceRuns?.[matched >= 0 ? matched : preferred]?.format;
     const style = prior?.[matched >= 0 ? matched : preferred]?.style;
     const fontFamily = reference && f.fontFamily === reference.fontFamily ? style?.fontFamily : f.fontFamily;
     const fontSize = reference && f.fontSizePoints === reference.fontSizePoints ? style?.fontSize : f.fontSizePoints;
