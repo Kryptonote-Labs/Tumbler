@@ -28,10 +28,10 @@ export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[
   const right = width - PADDING - (reserve && (position === "right" || position === "top-right") ? sideWidth : 0);
   const top = titleHeight + (reserve && position === "top" ? legendHeight : 0);
   const bottom = height - PADDING - (reserve && position === "bottom" ? legendHeight : 0);
-  const tilt = model.threeD ? Math.max(0.1, Math.sin(Math.abs(model.threeD.rotationX) * Math.PI / 180)) : 1;
+  const tilt = model.threeD ? Math.sin(Math.abs(model.threeD.rotationX) * Math.PI / 180) : 1;
   const available = Math.max(1, bottom - top);
   const initialRadius = Math.max(1, Math.min((right - left) / 2, available / (2 * tilt)));
-  const depth = model.threeD ? Math.min(24, initialRadius * 0.2) : 0;
+  const depth = model.threeD ? Math.min(24, initialRadius * 0.2) * (model.threeD.heightPercent ?? 100) / 100 : 0;
   const cx = (left + right) / 2, cy = (top + bottom - depth) / 2;
   const radius = Math.max(1, Math.min((right - left) / 2, (available - depth) / (2 * tilt)));
   const hole = model.kind === "doughnut" ? radius * (model.holeSize ?? 50) / 100 : 0;
@@ -57,7 +57,8 @@ export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[
       const points = sample(outer, slice.startAngle, slice.endAngle).map(point => ({ x: point.x + dx, y: point.y + dy }));
       for (let i = 0; i < points.length - 1; i++) {
         const a = points[i]!, b = points[i + 1]!;
-        if ((a.y + b.y) / 2 < cy + dy) continue;
+        const middleAngle = slice.startAngle + (slice.endAngle - slice.startAngle) * (i + .5) / (points.length - 1);
+        if (Math.sin(middleAngle) < 0) continue;
         marks.push({ kind: 'path', d: chartPolygon([a, b, { x: b.x, y: b.y + depth }, { x: a.x, y: a.y + depth }]), fill: chartShade(chartPointColor(context, series, ring, slice.index), 0.75) });
       }
     }

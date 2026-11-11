@@ -18,7 +18,12 @@ const chart = parseOoxmlChart(chartXml, "transitional");
 
 The shared preview covers bar/column, line, area, pie, doughnut, XY scatter,
 bubble, radar, stock, split pie and surface charts. Cartesian and pie 3D plots
-retain camera settings. These layouts are under active compatibility work; this
+use authored camera settings. Box, cylinder, cone, pyramid and their axis-maximum
+variants share projected geometry, point paint and outlines. Standard grouping
+places series in depth; clustered grouping places series across categories.
+Height/depth ratios, right-angle projection and perspective use the Office
+implementation notes. Unauthored depth uses proportional cells as an automatic
+layout policy. Authored walls retain paint and outward thickness. These layouts are under active compatibility work; this
 is not a claim of pixel parity with Office or LibreOffice for every property. Bubble series pair sparse
 X, Y, and size caches by point index and support the standard area/width size
 modes, 0–300% scaling, and opt-in negative values. Deterministic headless layout
@@ -87,8 +92,10 @@ height contours. Shared contour edges paint once so authored alpha is preserved.
 
 Value axes support logarithmic/reversed scales, crossings, minor grids/ticks,
 label-side/skip settings and display units. Date categories preserve calendar gaps
-and equal month/year units. Manual layout, full depth-axis geometry and several
-other axis properties still need compatibility work. Unknown source XML is preserved by the owning OOXML
+and equal month/year units. Cartesian 3D axes share the data camera, crossings,
+labels, value gridlines and ticks; hidden axes retain their scale. Surface charts
+apply authored camera settings, with new contours using a top-down view. Manual
+layout and several other axis properties still need compatibility work. Unknown source XML is preserved by the owning OOXML
 package even when a chart falls back rather than rendering.
 
 Tumbler is developed at

@@ -77,7 +77,7 @@ export function layoutCartesianChart(model: SupportedChartModel, width: number, 
   const categories = categoryLabels(model, count);
   const stacks = chartStacks(model, count);
   const horizontal = model.kind === "bar";
-  const categoryAxis = model.axes.find(axis => axis.kind === "category" && !axis.deleted);
+  const categoryAxis = model.axes.find(axis => axis.kind === "category");
   const categoryFont = chartFont("category", categoryAxis?.textStyle, model);
   const labelWidth = Math.max(0, ...categories.map(label => measure(label, categoryFont)));
   const legend = model.legend?.overlay === false ? model.legend.position : undefined;
@@ -93,7 +93,7 @@ export function layoutCartesianChart(model: SupportedChartModel, width: number, 
   const categoryHeight = horizontal ? 20 : Math.abs(Math.sin(radians)) * labelWidth + Math.abs(Math.cos(radians)) * categoryFont.size + 14;
   const top = (model.title === undefined || model.titleOverlay ? 16 : chartTitleHeight(model) + 28) + (legend === "top" ? 28 : 0);
   const plot = Object.freeze({ x: left, y: top, width: plotWidth, height: Math.max(1, height - top - bottomLegend - categoryHeight) });
-  const axis = model.axes.find((candidate) => candidate.kind === "value" && !candidate.deleted);
+  const axis = model.axes.find((candidate) => candidate.kind === "value");
   let dataMinimum = 0, dataMaximum = 0;
   for (const points of stacks) for (const point of points) if (point) {
     dataMinimum = Math.min(dataMinimum, point.start, point.end);
@@ -145,11 +145,11 @@ export function layoutScatterChart(model: SupportedChartModel, width: number, he
   const yValues = rawSeries.flatMap((series) => series.map((point) => point.y));
   const axisById = (index: number) => {
     const id = model.axisIds?.[index];
-    return id === undefined ? undefined : model.axes.find((axis) => axis.id === id && !axis.deleted);
+    return id === undefined ? undefined : model.axes.find((axis) => axis.id === id);
   };
-  const visibleValueAxes = model.axes.filter((axis) => axis.kind === "value" && !axis.deleted);
-  const xAxis = axisById(0) ?? visibleValueAxes.find((axis) => axis.position === "bottom" || axis.position === "top");
-  const yAxis = axisById(1) ?? visibleValueAxes.find((axis) => axis.position === "left" || axis.position === "right");
+  const valueAxes = model.axes.filter((axis) => axis.kind === "value");
+  const xAxis = axisById(0) ?? valueAxes.find((axis) => axis.position === "bottom" || axis.position === "top");
+  const yAxis = axisById(1) ?? valueAxes.find((axis) => axis.position === "left" || axis.position === "right");
   const analytic = model.series.map((series, index) => chartAnalyticalBounds(series, rawSeries[index] ?? []));
   const xDomain = xAxis?.logBase ? chartLogarithmicScale([...xValues, ...analytic.flatMap(bounds => [bounds.xPositiveMinimum, bounds.xMaximum])], xAxis) : numericDomain([...xValues, ...analytic.flatMap(bounds => [bounds.xMinimum, bounds.xMaximum]).filter(Number.isFinite)], xAxis?.minimum, xAxis?.maximum);
   const yDomain = yAxis?.logBase ? chartLogarithmicScale([...yValues, ...analytic.flatMap(bounds => [bounds.yPositiveMinimum, bounds.yMaximum])], yAxis) : numericDomain([...yValues, ...analytic.flatMap(bounds => [bounds.yMinimum, bounds.yMaximum]).filter(Number.isFinite)], yAxis?.minimum, yAxis?.maximum);
@@ -270,7 +270,7 @@ export function layoutPieSlices(model: SupportedChartModel): readonly PieSlice[]
   ) ?? [];
   const total = values.reduce((sum, point) => sum + point.value, 0);
   if (total <= 0) return Object.freeze([]);
-  let angle = -Math.PI / 2 + (model.firstSliceAngle ?? 0) * Math.PI / 180;
+  let angle = -Math.PI / 2 + (model.firstSliceAngle ?? model.threeD?.rotationY ?? 0) * Math.PI / 180;
   return Object.freeze(values.map((point) => {
     const startAngle = angle;
     angle += point.value / total * Math.PI * 2;

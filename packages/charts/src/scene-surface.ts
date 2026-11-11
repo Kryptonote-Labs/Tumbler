@@ -1,3 +1,6 @@
+import { threeDWallMarks } from './three-d-walls.ts';
+import { threeDAxisMarks } from './three-d-axes.ts';
+import { threeDGeometry } from './three-d-geometry.ts';
 import { surfaceWireframe, type SurfaceVertex } from './surface-wireframe.ts';
 import { surfaceBandPaint } from './surface-bands.ts';
 import { chartShapeMarks } from './shape-scene.ts';
@@ -37,6 +40,8 @@ export function surfaceScene(context: SceneContext): ChartMark[] {
   let work = 0;
   const spend = () => { if (++work > 200_000) throw new RangeError('Chart preview geometry budget exceeded.'); };
   const project = chartProjection(model, layout.plot);
+  const geometry = threeDGeometry(model, layout);
+  const axes = model.threeD ? threeDAxisMarks(context, layout, geometry, project) : undefined;
   const normalizedValue = (value: number) => chartAxisCoordinate(value, layout.minimum, layout.maximum, 0, 1, valueAxis);
   const position = (vertex: SurfaceVertex) => {
     const x = categoryAxis?.reversed ? 1 - vertex.x : vertex.x, z = seriesAxis?.reversed ? 1 - vertex.z : vertex.z;
@@ -52,7 +57,7 @@ export function surfaceScene(context: SceneContext): ChartMark[] {
     });
     if (!corners.every(point => point !== undefined)) continue;
     if (model.wireframe) {
-      surfaceWireframe(corners, bands, !!model.threeD, seenEdges, (a, b, band) => {
+      surfaceWireframe(corners, bands, model.sourceType === 'surface3DChart', seenEdges, (a, b, band) => {
         spend();
         const first = position(a), last = position(b);
         polygons.push({ depth: (first.depth + last.depth) / 2, mark: { kind: 'path', d: `M ${first.x} ${first.y} L ${last.x} ${last.y}`, ...surfaceBandPaint(context, band, formats.get(band), layout.plot) } });
@@ -70,19 +75,20 @@ export function surfaceScene(context: SceneContext): ChartMark[] {
       polygons.push({ depth: points.reduce((sum, point) => sum + point.depth, 0) / points.length, mark: { kind: 'path', d: chartPolygon(points), ...surfaceBandPaint(context, band, formats.get(band), layout.plot) } });
     }
   }
-  const marks: ChartMark[] = [...chartShapeMarks(context, layout.plot, model.plotArea), { kind: 'group', clip: layout.plot, marks: polygons.sort((a, b) => b.depth - a.depth).map(polygon => polygon.mark) }];
+  const marks: ChartMark[] = [...chartShapeMarks(context, layout.plot, model.plotArea), { kind: 'group', clip: layout.plot, marks: [...(model.threeD ? threeDWallMarks(context, layout.plot, project) : []), ...(axes?.grids ?? []), ...polygons.sort((a, b) => b.depth - a.depth).map(polygon => polygon.mark)] }];
+  if (axes) marks.push(...axes.marks);
   const font = chartFont('category', categoryAxis?.textStyle, model, options.resolveColor);
   const seriesFont = chartFont('category', seriesAxis?.textStyle, model, options.resolveColor);
   const valueFont = chartFont('tick', valueAxis?.textStyle, model, options.resolveColor);
-  if (!categoryAxis?.deleted && categoryAxis?.tickLabelPosition !== 'none') layout.categories.forEach((text, index) => {
+  if (!axes && !categoryAxis?.deleted && categoryAxis?.tickLabelPosition !== 'none') layout.categories.forEach((text, index) => {
     const point = position({ x: index / Math.max(1, columns - 1), z: 0, value: layout.minimum });
     marks.push({ kind: 'text', text, x: point.x, y: point.y + font.size + 5, anchor: 'middle', font });
   });
-  if (!seriesAxis?.deleted && seriesAxis?.tickLabelPosition !== 'none') model.series.forEach((series, index) => {
+  if (!axes && !seriesAxis?.deleted && seriesAxis?.tickLabelPosition !== 'none') model.series.forEach((series, index) => {
     const point = position({ x: 0, z: index / Math.max(1, rows - 1), value: layout.minimum });
     marks.push({ kind: 'text', text: series.title ?? `Series ${index + 1}`, x: point.x - 5, y: point.y + 4, anchor: 'end', font: seriesFont });
   });
-  if (model.threeD && !valueAxis?.deleted && valueAxis?.tickLabelPosition !== 'none') for (const value of layout.ticks) {
+  if (!axes && model.threeD && !valueAxis?.deleted && valueAxis?.tickLabelPosition !== 'none') for (const value of layout.ticks) {
     const point = project({ x: 0, y: normalizedValue(value), z: 1 });
     marks.push({ kind: 'text', text: chartTickLabel(value, valueAxis?.numberFormatCode, options), x: point.x - 5, y: point.y + 4, anchor: 'end', font: valueFont });
   }
