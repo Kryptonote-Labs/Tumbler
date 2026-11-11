@@ -9,6 +9,7 @@
     updateChartTitle,
     type ChartPropertyNode,
   } from "@tumblerjs/charts";
+  import Chart3DProperties from "./Chart3DProperties.svelte";
   import ChartPropertyFields from "./ChartPropertyFields.svelte";
   import {
     CHART_TYPE_FAMILIES,
@@ -22,6 +23,7 @@
     removableChartProperties,
     sameChartType,
     searchChartProperties,
+    setChartPropertyValue as setValue,
     type ChartPropertyApply,
     type ChartTypeChange,
   } from "./chart-properties.ts";
@@ -40,12 +42,16 @@
     readonly ontypepreview?: (options: ChartTypeChange | undefined) => void;
     readonly oneditdata?: () => void;
     readonly typePreview?: Snippet;
-    readonly dataEditor?: Snippet;
+    readonly viewPreview?: Snippet;
+    readonly onsourcepreview?: (bytes: Uint8Array | undefined) => void;
+    readonly typeError?: string;
+    readonly dataExpanded?: boolean;
+    readonly dataEditor?: Snippet<[() => void]>;
     readonly plotIndex?: number;
     readonly onplotselect?: (index: number) => void;
   }
 
-  let { bytes, disabled = false, themeColors = {}, onchange, ontypechange, ontypepreview, oneditdata, typePreview, dataEditor, plotIndex = 0, onplotselect }: Props = $props();
+  let { bytes, disabled = false, themeColors = {}, onchange, ontypechange, ontypepreview, oneditdata, typePreview, viewPreview, onsourcepreview, typeError, dataExpanded, dataEditor, plotIndex = 0, onplotselect }: Props = $props();
 
   const id = $props.id();
   // Follows the host's bytes, and runs ahead of them between an edit and the host's next render.
@@ -60,6 +66,8 @@
   let previewed: ChartTypeChange | undefined;
   let trigger = $state<HTMLButtonElement>();
   let listbox = $state<HTMLDivElement>();
+  let dataTrigger = $state<HTMLButtonElement>();
+  let typed = "", lastTyped = 0;
 
   const chart = $derived(chartPropertyChild(parsed, "chart"));
   const title = $derived(parsed && chartTitleText(parsed));
@@ -91,19 +99,6 @@
   const locateChart: Locate = (root) => chartPropertyChild(root, "chart");
   const locateLegend: Locate = (root) => chartPropertyChild(locateChart(root), "legend");
 
-  /** Sets `val` on a child property, adding the property first when it is absent. */
-  function setValue(source: Uint8Array, parent: Locate, name: string, definition: string, value: string): Uint8Array {
-    const owner = parent(chartPropertyTree(source));
-    if (!owner) throw new TypeError("This chart has no place for that property.");
-    let next = source;
-    let node = chartPropertyChild(owner, name);
-    if (!node) {
-      next = insertChartProperty(source, owner.id, definition);
-      node = chartPropertyChild(parent(chartPropertyTree(next)), name)!;
-    }
-    return editChartSource(next, [{ kind: "attribute", node: node.id, name: "val", value }]);
-  }
-
   function toggleTitle(show: boolean) {
     error = commit((source) => {
       if (show) return updateChartTitle(source, "Chart Title");
@@ -134,7 +129,7 @@
     ontypepreview?.(option);
   }
   async function openPicker() {
-    picking = true;
+    picking = true; typed = "";
     await tick();
     (listbox?.querySelector<HTMLElement>('[aria-selected="true"]') ?? listbox?.querySelector<HTMLElement>('[role="option"]'))?.focus();
   }
@@ -157,6 +152,12 @@
     else if (event.key === "End") move(options.length - 1);
     else if (event.key === "Escape") { event.preventDefault(); closePicker(true); }
     else if (event.key === "Tab") closePicker(false);
+    else if (event.key.length === 1 && event.key !== ' ' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      const now = Date.now(); typed = (now - lastTyped < 700 ? typed : '') + event.key.toLowerCase(); lastTyped = now;
+      const query = [...typed].every(character => character === typed[0]) ? typed[0]! : typed;
+      const match = [...options.slice(index + 1), ...options.slice(0, index + 1)].find(option => option.textContent?.trim().toLowerCase().startsWith(query));
+      if (match) { event.preventDefault(); match.focus(); }
+    }
   }
   function leave(event: FocusEvent) {
     const next = event.relatedTarget as Node | null;
@@ -182,10 +183,10 @@
           <span id={`${id}-type-value`}>{type?.label ?? "Other"}</span>
         </button>
       </div>
+      {#if typeError}<p class="error" role="alert">{typeError}</p>{/if}
       {#if oneditdata}
-        <div class="row"><span>Data</span><button type="button" class="button" onclick={oneditdata}>Edit data</button></div>
+        <div class="row"><span>Data</span><button bind:this={dataTrigger} type="button" class="button" aria-expanded={dataExpanded} aria-controls={dataExpanded === undefined ? undefined : `${id}-data`} onclick={oneditdata}>Edit data</button></div>
       {/if}
-      {@render dataEditor?.()}
       {#if picking}
         {#if typePreview}<div class="type-preview">{@render typePreview()}</div>{/if}
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -224,6 +225,10 @@
         </select></label>
       {#if error}<p class="error" role="alert">{error}</p>{/if}
     </fieldset>
+
+    {#if dataEditor}<fieldset id={`${id}-data`} {disabled}><legend>Data</legend>{@render dataEditor(() => dataTrigger?.focus())}</fieldset>{/if}
+
+    <Chart3DProperties bytes={current} root={parsed} {disabled} {plotIndex} onchange={(next) => { current = next; onchange(next); }} onpreview={onsourcepreview} preview={viewPreview} />
 
     <fieldset {disabled}>
       <legend>Format</legend>

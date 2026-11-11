@@ -74,6 +74,7 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
     const names = [...new Set(allowed.map(name => chartPropertyDefinition(name)?.name.split(':').at(-1)).filter((name): name is string => !!name))];
     const content = names.flatMap(name => {
       const generated = fresh.filter(child => child.localName === name);
+      if (series && name === 'shape' && change.type === 'bar3DChart' && change.shape !== undefined) return generated.map(element => standalone(created.document, element));
       if (series && name === 'bubble3D' && change.type === 'bubbleChart' && change.bubble3D !== undefined) return generated.map(element => standalone(created.document, element));
       if (!series && overrides.has(name)) {
         if (name === 'ser') return generated.map((element, index) => merge(element, findNode(properties, element.id)!, currentSeries[index], archivedSeries.find(saved => elementChildren(saved).find(child => child.localName === 'idx')?.attributes.find(attribute => attribute.localName === 'val')?.value === source.children(currentSeries[index]!, 'idx')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value), true));

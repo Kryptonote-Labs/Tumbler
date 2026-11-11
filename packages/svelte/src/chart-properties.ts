@@ -1,5 +1,5 @@
 import {
-  chartPropertyDefinition,
+  chartPropertyDefinition, chartPropertyTree, editChartSource, insertChartProperty,
   type ChartPropertyDefinition,
   type ChartPropertyNode,
   type ChartSourceEdit,
@@ -299,4 +299,21 @@ export function chartTitleText(root: ChartPropertyNode): string | undefined {
     .filter((paragraph) => localName(paragraph) === "p")
     .map((paragraph) => paragraph.children.map((run) => ["r", "fld"].includes(localName(run)) ? child(run, "t")?.text ?? "" : localName(run) === "br" ? "\n" : "").join(""))
     .join("\n");
+}
+
+
+export type ChartPropertyLocator = (root: ChartPropertyNode) => ChartPropertyNode | undefined;
+
+/** Resolve fresh node identities for each source edit, including optional numeric defaults. */
+export function setChartPropertyValue(bytes: Uint8Array, locate: ChartPropertyLocator, name: string, definition: string, next: string | undefined): Uint8Array {
+  let source = bytes;
+  const parent = locate(chartPropertyTree(source));
+  if (!parent) throw new TypeError('This chart has no place for that property.');
+  let node = child(parent, name);
+  if (next === undefined) return node ? editChartSource(source, [{ kind: 'remove', node: node.id }]) : source;
+  if (!node) {
+    source = insertChartProperty(source, parent.id, definition);
+    node = child(locate(chartPropertyTree(source)), name)!;
+  }
+  return editChartSource(source, [{ kind: 'attribute', node: node.id, name: 'val', value: next }]);
 }

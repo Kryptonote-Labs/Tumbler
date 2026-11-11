@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { chartPropertyTree, createOoxmlChart, type ChartPropertyNode } from "@tumblerjs/charts";
-import { CHART_TYPE_FAMILIES, chartPropertyLabels, currentChartType, removableChartProperties } from "./chart-properties.ts";
+import { chartPropertyTree, createOoxmlChart, parseOoxmlChart, type ChartPropertyNode } from "@tumblerjs/charts";
+import { CHART_TYPE_FAMILIES, chartPropertyLabels, currentChartType, removableChartProperties, setChartPropertyValue, chartPropertyChild } from "./chart-properties.ts";
 
 const fixture = readFileSync(new URL("../../charts/test/fixtures/word-default-chart.xml", import.meta.url));
 
@@ -43,4 +43,16 @@ test('the gallery treats present empty boolean properties as true', () => {
   const bytes = createOoxmlChart({ type: 'bubbleChart', categories: [], series: [{ name: 'Data', values: [1], xValues: [1], bubbleSizes: [1] }], bubble3D: true });
   const empty = new TextEncoder().encode(new TextDecoder().decode(bytes).replace('<c:bubble3D val="1"/>', '<c:bubble3D/>'));
   expect(currentChartType(chartPropertyTree(empty))?.label).toBe('3-D bubble');
+});
+
+
+test('3D property controls preserve chart data while setting and restoring automatic dimensions', () => {
+  for (const conformance of ['strict', 'transitional'] as const) {
+    const original = createOoxmlChart({ type: 'bar3DChart', conformance, categories: ['A'], series: [{ name: 'Data', values: [2] }] });
+    const view = (root: ChartPropertyNode) => chartPropertyChild(chartPropertyChild(root, 'chart'), 'view3D');
+    const changed = setChartPropertyValue(original, view, 'hPercent', 'c:CT_HPercent/c:hPercent', '50');
+    expect(parseOoxmlChart(changed, conformance)).toMatchObject({ threeD: { heightPercent: 50 }, series: [expect.objectContaining({ values: expect.objectContaining({ points: [{ index: 0, value: 2 }] }) })] });
+    const automatic = parseOoxmlChart(setChartPropertyValue(changed, view, 'hPercent', 'c:CT_HPercent/c:hPercent', undefined), conformance);
+    expect(automatic.status === 'supported' && automatic.threeD?.heightPercent).toBeUndefined();
+  }
 });
