@@ -35,7 +35,7 @@ function move(mark: ChartMark, x: number, y: number): ChartMark {
 export function ofPieScene(context: SceneContext): ChartMark[] {
   const { plot } = pieChartFrame(context);
   const { plotLayout: _layout, plotArea, title: _title, legend: _legend, ...model } = context.model;
-  const content = splitPieScene({ ...context, width: plot.width, height: plot.height, model: { ...model, title: undefined, legend: undefined, plotLayout: { target: 'inner', xMode: 'edge', yMode: 'edge', x: 0, y: 0, width: 1, height: 1 } } });
+  const content = splitPieScene({ ...context, width: plot.width, height: plot.height, textFrame: { x: plot.x, y: plot.y, width: context.width, height: context.height }, model: { ...model, title: undefined, legend: undefined, plotLayout: { target: 'inner', xMode: 'edge', yMode: 'edge', x: 0, y: 0, width: 1, height: 1 } } });
   const legend = chartLegendScene(context);
   return [...chartShapeMarks(context, plot, plotArea), ...content.map(mark => move(mark, plot.x, plot.y)), ...legend];
 }
@@ -70,7 +70,8 @@ function splitPieScene(context: SceneContext): ChartMark[] {
       top += h;
     }
   } else {
-    const minor = pieScene({ ...context, width: minorWidth, height: minorHeight, model: { ...model, kind: 'pie', title: undefined, legend: undefined, series: [secondarySeries] } }, total);
+    const frame = context.textFrame ?? { x: 0, y: 0, width, height };
+    const minor = pieScene({ ...context, width: minorWidth, height: minorHeight, textFrame: { ...frame, x: frame.x + mainWidth, y: frame.y + (height - minorHeight) / 2 }, model: { ...model, kind: 'pie', title: undefined, legend: undefined, series: [secondarySeries] } }, total);
     marks.push(...minor.map(mark => move(mark, mainWidth, (height - minorHeight) / 2)));
   }
   marks.push(...chartLegendScene(context));

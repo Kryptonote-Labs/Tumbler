@@ -55,7 +55,6 @@ function buildChartScene(model: SupportedChartModel, width: number, height: numb
   const marks: ChartMark[] = chartShapeMarks(context, { x: .5, y: .5, width: Math.max(0, width - 1), height: Math.max(0, height - 1) }, model.chartArea, { fill: '#ffffff', stroke: '#d9d9d9' });
   const title = chartTitleMarks(context), titleBounds = chartMarksBounds(context, title);
   const titleMarks = [...(titleBounds ? chartShapeMarks(context, { x: titleBounds.x - 4, y: titleBounds.y - 3, width: titleBounds.width + 8, height: titleBounds.height + 6 }, model.titleArea) : []), ...title];
-  if (!model.titleOverlay) marks.push(...titleMarks);
   const manual = model.plotLayout;
   const possiblyCollapsed = manual && (manual.width === 0 || manual.height === 0 || manual.widthMode === 'edge' || manual.heightMode === 'edge');
   const plot = possiblyCollapsed ? model.kind === 'pie' || model.kind === 'doughnut' || model.kind === 'of-pie'
@@ -66,7 +65,7 @@ function buildChartScene(model: SupportedChartModel, width: number, height: numb
     const { plotLayout: _manual, ...automatic } = model;
     marks.push(...chartPlotScene({ ...context, model: automatic }).filter(mark => mark.kind === 'group' && mark.role === 'legend'));
   } else marks.push(...chartPlotScene(context));
-  if (model.titleOverlay) marks.push(...titleMarks);
+  marks.push(...titleMarks);
   return { width, height, label: model.title ?? (model.plots ? "Combination chart" : `${model.kind} chart`), marks: chartStrokeBounds(chartLegendShape(context, marks), options.viewport ?? { x: 0, y: 0, width, height }) };
 }
 
