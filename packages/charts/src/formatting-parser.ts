@@ -1,5 +1,5 @@
 import { chartElementMarkup } from './xml-markup.ts';
-import { resolveDrawingColor, type LosslessXmlElement } from "@tumblerjs/ooxml";
+import { resolveDrawingColor, readDrawingStrokeProperties, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import type { ChartColor, ChartColorTransform, ChartLineStyle, ChartTextStyle } from "./model.ts";
 
 function child(parent: LosslessXmlElement | undefined, ns: string, name: string) {
@@ -40,6 +40,7 @@ export function parseChartLine(parent: LosslessXmlElement | undefined, ns: strin
   const width = rawWidth === undefined ? undefined : Number(rawWidth) / 12700;
   const color = parseChartFill(line, ns);
   return Object.freeze({
+    ...readDrawingStrokeProperties(line),
     ...(child(line, ns, "noFill") ? { noFill: true } : {}),
     ...(color ? { color } : {}),
     ...(width !== undefined && Number.isFinite(width) && width >= 0 ? { width } : {}),

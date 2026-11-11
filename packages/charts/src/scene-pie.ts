@@ -1,3 +1,4 @@
+import { chartPointStroke } from './stroke-scene.ts';
 import { chartDataLabelMarks } from './label-scene.ts';
 import { chartPointColor } from './point-style.ts';
 import { chartShade, chartPolygon } from './projection.ts';
@@ -64,7 +65,7 @@ export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[
       const { dx, dy } = offset(slice);
       const shifted = (points: readonly { x: number; y: number }[]) => points.map(point => ({ x: point.x + dx, y: point.y + dy }));
       const d = depth ? chartPolygon(shifted([...sample(outer, slice.startAngle, slice.endAngle), ...(inner ? sample(inner, slice.endAngle, slice.startAngle) : [{ x: cx, y: cy }])])) : pieArcPath(cx + dx, cy + dy, outer, slice.startAngle, slice.endAngle, inner);
-      marks.push({ kind: 'path', d, fill: chartPointColor(context, series, ring, slice.index), stroke: '#ffffff', strokeWidth: 1 });
+      marks.push({ kind: 'path', d, fill: chartPointColor(context, series, ring, slice.index), ...chartPointStroke(context, series, ring, slice.index, '#ffffff') });
       const angle = (slice.startAngle + slice.endAngle) / 2;
       const labelRadius = inner + (outer - inner) * .65;
       const category = String(categories.get(slice.index) ?? slice.index + 1);

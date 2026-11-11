@@ -1,3 +1,4 @@
+import { chartPointStroke, chartSeriesStroke, chartStrokeMark } from './stroke-scene.ts';
 import { xyGeometry } from './xy-geometry.ts';
 import { xyAxisMarks } from './axis-scene.ts';
 import { chartAnalyticsMarks } from './analytics-scene.ts';
@@ -15,21 +16,20 @@ export function xyScene(context: SceneContext): ChartMark[] {
   const layout = bubbles ?? layoutScatterChart(model, context.width, height);
   const { plot } = layout;
   const { x: projectX, y: projectY } = xyGeometry(model, layout);
-  const marks: ChartMark[] = xyAxisMarks(context, layout);
+  const marks: ChartMark[] = [...xyAxisMarks(context, layout)];
 
   const series: ChartMark[] = [];
   const labels: ChartMark[] = [];
   model.series.forEach((item, index) => {
     if (bubbles) {
       for (const point of bubbles.series[index] ?? []) {
-        if (point.radius > 0) series.push({ kind: "circle", cx: point.plotX, cy: point.plotY, r: point.radius, fill: chartPointColor(context, item, index, point.index), stroke: chartPointColor(context, item, index, point.index, true), fillOpacity: 0.72 });
+        if (point.radius > 0) series.push({ kind: "circle", cx: point.plotX, cy: point.plotY, r: point.radius, fill: chartPointColor(context, item, index, point.index), ...chartPointStroke(context, item, index, point.index, chartPointColor(context, item, index, point.index, true)), fillOpacity: 0.72 });
       }
       for (const point of bubbles.series[index] ?? []) labels.push(...chartDataLabelMarks(context, item, index, { index: point.index, x: point.plotX, y: point.plotY, category: String(point.x), value: point.y, bubbleSize: point.size }));
       return;
     }
     const points = layout.series[index] ?? [];
-    const stroke = context.color(item, index, true);
-    if (lineVisible(model, item)) series.push({ kind: "path", d: scatterLinePath(points, smooth(model, item)), stroke, strokeWidth: item.lineStyle?.noFill ? 0 : (item.lineStyle?.width ?? 1.5) * 4 / 3 });
+    if (lineVisible(model, item)) series.push({ kind: "path", d: scatterLinePath(points, smooth(model, item)), ...chartStrokeMark(chartSeriesStroke(context, item, index)) });
     if (markerVisible(model, item)) for (const point of points) series.push(...chartMarkerMarks(context, item, index, point.index, point.plotX, point.plotY));
     for (const point of points) labels.push(...chartDataLabelMarks(context, item, index, { index: point.index, x: point.plotX, y: point.plotY, category: String(point.x), value: point.y }));
   });

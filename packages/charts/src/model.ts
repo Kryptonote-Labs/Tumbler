@@ -1,3 +1,4 @@
+import type { DrawingStrokeProperties } from "@tumblerjs/ooxml";
 export type ChartKind = "bar" | "column" | "line" | "pie" | "doughnut" | "scatter" | "bubble" | "area" | "radar" | "stock" | "surface" | "of-pie";
 
 export type ChartScatterStyle = "none" | "line" | "line-marker" | "marker" | "smooth" | "smooth-marker";
@@ -44,7 +45,7 @@ export interface ChartTextStyle {
   readonly color?: ChartColor;
 }
 
-export interface ChartLineStyle {
+export interface ChartLineStyle extends DrawingStrokeProperties {
   readonly color?: ChartColor;
   readonly noFill?: boolean;
   /** Width in points. */

@@ -1,12 +1,12 @@
 import type { ChartRect } from "./layout.ts";
 import type { ChartSeries, ChartPointFormat, SupportedChartModel } from "./model.ts";
-import { chartFont, chartLegendPositions, type ChartColorResolver, type ChartFont } from "./scene-style.ts";
+import { chartFont, chartLegendPositions, type ChartColorResolver, type ChartFont, type ChartStroke, type ChartStrokeDecoration } from "./scene-style.ts";
 
 /**
  * One drawing primitive of a chart, in CSS pixels. SVG and canvas heads draw the same marks, so
  * editor charts and rendered thumbnails agree.
  */
-export type ChartMark =
+export type ChartMark = (
   | { readonly kind: "rect"; readonly x: number; readonly y: number; readonly width: number; readonly height: number; readonly fill: string; readonly stroke?: string; readonly strokeWidth?: number }
   | { readonly kind: "circle"; readonly cx: number; readonly cy: number; readonly r: number; readonly fill: string; readonly stroke?: string; readonly fillOpacity?: number; readonly strokeWidth?: number }
   /** An SVG path string. Paths without `fill` are stroked only. */
@@ -19,7 +19,7 @@ export type ChartMark =
    * Structure: an optional clip to `clip`, and a `role` naming the legend and each of its entries
    * so heads can expose them (the SVG head renders `chart-legend` and `chart-legend-entry` classes).
    */
-  | { readonly kind: "group"; readonly role?: "legend" | "legend-entry"; readonly clip?: ChartRect; readonly marks: readonly ChartMark[] };
+  | { readonly kind: "group"; readonly role?: "legend" | "legend-entry"; readonly clip?: ChartRect; readonly marks: readonly ChartMark[] }) & ChartStrokeDecoration;
 
 export interface ChartScene {
   readonly width: number;
@@ -54,8 +54,8 @@ export interface SceneContext {
 }
 
 /** A stroke that draws nothing produces no mark. */
-export function line(x1: number, y1: number, x2: number, y2: number, style: { readonly stroke: string | undefined; readonly width: number }): ChartMark[] {
-  return style.stroke === undefined ? [] : [{ kind: "line", x1, y1, x2, y2, stroke: style.stroke, width: style.width }];
+export function line(x1: number, y1: number, x2: number, y2: number, style: ChartStroke): ChartMark[] {
+  return style.stroke === undefined ? [] : [{ kind: "line", x1, y1, x2, y2, ...style, stroke: style.stroke }];
 }
 
 /** Series legend entries: a swatch, then a label `labelX` pixels from the swatch's left edge. */

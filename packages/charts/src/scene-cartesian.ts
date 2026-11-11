@@ -1,3 +1,4 @@
+import { chartPointStroke, chartSeriesStroke, chartStrokeMark } from './stroke-scene.ts';
 import { cartesianAnalyticalData } from './analytics-bounds.ts';
 import { cartesianGeometry } from './cartesian-geometry.ts';
 import { cartesianAxisMarks } from './axis-scene.ts';
@@ -17,7 +18,7 @@ export function cartesianScene(context: SceneContext, drawSeries = true, supplie
   const { plot } = layout;
   const { horizontal, count, value: coordinate, category, categoryBand, band } = cartesianGeometry(model, layout);
   const x = coordinate, y = coordinate;
-  const marks: ChartMark[] = cartesianAxisMarks(context, layout);
+  const marks: ChartMark[] = [...cartesianAxisMarks(context, layout)];
 
   const dataStart = marks.length;
   const order = model.series.map((series, seriesIndex) => ({ series, seriesIndex }));
@@ -31,7 +32,7 @@ export function cartesianScene(context: SceneContext, drawSeries = true, supplie
         const px = (index: number) => category(index, false);
         const top = segment.map(point => `${px(point.index)},${y(point.end)}`);
         const bottom = [...segment].reverse().map(point => `${px(point.index)},${y(point.start)}`);
-        marks.push({ kind: 'path', d: `M ${top.join(' L ')} L ${bottom.join(' L ')} Z`, fill: context.color(series, seriesIndex) });
+        marks.push({ kind: 'path', d: `M ${top.join(' L ')} L ${bottom.join(' L ')} Z`, fill: series.noFill ? 'none' : context.color(series, seriesIndex), ...(series.lineStyle ? chartStrokeMark(chartSeriesStroke(context, series, seriesIndex)) : {}) });
         segment = [];
       };
       for (let index = 0; index < count; index++) {
@@ -42,7 +43,7 @@ export function cartesianScene(context: SceneContext, drawSeries = true, supplie
       return;
     }
     if (model.kind === "line") {
-      marks.push({ kind: "path", d: linePath(seriesIndex, layout, category, coordinate, series.smooth), stroke: context.color(series, seriesIndex, true), strokeWidth: series.lineStyle?.noFill ? 0 : (series.lineStyle?.width ?? 1.5) * 4 / 3 });
+      marks.push({ kind: "path", d: linePath(seriesIndex, layout, category, coordinate, series.smooth), ...chartStrokeMark(chartSeriesStroke(context, series, seriesIndex)) });
       layout.categories.forEach((_, index) => {
         const current = layout.stacks[seriesIndex]?.[index]?.end;
         if (current !== undefined) marks.push(...chartMarkerMarks(context, series, seriesIndex, index, category(index), y(current)));
@@ -57,8 +58,8 @@ export function cartesianScene(context: SceneContext, drawSeries = true, supplie
       const offset = categoryBand(index) + bars.inset + seriesIndex * bars.stride;
       const fill = chartPointColor(context, series, seriesIndex, index);
       marks.push(horizontal
-        ? { kind: "rect", x: Math.min(x(current), x(start)), y: offset, width: Math.max(0.5, Math.abs(x(start) - x(current))), height: bars.thickness, fill }
-        : { kind: "rect", x: offset, y: Math.min(y(current), y(start)), width: bars.thickness, height: Math.max(0.5, Math.abs(y(start) - y(current))), fill });
+        ? { kind: "rect", x: Math.min(x(current), x(start)), y: offset, width: Math.max(0.5, Math.abs(x(start) - x(current))), height: bars.thickness, fill, ...chartPointStroke(context, series, seriesIndex, index) }
+        : { kind: "rect", x: offset, y: Math.min(y(current), y(start)), width: bars.thickness, height: Math.max(0.5, Math.abs(y(start) - y(current))), fill, ...chartPointStroke(context, series, seriesIndex, index) });
     });
   });
 

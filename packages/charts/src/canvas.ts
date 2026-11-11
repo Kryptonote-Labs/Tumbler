@@ -10,6 +10,10 @@ export interface ChartCanvasContext<Path> {
   fillStyle: unknown;
   strokeStyle: unknown;
   lineWidth: number;
+  lineCap?: 'butt' | 'round' | 'square';
+  lineJoin?: 'round' | 'bevel' | 'miter';
+  miterLimit?: number;
+  setLineDash?(values: number[]): void;
   globalAlpha: number;
   textAlign: "start" | "end" | "left" | "right" | "center";
   textBaseline: "top" | "hanging" | "middle" | "alphabetic" | "ideographic" | "bottom";
@@ -43,6 +47,12 @@ const ALIGN = { start: "left", middle: "center", end: "right" } as const;
 
 function paintMarks<Path>(context: ChartCanvasContext<Path>, marks: readonly ChartMark[], path: (d: string) => Path): void {
   for (const mark of marks) {
+    if (mark.kind !== 'text' && mark.kind !== 'group') {
+      context.setLineDash?.(Array.from(mark.strokeDash ?? []));
+      context.lineCap = mark.strokeCap ?? 'butt';
+      context.lineJoin = mark.strokeJoin ?? 'miter';
+      context.miterLimit = mark.miterLimit ?? 10;
+    }
     switch (mark.kind) {
       case "rect":
         context.beginPath();

@@ -1,3 +1,5 @@
+import { chartStrokeMark } from './stroke-scene.ts';
+import { chartStroke } from './scene-style.ts';
 import type { ChartSeries } from './model.ts';
 import type { ChartDataLabelOptions } from './data-labels.ts';
 import { chartFont } from './scene-style.ts';
@@ -57,8 +59,8 @@ export function chartDataLabelMarks(context: SceneContext, series: ChartSeries, 
   const top = y - font.size;
   const marks: ChartMark[] = [];
   const resolve = (color: NonNullable<ChartDataLabelOptions['fill']>) => context.options.resolveColor?.(color) ?? resolveChartColor(color, context.model);
-  const stroke = settings.lineStyle?.color && !settings.lineStyle.noFill ? resolve(settings.lineStyle.color) : undefined;
-  if (settings.fill || stroke) marks.push({ kind: 'rect', x: left - 3, y: top - 2, width: width + 6, height: height + 4, fill: settings.fill ? resolve(settings.fill) ?? 'none' : 'none', ...(stroke ? { stroke } : {}), ...(settings.lineStyle?.width === undefined ? {} : { strokeWidth: settings.lineStyle.width * 4 / 3 }) });
+  const stroke = settings.lineStyle ? chartStroke('axis', settings.lineStyle, context.model, context.options.resolveColor) : undefined;
+  if (settings.fill || stroke?.stroke) marks.push({ kind: 'rect', x: left - 3, y: top - 2, width: width + 6, height: height + 4, fill: settings.fill ? resolve(settings.fill) ?? 'none' : 'none', ...(stroke ? chartStrokeMark(stroke) : {}) });
   if (settings.showLegendKey) marks.push({ kind: 'rect', x: left - font.size - 4, y: top, width: font.size * .8, height: font.size * .8, fill: chartPointColor(context, series, seriesIndex, point.index) });
   lines.forEach((text, index) => marks.push({ kind: 'text', text, x, y: y + index * font.size * 1.2, anchor, font }));
   return marks;
