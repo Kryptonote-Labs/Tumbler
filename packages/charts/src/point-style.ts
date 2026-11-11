@@ -13,4 +13,3 @@ export function chartPointColor(context: SceneContext, series: ChartSeries, seri
   const varies = context.model.varyColors ?? ['pie', 'doughnut', 'of-pie'].includes(context.model.kind);
   return varies ? context.color({ ...series, fill: undefined, line: undefined }, index, line) : context.color(series, seriesIndex, line);
 }
-
