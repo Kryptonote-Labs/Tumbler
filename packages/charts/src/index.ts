@@ -77,4 +77,5 @@ export type { ChartUpDownBars } from './plot-decorations.ts';
 export type { ChartSurfaceBand } from './surface-bands.ts';
 
 export { CHART_BAR_SHAPES, type ChartBarShape } from './bar-shapes.ts';
+export { readChart3DProperties } from './three-d-properties.ts';
 export type { ChartView3D, ChartWall, ChartWalls } from './three-d-properties.ts';

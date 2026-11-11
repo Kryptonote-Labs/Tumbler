@@ -62,6 +62,8 @@
     readonly showGridlines?: boolean;
     readonly showHeadings?: boolean;
     readonly remoteSelections?: readonly SpreadsheetRemoteSelection[];
+    /** Referenced ranges to show independently of the active cell and collaborators. */
+    readonly highlightRanges?: readonly { readonly range: GridSelection["range"]; readonly color: string }[];
     readonly worksheet: SpreadsheetWorksheet;
     readonly calculation?: SpreadsheetCalculationSnapshot;
     selection?: GridSelection;
@@ -90,6 +92,7 @@
     showHeadings = true,
     worksheet,
     remoteSelections = [],
+    highlightRanges = [],
     calculation,
     selection = createGridSelection({ row: 1, column: 1 }),
     onselectionchange,
@@ -257,6 +260,7 @@
   });
   const selectionRects = $derived(spreadsheetSelectionRanges(selection.range,projectedRows).flatMap(range=>spreadsheetSelectionRects({rowHeaderWidth,columnHeaderHeight,range,rows:rowGeometry,columns:columnGeometry,scrollTop,scrollLeft,width:viewportWidth,height:viewportHeight,frozenRows,frozenColumns})));
   const remoteRects = $derived(remoteSelections.map(peer => ({ ...peer, rects: spreadsheetSelectionRanges(peer.range,projectedRows).flatMap(range=>spreadsheetSelectionRects({rowHeaderWidth,columnHeaderHeight,range,rows:rowGeometry,columns:columnGeometry,scrollTop,scrollLeft,width:viewportWidth,height:viewportHeight,frozenRows,frozenColumns})) })));
+  const highlightRects = $derived(highlightRanges.map(peer => ({ ...peer, rects: spreadsheetSelectionRanges(peer.range,projectedRows).flatMap(range=>spreadsheetSelectionRects({rowHeaderWidth,columnHeaderHeight,range,rows:rowGeometry,columns:columnGeometry,scrollTop,scrollLeft,width:viewportWidth,height:viewportHeight,frozenRows,frozenColumns})) })));
   let maximumVisibleColumn = $derived(renderedColumns.at(-1)?.index ?? 1);
   let emptyRegionStart = $derived(spreadsheetEmptyRegionStart(worksheet));
   let emptyCorner = $derived.by(() => {
@@ -1073,6 +1077,13 @@
       </div>
     {/if}
   </div>
+  {#each highlightRects as source}
+    {#each source.rects as rect}
+      <div aria-hidden="true" class="range-highlight" style:--source-color={source.color}
+        class:top-edge={rect.topEdge} class:bottom-edge={rect.bottomEdge} class:left-edge={rect.leftEdge} class:right-edge={rect.rightEdge}
+        style:left={`${rect.left}px`} style:top={`${rect.top}px`} style:width={`${rect.width}px`} style:height={`${rect.height}px`}></div>
+    {/each}
+  {/each}
   {#each selectionRects as rect}
     <div class="selection-outline" class:top-edge={rect.topEdge} class:bottom-edge={rect.bottomEdge} class:left-edge={rect.leftEdge} class:right-edge={rect.rightEdge}
       style:left={`${rect.left}px`} style:top={`${rect.top}px`} style:width={`${rect.width}px`} style:height={`${rect.height}px`}></div>
@@ -1118,6 +1129,11 @@
   }} />
 
 <style>
+  .range-highlight { position: absolute; pointer-events: none; z-index: 5; box-sizing: border-box; border: 0 solid var(--source-color); background: color-mix(in srgb, var(--source-color) 8%, transparent); }
+  .range-highlight.top-edge { border-top-width: 1px; }
+  .range-highlight.bottom-edge { border-bottom-width: 1px; }
+  .range-highlight.left-edge { border-left-width: 1px; }
+  .range-highlight.right-edge { border-right-width: 1px; }
   .remote-selection { position: absolute; pointer-events: none; z-index: 8; box-sizing: border-box; border: 0 solid var(--peer-color); background: color-mix(in srgb, var(--peer-color) 10%, transparent); }
   .remote-selection.top-edge { border-top-width: 2px; }
   .remote-selection.bottom-edge { border-bottom-width: 2px; }

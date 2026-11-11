@@ -1,3 +1,5 @@
+import { chartXml } from './source-xml.ts';
+import { isOoxmlChartType } from './chart-types.ts';
 import type { LosslessXmlElement } from '@tumblerjs/ooxml';
 import type { ChartShapeStyle, SupportedChartModel } from './model.ts';
 import { CHART_BAR_SHAPES, type ChartBarShape } from './bar-shapes.ts';
@@ -47,4 +49,13 @@ export function parseChart3DProperties(chart: LosslessXmlElement, plot: Lossless
   return { threeD: { rotationX: number(child(view, c, 'rotX'), child(view, c, 'rotX') ? 0 : 15), rotationY: number(child(view, c, 'rotY'), child(view, c, 'rotY') ? 0 : 20), perspective: number(child(view, c, 'perspective'), 30), rightAngleAxes: rightAngle === '1' || rightAngle === 'true', ...(child(view, c, 'depthPercent') ? { depthPercent: number(child(view, c, 'depthPercent'), 100) } : {}), ...(height ? { heightPercent: number(height, 100) } : {}) },
     ...(floor || back || side ? { walls: { ...(floor ? { floor } : {}), ...(back ? { back } : {}), ...(side ? { side } : {}) } } : {}),
     gapDepth: number(child(plot, c, 'gapDepth'), 150), ...(shape ? { barShape: shape } : {}) };
+}
+
+
+/** Resolve view controls without requiring preview support or loading chart caches. */
+export function readChart3DProperties(bytes: Uint8Array, plotIndex = 0): Pick<SupportedChartModel, 'threeD' | 'walls' | 'gapDepth' | 'barShape'> {
+  const source = chartXml(bytes);
+  const plot = source.children(source.plotArea).filter(plot => isOoxmlChartType(plot.localName))[plotIndex];
+  if (!plot) throw new RangeError('Chart plot is missing.');
+  return parseChart3DProperties(source.chart, plot, source.namespace, source.namespace.replace(/chart$/, 'main'));
 }

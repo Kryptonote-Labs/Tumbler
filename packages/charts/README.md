@@ -224,7 +224,11 @@ current series, including its source ranges and formatting.
 `chartPropertyTree` exposes the chart and DrawingML property definitions from the
 pinned Open XML SDK schema. It supplies typed attributes, choices, numeric bounds
 and available child properties for the shared editor. The source-edit API remains
-available for extension properties. Metadata coverage does not establish renderer
+available for extension properties. `readChart3DProperties(bytes, plotIndex)` resolves
+view defaults independently of preview budgets for shared editor controls. Numeric
+view controls preview drafts and commit on blur, with Escape cancellation. Mini
+sheets retain referenced-range highlights; opening a missing embedded workbook
+creates a local draft and saves it with the first edit. Metadata coverage does not establish renderer
 coverage or semantic validity for arbitrary combinations of property edits.
 
 The Svelte `ChartWorkbench` combines type previews, property fields, series/range

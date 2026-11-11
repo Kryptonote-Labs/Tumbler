@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount, tick } from 'svelte';
+  import { chartDataHighlights } from './chart-data-highlights.ts';
   import { createGridSelection } from "@tumblerjs/core";
   import { formatCellReference, type SpreadsheetArtifact } from "@tumblerjs/sheets";
   import SpreadsheetFormulaBar from "./SpreadsheetFormulaBar.svelte";
@@ -10,18 +12,23 @@
   interface Props {
     readonly artifact: SpreadsheetArtifact;
     readonly disabled?: boolean;
+    readonly source?: Uint8Array;
+    readonly themeColors?: Readonly<Record<string, string>>;
     /** Receives each successful edit. Formulas keep their source and are parsed by the workbook engine. */
     readonly onchange: (artifact: SpreadsheetArtifact) => void;
     readonly onclose?: () => void;
     readonly onsheetselect?: (name: string) => void;
   }
 
-  let { artifact, disabled = false, onchange, onclose, onsheetselect }: Props = $props();
+  let { artifact, disabled = false, source, themeColors = {}, onchange, onclose, onsheetselect }: Props = $props();
 
   // Follows the host's artifact, and runs ahead of it between an edit and the host's next render.
   let current = $derived(artifact);
   let selection = $state(createGridSelection({ row: 1, column: 1 }));
   let error = $state<string>();
+  let region = $state<HTMLElement>();
+  const highlights = $derived(source ? chartDataHighlights(source, current.activeSheet.name, themeColors) : []);
+  onMount(() => { void tick().then(() => region?.querySelector<HTMLElement>('[role="grid"]')?.focus()); });
   const reference = $derived(formatCellReference(selection.anchor));
 
   function apply(edit: (artifact: SpreadsheetArtifact) => SpreadsheetArtifact): boolean {
@@ -56,13 +63,13 @@
   }
 </script>
 
-<section class="chart-data" aria-label="Chart data">
+<section bind:this={region} class="chart-data" aria-label="Chart data">
   <div class="bar">
     <div class="formula"><SpreadsheetFormulaBar worksheet={current.worksheet} {reference} readonly={disabled} onedit={editFormula} /></div>
     {#if onclose}<button type="button" class="close" aria-label="Close chart data" title="Close" onclick={onclose}>×</button>{/if}
   </div>
   <div class="grid">
-    <SpreadsheetGrid worksheet={current.worksheet} calculation={current.calculation} {selection} readonly={disabled}
+    <SpreadsheetGrid worksheet={current.worksheet} calculation={current.calculation} {selection} highlightRanges={highlights} readonly={disabled}
       onselectionchange={(next) => { selection = next; }} onedit={editCell} />
     {#if error}<p class="error" role="alert">{error}</p>{/if}
   </div>

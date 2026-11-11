@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { createCanvas, Path2D } from '@napi-rs/canvas';
-import { CHART_BAR_SHAPES, createOoxmlChart, parseOoxmlChart, layoutChartScene, layoutCartesianChart, paintChartScene, layoutPieSlices, type ChartMark, type ChartBarShape } from '../src/index.ts';
+import { convertChartType, readChart3DProperties, CHART_BAR_SHAPES, createOoxmlChart, parseOoxmlChart, layoutChartScene, layoutCartesianChart, paintChartScene, layoutPieSlices, type ChartMark, type ChartBarShape } from '../src/index.ts';
 import { chartProjection } from '../src/projection.ts';
 import { threeDGeometry } from '../src/three-d-geometry.ts';
 
@@ -242,4 +242,22 @@ test('an edge-on 3D pie culls rear sides before the zero-tilt projection', () =>
   const marks = flatten(layoutChartScene(model, 500, 350).marks);
   expect(marks.filter(mark => mark.kind === 'path' && mark.fill === '#bf0000').length).toBeGreaterThan(0);
   expect(marks.filter(mark => mark.kind === 'path' && mark.fill === '#0000bf')).toHaveLength(0);
+});
+
+
+test('resolved view inspection remains available when chart caches exceed preview budgets', () => {
+  const original = chart().source;
+  const xml = new TextDecoder().decode(original).replaceAll('<c:ptCount val="2"/>', '<c:ptCount val="1000001"/>');
+  const source = new TextEncoder().encode(xml);
+  expect(parseOoxmlChart(source, 'transitional').status).toBe('unsupported');
+  expect(readChart3DProperties(source).threeD).toMatchObject({ rotationX: 15, rotationY: 20, rightAngleAxes: true });
+});
+
+test('an explicit plot shape change replaces imported per-series shape overrides', () => {
+  const source = new TextEncoder().encode(new TextDecoder().decode(chart('box').source).replace('</c:ser>', '<c:shape val="cylinder"/></c:ser>'));
+  const changed = convertChartType(source, { type: 'bar3DChart', shape: 'pyramid' });
+  const model = parseOoxmlChart(changed, 'transitional');
+  if (model.status !== 'supported') throw Error(model.reason);
+  expect(model.barShape).toBe('pyramid');
+  expect(model.series.every(series => series.barShape === undefined)).toBe(true);
 });
