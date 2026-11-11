@@ -34,6 +34,8 @@ export type ChartColor = (
 };
 
 export interface ChartTextStyle {
+  /** Text-body rotation in clockwise degrees, independent of shape rotation. */
+  readonly rotation?: number;
   /** Retained run properties for lossless rich title editing. */
   readonly sourceProperties?: import('@tumblerjs/ooxml').LosslessXmlElement;
   readonly highlight?: string;

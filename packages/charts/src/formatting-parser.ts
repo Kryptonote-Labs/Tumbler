@@ -1,6 +1,7 @@
 import { parseChartGradient } from './gradient-parser.ts';
 import { parseChartPicture } from './picture-parser.ts';
 import { chartElementMarkup } from './xml-markup.ts';
+import { parseChartTextRotation } from './text-rotation.ts';
 import { isDrawingPatternPreset, resolveDrawingColor, readDrawingStrokeProperties, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import type { ChartColor, ChartColorTransform, ChartLineStyle, ChartTextStyle, ChartPattern, ChartShapeStyle } from "./model.ts";
 
@@ -81,8 +82,10 @@ export function parseChartTextStyle(parent: LosslessXmlElement | undefined, char
   const color = parseChartFill(richDefaults, ns) ?? parseChartFill(defaults, ns);
   const boolean = (name: string) => read(name) === undefined ? undefined : read(name) === "1" || read(name) === "true";
   const bold = boolean("b"), italic = boolean("i");
+  const rotation = parseChartTextRotation(parent, chartNs, ns);
   if (!properties && !rich) return undefined;
   return Object.freeze({
+    ...(rotation === undefined ? {} : { rotation }),
     ...(fontSize !== undefined && Number.isFinite(fontSize) && fontSize > 0 ? { fontSize } : {}),
     ...(fontFamily === undefined ? {} : { fontFamily }),
     ...(bold === undefined ? {} : { bold }),

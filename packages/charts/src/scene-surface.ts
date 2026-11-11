@@ -1,4 +1,5 @@
 import { chartSurfaceLevels } from './legend-items.ts';
+import { chartAxisTitleFrame } from './axis-title-scene.ts';
 import { chartLegendScene } from './legend-scene.ts';
 import { threeDWallMarks } from './three-d-walls.ts';
 import { threeDAxisMarks } from './three-d-axes.ts';
@@ -43,7 +44,8 @@ export function surfaceScene(context: SceneContext): ChartMark[] {
   const spend = () => { if (++work > 200_000) throw new RangeError('Chart preview geometry budget exceeded.'); };
   const project = chartProjection(model, layout.plot);
   const geometry = threeDGeometry(model, layout);
-  const axes = model.threeD ? threeDAxisMarks(context, layout, geometry, project) : undefined;
+  const axesContext = context.axisTitleFrame ? { ...context, axisTitleFrame: chartAxisTitleFrame(context, bands) } : context;
+  const axes = model.threeD ? threeDAxisMarks(axesContext, layout, geometry, project) : undefined;
   const normalizedValue = (value: number) => chartAxisCoordinate(value, layout.minimum, layout.maximum, 0, 1, valueAxis);
   const position = (vertex: SurfaceVertex) => {
     const x = categoryAxis?.reversed ? 1 - vertex.x : vertex.x, z = seriesAxis?.reversed ? 1 - vertex.z : vertex.z;

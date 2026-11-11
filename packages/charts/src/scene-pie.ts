@@ -1,5 +1,6 @@
 import { chartLegendScene } from './legend-scene.ts';
 import { layoutChartLegend } from './legend-layout.ts';
+import { chartTitleHeight } from './title-scene.ts';
 import { chartManualPlot } from './manual-layout.ts';
 import { chartPointFill } from './fill-scene.ts';
 import { pieFillBounds } from './pie-fill-bounds.ts';
@@ -21,7 +22,7 @@ export function pieChartFrame(context: SceneContext) {
   const leftSpace = legend.space.left, rightSpace = legend.space.right;
   const left = PADDING + leftSpace;
   const right = width - PADDING - rightSpace;
-  const top = (model.title === undefined || model.titleOverlay ? PADDING : 36) + legend.space.top;
+  const top = (model.title === undefined || model.titleOverlay ? PADDING : model.titleStyle?.rotation ? chartTitleHeight(model, context.measure) + 28 : 36) + legend.space.top;
   const bottom = height - PADDING - legend.space.bottom;
   const automatic = { x: left, y: top, width: right - left, height: bottom - top };
   return { plot: chartManualPlot(model.plotLayout, automatic, automatic, width, height) };

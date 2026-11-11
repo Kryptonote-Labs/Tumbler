@@ -7,6 +7,7 @@ import { radarScene } from './scene-radar.ts';
 import { stockScene } from './scene-stock.ts';
 import { assertChartSceneBudget } from './scene-budget.ts';
 import { chartTitleMarks } from './title-scene.ts';
+import { chartAxisTitleFrame } from './axis-title-scene.ts';
 import { resolveChartColor } from "./colors.ts";
 import type { SupportedChartModel, ChartSeries, ChartPointFormat } from "./model.ts";
 import { cartesianScene } from "./scene-cartesian.ts";
@@ -38,7 +39,7 @@ export function layoutChartScene(model: SupportedChartModel, width: number, heig
 function buildChartScene(model: SupportedChartModel, width: number, height: number, options: ChartSceneOptions): ChartScene {
   assertChartSceneBudget(model);
   const pointStyles = new Map<ChartSeries, ReadonlyMap<number, ChartPointFormat>>();
-  const context: SceneContext = {
+  const baseContext: SceneContext = {
     model, width, height, options: { ...options, dateSystem: options.dateSystem ?? model.dateSystem ?? "1900" },
     color(series, index, line = false) {
       const authored = line ? series.line ?? series.fill : series.fill ?? series.line;
@@ -52,6 +53,8 @@ function buildChartScene(model: SupportedChartModel, width: number, height: numb
     },
     measure: (text, font) => options.measureText?.(text, chartFontShorthand(font)) ?? text.length * font.size * 0.55,
   };
+  const orientedAxes = model.axes.some(axis => axis.titleStyle?.rotation !== undefined) || model.plots?.some(plot => plot.axes.some(axis => axis.titleStyle?.rotation !== undefined));
+  const context: SceneContext = orientedAxes ? { ...baseContext, axisTitleFrame: chartAxisTitleFrame(baseContext) } : baseContext;
   const marks: ChartMark[] = chartShapeMarks(context, { x: .5, y: .5, width: Math.max(0, width - 1), height: Math.max(0, height - 1) }, model.chartArea, { fill: '#ffffff', stroke: '#d9d9d9' });
   const title = chartTitleMarks(context), titleBounds = chartMarksBounds(context, title);
   const titleMarks = [...(titleBounds ? chartShapeMarks(context, { x: titleBounds.x - 4, y: titleBounds.y - 3, width: titleBounds.width + 8, height: titleBounds.height + 6 }, model.titleArea) : []), ...title];

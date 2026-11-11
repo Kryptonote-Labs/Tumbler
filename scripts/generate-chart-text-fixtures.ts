@@ -26,6 +26,13 @@ samples.push(['point-label', base.replace('<c:cat>', `<c:dLbls><c:dLbl><c:idx va
 samples.push(['display-units', base.replace('</c:valAx>', `<c:dispUnits><c:builtInUnit val="thousands"/><c:dispUnitsLbl>${manual()}${rich}</c:dispUnitsLbl></c:dispUnits></c:valAx>`)]);
 const line = new TextDecoder().decode(createOoxmlChart({ type: 'lineChart', categories: ['A', 'B', 'C'], series: [series[0]!] }));
 samples.push(['trendline-label', line.replace('<c:cat>', `<c:trendline><c:trendlineType val="linear"/><c:dispEq val="1"/><c:trendlineLbl>${manual()}${rich}</c:trendlineLbl></c:trendline><c:cat>`)]);
+for (const rotation of [-45, 0, 90]) samples.push([`rotation-title-${rotation}`, base.replace('<a:bodyPr/>', `<a:bodyPr rot="${rotation * 60000}"/>`)]);
+for (const name of ['point-label', 'display-units', 'trendline-label']) {
+  const source = samples.find(sample => sample[0] === name)![1];
+  const rotated = source.replace(rich, rich.replace('<a:bodyPr/>', '<a:bodyPr rot="5400000"/>'));
+  samples.push([`rotation-${name}`, rotated]);
+}
+samples.push(['rotation-axis-title', base.replace(/<c:valAx>[\s\S]*?<\/c:valAx>/, axis => axis.replace('<c:tickLblPos', `<c:title>${rich.replace('<a:bodyPr/>', '<a:bodyPr rot="0"/>')}${manual()}</c:title><c:tickLblPos`))]);
 for (const [name, xml] of samples) {
   await Bun.write(resolve(output, `${name}.xml`), xml);
   await writeChartFixture(output, name, new TextEncoder().encode(xml));

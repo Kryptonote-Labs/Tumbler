@@ -1,3 +1,4 @@
+import { translateChartMark } from './mark-translation.ts';
 import { chartLegendScene } from './legend-scene.ts';
 import { chartPointFill } from './fill-scene.ts';
 import { chartPointStroke } from './stroke-scene.ts';
@@ -8,36 +9,12 @@ import { chartShapeMarks } from './shape-scene.ts';
 import { pieScene, pieChartFrame } from './scene-pie.ts';
 import type { ChartMark, SceneContext } from './scene-marks.ts';
 
-/** Translate generated subchart marks without changing their authored text or colours. */
-function move(mark: ChartMark, x: number, y: number): ChartMark {
-  if (mark.fillGradient) mark = { ...mark, fillGradient: { ...mark.fillGradient, bounds: { ...mark.fillGradient.bounds, x: mark.fillGradient.bounds.x + x, y: mark.fillGradient.bounds.y + y } } };
-  if (mark.fillPattern) mark = { ...mark, fillPattern: { ...mark.fillPattern, bounds: { ...mark.fillPattern.bounds, x: mark.fillPattern.bounds.x + x, y: mark.fillPattern.bounds.y + y } } };
-  if (mark.fillPicture) mark = { ...mark, fillPicture: { ...mark.fillPicture, bounds: { ...mark.fillPicture.bounds, x: mark.fillPicture.bounds.x + x, y: mark.fillPicture.bounds.y + y } } };
-  switch (mark.kind) {
-    case 'group': return { ...mark, ...(mark.clip ? { clip: { ...mark.clip, x: mark.clip.x + x, y: mark.clip.y + y } } : {}), marks: mark.marks.map(mark => move(mark, x, y)) };
-    case 'text': case 'rect': return { ...mark, x: mark.x + x, y: mark.y + y };
-    case 'circle': return { ...mark, cx: mark.cx + x, cy: mark.cy + y };
-    case 'line': return { ...mark, x1: mark.x1 + x, x2: mark.x2 + x, y1: mark.y1 + y, y2: mark.y2 + y };
-    case 'path': {
-      // Pie paths contain only absolute M/L/A/Z commands. Elliptical arc arguments
-      // include radii and flags, so only their endpoint pairs are translated.
-      const d = mark.d.replace(/([MLA])\s*([^MLAZ]+)/g, (_, command: string, values: string) => {
-        const numbers = values.trim().split(/[\s,]+/).map(Number);
-        const start = command === 'A' ? 5 : 0;
-        for (let i = start; i < numbers.length; i += 2) { numbers[i] = numbers[i]! + x; numbers[i + 1] = numbers[i + 1]! + y; }
-        return command + ' ' + numbers.join(' ') + ' ';
-      });
-      return { ...mark, d };
-    }
-  }
-}
-
 export function ofPieScene(context: SceneContext): ChartMark[] {
   const { plot } = pieChartFrame(context);
   const { plotLayout: _layout, plotArea, title: _title, legend: _legend, ...model } = context.model;
   const content = splitPieScene({ ...context, width: plot.width, height: plot.height, textFrame: { x: plot.x, y: plot.y, width: context.width, height: context.height }, model: { ...model, title: undefined, legend: undefined, plotLayout: { target: 'inner', xMode: 'edge', yMode: 'edge', x: 0, y: 0, width: 1, height: 1 } } });
   const legend = chartLegendScene(context);
-  return [...chartShapeMarks(context, plot, plotArea), ...content.map(mark => move(mark, plot.x, plot.y)), ...legend];
+  return [...chartShapeMarks(context, plot, plotArea), ...content.map(mark => translateChartMark(mark, plot.x, plot.y)), ...legend];
 }
 
 function splitPieScene(context: SceneContext): ChartMark[] {
@@ -72,7 +49,7 @@ function splitPieScene(context: SceneContext): ChartMark[] {
   } else {
     const frame = context.textFrame ?? { x: 0, y: 0, width, height };
     const minor = pieScene({ ...context, width: minorWidth, height: minorHeight, textFrame: { ...frame, x: frame.x + mainWidth, y: frame.y + (height - minorHeight) / 2 }, model: { ...model, kind: 'pie', title: undefined, legend: undefined, series: [secondarySeries] } }, total);
-    marks.push(...minor.map(mark => move(mark, mainWidth, (height - minorHeight) / 2)));
+    marks.push(...minor.map(mark => translateChartMark(mark, mainWidth, (height - minorHeight) / 2)));
   }
   marks.push(...chartLegendScene(context));
   return marks;

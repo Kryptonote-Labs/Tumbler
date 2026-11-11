@@ -1,5 +1,5 @@
 import { chartDisplayUnitMarks } from './display-unit-scene.ts';
-import { positionChartText } from './text-position.ts';
+import { chartAxisTitleMarks } from './axis-title-scene.ts';
 import { chartAxisFormat, chartCategoryAxisLabels } from './axis-labels.ts';
 import { xyGeometry } from './xy-geometry.ts';
 import type { ChartAxis } from './model.ts';
@@ -48,8 +48,8 @@ export function cartesianAxisMarks(context: SceneContext, layout: CartesianChart
     marks.push(...(horizontal ? line(plot.x, categoryPosition, plot.x + plot.width, categoryPosition, valueLine) : line(categoryPosition, plot.y, categoryPosition, plot.y + plot.height, valueLine)));
     if (valueAxis?.title) {
       const titleFont = chartFont('axisTitle', valueAxis.titleStyle, model, options.resolveColor);
-      marks.push(...positionChartText(context, [horizontal ? { kind: 'text', text: valueAxis.title, x: plot.x + plot.width / 2, y: context.height - titleFont.size / 2, anchor: 'middle', font: titleFont }
-        : { kind: 'text', text: valueAxis.title, x: labelSide > 0 ? context.width - titleFont.size : titleFont.size, y: plot.y + plot.height / 2, rotate: -90, anchor: 'middle', font: titleFont }], valueAxis.titleLayout));
+      marks.push(...chartAxisTitleMarks(context, valueAxis, [horizontal ? { kind: 'text', text: valueAxis.title, x: plot.x + plot.width / 2, y: labelSide < 0 ? titleFont.size + 4 : context.height - titleFont.size / 2, anchor: 'middle', rotate: valueAxis.titleStyle?.rotation ?? 0, font: titleFont }
+        : { kind: 'text', text: valueAxis.title, x: labelSide > 0 ? context.width - titleFont.size : titleFont.size, y: plot.y + plot.height / 2, rotate: valueAxis.titleStyle?.rotation ?? -90, anchor: 'middle', font: titleFont }], horizontal ? labelSide > 0 ? 'bottom' : 'top' : labelSide > 0 ? 'right' : 'left'));
     }
     if (valueAxis) marks.push(...chartDisplayUnitMarks(context, valueAxis, { x: plot.x, y: plot.y - 6, anchor: 'start' }));
   }
@@ -68,8 +68,8 @@ export function cartesianAxisMarks(context: SceneContext, layout: CartesianChart
     });
     if (categoryAxis?.title) {
       const titleFont = chartFont('axisTitle', categoryAxis.titleStyle, model, options.resolveColor);
-      marks.push(...positionChartText(context, [horizontal ? { kind: 'text', text: categoryAxis.title, x: titleFont.size, y: plot.y + plot.height / 2, rotate: -90, anchor: 'middle', font: titleFont }
-        : { kind: 'text', text: categoryAxis.title, x: plot.x + plot.width / 2, y: context.height - titleFont.size / 2, anchor: 'middle', font: titleFont }], categoryAxis.titleLayout));
+      marks.push(...chartAxisTitleMarks(context, categoryAxis, [horizontal ? { kind: 'text', text: categoryAxis.title, x: labelDirection < 0 ? context.width - titleFont.size : titleFont.size, y: plot.y + plot.height / 2, rotate: categoryAxis.titleStyle?.rotation ?? -90, anchor: 'middle', font: titleFont }
+        : { kind: 'text', text: categoryAxis.title, x: plot.x + plot.width / 2, y: labelDirection < 0 ? titleFont.size + 4 : context.height - titleFont.size / 2, anchor: 'middle', rotate: categoryAxis.titleStyle?.rotation ?? 0, font: titleFont }], horizontal ? labelDirection > 0 ? 'left' : 'right' : labelDirection > 0 ? 'bottom' : 'top'));
     }
   }
   return marks;
@@ -107,8 +107,8 @@ export function xyAxisMarks(context: SceneContext, layout: import('./layout.ts')
     marks.push(...(horizontal ? line(plot.x, spine, plot.x + plot.width, spine, axisLine) : line(spine, plot.y, spine, plot.y + plot.height, axisLine)));
     if (axis?.title !== undefined) {
       const font = chartFont('axisTitle', axis.titleStyle, model, options.resolveColor);
-      marks.push(...positionChartText(context, [horizontal ? { kind: 'text', text: axis.title, x: plot.x + plot.width / 2, y: context.height - 4, anchor: 'middle', font }
-        : { kind: 'text', text: axis.title, x: side > 0 ? context.width - font.size : font.size, y: plot.y + plot.height / 2, anchor: 'middle', rotate: -90, font }], axis.titleLayout));
+      marks.push(...chartAxisTitleMarks(context, axis, [horizontal ? { kind: 'text', text: axis.title, x: plot.x + plot.width / 2, y: side < 0 ? font.size + 4 : context.height - 4, anchor: 'middle', rotate: axis.titleStyle?.rotation ?? 0, font }
+        : { kind: 'text', text: axis.title, x: side > 0 ? context.width - font.size : font.size, y: plot.y + plot.height / 2, anchor: 'middle', rotate: axis.titleStyle?.rotation ?? -90, font }], horizontal ? side > 0 ? 'bottom' : 'top' : side > 0 ? 'right' : 'left'));
     }
     if (axis) marks.push(...chartDisplayUnitMarks(context, axis, { x: horizontal ? plot.x + plot.width : plot.x, y: horizontal ? plot.y + plot.height + font.size * 2.5 : plot.y - 6, anchor: 'end' }));
   }
