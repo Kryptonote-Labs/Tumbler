@@ -1,3 +1,4 @@
+import { parseSurfaceBands } from './surface-bands.ts';
 import { parsePlotDecorations } from './plot-decorations.ts';
 import { parseChartGradient } from './gradient-parser.ts';
 import { parseChartAxisProperties } from './axis-properties.ts';
@@ -156,7 +157,7 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
     sourceType: chartType.localName,
     ...(chartType.localName.includes('3D') ? { threeD: parseView3D(children(chart, chartNamespace, 'view3D')[0], chartNamespace) } : {}),
     ...(kind === 'radar' ? { radarStyle: radarStyle(val(children(chartType, chartNamespace, 'radarStyle')[0]) ?? 'standard') } : {}),
-    ...(kind === 'surface' ? { wireframe: booleanVal(children(chartType, chartNamespace, 'wireframe')[0], false) } : {}),
+    ...(kind === 'surface' ? { wireframe: booleanVal(children(chartType, chartNamespace, 'wireframe')[0], false), ...(parseSurfaceBands(chartType, chartNamespace, drawingNamespace) ? { bandFormats: parseSurfaceBands(chartType, chartNamespace, drawingNamespace)! } : {}) } : {}),
     ...(kind === 'of-pie' ? { splitType: val(children(chartType, chartNamespace, 'ofPieType')[0]) === 'bar' ? 'bar' as const : 'pie' as const,
       customSplit: children(children(chartType, chartNamespace, 'custSplit')[0] ?? chartType, chartNamespace, 'secondPiePt').map(point => unsigned(val(point) ?? '', 'custom split point')),
       splitBy: splitBy(val(children(chartType, chartNamespace, 'splitType')[0]) ?? 'auto'),

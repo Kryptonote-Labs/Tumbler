@@ -80,6 +80,10 @@ Stock plots use the same date/log/reversed projection and can share combination 
 with volume columns on separate axes. High-low lines, drop lines and up/down bars use
 authored paint and gap widths; high-low-close ticks extend right from the price stem.
 New three/four-series stock sources author the corresponding marker/bar defaults.
+Surface height bands use independent theme colours and sparse `bandFmt` overrides,
+including fills, gradients, outlines and no-fill. Legends describe value ranges.
+3D wireframes follow source grid edges, while 2D wireframes follow interpolated
+height contours. Shared contour edges paint once so authored alpha is preserved.
 
 Value axes support logarithmic/reversed scales, crossings, minor grids/ticks,
 label-side/skip settings and display units. Date categories preserve calendar gaps

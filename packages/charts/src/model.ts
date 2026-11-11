@@ -206,6 +206,7 @@ export interface SupportedChartModel extends ChartModelBase {
   readonly dataLabels?: import('./data-labels.ts').ChartDataLabels;
   readonly threeD?: { readonly rotationX: number; readonly rotationY: number; readonly perspective: number; readonly rightAngleAxes: boolean; readonly depthPercent: number };
   readonly radarStyle?: 'standard' | 'marker' | 'filled';
+  readonly bandFormats?: readonly import('./surface-bands.ts').ChartSurfaceBand[];
   readonly wireframe?: boolean;
   readonly splitType?: 'pie' | 'bar';
   readonly splitBy?: 'auto' | 'cust' | 'percent' | 'pos' | 'val';

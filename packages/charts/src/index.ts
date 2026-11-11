@@ -73,3 +73,5 @@ export type { ChartGradient } from './model.ts';
 export type { ChartGradientPaint } from './gradient-scene.ts';
 
 export type { ChartUpDownBars } from './plot-decorations.ts';
+
+export type { ChartSurfaceBand } from './surface-bands.ts';
