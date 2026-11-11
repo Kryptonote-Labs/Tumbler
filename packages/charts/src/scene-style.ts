@@ -22,7 +22,7 @@ const FAMILY = "Calibri, Aptos, system-ui, sans-serif";
 
 /** Default type per text role, before authored chart properties apply. */
 export const CHART_TEXT_DEFAULTS = {
-  title: { size: 24, family: FAMILY, weight: 600, italic: false, color: "#222222" },
+  title: { size: 24, family: FAMILY, weight: 700, italic: false, color: "#222222" },
   dataLabel: { size: 40 / 3, family: FAMILY, weight: 400, italic: false, color: "#333333" },
   tick: { size: 40 / 3, family: FAMILY, weight: 400, italic: false, color: "#555555" },
   category: { size: 40 / 3, family: FAMILY, weight: 400, italic: false, color: "#555555" },

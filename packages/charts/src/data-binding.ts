@@ -14,9 +14,12 @@ export function bindChartData(bytes: Uint8Array, data: readonly ChartEditablePlo
     if (data[plotIndex]?.type !== plot.localName || data[plotIndex]?.series.length !== series.length) throw new TypeError('Bindings must retain existing chart plots and series.');
     series.forEach((element, seriesIndex) => {
       const replacement = data[plotIndex]!.series[seriesIndex]!;
-      for (const [name, sequence] of [['cat', replacement.categories], ['xVal', replacement.xValues], [source.children(element, 'yVal').length ? 'yVal' : 'val', replacement.values], ['bubbleSize', replacement.bubbleSizes]] as const) {
+      const sequences = [
+        ...([['cat', replacement.categories], ['xVal', replacement.xValues], [source.children(element, 'yVal').length ? 'yVal' : 'val', replacement.values], ['bubbleSize', replacement.bubbleSizes]] as const).map(([name, sequence]) => ({ container: source.children(element, name)[0], sequence })),
+        ...source.children(element, 'errBars').flatMap((errors, index) => (['plus', 'minus'] as const).map(side => ({ container: source.children(errors, side)[0], sequence: replacement.errorBars?.[index]?.[side] }))),
+      ];
+      for (const { container, sequence } of sequences) {
         if (sequence?.formula === undefined) continue;
-        const container = source.children(element, name)[0];
         const literal = container && source.children(container).find(child => child.localName === 'numLit' || child.localName === 'strLit');
         if (!literal) continue;
         const kind = literal.localName === 'numLit' ? 'num' : 'str';

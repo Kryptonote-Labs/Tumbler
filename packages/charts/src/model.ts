@@ -73,6 +73,8 @@ export interface ChartPointFormat {
 }
 
 export interface ChartSeries {
+  readonly trendlines?: readonly import('./analytics-parser.ts').ChartTrendline[];
+  readonly errorBars?: readonly import('./analytics-parser.ts').ChartErrorBars[];
   readonly dataLabels?: import('./data-labels.ts').ChartDataLabels;
   readonly noFill?: boolean;
   readonly lineStyle?: ChartLineStyle;
@@ -103,13 +105,37 @@ export interface ChartLegend {
 }
 
 export interface ChartAxis {
+  readonly sourceType?: string;
+  readonly logBase?: number;
+  readonly reversed?: boolean;
+  readonly crossAxisId?: number;
+  readonly crosses?: 'autoZero' | 'min' | 'max';
+  readonly crossesAt?: number;
+  readonly crossBetween?: 'between' | 'midCat';
+  readonly tickLabelPosition?: 'high' | 'low' | 'nextTo' | 'none';
+  readonly majorTickMark?: 'cross' | 'in' | 'out' | 'none';
+  readonly minorTickMark?: 'cross' | 'in' | 'out' | 'none';
+  readonly minorUnit?: number;
+  readonly minorGridlines?: boolean;
+  readonly minorGridlineStyle?: ChartLineStyle;
+  readonly tickLabelSkip?: number;
+  readonly tickMarkSkip?: number;
+  readonly labelOffset?: number;
+  readonly titleStyle?: ChartTextStyle;
+  readonly displayUnit?: number;
+  readonly displayUnitName?: string;
+  readonly showDisplayUnitLabel?: boolean;
+  readonly dateAxis?: boolean;
+  readonly baseTimeUnit?: 'days' | 'months' | 'years';
+  readonly majorTimeUnit?: 'days' | 'months' | 'years';
+  readonly minorTimeUnit?: 'days' | 'months' | 'years';
   /** Degrees clockwise; omitted means automatic label layout. */
   readonly labelRotation?: number;
   readonly textStyle?: ChartTextStyle;
   readonly lineStyle?: ChartLineStyle;
   readonly gridlineStyle?: ChartLineStyle;
   readonly id: number;
-  readonly kind: "category" | "value";
+  readonly kind: "category" | "value" | "series";
   readonly position: "bottom" | "left" | "right" | "top";
   readonly title: string | undefined;
   readonly majorGridlines: boolean;

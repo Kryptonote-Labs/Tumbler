@@ -12,7 +12,7 @@ export const chartSourceEdit = z.discriminatedUnion('kind', [
 ]);
 const chartTarget = { page: z.string().min(1), part: z.string().min(1) };
 const sequence = z.object({ kind: z.enum(['string', 'number']), values: z.array(z.union([z.string(), z.number().finite(), z.null()])), formula: z.string().optional(), formatCode: z.string().optional(), levels: z.array(z.array(z.union([z.string(), z.number().finite(), z.null()]))).optional() }).strict();
-const seriesData = z.object({ name: z.string(), nameFormula: z.string().optional(), categories: sequence.optional(), values: sequence.optional(), xValues: sequence.optional(), bubbleSizes: sequence.optional() }).strict();
+const seriesData = z.object({ name: z.string(), nameFormula: z.string().optional(), categories: sequence.optional(), values: sequence.optional(), xValues: sequence.optional(), bubbleSizes: sequence.optional(), errorBars: z.array(z.object({ plus: sequence.optional(), minus: sequence.optional() }).strict()).optional() }).strict();
 const seriesEdit = z.discriminatedUnion('action', [
   z.object({ action: z.literal('add'), plot: z.number().int().nonnegative().optional(), series: seriesData }).strict(),
   z.object({ action: z.enum(['duplicate', 'remove']), plot: z.number().int().nonnegative().optional(), series: z.number().int().nonnegative() }).strict(),

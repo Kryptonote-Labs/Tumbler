@@ -115,7 +115,7 @@ test("canvas painting fills marks and draws text at the scene's positions", () =
   paintChartScene(context, scene, d => d);
   expect(calls.filter(call => call[0] === "fill" && typeof call[2] === "string")).toHaveLength(3);
   expect(calls).toContainEqual(["translate", 150, 23]);
-  expect(calls).toContainEqual(["fillText", "Results", expect.stringContaining("600 15px"), "center"]);
+  expect(calls).toContainEqual(["fillText", "Results", expect.stringContaining("700 15px"), "center"]);
   calls.length = 0;
   const invisibleLine = model({ kind: 'line', legend: undefined, series: model().series.map(series => ({ ...series, lineStyle: { noFill: true } })) });
   paintChartScene(context, layoutChartScene(invisibleLine, 300, 200), d => d);

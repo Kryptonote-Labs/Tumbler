@@ -16,7 +16,9 @@ export function assertChartSceneBudget(model: SupportedChartModel): number {
     if (current.series.length > 256 || current.axes.length > 256) throw new RangeError('Chart preview exceeds 256 series or axes.');
     let categories = 0;
     for (const series of current.series) {
-      for (const sequence of [series.categories, series.values, series.xValues, series.bubbleSizes]) {
+      cells += (series.trendlines?.length ?? 0) * 129 + (series.errorBars?.length ?? 0) * (series.values?.points.length ?? 0);
+      if (cells > CHART_SCENE_CELL_LIMIT) throw new RangeError('Chart analytical overlays exceed the preview budget.');
+      for (const sequence of [series.categories, series.values, series.xValues, series.bubbleSizes, ...(series.errorBars?.flatMap(error => [error.plus, error.minus]) ?? [])]) {
         if (!sequence) continue;
         for (const points of [sequence.points, ...(sequence.levels ?? [])]) {
           stored += points.length;

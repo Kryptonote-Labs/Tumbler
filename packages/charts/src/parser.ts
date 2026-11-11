@@ -1,3 +1,5 @@
+import { parseChartAxisProperties } from './axis-properties.ts';
+import { parseChartAnalytics } from './analytics-parser.ts';
 import { parseChartDataLabels } from './data-labels.ts';
 import { readChartTitleText } from './rich-text.ts';
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
@@ -104,7 +106,7 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
     throw error;
   }
   const axes = plotArea.children.filter((child): child is LosslessXmlElement =>
-    child.kind === "element" && child.namespaceUri === chartNamespace && (child.localName === "catAx" || child.localName === "valAx")
+    child.kind === "element" && child.namespaceUri === chartNamespace && (["catAx", "valAx", "dateAx", "serAx"].includes(child.localName))
   ).map((element) => parseAxis(element, chartNamespace, drawingNamespace));
   if (series.length > MAX_SERIES) throw new ChartPreviewLimitError(`Chart exceeds ${MAX_SERIES} series.`);
   if (axes.length > MAX_AXES) throw new ChartPreviewLimitError(`Chart exceeds ${MAX_AXES} axes.`);
@@ -229,6 +231,7 @@ function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespac
     ...(children(shape ?? element, drawingNamespace, 'noFill').length ? { noFill: true } : {}),
     ...(lineStyle ? { lineStyle } : {}),
     ...(parseChartDataLabels(children(element, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace) ? { dataLabels: parseChartDataLabels(children(element, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace)! } : {}),
+    ...parseChartAnalytics(element, chartNamespace, drawingNamespace, node => parseData(node, chartNamespace)),
     explosion: Number(val(children(element, chartNamespace, 'explosion')[0]) ?? 0),
     pointFormats: points.map(point => {
       const shape = children(point, chartNamespace, 'spPr')[0];
@@ -325,10 +328,11 @@ function parseAxis(element: LosslessXmlElement, namespace: string, drawingNamesp
   const numberFormat = children(element, namespace, "numFmt")[0];
   const numberFormatCode = numberFormat?.attributes.find((attribute) => attribute.namespaceUri === "" && attribute.localName === "formatCode")?.value;
   return Object.freeze({
+    ...parseChartAxisProperties(element, namespace, drawingNamespace),
     ...textStyleProperties(element, namespace, drawingNamespace),
     ...lineStyleProperties(element, namespace, drawingNamespace),
     id: requiredUnsignedVal(element, namespace, "axId", "axis id"),
-    kind: element.localName === "catAx" ? "category" : "value",
+    kind: element.localName === "serAx" ? "series" : element.localName === "valAx" ? "value" : "category",
     position: axisPosition(val(children(element, namespace, "axPos")[0]) ?? "l"),
     title: parseText(children(element, namespace, "title")[0], namespace, drawingNamespace),
     ...axisRotation(element, namespace, drawingNamespace),

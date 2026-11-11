@@ -11,8 +11,8 @@ function automaticIntervals(space?: ChartAxisSpace): number {
   if (!space) return 5;
   if (!Number.isFinite(space.length) || space.length <= 0 || !Number.isFinite(space.labelSize) || space.labelSize <= 0)
     throw new RangeError('Axis length and label size must be positive and finite.');
-  // Office retains three intervals in compact plots; larger plots target five.
-  return Math.max(3, Math.min(5, Math.round(space.length / (space.labelSize * 2))));
+  // Office retains three intervals in compact plots; larger plots accommodate denser grids.
+  return Math.max(3, Math.min(8, Math.round(space.length / (space.labelSize * 2))));
 }
 
 /** Automatic headroom and density follow Word reference cases; ECMA does not mandate an auto algorithm. */
@@ -60,4 +60,48 @@ function niceStep(raw: number): number {
   const magnitude = 10 ** Math.floor(Math.log10(raw));
   const normalized = raw / magnitude;
   return (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) * magnitude;
+}
+
+/** Logarithmic bounds are positive and use the authored base; automatic bounds span whole powers. */
+export function chartLogarithmicScale(values: readonly number[], axis: ChartAxis) {
+  const base = axis.logBase ?? 10;
+  const positive = values.filter(value => Number.isFinite(value) && value > 0);
+  let minimum = axis.minimum !== undefined && axis.minimum > 0 ? axis.minimum : positive.length ? base ** Math.floor(Math.log(Math.min(...positive)) / Math.log(base)) : 1;
+  let maximum = axis.maximum !== undefined && axis.maximum > minimum ? axis.maximum : positive.length ? base ** Math.ceil(Math.log(Math.max(...positive)) / Math.log(base)) : base;
+  if (!(maximum > minimum)) maximum = minimum * base;
+  const ticks: number[] = [];
+  const first = Math.ceil(Math.log(minimum) / Math.log(base) - 1e-12), last = Math.floor(Math.log(maximum) / Math.log(base) + 1e-12);
+  const stride = Math.max(1, Math.ceil((last - first) / 1000));
+  for (let exponent = first; exponent <= last; exponent += stride) ticks.push(roundChartTick(base ** exponent, base ** exponent * 1e-12));
+  return { minimum, maximum, ticks };
+}
+
+/** Unlike clamped frame coordinates, series geometry extends past the domain and is clipped by the plot. */
+export function chartAxisCoordinate(value: number, minimum: number, maximum: number, start: number, length: number, axis?: ChartAxis, vertical = false): number {
+  const transform = (number: number) => axis?.logBase ? Math.log(Math.max(Number.MIN_VALUE, number)) / Math.log(axis.logBase) : number;
+  const first = transform(minimum), last = transform(maximum);
+  const ratio = (transform(value) - first) / (last - first);
+  return start + ((vertical !== !!axis?.reversed) ? 1 - ratio : ratio) * length;
+}
+
+export function chartMinorTicks(minimum: number, maximum: number, axis: ChartAxis, major: readonly number[]): readonly number[] {
+  if (axis.logBase) {
+    const base = axis.logBase;
+    const values: number[] = [];
+    const first = Math.floor(Math.log(minimum) / Math.log(base));
+    for (let exponent = first; exponent <= Math.ceil(Math.log(maximum) / Math.log(base)) && values.length < 1000; exponent++) {
+      for (let factor = 2; factor < base && values.length < 1000; factor++) {
+        const value = factor * base ** exponent;
+        if (value > minimum && value < maximum) values.push(value);
+      }
+    }
+    return values;
+  }
+  const unit = axis.minorUnit ?? (major.length > 1 ? (major[1]! - major[0]!) / 5 : (maximum - minimum) / 25);
+  return chartAxisTicks(minimum, maximum, unit).filter(value => !major.some(tick => Math.abs(value - tick) < unit * 1e-8));
+}
+
+/** A crossing value uses the coordinate system of the axis that owns the property. */
+export function chartAxisCrossing(axis: ChartAxis | undefined, minimum: number, maximum: number): number {
+  return axis?.crossesAt ?? (axis?.crosses === 'min' ? minimum : axis?.crosses === 'max' ? maximum : Math.max(minimum, Math.min(maximum, axis?.logBase ? 1 : 0)));
 }
