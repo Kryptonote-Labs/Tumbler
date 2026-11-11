@@ -1,6 +1,6 @@
 import type { ChartRect } from "./layout.ts";
 import type { ChartSeries, ChartPointFormat, SupportedChartModel } from "./model.ts";
-import { chartFont, chartLegendPositions, type ChartColorResolver, type ChartFont, type ChartStroke, type ChartStrokeDecoration } from "./scene-style.ts";
+import { type ChartColorResolver, type ChartFont, type ChartStroke, type ChartStrokeDecoration } from "./scene-style.ts";
 
 /**
  * One drawing primitive of a chart, in CSS pixels. SVG and canvas heads draw the same marks, so
@@ -60,20 +60,4 @@ export interface SceneContext {
 /** A stroke that draws nothing produces no mark. */
 export function line(x1: number, y1: number, x2: number, y2: number, style: ChartStroke): ChartMark[] {
   return style.stroke === undefined ? [] : [{ kind: "line", x1, y1, x2, y2, ...style, stroke: style.stroke }];
-}
-
-/** Series legend entries: a swatch, then a label `labelX` pixels from the swatch's left edge. */
-export function legendMarks(context: SceneContext, entries: readonly { readonly label: string; readonly swatch: (x: number, y: number) => ChartMark }[], labelX: number): ChartMark[] {
-  const { model, width, height, options } = context;
-  const font = chartFont("legend", model.legend?.textStyle, model, options.resolveColor);
-  const widths = entries.map(entry => labelX + context.measure(entry.label, font));
-  return [legendGroup(chartLegendPositions(widths, { model, width, height }).map((point, index) => [
-    entries[index]!.swatch(point.x, point.y),
-    { kind: "text", text: entries[index]!.label, x: point.x + labelX, y: point.y, anchor: "start", font },
-  ]))];
-}
-
-/** Wraps legend entries, each a swatch and its label, in their structural groups. */
-export function legendGroup(entries: readonly (readonly ChartMark[])[]): ChartMark {
-  return { kind: "group", role: "legend", marks: entries.map(marks => ({ kind: "group", role: "legend-entry", marks })) };
 }

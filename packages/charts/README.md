@@ -336,3 +336,10 @@ inner layouts set the data frame directly. Empty layouts keep automatic geometry
 and zero-sized data frames retain the chart title and legend. See
 [layout reference checks](../../docs/chart-layout-reference.md) for native samples,
 Microsoft implementation notes and measured LibreOffice differences.
+
+`legend.entries` retains native per-entry deletion and text styles. Its keys are
+positions in the complete legend list, including trendlines and surface height
+bands, rather than series identities. Each entry keeps its scheme colour and theme
+font references. The shared layout measures the visible resolved fonts, wraps long
+labels, and reserves the same frame that SVG and canvas paint. Hiding every entry
+releases automatic legend space without changing the series or chart source.

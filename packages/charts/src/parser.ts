@@ -1,3 +1,4 @@
+import { parseChartLegend } from './legend-parser.ts';
 import { parseChartManualLayout } from './manual-layout.ts';
 import { parseChart3DProperties, parseBarShape } from './three-d-properties.ts';
 import { parseSurfaceBands } from './surface-bands.ts';
@@ -18,7 +19,6 @@ import type {
   ChartDataSequence,
   ChartKind,
   ChartLegend,
-  ChartLegendPosition,
   ChartModel,
   ChartSeries,
   ChartScatterStyle,
@@ -64,7 +64,7 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
   const chart = exactlyOne(document.root, chartNamespace, "chart", "chartSpace");
   const titleElement = children(chart, chartNamespace, "title")[0];
   const titleFormula = parseTextFormula(children(chart, chartNamespace, "title")[0], chartNamespace);
-  const legend = parseLegend(children(chart, chartNamespace, "legend")[0], chartNamespace, drawingNamespace);
+  const legend = parseChartLegend(children(chart, chartNamespace, "legend")[0], chartNamespace, drawingNamespace);
   const plotAreas = children(chart, chartNamespace, "plotArea");
   if (plotAreas.length !== 1) throw new ChartParseError("A chart must contain exactly one plotArea.");
   const plotArea = plotAreas[0]!;
@@ -404,15 +404,6 @@ function lineStyleProperties(element: LosslessXmlElement, ns: string, drawing: s
   const gridlines = children(element, ns, "majorGridlines")[0];
   const gridlineStyle = parseChartLine(gridlines && children(gridlines, ns, "spPr")[0], drawing);
   return { ...(lineStyle === undefined ? {} : { lineStyle }), ...(gridlineStyle === undefined ? {} : { gridlineStyle }) };
-}
-
-function parseLegend(element: LosslessXmlElement | undefined, namespace: string, drawingNamespace: string): ChartLegend | undefined {
-  if (element === undefined) return undefined;
-  const positions: Record<string, ChartLegendPosition> = { b: "bottom", l: "left", r: "right", t: "top", tr: "top-right" };
-  const raw = val(children(element, namespace, "legendPos")[0]) ?? "r";
-  const shapeStyle = parseChartShapeStyle(children(element, namespace, 'spPr')[0], drawingNamespace);
-  return Object.freeze({
-    ...(shapeStyle ? { shapeStyle } : {}), ...textStyleProperties(element, namespace, drawingNamespace), position: positions[raw] ?? "right", overlay: booleanVal(children(element, namespace, "overlay")[0], false) });
 }
 
 function parseText(element: LosslessXmlElement | undefined, chartNamespace: string, drawingNamespace: string): string | undefined {

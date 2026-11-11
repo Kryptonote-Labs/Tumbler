@@ -1,3 +1,6 @@
+import type { ChartSceneOptions } from './scene-marks.ts';
+import { layoutChartLegend } from './legend-layout.ts';
+import { chartSurfaceLevels } from './legend-items.ts';
 import { chartManualPlot, chartOuterPlot, chartOuterXYPlot } from './manual-layout.ts';
 import { fitBubbleAxis } from './bubble-axis.ts';
 import { xyGeometry } from './xy-geometry.ts';
@@ -7,7 +10,7 @@ import { chartLogarithmicScale, chartAxisCoordinate } from './axis-scale.ts';
 import { assertChartSceneBudget } from './scene-budget.ts';
 import { chartStacks, indexChartSequence, type StackPoint } from './indexed-data.ts';
 import { chartTitleHeight } from './title-scene.ts';
-import { chartFont, chartLegendPositions, type ChartFont } from './scene-style.ts';
+import { chartFont, type ChartFont } from './scene-style.ts';
 import { cartesianAxisScale, chartAxisTicks, roundChartTick } from "./axis-scale.ts";
 import { BUBBLE_CHART_POINT_LIMIT, type ChartDataSequence, type SupportedChartModel } from "./model.ts";
 
@@ -73,7 +76,14 @@ export interface BubbleChartLayout {
   readonly series: readonly (readonly BubblePoint[])[];
 }
 
-export function layoutCartesianChart(model: SupportedChartModel, width: number, height: number, measure: (text: string, font: ChartFont) => number = (text, font) => text.length * font.size * 0.55): CartesianChartLayout {
+export function layoutCartesianChart(model: SupportedChartModel, width: number, height: number, measure: (text: string, font: ChartFont) => number = (text, font) => text.length * font.size * .55, options: ChartSceneOptions = {}): CartesianChartLayout {
+  if (model.kind !== 'surface' || !model.legend) return cartesianFrame(model, width, height, measure, undefined, options);
+  // Choose surface levels before the legend reserves space; band formatting must not change its own entry list.
+  const scale = cartesianFrame({ ...model, legend: undefined }, width, height, measure, undefined, options);
+  return cartesianFrame(model, width, height, measure, { minimum: scale.minimum, maximum: scale.maximum, ticks: scale.ticks }, options);
+}
+
+function cartesianFrame(model: SupportedChartModel, width: number, height: number, measure: (text: string, font: ChartFont) => number, surfaceScale?: Pick<CartesianChartLayout, 'minimum' | 'maximum' | 'ticks'>, options: ChartSceneOptions = {}): CartesianChartLayout {
   finiteSize(width, "chart width");
   finiteSize(height, "chart height");
   const count = assertChartSceneBudget(model);
@@ -83,20 +93,16 @@ export function layoutCartesianChart(model: SupportedChartModel, width: number, 
   const categoryAxis = model.axes.find(axis => axis.kind === "category");
   const categoryFont = chartFont("category", categoryAxis?.textStyle, model);
   const labelWidth = Math.max(0, ...categories.map(label => measure(label, categoryFont)));
-  const legend = model.legend?.overlay === false ? model.legend.position : undefined;
-  const legendFont = chartFont("legend", model.legend?.textStyle, model);
-  const legendWidths = model.series.map((series, index) => 12 + measure(series.title ?? `Series ${index + 1}`, legendFont));
-  const legendPoints = chartLegendPositions(legendWidths, { model, width, height });
-  const bottomLegend = legend === "bottom" ? height - Math.min(height, ...legendPoints.map(point => point.y)) + legendFont.size + 10 : 8;
-  const sideLegend = legend === "left" || legend === "right" || legend === "top-right" ? Math.max(0, ...legendWidths) + 16 : 0;
-  const left = (legend === "left" ? sideLegend : 0) + (horizontal ? labelWidth + 16 : 30);
-  const plotWidth = Math.max(1, width - left - 16 - (legend === "left" ? 0 : sideLegend));
+  const legend = layoutChartLegend(model, width, height, measure, surfaceScale && chartSurfaceLevels(surfaceScale), options.resolveColor, options);
+  const bottomLegend = legend.space.bottom || 8;
+  const left = legend.space.left + (horizontal ? labelWidth + 16 : 30);
+  const plotWidth = Math.max(1, width - left - 16 - legend.space.right);
   const categoryRotation = horizontal ? 0 : categoryAxis?.labelRotation ?? (labelWidth + 8 > plotWidth / Math.max(1, categories.length) ? -45 : 0);
   const radians = Math.abs(categoryRotation) * Math.PI / 180;
   const categoryHeight = horizontal ? 20 : Math.abs(Math.sin(radians)) * labelWidth + Math.abs(Math.cos(radians)) * categoryFont.size + 14;
-  const top = (model.title === undefined || model.titleOverlay ? 16 : chartTitleHeight(model) + 28) + (legend === "top" ? 28 : 0);
+  const top = (model.title === undefined || model.titleOverlay ? 16 : chartTitleHeight(model) + 28) + legend.space.top;
   const automaticPlot = { x: left, y: top, width: plotWidth, height: Math.max(1, height - top - bottomLegend - categoryHeight) };
-  let plot = chartManualPlot(model.plotLayout, automaticPlot, { x: legend === "left" ? sideLegend : 0, y: top, width: width - 16 - sideLegend, height: height - top - bottomLegend }, width, height);
+  let plot = chartManualPlot(model.plotLayout, automaticPlot, { x: legend.space.left, y: top, width: width - 16 - legend.space.left - legend.space.right, height: height - top - bottomLegend }, width, height);
   const axis = model.axes.find((candidate) => candidate.kind === "value");
   let dataMinimum = 0, dataMaximum = 0;
   for (const points of stacks) for (const point of points) if (point) {
@@ -107,10 +113,10 @@ export function layoutCartesianChart(model: SupportedChartModel, width: number, 
   for (const bounds of analytic) { dataMinimum = Math.min(dataMinimum, bounds.yMinimum); dataMaximum = Math.max(dataMaximum, bounds.yMaximum); }
   const minimum = axis?.minimum ?? dataMinimum;
   const maximum = axis?.maximum ?? dataMaximum;
-  const scale = axis?.logBase ? chartLogarithmicScale([...model.series.flatMap(series => series.values?.points.flatMap(point => typeof point.value === "number" ? [point.value] : []) ?? []), ...analytic.flatMap(bounds => [bounds.yPositiveMinimum, bounds.yMaximum])], axis) : cartesianAxisScale(minimum, maximum, axis, model.grouping === "percent-stacked", {
+  const scale = surfaceScale ?? (axis?.logBase ? chartLogarithmicScale([...model.series.flatMap(series => series.values?.points.flatMap(point => typeof point.value === "number" ? [point.value] : []) ?? []), ...analytic.flatMap(bounds => [bounds.yPositiveMinimum, bounds.yMaximum])], axis) : cartesianAxisScale(minimum, maximum, axis, model.grouping === "percent-stacked", {
     length: Math.max(1, horizontal ? plot.width : plot.height),
     labelSize: chartFont("tick", axis?.textStyle, model).size * (horizontal ? 2 : 1),
-  });
+  }));
   const categoryValues = indexChartSequence(model.series.find(series => series.categories !== undefined)?.categories);
   const categoryScale = categoryAxis?.dateAxis ? chartDateScale(Array.from({ length: count }, (_, index) => {
     const value = categoryValues.get(index); return typeof value === 'number' ? value : undefined;
@@ -128,11 +134,9 @@ export function layoutScatterChart(model: SupportedChartModel, width: number, he
   finiteSize(width, "chart width");
   finiteSize(height, "chart height");
   const titleHeight = model.title === undefined || model.titleOverlay ? 10 : Math.min(34, Math.max(20, height * 0.12));
-  const legend = model.legend?.overlay === false ? model.legend.position : undefined;
-  const leftLegend = legend === "left" ? Math.min(100, width * 0.22) : 0;
-  const rightLegend = legend === "right" || legend === "top-right" ? Math.min(100, width * 0.22) : 0;
-  const topLegend = legend === "top" ? 24 : 0;
-  const bottomLegend = legend === "bottom" ? 28 : 0;
+  const legend = layoutChartLegend(model, width, height, measure);
+  const leftLegend = legend.space.left, rightLegend = legend.space.right;
+  const topLegend = legend.space.top, bottomLegend = legend.space.bottom;
   const automaticPlot = {
     x: leftLegend + 58,
     y: titleHeight + topLegend + 8,

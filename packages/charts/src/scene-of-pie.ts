@@ -1,3 +1,4 @@
+import { chartLegendScene } from './legend-scene.ts';
 import { chartPointFill } from './fill-scene.ts';
 import { chartPointStroke } from './stroke-scene.ts';
 import { chartDataLabelMarks } from './label-scene.ts';
@@ -32,13 +33,10 @@ function move(mark: ChartMark, x: number, y: number): ChartMark {
 }
 
 export function ofPieScene(context: SceneContext): ChartMark[] {
-  const layout = context.model.plotLayout;
-  if (!layout || [layout.x, layout.y, layout.width, layout.height].every(value => value === undefined)) return splitPieScene(context);
-  const count = context.model.series[0]?.values?.points.length ?? 0;
-  const { plot } = pieChartFrame(context, count);
+  const { plot } = pieChartFrame(context);
   const { plotLayout: _layout, plotArea, title: _title, legend: _legend, ...model } = context.model;
   const content = splitPieScene({ ...context, width: plot.width, height: plot.height, model: { ...model, title: undefined, legend: undefined, plotLayout: { target: 'inner', xMode: 'edge', yMode: 'edge', x: 0, y: 0, width: 1, height: 1 } } });
-  const legend = context.model.legend ? pieScene(context).filter(mark => mark.kind === 'group' && mark.role === 'legend') : [];
+  const legend = chartLegendScene(context);
   return [...chartShapeMarks(context, plot, plotArea), ...content.map(mark => move(mark, plot.x, plot.y)), ...legend];
 }
 
@@ -75,6 +73,6 @@ function splitPieScene(context: SceneContext): ChartMark[] {
     const minor = pieScene({ ...context, width: minorWidth, height: minorHeight, model: { ...model, kind: 'pie', title: undefined, legend: undefined, series: [secondarySeries] } }, total);
     marks.push(...minor.map(mark => move(mark, mainWidth, (height - minorHeight) / 2)));
   }
-  if (model.legend) marks.push(...pieScene({ ...context, model: { ...model, kind: 'pie' } }).filter(mark => mark.kind === 'group' && mark.role === 'legend'));
+  marks.push(...chartLegendScene(context));
   return marks;
 }
