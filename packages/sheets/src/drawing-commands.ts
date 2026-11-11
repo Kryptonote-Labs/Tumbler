@@ -1,3 +1,4 @@
+import { addChartContent, writeChartContent } from '@tumblerjs/charts';
 import { z } from 'zod';
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, parseLosslessXml, presetGeometries, type LosslessXmlElement } from '@tumblerjs/ooxml';
 import { beginPackageTransaction, PartName, relationshipItemName } from '@tumblerjs/opc';
@@ -8,8 +9,11 @@ import { spreadsheetDrawingBounds, spreadsheetDrawingObjectId } from './drawings
 
 const id = z.string().min(1);
 const position = { x: z.number().finite(), y: z.number().finite(), width: z.number().finite().positive(), height: z.number().finite().positive() };
+const chartContent = z.object({ xml: z.string(), workbook: z.string().optional() }).strict();
 const target = { sheetId: id, objectId: z.number().int().nonnegative() };
 export const spreadsheetDrawingCommand = z.discriminatedUnion('name', [
+  z.object({ name: z.literal('insert-chart'), sheetId: id, ...position, content: chartContent }).strict(),
+  z.object({ name: z.literal('edit-chart'), ...target, content: chartContent }).strict(),
   z.object({ name: z.literal('insert-shape'), sheetId: id, ...position, preset: id, text: z.string().optional(), fill: z.string().optional(), stroke: z.string().optional() }).strict(),
   z.object({ name: z.literal('insert-image'), sheetId: id, ...position, data: id, contentType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']), alt: z.string().optional() }).strict(),
   z.object({ name:z.literal('align-drawing'), ...target, range:id, action:z.enum(['left','center','right','top','middle','bottom']) }).strict(),
@@ -34,6 +38,15 @@ export function applySpreadsheetDrawingCommand(artifact: SpreadsheetArtifact, in
   const sheet = artifact.workbook.sheets.find(s => String(s.sheetId) === command.sheetId || s.name === command.sheetId);
   if (!sheet) throw new Error('Worksheet does not exist.');
   const worksheet = artifact.selectSheet(sheet.sheetId).worksheet;
+  if (command.name === 'edit-chart') {
+    const drawing = worksheet.drawing;
+    const frame = drawing?.charts.find(frame => spreadsheetDrawingObjectId(drawing, frame.anchor) === command.objectId);
+    if (!frame?.partName) throw new TypeError('Select an editable chart.');
+    const transaction = beginPackageTransaction(artifact.workbook.package);
+    writeChartContent(transaction, frame.partName, command.content);
+    const workbook = openSpreadsheet(transaction.commitPackage());
+    return new SpreadsheetArtifact(workbook, workbook.sheet(artifact.activeSheet.sheetId)!);
+  }
   if(command.name==='align-drawing') {
     const drawing=worksheet.drawing;
     const anchor=drawing?.anchors.find(a=>spreadsheetDrawingObjectId(drawing,a)===command.objectId);
@@ -74,7 +87,7 @@ export function applySpreadsheetDrawingCommand(artifact: SpreadsheetArtifact, in
     const clientData=original && children(original).find(e=>e.localName==='clientData');
     return `<xdr:absoluteAnchor xmlns:xdr="${ns.spreadsheetDrawing}" xmlns:a="${ns.drawing}" xmlns:r="${rel}" ${attributes}><xdr:pos x="${emu(bounds.x)}" y="${emu(bounds.y)}"/><xdr:ext cx="${emu(bounds.width)}" cy="${emu(bounds.height)}"/>${content}${clientData?raw(clientData):'<xdr:clientData/>'}</xdr:absoluteAnchor>`;
   };
-  if (command.name === 'insert-shape' || command.name === 'insert-image') {
+  if (command.name === 'insert-shape' || command.name === 'insert-image' || command.name === 'insert-chart') {
     const objectId = nextId++;
     const xfrm = `<a:xfrm><a:off x="${emu(command.x)}" y="${emu(command.y)}"/><a:ext cx="${emu(command.width)}" cy="${emu(command.height)}"/></a:xfrm>`;
     let content: string;
@@ -87,6 +100,16 @@ export function applySpreadsheetDrawingCommand(artifact: SpreadsheetArtifact, in
         return `<a:solidFill><a:srgbClr val="${value.slice(1)}"/></a:solidFill>`;
       };
       content = `<xdr:sp><xdr:nvSpPr><xdr:cNvPr id="${objectId}" name="Shape ${objectId}"/><xdr:cNvSpPr txBox="${command.text === undefined ? 0 : 1}"/></xdr:nvSpPr><xdr:spPr>${xfrm}<a:prstGeom prst="${escape(command.preset)}"><a:avLst/></a:prstGeom>${paint(fill)}<a:ln w="9525">${paint(stroke)}</a:ln></xdr:spPr>${command.text === undefined ? '' : `<xdr:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>${escape(command.text)}</a:t></a:r></a:p></xdr:txBody>`}</xdr:sp>`;
+    } else if (command.name === 'insert-chart') {
+      const chartPart = uniquePart('/xl/charts/chart', 'xml');
+      addChartContent(transaction, chartPart, command.content);
+      let relationshipIndex = objectId;
+      const relationships = drawing && workbook.package.archive.get(relationshipItemName(drawingPart)) ? workbook.package.relationships(drawingPart) : undefined;
+      while (relationships?.get(`chart${relationshipIndex}`)) relationshipIndex++;
+      const relationshipId = `chart${relationshipIndex}`;
+      if (!drawing) transaction.addPart(drawingPart, 'application/vnd.openxmlformats-officedocument.drawing+xml', document.originalBytes());
+      transaction.addRelationship(drawingPart, { id: relationshipId, type: `${rel}/chart`, target: chartPart });
+      content = `<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${objectId}" name="Chart ${objectId}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="${emu(command.width)}" cy="${emu(command.height)}"/></xdr:xfrm><a:graphic><a:graphicData uri="${ns.chart}"><c:chart xmlns:c="${ns.chart}" r:id="${relationshipId}"/></a:graphicData></a:graphic></xdr:graphicFrame>`;
     } else {
       const extension = command.contentType === 'image/jpeg' ? 'jpg' : command.contentType.split('/')[1]!.replace('+xml', '');
       const imagePart = uniquePart('/xl/media/image', extension);
@@ -161,7 +184,7 @@ export function applySpreadsheetDrawingCommand(artifact: SpreadsheetArtifact, in
   }
   const bytes = editor.commit().bytes;
   if (!drawing) {
-    if (command.name !== 'insert-image') transaction.addPart(drawingPart, 'application/vnd.openxmlformats-officedocument.drawing+xml', bytes);
+    if (command.name !== 'insert-image' && command.name !== 'insert-chart') transaction.addPart(drawingPart, 'application/vnd.openxmlformats-officedocument.drawing+xml', bytes);
     else transaction.replacePart(drawingPart, bytes);
     const rels = workbook.package.archive.get(relationshipItemName(sheet.partName)) ? workbook.package.relationships(sheet.partName) : undefined;
     let index = 1;

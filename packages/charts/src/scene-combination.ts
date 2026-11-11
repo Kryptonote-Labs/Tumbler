@@ -36,6 +36,22 @@ export function combinationScene(context: SceneContext): ChartMark[] {
     plot.model.series.forEach((series, s) => {
       const points = plot.points[s]!;
       const seriesIndex = model.series.findIndex(item => item.index === series.index);
+      if (plot.model.kind === 'area') {
+        let segment: { x: number; start: number; end: number }[] = [];
+        const flush = () => {
+          if (!segment.length) return;
+          const top = segment.map(point => `${point.x},${point.end}`);
+          const bottom = [...segment].reverse().map(point => `${point.x},${point.start}`);
+          marks.push({ kind: 'path', d: `M ${top.join(' L ')} L ${bottom.join(' L ')} Z`, fill: context.color(series, seriesIndex) });
+          segment = [];
+        };
+        points.forEach((point, category) => {
+          if (point) segment.push({ x: plot.plot.x + category / Math.max(1, count - 1) * plot.plot.width, ...point });
+          else flush();
+        });
+        flush();
+        return;
+      }
       if (plot.model.kind === "line") {
         const d = points.map((point, c) => point ? `${points[c - 1] ? "L" : "M"} ${plot.plot.x + (c + 0.5) * band} ${point.end}` : "").join(" ");
         marks.push({ kind: "path", d, stroke: context.color(series, seriesIndex, true), strokeWidth: 2 });

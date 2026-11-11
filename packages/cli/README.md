@@ -228,9 +228,19 @@ tumbler report.docx charts edit --input '{"page":"<revision>","part":"/word/char
 Use the current read's revision and node IDs, not the example ID. Each edit
 changes one chart part atomically and returns a new property tree and revision.
 All source properties, including extension markup, are accessible. These commands
-validate XML rather than chart schemas or linked workbook consistency. They do
-not yet insert chart drawings, convert types automatically, or synchronize source
-workbooks. Hosted integrations implement `ChartOperationHost` to supply their
+validate XML; typed series operations validate the data roles and stock-series count.
+Use `charts convert --input '{"page":"<revision>","part":"/word/charts/chart1.xml","type":"radarChart","radarStyle":"filled"}'`
+to convert a plot. `plot` selects a combination plot, starting at zero. Data and compatible
+formatting survive, and inactive type settings are restored when switching back.
+
+`charts data --input '{"page":"<revision>","part":"/word/charts/chart1.xml","cells":[{"reference":"B2","formula":"3*4"}]}'`
+edits a real embedded workbook and refreshes the chart cache in the same transaction.
+For XLSX, use ordinary `sheets` commands to edit the host workbook cells. A `series`
+request adds, duplicates, removes or reorders series; a `data` request updates the
+source ranges returned by `charts read`. Inspect `charts --help` for these schemas.
+New drawings use the native `insert-chart` operation in each document family's command API.
+
+Hosted integrations implement `ChartOperationHost` to supply their
 own permissions, storage and collaboration transactions; an unsupported host
 returns an explicit capability error. Run `tumbler <document> charts --help` for
 the complete edit schema.

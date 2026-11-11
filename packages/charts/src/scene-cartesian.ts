@@ -5,7 +5,7 @@ import { legendMarks, line, type ChartMark, type SceneContext } from "./scene-ma
 import { chartFont, chartStroke } from "./scene-style.ts";
 
 /** Bar, column and line charts over shared categories. */
-export function cartesianScene(context: SceneContext): ChartMark[] {
+export function cartesianScene(context: SceneContext, drawSeries = true): ChartMark[] {
   const { model, width, height, options } = context;
   const resolve = options.resolveColor;
   const layout = layoutCartesianChart(model, width, height, context.measure);
@@ -39,7 +39,25 @@ export function cartesianScene(context: SceneContext): ChartMark[] {
   const spine = horizontal ? x(0) : plot.x;
   if (!(horizontal ? categoryAxis : valueAxis)?.deleted) marks.push(...line(spine, plot.y, spine, plot.y + plot.height, down));
 
-  model.series.forEach((series, seriesIndex) => {
+  if (drawSeries) model.series.forEach((series, seriesIndex) => {
+    if (model.kind === 'area') {
+      const points = layout.stacks[seriesIndex] ?? [];
+      let segment: { index: number; start: number; end: number }[] = [];
+      const flush = () => {
+        if (!segment.length) return;
+        const px = (index: number) => plot.x + index / Math.max(1, count - 1) * plot.width;
+        const top = segment.map(point => `${px(point.index)},${y(point.end)}`);
+        const bottom = [...segment].reverse().map(point => `${px(point.index)},${y(point.start)}`);
+        marks.push({ kind: 'path', d: `M ${top.join(' L ')} L ${bottom.join(' L ')} Z`, fill: context.color(series, seriesIndex) });
+        segment = [];
+      };
+      for (let index = 0; index < count; index++) {
+        const point = points[index];
+        if (point) segment.push({ index, ...point }); else flush();
+      }
+      flush();
+      return;
+    }
     if (model.kind === "line") {
       marks.push({ kind: "path", d: linePath(seriesIndex, layout), stroke: context.color(series, seriesIndex, true), strokeWidth: 2 });
       layout.categories.forEach((_, index) => {
@@ -68,7 +86,7 @@ export function cartesianScene(context: SceneContext): ChartMark[] {
     if (categoryAxis?.deleted || index % step !== 0) return;
     marks.push(horizontal
       ? { kind: "text", text: category, x: plot.x - 7, y: plot.y + (index + 0.5) / count * plot.height + 4, anchor: "end", font }
-      : { kind: "text", text: category, x: plot.x + (index + 0.5) / count * plot.width, y: plot.y + plot.height + font.size + 5, anchor: layout.categoryRotation < 0 ? "end" : layout.categoryRotation > 0 ? "start" : "middle", rotate: layout.categoryRotation, font });
+      : { kind: "text", text: category, x: plot.x + (model.kind === 'area' ? index / Math.max(1, count - 1) : (index + 0.5) / count) * plot.width, y: plot.y + plot.height + font.size + 5, anchor: layout.categoryRotation < 0 ? "end" : layout.categoryRotation > 0 ? "start" : "middle", rotate: layout.categoryRotation, font });
   });
   if (model.legend !== undefined) {
     marks.push(...legendMarks(context, model.series.map((series, index) => ({

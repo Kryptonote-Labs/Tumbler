@@ -102,3 +102,5 @@ export {presentationNativeContent} from "./native-archive.ts";
 
 export { presentationFormatPainterSample, presentationFormatPainterCommands, type PresentationFormatPainterSample } from './format-painter.ts';
 export { exportPresentationPdf, type PresentationPdfBackend } from './pdf.ts';
+
+export { presentationChartContent, editPresentationChart, insertPresentationChart } from './chart-authoring.ts';

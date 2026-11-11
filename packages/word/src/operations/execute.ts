@@ -87,6 +87,7 @@ export function createWordOperations(commands = createWordCommands()) {
           const current = wordObjectAttributes(staged, range.start);
           if (operation.name === "edit-object") {
             const patch = defined(operation.input);
+            if (patch.chartContent) staged.format(range.start, 1, { ...(patch.chartTitle === undefined ? { chartTitle: null } : {}), ...(patch.chartTitleText === undefined ? { chartTitleText: null } : {}) });
             if (
               (patch.image && !current.image) ||
               (patch.shape && !current.shape) ||
@@ -277,11 +278,12 @@ export function createWordOperations(commands = createWordCommands()) {
           );
           return { start: range.start, end: range.start };
         }
+        case "insert-chart":
         case "insert-ink":
         case "insert-shape":
         case "insert-image": {
           const attributes =
-            operation.name === "insert-ink"
+            operation.name === "insert-chart" ? { chart: operation.input.chart } : operation.name === "insert-ink"
               ? { ink: operation.input.ink }
               : operation.name === "insert-shape"
                 ? { shape: operation.input.shape }

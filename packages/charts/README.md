@@ -16,8 +16,10 @@ import { parseOoxmlChart } from "@tumblerjs/charts";
 const chart = parseOoxmlChart(chartXml, "transitional");
 ```
 
-The current read-only subset covers clustered bar/column, line, pie, doughnut,
-numeric XY scatter, and two-dimensional bubble charts. Bubble series pair sparse
+The shared preview covers bar/column, line, area, pie, doughnut, XY scatter,
+bubble, radar, stock, split pie and surface charts. Cartesian and pie 3D plots
+retain camera settings. These layouts are under active compatibility work; this
+is not a claim of pixel parity with Office or LibreOffice for every property. Bubble series pair sparse
 X, Y, and size caches by point index and support the standard area/width size
 modes, 0–300% scaling, and opt-in negative values. Deterministic headless layout
 is available through `layoutBubbleChart`.
@@ -52,9 +54,9 @@ This is a Word-parity policy, not an ECMA-prescribed automatic scale. Explicit
 axis bounds and `majorUnit` take precedence; percentage stacks retain their
 normalized bounds. Very dense grids sample whole major units for rendering.
 
-Three-dimensional effects, per-point bubble formatting, data labels,
-trendlines, error bars, and exact Office bubble-size normalization remain
-explicitly unsupported. Unknown source XML is preserved by the owning OOXML
+Per-point bubble formatting, data labels, trendlines, error bars,
+and exact Office bubble-size normalization remain incomplete in the preview.
+Three-dimensional bubble effects remain unsupported. Unknown source XML is preserved by the owning OOXML
 package even when a chart falls back rather than rendering.
 
 Tumbler is developed at
@@ -160,3 +162,27 @@ Generate references with `bun scripts/generate-chart-authoring-fixtures.ts <dir>
 This produces one PPTX and chart XML per plot element, retaining the reference
 presentation's theme and layout. Validate PPTX files with the repository's
 Open XML SDK validator and export them through LibreOffice for visual references.
+
+
+`convertChartType` changes a selected plot without flattening its data bindings.
+Compatible formatting stays active, and a private OOXML extension retains inactive
+properties so they can return when switching back. Series identities keep their
+formatting through reordering; newly added series do not inherit deleted series history.
+`editChartSeries` adds, duplicates, removes or reorders series. Duplication copies the
+current series, including its source ranges and formatting.
+
+`chartPropertyTree` exposes the chart and DrawingML property definitions from the
+pinned Open XML SDK schema. It supplies typed attributes, choices, numeric bounds
+and available child properties for the shared editor. The source-edit API remains
+available for extension properties. Metadata coverage does not establish renderer
+coverage or semantic validity for arbitrary combinations of property edits.
+
+The Svelte `ChartWorkbench` combines type previews, property fields, series/range
+controls and a real embedded spreadsheet. DOCX and PPTX hosts serialize the chart
+and workbook together; XLSX hosts edit their existing worksheet data.
+
+Generate native authoring fixtures for all sixteen chart types across all three
+formats with `bun scripts/generate-chart-editing-fixtures.ts <output-directory>`.
+These fixtures exercise formulas, conversion history and series membership before
+schema and LibreOffice validation. Schema validation and successful PDF conversion
+are interoperability evidence; neither proves pixel parity.

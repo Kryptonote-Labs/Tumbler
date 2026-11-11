@@ -81,7 +81,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
       const edit = beginLosslessXmlEdit(document);
       for (const other of candidates) if (candidate !== other) edit.removeElement(other);
       const parsed = parseOoxmlChart(edit.commit().bytes, conformance, options);
-      if (parsed.status !== "supported" || !["column", "bar", "line"].includes(parsed.kind))
+      if (parsed.status !== "supported" || !["column", "bar", "line", "area"].includes(parsed.kind))
         return unsupported(candidate.localName, "This combination contains an unsupported plot type.", title, titleFormula, legend);
       plots.push(Object.freeze({ ...parsed, title }));
     }
@@ -112,17 +112,11 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
     : rawGrouping === "percentStacked" ? "percent-stacked" as const
     : rawGrouping === "clustered" ? "clustered" as const
     : "standard" as const;
-  if ((kind === "pie" || kind === "doughnut") && series.length > 1) {
-    return unsupported(chartType.localName, "Multiple-series pie-family charts are not supported in this milestone.", title, titleFormula, legend);
-  }
   if (kind === "bubble") {
-    const chartBubble3D = booleanVal(children(chartType, chartNamespace, "bubble3D")[0], false);
-    const seriesBubble3D = children(chartType, chartNamespace, "ser").some((element) =>
-      booleanVal(children(element, chartNamespace, "bubble3D")[0], false)
-    );
-    if (chartBubble3D || seriesBubble3D) {
-      return unsupported(chartType.localName, "3-D bubble effects are not supported in this milestone.", title, titleFormula, legend);
-    }
+    const chartBubble3D = booleanVal(children(chartType, chartNamespace, 'bubble3D')[0], false);
+    const seriesBubble3D = children(chartType, chartNamespace, 'ser').some(element => booleanVal(children(element, chartNamespace, 'bubble3D')[0], false));
+    if (chartBubble3D || seriesBubble3D) return unsupported(chartType.localName, '3-D bubble effects are not supported in this milestone.', title, titleFormula, legend);
+
     if (series.some((item) => item.xValues?.kind === "string" || item.values?.kind === "string" || item.bubbleSizes?.kind === "string")) {
       return unsupported(chartType.localName, "Bubble X, Y, and size sequences must be numeric.", title, titleFormula, legend);
     }
@@ -147,6 +141,16 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
   const bubbleSizeRepresentation = kind === "bubble" ? parseBubbleSizeRepresentation(val(children(chartType, chartNamespace, "sizeRepresents")[0]) ?? "area") : undefined;
   return Object.freeze({
     status: "supported", kind, grouping, holeSize,
+    sourceType: chartType.localName,
+    ...(chartType.localName.includes('3D') ? { threeD: parseView3D(children(chart, chartNamespace, 'view3D')[0], chartNamespace) } : {}),
+    ...(kind === 'radar' ? { radarStyle: radarStyle(val(children(chartType, chartNamespace, 'radarStyle')[0]) ?? 'standard') } : {}),
+    ...(kind === 'surface' ? { wireframe: booleanVal(children(chartType, chartNamespace, 'wireframe')[0], false) } : {}),
+    ...(kind === 'of-pie' ? { splitType: val(children(chartType, chartNamespace, 'ofPieType')[0]) === 'bar' ? 'bar' as const : 'pie' as const,
+      customSplit: children(children(chartType, chartNamespace, 'custSplit')[0] ?? chartType, chartNamespace, 'secondPiePt').map(point => unsigned(val(point) ?? '', 'custom split point')),
+      splitBy: splitBy(val(children(chartType, chartNamespace, 'splitType')[0]) ?? 'auto'),
+      splitPosition: Number(val(children(chartType, chartNamespace, 'splitPos')[0]) ?? 2),
+      secondPieSize: Number(val(children(chartType, chartNamespace, 'secondPieSize')[0]) ?? 75) } : {}),
+    ...(kind === 'pie' || kind === 'doughnut' ? { firstSliceAngle: Number(val(children(chartType, chartNamespace, 'firstSliceAng')[0]) ?? 0) } : {}),
     ...textStyleProperties(document.root, chartNamespace, drawingNamespace),
     ...titleStyleProperties(children(chart, chartNamespace, "title")[0], chartNamespace, drawingNamespace),
     ...(readChartTitleText(titleElement, chartNamespace, drawingNamespace) ? { titleText: readChartTitleText(titleElement, chartNamespace, drawingNamespace)! } : {}),
@@ -160,7 +164,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
     ...(bubbleSizeRepresentation === undefined ? {} : { bubbleSizeRepresentation }),
     ...(axisIds.length === 0 ? {} : { axisIds: Object.freeze(axisIds) }),
     title, ...(titleFormula === undefined ? {} : { titleFormula }), legend,
-    series: Object.freeze(series), axes: Object.freeze(axes),
+    series: Object.freeze(series), axes: Object.freeze(axisIds.length ? axes.filter(axis => axisIds.includes(axis.id)) : axes),
   });
 }
 
@@ -169,13 +173,40 @@ function unsupported(chartType: string | undefined, reason: string, title: strin
 }
 
 function chartKind(element: LosslessXmlElement, namespace: string): ChartKind | undefined {
-  if (element.localName === "barChart") return val(children(element, namespace, "barDir")[0]) === "bar" ? "bar" : "column";
-  if (element.localName === "lineChart") return "line";
-  if (element.localName === "pieChart") return "pie";
+  if (["barChart", "bar3DChart"].includes(element.localName)) return val(children(element, namespace, "barDir")[0]) === "bar" ? "bar" : "column";
+  if (["lineChart", "line3DChart"].includes(element.localName)) return "line";
+  if (["pieChart", "pie3DChart"].includes(element.localName)) return "pie";
   if (element.localName === "doughnutChart") return "doughnut";
   if (element.localName === "scatterChart") return "scatter";
   if (element.localName === "bubbleChart") return "bubble";
+  if (['areaChart', 'area3DChart'].includes(element.localName)) return 'area';
+  if (['surfaceChart', 'surface3DChart'].includes(element.localName)) return 'surface';
+  if (element.localName === 'radarChart') return 'radar';
+  if (element.localName === 'stockChart') return 'stock';
+  if (element.localName === 'ofPieChart') return 'of-pie';
   return undefined;
+}
+
+
+function splitBy(value: string): 'auto' | 'cust' | 'percent' | 'pos' | 'val' {
+  if (value === 'auto' || value === 'cust' || value === 'percent' || value === 'pos' || value === 'val') return value;
+  throw new ChartParseError('Invalid of-pie split mode.');
+}
+
+function radarStyle(value: string): 'standard' | 'marker' | 'filled' {
+  if (value === 'standard' || value === 'marker' || value === 'filled') return value;
+  throw new ChartParseError('Invalid radar chart style.');
+}
+
+function parseView3D(view: LosslessXmlElement | undefined, namespace: string) {
+  const number = (name: string, fallback: number) => {
+    const value = view && val(children(view, namespace, name)[0]);
+    const parsed = value === undefined ? fallback : Number(value.replace(/%$/, ''));
+    if (!Number.isFinite(parsed)) throw new ChartParseError('Invalid 3D chart view.');
+    return parsed;
+  };
+  return { rotationX: number('rotX', 15), rotationY: number('rotY', 20), perspective: number('perspective', 30),
+    rightAngleAxes: view ? booleanVal(children(view, namespace, 'rAngAx')[0], true) : true, depthPercent: number('depthPercent', 100) };
 }
 
 function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespace: string, drawingNamespace: string): ChartSeries {
@@ -185,7 +216,7 @@ function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespac
   const titleCache = titleRef === undefined ? undefined : parseSequenceContainer(titleRef, chartNamespace, "string");
   const xValues = kind === "scatter" || kind === "bubble" ? parseData(children(element, chartNamespace, "xVal")[0], chartNamespace) : undefined;
   const bubbleSizes = kind === "bubble" ? parseData(children(element, chartNamespace, "bubbleSize")[0], chartNamespace) : undefined;
-  const marker = kind === "scatter" ? parseMarker(children(element, chartNamespace, "marker")[0], chartNamespace) : undefined;
+  const marker = ["scatter", "line", "radar"].includes(kind) ? parseMarker(children(element, chartNamespace, "marker")[0], chartNamespace) : undefined;
   return Object.freeze({
     index: requiredUnsignedVal(element, chartNamespace, "idx", "series index"),
     order: requiredUnsignedVal(element, chartNamespace, "order", "series order"),
@@ -198,7 +229,7 @@ function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespac
     fill: parseSolidFill(children(element, chartNamespace, "spPr")[0], drawingNamespace),
     line: parseLine(children(element, chartNamespace, "spPr")[0], drawingNamespace),
     ...(marker === undefined ? {} : { marker }),
-    ...(kind === "scatter" ? { smooth: booleanVal(children(element, chartNamespace, "smooth")[0], false) } : {}),
+    ...(["scatter", "line"].includes(kind) ? { smooth: booleanVal(children(element, chartNamespace, "smooth")[0], false) } : {}),
   });
 }
 

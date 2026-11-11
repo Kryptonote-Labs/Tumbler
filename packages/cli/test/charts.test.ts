@@ -53,3 +53,43 @@ test('chart help and malformed edit inputs do not open documents', async () => {
   expect(output).toContain('snapshot node IDs');
   expect(await runTumbler(['missing.docx', 'charts', 'edit', '--input', '{"page":"x","part":"x","edits":[]}'], options)).toBe(1);
 });
+
+test('chart CLI converts a Word chart and edits its embedded cells without duplicating workbooks', async () => {
+  const { createChartWorkbook } = await import('@tumblerjs/sheets');
+  const { chartBytesToBase64, readChartData } = await import('@tumblerjs/charts');
+  const directory = await mkdtemp(join(tmpdir(), 'tumbler-chart-data-cli-'));
+  try {
+    const path = join(directory, 'chart.docx');
+    const created = createChartWorkbook(createOoxmlChart({ type: 'barChart', categories: ['A', 'B'], series: [{ name: 'Sales', values: [2, 4] }] }));
+    await Bun.write(path, createWordArtifact({ paragraphs: [{ runs: [{ text: '\uFFFC', chart: { width: 360, height: 240, content: { xml: new TextDecoder().decode(created.source), workbook: chartBytesToBase64(created.artifact.bytes()) } } }] }] }).bytes());
+    const host = createFileHost();
+    let stdout = '', stderr = '';
+    const run = (args: string[]) => { stdout = ''; stderr = ''; return runTumbler([path, 'charts', ...args], { host, stdout: value => { stdout += value; }, stderr: value => { stderr += value; } }); };
+    expect(await run(['read'])).toBe(0);
+    const part = (JSON.parse(stdout) as { parts: { part: string }[] }).parts[0]!.part;
+    expect(await run(['read', '--part', part])).toBe(0);
+    const page = (JSON.parse(stdout) as { page: string }).page;
+    expect(await run(['convert', '--input', JSON.stringify({ page, part, type: 'areaChart' })])).toBe(0);
+    const next = (JSON.parse(stdout) as { page: string }).page;
+    expect(await run(['data', '--input', JSON.stringify({ page: next, part, cells: [{ reference: 'B2', formula: '3*5' }] })])).toBe(0);
+    const output = openOpcPackage(await Bun.file(path).bytes());
+    expect(readChartData(output.readPart(output.getPart(part)!))[0]?.series[0]?.values?.values).toEqual([15, 4]);
+    expect(output.parts.filter(part => part.contentType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toHaveLength(1);
+    expect(stderr).toBe('');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('chartEx source editing remains available without classic chart conversion', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tumbler-chartex-cli-'));
+  try {
+    const path = join(directory, 'chart.pptx');
+    const pkg = openOpcPackage(await Bun.file(new URL('../../../apps/docs/static/samples/workspace-brief.pptx', import.meta.url)).bytes());
+    const part = '/ppt/charts/extended.xml';
+    await Bun.write(path, beginPackageTransaction(pkg).addPart(part, 'application/vnd.ms-office.chartex+xml', new TextEncoder().encode('<cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex"><cx:chart/></cx:chartSpace>')).commit());
+    const host = createFileHost();
+    const snapshot = await host.readCharts!(path, { part }) as { page: string; source: ChartSourceNode };
+    await host.editChart!(path, { page: snapshot.page, part, edits: [{ kind: 'attribute', node: snapshot.source.id, name: 'custom', value: 'retained' }] });
+    const result = await host.readCharts!(path, { part }) as { source: ChartSourceNode };
+    expect(result.source.attributes).toContainEqual(expect.objectContaining({ name: 'custom', value: 'retained' }));
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

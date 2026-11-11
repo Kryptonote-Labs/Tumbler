@@ -21,8 +21,7 @@ export function parseSpreadsheetChartReference(formula: string, currentSheet: st
   const reference = (split?.reference ?? source).replaceAll("$", "");
   try {
     const range = parseCellRange(reference);
-    const count = (range.end.row - range.start.row + 1) * (range.end.column - range.start.column + 1);
-    return count <= MAX_CHART_RANGE_CELLS ? Object.freeze({ sheet, range }) : undefined;
+    return Object.freeze({ sheet, range });
   } catch {
     return undefined;
   }
@@ -47,6 +46,8 @@ export function resolveSpreadsheetChartDataSet(
   const source = (formula: string): { worksheet: SpreadsheetWorksheet; calculation: SpreadsheetCalculationSnapshot; range: CellRange } | undefined => {
     const reference = parseSpreadsheetChartReference(formula, worksheet.sheet.name);
     if (reference === undefined) return undefined;
+    const { start, end } = reference.range;
+    if ((end.row - start.row + 1) * (end.column - start.column + 1) > MAX_CHART_RANGE_CELLS) return undefined;
     const sheet = worksheet.workbook.sheet(reference.sheet);
     if (sheet === undefined) return undefined;
     let calculation = snapshots.get(sheet.sheetId);

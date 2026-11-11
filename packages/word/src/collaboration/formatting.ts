@@ -1,3 +1,4 @@
+import { isWordAuthoredChart, isWordChartContent } from '../authored-chart.ts';
 import { wordSectionBoundarySchema } from '../section-format.ts';
 import { isSectionPropertyAttribute, isSectionPropertyValue } from './section-attributes.ts';
 import { isParagraphPropertyAttribute, isParagraphPropertyValue } from './paragraph-attributes.ts';
@@ -44,6 +45,8 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   drawing?: WordDrawingGeometry;
   ink?: WordAuthoredInk;
   inkTraces?: readonly WordInkTraceOverride[];
+  chart?: import('../authored-chart.ts').WordAuthoredChart;
+  chartContent?: import('@tumblerjs/charts').ChartContent;
   chartTitle?: string;
   chartTitleText?: readonly import("../create.ts").WordTextParagraph[];
   link?: string;
@@ -124,6 +127,8 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
       ["line", "page", "column"].includes(value)
     )
       continue;
+    if (key === "chart" && isWordAuthoredChart(value)) continue;
+    if (key === "chartContent" && isWordChartContent(value)) continue;
     if (key === "chartTitleText" && isShapeTextBody(value)) continue;
     if (
       key === "chartTitle" &&

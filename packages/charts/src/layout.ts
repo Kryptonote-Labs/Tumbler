@@ -254,7 +254,7 @@ export function layoutPieSlices(model: SupportedChartModel): readonly PieSlice[]
   ) ?? [];
   const total = values.reduce((sum, point) => sum + point.value, 0);
   if (total <= 0) return Object.freeze([]);
-  let angle = -Math.PI / 2;
+  let angle = -Math.PI / 2 + (model.firstSliceAngle ?? 0) * Math.PI / 180;
   return Object.freeze(values.map((point) => {
     const startAngle = angle;
     angle += point.value / total * Math.PI * 2;

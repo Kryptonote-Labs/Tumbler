@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { chmodSync, closeSync, openSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { extname } from 'node:path';
-import { editChartSource, inspectChartSource } from '@tumblerjs/charts';
+import { editChartSource, inspectChartSource, readChartContent, writeChartContent } from '@tumblerjs/charts';
+import { applyChartContentEdit } from '@tumblerjs/sheets';
 import { beginPackageTransaction, openOpcPackage, type OpcPackage } from '@tumblerjs/opc';
 import { chartEditInput, type ChartOperationHost } from './charts.ts';
 
@@ -46,8 +47,11 @@ export function chartFileHost(): Required<ChartOperationHost> {
         if (revision(original) !== input.page) throw new Error('The document changed. Read the chart again before editing.');
         const pkg = open(path, original);
         const part = chartPart(pkg, input.part);
-        const changed = editChartSource(pkg.readPart(part), input.edits);
-        const bytes = beginPackageTransaction(pkg).replacePart(part.name, changed).commit();
+        if ('cells' in input && extname(path).toLowerCase() === '.xlsx') throw new TypeError('Edit source cells with sheets commands in the owning workbook.');
+        const transaction = beginPackageTransaction(pkg);
+        if ('edits' in input) transaction.replacePart(part.name, editChartSource(pkg.readPart(part), input.edits));
+        else writeChartContent(transaction, part.name, applyChartContentEdit(readChartContent(pkg, part.name), input));
+        const bytes = transaction.commit();
         const result = inspect(bytes, open(path, bytes), input.part);
         const mode = statSync(path).mode;
         writeFileSync(temporary, bytes, { flag: 'wx', mode });

@@ -28,7 +28,7 @@ export function assertChartSceneBudget(model: SupportedChartModel): number {
         }
       }
     }
-    const cartesian = current.kind === 'bar' || current.kind === 'column' || current.kind === 'line';
+    const cartesian = current.kind === 'bar' || current.kind === 'column' || ['line', 'area', 'stock', 'radar', 'surface', 'of-pie'].includes(current.kind);
     if (cartesian && categories > CHART_CATEGORY_LIMIT) throw new RangeError(`Chart preview exceeds ${CHART_CATEGORY_LIMIT} categories.`);
     // Combination plots share the root category domain, including gaps in other plots.
     if (current === model) rootCount = categories;

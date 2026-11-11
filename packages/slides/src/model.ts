@@ -162,6 +162,7 @@ export interface SlideObject {
   readonly pictureFill?: import('./appearance.ts').DrawingPictureFill | undefined;
   readonly image: import('./appearance.ts').DrawingPictureFill | undefined;
   readonly chart: ChartModel | undefined;
+  readonly chartContent?: import('@tumblerjs/charts').ChartContent;
   readonly table: SlideTable | undefined;
   readonly movable: boolean;
   readonly textEditable: boolean;

@@ -1,3 +1,4 @@
+import { chartShade, chartPolygon } from './projection.ts';
 import { indexChartSequence } from './indexed-data.ts';
 import { layoutPieSlices, pieArcPath } from "./layout.ts";
 import { legendGroup, type ChartMark, type SceneContext } from "./scene-marks.ts";
@@ -25,10 +26,33 @@ export function pieScene(context: SceneContext): ChartMark[] {
   const cx = (left + right) / 2, cy = (top + bottom) / 2;
   const radius = Math.max(1, Math.min(right - left, bottom - top) / 2);
   const hole = model.kind === "doughnut" ? radius * (model.holeSize ?? 50) / 100 : 0;
-  const first = model.series[0]!;
-  const marks: ChartMark[] = slices.map((slice, index) => ({
-    kind: "path", d: pieArcPath(cx, cy, radius, slice.startAngle, slice.endAngle, hole), fill: context.color(first, index), stroke: "#ffffff", strokeWidth: 1,
-  }));
+  const first = model.series[0];
+  if (!first) return [];
+  const marks: ChartMark[] = [];
+  const rings = model.kind === 'doughnut' ? model.series : model.series.slice(0, 1);
+  rings.forEach((series, ring) => {
+    const outer = radius - (radius - hole) * ring / rings.length;
+    const inner = model.kind === 'doughnut' ? radius - (radius - hole) * (ring + 1) / rings.length : 0;
+    const current = layoutPieSlices({ ...model, series: [series] });
+    const tilt = model.threeD ? Math.max(0.1, Math.sin(Math.abs(model.threeD.rotationX) * Math.PI / 180)) : 1;
+    const depth = model.threeD ? Math.min(24, radius * 0.2) : 0;
+    const sample = (r: number, start: number, end: number) => {
+      const steps = Math.max(1, Math.ceil(Math.abs(end - start) * 32));
+      return Array.from({ length: steps + 1 }, (_, i) => { const angle = start + (end - start) * i / steps; return { x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r * tilt }; });
+    };
+    if (depth) for (const [index, slice] of current.entries()) {
+      const points = sample(outer, slice.startAngle, slice.endAngle);
+      for (let i = 0; i < points.length - 1; i++) {
+        const a = points[i]!, b = points[i + 1]!;
+        if ((a.y + b.y) / 2 < cy) continue;
+        marks.push({ kind: 'path', d: chartPolygon([a, b, { x: b.x, y: b.y + depth }, { x: a.x, y: a.y + depth }]), fill: chartShade(context.color(series, index), 0.75) });
+      }
+    }
+    current.forEach((slice, index) => {
+      const d = depth ? chartPolygon([...sample(outer, slice.startAngle, slice.endAngle), ...(inner ? sample(inner, slice.endAngle, slice.startAngle) : [{ x: cx, y: cy }])]) : pieArcPath(cx, cy, outer, slice.startAngle, slice.endAngle, inner);
+      marks.push({ kind: 'path', d, fill: context.color(series, index), stroke: '#ffffff', strokeWidth: 1 });
+    });
+  });
   if (model.legend === undefined) return marks;
 
   const font = chartFont("legend", model.legend.textStyle, model, options.resolveColor);
