@@ -34,6 +34,9 @@ export function chartPolygon(points: readonly { readonly x: number; readonly y: 
 }
 
 export function chartShade(color: string, factor: number): string {
+  const rgba = /^rgba\((\d+),(\d+),(\d+),([\d.]+)\)$/.exec(color);
+  const shade = (channel: number) => Math.round(Math.max(0, Math.min(255, channel * factor)));
+  if (rgba) return `rgba(${rgba.slice(1, 4).map(channel => shade(Number(channel))).join(',')},${rgba[4]})`;
   if (!/^#[\da-f]{6}$/i.test(color)) return color;
-  return '#' + [1, 3, 5].map(start => Math.round(Math.max(0, Math.min(255, parseInt(color.slice(start, start + 2), 16) * factor))).toString(16).padStart(2, '0')).join('');
+  return '#' + [1, 3, 5].map(start => shade(parseInt(color.slice(start, start + 2), 16)).toString(16).padStart(2, '0')).join('');
 }

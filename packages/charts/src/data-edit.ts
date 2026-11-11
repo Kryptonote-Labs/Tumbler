@@ -10,6 +10,7 @@ export interface ChartEditableSequence {
   readonly formatCode?: string | undefined;
 }
 export interface ChartEditableSeries {
+  readonly errorBars?: readonly { readonly plus?: ChartEditableSequence | undefined; readonly minus?: ChartEditableSequence | undefined }[] | undefined;
   readonly index: number;
   readonly name: string;
   readonly nameFormula?: string | undefined;
@@ -76,6 +77,7 @@ export function readChartData(bytes: Uint8Array): readonly ChartEditablePlot[] {
         values: sequence(children(series, 'val')[0] ?? children(series, 'yVal')[0]),
         xValues: sequence(children(series, 'xVal')[0]),
         bubbleSizes: sequence(children(series, 'bubbleSize')[0]),
+        ...(children(series, 'errBars').length ? { errorBars: children(series, 'errBars').map(errors => ({ plus: sequence(children(errors, 'plus')[0]), minus: sequence(children(errors, 'minus')[0]) })) } : {}),
       };
     }),
   }));
@@ -200,6 +202,19 @@ export function updateChartData(bytes: Uint8Array, plots: readonly ChartEditable
         const following = children(element).find(child => !['idx', 'order'].includes(child.localName));
         if (following) edit.insertMarkupBefore(following, titleXml); else edit.appendMarkup(element, titleXml);
       }
+      }
+      if (data.errorBars !== undefined) {
+        const errors = children(element, 'errBars');
+        if (errors.length !== data.errorBars.length) throw new TypeError('Data-only edits must retain error bars.');
+        errors.forEach((error, errorIndex) => {
+          for (const side of ['plus', 'minus'] as const) {
+            const sequence = data.errorBars![errorIndex]![side], old = before.errorBars?.[errorIndex]?.[side];
+            if (same(sequence, old)) continue;
+            const container = children(error, side)[0];
+            if (!container || !sequence || !old) throw new TypeError('Add or remove error ranges through chart properties.');
+            patchSequence(container, sequence, old);
+          }
+        });
       }
       for (const [name, sequence] of [['cat', data.categories], ['xVal', data.xValues], [children(element, 'yVal').length ? 'yVal' : 'val', data.values], ['bubbleSize', data.bubbleSizes]] as const) {
         const existing = children(element, name)[0];

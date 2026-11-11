@@ -47,7 +47,7 @@ function paintMarks<Path>(context: ChartCanvasContext<Path>, marks: readonly Cha
       case "rect":
         context.beginPath();
         context.rect(mark.x, mark.y, mark.width, mark.height);
-        fillAndStroke(context, mark.fill, mark.stroke, 1);
+        fillAndStroke(context, mark.fill, mark.stroke, mark.strokeWidth ?? 1);
         break;
       case "circle":
         context.beginPath();
@@ -55,15 +55,15 @@ function paintMarks<Path>(context: ChartCanvasContext<Path>, marks: readonly Cha
         context.globalAlpha = mark.fillOpacity ?? 1;
         fillAndStroke(context, mark.fill, undefined, 1);
         context.globalAlpha = 1;
-        fillAndStroke(context, undefined, mark.stroke, 1);
+        fillAndStroke(context, undefined, mark.stroke, mark.strokeWidth ?? 1);
         break;
       case "path": {
         const shape = path(mark.d);
-        if (mark.fill !== undefined) {
+        if (mark.fill !== undefined && mark.fill !== "none") {
           context.fillStyle = mark.fill;
           context.fill(shape);
         }
-        if (mark.stroke !== undefined) {
+        if (mark.stroke !== undefined && mark.stroke !== "none" && (mark.strokeWidth ?? 1) > 0) {
           context.strokeStyle = mark.stroke;
           context.lineWidth = mark.strokeWidth ?? 1;
           context.stroke(shape);
@@ -71,6 +71,7 @@ function paintMarks<Path>(context: ChartCanvasContext<Path>, marks: readonly Cha
         break;
       }
       case "line":
+        if (mark.width <= 0) break;
         context.beginPath();
         context.moveTo(mark.x1, mark.y1);
         context.lineTo(mark.x2, mark.y2);
@@ -104,11 +105,11 @@ function paintMarks<Path>(context: ChartCanvasContext<Path>, marks: readonly Cha
 
 /** Fills and strokes the current path. */
 function fillAndStroke<Path>(context: ChartCanvasContext<Path>, fill: string | undefined, stroke: string | undefined, width: number): void {
-  if (fill !== undefined) {
+  if (fill !== undefined && fill !== "none") {
     context.fillStyle = fill;
     context.fill();
   }
-  if (stroke !== undefined) {
+  if (stroke !== undefined && stroke !== "none" && width > 0) {
     context.strokeStyle = stroke;
     context.lineWidth = width;
     context.stroke();

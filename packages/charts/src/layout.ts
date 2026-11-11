@@ -1,3 +1,6 @@
+import { chartDateScale, type ChartDateScale } from './date-axis.ts';
+import { chartAnalyticalBounds, cartesianAnalyticalData } from './analytics-bounds.ts';
+import { chartLogarithmicScale, chartAxisCoordinate } from './axis-scale.ts';
 import { assertChartSceneBudget } from './scene-budget.ts';
 import { chartStacks, indexChartSequence, type StackPoint } from './indexed-data.ts';
 import { chartTitleHeight } from './title-scene.ts';
@@ -17,6 +20,8 @@ export interface CartesianChartLayout {
   readonly categories: readonly string[];
   readonly stacks: readonly (readonly (StackPoint | undefined)[])[];
   readonly categoryRotation: number;
+  readonly categoryScale?: ChartDateScale;
+  readonly categoryDomain?: { readonly minimum: number; readonly maximum: number };
   readonly minimum: number;
   readonly maximum: number;
   readonly ticks: readonly number[];
@@ -94,13 +99,23 @@ export function layoutCartesianChart(model: SupportedChartModel, width: number, 
     dataMinimum = Math.min(dataMinimum, point.start, point.end);
     dataMaximum = Math.max(dataMaximum, point.start, point.end);
   }
+  const analytic = cartesianAnalyticalData(model, stacks).filter(data => data.points.length).map(data => chartAnalyticalBounds(data.series, data.points));
+  for (const bounds of analytic) { dataMinimum = Math.min(dataMinimum, bounds.yMinimum); dataMaximum = Math.max(dataMaximum, bounds.yMaximum); }
   const minimum = axis?.minimum ?? dataMinimum;
   const maximum = axis?.maximum ?? dataMaximum;
-  const scale = cartesianAxisScale(minimum, maximum, axis, model.grouping === "percent-stacked", {
+  const scale = axis?.logBase ? chartLogarithmicScale([...model.series.flatMap(series => series.values?.points.flatMap(point => typeof point.value === "number" ? [point.value] : []) ?? []), ...analytic.flatMap(bounds => [bounds.yPositiveMinimum, bounds.yMaximum])], axis) : cartesianAxisScale(minimum, maximum, axis, model.grouping === "percent-stacked", {
     length: horizontal ? plot.width : plot.height,
     labelSize: chartFont("tick", axis?.textStyle, model).size * (horizontal ? 2 : 1),
   });
-  return Object.freeze({ plot, categories, stacks, categoryRotation, ...scale });
+  const categoryValues = indexChartSequence(model.series.find(series => series.categories !== undefined)?.categories);
+  const categoryScale = categoryAxis?.dateAxis ? chartDateScale(Array.from({ length: count }, (_, index) => {
+    const value = categoryValues.get(index); return typeof value === 'number' ? value : undefined;
+  }), categoryAxis, model.dateSystem ?? '1900', axis?.crossBetween !== 'midCat') : undefined;
+  const inset = model.kind === 'area' || axis?.crossBetween === 'midCat' ? 0 : .5;
+  const categoryMinimum = Math.min(1 - inset, ...analytic.map(bounds => bounds.xMinimum - inset));
+  const categoryMaximum = Math.max(count + inset, ...analytic.map(bounds => bounds.xMaximum + inset));
+  const categoryDomain = { minimum: categoryMinimum, maximum: categoryMaximum > categoryMinimum ? categoryMaximum : categoryMinimum + 1 };
+  return Object.freeze({ plot, categories, stacks, categoryRotation, ...scale, categoryDomain, ...(categoryScale ? { categoryScale } : {}) });
 }
 
 /** Lays out paired numeric X/Y values without converting them to category positions. */
@@ -135,12 +150,13 @@ export function layoutScatterChart(model: SupportedChartModel, width: number, he
   const visibleValueAxes = model.axes.filter((axis) => axis.kind === "value" && !axis.deleted);
   const xAxis = axisById(0) ?? visibleValueAxes.find((axis) => axis.position === "bottom" || axis.position === "top");
   const yAxis = axisById(1) ?? visibleValueAxes.find((axis) => axis.position === "left" || axis.position === "right");
-  const xDomain = numericDomain(xValues, xAxis?.minimum, xAxis?.maximum);
-  const yDomain = numericDomain(yValues, yAxis?.minimum, yAxis?.maximum);
-  const series = rawSeries.map((points) => Object.freeze(points.map((point) => Object.freeze({
+  const analytic = model.series.map((series, index) => chartAnalyticalBounds(series, rawSeries[index] ?? []));
+  const xDomain = xAxis?.logBase ? chartLogarithmicScale([...xValues, ...analytic.flatMap(bounds => [bounds.xPositiveMinimum, bounds.xMaximum])], xAxis) : numericDomain([...xValues, ...analytic.flatMap(bounds => [bounds.xMinimum, bounds.xMaximum]).filter(Number.isFinite)], xAxis?.minimum, xAxis?.maximum);
+  const yDomain = yAxis?.logBase ? chartLogarithmicScale([...yValues, ...analytic.flatMap(bounds => [bounds.yPositiveMinimum, bounds.yMaximum])], yAxis) : numericDomain([...yValues, ...analytic.flatMap(bounds => [bounds.yMinimum, bounds.yMaximum]).filter(Number.isFinite)], yAxis?.minimum, yAxis?.maximum);
+  const series = rawSeries.map((points) => Object.freeze(points.filter(point => (!xAxis?.logBase || point.x > 0) && (!yAxis?.logBase || point.y > 0)).map((point) => Object.freeze({
     ...point,
-    plotX: chartValueCoordinate(point.x, xDomain.minimum, xDomain.maximum, plot.x, plot.width),
-    plotY: chartValueCoordinate(point.y, yDomain.minimum, yDomain.maximum, plot.y, plot.height, true),
+    plotX: chartAxisCoordinate(point.x, xDomain.minimum, xDomain.maximum, plot.x, plot.width, xAxis),
+    plotY: chartAxisCoordinate(point.y, yDomain.minimum, yDomain.maximum, plot.y, plot.height, yAxis, true),
   }))));
   return Object.freeze({
     plot,
@@ -148,8 +164,8 @@ export function layoutScatterChart(model: SupportedChartModel, width: number, he
     xMaximum: xDomain.maximum,
     yMinimum: yDomain.minimum,
     yMaximum: yDomain.maximum,
-    xTicks: xAxis?.majorUnit === undefined ? linearTicks(xDomain.minimum, xDomain.maximum, 5) : chartAxisTicks(xDomain.minimum, xDomain.maximum, xAxis.majorUnit),
-    yTicks: yAxis?.majorUnit === undefined ? linearTicks(yDomain.minimum, yDomain.maximum, 5) : chartAxisTicks(yDomain.minimum, yDomain.maximum, yAxis.majorUnit),
+    xTicks: xAxis?.logBase ? chartLogarithmicScale([...xValues, ...analytic.flatMap(bounds => [bounds.xPositiveMinimum, bounds.xMaximum])], xAxis).ticks : xAxis?.majorUnit === undefined ? linearTicks(xDomain.minimum, xDomain.maximum, 5) : chartAxisTicks(xDomain.minimum, xDomain.maximum, xAxis.majorUnit),
+    yTicks: yAxis?.logBase ? chartLogarithmicScale([...yValues, ...analytic.flatMap(bounds => [bounds.yPositiveMinimum, bounds.yMaximum])], yAxis).ticks : yAxis?.majorUnit === undefined ? linearTicks(yDomain.minimum, yDomain.maximum, 5) : chartAxisTicks(yDomain.minimum, yDomain.maximum, yAxis.majorUnit),
     series: Object.freeze(series),
   });
 }
@@ -194,7 +210,7 @@ export function layoutBubbleChart(model: SupportedChartModel, width: number, hei
   const maximumRadius = Math.min(xy.plot.width, xy.plot.height) * 0.1 * (model.bubbleScale ?? 100) / 100;
   const series = paired.map((points, seriesIndex) => {
     const xyByIndex = new Map((xy.series[seriesIndex] ?? []).map((point) => [point.index, point] as const));
-    return Object.freeze(points.map((point): BubblePoint => {
+    return Object.freeze(points.filter(point => xyByIndex.has(point.index)).map((point): BubblePoint => {
       const position = xyByIndex.get(point.index)!;
       const magnitude = Math.abs(point.size);
       const visible = point.size > 0 || (point.size < 0 && model.showNegativeBubbles === true);

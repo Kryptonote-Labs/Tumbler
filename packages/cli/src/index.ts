@@ -1,3 +1,5 @@
+export { chartCreateInput } from './chart-create.ts';
+export type { ChartCreateInput } from './chart-create.ts';
 import { runCharts } from './charts.ts';
 export { chartHelp, chartEditInput, chartSourceEdit } from './charts.ts';
 export type { ChartEditInput, ChartOperationHost } from './charts.ts';

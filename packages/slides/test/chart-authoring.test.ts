@@ -36,3 +36,19 @@ test('portable chart edits retain one embedded workbook through repeated native 
   expect(exported.document.package.parts.filter(part => part.contentType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toHaveLength(1);
   expect(presentationChartContent(exported.document, exported.document.slides[0]!.id, exported.document.slides[0]!.objects.find(object => object.kind === 'chart')!.key).workbook).toBeDefined();
 });
+
+test('imported and native chart rendering uses the slide template colours and fonts', async () => {
+  const { presentationThemeColours } = await import('../src/index.ts');
+  const { resolveChartColor } = await import('@tumblerjs/charts');
+  for (const initial of [createPresentation(), importNativePresentation(createPresentation())]) {
+    const slideId = initial.document.slides[0]!.id;
+    const inserted = applyPresentationCommand(initial, { name: 'insert-chart', slideId, bounds: { x: 10, y: 10, width: 480, height: 320 }, content });
+    for (const artifact of [inserted, openPresentationArtifact(inserted.bytes())]) {
+      const model = artifact.document.slides[0]!.objects.find(object => object.kind === 'chart')!.chart!;
+      if (model.status !== 'supported') throw new Error(model.reason);
+      const theme = presentationThemeColours(artifact.document, artifact.document.slides[0]!.id);
+      expect(resolveChartColor(model.series[0]!.fill!, model)).toBe(`#${theme.color('accent1')}`);
+      expect(model.themeFonts?.['+mn-lt']).toBeTruthy();
+    }
+  }
+});

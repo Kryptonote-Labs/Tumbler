@@ -9,7 +9,6 @@ import { applyWordDocumentSettings, isWordDocumentSettings, type WordDocumentSet
 import { refreshUnchangedNumbering } from './content-numbering.ts';
 import { validateXmlText } from "./text-validation.ts";
 import { withWordInkTraces } from './ink-overrides.ts';
-import { chartTitleFromWord } from './chart-title.ts';
 import { withWordDrawingGeometry } from './drawing-geometry.ts';
 import { reconcileWordStories, reconcileWordContentAndStories } from './content-export-batch.ts';
 import { DEFAULT_WORD_THEME, resolveWordColour, resolveWordPaintProperties } from './theme-colours.ts';
@@ -574,7 +573,7 @@ export class NativeWordDocument implements WordLayoutSource {
               if (authoredRun.chart) {
                 if (authoredRun.text !== '\uFFFC') throw new TypeError('Charts occupy one object character.');
                 const id = allocate(); contents.push({ kind: 'drawing', elementId: id });
-                const chart = nativeChartDrawing(id, { ...authoredRun.chart, content: authoredChartContent(authoredRun)! }, width);
+                const chart = nativeChartDrawing(id, { ...authoredRun.chart, content: authoredChartContent(authoredRun, this.themeColours, this.namedStyles.themeFonts)! }, width);
                 media.push(withWordDrawingGeometry({ ...chart, model: bindChartTheme(chart.model, this.themeColours, this.namedStyles.themeFonts) }, authoredRun.drawing));
               } else if (authoredRun.ink) {
                 if (authoredRun.text !== '\uFFFC' || authoredRun.shape || authoredRun.image || authoredRun.field) throw new TypeError('Ink occupies one object character.');
@@ -629,8 +628,10 @@ export class NativeWordDocument implements WordLayoutSource {
                     updated = { ...updated, content, model: { ...model, ...(updated.model.themeColors ? { themeColors: updated.model.themeColors } : {}), ...(updated.model.themeFonts ? { themeFonts: updated.model.themeFonts } : {}) } };
                   }
                   if (updated.kind === 'chart' && (authoredRun.chartTitle !== undefined || authoredRun.chartTitleText !== undefined)) {
-                    const { titleFormula: _formula, titleText: _text, ...model } = updated.model;
-                    updated = { ...updated, model: { ...model, title: authoredRun.chartTitleText?.map(p => p.runs.map(r => r.text).join('')).join('\n') ?? authoredRun.chartTitle, ...(authoredRun.chartTitleText ? { titleText: chartTitleFromWord(authoredRun.chartTitleText) } : {}) } };
+                    // Keep the property editor's source in step with the inline title without copying the workbook on each keystroke.
+                    const original = updated.content ?? readChartContent(compiled!.artifact.document.package, updated.partName, { includeWorkbook: false });
+                    const content = authoredChartContent({ ...authoredRun, chartContent: original }, this.themeColours, this.namedStyles.themeFonts)!;
+                    updated = { ...updated, content, model: bindChartTheme(chartContentModel(content), this.themeColours, this.namedStyles.themeFonts) };
                   }
                   media.push({ ...updated, elementId: id });
                 }

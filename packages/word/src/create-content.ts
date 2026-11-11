@@ -1,5 +1,5 @@
 import { authoredChartContent, isWordAuthoredChart, type WordAuthoredChart } from './authored-chart.ts';
-import { chartBase64ToBytes, editChartSource, inspectChartSource } from '@tumblerjs/charts';
+import { chartBase64ToBytes, convertChartConformance, editChartSource, inspectChartSource } from '@tumblerjs/charts';
 import { sectionFormatXml, type WordSectionFormat } from './section-format.ts';
 import { orderedPropertyXml } from './property-order.ts';
 import { authoredInkMarkup } from './authored-ink.ts';
@@ -29,7 +29,7 @@ const namespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const office = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/';
 
 /** One traversal writes structure, numbering and media relationships together. */
-export function authoredContent(blocks: readonly WordContentBlock[], width: number, sectionDefaults: WordSectionFormat = {}) {
+export function authoredContent(blocks: readonly WordContentBlock[], width: number, sectionDefaults: WordSectionFormat = {}, themeColors?: import('@tumblerjs/ooxml').ThemeColorScheme) {
   const parts: { name: string; data: Uint8Array }[] = [];
   const lists = new Map<string, { id: number; defaults: WordAuthoredList; levels: Map<number, WordAuthoredList> }>();
   let relationships = '';
@@ -59,7 +59,7 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
     const placement = imagePlacement(chart, chart.width, availableWidth);
     const cx = Math.round(chart.width * 12700), cy = Math.round(chart.height * 12700);
     const chartName = `word/charts/chart${id}.xml`;
-    let chartBytes: Uint8Array = new TextEncoder().encode(chart.content.xml);
+    let chartBytes: Uint8Array = convertChartConformance(new TextEncoder().encode(chart.content.xml), 'transitional');
     const source = inspectChartSource(chartBytes);
     if (chart.content.workbook !== undefined) {
       const workbookName = `word/embeddings/chart${id}-data.xlsx`;
@@ -121,7 +121,7 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
           const markFormat = block.runs.every(run => !run.text) ? block.runs[0]?.format : undefined;
           const mark = markFormat ? `<w:rPr>${runProperties(markFormat)}</w:rPr>` : '';
           const properties = (block.styleId ? `<w:pStyle w:val="${xmlAttribute(block.styleId)}"/>` : '') + early.map(key => paragraph.get(key) ?? '').join('') + numbering + (paragraph.get('suppressLineNumbers') ?? '') + (paragraph.get('pBdr') ?? '') + (paragraph.get('shd') ?? '') + (positioning.tabs ?? '') + (paragraph.get('spacing') ?? '') + (positioning.ind ?? '') + (paragraph.get('contextualSpacing') ?? '') + (block.alignment ? `<w:jc w:val="${block.alignment === 'justify' ? 'both' : block.alignment}"/>` : '') + (paragraph.get('outlineLvl') ?? '') + mark + section;
-          return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => linked(run.link, run.chart ? (run.text === '\uFFFC' ? chartMarkup({ ...run.chart, content: authoredChartContent(run)! }, availableWidth) : (() => { throw new TypeError('Charts occupy one object character.'); })()) : run.ink ? (run.text === '\uFFFC' && !run.shape && !run.image && !run.field ? inkMarkup(run.ink, availableWidth) : (() => { throw new TypeError('Ink occupies one object character.'); })()) : run.shape ? (run.text === '\uFFFC' ? wordShapeXml(run.shape, ++imageId, availableWidth, paragraphs => visit(paragraphs.map(p => ({ kind: 'paragraph', ...p })), run.shape!.width)) : (() => { throw new TypeError('Shape runs occupy one object character.'); })()) : run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${run.breakType ? wordBreakXml(run.breakType, run.text) : run.tab ? positionalTabXml(run.tab, run.text) : textContent(run.text)}</w:r>`)).join('')}</w:p>`;
+          return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => linked(run.link, run.chart ? (run.text === '\uFFFC' ? chartMarkup({ ...run.chart, content: authoredChartContent(run, themeColors)! }, availableWidth) : (() => { throw new TypeError('Charts occupy one object character.'); })()) : run.ink ? (run.text === '\uFFFC' && !run.shape && !run.image && !run.field ? inkMarkup(run.ink, availableWidth) : (() => { throw new TypeError('Ink occupies one object character.'); })()) : run.shape ? (run.text === '\uFFFC' ? wordShapeXml(run.shape, ++imageId, availableWidth, paragraphs => visit(paragraphs.map(p => ({ kind: 'paragraph', ...p })), run.shape!.width)) : (() => { throw new TypeError('Shape runs occupy one object character.'); })()) : run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${run.breakType ? wordBreakXml(run.breakType, run.text) : run.tab ? positionalTabXml(run.tab, run.text) : textContent(run.text)}</w:r>`)).join('')}</w:p>`;
         }
         case 'table': {
           const grid = authoredTableGrid(block.rows, block.columnWidths, availableWidth, block.rowGrids);

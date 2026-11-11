@@ -31,3 +31,24 @@ test('rich title runs retain independent formatting through XML and scene layout
   expect(scene.marks).toContainEqual(expect.objectContaining({ kind: 'text', text: ' Title', font: expect.objectContaining({ weight: 400, italic: true }) }));
   expect(scene.marks).toContainEqual(expect.objectContaining({ kind: 'rect', fill: '#FFFF00' }));
 });
+
+test('plain title edits retain styled runs, colour transforms and text-box properties', () => {
+  const source = new TextEncoder().encode('<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><c:chart><c:title><c:tx><c:rich><a:bodyPr rot="5400000"/><a:lstStyle/><a:p><a:pPr fontAlgn="base"/><a:r><a:rPr b="1"><a:solidFill><a:srgbClr val="204080"><a:alpha val="50000"/></a:srgbClr></a:solidFill></a:rPr><a:t>Old </a:t></a:r><a:r><a:rPr i="1"/><a:t>text</a:t></a:r></a:p></c:rich></c:tx></c:title><c:plotArea><c:pieChart/></c:plotArea></c:chart></c:chartSpace>');
+  const result = new TextDecoder().decode(updateChartTitle(source, 'New text'));
+  expect(result).toContain('rot="5400000"');
+  expect(result).toContain('fontAlgn="base"');
+  expect(result).toContain('alpha val="50000"');
+  expect(result).toContain('b="1"');
+  expect(result).toContain('i="1"');
+  expect(result).toContain('New ');
+  expect(result).not.toContain('Old ');
+});
+
+
+test('self-closing imported title text accepts preserved leading whitespace', async () => {
+  const { createOoxmlChart } = await import('../src/index.ts');
+  const source = updateChartTitle(createOoxmlChart({ type: 'pieChart', categories: [], series: [] }), 'Original');
+  const empty = new TextEncoder().encode(new TextDecoder().decode(source).replace('<a:t>Original</a:t>', '<a:t/>'));
+  const changed = new TextDecoder().decode(updateChartTitle(empty, ' New'));
+  expect(changed).toContain('<a:t xml:space="preserve"> New</a:t>');
+});

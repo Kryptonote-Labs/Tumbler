@@ -1,3 +1,4 @@
+import { convertChartConformance } from './conformance.ts';
 import { ChartParseError, parseOoxmlChart } from './parser.ts';
 import type { ChartModel } from './model.ts';
 import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
@@ -32,7 +33,7 @@ export function mergeChartContent(previous: ChartContent, next: ChartContent): C
 }
 
 /** Read the embedded source only through the chart's explicit relationship, never a network URL. */
-export function readChartContent(pkg: OpcPackage, partName: PartName | string): ChartContent {
+export function readChartContent(pkg: OpcPackage, partName: PartName | string, options: { readonly includeWorkbook?: boolean } = {}): ChartContent {
   const part = pkg.getPart(partName);
   if (!part || part.contentType !== 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml') throw new TypeError('Chart part is missing.');
   const bytes = pkg.readPart(part);
@@ -42,7 +43,7 @@ export function readChartContent(pkg: OpcPackage, partName: PartName | string): 
   const id = external?.attributes.find(attribute => attribute.namespaceUri === relNs && attribute.localName === 'id')?.value;
   const relationship = id && pkg.relationships(part.name).get(id);
   const workbook = relationship && relationship.targetMode === 'Internal' && relationship.type === `${relNs}/package` ? pkg.getPart(relationship.targetPartName) : undefined;
-  return { xml: source.document.source.replace(/^(\s*<\?xml[^?]*?encoding\s*=\s*['"])utf-16(?:le|be)?(?=['"])/i, '$1UTF-8'), ...(workbook?.contentType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ? { workbook: chartBytesToBase64(pkg.readPart(workbook)) } : {}) };
+  return { xml: source.document.source.replace(/^(\s*<\?xml[^?]*?encoding\s*=\s*['"])utf-16(?:le|be)?(?=['"])/i, '$1UTF-8'), ...(options.includeWorkbook !== false && workbook?.contentType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ? { workbook: chartBytesToBase64(pkg.readPart(workbook)) } : {}) };
 }
 
 /** Stage the chart and embedded workbook together in the owning host's undo/save transaction. */
@@ -50,7 +51,8 @@ function stageChartContent(transaction: PackageTransaction, partName: PartName |
   const name = typeof partName === 'string' ? PartName.parse(partName) : partName;
   const original = transaction.package.getPart(name);
   if (!addition && (!original || original.contentType !== 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml')) throw new TypeError('Chart part is missing.');
-  let bytes: Uint8Array = new TextEncoder().encode(content.xml);
+  const strict = transaction.package.relationships(null).items.some(relationship => relationship.type === 'http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument');
+  let bytes: Uint8Array = convertChartConformance(new TextEncoder().encode(content.xml), strict ? 'strict' : 'transitional');
   let source = chartXml(bytes);
   const old = original && chartXml(transaction.package.readPart(original));
   const oldExternal = old && old.children(old.document.root, 'externalData')[0];

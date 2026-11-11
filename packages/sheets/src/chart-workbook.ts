@@ -1,3 +1,4 @@
+import { parseLosslessXml } from '@tumblerjs/ooxml';
 import { bindChartData, readChartData, updateChartData, type ChartEditablePlot, type ChartEditableSequence } from '@tumblerjs/charts';
 import { createSpreadsheet, applySpreadsheetCommand } from './commands.ts';
 import { SpreadsheetArtifact, openSpreadsheetArtifact } from './artifact.ts';
@@ -14,13 +15,27 @@ export interface ChartWorkbookEdit {
 
 /** Give a literal-data chart a real workbook, including XY coordinates and bubble sizes. */
 function bindWorkbook(source: Uint8Array, input: SpreadsheetArtifact, onlyUnbound: boolean): ChartWorkbookEdit {
-  let artifact = input;
+  const data = readChartData(source);
+  const reference = onlyUnbound ? data.flatMap(plot => plot.series.flatMap(series => [series.categories, series.values, series.xValues, series.bubbleSizes])).flatMap(sequence => sequence?.formula ? [parseSpreadsheetChartReference(sequence.formula, input.activeSheet.name)] : []).find(reference => reference && input.workbook.sheet(reference.sheet)) : undefined;
+  let artifact = reference ? input.selectSheet(reference.sheet) : input;
   let column = 1;
-  if (onlyUnbound) for (const row of artifact.worksheet.rows) for (const cell of row.cells) column = Math.max(column, cell.address.column + 1);
-  const required = readChartData(source).flatMap(plot => plot.series.flatMap(series => [series.categories, series.xValues, series.values, series.bubbleSizes])).reduce((count, sequence) => count + (sequence && (!onlyUnbound || !sequence.formula) ? sequence.levels?.length ?? 1 : 0), 0);
-  if (column + required > EXCEL_MAX_COLUMNS + 1) {
+  if (onlyUnbound) {
+    for (const row of artifact.worksheet.rows) for (const cell of row.cells) column = Math.max(column, cell.address.column + 1);
+    // Blank source cells still belong to their bound ranges. Reserve chart/title/error references before appending roles.
+    const sources = [source, ...artifact.workbook.package.parts.filter(part => part.contentType === 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml').map(part => artifact.workbook.package.readPart(part))];
+    for (const bytes of sources) {
+      const xml = parseLosslessXml(bytes);
+      for (const formula of xml.elements(xml.root.namespaceUri, 'f')) {
+        const reference = parseSpreadsheetChartReference(xml.textContent(formula), artifact.activeSheet.name);
+        if (reference && artifact.workbook.sheet(reference.sheet)?.sheetId === artifact.activeSheet.sheetId) column = Math.max(column, reference.range.end.column + 1);
+      }
+    }
+  }
+  const required = data.flatMap(plot => plot.series.flatMap(series => [series.categories, series.xValues, series.values, series.bubbleSizes, ...(series.errorBars?.flatMap(errors => [errors.plus, errors.minus]) ?? [])])).reduce((count, sequence) => count + (sequence && (!onlyUnbound || !sequence.formula) ? sequence.levels?.length ?? 1 : 0), 0);
+  const titleColumns = onlyUnbound ? data.reduce((total, plot) => total + plot.series.filter(series => series.values?.formula !== undefined && series.nameFormula === undefined).length, 0) : 0;
+  if (column + required + titleColumns > EXCEL_MAX_COLUMNS + 1) {
     let name = 'Chart data';
-    for (let suffix = 2; artifact.workbook.sheets.some(sheet => sheet.name === name); suffix++) name = `Chart data ${suffix}`;
+    for (let suffix = 2; artifact.workbook.sheets.some(sheet => sheet.name.toLowerCase() === name.toLowerCase()); suffix++) name = `Chart data ${suffix}`;
     artifact = applySpreadsheetCommand(artifact, { name: 'add-sheet', nameValue: name });
     artifact = artifact.selectSheet(name);
     column = 1;
@@ -43,7 +58,7 @@ function bindWorkbook(source: Uint8Array, input: SpreadsheetArtifact, onlyUnboun
     return { ...data, formula: `${sheetName}!${start}:${end}` };
   }
   const categoryBindings = new Map<string, ChartEditableSequence>();
-  const plots = readChartData(source).map(plot => ({ ...plot, series: plot.series.map(series => {
+  const plots = data.map(plot => ({ ...plot, series: plot.series.map(series => {
     const categoryKey = series.categories && JSON.stringify({ kind: series.categories.kind, values: series.categories.values, levels: series.categories.levels });
     const categories = onlyUnbound && series.categories?.formula !== undefined ? series.categories : categoryKey && categoryBindings.has(categoryKey) ? categoryBindings.get(categoryKey) : sequence(series.categories, 'Category');
     if (categoryKey && categories) categoryBindings.set(categoryKey, categories);
@@ -51,6 +66,7 @@ function bindWorkbook(source: Uint8Array, input: SpreadsheetArtifact, onlyUnboun
     const valueColumn = column;
     const values = sequence(series.values, series.name);
     const bubbleSizes = sequence(series.bubbleSizes, 'Size');
+    const errorBars = series.errorBars?.map(errors => ({ plus: sequence(errors.plus, 'Positive error'), minus: sequence(errors.minus, 'Negative error') }));
     let nameFormula = series.nameFormula;
     if (values && (!onlyUnbound || series.values?.formula === undefined)) nameFormula = `${sheetName}!${formatCellReference({ row: 1, column: valueColumn }).replace(/([A-Z]+)(\d+)/, '$$$1$$$2')}`;
     else if (values && nameFormula === undefined) {
@@ -58,7 +74,7 @@ function bindWorkbook(source: Uint8Array, input: SpreadsheetArtifact, onlyUnboun
       nameFormula = `${sheetName}!${formatCellReference({ row: 1, column }).replace(/([A-Z]+)(\d+)/, '$$$1$$$2')}`;
       column++;
     }
-    return { ...series, categories, xValues, values, bubbleSizes, ...(nameFormula === undefined ? {} : { nameFormula }) };
+    return { ...series, ...(errorBars ? { errorBars } : {}), categories, xValues, values, bubbleSizes, ...(nameFormula === undefined ? {} : { nameFormula }) };
   }) }));
   const pkg = edit.commitPackage();
   return { source: bindChartData(source, plots), artifact: openSpreadsheetArtifact(pkg.archive.originalBytes(), { sheet: sheet.name }) };
@@ -66,11 +82,21 @@ function bindWorkbook(source: Uint8Array, input: SpreadsheetArtifact, onlyUnboun
 
 /** Refresh source caches from calculated workbook cells, leaving unresolvable references intact. */
 export function refreshChartWorkbook(source: Uint8Array, artifact: SpreadsheetArtifact): Uint8Array {
-  const calculations = new Map(artifact.workbook.sheets.map(sheet => [sheet.name, calculateSpreadsheetWorksheet(openWorksheet(artifact.workbook, sheet))]));
+  const calculations = new Map<string, ReturnType<typeof calculateSpreadsheetWorksheet>>();
+  const calculationFor = (name: string) => {
+    let calculation = calculations.get(name);
+    if (!calculation) {
+      const sheet = artifact.workbook.sheet(name);
+      if (!sheet) return undefined;
+      calculation = sheet === artifact.activeSheet ? artifact.calculation : calculateSpreadsheetWorksheet(openWorksheet(artifact.workbook, sheet));
+      calculations.set(name, calculation);
+    }
+    return calculation;
+  };
   function sequence(data: ChartEditableSequence | undefined): ChartEditableSequence | undefined {
     if (!data?.formula) return data;
     const reference = parseSpreadsheetChartReference(data.formula, artifact.activeSheet.name);
-    const calculation = reference && calculations.get(reference.sheet);
+    const calculation = reference && calculationFor(reference.sheet);
     if (!reference || !calculation) return data;
     const { start, end } = reference.range;
     const point = (row: number, column: number) => {
@@ -88,8 +114,8 @@ export function refreshChartWorkbook(source: Uint8Array, artifact: SpreadsheetAr
   }
   const plots: ChartEditablePlot[] = readChartData(source).map(plot => ({ ...plot, series: plot.series.map(series => {
     const title = series.nameFormula && parseSpreadsheetChartReference(series.nameFormula, artifact.activeSheet.name);
-    const name = title && calculations.get(title.sheet)?.displayText(title.range.start);
-    return { ...series, ...(typeof name === 'string' ? { name } : {}), categories: sequence(series.categories), xValues: sequence(series.xValues), values: sequence(series.values), bubbleSizes: sequence(series.bubbleSizes) };
+    const name = title && calculationFor(title.sheet)?.displayText(title.range.start);
+    return { ...series, ...(typeof name === 'string' ? { name } : {}), categories: sequence(series.categories), xValues: sequence(series.xValues), values: sequence(series.values), bubbleSizes: sequence(series.bubbleSizes), ...(series.errorBars ? { errorBars: series.errorBars.map(errors => ({ plus: sequence(errors.plus), minus: sequence(errors.minus) })) } : {}) };
   }) }));
   return updateChartData(source, plots);
 }

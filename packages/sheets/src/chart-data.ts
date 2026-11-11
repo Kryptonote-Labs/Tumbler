@@ -92,7 +92,8 @@ export function resolveSpreadsheetChartDataSet(
       return Object.freeze({
         ...item,
         title,
-        categories: resolveSequence(item.categories, "category"),
+        categories: resolveSequence(item.categories, model.axes.some(axis => axis.dateAxis) ? "value" : "category"),
+        ...(item.errorBars ? { errorBars: item.errorBars.map(errors => { const plus = resolveSequence(errors.plus, "value"), minus = resolveSequence(errors.minus, "value"); return { ...errors, ...(plus ? { plus } : {}), ...(minus ? { minus } : {}) }; }) } : {}),
         ...(xValues === undefined ? {} : { xValues }),
         values: resolveSequence(item.values, "value"),
         ...(bubbleSizes === undefined ? {} : { bubbleSizes }),
@@ -114,7 +115,7 @@ export function resolveSpreadsheetChartDataSet(
         });
       }
     }
-    return Object.freeze({ ...model, title, series: Object.freeze(series) });
+    return Object.freeze({ ...model, dateSystem: worksheet.workbook.dateSystem, title, series: Object.freeze(series) });
   }));
 }
 

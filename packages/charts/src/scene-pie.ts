@@ -1,3 +1,5 @@
+import { chartDataLabelMarks } from './label-scene.ts';
+import { chartPointColor } from './point-style.ts';
 import { chartShade, chartPolygon } from './projection.ts';
 import { indexChartSequence } from './indexed-data.ts';
 import { layoutPieSlices, pieArcPath } from "./layout.ts";
@@ -8,7 +10,7 @@ const PADDING = 16;
 const SLOT = 110;
 
 /** Pie and doughnut charts. The legend lists categories of the first series, one entry per slice. */
-export function pieScene(context: SceneContext): ChartMark[] {
+export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[] {
   const { model, width, height, options } = context;
   const slices = layoutPieSlices(model);
   const count = slices.length;
@@ -23,34 +25,52 @@ export function pieScene(context: SceneContext): ChartMark[] {
   const right = width - PADDING - (reserve && (position === "right" || position === "top-right") ? sideWidth : 0);
   const top = titleHeight + (reserve && position === "top" ? legendHeight : 0);
   const bottom = height - PADDING - (reserve && position === "bottom" ? legendHeight : 0);
-  const cx = (left + right) / 2, cy = (top + bottom) / 2;
-  const radius = Math.max(1, Math.min(right - left, bottom - top) / 2);
+  const tilt = model.threeD ? Math.max(0.1, Math.sin(Math.abs(model.threeD.rotationX) * Math.PI / 180)) : 1;
+  const available = Math.max(1, bottom - top);
+  const initialRadius = Math.max(1, Math.min((right - left) / 2, available / (2 * tilt)));
+  const depth = model.threeD ? Math.min(24, initialRadius * 0.2) : 0;
+  const cx = (left + right) / 2, cy = (top + bottom - depth) / 2;
+  const radius = Math.max(1, Math.min((right - left) / 2, (available - depth) / (2 * tilt)));
   const hole = model.kind === "doughnut" ? radius * (model.holeSize ?? 50) / 100 : 0;
   const first = model.series[0];
   if (!first) return [];
   const marks: ChartMark[] = [];
   const rings = model.kind === 'doughnut' ? model.series : model.series.slice(0, 1);
   rings.forEach((series, ring) => {
-    const outer = radius - (radius - hole) * ring / rings.length;
-    const inner = model.kind === 'doughnut' ? radius - (radius - hole) * (ring + 1) / rings.length : 0;
+    const outer = radius - (radius - hole) * (rings.length - ring - 1) / rings.length;
+    const inner = model.kind === 'doughnut' ? radius - (radius - hole) * (rings.length - ring) / rings.length : 0;
     const current = layoutPieSlices({ ...model, series: [series] });
-    const tilt = model.threeD ? Math.max(0.1, Math.sin(Math.abs(model.threeD.rotationX) * Math.PI / 180)) : 1;
-    const depth = model.threeD ? Math.min(24, radius * 0.2) : 0;
+    const offset = (slice: { startAngle: number; endAngle: number; index: number }) => {
+      const explosion = context.pointFormat(series, slice.index)?.explosion ?? series.explosion ?? 0;
+      const angle = (slice.startAngle + slice.endAngle) / 2;
+      return { dx: Math.cos(angle) * radius * explosion / 100, dy: Math.sin(angle) * radius * explosion / 100 * tilt };
+    };
     const sample = (r: number, start: number, end: number) => {
       const steps = Math.max(1, Math.ceil(Math.abs(end - start) * 32));
       return Array.from({ length: steps + 1 }, (_, i) => { const angle = start + (end - start) * i / steps; return { x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r * tilt }; });
     };
     if (depth) for (const [index, slice] of current.entries()) {
-      const points = sample(outer, slice.startAngle, slice.endAngle);
+      const { dx, dy } = offset(slice);
+      const points = sample(outer, slice.startAngle, slice.endAngle).map(point => ({ x: point.x + dx, y: point.y + dy }));
       for (let i = 0; i < points.length - 1; i++) {
         const a = points[i]!, b = points[i + 1]!;
-        if ((a.y + b.y) / 2 < cy) continue;
-        marks.push({ kind: 'path', d: chartPolygon([a, b, { x: b.x, y: b.y + depth }, { x: a.x, y: a.y + depth }]), fill: chartShade(context.color(series, index), 0.75) });
+        if ((a.y + b.y) / 2 < cy + dy) continue;
+        marks.push({ kind: 'path', d: chartPolygon([a, b, { x: b.x, y: b.y + depth }, { x: a.x, y: a.y + depth }]), fill: chartShade(chartPointColor(context, series, ring, slice.index), 0.75) });
       }
     }
+    const categories = indexChartSequence(series.categories);
+    const total = labelTotal ?? current.reduce((sum, slice) => sum + slice.value, 0);
     current.forEach((slice, index) => {
-      const d = depth ? chartPolygon([...sample(outer, slice.startAngle, slice.endAngle), ...(inner ? sample(inner, slice.endAngle, slice.startAngle) : [{ x: cx, y: cy }])]) : pieArcPath(cx, cy, outer, slice.startAngle, slice.endAngle, inner);
-      marks.push({ kind: 'path', d, fill: context.color(series, index), stroke: '#ffffff', strokeWidth: 1 });
+      const { dx, dy } = offset(slice);
+      const shifted = (points: readonly { x: number; y: number }[]) => points.map(point => ({ x: point.x + dx, y: point.y + dy }));
+      const d = depth ? chartPolygon(shifted([...sample(outer, slice.startAngle, slice.endAngle), ...(inner ? sample(inner, slice.endAngle, slice.startAngle) : [{ x: cx, y: cy }])])) : pieArcPath(cx + dx, cy + dy, outer, slice.startAngle, slice.endAngle, inner);
+      marks.push({ kind: 'path', d, fill: chartPointColor(context, series, ring, slice.index), stroke: '#ffffff', strokeWidth: 1 });
+      const angle = (slice.startAngle + slice.endAngle) / 2;
+      const labelRadius = inner + (outer - inner) * .65;
+      const category = String(categories.get(slice.index) ?? slice.index + 1);
+      marks.push(...chartDataLabelMarks(context, series, ring, { index: slice.index,
+        x: cx + dx + Math.cos(angle) * labelRadius, y: cy + dy + Math.sin(angle) * labelRadius * tilt,
+        category, value: slice.value, percent: total ? slice.value / total : 0 }));
     });
   });
   if (model.legend === undefined) return marks;
@@ -79,7 +99,7 @@ export function pieScene(context: SceneContext): ChartMark[] {
     const row = rows.get(entry.y)!;
     const x = entry.x + (horizontal ? width / 2 - (row.left + row.right) / 2 : 0);
     return [
-      { kind: "rect", x, y: entry.y - 8, width: 10, height: 10, fill: context.color(first, index) },
+      { kind: "rect", x, y: entry.y - 8, width: 10, height: 10, fill: chartPointColor(context, first, 0, slices[index]!.index) },
       { kind: "text", text: entry.label, x: x + 15, y: entry.y, anchor: "start", font },
     ];
   })));

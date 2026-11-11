@@ -28,7 +28,7 @@ test("columns draw one bar per value, taller for larger values", () => {
 });
 
 test("pie slices take series categories as legend labels and centre measured rows", () => {
-  const scene = layoutChartScene(model({ kind: "pie" }), 600, 400, { measureText: text => text.length * 10 });
+  const scene = layoutChartScene(model({ kind: "pie", legend: { position: "bottom", overlay: false, textStyle: { fontSize: 8.25 } } }), 600, 400, { measureText: text => text.length * 10 });
   expect(scene.marks.filter(mark => mark.kind === "path")).toHaveLength(3);
   const legend = scene.marks.find(mark => mark.kind === "group" && mark.role === "legend");
   expect(legend?.kind === "group" && legend.marks.map(entry => entry.kind === "group" && entry.role)).toEqual(["legend-entry", "legend-entry", "legend-entry"]);
@@ -111,11 +111,15 @@ test("canvas painting fills marks and draws text at the scene's positions", () =
     stroke: (path?: string) => calls.push(["stroke", context.strokeStyle, path]),
     fillText: (text: string) => calls.push(["fillText", text, context.font, context.textAlign]),
   } satisfies ChartCanvasContext<string>;
-  const scene = layoutChartScene(model({ kind: "pie", legend: undefined }), 300, 200);
+  const scene = layoutChartScene(model({ kind: "pie", legend: undefined, titleStyle: { fontSize: 11.25 } }), 300, 200);
   paintChartScene(context, scene, d => d);
   expect(calls.filter(call => call[0] === "fill" && typeof call[2] === "string")).toHaveLength(3);
   expect(calls).toContainEqual(["translate", 150, 23]);
-  expect(calls).toContainEqual(["fillText", "Results", expect.stringContaining("600 15px"), "center"]);
+  expect(calls).toContainEqual(["fillText", "Results", expect.stringContaining("700 15px"), "center"]);
+  calls.length = 0;
+  const invisibleLine = model({ kind: 'line', legend: undefined, series: model().series.map(series => ({ ...series, lineStyle: { noFill: true } })) });
+  paintChartScene(context, layoutChartScene(invisibleLine, 300, 200), d => d);
+  expect(calls.filter(call => call[0] === 'stroke' && typeof call[2] === 'string')).toHaveLength(0);
 });
 
 test("browser and offscreen canvases are paint targets", () => {
@@ -159,7 +163,7 @@ test('combination value labels and gridlines follow each axis independently', ()
   const scene = layoutChartScene(combo, 600, 400, { formatNumber: (value, code) => `${code}:${value}` });
   expect(texts(scene.marks).some(text => text.startsWith('Y:'))).toBe(true);
   expect(texts(scene.marks)).not.toContain('Jan');
-  expect(scene.marks.filter(mark => mark.kind === 'line')).toHaveLength(0);
+  expect(scene.marks.filter(mark => mark.kind === 'line')).toHaveLength(1);
   const hidden = { ...base, axes: base.axes.map(axis => ({ ...axis, deleted: true, majorGridlines: true })) };
   expect(texts(layoutChartScene({ ...hidden, plots: [hidden] }, 600, 400).marks)).toEqual(['Results']);
 });

@@ -1,3 +1,4 @@
+import { DRAWING_PRESET_COLORS } from './preset-colors.ts';
 import type { LosslessXmlElement } from "./xml/source-document.ts";
 type RGB = [number, number, number];
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
@@ -35,7 +36,7 @@ const linear = (v: number) =>
 const attr = (e: LosslessXmlElement, n: string) =>
   e.attributes.find((a) => a.namespaceUri === "" && a.localName === n)?.value;
 const numeric = (value: string | undefined) => {
-  const n = Number(value ?? 0);
+  const n = value?.endsWith("%") ? Number(value.slice(0, -1)) * 1000 : Number(value ?? 0);
   if (!Number.isFinite(n)) throw new Error("Invalid colour value.");
   return n;
 };
@@ -64,38 +65,12 @@ function parse(
       alpha: Number(rgba[4]),
     };
 }
-const preset: Record<string, string> = {
-  black: "000000",
-  white: "FFFFFF",
-  red: "FF0000",
-  blue: "0000FF",
-  green: "008000",
-  yellow: "FFFF00",
-  orange: "FFA500",
-  purple: "800080",
-  gray: "808080",
-  grey: "808080",
-  ltGray: "D3D3D3",
-  dkGray: "A9A9A9",
-  dkBlue: "00008B",
-  ltBlue: "ADD8E6",
-  dkGreen: "006400",
-  cyan: "00FFFF",
-  magenta: "FF00FF",
-  navy: "000080",
-  teal: "008080",
-  gold: "FFD700",
-  silver: "C0C0C0",
-  maroon: "800000",
-  lime: "00FF00",
-  pink: "FFC0CB",
-  brown: "A52A2A",
-};
 /** Resolve source colour transforms in order, including HSL luminance and opacity. */
 export function resolveDrawingColor(
   element: LosslessXmlElement | undefined,
   scheme: (name: string) => string | undefined,
   placeholder?: string,
+  systemColor?: (name: string) => string | undefined,
 ): string | undefined {
   const node = element?.children.find(
     (n): n is LosslessXmlElement =>
@@ -116,9 +91,9 @@ export function resolveDrawingColor(
         ? placeholder
         : scheme(attr(node, "val") ?? "")
       : node.localName === "sysClr"
-        ? attr(node, "lastClr")
+        ? attr(node, "lastClr") ?? systemColor?.(attr(node, "val") ?? "")
         : node.localName === "prstClr"
-          ? preset[attr(node, "val") ?? ""]
+          ? DRAWING_PRESET_COLORS[attr(node, "val") ?? ""]
           : attr(node, "val"),
   );
   if (node.localName === "scrgbClr")

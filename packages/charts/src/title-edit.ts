@@ -1,3 +1,4 @@
+import { chartXmlText } from './source-xml.ts';
 import { chartTitleTextXml } from './rich-text.ts';
 import type { ChartTextParagraph } from './model.ts';
 import { beginLosslessXmlEdit, parseLosslessXml, type LosslessXmlElement } from '@tumblerjs/ooxml';
@@ -18,7 +19,42 @@ export function updateChartTitle(bytes: Uint8Array, title: string | readonly Cha
   const edit = beginLosslessXmlEdit(xml);
   if (existing) {
     const text = children(existing, 'tx')[0];
-    if (text) edit.replaceElementMarkup(text, tx);
+    const rich = text?.children.find((child): child is LosslessXmlElement => child.kind === 'element' && child.namespaceUri === ns && child.localName === 'rich');
+    const body = rich?.children.filter((child): child is LosslessXmlElement => child.kind === 'element' && child.namespaceUri === a && child.localName === 'p') ?? [];
+    const descendants = (node: LosslessXmlElement): LosslessXmlElement[] => node.children.flatMap(child => child.kind === 'element' ? [child, ...descendants(child)] : []);
+    const nodes = body.length === 1 ? descendants(body[0]!).filter(node => node.namespaceUri === a && node.localName === 't') : [];
+    if (typeof title === 'string' && nodes.length && !title.includes('\n') && !descendants(body[0]!).some(node => node.namespaceUri === a && node.localName === 'br')) {
+      const values = nodes.map(node => xml.textContent(node));
+      const original = values.join('');
+      let prefix = 0, suffix = 0;
+      while (prefix < original.length && prefix < title.length && original[prefix] === title[prefix]) prefix++;
+      while (suffix < original.length - prefix && suffix < title.length - prefix && original.at(-suffix - 1) === title.at(-suffix - 1)) suffix++;
+      // A text node must never end with half of a surrogate pair after an edit.
+      if (prefix && /[\uD800-\uDBFF]/.test(original[prefix - 1]!) && /[\uDC00-\uDFFF]/.test(original[prefix] ?? '')) prefix--;
+      if (suffix && /[\uDC00-\uDFFF]/.test(original[original.length - suffix]!) && /[\uD800-\uDBFF]/.test(original[original.length - suffix - 1] ?? '')) suffix--;
+      const end = original.length - suffix;
+      let offset = 0, first = nodes.length - 1, last = 0;
+      const starts = values.map(value => { const start = offset; offset += value.length; return start; });
+      first = values.findIndex((value, index) => starts[index]! + value.length > prefix);
+      if (first < 0) first = nodes.length - 1;
+      for (let index = 0; index < nodes.length; index++) if (starts[index]! < end) last = index;
+      last = Math.max(first, last);
+      for (let index = first; index <= last; index++) {
+        const value = (index === first ? values[index]!.slice(0, prefix - starts[index]!) + title.slice(prefix, title.length - suffix) : '') + (index === last ? values[index]!.slice(end - starts[index]!) : '');
+        const node = nodes[index]!;
+        if (node.selfClosing && /^\s|\s$/.test(value)) {
+          const attributes = node.attributes.filter(attribute => !(attribute.namespaceUri === 'http://www.w3.org/XML/1998/namespace' && attribute.localName === 'space')).map(attribute => ` ${attribute.qualified}="${chartXmlText(attribute.value)}"`).join('');
+          edit.replaceElementMarkup(node, `<${node.qualified}${attributes} xml:space="preserve">${chartXmlText(value)}</${node.qualified}>`);
+          continue;
+        }
+        if (value !== values[index]) edit.setText(node, value);
+        if (/^\s|\s$/.test(value)) {
+          const space = nodes[index]!.attributes.find(attribute => attribute.namespaceUri === 'http://www.w3.org/XML/1998/namespace' && attribute.localName === 'space');
+          if (space && space.value !== 'preserve') edit.setAttribute(space, 'preserve');
+          else if (!space) edit.insertAttribute(nodes[index]!, 'xml:space', 'preserve');
+        }
+      }
+    } else if (text) edit.replaceElementMarkup(text, tx);
     else if (existing.children.find(child => child.kind === 'element')) edit.insertMarkupBefore(existing.children.find((child): child is LosslessXmlElement => child.kind === 'element')!, tx);
     else if (existing.selfClosing) edit.replaceElementMarkup(existing, `<c:title xmlns:c="${ns}">${tx}</c:title>`);
     else edit.appendMarkup(existing, tx);

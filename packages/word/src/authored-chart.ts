@@ -1,5 +1,7 @@
+import { DEFAULT_WORD_THEME } from './theme-colours.ts';
+import type { ThemeColorScheme, ThemeFontScheme } from '@tumblerjs/ooxml';
 import { chartTitleFromWord } from './chart-title.ts';
-import { inspectChartSource, chartContentModel, updateChartTitle, decodeChartWorkbook, mergeChartContent, type ChartContent } from '@tumblerjs/charts';
+import { inspectChartSource, chartContentModel, updateChartTitle, decodeChartWorkbook, mergeChartContent, bindChartTheme, type ChartContent } from '@tumblerjs/charts';
 import { PartName } from '@tumblerjs/opc';
 import type { WordChartDrawing } from './drawings.ts';
 import { imagePlacement, type WordImagePosition } from './image-placement.ts';
@@ -33,9 +35,9 @@ export function nativeChartDrawing(id: number, chart: WordAuthoredChart, availab
 }
 
 /** Inline title editing and property-pane edits compose before persistence. */
-export function authoredChartContent(run: Pick<import('./create.ts').WordTextRun, 'chart' | 'chartContent' | 'chartTitle' | 'chartTitleText'>): ChartContent | undefined {
+export function authoredChartContent(run: Pick<import('./create.ts').WordTextRun, 'chart' | 'chartContent' | 'chartTitle' | 'chartTitleText'>, themeColors: ThemeColorScheme = DEFAULT_WORD_THEME, themeFonts?: ThemeFontScheme): ChartContent | undefined {
   const content = run.chartContent ? run.chart ? mergeChartContent(run.chart.content, run.chartContent) : run.chartContent : run.chart?.content;
   if (!content || run.chartTitle === undefined && run.chartTitleText === undefined) return content;
   const source = new TextEncoder().encode(content.xml);
-  return { ...content, xml: new TextDecoder().decode(updateChartTitle(source, run.chartTitleText ? chartTitleFromWord(run.chartTitleText) : run.chartTitle!)) };
+  return { ...content, xml: new TextDecoder().decode(updateChartTitle(source, run.chartTitleText ? chartTitleFromWord(run.chartTitleText, bindChartTheme(chartContentModel(content), themeColors, themeFonts)) : run.chartTitle!)) };
 }

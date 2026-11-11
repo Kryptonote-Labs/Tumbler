@@ -174,7 +174,7 @@ export function prepareWordContent(
       runs: p.runs.map((run) => ({
         // This package supplies resources only. Source text leaves are rendered below.
         text: (originalRuns.get(run.source!)?.text === run.text ? run.text.replace(/[\r\n]/g, '') : run.text).replaceAll('\u2028', ''),
-        ...(run.chart ? { chart: { ...run.chart, content: authoredChartContent(run)! } } : {}),
+        ...(run.chart ? { chart: { ...run.chart, content: authoredChartContent(run, document.styles.themeColors, document.styles.themeFonts)! } } : {}),
         ...(run.shape ? { shape: run.shape } : {}),
         ...(run.ink ? { ink: { ...run.ink, ...run.drawing } } : {}),
         ...(run.link === undefined ? {} : { link: run.link }),
@@ -215,10 +215,10 @@ export function prepareWordContent(
   for (const paragraph of paragraphs) for (const run of paragraph.runs) {
     const drawing = document.drawings.get(run.source!);
     if (drawing?.kind !== 'chart') continue;
-    if (run.chartContent) { writeChartContent(transaction, drawing.partName, authoredChartContent(run)!); continue; }
+    if (run.chartContent) { writeChartContent(transaction, drawing.partName, authoredChartContent(run, document.styles.themeColors, document.styles.themeFonts)!); continue; }
     if (run.chartTitle === undefined && run.chartTitleText === undefined) continue;
     const part = document.package.getPart(drawing.partName)!;
-    transaction.replacePart(drawing.partName, updateChartTitle(document.package.readPart(part), run.chartTitleText ? chartTitleFromWord(run.chartTitleText) : run.chartTitle!));
+    transaction.replacePart(drawing.partName, updateChartTitle(document.package.readPart(part), run.chartTitleText ? chartTitleFromWord(run.chartTitleText, drawing.model) : run.chartTitle!));
   }
   mergeAuthoredStyles(document, paragraphs.flatMap(p => p.styleId ? [p.styleId] : []), transaction);
   const sharedOwner = document.package.mainOfficeDocumentPart().name;

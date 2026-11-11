@@ -314,6 +314,8 @@ export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetS
       worksheetRoot: document.root,
       spreadsheetNamespace: namespace,
       relationshipsNamespace,
+      theme: styles.theme,
+      themeFonts: styles.themeFonts,
     }),
     conditionalFormatting: parseSpreadsheetConditionalFormatting(document, namespace, styles),
     styles,

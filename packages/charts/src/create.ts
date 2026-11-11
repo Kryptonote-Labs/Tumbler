@@ -4,8 +4,8 @@ import { updateChartTitle } from './title-edit.ts';
 export interface ChartSourceSeries {
   readonly name: string;
   readonly values: readonly (number | null)[];
-  readonly xValues?: readonly (number | null)[];
-  readonly bubbleSizes?: readonly (number | null)[];
+  readonly xValues?: readonly (number | null)[] | undefined;
+  readonly bubbleSizes?: readonly (number | null)[] | undefined;
 }
 
 export interface CreateChartOptions {
@@ -76,7 +76,7 @@ export function createOoxmlChart(options: CreateChartOptions): Uint8Array {
   if (options.splitType !== undefined && type !== 'ofPieChart') throw new TypeError('Split type applies only to of-pie charts.');
   if (options.wireframe !== undefined && !type.startsWith('surface')) throw new TypeError('Wireframe applies only to surface charts.');
   const series = options.series.map((series, index) => {
-    if (series.values.length !== options.categories.length) throw new TypeError('Series and category counts must match.');
+    if (!xy && series.values.length !== options.categories.length) throw new TypeError('Series and category counts must match.');
     for (const values of [series.xValues, series.bubbleSizes])
       if (values && values.length !== series.values.length) throw new TypeError('X, Y and bubble-size counts must match.');
     if (type === 'bubbleChart' && !series.bubbleSizes) throw new TypeError('Bubble charts require bubble sizes.');

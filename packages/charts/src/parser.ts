@@ -1,3 +1,6 @@
+import { parseChartAxisProperties } from './axis-properties.ts';
+import { parseChartAnalytics } from './analytics-parser.ts';
+import { parseChartDataLabels } from './data-labels.ts';
 import { readChartTitleText } from './rich-text.ts';
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { BUBBLE_CHART_POINT_LIMIT } from "./model.ts";
@@ -24,15 +27,8 @@ const MAX_CACHE_POINTS = 100_000;
 const MAX_SERIES = 1_024;
 const MAX_AXES = 128;
 
-export class ChartParseError extends Error {
-  constructor(message: string, options: { cause?: unknown } = {}) {
-    super(message, options.cause === undefined ? undefined : { cause: options.cause });
-    this.name = "ChartParseError";
-  }
-}
-
-/** A product preview limit is unsupported content, not malformed host XML. */
-class ChartPreviewLimitError extends Error {}
+export { ChartParseError } from './parser-errors.ts';
+import { ChartParseError, ChartPreviewLimitError } from './parser-errors.ts';
 
 export interface ChartParseOptions {
   /** Localized Office-compatible text for an existing title without a text child. */
@@ -41,6 +37,13 @@ export interface ChartParseOptions {
 
 /** Parses the native chart subset without interpreting host-document references. */
 export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "transitional", options: ChartParseOptions = {}): ChartModel {
+  try { return parseChart(bytes, conformance, options); }
+  catch (error) {
+    if (error instanceof ChartPreviewLimitError) return unsupported(undefined, error.message, undefined, undefined, undefined);
+    throw error;
+  }
+}
+function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", options: ChartParseOptions): ChartModel {
   let document: LosslessXmlDocument;
   try {
     document = parseLosslessXml(bytes);
@@ -75,7 +78,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
       (children(titleElement, chartNamespace, "tx").length === 0 ? singleSeriesTitle ?? options.defaultTitle ?? "Chart Title" : undefined);
   if (candidates.length === 0) return unsupported(undefined, "The plot area has no chart type.", title, titleFormula, legend);
   if (candidates.length > 1) {
-    if (candidates.length > 32) throw new ChartParseError("Too many chart plots.");
+    if (candidates.length > 32) throw new ChartPreviewLimitError("Too many chart plots.");
     const plots: SupportedChartModel[] = [];
     for (const candidate of candidates) {
       const edit = beginLosslessXmlEdit(document);
@@ -87,7 +90,7 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
     }
     if (plots.some(p=>p.kind === "bar") && plots.some(p=>p.kind !== "bar")) return unsupported("combination", "Mixed horizontal and vertical plots are unsupported.", title, titleFormula, legend);
     const series = plots.flatMap(p=>p.series);
-    if (series.length > MAX_SERIES) throw new ChartParseError("Too many combination series.");
+    if (series.length > MAX_SERIES) throw new ChartPreviewLimitError("Too many combination series.");
     return Object.freeze({ ...plots[0]!, title, plots: Object.freeze(plots), series: Object.freeze(series) });
   }
   const chartType = candidates[0]!;
@@ -103,10 +106,10 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
     throw error;
   }
   const axes = plotArea.children.filter((child): child is LosslessXmlElement =>
-    child.kind === "element" && child.namespaceUri === chartNamespace && (child.localName === "catAx" || child.localName === "valAx")
+    child.kind === "element" && child.namespaceUri === chartNamespace && (["catAx", "valAx", "dateAx", "serAx"].includes(child.localName))
   ).map((element) => parseAxis(element, chartNamespace, drawingNamespace));
-  if (series.length > MAX_SERIES) throw new ChartParseError(`Chart exceeds ${MAX_SERIES} series.`);
-  if (axes.length > MAX_AXES) throw new ChartParseError(`Chart exceeds ${MAX_AXES} axes.`);
+  if (series.length > MAX_SERIES) throw new ChartPreviewLimitError(`Chart exceeds ${MAX_SERIES} series.`);
+  if (axes.length > MAX_AXES) throw new ChartPreviewLimitError(`Chart exceeds ${MAX_AXES} axes.`);
   const rawGrouping = val(children(chartType, chartNamespace, "grouping")[0]) ?? "standard";
   const grouping = rawGrouping === "stacked" ? "stacked" as const
     : rawGrouping === "percentStacked" ? "percent-stacked" as const
@@ -141,6 +144,9 @@ export function parseOoxmlChart(bytes: Uint8Array, conformance: "strict" | "tran
   const bubbleSizeRepresentation = kind === "bubble" ? parseBubbleSizeRepresentation(val(children(chartType, chartNamespace, "sizeRepresents")[0]) ?? "area") : undefined;
   return Object.freeze({
     status: "supported", kind, grouping, holeSize,
+    dateSystem: booleanVal(children(document.root, chartNamespace, "date1904")[0], false) ? "1904" : "1900",
+    varyColors: booleanVal(children(chartType, chartNamespace, "varyColors")[0], ["pie", "doughnut", "of-pie"].includes(kind)),
+    ...(parseChartDataLabels(children(chartType, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace) ? { dataLabels: parseChartDataLabels(children(chartType, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace)! } : {}),
     sourceType: chartType.localName,
     ...(chartType.localName.includes('3D') ? { threeD: parseView3D(children(chart, chartNamespace, 'view3D')[0], chartNamespace) } : {}),
     ...(kind === 'radar' ? { radarStyle: radarStyle(val(children(chartType, chartNamespace, 'radarStyle')[0]) ?? 'standard') } : {}),
@@ -217,7 +223,23 @@ function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespac
   const xValues = kind === "scatter" || kind === "bubble" ? parseData(children(element, chartNamespace, "xVal")[0], chartNamespace) : undefined;
   const bubbleSizes = kind === "bubble" ? parseData(children(element, chartNamespace, "bubbleSize")[0], chartNamespace) : undefined;
   const marker = ["scatter", "line", "radar"].includes(kind) ? parseMarker(children(element, chartNamespace, "marker")[0], chartNamespace) : undefined;
+  const points = children(element, chartNamespace, 'dPt');
+  if (points.length > MAX_CACHE_POINTS) throw new ChartPreviewLimitError('Chart point formatting exceeds preview limits.');
+  const shape = children(element, chartNamespace, 'spPr')[0];
+  const lineStyle = parseChartLine(shape, drawingNamespace);
   return Object.freeze({
+    ...(children(shape ?? element, drawingNamespace, 'noFill').length ? { noFill: true } : {}),
+    ...(lineStyle ? { lineStyle } : {}),
+    ...(parseChartDataLabels(children(element, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace) ? { dataLabels: parseChartDataLabels(children(element, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace)! } : {}),
+    ...parseChartAnalytics(element, chartNamespace, drawingNamespace, node => parseData(node, chartNamespace)),
+    explosion: Number(val(children(element, chartNamespace, 'explosion')[0]) ?? 0),
+    pointFormats: points.map(point => {
+      const shape = children(point, chartNamespace, 'spPr')[0];
+      return { index: requiredUnsignedVal(point, chartNamespace, 'idx', 'point index'),
+        fill: parseChartFill(shape, drawingNamespace), noFill: shape && children(shape, drawingNamespace, 'noFill').length ? true : undefined,
+        lineStyle: parseChartLine(shape, drawingNamespace), marker: parseMarker(children(point, chartNamespace, 'marker')[0], chartNamespace),
+        explosion: val(children(point, chartNamespace, 'explosion')[0]) === undefined ? undefined : Number(val(children(point, chartNamespace, 'explosion')[0])) };
+    }),
     index: requiredUnsignedVal(element, chartNamespace, "idx", "series index"),
     order: requiredUnsignedVal(element, chartNamespace, "order", "series order"),
     title: literalTitle === undefined ? titleCache?.points[0]?.value.toString() : text(literalTitle),
@@ -254,10 +276,10 @@ function parseData(container: LosslessXmlElement | undefined, namespace: string)
   if (multi !== undefined) {
     const cache = children(multi, namespace, "multiLvlStrCache")[0];
     const levelElements = cache === undefined ? [] : children(cache, namespace, "lvl");
-    if (levelElements.length > 32) throw new ChartParseError("Chart categories exceed 32 levels.");
+    if (levelElements.length > 32) throw new ChartPreviewLimitError("Chart categories exceed 32 levels.");
     const rawCount = cache === undefined ? undefined : val(children(cache, namespace, "ptCount")[0]);
     const count = rawCount === undefined ? undefined : unsigned(rawCount, "category point count");
-    if (count !== undefined && count > MAX_CACHE_POINTS) throw new ChartParseError(`Chart cache exceeds ${MAX_CACHE_POINTS} points.`);
+    if (count !== undefined && count > MAX_CACHE_POINTS) throw new ChartPreviewLimitError(`Chart cache exceeds ${MAX_CACHE_POINTS} points.`);
     const levels = levelElements.map(level => parseSequenceContainer(level, namespace, "string").points);
     if (levels.some(level => level.some(point => point.index >= (count ?? MAX_CACHE_POINTS)))) {
       throw new ChartParseError("Category point is outside its declared cache.");
@@ -274,11 +296,11 @@ function parseData(container: LosslessXmlElement | undefined, namespace: string)
 function parseSequenceContainer(element: LosslessXmlElement, namespace: string, kind: "number" | "string"): ChartDataSequence {
   const cache = children(element, namespace, kind === "number" ? "numCache" : "strCache")[0] ?? element;
   const points = children(cache, namespace, "pt");
-  if (points.length > MAX_CACHE_POINTS) throw new ChartParseError(`Chart cache exceeds ${MAX_CACHE_POINTS} points.`);
+  if (points.length > MAX_CACHE_POINTS) throw new ChartPreviewLimitError(`Chart cache exceeds ${MAX_CACHE_POINTS} points.`);
   const declaredCountElement = children(cache, namespace, "ptCount")[0];
   const declaredCountRaw = val(declaredCountElement);
   const declaredCount = declaredCountRaw === undefined ? undefined : unsigned(declaredCountRaw, "chart cache point count");
-  if (declaredCount !== undefined && declaredCount > MAX_CACHE_POINTS) throw new ChartParseError(`Chart cache exceeds ${MAX_CACHE_POINTS} points.`);
+  if (declaredCount !== undefined && declaredCount > MAX_CACHE_POINTS) throw new ChartPreviewLimitError(`Chart cache exceeds ${MAX_CACHE_POINTS} points.`);
   const seen = new Set<number>();
   const parsed = points.map((point): ChartDataPoint => {
     const index = unsigned(requiredAttr(point, "idx", "cache point index"), "cache point index");
@@ -306,10 +328,11 @@ function parseAxis(element: LosslessXmlElement, namespace: string, drawingNamesp
   const numberFormat = children(element, namespace, "numFmt")[0];
   const numberFormatCode = numberFormat?.attributes.find((attribute) => attribute.namespaceUri === "" && attribute.localName === "formatCode")?.value;
   return Object.freeze({
+    ...parseChartAxisProperties(element, namespace, drawingNamespace),
     ...textStyleProperties(element, namespace, drawingNamespace),
     ...lineStyleProperties(element, namespace, drawingNamespace),
     id: requiredUnsignedVal(element, namespace, "axId", "axis id"),
-    kind: element.localName === "catAx" ? "category" : "value",
+    kind: element.localName === "serAx" ? "series" : element.localName === "valAx" ? "value" : "category",
     position: axisPosition(val(children(element, namespace, "axPos")[0]) ?? "l"),
     title: parseText(children(element, namespace, "title")[0], namespace, drawingNamespace),
     ...axisRotation(element, namespace, drawingNamespace),
@@ -340,7 +363,11 @@ function parseMarker(element: LosslessXmlElement | undefined, namespace: string)
   const rawSize = val(children(element, namespace, "size")[0]) ?? "5";
   const size = Number(rawSize);
   if (!Number.isInteger(size) || size < 2 || size > 72) throw new ChartParseError("Chart marker size must be an integer between 2 and 72.");
-  return Object.freeze({ symbol: rawSymbol as ChartMarkerSymbol, size });
+  const drawing = namespace.replace(/chart$/, 'main');
+  const shape = children(element, namespace, 'spPr')[0];
+  const fill = parseChartFill(shape, drawing), lineStyle = parseChartLine(shape, drawing);
+  return Object.freeze({ symbol: rawSymbol as ChartMarkerSymbol, size,
+    ...(fill ? { fill } : {}), ...(shape && children(shape, drawing, 'noFill').length ? { noFill: true } : {}), ...(lineStyle ? { lineStyle } : {}) });
 }
 
 function booleanAttribute(element: LosslessXmlElement, name: string, fallback: boolean): boolean {

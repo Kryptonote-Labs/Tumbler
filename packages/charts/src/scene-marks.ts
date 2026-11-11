@@ -1,5 +1,5 @@
 import type { ChartRect } from "./layout.ts";
-import type { ChartSeries, SupportedChartModel } from "./model.ts";
+import type { ChartSeries, ChartPointFormat, SupportedChartModel } from "./model.ts";
 import { chartFont, chartLegendPositions, type ChartColorResolver, type ChartFont } from "./scene-style.ts";
 
 /**
@@ -7,8 +7,8 @@ import { chartFont, chartLegendPositions, type ChartColorResolver, type ChartFon
  * editor charts and rendered thumbnails agree.
  */
 export type ChartMark =
-  | { readonly kind: "rect"; readonly x: number; readonly y: number; readonly width: number; readonly height: number; readonly fill: string; readonly stroke?: string }
-  | { readonly kind: "circle"; readonly cx: number; readonly cy: number; readonly r: number; readonly fill: string; readonly stroke?: string; readonly fillOpacity?: number }
+  | { readonly kind: "rect"; readonly x: number; readonly y: number; readonly width: number; readonly height: number; readonly fill: string; readonly stroke?: string; readonly strokeWidth?: number }
+  | { readonly kind: "circle"; readonly cx: number; readonly cy: number; readonly r: number; readonly fill: string; readonly stroke?: string; readonly fillOpacity?: number; readonly strokeWidth?: number }
   /** An SVG path string. Paths without `fill` are stroked only. */
   | { readonly kind: "path"; readonly d: string; readonly fill?: string; readonly stroke?: string; readonly strokeWidth?: number }
   /** Axes and gridlines, drawn with crisp edges. */
@@ -30,6 +30,7 @@ export interface ChartScene {
 }
 
 export interface ChartSceneOptions {
+  readonly dateSystem?: "1900" | "1904";
   /** Host colour binding; takes precedence over the model's theme colours. */
   readonly resolveColor?: ChartColorResolver;
   readonly formatNumber?: (value: number, formatCode: string | undefined) => string;
@@ -48,6 +49,7 @@ export interface SceneContext {
   readonly options: ChartSceneOptions;
   /** Series colour, falling back to the theme accent cycle as Office does. */
   color(series: ChartSeries, index: number, line?: boolean): string;
+  pointFormat(series: ChartSeries, index: number): ChartPointFormat | undefined;
   measure(text: string, font: ChartFont): number;
 }
 
