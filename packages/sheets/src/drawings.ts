@@ -1,7 +1,7 @@
 import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement, type ThemeColorScheme, type ThemeFontScheme } from "@tumblerjs/ooxml";
 import type { OpcPart, PartName } from "@tumblerjs/opc";
 import type { SparseAxisGeometry } from "@tumblerjs/core";
-import { ChartParseError, parseOoxmlChart, bindChartTheme, type ChartModel } from "@tumblerjs/charts";
+import { ChartParseError, readChartModel, bindChartTheme, type ChartModel } from "@tumblerjs/charts";
 import { SpreadsheetError, type SpreadsheetWorkbook } from "./workbook.ts";
 
 const DRAWING_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.drawing+xml";
@@ -129,7 +129,7 @@ function readChartFrames(
       const chartPart = workbook.package.getPart(relationship.targetPartName);
       if (chartPart?.contentType !== CHART_CONTENT_TYPE) return [unsupportedFrame(anchor, relationshipId, chartPart?.name, "Chart relationship has an unsupported content type.")];
       try {
-        const model = parseOoxmlChart(workbook.package.readPart(chartPart), workbook.conformance);
+        const model = readChartModel(workbook.package, chartPart.name, workbook.conformance);
         return [Object.freeze({ anchor, relationshipId, partName: chartPart.name, model: theme ? bindChartTheme(model, theme, themeFonts) : model })];
       } catch (cause) {
         if (!(cause instanceof ChartParseError)) throw cause;

@@ -1,10 +1,10 @@
-import { paintDrawingGradient as gradient, paintRectangularGradient as rectangular } from "@tumblerjs/ooxml";
+import { paintDrawingPicture, paintDrawingGradient as gradient, paintRectangularGradient as rectangular } from "@tumblerjs/ooxml";
 import {
   linearGradientLine,
   rectangularGradientFaces,
   drawingPatternGeometry,
 } from './fill-geometry.ts';
-import { layoutChartScene, paintChartScene } from '@tumblerjs/charts';
+import { layoutChartScene, paintChartScene, chartScenePictures } from '@tumblerjs/charts';
 import type { DrawingGradient, DrawingPictureFill, DrawingPattern } from './appearance.ts';
 import type { PresentationDocument, PresentationSlide } from './model.ts';
 import type { SlideCanvasContext, SlideCanvasOptions } from './canvas-types.ts';
@@ -15,7 +15,7 @@ export type { SlideCanvasContext, SlideCanvasOptions } from './canvas-types.ts';
 export function presentationSlideImages(slide: PresentationSlide): readonly DrawingPictureFill[] {
   return [
     slide.backgroundPicture,
-    ...slide.objects.flatMap((o) => [o.image, o.pictureFill]),
+    ...slide.objects.flatMap((o) => [o.image, o.pictureFill, ...(o.chart?.status === 'supported' ? chartScenePictures(layoutChartScene(o.chart, o.transform.width, o.transform.height)) : [])]),
   ].filter((p): p is DrawingPictureFill => p !== undefined);
 }
 function picture<Path, Image>(
@@ -28,60 +28,7 @@ function picture<Path, Image>(
   if (!fill) return;
   const decoded = options.image?.(fill);
   if (!decoded) return;
-  const [l, t, r, b] = fill.crop;
-  const sw = decoded.width * (1 - l - r),
-    sh = decoded.height * (1 - t - b);
-  if (sw <= 0 || sh <= 0) return;
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, 0, width, height);
-  ctx.clip();
-  ctx.globalAlpha *= fill.opacity ?? 1;
-  const draw = (w: number, h: number) => {
-    const [fl, ft, fr, fb] = fill.stretch ?? [0, 0, 0, 0];
-    ctx.drawImage(
-      decoded.image,
-      decoded.width * l,
-      decoded.height * t,
-      sw,
-      sh,
-      fl * w,
-      ft * h,
-      w * (1 - fl - fr),
-      h * (1 - ft - fb),
-    );
-  };
-  const tile = fill.tile;
-  if (!tile) draw(width, height);
-  else {
-    const w = Math.max(1, decoded.width * tile.scaleX),
-      h = Math.max(1, decoded.height * tile.scaleY);
-    const ox =
-      tile.x +
-      (['r', 'tr', 'br'].includes(tile.align)
-        ? width - w
-        : ['ctr', 't', 'b'].includes(tile.align)
-          ? (width - w) / 2
-          : 0);
-    const oy =
-      tile.y +
-      (['b', 'bl', 'br'].includes(tile.align)
-        ? height - h
-        : ['ctr', 'l', 'r'].includes(tile.align)
-          ? (height - h) / 2
-          : 0);
-    for (let row = Math.floor(-oy / h); row < Math.ceil((height - oy) / h); row++)
-      for (let col = Math.floor(-ox / w); col < Math.ceil((width - ox) / w); col++) {
-        const flipX = (tile.flip === 'x' || tile.flip === 'xy') && Math.abs(col % 2) === 1;
-        const flipY = (tile.flip === 'y' || tile.flip === 'xy') && Math.abs(row % 2) === 1;
-        ctx.save();
-        ctx.translate(ox + col * w + (flipX ? w : 0), oy + row * h + (flipY ? h : 0));
-        ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
-        ctx.drawImage(decoded.image, decoded.width * l, decoded.height * t, sw, sh, 0, 0, w, h);
-        ctx.restore();
-      }
-  }
-  ctx.restore();
+  paintDrawingPicture(ctx, fill, width, height, decoded);
 }
 
 function pattern<Path, Image>(
@@ -207,7 +154,7 @@ export function paintPresentationSlide<Path, Image>(
       ctx.restore();
     }
     if (object.chart && object.chart.status === 'supported')
-      paintChartScene(ctx, layoutChartScene(object.chart, width, height), options.path);
+      paintChartScene(ctx, layoutChartScene(object.chart, width, height), options.path, { picture: (fill, width, height) => picture(ctx, fill, width, height, options) });
     if (object.text) {
       const rect = object.drawingGeometry?.textRect ?? [0, 0, width, height];
       ctx.save();

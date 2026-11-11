@@ -1,5 +1,5 @@
 import { ThemeColorScheme } from '@tumblerjs/ooxml';
-import { chartContentModel, mergeChartContent, bindChartTheme } from '@tumblerjs/charts';
+import { chartContentModel, mergeChartContent, bindChartTheme, bindChartImages } from '@tumblerjs/charts';
 import { linkedText } from './authoring-metadata.ts';
 import type { PresentationCommand } from './commands.ts';
 import type { NativePresentationState, NativeSlide, NativeChange } from './native-document.ts';
@@ -217,8 +217,9 @@ export function applyNativeModelCommand(
     }
     case 'edit-chart': {
       if (selected?.kind !== 'chart') throw new TypeError('Select a chart.');
-      const chart = chartContentModel(command.content);
-      patchObject({ ...selected, chartContent: selected.chartContent ? mergeChartContent(selected.chartContent, command.content) : command.content, chart: { ...chart, ...(selected.chart?.themeColors ? { themeColors: selected.chart.themeColors } : {}), ...(selected.chart?.themeFonts ? { themeFonts: selected.chart.themeFonts } : {}) } });
+      const content = selected.chartContent ? mergeChartContent(selected.chartContent, command.content) : command.content;
+      const parsed = chartContentModel(content), chart = content.resources === undefined ? bindChartImages(parsed, selected.chart?.images) : parsed;
+      patchObject({ ...selected, chartContent: content, chart: { ...chart, ...(selected.chart?.themeColors ? { themeColors: selected.chart.themeColors } : {}), ...(selected.chart?.themeFonts ? { themeFonts: selected.chart.themeFonts } : {}) } });
       break;
     }
     case 'insert-chart': {

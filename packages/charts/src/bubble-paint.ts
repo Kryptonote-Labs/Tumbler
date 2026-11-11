@@ -1,5 +1,5 @@
 import { chartPointColor } from './point-style.ts';
-import { chartPointGradient } from './gradient-scene.ts';
+import { chartPointFill } from './fill-scene.ts';
 import { chartShade } from './projection.ts';
 import type { ChartRect } from './layout.ts';
 import type { ChartSeries } from './model.ts';
@@ -16,8 +16,8 @@ function highlight(color: string): string {
 
 /** A 3D bubble is a shaded sphere in the same XY geometry; explicit fills retain precedence. */
 export function chartBubblePaint(context: SceneContext, series: ChartSeries, seriesIndex: number, point: number, bounds: ChartRect) {
-  const fill = chartPointColor(context, series, seriesIndex, point), authored = chartPointGradient(context, series, point, bounds);
-  if (!(context.pointFormat(series, point)?.bubble3D ?? series.bubble3D ?? context.model.bubble3D) || fill === 'none' || authored.fillGradient) return { fill, ...authored };
+  const fill = chartPointColor(context, series, seriesIndex, point), authored = chartPointFill(context, series, point, bounds);
+  if (!(context.pointFormat(series, point)?.bubble3D ?? series.bubble3D ?? context.model.bubble3D) || fill === 'none' || authored.fillGradient || authored.fillPicture) return { fill, ...authored };
   return { fill, fillGradient: { bounds, gradient: { kind: 'radial' as const, angle: 0, scaled: true, center: [.3, .25] as const, stops: [
     { offset: 0, color: highlight(fill) }, { offset: .4, color: fill }, { offset: 1, color: chartShade(fill, .5) },
   ] } } };

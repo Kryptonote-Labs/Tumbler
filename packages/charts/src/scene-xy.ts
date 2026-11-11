@@ -1,5 +1,5 @@
 import { chartBubblePaint } from './bubble-paint.ts';
-import { chartLegendFill } from './gradient-scene.ts';
+import { chartLegendFill } from './fill-scene.ts';
 import { chartShapeMarks } from './shape-scene.ts';
 import { chartPointStroke, chartSeriesStroke, chartStrokeMark } from './stroke-scene.ts';
 import { xyGeometry } from './xy-geometry.ts';

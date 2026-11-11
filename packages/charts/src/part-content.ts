@@ -5,6 +5,7 @@ import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
 import { openOpcPackage, PartName, Relationships, RelationshipsError, type OpcPackage, type PackageTransaction } from '@tumblerjs/opc';
 import { chartXml, chartXmlText } from './source-xml.ts';
 import { chartBase64ToBytes, chartBytesToBase64 } from './base64.ts';
+import { bindChartResourceImages } from './picture-binding.ts';
 import { chartPartRelationships, readChartResources, stageChartResources, type ChartResources } from './resources.ts';
 export { chartBase64ToBytes, chartBytesToBase64 } from './base64.ts';
 
@@ -120,7 +121,7 @@ export function addChartContent(transaction: PackageTransaction, partName: PartN
 export function chartContentModel(content: ChartContent): ChartModel {
   const bytes = new TextEncoder().encode(content.xml);
   const source = chartXml(bytes);
-  try { return parseOoxmlChart(bytes, source.namespace.includes('purl.oclc.org') ? 'strict' : 'transitional'); }
+  try { return bindChartResourceImages(parseOoxmlChart(bytes, source.namespace.includes('purl.oclc.org') ? 'strict' : 'transitional'), content.resources); }
   catch (error) {
     if (!(error instanceof ChartParseError)) throw error;
     return { status: 'unsupported', chartType: undefined, reason: error.message, title: undefined, legend: undefined };

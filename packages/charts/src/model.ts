@@ -11,6 +11,7 @@ export const BUBBLE_CHART_POINT_LIMIT = 10_000;
 export type ChartMarkerSymbol = "auto" | "circle" | "dash" | "diamond" | "dot" | "none" | "picture" | "plus" | "square" | "star" | "triangle" | "x";
 
 export interface ChartMarker {
+  readonly picture?: import('./picture-parser.ts').ChartPictureFill;
   readonly gradient?: ChartGradient;
   readonly fill?: ChartColor;
   readonly noFill?: boolean;
@@ -64,10 +65,11 @@ export interface ChartGradient {
 }
 
 export interface ChartShapeStyle {
+  readonly picture?: import('./picture-parser.ts').ChartPictureFill;
   readonly gradient?: ChartGradient;
-  readonly fill?: ChartColor;
-  readonly noFill?: boolean;
-  readonly lineStyle?: ChartLineStyle;
+  readonly fill?: ChartColor | undefined;
+  readonly noFill?: boolean | undefined;
+  readonly lineStyle?: ChartLineStyle | undefined;
 }
 
 export interface ChartDataPoint {
@@ -85,6 +87,7 @@ export interface ChartDataSequence {
 }
 
 export interface ChartPointFormat {
+  readonly picture?: import('./picture-parser.ts').ChartPictureFill;
   readonly bubble3D?: boolean;
   readonly gradient?: ChartGradient;
   readonly index: number;
@@ -96,6 +99,7 @@ export interface ChartPointFormat {
 }
 
 export interface ChartSeries {
+  readonly picture?: import('./picture-parser.ts').ChartPictureFill;
   readonly bubble3D?: boolean;
   readonly barShape?: import('./bar-shapes.ts').ChartBarShape;
   readonly gradient?: ChartGradient;
@@ -181,6 +185,7 @@ export interface ChartTextParagraph {
 }
 
 interface ChartModelBase {
+  readonly images?: Readonly<Record<string, import('./picture-parser.ts').ChartImage>>;
   readonly chartArea?: ChartShapeStyle;
   readonly titleArea?: ChartShapeStyle;
   readonly titleOverlay?: boolean;

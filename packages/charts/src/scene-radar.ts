@@ -1,5 +1,5 @@
-import { chartLegendFill } from './gradient-scene.ts';
-import { chartGradientPaint } from './gradient-scene.ts';
+import { chartLegendFill } from './fill-scene.ts';
+import { chartFillPaint } from './fill-scene.ts';
 import { chartShapeMarks } from './shape-scene.ts';
 import { chartSeriesStroke, chartStrokeMark } from './stroke-scene.ts';
 import { chartDataLabelMarks } from './label-scene.ts';
@@ -55,7 +55,7 @@ export function radarScene(context: SceneContext): ChartMark[] {
     });
     const stroke = chartStrokeMark(chartSeriesStroke(context, series, seriesIndex));
     if (model.radarStyle === 'filled' && points.every(point => point !== undefined)) {
-      marks.push({ kind: 'path', d: path(points), fill: series.noFill ? 'none' : context.color(series, seriesIndex), ...chartGradientPaint(context, series.noFill ? undefined : series.gradient, { x: cx - radius, y: cy - radius, width: radius * 2, height: radius * 2 }), ...stroke });
+      marks.push({ kind: 'path', d: path(points), fill: series.noFill ? 'none' : context.color(series, seriesIndex), ...chartFillPaint(context, series, { x: cx - radius, y: cy - radius, width: radius * 2, height: radius * 2 }), ...stroke });
     } else {
       // Rotate to the first gap, so the wraparound edge remains connected when appropriate.
       const gap = points.findIndex(point => point === undefined);

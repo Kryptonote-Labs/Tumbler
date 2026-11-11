@@ -42,6 +42,23 @@ groups) in CSS pixels. The Svelte head renders these marks as SVG and
 context, so editor charts and rendered previews agree. Pass `measureText` to centre
 legends with real text widths; otherwise widths are estimated.
 
+Picture fills retain embedded images, source crop, destination insets, opacity,
+tiling, alignment, offsets and alternating flips. Native document readers resolve
+image parts locally through `readChartModel`; portable `chartContentModel` resolves
+the resource graph. External image URLs are never fetched. SVG and canvas share
+the picture geometry with other DrawingML shapes. Stretched pie pictures use each
+wedge's own bounds. Office ignores the stored `dpi` field, following MS-OI29500
+§2.1.1288 and §2.1.1601; the source still retains it.
+
+Canvas hosts enumerate `chartScenePictures(scene)` and decode those stable picture
+identities before painting. Pass a fourth `paintChartScene` argument with
+`picture(fill, width, height)` to draw a decoded image at the current origin; the
+engine supplies the shape clip. `paintDrawingPicture` from `@tumblerjs/ooxml` paints
+the shared source/crop/tile geometry. Word exposes `wordPageChartPictures` and
+`WordPagePaintOptions.chartImage`; slides include chart fills in
+`presentationSlideImages`. Canvas tiling has a configurable preview-work budget,
+independent of stored source or authoring limits.
+
 Hosts can bind document colours through `model.themeColors`; `resolveChartColor`
 resolves these bindings while preserving authored scheme references. Word, slide
 and spreadsheet imports bind their host template colours and Latin fonts, including
@@ -236,6 +253,12 @@ controls and a real embedded spreadsheet. DOCX and PPTX hosts serialize the char
 and workbook together; XLSX hosts edit their existing worksheet data.
 Its collapsed Source XML editor supports extension properties, retains drafts across
 collapse, and requires reloading before applying over a concurrent host edit.
+The format target's Picture chooser attaches native image parts, preserves crop,
+tiling and effects on replacement, and disconnects a replaced linked source.
+`setChartPictureFill(content, snapshotNodeId, { data, contentType })` provides the
+same operation to headless hosts and CLI picture edits. Use complete content from
+`readChartContent` to retain other related parts. Removing a fill leaves resources
+available for other references and inactive conversion history.
 
 `ChartContent.resources` carries pictures, styles, user drawings and other related
 parts as a portable graph. `parts` have unique keys, content types, base64 bytes and

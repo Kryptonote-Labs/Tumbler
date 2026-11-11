@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { paintWordPage, wordPageImages, wordPageInkBounds, type WordImageDrawing, type WordLayoutPage } from '@tumblerjs/word';
+  import { paintWordPage, wordPageImages, wordPageChartPictures, wordPageInkBounds, type WordImageDrawing, type WordLayoutPage } from '@tumblerjs/word';
+  import type { DrawingPictureFill } from '@tumblerjs/ooxml';
+  import { metafileSvg } from './presentation-metafiles.ts';
   import { reserveWordInkPixels, wordInkTiles, WORD_INK_PAGE_PIXELS, WORD_INK_TILE_PIXELS } from './word-ink-tiles.ts';
 
   let { page, scale = 1, background = '#fff', maxPixels = WORD_INK_PAGE_PIXELS, imageurl, onerror }: {
@@ -63,6 +65,21 @@
           try { images.set(drawing, await decode(drawing)); }
           catch (error) { failures.set(drawing, error); }
         }
+        const chartImages = new Map<DrawingPictureFill, { image: HTMLImageElement; width: number; height: number }>();
+        const chartFailures = new Map<DrawingPictureFill, unknown>();
+        for (const picture of wordPageChartPictures(current)) {
+          if (cancelled) return;
+          try {
+            const svg = /(?:emf|wmf)$/.test(picture.contentType) ? await metafileSvg(picture.bytes, picture.contentType) : undefined;
+            if (cancelled) return;
+            const blob = svg === undefined ? new Blob([new Uint8Array(picture.bytes)], { type: picture.contentType }) : new Blob([svg], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob); urls.push(url);
+            const image = new Image(); image.src = url; await image.decode();
+            if (cancelled) return;
+            chartImages.set(picture, { image, width: image.naturalWidth, height: image.naturalHeight });
+          } catch (error) { chartFailures.set(picture, error); }
+        }
+        if (cancelled) return;
         const buffer = document.createElement('canvas'), backdrop = document.createElement('canvas');
         canvases.push(buffer, backdrop);
         for (const tile of plan.tiles) {
@@ -78,6 +95,10 @@
             image: (drawing: WordImageDrawing) => {
               if (failures.has(drawing)) throw failures.get(drawing);
               return images.get(drawing);
+            },
+            chartImage: (picture: DrawingPictureFill) => {
+              if (chartFailures.has(picture)) throw chartFailures.get(picture);
+              return chartImages.get(picture);
             }, path: (d: string) => new Path2D(d),
           };
           paintWordPage(context, current, options);

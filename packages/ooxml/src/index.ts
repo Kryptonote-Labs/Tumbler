@@ -86,3 +86,4 @@ export { paintDrawingGradient, paintRectangularGradient, type DrawingGradientCan
 export { formatOoxmlNumber } from './number-format.ts';
 
 export { readDrawingStrokeProperties, type DrawingStrokeProperties } from './drawing-line.ts';
+export { drawingPictureGeometry, paintDrawingPicture, type DrawingPictureFill, type DrawingPictureCanvasContext } from './picture-fill.ts';
