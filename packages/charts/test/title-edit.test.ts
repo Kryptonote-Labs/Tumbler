@@ -50,8 +50,9 @@ test('self-closing imported title text accepts preserved leading whitespace', as
   const source = updateChartTitle(createOoxmlChart({ type: 'pieChart', categories: [], series: [] }), 'Original');
   const empty = new TextEncoder().encode(new TextDecoder().decode(source).replace(/<a:t(?: [^>]*)?>Original<\/a:t>/, '<a:t/>'));
   expect(new TextDecoder().decode(empty)).toContain('<a:t/>');
-  const changed = new TextDecoder().decode(updateChartTitle(empty, ' New'));
-  expect(changed).toContain('<a:t xml:space="preserve"> New</a:t>');
+  const changed = updateChartTitle(empty, ' New');
+  expect(parseOoxmlChart(changed, 'transitional').title).toBe(' New');
+  expect(new TextDecoder().decode(changed)).toContain('xml:space="preserve"> New</a:t>');
 });
 
 test('rich title edits keep text-box layout and unmodeled run/paragraph properties', () => {
