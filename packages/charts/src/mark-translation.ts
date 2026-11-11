@@ -7,7 +7,7 @@ export function translateChartMark(original: ChartMark, x: number, y: number): C
   if (mark.fillPattern) mark = { ...mark, fillPattern: { ...mark.fillPattern, bounds: { ...mark.fillPattern.bounds, x: mark.fillPattern.bounds.x + x, y: mark.fillPattern.bounds.y + y } } };
   if (mark.fillPicture) mark = { ...mark, fillPicture: { ...mark.fillPicture, bounds: { ...mark.fillPicture.bounds, x: mark.fillPicture.bounds.x + x, y: mark.fillPicture.bounds.y + y } } };
   switch (mark.kind) {
-    case 'group': return { ...mark, ...(mark.clip ? { clip: { ...mark.clip, x: mark.clip.x + x, y: mark.clip.y + y } } : {}), marks: mark.marks.map(mark => translateChartMark(mark, x, y)) };
+    case 'group': return { ...mark, ...(mark.rotation ? { rotation: { ...mark.rotation, cx: mark.rotation.cx + x, cy: mark.rotation.cy + y } } : {}), ...(mark.clip ? { clip: { ...mark.clip, x: mark.clip.x + x, y: mark.clip.y + y } } : {}), marks: mark.marks.map(mark => translateChartMark(mark, x, y)) };
     case 'text': case 'rect': return { ...mark, x: mark.x + x, y: mark.y + y };
     case 'circle': return { ...mark, cx: mark.cx + x, cy: mark.cy + y };
     case 'line': return { ...mark, x1: mark.x1 + x, x2: mark.x2 + x, y1: mark.y1 + y, y2: mark.y2 + y };

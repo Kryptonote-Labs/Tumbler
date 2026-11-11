@@ -2,6 +2,12 @@ import type { ChartRect } from "./layout.ts";
 import type { ChartSeries, ChartPointFormat, SupportedChartModel } from "./model.ts";
 import { type ChartColorResolver, type ChartFont, type ChartStroke, type ChartStrokeDecoration } from "./scene-style.ts";
 
+export interface ChartRotation {
+  readonly angle: number;
+  readonly cx: number;
+  readonly cy: number;
+}
+
 /**
  * One drawing primitive of a chart, in CSS pixels. SVG and canvas heads draw the same marks, so
  * editor charts and rendered thumbnails agree.
@@ -16,10 +22,10 @@ export type ChartMark = (
   /** `rotate` turns the text about its anchor point, in degrees. */
   | { readonly kind: "text"; readonly text: string; readonly x: number; readonly y: number; readonly anchor: "start" | "middle" | "end"; readonly font: ChartFont; readonly rotate?: number }
   /**
-   * Structure: an optional clip to `clip`, and a `role` naming the legend and each of its entries
+   * Structure: optional rotation followed by a local `clip`, and a `role` naming the legend and each of its entries
    * so heads can expose them (the SVG head renders `chart-legend` and `chart-legend-entry` classes).
    */
-  | { readonly kind: "group"; readonly role?: "legend" | "legend-entry"; readonly clip?: ChartRect; readonly marks: readonly ChartMark[] }) & ChartStrokeDecoration & { readonly strokeBounds?: ChartRect; readonly strokeBrushBounds?: ChartRect; readonly fillGradient?: import('./gradient-scene.ts').ChartGradientPaint; readonly fillPicture?: import('./fill-scene.ts').ChartPicturePaint; readonly fillPattern?: import('./fill-scene.ts').ChartPatternPaint };
+  | { readonly kind: "group"; readonly role?: "legend" | "legend-entry"; readonly clip?: ChartRect; readonly rotation?: ChartRotation; readonly marks: readonly ChartMark[] }) & ChartStrokeDecoration & { readonly strokeBounds?: ChartRect; readonly strokeBrushBounds?: ChartRect; readonly fillGradient?: import('./gradient-scene.ts').ChartGradientPaint; readonly fillPicture?: import('./fill-scene.ts').ChartPicturePaint; readonly fillPattern?: import('./fill-scene.ts').ChartPatternPaint };
 
 export interface ChartScene {
   readonly width: number;

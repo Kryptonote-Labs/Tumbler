@@ -3,7 +3,7 @@ import { chartFont, type ChartFont } from './scene-style.ts';
 import type { ChartModel } from './model.ts';
 import { chartRichTextMarks, chartTextLines, layoutChartText } from './text-layout.ts';
 import { positionChartText } from './text-position.ts';
-import { rotateChartText } from './text-rotation.ts';
+import { chartTextBoxMarks } from './text-box-scene.ts';
 
 export function chartTitleHeight(model: ChartModel, measure: (text: string, font: ChartFont) => number = (text, font) => text.length * font.size * .55): number {
   if (model.title === undefined) return 0;
@@ -23,5 +23,5 @@ export function chartTitleMarks(context: SceneContext): ChartMark[] {
   const marks: ChartMark[] = model.titleText?.length
     ? chartRichTextMarks(layoutChartText(context, 'title', model.titleStyle, model.titleText), 0, 8, width, 8)
     : model.title === undefined ? [] : [{ kind: 'text', text: model.title, x: width / 2, y: chartFont('title', model.titleStyle, model).size + 8, anchor: 'middle', font: chartFont('title', model.titleStyle, model, context.options.resolveColor) }];
-  return positionChartText(context, rotateChartText(context, marks, model.titleStyle?.rotation), model.titleLayout, !!model.titleStyle?.rotation);
+  return positionChartText(context, chartTextBoxMarks(context, marks, model.titleArea, model.titleStyle?.rotation, { x: 4, y: 3 }), model.titleLayout, !!model.titleStyle?.rotation);
 }

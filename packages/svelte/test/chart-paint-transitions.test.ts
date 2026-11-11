@@ -17,7 +17,7 @@ test('native fill changes keep valid SVG paint, and gradient edits reuse the exi
     client.flushSync();
     const existingShape = shape(), before = paint().getAttribute('x1');
     app.setModel(chartContentModel(gradient(90))); await client.tick();
-    expect(shape()).toBe(existingShape);
+    expect(shape() === existingShape).toBe(true);
     expect(paint().getAttribute('x1')).not.toBe(before);
     app.setModel(chartContentModel(picture)); await client.tick();
     expect(paint().localName).toBe('pattern'); expect(paint().querySelector('image')).not.toBeNull();
@@ -27,6 +27,29 @@ test('native fill changes keep valid SVG paint, and gradient edits reuse the exi
     expect(paint().localName).toBe('pattern'); expect(paint().getAttribute('width')).toBe('8');
     app.setModel(chartContentModel(gradient(45))); await client.tick();
     expect(paint().localName).toBe('linearGradient'); expect(target.querySelectorAll('svg.chart')).toHaveLength(1);
+  } finally { await client.unmount(app); await client.dispose(); }
+});
+
+test('rotated title backgrounds retain valid SVG paint through angle and fill changes', async () => {
+  const client = await chartClient();
+  const source = new TextDecoder().decode(createOoxmlChart({ type: 'barChart', title: 'Rotated title', categories: ['A'], series: [{ name: 'Data', values: [2] }] }));
+  const gradient = '<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs><a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs></a:gsLst><a:lin ang="0" scaled="0"/></a:gradFill>';
+  const content = (angle: number, fill = gradient): ChartContent => ({ xml: source.replace('<a:bodyPr/>', `<a:bodyPr rot="${angle * 60000}"/>`).replace('</c:title>', `<c:spPr>${fill}</c:spPr></c:title>`),
+    resources: { parts: [{ key: 'image', contentType: 'image/png', data: chartBytesToBase64(encodeRgbaPng(1, 1, new Uint8Array([255, 0, 0, 255]))) }], relationships: [{ id: 'image', type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image', target: 'image' }] } });
+  const target = document.createElement('div'); document.body.append(target);
+  const app = client.mount(client.Harness, { target, props: { initial: chartContentModel(content(45)) } });
+  const group = () => target.querySelector('svg.chart > g[transform]')!;
+  try {
+    client.flushSync();
+    expect(group().getAttribute('transform')).toStartWith('rotate(45 ');
+    app.setModel(chartContentModel(content(90))); await client.tick();
+    expect(group().getAttribute('transform')).toStartWith('rotate(90 ');
+    app.setModel(chartContentModel(content(90, '<a:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="image"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>'))); await client.tick();
+    expect(group().querySelector('pattern image')).not.toBeNull();
+    app.setModel(chartContentModel(content(0, '<a:solidFill><a:srgbClr val="123456"/></a:solidFill>'))); await client.tick();
+    expect(target.querySelector('svg.chart > g[transform]')).toBeNull();
+    app.setModel(chartContentModel(content(45))); await client.tick();
+    expect(group().querySelector('linearGradient')).not.toBeNull();
   } finally { await client.unmount(app); await client.dispose(); }
 });
 

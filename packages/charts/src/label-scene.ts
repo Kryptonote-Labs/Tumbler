@@ -6,8 +6,7 @@ import { chartPointColor } from './point-style.ts';
 import type { ChartMark, SceneContext } from './scene-marks.ts';
 import { chartRichTextMarks, layoutChartText } from './text-layout.ts';
 import { positionChartText } from './text-position.ts';
-import { rotateChartText } from './text-rotation.ts';
-import { chartMarksBounds, chartShapeMarks } from './shape-scene.ts';
+import { chartTextBoxMarks } from './text-box-scene.ts';
 
 export interface ChartLabelPoint {
   readonly index: number;
@@ -58,13 +57,12 @@ export function chartDataLabelMarks(context: SceneContext, series: ChartSeries, 
   } else if (position === 'b') y += font.size * 1.8;
   else if (position === 'l') { x -= 6; anchor = 'end'; y += font.size * .8; }
   else if (position === 'r') { x += 6; anchor = 'start'; y += font.size * .8; }
-  const width = rich?.width ?? Math.max(0, ...lines.map(line => context.measure(line, font))), height = rich?.height ?? font.size * 1.2 * lines.length;
+  const width = rich?.width ?? Math.max(0, ...lines.map(line => context.measure(line, font)));
   const left = x - (anchor === 'middle' ? width / 2 : anchor === 'end' ? width : 0);
   const top = y - font.size;
-  const marks = rotateChartText(context, rich ? chartRichTextMarks(rich, left, top, width)
-    : lines.map((text, index): ChartMark => ({ kind: 'text', text, x, y: y + index * font.size * 1.2, anchor, font })), style.rotation);
-  const bounds = style.rotation ? chartMarksBounds(context, marks) ?? { x: left, y: top, width, height } : { x: left, y: top, width, height };
-  if (settings.showLegendKey) marks.unshift({ kind: 'rect', x: bounds.x - font.size - 4, y: bounds.y, width: font.size * .8, height: font.size * .8, fill: chartPointColor(context, series, seriesIndex, point.index) });
-  marks.unshift(...chartShapeMarks(context, { x: bounds.x - 3, y: bounds.y - 2, width: bounds.width + 6, height: bounds.height + 4 }, settings));
+  const content = rich ? chartRichTextMarks(rich, left, top, width)
+    : lines.map((text, index): ChartMark => ({ kind: 'text', text, x, y: y + index * font.size * 1.2, anchor, font }));
+  if (settings.showLegendKey) content.unshift({ kind: 'rect', x: left - font.size - 4, y: top, width: font.size * .8, height: font.size * .8, fill: chartPointColor(context, series, seriesIndex, point.index) });
+  const marks = chartTextBoxMarks(context, content, settings, style.rotation);
   return positionChartText(context, marks, settings.layout, !!style.rotation);
 }

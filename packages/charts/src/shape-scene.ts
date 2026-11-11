@@ -5,6 +5,7 @@ import { resolveChartColor } from './colors.ts';
 import { chartStroke } from './scene-style.ts';
 import { chartStrokeMark } from './stroke-scene.ts';
 import { chartPathBounds } from './path-bounds.ts';
+import { rotatedChartBounds } from './rotated-bounds.ts';
 import type { ChartMark, SceneContext } from './scene-marks.ts';
 
 export function chartShapeMarks(context: SceneContext, rect: ChartRect, style: ChartShapeStyle | undefined, defaults?: { readonly fill: string; readonly stroke?: string }) : ChartMark[] {
@@ -19,7 +20,7 @@ export function chartShapeMarks(context: SceneContext, rect: ChartRect, style: C
 /** Text, swatches and simple shapes define the automatic title/legend box. */
 export function chartMarksBounds(context: Pick<SceneContext, 'measure'>, marks: readonly ChartMark[]): ChartRect | undefined {
   const boxes = marks.flatMap((mark): ChartRect[] => {
-    if (mark.kind === 'group') { const bounds = chartMarksBounds(context, mark.marks); return bounds ? [bounds] : []; }
+    if (mark.kind === 'group') { const bounds = chartMarksBounds(context, mark.marks); return bounds ? [mark.rotation ? rotatedChartBounds(bounds, mark.rotation) : bounds] : []; }
     if (mark.kind === 'rect') return [mark];
     if (mark.kind === 'path') { const bounds = chartPathBounds(mark.d); return bounds ? [bounds] : []; }
     if (mark.kind === 'circle') return [{ x: mark.cx - mark.r, y: mark.cy - mark.r, width: mark.r * 2, height: mark.r * 2 }];

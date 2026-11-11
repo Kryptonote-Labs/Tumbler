@@ -2,12 +2,16 @@ import { drawingGradientTile } from '@tumblerjs/ooxml';
 import type { ChartRect } from './layout.ts';
 import type { ChartMark } from './scene-marks.ts';
 import { chartPathBounds } from './path-bounds.ts';
+import { rotatedChartBounds } from './rotated-bounds.ts';
 
 /** Bind stroke brushes after layout, including curved paths and the outside half of an outline. */
 export function chartStrokeBounds(marks: readonly ChartMark[], clip: ChartRect): readonly ChartMark[] {
   return marks.map(original => {
     const mark = original.fillGradient ? { ...original, fillGradient: { ...original.fillGradient, coverage: intersection(clip, original.fillGradient.bounds) } } : original;
-    if (mark.kind === 'group') return { ...mark, marks: chartStrokeBounds(mark.marks, mark.clip ? intersection(clip, mark.clip) : clip) };
+    if (mark.kind === 'group') {
+      const local = mark.rotation ? rotatedChartBounds(clip, { ...mark.rotation, angle: -mark.rotation.angle }) : clip;
+      return { ...mark, marks: chartStrokeBounds(mark.marks, mark.clip ? intersection(local, mark.clip) : local) };
+    }
     if (!mark.strokeGradient || mark.kind === 'text') return mark;
     const bounds = mark.kind === 'rect' ? mark
       : mark.kind === 'circle' ? { x: mark.cx - mark.r, y: mark.cy - mark.r, width: mark.r * 2, height: mark.r * 2 }

@@ -65,9 +65,9 @@
     {:else if mark.clip}
       {@const id = `${clipId}${path}-${index}`}
       <defs><clipPath {id}><rect x={mark.clip.x} y={mark.clip.y} width={mark.clip.width} height={mark.clip.height} /></clipPath></defs>
-      <g class={mark.role && `chart-${mark.role}`} clip-path={`url(#${id})`}>{@render marks(mark.marks, `${path}-${index}`)}</g>
+      <g class={mark.role && `chart-${mark.role}`} transform={mark.rotation ? `rotate(${mark.rotation.angle} ${mark.rotation.cx} ${mark.rotation.cy})` : undefined} clip-path={`url(#${id})`}>{@render marks(mark.marks, `${path}-${index}`)}</g>
     {:else}
-      <g class={mark.role && `chart-${mark.role}`}>{@render marks(mark.marks, `${path}-${index}`)}</g>
+      <g class={mark.role && `chart-${mark.role}`} transform={mark.rotation ? `rotate(${mark.rotation.angle} ${mark.rotation.cx} ${mark.rotation.cy})` : undefined}>{@render marks(mark.marks, `${path}-${index}`)}</g>
     {/if}
   {/each}
 {/snippet}
