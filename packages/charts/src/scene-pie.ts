@@ -1,3 +1,4 @@
+import { chartManualPlot } from './manual-layout.ts';
 import { chartPointFill } from './fill-scene.ts';
 import { pieFillBounds } from './pie-fill-bounds.ts';
 import { chartShapeMarks } from './shape-scene.ts';
@@ -13,11 +14,9 @@ import { chartFont } from "./scene-style.ts";
 const PADDING = 16;
 const SLOT = 110;
 
-/** Pie and doughnut charts. The legend lists categories of the first series, one entry per slice. */
-export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[] {
-  const { model, width, height, options } = context;
-  const slices = layoutPieSlices(model);
-  const count = slices.length;
+/** Shared chart-local data frame for pie, doughnut and split-pie plots. */
+export function pieChartFrame(context: SceneContext, count: number) {
+  const { model, width, height } = context;
   const position = model.legend?.position;
   const horizontal = position === "top" || position === "bottom";
   const titleHeight = model.title === undefined || model.titleOverlay ? PADDING : 36;
@@ -29,6 +28,17 @@ export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[
   const right = width - PADDING - (reserve && (position === "right" || position === "top-right") ? sideWidth : 0);
   const top = titleHeight + (reserve && position === "top" ? legendHeight : 0);
   const bottom = height - PADDING - (reserve && position === "bottom" ? legendHeight : 0);
+  const automatic = { x: left, y: top, width: right - left, height: bottom - top };
+  return { plot: chartManualPlot(model.plotLayout, automatic, automatic, width, height), position, horizontal, titleHeight, columns, legendHeight, sideWidth };
+}
+
+/** Pie and doughnut charts. The legend lists categories of the first series, one entry per slice. */
+export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[] {
+  const { model, width, height, options } = context;
+  const slices = layoutPieSlices(model);
+  const count = slices.length;
+  const { plot, position, horizontal, titleHeight, columns, legendHeight, sideWidth } = pieChartFrame(context, count);
+  const left = plot.x, right = left + plot.width, top = plot.y, bottom = top + plot.height;
   const tilt = model.threeD ? Math.sin(Math.abs(model.threeD.rotationX) * Math.PI / 180) : 1;
   const available = Math.max(1, bottom - top);
   const initialRadius = Math.max(1, Math.min((right - left) / 2, available / (2 * tilt)));

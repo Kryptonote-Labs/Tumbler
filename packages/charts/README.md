@@ -328,3 +328,11 @@ The shared workbench previews a gradient draft before committing it. Cancel or
 Escape discards it; Apply creates one edit. `mergeChartFillDraft` rebases the fill
 onto newer chart data or other formatting without overwriting those changes. A
 concurrent edit to the same fill rejects the merge and leaves both sources intact.
+
+Native plot `manualLayout` positions and sizes apply to all classic chart families.
+`plotLayout` retains the authored fractions, edge/factor modes and inner/outer
+target in the headless model. Outer layouts retain measured axis label margins;
+inner layouts set the data frame directly. Empty layouts keep automatic geometry,
+and zero-sized data frames retain the chart title and legend. See
+[layout reference checks](../../docs/chart-layout-reference.md) for native samples,
+Microsoft implementation notes and measured LibreOffice differences.

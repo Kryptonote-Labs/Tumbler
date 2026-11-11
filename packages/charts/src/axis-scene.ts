@@ -1,10 +1,11 @@
+import { chartAxisFormat, chartCategoryAxisLabels } from './axis-labels.ts';
 import { xyGeometry } from './xy-geometry.ts';
 import type { ChartAxis } from './model.ts';
-import { chartMinorTicks, chartAxisCrossing } from './axis-scale.ts';
+import { chartMinorTicks } from './axis-scale.ts';
 import { chartFont, chartStroke } from './scene-style.ts';
 import { line, type ChartMark, type SceneContext } from './scene-marks.ts';
 import { chartTickLabel } from './tick-label.ts';
-import { cartesianGeometry } from './cartesian-geometry.ts';
+import { cartesianAxisPositions, xyAxisPosition } from './axis-positions.ts';
 import type { CartesianChartLayout } from './layout.ts';
 
 function ticks(axis: ChartAxis | undefined, minor: boolean, position: number, spine: number, horizontal: boolean, side: number, style: ReturnType<typeof chartStroke>): ChartMark[] {
@@ -20,24 +21,13 @@ function ticks(axis: ChartAxis | undefined, minor: boolean, position: number, sp
 export function cartesianAxisMarks(context: SceneContext, layout: CartesianChartLayout): ChartMark[] {
   const { model, options } = context;
   const { plot, minimum, maximum } = layout;
-  const { horizontal, valueAxis, categoryAxis, count, value, category, categoryBand, categoryReversed, dateCategory } = cartesianGeometry(model, layout);
+  const { horizontal, valueAxis, categoryAxis, count, value, category, dateCategory, numericPosition, categoryPosition, numericLabelEdge, labelSide, categoryLabelEdge: labelEdge, categoryLabelDirection: labelDirection } = cartesianAxisPositions(model, layout);
   const marks: ChartMark[] = [];
-  const numericPosition = value(chartAxisCrossing(valueAxis, minimum, maximum));
-  const categoryStart = horizontal ? plot.y : plot.x, categoryLength = horizontal ? plot.height : plot.width;
-  const edge = (maximum: boolean) => categoryStart + (maximum !== categoryReversed ? categoryLength : 0);
-  const categoryPosition = categoryAxis?.crossesAt !== undefined
-    ? categoryAxis.dateAxis ? dateCategory(categoryAxis.crossesAt) : valueAxis?.crossBetween === 'midCat' ? category(categoryAxis.crossesAt - 1) : categoryBand(categoryAxis.crossesAt - 1)
-    : edge(categoryAxis?.crosses === 'max' || (categoryAxis?.crosses === undefined || categoryAxis.crosses === 'autoZero') && (valueAxis?.position === 'right' || valueAxis?.position === 'top'));
-  const low = horizontal ? plot.y + plot.height : plot.x;
-  const high = horizontal ? plot.y : plot.x + plot.width;
-  const side = valueAxis?.position === 'right' || valueAxis?.position === 'top' ? 1 : -1;
-  const numericLabelEdge = valueAxis?.tickLabelPosition === 'high' ? high : valueAxis?.tickLabelPosition === 'low' ? low : categoryPosition;
-  const labelSide = valueAxis?.tickLabelPosition === 'high' ? horizontal ? -1 : 1 : valueAxis?.tickLabelPosition === 'low' ? horizontal ? 1 : -1 : side * (horizontal ? -1 : 1);
   const valueLine = chartStroke('axis', valueAxis?.lineStyle, model, options.resolveColor);
   const categoryLine = chartStroke('axis', categoryAxis?.lineStyle, model, options.resolveColor);
   const gridline = chartStroke('gridline', valueAxis?.gridlineStyle, model, options.resolveColor);
   const font = chartFont('tick', valueAxis?.textStyle, model, options.resolveColor);
-  const format = valueAxis?.numberFormatCode ?? model.series.find(series => series.values?.formatCode !== undefined)?.values?.formatCode;
+  const format = chartAxisFormat(model, valueAxis);
   if (valueAxis && !valueAxis.deleted) {
     const drawTick = (tick: number, minor: boolean) => {
       const at = value(tick);
@@ -65,11 +55,9 @@ export function cartesianAxisMarks(context: SceneContext, layout: CartesianChart
     marks.push(...(horizontal ? line(numericPosition, plot.y, numericPosition, plot.y + plot.height, categoryLine) : line(plot.x, numericPosition, plot.x + plot.width, numericPosition, categoryLine)));
     const categoryFont = chartFont('category', categoryAxis?.textStyle, model, options.resolveColor);
     const skip = categoryAxis?.tickLabelSkip ?? (horizontal ? Math.max(1, Math.ceil(count * categoryFont.size * 1.5 / plot.height)) : 1);
-    const categorySide = categoryAxis?.position === 'top' || categoryAxis?.position === 'right' ? -1 : 1;
-    const labelEdge = categoryAxis?.tickLabelPosition === 'high' ? horizontal ? plot.x + plot.width : plot.y : categoryAxis?.tickLabelPosition === 'low' ? horizontal ? plot.x : plot.y + plot.height : numericPosition;
-    const labelDirection = categoryAxis?.tickLabelPosition === 'high' ? -1 : categoryAxis?.tickLabelPosition === 'low' ? 1 : categorySide;
     const distance = 5 + categoryFont.size * (categoryAxis?.labelOffset ?? 100) / 100;
-    const categoryTicks = layout.categoryScale ? layout.categoryScale.ticks.map(value => ({ text: chartTickLabel(value, categoryAxis?.numberFormatCode ?? model.series.find(series => series.categories?.formatCode)?.categories?.formatCode ?? 'm/d/yyyy', options), position: dateCategory(value) })) : layout.categories.map((text, index) => ({ text, position: category(index, model.kind !== 'area') }));
+    const texts = chartCategoryAxisLabels(model, layout, options);
+    const categoryTicks = layout.categoryScale ? layout.categoryScale.ticks.map((value, index) => ({ text: texts[index]!, position: dateCategory(value) })) : texts.map((text, index) => ({ text, position: category(index, model.kind !== 'area') }));
     categoryTicks.forEach(({ text, position: at }, index) => {
       if (index % (categoryAxis?.tickMarkSkip ?? 1) === 0) marks.push(...ticks(categoryAxis, false, at, numericPosition, !horizontal, horizontal ? -labelDirection : labelDirection, categoryLine));
       if (index % skip || categoryAxis?.tickLabelPosition === 'none') return;
@@ -89,22 +77,17 @@ export function cartesianAxisMarks(context: SceneContext, layout: CartesianChart
 export function xyAxisMarks(context: SceneContext, layout: import('./layout.ts').ScatterChartLayout): ChartMark[] {
   const { model, options } = context;
   const { plot } = layout;
-  const { xAxis, yAxis, x, y } = xyGeometry(model, layout);
+  const { x, y } = xyGeometry(model, layout);
   const marks: ChartMark[] = [];
-  const horizontalSpine = y(chartAxisCrossing(yAxis, layout.yMinimum, layout.yMaximum));
-  const verticalSpine = x(chartAxisCrossing(xAxis, layout.xMinimum, layout.xMaximum));
   for (const horizontal of [true, false]) {
-    const axis = horizontal ? xAxis : yAxis;
+    const { axis, spine, side, edge } = xyAxisPosition(model, layout, horizontal);
     if (axis?.deleted) continue;
     const minimum = horizontal ? layout.xMinimum : layout.yMinimum, maximum = horizontal ? layout.xMaximum : layout.yMaximum;
     const positions = horizontal ? layout.xTicks : layout.yTicks;
     const coordinate = horizontal ? x : y;
-    const spine = horizontal ? horizontalSpine : verticalSpine;
     const axisLine = chartStroke('axis', axis?.lineStyle, model, options.resolveColor);
-    const side = axis?.tickLabelPosition === 'high' ? horizontal ? -1 : 1 : axis?.tickLabelPosition === 'low' ? horizontal ? 1 : -1 : horizontal ? axis?.position === 'top' ? -1 : 1 : axis?.position === 'right' ? 1 : -1;
-    const edge = axis?.tickLabelPosition === 'high' ? horizontal ? plot.y : plot.x + plot.width : axis?.tickLabelPosition === 'low' ? horizontal ? plot.y + plot.height : plot.x : spine;
     const font = chartFont('tick', axis?.textStyle, model, options.resolveColor);
-    const format = axis?.numberFormatCode ?? model.series.find(series => (horizontal ? series.xValues : series.values)?.formatCode !== undefined)?.[horizontal ? 'xValues' : 'values']?.formatCode;
+    const format = chartAxisFormat(model, axis, horizontal ? 'xValues' : 'values');
     const drawTick = (tick: number, minor: boolean) => {
       const position = coordinate(tick);
       if (minor ? axis?.minorGridlines : axis?.majorGridlines) {

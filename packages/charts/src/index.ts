@@ -96,3 +96,5 @@ export { chartColorOpacity } from './chart-color-markup.ts';
 export { editChartFill, type ChartFillEdit } from './fill-edit.ts';
 
 export { mergeChartFillDraft, type ChartFillSnapshot } from './fill-draft.ts';
+
+export type { ChartManualLayout } from './manual-layout.ts';

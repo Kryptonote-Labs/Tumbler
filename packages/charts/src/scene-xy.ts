@@ -15,8 +15,8 @@ import { legendMarks, type ChartMark, type SceneContext } from "./scene-marks.ts
 /** Scatter and bubble charts: numeric X and Y axes with series clipped to the plot. */
 export function xyScene(context: SceneContext): ChartMark[] {
   const { model, height } = context;
-  const bubbles = model.kind === "bubble" ? layoutBubbleChart(model, context.width, height) : undefined;
-  const layout = bubbles ?? layoutScatterChart(model, context.width, height);
+  const bubbles = model.kind === "bubble" ? layoutBubbleChart(model, context.width, height, context.measure) : undefined;
+  const layout = bubbles ?? layoutScatterChart(model, context.width, height, context.measure);
   const { plot } = layout;
   const { x: projectX, y: projectY } = xyGeometry(model, layout);
   const marks: ChartMark[] = [...chartShapeMarks(context, plot, model.plotArea), ...xyAxisMarks(context, layout)];
