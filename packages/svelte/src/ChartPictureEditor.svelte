@@ -2,8 +2,8 @@
   import { onDestroy } from 'svelte';
   import { canSetChartPicture, chartBytesToBase64, setChartPictureFill, editChartSource, type ChartContent, type ChartPropertyNode } from '@tumblerjs/charts';
 
-  let { content, target, label, disabled = false, mode = 'row', onchange }: {
-    content: ChartContent; target: ChartPropertyNode; label: string; disabled?: boolean; mode?: 'row' | 'action'; onchange: (content: ChartContent) => void;
+  let { content, target, label, disabled = false, mode = 'row', onchange, onerror }: {
+    content: ChartContent; target: ChartPropertyNode; label: string; disabled?: boolean; mode?: 'row' | 'action'; onchange: (content: ChartContent) => void; onerror?: ((message: string) => void) | undefined;
   } = $props();
   let input = $state<HTMLInputElement>(), busy = $state(false), error = $state<string>();
   let requested: { readonly content: ChartContent; readonly target: ChartPropertyNode } | undefined;
@@ -32,7 +32,7 @@
       try { next = setChartPictureFill(content, node, { data: chartBytesToBase64(bytes), contentType }); }
       catch { throw new Error('The picture could not be applied.'); }
       onchange(next);
-    } catch (cause) { error = cause instanceof Error ? cause.message : 'The picture could not be applied.'; }
+    } catch (cause) { error = cause instanceof Error ? cause.message : 'The picture could not be applied.'; onerror?.(error); }
     finally { busy = false; if (input) input.value = ''; }
   }
   function remove() {

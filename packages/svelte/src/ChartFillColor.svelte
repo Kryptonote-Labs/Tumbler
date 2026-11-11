@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolveChartColor, type ChartColor } from '@tumblerjs/charts';
-  let { label, target, color, themeColors, disabled = false, onchange }: { label: string; target: string; color: ChartColor; themeColors: Readonly<Record<string, string>>; disabled?: boolean; onchange: (color: ChartColor) => void } = $props();
+  let { label, target, color, themeColors, disabled = false, unresolved = false, onchange }: { label: string; target: string; color: ChartColor; themeColors: Readonly<Record<string, string>>; disabled?: boolean; unresolved?: boolean; onchange: (color: ChartColor) => void } = $props();
   const id = $props.id();
   let root = $state<HTMLDivElement>();
   let open = $state(false), trigger = $state<HTMLButtonElement>();
@@ -12,7 +12,7 @@
 </script>
 <svelte:window onpointerdown={(event) => { if (open && !root?.contains(event.target as Node)) open = false; }} />
 <div bind:this={root} class="color-control" onfocusout={(event) => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) open = false; }}>
-  <div class="row"><span>{label}</span><button bind:this={trigger} type="button" {disabled} aria-expanded={open} aria-haspopup="dialog" aria-controls={id} aria-label={`${label} colour for ${target}`} onkeydown={keydown} onclick={() => open = !open}><span class="swatch" style:background={css}></span><span class="value">{color.kind === 'scheme' ? names[color.value] ?? color.value : hex.toUpperCase()}</span></button></div>
+  <div class="row"><span>{label}</span><button bind:this={trigger} type="button" {disabled} aria-expanded={open} aria-haspopup="dialog" aria-controls={id} aria-label={`${label} colour for ${target}`} onkeydown={keydown} onclick={() => open = !open}><span class="swatch" style:background={css}></span><span class="value">{unresolved || !resolveChartColor(color, { themeColors }) ? 'Choose…' : color.kind === 'scheme' ? names[color.value] ?? color.value : hex.toUpperCase()}</span></button></div>
   {#if open}<div id={id} class="choices" role="dialog" tabindex="-1" aria-label={`${label} colour`} onkeydown={keydown}>
       <div class="themes">{#each Object.entries(names) as [value, name]}<button class="theme" type="button" {disabled} title={name} aria-label={name} aria-pressed={color.kind === 'scheme' && color.value === value} style:background={resolveChartColor({ kind: 'scheme', value }, { themeColors })} onclick={() => pick({ kind: 'scheme', value })}></button>{/each}</div>
       <label class="custom"><span>Custom…</span><input type="color" {disabled} aria-label={`Custom ${label.toLowerCase()} colour for ${target}`} value={hex} onchange={(event) => pick({ kind: 'rgb', value: event.currentTarget.value.toUpperCase() })} /></label>
