@@ -32,7 +32,7 @@ export function parseChartAnalytics(series: LosslessXmlElement, ns: string, draw
   const children = (node: LosslessXmlElement, name: string) => node.children.filter((child): child is LosslessXmlElement => child.kind === 'element' && child.namespaceUri === ns && child.localName === name);
   const child = (node: LosslessXmlElement, name: string) => children(node, name)[0];
   const val = (node: LosslessXmlElement, name: string) => child(node, name)?.attributes.find(attr => !attr.namespaceUri && attr.localName === 'val')?.value;
-  function choice<T extends string>(raw: string | undefined, choices: readonly T[], fallback: T): T {
+  function choice<const T extends string>(raw: string | undefined, choices: readonly T[], fallback: T): T {
     if (raw === undefined) return fallback;
     const value = choices.find(value => value === raw);
     if (value === undefined) throw new ChartParseError(`Invalid chart analytical property ${raw}.`);

@@ -14,7 +14,7 @@ export function parseChartAxisProperties(element: LosslessXmlElement, ns: string
     if (!Number.isFinite(value)) throw new ChartParseError('Invalid numeric axis property.');
     return value;
   }
-  function choice<T extends string>(raw: string | undefined, values: readonly T[], fallback: T): T {
+  function choice<const T extends string>(raw: string | undefined, values: readonly T[], fallback: T): T {
     if (raw === undefined) return fallback;
     const result = values.find(value => value === raw);
     if (result === undefined) throw new ChartParseError(`Invalid axis property ${raw}.`);
