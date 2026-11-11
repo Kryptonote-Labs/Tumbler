@@ -1,8 +1,8 @@
+import { chartLegendScene } from './legend-scene.ts';
 import { stockScene } from './scene-stock.ts';
-import { chartLegendFill } from './fill-scene.ts';
 import { layoutCombinationChart } from './combination.ts';
 import { cartesianScene } from './scene-cartesian.ts';
-import { legendMarks, type ChartMark, type SceneContext } from './scene-marks.ts';
+import { type ChartMark, type SceneContext } from './scene-marks.ts';
 
 /** Each plot uses the shared categorical renderer, retaining its own axes and analytical properties. */
 export function combinationScene(context: SceneContext): ChartMark[] {
@@ -20,9 +20,6 @@ export function combinationScene(context: SceneContext): ChartMark[] {
     };
     marks.push(...(current.model.kind === 'stock' ? stockScene(current, plot.layout) : cartesianScene(current, true, plot.layout)));
   }
-  if (model.legend) marks.push(...legendMarks(context, model.series.map((series, index) => ({
-    label: series.title ?? `Series ${index + 1}`,
-    swatch: (x: number, y: number): ChartMark => ({ kind: 'rect', x, y: y - 8, width: 8, height: 8, ...chartLegendFill(context, series, { x, y: y - 7, width: 8, height: 8 }), fill: series.noFill ? "none" : context.color(series, index) }),
-  })), 12));
+  marks.push(...chartLegendScene(context));
   return marks;
 }

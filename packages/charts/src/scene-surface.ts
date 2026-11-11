@@ -1,3 +1,5 @@
+import { chartSurfaceLevels } from './legend-items.ts';
+import { chartLegendScene } from './legend-scene.ts';
 import { threeDWallMarks } from './three-d-walls.ts';
 import { threeDAxisMarks } from './three-d-axes.ts';
 import { threeDGeometry } from './three-d-geometry.ts';
@@ -10,7 +12,7 @@ import { layoutCartesianChart } from './layout.ts';
 import { chartFont } from './scene-style.ts';
 import { chartTickLabel } from './tick-label.ts';
 import { chartPolygon, chartProjection } from './projection.ts';
-import { legendMarks, type ChartMark, type SceneContext } from './scene-marks.ts';
+import { type ChartMark, type SceneContext } from './scene-marks.ts';
 
 /** Clip a heightfield triangle against one contour plane, retaining interpolated boundaries. */
 function clip(vertices: readonly SurfaceVertex[], level: number, above: boolean): SurfaceVertex[] {
@@ -31,12 +33,12 @@ function clip(vertices: readonly SurfaceVertex[], level: number, above: boolean)
 /** Surface charts render height bands; the non-3D form is the contour projection. */
 export function surfaceScene(context: SceneContext): ChartMark[] {
   const { model, width, height, options } = context;
-  const layout = layoutCartesianChart(model, width, height, context.measure);
+  const layout = layoutCartesianChart(model, width, height, context.measure, options);
   const columns = layout.categories.length, rows = model.series.length;
   const categoryAxis = model.axes.find(axis => axis.kind === 'category'), valueAxis = model.axes.find(axis => axis.kind === 'value'), seriesAxis = model.axes.find(axis => axis.kind === 'series');
   const formats = new Map(model.bandFormats?.map(band => [band.index, band.style]));
   const values = model.series.map(series => indexChartSequence(series.values));
-  const bands = [...new Set([layout.minimum, ...layout.ticks.filter(tick => tick > layout.minimum && tick < layout.maximum), layout.maximum])].sort((a, b) => a - b);
+  const bands = chartSurfaceLevels(layout);
   let work = 0;
   const spend = () => { if (++work > 200_000) throw new RangeError('Chart preview geometry budget exceeded.'); };
   const project = chartProjection(model, layout.plot);
@@ -92,9 +94,6 @@ export function surfaceScene(context: SceneContext): ChartMark[] {
     const point = project({ x: 0, y: normalizedValue(value), z: 1 });
     marks.push({ kind: 'text', text: chartTickLabel(value, valueAxis?.numberFormatCode, options), x: point.x - 5, y: point.y + 4, anchor: 'end', font: valueFont });
   }
-  if (model.legend) marks.push(...legendMarks(context, bands.slice(0, -1).map((minimum, index) => ({
-    label: `${chartTickLabel(minimum, valueAxis?.numberFormatCode, options)}–${chartTickLabel(bands[index + 1]!, valueAxis?.numberFormatCode, options)}`,
-    swatch: (x: number, y: number): ChartMark => ({ kind: 'rect', x, y: y - 8, width: 10, height: 10, ...surfaceBandPaint(context, index, formats.get(index), { x, y: y - 8, width: 10, height: 10 }) }),
-  })), 14));
+  marks.push(...chartLegendScene(context, bands));
   return marks;
 }

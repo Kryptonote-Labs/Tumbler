@@ -1,5 +1,5 @@
+import { chartLegendScene } from './legend-scene.ts';
 import { chartBubblePaint } from './bubble-paint.ts';
-import { chartLegendFill } from './fill-scene.ts';
 import { chartShapeMarks } from './shape-scene.ts';
 import { chartPointStroke, chartSeriesStroke, chartStrokeMark } from './stroke-scene.ts';
 import { xyGeometry } from './xy-geometry.ts';
@@ -10,7 +10,7 @@ import { chartMarkerMarks } from './marker-scene.ts';
 import { chartPointColor } from './point-style.ts';
 import { layoutBubbleChart, layoutScatterChart, scatterLinePath } from "./layout.ts";
 import type { ChartSeries, SupportedChartModel } from "./model.ts";
-import { legendMarks, type ChartMark, type SceneContext } from "./scene-marks.ts";
+import { type ChartMark, type SceneContext } from "./scene-marks.ts";
 
 /** Scatter and bubble charts: numeric X and Y axes with series clipped to the plot. */
 export function xyScene(context: SceneContext): ChartMark[] {
@@ -44,14 +44,7 @@ export function xyScene(context: SceneContext): ChartMark[] {
   marks.push({ kind: "group", clip: plot, marks: series });
   marks.push(...labels);
 
-  if (model.legend !== undefined) {
-    marks.push(...legendMarks(context, model.series.map((item, index) => ({
-      label: item.title ?? `Series ${index + 1}`,
-      swatch: (x: number, y: number): ChartMark => bubbles
-        ? { kind: "circle", cx: x + 5, cy: y - 3, r: 5, ...chartLegendFill(context, item, { x, y: y - 8, width: 10, height: 10 }), fill: item.noFill ? "none" : context.color(item, index) }
-        : { kind: "rect", x, y: y - 8, width: 10, height: 10, ...chartLegendFill(context, item, { x, y: y - 8, width: 10, height: 10 }), fill: item.noFill ? "none" : context.color(item, index) },
-    })), 15));
-  }
+  marks.push(...chartLegendScene(context));
   return marks;
 }
 

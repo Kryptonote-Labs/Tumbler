@@ -129,7 +129,13 @@ export interface ChartSeries {
 
 export type ChartLegendPosition = "bottom" | "left" | "right" | "top" | "top-right";
 
+export interface ChartLegendEntry {
+  readonly deleted?: boolean;
+  readonly textStyle?: ChartTextStyle;
+}
+
 export interface ChartLegend {
+  readonly entries?: Readonly<Record<number, ChartLegendEntry>>;
   readonly shapeStyle?: ChartShapeStyle;
   readonly textStyle?: ChartTextStyle;
   readonly position: ChartLegendPosition;

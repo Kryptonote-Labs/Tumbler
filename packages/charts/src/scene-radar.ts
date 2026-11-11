@@ -1,4 +1,4 @@
-import { chartLegendFill } from './fill-scene.ts';
+import { chartLegendScene } from './legend-scene.ts';
 import { chartFillPaint } from './fill-scene.ts';
 import { chartShapeMarks } from './shape-scene.ts';
 import { chartSeriesStroke, chartStrokeMark } from './stroke-scene.ts';
@@ -8,7 +8,7 @@ import { layoutCartesianChart } from './layout.ts';
 import { indexChartSequence } from './indexed-data.ts';
 import { chartTickLabel } from './tick-label.ts';
 import { chartFont, chartStroke } from './scene-style.ts';
-import { legendMarks, line, type ChartMark, type SceneContext } from './scene-marks.ts';
+import { line, type ChartMark, type SceneContext } from './scene-marks.ts';
 
 /** Radar axes share a numeric scale; missing values interrupt the series outline. */
 export function radarScene(context: SceneContext): ChartMark[] {
@@ -76,6 +76,6 @@ export function radarScene(context: SceneContext): ChartMark[] {
       if (point) marks.push(...chartMarkerMarks(context, series, seriesIndex, index, point.x, point.y));
     }
   });
-  if (model.legend) marks.push(...legendMarks(context, model.series.map((series, index) => ({ label: series.title ?? `Series ${index + 1}`, swatch: (x: number, y: number): ChartMark => ({ kind: 'rect', x, y: y - 7, width: 8, height: 8, ...chartLegendFill(context, series, { x, y: y - 7, width: 8, height: 8 }), fill: series.noFill ? "none" : context.color(series, index) }) })), 12));
+  marks.push(...chartLegendScene(context));
   return marks;
 }

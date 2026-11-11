@@ -1,9 +1,9 @@
+import { chartLegendScene } from './legend-scene.ts';
 import { threeDAxisMarks } from './three-d-axes.ts';
 import { chartAreaMesh } from './area-mesh.ts';
 import { chartMeshOutline } from './mesh-outlines.ts';
 import { chartPointStroke } from './stroke-scene.ts';
 import { threeDWallMarks } from './three-d-walls.ts';
-import { chartLegendFill } from './fill-scene.ts';
 import { chartBarMesh } from './bar-mesh.ts';
 import { threeDGeometry } from './three-d-geometry.ts';
 import { threeDPointPaint } from './three-d-paint.ts';
@@ -13,7 +13,7 @@ import { chartDataLabelMarks } from './label-scene.ts';
 import { indexChartSequence } from './indexed-data.ts';
 import { layoutCartesianChart } from './layout.ts';
 import { chart3DSize, chartProjection, type ChartPoint3D } from './projection.ts';
-import { legendMarks, type ChartMark, type SceneContext } from './scene-marks.ts';
+import { type ChartMark, type SceneContext } from './scene-marks.ts';
 
 /** Cartesian 3D plots use one camera for data, walls, gridlines and labels. */
 export function threeDScene(context: SceneContext): ChartMark[] {
@@ -76,6 +76,6 @@ export function threeDScene(context: SceneContext): ChartMark[] {
       labels.push(...chartDataLabelMarks(context, series, seriesIndex, { index, x: end.x, y: end.y, baseX: base.x, baseY: base.y, category: layout.categories[index] ?? String(index + 1), value: raw }));
     });
   });
-  if (model.legend) labels.push(...legendMarks(context, model.series.map((series, index) => ({ label: series.title ?? `Series ${index + 1}`, swatch: (x: number, y: number): ChartMark => ({ kind: 'rect', x, y: y - 7, width: 8, height: 8, ...chartLegendFill(context, series, { x, y: y - 7, width: 8, height: 8 }), fill: series.noFill ? 'none' : context.color(series, index) }) })), 12));
+  labels.push(...chartLegendScene(context));
   return [...chartShapeMarks(context, layout.plot, model.plotArea), { kind: 'group', clip: layout.plot, marks: [...backdrop, ...axes.grids, ...faces.marks()] }, ...axes.marks, ...labels];
 }

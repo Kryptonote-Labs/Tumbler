@@ -20,6 +20,7 @@ export type {
   ChartDataSequence,
   ChartKind,
   ChartLegend,
+  ChartLegendEntry,
   ChartLegendPosition,
   ChartMarker,
   ChartMarkerSymbol,

@@ -1,5 +1,5 @@
+import { chartLegendScene } from './legend-scene.ts';
 import { cartesianDecorationMarks } from './plot-decorations.ts';
-import { chartLegendFill } from './fill-scene.ts';
 import { chartFillPaint } from './fill-scene.ts';
 import { chartPointFill } from './fill-scene.ts';
 import { chartShapeMarks } from './shape-scene.ts';
@@ -14,7 +14,7 @@ import { chartMarkerMarks } from './marker-scene.ts';
 import { chartPointColor } from './point-style.ts';
 import { layoutBarBand } from "./bar-layout.ts";
 import { layoutCartesianChart, scatterLinePath } from "./layout.ts";
-import { legendMarks, type ChartMark, type SceneContext } from "./scene-marks.ts";
+import { type ChartMark, type SceneContext } from "./scene-marks.ts";
 
 /** Bar, column and line charts over shared categories. */
 export function cartesianScene(context: SceneContext, drawSeries = true, suppliedLayout?: ReturnType<typeof layoutCartesianChart>): ChartMark[] {
@@ -94,12 +94,7 @@ export function cartesianScene(context: SceneContext, drawSeries = true, supplie
     marks.push(...overlays.annotations);
   });
 
-  if (model.legend !== undefined) {
-    marks.push(...legendMarks(context, model.series.map((series, index) => ({
-      label: series.title ?? `Series ${index + 1}`,
-      swatch: (x: number, y: number): ChartMark => ({ kind: "rect", x, y: y - 7, width: 8, height: 8, ...chartLegendFill(context, series, { x, y: y - 7, width: 8, height: 8 }), fill: series.noFill ? "none" : context.color(series, index) }),
-    })), 12));
-  }
+  marks.push(...chartLegendScene(context));
   return marks;
 }
 
