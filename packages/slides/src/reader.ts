@@ -969,12 +969,13 @@ class Reader {
         ? element
         : this.child(element, "gradFill");
     if (!gradient) return;
-    const stops = this.children(this.child(gradient, "gsLst"))
+    const list = this.child(gradient, "gsLst");
+    const stops = (list ? this.children(list)
       .map((stop) => ({
         offset: Math.max(0, Math.min(1, percentage(attr(stop, "pos")))),
         color: this.color(stop, context, placeholder) ?? "transparent",
       }))
-      .sort((a, b) => a.offset - b.offset);
+      .sort((a, b) => a.offset - b.offset) : [{ offset: 0, color: '#000000' }, { offset: 1, color: '#FFFFFF' }]);
     if (stops.length < 2) {
       context.diagnostics.push({
         part: context.slide.part.name.value,
@@ -984,8 +985,11 @@ class Reader {
     }
     const linear = this.child(gradient, "lin"),
       path = this.child(gradient, "path"),
-      rect = this.child(path, "fillToRect");
+      rect = this.child(path, "fillToRect"), tile = this.child(gradient, 'tileRect');
     return {
+      ...(path ? { path: attr(path, 'path') === 'circle' ? 'circle' as const : attr(path, 'path') === 'rect' ? 'rect' as const : 'shape' as const } : {}),
+      ...(rect ? { focusRect: [percentage(attr(rect, 'l')), percentage(attr(rect, 't')), 1 - percentage(attr(rect, 'r')), 1 - percentage(attr(rect, 'b'))] as const } : {}),
+      ...(tile ? { tileRect: [percentage(attr(tile, 'l')), percentage(attr(tile, 't')), 1 - percentage(attr(tile, 'r')), 1 - percentage(attr(tile, 'b'))] as const } : {}),
       kind: !path
         ? "linear"
         : attr(path, "path") === "circle"

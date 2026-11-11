@@ -15,3 +15,12 @@ test('reading a linear gradient uses the native unscaled default and accepts XML
   expect(read(xml.replace('ang="2700000"', 'ang="2700000" scaled="false"'))?.scaled).toBe(false);
   expect(read(xml.replace('ang="2700000"', 'ang="2700000" scaled="true"'))?.scaled).toBe(true);
 });
+
+test('aspect scaling preserves diagonal shade lines rather than scaling their normal twice', async () => {
+  const { linearGradientLine } = await import('../src/gradient.ts');
+  const value = { kind: 'linear' as const, angle: 45, scaled: true, center: [.5, .5] as const, stops: [] };
+  const line = linearGradientLine(value, 260, 160);
+  expect((line[2] - line[0]) / (line[3] - line[1])).toBeCloseTo(160 / 260);
+  const unscaled = linearGradientLine({ ...value, scaled: false }, 260, 160);
+  expect(unscaled[2] - unscaled[0]).toBeCloseTo(unscaled[3] - unscaled[1]);
+});

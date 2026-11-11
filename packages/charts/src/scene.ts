@@ -65,5 +65,5 @@ function buildChartScene(model: SupportedChartModel, width: number, height: numb
     : model.kind === 'stock' ? stockScene(context)
     : cartesianScene(context)));
   if (model.titleOverlay) marks.push(...titleMarks);
-  return { width, height, label: model.title ?? (model.plots ? "Combination chart" : `${model.kind} chart`), marks: chartStrokeBounds(chartLegendShape(context, marks), { x: 0, y: 0, width, height }) };
+  return { width, height, label: model.title ?? (model.plots ? "Combination chart" : `${model.kind} chart`), marks: chartStrokeBounds(chartLegendShape(context, marks), options.viewport ?? { x: 0, y: 0, width, height }) };
 }

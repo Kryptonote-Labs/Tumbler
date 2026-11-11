@@ -1,4 +1,4 @@
-import { paintDrawingGradient, paintRectangularGradient, type DrawingGradientCanvasContext } from '@tumblerjs/ooxml';
+import { drawingGradientCircle, drawingGradientStops, paintDrawingGradient, paintRectangularGradient, type DrawingGradientCanvasContext } from '@tumblerjs/ooxml';
 import type { ChartCanvasContext } from './canvas.ts';
 import type { ChartGradientPaint } from './gradient-scene.ts';
 
@@ -15,14 +15,12 @@ export function paintChartGradient<Path>(context: ChartCanvasContext<Path>, pain
   context.clip(shape);
   context.translate(bounds.x, bounds.y);
   if (gradient.kind === 'rectangular') paintRectangularGradient(context, gradient, bounds.width, bounds.height);
-  else if (gradient.kind === 'radial') {
+  else if (gradient.kind === 'radial' && !drawingGradientCircle(gradient, bounds.width, bounds.height)) {
     context.scale(bounds.width, bounds.height);
     const fill = context.createRadialGradient(...gradient.center, 0, ...gradient.center, .5);
-    for (const stop of gradient.stops) fill.addColorStop(stop.offset, stop.color);
+    for (const stop of drawingGradientStops(gradient)) fill.addColorStop(stop.offset, stop.color);
     context.fillStyle = fill;
-    context.beginPath();
-    context.rect(0, 0, 1, 1);
-    context.fill();
+    context.beginPath(); context.rect(0, 0, 1, 1); context.fill();
   } else {
     context.fillStyle = paintDrawingGradient(context, gradient, 'transparent', bounds.width, bounds.height);
     context.beginPath();
@@ -42,11 +40,8 @@ export function paintChartGradientStroke<Path>(context: ChartCanvasContext<Path>
   if (!supportsGradients(context) || bounds.width <= 0 || bounds.height <= 0) {
     context.strokeStyle = gradient.stops[0]?.color ?? 'transparent'; draw(); return;
   }
-  if (gradient.kind !== 'rectangular') {
-    context.save();
-    context.translate(bounds.x, bounds.y);
-    const brush = paintDrawingGradient(context, gradient, 'transparent', bounds.width, bounds.height);
-    context.restore();
+  if (gradient.kind === 'linear' || drawingGradientCircle(gradient, bounds.width, bounds.height)) {
+    const brush = paintDrawingGradient(context, gradient, 'transparent', bounds.width, bounds.height, bounds);
     context.strokeStyle = brush; draw(); return;
   }
   // Hosts without procedural-image decoding retain a visible outline.

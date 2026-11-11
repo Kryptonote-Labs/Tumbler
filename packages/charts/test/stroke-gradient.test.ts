@@ -106,3 +106,16 @@ test('large authored miter limits sample only the visible brush region', () => {
   expect(pictures).toHaveLength(1);
   expect(pictures[0]!.bytes.length).toBeLessThan(50 * 50 * 5);
 });
+
+for (const kind of ['linear', 'native circle', 'procedural ellipse'] as const) test(`translated ${kind} outlines retain their brush coordinates`, async () => {
+  const brush = { ...gradient, ...(kind === 'linear' ? {} : { kind: 'radial' as const }), ...(kind === 'native circle' ? { path: 'circle' as const } : {}) };
+  const images = [];
+  for (const [x, y] of [[20, 20], [260, 60]]) {
+    const scene: ChartScene = { width: 400, height: 220, label: kind, marks: chartStrokeBounds([{ kind: 'rect', x: x!, y: y!, width: 80, height: 80, fill: 'none', stroke: '#000000', strokeWidth: 6, strokeGradient: brush }], { x: 0, y: 0, width: 400, height: 220 }) };
+    const decoded = new Map(await Promise.all(chartScenePictures(scene).map(async picture => { const image = await loadImage(Buffer.from(picture.bytes)); return [picture, { image, width: image.width, height: image.height }] as const; })));
+    const canvas = createCanvas(400, 220), ctx = canvas.getContext('2d');
+    paintChartScene(ctx, scene, d => new Path2D(d), { image: picture => decoded.get(picture) });
+    images.push(ctx.getImageData(x! - 6, y! - 6, 92, 92).data);
+  }
+  expect(images[1]).toEqual(images[0]);
+});

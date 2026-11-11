@@ -68,13 +68,16 @@ test('a point marker size override retains the series marker gradient', () => {
 });
 
 
-test('a rectangular gradient preserves the full constant-colour focus rectangle', () => {
+test('a native rectangular gradient retains inset metadata while normalizing the focal point', () => {
   const model = modelWithGradient('<a:path path="rect"><a:fillToRect l="25000" t="25000" r="25000" b="0"/></a:path>');
   expect(model.series[0]?.gradient?.focusRect).toEqual([.25, .25, .75, 1]);
   const canvas = createCanvas(120, 120), context = canvas.getContext('2d');
   const gradient = model.series[0]!.gradient!;
   paintChartScene(context, { width: 120, height: 120, label: 'Focus', marks: [{ kind: 'rect', x: 10, y: 10, width: 100, height: 100, fill: 'none', fillGradient: { bounds: { x: 10, y: 10, width: 100, height: 100 }, gradient: { ...gradient, stops: [{ offset: 0, color: '#FF0000' }, { offset: 1, color: '#0000FF' }] } } }] }, d => new Path2D(d));
-  expect([...context.getImageData(60, 90, 1, 1).data]).toEqual([255, 0, 0, 255]);
+  const focus = context.getImageData(60, 109, 1, 1).data;
+  expect(focus[0]).toBeGreaterThan(250);
+  expect(focus[2]).toBeLessThan(20);
+  expect(context.getImageData(60, 90, 1, 1).data[2]).toBeGreaterThan(50);
   expect(context.getImageData(11, 60, 1, 1).data[2]).toBeGreaterThan(230);
 });
 
@@ -91,4 +94,41 @@ test('omitted linear scaling uses the native unscaled default', () => {
   expect(absent.series[0]?.gradient?.scaled).toBe(false);
   expect(layoutChartScene(absent, 400, 300)).toEqual(layoutChartScene(explicit, 400, 300));
   expect(modelWithGradient('<a:lin ang="2700000" scaled="true"/>').series[0]?.gradient?.scaled).toBe(true);
+});
+
+test('native circle focal inset changes retain source metadata without shifting the rendered circle', () => {
+  const models = [modelWithGradient('<a:path path="circle"><a:fillToRect l="25000" t="20000" r="75000" b="80000"/></a:path>'), modelWithGradient('<a:path path="circle"><a:fillToRect l="50000" t="50000" r="50000" b="50000"/></a:path>')];
+  expect(models[0]!.series[0]!.gradient!.focusRect).not.toEqual(models[1]!.series[0]!.gradient!.focusRect);
+  const images = models.map(model => {
+    const canvas = createCanvas(400, 300), context = canvas.getContext('2d');
+    paintChartScene(context, layoutChartScene(model, 400, 300), d => new Path2D(d));
+    return context.getImageData(0, 0, 400, 300).data;
+  });
+  expect(images[0]).toEqual(images[1]);
+});
+
+test('an omitted gradient stop list uses the native black and white defaults', () => {
+  const source = new TextDecoder().decode(createOoxmlChart({ type: 'barChart', categories: ['A'], series: [{ name: 'Data', values: [2] }] })).replace(/<c:spPr>[\s\S]*?<\/c:spPr>/, '<c:spPr><a:gradFill><a:lin/></a:gradFill></c:spPr>');
+  const model = parseOoxmlChart(new TextEncoder().encode(source), 'transitional');
+  if (model.status !== 'supported') throw Error(model.reason);
+  expect(model.series[0]?.gradient?.stops).toEqual([{ offset: 0, color: { kind: 'rgb', value: '#000000' } }, { offset: 1, color: { kind: 'rgb', value: '#FFFFFF' } }]);
+});
+
+
+for (const d of ['M 20 100 L 60 30 L 100 100 Z', 'M 20 20 L 100 20 L 100 100 L 20 100 Z']) test('translucent rectangular fills composite exactly once at every face boundary', async () => {
+  const { createCanvas, loadImage, Path2D } = await import('@napi-rs/canvas');
+  const { chartScenePictures, paintChartScene } = await import('../src/index.ts');
+  const color = 'rgba(255,0,0,0.5)', bounds = { x: 20, y: 20, width: 80, height: 80 };
+  const gradient = { kind: 'rectangular' as const, path: 'rect' as const, angle: 0, scaled: false, center: [.5, .5] as const, stops: [{ offset: 0, color }, { offset: 1, color }] };
+  const mark = { kind: 'path' as const, d, fill: color };
+  const scene = { width: 120, height: 120, label: 'Fill', marks: [{ ...mark, fillGradient: { bounds, gradient } }] };
+  const images = new Map(await Promise.all(chartScenePictures(scene).map(async picture => { const image = await loadImage(Buffer.from(picture.bytes)); return [picture, { image, width: image.width, height: image.height }] as const; })));
+  const solid = createCanvas(120, 120), shaded = createCanvas(120, 120);
+  paintChartScene(solid.getContext('2d'), { ...scene, marks: [mark] }, d => new Path2D(d));
+  paintChartScene(shaded.getContext('2d'), scene, d => new Path2D(d), { image: picture => images.get(picture) });
+  const actual = shaded.getContext('2d').getImageData(0, 0, 120, 120).data, expected = solid.getContext('2d').getImageData(0, 0, 120, 120).data;
+  // CSS and PNG alpha round 0.5 to adjacent byte values; double compositing would reach 191.
+  expect(Math.max(...actual.map((value, index) => Math.abs(value - expected[index]!)))).toBeLessThanOrEqual(1);
+  expect(Math.max(...actual.filter((_, index) => index % 4 === 3))).toBe(128);
+  expect(chartScenePictures(scene)[0]).toBe(chartScenePictures(scene)[0]);
 });

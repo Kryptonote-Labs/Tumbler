@@ -1,3 +1,4 @@
+import { chartGradientBrush } from './gradient-scene.ts';
 import { chartStrokeBrush } from './stroke-brush.ts';
 import { paintDrawingPattern } from '@tumblerjs/ooxml';
 import { paintChartGradient, paintChartGradientStroke } from './gradient-canvas.ts';
@@ -132,8 +133,7 @@ function strokeMark<Path, Image>(context: ChartCanvasContext<Path, Image>, mark:
   const decoded = paint && options.image?.(paint.picture);
   const brush = decoded && context.createPattern?.(decoded.image, 'repeat');
   if (brush && paint) {
-    const bounds = paint.bounds;
-    brush.setTransform({ a: bounds.width / decoded.width, b: 0, c: 0, d: bounds.height / decoded.height, e: bounds.x, f: bounds.y });
+    brush.setTransform(paint.transform);
     context.strokeStyle = brush; draw();
   } else if (mark.strokeGradient && mark.strokeBounds) paintChartGradientStroke(context, { gradient: mark.strokeGradient, bounds: mark.strokeBounds }, draw);
   else { context.strokeStyle = mark.stroke; draw(); }
@@ -143,7 +143,15 @@ function strokeMark<Path, Image>(context: ChartCanvasContext<Path, Image>, mark:
 function fillMark<Path, Image>(context: ChartCanvasContext<Path, Image>, mark: Exclude<ChartMark, { kind: 'text' | 'group' | 'line' }>, options: ChartCanvasOptions<Image>, shape?: Path): void {
   if (mark.fillPattern) paintPattern(context, mark.fillPattern, options, shape);
   else if (mark.fillPicture) paintPicture(context, mark.fillPicture, options, shape);
-  else if (mark.fillGradient) paintChartGradient(context, mark.fillGradient, shape);
+  else if (mark.fillGradient) {
+    const paint = options.image && chartGradientBrush(mark.fillGradient);
+    const decoded = paint && options.image?.(paint.picture);
+    const brush = decoded && context.createPattern?.(decoded.image, 'repeat');
+    if (brush && paint) {
+      brush.setTransform(paint.transform);
+      context.fillStyle = brush; context.fill(shape);
+    } else paintChartGradient(context, mark.fillGradient, shape);
+  }
   else if (mark.fill !== undefined && mark.fill !== 'none') {
     context.fillStyle = mark.fill;
     context.fill(shape);

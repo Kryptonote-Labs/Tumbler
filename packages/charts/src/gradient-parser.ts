@@ -16,10 +16,10 @@ export function parseChartGradient(parent: LosslessXmlElement | undefined, ns: s
     const color = parseChartColorContainer(node, ns);
     const offset = percentage(attr(node, 'pos'));
     return color && Number.isFinite(offset) ? [{ offset: Math.min(1, Math.max(0, offset)), color }] : [];
-  }).sort((a, b) => a.offset - b.offset) ?? [];
+  }).sort((a, b) => a.offset - b.offset) ?? [{ offset: 0, color: { kind: 'rgb' as const, value: '#000000' } }, { offset: 1, color: { kind: 'rgb' as const, value: '#FFFFFF' } }];
   if (!stops.length) return undefined;
-  const linear = child(gradient, ns, 'lin'), path = child(gradient, ns, 'path'), rect = child(path, ns, 'fillToRect');
+  const linear = child(gradient, ns, 'lin'), path = child(gradient, ns, 'path'), rect = child(path, ns, 'fillToRect'), tile = child(gradient, ns, 'tileRect');
   const center = [(percentage(attr(rect, 'l')) + 1 - percentage(attr(rect, 'r'))) / 2, (percentage(attr(rect, 't')) + 1 - percentage(attr(rect, 'b'))) / 2] as const;
   return { kind: !path ? 'linear' : attr(path, 'path') === 'circle' ? 'radial' : 'rectangular',
-    angle: Number(attr(linear, 'ang') ?? 0) / 60000, scaled: ['1', 'true'].includes(attr(linear, 'scaled') ?? '0'), center, ...(path ? { focusRect: [percentage(attr(rect, 'l')), percentage(attr(rect, 't')), 1 - percentage(attr(rect, 'r')), 1 - percentage(attr(rect, 'b'))] as const } : {}), stops };
+    angle: Number(attr(linear, 'ang') ?? 0) / 60000, scaled: ['1', 'true'].includes(attr(linear, 'scaled') ?? '0'), center, ...(path ? { path: attr(path, 'path') === 'circle' ? 'circle' as const : attr(path, 'path') === 'rect' ? 'rect' as const : 'shape' as const } : {}), ...(tile ? { tileRect: [percentage(attr(tile, 'l')), percentage(attr(tile, 't')), 1 - percentage(attr(tile, 'r')), 1 - percentage(attr(tile, 'b'))] as const } : {}), ...(rect ? { focusRect: [percentage(attr(rect, 'l')), percentage(attr(rect, 't')), 1 - percentage(attr(rect, 'r')), 1 - percentage(attr(rect, 'b'))] as const } : {}), stops };
 }

@@ -3,7 +3,7 @@ import { drawingPatternPicture } from '@tumblerjs/ooxml';
 import { resolveChartColor } from './colors.ts';
 import type { DrawingPattern, DrawingPictureFill } from '@tumblerjs/ooxml';
 import { mergeChartFillLayers } from './fill-style.ts';
-import { chartGradientPaint } from './gradient-scene.ts';
+import { chartGradientPaint, chartGradientBrush } from './gradient-scene.ts';
 import type { ChartGradientPaint } from './gradient-scene.ts';
 import type { ChartRect } from './layout.ts';
 import type { ChartSeries, ChartShapeStyle } from './model.ts';
@@ -60,6 +60,8 @@ export function chartScenePictures(scene: ChartScene): readonly DrawingPictureFi
   function visit(marks: readonly ChartMark[]) {
     for (const mark of marks) {
       const stroke = chartStrokeBrush(mark);
+      const fill = mark.fillGradient && chartGradientBrush(mark.fillGradient);
+      if (fill) pictures.add(fill.picture);
       if (stroke) pictures.add(stroke.picture);
       if (mark.fillPattern) pictures.add(mark.fillPattern.picture);
       if (mark.fillPicture) pictures.add(mark.fillPicture.picture);

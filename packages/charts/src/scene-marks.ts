@@ -30,6 +30,8 @@ export interface ChartScene {
 }
 
 export interface ChartSceneOptions {
+  /** Visible chart-local region used to bound procedural canvas brush allocation. */
+  readonly viewport?: ChartRect;
   /** Chart location in CSS pixels in the parent pattern brush space. */
   readonly patternOrigin?: { readonly x: number; readonly y: number };
   readonly dateSystem?: "1900" | "1904";

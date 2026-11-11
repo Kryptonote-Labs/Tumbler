@@ -1,5 +1,6 @@
 <script lang="ts">
   import { layoutChartScene, type ChartColor, type ChartMark, type ChartModel } from "@tumblerjs/charts";
+  import { chartGradientPalettes } from './chart-gradient-palettes.ts';
   import PresentationPattern from './PresentationPattern.svelte';
   import ChartGradient from "./ChartGradient.svelte";
   import PresentationPictureFill from './PresentationPictureFill.svelte';
@@ -34,6 +35,7 @@
       return undefined;
     }
   });
+  const ramps = $derived(chartGradientPalettes(scene?.marks ?? [], clipId));
 </script>
 
 {#snippet marks(list: readonly ChartMark[], path: string)}
@@ -41,9 +43,9 @@
     {@const paintId = `${clipId}${path}-${index}-fill`}
     {#if mark.fillPattern}<defs><PresentationPattern pattern={mark.fillPattern.pattern} light={mark.fillPattern.light} origin={mark.fillPattern.origin} id={paintId} /></defs>
     {:else if mark.fillPicture}<defs><PresentationPictureFill picture={mark.fillPicture.picture} origin={mark.fillPicture.bounds} width={mark.fillPicture.bounds.width} height={mark.fillPicture.bounds.height} id={paintId} /></defs>
-    {:else if mark.fillGradient}<defs><ChartGradient paint={mark.fillGradient} id={paintId} /></defs>{/if}
+    {:else if mark.fillGradient}<defs><ChartGradient paint={mark.fillGradient} palette={ramps.bindings.get(mark.fillGradient.gradient)} id={paintId} /></defs>{/if}
     {@const strokeId = `${clipId}${path}-${index}-stroke`}
-    {#if mark.strokeGradient && mark.strokeBounds}<defs><ChartGradient paint={{ gradient: mark.strokeGradient, bounds: mark.strokeBounds }} id={strokeId} /></defs>{/if}
+    {#if mark.strokeGradient && mark.strokeBounds}<defs><ChartGradient paint={{ gradient: mark.strokeGradient, bounds: mark.strokeBounds }} palette={ramps.bindings.get(mark.strokeGradient)} id={strokeId} /></defs>{/if}
     {#if mark.kind === "rect"}
       <rect x={mark.x} y={mark.y} width={mark.width} height={mark.height} fill={mark.fillPattern || mark.fillPicture || mark.fillGradient ? `url(#${paintId})` : mark.fill} stroke={mark.strokeGradient && mark.strokeBounds ? `url(#${strokeId})` : mark.stroke} stroke-width={mark.strokeWidth} stroke-dasharray={mark.strokeDash?.join(" ")} stroke-linecap={mark.strokeCap} stroke-linejoin={mark.strokeJoin} stroke-miterlimit={mark.miterLimit?.toString()} />
     {:else if mark.kind === "circle"}
@@ -67,6 +69,7 @@
 {#if scene}
   <svg class="chart" role="img" aria-label={scene.label} viewBox={`0 0 ${width} ${height}`}>
     <title>{scene.label}</title>
+    <defs>{#each ramps.palettes as palette}<linearGradient id={palette.id}>{#each palette.stops as stop}<stop offset={stop.offset} stop-color={stop.color} />{/each}</linearGradient>{/each}</defs>
     {@render marks(scene.marks, "")}
   </svg>
 {:else}

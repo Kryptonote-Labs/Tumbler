@@ -1,4 +1,4 @@
-import type { DrawingStrokeProperties } from "@tumblerjs/ooxml";
+import type { DrawingGradient, DrawingStrokeProperties } from "@tumblerjs/ooxml";
 export type ChartKind = "bar" | "column" | "line" | "pie" | "doughnut" | "scatter" | "bubble" | "area" | "radar" | "stock" | "surface" | "of-pie";
 
 export type ChartScatterStyle = "none" | "line" | "line-marker" | "marker" | "smooth" | "smooth-marker";
@@ -56,13 +56,7 @@ export interface ChartLineStyle extends DrawingStrokeProperties {
   readonly width?: number;
 }
 
-export interface ChartGradient {
-  /** Normalized focus edges, not the four DrawingML inset amounts. */
-  readonly focusRect?: readonly [number, number, number, number];
-  readonly kind: 'linear' | 'radial' | 'rectangular';
-  readonly angle: number;
-  readonly scaled: boolean;
-  readonly center: readonly [number, number];
+export interface ChartGradient extends Omit<DrawingGradient, 'stops'> {
   readonly stops: readonly { readonly offset: number; readonly color: ChartColor }[];
 }
 
