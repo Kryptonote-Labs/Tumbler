@@ -1,4 +1,4 @@
-import { chartShapeMarks, chartMarksBounds } from './shape-scene.ts';
+import { chartShapeMarks } from './shape-scene.ts';
 import { chartStrokeBounds } from './stroke-bounds.ts';
 import { ofPieScene } from './scene-of-pie.ts';
 import { surfaceScene } from './scene-surface.ts';
@@ -56,8 +56,7 @@ function buildChartScene(model: SupportedChartModel, width: number, height: numb
   const orientedAxes = model.axes.some(axis => axis.titleStyle?.rotation !== undefined) || model.plots?.some(plot => plot.axes.some(axis => axis.titleStyle?.rotation !== undefined));
   const context: SceneContext = orientedAxes ? { ...baseContext, axisTitleFrame: chartAxisTitleFrame(baseContext) } : baseContext;
   const marks: ChartMark[] = chartShapeMarks(context, { x: .5, y: .5, width: Math.max(0, width - 1), height: Math.max(0, height - 1) }, model.chartArea, { fill: '#ffffff', stroke: '#d9d9d9' });
-  const title = chartTitleMarks(context), titleBounds = chartMarksBounds(context, title);
-  const titleMarks = [...(titleBounds ? chartShapeMarks(context, { x: titleBounds.x - 4, y: titleBounds.y - 3, width: titleBounds.width + 8, height: titleBounds.height + 6 }, model.titleArea) : []), ...title];
+  const titleMarks = chartTitleMarks(context);
   const manual = model.plotLayout;
   const possiblyCollapsed = manual && (manual.width === 0 || manual.height === 0 || manual.widthMode === 'edge' || manual.heightMode === 'edge');
   const plot = possiblyCollapsed ? model.kind === 'pie' || model.kind === 'doughnut' || model.kind === 'of-pie'

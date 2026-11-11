@@ -38,13 +38,17 @@ test('rotated rich title decorations keep their relative positions under manual 
   expect(decorations.some(mark => mark.kind === 'path' && mark.fill === '#FFFF00')).toBe(true);
 });
 
-test('point labels rotate their text while fitting unrotated pattern backgrounds around the resulting bounds', () => {
+test('point labels rotate their pattern backgrounds and text as the same positioned box', () => {
   const label = `<c:dLbls><c:dLbl><c:idx val="0"/>${manual}<c:tx><c:rich><a:bodyPr rot="5400000"/><a:lstStyle/><a:p><a:r><a:t>Point label</a:t></a:r></a:p></c:rich></c:tx><c:spPr><a:pattFill prst="diagCross"/></c:spPr></c:dLbl></c:dLbls>`;
-  const scene = flat(layoutChartScene(parse(base().replace('<c:cat>', `${label}<c:cat>`)), 600, 400).marks);
-  const mark = text(scene, 'Point label'), background = scene.find(mark => mark.kind === 'rect' && mark.fillPattern);
+  const scene = layoutChartScene(parse(base().replace('<c:cat>', `${label}<c:cat>`)), 600, 400).marks;
+  const mark = text(scene, 'Point label'), group = scene.find(mark => mark.kind === 'group' && mark.rotation?.angle === 90);
   expect(mark.rotate).toBe(90);
-  expect(background).toMatchObject({ x: 120, y: 100, width: expect.closeTo(mark.font.size * 1.2 + 6), height: expect.closeTo(mark.text.length * mark.font.size * .55 + 4) });
-  expect(background?.fillPattern?.bounds).toMatchObject({ x: 120, y: 100 });
+  if (group?.kind !== 'group') throw new Error('Missing rotated label background');
+  const bounds = chartMarksBounds(measure, [group])!;
+  expect(bounds).toMatchObject({ x: expect.closeTo(120), y: expect.closeTo(100), width: expect.closeTo(mark.font.size * 1.2 + 4), height: expect.closeTo(mark.text.length * mark.font.size * .55 + 6) });
+  const background = group.marks.find(mark => mark.kind === 'rect');
+  if (background?.kind !== 'rect') throw new Error('Missing label frame');
+  expect(background.fillPattern?.bounds).toEqual({ x: background.x, y: background.y, width: background.width, height: background.height });
 });
 
 test('explicit zero axis-title rotation overrides automatic Cartesian, XY and 3-D orientation', () => {

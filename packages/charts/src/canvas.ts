@@ -109,15 +109,22 @@ function paintMarks<Path, Image>(context: ChartCanvasContext<Path, Image>, marks
         } finally { context.restore(); }
         break;
       case "group":
-        if (mark.clip === undefined) {
+        if (mark.clip === undefined && !mark.rotation) {
           paintMarks(context, mark.marks, path, options);
           break;
         }
         context.save();
         try {
-          context.beginPath();
-          context.rect(mark.clip.x, mark.clip.y, mark.clip.width, mark.clip.height);
-          context.clip();
+          if (mark.rotation) {
+            context.translate(mark.rotation.cx, mark.rotation.cy);
+            context.rotate(mark.rotation.angle * Math.PI / 180);
+            context.translate(-mark.rotation.cx, -mark.rotation.cy);
+          }
+          if (mark.clip) {
+            context.beginPath();
+            context.rect(mark.clip.x, mark.clip.y, mark.clip.width, mark.clip.height);
+            context.clip();
+          }
           paintMarks(context, mark.marks, path, options);
         } finally { context.restore(); }
         break;
