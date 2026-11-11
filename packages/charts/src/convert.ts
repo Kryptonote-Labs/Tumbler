@@ -54,10 +54,28 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
   }
   const archivedXml = histories.get(`${plotId}/${change.type}`);
   const archived = archivedXml ? parseLosslessXml(new TextEncoder().encode(archivedXml)) : undefined;
-  histories.set(`${plotId}/${original.localName}`, standalone(source.document, original));
+  const currentHistory = `${plotId}/${original.localName}`;
+  histories.delete(currentHistory);
+  histories.set(currentHistory, standalone(source.document, original));
   const elementChildren = (element: LosslessXmlElement | undefined) => element?.children.filter((child): child is LosslessXmlElement => child.kind === 'element' && child.namespaceUri === source.namespace) ?? [];
   const currentSeries = source.children(original, 'ser');
   const archivedSeries = elementChildren(archived?.root).filter(child => child.localName === 'ser');
+  const categoriesBySeries = new Map<string, { document: LosslessXmlDocument; element: LosslessXmlElement }>();
+  if (change.type !== 'scatterChart' && change.type !== 'bubbleChart' && currentSeries.some(series => !source.children(series, 'cat').length)) {
+    const ids = new Set(currentSeries.map(series => source.children(series, 'idx')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value));
+    // XY coordinates and category labels are distinct data. Restore the most recent
+    // labels by series identity when a plot returns from an XY representation.
+    for (const [key, xml] of [...histories].reverse()) {
+      if (!key.startsWith(`${plotId}/`) || key.endsWith('/scatterChart') || key.endsWith('/bubbleChart')) continue;
+      const document = parseLosslessXml(new TextEncoder().encode(xml));
+      for (const series of elementChildren(document.root).filter(child => child.localName === 'ser')) {
+        const id = elementChildren(series).find(child => child.localName === 'idx')?.attributes.find(attribute => attribute.localName === 'val')?.value;
+        const category = elementChildren(series).find(child => child.localName === 'cat');
+        if (id !== undefined && ids.has(id) && category && !categoriesBySeries.has(id)) categoriesBySeries.set(id, { document, element: category });
+      }
+      if (categoriesBySeries.size === ids.size) break;
+    }
+  }
   const overrides = new Set<string>(['ser', 'axId']);
   if (change.direction !== undefined) overrides.add('barDir');
   if (change.grouping !== undefined) overrides.add('grouping');
@@ -85,6 +103,11 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
       let candidates = originalChildren.children.filter(child => role.includes(child.localName));
       if (series && name === 'xVal' && !candidates.length) candidates = originalChildren.children.filter(child => child.localName === 'cat' && elementChildren(child).some(child => child.localName.startsWith('num')));
       let document = source.document;
+      if (series && name === 'cat' && !candidates.length && current) {
+        const id = source.children(current, 'idx')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value;
+        const category = id === undefined ? undefined : categoriesBySeries.get(id);
+        if (category) { candidates = [category.element]; document = category.document; }
+      }
       if (!candidates.length && archivedChildren) { candidates = archivedChildren.children.filter(child => role.includes(child.localName)); document = archivedChildren.document; }
       if (series && name === 'cat' && !candidates.length) candidates = originalChildren.children.filter(child => child.localName === 'xVal');
       if (candidates.length) {
