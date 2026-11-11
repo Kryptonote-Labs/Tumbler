@@ -10,7 +10,8 @@ import { chartDataLabelMarks } from './label-scene.ts';
 import { chartPointColor } from './point-style.ts';
 import { chartShade, chartPolygon } from './projection.ts';
 import { indexChartSequence } from './indexed-data.ts';
-import { layoutPieSlices, pieArcPath } from "./layout.ts";
+import { layoutPieSlices, pieArcPath, type PieSlice } from "./layout.ts";
+import { chartPieData } from './pie-data.ts';
 import { type ChartMark, type SceneContext } from "./scene-marks.ts";
 
 const PADDING = 16;
@@ -29,9 +30,8 @@ export function pieChartFrame(context: SceneContext) {
 }
 
 /** Pie and doughnut charts. The legend lists categories of the first series, one entry per slice. */
-export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[] {
+export function pieScene(context: SceneContext, labels?: { readonly fractions?: ReadonlyMap<number, number>; readonly slices?: readonly PieSlice[] }): ChartMark[] {
   const { model, width, height, options } = context;
-  const slices = layoutPieSlices(model);
   const { plot } = pieChartFrame(context);
   const left = plot.x, right = left + plot.width, top = plot.y, bottom = top + plot.height;
   const tilt = model.threeD ? Math.sin(Math.abs(model.threeD.rotationX) * Math.PI / 180) : 1;
@@ -48,7 +48,8 @@ export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[
   rings.forEach((series, ring) => {
     const outer = radius - (radius - hole) * (rings.length - ring - 1) / rings.length;
     const inner = model.kind === 'doughnut' ? radius - (radius - hole) * (rings.length - ring) / rings.length : 0;
-    const current = layoutPieSlices({ ...model, series: [series] });
+    const current = labels?.slices ?? layoutPieSlices({ ...model, series: [series] });
+    const fractions = labels?.fractions ?? chartPieData(series).fractions;
     const offset = (slice: { startAngle: number; endAngle: number; index: number }) => {
       const explosion = context.pointFormat(series, slice.index)?.explosion ?? series.explosion ?? 0;
       const angle = (slice.startAngle + slice.endAngle) / 2;
@@ -69,7 +70,6 @@ export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[
       }
     }
     const categories = indexChartSequence(series.categories);
-    const total = labelTotal ?? current.reduce((sum, slice) => sum + slice.value, 0);
     current.forEach((slice, index) => {
       const { dx, dy } = offset(slice);
       const shifted = (points: readonly { x: number; y: number }[]) => points.map(point => ({ x: point.x + dx, y: point.y + dy }));
@@ -82,7 +82,7 @@ export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[
       const category = String(categories.get(slice.index) ?? slice.index + 1);
       marks.push(...chartDataLabelMarks(context, series, ring, { index: slice.index,
         x: cx + dx + Math.cos(angle) * labelRadius, y: cy + dy + Math.sin(angle) * labelRadius * tilt,
-        category, value: slice.value, percent: total ? slice.value / total : 0 }));
+        category, value: slice.value, percent: fractions.get(slice.index) ?? 0 }));
     });
   });
   marks.push(...chartLegendScene(context));

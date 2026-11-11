@@ -30,11 +30,13 @@ describe("headless chart layout", () => {
     expect(chartSequenceValue(model().series[0]?.values, 2)).toBe(20);
   });
 
-  test("lays out positive pie values as a complete non-overlapping circle", () => {
+  test("lays out signed pie values by magnitude as a complete non-overlapping circle", () => {
     const source = model();
     const pie = { ...source, kind: "doughnut" as const, series: [{ ...source.series[0]!, values: { kind: "number" as const, formula: undefined, formatCode: undefined, points: [{ index: 0, value: 1 }, { index: 1, value: 3 }, { index: 2, value: -2 }] } }] };
     const slices = layoutPieSlices(pie);
-    expect(slices).toHaveLength(2);
+    expect(slices).toHaveLength(3);
+    expect(slices[2]?.value).toBe(-2);
+    expect(slices[0]!.endAngle - slices[0]!.startAngle).toBeCloseTo(Math.PI / 3);
     expect(slices[0]?.startAngle).toBeCloseTo(-Math.PI / 2);
     expect(slices.at(-1)?.endAngle).toBeCloseTo(Math.PI * 3 / 2);
     expect(pieArcPath(50, 50, 40, slices[0]!.startAngle, slices[0]!.endAngle, 20)).toContain("A 20 20");
