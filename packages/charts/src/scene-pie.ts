@@ -17,7 +17,7 @@ export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[
   const count = slices.length;
   const position = model.legend?.position;
   const horizontal = position === "top" || position === "bottom";
-  const titleHeight = model.title === undefined ? PADDING : 36;
+  const titleHeight = model.title === undefined || model.titleOverlay ? PADDING : 36;
   const columns = Math.max(1, Math.min(count, Math.floor((width - PADDING * 2) / SLOT)));
   const legendHeight = horizontal ? Math.ceil(count / columns) * 20 + 8 : 0;
   const sideWidth = Math.min(120, width * 0.25);

@@ -1,3 +1,4 @@
+import { chartShapeMarks } from './shape-scene.ts';
 import { chartPointStroke, chartSeriesStroke, chartStrokeMark } from './stroke-scene.ts';
 import { xyGeometry } from './xy-geometry.ts';
 import { xyAxisMarks } from './axis-scene.ts';
@@ -16,7 +17,7 @@ export function xyScene(context: SceneContext): ChartMark[] {
   const layout = bubbles ?? layoutScatterChart(model, context.width, height);
   const { plot } = layout;
   const { x: projectX, y: projectY } = xyGeometry(model, layout);
-  const marks: ChartMark[] = [...xyAxisMarks(context, layout)];
+  const marks: ChartMark[] = [...chartShapeMarks(context, plot, model.plotArea), ...xyAxisMarks(context, layout)];
 
   const series: ChartMark[] = [];
   const labels: ChartMark[] = [];

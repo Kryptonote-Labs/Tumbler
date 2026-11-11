@@ -7,12 +7,13 @@ export function combinationScene(context: SceneContext): ChartMark[] {
   const { model, width, height } = context;
   const plots = layoutCombinationChart(model, width, height, context.measure);
   const marks: ChartMark[] = [], seenAxes = new Set<number>();
-  for (const plot of plots) {
+  for (const [plotIndex, plot] of plots.entries()) {
+    const { plotArea, ...plotModel } = plot.model;
     const axes = plot.model.axes.map(axis => ({ ...axis, deleted: axis.deleted || seenAxes.has(axis.id) }));
     plot.model.axes.forEach(axis => { if (!axis.deleted) seenAxes.add(axis.id); });
     const current: SceneContext = {
       ...context,
-      model: { ...plot.model, title: undefined, legend: undefined, axes, ...(model.themeColors ? { themeColors: model.themeColors } : {}), ...(model.themeFonts ? { themeFonts: model.themeFonts } : {}) },
+      model: { ...plotModel, ...(plotIndex === 0 && plotArea ? { plotArea } : {}), title: undefined, legend: undefined, axes, ...(model.themeColors ? { themeColors: model.themeColors } : {}), ...(model.themeFonts ? { themeFonts: model.themeFonts } : {}) },
       color: (series, index, line) => context.color(series, Math.max(0, model.series.findIndex(item => item.index === series.index)), line),
     };
     marks.push(...cartesianScene(current, true, plot.layout));

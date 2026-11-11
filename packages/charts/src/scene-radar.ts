@@ -1,3 +1,4 @@
+import { chartShapeMarks } from './shape-scene.ts';
 import { chartSeriesStroke, chartStrokeMark } from './stroke-scene.ts';
 import { chartDataLabelMarks } from './label-scene.ts';
 import { chartMarkerMarks } from './marker-scene.ts';

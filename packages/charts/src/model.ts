@@ -52,6 +52,12 @@ export interface ChartLineStyle extends DrawingStrokeProperties {
   readonly width?: number;
 }
 
+export interface ChartShapeStyle {
+  readonly fill?: ChartColor;
+  readonly noFill?: boolean;
+  readonly lineStyle?: ChartLineStyle;
+}
+
 export interface ChartDataPoint {
   readonly index: number;
   readonly value: string | number;
@@ -102,6 +108,7 @@ export interface ChartSeries {
 export type ChartLegendPosition = "bottom" | "left" | "right" | "top" | "top-right";
 
 export interface ChartLegend {
+  readonly shapeStyle?: ChartShapeStyle;
   readonly textStyle?: ChartTextStyle;
   readonly position: ChartLegendPosition;
   readonly overlay: boolean;
@@ -157,6 +164,9 @@ export interface ChartTextParagraph {
 }
 
 interface ChartModelBase {
+  readonly chartArea?: ChartShapeStyle;
+  readonly titleArea?: ChartShapeStyle;
+  readonly titleOverlay?: boolean;
   readonly dateSystem?: "1900" | "1904";
   readonly titleText?: readonly ChartTextParagraph[];
   readonly textStyle?: ChartTextStyle;
@@ -170,6 +180,7 @@ interface ChartModelBase {
 }
 
 export interface SupportedChartModel extends ChartModelBase {
+  readonly plotArea?: ChartShapeStyle;
   readonly plots?: readonly SupportedChartModel[];
   readonly status: "supported";
   readonly kind: ChartKind;

@@ -1,3 +1,4 @@
+import { chartShapeMarks, chartMarksBounds, chartLegendShape } from './shape-scene.ts';
 import { ofPieScene } from './scene-of-pie.ts';
 import { surfaceScene } from './scene-surface.ts';
 import { threeDScene } from './scene-three-d.ts';
@@ -49,8 +50,10 @@ function buildChartScene(model: SupportedChartModel, width: number, height: numb
     },
     measure: (text, font) => options.measureText?.(text, chartFontShorthand(font)) ?? text.length * font.size * 0.55,
   };
-  const marks: ChartMark[] = [{ kind: "rect", x: 0.5, y: 0.5, width: Math.max(0, width - 1), height: Math.max(0, height - 1), fill: "#ffffff", stroke: "#d9d9d9" }];
-  marks.push(...chartTitleMarks(context));
+  const marks: ChartMark[] = chartShapeMarks(context, { x: .5, y: .5, width: Math.max(0, width - 1), height: Math.max(0, height - 1) }, model.chartArea, { fill: '#ffffff', stroke: '#d9d9d9' });
+  const title = chartTitleMarks(context), titleBounds = chartMarksBounds(context, title);
+  const titleMarks = [...(titleBounds ? chartShapeMarks(context, { x: titleBounds.x - 4, y: titleBounds.y - 3, width: titleBounds.width + 8, height: titleBounds.height + 6 }, model.titleArea) : []), ...title];
+  if (!model.titleOverlay) marks.push(...titleMarks);
   marks.push(...(model.plots ? combinationScene(context)
     : model.kind === 'of-pie' ? ofPieScene(context)
     : model.kind === "pie" || model.kind === "doughnut" ? pieScene(context)
@@ -60,5 +63,6 @@ function buildChartScene(model: SupportedChartModel, width: number, height: numb
     : model.kind === 'radar' ? radarScene(context)
     : model.kind === 'stock' ? stockScene(context)
     : cartesianScene(context)));
-  return { width, height, label: model.title ?? (model.plots ? "Combination chart" : `${model.kind} chart`), marks };
+  if (model.titleOverlay) marks.push(...titleMarks);
+  return { width, height, label: model.title ?? (model.plots ? "Combination chart" : `${model.kind} chart`), marks: chartLegendShape(context, marks) };
 }

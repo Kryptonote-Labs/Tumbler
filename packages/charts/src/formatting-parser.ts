@@ -1,6 +1,6 @@
 import { chartElementMarkup } from './xml-markup.ts';
 import { resolveDrawingColor, readDrawingStrokeProperties, type LosslessXmlElement } from "@tumblerjs/ooxml";
-import type { ChartColor, ChartColorTransform, ChartLineStyle, ChartTextStyle } from "./model.ts";
+import type { ChartColor, ChartColorTransform, ChartLineStyle, ChartTextStyle, ChartShapeStyle } from "./model.ts";
 
 function child(parent: LosslessXmlElement | undefined, ns: string, name: string) {
   return parent?.children.find((item): item is LosslessXmlElement => item.kind === "element" && item.namespaceUri === ns && item.localName === name);
@@ -79,4 +79,11 @@ export function chartColorFillXml(color: ChartColor, drawingNamespace?: string):
   if (color.source) return chartElementMarkup(color.source, drawingNamespace);
   const kind = color.kind === 'rgb' ? 'srgbClr' : 'schemeClr';
   return `<a:solidFill${drawingNamespace ? ` xmlns:a="${drawingNamespace}"` : ''}><a:${kind} val="${escape(color.value.replace(/^#/, ''))}">${color.transforms?.map(transform => `<a:${transform.kind} val="${Math.round(transform.value * 100000)}"/>`).join('') ?? ''}</a:${kind}></a:solidFill>`;
+}
+
+/** Shape-level paint is shared by chart/plot areas, titles and legends. */
+export function parseChartShapeStyle(parent: LosslessXmlElement | undefined, ns: string): ChartShapeStyle | undefined {
+  if (!parent) return undefined;
+  const fill = parseChartFill(parent, ns), lineStyle = parseChartLine(parent, ns);
+  return { ...(fill ? { fill } : {}), ...(child(parent, ns, 'noFill') ? { noFill: true } : {}), ...(lineStyle ? { lineStyle } : {}) };
 }

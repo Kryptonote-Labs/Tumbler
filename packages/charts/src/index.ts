@@ -10,6 +10,7 @@ export { cartesianStack, chartSequenceValue, chartValueCoordinate, layoutBubbleC
 export type { BubbleChartLayout, BubblePoint, CartesianChartLayout, ChartRect, PieSlice, ScatterChartLayout, ScatterPoint } from "./layout.ts";
 export type {
   ChartTextStyle,
+  ChartShapeStyle,
   ChartLineStyle,
   ChartColorTransform,
   ChartAxis,

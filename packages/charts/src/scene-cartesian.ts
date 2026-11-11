@@ -1,3 +1,4 @@
+import { chartShapeMarks } from './shape-scene.ts';
 import { chartPointStroke, chartSeriesStroke, chartStrokeMark } from './stroke-scene.ts';
 import { cartesianAnalyticalData } from './analytics-bounds.ts';
 import { cartesianGeometry } from './cartesian-geometry.ts';
@@ -18,7 +19,7 @@ export function cartesianScene(context: SceneContext, drawSeries = true, supplie
   const { plot } = layout;
   const { horizontal, count, value: coordinate, category, categoryBand, band } = cartesianGeometry(model, layout);
   const x = coordinate, y = coordinate;
-  const marks: ChartMark[] = [...cartesianAxisMarks(context, layout)];
+  const marks: ChartMark[] = [...chartShapeMarks(context, plot, model.plotArea), ...cartesianAxisMarks(context, layout)];
 
   const dataStart = marks.length;
   const order = model.series.map((series, seriesIndex) => ({ series, seriesIndex }));

@@ -66,7 +66,7 @@
 {/if}
 
 <style>
-  .chart, .chart-fallback { display: block; width: 100%; height: 100%; box-sizing: border-box; overflow: hidden; background: #fff; }
+  .chart, .chart-fallback { display: block; width: 100%; height: 100%; box-sizing: border-box; overflow: hidden; }
   .chart { pointer-events: none; }
   .chart-fallback { display: grid; place-items: center; padding: 12px; border: 1px solid #d9d9d9; color: #666; font: 11px/1.2 Calibri, Aptos, system-ui, sans-serif; background: repeating-linear-gradient(135deg, #fff, #fff 8px, #f7f7f7 8px, #f7f7f7 16px); text-align: center; }
 </style>
