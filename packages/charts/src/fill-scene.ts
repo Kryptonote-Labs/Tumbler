@@ -1,3 +1,4 @@
+import { chartStrokeBrush } from './stroke-brush.ts';
 import { drawingPatternPicture } from '@tumblerjs/ooxml';
 import { resolveChartColor } from './colors.ts';
 import type { DrawingPattern, DrawingPictureFill } from '@tumblerjs/ooxml';
@@ -58,6 +59,8 @@ export function chartScenePictures(scene: ChartScene): readonly DrawingPictureFi
   const pictures = new Set<DrawingPictureFill>();
   function visit(marks: readonly ChartMark[]) {
     for (const mark of marks) {
+      const stroke = chartStrokeBrush(mark);
+      if (stroke) pictures.add(stroke.picture);
       if (mark.fillPattern) pictures.add(mark.fillPattern.picture);
       if (mark.fillPicture) pictures.add(mark.fillPicture.picture);
       if (mark.kind === 'group') visit(mark.marks);

@@ -90,3 +90,5 @@ export { drawingPictureGeometry, paintDrawingPicture, type DrawingPictureFill, t
 export { DRAWING_PATTERN_PRESETS, type DrawingPatternPreset } from './pattern-presets.ts';
 export { drawingPatternGeometry, drawingPatternPaint, drawingPatternPicture, paintDrawingPattern, isDrawingPatternPreset, type DrawingPattern, type DrawingPatternCanvasContext, type DrawingCanvasPattern } from './pattern-fill.ts';
 export { encodeRgbaPng } from './png.ts';
+
+export { drawingColorRgba } from './css-color.ts';

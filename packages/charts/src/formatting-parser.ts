@@ -54,10 +54,12 @@ export function parseChartLine(parent: LosslessXmlElement | undefined, ns: strin
   const rawWidth = attribute(line, "w");
   const width = rawWidth === undefined ? undefined : Number(rawWidth) / 12700;
   const color = parseChartFill(line, ns);
+  const gradient = parseChartGradient(line, ns);
   return Object.freeze({
     ...readDrawingStrokeProperties(line),
     ...(child(line, ns, "noFill") ? { noFill: true } : {}),
     ...(color ? { color } : {}),
+    ...(gradient ? { gradient } : {}),
     ...(width !== undefined && Number.isFinite(width) && width >= 0 ? { width } : {}),
   });
 }

@@ -1,4 +1,5 @@
 import { resolveChartColor } from "./colors.ts";
+import { resolveChartGradient } from './gradient-scene.ts';
 import type { ChartColor, ChartLineStyle, ChartModel, ChartTextStyle, SupportedChartModel } from "./model.ts";
 
 /** Resolved type for one run of chart text. Sizes are CSS pixels. */
@@ -12,6 +13,7 @@ export interface ChartFont {
 
 /** Resolved stroke for an axis or gridline; `stroke: undefined` draws nothing. */
 export interface ChartStrokeDecoration {
+  readonly strokeGradient?: import('@tumblerjs/ooxml').DrawingGradient;
   readonly strokeDash?: readonly number[];
   readonly strokeCap?: 'butt' | 'round' | 'square';
   readonly strokeJoin?: 'round' | 'bevel' | 'miter';
@@ -72,6 +74,7 @@ export function chartStroke(role: keyof typeof CHART_STROKE_DEFAULTS, style: Cha
     ...(style?.cap ? { strokeCap: style.cap } : {}),
     ...(style?.join ? { strokeJoin: style.join } : {}),
     ...(style?.miterLimit === undefined ? {} : { miterLimit: style.miterLimit }),
+    ...(style?.gradient && !style.noFill ? { strokeGradient: resolveChartGradient(style.gradient, model, resolve) } : {}),
     stroke: style?.noFill ? undefined : color ?? fallback.stroke,
     width,
   };
