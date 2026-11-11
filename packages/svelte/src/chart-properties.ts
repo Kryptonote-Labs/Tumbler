@@ -8,7 +8,7 @@ import {
 } from "@tumblerjs/charts";
 
 /** A chart type and its variant. Hosts convert the chart; the properties pane only proposes. */
-export type ChartTypeChange = Pick<CreateChartOptions, "type" | "direction" | "grouping" | "radarStyle" | "scatterStyle" | "splitType" | "wireframe" | "shape">;
+export type ChartTypeChange = Pick<CreateChartOptions, "type" | "direction" | "grouping" | "radarStyle" | "scatterStyle" | "splitType" | "wireframe" | "shape" | "bubble3D">;
 
 export interface ChartTypeOption {
   readonly label: string;
@@ -93,7 +93,8 @@ export const CHART_TYPE_FAMILIES: readonly ChartTypeFamily[] = [
       { label: "Scatter with smooth lines", change: { type: "scatterChart", scatterStyle: "smooth" } },
       { label: "Scatter with straight lines and markers", change: { type: "scatterChart", scatterStyle: "lineMarker" } },
       { label: "Scatter with straight lines", change: { type: "scatterChart", scatterStyle: "line" } },
-      { label: "Bubble", change: { type: "bubbleChart" } },
+      { label: "Bubble", change: { type: "bubbleChart", bubble3D: false } },
+      { label: "3-D bubble", change: { type: "bubbleChart", bubble3D: true } },
     ],
   },
   {
@@ -119,6 +120,7 @@ export const CHART_TYPE_FAMILIES: readonly ChartTypeFamily[] = [
 const localName = (node: ChartPropertyNode) => node.name.split(":").at(-1)!;
 const child = (node: ChartPropertyNode | undefined, name: string) => node?.children.find((candidate) => localName(candidate) === name);
 const value = (node: ChartPropertyNode | undefined) => node?.attributes.find((attribute) => attribute.name === "val")?.value;
+const booleanValue = (node: ChartPropertyNode | undefined) => node ? chartBoolean(value(node) ?? "1") : undefined;
 
 /** Reads a boolean schema value, accepting both lexical forms. */
 export function chartBoolean(raw: string | undefined): boolean | undefined {
@@ -140,13 +142,16 @@ export function currentChartType(root: ChartPropertyNode, index = 0): ChartTypeO
     CHART_TYPE_FAMILIES.some((family) => family.options.some((option) => option.change.type === localName(node))))[index];
   if (!plot) return undefined;
   const type = localName(plot) as OoxmlChartType;
+  const series = plot.children.filter(node => localName(node) === 'ser');
+  const plotBubble3D = booleanValue(child(plot, 'bubble3D')) ?? false;
   const observed: Record<string, string | boolean | undefined> = {
     direction: value(child(plot, "barDir")) ?? "col",
     grouping: value(child(plot, "grouping")) ?? (type.startsWith("bar") ? "clustered" : "standard"),
     radarStyle: value(child(plot, "radarStyle")) ?? "standard",
     scatterStyle: value(child(plot, "scatterStyle")) ?? "marker",
     splitType: value(child(plot, "ofPieType")) ?? "pie",
-    wireframe: chartBoolean(value(child(plot, "wireframe"))) ?? false,
+    bubble3D: series.length ? series.some(series => booleanValue(child(series, 'bubble3D')) ?? plotBubble3D) : plotBubble3D,
+    wireframe: booleanValue(child(plot, "wireframe")) ?? false,
   };
   const options = CHART_TYPE_FAMILIES.flatMap((family) => family.options).filter((option) => option.change.type === type);
   return options.find((option) => Object.entries(option.change).every(([key, expected]) => key === "type" || observed[key] === expected)) ?? options[0];

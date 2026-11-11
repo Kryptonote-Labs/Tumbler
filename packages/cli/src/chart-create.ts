@@ -19,7 +19,7 @@ export const chartCreateInput = z.object({
     series: z.array(z.object({ name: z.string(), values: numbers, xValues: numbers.optional(), bubbleSizes: numbers.optional() }).strict()),
     direction: z.enum(['bar', 'col']).optional(), grouping: z.enum(['standard', 'clustered', 'stacked', 'percentStacked']).optional(),
     radarStyle: z.enum(['standard', 'marker', 'filled']).optional(), scatterStyle: z.enum(['none', 'line', 'lineMarker', 'marker', 'smooth', 'smoothMarker']).optional(),
-    splitType: z.enum(['pie', 'bar']).optional(), wireframe: z.boolean().optional(), shape: z.enum(CHART_BAR_SHAPES).optional(),
+    splitType: z.enum(['pie', 'bar']).optional(), wireframe: z.boolean().optional(), bubble3D: z.boolean().optional(), shape: z.enum(CHART_BAR_SHAPES).optional(),
   }).strict(),
 }).strict();
 export type ChartCreateInput = z.infer<typeof chartCreateInput>;

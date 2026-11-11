@@ -85,6 +85,7 @@ export interface ChartDataSequence {
 }
 
 export interface ChartPointFormat {
+  readonly bubble3D?: boolean;
   readonly gradient?: ChartGradient;
   readonly index: number;
   readonly fill?: ChartColor | undefined;
@@ -95,6 +96,7 @@ export interface ChartPointFormat {
 }
 
 export interface ChartSeries {
+  readonly bubble3D?: boolean;
   readonly barShape?: import('./bar-shapes.ts').ChartBarShape;
   readonly gradient?: ChartGradient;
   readonly trendlines?: readonly import('./analytics-parser.ts').ChartTrendline[];
@@ -227,6 +229,7 @@ export interface SupportedChartModel extends ChartModelBase {
   readonly bubbleScale?: number;
   readonly showNegativeBubbles?: boolean;
   readonly bubbleSizeRepresentation?: ChartBubbleSizeRepresentation;
+  readonly bubble3D?: boolean;
   readonly axisIds?: readonly number[];
   readonly series: readonly ChartSeries[];
   readonly axes: readonly ChartAxis[];

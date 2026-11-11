@@ -37,3 +37,10 @@ describe("removable properties", () => {
       expect(named(label).every((node) => !removable.has(node.id))).toBe(true);
   });
 });
+
+
+test('the gallery treats present empty boolean properties as true', () => {
+  const bytes = createOoxmlChart({ type: 'bubbleChart', categories: [], series: [{ name: 'Data', values: [1], xValues: [1], bubbleSizes: [1] }], bubble3D: true });
+  const empty = new TextEncoder().encode(new TextDecoder().decode(bytes).replace('<c:bubble3D val="1"/>', '<c:bubble3D/>'));
+  expect(currentChartType(chartPropertyTree(empty))?.label).toBe('3-D bubble');
+});

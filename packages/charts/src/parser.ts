@@ -120,10 +120,6 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
     : rawGrouping === "clustered" ? "clustered" as const
     : "standard" as const;
   if (kind === "bubble") {
-    const chartBubble3D = booleanVal(children(chartType, chartNamespace, 'bubble3D')[0], false);
-    const seriesBubble3D = children(chartType, chartNamespace, 'ser').some(element => booleanVal(children(element, chartNamespace, 'bubble3D')[0], false));
-    if (chartBubble3D || seriesBubble3D) return unsupported(chartType.localName, '3-D bubble effects are not supported in this milestone.', title, titleFormula, legend);
-
     if (series.some((item) => item.xValues?.kind === "string" || item.values?.kind === "string" || item.bubbleSizes?.kind === "string")) {
       return unsupported(chartType.localName, "Bubble X, Y, and size sequences must be numeric.", title, titleFormula, legend);
     }
@@ -173,6 +169,7 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
       overlap: barPercent(val(children(chartType, chartNamespace, "overlap")[0]) ?? (grouping === "stacked" || grouping === "percent-stacked" ? "100" : "0"), -100, 100, "overlap"),
     } : {}),
     ...(scatterStyle === undefined ? {} : { scatterStyle }),
+    ...(kind === 'bubble' ? { bubble3D: booleanVal(children(chartType, chartNamespace, 'bubble3D')[0], false) } : {}),
     ...(bubbleScale === undefined ? {} : { bubbleScale }),
     ...(showNegativeBubbles === undefined ? {} : { showNegativeBubbles }),
     ...(bubbleSizeRepresentation === undefined ? {} : { bubbleSizeRepresentation }),
@@ -235,6 +232,7 @@ function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespac
     pointFormats: points.map(point => {
       const shape = children(point, chartNamespace, 'spPr')[0], gradient = parseChartGradient(shape, drawingNamespace);
       return { index: requiredUnsignedVal(point, chartNamespace, 'idx', 'point index'),
+        ...(kind === 'bubble' && children(point, chartNamespace, 'bubble3D').length ? { bubble3D: booleanVal(children(point, chartNamespace, 'bubble3D')[0], true) } : {}),
         ...(gradient ? { gradient } : {}),
         fill: parseChartFill(shape, drawingNamespace), noFill: shape && children(shape, drawingNamespace, 'noFill').length ? true : undefined,
         lineStyle: parseChartLine(shape, drawingNamespace), marker: parseMarker(children(point, chartNamespace, 'marker')[0], chartNamespace),
@@ -247,6 +245,7 @@ function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespac
     categories: parseData(children(element, chartNamespace, "cat")[0], chartNamespace),
     ...(xValues === undefined ? {} : { xValues }),
     values: parseData(children(element, chartNamespace, "val")[0] ?? children(element, chartNamespace, "yVal")[0], chartNamespace),
+    ...(kind === 'bubble' && children(element, chartNamespace, 'bubble3D').length ? { bubble3D: booleanVal(children(element, chartNamespace, 'bubble3D')[0], true) } : {}),
     ...(bubbleSizes === undefined ? {} : { bubbleSizes }),
     fill: parseSolidFill(children(element, chartNamespace, "spPr")[0], drawingNamespace),
     line: parseLine(children(element, chartNamespace, "spPr")[0], drawingNamespace),

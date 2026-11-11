@@ -27,7 +27,10 @@ layout policy. Authored walls retain paint and outward thickness. These layouts 
 is not a claim of pixel parity with Office or LibreOffice for every property. Bubble series pair sparse
 X, Y, and size caches by point index and support the standard area/width size
 modes, 0–300% scaling, and opt-in negative values. Deterministic headless layout
-is available through `layoutBubbleChart`.
+is available through `layoutBubbleChart`. Bubble sphere effects retain plot, series
+and point precedence. Typed creation and gallery conversion use the series-level
+flag required by Office; raw ECMA plot-level flags remain supported. SVG and
+canvas share the shading, with authored gradients and no-fill retained.
 
 `layoutChartScene(model, width, height, options)` lays a supported chart out as
 drawing marks (rects, circles, SVG paths, crisp lines, styled text and clip

@@ -75,16 +75,16 @@ describe("DrawingML chart parser", () => {
     });
   }
 
-  test("uses standard bubble defaults and rejects unsafe bubble variants", () => {
+  test("uses standard bubble defaults and rejects invalid bubble data", () => {
     expect(type("bubbleChart", '<c:axId val="1"/><c:axId val="2"/>')).toMatchObject({
       status: "supported", kind: "bubble", bubbleScale: 100,
       showNegativeBubbles: false, bubbleSizeRepresentation: "area",
     });
     expect(type("bubbleChart", '<c:bubble3D/><c:axId val="1"/><c:axId val="2"/>')).toMatchObject({
-      status: "unsupported", reason: expect.stringContaining("3-D"),
+      status: "supported", bubble3D: true,
     });
     expect(type("bubbleChart", '<c:ser><c:idx val="0"/><c:order val="0"/><c:bubble3D val="true"/></c:ser><c:axId val="1"/><c:axId val="2"/>')).toMatchObject({
-      status: "unsupported", reason: expect.stringContaining("3-D"),
+      status: "supported", series: [expect.objectContaining({ bubble3D: true })],
     });
     expect(type("bubbleChart", '<c:axId val="1"/>')).toMatchObject({
       status: "unsupported", reason: expect.stringContaining("exactly two"),
