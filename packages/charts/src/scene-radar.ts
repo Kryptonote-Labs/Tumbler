@@ -4,9 +4,11 @@ import { chartShapeMarks } from './shape-scene.ts';
 import { chartSeriesStroke, chartStrokeMark } from './stroke-scene.ts';
 import { chartDataLabelMarks } from './label-scene.ts';
 import { chartMarkerMarks } from './marker-scene.ts';
-import { layoutCartesianChart } from './layout.ts';
+import { layoutCartesianChart, pieArcPath } from './layout.ts';
 import { indexChartSequence } from './indexed-data.ts';
 import { chartTickLabel } from './tick-label.ts';
+import { chartMinorTicks } from './axis-scale.ts';
+import { CHART_SCENE_CELL_LIMIT } from './scene-budget.ts';
 import { chartFont, chartStroke } from './scene-style.ts';
 import { line, type ChartMark, type SceneContext } from './scene-marks.ts';
 
@@ -27,17 +29,32 @@ export function radarScene(context: SceneContext): ChartMark[] {
   const distance = (value: number) => (value - layout.minimum) / (layout.maximum - layout.minimum || 1) * radius;
   const path = (points: readonly { x: number; y: number }[], close = true) => points.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ') + (close ? ' Z' : '');
   const marks: ChartMark[] = chartShapeMarks(context, layout.plot, model.plotArea);
-  const grid = chartStroke('gridline', axis?.gridlineStyle, model, options.resolveColor);
   const stroke = chartStroke('axis', categoryAxis?.lineStyle, model, options.resolveColor);
-  if (!axis?.deleted) {
-    const font = chartFont('tick', axis?.textStyle, model, options.resolveColor);
-    for (const tick of layout.ticks) {
-      const r = distance(tick);
-      if (r < 0) continue;
-      if (axis?.majorGridlines && grid.stroke) marks.push({ kind: 'path', d: path(Array.from({ length: count }, (_, index) => point(index, r))), ...chartStrokeMark(grid) });
-      marks.push({ kind: 'text', text: chartTickLabel(tick, axis?.numberFormatCode, options), x: cx + 4, y: cy - r - 3, anchor: 'start', font });
+  const font = chartFont('tick', axis?.textStyle, model, options.resolveColor);
+  const majorGrid = axis?.majorGridlines ? chartStroke('gridline', axis.gridlineStyle, model, options.resolveColor) : undefined;
+  const minorGrid = axis?.minorGridlines ? chartStroke('gridline', axis.minorGridlineStyle, model, options.resolveColor) : undefined;
+  const minorTicks = axis && minorGrid?.stroke ? chartMinorTicks(layout.minimum, layout.maximum, axis, layout.ticks) : [];
+  const circular = (r: number) => r * (1 - Math.cos(Math.PI / count)) <= .1;
+  // Dense regular polygons differ from circles by less than a tenth of a CSS pixel.
+  const gridWork = [...(majorGrid?.stroke ? layout.ticks : []), ...minorTicks].reduce((work, tick) => {
+    const r = distance(tick);
+    return work + (r <= 0 ? 0 : circular(r) ? 2 : count);
+  }, 0);
+  if (gridWork > CHART_SCENE_CELL_LIMIT * 5) throw new RangeError('Radar grid geometry exceeds the preview work budget.');
+  const drawTick = (tick: number, minor: boolean) => {
+    const r = distance(tick);
+    if (r < 0) return;
+    const grid = minor ? minorGrid : majorGrid;
+    if (grid?.stroke && r > 0) {
+      // Preserve the top category's dash origin when a dense polygon becomes two arcs.
+      const d = circular(r) ? pieArcPath(cx, cy, r, -Math.PI / 2, Math.PI * 1.5)
+        : path(Array.from({ length: count }, (_, index) => point(index, r)));
+      marks.push({ kind: 'path', d, ...chartStrokeMark(grid) });
     }
-  }
+    if (!minor && !axis?.deleted && axis?.tickLabelPosition !== 'none') marks.push({ kind: 'text', text: chartTickLabel(tick, axis?.numberFormatCode, options), x: cx + 4, y: cy - r - 3, anchor: 'start', font });
+  };
+  minorTicks.forEach(tick => drawTick(tick, true));
+  layout.ticks.forEach(tick => drawTick(tick, false));
   const categoryFont = chartFont('category', categoryAxis?.textStyle, model, options.resolveColor);
   layout.categories.forEach((text, index) => {
     const end = point(index, radius);

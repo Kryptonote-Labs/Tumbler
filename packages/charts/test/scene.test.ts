@@ -138,11 +138,12 @@ test('visible Cartesian value labels survive missing gridlines and use the host 
     expect(grid.marks.filter(mark => mark.kind === 'line').length).toBeGreaterThan(noGrid.marks.filter(mark => mark.kind === 'line').length);
     const deleted = layoutChartScene({ ...base, axes: [{ ...base.axes[0]!, majorGridlines: true, deleted: true }] }, 600, 400);
     expect(texts(deleted.marks)).toEqual(['Jan', 'Feb', 'Mar', 'Results']);
-    expect(deleted.marks.filter(mark => mark.kind === 'line')).toHaveLength(1);
+    expect(deleted.marks.filter(mark => mark.kind === 'line' && mark.stroke === '#777777')).toHaveLength(1);
+    expect(deleted.marks.filter(mark => mark.kind === 'line' && mark.stroke === '#d9d9d9').length).toBeGreaterThan(0);
   }
 });
 
-test('hidden XY axis spines keep their titles while suppressing ticks, strokes and gridlines', () => {
+test('hidden XY axis spines keep titles and gridlines while suppressing ticks and axis strokes', () => {
   const base = model({ kind: 'scatter', legend: undefined, axisIds: [1, 2], axes: [
     { id: 1, kind: 'value', position: 'bottom', title: 'Deleted X', majorGridlines: true, deleted: true, minimum: undefined, maximum: undefined, numberFormatCode: 'X' },
     { id: 2, kind: 'value', position: 'left', title: 'Visible Y', majorGridlines: false, deleted: false, minimum: undefined, maximum: undefined, numberFormatCode: 'Y' },
@@ -151,7 +152,8 @@ test('hidden XY axis spines keep their titles while suppressing ticks, strokes a
   expect(texts(scene.marks)).toContain('Deleted X');
   expect(texts(scene.marks).some(text => text.startsWith('X:'))).toBe(false);
   expect(texts(scene.marks).some(text => text.startsWith('Y:'))).toBe(true);
-  expect(scene.marks.filter(mark => mark.kind === 'line')).toHaveLength(1);
+  expect(scene.marks.filter(mark => mark.kind === 'line' && mark.stroke === '#777777')).toHaveLength(1);
+  expect(scene.marks.filter(mark => mark.kind === 'line' && mark.stroke === '#d9d9d9').length).toBeGreaterThan(0);
 });
 
 test('combination value labels and gridlines follow each axis independently', () => {

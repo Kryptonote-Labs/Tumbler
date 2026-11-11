@@ -9,15 +9,18 @@ export function combinationScene(context: SceneContext): ChartMark[] {
   const { model, width, height } = context;
   const plots = layoutCombinationChart(model, width, height, context.measure);
   const marks: ChartMark[] = [], seenAxes = new Set<number>(), seenTitles = new Set<number>();
+  const seenMajorGrids = new Set<number>(), seenMinorGrids = new Set<number>();
   for (const [plotIndex, plot] of plots.entries()) {
     const { plotArea, ...plotModel } = plot.model;
     const axes = plot.model.axes.map(axis => {
-      const current = { ...axis, deleted: axis.deleted || seenAxes.has(axis.id) };
+      const current = { ...axis, deleted: axis.deleted || seenAxes.has(axis.id),
+        ...(seenMajorGrids.has(axis.id) ? { majorGridlines: false } : {}), ...(seenMinorGrids.has(axis.id) ? { minorGridlines: false } : {}) };
       if (!seenTitles.has(axis.id)) return current;
       const { titleText: _text, titleShape: _shape, ...rest } = current;
       return { ...rest, title: undefined };
     });
     plot.model.axes.forEach(axis => { if (!axis.deleted) seenAxes.add(axis.id); });
+    plot.model.axes.forEach(axis => { if (axis.majorGridlines) seenMajorGrids.add(axis.id); if (axis.minorGridlines) seenMinorGrids.add(axis.id); });
     plot.model.axes.forEach(axis => { if (axis.title !== undefined) seenTitles.add(axis.id); });
     const current: SceneContext = {
       ...context,

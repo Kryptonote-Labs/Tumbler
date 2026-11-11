@@ -39,9 +39,9 @@ export function threeDAxisMarks(context: SceneContext, layout: CartesianChartLay
   const valueDirection = normal(valueStart, valueEnd, horizontal ? { x: 0, y: valueAxis?.position === 'top' ? -1 : 1 } : { x: valueAxis?.position === 'right' ? 1 : -1, y: 0 });
   const categoryDirection = normal(categoryStart, categoryEnd, horizontal ? { x: categoryAxis?.position === 'right' ? 1 : -1, y: 0 } : { x: 0, y: categoryAxis?.position === 'top' ? -1 : 1 });
   const valueLine = chartStroke('axis', valueAxis?.lineStyle, model, options.resolveColor), categoryLine = chartStroke('axis', categoryAxis?.lineStyle, model, options.resolveColor);
-  if (valueAxis && !valueAxis.deleted) {
+  if (valueAxis) {
     const font = chartFont('tick', valueAxis.textStyle, model, options.resolveColor);
-    marks.push(...line(valueStart.x, valueStart.y, valueEnd.x, valueEnd.y, valueLine));
+    if (!valueAxis.deleted) marks.push(...line(valueStart.x, valueStart.y, valueEnd.x, valueEnd.y, valueLine));
     const draw = (value: number, minor: boolean) => {
       const position = project(point(categoryCross, value, near));
       if (minor ? valueAxis.minorGridlines : valueAxis.majorGridlines) {
@@ -50,6 +50,7 @@ export function threeDAxisMarks(context: SceneContext, layout: CartesianChartLay
         const style = chartStroke('gridline', minor ? valueAxis.minorGridlineStyle : valueAxis.gridlineStyle, model, options.resolveColor);
         grids.push(...line(a.x, a.y, b.x, b.y, style), ...line(b.x, b.y, c.x, c.y, style));
       }
+      if (valueAxis.deleted) return;
       marks.push(...tick(position, valueDirection, minor ? valueAxis.minorTickMark : valueAxis.majorTickMark, valueLine, minor));
       if (minor || valueAxis.tickLabelPosition === 'none') return;
       const edge = valueAxis.tickLabelPosition === 'high' ? 1 : valueAxis.tickLabelPosition === 'low' ? 0 : categoryCross;
@@ -58,7 +59,7 @@ export function threeDAxisMarks(context: SceneContext, layout: CartesianChartLay
     };
     layout.ticks.forEach(value => draw(value, false));
     if (valueAxis.minorGridlines || valueAxis.minorTickMark && valueAxis.minorTickMark !== 'none') chartMinorTicks(layout.minimum, layout.maximum, valueAxis, layout.ticks).forEach(value => draw(value, true));
-    marks.push(...chartDisplayUnitMarks(context, valueAxis, { x: valueEnd.x - 4, y: valueEnd.y - 8, anchor: 'end' }));
+    if (!valueAxis.deleted) marks.push(...chartDisplayUnitMarks(context, valueAxis, { x: valueEnd.x - 4, y: valueEnd.y - 8, anchor: 'end' }));
   }
   if (valueAxis?.title) {
     const titleFont = chartFont('axisTitle', valueAxis.titleStyle, model, options.resolveColor);

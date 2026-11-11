@@ -30,13 +30,14 @@ export function cartesianAxisMarks(context: SceneContext, layout: CartesianChart
   const gridline = chartStroke('gridline', valueAxis?.gridlineStyle, model, options.resolveColor);
   const font = chartFont('tick', valueAxis?.textStyle, model, options.resolveColor);
   const format = chartAxisFormat(model, valueAxis);
-  if (valueAxis && !valueAxis.deleted) {
+  if (valueAxis) {
     const drawTick = (tick: number, minor: boolean) => {
       const at = value(tick);
       if (minor ? valueAxis?.minorGridlines : valueAxis?.majorGridlines) {
         const style = minor ? chartStroke('gridline', valueAxis?.minorGridlineStyle, model, options.resolveColor) : gridline;
         marks.push(...(horizontal ? line(at, plot.y, at, plot.y + plot.height, style) : line(plot.x, at, plot.x + plot.width, at, style)));
       }
+      if (valueAxis.deleted) return;
       marks.push(...ticks(valueAxis, minor, at, categoryPosition, horizontal, labelSide, valueLine));
       if (minor || valueAxis?.tickLabelPosition === 'none') return;
       const text = chartTickLabel(tick / (valueAxis?.displayUnit ?? 1), format, options);
@@ -45,8 +46,10 @@ export function cartesianAxisMarks(context: SceneContext, layout: CartesianChart
     };
     if (valueAxis && (valueAxis.minorGridlines || valueAxis.minorTickMark !== undefined && valueAxis.minorTickMark !== 'none')) chartMinorTicks(minimum, maximum, valueAxis, layout.ticks).forEach(tick => drawTick(tick, true));
     layout.ticks.forEach(tick => drawTick(tick, false));
-    marks.push(...(horizontal ? line(plot.x, categoryPosition, plot.x + plot.width, categoryPosition, valueLine) : line(categoryPosition, plot.y, categoryPosition, plot.y + plot.height, valueLine)));
-    if (valueAxis) marks.push(...chartDisplayUnitMarks(context, valueAxis, { x: plot.x, y: plot.y - 6, anchor: 'start' }));
+    if (!valueAxis.deleted) {
+      marks.push(...(horizontal ? line(plot.x, categoryPosition, plot.x + plot.width, categoryPosition, valueLine) : line(categoryPosition, plot.y, categoryPosition, plot.y + plot.height, valueLine)));
+      marks.push(...chartDisplayUnitMarks(context, valueAxis, { x: plot.x, y: plot.y - 6, anchor: 'start' }));
+    }
   }
   if (valueAxis?.title) {
     const titleFont = chartFont('axisTitle', valueAxis.titleStyle, model, options.resolveColor);
@@ -88,7 +91,6 @@ export function xyAxisMarks(context: SceneContext, layout: import('./layout.ts')
       marks.push(...chartAxisTitleMarks(context, axis, [horizontal ? { kind: 'text', text: axis.title, x: plot.x + plot.width / 2, y: side < 0 ? font.size + 4 : context.height - 4, anchor: 'middle', rotate: axis.titleStyle?.rotation ?? 0, font }
         : { kind: 'text', text: axis.title, x: side > 0 ? context.width - font.size : font.size, y: plot.y + plot.height / 2, anchor: 'middle', rotate: axis.titleStyle?.rotation ?? -90, font }], horizontal ? side > 0 ? 'bottom' : 'top' : side > 0 ? 'right' : 'left'));
     }
-    if (axis?.deleted) continue;
     const minimum = horizontal ? layout.xMinimum : layout.yMinimum, maximum = horizontal ? layout.xMaximum : layout.yMaximum;
     const positions = horizontal ? layout.xTicks : layout.yTicks;
     const coordinate = horizontal ? x : y;
@@ -101,6 +103,7 @@ export function xyAxisMarks(context: SceneContext, layout: import('./layout.ts')
         const style = chartStroke('gridline', minor ? axis?.minorGridlineStyle : axis?.gridlineStyle, model, options.resolveColor);
         marks.push(...(horizontal ? line(position, plot.y, position, plot.y + plot.height, style) : line(plot.x, position, plot.x + plot.width, position, style)));
       }
+      if (axis?.deleted) return;
       marks.push(...ticks(axis, minor, position, spine, horizontal, side, axisLine));
       if (minor || axis?.tickLabelPosition === 'none') return;
       const text = chartTickLabel(tick / (axis?.displayUnit ?? 1), format, options);
@@ -109,6 +112,7 @@ export function xyAxisMarks(context: SceneContext, layout: import('./layout.ts')
     };
     if (axis && (axis.minorGridlines || axis.minorTickMark !== undefined && axis.minorTickMark !== 'none')) chartMinorTicks(minimum, maximum, axis, positions).forEach(value => drawTick(value, true));
     positions.forEach(value => drawTick(value, false));
+    if (axis?.deleted) continue;
     marks.push(...(horizontal ? line(plot.x, spine, plot.x + plot.width, spine, axisLine) : line(spine, plot.y, spine, plot.y + plot.height, axisLine)));
     if (axis) marks.push(...chartDisplayUnitMarks(context, axis, { x: horizontal ? plot.x + plot.width : plot.x, y: horizontal ? plot.y + plot.height + font.size * 2.5 : plot.y - 6, anchor: 'end' }));
   }
