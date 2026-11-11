@@ -1,9 +1,9 @@
-import { drawingColorRgba, drawingGradientStops, encodeRgbaPng, type DrawingGradient, type DrawingPictureFill } from '@tumblerjs/ooxml';
+import { drawingColorRgba, drawingGradientFocus, drawingGradientStops, encodeRgbaPng, type DrawingGradient, type DrawingPictureFill } from '@tumblerjs/ooxml';
 import type { ChartMark } from './scene-marks.ts';
 import type { ChartRect } from './layout.ts';
 
 const brushes = new WeakMap<DrawingGradient, Map<string, DrawingPictureFill>>();
-/** A complete rectangular brush avoids compositing separate antialiased faces on an outline. */
+/** A complete nonlinear brush retains translucent coverage and supports elliptical highlights. */
 export function rectangularStrokeBrush(gradient: DrawingGradient, bounds: ChartRect, coverage: ChartRect): DrawingPictureFill {
   let cache = brushes.get(gradient);
   if (!cache) { cache = new Map(); brushes.set(gradient, cache); }
@@ -12,12 +12,13 @@ export function rectangularStrokeBrush(gradient: DrawingGradient, bounds: ChartR
   if (previous) return previous;
   const width = Math.max(1, Math.ceil(coverage.width)), height = Math.max(1, Math.ceil(coverage.height));
   const pixels = new Uint8Array(width * height * 4), stops = drawingGradientStops(gradient).map(stop => ({ ...stop, rgba: drawingColorRgba(stop.color) ?? [0, 0, 0, 0] as const }));
-  const [l, t, r, b] = gradient.focusRect ?? [...gradient.center, ...gradient.center];
+  const focus = drawingGradientFocus(gradient);
+  const [l, t, r, b] = focus.focusRect ?? [...focus.center, ...focus.center];
   const distance = (value: number, low: number, high: number) => value < low ? (low - value) / (low || 1e-12) : value > high ? (value - high) / (1 - high || 1e-12) : 0;
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     const px = (coverage.x + (x + .5) * coverage.width / width - bounds.x) / bounds.width;
     const py = (coverage.y + (y + .5) * coverage.height / height - bounds.y) / bounds.height;
-    const offset = Math.max(0, Math.min(1, Math.max(distance(px, l, r), distance(py, t, b))));
+    const offset = Math.max(0, Math.min(1, gradient.kind === 'radial' ? Math.hypot(px - gradient.center[0], py - gradient.center[1]) * 2 : Math.max(distance(px, l, r), distance(py, t, b))));
     let low = 0, high = stops.length;
     while (low < high) { const middle = (low + high) >>> 1; if (stops[middle]!.offset > offset) high = middle; else low = middle + 1; }
     const end = low === stops.length ? -1 : low;

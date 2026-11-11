@@ -1,3 +1,4 @@
+import { drawingGradientCircle, drawingGradientFocus } from './gradient-geometry.ts';
 import { drawingGradientStops } from './gradient-stops.ts';
 import { linearGradientLine, rectangularGradientFaces, type DrawingGradient } from './gradient.ts';
 export interface DrawingGradientCanvasContext {
@@ -13,15 +14,23 @@ export function paintDrawingGradient(
   fallback: string,
   w: number,
   h: number,
+  origin = { x: 0, y: 0 },
 ) {
   if (!value) return fallback;
   let result;
-  if (value.kind === 'radial') {
+  const circle = drawingGradientCircle(value, w, h);
+  if (circle) {
+    if (circle.radius <= 0) return value.stops.at(-1)?.color ?? fallback;
+    result = ctx.createRadialGradient(origin.x + circle.x, origin.y + circle.y, 0, origin.x + circle.x, origin.y + circle.y, circle.radius);
+  } else if (value.kind === 'radial') {
     ctx.save();
     ctx.scale(w, h);
     result = ctx.createRadialGradient(value.center[0], value.center[1], 0, value.center[0], value.center[1], 0.5);
     ctx.restore();
-  } else result = ctx.createLinearGradient(...linearGradientLine(value, w, h));
+  } else {
+    const [x1, y1, x2, y2] = linearGradientLine(value, w, h);
+    result = ctx.createLinearGradient(origin.x + x1, origin.y + y1, origin.x + x2, origin.y + y2);
+  }
   for (const stop of drawingGradientStops(value))
     result.addColorStop(Math.max(0, Math.min(1, stop.offset)), stop.color);
   return result;
@@ -41,14 +50,15 @@ export function paintRectangularGradient(
     const alpha = /^rgba\(.*,\s*([\d.]+)\)$/.exec(color)?.[1];
     return color !== 'transparent' && (alpha === undefined || Number(alpha) >= 1);
   });
-  const [l, t, r, b] = value.focusRect ?? [...value.center, ...value.center];
+  const focus = drawingGradientFocus(value);
+  const [l, t, r, b] = focus.focusRect ?? [...focus.center, ...focus.center];
   if (r > l && b > t) {
     ctx.fillStyle = value.stops[0]?.color ?? 'transparent';
     ctx.beginPath();
     ctx.moveTo(l * w, t * h); ctx.lineTo(r * w, t * h); ctx.lineTo(r * w, b * h); ctx.lineTo(l * w, b * h);
     ctx.fill();
   }
-  for (const face of rectangularGradientFaces(value.center, opaque ? 1 / Math.max(1, Math.min(w, h)) : 0, value.focusRect)) {
+  for (const face of rectangularGradientFaces(focus.center, opaque ? 1 / Math.max(1, Math.min(w, h)) : 0, focus.focusRect)) {
     const [x1, y1, x2, y2] = face.line;
     const fill = ctx.createLinearGradient(x1 * w, y1 * h, x2 * w, y2 * h);
     for (const stop of drawingGradientStops(value))

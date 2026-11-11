@@ -13,6 +13,7 @@ export function nativeColour(value: string, opacity = 1) {
 
 export function nativeGradient(fill: GradientFill): DrawingGradient {
   return {
+    ...(fill.type === 'linear' ? {} : { path: fill.type === 'radial' ? 'circle' as const : 'rect' as const }),
     kind: fill.type,
     angle: fill.angle ?? 0,
     scaled: fill.scaled ?? true,

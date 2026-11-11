@@ -34,6 +34,11 @@ export function gradientFillMarkup(input: GradientFill) {
 
 /** `rectangular` covers DrawingML `rect` and `shape` paths, which match on rectangular fills. */
 export interface DrawingGradient {
+  /** Native path shading differs from procedural radial highlights. */
+  readonly path?: 'circle' | 'rect' | 'shape';
+  /** Normalized tile edges, rather than DrawingML's inset amounts. */
+  readonly tileRect?: readonly [number, number, number, number];
+  /** Normalized focus edges, rather than DrawingML's inset amounts. */
   readonly focusRect?: readonly [number, number, number, number];
   readonly kind: "linear" | "radial" | "rectangular";
   readonly angle: number;
@@ -89,7 +94,7 @@ export function rectangularGradientFaces([cx, cy]: readonly [number, number], bl
 }
 
 export function drawingGradientFill(fill: GradientFill): DrawingGradient {
-  return { kind: fill.type, angle: fill.angle ?? 0, scaled: fill.scaled ?? true, center: fill.center ?? [0.5, 0.5], stops: [...fill.stops].sort((a,b) => a.offset-b.offset).map(s => ({ offset: s.offset, color: `rgba(${[1,3,5].map(i => parseInt(s.color.slice(i,i+2),16)).join(',')},${s.opacity ?? 1})` })) };
+  return { ...(fill.type === 'linear' ? {} : { path: fill.type === 'radial' ? 'circle' as const : 'rect' as const }), kind: fill.type, angle: fill.angle ?? 0, scaled: fill.scaled ?? true, center: fill.center ?? [0.5, 0.5], stops: [...fill.stops].sort((a,b) => a.offset-b.offset).map(s => ({ offset: s.offset, color: `rgba(${[1,3,5].map(i => parseInt(s.color.slice(i,i+2),16)).join(',')},${s.opacity ?? 1})` })) };
 }
 
 /** Read the RGB gradients this editor can author. Unsupported transforms stay in source XML. */

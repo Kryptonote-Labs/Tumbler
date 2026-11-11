@@ -1,4 +1,4 @@
-import { drawingPatternPicture, paintDrawingPattern, paintDrawingPicture, paintDrawingGradient as gradient, paintRectangularGradient as rectangular } from "@tumblerjs/ooxml";
+import { drawingGradientCircle, drawingGradientStops, drawingPatternPicture, paintDrawingPattern, paintDrawingPicture, paintDrawingGradient as gradient, paintRectangularGradient as rectangular } from "@tumblerjs/ooxml";
 import {
   linearGradientLine,
   rectangularGradientFaces,
@@ -58,15 +58,12 @@ export function paintPresentationSlide<Path, Image>(
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, document.width, document.height);
   const background = slide.backgroundGradient;
-  if (background?.kind === 'radial') {
-    // Keep the normalized coordinate transform active while painting the elliptical gradient.
+  if (background?.kind === 'radial' && !drawingGradientCircle(background, document.width, document.height)) {
     ctx.save();
     ctx.scale(document.width, document.height);
-    const fill = ctx.createRadialGradient(...background.center, 0, ...background.center, 0.5);
-    for (const stop of background.stops) fill.addColorStop(stop.offset, stop.color);
-    ctx.fillStyle = fill;
-    ctx.fillRect(0, 0, 1, 1);
-    ctx.restore();
+    const fill = ctx.createRadialGradient(...background.center, 0, ...background.center, .5);
+    for (const stop of drawingGradientStops(background)) fill.addColorStop(stop.offset, stop.color);
+    ctx.fillStyle = fill; ctx.fillRect(0, 0, 1, 1); ctx.restore();
   } else if (background?.kind === 'rectangular')
     rectangular(ctx, background, document.width, document.height);
   else {

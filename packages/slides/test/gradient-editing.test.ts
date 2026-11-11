@@ -81,3 +81,15 @@ test('native gradient-only shapes paint without a separate solid fallback', asyn
   paintPresentationSlide(context, reopened.document, slide, { path: d => new Path2D(d) });
   expect([...context.getImageData(60, 60, 1, 1).data]).toEqual([255, 0, 0, 255]);
 });
+
+test('procedural radial backgrounds keep their ellipse transform while painting', async () => {
+  const { createCanvas, Path2D } = await import('@napi-rs/canvas');
+  const { paintPresentationSlide } = await import('../src/index.ts');
+  const artifact = createPresentation({ width: 200, height: 100 });
+  const slide = { ...artifact.document.slides[0]!, backgroundGradient: { kind: 'radial' as const, angle: 0, scaled: true, center: [.5, .5] as const, stops: [{ offset: 0, color: '#FF0000' }, { offset: 1, color: '#0000FF' }] } };
+  const canvas = createCanvas(200, 100), context = canvas.getContext('2d');
+  paintPresentationSlide(context, artifact.document, slide, { path: d => new Path2D(d) });
+  const center = context.getImageData(100, 50, 1, 1).data;
+  expect(center[0]).toBeGreaterThan(250);
+  expect(center[2]).toBeLessThan(30);
+});

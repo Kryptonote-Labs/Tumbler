@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { drawingGradientStops, linearGradientLine, rectangularGradientFaces } from '@tumblerjs/ooxml';
+  import { drawingGradientCircle, drawingGradientFocus, drawingGradientStops, linearGradientLine, rectangularGradientFaces } from '@tumblerjs/ooxml';
   import type { DrawingGradient } from '@tumblerjs/ooxml';
   let {
     gradient,
@@ -8,7 +8,8 @@
     height,
   }: { gradient: DrawingGradient; id: string; width: number; height: number } = $props();
   let line = $derived(linearGradientLine(gradient, width, height));
-  let faces = $derived(rectangularGradientFaces(gradient.center));
+  const focus = $derived(drawingGradientFocus(gradient)), circle = $derived(drawingGradientCircle(gradient, width, height));
+  let faces = $derived(rectangularGradientFaces(focus.center, 0, focus.focusRect));
 </script>
 
 {#snippet stops()}
@@ -47,6 +48,8 @@
       />
     {/each}
   </pattern>
+{:else if circle}
+  <radialGradient {id} gradientUnits="userSpaceOnUse" cx={circle.x} cy={circle.y} r={circle.radius} color-interpolation="sRGB">{@render stops()}</radialGradient>
 {:else}
   <radialGradient
     {id}

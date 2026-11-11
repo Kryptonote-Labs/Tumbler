@@ -93,3 +93,4 @@ export { encodeRgbaPng } from './png.ts';
 
 export { drawingColorRgba } from './css-color.ts';
 export { drawingGradientStops } from './gradient-stops.ts';
+export { drawingGradientCircle, drawingGradientFocus } from './gradient-geometry.ts';

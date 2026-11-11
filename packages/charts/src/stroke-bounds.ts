@@ -14,7 +14,7 @@ export function chartStrokeBounds(marks: readonly ChartMark[], clip: ChartRect):
     if (!bounds) return mark;
     const width = (mark.kind === 'line' ? mark.width : mark.strokeWidth ?? 1) / 2;
     const strokeBounds = { x: bounds.x - width, y: bounds.y - width, width: bounds.width + width * 2, height: bounds.height + width * 2 };
-    if (mark.strokeGradient.kind !== 'rectangular') return { ...mark, strokeBounds };
+    if (mark.strokeGradient.kind !== 'rectangular' && !(mark.strokeGradient.kind === 'radial' && !mark.strokeGradient.path)) return { ...mark, strokeBounds };
     const extent = width * (mark.kind === 'circle' || mark.kind === 'rect' ? 1 : mark.kind === 'path' && (mark.strokeJoin === undefined || mark.strokeJoin === 'miter') ? Math.max(1, mark.miterLimit ?? 10) : Math.SQRT2);
     const coverage = intersection(clip, { x: bounds.x - extent, y: bounds.y - extent, width: bounds.width + extent * 2, height: bounds.height + extent * 2 });
     if (coverage.width <= 0 || coverage.height <= 0) return { ...mark, strokeBounds };
