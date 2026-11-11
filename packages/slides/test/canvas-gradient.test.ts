@@ -1,10 +1,20 @@
 import { expect, test } from 'bun:test';
 import { createCanvas, loadImage, Path2D } from '@napi-rs/canvas';
-import { createPresentation, applyPresentationCommand, presentationSlideImages, paintPresentationSlide } from '../src/index.ts';
+import { createPresentation, applyPresentationCommand, createPresentationNativeView, openPresentationNativeArchive, presentationSlideImages, paintPresentationSlide } from '../src/index.ts';
 import { slideObjectViewport } from '../src/canvas-gradient.ts';
 import type { DrawingGradient } from '@tumblerjs/ooxml';
 
 const gradient: DrawingGradient = { kind: 'linear', angle: 0, scaled: false, center: [.5, .5], tileRect: [0, 0, .5, 1], stops: [{ offset: 0, color: '#FF0000' }, { offset: 1, color: '#0000FF' }] };
+
+test('compiled slide image collection needs the viewport dimensions without export preservation', () => {
+  const partial = openPresentationNativeArchive(createPresentationNativeView(createPresentation()));
+  const document = partial.document, slide = document.slides[0]!;
+  expect(() => document.package).toThrow('Presentation preservation resources have not loaded.');
+  expect(presentationSlideImages(slide, document)).toEqual([]);
+  const images = presentationSlideImages({ ...slide, backgroundGradient: gradient }, document);
+  expect(images).toHaveLength(1);
+  expect(images[0]!.bytes.length).toBeGreaterThan(0);
+});
 
 test('native tiled slide backgrounds use the same brush as visible shapes', async () => {
   const document = { ...createPresentation().document, width: 100, height: 80 };
