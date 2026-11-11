@@ -39,6 +39,10 @@ export const gradientReferenceCases: readonly (readonly [label: string, shade: s
   ['linear no stop list', '<a:lin ang="0"/>', ''],
   ['circle non-square tile', `<a:path path="circle">${focus(50000, 50000, 50000, 50000)}</a:path><a:tileRect l="25000" r="25000" t="10000" b="10000"/>`],
   ['rect non-square tile', `<a:path path="rect">${focus(50000, 50000, 50000, 50000)}</a:path><a:tileRect l="25000" r="25000" t="10000" b="10000"/>`],
+  ['linear grey range', '<a:lin ang="0"/>', colors('404040', 'C0C0C0')],
+  ['linear custom colours', '<a:lin ang="0"/>', colors('2A84C0', 'C83465')],
+  ['rect asymmetric focus area', `<a:path path="rect">${focus(25000, 10000, 50000, 30000)}</a:path>`],
+  ['linear middle stop positions', '<a:lin ang="0"/>', colors('FF0000', '0000FF').replace('pos="0"', 'pos="25000"').replace('pos="100000"', 'pos="75000"')],
 ];
 const fill = (shade: string, colors = stops) => `<a:gradFill>${colors}${shade}</a:gradFill>`;
 let presentation = createPresentation();
