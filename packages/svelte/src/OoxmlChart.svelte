@@ -36,10 +36,16 @@
     }
   });
   const ramps = $derived(chartGradientPalettes(scene?.marks ?? [], clipId));
+
+  // A paint-kind change replaces the each scope, keeping old child getters valid until teardown.
+  function markKey(mark: ChartMark, index: number) {
+    const fill = mark.fillPattern ? 'pattern' : mark.fillPicture ? 'picture' : mark.fillGradient ? 'gradient' : 'solid';
+    return `${index}:${mark.kind}:${fill}:${!!(mark.strokeGradient && mark.strokeBounds)}:${mark.kind === 'group' && !!mark.clip}`;
+  }
 </script>
 
 {#snippet marks(list: readonly ChartMark[], path: string)}
-  {#each list as mark, index}
+  {#each list as mark, index (markKey(mark, index))}
     {@const paintId = `${clipId}${path}-${index}-fill`}
     {#if mark.fillPattern}<defs><PresentationPattern pattern={mark.fillPattern.pattern} light={mark.fillPattern.light} origin={mark.fillPattern.origin} id={paintId} /></defs>
     {:else if mark.fillPicture}<defs><PresentationPictureFill picture={mark.fillPicture.picture} origin={mark.fillPicture.bounds} width={mark.fillPicture.bounds.width} height={mark.fillPicture.bounds.height} id={paintId} /></defs>
