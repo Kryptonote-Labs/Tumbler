@@ -185,3 +185,6 @@ export type { SpreadsheetDrawingCommand } from './drawing-commands.ts';
 export { spreadsheetDrawingObjectId } from './drawings.ts';
 export { spreadsheetPrintHeaderText, spreadsheetPrintPages, type SpreadsheetPrintPage } from './print.ts';
 export { spreadsheetFormatPainterSample } from './format-painter.ts';
+export { createChartWorkbook, extendChartWorkbook, refreshChartWorkbook } from './chart-workbook.ts';
+export type { ChartWorkbookEdit } from './chart-workbook.ts';
+export { spreadsheetChartContent } from './chart-content.ts';
