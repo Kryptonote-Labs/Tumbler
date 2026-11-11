@@ -58,6 +58,12 @@ axis bounds and `majorUnit` take precedence; percentage stacks retain their
 normalized bounds. Very dense grids sample whole major units for rendering.
 
 Per-point fills, markers, line widths, smoothing and pie explosion are rendered.
+Chart, plot, title and legend shape fills are independent; overlay titles retain plot space.
+Authored preset/custom dash patterns, caps and joins reach SVG and canvas strokes.
+Linear, radial and rectangular gradients retain theme colours and alpha transforms on
+2D series, points, markers, labels, areas and legend swatches. Rectangular path gradients
+retain the full focus rectangle. Radial focus size, tiled/flipped gradients, gradient
+strokes, picture/pattern fills and effects still need renderer work. Their XML remains editable.
 Data labels support value/category/series/percentage/bubble-size flags, custom text,
 point deletion and number formats. Rich label text, leader lines, exact Office
 bubble-size normalization and three-dimensional bubble effects remain incomplete.

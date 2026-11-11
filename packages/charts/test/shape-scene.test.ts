@@ -19,7 +19,7 @@ test('chart, plot, title and legend use their own authored backgrounds with hidd
   const model = chart();
   expect(model).toMatchObject({ chartArea: { fill: { value: '#FFFF00' } }, plotArea: { fill: { value: '#00FF00' } }, titleArea: { fill: { value: '#FF0000' } }, legend: { shapeStyle: { fill: { value: '#0000FF' } } } });
   const scene = layoutChartScene(model, 600, 400), marks = flatten(scene.marks);
-  for (const fill of ['#FFFF00', '#00FF00', '#FF0000', '#0000FF']) expect(marks.find(mark => mark.kind === 'rect' && mark.fill === fill)?.stroke).toBeUndefined();
+  for (const fill of ['#FFFF00', '#00FF00', '#FF0000', '#0000FF']) expect(marks.filter(mark => mark.kind === 'rect').find(mark => mark.fill === fill)?.stroke).toBeUndefined();
   expect(scene.marks[0]).toMatchObject({ fill: '#FFFF00' });
   const canvas = createCanvas(600, 400), context = canvas.getContext('2d');
   paintChartScene(context, scene, d => new Path2D(d));

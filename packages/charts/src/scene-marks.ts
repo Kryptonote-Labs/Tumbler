@@ -19,7 +19,7 @@ export type ChartMark = (
    * Structure: an optional clip to `clip`, and a `role` naming the legend and each of its entries
    * so heads can expose them (the SVG head renders `chart-legend` and `chart-legend-entry` classes).
    */
-  | { readonly kind: "group"; readonly role?: "legend" | "legend-entry"; readonly clip?: ChartRect; readonly marks: readonly ChartMark[] }) & ChartStrokeDecoration;
+  | { readonly kind: "group"; readonly role?: "legend" | "legend-entry"; readonly clip?: ChartRect; readonly marks: readonly ChartMark[] }) & ChartStrokeDecoration & { readonly fillGradient?: import('./gradient-scene.ts').ChartGradientPaint };
 
 export interface ChartScene {
   readonly width: number;

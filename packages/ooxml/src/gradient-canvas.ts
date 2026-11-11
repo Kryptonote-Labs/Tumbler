@@ -40,7 +40,14 @@ export function paintRectangularGradient(
     const alpha = /^rgba\(.*,\s*([\d.]+)\)$/.exec(color)?.[1];
     return color !== 'transparent' && (alpha === undefined || Number(alpha) >= 1);
   });
-  for (const face of rectangularGradientFaces(value.center, opaque ? 0.002 : 0)) {
+  const [l, t, r, b] = value.focusRect ?? [...value.center, ...value.center];
+  if (r > l && b > t) {
+    ctx.fillStyle = value.stops[0]?.color ?? 'transparent';
+    ctx.beginPath();
+    ctx.moveTo(l * w, t * h); ctx.lineTo(r * w, t * h); ctx.lineTo(r * w, b * h); ctx.lineTo(l * w, b * h);
+    ctx.fill();
+  }
+  for (const face of rectangularGradientFaces(value.center, opaque ? 1 / Math.max(1, Math.min(w, h)) : 0, value.focusRect)) {
     const [x1, y1, x2, y2] = face.line;
     const fill = ctx.createLinearGradient(x1 * w, y1 * h, x2 * w, y2 * h);
     for (const stop of value.stops)

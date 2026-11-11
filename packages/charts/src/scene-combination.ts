@@ -1,3 +1,4 @@
+import { chartLegendFill } from './gradient-scene.ts';
 import { layoutCombinationChart } from './combination.ts';
 import { cartesianScene } from './scene-cartesian.ts';
 import { legendMarks, type ChartMark, type SceneContext } from './scene-marks.ts';
@@ -20,7 +21,7 @@ export function combinationScene(context: SceneContext): ChartMark[] {
   }
   if (model.legend) marks.push(...legendMarks(context, model.series.map((series, index) => ({
     label: series.title ?? `Series ${index + 1}`,
-    swatch: (x: number, y: number): ChartMark => ({ kind: 'rect', x, y: y - 8, width: 8, height: 8, fill: context.color(series, index) }),
+    swatch: (x: number, y: number): ChartMark => ({ kind: 'rect', x, y: y - 8, width: 8, height: 8, ...chartLegendFill(context, series, { x, y: y - 7, width: 8, height: 8 }), fill: series.noFill ? "none" : context.color(series, index) }),
   })), 12));
   return marks;
 }

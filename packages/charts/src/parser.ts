@@ -1,3 +1,4 @@
+import { parseChartGradient } from './gradient-parser.ts';
 import { parseChartAxisProperties } from './axis-properties.ts';
 import { parseChartAnalytics } from './analytics-parser.ts';
 import { parseChartDataLabels } from './data-labels.ts';
@@ -229,18 +230,18 @@ function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespac
   const points = children(element, chartNamespace, 'dPt');
   if (points.length > MAX_CACHE_POINTS) throw new ChartPreviewLimitError('Chart point formatting exceeds preview limits.');
   const shape = children(element, chartNamespace, 'spPr')[0];
-  const lineStyle = parseChartLine(shape, drawingNamespace);
+  const lineStyle = parseChartLine(shape, drawingNamespace), gradient = parseChartGradient(shape, drawingNamespace);
   return Object.freeze({
     ...(children(shape ?? element, drawingNamespace, 'noFill').length ? { noFill: true } : {}),
     ...(lineStyle ? { lineStyle } : {}),
-
+    ...(gradient ? { gradient } : {}),
     ...(parseChartDataLabels(children(element, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace) ? { dataLabels: parseChartDataLabels(children(element, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace)! } : {}),
     ...parseChartAnalytics(element, chartNamespace, drawingNamespace, node => parseData(node, chartNamespace)),
     explosion: Number(val(children(element, chartNamespace, 'explosion')[0]) ?? 0),
     pointFormats: points.map(point => {
-      const shape = children(point, chartNamespace, 'spPr')[0];
+      const shape = children(point, chartNamespace, 'spPr')[0], gradient = parseChartGradient(shape, drawingNamespace);
       return { index: requiredUnsignedVal(point, chartNamespace, 'idx', 'point index'),
-
+        ...(gradient ? { gradient } : {}),
         fill: parseChartFill(shape, drawingNamespace), noFill: shape && children(shape, drawingNamespace, 'noFill').length ? true : undefined,
         lineStyle: parseChartLine(shape, drawingNamespace), marker: parseMarker(children(point, chartNamespace, 'marker')[0], chartNamespace),
         explosion: val(children(point, chartNamespace, 'explosion')[0]) === undefined ? undefined : Number(val(children(point, chartNamespace, 'explosion')[0])) };
@@ -370,9 +371,11 @@ function parseMarker(element: LosslessXmlElement | undefined, namespace: string)
   if (!Number.isInteger(size) || size < 2 || size > 72) throw new ChartParseError("Chart marker size must be an integer between 2 and 72.");
   const drawing = namespace.replace(/chart$/, 'main');
   const shape = children(element, namespace, 'spPr')[0];
-  const fill = parseChartFill(shape, drawing), lineStyle = parseChartLine(shape, drawing);
-  return Object.freeze({ symbol: rawSymbol as ChartMarkerSymbol, size,
-
+  const fill = parseChartFill(shape, drawing), lineStyle = parseChartLine(shape, drawing), gradient = parseChartGradient(shape, drawing);
+  return Object.freeze({
+    ...(children(element, namespace, "symbol").length ? { symbol: rawSymbol as ChartMarkerSymbol } : {}),
+    ...(children(element, namespace, "size").length ? { size } : {}),
+    ...(gradient ? { gradient } : {}),
     ...(fill ? { fill } : {}), ...(shape && children(shape, drawing, 'noFill').length ? { noFill: true } : {}), ...(lineStyle ? { lineStyle } : {}) });
 }
 

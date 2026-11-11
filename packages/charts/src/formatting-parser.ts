@@ -1,3 +1,4 @@
+import { parseChartGradient } from './gradient-parser.ts';
 import { chartElementMarkup } from './xml-markup.ts';
 import { resolveDrawingColor, readDrawingStrokeProperties, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import type { ChartColor, ChartColorTransform, ChartLineStyle, ChartTextStyle, ChartShapeStyle } from "./model.ts";
@@ -11,7 +12,11 @@ function attribute(element: LosslessXmlElement | undefined, name: string) {
 
 /** Retain ordered luminance transforms used by Office chart text and gridlines. */
 export function parseChartFill(parent: LosslessXmlElement | undefined, ns: string): ChartColor | undefined {
-  const fill = child(parent, ns, "solidFill");
+  return parseChartColorContainer(child(parent, ns, "solidFill"), ns);
+}
+
+/** A colour choice shared by solid fills, gradient stops and pattern colours. */
+export function parseChartColorContainer(fill: LosslessXmlElement | undefined, ns: string): ChartColor | undefined {
   const source = fill?.children.find((node): node is LosslessXmlElement => node.kind === 'element' && node.namespaceUri === ns && ['srgbClr', 'schemeClr', 'sysClr', 'prstClr', 'scrgbClr', 'hslClr'].includes(node.localName));
   const rgb = source?.localName === 'srgbClr';
   const raw = attribute(source, 'val');
@@ -84,6 +89,7 @@ export function chartColorFillXml(color: ChartColor, drawingNamespace?: string):
 /** Shape-level paint is shared by chart/plot areas, titles and legends. */
 export function parseChartShapeStyle(parent: LosslessXmlElement | undefined, ns: string): ChartShapeStyle | undefined {
   if (!parent) return undefined;
+  const gradient = parseChartGradient(parent, ns);
   const fill = parseChartFill(parent, ns), lineStyle = parseChartLine(parent, ns);
-  return { ...(fill ? { fill } : {}), ...(child(parent, ns, 'noFill') ? { noFill: true } : {}), ...(lineStyle ? { lineStyle } : {}) };
+  return { ...(gradient ? { gradient } : {}), ...(fill ? { fill } : {}), ...(child(parent, ns, 'noFill') ? { noFill: true } : {}), ...(lineStyle ? { lineStyle } : {}) };
 }

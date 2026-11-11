@@ -68,3 +68,6 @@ export { fitChartTrendline, type ChartTrendFit, type TrendPoint } from './trendl
 export { chartErrorExtents, type ChartErrorExtent } from './error-bars.ts';
 
 export { convertChartConformance } from './conformance.ts';
+
+export type { ChartGradient } from './model.ts';
+export type { ChartGradientPaint } from './gradient-scene.ts';

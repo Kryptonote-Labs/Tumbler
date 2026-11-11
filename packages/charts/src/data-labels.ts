@@ -1,10 +1,10 @@
 import { ChartParseError, ChartPreviewLimitError } from './parser-errors.ts';
 import type { LosslessXmlElement } from '@tumblerjs/ooxml';
-import { parseChartFill, parseChartLine, parseChartTextStyle } from './formatting-parser.ts';
+import { parseChartShapeStyle, parseChartTextStyle } from './formatting-parser.ts';
 import { readChartTitleText } from './rich-text.ts';
-import type { ChartColor, ChartLineStyle, ChartTextStyle, ChartTextParagraph } from './model.ts';
+import type { ChartShapeStyle, ChartTextStyle, ChartTextParagraph } from './model.ts';
 
-export interface ChartDataLabelOptions {
+export interface ChartDataLabelOptions extends ChartShapeStyle {
   readonly deleted?: boolean;
   readonly showValue?: boolean;
   readonly showCategory?: boolean;
@@ -18,8 +18,6 @@ export interface ChartDataLabelOptions {
   readonly text?: string;
   readonly richText?: readonly ChartTextParagraph[];
   readonly textStyle?: ChartTextStyle;
-  readonly fill?: ChartColor;
-  readonly lineStyle?: ChartLineStyle;
 }
 export interface ChartDataLabels extends ChartDataLabelOptions {
   readonly points?: Readonly<Record<number, ChartDataLabelOptions>>;
@@ -49,10 +47,10 @@ export function parseChartDataLabels(element: LosslessXmlElement | undefined, c:
     const cache = children(reference, c, 'strCache')[0];
     const value = children(children(cache, c, 'pt')[0], c, 'v')[0];
     const textStyle = parseChartTextStyle(element, c, a), shape = children(element, c, 'spPr')[0];
-    const fill = parseChartFill(shape, a), lineStyle = parseChartLine(shape, a);
+    const shapeStyle = parseChartShapeStyle(shape, a);
     return { ...flags, ...(position ? { position } : {}), ...(separator ? { separator: text(separator) } : {}),
       ...(formatCode ? { formatCode } : {}), ...(richText ? { richText, text: richText.map(paragraph => paragraph.runs.map(run => run.text).join('')).join('\n') } : value ? { text: text(value) } : {}),
-      ...(textStyle ? { textStyle } : {}), ...(fill ? { fill } : {}), ...(lineStyle ? { lineStyle } : {}) };
+      ...(textStyle ? { textStyle } : {}), ...shapeStyle };
   }
   const points = children(element, c, 'dLbl');
   if (points.length > 100_000) throw new ChartPreviewLimitError('Data labels exceed preview limits.');

@@ -11,11 +11,12 @@ export const BUBBLE_CHART_POINT_LIMIT = 10_000;
 export type ChartMarkerSymbol = "auto" | "circle" | "dash" | "diamond" | "dot" | "none" | "picture" | "plus" | "square" | "star" | "triangle" | "x";
 
 export interface ChartMarker {
+  readonly gradient?: ChartGradient;
   readonly fill?: ChartColor;
   readonly noFill?: boolean;
   readonly lineStyle?: ChartLineStyle;
-  readonly symbol: ChartMarkerSymbol;
-  readonly size: number;
+  readonly symbol?: ChartMarkerSymbol;
+  readonly size?: number;
 }
 
 export interface ChartColorTransform {
@@ -52,7 +53,18 @@ export interface ChartLineStyle extends DrawingStrokeProperties {
   readonly width?: number;
 }
 
+export interface ChartGradient {
+  /** Normalized focus edges, not the four DrawingML inset amounts. */
+  readonly focusRect?: readonly [number, number, number, number];
+  readonly kind: 'linear' | 'radial' | 'rectangular';
+  readonly angle: number;
+  readonly scaled: boolean;
+  readonly center: readonly [number, number];
+  readonly stops: readonly { readonly offset: number; readonly color: ChartColor }[];
+}
+
 export interface ChartShapeStyle {
+  readonly gradient?: ChartGradient;
   readonly fill?: ChartColor;
   readonly noFill?: boolean;
   readonly lineStyle?: ChartLineStyle;
@@ -73,6 +85,7 @@ export interface ChartDataSequence {
 }
 
 export interface ChartPointFormat {
+  readonly gradient?: ChartGradient;
   readonly index: number;
   readonly fill?: ChartColor | undefined;
   readonly noFill?: boolean | undefined;
@@ -82,6 +95,7 @@ export interface ChartPointFormat {
 }
 
 export interface ChartSeries {
+  readonly gradient?: ChartGradient;
   readonly trendlines?: readonly import('./analytics-parser.ts').ChartTrendline[];
   readonly errorBars?: readonly import('./analytics-parser.ts').ChartErrorBars[];
   readonly dataLabels?: import('./data-labels.ts').ChartDataLabels;

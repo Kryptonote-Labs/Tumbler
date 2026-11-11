@@ -1,3 +1,5 @@
+import { chartPointGradient } from './gradient-scene.ts';
+import { chartShapeMarks } from './shape-scene.ts';
 import { chartPointStroke } from './stroke-scene.ts';
 import { chartDataLabelMarks } from './label-scene.ts';
 import { chartPointColor } from './point-style.ts';
@@ -35,7 +37,7 @@ export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[
   const hole = model.kind === "doughnut" ? radius * (model.holeSize ?? 50) / 100 : 0;
   const first = model.series[0];
   if (!first) return [];
-  const marks: ChartMark[] = [];
+  const marks: ChartMark[] = chartShapeMarks(context, { x: left, y: top, width: right - left, height: bottom - top }, model.plotArea);
   const rings = model.kind === 'doughnut' ? model.series : model.series.slice(0, 1);
   rings.forEach((series, ring) => {
     const outer = radius - (radius - hole) * (rings.length - ring - 1) / rings.length;
@@ -65,7 +67,7 @@ export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[
       const { dx, dy } = offset(slice);
       const shifted = (points: readonly { x: number; y: number }[]) => points.map(point => ({ x: point.x + dx, y: point.y + dy }));
       const d = depth ? chartPolygon(shifted([...sample(outer, slice.startAngle, slice.endAngle), ...(inner ? sample(inner, slice.endAngle, slice.startAngle) : [{ x: cx, y: cy }])])) : pieArcPath(cx + dx, cy + dy, outer, slice.startAngle, slice.endAngle, inner);
-      marks.push({ kind: 'path', d, fill: chartPointColor(context, series, ring, slice.index), ...chartPointStroke(context, series, ring, slice.index, '#ffffff') });
+      marks.push({ kind: 'path', d, fill: chartPointColor(context, series, ring, slice.index), ...chartPointGradient(context, series, slice.index, { x: cx + dx - outer, y: cy + dy - outer * tilt, width: outer * 2, height: outer * tilt * 2 }), ...chartPointStroke(context, series, ring, slice.index, '#ffffff') });
       const angle = (slice.startAngle + slice.endAngle) / 2;
       const labelRadius = inner + (outer - inner) * .65;
       const category = String(categories.get(slice.index) ?? slice.index + 1);
@@ -100,7 +102,7 @@ export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[
     const row = rows.get(entry.y)!;
     const x = entry.x + (horizontal ? width / 2 - (row.left + row.right) / 2 : 0);
     return [
-      { kind: "rect", x, y: entry.y - 8, width: 10, height: 10, fill: chartPointColor(context, first, 0, slices[index]!.index) },
+      { kind: "rect", x, y: entry.y - 8, width: 10, height: 10, fill: chartPointColor(context, first, 0, slices[index]!.index), ...chartPointGradient(context, first, slices[index]!.index, { x, y: entry.y - 8, width: 10, height: 10 }) },
       { kind: "text", text: entry.label, x: x + 15, y: entry.y, anchor: "start", font },
     ];
   })));
