@@ -6,6 +6,7 @@ import { chartStroke } from './scene-style.ts';
 import { surfaceBandPaint } from './surface-bands.ts';
 import type { ChartMark, SceneContext } from './scene-marks.ts';
 import type { ChartLegendItem } from './legend-items.ts';
+import { chartLegendShape } from './shape-scene.ts';
 
 function key(context: SceneContext, entry: ChartLegendItem, x: number, y: number, size: number): ChartMark {
   if (entry.kind === 'trendline') {
@@ -26,8 +27,9 @@ export function chartLegendScene(context: SceneContext, bands?: readonly number[
   const layout = layoutChartLegend(context.model, context.width, context.height, context.measure, bands, context.options.resolveColor, context.options);
   if (!layout.entries.length) return [];
   const size = layout.labelX >= 14 ? 10 : 8;
-  return [{ kind: 'group', role: 'legend', marks: layout.entries.map(entry => ({ kind: 'group', role: 'legend-entry', marks: [
+  const entries: ChartMark[] = layout.entries.map(entry => ({ kind: 'group', role: 'legend-entry', marks: [
     key(context, entry, entry.x, entry.y, size),
     ...entry.lines.map((text, index): ChartMark => ({ kind: 'text', text, x: entry.x + layout.labelX, y: entry.y + index * entry.font.size * 1.2, anchor: 'start', font: entry.font })),
-  ] })) }];
+  ] }));
+  return chartLegendShape(context, [{ kind: 'group', role: 'legend', marks: layout.manual ? [{ kind: 'group', clip: layout.bounds, marks: entries }] : entries }], layout.manual ? layout.bounds : undefined);
 }

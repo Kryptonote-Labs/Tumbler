@@ -2,6 +2,7 @@ import type { LosslessXmlElement } from '@tumblerjs/ooxml';
 import { parseChartShapeStyle, parseChartTextStyle } from './formatting-parser.ts';
 import type { ChartLegend, ChartLegendEntry, ChartLegendPosition } from './model.ts';
 import { ChartParseError } from './parser-errors.ts';
+import { parseChartManualLayout } from './manual-layout.ts';
 
 export function parseChartLegend(element: LosslessXmlElement | undefined, c: string, a: string): ChartLegend | undefined {
   if (!element) return undefined;
@@ -22,6 +23,7 @@ export function parseChartLegend(element: LosslessXmlElement | undefined, c: str
     entries[index] = { ...(deleted ? { deleted: boolean(deleted, false) } : {}), ...(textStyle ? { textStyle } : {}) };
   }
   const shapeStyle = parseChartShapeStyle(children(element, 'spPr')[0], a), textStyle = parseChartTextStyle(element, c, a);
+  const layout = parseChartManualLayout(element, c);
   return Object.freeze({ position: positions[value(children(element, 'legendPos')[0]) ?? 'r'] ?? 'right', overlay: boolean(children(element, 'overlay')[0], false),
-    ...(shapeStyle ? { shapeStyle } : {}), ...(textStyle ? { textStyle } : {}), ...(Object.keys(entries).length ? { entries: Object.freeze(entries) } : {}) });
+    ...(layout ? { layout } : {}), ...(shapeStyle ? { shapeStyle } : {}), ...(textStyle ? { textStyle } : {}), ...(Object.keys(entries).length ? { entries: Object.freeze(entries) } : {}) });
 }
