@@ -40,21 +40,23 @@ export function xyScene(context: SceneContext): ChartMark[] {
   if (!yAxis?.deleted) marks.push(...line(plot.x, plot.y, plot.x, bottom, chartStroke("axis", model.axes.find(axis => axis.position === "left" || axis.position === "right")?.lineStyle, model, resolve)));
 
   const series: ChartMark[] = [];
+  const labels: ChartMark[] = [];
   model.series.forEach((item, index) => {
     if (bubbles) {
       for (const point of bubbles.series[index] ?? []) {
         if (point.radius > 0) series.push({ kind: "circle", cx: point.plotX, cy: point.plotY, r: point.radius, fill: chartPointColor(context, item, index, point.index), stroke: chartPointColor(context, item, index, point.index, true), fillOpacity: 0.72 });
       }
-      for (const point of bubbles.series[index] ?? []) series.push(...chartDataLabelMarks(context, item, index, { index: point.index, x: point.plotX, y: point.plotY, category: String(point.x), value: point.y, bubbleSize: point.size }));
+      for (const point of bubbles.series[index] ?? []) labels.push(...chartDataLabelMarks(context, item, index, { index: point.index, x: point.plotX, y: point.plotY, category: String(point.x), value: point.y, bubbleSize: point.size }));
       return;
     }
     const points = layout.series[index] ?? [];
     const stroke = context.color(item, index, true);
     if (lineVisible(model, item)) series.push({ kind: "path", d: scatterLinePath(points, smooth(model, item)), stroke, strokeWidth: item.lineStyle?.noFill ? 0 : (item.lineStyle?.width ?? 1.5) * 4 / 3 });
     if (markerVisible(model, item)) for (const point of points) series.push(...chartMarkerMarks(context, item, index, point.index, point.plotX, point.plotY));
-    for (const point of points) series.push(...chartDataLabelMarks(context, item, index, { index: point.index, x: point.plotX, y: point.plotY, category: String(point.x), value: point.y }));
+    for (const point of points) labels.push(...chartDataLabelMarks(context, item, index, { index: point.index, x: point.plotX, y: point.plotY, category: String(point.x), value: point.y }));
   });
   marks.push({ kind: "group", clip: plot, marks: series });
+  marks.push(...labels);
 
   const titleFont = chartFont("axisTitle", undefined, model, resolve);
   if (!xAxis?.deleted && xAxis?.title !== undefined) marks.push({ kind: "text", text: xAxis.title, x: plot.x + plot.width / 2, y: height - 4, anchor: "middle", font: titleFont });

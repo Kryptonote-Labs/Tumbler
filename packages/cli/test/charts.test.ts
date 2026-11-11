@@ -99,7 +99,10 @@ test('XLSX chart reads report live worksheet values while property IDs address t
   const directory = await mkdtemp(join(tmpdir(), 'tumbler-live-chart-cli-'));
   try {
     const created = createChartWorkbook(createOoxmlChart({ type: 'barChart', categories: ['A', 'B'], series: [{ name: 'One', values: [2, 4] }] }));
-    let artifact = applySpreadsheetCommand(created.artifact, { name: 'insert-chart', sheetId: '1', x: 10, y: 10, width: 480, height: 320, content: { xml: new TextDecoder().decode(created.source) } });
+    const { updateChartData, readChartData } = await import('@tumblerjs/charts');
+    const bound = updateChartData(created.source, readChartData(created.source).map(plot => ({ ...plot, series: plot.series.map(series => ({ ...series, values: { ...series.values!, formula: "'Sheet1'!$B$2:$B$5" } })) })));
+    let artifact = applySpreadsheetCommand(created.artifact, { name: 'insert-chart', sheetId: '1', x: 10, y: 10, width: 480, height: 320, content: { xml: new TextDecoder().decode(bound) } });
+    artifact = applySpreadsheetCommand(artifact, { name: 'set-range', sheetId: '1', reference: 'B2', values: [[2], [4], [6], [8]] });
     artifact = applySpreadsheetCommand(artifact, { name: 'set-formula', sheetId: '1', reference: 'B2', formula: '6*7' });
     const path = join(directory, 'live.xlsx');
     await Bun.write(path, artifact.bytes());
@@ -108,11 +111,14 @@ test('XLSX chart reads report live worksheet values while property IDs address t
     const part = list.parts[0]!.part;
     const before = await Bun.file(path).bytes();
     const snapshot = await host.readCharts!(path, { part }) as { page: string; source: ChartSourceNode; data: { series: { values: { values: number[] } }[] }[] };
-    expect(snapshot.data[0]?.series[0]?.values.values).toEqual([42, 4]);
+    expect(snapshot.data[0]?.series[0]?.values.values).toEqual([42, 4, 6, 8]);
     expect(await Bun.file(path).bytes()).toEqual(before);
     const chart = snapshot.source.children.find(child => child.name === 'c:chart')!;
     const titleFlag = chart.children.find(child => child.name === 'c:autoTitleDeleted')!;
-    const changed = await host.editChart!(path, { page: snapshot.page, part, edits: [{ kind: 'attribute', node: titleFlag.id, name: 'val', value: '0' }] }) as { data: typeof snapshot.data };
-    expect(changed.data[0]?.series[0]?.values.values).toEqual([42, 4]);
+    const changed = await host.editChart!(path, { page: snapshot.page, part, edits: [{ kind: 'attribute', node: titleFlag.id, name: 'val', value: '0' }] }) as { page: string; data: typeof snapshot.data };
+    expect(changed.data[0]?.series[0]?.values.values).toEqual([42, 4, 6, 8]);
+    await host.editChart!(path, { page: changed.page, part, type: 'scatterChart' });
+    const saved = openOpcPackage(await Bun.file(path).bytes());
+    expect(readChartData(saved.readPart(saved.getPart(part)!))[0]?.series[0]?.xValues?.values).toEqual([1, 2, 3, 4]);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

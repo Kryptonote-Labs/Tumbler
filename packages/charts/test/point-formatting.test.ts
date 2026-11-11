@@ -45,3 +45,12 @@ test('layout uses new point formatting after a host changes the model', () => {
   expect(flat(layoutChartScene({ ...model, series: [first] }, 600, 400).marks).some(mark => 'fill' in mark && mark.fill === '#123456')).toBe(true);
   expect(flat(layoutChartScene({ ...model, series: [next] }, 600, 400).marks).some(mark => 'fill' in mark && mark.fill === '#ABCDEF')).toBe(true);
 });
+
+test('explicit point paint overrides inherited no-fill and hollow markers retain an outline', () => {
+  const base = chart('barChart', '');
+  const series = { ...base.series[0]!, noFill: true, pointFormats: [{ index: 1, fill: { kind: 'rgb' as const, value: '#FF3300' } }] };
+  const marks = flat(layoutChartScene({ ...base, series: [series] }, 600, 400).marks);
+  expect(marks.some(mark => mark.kind === 'rect' && mark.fill === '#FF3300')).toBe(true);
+  const line = chart('lineChart', '<c:marker><c:symbol val="circle"/><c:spPr><a:noFill/></c:spPr></c:marker>');
+  expect(flat(layoutChartScene(line, 600, 400).marks).some(mark => mark.kind === 'circle' && mark.fill === 'none' && mark.stroke && mark.stroke !== 'none')).toBe(true);
+});

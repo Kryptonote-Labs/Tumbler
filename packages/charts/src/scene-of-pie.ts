@@ -1,3 +1,6 @@
+import { chartDataLabelMarks } from './label-scene.ts';
+import { indexChartSequence } from './indexed-data.ts';
+import { chartPointColor } from './point-style.ts';
 import { pieScene } from './scene-pie.ts';
 import type { ChartMark, SceneContext } from './scene-marks.ts';
 
@@ -47,11 +50,12 @@ export function ofPieScene(context: SceneContext): ChartMark[] {
     let top = (height - barHeight) / 2;
     for (const point of secondary) {
       const h = Number(point.value) / other * barHeight;
-      marks.push({ kind: 'rect', x: mainWidth + (minorWidth - barWidth) / 2, y: top, width: barWidth, height: h, fill: context.color(first, values.indexOf(point)), stroke: '#ffffff' });
+      marks.push({ kind: 'rect', x: mainWidth + (minorWidth - barWidth) / 2, y: top, width: barWidth, height: h, fill: chartPointColor(context, first, 0, point.index), stroke: '#ffffff' });
+      marks.push(...chartDataLabelMarks(context, first, 0, { index: point.index, x: mainWidth + minorWidth / 2, y: top + h / 2, category: String(indexChartSequence(first.categories).get(point.index) ?? point.index + 1), value: Number(point.value), percent: Number(point.value) / total }));
       top += h;
     }
   } else {
-    const minor = pieScene({ ...context, width: minorWidth, height: minorHeight, color: (series, index, line) => context.color(series, values.findIndex(point => point.index === secondary[index]?.index), line), model: { ...model, kind: 'pie', title: undefined, legend: undefined, series: [secondarySeries] } });
+    const minor = pieScene({ ...context, width: minorWidth, height: minorHeight, model: { ...model, kind: 'pie', title: undefined, legend: undefined, series: [secondarySeries] } }, total);
     marks.push(...minor.map(mark => move(mark, mainWidth, (height - minorHeight) / 2)));
   }
   if (model.legend) marks.push(...pieScene({ ...context, model: { ...model, kind: 'pie' } }).filter(mark => mark.kind === 'group' && mark.role === 'legend'));

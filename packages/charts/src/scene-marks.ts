@@ -30,6 +30,7 @@ export interface ChartScene {
 }
 
 export interface ChartSceneOptions {
+  readonly dateSystem?: "1900" | "1904";
   /** Host colour binding; takes precedence over the model's theme colours. */
   readonly resolveColor?: ChartColorResolver;
   readonly formatNumber?: (value: number, formatCode: string | undefined) => string;

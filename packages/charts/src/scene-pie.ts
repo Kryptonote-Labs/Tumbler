@@ -10,7 +10,7 @@ const PADDING = 16;
 const SLOT = 110;
 
 /** Pie and doughnut charts. The legend lists categories of the first series, one entry per slice. */
-export function pieScene(context: SceneContext): ChartMark[] {
+export function pieScene(context: SceneContext, labelTotal?: number): ChartMark[] {
   const { model, width, height, options } = context;
   const slices = layoutPieSlices(model);
   const count = slices.length;
@@ -59,7 +59,7 @@ export function pieScene(context: SceneContext): ChartMark[] {
       }
     }
     const categories = indexChartSequence(series.categories);
-    const total = current.reduce((sum, slice) => sum + slice.value, 0);
+    const total = labelTotal ?? current.reduce((sum, slice) => sum + slice.value, 0);
     current.forEach((slice, index) => {
       const { dx, dy } = offset(slice);
       const shifted = (points: readonly { x: number; y: number }[]) => points.map(point => ({ x: point.x + dx, y: point.y + dy }));

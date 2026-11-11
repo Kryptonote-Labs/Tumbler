@@ -64,12 +64,24 @@ function formatFraction(value: number, section: string): string {
 }
 
 function approximateFraction(value: number, maximumDenominator: number): { numerator: number; denominator: number } {
-  let best = { numerator: 0, denominator: 1, error: value };
-  for (let denominator = 1; denominator <= maximumDenominator; denominator += 1) {
-    const numerator = Math.round(value * denominator);
-    const error = Math.abs(value - numerator / denominator);
-    if (error < best.error) best = { numerator, denominator, error };
+  // Continued fractions find the closest bounded rational without scanning every denominator.
+  // Denominators beyond IEEE-754's exact integer range cannot improve the input's precision.
+  const maximum = Math.min(Number.MAX_SAFE_INTEGER, maximumDenominator);
+  let p0 = 0, q0 = 1, p1 = 1, q1 = 0, remaining = value;
+  for (let iteration = 0; iteration < 128; iteration++) {
+    const integer = Math.floor(remaining);
+    const p2 = p0 + integer * p1, q2 = q0 + integer * q1;
+    if (!Number.isSafeInteger(q2) || q2 > maximum) break;
+    [p0, q0, p1, q1] = [p1, q1, p2, q2];
+    const rest = remaining - integer;
+    if (rest === 0) return { numerator: p1, denominator: q1 };
+    remaining = 1 / rest;
   }
+  const k = Math.floor((maximum - q0) / q1);
+  const first = { numerator: p0 + k * p1, denominator: q0 + k * q1 };
+  const second = { numerator: p1, denominator: q1 };
+  const firstError = Math.abs(value - first.numerator / first.denominator), secondError = Math.abs(value - second.numerator / second.denominator);
+  const best = firstError < secondError || firstError === secondError && first.denominator < second.denominator ? first : second;
   const divisor = gcd(best.numerator, best.denominator);
   return { numerator: best.numerator / divisor, denominator: best.denominator / divisor };
 }

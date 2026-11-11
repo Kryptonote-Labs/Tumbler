@@ -66,11 +66,21 @@ function bindWorkbook(source: Uint8Array, input: SpreadsheetArtifact, onlyUnboun
 
 /** Refresh source caches from calculated workbook cells, leaving unresolvable references intact. */
 export function refreshChartWorkbook(source: Uint8Array, artifact: SpreadsheetArtifact): Uint8Array {
-  const calculations = new Map(artifact.workbook.sheets.map(sheet => [sheet.name, calculateSpreadsheetWorksheet(openWorksheet(artifact.workbook, sheet))]));
+  const calculations = new Map<string, ReturnType<typeof calculateSpreadsheetWorksheet>>();
+  const calculationFor = (name: string) => {
+    let calculation = calculations.get(name);
+    if (!calculation) {
+      const sheet = artifact.workbook.sheet(name);
+      if (!sheet) return undefined;
+      calculation = sheet === artifact.activeSheet ? artifact.calculation : calculateSpreadsheetWorksheet(openWorksheet(artifact.workbook, sheet));
+      calculations.set(name, calculation);
+    }
+    return calculation;
+  };
   function sequence(data: ChartEditableSequence | undefined): ChartEditableSequence | undefined {
     if (!data?.formula) return data;
     const reference = parseSpreadsheetChartReference(data.formula, artifact.activeSheet.name);
-    const calculation = reference && calculations.get(reference.sheet);
+    const calculation = reference && calculationFor(reference.sheet);
     if (!reference || !calculation) return data;
     const { start, end } = reference.range;
     const point = (row: number, column: number) => {
@@ -88,7 +98,7 @@ export function refreshChartWorkbook(source: Uint8Array, artifact: SpreadsheetAr
   }
   const plots: ChartEditablePlot[] = readChartData(source).map(plot => ({ ...plot, series: plot.series.map(series => {
     const title = series.nameFormula && parseSpreadsheetChartReference(series.nameFormula, artifact.activeSheet.name);
-    const name = title && calculations.get(title.sheet)?.displayText(title.range.start);
+    const name = title && calculationFor(title.sheet)?.displayText(title.range.start);
     return { ...series, ...(typeof name === 'string' ? { name } : {}), categories: sequence(series.categories), xValues: sequence(series.xValues), values: sequence(series.values), bubbleSizes: sequence(series.bubbleSizes) };
   }) }));
   return updateChartData(source, plots);

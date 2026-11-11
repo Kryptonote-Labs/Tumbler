@@ -10,7 +10,7 @@ export function chartMarkerMarks(context: SceneContext, series: ChartSeries, ser
   const radius = (marker?.size ?? 5) * 2 / 3;
   const resolve = (color: NonNullable<typeof marker>['fill']) => color && (context.options.resolveColor?.(color) ?? resolveChartColor(color, context.model));
   const fill = marker?.noFill ? 'none' : resolve(marker?.fill) ?? chartPointColor(context, series, seriesIndex, index);
-  const stroke = marker?.lineStyle?.noFill ? undefined : resolve(marker?.lineStyle?.color);
+  const stroke = marker?.lineStyle?.noFill ? undefined : resolve(marker?.lineStyle?.color) ?? chartPointColor(context, series, seriesIndex, index, true);
   const style = { fill, ...(stroke ? { stroke } : {}), ...(marker?.lineStyle?.width === undefined ? {} : { strokeWidth: marker.lineStyle.width * 4 / 3 }) };
   const polygon = (points: readonly [number, number][]) => [{ kind: 'path' as const, d: points.map(([dx, dy], i) => `${i ? 'L' : 'M'} ${x + dx} ${y + dy}`).join(' ') + ' Z', ...style }];
   switch (marker?.symbol ?? 'auto') {

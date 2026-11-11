@@ -142,6 +142,7 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
   const bubbleSizeRepresentation = kind === "bubble" ? parseBubbleSizeRepresentation(val(children(chartType, chartNamespace, "sizeRepresents")[0]) ?? "area") : undefined;
   return Object.freeze({
     status: "supported", kind, grouping, holeSize,
+    dateSystem: booleanVal(children(document.root, chartNamespace, "date1904")[0], false) ? "1904" : "1900",
     varyColors: booleanVal(children(chartType, chartNamespace, "varyColors")[0], ["pie", "doughnut", "of-pie"].includes(kind)),
     ...(parseChartDataLabels(children(chartType, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace) ? { dataLabels: parseChartDataLabels(children(chartType, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace)! } : {}),
     sourceType: chartType.localName,

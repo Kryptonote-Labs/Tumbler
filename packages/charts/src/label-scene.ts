@@ -38,14 +38,20 @@ export function chartDataLabelMarks(context: SceneContext, series: ChartSeries, 
   let x = point.x, y = point.y - font.size * .5;
   let anchor: 'start' | 'end' | 'middle' = 'middle';
   const position = settings.position ?? 'bestFit';
-  if (position === 'ctr' || position === 'inBase') {
+  const horizontal = context.model.kind === 'bar';
+  const dx = point.x - (point.baseX ?? point.x), dy = point.y - (point.baseY ?? point.y);
+  if ((position === 'inEnd' || position === 'outEnd' || position === 'bestFit') && (dx || dy)) {
+    const inside = position === 'inEnd';
+    const direction = Math.sign(horizontal ? dx : dy);
+    if (horizontal) { x += direction * (inside ? -6 : 6); anchor = (direction > 0) === inside ? 'end' : 'start'; y += font.size * .3; }
+    else y += direction * (inside ? -1 : 1) * (font.size * .5 + 6) + font.size * .35;
+  } else if (position === 'ctr' || position === 'inBase') {
     const factor = position === 'inBase' ? .15 : .5;
-    x = (point.baseX ?? point.x) + (point.x - (point.baseX ?? point.x)) * factor;
-    y = (point.baseY ?? point.y) + (point.y - (point.baseY ?? point.y)) * factor + font.size * .3;
+    x = (point.baseX ?? point.x) + dx * factor;
+    y = (point.baseY ?? point.y) + dy * factor + font.size * .3;
   } else if (position === 'b') y += font.size * 1.8;
   else if (position === 'l') { x -= 6; anchor = 'end'; y += font.size * .8; }
   else if (position === 'r') { x += 6; anchor = 'start'; y += font.size * .8; }
-  else if (context.model.kind === 'bar') { x += 6; anchor = 'start'; y += font.size * .8; }
   const width = Math.max(0, ...lines.map(line => context.measure(line, font))), height = font.size * 1.2 * lines.length;
   const left = x - (anchor === 'middle' ? width / 2 : anchor === 'end' ? width : 0);
   const top = y - font.size;

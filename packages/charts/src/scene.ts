@@ -36,7 +36,7 @@ function buildChartScene(model: SupportedChartModel, width: number, height: numb
   assertChartSceneBudget(model);
   const pointStyles = new Map<ChartSeries, ReadonlyMap<number, ChartPointFormat>>();
   const context: SceneContext = {
-    model, width, height, options,
+    model, width, height, options: { ...options, dateSystem: options.dateSystem ?? model.dateSystem ?? "1900" },
     color(series, index, line = false) {
       const authored = line ? series.line ?? series.fill : series.fill ?? series.line;
       const themed = authored ?? { kind: "scheme" as const, value: `accent${index % 6 + 1}` };

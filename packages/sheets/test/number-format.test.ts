@@ -53,3 +53,8 @@ test("currency commands render the same values before and after an XLSX roundtri
   const reopened = openSpreadsheetArtifact(artifact.bytes());
   expect(["A1","A2","A3"].map(reference=>reopened.calculation.displayText(reference))).toEqual(["$1,234.50","($1,234.50)","$0.00"]);
 });
+
+test('large fraction placeholders use bounded rational approximation', () => {
+  expect(formatSpreadsheetCellValue({ type: 'number', value: 1 / 3, lexical: String(1 / 3) }, { numberFormatCode: '# ??????????/??????????' })).toBe('1/3');
+  expect(formatSpreadsheetCellValue({ type: 'number', value: 0.123456789, lexical: '0.123456789' }, { numberFormatCode: '# ?????????????????????/?????????????????????' })).toContain('/');
+});

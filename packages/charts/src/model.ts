@@ -126,6 +126,7 @@ export interface ChartTextParagraph {
 }
 
 interface ChartModelBase {
+  readonly dateSystem?: "1900" | "1904";
   readonly titleText?: readonly ChartTextParagraph[];
   readonly textStyle?: ChartTextStyle;
   readonly titleStyle?: ChartTextStyle;

@@ -63,7 +63,7 @@ function paintMarks<Path>(context: ChartCanvasContext<Path>, marks: readonly Cha
           context.fillStyle = mark.fill;
           context.fill(shape);
         }
-        if (mark.stroke !== undefined && mark.stroke !== "none") {
+        if (mark.stroke !== undefined && mark.stroke !== "none" && (mark.strokeWidth ?? 1) > 0) {
           context.strokeStyle = mark.stroke;
           context.lineWidth = mark.strokeWidth ?? 1;
           context.stroke(shape);
@@ -71,6 +71,7 @@ function paintMarks<Path>(context: ChartCanvasContext<Path>, marks: readonly Cha
         break;
       }
       case "line":
+        if (mark.width <= 0) break;
         context.beginPath();
         context.moveTo(mark.x1, mark.y1);
         context.lineTo(mark.x2, mark.y2);
@@ -108,7 +109,7 @@ function fillAndStroke<Path>(context: ChartCanvasContext<Path>, fill: string | u
     context.fillStyle = fill;
     context.fill();
   }
-  if (stroke !== undefined && stroke !== "none") {
+  if (stroke !== undefined && stroke !== "none" && width > 0) {
     context.strokeStyle = stroke;
     context.lineWidth = width;
     context.stroke();
