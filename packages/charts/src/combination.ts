@@ -1,9 +1,8 @@
 import { chartStacks } from './indexed-data.ts';
 import { assertChartSceneBudget } from './scene-budget.ts';
 import { chartFont, type ChartFont } from './scene-style.ts';
-import { chartAxisTicks } from "./axis-scale.ts";
+import { chartAxisTicks, chartAxisCoordinate, chartLogarithmicScale } from "./axis-scale.ts";
 import {
-  chartValueCoordinate,
   layoutCartesianChart,
 } from "./layout.ts";
 import type { SupportedChartModel } from "./model.ts";
@@ -17,6 +16,7 @@ export function layoutCombinationChart(
   assertChartSceneBudget(model);
   const plots = (model.plots ?? [model]).map(({ plots: _nested, ...plot }) => ({
     ...plot,
+    axes: plot.axes.filter(axis => !plot.axisIds || plot.axisIds.includes(axis.id)),
     series: plot.series.map(
       (series) => model.series.find((s) => s.index === series.index) ?? series,
     ),
@@ -61,24 +61,27 @@ export function layoutCombinationChart(
     const minimum = axis?.minimum ?? Math.min(...peers.map((l) => l.minimum));
     const maximum = axis?.maximum ?? Math.max(...peers.map((l) => l.maximum));
     const coordinate = (value: number) =>
-      chartValueCoordinate(
+      chartAxisCoordinate(
         value,
         minimum,
         maximum,
         plot.kind === "bar" ? rect.x : rect.y,
         plot.kind === "bar" ? rect.width : rect.height,
+        axis,
         plot.kind !== "bar",
       );
     const stacks = chartStacks(plot, common.categories.length);
+    const ticks = axis?.logBase ? chartLogarithmicScale([minimum, maximum], { ...axis, minimum, maximum }).ticks : chartAxisTicks(minimum, maximum, axis?.majorUnit, {
+      length: plot.kind === 'bar' ? rect.width : rect.height,
+      labelSize: chartFont('tick', axis?.textStyle, plot).size * (plot.kind === 'bar' ? 2 : 1),
+    });
     return {
       model: plot,
       axis,
       minimum,
       maximum,
-      ticks: chartAxisTicks(minimum, maximum, axis?.majorUnit, {
-        length: plot.kind === "bar" ? rect.width : rect.height,
-        labelSize: chartFont("tick", axis?.textStyle, plot).size * (plot.kind === "bar" ? 2 : 1),
-      }),
+      ticks,
+      layout: { ...layouts[i]!, plot: rect, categories: common.categories, stacks, minimum, maximum, ticks, ...(common.categoryDomain ? { categoryDomain: common.categoryDomain } : {}), ...(common.categoryScale ? { categoryScale: common.categoryScale } : {}) },
       plot: rect,
       categories: common.categories,
       categoryRotation: common.categoryRotation,

@@ -27,7 +27,7 @@ export function cartesianAxisMarks(context: SceneContext, layout: CartesianChart
   const edge = (maximum: boolean) => categoryStart + (maximum !== categoryReversed ? categoryLength : 0);
   const categoryPosition = categoryAxis?.crossesAt !== undefined
     ? categoryAxis.dateAxis ? dateCategory(categoryAxis.crossesAt) : valueAxis?.crossBetween === 'midCat' ? category(categoryAxis.crossesAt - 1) : categoryBand(categoryAxis.crossesAt - 1)
-    : edge(categoryAxis?.crosses === 'max');
+    : edge(categoryAxis?.crosses === 'max' || (categoryAxis?.crosses === undefined || categoryAxis.crosses === 'autoZero') && (valueAxis?.position === 'right' || valueAxis?.position === 'top'));
   const low = horizontal ? plot.y + plot.height : plot.x;
   const high = horizontal ? plot.y : plot.x + plot.width;
   const side = valueAxis?.position === 'right' || valueAxis?.position === 'top' ? 1 : -1;

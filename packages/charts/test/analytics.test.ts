@@ -111,3 +111,15 @@ test('moving-average windows do not overflow when the finite mean is representab
   const fit = fitChartTrendline(points([9e307, 9e307, 9e307]), trend('movingAvg'))!;
   expect(fit.points.map(point => point.y)).toEqual([9e307, 9e307]);
 });
+
+test('combination plots use logarithmic spacing and render their analytical overlays', () => {
+  const parsed = parseOoxmlChart(createOoxmlChart({ type: 'lineChart', categories: ['A', 'B', 'C'], series: [{ name: 'Log data', values: [1, 10, 100] }] }), 'transitional');
+  if (parsed.status !== 'supported') throw new Error(parsed.reason);
+  const current = { ...parsed, axes: parsed.axes.map(axis => axis.kind === 'value' ? { ...axis, logBase: 10, minimum: 1, maximum: 100 } : axis), series: parsed.series.map(series => ({ ...series, marker: { symbol: 'circle' as const, size: 5 }, trendlines: [trend('linear', { lineStyle: { color: { kind: 'rgb' as const, value: '#AA00AA' } } })], errorBars: [errors('fixedVal', { lineStyle: { color: { kind: 'rgb' as const, value: '#00AABB' } } })] })) };
+  const marks = flatten(layoutChartScene({ ...current, plots: [current] }, 600, 400).marks);
+  const markers = marks.filter(mark => mark.kind === 'circle');
+  expect(markers).toHaveLength(3);
+  expect(markers[1]!.kind === 'circle' && markers[0]!.kind === 'circle' && markers[2]!.kind === 'circle' && Math.abs(markers[1]!.cy - (markers[0]!.cy + markers[2]!.cy) / 2)).toBeLessThan(.01);
+  expect(marks.some(mark => mark.kind === 'path' && mark.stroke === '#AA00AA')).toBe(true);
+  expect(marks.some(mark => mark.kind === 'line' && mark.stroke === '#00AABB')).toBe(true);
+});

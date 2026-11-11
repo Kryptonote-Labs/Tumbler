@@ -11,9 +11,9 @@ import { layoutCartesianChart, scatterLinePath } from "./layout.ts";
 import { legendMarks, type ChartMark, type SceneContext } from "./scene-marks.ts";
 
 /** Bar, column and line charts over shared categories. */
-export function cartesianScene(context: SceneContext, drawSeries = true): ChartMark[] {
+export function cartesianScene(context: SceneContext, drawSeries = true, suppliedLayout?: ReturnType<typeof layoutCartesianChart>): ChartMark[] {
   const { model, width, height } = context;
-  const layout = layoutCartesianChart(model, width, height, context.measure);
+  const layout = suppliedLayout ?? layoutCartesianChart(model, width, height, context.measure);
   const { plot } = layout;
   const { horizontal, count, value: coordinate, category, categoryBand, band } = cartesianGeometry(model, layout);
   const x = coordinate, y = coordinate;

@@ -163,7 +163,7 @@ test('combination value labels and gridlines follow each axis independently', ()
   const scene = layoutChartScene(combo, 600, 400, { formatNumber: (value, code) => `${code}:${value}` });
   expect(texts(scene.marks).some(text => text.startsWith('Y:'))).toBe(true);
   expect(texts(scene.marks)).not.toContain('Jan');
-  expect(scene.marks.filter(mark => mark.kind === 'line')).toHaveLength(0);
+  expect(scene.marks.filter(mark => mark.kind === 'line')).toHaveLength(1);
   const hidden = { ...base, axes: base.axes.map(axis => ({ ...axis, deleted: true, majorGridlines: true })) };
   expect(texts(layoutChartScene({ ...hidden, plots: [hidden] }, 600, 400).marks)).toEqual(['Results']);
 });
