@@ -1,0 +1,11 @@
+import { mkdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { createOoxmlChart } from '../packages/charts/src/index.ts';
+import { writeChartFixture } from './chart-fixture-writer.ts';
+const output = resolve(process.argv[2] ?? 'compatibility-results/chart-bubble-effects/input');
+await mkdir(output, { recursive: true });
+const data = { type: 'bubbleChart' as const, categories: [], series: [{ name: 'Data', values: [2, 4, 3], xValues: [1, 2, 3], bubbleSizes: [2, 3, 4] }] };
+for (const bubble3D of [false, true]) await writeChartFixture(output, bubble3D ? 'sphere' : 'flat', createOoxmlChart({ ...data, bubble3D, title: bubble3D ? '3-D bubble' : 'Bubble' }));
+const point = new TextDecoder().decode(createOoxmlChart({ ...data, bubble3D: true, title: 'One flat point' })).replace('</c:spPr>', '</c:spPr><c:dPt><c:idx val="1"/><c:bubble3D val="0"/></c:dPt>');
+await writeChartFixture(output, 'point-override', new TextEncoder().encode(point));
+console.log(output);

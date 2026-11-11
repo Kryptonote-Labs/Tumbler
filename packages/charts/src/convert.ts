@@ -6,7 +6,7 @@ import { chartPropertyTree, chartPropertyDefinition, type ChartPropertyNode } fr
 import { chartXml, chartXmlText, standaloneChartElement as standalone } from './source-xml.ts';
 import { isOoxmlChartType } from './chart-types.ts';
 
-export type ChartTypeChange = Pick<CreateChartOptions, 'type' | 'direction' | 'grouping' | 'radarStyle' | 'scatterStyle' | 'splitType' | 'wireframe' | 'shape'>;
+export type ChartTypeChange = Pick<CreateChartOptions, 'type' | 'direction' | 'grouping' | 'radarStyle' | 'scatterStyle' | 'splitType' | 'wireframe' | 'shape' | 'bubble3D'>;
 const HISTORY_NS = 'urn:tumblerjs:chart-authoring';
 const IDENTITY_URI = 'https://tumblerjs.org/chart-authoring/plot-identity/v1';
 const HISTORY_URI = 'https://tumblerjs.org/chart-authoring/type-history/v1';
@@ -63,6 +63,7 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
   if (change.radarStyle !== undefined) overrides.add('radarStyle');
   if (change.scatterStyle !== undefined) overrides.add('scatterStyle');
   if (change.splitType !== undefined) overrides.add('ofPieType');
+  if (change.bubble3D !== undefined) overrides.add('bubble3D');
   if (change.shape !== undefined) overrides.add('shape');
   if (change.wireframe !== undefined) overrides.add('wireframe');
   const readChildren = (document: LosslessXmlDocument, element: LosslessXmlElement | undefined) => ({ document, children: elementChildren(element) });
@@ -73,6 +74,7 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
     const names = [...new Set(allowed.map(name => chartPropertyDefinition(name)?.name.split(':').at(-1)).filter((name): name is string => !!name))];
     const content = names.flatMap(name => {
       const generated = fresh.filter(child => child.localName === name);
+      if (series && name === 'bubble3D' && change.type === 'bubbleChart' && change.bubble3D !== undefined) return generated.map(element => standalone(created.document, element));
       if (!series && overrides.has(name)) {
         if (name === 'ser') return generated.map((element, index) => merge(element, findNode(properties, element.id)!, currentSeries[index], archivedSeries.find(saved => elementChildren(saved).find(child => child.localName === 'idx')?.attributes.find(attribute => attribute.localName === 'val')?.value === source.children(currentSeries[index]!, 'idx')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value), true));
         return generated.map(element => standalone(created.document, element));

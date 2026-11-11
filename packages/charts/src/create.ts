@@ -21,6 +21,7 @@ export interface CreateChartOptions {
   readonly radarStyle?: 'standard' | 'marker' | 'filled' | undefined;
   readonly scatterStyle?: 'none' | 'line' | 'lineMarker' | 'marker' | 'smooth' | 'smoothMarker' | undefined;
   readonly splitType?: 'pie' | 'bar' | undefined;
+  readonly bubble3D?: boolean | undefined;
   readonly wireframe?: boolean | undefined;
 }
 
@@ -78,6 +79,7 @@ export function createOoxmlChart(options: CreateChartOptions): Uint8Array {
   if (options.scatterStyle !== undefined && type !== 'scatterChart') throw new TypeError('Scatter style applies only to scatter charts.');
   if (options.splitType !== undefined && type !== 'ofPieChart') throw new TypeError('Split type applies only to of-pie charts.');
   if (options.shape !== undefined && type !== 'bar3DChart') throw new TypeError('Bar shape applies only to 3D bar and column charts.');
+  if (options.bubble3D !== undefined && type !== 'bubbleChart') throw new TypeError('Bubble effects apply only to bubble charts.');
   if (options.wireframe !== undefined && !type.startsWith('surface')) throw new TypeError('Wireframe applies only to surface charts.');
   const series = options.series.map((series, index) => {
     if (!xy && series.values.length !== options.categories.length) throw new TypeError('Series and category counts must match.');
@@ -94,7 +96,7 @@ export function createOoxmlChart(options: CreateChartOptions): Uint8Array {
     const values = xy
       ? numericData('xVal', series.xValues ?? series.values.map((_, i) => i + 1)) + numericData('yVal', series.values) + (type === 'bubbleChart' ? numericData('bubbleSize', series.bubbleSizes!) : '')
       : categories + numericData('val', series.values);
-    return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/><c:tx><c:v>${escape(series.name)}</c:v></c:tx>${style}${type === 'stockChart' ? `<c:marker><c:symbol val="${options.series.length === 3 && index === 2 ? 'dash' : 'none'}"/>${options.series.length === 3 && index === 2 ? '<c:spPr><a:ln><a:solidFill><a:schemeClr val="tx1"/></a:solidFill></a:ln></c:spPr>' : ''}</c:marker>` : ''}${marker}${values}${smooth}</c:ser>`;
+    return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/><c:tx><c:v>${escape(series.name)}</c:v></c:tx>${style}${type === 'stockChart' ? `<c:marker><c:symbol val="${options.series.length === 3 && index === 2 ? 'dash' : 'none'}"/>${options.series.length === 3 && index === 2 ? '<c:spPr><a:ln><a:solidFill><a:schemeClr val="tx1"/></a:solidFill></a:ln></c:spPr>' : ''}</c:marker>` : ''}${marker}${values}${smooth}${type === 'bubbleChart' ? `<c:bubble3D val="${options.bubble3D ? 1 : 0}"/>` : ''}</c:ser>`;
   }).join('');
   let before = '';
   let after = '';

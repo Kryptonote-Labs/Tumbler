@@ -1,5 +1,5 @@
+import { chartBubblePaint } from './bubble-paint.ts';
 import { chartLegendFill } from './gradient-scene.ts';
-import { chartPointGradient } from './gradient-scene.ts';
 import { chartShapeMarks } from './shape-scene.ts';
 import { chartPointStroke, chartSeriesStroke, chartStrokeMark } from './stroke-scene.ts';
 import { xyGeometry } from './xy-geometry.ts';
@@ -26,7 +26,7 @@ export function xyScene(context: SceneContext): ChartMark[] {
   model.series.forEach((item, index) => {
     if (bubbles) {
       for (const point of bubbles.series[index] ?? []) {
-        if (point.radius > 0) series.push({ kind: "circle", cx: point.plotX, cy: point.plotY, r: point.radius, ...chartPointGradient(context, item, point.index, { x: point.plotX - point.radius, y: point.plotY - point.radius, width: point.radius * 2, height: point.radius * 2 }), fill: chartPointColor(context, item, index, point.index), ...chartPointStroke(context, item, index, point.index, chartPointColor(context, item, index, point.index, true)) });
+        if (point.radius > 0) series.push({ kind: "circle", cx: point.plotX, cy: point.plotY, r: point.radius, ...chartBubblePaint(context, item, index, point.index, { x: point.plotX - point.radius, y: point.plotY - point.radius, width: point.radius * 2, height: point.radius * 2 }), ...chartPointStroke(context, item, index, point.index, chartPointColor(context, item, index, point.index, true)) });
       }
       for (const point of bubbles.series[index] ?? []) labels.push(...chartDataLabelMarks(context, item, index, { index: point.index, x: point.plotX, y: point.plotY, category: String(point.x), value: point.y, bubbleSize: point.size }));
       return;
