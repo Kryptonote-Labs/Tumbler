@@ -9,6 +9,7 @@ import {
   presentationBlockCodecs,
 } from './native-block.ts';
 import type { NativeSlide } from './native-document.ts';
+import { refreshNativeChartProjection } from './native-chart-projection.ts';
 
 const hashes = new WeakMap<Uint8Array, string>();
 export function presentationResourceHash(bytes: Uint8Array) {
@@ -90,7 +91,7 @@ export function decodeNativeSlide(
       throw new Error('Native presentation resource checksum mismatch.');
     return bytes;
   });
-  return nativeSlide.parse(readNativeGraph(parsed.graph, bytes, presentationBlockCodecs));
+  return refreshNativeChartProjection(nativeSlide.parse(readNativeGraph(parsed.graph, bytes, presentationBlockCodecs)));
 }
 
 /** Resolve only arriving binary handles; untouched text, geometry and shared theme objects keep their identity. */
