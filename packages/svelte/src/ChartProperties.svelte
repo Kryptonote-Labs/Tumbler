@@ -41,8 +41,8 @@
     /** A hovered or focused type, or undefined when previewing ends. The document is unchanged. */
     readonly ontypepreview?: (options: ChartTypeChange | undefined) => void;
     readonly oneditdata?: () => void;
-    readonly typePreview?: Snippet<[number]>;
-    readonly viewPreview?: Snippet<[number]>;
+    readonly typePreview?: Snippet;
+    readonly viewPreview?: Snippet;
     readonly onsourcepreview?: (bytes: Uint8Array | undefined) => void;
     readonly typeError?: string;
     readonly dataExpanded?: boolean;
@@ -67,7 +67,6 @@
   let trigger = $state<HTMLButtonElement>();
   let listbox = $state<HTMLDivElement>();
   let dataTrigger = $state<HTMLButtonElement>();
-  let previewWidth = $state(280);
   let typed = "", lastTyped = 0;
 
   const chart = $derived(chartPropertyChild(parsed, "chart"));
@@ -189,7 +188,7 @@
         <div class="row"><span>Data</span><button bind:this={dataTrigger} type="button" class="button" aria-expanded={dataExpanded} aria-controls={dataExpanded === undefined ? undefined : `${id}-data`} onclick={oneditdata}>Edit data</button></div>
       {/if}
       {#if picking}
-        {#if typePreview}<div class="type-preview" bind:clientWidth={previewWidth}>{@render typePreview(Math.max(1, previewWidth))}</div>{/if}
+        {#if typePreview}<div class="type-preview">{@render typePreview()}</div>{/if}
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div bind:this={listbox} id={`${id}-types`} class="types" role="listbox" tabindex="-1" aria-labelledby={`${id}-type`}
           onkeydown={navigate} onfocusout={leave} onpointerleave={() => preview(undefined)}>

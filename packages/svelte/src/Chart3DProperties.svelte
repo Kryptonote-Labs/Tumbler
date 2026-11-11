@@ -5,9 +5,9 @@
   import ChartNumberField from './ChartNumberField.svelte';
   let { bytes, root, disabled = false, plotIndex = 0, onchange, onpreview, preview }: {
     bytes: Uint8Array; root: ChartPropertyNode; disabled?: boolean; plotIndex?: number; onchange: (bytes: Uint8Array) => void;
-    onpreview?: (bytes: Uint8Array | undefined) => void; preview?: Snippet<[number]>;
+    onpreview?: (bytes: Uint8Array | undefined) => void; preview?: Snippet;
   } = $props();
-  let current = $derived(bytes), error = $state<string>(), previewWidth = $state(280);
+  let current = $derived(bytes), error = $state<string>();
   const locatePlot: ChartPropertyLocator = root => child(child(root, 'chart'), 'plotArea')?.children.filter(node => isOoxmlChartType(node.name.split(':').at(-1) ?? ''))[plotIndex];
   const plot = $derived(locatePlot(root)), type = $derived(plot?.name.split(':').at(-1));
   const visible = $derived(type?.includes('3D') || type === 'surfaceChart');
@@ -51,7 +51,7 @@
 {#if visible && view}
   <fieldset {disabled} class="view">
     <legend>3-D view</legend>
-    {#if preview}<div class="preview" bind:clientWidth={previewWidth}>{@render preview(previewWidth)}</div>{/if}
+    {#if preview}<div class="preview">{@render preview()}</div>{/if}
     {#if type === 'bar3DChart'}
       <label><span>Shape</span><select class="tumbler-select" value={shape} onchange={(event) => set('shape', 'c:CT_Shape/c:shape', event.currentTarget.value, true)}>
         {#if shape === 'mixed'}<option value="mixed" disabled>Mixed</option>{/if}
