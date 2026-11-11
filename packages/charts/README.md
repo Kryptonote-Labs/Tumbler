@@ -162,3 +162,27 @@ Generate references with `bun scripts/generate-chart-authoring-fixtures.ts <dir>
 This produces one PPTX and chart XML per plot element, retaining the reference
 presentation's theme and layout. Validate PPTX files with the repository's
 Open XML SDK validator and export them through LibreOffice for visual references.
+
+
+`convertChartType` changes a selected plot without flattening its data bindings.
+Compatible formatting stays active, and a private OOXML extension retains inactive
+properties so they can return when switching back. Series identities keep their
+formatting through reordering; newly added series do not inherit deleted series history.
+`editChartSeries` adds, duplicates, removes or reorders series. Duplication copies the
+current series, including its source ranges and formatting.
+
+`chartPropertyTree` exposes the chart and DrawingML property definitions from the
+pinned Open XML SDK schema. It supplies typed attributes, choices, numeric bounds
+and available child properties for the shared editor. The source-edit API remains
+available for extension properties. Metadata coverage does not establish renderer
+coverage or semantic validity for arbitrary combinations of property edits.
+
+The Svelte `ChartWorkbench` combines type previews, property fields, series/range
+controls and a real embedded spreadsheet. DOCX and PPTX hosts serialize the chart
+and workbook together; XLSX hosts edit their existing worksheet data.
+
+Generate native authoring fixtures for all sixteen chart types across all three
+formats with `bun scripts/generate-chart-editing-fixtures.ts <output-directory>`.
+These fixtures exercise formulas, conversion history and series membership before
+schema and LibreOffice validation. Schema validation and successful PDF conversion
+are interoperability evidence; neither proves pixel parity.
