@@ -1,6 +1,6 @@
+import { chartStrokeBrush } from './stroke-brush.ts';
 import { paintDrawingPattern } from '@tumblerjs/ooxml';
-import { paintChartGradient } from './gradient-canvas.ts';
-import type { ChartGradientPaint } from './gradient-scene.ts';
+import { paintChartGradient, paintChartGradientStroke } from './gradient-canvas.ts';
 import type { DrawingGradientCanvasContext } from '@tumblerjs/ooxml';
 import type { DrawingPictureFill } from '@tumblerjs/ooxml';
 import type { ChartPatternPaint, ChartPicturePaint } from './fill-scene.ts';
@@ -45,7 +45,7 @@ export interface ChartCanvasContext<Path, Image = unknown> {
 
 /** Paints a chart scene at the context's current transform, one unit per scene pixel. */
 export interface ChartCanvasOptions<Image = unknown> {
-  /** Decode enumerated scene images, including generated native pattern tiles. */
+  /** Decode enumerated scene images, including native pattern tiles and rectangular outline brushes. */
   readonly image?: ((picture: DrawingPictureFill) => { readonly image: Image; readonly width: number; readonly height: number } | undefined) | undefined;
   /** Paint a predecoded picture at the current origin. The engine applies its bounds and shape clip. */
   readonly picture?: (picture: DrawingPictureFill, width: number, height: number) => void;
@@ -75,40 +75,26 @@ function paintMarks<Path, Image>(context: ChartCanvasContext<Path, Image>, marks
       case "rect":
         context.beginPath();
         context.rect(mark.x, mark.y, mark.width, mark.height);
-        fillAndStroke(context, mark.fill, mark.stroke, mark.strokeWidth ?? 1, mark.fillGradient, () => { context.beginPath(); context.rect(mark.x, mark.y, mark.width, mark.height); }, mark.fillPicture, options, mark.fillPattern);
+        fillMark(context, mark, options);
+        strokeMark(context, mark, options, () => { context.beginPath(); context.rect(mark.x, mark.y, mark.width, mark.height); context.stroke(); });
         break;
       case "circle":
         context.beginPath();
         context.arc(mark.cx, mark.cy, mark.r, 0, Math.PI * 2);
         context.globalAlpha = mark.fillOpacity ?? 1;
-        fillAndStroke(context, mark.fill, undefined, 1, mark.fillGradient, undefined, mark.fillPicture, options, mark.fillPattern);
+        fillMark(context, mark, options);
         context.globalAlpha = 1;
-        context.beginPath();
-        context.arc(mark.cx, mark.cy, mark.r, 0, Math.PI * 2);
-        fillAndStroke(context, undefined, mark.stroke, mark.strokeWidth ?? 1);
+        strokeMark(context, mark, options, () => { context.beginPath(); context.arc(mark.cx, mark.cy, mark.r, 0, Math.PI * 2); context.stroke(); });
         break;
       case "path": {
         const shape = path(mark.d);
-        if (mark.fillPattern) paintPattern(context, mark.fillPattern, options, shape);
-        else if (mark.fillPicture) paintPicture(context, mark.fillPicture, options, shape);
-        else if (mark.fillGradient) paintChartGradient(context, mark.fillGradient, shape);
-        else if (mark.fill !== undefined && mark.fill !== "none") {
-          context.fillStyle = mark.fill;
-          context.fill(shape);
-        }
-        if (mark.stroke !== undefined && mark.stroke !== "none" && (mark.strokeWidth ?? 1) > 0) {
-          context.strokeStyle = mark.stroke;
-          context.lineWidth = mark.strokeWidth ?? 1;
-          context.stroke(shape);
-        }
+        fillMark(context, mark, options, shape);
+        strokeMark(context, mark, options, () => context.stroke(shape));
         break;
       }
       case "line":
         if (mark.width <= 0) break;
-        context.beginPath();
-        context.moveTo(mark.x1, mark.y1);
-        context.lineTo(mark.x2, mark.y2);
-        fillAndStroke(context, undefined, mark.stroke, mark.width);
+        strokeMark(context, mark, options, () => { context.beginPath(); context.moveTo(mark.x1, mark.y1); context.lineTo(mark.x2, mark.y2); context.stroke(); });
         break;
       case "text":
         context.save();
@@ -138,19 +124,29 @@ function paintMarks<Path, Image>(context: ChartCanvasContext<Path, Image>, marks
   }
 }
 
-/** Fills and strokes the current path. */
-function fillAndStroke<Path, Image>(context: ChartCanvasContext<Path, Image>, fill: string | undefined, stroke: string | undefined, width: number, gradient?: ChartGradientPaint, redraw?: () => void, picture?: ChartPicturePaint, options: ChartCanvasOptions<Image> = {}, pattern?: ChartPatternPaint): void {
-  if (pattern) { paintPattern(context, pattern, options); redraw?.(); }
-  else if (picture) { paintPicture(context, picture, options); redraw?.(); }
-  else if (gradient) { paintChartGradient(context, gradient); redraw?.(); }
-  else if (fill !== undefined && fill !== "none") {
-    context.fillStyle = fill;
-    context.fill();
-  }
-  if (stroke !== undefined && stroke !== "none" && width > 0) {
-    context.strokeStyle = stroke;
-    context.lineWidth = width;
-    context.stroke();
+function strokeMark<Path, Image>(context: ChartCanvasContext<Path, Image>, mark: Exclude<ChartMark, { kind: 'text' | 'group' }>, options: ChartCanvasOptions<Image>, draw: () => void) {
+  const width = mark.kind === 'line' ? mark.width : mark.strokeWidth ?? 1;
+  if ((!mark.strokeGradient && (mark.stroke === undefined || mark.stroke === 'none')) || width <= 0) return;
+  context.lineWidth = width;
+  const paint = options.image && chartStrokeBrush(mark);
+  const decoded = paint && options.image?.(paint.picture);
+  const brush = decoded && context.createPattern?.(decoded.image, 'repeat');
+  if (brush && paint) {
+    const bounds = paint.bounds;
+    brush.setTransform({ a: bounds.width / decoded.width, b: 0, c: 0, d: bounds.height / decoded.height, e: bounds.x, f: bounds.y });
+    context.strokeStyle = brush; draw();
+  } else if (mark.strokeGradient && mark.strokeBounds) paintChartGradientStroke(context, { gradient: mark.strokeGradient, bounds: mark.strokeBounds }, draw);
+  else { context.strokeStyle = mark.stroke; draw(); }
+}
+
+/** Fill the caller's current path, or the supplied reusable path. */
+function fillMark<Path, Image>(context: ChartCanvasContext<Path, Image>, mark: Exclude<ChartMark, { kind: 'text' | 'group' | 'line' }>, options: ChartCanvasOptions<Image>, shape?: Path): void {
+  if (mark.fillPattern) paintPattern(context, mark.fillPattern, options, shape);
+  else if (mark.fillPicture) paintPicture(context, mark.fillPicture, options, shape);
+  else if (mark.fillGradient) paintChartGradient(context, mark.fillGradient, shape);
+  else if (mark.fill !== undefined && mark.fill !== 'none') {
+    context.fillStyle = mark.fill;
+    context.fill(shape);
   }
 }
 

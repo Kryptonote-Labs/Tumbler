@@ -1,4 +1,4 @@
-import { DRAWING_PRESET_COLORS } from './preset-colors.ts';
+import { drawingColorRgba } from './css-color.ts';
 import { encodeRgbaPng } from './png.ts';
 import type { DrawingPictureFill } from './picture-fill.ts';
 import { DRAWING_PATTERN_PRESETS, type DrawingPatternPreset } from './pattern-presets.ts';
@@ -26,19 +26,11 @@ export function drawingPatternGeometry(preset: string): PatternGeometry {
   result = Object.freeze({ size: tile.size, strokeWidth: 0, path: '', filled: false, rects: Object.freeze(rects) });
   geometryCache.set(preset, result); return result;
 }
-function rgba(color: string): readonly [number, number, number, number] | undefined {
-  const named = DRAWING_PRESET_COLORS[color];
-  if (named) color = '#' + named;
-  if (color === 'transparent' || color === 'none') return [0, 0, 0, 0];
-  if (/^#[a-f\d]{3,4}$/i.test(color)) color = '#' + [...color.slice(1)].map(value => value + value).join('');
-  if (/^#[a-f\d]{6}(?:[a-f\d]{2})?$/i.test(color)) return [parseInt(color.slice(1, 3), 16), parseInt(color.slice(3, 5), 16), parseInt(color.slice(5, 7), 16), color.length === 9 ? parseInt(color.slice(7), 16) / 255 : 1];
-  const match = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/.exec(color);
-  return match ? [Number(match[1]), Number(match[2]), Number(match[3]), match[4] === undefined ? 1 : Number(match[4])] : undefined;
-}
+
 function mix(foreground: string, background: string, coverage: number): string {
   if (coverage === 0) return background;
   if (coverage === 1) return foreground;
-  const a = rgba(foreground), b = rgba(background);
+  const a = drawingColorRgba(foreground), b = drawingColorRgba(background);
   if (!a || !b) return coverage >= .5 ? foreground : background;
   const alpha = a[3] * coverage + b[3] * (1 - coverage);
   if (!alpha) return 'transparent';
@@ -61,7 +53,7 @@ export function drawingPatternPicture(pattern: DrawingPattern): DrawingPictureFi
   if (picture) return picture;
   const paint = drawingPatternPaint(pattern), scale = 4, size = paint.size * scale, pixels = new Uint8Array(size * size * 4);
   for (const rect of paint.rects) {
-    const color = rgba(rect.fill) ?? [0, 0, 0, 0];
+    const color = drawingColorRgba(rect.fill) ?? [0, 0, 0, 0];
     for (let y = rect.y * scale; y < (rect.y + rect.height) * scale; y++) for (let x = rect.x * scale; x < (rect.x + rect.width) * scale; x++) {
       const offset = (y * size + x) * 4;
       pixels.set([color[0], color[1], color[2], Math.round(color[3] * 255)], offset);

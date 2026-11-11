@@ -992,7 +992,7 @@ class Reader {
           ? "radial"
           : "rectangular",
       angle: number(linear, "ang") / 60000,
-      scaled: !["0", "false"].includes(attr(linear, "scaled") ?? "1"),
+      scaled: ["1", "true"].includes(attr(linear, "scaled") ?? "0"),
       center: [
         (percentage(attr(rect, "l")) + 1 - percentage(attr(rect, "r"))) / 2,
         (percentage(attr(rect, "t")) + 1 - percentage(attr(rect, "b"))) / 2,

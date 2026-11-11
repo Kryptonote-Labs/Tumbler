@@ -89,9 +89,12 @@ Per-point fills, markers, line widths, smoothing and pie explosion are rendered.
 Chart, plot, title and legend shape fills are independent; overlay titles retain plot space.
 Authored preset/custom dash patterns, caps and joins reach SVG and canvas strokes.
 Linear, radial and rectangular gradients retain theme colours and alpha transforms on
-2D series, points, markers, labels, areas and legend swatches. Rectangular path gradients
-retain the full focus rectangle. Radial focus size, tiled/flipped gradients, gradient
-strokes and effects still need renderer work. Their XML remains editable.
+2D series, points, markers, labels, areas and legend swatches, including outlines.
+Rectangular path gradients retain the full focus rectangle. Canvas hosts decode
+the rectangular outline brushes returned by `chartScenePictures`; SVG uses vector
+paint. Radial focus size, tiled/flipped gradients and effects still need renderer
+work. Their XML remains editable, and native gradient colour interpolation still
+needs separate visual comparison.
 Data labels support value/category/series/percentage/bubble-size flags, custom text,
 point deletion and number formats. Rich label text, leader lines, exact Office
 bubble-size normalization remain incomplete. Three-dimensional bubble shading is rendered

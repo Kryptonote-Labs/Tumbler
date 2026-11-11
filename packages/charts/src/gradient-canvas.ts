@@ -35,3 +35,20 @@ export function paintChartGradient<Path>(context: ChartCanvasContext<Path>, pain
 function supportsGradients<Path>(context: ChartCanvasContext<Path>): context is ChartCanvasContext<Path> & DrawingGradientCanvasContext {
   return !!context.scale && !!context.createLinearGradient && !!context.createRadialGradient;
 }
+
+/** Shade the existing outline without changing its dash, caps or joins. */
+export function paintChartGradientStroke<Path>(context: ChartCanvasContext<Path>, paint: ChartGradientPaint, draw: () => void): void {
+  const { gradient, bounds } = paint;
+  if (!supportsGradients(context) || bounds.width <= 0 || bounds.height <= 0) {
+    context.strokeStyle = gradient.stops[0]?.color ?? 'transparent'; draw(); return;
+  }
+  if (gradient.kind !== 'rectangular') {
+    context.save();
+    context.translate(bounds.x, bounds.y);
+    const brush = paintDrawingGradient(context, gradient, 'transparent', bounds.width, bounds.height);
+    context.restore();
+    context.strokeStyle = brush; draw(); return;
+  }
+  // Hosts without procedural-image decoding retain a visible outline.
+  context.strokeStyle = gradient.stops[0]?.color ?? 'transparent'; draw();
+}

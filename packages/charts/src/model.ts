@@ -49,6 +49,7 @@ export interface ChartTextStyle {
 }
 
 export interface ChartLineStyle extends DrawingStrokeProperties {
+  readonly gradient?: ChartGradient;
   readonly color?: ChartColor;
   readonly noFill?: boolean;
   /** Width in points. */
