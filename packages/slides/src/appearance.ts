@@ -19,11 +19,7 @@ export interface DrawingEffect {
   readonly x: number;
   readonly y: number;
 }
-export interface DrawingPattern {
-  readonly preset: string;
-  readonly foreground: string;
-  readonly background: string;
-}
+export type { DrawingPattern } from '@tumblerjs/ooxml';
 export interface DrawingReflection {
   readonly blur: number;
   readonly startAlpha: number;

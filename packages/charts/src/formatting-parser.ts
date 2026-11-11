@@ -1,8 +1,8 @@
 import { parseChartGradient } from './gradient-parser.ts';
 import { parseChartPicture } from './picture-parser.ts';
 import { chartElementMarkup } from './xml-markup.ts';
-import { resolveDrawingColor, readDrawingStrokeProperties, type LosslessXmlElement } from "@tumblerjs/ooxml";
-import type { ChartColor, ChartColorTransform, ChartLineStyle, ChartTextStyle, ChartShapeStyle } from "./model.ts";
+import { isDrawingPatternPreset, resolveDrawingColor, readDrawingStrokeProperties, type LosslessXmlElement } from "@tumblerjs/ooxml";
+import type { ChartColor, ChartColorTransform, ChartLineStyle, ChartTextStyle, ChartPattern, ChartShapeStyle } from "./model.ts";
 
 function child(parent: LosslessXmlElement | undefined, ns: string, name: string) {
   return parent?.children.find((item): item is LosslessXmlElement => item.kind === "element" && item.namespaceUri === ns && item.localName === name);
@@ -37,6 +37,15 @@ export function parseChartColorContainer(fill: LosslessXmlElement | undefined, n
     return Number.isFinite(value) ? [{ kind: node.localName, value }] : [];
   });
   return Object.freeze({ kind: rgb ? "rgb" : "scheme", value: rgb ? `#${value.toUpperCase()}` : value, ...(transforms.length ? { transforms: Object.freeze(transforms) } : {}) });
+}
+
+export function parseChartPattern(parent: LosslessXmlElement | undefined, ns: string): ChartPattern | undefined {
+  const fill = child(parent, ns, 'pattFill');
+  if (!fill) return;
+  const preset = attribute(fill, 'prst') ?? 'pct5';
+  if (!isDrawingPatternPreset(preset)) return;
+  const foreground = parseChartColorContainer(child(fill, ns, 'fgClr'), ns), background = parseChartColorContainer(child(fill, ns, 'bgClr'), ns);
+  return Object.freeze({ preset, ...(foreground ? { foreground } : {}), ...(background ? { background } : {}) });
 }
 
 export function parseChartLine(parent: LosslessXmlElement | undefined, ns: string): ChartLineStyle | undefined {
@@ -90,7 +99,7 @@ export function chartColorFillXml(color: ChartColor, drawingNamespace?: string):
 /** Shape-level paint is shared by chart/plot areas, titles and legends. */
 export function parseChartShapeStyle(parent: LosslessXmlElement | undefined, ns: string): ChartShapeStyle | undefined {
   if (!parent) return undefined;
-  const gradient = parseChartGradient(parent, ns), picture = parseChartPicture(parent, ns);
+  const pattern = parseChartPattern(parent, ns), gradient = parseChartGradient(parent, ns), picture = parseChartPicture(parent, ns);
   const fill = parseChartFill(parent, ns), lineStyle = parseChartLine(parent, ns);
-  return { ...(picture ? { picture } : {}), ...(gradient ? { gradient } : {}), ...(fill ? { fill } : {}), ...(child(parent, ns, 'noFill') ? { noFill: true } : {}), ...(lineStyle ? { lineStyle } : {}) };
+  return { ...(pattern ? { pattern } : {}), ...(picture ? { picture } : {}), ...(gradient ? { gradient } : {}), ...(fill ? { fill } : {}), ...(child(parent, ns, 'noFill') ? { noFill: true } : {}), ...(lineStyle ? { lineStyle } : {}) };
 }

@@ -9,13 +9,14 @@
   import type { ChartTypeChange } from './chart-properties.ts';
   import { chartDataState } from './chart-data-state.ts';
 
-  let { content, disabled = false, themeColors = {}, themeFonts = {}, previewSize = { width: 480, height: 320 }, embeddedData = true, oneditdata, onchange }: {
+  let { content, disabled = false, themeColors = {}, themeFonts = {}, previewSize = { width: 480, height: 320 }, patternOrigin, embeddedData = true, oneditdata, onchange }: {
     content: ChartContent;
     disabled?: boolean;
     themeColors?: Readonly<Record<string, string>>;
     themeFonts?: Readonly<Record<string, string>>;
     /** Layout at the document object size, then scale the SVG into the preview pane. */
     previewSize?: { readonly width: number; readonly height: number };
+    patternOrigin?: { readonly x: number; readonly y: number };
     embeddedData?: boolean;
     oneditdata?: () => void;
     onchange: (content: ChartContent, reason?: 'type' | 'series') => void;
@@ -78,10 +79,10 @@
   onchange={(source) => publish({ ...current, xml: new TextDecoder().decode(source) })}
   ontypechange={changeType} ontypepreview={(value) => { preview = value; }} oneditdata={embeddedData ? openData : oneditdata}>
   {#snippet typePreview()}
-    <OoxmlChart model={previewModel} width={previewSize.width} height={previewSize.height} />
+    <OoxmlChart {patternOrigin} model={previewModel} width={previewSize.width} height={previewSize.height} />
     {#if previewModel.status === 'unsupported'}<p class="preview-error" role="status">{previewModel.reason}</p>{/if}
   {/snippet}
-  {#snippet viewPreview()}<OoxmlChart model={previewModel} width={previewSize.width} height={previewSize.height} />{/snippet}
+  {#snippet viewPreview()}<OoxmlChart {patternOrigin} model={previewModel} width={previewSize.width} height={previewSize.height} />{/snippet}
   {#snippet pictureEditor(target, label)}<ChartPictureEditor content={current} {target} {label} {disabled} onchange={(content) => publish(content)} />{/snippet}
   {#snippet dataEditor(returnFocus: () => void)}
     <ChartSeriesProperties bytes={dataBytes} {disabled} onchange={changeSource} />

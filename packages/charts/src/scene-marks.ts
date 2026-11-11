@@ -19,7 +19,7 @@ export type ChartMark = (
    * Structure: an optional clip to `clip`, and a `role` naming the legend and each of its entries
    * so heads can expose them (the SVG head renders `chart-legend` and `chart-legend-entry` classes).
    */
-  | { readonly kind: "group"; readonly role?: "legend" | "legend-entry"; readonly clip?: ChartRect; readonly marks: readonly ChartMark[] }) & ChartStrokeDecoration & { readonly fillGradient?: import('./gradient-scene.ts').ChartGradientPaint; readonly fillPicture?: import('./fill-scene.ts').ChartPicturePaint };
+  | { readonly kind: "group"; readonly role?: "legend" | "legend-entry"; readonly clip?: ChartRect; readonly marks: readonly ChartMark[] }) & ChartStrokeDecoration & { readonly fillGradient?: import('./gradient-scene.ts').ChartGradientPaint; readonly fillPicture?: import('./fill-scene.ts').ChartPicturePaint; readonly fillPattern?: import('./fill-scene.ts').ChartPatternPaint };
 
 export interface ChartScene {
   readonly width: number;
@@ -30,6 +30,8 @@ export interface ChartScene {
 }
 
 export interface ChartSceneOptions {
+  /** Chart location in CSS pixels in the parent pattern brush space. */
+  readonly patternOrigin?: { readonly x: number; readonly y: number };
   readonly dateSystem?: "1900" | "1904";
   /** Host colour binding; takes precedence over the model's theme colours. */
   readonly resolveColor?: ChartColorResolver;

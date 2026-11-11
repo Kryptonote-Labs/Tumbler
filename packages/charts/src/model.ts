@@ -11,6 +11,7 @@ export const BUBBLE_CHART_POINT_LIMIT = 10_000;
 export type ChartMarkerSymbol = "auto" | "circle" | "dash" | "diamond" | "dot" | "none" | "picture" | "plus" | "square" | "star" | "triangle" | "x";
 
 export interface ChartMarker {
+  readonly pattern?: ChartPattern;
   readonly picture?: import('./picture-parser.ts').ChartPictureFill;
   readonly gradient?: ChartGradient;
   readonly fill?: ChartColor;
@@ -64,7 +65,10 @@ export interface ChartGradient {
   readonly stops: readonly { readonly offset: number; readonly color: ChartColor }[];
 }
 
+export interface ChartPattern { readonly preset: string; readonly foreground?: ChartColor; readonly background?: ChartColor }
+
 export interface ChartShapeStyle {
+  readonly pattern?: ChartPattern;
   readonly picture?: import('./picture-parser.ts').ChartPictureFill;
   readonly gradient?: ChartGradient;
   readonly fill?: ChartColor | undefined;
@@ -87,6 +91,7 @@ export interface ChartDataSequence {
 }
 
 export interface ChartPointFormat {
+  readonly pattern?: ChartPattern;
   readonly picture?: import('./picture-parser.ts').ChartPictureFill;
   readonly bubble3D?: boolean;
   readonly gradient?: ChartGradient;
@@ -99,6 +104,7 @@ export interface ChartPointFormat {
 }
 
 export interface ChartSeries {
+  readonly pattern?: ChartPattern;
   readonly picture?: import('./picture-parser.ts').ChartPictureFill;
   readonly bubble3D?: boolean;
   readonly barShape?: import('./bar-shapes.ts').ChartBarShape;

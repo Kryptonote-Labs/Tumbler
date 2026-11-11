@@ -1,3 +1,4 @@
+import { isDrawingPatternPreset } from '@tumblerjs/ooxml';
 import { readPresentationInk } from "./ink.ts";
 import { PresentationPackageState } from "./package-state.ts";
 import { readSlideTiming } from "./timing.ts";
@@ -811,15 +812,8 @@ class Reader {
     const pattern = this.child(element, "pattFill");
     if (!pattern) return;
     const preset = attr(pattern, "prst") ?? "pct5";
-    if (
-      !/^(pct(5|10|20|25|30|40|50|60|70|75|80|90)|horz|vert|cross|diagCross|(?:lt|dk|wd)(?:DnDiag|UpDiag)|(?:lt|nar|dk)(?:Horz|Vert)|(?:sm|lg)Check|dotGrid)$/.test(
-        preset,
-      )
-    ) {
-      context.diagnostics.push({
-        part: context.slide.part.name.value,
-        message: `Pattern ${preset} is not rendered yet.`,
-      });
+    if (!isDrawingPatternPreset(preset)) {
+      context.diagnostics.push({ part: context.slide.part.name.value, message: `Unknown pattern ${preset}.` });
       return;
     }
     return {

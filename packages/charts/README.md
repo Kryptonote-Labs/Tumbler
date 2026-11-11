@@ -91,7 +91,7 @@ Authored preset/custom dash patterns, caps and joins reach SVG and canvas stroke
 Linear, radial and rectangular gradients retain theme colours and alpha transforms on
 2D series, points, markers, labels, areas and legend swatches. Rectangular path gradients
 retain the full focus rectangle. Radial focus size, tiled/flipped gradients, gradient
-strokes, pattern fills and effects still need renderer work. Their XML remains editable.
+strokes and effects still need renderer work. Their XML remains editable.
 Data labels support value/category/series/percentage/bubble-size flags, custom text,
 point deletion and number formats. Rich label text, leader lines, exact Office
 bubble-size normalization remain incomplete. Three-dimensional bubble shading is rendered
@@ -295,3 +295,16 @@ six trendline types, five error amount modes, date categories, log/reversed axes
 axis crossings, ticks and display units in DOCX, PPTX and XLSX. Schema validation
 and successful LibreOffice export establish interoperability evidence; visual
 parity still needs separate measurement.
+
+All 54 ECMA-376 pattern presets use shared native Office masks, including shaded
+diagonal edges. SVG and canvas repeat complete RGBA tiles so opaque fills remain
+opaque at fractional scale. `chartScenePictures` includes generated pattern tiles;
+canvas hosts pass their decoded-image lookup as `ChartCanvasOptions.image`. The
+existing `picture` callback still paints authored picture fills. `patternOrigin`
+locates the chart in its parent brush coordinate space.
+
+Generate the synthetic nine-page shape/chart atlas with
+`bun scripts/generate-chart-pattern-reference.ts`. Export its native PDF, convert
+each page with `pdftocairo -f N -l N -svg reference.pdf microsoft-N.svg`, then run
+`bun scripts/derive-drawing-pattern-tiles.ts <svg-directory>` to reproduce the masks.
+The shared PNG encoder also retains the existing `encodeInkPng` API.

@@ -12,5 +12,5 @@ export function threeDPointPaint(context: SceneContext, series: ChartSeries, ser
   const normal = chartMeshNormal(vertices.map(point => ({ x: point.x, y: point.y * size.height, z: point.z * size.depth }))), fill = chartPointColor(context, series, seriesIndex, index, line);
   const light = normal ? Math.max(.45, Math.min(1.2, .8 + normal.y * .35 - normal.z * .15 - normal.x * .1)) : 1;
   const gradient = line ? {} : chartPointFill(context, series, index, bounds);
-  return { fill: chartShade(fill, light), ...gradient, ...(gradient.fillGradient ? { fillGradient: { ...gradient.fillGradient, gradient: { ...gradient.fillGradient.gradient, stops: gradient.fillGradient.gradient.stops.map(stop => ({ ...stop, color: chartShade(stop.color, light) })) } } } : {}), ...chartPointStroke(context, series, seriesIndex, index) };
+  return { fill: chartShade(fill, light), ...gradient, ...(gradient.fillPattern ? { fillPattern: { ...gradient.fillPattern, light } } : {}), ...(gradient.fillGradient ? { fillGradient: { ...gradient.fillGradient, gradient: { ...gradient.fillGradient.gradient, stops: gradient.fillGradient.gradient.stops.map(stop => ({ ...stop, color: chartShade(stop.color, light) })) } } } : {}), ...chartPointStroke(context, series, seriesIndex, index) };
 }

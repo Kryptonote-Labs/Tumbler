@@ -1,8 +1,7 @@
-import { paintDrawingPicture, paintDrawingGradient as gradient, paintRectangularGradient as rectangular } from "@tumblerjs/ooxml";
+import { drawingPatternPicture, paintDrawingPattern, paintDrawingPicture, paintDrawingGradient as gradient, paintRectangularGradient as rectangular } from "@tumblerjs/ooxml";
 import {
   linearGradientLine,
   rectangularGradientFaces,
-  drawingPatternGeometry,
 } from './fill-geometry.ts';
 import { layoutChartScene, paintChartScene, chartScenePictures } from '@tumblerjs/charts';
 import type { DrawingGradient, DrawingPictureFill, DrawingPattern } from './appearance.ts';
@@ -14,8 +13,8 @@ export type { SlideCanvasContext, SlideCanvasOptions } from './canvas-types.ts';
 /** Embedded images needed by a slide, including its background and shape picture fills. */
 export function presentationSlideImages(slide: PresentationSlide): readonly DrawingPictureFill[] {
   return [
-    slide.backgroundPicture,
-    ...slide.objects.flatMap((o) => [o.image, o.pictureFill, ...(o.chart?.status === 'supported' ? chartScenePictures(layoutChartScene(o.chart, o.transform.width, o.transform.height)) : [])]),
+    slide.backgroundPicture, ...(slide.backgroundPattern ? [drawingPatternPicture(slide.backgroundPattern)] : []),
+    ...slide.objects.flatMap((o) => [o.image, o.pictureFill, ...(o.pattern ? [drawingPatternPicture(o.pattern)] : []), ...(o.chart?.status === 'supported' ? chartScenePictures(layoutChartScene(o.chart, o.transform.width, o.transform.height)) : [])]),
   ].filter((p): p is DrawingPictureFill => p !== undefined);
 }
 function picture<Path, Image>(
@@ -39,29 +38,8 @@ function pattern<Path, Image>(
   options: SlideCanvasOptions<Path, Image>,
 ) {
   if (!fill) return;
-  const geometry = drawingPatternGeometry(fill.preset);
-  ctx.save();
-  ctx.fillStyle = fill.background;
-  ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = fill.foreground;
-  ctx.strokeStyle = fill.foreground;
-  ctx.lineWidth = geometry.strokeWidth;
-  const path = geometry.path ? options.path(geometry.path) : undefined;
-  for (let y = 0; y < height; y += geometry.size)
-    for (let x = 0; x < width; x += geometry.size) {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.beginPath();
-      ctx.rect(0, 0, Math.min(geometry.size, width - x), Math.min(geometry.size, height - y));
-      ctx.clip();
-      for (const rect of geometry.rects) ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
-      if (path) {
-        if (geometry.filled) ctx.fill(path);
-        else ctx.stroke(path);
-      }
-      ctx.restore();
-    }
-  ctx.restore();
+  const decoded = options.image?.(drawingPatternPicture(fill));
+  if (decoded) paintDrawingPattern(ctx, decoded.image, width, height);
 }
 
 /** Paints actual slide content without editor handles or empty-placeholder prompts. Hosts own PNG encoding. */
@@ -112,8 +90,11 @@ export function paintPresentationSlide<Path, Image>(
     );
     for (const path of object.drawingGeometry?.paths ?? []) {
       const geometry = options.path(path.d);
-      if (path.fill !== 'none' && object.fill !== 'none') {
-        if (object.gradient?.kind === 'rectangular') {
+      if (path.fill !== 'none' && (object.pattern || object.fill !== 'none')) {
+        if (object.pattern) {
+          ctx.save();
+          try { ctx.clip(geometry); const decoded = options.image?.(drawingPatternPicture(object.pattern)); if (decoded) paintDrawingPattern(ctx, decoded.image, width, height, { x: object.matrix[4], y: object.matrix[5] }); } finally { ctx.restore(); }
+        } else if (object.gradient?.kind === 'rectangular') {
           ctx.save();
           ctx.clip(geometry);
           rectangular(ctx, object.gradient, width, height);
@@ -154,7 +135,7 @@ export function paintPresentationSlide<Path, Image>(
       ctx.restore();
     }
     if (object.chart && object.chart.status === 'supported')
-      paintChartScene(ctx, layoutChartScene(object.chart, width, height), options.path, { picture: (fill, width, height) => picture(ctx, fill, width, height, options) });
+      paintChartScene(ctx, layoutChartScene(object.chart, width, height, { patternOrigin: { x: object.matrix[4], y: object.matrix[5] } }), options.path, { image: options.image, picture: (fill, width, height) => picture(ctx, fill, width, height, options) });
     if (object.text) {
       const rect = object.drawingGeometry?.textRect ?? [0, 0, width, height];
       ctx.save();
