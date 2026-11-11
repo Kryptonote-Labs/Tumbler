@@ -2,6 +2,8 @@ import { resolve } from 'node:path';
 import PptxGenJS from 'pptxgenjs';
 import { DRAWING_PATTERN_PRESETS } from '../packages/ooxml/src/pattern-presets.ts';
 import { beginPackageTransaction, openOpcPackage } from '../packages/opc/src/index.ts';
+import { createOoxmlChart, writeChartContent, chartBytesToBase64 } from '../packages/charts/src/index.ts';
+import { createChartWorkbook } from '../packages/sheets/src/index.ts';
 
 const output = resolve(process.argv[2] ?? 'packages/charts/test/fixtures/chart-pattern-reference.pptx');
 const presentation = new PptxGenJS();
@@ -22,6 +24,10 @@ for (const preset of DRAWING_PATTERN_PRESETS) {
 const bytes = await presentation.write({ outputType: 'uint8array' });
 if (!(bytes instanceof Uint8Array)) throw Error('Expected presentation bytes.');
 const pkg = openOpcPackage(bytes), edit = beginPackageTransaction(pkg);
+const root = pkg.getPart('/ppt/presentation.xml')!;
+const rootXml = new TextDecoder().decode(pkg.readPart(root));
+const notes = rootXml.match(/<p:notesMasterIdLst>[\s\S]*?<\/p:notesMasterIdLst>/)?.[0];
+if (notes) edit.replacePart(root.name, new TextEncoder().encode(rootXml.replace(notes, '').replace('<p:sldIdLst>', `${notes}<p:sldIdLst>`)));
 for (const [index, preset] of DRAWING_PATTERN_PRESETS.entries()) {
   const pattern = `<a:pattFill prst="${preset}"><a:fgClr><a:srgbClr val="000000"/></a:fgClr><a:bgClr><a:srgbClr val="FFFFFF"/></a:bgClr></a:pattFill>`;
   const part = pkg.getPart(`/ppt/slides/slide${index + 1}.xml`)!;
@@ -33,11 +39,12 @@ for (const [index, preset] of DRAWING_PATTERN_PRESETS.entries()) {
   if (replaced === rectangle) throw Error(`Rectangle fill missing: ${preset}.`);
   edit.replacePart(part.name, new TextEncoder().encode(source.replace(rectangle, replaced)));
   const chart = pkg.getPart(`/ppt/charts/chart${index + 1}.xml`)!;
-  const chartXml = new TextDecoder().decode(pkg.readPart(chart));
+  const chartXml = new TextDecoder().decode(createOoxmlChart({ type: 'barChart', categories: ['A'], series: [{ name: 'Pattern', values: [4] }] })).replaceAll('<c:delete val="0"/>', '<c:delete val="1"/>');
   const series = chartXml.match(/<c:ser>[\s\S]*?<\/c:ser>/)?.[0];
   if (!series) throw Error(`Chart series missing: ${preset}.`);
   const painted = series.replace(/<c:spPr>[\s\S]*?<\/c:spPr>/, `<c:spPr>${pattern}</c:spPr>`);
-  edit.replacePart(chart.name, new TextEncoder().encode(chartXml.replace(series, painted)));
+  const data = createChartWorkbook(new TextEncoder().encode(chartXml.replace(series, painted)));
+  writeChartContent(edit, chart.name, { xml: new TextDecoder().decode(data.source), workbook: chartBytesToBase64(data.artifact.bytes()) });
 }
 await Bun.write(output, edit.commit());
 console.log(output);
