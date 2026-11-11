@@ -252,6 +252,11 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
     if (box.width <= 0 || box.height <= 0 || (fragment.x + box.x + box.width) * scale <= view.x || (fragment.y + box.y + box.height) * scale <= view.y
       || (fragment.x + box.x) * scale >= view.x + view.width || (fragment.y + box.y) * scale >= view.y + view.height) return;
   }
+  if (drawing?.kind === 'chart' && options.viewport) {
+    const scale = options.scale ?? 4 / 3, view = options.viewport;
+    if (fragment.width <= 0 || fragment.height <= 0 || (fragment.x + fragment.width) * scale <= view.x || (fragment.y + fragment.height) * scale <= view.y
+      || fragment.x * scale >= view.x + view.width || fragment.y * scale >= view.y + view.height) return;
+  }
   if (drawing?.kind === 'image' && drawing.inkRendering === 'raster') options.onInkFallback?.(drawing);
   const image = drawing?.kind === "image" ? options.image?.(drawing) : undefined;
   if (image !== undefined && drawing?.kind === 'image') {
@@ -272,6 +277,7 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
       },
     });
     context.save();
+    try {
     context.translate(fragment.x, fragment.y);
     context.scale(1 / pixels, 1 / pixels);
     for (const mark of scene.marks) if (mark.kind === 'text') options.prepareFont?.(mark.font.family);
@@ -279,7 +285,7 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
       const decoded = options.chartImage?.(fill);
       if (decoded) paintDrawingPicture(context, fill, width, height, decoded);
     } });
-    context.restore();
+    } finally { context.restore(); }
     return;
   }
   context.fillStyle = PLACEHOLDER;

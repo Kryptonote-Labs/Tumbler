@@ -3,7 +3,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./file-host": "./src/file-host.ts"
+    "./file-host": "./src/file-host.ts",
+    "./metafile": "./src/metafile.ts"
   },
   "bin": {
     "tumbler": "./src/bin.ts"
@@ -14,14 +15,16 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@tumblerjs/pdf": "0.1.0-alpha.26",
-    "@tumblerjs/word": "0.1.0-alpha.26",
-    "zod": "^4.6.5",
-    "yjs": "^13.6.0",
-    "@tumblerjs/slides": "0.1.0-alpha.26",
-    "@tumblerjs/sheets": "0.1.0-alpha.26",
     "@tumblerjs/charts": "0.1.0-alpha.26",
-    "@tumblerjs/opc": "0.1.0-alpha.26"
+    "@tumblerjs/opc": "0.1.0-alpha.26",
+    "@tumblerjs/pdf": "0.1.0-alpha.26",
+    "@tumblerjs/sheets": "0.1.0-alpha.26",
+    "@tumblerjs/slides": "0.1.0-alpha.26",
+    "@tumblerjs/word": "0.1.0-alpha.26",
+    "@xmldom/xmldom": "^0.9.12",
+    "rtf.js": "3.0.9",
+    "yjs": "^13.6.0",
+    "zod": "^4.6.5"
   },
   "version": "0.1.0-alpha.26",
   "description": "Host-backed command-line operations for Word documents, presentations and spreadsheets.",
