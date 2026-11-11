@@ -1,6 +1,7 @@
 <script lang="ts">
   import { chartBase64ToBytes, chartBytesToBase64, chartContentModel, convertChartType, type ChartContent, type ChartModel } from '@tumblerjs/charts';
   import { createChartWorkbook, extendChartWorkbook, openSpreadsheetArtifact, refreshChartWorkbook, type SpreadsheetArtifact } from '@tumblerjs/sheets';
+  import ChartSeriesProperties from './ChartSeriesProperties.svelte';
   import ChartProperties from './ChartProperties.svelte';
   import ChartDataEditor from './ChartDataEditor.svelte';
   import OoxmlChart from './OoxmlChart.svelte';
@@ -26,17 +27,18 @@
   });
   let dataOpen = $state(false);
   let preview = $state<ChartTypeChange>();
+  let plotIndex = $state(0);
   let error = $state<string>();
   const previewModel = $derived.by((): ChartModel => {
     try {
-      const xml = preview ? new TextDecoder().decode(convertChartType(bytes, preview)) : current.xml;
+      const xml = preview ? new TextDecoder().decode(convertChartType(bytes, preview, plotIndex)) : current.xml;
       return { ...chartContentModel({ xml }), themeColors };
     } catch (cause) { return { status: 'unsupported', chartType: undefined, reason: cause instanceof Error ? cause.message : 'This data cannot use that chart type.', title: undefined, legend: undefined }; }
   });
   function publish(content: ChartContent) { if (disabled) return; current = content; error = undefined; onchange(content); }
   function changeType(change: ChartTypeChange) {
     try {
-      const source = convertChartType(bytes, change);
+      const source = convertChartType(bytes, change, plotIndex);
       if (embeddedData && workbook) {
         const bound = extendChartWorkbook(source, workbook);
         publish({ xml: new TextDecoder().decode(bound.source), workbook: chartBytesToBase64(bound.artifact.bytes()) });
@@ -53,6 +55,15 @@
     }
     dataOpen = true;
   }
+  function changeSource(source: Uint8Array) {
+    try {
+      if (embeddedData && workbook) {
+        const bound = extendChartWorkbook(source, workbook);
+        const refreshed = refreshChartWorkbook(bound.source, bound.artifact);
+        publish({ xml: new TextDecoder().decode(refreshed), workbook: chartBytesToBase64(bound.artifact.bytes()) });
+      } else publish({ ...current, xml: new TextDecoder().decode(source) });
+    } catch (cause) { error = cause instanceof Error ? cause.message : 'The series could not be changed.'; }
+  }
   function changeData(artifact: SpreadsheetArtifact) {
     try {
       sheet = artifact.activeSheet.name;
@@ -62,7 +73,7 @@
   }
 </script>
 
-<ChartProperties {bytes} {disabled} {themeColors}
+<ChartProperties {bytes} {disabled} {themeColors} {plotIndex} onplotselect={(index) => { plotIndex = index; preview = undefined; }}
   onchange={(source) => publish({ ...current, xml: new TextDecoder().decode(source) })}
   ontypechange={changeType} ontypepreview={(value) => { preview = value; }} oneditdata={embeddedData ? openData : oneditdata}>
   {#snippet typePreview()}
@@ -70,6 +81,7 @@
     {#if previewModel.status === 'unsupported'}<p class="preview-error" role="status">{previewModel.reason}</p>{/if}
   {/snippet}
   {#snippet dataEditor()}
+    <ChartSeriesProperties {bytes} {disabled} onchange={changeSource} />
     {#if embeddedData && dataOpen && workbook}<ChartDataEditor artifact={workbook} {disabled} onchange={changeData} onsheetselect={(name) => { sheet = name; }} onclose={() => { dataOpen = false; }} />{/if}
   {/snippet}
 </ChartProperties>

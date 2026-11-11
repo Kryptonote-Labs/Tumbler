@@ -2,7 +2,7 @@ import { beginLosslessXmlEdit, parseLosslessXml, type LosslessXmlDocument, type 
 import { createOoxmlChart, type CreateChartOptions } from './create.ts';
 import { readChartData } from './data-edit.ts';
 import { chartPropertyTree, chartPropertyDefinition, type ChartPropertyNode } from './properties.ts';
-import { chartXml, chartXmlText } from './source-xml.ts';
+import { chartXml, chartXmlText, standaloneChartElement as standalone } from './source-xml.ts';
 import { isOoxmlChartType } from './chart-types.ts';
 
 export type ChartTypeChange = Pick<CreateChartOptions, 'type' | 'direction' | 'grouping' | 'radarStyle' | 'scatterStyle' | 'splitType' | 'wireframe'>;
@@ -10,21 +10,6 @@ const HISTORY_NS = 'urn:tumblerjs:chart-authoring';
 const IDENTITY_URI = 'https://tumblerjs.org/chart-authoring/plot-identity/v1';
 const HISTORY_URI = 'https://tumblerjs.org/chart-authoring/type-history/v1';
 
-/** Capture namespace bindings so moved or temporarily inactive properties remain self-contained. */
-function standalone(document: LosslessXmlDocument, element: LosslessXmlElement): string {
-  const bindings = new Map<string, string>();
-  let ancestor: LosslessXmlElement | undefined = document.root;
-  while (ancestor) {
-    for (const attribute of ancestor.attributes) if (attribute.namespaceUri === 'http://www.w3.org/2000/xmlns/') bindings.set(attribute.qualified, attribute.value);
-    if (ancestor.id === element.id) break;
-    ancestor = ancestor.children.find((child): child is LosslessXmlElement => child.kind === 'element' && child.span.start <= element.span.start && child.span.end >= element.span.end);
-  }
-  const own = new Set(element.attributes.filter(attribute => attribute.namespaceUri === 'http://www.w3.org/2000/xmlns/').map(attribute => attribute.qualified));
-  const declarations = [...bindings].filter(([name]) => !own.has(name)).map(([name, value]) => ` ${name}="${chartXmlText(value)}"`).join('');
-  const source = document.source.slice(element.span.start, element.span.end);
-  const offset = element.startTagSpan.end - element.span.start - (element.selfClosing ? 2 : 1);
-  return source.slice(0, offset) + declarations + source.slice(offset);
-}
 function renamed(document: LosslessXmlDocument, element: LosslessXmlElement, name: string): string {
   const xml = standalone(document, element);
   const qualified = element.prefix ? `${element.prefix}:${name}` : name;

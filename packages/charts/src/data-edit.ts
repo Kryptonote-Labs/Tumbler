@@ -5,14 +5,14 @@ import { chartXml, chartXmlText } from './source-xml.ts';
 export interface ChartEditableSequence {
   readonly values: readonly (string | number | null)[];
   readonly kind: 'string' | 'number';
-  readonly formula?: string;
-  readonly levels?: readonly (readonly (string | number | null)[])[];
-  readonly formatCode?: string;
+  readonly formula?: string | undefined;
+  readonly levels?: readonly (readonly (string | number | null)[])[] | undefined;
+  readonly formatCode?: string | undefined;
 }
 export interface ChartEditableSeries {
   readonly index: number;
   readonly name: string;
-  readonly nameFormula?: string;
+  readonly nameFormula?: string | undefined;
   readonly categories?: ChartEditableSequence | undefined;
   readonly values?: ChartEditableSequence | undefined;
   readonly xValues?: ChartEditableSequence | undefined;

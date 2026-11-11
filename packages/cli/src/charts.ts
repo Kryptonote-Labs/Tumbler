@@ -11,9 +11,18 @@ export const chartSourceEdit = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('remove'), ...address }).strict(),
 ]);
 const chartTarget = { page: z.string().min(1), part: z.string().min(1) };
+const sequence = z.object({ kind: z.enum(['string', 'number']), values: z.array(z.union([z.string(), z.number().finite(), z.null()])), formula: z.string().optional(), formatCode: z.string().optional(), levels: z.array(z.array(z.union([z.string(), z.number().finite(), z.null()]))).optional() }).strict();
+const seriesData = z.object({ name: z.string(), nameFormula: z.string().optional(), categories: sequence.optional(), values: sequence.optional(), xValues: sequence.optional(), bubbleSizes: sequence.optional() }).strict();
+const seriesEdit = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('add'), plot: z.number().int().nonnegative().optional(), series: seriesData }).strict(),
+  z.object({ action: z.enum(['duplicate', 'remove']), plot: z.number().int().nonnegative().optional(), series: z.number().int().nonnegative() }).strict(),
+  z.object({ action: z.literal('move'), plot: z.number().int().nonnegative().optional(), series: z.number().int().nonnegative(), to: z.number().int().nonnegative() }).strict(),
+]);
 export const chartEditInput = z.union([
   z.object({ ...chartTarget, edits: z.array(chartSourceEdit).min(1) }).strict(),
-  z.object({ ...chartTarget, type: z.enum(OOXML_CHART_TYPES), direction: z.enum(['bar', 'col']).optional(), grouping: z.enum(['standard', 'clustered', 'stacked', 'percentStacked']).optional(), radarStyle: z.enum(['standard', 'marker', 'filled']).optional(), scatterStyle: z.enum(['none', 'line', 'lineMarker', 'marker', 'smooth', 'smoothMarker']).optional(), splitType: z.enum(['pie', 'bar']).optional(), wireframe: z.boolean().optional() }).strict(),
+  z.object({ ...chartTarget, plot: z.number().int().nonnegative().optional(), type: z.enum(OOXML_CHART_TYPES), direction: z.enum(['bar', 'col']).optional(), grouping: z.enum(['standard', 'clustered', 'stacked', 'percentStacked']).optional(), radarStyle: z.enum(['standard', 'marker', 'filled']).optional(), scatterStyle: z.enum(['none', 'line', 'lineMarker', 'marker', 'smooth', 'smoothMarker']).optional(), splitType: z.enum(['pie', 'bar']).optional(), wireframe: z.boolean().optional() }).strict(),
+  z.object({ ...chartTarget, series: seriesEdit }).strict(),
+  z.object({ ...chartTarget, data: z.array(z.object({ type: z.enum(OOXML_CHART_TYPES), series: z.array(seriesData.extend({ index: z.number().int().nonnegative() })) }).strict()) }).strict(),
   z.object({ ...chartTarget, cells: z.array(z.object({ sheet: z.string().optional(), reference: z.string().min(1), value: z.union([z.string(), z.number().finite(), z.boolean(), z.null()]).optional(), formula: z.string().optional() }).strict().refine(cell => (cell.value !== undefined) !== (cell.formula !== undefined), 'Supply a value or a formula.')).min(1) }).strict(),
 ]);
 export type ChartEditInput = z.infer<typeof chartEditInput>;

@@ -2,6 +2,7 @@
   import { tick, type Snippet } from "svelte";
   import {
     chartPropertyDefinition,
+    readChartData,
     chartPropertyTree,
     editChartSource,
     insertChartProperty,
@@ -40,9 +41,11 @@
     readonly oneditdata?: () => void;
     readonly typePreview?: Snippet;
     readonly dataEditor?: Snippet;
+    readonly plotIndex?: number;
+    readonly onplotselect?: (index: number) => void;
   }
 
-  let { bytes, disabled = false, themeColors = {}, onchange, ontypechange, ontypepreview, oneditdata, typePreview, dataEditor }: Props = $props();
+  let { bytes, disabled = false, themeColors = {}, onchange, ontypechange, ontypepreview, oneditdata, typePreview, dataEditor, plotIndex = 0, onplotselect }: Props = $props();
 
   const id = $props.id();
   // Follows the host's bytes, and runs ahead of them between an edit and the host's next render.
@@ -63,7 +66,8 @@
   const legend = $derived(chartPropertyChild(chart, "legend"));
   const legendPosition = $derived(chartPropertyValue(chartPropertyChild(legend, "legendPos")) ?? "r");
   const legendChoices = chartPropertyDefinition("c:CT_LegendPos/c:legendPos")?.attributes[0]?.choices ?? [];
-  const type = $derived(parsed && currentChartType(parsed));
+  const plots = $derived(parsed ? readChartData(current) : []);
+  const type = $derived(parsed && currentChartType(parsed, plotIndex));
   const targets = $derived(parsed ? chartFormatTargets(parsed) : []);
   const target = $derived(targets.find((entry) => entry.key === targetKey) ?? targets[0]);
   const labels = $derived(parsed ? chartPropertyLabels(parsed) : new Map<number, string>());
@@ -167,6 +171,9 @@
   <div class="chart-properties">
     <fieldset {disabled}>
       <legend>Chart</legend>
+      {#if plots.length > 1}<label class="row"><span>Plot</span><select aria-label="Chart plot" value={plotIndex} onchange={(event) => onplotselect?.(Number(event.currentTarget.value))}>
+        {#each plots as plot, index}<option value={index}>Plot {index + 1} · {plot.series.map(series => series.name).join(', ')}</option>{/each}
+      </select></label>{/if}
       <div class="row">
         <span id={`${id}-type`}>Type</span>
         <button bind:this={trigger} type="button" class="picker" disabled={disabled || !ontypechange}

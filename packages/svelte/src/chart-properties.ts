@@ -132,10 +132,10 @@ export function chartPropertyValue(node: ChartPropertyNode | undefined): string 
   return value(node);
 }
 
-/** The first plot decides the type shown; combination charts list further plots as format targets. */
-export function currentChartType(root: ChartPropertyNode): ChartTypeOption | undefined {
-  const plot = child(child(root, "chart"), "plotArea")?.children.find((node) =>
-    CHART_TYPE_FAMILIES.some((family) => family.options.some((option) => option.change.type === localName(node))));
+/** Inspect the selected combination plot without changing its peers. */
+export function currentChartType(root: ChartPropertyNode, index = 0): ChartTypeOption | undefined {
+  const plot = child(child(root, "chart"), "plotArea")?.children.filter((node) =>
+    CHART_TYPE_FAMILIES.some((family) => family.options.some((option) => option.change.type === localName(node))))[index];
   if (!plot) return undefined;
   const type = localName(plot) as OoxmlChartType;
   const observed: Record<string, string | boolean | undefined> = {

@@ -1,9 +1,9 @@
-import { chartBase64ToBytes, chartBytesToBase64, convertChartType, editChartSource, type ChartContent, type ChartSourceEdit, type ChartTypeChange } from '@tumblerjs/charts';
+import { chartBase64ToBytes, chartBytesToBase64, convertChartType, editChartSource, editChartSeries, bindChartData, type ChartContent, type ChartSourceEdit, type ChartTypeChange, type ChartSeriesEdit, type ChartEditablePlot } from '@tumblerjs/charts';
 import { createChartWorkbook, extendChartWorkbook, refreshChartWorkbook } from './chart-workbook.ts';
 import { openSpreadsheetArtifact } from './artifact.ts';
 import { beginSpreadsheetEdit } from './editor.ts';
 
-export type ChartContentEdit = { readonly edits: readonly ChartSourceEdit[] } | ChartTypeChange | {
+export type ChartContentEdit = { readonly edits: readonly ChartSourceEdit[] } | (ChartTypeChange & { readonly plot?: number | undefined }) | { readonly series: ChartSeriesEdit } | { readonly data: readonly ChartEditablePlot[] } | {
   readonly cells: readonly { readonly sheet?: string | undefined; readonly reference: string; readonly value?: string | number | boolean | null | undefined; readonly formula?: string | undefined }[];
 };
 
@@ -11,11 +11,11 @@ export type ChartContentEdit = { readonly edits: readonly ChartSourceEdit[] } | 
 export function applyChartContentEdit(content: ChartContent, input: ChartContentEdit): ChartContent {
   let source: Uint8Array = new TextEncoder().encode(content.xml);
   if ('edits' in input) return { ...content, xml: new TextDecoder().decode(editChartSource(source, input.edits)) };
-  if ('type' in input) {
-    const changed = convertChartType(source, input);
+  if ('type' in input || 'series' in input || 'data' in input) {
+    const changed = 'type' in input ? convertChartType(source, input, input.plot ?? 0) : 'series' in input ? editChartSeries(source, input.series) : bindChartData(source, input.data);
     if (content.workbook === undefined) return { ...content, xml: new TextDecoder().decode(changed) };
     const workbook = extendChartWorkbook(changed, openSpreadsheetArtifact(chartBase64ToBytes(content.workbook)));
-    return { xml: new TextDecoder().decode(workbook.source), workbook: chartBytesToBase64(workbook.artifact.bytes()) };
+    return { xml: new TextDecoder().decode(refreshChartWorkbook(workbook.source, workbook.artifact)), workbook: chartBytesToBase64(workbook.artifact.bytes()) };
   }
   let artifact;
   if (content.workbook === undefined) {
