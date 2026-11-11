@@ -1,3 +1,4 @@
+import { chartFileHost } from './chart-file-host.ts';
 import { spreadsheetFileHost, createSpreadsheetFile } from './spreadsheet-file-host.ts';
 import { extractPdfPages, openPdfDocument, PdfSearchIndex, mergePdfDocuments, parsePdfPageSelection } from '@tumblerjs/pdf';
 import { checkPdfDeletionSupported } from './pdf-delete-pages.ts';
@@ -229,6 +230,7 @@ export function createFileHost(): OperationHost {
   return {
     ...presentationFileHost(),
     ...spreadsheetFileHost(),
+    ...chartFileHost(),
     async mergePdf(input) {
       if (!input.sources.length) throw new Error('Select at least one PDF source.');
       if (extname(input.output).toLowerCase() !== '.pdf') throw new Error('PDF merge requires a .pdf output path.');

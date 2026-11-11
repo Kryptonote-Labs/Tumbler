@@ -214,3 +214,23 @@ tumbler first.pdf pdf merge --pages 3,1-2,1 --source second.pdf --pages 2-1 --so
 Sources are read in command order. `--pages` and `--password` apply to the most recent source (initially the positional PDF). Omit `--pages` to include every page. Selections use one-based numbers, comma lists, inclusive ranges in either direction, and repetitions. Repeat `--source` to interleave blocks from any document. `--password` takes the next argument literally (including passwords such as `--help`); `--password=--secret` is also supported. It unlocks an encrypted input; the new PDF is unencrypted. The output must end in `.pdf` and must not exist. Inputs remain untouched and publication occurs only after the complete output has been written.
 
 The shared `@tumblerjs/pdf` merge API also powers the Svelte docs PDF merge playground. Both interfaces use the same page-selection rules and preservation checks. See the PDF package README for document structure support and limitations.
+
+### Chart source properties
+
+The file host supports advanced chart-part edits in DOCX, PPTX and XLSX:
+
+```sh
+tumbler report.docx charts read
+tumbler report.docx charts read --part /word/charts/chart1.xml
+tumbler report.docx charts edit --input '{"page":"<revision>","part":"/word/charts/chart1.xml","edits":[{"kind":"attribute","node":12,"name":"val","value":"0"}]}'
+```
+
+Use the current read's revision and node IDs, not the example ID. Each edit
+changes one chart part atomically and returns a new property tree and revision.
+All source properties, including extension markup, are accessible. These commands
+validate XML rather than chart schemas or linked workbook consistency. They do
+not yet insert chart drawings, convert types automatically, or synchronize source
+workbooks. Hosted integrations implement `ChartOperationHost` to supply their
+own permissions, storage and collaboration transactions; an unsupported host
+returns an explicit capability error. Run `tumbler <document> charts --help` for
+the complete edit schema.
