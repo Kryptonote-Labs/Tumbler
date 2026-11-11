@@ -1,3 +1,4 @@
+import { drawingGradientStops } from './gradient-stops.ts';
 import { linearGradientLine, rectangularGradientFaces, type DrawingGradient } from './gradient.ts';
 export interface DrawingGradientCanvasContext {
   fillStyle: unknown;
@@ -21,7 +22,7 @@ export function paintDrawingGradient(
     result = ctx.createRadialGradient(value.center[0], value.center[1], 0, value.center[0], value.center[1], 0.5);
     ctx.restore();
   } else result = ctx.createLinearGradient(...linearGradientLine(value, w, h));
-  for (const stop of value.stops)
+  for (const stop of drawingGradientStops(value))
     result.addColorStop(Math.max(0, Math.min(1, stop.offset)), stop.color);
   return result;
 }
@@ -50,7 +51,7 @@ export function paintRectangularGradient(
   for (const face of rectangularGradientFaces(value.center, opaque ? 1 / Math.max(1, Math.min(w, h)) : 0, value.focusRect)) {
     const [x1, y1, x2, y2] = face.line;
     const fill = ctx.createLinearGradient(x1 * w, y1 * h, x2 * w, y2 * h);
-    for (const stop of value.stops)
+    for (const stop of drawingGradientStops(value))
       fill.addColorStop(Math.max(0, Math.min(1, stop.offset)), stop.color);
     ctx.fillStyle = fill;
     ctx.beginPath();

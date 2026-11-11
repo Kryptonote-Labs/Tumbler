@@ -1,4 +1,4 @@
-import { drawingColorRgba, encodeRgbaPng, type DrawingGradient, type DrawingPictureFill } from '@tumblerjs/ooxml';
+import { drawingColorRgba, drawingGradientStops, encodeRgbaPng, type DrawingGradient, type DrawingPictureFill } from '@tumblerjs/ooxml';
 import type { ChartMark } from './scene-marks.ts';
 import type { ChartRect } from './layout.ts';
 
@@ -11,14 +11,16 @@ export function rectangularStrokeBrush(gradient: DrawingGradient, bounds: ChartR
   const previous = cache.get(key);
   if (previous) return previous;
   const width = Math.max(1, Math.ceil(coverage.width)), height = Math.max(1, Math.ceil(coverage.height));
-  const pixels = new Uint8Array(width * height * 4), stops = gradient.stops.map(stop => ({ ...stop, rgba: drawingColorRgba(stop.color) ?? [0, 0, 0, 0] as const }));
+  const pixels = new Uint8Array(width * height * 4), stops = drawingGradientStops(gradient).map(stop => ({ ...stop, rgba: drawingColorRgba(stop.color) ?? [0, 0, 0, 0] as const }));
   const [l, t, r, b] = gradient.focusRect ?? [...gradient.center, ...gradient.center];
   const distance = (value: number, low: number, high: number) => value < low ? (low - value) / (low || 1e-12) : value > high ? (value - high) / (1 - high || 1e-12) : 0;
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     const px = (coverage.x + (x + .5) * coverage.width / width - bounds.x) / bounds.width;
     const py = (coverage.y + (y + .5) * coverage.height / height - bounds.y) / bounds.height;
     const offset = Math.max(0, Math.min(1, Math.max(distance(px, l, r), distance(py, t, b))));
-    const end = stops.findIndex(stop => stop.offset > offset);
+    let low = 0, high = stops.length;
+    while (low < high) { const middle = (low + high) >>> 1; if (stops[middle]!.offset > offset) high = middle; else low = middle + 1; }
+    const end = low === stops.length ? -1 : low;
     const first = stops[Math.max(0, end < 0 ? stops.length - 1 : end - 1)]!, last = stops[end < 0 ? stops.length - 1 : end]!;
     const amount = first === last ? 0 : Math.max(0, Math.min(1, (offset - first.offset) / (last.offset - first.offset)));
     const alpha = first.rgba[3] * (1 - amount) + last.rgba[3] * amount, at = (y * width + x) * 4;

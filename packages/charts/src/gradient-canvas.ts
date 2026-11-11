@@ -1,4 +1,4 @@
-import { paintDrawingGradient, paintRectangularGradient, type DrawingGradientCanvasContext } from '@tumblerjs/ooxml';
+import { drawingGradientStops, paintDrawingGradient, paintRectangularGradient, type DrawingGradientCanvasContext } from '@tumblerjs/ooxml';
 import type { ChartCanvasContext } from './canvas.ts';
 import type { ChartGradientPaint } from './gradient-scene.ts';
 
@@ -18,7 +18,7 @@ export function paintChartGradient<Path>(context: ChartCanvasContext<Path>, pain
   else if (gradient.kind === 'radial') {
     context.scale(bounds.width, bounds.height);
     const fill = context.createRadialGradient(...gradient.center, 0, ...gradient.center, .5);
-    for (const stop of gradient.stops) fill.addColorStop(stop.offset, stop.color);
+    for (const stop of drawingGradientStops(gradient)) fill.addColorStop(stop.offset, stop.color);
     context.fillStyle = fill;
     context.beginPath();
     context.rect(0, 0, 1, 1);

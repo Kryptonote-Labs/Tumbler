@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { linearGradientLine, rectangularGradientFaces } from '@tumblerjs/ooxml';
+  import { drawingGradientStops, linearGradientLine, rectangularGradientFaces } from '@tumblerjs/ooxml';
   import type { DrawingGradient } from '@tumblerjs/ooxml';
   let {
     gradient,
@@ -12,7 +12,7 @@
 </script>
 
 {#snippet stops()}
-  {#each gradient.stops as stop}<stop offset={stop.offset} stop-color={stop.color} />{/each}
+  {#each drawingGradientStops(gradient) as stop}<stop offset={stop.offset} stop-color={stop.color} />{/each}
 {/snippet}
 {#if gradient.kind === 'linear'}
   <linearGradient
