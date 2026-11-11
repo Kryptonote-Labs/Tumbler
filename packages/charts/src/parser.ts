@@ -9,6 +9,7 @@ import { parseChartAxisProperties } from './axis-properties.ts';
 import { parseChartAnalytics } from './analytics-parser.ts';
 import { parseChartDataLabels } from './data-labels.ts';
 import { readChartTitleText } from './rich-text.ts';
+import { registerChartNamespaces } from './xml-namespaces.ts';
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { BUBBLE_CHART_POINT_LIMIT } from "./model.ts";
 import type {
@@ -53,6 +54,7 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
   let document: LosslessXmlDocument;
   try {
     document = parseLosslessXml(bytes);
+    registerChartNamespaces(document.root);
   } catch (cause) {
     throw new ChartParseError("Chart part is not valid XML.", { cause });
   }
@@ -410,6 +412,8 @@ function lineStyleProperties(element: LosslessXmlElement, ns: string, drawing: s
 
 function parseText(element: LosslessXmlElement | undefined, chartNamespace: string, drawingNamespace: string): string | undefined {
   if (element === undefined) return undefined;
+  const rich = readChartTitleText(element, chartNamespace, drawingNamespace);
+  if (rich?.length) return rich.map(paragraph => paragraph.runs.map(run => run.text).join('')).join('\n');
   const texts = descendants(element, drawingNamespace, "t").map(text);
   if (texts.length > 0) return texts.join("");
   const values = descendants(element, chartNamespace, "v").map(text);
