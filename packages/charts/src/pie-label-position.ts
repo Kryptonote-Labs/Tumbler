@@ -4,6 +4,7 @@ import { chartMarksBounds } from './shape-scene.ts';
 import { translateChartMark } from './mark-translation.ts';
 import { chartStroke } from './scene-style.ts';
 import { line, type ChartMark, type SceneContext } from './scene-marks.ts';
+import type { pieProjection } from './pie-projection.ts';
 
 export interface PieLabelGeometry {
   readonly cx: number;
@@ -13,6 +14,7 @@ export interface PieLabelGeometry {
   readonly startAngle: number;
   readonly endAngle: number;
   readonly tilt: number;
+  readonly projection?: ReturnType<typeof pieProjection>;
 }
 
 export interface PieLabelFrame {
@@ -26,7 +28,9 @@ const TAU = Math.PI * 2;
 function fitsSlice(box: ChartRect, pie: PieLabelGeometry): boolean {
   if (pie.tilt < 1e-6) return false;
   return [box.x, box.x + box.width].every(x => [box.y, box.y + box.height].every(y => {
-    const dx = x - pie.cx, dy = (y - pie.cy) / pie.tilt;
+    const point = pie.projection ? pie.projection.unproject(x, y) : { x, y };
+    if (!point) return false;
+    const dx = point.x - pie.cx, dy = (point.y - pie.cy) / pie.tilt;
     const radius = Math.hypot(dx, dy);
     const angle = ((Math.atan2(dy, dx) - pie.startAngle) % TAU + TAU) % TAU;
     return radius >= pie.inner && radius <= pie.outer && angle <= pie.endAngle - pie.startAngle + 1e-9;
@@ -40,13 +44,17 @@ export function positionPieLabel(context: Pick<SceneContext, 'measure'>, marks: 
   const angle = (pie.startAngle + pie.endAngle) / 2;
   const cos = Math.cos(angle), sin = Math.sin(angle);
   const radius = (pie.inner + pie.outer) / 2;
-  const center = { x: pie.cx + cos * radius, y: pie.cy + sin * radius * pie.tilt };
+  const point = (radius: number) => {
+    const x = pie.cx + cos * radius, y = pie.cy + sin * radius * pie.tilt;
+    return pie.projection?.project(x, y) ?? { x, y };
+  };
+  const center = point(radius);
   let target = { ...bounds, x: center.x - bounds.width / 2, y: center.y - bounds.height / 2 };
   const resolved = position === 'bestFit' ? fitsSlice(target, pie) ? 'ctr' : 'outEnd' : position;
   if (resolved === 'inEnd' || resolved === 'outEnd') {
     const inside = resolved === 'inEnd';
-    const r = pie.outer + (inside ? -GAP : GAP);
-    const x = pie.cx + cos * r, y = pie.cy + sin * r * pie.tilt;
+    const r = pie.outer + (inside ? -GAP : GAP) / (pie.projection?.scale ?? 1);
+    const { x, y } = point(r);
     const horizontal = Math.abs(cos) < 1e-6 ? .5 : (cos > 0) === inside ? 1 : 0;
     const vertical = Math.abs(sin) < 1e-6 ? .5 : (sin > 0) === inside ? 1 : 0;
     target = { ...bounds, x: x - bounds.width * horizontal, y: y - bounds.height * vertical };
@@ -68,10 +76,13 @@ export function pieLabelLeader(context: SceneContext, marks: ChartMark[], pie: P
     const localY = Math.max(bounds.y, Math.min(cy - (x - cx) * sin + (y - cy) * cos, bounds.y + bounds.height));
     return { x: cx + (localX - cx) * cos - (localY - cy) * sin, y: cy + (localX - cx) * sin + (localY - cy) * cos };
   };
-  const close = nearest(pie.cx, pie.cy);
-  if (Math.hypot(close.x - pie.cx, (close.y - pie.cy) / pie.tilt) <= pie.outer) return [];
+  const center = pie.projection?.project(pie.cx, pie.cy) ?? { x: pie.cx, y: pie.cy };
+  const nearestPoint = nearest(center.x, center.y);
+  const close = pie.projection ? pie.projection.unproject(nearestPoint.x, nearestPoint.y) : nearestPoint;
+  if (close && Math.hypot(close.x - pie.cx, (close.y - pie.cy) / pie.tilt) <= pie.outer) return [];
   const angle = (pie.startAngle + pie.endAngle) / 2;
-  const x = pie.cx + Math.cos(angle) * pie.outer, y = pie.cy + Math.sin(angle) * pie.outer * pie.tilt;
+  const planeX = pie.cx + Math.cos(angle) * pie.outer, planeY = pie.cy + Math.sin(angle) * pie.outer * pie.tilt;
+  const { x, y } = pie.projection?.project(planeX, planeY) ?? { x: planeX, y: planeY };
   const end = nearest(x, y);
   return line(x, y, end.x, end.y, chartStroke('axis', settings.leaderLineStyle, context.model, context.options.resolveColor));
 }

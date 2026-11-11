@@ -1,6 +1,6 @@
 # Pie label placement and leader lines
 
-Pie labels now position their fitted box at the slice center, inside end or outside end. Doughnut centers follow the middle of each ring. Best fit keeps the label inside when its box fits the slice, otherwise it uses the outside end. Exploded slices and the existing 3-D projection supply their own center and radii.
+Pie labels now position their fitted box at the slice center, inside end or outside end. Doughnut centers follow the middle of each ring. Best fit keeps the label inside when its box fits the slice, otherwise it uses the outside end. Exploded slices and the 3-D projection supply their own center and radii.
 
 Manual label coordinates still use the full chart frame. Enabled leader lines connect manually displaced outside labels to their slice and retain native stroke colour, width, dash and no-fill. Rotated frames use their oriented outline. Both plots of split charts paint before their leaders, and all leaders paint before label backgrounds and text.
 
@@ -16,7 +16,7 @@ At the 1440 × 810 reference size, the chart origin is 90,90 and one chart CSS p
 | Inside end, top left | 450,295 | 222,261 | 317,139 |
 | Outside end, top left | 503,316 | 178,261 | 277,110 |
 
-These measurements establish the tested 2-D placements. They do not establish whole-chart pixel parity. LibreOffice repositions the manually moved label in its import, and its 3-D camera geometry differs from the existing Tumbler pie projection. The renderer retains authored manual coordinates and positions 3-D labels on that existing projection; this change does not replace the 3-D camera or text metrics.
+These measurements establish the tested 2-D placements. They do not establish whole-chart pixel parity. LibreOffice repositions the manually moved label in its import. The renderer retains authored manual coordinates. The subsequent [3-D projection work](chart-pie-projection-reference.md) compares the camera with additional controlled native references; text metrics and whole-chart pixel parity remain separate work.
 
 ## Standards
 

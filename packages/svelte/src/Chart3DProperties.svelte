@@ -63,15 +63,17 @@
       </select></label>
     {/if}
     {#each fields as field}
-      {#if type !== 'pie3DChart' || field.name !== 'depthPercent'}
-        <ChartNumberField label={type === 'pie3DChart' && field.name === 'hPercent' ? 'Thickness %' : field.label} value={view[field.key]} min={field.min} max={field.max} {disabled} empty={'empty' in field ? field.empty : undefined}
+      {#if type !== 'pie3DChart' || (field.name !== 'depthPercent' && field.name !== 'hPercent')}
+        <ChartNumberField label={field.label} value={view[field.key]} min={field.min} max={field.max} {disabled} empty={'empty' in field ? field.empty : undefined}
           oncommit={(next) => set(field.name, field.definition, next === undefined ? undefined : String(next))} onpreview={(next) => draft(field.name, field.definition, next)} onendpreview={() => onpreview?.(undefined)} />
       {/if}
     {/each}
     {#if type !== 'pie3DChart'}
       <label><span>Right-angle axes</span><input type="checkbox" checked={view.rightAngleAxes} onchange={(event) => set('rAngAx', 'c:CT_Boolean/c:rAngAx', event.currentTarget.checked ? '1' : '0')} /></label>
-      <ChartNumberField label="Perspective" value={view.perspective} min={0} max={240} disabled={disabled || view.rightAngleAxes}
-        oncommit={(next) => set('perspective', 'c:CT_Perspective/c:perspective', String(next))} onpreview={(next) => draft('perspective', 'c:CT_Perspective/c:perspective', next)} onendpreview={() => onpreview?.(undefined)} />
+    {/if}
+    <ChartNumberField label="Perspective" value={view.perspective} min={0} max={240} disabled={disabled || (type !== 'pie3DChart' && view.rightAngleAxes)}
+      oncommit={(next) => set('perspective', 'c:CT_Perspective/c:perspective', String(next))} onpreview={(next) => draft('perspective', 'c:CT_Perspective/c:perspective', next)} onendpreview={() => onpreview?.(undefined)} />
+    {#if type !== 'pie3DChart'}
       {#if ['bar3DChart', 'area3DChart', 'line3DChart'].includes(type ?? '')}
         <ChartNumberField label="Depth gap %" value={resolved?.gapDepth} min={0} max={500} {disabled}
           oncommit={(next) => set('gapDepth', 'c:CT_GapAmount/c:gapDepth', String(next), true)} onpreview={(next) => draft('gapDepth', 'c:CT_GapAmount/c:gapDepth', next, true)} onendpreview={() => onpreview?.(undefined)} />
