@@ -49,11 +49,12 @@
     readonly dataExpanded?: boolean;
     readonly dataEditor?: Snippet<[() => void]>;
     readonly pictureEditor?: Snippet<[ChartPropertyNode, string]>;
+    readonly fillEditor?: Snippet<[ChartPropertyNode, string]>;
     readonly plotIndex?: number;
     readonly onplotselect?: (index: number) => void;
   }
 
-  let { bytes, disabled = false, themeColors = {}, onchange, ontypechange, ontypepreview, oneditdata, typePreview, viewPreview, onsourcepreview, typeError, dataExpanded, dataEditor, pictureEditor, plotIndex = 0, onplotselect }: Props = $props();
+  let { bytes, disabled = false, themeColors = {}, onchange, ontypechange, ontypepreview, oneditdata, typePreview, viewPreview, onsourcepreview, typeError, dataExpanded, dataEditor, pictureEditor, fillEditor, plotIndex = 0, onplotselect }: Props = $props();
 
   const id = $props.id();
   // Follows the host's bytes, and runs ahead of them between an edit and the host's next render.
@@ -242,7 +243,7 @@
       <select class="tumbler-select target" aria-label="Format target" value={target?.key} onchange={(event) => { targetKey = event.currentTarget.value; }}>
         {#each targets as entry (entry.key)}<option value={entry.key}>{entry.label}</option>{/each}
       </select>
-      {#if target && pictureEditor}{@render pictureEditor(target.node, target.label)}{/if}
+      {#if target && fillEditor}{@render fillEditor(target.node, target.label)}{:else if target && pictureEditor}{@render pictureEditor(target.node, target.label)}{/if}
       <input class="search" type="search" placeholder="Search properties" aria-label="Search properties" bind:value={query} />
       {#if shown}
         {#key target?.key}

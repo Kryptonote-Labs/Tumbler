@@ -2,10 +2,11 @@
   import { onDestroy } from 'svelte';
   import { canSetChartPicture, chartBytesToBase64, setChartPictureFill, editChartSource, type ChartContent, type ChartPropertyNode } from '@tumblerjs/charts';
 
-  let { content, target, label, disabled = false, onchange }: {
-    content: ChartContent; target: ChartPropertyNode; label: string; disabled?: boolean; onchange: (content: ChartContent) => void;
+  let { content, target, label, disabled = false, mode = 'row', onchange }: {
+    content: ChartContent; target: ChartPropertyNode; label: string; disabled?: boolean; mode?: 'row' | 'action'; onchange: (content: ChartContent) => void;
   } = $props();
   let input = $state<HTMLInputElement>(), busy = $state(false), error = $state<string>();
+  let requested: { readonly content: ChartContent; readonly target: ChartPropertyNode } | undefined;
   let disposed = false;
   onDestroy(() => { disposed = true; });
   const errorId = $props.id();
@@ -15,11 +16,13 @@
   const fill = $derived(shape?.children.find(child => child.name.split(':').at(-1) === 'blipFill'));
   async function choose(file: File | undefined) {
     if (!file || disabled || busy) return;
-    const snapshot = content, node = target.id;
+    const request = requested; requested = undefined;
+    const snapshot = request?.content ?? content, node = request?.target.id ?? target.id;
     busy = true; error = undefined;
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       if (disposed || disabled) return;
+      if (request && (request.target !== target || request.content !== content)) throw new Error('The document changed. Choose the picture again.');
       if (node !== target.id || content !== snapshot && (content.xml !== snapshot.xml || content.workbook !== snapshot.workbook || content.resources !== snapshot.resources)) throw new Error('The document changed. Choose the picture again.');
       const extension = file.name.split('.').at(-1)?.toLowerCase(), aliases: Readonly<Record<string, string>> = { jpg: 'jpeg', tif: 'tiff', emf: 'x-emf', wmf: 'x-wmf', svg: 'svg+xml' };
       const contentType = file.type || `image/${aliases[extension ?? ''] ?? extension ?? 'png'}`;
@@ -41,9 +44,9 @@
 
 {#if capable}
   <div class="picture-editor">
-    <div class="row"><span>Picture</span><div class="actions">
-      <button type="button" {disabled} aria-disabled={busy} aria-label={`${fill ? 'Replace' : 'Choose'} picture for ${label}`} aria-describedby={error ? errorId : undefined} onclick={() => { if (!busy) input?.click(); }}>{fill ? 'Replace…' : 'Choose…'}</button>
-      {#if fill}<button class="remove" type="button" {disabled} aria-disabled={busy} aria-label={`Remove picture for ${label}`} title="Remove picture" onclick={remove}>×</button>{/if}
+    <div class="row">{#if mode === 'row'}<span>Picture</span>{/if}<div class="actions" class:standalone={mode === 'action'}>
+      <button type="button" {disabled} aria-disabled={busy} aria-label={`${fill ? 'Replace' : 'Choose'} picture for ${label}`} aria-describedby={error ? errorId : undefined} onclick={() => { if (!busy && !disabled) { requested = { content, target }; input?.click(); } }}>{mode === 'action' ? 'Picture…' : fill ? 'Replace…' : 'Choose…'}</button>
+      {#if fill && mode === 'row'}<button class="remove" type="button" {disabled} aria-disabled={busy} aria-label={`Remove picture for ${label}`} title="Remove picture" onclick={remove}>×</button>{/if}
     </div></div>
     <input bind:this={input} type="file" accept="image/*,.emf,.wmf" hidden onchange={(event) => { void choose(event.currentTarget.files?.[0]); }} />
     {#if error}<p id={errorId} role="alert">{error}</p>{/if}
@@ -54,6 +57,8 @@
   .picture-editor { display: flex; flex-direction: column; gap: 6px; }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
   .actions { display: flex; gap: 6px; width: 140px; }
+  .actions.standalone { width: 100%; }
+  .row:has(.standalone) { display: block; }
   button { box-sizing: border-box; flex: 1; min-width: 0; height: 28px; padding: 0 10px; font: inherit; color: inherit; cursor: pointer; background: var(--tumbler-control-bg, var(--surface, #181818)); border: 1px solid var(--tumbler-control-border, var(--border, #303030)); border-radius: 4px; }
   button:hover { background: var(--tumbler-control-hover, var(--surface-hover, #252825)); }
   button.remove { flex: 0 0 28px; padding: 0; font-size: 16px; }

@@ -4,7 +4,7 @@
   import ChartSeriesProperties from './ChartSeriesProperties.svelte';
   import ChartProperties from './ChartProperties.svelte';
   import ChartDataEditor from './ChartDataEditor.svelte';
-  import ChartPictureEditor from './ChartPictureEditor.svelte';
+  import ChartFillEditor from './ChartFillEditor.svelte';
   import OoxmlChart from './OoxmlChart.svelte';
   import type { ChartTypeChange } from './chart-properties.ts';
   import { chartDataState } from './chart-data-state.ts';
@@ -83,7 +83,7 @@
     {#if previewModel.status === 'unsupported'}<p class="preview-error" role="status">{previewModel.reason}</p>{/if}
   {/snippet}
   {#snippet viewPreview()}<OoxmlChart {patternOrigin} model={previewModel} width={previewSize.width} height={previewSize.height} />{/snippet}
-  {#snippet pictureEditor(target, label)}<ChartPictureEditor content={current} {target} {label} {disabled} onchange={(content) => publish(content)} />{/snippet}
+  {#snippet fillEditor(target, label)}<ChartFillEditor content={current} {target} {label} {themeColors} {disabled} preview={viewPreview} onpreview={(source) => { sourcePreview = source; }} onchange={(content) => publish(content)} />{/snippet}
   {#snippet dataEditor(returnFocus: () => void)}
     <ChartSeriesProperties bytes={dataBytes} {disabled} onchange={changeSource} />
     {#if error || draft?.error}<p class="error" role="alert">{error ?? draft?.error}</p>{/if}
