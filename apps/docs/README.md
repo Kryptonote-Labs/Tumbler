@@ -69,7 +69,7 @@ outside the repository. Never commit that file or its extracted resources.
 - Include source files outside the root directory: enabled
 - Install command: `cd ../.. && bun install --frozen-lockfile`
 - Build command: `bun run build`
-- Domain: `tumbler.alexco.dev`
+- Domain: `oss.kryptonote.com`
 
 The app uses the Vercel adapter and prerenders every docs and sample route. There are no runtime secrets. Workspace dependencies load Tumbler source directly, so preview deployments exercise that commit rather than the last published package. The UI shows the package version and source commit.
 

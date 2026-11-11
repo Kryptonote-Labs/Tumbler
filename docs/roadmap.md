@@ -2,7 +2,7 @@
 
 This roadmap defines order and exit criteria, not dates. Tumbler deliberately
 develops the three formats through bounded, independently tested features.
-Current coverage lives in the [compatibility guide](https://tumbler.alexco.dev/docs/compatibility);
+Current coverage lives in the [compatibility guide](https://oss.kryptonote.com/docs/compatibility);
 the phases below retain the original sequencing and remaining exit criteria.
 
 ## Phase 0: foundations and experiments

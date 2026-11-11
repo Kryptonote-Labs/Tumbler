@@ -1,6 +1,6 @@
 # PresentationML implementation
 
-Current reader, renderer, and editing coverage. For integration examples, use the [PowerPoint guide](https://tumbler.alexco.dev/docs/powerpoint).
+Current reader, renderer, and editing coverage. For integration examples, use the [PowerPoint guide](https://oss.kryptonote.com/docs/powerpoint).
 
 ```ts
 import { openPresentationEditingSession } from "@tumblerjs/slides";
