@@ -90,7 +90,7 @@ export function paintPresentationSlide<Path, Image>(
     );
     for (const path of object.drawingGeometry?.paths ?? []) {
       const geometry = options.path(path.d);
-      if (path.fill !== 'none' && (object.pattern || object.fill !== 'none')) {
+      if (path.fill !== 'none' && (object.gradient || object.pattern || object.fill !== 'none')) {
         if (object.pattern) {
           ctx.save();
           try { ctx.clip(geometry); const decoded = options.image?.(drawingPatternPicture(object.pattern)); if (decoded) paintDrawingPattern(ctx, decoded.image, width, height, { x: object.matrix[4], y: object.matrix[5] }); } finally { ctx.restore(); }

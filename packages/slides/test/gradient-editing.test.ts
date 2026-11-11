@@ -66,3 +66,18 @@ test("shape gradients preserve geometry and text through save, edits, and undo",
     }),
   ).toThrow();
 });
+
+test('native gradient-only shapes paint without a separate solid fallback', async () => {
+  const { createCanvas, Path2D } = await import('@napi-rs/canvas');
+  const { paintPresentationSlide } = await import('../src/index.ts');
+  let artifact = createPresentation({ width: 200, height: 160 });
+  const slideId = artifact.document.slides[0]!.id;
+  artifact = applyPresentationCommand(artifact, { name: 'insert-object', slideId, bounds: { x: 20, y: 20, width: 100, height: 100 }, object: { kind: 'shape', geometry: 'rect', fill: 'none', stroke: 'none' } });
+  const objectKey = artifact.document.slides[0]!.objects[0]!.key;
+  artifact = applyPresentationCommand(artifact, { name: 'style-shape', slideId, objectKey, fill: { kind: 'gradient', type: 'linear', stops: [{ offset: 0, color: '#FF0000' }, { offset: 1, color: '#FF0000' }] } });
+  const reopened = openPresentationArtifact(artifact.bytes()), slide = reopened.document.slides[0]!;
+  expect(slide.objects[0]?.fill).toBe('none');
+  const canvas = createCanvas(200, 160), context = canvas.getContext('2d');
+  paintPresentationSlide(context, reopened.document, slide, { path: d => new Path2D(d) });
+  expect([...context.getImageData(60, 60, 1, 1).data]).toEqual([255, 0, 0, 255]);
+});
