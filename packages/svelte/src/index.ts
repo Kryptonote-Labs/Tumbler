@@ -74,3 +74,10 @@ export { default as SpreadsheetPrintView } from './SpreadsheetPrintView.svelte';
 
 export { spreadsheetFormulaCompletion, acceptSpreadsheetFormulaCompletion } from "./spreadsheet-formula-completion.ts";
 export type { SpreadsheetFormulaCompletion } from "./spreadsheet-formula-completion.ts";
+
+export { default as ChartProperties } from "./ChartProperties.svelte";
+export { default as ChartPropertyFields } from "./ChartPropertyFields.svelte";
+export { default as ChartDataEditor } from "./ChartDataEditor.svelte";
+export { CHART_TYPE_FAMILIES } from "./chart-properties.ts";
+export type { ChartTypeChange, ChartTypeFamily, ChartTypeOption, ChartPropertyApply, ChartPropertyChange } from "./chart-properties.ts";
+export { default as ChartWorkbench } from './ChartWorkbench.svelte';
