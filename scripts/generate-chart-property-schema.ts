@@ -46,12 +46,18 @@ const types = Object.fromEntries(definitions.filter(definition => definition.Nam
       const numeric = attribute.Validators?.find(validator => validator.Name === 'NumberValidator');
       const minimum = numeric?.Arguments?.find(argument => argument.Name === 'MinInclusive')?.Value;
       const maximum = numeric?.Arguments?.find(argument => argument.Name === 'MaxInclusive')?.Value;
+      const minimumExclusive = numeric?.Arguments?.find(argument => argument.Name === 'MinExclusive')?.Value;
+      const maximumExclusive = numeric?.Arguments?.find(argument => argument.Name === 'MaxExclusive')?.Value;
+      const integer = /(?:U?Int\d*|Byte|SByte)Value/.test(attribute.Type);
       return {
         name: attribute.QName.replace(/^:/, ''), label: words(attribute.PropertyName ?? attribute.QName.replace(/^:/, '')),
-        kind: attribute.Type === 'BooleanValue' ? 'boolean' : attribute.Type.includes('HexBinary') ? 'hex' : /(?:Int\d*|Double|Decimal|Single)Value/.test(attribute.Type) ? 'number' : 'string',
+        kind: attribute.Type === 'BooleanValue' ? 'boolean' : attribute.Type.includes('HexBinary') ? 'hex' : integer || /(?:Double|Decimal|Single)Value/.test(attribute.Type) ? 'number' : 'string',
+        ...(integer ? { integer: true, ...(attribute.Type.startsWith('U') ? { minimum: 0 } : {}) } : {}),
         required: attribute.Validators?.some(validator => validator.Name === 'RequiredValidator') ?? false,
         ...(enumeration && enums.has(enumeration) ? { choices: enums.get(enumeration)! } : {}),
         ...(minimum !== undefined ? { minimum: Number(minimum) } : {}), ...(maximum !== undefined ? { maximum: Number(maximum) } : {}),
+        ...(minimumExclusive !== undefined ? { minimumExclusive: Number(minimumExclusive) } : {}),
+        ...(maximumExclusive !== undefined ? { maximumExclusive: Number(maximumExclusive) } : {}),
       };
     }),
     children: (definition.Children ?? []).map(child => child.Name),

@@ -51,7 +51,10 @@
     }
     const number = Number(raw);
     const { minimum = -Infinity, maximum = Infinity } = attribute;
-    if (!Number.isFinite(number) || number < minimum || number > maximum) {
+    if (!Number.isFinite(number) || number < minimum || number > maximum ||
+      attribute.integer && !Number.isInteger(number) ||
+      attribute.minimumExclusive !== undefined && number <= attribute.minimumExclusive ||
+      attribute.maximumExclusive !== undefined && number >= attribute.maximumExclusive) {
       error = Number.isFinite(minimum) && Number.isFinite(maximum)
         ? `${attribute.label} must be between ${minimum} and ${maximum}.`
         : `${attribute.label} must be a number.`;
@@ -119,7 +122,7 @@
     </span>
   {:else if numeric(attribute)}
     <input id={controlId} type="number" {disabled} aria-label={name} value={attribute.value ?? ""} placeholder={attribute.required ? "" : "Auto"}
-      min={attribute.minimum} max={attribute.maximum}
+      min={attribute.minimum} max={attribute.maximum} step={attribute.integer ? 1 : 'any'}
       onchange={(event) => commitNumber(attribute, event.currentTarget)}
       onkeydown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} />
   {:else}

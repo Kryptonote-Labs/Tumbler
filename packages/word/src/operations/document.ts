@@ -133,7 +133,7 @@ export function projectWordOperationText(
     for (let i = 0; i < lines.length; i++) {
       const value = lines[i]!;
       if (value)
-        for (const content of a.shape || a.image || a.field || a.breakType || a.tab || a.drawing
+        for (const content of a.chart || a.ink || a.shape || a.image || a.field || a.breakType || a.tab || a.drawing
           ? [...value]
           : [value])
           runs.push({

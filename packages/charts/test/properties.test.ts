@@ -39,3 +39,11 @@ test('required rich text properties receive their required descendants in Strict
   const originalValue = find(updated, 'Numeric Value');
   expect(originalValue?.editableText).toBe(true);
 });
+
+test('new major units use a valid positive default and retain their exclusive bound', () => {
+  const bytes = createOoxmlChart({ type: 'lineChart', categories: ['A'], series: [{ name: 'One', values: [3] }] });
+  const axis = find(chartPropertyTree(bytes), 'Value Axis')!;
+  const major = axis.availableChildren.find(child => child.label === 'Major Unit')!;
+  const node = find(chartPropertyTree(insertChartProperty(bytes, axis.id, major.definition)), 'Major Unit')!;
+  expect(node.attributes[0]).toMatchObject({ minimumExclusive: 0, value: '1' });
+});

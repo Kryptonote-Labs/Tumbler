@@ -11,6 +11,9 @@ export interface ChartPropertyAttribute {
   readonly choices?: readonly { readonly value: string; readonly label: string }[];
   readonly minimum?: number;
   readonly maximum?: number;
+  readonly minimumExclusive?: number;
+  readonly maximumExclusive?: number;
+  readonly integer?: boolean;
 }
 interface Particle {
   readonly Name?: string;
@@ -91,7 +94,11 @@ function propertyMarkup(name: string, strict: boolean, active = new Set<string>(
   const ns = strict ? namespace.replace('http://schemas.openxmlformats.org/drawingml/2006/', 'http://purl.oclc.org/ooxml/drawingml/') : namespace;
   const attributes = definition.attributes.filter(attribute => attribute.required).map(attribute => {
     const choice = attribute.choices?.find(choice => ['accent1', 'linear', 'minMax', 'auto'].includes(choice.value)) ?? attribute.choices?.[0];
-    const value = choice?.value ?? (attribute.kind === 'boolean' ? '1' : attribute.kind === 'number' ? String(Math.max(0, attribute.minimum ?? 0)) : attribute.kind === 'hex' ? '000000' : '');
+    let number = Math.max(0, attribute.minimum ?? 0);
+    if (attribute.minimumExclusive !== undefined && number <= attribute.minimumExclusive) number = attribute.minimumExclusive + 1;
+    if (attribute.maximum !== undefined) number = Math.min(number, attribute.maximum);
+    if (attribute.maximumExclusive !== undefined && number >= attribute.maximumExclusive) number = attribute.maximumExclusive - 1;
+    const value = choice?.value ?? (attribute.kind === 'boolean' ? '1' : attribute.kind === 'number' ? String(number) : attribute.kind === 'hex' ? '000000' : '');
     const attributePrefix = attribute.name.includes(':') ? attribute.name.split(':')[0] : undefined;
     const declaration = attributePrefix && attributePrefix !== prefix ? ` xmlns:${attributePrefix}="${schema.namespaces[attributePrefix]}"` : '';
     return `${declaration} ${attribute.name}="${chartXmlText(value)}"`;

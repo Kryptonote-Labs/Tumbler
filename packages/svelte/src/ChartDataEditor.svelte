@@ -13,9 +13,10 @@
     /** Receives each successful edit. Formulas keep their source and are parsed by the workbook engine. */
     readonly onchange: (artifact: SpreadsheetArtifact) => void;
     readonly onclose?: () => void;
+    readonly onsheetselect?: (name: string) => void;
   }
 
-  let { artifact, disabled = false, onchange, onclose }: Props = $props();
+  let { artifact, disabled = false, onchange, onclose, onsheetselect }: Props = $props();
 
   // Follows the host's artifact, and runs ahead of it between an edit and the host's next render.
   let current = $derived(artifact);
@@ -47,6 +48,12 @@
       ? artifact.editFormulaOnSheet(sheet, edit.reference, edit.formula)
       : artifact.editCellOnSheet(sheet, edit.reference, edit.value));
   }
+  function selectSheet(name: string) {
+    current = current.selectSheet(name);
+    selection = createGridSelection({ row: 1, column: 1 });
+    error = undefined;
+    onsheetselect?.(name);
+  }
 </script>
 
 <section class="chart-data" aria-label="Chart data">
@@ -59,16 +66,27 @@
       onselectionchange={(next) => { selection = next; }} onedit={editCell} />
     {#if error}<p class="error" role="alert">{error}</p>{/if}
   </div>
+  {#if current.workbook.sheets.filter((sheet) => sheet.state === 'visible').length > 1}
+    <div class="sheets" role="tablist" aria-label="Chart data worksheets">
+      {#each current.workbook.sheets.filter((sheet) => sheet.state === 'visible') as sheet (sheet.sheetId)}
+        <button type="button" role="tab" aria-selected={sheet.sheetId === current.activeSheet.sheetId}
+          onclick={() => selectSheet(sheet.name)}>{sheet.name}</button>
+      {/each}
+    </div>
+  {/if}
 </section>
 
 <style>
   .chart-data {
-    display: flex; flex-direction: column; box-sizing: border-box; height: 240px; min-width: 0; overflow: hidden;
+    display: flex; flex-direction: column; box-sizing: border-box; height: 240px; width: 100%; min-width: 0; overflow: hidden; contain: inline-size; flex-shrink: 0;
     border-top: 1px solid var(--tumbler-control-border, var(--border, #303030)); background: var(--tumbler-control-bg, var(--surface, #181818));
   }
   .bar { display: flex; align-items: center; min-width: 0; }
+  .sheets { display: flex; overflow-x: auto; flex: 0 0 auto; border-top: 1px solid var(--tumbler-control-border, var(--border, #303030)); }
+  .sheets button { border: 0; border-bottom: 2px solid transparent; padding: 4px 10px; white-space: nowrap; color: inherit; background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
+  .sheets button[aria-selected="true"] { border-bottom-color: var(--tumbler-control-accent, var(--accent, #4fe519)); }
   .formula { flex: 1; min-width: 0; }
-  .grid { position: relative; flex: 1; min-height: 0; }
+  .grid { position: relative; flex: 1; min-height: 0; min-width: 0; overflow: hidden; contain: strict; }
   .close {
     flex: 0 0 auto; width: 28px; height: 28px; margin: 0 4px; padding: 0; font: inherit; font-size: 16px; line-height: 1; cursor: pointer;
     color: var(--tumbler-control-muted, var(--text-soft, #9baa9d)); background: none; border: 0; border-radius: 4px;

@@ -24,7 +24,7 @@ export function wordDrawingChanges(
   });
   if (!part?.attributes || text.toString()[start] !== "\uFFFC") return [];
   const image = isDocumentImage(part.attributes.image) ? part.attributes.image : undefined;
-  if (!image && !part.attributes.wordSource && !part.attributes.ink && !part.attributes.shape) return [];
+  if (!image && part.attributes.wordSource === undefined && !part.attributes.ink && !part.attributes.shape && !part.attributes.chart) return [];
   const target = anchorWordRange(text, { start, end: start + 1 });
   if (destination !== undefined) {
     if (destination >= start && destination <= start + 1) return [];

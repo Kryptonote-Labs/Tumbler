@@ -18,7 +18,12 @@
   const bytes = $derived(new TextEncoder().encode(current.xml));
   const encoded = $derived(current.workbook);
   let sheet = $state<string>();
-  const workbook = $derived(encoded === undefined ? undefined : openSpreadsheetArtifact(chartBase64ToBytes(encoded), sheet === undefined ? {} : { sheet }));
+  const workbook = $derived.by(() => {
+    if (encoded === undefined) return undefined;
+    const artifact = openSpreadsheetArtifact(chartBase64ToBytes(encoded));
+    return sheet !== undefined && artifact.workbook.sheet(sheet)
+      ? artifact.selectSheet(sheet) : artifact;
+  });
   let dataOpen = $state(false);
   let preview = $state<ChartTypeChange>();
   let error = $state<string>();
@@ -65,7 +70,7 @@
     {#if previewModel.status === 'unsupported'}<p class="preview-error" role="status">{previewModel.reason}</p>{/if}
   {/snippet}
   {#snippet dataEditor()}
-    {#if embeddedData && dataOpen && workbook}<ChartDataEditor artifact={workbook} {disabled} onchange={changeData} onclose={() => { dataOpen = false; }} />{/if}
+    {#if embeddedData && dataOpen && workbook}<ChartDataEditor artifact={workbook} {disabled} onchange={changeData} onsheetselect={(name) => { sheet = name; }} onclose={() => { dataOpen = false; }} />{/if}
   {/snippet}
 </ChartProperties>
 {#if error}<p class="error" role="alert">{error}</p>{/if}
