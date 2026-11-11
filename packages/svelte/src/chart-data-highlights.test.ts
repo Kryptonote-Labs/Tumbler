@@ -21,3 +21,9 @@ test('overlapping source roles are highlighted once and external references are 
   expect(chartDataHighlights(bound, 'Data')).toHaveLength(1);
   expect(readChartData(bound)[0]?.series[0]?.nameFormula).toBe('[Other.xlsx]Data!$B$1');
 });
+
+test('unreadable source data does not break an already open mini-sheet', () => {
+  const source = createOoxmlChart({ type: 'barChart', categories: ['A'], series: [{ name: 'Data', values: [2] }] });
+  const changed = new TextEncoder().encode(new TextDecoder().decode(source).replace('<c:v>2</c:v>', '<c:v>#N/A</c:v>'));
+  expect(chartDataHighlights(changed, 'Data')).toEqual([]);
+});

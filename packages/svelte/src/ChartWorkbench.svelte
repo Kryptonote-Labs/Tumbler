@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { chartBase64ToBytes, chartBytesToBase64, chartContentModel, convertChartType, readChartData, type ChartContent, type ChartModel } from '@tumblerjs/charts';
+  import { chartBase64ToBytes, chartBytesToBase64, chartContentModel, convertChartType, type ChartContent, type ChartModel } from '@tumblerjs/charts';
   import { createChartWorkbook, extendChartWorkbook, openSpreadsheetArtifact, refreshChartWorkbook, type SpreadsheetArtifact } from '@tumblerjs/sheets';
   import ChartSeriesProperties from './ChartSeriesProperties.svelte';
   import ChartProperties from './ChartProperties.svelte';
   import ChartDataEditor from './ChartDataEditor.svelte';
   import OoxmlChart from './OoxmlChart.svelte';
   import type { ChartTypeChange } from './chart-properties.ts';
+  import { chartDataState } from './chart-data-state.ts';
 
   let { content, disabled = false, themeColors = {}, themeFonts = {}, previewSize = { width: 480, height: 320 }, embeddedData = true, oneditdata, onchange }: {
     content: ChartContent;
@@ -35,7 +36,7 @@
   });
   let preview = $state<ChartTypeChange>();
   let plotIndex = $state(0);
-  const selectedPlot = $derived(Math.max(0, Math.min(plotIndex, readChartData(bytes).length - 1)));
+  const selectedPlot = $derived(Math.max(0, Math.min(plotIndex, chartDataState(bytes).plots.length - 1)));
   let error = $state<string>(), typeError = $state<string>();
   let sourcePreview = $state<Uint8Array>();
   const previewModel = $derived.by((): ChartModel => {
@@ -44,7 +45,7 @@
       return { ...chartContentModel({ xml }), themeColors, themeFonts };
     } catch (cause) { return { status: 'unsupported', chartType: undefined, reason: cause instanceof Error ? cause.message : 'This data cannot use that chart type.', title: undefined, legend: undefined }; }
   });
-  function publish(content: ChartContent, reason?: 'type' | 'series') { if (disabled) return; current = content; error = undefined; typeError = undefined; sourcePreview = undefined; onchange(content, reason); }
+  function publish(content: ChartContent, reason?: 'type' | 'series') { if (disabled) return; onchange(content, reason); current = content; error = undefined; typeError = undefined; sourcePreview = undefined; }
   function changeType(change: ChartTypeChange) {
     try {
       const source = convertChartType(bytes, change, selectedPlot);
@@ -65,11 +66,9 @@
     } catch (cause) { error = cause instanceof Error ? cause.message : 'The series could not be changed.'; }
   }
   function changeData(artifact: SpreadsheetArtifact) {
-    try {
-      sheet = artifact.activeSheet.name;
-      const source = refreshChartWorkbook(dataBytes, artifact);
-      publish({ xml: new TextDecoder().decode(source), workbook: chartBytesToBase64(artifact.bytes()) });
-    } catch (cause) { error = cause instanceof Error ? cause.message : 'The chart data could not be saved.'; }
+    const source = refreshChartWorkbook(dataBytes, artifact);
+    publish({ xml: new TextDecoder().decode(source), workbook: chartBytesToBase64(artifact.bytes()) });
+    sheet = artifact.activeSheet.name;
   }
 </script>
 

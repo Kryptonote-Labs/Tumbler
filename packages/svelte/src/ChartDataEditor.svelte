@@ -35,7 +35,7 @@
     try {
       const next = edit(current);
       error = undefined;
-      if (next !== current) { current = next; onchange(next); }
+      if (next !== current) { onchange(next); current = next; }
       return true;
     } catch (cause) {
       error = cause instanceof Error ? cause.message : "This value can't be entered here.";

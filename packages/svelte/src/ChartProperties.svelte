@@ -2,7 +2,6 @@
   import { tick, type Snippet } from "svelte";
   import {
     chartPropertyDefinition,
-    readChartData,
     chartPropertyTree,
     editChartSource,
     insertChartProperty,
@@ -10,6 +9,8 @@
     type ChartPropertyNode,
   } from "@tumblerjs/charts";
   import Chart3DProperties from "./Chart3DProperties.svelte";
+  import ChartSourceEditor from "./ChartSourceEditor.svelte";
+  import { chartDataState } from './chart-data-state.ts';
   import ChartPropertyFields from "./ChartPropertyFields.svelte";
   import {
     CHART_TYPE_FAMILIES,
@@ -63,6 +64,9 @@
   let targetKey = $state("chart");
   let query = $state("");
   let picking = $state(false);
+  let sourceOpen = $state(false);
+  let sourceLoaded = $state(false);
+  $effect(() => { if (sourceOpen) sourceLoaded = true; });
   let previewed: ChartTypeChange | undefined;
   let trigger = $state<HTMLButtonElement>();
   let listbox = $state<HTMLDivElement>();
@@ -74,7 +78,8 @@
   const legend = $derived(chartPropertyChild(chart, "legend"));
   const legendPosition = $derived(chartPropertyValue(chartPropertyChild(legend, "legendPos")) ?? "r");
   const legendChoices = chartPropertyDefinition("c:CT_LegendPos/c:legendPos")?.attributes[0]?.choices ?? [];
-  const plots = $derived(parsed ? readChartData(current) : []);
+  const data = $derived(chartDataState(current));
+  const plots = $derived(data.plots);
   const type = $derived(parsed && currentChartType(parsed, plotIndex));
   const targets = $derived(parsed ? chartFormatTargets(parsed) : []);
   const target = $derived(targets.find((entry) => entry.key === targetKey) ?? targets[0]);
@@ -86,7 +91,7 @@
   function commit(transform: (bytes: Uint8Array) => Uint8Array): string | undefined {
     try {
       const next = transform(current);
-      if (next !== current) { current = next; onchange(next); }
+      if (next !== current) { onchange(next); current = next; }
       return undefined;
     } catch (cause) {
       return cause instanceof Error ? cause.message : "This change could not be applied.";
@@ -184,6 +189,7 @@
         </button>
       </div>
       {#if typeError}<p class="error" role="alert">{typeError}</p>{/if}
+      {#if data.error}<p class="error" role="alert">{data.error}</p>{/if}
       {#if oneditdata}
         <div class="row"><span>Data</span><button bind:this={dataTrigger} type="button" class="button" aria-expanded={dataExpanded} aria-controls={dataExpanded === undefined ? undefined : `${id}-data`} onclick={oneditdata}>Edit data</button></div>
       {/if}
@@ -228,7 +234,7 @@
 
     {#if dataEditor}<fieldset id={`${id}-data`} {disabled}><legend>Data</legend>{@render dataEditor(() => dataTrigger?.focus())}</fieldset>{/if}
 
-    <Chart3DProperties bytes={current} root={parsed} {disabled} {plotIndex} onchange={(next) => { current = next; onchange(next); }} onpreview={onsourcepreview} preview={viewPreview} />
+    <Chart3DProperties bytes={current} root={parsed} {disabled} {plotIndex} onchange={(next) => { onchange(next); current = next; }} onpreview={onsourcepreview} preview={viewPreview} />
 
     <fieldset {disabled}>
       <legend>Format</legend>
@@ -244,6 +250,10 @@
         <p class="empty">No matching properties</p>
       {/if}
     </fieldset>
+    <details bind:open={sourceOpen}>
+      <summary>Source XML</summary>
+      {#if sourceLoaded}<ChartSourceEditor bytes={current} {disabled} onchange={(next) => { onchange(next); current = next; }} />{/if}
+    </details>
   </div>
 {/if}
 
@@ -278,4 +288,5 @@
   :is(button, select):disabled { opacity: 0.4; cursor: default; }
   .empty { margin: 0; color: var(--tumbler-control-muted, var(--text-soft, #9baa9d)); }
   .error { margin: 0; font-size: 11px; color: var(--tumbler-control-danger, var(--danger, #ff6b6b)); }
+  summary { cursor: pointer; padding: 4px 0 8px; }
 </style>
