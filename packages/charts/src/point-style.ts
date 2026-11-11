@@ -10,6 +10,9 @@ export function chartPointColor(context: SceneContext, series: ChartSeries, seri
   if (noFill) return 'none';
   if (explicit) return context.options.resolveColor?.(explicit) ?? resolveChartColor(explicit, context.model) ?? context.color(series, seriesIndex, line);
   if (line ? series.lineStyle?.noFill : series.noFill) return 'none';
-  const varies = context.model.varyColors ?? ['pie', 'doughnut', 'of-pie'].includes(context.model.kind);
+  if (line ? series.lineStyle?.color || series.line : series.fill) return context.color(series, seriesIndex, line);
+  // MS-OI29500 2.1.1571: multiple series and these filled plots keep series colours.
+  const variation = context.model.varyColors ?? ['pie', 'doughnut', 'of-pie'].includes(context.model.kind);
+  const varies = variation && context.model.series.length === 1 && !['area', 'stock'].includes(context.model.kind) && !(context.model.kind === 'radar' && context.model.radarStyle === 'filled');
   return varies ? context.color({ ...series, fill: undefined, line: undefined }, index, line) : context.color(series, seriesIndex, line);
 }

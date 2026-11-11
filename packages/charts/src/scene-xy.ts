@@ -26,14 +26,14 @@ export function xyScene(context: SceneContext): ChartMark[] {
   model.series.forEach((item, index) => {
     if (bubbles) {
       for (const point of bubbles.series[index] ?? []) {
-        if (point.radius > 0) series.push({ kind: "circle", cx: point.plotX, cy: point.plotY, r: point.radius, ...chartPointGradient(context, item, point.index, { x: point.plotX - point.radius, y: point.plotY - point.radius, width: point.radius * 2, height: point.radius * 2 }), fill: chartPointColor(context, item, index, point.index), ...chartPointStroke(context, item, index, point.index, chartPointColor(context, item, index, point.index, true)), fillOpacity: 0.72 });
+        if (point.radius > 0) series.push({ kind: "circle", cx: point.plotX, cy: point.plotY, r: point.radius, ...chartPointGradient(context, item, point.index, { x: point.plotX - point.radius, y: point.plotY - point.radius, width: point.radius * 2, height: point.radius * 2 }), fill: chartPointColor(context, item, index, point.index), ...chartPointStroke(context, item, index, point.index, chartPointColor(context, item, index, point.index, true)) });
       }
       for (const point of bubbles.series[index] ?? []) labels.push(...chartDataLabelMarks(context, item, index, { index: point.index, x: point.plotX, y: point.plotY, category: String(point.x), value: point.y, bubbleSize: point.size }));
       return;
     }
     const points = layout.series[index] ?? [];
     if (lineVisible(model, item)) series.push({ kind: "path", d: scatterLinePath(points, smooth(model, item)), ...chartStrokeMark(chartSeriesStroke(context, item, index)) });
-    if (markerVisible(model, item)) for (const point of points) series.push(...chartMarkerMarks(context, item, index, point.index, point.plotX, point.plotY));
+    for (const point of points) if (markerVisible(model, item, context.pointFormat(item, point.index)?.marker?.symbol)) series.push(...chartMarkerMarks(context, item, index, point.index, point.plotX, point.plotY));
     for (const point of points) labels.push(...chartDataLabelMarks(context, item, index, { index: point.index, x: point.plotX, y: point.plotY, category: String(point.x), value: point.y }));
   });
   model.series.forEach((item, index) => {
@@ -56,13 +56,16 @@ export function xyScene(context: SceneContext): ChartMark[] {
 }
 
 function lineVisible(model: SupportedChartModel, series: ChartSeries): boolean {
+  if (series.lineStyle) return !series.lineStyle.noFill;
   return series.smooth === true || model.scatterStyle === "line" || model.scatterStyle === "line-marker" || model.scatterStyle === "smooth" || model.scatterStyle === "smooth-marker";
 }
 
-function markerVisible(model: SupportedChartModel, series: ChartSeries): boolean {
-  return (series.marker?.symbol !== "none" || series.pointFormats?.some(point => point.marker?.symbol !== undefined && point.marker.symbol !== "none") === true) && (model.scatterStyle === "marker" || model.scatterStyle === "line-marker" || model.scatterStyle === "smooth-marker");
+function markerVisible(model: SupportedChartModel, series: ChartSeries, pointSymbol?: import('./model.ts').ChartMarkerSymbol): boolean {
+  const symbol = pointSymbol ?? series.marker?.symbol;
+  if (symbol !== undefined) return symbol !== 'none';
+  return model.scatterStyle === "marker" || model.scatterStyle === "line-marker" || model.scatterStyle === "smooth-marker";
 }
 
 function smooth(model: SupportedChartModel, series: ChartSeries): boolean {
-  return series.smooth === true || model.scatterStyle === "smooth" || model.scatterStyle === "smooth-marker";
+  return series.smooth ?? (model.scatterStyle === "smooth" || model.scatterStyle === "smooth-marker");
 }

@@ -176,7 +176,12 @@ contend for this shared host.
 ECMA-376 Part 1 §21.2.2 plot elements, listed in `OOXML_CHART_TYPES`.
 It accepts Strict or Transitional conformance, titles, series, category labels,
 XY values, bubble sizes and family-specific grouping/style options. Null data
-points remain blank. Series colours use theme accent references. The caller
+points remain blank. Series colours use theme accent references; automatic pie
+fills remain unassigned so slices can use the host palette. New axes explicitly
+retain visibility in Office. Scatter gallery choices author series line, marker
+and smoothing settings, and hidden lines retain their inactive paint. The `none`
+creation option uses hidden series under `lineMarker`, because Office rejects the
+ECMA `none` shortcut. Raw source editing still accepts that standard value. The caller
 must attach the part to a host drawing. Source creation does **not** extend the
 renderer coverage described above, create an embedded workbook, or bind sheet
 formulas. Combination charts are composed of multiple plot elements and are not
