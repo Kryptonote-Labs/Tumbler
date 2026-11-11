@@ -143,6 +143,7 @@ export interface ChartLegend {
 }
 
 export interface ChartAxis {
+  readonly titleLayout?: import('./manual-layout.ts').ChartManualLayout;
   readonly sourceType?: string;
   readonly logBase?: number;
   readonly reversed?: boolean;
@@ -163,6 +164,10 @@ export interface ChartAxis {
   readonly displayUnit?: number;
   readonly displayUnitName?: string;
   readonly showDisplayUnitLabel?: boolean;
+  readonly displayUnitLayout?: import('./manual-layout.ts').ChartManualLayout;
+  readonly displayUnitText?: readonly ChartTextParagraph[];
+  readonly displayUnitStyle?: ChartTextStyle;
+  readonly displayUnitShape?: ChartShapeStyle;
   readonly dateAxis?: boolean;
   readonly baseTimeUnit?: 'days' | 'months' | 'years';
   readonly majorTimeUnit?: 'days' | 'months' | 'years';
@@ -192,6 +197,7 @@ export interface ChartTextParagraph {
 }
 
 interface ChartModelBase {
+  readonly titleLayout?: import('./manual-layout.ts').ChartManualLayout;
   readonly images?: Readonly<Record<string, import('./picture-parser.ts').ChartImage>>;
   readonly chartArea?: ChartShapeStyle;
   readonly titleArea?: ChartShapeStyle;

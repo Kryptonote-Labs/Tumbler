@@ -1,7 +1,9 @@
 import type { LosslessXmlElement } from '@tumblerjs/ooxml';
 import type { ChartAxis } from './model.ts';
-import { parseChartLine, parseChartTextStyle } from './formatting-parser.ts';
+import { parseChartLine, parseChartTextStyle, parseChartShapeStyle } from './formatting-parser.ts';
 import { ChartParseError } from './parser-errors.ts';
+import { parseChartManualLayout } from './manual-layout.ts';
+import { readChartLabelText } from './rich-text.ts';
 
 /** Axis placement and scale properties shared by category, date, value and depth axes. */
 export function parseChartAxisProperties(element: LosslessXmlElement, ns: string, drawing: string): Partial<ChartAxis> {
@@ -31,7 +33,9 @@ export function parseChartAxisProperties(element: LosslessXmlElement, ns: string
   const minor = child(element, 'minorGridlines');
   const minorGridlineStyle = parseChartLine(child(minor, 'spPr'), drawing);
   const titleStyle = parseChartTextStyle(child(element, 'title'), ns, drawing);
+  const titleLayout = parseChartManualLayout(child(element, 'title'), ns);
   const units = child(element, 'dispUnits');
+  const unitLabel = child(units, 'dispUnitsLbl'), displayUnitLayout = parseChartManualLayout(unitLabel, ns), displayUnitText = readChartLabelText(unitLabel, ns, drawing), displayUnitStyle = parseChartTextStyle(unitLabel, ns, drawing), displayUnitShape = parseChartShapeStyle(child(unitLabel, 'spPr'), drawing);
   const custom = number(child(units, 'custUnit'));
   if (custom !== undefined && custom <= 0) throw new ChartParseError('Display units must be positive.');
   const builtIn = choice(val(child(units, 'builtInUnit')), ['hundreds', 'thousands', 'tenThousands', 'hundredThousands', 'millions', 'tenMillions', 'hundredMillions', 'billions', 'trillions'], 'hundreds');
@@ -55,7 +59,9 @@ export function parseChartAxisProperties(element: LosslessXmlElement, ns: string
     ...(tickLabelSkip === undefined ? {} : { tickLabelSkip }), ...(tickMarkSkip === undefined ? {} : { tickMarkSkip }),
     ...(offset === undefined ? {} : { labelOffset: offset }),
     ...(titleStyle ? { titleStyle } : {}),
+    ...(titleLayout ? { titleLayout } : {}),
     ...(units ? { displayUnit: custom ?? factors[builtIn], displayUnitName: custom === undefined ? builtIn : String(custom), showDisplayUnitLabel: !!child(units, 'dispUnitsLbl') } : {}),
+    ...(displayUnitLayout ? { displayUnitLayout } : {}), ...(displayUnitText ? { displayUnitText } : {}), ...(displayUnitStyle ? { displayUnitStyle } : {}), ...(displayUnitShape ? { displayUnitShape } : {}),
     ...(element.localName === 'dateAx' ? { dateAxis: true, baseTimeUnit: choice(val(child(element, 'baseTimeUnit')), ['days', 'months', 'years'], 'days'),
       majorTimeUnit: choice(val(child(element, 'majorTimeUnit')), ['days', 'months', 'years'], 'days'), minorTimeUnit: choice(val(child(element, 'minorTimeUnit')), ['days', 'months', 'years'], 'days') } : {}),
   };

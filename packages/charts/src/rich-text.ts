@@ -22,6 +22,20 @@ export function readChartTitleText(title: LosslessXmlElement | undefined, c: str
     }) };
   });
 }
+
+/** Custom chart labels can use rich text or the cached value of a worksheet reference. */
+export function readChartLabelText(owner: LosslessXmlElement | undefined, c: string, a: string): readonly ChartTextParagraph[] | undefined {
+  const rich = readChartTitleText(owner, c, a);
+  if (rich) return rich;
+  const reference = children(children(owner, c, 'tx')[0], c, 'strRef')[0];
+  const cache = children(reference, c, 'strCache')[0];
+  const point = children(cache, c, 'pt').find(point => {
+    const index = attr(point, 'idx');
+    return index !== undefined && index.trim() !== '' && Number(index) === 0;
+  });
+  const value = children(point, c, 'v')[0];
+  return value ? [{ runs: [{ text: value.children.map(node => node.kind === 'text' || node.kind === 'cdata' ? node.value : '').join('') }] }] : undefined;
+}
 const escape = (value: string) => value.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 export function chartTitleTextXml(paragraphs: readonly ChartTextParagraph[], drawingNamespace = 'http://schemas.openxmlformats.org/drawingml/2006/main'): string {
   return (paragraphs.length ? paragraphs : [{ runs: [{ text: '' }] }]).map(p => `<a:p xmlns:a="${drawingNamespace}">${chartParagraphPropertiesXml(p, drawingNamespace)}${p.runs.map(run => `<a:r>${chartRunPropertiesXml(run.style ?? {}, drawingNamespace)}<a:t xml:space="preserve">${escape(run.text)}</a:t></a:r>`).join('')}</a:p>`).join('');

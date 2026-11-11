@@ -9,6 +9,8 @@ import { chartTickLabel } from './tick-label.ts';
 import { chartPointColor } from './point-style.ts';
 import { resolveChartColor } from './colors.ts';
 import type { ChartMark, SceneContext } from './scene-marks.ts';
+import { chartRichTextMarks, layoutChartText } from './text-layout.ts';
+import { positionChartText } from './text-position.ts';
 
 export interface ChartLabelPoint {
   readonly index: number;
@@ -37,7 +39,10 @@ export function chartDataLabelMarks(context: SceneContext, series: ChartSeries, 
   ].filter((value): value is string => value !== undefined);
   const text = settings.text ?? fields.join(settings.separator ?? '\n');
   if (!text && !settings.showLegendKey) return [];
-  const font = chartFont('dataLabel', { ...plot?.textStyle, ...labels?.textStyle, ...settings.textStyle }, context.model, context.options.resolveColor);
+  const style = { ...plot?.textStyle, ...labels?.textStyle, ...settings.textStyle };
+  const rich = settings.richText?.length ? layoutChartText(context, 'dataLabel', style, settings.richText) : undefined;
+  const inherited = chartFont('dataLabel', style, context.model, context.options.resolveColor);
+  const font = rich ? { ...inherited, size: Math.max(1, ...rich.lines.map(line => line.size)) } : inherited;
   const lines = text.split('\n');
   let x = point.x, y = point.y - font.size * .5;
   let anchor: 'start' | 'end' | 'middle' = 'middle';
@@ -56,14 +61,15 @@ export function chartDataLabelMarks(context: SceneContext, series: ChartSeries, 
   } else if (position === 'b') y += font.size * 1.8;
   else if (position === 'l') { x -= 6; anchor = 'end'; y += font.size * .8; }
   else if (position === 'r') { x += 6; anchor = 'start'; y += font.size * .8; }
-  const width = Math.max(0, ...lines.map(line => context.measure(line, font))), height = font.size * 1.2 * lines.length;
+  const width = rich?.width ?? Math.max(0, ...lines.map(line => context.measure(line, font))), height = rich?.height ?? font.size * 1.2 * lines.length;
   const left = x - (anchor === 'middle' ? width / 2 : anchor === 'end' ? width : 0);
   const top = y - font.size;
   const marks: ChartMark[] = [];
   const resolve = (color: NonNullable<ChartDataLabelOptions['fill']>) => context.options.resolveColor?.(color) ?? resolveChartColor(color, context.model);
   const stroke = settings.lineStyle ? chartStroke('axis', settings.lineStyle, context.model, context.options.resolveColor) : undefined;
-  if (settings.fill || settings.gradient || settings.picture || stroke?.stroke) marks.push({ kind: 'rect', x: left - 3, y: top - 2, width: width + 6, height: height + 4, fill: settings.noFill ? 'none' : settings.fill ? resolve(settings.fill) ?? 'none' : 'none', ...chartFillPaint(context, settings, { x: left - 3, y: top - 2, width: width + 6, height: height + 4 }), ...(stroke ? chartStrokeMark(stroke) : {}) });
+  if (settings.fill || settings.gradient || settings.picture || settings.pattern || stroke?.stroke) marks.push({ kind: 'rect', x: left - 3, y: top - 2, width: width + 6, height: height + 4, fill: settings.noFill ? 'none' : settings.fill ? resolve(settings.fill) ?? 'none' : 'none', ...chartFillPaint(context, settings, { x: left - 3, y: top - 2, width: width + 6, height: height + 4 }), ...(stroke ? chartStrokeMark(stroke) : {}) });
   if (settings.showLegendKey) marks.push({ kind: 'rect', x: left - font.size - 4, y: top, width: font.size * .8, height: font.size * .8, fill: chartPointColor(context, series, seriesIndex, point.index) });
-  lines.forEach((text, index) => marks.push({ kind: 'text', text, x, y: y + index * font.size * 1.2, anchor, font }));
-  return marks;
+  if (rich) marks.push(...chartRichTextMarks(rich, left, top, width));
+  else lines.forEach((text, index) => marks.push({ kind: 'text', text, x, y: y + index * font.size * 1.2, anchor, font }));
+  return positionChartText(context, marks, settings.layout);
 }

@@ -51,6 +51,8 @@ export interface SceneContext {
   readonly width: number;
   readonly height: number;
   readonly options: ChartSceneOptions;
+  /** Subplots retain the full chart frame for native manual text coordinates. */
+  readonly textFrame?: ChartRect;
   /** Series colour, falling back to the theme accent cycle as Office does. */
   color(series: ChartSeries, index: number, line?: boolean): string;
   pointFormat(series: ChartSeries, index: number): ChartPointFormat | undefined;

@@ -145,9 +145,11 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
   const showNegativeBubbles = kind === "bubble" ? booleanVal(children(chartType, chartNamespace, "showNegBubbles")[0], false) : undefined;
   const bubbleSizeRepresentation = kind === "bubble" ? parseBubbleSizeRepresentation(val(children(chartType, chartNamespace, "sizeRepresents")[0]) ?? "area") : undefined;
   const plotLayout = parseChartManualLayout(plotArea, chartNamespace);
+  const titleLayout = parseChartManualLayout(titleElement, chartNamespace);
   return Object.freeze({
     status: "supported", kind, grouping, holeSize,
     ...(plotLayout ? { plotLayout } : {}),
+    ...(titleLayout ? { titleLayout } : {}),
     ...parsePlotDecorations(chartType, chartNamespace, drawingNamespace),
     ...areaStyleProperties(document.root, chartNamespace, drawingNamespace, 'chartArea'),
     ...areaStyleProperties(plotArea, chartNamespace, drawingNamespace, 'plotArea'),

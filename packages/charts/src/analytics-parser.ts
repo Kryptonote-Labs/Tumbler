@@ -1,7 +1,9 @@
 import type { LosslessXmlElement } from '@tumblerjs/ooxml';
-import type { ChartDataSequence, ChartLineStyle, ChartTextStyle } from './model.ts';
-import { parseChartLine, parseChartTextStyle } from './formatting-parser.ts';
+import type { ChartDataSequence, ChartLineStyle, ChartTextStyle, ChartTextParagraph, ChartShapeStyle } from './model.ts';
+import { parseChartLine, parseChartTextStyle, parseChartShapeStyle } from './formatting-parser.ts';
 import { ChartParseError } from './parser-errors.ts';
+import { parseChartManualLayout, type ChartManualLayout } from './manual-layout.ts';
+import { readChartLabelText } from './rich-text.ts';
 
 export interface ChartTrendline {
   readonly type: 'linear' | 'exp' | 'log' | 'poly' | 'power' | 'movingAvg';
@@ -15,6 +17,9 @@ export interface ChartTrendline {
   readonly displayRSquared: boolean;
   readonly lineStyle?: ChartLineStyle;
   readonly labelStyle?: ChartTextStyle;
+  readonly labelLayout?: ChartManualLayout;
+  readonly labelText?: readonly ChartTextParagraph[];
+  readonly labelShape?: ChartShapeStyle;
 }
 export interface ChartErrorBars {
   readonly direction: 'x' | 'y';
@@ -51,11 +56,13 @@ export function parseChartAnalytics(series: LosslessXmlElement, ns: string, draw
     const forward = number(node, 'forward', 0)!, backward = number(node, 'backward', 0)!;
     if (forward < 0 || backward < 0) throw new ChartParseError('Trendline forecasts cannot be negative.');
     const text = child(node, 'name')?.children.flatMap(child => child.kind === 'text' || child.kind === 'cdata' ? [child.value] : []).join('');
+    const label = child(node, 'trendlineLbl'), labelLayout = parseChartManualLayout(label, ns), labelText = readChartLabelText(label, ns, drawing), labelShape = label && parseChartShapeStyle(child(label, 'spPr'), drawing);
     return { type: choice(val(node, 'trendlineType'), ['linear', 'exp', 'log', 'poly', 'power', 'movingAvg'], 'linear'),
       ...(text === undefined ? {} : { name: text }), order, period, forward, backward,
       ...(number(node, 'intercept') === undefined ? {} : { intercept: number(node, 'intercept')! }),
       displayEquation: boolean(node, 'dispEq'), displayRSquared: boolean(node, 'dispRSqr'),
       ...(parseChartLine(child(node, 'spPr'), drawing) ? { lineStyle: parseChartLine(child(node, 'spPr'), drawing)! } : {}),
+      ...(labelLayout ? { labelLayout } : {}), ...(labelText ? { labelText } : {}), ...(labelShape ? { labelShape } : {}),
       ...(parseChartTextStyle(child(node, 'trendlineLbl'), ns, drawing) ? { labelStyle: parseChartTextStyle(child(node, 'trendlineLbl'), ns, drawing)! } : {}) };
   });
   const errorBars = children(series, 'errBars').map((node): ChartErrorBars => {

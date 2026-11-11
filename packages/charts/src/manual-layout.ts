@@ -28,13 +28,17 @@ export function parseChartManualLayout(owner: LosslessXmlElement | undefined, na
   const xMode = mode('xMode'), yMode = mode('yMode');
   const number = (name: string) => { const raw = value(name); return raw === undefined ? undefined : raw.trim() ? Number(raw) : NaN; };
   const x = number('x'), y = number('y'), width = number('w'), height = number('h');
+  const text = owner && ['title', 'dLbl', 'dispUnitsLbl', 'trendlineLbl'].includes(owner.localName);
+  // MS-OI29500 21.2.2.104: Office requires paired text coordinates and complete plot/legend frames.
+  if (text && (x === undefined) !== (y === undefined) ||
+    owner && ['plotArea', 'legend'].includes(owner.localName) && [x, y, width, height].some(value => value !== undefined) && [x, y, width, height].some(value => value === undefined)) return undefined;
   // MS-OI29500 21.2.2.232/235: invalid positions discard the entire manual layout.
   if ([x, y, width, height].some(value => value !== undefined && !Number.isFinite(value)) ||
     x !== undefined && (x < (xMode === 'edge' ? 0 : -1) || x > 1) ||
     y !== undefined && (y < (yMode === 'edge' ? 0 : -1) || y > 1) ||
     width !== undefined && (width < 0 || width > 1) || height !== undefined && (height < 0 || height > 1)) return undefined;
   return { target: value('layoutTarget') === 'inner' ? 'inner' : 'outer', xMode, yMode, widthMode: mode('wMode'), heightMode: mode('hMode'),
-    ...(x === undefined ? {} : { x }), ...(y === undefined ? {} : { y }), ...(width === undefined ? {} : { width }), ...(height === undefined ? {} : { height }) };
+    ...(x === undefined ? {} : { x }), ...(y === undefined ? {} : { y }), ...(width === undefined || text ? {} : { width }), ...(height === undefined || text ? {} : { height }) };
 }
 
 /** Edge sizes name the far edge; factor sizes name the extent. Office keeps the box on the chart. */

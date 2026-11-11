@@ -23,7 +23,7 @@ test("columns draw one bar per value, taller for larger values", () => {
   const heights = bars.slice(0, 3).map(bar => bar.kind === "rect" ? bar.height : 0);
   expect(heights[2]).toBeGreaterThan(heights[1]!);
   expect(heights[1]).toBeGreaterThan(heights[0]!);
-  expect(texts(scene.marks)).toEqual(["Results", "Jan", "Feb", "Mar", "Actual"]);
+  expect(texts(scene.marks)).toEqual(["Jan", "Feb", "Mar", "Actual", "Results"]);
   expect(scene.label).toBe("Results");
 });
 
@@ -137,7 +137,7 @@ test('visible Cartesian value labels survive missing gridlines and use the host 
     expect(texts(grid.marks)).toEqual(texts(noGrid.marks));
     expect(grid.marks.filter(mark => mark.kind === 'line').length).toBeGreaterThan(noGrid.marks.filter(mark => mark.kind === 'line').length);
     const deleted = layoutChartScene({ ...base, axes: [{ ...base.axes[0]!, majorGridlines: true, deleted: true }] }, 600, 400);
-    expect(texts(deleted.marks)).toEqual(['Results', 'Jan', 'Feb', 'Mar']);
+    expect(texts(deleted.marks)).toEqual(['Jan', 'Feb', 'Mar', 'Results']);
     expect(deleted.marks.filter(mark => mark.kind === 'line')).toHaveLength(1);
   }
 });
