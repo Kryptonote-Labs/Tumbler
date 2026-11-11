@@ -12,8 +12,8 @@ Category labels and XY coordinates retain their separate source data. The most r
 
 ## Evidence
 
-`bun scripts/generate-chart-conversion-fixtures.ts /tmp/chart-conversions/input` changes one chart consecutively through all 44 gallery variants. Each step checks values, category labels and clustered overlap, then creates DOCX, PPTX and XLSX packages. All 132 packages pass Open XML SDK3.5.1 validation. The corrected recorded editor also exports three passing native packages with the embedded `8*7` formula retained.
+`bun scripts/generate-chart-conversion-fixtures.ts /tmp/chart-conversions/input` changes one chart consecutively through all 44 gallery variants. Each step checks values, category labels and clustered overlap, then creates DOCX, PPTX and XLSX packages. All 132 packages pass Open XML SDK 3.5.1 validation. The corrected recorded editor also exports three passing native packages with the embedded `8*7` formula retained.
 
-The focused conversion suite passes 34 tests and115 assertions. It covers both namespace families, axis formatting restoration, plot-child order, shared axes and crossing dependencies, the largest unsigned axis ID, category edits, independent XY edits and grouping changes. Focused TypeScript validation passes. Independent static review has no remaining findings.
+The focused conversion suite passes 34 tests and 115 assertions. It covers both namespace families, axis formatting restoration, plot-child order, shared axes and crossing dependencies, the largest unsigned axis ID, category edits, independent XY edits and grouping changes. Focused TypeScript validation passes. Independent static review has no remaining findings.
 
-Local checks run serially with600MiB RAM, no swap and40% of oneCPU. This evidence concerns data retention and native package validity; it does not establish pixel parity for every rendering property.
+Local checks run serially with 600MiB RAM, no swap and 40% of oneCPU. This evidence concerns data retention and native package validity; it does not establish pixel parity for every rendering property.
