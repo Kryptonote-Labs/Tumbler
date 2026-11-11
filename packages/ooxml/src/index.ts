@@ -82,3 +82,5 @@ export { gradientFill, gradientFillMarkup, linearGradientLine, rectangularGradie
 export { drawingGradientFill } from "./gradient.ts";
 export { readGradientFill } from "./gradient.ts";
 export { paintDrawingGradient, paintRectangularGradient, type DrawingGradientCanvasContext } from "./gradient-canvas.ts";
+
+export { formatOoxmlNumber } from './number-format.ts';
