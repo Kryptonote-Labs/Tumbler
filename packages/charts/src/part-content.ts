@@ -1,3 +1,4 @@
+import { convertChartConformance } from './conformance.ts';
 import { ChartParseError, parseOoxmlChart } from './parser.ts';
 import type { ChartModel } from './model.ts';
 import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
@@ -50,7 +51,8 @@ function stageChartContent(transaction: PackageTransaction, partName: PartName |
   const name = typeof partName === 'string' ? PartName.parse(partName) : partName;
   const original = transaction.package.getPart(name);
   if (!addition && (!original || original.contentType !== 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml')) throw new TypeError('Chart part is missing.');
-  let bytes: Uint8Array = new TextEncoder().encode(content.xml);
+  const strict = transaction.package.relationships(null).items.some(relationship => relationship.type === 'http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument');
+  let bytes: Uint8Array = convertChartConformance(new TextEncoder().encode(content.xml), strict ? 'strict' : 'transitional');
   let source = chartXml(bytes);
   const old = original && chartXml(transaction.package.readPart(original));
   const oldExternal = old && old.children(old.document.root, 'externalData')[0];

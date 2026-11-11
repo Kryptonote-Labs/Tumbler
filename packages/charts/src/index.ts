@@ -65,3 +65,5 @@ export type { ChartDataLabels, ChartDataLabelOptions } from './data-labels.ts';
 export type { ChartTrendline, ChartErrorBars } from './analytics-parser.ts';
 export { fitChartTrendline, type ChartTrendFit, type TrendPoint } from './trendline.ts';
 export { chartErrorExtents, type ChartErrorExtent } from './error-bars.ts';
+
+export { convertChartConformance } from './conformance.ts';

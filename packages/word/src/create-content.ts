@@ -1,5 +1,5 @@
 import { authoredChartContent, isWordAuthoredChart, type WordAuthoredChart } from './authored-chart.ts';
-import { chartBase64ToBytes, editChartSource, inspectChartSource } from '@tumblerjs/charts';
+import { chartBase64ToBytes, convertChartConformance, editChartSource, inspectChartSource } from '@tumblerjs/charts';
 import { sectionFormatXml, type WordSectionFormat } from './section-format.ts';
 import { orderedPropertyXml } from './property-order.ts';
 import { authoredInkMarkup } from './authored-ink.ts';
@@ -59,7 +59,7 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
     const placement = imagePlacement(chart, chart.width, availableWidth);
     const cx = Math.round(chart.width * 12700), cy = Math.round(chart.height * 12700);
     const chartName = `word/charts/chart${id}.xml`;
-    let chartBytes: Uint8Array = new TextEncoder().encode(chart.content.xml);
+    let chartBytes: Uint8Array = convertChartConformance(new TextEncoder().encode(chart.content.xml), 'transitional');
     const source = inspectChartSource(chartBytes);
     if (chart.content.workbook !== undefined) {
       const workbookName = `word/embeddings/chart${id}-data.xlsx`;

@@ -14,7 +14,7 @@ export const chartCreateInput = z.object({
     z.object({ family: z.literal('spreadsheet'), sheetId: z.string().min(1), x: z.number().finite().default(100), y: z.number().finite().default(60), width: size.width.default(480), height: size.height.default(320) }).strict(),
   ]),
   chart: z.object({
-    type: z.enum(OOXML_CHART_TYPES), title: z.string().optional(), conformance: z.enum(['strict', 'transitional']).optional(),
+    type: z.enum(OOXML_CHART_TYPES), title: z.string().optional(), conformance: z.enum(['strict', 'transitional']).optional().describe('Initial source profile; native insertion reconciles it with the target document profile.'),
     categories: z.array(z.string()).optional(),
     series: z.array(z.object({ name: z.string(), values: numbers, xValues: numbers.optional(), bubbleSizes: numbers.optional() }).strict()),
     direction: z.enum(['bar', 'col']).optional(), grouping: z.enum(['standard', 'clustered', 'stacked', 'percentStacked']).optional(),
