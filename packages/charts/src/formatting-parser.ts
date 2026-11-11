@@ -1,3 +1,4 @@
+import { chartElementMarkup } from './xml-markup.ts';
 import { resolveDrawingColor, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import type { ChartColor, ChartColorTransform, ChartLineStyle, ChartTextStyle } from "./model.ts";
 
@@ -72,19 +73,9 @@ export function parseChartTextStyle(parent: LosslessXmlElement | undefined, char
 }
 
 /** Rich text keeps complete colour choices and ordered transforms when title text is edited. */
-export function chartColorFillXml(color: ChartColor): string {
+export function chartColorFillXml(color: ChartColor, drawingNamespace?: string): string {
   const escape = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
-  function markup(node: LosslessXmlElement): string {
-    const namespaces = new Map<string, string>();
-    if (node.prefix) namespaces.set(node.prefix, node.namespaceUri);
-    else if (node.namespaceUri) namespaces.set('', node.namespaceUri);
-    for (const attribute of node.attributes) if (attribute.prefix && attribute.prefix !== 'xmlns' && attribute.prefix !== 'xml') namespaces.set(attribute.prefix, attribute.namespaceUri);
-    for (const attribute of node.attributes) if (attribute.namespaceUri === 'http://www.w3.org/2000/xmlns/') namespaces.delete(attribute.localName === 'xmlns' ? '' : attribute.localName);
-    const attributes = node.attributes.map(attribute => ` ${attribute.qualified}="${escape(attribute.value)}"`).join('') + [...namespaces].map(([prefix, ns]) => ` xmlns${prefix ? `:${prefix}` : ''}="${escape(ns)}"`).join('');
-    const contents = node.children.map(child => child.kind === 'element' ? markup(child) : child.kind === 'text' || child.kind === 'cdata' ? escape(child.value) : '').join('');
-    return `<${node.qualified}${attributes}>${contents}</${node.qualified}>`;
-  }
-  if (color.source) return markup(color.source);
+  if (color.source) return chartElementMarkup(color.source, drawingNamespace);
   const kind = color.kind === 'rgb' ? 'srgbClr' : 'schemeClr';
-  return `<a:solidFill><a:${kind} val="${escape(color.value.replace(/^#/, ''))}">${color.transforms?.map(transform => `<a:${transform.kind} val="${Math.round(transform.value * 100000)}"/>`).join('') ?? ''}</a:${kind}></a:solidFill>`;
+  return `<a:solidFill${drawingNamespace ? ` xmlns:a="${drawingNamespace}"` : ''}><a:${kind} val="${escape(color.value.replace(/^#/, ''))}">${color.transforms?.map(transform => `<a:${transform.kind} val="${Math.round(transform.value * 100000)}"/>`).join('') ?? ''}</a:${kind}></a:solidFill>`;
 }

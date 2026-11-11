@@ -15,7 +15,7 @@ export function updateChartTitle(bytes: Uint8Array, title: string | readonly Cha
   const existing = children(chart, 'title')[0];
   const a = ns.includes('purl.oclc.org') ? 'http://purl.oclc.org/ooxml/drawingml/main' : 'http://schemas.openxmlformats.org/drawingml/2006/main';
   const paragraphs = typeof title === 'string' ? [{ runs: [{ text: title }] }] : title;
-  const tx = `<c:tx xmlns:c="${ns}" xmlns:a="${a}"><c:rich><a:bodyPr/><a:lstStyle/>${chartTitleTextXml(paragraphs)}</c:rich></c:tx>`;
+  const tx = `<c:tx xmlns:c="${ns}" xmlns:a="${a}"><c:rich><a:bodyPr/><a:lstStyle/>${chartTitleTextXml(paragraphs, a)}</c:rich></c:tx>`;
   const edit = beginLosslessXmlEdit(xml);
   if (existing) {
     const text = children(existing, 'tx')[0];
@@ -54,6 +54,10 @@ export function updateChartTitle(bytes: Uint8Array, title: string | readonly Cha
           else if (!space) edit.insertAttribute(nodes[index]!, 'xml:space', 'preserve');
         }
       }
+    } else if (rich && body.length) {
+      // Keep text-box and list properties when rich title editing replaces paragraphs.
+      edit.replaceElementMarkup(body[0]!, chartTitleTextXml(paragraphs, a));
+      for (const paragraph of body.slice(1)) edit.removeElement(paragraph);
     } else if (text) edit.replaceElementMarkup(text, tx);
     else if (existing.children.find(child => child.kind === 'element')) edit.insertMarkupBefore(existing.children.find((child): child is LosslessXmlElement => child.kind === 'element')!, tx);
     else if (existing.selfClosing) edit.replaceElementMarkup(existing, `<c:title xmlns:c="${ns}">${tx}</c:title>`);

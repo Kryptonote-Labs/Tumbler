@@ -30,6 +30,8 @@ export type ChartColor = (
 };
 
 export interface ChartTextStyle {
+  /** Retained run properties for lossless rich title editing. */
+  readonly sourceProperties?: import('@tumblerjs/ooxml').LosslessXmlElement;
   readonly highlight?: string;
   readonly verticalAlign?: "baseline" | "superscript" | "subscript";
   readonly characterSpacingPoints?: number;
@@ -148,6 +150,7 @@ export interface ChartAxis {
 }
 
 export interface ChartTextParagraph {
+  readonly sourceProperties?: import('@tumblerjs/ooxml').LosslessXmlElement;
   readonly alignment?: "start" | "center" | "end" | "justify";
   readonly runs: readonly { readonly text: string; readonly style?: ChartTextStyle }[];
 }

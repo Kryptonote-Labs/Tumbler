@@ -16,14 +16,17 @@ export function wordChartTitleText(model: ChartModel): readonly WordTextParagrap
   return paragraphs.map(p => ({ alignment: p.alignment ?? 'center', runs: p.runs.map(run => {
     const style = { ...model.titleStyle, ...run.style };
     const font = chartFont('title', style, model);
+    const highlight = style.highlight && WORD_HIGHLIGHTS.find(value => wordHighlightColor(value) === style.highlight);
     const authoredFamily = style.fontFamily ?? model.textStyle?.fontFamily;
     const family = authoredFamily ? model.themeFonts?.[authoredFamily] ?? authoredFamily : model.themeFonts?.['+mn-lt'] ?? 'Aptos';
-    return { text: run.text, format: { fontFamily: family, fontSizePoints: font.size * .75, bold: font.weight >= 600, italic: font.italic, color: opaqueColour(font.color), underline: style.underline ?? 'none', strike: style.strike ?? false, verticalAlign: style.verticalAlign ?? 'baseline', ...(style.characterSpacingPoints === undefined ? {} : { characterSpacingPoints: style.characterSpacingPoints }), ...(style.highlight ? { highlight: WORD_HIGHLIGHTS.find(value => wordHighlightColor(value) === style.highlight) ?? 'none' } : {}) } };
+    return { text: run.text, format: { fontFamily: family, fontSizePoints: font.size * .75, bold: font.weight >= 600, italic: font.italic, color: opaqueColour(font.color), underline: style.underline ?? 'none', strike: style.strike ?? false, verticalAlign: style.verticalAlign ?? 'baseline', ...(style.characterSpacingPoints === undefined ? {} : { characterSpacingPoints: style.characterSpacingPoints }), ...(style.highlight ? highlight ? { highlight } : { highlight: 'none', shading: style.highlight } : {}) } };
   }) }));
 }
 export function chartTitleFromWord(paragraphs: readonly WordTextParagraph[], previous?: ChartModel): readonly ChartTextParagraph[] {
   const references = previous && wordChartTitleText(previous);
-  return chartTitleRuns(paragraphs, previous).map(({ paragraph: p, runs }, paragraphIndex) => ({ ...(p.alignment ? { alignment: p.alignment } : {}), runs: runs.map(({ run, source }, runIndex) => {
+  return chartTitleRuns(paragraphs, previous).map(({ paragraph: p, runs }, paragraphIndex) => {
+    const priorParagraph = previous?.titleText?.[runs.find(run => run.source)?.source?.paragraph ?? paragraphIndex];
+    return { ...(priorParagraph?.sourceProperties ? { sourceProperties: priorParagraph.sourceProperties } : {}), ...(p.alignment ? { alignment: p.alignment } : {}), runs: runs.map(({ run, source }, runIndex) => {
     const f = run.format ?? {};
     const prior = previous?.titleText?.[source?.paragraph ?? paragraphIndex]?.runs;
     const referenceRuns = references?.[source?.paragraph ?? paragraphIndex]?.runs;
@@ -40,17 +43,19 @@ export function chartTitleFromWord(paragraphs: readonly WordTextParagraph[], pre
       kind: 'scheme', value: f.color.theme,
       transforms: f.color.tint !== undefined ? [{ kind: 'lumMod', value: f.color.tint / 255 }, { kind: 'lumOff', value: 1 - f.color.tint / 255 }] : f.color.shade !== undefined ? [{ kind: 'lumMod', value: f.color.shade / 255 }] : [],
     };
+    const highlight = f.highlight === reference?.highlight && f.shading === reference?.shading ? style?.highlight : f.highlight && f.highlight !== 'none' ? wordHighlightColor(f.highlight) : f.shading ? resolveWordColour(f.shading) : undefined;
     return { text: run.text, style: {
+      ...(style?.sourceProperties ? { sourceProperties: style.sourceProperties } : {}),
       ...(fontFamily === undefined ? {} : { fontFamily }),
       ...(fontSize === undefined ? {} : { fontSize }),
       ...(f.verticalAlign === undefined ? {} : { verticalAlign: f.verticalAlign }),
       ...(f.characterSpacingPoints === undefined ? {} : { characterSpacingPoints: f.characterSpacingPoints }),
-      ...(f.highlight === undefined || f.highlight === 'none' ? {} : { highlight: wordHighlightColor(f.highlight) }),
+      ...(highlight === undefined ? {} : { highlight }),
       ...(bold === undefined ? {} : { bold }),
       ...(italic === undefined ? {} : { italic }),
       ...(f.underline === undefined ? {} : { underline: f.underline }),
       ...(f.strike === undefined ? {} : { strike: f.strike }),
       ...(color === undefined ? {} : { color }),
     } };
-  }) }));
+  }) }; });
 }
