@@ -73,7 +73,7 @@ test('editing a transparent theme-coloured chart title keeps its colour source a
   const { wordChartTitleText } = await import('../src/index.ts');
   const { WordShapeText } = await import('../src/collaboration/index.ts');
   const authored = chart();
-  const title = new TextDecoder().decode(updateChartTitle(new TextEncoder().encode(authored.content.xml), 'Alpha')).replace('<a:r>', '<a:r><a:rPr><a:solidFill><a:schemeClr val="accent1"><a:alpha val="50000"/></a:schemeClr></a:solidFill></a:rPr>');
+  const title = new TextDecoder().decode(updateChartTitle(new TextEncoder().encode(authored.content.xml), 'Alpha')).replace(/<a:rPr\b[^>]*>[\s\S]*?<\/a:rPr>/, '<a:rPr><a:solidFill><a:schemeClr val="accent1"><a:alpha val="50000"/></a:schemeClr></a:solidFill></a:rPr>');
   const run = { text: '\uFFFC', chart: { ...authored, content: { ...authored.content, xml: title } } };
   const native = new NativeWordDocument({ content: [{ kind: 'paragraph', runs: [run] }] });
   const drawing = [...native.drawings.values()][0]!;
@@ -97,7 +97,7 @@ test('merged editor runs keep distinct chart opacity on unchanged text', async (
   const { WordShapeText } = await import('../src/collaboration/index.ts');
   const authored = chart();
   let title = new TextDecoder().decode(updateChartTitle(new TextEncoder().encode(authored.content.xml), 'One'));
-  title = title.replace('<a:r>', '<a:r><a:rPr><a:solidFill><a:schemeClr val="accent1"><a:alpha val="25000"/></a:schemeClr></a:solidFill></a:rPr>').replace('</a:r>', '</a:r><a:r><a:rPr><a:solidFill><a:schemeClr val="accent1"><a:alpha val="75000"/></a:schemeClr></a:solidFill></a:rPr><a:t>Two</a:t></a:r>');
+  title = title.replace(/<a:rPr\b[^>]*>[\s\S]*?<\/a:rPr>/, '<a:rPr><a:solidFill><a:schemeClr val="accent1"><a:alpha val="25000"/></a:schemeClr></a:solidFill></a:rPr>').replace('</a:r>', '</a:r><a:r><a:rPr><a:solidFill><a:schemeClr val="accent1"><a:alpha val="75000"/></a:schemeClr></a:solidFill></a:rPr><a:t>Two</a:t></a:r>');
   const run = { text: '\uFFFC', chart: { ...authored, content: { ...authored.content, xml: title } } };
   const native = new NativeWordDocument({ content: [{ kind: 'paragraph', runs: [run] }] });
   const drawing = [...native.drawings.values()][0]!;
@@ -176,4 +176,38 @@ test('theme selections made in the inline chart editor retain their theme and lu
   const { chartTitleFromWord } = await import('../src/chart-title.ts');
   const runs = chartTitleFromWord([{ runs: [{ text: 'Theme', format: { color: { theme: 'accent2', fallback: '#00FF00', tint: 128 } } }] }]);
   expect(runs[0]!.runs[0]!.style!.color).toEqual({ kind: 'scheme', value: 'accent2', transforms: [{ kind: 'lumMod', value: 128 / 255 }, { kind: 'lumOff', value: 127 / 255 }] });
+});
+
+test('inline title text edits retain imported text-box layout and unexposed character effects', async () => {
+  const { wordChartTitleText } = await import('../src/chart-title.ts');
+  const { WordShapeText } = await import('../src/collaboration/index.ts');
+  const { updateChartTitle } = await import('@tumblerjs/charts');
+  const authored = chart();
+  let xml = new TextDecoder().decode(updateChartTitle(new TextEncoder().encode(authored.content.xml), 'Original'));
+  xml = xml.replace('<a:bodyPr/>', '<a:bodyPr rot="2400000" lIns="12700"/>').replace(/<a:rPr\b[^>]*>[\s\S]*?<\/a:rPr>/, '<a:rPr lang="en-GB" baseline="20000" u="wavy"><a:effectLst><a:glow rad="12700"><a:schemeClr val="accent2"/></a:glow></a:effectLst><a:ea typeface="Yu Gothic"/></a:rPr>');
+  const run = { text: '\uFFFC', chart: { ...authored, content: { ...authored.content, xml } } };
+  const document = new NativeWordDocument({ content: [{ kind: 'paragraph', runs: [run] }] });
+  const drawing = [...document.drawings.values()][0]!;
+  if (drawing.kind !== 'chart') throw new Error('Missing chart');
+  const editor = new WordShapeText({ textBody: wordChartTitleText(drawing.model) });
+  editor.replace({ start: 0, end: 8 }, 'Revised');
+  document.update([{ kind: 'paragraph', runs: [{ ...run, chartTitleText: editor.paragraphs() }] }]);
+  const saved = document.artifact(), chartDrawing = [...saved.document.drawings.values()][0]!;
+  if (chartDrawing.kind !== 'chart') throw new Error('Missing saved chart');
+  const source = readChartContent(saved.document.package, chartDrawing.partName).xml;
+  for (const property of ['rot="2400000"', 'lIns="12700"', 'lang="en-GB"', 'baseline="20000"', 'u="wavy"', 'glow', 'Yu Gothic', 'Revised']) expect(source).toContain(property);
+});
+
+test('custom RGB title highlights survive text edits and remain explicitly clearable', async () => {
+  const { wordChartTitleText, chartTitleFromWord } = await import('../src/chart-title.ts');
+  const { chartContentModel } = await import('@tumblerjs/charts');
+  const { WordShapeText } = await import('../src/collaboration/index.ts');
+  const model = { ...chartContentModel(chart().content), titleText: [{ runs: [{ text: 'Old', style: { highlight: '#123456' } }] }] };
+  const projected = wordChartTitleText(model);
+  expect(projected[0]!.runs[0]!.format?.shading).toBe('#123456');
+  const editor = new WordShapeText({ textBody: projected });
+  editor.replace({ start: 0, end: 3 }, 'New');
+  expect(chartTitleFromWord(editor.paragraphs(), model)[0]!.runs[0]!.style?.highlight).toBe('#123456');
+  editor.format({ start: 0, end: 3 }, { highlight: 'none', shading: null });
+  expect(chartTitleFromWord(editor.paragraphs(), model)[0]!.runs[0]!.style?.highlight).toBeUndefined();
 });

@@ -1,3 +1,4 @@
+import { parseChartGradient } from './gradient-parser.ts';
 import { parseChartAxisProperties } from './axis-properties.ts';
 import { parseChartAnalytics } from './analytics-parser.ts';
 import { parseChartDataLabels } from './data-labels.ts';
@@ -21,7 +22,7 @@ import type {
   ChartMarkerSymbol,
 } from "./model.ts";
 
-import { parseChartFill, parseChartLine, parseChartTextStyle } from "./formatting-parser.ts";
+import { parseChartFill, parseChartLine, parseChartTextStyle, parseChartShapeStyle } from "./formatting-parser.ts";
 
 const MAX_CACHE_POINTS = 100_000;
 const MAX_SERIES = 1_024;
@@ -144,6 +145,9 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
   const bubbleSizeRepresentation = kind === "bubble" ? parseBubbleSizeRepresentation(val(children(chartType, chartNamespace, "sizeRepresents")[0]) ?? "area") : undefined;
   return Object.freeze({
     status: "supported", kind, grouping, holeSize,
+    ...areaStyleProperties(document.root, chartNamespace, drawingNamespace, 'chartArea'),
+    ...areaStyleProperties(plotArea, chartNamespace, drawingNamespace, 'plotArea'),
+    ...(titleElement ? { ...areaStyleProperties(titleElement, chartNamespace, drawingNamespace, 'titleArea'), titleOverlay: booleanVal(children(titleElement, chartNamespace, 'overlay')[0], false) } : {}),
     dateSystem: booleanVal(children(document.root, chartNamespace, "date1904")[0], false) ? "1904" : "1900",
     varyColors: booleanVal(children(chartType, chartNamespace, "varyColors")[0], ["pie", "doughnut", "of-pie"].includes(kind)),
     ...(parseChartDataLabels(children(chartType, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace) ? { dataLabels: parseChartDataLabels(children(chartType, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace)! } : {}),
@@ -226,16 +230,18 @@ function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespac
   const points = children(element, chartNamespace, 'dPt');
   if (points.length > MAX_CACHE_POINTS) throw new ChartPreviewLimitError('Chart point formatting exceeds preview limits.');
   const shape = children(element, chartNamespace, 'spPr')[0];
-  const lineStyle = parseChartLine(shape, drawingNamespace);
+  const lineStyle = parseChartLine(shape, drawingNamespace), gradient = parseChartGradient(shape, drawingNamespace);
   return Object.freeze({
     ...(children(shape ?? element, drawingNamespace, 'noFill').length ? { noFill: true } : {}),
     ...(lineStyle ? { lineStyle } : {}),
+    ...(gradient ? { gradient } : {}),
     ...(parseChartDataLabels(children(element, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace) ? { dataLabels: parseChartDataLabels(children(element, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace)! } : {}),
     ...parseChartAnalytics(element, chartNamespace, drawingNamespace, node => parseData(node, chartNamespace)),
     explosion: Number(val(children(element, chartNamespace, 'explosion')[0]) ?? 0),
     pointFormats: points.map(point => {
-      const shape = children(point, chartNamespace, 'spPr')[0];
+      const shape = children(point, chartNamespace, 'spPr')[0], gradient = parseChartGradient(shape, drawingNamespace);
       return { index: requiredUnsignedVal(point, chartNamespace, 'idx', 'point index'),
+        ...(gradient ? { gradient } : {}),
         fill: parseChartFill(shape, drawingNamespace), noFill: shape && children(shape, drawingNamespace, 'noFill').length ? true : undefined,
         lineStyle: parseChartLine(shape, drawingNamespace), marker: parseMarker(children(point, chartNamespace, 'marker')[0], chartNamespace),
         explosion: val(children(point, chartNamespace, 'explosion')[0]) === undefined ? undefined : Number(val(children(point, chartNamespace, 'explosion')[0])) };
@@ -365,8 +371,11 @@ function parseMarker(element: LosslessXmlElement | undefined, namespace: string)
   if (!Number.isInteger(size) || size < 2 || size > 72) throw new ChartParseError("Chart marker size must be an integer between 2 and 72.");
   const drawing = namespace.replace(/chart$/, 'main');
   const shape = children(element, namespace, 'spPr')[0];
-  const fill = parseChartFill(shape, drawing), lineStyle = parseChartLine(shape, drawing);
-  return Object.freeze({ symbol: rawSymbol as ChartMarkerSymbol, size,
+  const fill = parseChartFill(shape, drawing), lineStyle = parseChartLine(shape, drawing), gradient = parseChartGradient(shape, drawing);
+  return Object.freeze({
+    ...(children(element, namespace, "symbol").length ? { symbol: rawSymbol as ChartMarkerSymbol } : {}),
+    ...(children(element, namespace, "size").length ? { size } : {}),
+    ...(gradient ? { gradient } : {}),
     ...(fill ? { fill } : {}), ...(shape && children(shape, drawing, 'noFill').length ? { noFill: true } : {}), ...(lineStyle ? { lineStyle } : {}) });
 }
 
@@ -404,7 +413,9 @@ function parseLegend(element: LosslessXmlElement | undefined, namespace: string,
   if (element === undefined) return undefined;
   const positions: Record<string, ChartLegendPosition> = { b: "bottom", l: "left", r: "right", t: "top", tr: "top-right" };
   const raw = val(children(element, namespace, "legendPos")[0]) ?? "r";
-  return Object.freeze({ ...textStyleProperties(element, namespace, drawingNamespace), position: positions[raw] ?? "right", overlay: booleanVal(children(element, namespace, "overlay")[0], false) });
+  const shapeStyle = parseChartShapeStyle(children(element, namespace, 'spPr')[0], drawingNamespace);
+  return Object.freeze({
+    ...(shapeStyle ? { shapeStyle } : {}), ...textStyleProperties(element, namespace, drawingNamespace), position: positions[raw] ?? "right", overlay: booleanVal(children(element, namespace, "overlay")[0], false) });
 }
 
 function parseText(element: LosslessXmlElement | undefined, chartNamespace: string, drawingNamespace: string): string | undefined {
@@ -540,4 +551,9 @@ function axisRotation(element: LosslessXmlElement, namespace: string, drawingNam
   if (raw === undefined || raw === "-60000000") return {};
   const rotation = Number(raw);
   return Number.isFinite(rotation) ? { labelRotation: rotation / 60000 } : {};
+}
+
+function areaStyleProperties<K extends 'chartArea' | 'plotArea' | 'titleArea'>(element: LosslessXmlElement, ns: string, drawing: string, key: K) {
+  const style = parseChartShapeStyle(children(element, ns, 'spPr')[0], drawing);
+  return style ? { [key]: style } : {};
 }

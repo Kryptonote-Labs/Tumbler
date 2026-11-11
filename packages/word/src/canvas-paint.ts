@@ -20,7 +20,7 @@ import { resolveWordColour } from "./theme-colours.ts";
  * The drawing subset of a Canvas 2D context. Browser, OffscreenCanvas and server canvases satisfy
  * it; `Path` is the host's Path2D.
  */
-export interface WordCanvasContext<Image, Path = unknown> extends Omit<DrawingGradientCanvasContext, "fill">, ChartCanvasContext<Path>, WordCanvasTextContext, WordInkPixelContext {
+export interface WordCanvasContext<Image, Path = unknown> extends Omit<DrawingGradientCanvasContext, "fill">, Omit<ChartCanvasContext<Path>, "createLinearGradient" | "createRadialGradient">, WordCanvasTextContext, WordInkPixelContext {
   clip(path?: Path): void;
   direction: "inherit" | "ltr" | "rtl";
   fontKerning?: "auto" | "none" | "normal";

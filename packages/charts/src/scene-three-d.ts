@@ -1,3 +1,4 @@
+import { chartLegendFill } from './gradient-scene.ts';
 import { layoutBarBand } from './bar-layout.ts';
 import { layoutCartesianChart } from './layout.ts';
 import { chartFont } from './scene-style.ts';
@@ -58,6 +59,6 @@ export function threeDScene(context: SceneContext): ChartMark[] {
     const p = project(point((index + 0.5) / count, layout.minimum, 0));
     marks.push({ kind: 'text', text, x: p.x, y: p.y + font.size + 6, anchor: 'middle', font });
   });
-  if (model.legend) marks.push(...legendMarks(context, model.series.map((series, index) => ({ label: series.title ?? `Series ${index + 1}`, swatch: (x: number, y: number): ChartMark => ({ kind: 'rect', x, y: y - 7, width: 8, height: 8, fill: context.color(series, index) }) })), 12));
+  if (model.legend) marks.push(...legendMarks(context, model.series.map((series, index) => ({ label: series.title ?? `Series ${index + 1}`, swatch: (x: number, y: number): ChartMark => ({ kind: 'rect', x, y: y - 7, width: 8, height: 8, ...chartLegendFill(context, series, { x, y: y - 7, width: 8, height: 8 }), fill: series.noFill ? "none" : context.color(series, index) }) })), 12));
   return [...ordered, ...marks];
 }

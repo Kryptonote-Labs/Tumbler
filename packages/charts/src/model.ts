@@ -1,3 +1,4 @@
+import type { DrawingStrokeProperties } from "@tumblerjs/ooxml";
 export type ChartKind = "bar" | "column" | "line" | "pie" | "doughnut" | "scatter" | "bubble" | "area" | "radar" | "stock" | "surface" | "of-pie";
 
 export type ChartScatterStyle = "none" | "line" | "line-marker" | "marker" | "smooth" | "smooth-marker";
@@ -10,11 +11,12 @@ export const BUBBLE_CHART_POINT_LIMIT = 10_000;
 export type ChartMarkerSymbol = "auto" | "circle" | "dash" | "diamond" | "dot" | "none" | "picture" | "plus" | "square" | "star" | "triangle" | "x";
 
 export interface ChartMarker {
+  readonly gradient?: ChartGradient;
   readonly fill?: ChartColor;
   readonly noFill?: boolean;
   readonly lineStyle?: ChartLineStyle;
-  readonly symbol: ChartMarkerSymbol;
-  readonly size: number;
+  readonly symbol?: ChartMarkerSymbol;
+  readonly size?: number;
 }
 
 export interface ChartColorTransform {
@@ -30,6 +32,8 @@ export type ChartColor = (
 };
 
 export interface ChartTextStyle {
+  /** Retained run properties for lossless rich title editing. */
+  readonly sourceProperties?: import('@tumblerjs/ooxml').LosslessXmlElement;
   readonly highlight?: string;
   readonly verticalAlign?: "baseline" | "superscript" | "subscript";
   readonly characterSpacingPoints?: number;
@@ -42,11 +46,28 @@ export interface ChartTextStyle {
   readonly color?: ChartColor;
 }
 
-export interface ChartLineStyle {
+export interface ChartLineStyle extends DrawingStrokeProperties {
   readonly color?: ChartColor;
   readonly noFill?: boolean;
   /** Width in points. */
   readonly width?: number;
+}
+
+export interface ChartGradient {
+  /** Normalized focus edges, not the four DrawingML inset amounts. */
+  readonly focusRect?: readonly [number, number, number, number];
+  readonly kind: 'linear' | 'radial' | 'rectangular';
+  readonly angle: number;
+  readonly scaled: boolean;
+  readonly center: readonly [number, number];
+  readonly stops: readonly { readonly offset: number; readonly color: ChartColor }[];
+}
+
+export interface ChartShapeStyle {
+  readonly gradient?: ChartGradient;
+  readonly fill?: ChartColor;
+  readonly noFill?: boolean;
+  readonly lineStyle?: ChartLineStyle;
 }
 
 export interface ChartDataPoint {
@@ -64,6 +85,7 @@ export interface ChartDataSequence {
 }
 
 export interface ChartPointFormat {
+  readonly gradient?: ChartGradient;
   readonly index: number;
   readonly fill?: ChartColor | undefined;
   readonly noFill?: boolean | undefined;
@@ -73,6 +95,7 @@ export interface ChartPointFormat {
 }
 
 export interface ChartSeries {
+  readonly gradient?: ChartGradient;
   readonly trendlines?: readonly import('./analytics-parser.ts').ChartTrendline[];
   readonly errorBars?: readonly import('./analytics-parser.ts').ChartErrorBars[];
   readonly dataLabels?: import('./data-labels.ts').ChartDataLabels;
@@ -99,6 +122,7 @@ export interface ChartSeries {
 export type ChartLegendPosition = "bottom" | "left" | "right" | "top" | "top-right";
 
 export interface ChartLegend {
+  readonly shapeStyle?: ChartShapeStyle;
   readonly textStyle?: ChartTextStyle;
   readonly position: ChartLegendPosition;
   readonly overlay: boolean;
@@ -148,11 +172,15 @@ export interface ChartAxis {
 }
 
 export interface ChartTextParagraph {
+  readonly sourceProperties?: import('@tumblerjs/ooxml').LosslessXmlElement;
   readonly alignment?: "start" | "center" | "end" | "justify";
   readonly runs: readonly { readonly text: string; readonly style?: ChartTextStyle }[];
 }
 
 interface ChartModelBase {
+  readonly chartArea?: ChartShapeStyle;
+  readonly titleArea?: ChartShapeStyle;
+  readonly titleOverlay?: boolean;
   readonly dateSystem?: "1900" | "1904";
   readonly titleText?: readonly ChartTextParagraph[];
   readonly textStyle?: ChartTextStyle;
@@ -166,6 +194,7 @@ interface ChartModelBase {
 }
 
 export interface SupportedChartModel extends ChartModelBase {
+  readonly plotArea?: ChartShapeStyle;
   readonly plots?: readonly SupportedChartModel[];
   readonly status: "supported";
   readonly kind: ChartKind;

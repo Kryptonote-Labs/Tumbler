@@ -1,5 +1,6 @@
 <script lang="ts">
   import { layoutChartScene, type ChartColor, type ChartMark, type ChartModel } from "@tumblerjs/charts";
+  import ChartGradient from "./ChartGradient.svelte";
   import { measureChartText } from "./chart-text.ts";
 
   interface Props {
@@ -34,14 +35,16 @@
 
 {#snippet marks(list: readonly ChartMark[], path: string)}
   {#each list as mark, index}
+    {@const paintId = `${clipId}${path}-${index}-fill`}
+    {#if mark.fillGradient}<defs><ChartGradient paint={mark.fillGradient} id={paintId} /></defs>{/if}
     {#if mark.kind === "rect"}
-      <rect x={mark.x} y={mark.y} width={mark.width} height={mark.height} fill={mark.fill} stroke={mark.stroke} stroke-width={mark.strokeWidth} />
+      <rect x={mark.x} y={mark.y} width={mark.width} height={mark.height} fill={mark.fillGradient ? `url(#${paintId})` : mark.fill} stroke={mark.stroke} stroke-width={mark.strokeWidth} stroke-dasharray={mark.strokeDash?.join(" ")} stroke-linecap={mark.strokeCap} stroke-linejoin={mark.strokeJoin} stroke-miterlimit={mark.miterLimit?.toString()} />
     {:else if mark.kind === "circle"}
-      <circle cx={mark.cx} cy={mark.cy} r={mark.r} fill={mark.fill} stroke={mark.stroke} stroke-width={mark.strokeWidth} fill-opacity={mark.fillOpacity} />
+      <circle cx={mark.cx} cy={mark.cy} r={mark.r} fill={mark.fillGradient ? `url(#${paintId})` : mark.fill} stroke={mark.stroke} stroke-width={mark.strokeWidth} stroke-dasharray={mark.strokeDash?.join(" ")} stroke-linecap={mark.strokeCap} stroke-linejoin={mark.strokeJoin} stroke-miterlimit={mark.miterLimit?.toString()} fill-opacity={mark.fillOpacity} />
     {:else if mark.kind === "path"}
-      <path d={mark.d} fill={mark.fill ?? "none"} stroke={mark.stroke} stroke-width={mark.strokeWidth} />
+      <path d={mark.d} fill={mark.fillGradient ? `url(#${paintId})` : mark.fill ?? "none"} stroke={mark.stroke} stroke-width={mark.strokeWidth} stroke-dasharray={mark.strokeDash?.join(" ")} stroke-linecap={mark.strokeCap} stroke-linejoin={mark.strokeJoin} stroke-miterlimit={mark.miterLimit?.toString()} />
     {:else if mark.kind === "line"}
-      <line x1={mark.x1} y1={mark.y1} x2={mark.x2} y2={mark.y2} stroke={mark.stroke} stroke-width={mark.width} shape-rendering="crispEdges" />
+      <line x1={mark.x1} y1={mark.y1} x2={mark.x2} y2={mark.y2} stroke={mark.stroke} stroke-width={mark.width} stroke-dasharray={mark.strokeDash?.join(" ")} stroke-linecap={mark.strokeCap} stroke-linejoin={mark.strokeJoin} stroke-miterlimit={mark.miterLimit?.toString()} shape-rendering="crispEdges" />
     {:else if mark.kind === "text"}
       <text style="white-space:pre" x={mark.x} y={mark.y} text-anchor={mark.anchor} transform={mark.rotate ? `rotate(${mark.rotate} ${mark.x} ${mark.y})` : undefined} font-family={mark.font.family} font-size={mark.font.size} font-weight={mark.font.weight} font-style={mark.font.italic ? "italic" : undefined} fill={mark.font.color}>{mark.text}</text>
     {:else if mark.clip}
@@ -66,7 +69,7 @@
 {/if}
 
 <style>
-  .chart, .chart-fallback { display: block; width: 100%; height: 100%; box-sizing: border-box; overflow: hidden; background: #fff; }
+  .chart, .chart-fallback { display: block; width: 100%; height: 100%; box-sizing: border-box; overflow: hidden; }
   .chart { pointer-events: none; }
   .chart-fallback { display: grid; place-items: center; padding: 12px; border: 1px solid #d9d9d9; color: #666; font: 11px/1.2 Calibri, Aptos, system-ui, sans-serif; background: repeating-linear-gradient(135deg, #fff, #fff 8px, #f7f7f7 8px, #f7f7f7 16px); text-align: center; }
 </style>

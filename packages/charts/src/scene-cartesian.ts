@@ -1,3 +1,7 @@
+import { chartLegendFill } from './gradient-scene.ts';
+import { chartGradientPaint, chartPointGradient } from './gradient-scene.ts';
+import { chartShapeMarks } from './shape-scene.ts';
+import { chartPointStroke, chartSeriesStroke, chartStrokeMark } from './stroke-scene.ts';
 import { cartesianAnalyticalData } from './analytics-bounds.ts';
 import { cartesianGeometry } from './cartesian-geometry.ts';
 import { cartesianAxisMarks } from './axis-scene.ts';
@@ -17,7 +21,7 @@ export function cartesianScene(context: SceneContext, drawSeries = true, supplie
   const { plot } = layout;
   const { horizontal, count, value: coordinate, category, categoryBand, band } = cartesianGeometry(model, layout);
   const x = coordinate, y = coordinate;
-  const marks: ChartMark[] = cartesianAxisMarks(context, layout);
+  const marks: ChartMark[] = [...chartShapeMarks(context, plot, model.plotArea), ...cartesianAxisMarks(context, layout)];
 
   const dataStart = marks.length;
   const order = model.series.map((series, seriesIndex) => ({ series, seriesIndex }));
@@ -31,7 +35,7 @@ export function cartesianScene(context: SceneContext, drawSeries = true, supplie
         const px = (index: number) => category(index, false);
         const top = segment.map(point => `${px(point.index)},${y(point.end)}`);
         const bottom = [...segment].reverse().map(point => `${px(point.index)},${y(point.start)}`);
-        marks.push({ kind: 'path', d: `M ${top.join(' L ')} L ${bottom.join(' L ')} Z`, fill: context.color(series, seriesIndex) });
+        marks.push({ kind: 'path', d: `M ${top.join(' L ')} L ${bottom.join(' L ')} Z`, fill: series.noFill ? 'none' : context.color(series, seriesIndex), ...chartGradientPaint(context, series.noFill ? undefined : series.gradient, plot), ...(series.lineStyle ? chartStrokeMark(chartSeriesStroke(context, series, seriesIndex)) : {}) });
         segment = [];
       };
       for (let index = 0; index < count; index++) {
@@ -42,7 +46,7 @@ export function cartesianScene(context: SceneContext, drawSeries = true, supplie
       return;
     }
     if (model.kind === "line") {
-      marks.push({ kind: "path", d: linePath(seriesIndex, layout, category, coordinate, series.smooth), stroke: context.color(series, seriesIndex, true), strokeWidth: series.lineStyle?.noFill ? 0 : (series.lineStyle?.width ?? 1.5) * 4 / 3 });
+      marks.push({ kind: "path", d: linePath(seriesIndex, layout, category, coordinate, series.smooth), ...chartStrokeMark(chartSeriesStroke(context, series, seriesIndex)) });
       layout.categories.forEach((_, index) => {
         const current = layout.stacks[seriesIndex]?.[index]?.end;
         if (current !== undefined) marks.push(...chartMarkerMarks(context, series, seriesIndex, index, category(index), y(current)));
@@ -56,9 +60,10 @@ export function cartesianScene(context: SceneContext, drawSeries = true, supplie
       const start = layout.stacks[seriesIndex]?.[index]?.start ?? 0;
       const offset = categoryBand(index) + bars.inset + seriesIndex * bars.stride;
       const fill = chartPointColor(context, series, seriesIndex, index);
-      marks.push(horizontal
-        ? { kind: "rect", x: Math.min(x(current), x(start)), y: offset, width: Math.max(0.5, Math.abs(x(start) - x(current))), height: bars.thickness, fill }
-        : { kind: "rect", x: offset, y: Math.min(y(current), y(start)), width: bars.thickness, height: Math.max(0.5, Math.abs(y(start) - y(current))), fill });
+      const bar = horizontal
+        ? { kind: "rect", x: Math.min(x(current), x(start)), y: offset, width: Math.max(0.5, Math.abs(x(start) - x(current))), height: bars.thickness, fill, ...chartPointStroke(context, series, seriesIndex, index) }
+        : { kind: "rect", x: offset, y: Math.min(y(current), y(start)), width: bars.thickness, height: Math.max(0.5, Math.abs(y(start) - y(current))), fill, ...chartPointStroke(context, series, seriesIndex, index) };
+      marks.push({ ...bar, kind: "rect", ...chartPointGradient(context, series, index, bar) });
     });
   });
 
@@ -89,7 +94,7 @@ export function cartesianScene(context: SceneContext, drawSeries = true, supplie
   if (model.legend !== undefined) {
     marks.push(...legendMarks(context, model.series.map((series, index) => ({
       label: series.title ?? `Series ${index + 1}`,
-      swatch: (x: number, y: number): ChartMark => ({ kind: "rect", x, y: y - 7, width: 8, height: 8, fill: context.color(series, index) }),
+      swatch: (x: number, y: number): ChartMark => ({ kind: "rect", x, y: y - 7, width: 8, height: 8, ...chartLegendFill(context, series, { x, y: y - 7, width: 8, height: 8 }), fill: series.noFill ? "none" : context.color(series, index) }),
     })), 12));
   }
   return marks;

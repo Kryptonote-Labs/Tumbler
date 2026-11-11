@@ -34,6 +34,7 @@ export function gradientFillMarkup(input: GradientFill) {
 
 /** `rectangular` covers DrawingML `rect` and `shape` paths, which match on rectangular fills. */
 export interface DrawingGradient {
+  readonly focusRect?: readonly [number, number, number, number];
   readonly kind: "linear" | "radial" | "rectangular";
   readonly angle: number;
   readonly scaled: boolean;
@@ -63,21 +64,22 @@ export function linearGradientLine(value: DrawingGradient, width: number, height
  * anti-aliased renderers show no seams; only use it with opaque stops, since overlaps composite
  * translucent colour twice. Hosts clip to the filled area.
  */
-export function rectangularGradientFaces([cx, cy]: readonly [number, number], bleed = 0) {
+export function rectangularGradientFaces([cx, cy]: readonly [number, number], bleed = 0, focusRect?: readonly [number, number, number, number]) {
+  const [l, t, r, b] = focusRect ?? [cx, cy, cx, cy];
   const faces = [
-    { points: [[0, 0], [1, 0]], line: [cx, cy, cx, 0] },
-    { points: [[1, 0], [1, 1]], line: [cx, cy, 1, cy] },
-    { points: [[1, 1], [0, 1]], line: [cx, cy, cx, 1] },
-    { points: [[0, 1], [0, 0]], line: [cx, cy, 0, cy] },
+    { points: [[0, 0], [1, 0], [r, t], [l, t]], line: [cx, t, cx, 0] },
+    { points: [[1, 0], [1, 1], [r, b], [r, t]], line: [r, cy, 1, cy] },
+    { points: [[1, 1], [0, 1], [l, b], [r, b]], line: [cx, b, cx, 1] },
+    { points: [[0, 1], [0, 0], [l, t], [l, b]], line: [l, cy, 0, cy] },
   ] as const;
   return faces
     .filter(({ line: [x1, y1, x2, y2] }) => x1 !== x2 || y1 !== y2)
     .map(({ points, line }) => {
-      const triangle = [...points, [cx, cy] as const];
-      const mx = (triangle[0]![0] + triangle[1]![0] + cx) / 3,
-        my = (triangle[0]![1] + triangle[1]![1] + cy) / 3;
+      const region: readonly (readonly [number, number])[] = points;
+      const mx = region.reduce((sum, point) => sum + point[0], 0) / region.length,
+        my = region.reduce((sum, point) => sum + point[1], 0) / region.length;
       return {
-        points: triangle.map(([x, y]) => {
+        points: region.map(([x, y]) => {
           const d = Math.hypot(x - mx, y - my) || 1;
           return [x + ((x - mx) / d) * bleed, y + ((y - my) / d) * bleed] as const;
         }),

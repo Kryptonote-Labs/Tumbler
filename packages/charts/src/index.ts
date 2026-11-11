@@ -10,6 +10,7 @@ export { cartesianStack, chartSequenceValue, chartValueCoordinate, layoutBubbleC
 export type { BubbleChartLayout, BubblePoint, CartesianChartLayout, ChartRect, PieSlice, ScatterChartLayout, ScatterPoint } from "./layout.ts";
 export type {
   ChartTextStyle,
+  ChartShapeStyle,
   ChartLineStyle,
   ChartColorTransform,
   ChartAxis,
@@ -34,7 +35,7 @@ export {layoutCombinationChart} from "./combination.ts";
 export { layoutChartScene } from "./scene.ts";
 export type { ChartMark, ChartScene, ChartSceneOptions } from "./scene-marks.ts";
 export { CHART_STROKE_DEFAULTS, CHART_TEXT_DEFAULTS, chartFont, chartFontShorthand, chartLegendPositions, chartStroke } from "./scene-style.ts";
-export type { ChartColorResolver, ChartFont, ChartStroke, ChartTextRole } from "./scene-style.ts";
+export type { ChartColorResolver, ChartFont, ChartStroke, ChartStrokeDecoration, ChartTextRole } from "./scene-style.ts";
 export { paintChartScene, type ChartCanvasContext } from "./canvas.ts";
 
 export { updateChartTitle } from './title-edit.ts';
@@ -67,3 +68,6 @@ export { fitChartTrendline, type ChartTrendFit, type TrendPoint } from './trendl
 export { chartErrorExtents, type ChartErrorExtent } from './error-bars.ts';
 
 export { convertChartConformance } from './conformance.ts';
+
+export type { ChartGradient } from './model.ts';
+export type { ChartGradientPaint } from './gradient-scene.ts';

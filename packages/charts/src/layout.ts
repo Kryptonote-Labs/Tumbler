@@ -91,7 +91,7 @@ export function layoutCartesianChart(model: SupportedChartModel, width: number, 
   const categoryRotation = horizontal ? 0 : categoryAxis?.labelRotation ?? (labelWidth + 8 > plotWidth / Math.max(1, categories.length) ? -45 : 0);
   const radians = Math.abs(categoryRotation) * Math.PI / 180;
   const categoryHeight = horizontal ? 20 : Math.abs(Math.sin(radians)) * labelWidth + Math.abs(Math.cos(radians)) * categoryFont.size + 14;
-  const top = (model.title === undefined ? 16 : chartTitleHeight(model) + 28) + (legend === "top" ? 28 : 0);
+  const top = (model.title === undefined || model.titleOverlay ? 16 : chartTitleHeight(model) + 28) + (legend === "top" ? 28 : 0);
   const plot = Object.freeze({ x: left, y: top, width: plotWidth, height: Math.max(1, height - top - bottomLegend - categoryHeight) });
   const axis = model.axes.find((candidate) => candidate.kind === "value" && !candidate.deleted);
   let dataMinimum = 0, dataMaximum = 0;
@@ -122,7 +122,7 @@ export function layoutCartesianChart(model: SupportedChartModel, width: number, 
 export function layoutScatterChart(model: SupportedChartModel, width: number, height: number): ScatterChartLayout {
   finiteSize(width, "chart width");
   finiteSize(height, "chart height");
-  const titleHeight = model.title === undefined ? 10 : Math.min(34, Math.max(20, height * 0.12));
+  const titleHeight = model.title === undefined || model.titleOverlay ? 10 : Math.min(34, Math.max(20, height * 0.12));
   const legend = model.legend?.overlay === false ? model.legend.position : undefined;
   const leftLegend = legend === "left" ? Math.min(100, width * 0.22) : 0;
   const rightLegend = legend === "right" || legend === "top-right" ? Math.min(100, width * 0.22) : 0;

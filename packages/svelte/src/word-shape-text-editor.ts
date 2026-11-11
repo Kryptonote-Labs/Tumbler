@@ -46,6 +46,7 @@ export class ShapeTextEditorView implements ShapeTextEditor {
     private escape: () => void,
     private undo: (redo: boolean) => void,
     private layout?: (root: HTMLDivElement) => void,
+    private formatPatch?: (patch: WordFormatPatch) => WordFormatPatch,
   ) {
     this.story = new WordShapeText(shape);
     this.signature = JSON.stringify(shapeTextParagraphs(shape));
@@ -95,7 +96,7 @@ export class ShapeTextEditorView implements ShapeTextEditor {
     this.commit();
   }
   format(patch: WordFormatPatch, focus = true) {
-    this.story.format(this.editing ? this.range : { start: 0, end: this.story.length }, patch);
+    this.story.format(this.editing ? this.range : { start: 0, end: this.story.length }, this.formatPatch?.(patch) ?? patch);
     this.commit();
     if (focus && this.editing) this.focus();
   }

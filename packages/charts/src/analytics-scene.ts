@@ -1,3 +1,4 @@
+import { chartStrokeMark } from './stroke-scene.ts';
 import type { ChartSeries } from './model.ts';
 import { chartErrorExtents } from './error-bars.ts';
 import { fitChartTrendline, type TrendPoint } from './trendline.ts';
@@ -34,7 +35,7 @@ export function chartAnalyticsMarks(context: SceneContext, series: ChartSeries, 
     if (!fit?.points.length) continue;
     const style = chartStroke('axis', { color: series.line ?? series.fill ?? { kind: 'scheme', value: `accent${seriesIndex % 6 + 1}` }, width: 1.5, ...trend.lineStyle }, context.model, context.options.resolveColor);
     const projected = fit.points.map(point => project(point.x, point.y));
-    if (style.stroke) marks.push({ kind: 'path', d: projected.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' '), stroke: style.stroke, strokeWidth: style.width });
+    if (style.stroke) marks.push({ kind: 'path', d: projected.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' '), ...chartStrokeMark(style) });
     const annotation = [trend.displayEquation ? fit.equation : undefined, trend.displayRSquared && fit.rSquared !== undefined ? `R² = ${Number(fit.rSquared.toPrecision(6))}` : undefined].filter((value): value is string => value !== undefined);
     const last = projected.at(-1)!;
     const font = chartFont('dataLabel', trend.labelStyle, context.model, context.options.resolveColor);

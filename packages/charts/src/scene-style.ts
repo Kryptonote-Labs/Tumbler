@@ -11,7 +11,13 @@ export interface ChartFont {
 }
 
 /** Resolved stroke for an axis or gridline; `stroke: undefined` draws nothing. */
-export interface ChartStroke {
+export interface ChartStrokeDecoration {
+  readonly strokeDash?: readonly number[];
+  readonly strokeCap?: 'butt' | 'round' | 'square';
+  readonly strokeJoin?: 'round' | 'bevel' | 'miter';
+  readonly miterLimit?: number;
+}
+export interface ChartStroke extends ChartStrokeDecoration {
   readonly stroke: string | undefined;
   readonly width: number;
 }
@@ -60,9 +66,14 @@ export function chartFont(role: ChartTextRole, style: ChartTextStyle | undefined
 export function chartStroke(role: keyof typeof CHART_STROKE_DEFAULTS, style: ChartLineStyle | undefined, model: ChartModel, resolve?: ChartColorResolver): ChartStroke {
   const fallback = CHART_STROKE_DEFAULTS[role];
   const color = style?.color && (resolve?.(style.color) ?? resolveChartColor(style.color, model));
+  const width = style?.width === undefined ? fallback.width : style.width * 4 / 3;
   return {
+    ...(style?.dash ? { strokeDash: style.dash.map(value => value * width) } : {}),
+    ...(style?.cap ? { strokeCap: style.cap } : {}),
+    ...(style?.join ? { strokeJoin: style.join } : {}),
+    ...(style?.miterLimit === undefined ? {} : { miterLimit: style.miterLimit }),
     stroke: style?.noFill ? undefined : color ?? fallback.stroke,
-    width: style?.width === undefined ? fallback.width : style.width * 4 / 3,
+    width,
   };
 }
 

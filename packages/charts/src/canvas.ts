@@ -1,3 +1,6 @@
+import { paintChartGradient } from './gradient-canvas.ts';
+import type { ChartGradientPaint } from './gradient-scene.ts';
+import type { DrawingGradientCanvasContext } from '@tumblerjs/ooxml';
 import type { ChartMark, ChartScene } from "./scene-marks.ts";
 import { chartFontShorthand } from "./scene-style.ts";
 
@@ -6,10 +9,17 @@ import { chartFontShorthand } from "./scene-style.ts";
  * satisfy it; `Path` is the host's Path2D.
  */
 export interface ChartCanvasContext<Path> {
+  scale?: DrawingGradientCanvasContext['scale'];
+  createLinearGradient?: DrawingGradientCanvasContext['createLinearGradient'];
+  createRadialGradient?: DrawingGradientCanvasContext['createRadialGradient'];
   font: string;
   fillStyle: unknown;
   strokeStyle: unknown;
   lineWidth: number;
+  lineCap?: 'butt' | 'round' | 'square';
+  lineJoin?: 'round' | 'bevel' | 'miter';
+  miterLimit?: number;
+  setLineDash?(values: number[]): void;
   globalAlpha: number;
   textAlign: "start" | "end" | "left" | "right" | "center";
   textBaseline: "top" | "hanging" | "middle" | "alphabetic" | "ideographic" | "bottom";
@@ -22,7 +32,7 @@ export interface ChartCanvasContext<Path> {
   arc(x: number, y: number, radius: number, startAngle: number, endAngle: number): void;
   moveTo(x: number, y: number): void;
   lineTo(x: number, y: number): void;
-  clip(): void;
+  clip(path?: Path): void;
   fill(path?: Path): void;
   stroke(path?: Path): void;
   fillText(text: string, x: number, y: number): void;
@@ -43,23 +53,32 @@ const ALIGN = { start: "left", middle: "center", end: "right" } as const;
 
 function paintMarks<Path>(context: ChartCanvasContext<Path>, marks: readonly ChartMark[], path: (d: string) => Path): void {
   for (const mark of marks) {
+    if (mark.kind !== 'text' && mark.kind !== 'group') {
+      context.setLineDash?.(Array.from(mark.strokeDash ?? []));
+      context.lineCap = mark.strokeCap ?? 'butt';
+      context.lineJoin = mark.strokeJoin ?? 'miter';
+      context.miterLimit = mark.miterLimit ?? 10;
+    }
     switch (mark.kind) {
       case "rect":
         context.beginPath();
         context.rect(mark.x, mark.y, mark.width, mark.height);
-        fillAndStroke(context, mark.fill, mark.stroke, mark.strokeWidth ?? 1);
+        fillAndStroke(context, mark.fill, mark.stroke, mark.strokeWidth ?? 1, mark.fillGradient, () => { context.beginPath(); context.rect(mark.x, mark.y, mark.width, mark.height); });
         break;
       case "circle":
         context.beginPath();
         context.arc(mark.cx, mark.cy, mark.r, 0, Math.PI * 2);
         context.globalAlpha = mark.fillOpacity ?? 1;
-        fillAndStroke(context, mark.fill, undefined, 1);
+        fillAndStroke(context, mark.fill, undefined, 1, mark.fillGradient);
         context.globalAlpha = 1;
+        context.beginPath();
+        context.arc(mark.cx, mark.cy, mark.r, 0, Math.PI * 2);
         fillAndStroke(context, undefined, mark.stroke, mark.strokeWidth ?? 1);
         break;
       case "path": {
         const shape = path(mark.d);
-        if (mark.fill !== undefined && mark.fill !== "none") {
+        if (mark.fillGradient) paintChartGradient(context, mark.fillGradient, shape);
+        else if (mark.fill !== undefined && mark.fill !== "none") {
           context.fillStyle = mark.fill;
           context.fill(shape);
         }
@@ -104,8 +123,9 @@ function paintMarks<Path>(context: ChartCanvasContext<Path>, marks: readonly Cha
 }
 
 /** Fills and strokes the current path. */
-function fillAndStroke<Path>(context: ChartCanvasContext<Path>, fill: string | undefined, stroke: string | undefined, width: number): void {
-  if (fill !== undefined && fill !== "none") {
+function fillAndStroke<Path>(context: ChartCanvasContext<Path>, fill: string | undefined, stroke: string | undefined, width: number, gradient?: ChartGradientPaint, redraw?: () => void): void {
+  if (gradient) { paintChartGradient(context, gradient); redraw?.(); }
+  else if (fill !== undefined && fill !== "none") {
     context.fillStyle = fill;
     context.fill();
   }

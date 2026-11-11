@@ -1,5 +1,7 @@
-import { resolveDrawingColor, type LosslessXmlElement } from "@tumblerjs/ooxml";
-import type { ChartColor, ChartColorTransform, ChartLineStyle, ChartTextStyle } from "./model.ts";
+import { parseChartGradient } from './gradient-parser.ts';
+import { chartElementMarkup } from './xml-markup.ts';
+import { resolveDrawingColor, readDrawingStrokeProperties, type LosslessXmlElement } from "@tumblerjs/ooxml";
+import type { ChartColor, ChartColorTransform, ChartLineStyle, ChartTextStyle, ChartShapeStyle } from "./model.ts";
 
 function child(parent: LosslessXmlElement | undefined, ns: string, name: string) {
   return parent?.children.find((item): item is LosslessXmlElement => item.kind === "element" && item.namespaceUri === ns && item.localName === name);
@@ -10,7 +12,11 @@ function attribute(element: LosslessXmlElement | undefined, name: string) {
 
 /** Retain ordered luminance transforms used by Office chart text and gridlines. */
 export function parseChartFill(parent: LosslessXmlElement | undefined, ns: string): ChartColor | undefined {
-  const fill = child(parent, ns, "solidFill");
+  return parseChartColorContainer(child(parent, ns, "solidFill"), ns);
+}
+
+/** A colour choice shared by solid fills, gradient stops and pattern colours. */
+export function parseChartColorContainer(fill: LosslessXmlElement | undefined, ns: string): ChartColor | undefined {
   const source = fill?.children.find((node): node is LosslessXmlElement => node.kind === 'element' && node.namespaceUri === ns && ['srgbClr', 'schemeClr', 'sysClr', 'prstClr', 'scrgbClr', 'hslClr'].includes(node.localName));
   const rgb = source?.localName === 'srgbClr';
   const raw = attribute(source, 'val');
@@ -39,6 +45,7 @@ export function parseChartLine(parent: LosslessXmlElement | undefined, ns: strin
   const width = rawWidth === undefined ? undefined : Number(rawWidth) / 12700;
   const color = parseChartFill(line, ns);
   return Object.freeze({
+    ...readDrawingStrokeProperties(line),
     ...(child(line, ns, "noFill") ? { noFill: true } : {}),
     ...(color ? { color } : {}),
     ...(width !== undefined && Number.isFinite(width) && width >= 0 ? { width } : {}),
@@ -72,19 +79,17 @@ export function parseChartTextStyle(parent: LosslessXmlElement | undefined, char
 }
 
 /** Rich text keeps complete colour choices and ordered transforms when title text is edited. */
-export function chartColorFillXml(color: ChartColor): string {
+export function chartColorFillXml(color: ChartColor, drawingNamespace?: string): string {
   const escape = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
-  function markup(node: LosslessXmlElement): string {
-    const namespaces = new Map<string, string>();
-    if (node.prefix) namespaces.set(node.prefix, node.namespaceUri);
-    else if (node.namespaceUri) namespaces.set('', node.namespaceUri);
-    for (const attribute of node.attributes) if (attribute.prefix && attribute.prefix !== 'xmlns' && attribute.prefix !== 'xml') namespaces.set(attribute.prefix, attribute.namespaceUri);
-    for (const attribute of node.attributes) if (attribute.namespaceUri === 'http://www.w3.org/2000/xmlns/') namespaces.delete(attribute.localName === 'xmlns' ? '' : attribute.localName);
-    const attributes = node.attributes.map(attribute => ` ${attribute.qualified}="${escape(attribute.value)}"`).join('') + [...namespaces].map(([prefix, ns]) => ` xmlns${prefix ? `:${prefix}` : ''}="${escape(ns)}"`).join('');
-    const contents = node.children.map(child => child.kind === 'element' ? markup(child) : child.kind === 'text' || child.kind === 'cdata' ? escape(child.value) : '').join('');
-    return `<${node.qualified}${attributes}>${contents}</${node.qualified}>`;
-  }
-  if (color.source) return markup(color.source);
+  if (color.source) return chartElementMarkup(color.source, drawingNamespace);
   const kind = color.kind === 'rgb' ? 'srgbClr' : 'schemeClr';
-  return `<a:solidFill><a:${kind} val="${escape(color.value.replace(/^#/, ''))}">${color.transforms?.map(transform => `<a:${transform.kind} val="${Math.round(transform.value * 100000)}"/>`).join('') ?? ''}</a:${kind}></a:solidFill>`;
+  return `<a:solidFill${drawingNamespace ? ` xmlns:a="${drawingNamespace}"` : ''}><a:${kind} val="${escape(color.value.replace(/^#/, ''))}">${color.transforms?.map(transform => `<a:${transform.kind} val="${Math.round(transform.value * 100000)}"/>`).join('') ?? ''}</a:${kind}></a:solidFill>`;
+}
+
+/** Shape-level paint is shared by chart/plot areas, titles and legends. */
+export function parseChartShapeStyle(parent: LosslessXmlElement | undefined, ns: string): ChartShapeStyle | undefined {
+  if (!parent) return undefined;
+  const gradient = parseChartGradient(parent, ns);
+  const fill = parseChartFill(parent, ns), lineStyle = parseChartLine(parent, ns);
+  return { ...(gradient ? { gradient } : {}), ...(fill ? { fill } : {}), ...(child(parent, ns, 'noFill') ? { noFill: true } : {}), ...(lineStyle ? { lineStyle } : {}) };
 }

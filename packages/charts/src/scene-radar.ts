@@ -1,3 +1,7 @@
+import { chartLegendFill } from './gradient-scene.ts';
+import { chartGradientPaint } from './gradient-scene.ts';
+import { chartShapeMarks } from './shape-scene.ts';
+import { chartSeriesStroke, chartStrokeMark } from './stroke-scene.ts';
 import { chartDataLabelMarks } from './label-scene.ts';
 import { chartMarkerMarks } from './marker-scene.ts';
 import { layoutCartesianChart } from './layout.ts';
@@ -22,7 +26,7 @@ export function radarScene(context: SceneContext): ChartMark[] {
   };
   const distance = (value: number) => (value - layout.minimum) / (layout.maximum - layout.minimum || 1) * radius;
   const path = (points: readonly { x: number; y: number }[], close = true) => points.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ') + (close ? ' Z' : '');
-  const marks: ChartMark[] = [];
+  const marks: ChartMark[] = chartShapeMarks(context, layout.plot, model.plotArea);
   const grid = chartStroke('gridline', axis?.gridlineStyle, model, options.resolveColor);
   const stroke = chartStroke('axis', categoryAxis?.lineStyle, model, options.resolveColor);
   if (!axis?.deleted) {
@@ -30,7 +34,7 @@ export function radarScene(context: SceneContext): ChartMark[] {
     for (const tick of layout.ticks) {
       const r = distance(tick);
       if (r < 0) continue;
-      if (axis?.majorGridlines && grid.stroke) marks.push({ kind: 'path', d: path(Array.from({ length: count }, (_, index) => point(index, r))), stroke: grid.stroke, strokeWidth: grid.width });
+      if (axis?.majorGridlines && grid.stroke) marks.push({ kind: 'path', d: path(Array.from({ length: count }, (_, index) => point(index, r))), ...chartStrokeMark(grid) });
       marks.push({ kind: 'text', text: chartTickLabel(tick, axis?.numberFormatCode, options), x: cx + 4, y: cy - r - 3, anchor: 'start', font });
     }
   }
@@ -49,9 +53,9 @@ export function radarScene(context: SceneContext): ChartMark[] {
       const value = values.get(index);
       return typeof value === 'number' ? point(index, distance(value)) : undefined;
     });
-    const color = context.color(series, seriesIndex, true);
+    const stroke = chartStrokeMark(chartSeriesStroke(context, series, seriesIndex));
     if (model.radarStyle === 'filled' && points.every(point => point !== undefined)) {
-      marks.push({ kind: 'path', d: path(points), fill: context.color(series, seriesIndex), stroke: color, strokeWidth: 1 });
+      marks.push({ kind: 'path', d: path(points), fill: series.noFill ? 'none' : context.color(series, seriesIndex), ...chartGradientPaint(context, series.noFill ? undefined : series.gradient, { x: cx - radius, y: cy - radius, width: radius * 2, height: radius * 2 }), ...stroke });
     } else {
       // Rotate to the first gap, so the wraparound edge remains connected when appropriate.
       const gap = points.findIndex(point => point === undefined);
@@ -62,16 +66,16 @@ export function radarScene(context: SceneContext): ChartMark[] {
         else previous = false;
       }
       if (gap < 0) d += ' Z';
-      marks.push({ kind: 'path', d: d.trim(), stroke: color, strokeWidth: 2 });
+      marks.push({ kind: 'path', d: d.trim(), ...stroke });
     }
     points.forEach((point, index) => {
       const value = values.get(index);
       if (point && typeof value === 'number') marks.push(...chartDataLabelMarks(context, series, seriesIndex, { index, ...point, category: layout.categories[index] ?? String(index + 1), value }));
     });
-    if (model.radarStyle === 'marker' && series.marker?.symbol !== 'none') for (const [index, point] of points.entries()) {
+    if (model.radarStyle === 'marker') for (const [index, point] of points.entries()) {
       if (point) marks.push(...chartMarkerMarks(context, series, seriesIndex, index, point.x, point.y));
     }
   });
-  if (model.legend) marks.push(...legendMarks(context, model.series.map((series, index) => ({ label: series.title ?? `Series ${index + 1}`, swatch: (x: number, y: number): ChartMark => ({ kind: 'rect', x, y: y - 7, width: 8, height: 8, fill: context.color(series, index) }) })), 12));
+  if (model.legend) marks.push(...legendMarks(context, model.series.map((series, index) => ({ label: series.title ?? `Series ${index + 1}`, swatch: (x: number, y: number): ChartMark => ({ kind: 'rect', x, y: y - 7, width: 8, height: 8, ...chartLegendFill(context, series, { x, y: y - 7, width: 8, height: 8 }), fill: series.noFill ? "none" : context.color(series, index) }) })), 12));
   return marks;
 }

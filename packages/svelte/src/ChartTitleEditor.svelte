@@ -33,7 +33,7 @@
     }
   }
   function mount(root: HTMLDivElement) {
-    const current = new ShapeTextEditorView(root, shape, oncommit, () => onselection?.(), oncancel, redo => onundo?.(redo), alignBaselines);
+    const current = new ShapeTextEditorView(root, shape, oncommit, () => onselection?.(), oncancel, redo => onundo?.(redo), alignBaselines, patch => patch.highlight === undefined ? patch : { ...patch, shading: null });
     view = current;
     return { destroy() { view = undefined; current.destroy(); } };
   }
