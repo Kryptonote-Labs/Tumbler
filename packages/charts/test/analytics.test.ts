@@ -123,3 +123,15 @@ test('combination plots use logarithmic spacing and render their analytical over
   expect(marks.some(mark => mark.kind === 'path' && mark.stroke === '#AA00AA')).toBe(true);
   expect(marks.some(mark => mark.kind === 'line' && mark.stroke === '#00AABB')).toBe(true);
 });
+
+
+test('an unstacked combination plot reserves forecast space alongside stacked columns', async () => {
+  const { layoutCombinationChart } = await import('../src/index.ts');
+  const { cartesianGeometry } = await import('../src/cartesian-geometry.ts');
+  const base = parseOoxmlChart(createOoxmlChart({ type: 'barChart', grouping: 'stacked', categories: ['A', 'B', 'C'], series: [{ name: 'Column', values: [2, 3, 4] }] }), 'transitional');
+  if (base.status !== 'supported') throw new Error(base.reason);
+  const line = { ...base, kind: 'line' as const, grouping: 'standard' as const, series: base.series.map(series => ({ ...series, index: 1, trendlines: [trend('linear', { forward: 2 })] })) };
+  const plots = layoutCombinationChart({ ...base, plots: [base, line], series: [...base.series, ...line.series] }, 600, 400);
+  const projected = cartesianGeometry(line, plots[1]!.layout);
+  expect(projected.category(4)).toBeLessThan(plots[1]!.plot.x + plots[1]!.plot.width);
+});

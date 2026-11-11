@@ -35,6 +35,10 @@ export function layoutCombinationChart(
     ),
   );
   const common = layoutCartesianChart(model, width, height, measure);
+  const categoryDomain = {
+    minimum: Math.min(...layouts.map(layout => layout.categoryDomain?.minimum ?? .5)),
+    maximum: Math.max(...layouts.map(layout => layout.categoryDomain?.maximum ?? common.categories.length + .5)),
+  };
   const rightAxis = plots.some((plot) =>
     plot.axes.some(
       (axis) =>
@@ -81,7 +85,7 @@ export function layoutCombinationChart(
       minimum,
       maximum,
       ticks,
-      layout: { ...layouts[i]!, plot: rect, categories: common.categories, stacks, minimum, maximum, ticks, ...(common.categoryDomain ? { categoryDomain: common.categoryDomain } : {}), ...(common.categoryScale ? { categoryScale: common.categoryScale } : {}) },
+      layout: { ...layouts[i]!, plot: rect, categories: common.categories, stacks, minimum, maximum, ticks, categoryDomain, ...(common.categoryScale ? { categoryScale: common.categoryScale } : {}) },
       plot: rect,
       categories: common.categories,
       categoryRotation: common.categoryRotation,
