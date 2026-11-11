@@ -1,4 +1,4 @@
-export type ChartKind = "bar" | "column" | "line" | "pie" | "doughnut" | "scatter" | "bubble";
+export type ChartKind = "bar" | "column" | "line" | "pie" | "doughnut" | "scatter" | "bubble" | "area" | "radar" | "stock" | "surface" | "of-pie";
 
 export type ChartScatterStyle = "none" | "line" | "line-marker" | "marker" | "smooth" | "smooth-marker";
 
@@ -124,6 +124,16 @@ export interface SupportedChartModel extends ChartModelBase {
   readonly plots?: readonly SupportedChartModel[];
   readonly status: "supported";
   readonly kind: ChartKind;
+  readonly sourceType?: string;
+  readonly threeD?: { readonly rotationX: number; readonly rotationY: number; readonly perspective: number; readonly rightAngleAxes: boolean; readonly depthPercent: number };
+  readonly radarStyle?: 'standard' | 'marker' | 'filled';
+  readonly wireframe?: boolean;
+  readonly splitType?: 'pie' | 'bar';
+  readonly splitBy?: 'auto' | 'cust' | 'percent' | 'pos' | 'val';
+  readonly splitPosition?: number;
+  readonly customSplit?: readonly number[];
+  readonly secondPieSize?: number;
+  readonly firstSliceAngle?: number;
   readonly grouping: "clustered" | "stacked" | "percent-stacked" | "standard";
   /** Bar-width percentages, independent of the chart frame size. */
   readonly gapWidth?: number;

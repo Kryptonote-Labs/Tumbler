@@ -16,8 +16,10 @@ import { parseOoxmlChart } from "@tumblerjs/charts";
 const chart = parseOoxmlChart(chartXml, "transitional");
 ```
 
-The current read-only subset covers clustered bar/column, line, pie, doughnut,
-numeric XY scatter, and two-dimensional bubble charts. Bubble series pair sparse
+The shared preview covers bar/column, line, area, pie, doughnut, XY scatter,
+bubble, radar, stock, split pie and surface charts. Cartesian and pie 3D plots
+retain camera settings. These layouts are under active compatibility work; this
+is not a claim of pixel parity with Office or LibreOffice for every property. Bubble series pair sparse
 X, Y, and size caches by point index and support the standard area/width size
 modes, 0–300% scaling, and opt-in negative values. Deterministic headless layout
 is available through `layoutBubbleChart`.
@@ -52,9 +54,9 @@ This is a Word-parity policy, not an ECMA-prescribed automatic scale. Explicit
 axis bounds and `majorUnit` take precedence; percentage stacks retain their
 normalized bounds. Very dense grids sample whole major units for rendering.
 
-Three-dimensional effects, per-point bubble formatting, data labels,
-trendlines, error bars, and exact Office bubble-size normalization remain
-explicitly unsupported. Unknown source XML is preserved by the owning OOXML
+Per-point bubble formatting, data labels, trendlines, error bars,
+and exact Office bubble-size normalization remain incomplete in the preview.
+Three-dimensional bubble effects remain unsupported. Unknown source XML is preserved by the owning OOXML
 package even when a chart falls back rather than rendering.
 
 Tumbler is developed at

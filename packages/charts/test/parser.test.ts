@@ -97,7 +97,8 @@ describe("DrawingML chart parser", () => {
   });
 
   test("returns an explicit model for unsupported and combination charts", () => {
-    expect(type("radarChart")).toMatchObject({ status: "unsupported", chartType: "radarChart" });
+    expect(type("futureChart")).toMatchObject({ status: "unsupported", chartType: "futureChart" });
+    expect(type("radarChart")).toMatchObject({ status: "supported", kind: "radar" });
     const profile = profiles[1]!;
     const result = parseOoxmlChart(xml(profile, '<c:plotArea><c:lineChart/><c:barChart/></c:plotArea>'), "transitional");
     expect(result).toMatchObject({ status: "supported", plots: expect.any(Array) });

@@ -1,3 +1,8 @@
+import { ofPieScene } from './scene-of-pie.ts';
+import { surfaceScene } from './scene-surface.ts';
+import { threeDScene } from './scene-three-d.ts';
+import { radarScene } from './scene-radar.ts';
+import { stockScene } from './scene-stock.ts';
 import { assertChartSceneBudget } from './scene-budget.ts';
 import { chartTitleMarks } from './title-scene.ts';
 import { resolveChartColor } from "./colors.ts";
@@ -41,8 +46,13 @@ function buildChartScene(model: SupportedChartModel, width: number, height: numb
   const marks: ChartMark[] = [{ kind: "rect", x: 0.5, y: 0.5, width: Math.max(0, width - 1), height: Math.max(0, height - 1), fill: "#ffffff", stroke: "#d9d9d9" }];
   marks.push(...chartTitleMarks(context));
   marks.push(...(model.plots ? combinationScene(context)
+    : model.kind === 'of-pie' ? ofPieScene(context)
     : model.kind === "pie" || model.kind === "doughnut" ? pieScene(context)
     : model.kind === "scatter" || model.kind === "bubble" ? xyScene(context)
+    : model.kind === 'surface' ? surfaceScene(context)
+    : model.threeD ? threeDScene(context)
+    : model.kind === 'radar' ? radarScene(context)
+    : model.kind === 'stock' ? stockScene(context)
     : cartesianScene(context)));
   return { width, height, label: model.title ?? (model.plots ? "Combination chart" : `${model.kind} chart`), marks };
 }
