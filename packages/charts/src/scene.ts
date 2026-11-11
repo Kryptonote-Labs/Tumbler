@@ -53,7 +53,7 @@ function buildChartScene(model: SupportedChartModel, width: number, height: numb
     },
     measure: (text, font) => options.measureText?.(text, chartFontShorthand(font)) ?? text.length * font.size * 0.55,
   };
-  const orientedAxes = model.axes.some(axis => axis.titleStyle?.rotation !== undefined) || model.plots?.some(plot => plot.axes.some(axis => axis.titleStyle?.rotation !== undefined));
+  const orientedAxes = model.axes.some(axis => axis.titleStyle?.rotation !== undefined || axis.titleText || axis.titleShape) || model.plots?.some(plot => plot.axes.some(axis => axis.titleStyle?.rotation !== undefined || axis.titleText || axis.titleShape));
   const context: SceneContext = orientedAxes ? { ...baseContext, axisTitleFrame: chartAxisTitleFrame(baseContext) } : baseContext;
   const marks: ChartMark[] = chartShapeMarks(context, { x: .5, y: .5, width: Math.max(0, width - 1), height: Math.max(0, height - 1) }, model.chartArea, { fill: '#ffffff', stroke: '#d9d9d9' });
   const titleMarks = chartTitleMarks(context);
