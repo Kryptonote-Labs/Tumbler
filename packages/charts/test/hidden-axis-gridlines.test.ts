@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test';
 import { createOoxmlChart, layoutCartesianChart, layoutChartScene, parseOoxmlChart, type ChartMark, type CreateChartOptions } from '../src/index.ts';
 
-const flat = (marks: readonly ChartMark[]): ChartMark[] => marks.flatMap(mark => mark.kind === 'group' ? flat(mark.marks) : [mark]);
+type PrimitiveMark = Exclude<ChartMark, { kind: 'group' }>;
+const flat = (marks: readonly ChartMark[]): PrimitiveMark[] => marks.flatMap(mark => mark.kind === 'group' ? flat(mark.marks) : [mark]);
 function model(type: CreateChartOptions['type']) {
   const source = createOoxmlChart({ type, categories: ['A', 'B', 'C', 'D'], series: [{ name: 'Data', values: [2, 4, 3, 1], xValues: [1, 2, 3, 4], bubbleSizes: [2, 3, 4, 1] }] });
   const parsed = parseOoxmlChart(source, 'transitional');
@@ -65,7 +66,7 @@ test('dense radar grids use short circular paths instead of multiplying all cate
     series: [{ ...first, categories: { kind: 'string' as const, formula: undefined, formatCode: undefined, points: points.map(point => ({ ...point, value: `C${point.index}` })) }, values: { ...first.values!, points } }] };
   const scene = layoutChartScene(changed, 600, 400), marks = flat(scene.marks);
   expect(scene.label).not.toBe('Chart preview unavailable');
-  const grids = marks.filter(mark => mark.kind === 'path' && mark.stroke === '#00AA00');
+  const grids = marks.filter((mark): mark is Extract<ChartMark, { kind: 'path' }> => mark.kind === 'path' && mark.stroke === '#00AA00');
   expect(grids.length).toBeGreaterThan(900);
   expect(grids.every(mark => mark.d.includes(' A ') && mark.d.length < 256)).toBe(true);
   const start = grids[0]!.d.match(/^M ([\d.e+-]+) ([\d.e+-]+) A ([\d.e+-]+)/)!;
