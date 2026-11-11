@@ -10,7 +10,9 @@
   const id = $props.id();
   let track = $state<HTMLDivElement>();
   const ramp = $derived(chartGradientRamp(stops, themeColors));
-  const ordered = $derived(stops.map((stop, index) => ({ ...stop, index, key: keys[index]! })).toSorted((a, b) => a.position - b.position));
+  const handles = $derived(stops.map((stop, index) => ({ ...stop, index, key: keys[index]! })));
+  const ordered = $derived(handles.toSorted((a, b) => a.position - b.position));
+  const ranks = $derived(new Map(ordered.map((item, rank) => [item.key, rank])));
   let drag: { pointer: number; index: number; start: number; offset: number; moved: boolean } | undefined;
   let frame: number | undefined, pending: { index: number; position: number } | undefined;
   onDestroy(() => { if (frame !== undefined) cancelAnimationFrame(frame); });
@@ -31,8 +33,8 @@
     if (['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
       event.preventDefault(); event.stopPropagation();
       onposition(index, event.key === 'Home' ? 0 : event.key === 'End' ? 1 : Math.max(0, Math.min(1, value + (['ArrowLeft', 'ArrowDown'].includes(event.key) ? -step : step))));
-    } else if (['Delete', 'Backspace'].includes(event.key) && stops.length > 2) {
-      event.preventDefault(); event.stopPropagation(); if (frame !== undefined) cancelAnimationFrame(frame); frame = undefined; pending = undefined; drag = undefined; onremove(index);
+    } else if (['Delete', 'Backspace'].includes(event.key)) {
+      event.preventDefault(); event.stopPropagation(); if (frame !== undefined) cancelAnimationFrame(frame); frame = undefined; pending = undefined; drag = undefined; if (stops.length > 2) onremove(index);
     }
   }
 </script>
@@ -40,7 +42,8 @@
   <button class="add-track" type="button" {disabled} aria-label={`Add gradient stop for ${label}`} onclick={(event) => { const rect = track?.getBoundingClientRect(); onadd(rect?.width && event.detail ? Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) : .5); }}>
     <svg viewBox="0 0 240 20" preserveAspectRatio="none" aria-hidden="true"><defs><DrawingGradientPaint gradient={ramp} bounds={{ x: 0, y: 0, width: 240, height: 20 }} {id} /></defs><rect width="240" height="20" fill={`url(#${id})`} /></svg>
   </button>
-  {#each ordered as item, rank (item.key)}
+  {#each handles as item (item.key)}
+    {@const rank = ranks.get(item.key) ?? item.index}
     <button class="stop" class:selected={selected === item.index} data-stop={item.key} type="button" role="slider" tabindex={selected === item.index ? 0 : -1} {disabled} aria-label={`Gradient stop ${rank + 1} for ${label}`} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(item.position * 10000) / 100} aria-valuetext={`${Math.round(item.position * 10000) / 100}%, ${item.color ? resolveChartColor(item.color, { themeColors }) ?? 'Choose a colour' : 'Choose a colour'}`} style:left={`${item.position * 100}%`} style:background={item.color ? resolveChartColor(item.color, { themeColors }) : 'transparent'} onclick={() => selected = item.index} onkeydown={(event) => key(event, item.index)}
       onpointerdown={(event) => { const rect = track?.getBoundingClientRect(); selected = item.index; drag = { pointer: event.pointerId, index: item.index, start: event.clientX, offset: event.clientX - (rect?.left ?? 0) - item.position * (rect?.width ?? 1), moved: false }; event.currentTarget.setPointerCapture(event.pointerId); }}
       onpointermove={move} onpointerup={() => { flush(); drag = undefined; }} onpointercancel={() => { pending = undefined; if (frame !== undefined) cancelAnimationFrame(frame); frame = undefined; drag = undefined; }}></button>

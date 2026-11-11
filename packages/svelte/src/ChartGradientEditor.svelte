@@ -63,9 +63,11 @@
   function add(position = .5) { run({ kind: 'add', position, ...chartGradientStopAt(gradient?.stops ?? [], themeColors, position) }); }
   function apply() {
     if (disabled || !gradient || !rebased.bytes) return;
-    const xml = new TextDecoder().decode(rebased.bytes);
-    if (xml !== content.xml) onchange({ ...content, xml });
-    close();
+    try {
+      const xml = new TextDecoder().decode(rebased.bytes);
+      if (xml !== content.xml) onchange({ ...content, xml });
+      close();
+    } catch (cause) { error = cause instanceof Error ? cause.message : 'The gradient could not be saved.'; }
   }
 </script>
 <div class="gradient-editor">

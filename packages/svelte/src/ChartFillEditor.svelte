@@ -91,7 +91,7 @@
         </div>
         {#if mode === 'pattern'}<ChartPatternGrid id={`${id}-patterns`} value={fill.pattern?.preset} {foreground} {background} {disabled} onpreview={previewPattern} onpick={choose} onclose={() => close()} />{/if}
       {/if}
-        <ChartPictureEditor {content} {target} {label} {disabled} mode="action" onerror={() => open = true} onchange={(next) => { onchange(next); close(); }} />
+        <ChartPictureEditor {content} {target} {label} {disabled} mode="action" onerror={() => open = true} onchange={(next) => { onchange(next); gradientOpen = false; gradientPreview = undefined; close(); }} />
       </div>
     {#if error}<p role="alert">{error}</p>{/if}
   </div>
