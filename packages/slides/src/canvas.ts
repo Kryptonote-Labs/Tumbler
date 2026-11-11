@@ -1,3 +1,4 @@
+import { slideObjectViewport, slideGradientBrush, paintSlideGradientBrush } from './canvas-gradient.ts';
 import { drawingGradientCircle, drawingGradientStops, drawingPatternPicture, paintDrawingPattern, paintDrawingPicture, paintDrawingGradient as gradient, paintRectangularGradient as rectangular } from "@tumblerjs/ooxml";
 import {
   linearGradientLine,
@@ -10,13 +11,19 @@ import type { SlideCanvasContext, SlideCanvasOptions } from './canvas-types.ts';
 import { paintSlideText } from './canvas-text.ts';
 export type { SlideCanvasContext, SlideCanvasOptions } from './canvas-types.ts';
 
-/** Embedded images needed by a slide, including its background and shape picture fills. */
-export function presentationSlideImages(slide: PresentationSlide): readonly DrawingPictureFill[] {
+/** Embedded images and paint brushes. Pass the document size to include viewport-bounded native gradient brushes. */
+export function presentationSlideImages(slide: PresentationSlide, viewport?: Pick<PresentationDocument, 'width' | 'height'>, outputScale = 1): readonly DrawingPictureFill[] {
+  const backgroundBounds = viewport && { x: 0, y: 0, ...viewport }, background = backgroundBounds && slideGradientBrush(slide.backgroundGradient, backgroundBounds, backgroundBounds, undefined, outputScale);
   return [
-    slide.backgroundPicture, ...(slide.backgroundPattern ? [drawingPatternPicture(slide.backgroundPattern)] : []),
-    ...slide.objects.flatMap((o) => [o.image, o.pictureFill, ...(o.pattern ? [drawingPatternPicture(o.pattern)] : []), ...(o.chart?.status === 'supported' ? chartScenePictures(layoutChartScene(o.chart, o.transform.width, o.transform.height)) : [])]),
+    ...(background ? [background.picture] : []), slide.backgroundPicture, ...(slide.backgroundPattern ? [drawingPatternPicture(slide.backgroundPattern)] : []),
+    ...slide.objects.flatMap(o => {
+      const { width, height } = o.transform, bounds = { x: 0, y: 0, width, height };
+      const coverage = viewport && slideObjectViewport(o.matrix, width, height, viewport), brush = coverage && slideGradientBrush(o.gradient, bounds, coverage, o.matrix, outputScale);
+      return [...(brush ? [brush.picture] : []), o.image, o.pictureFill, ...(o.pattern ? [drawingPatternPicture(o.pattern)] : []), ...(o.chart?.status === 'supported' ? chartScenePictures(layoutChartScene(o.chart, width, height, { ...(coverage ? { viewport: coverage } : {}) })) : [])];
+    }),
   ].filter((p): p is DrawingPictureFill => p !== undefined);
 }
+
 function picture<Path, Image>(
   ctx: SlideCanvasContext<Path, Image>,
   fill: DrawingPictureFill | undefined,
@@ -58,7 +65,11 @@ export function paintPresentationSlide<Path, Image>(
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, document.width, document.height);
   const background = slide.backgroundGradient;
-  if (background?.kind === 'radial' && !drawingGradientCircle(background, document.width, document.height)) {
+  ctx.beginPath(); ctx.rect(0, 0, document.width, document.height);
+  const backgroundBounds = { x: 0, y: 0, width: document.width, height: document.height };
+  if (options.image && paintSlideGradientBrush(ctx, slideGradientBrush(background, backgroundBounds, backgroundBounds, undefined, options.scale ?? 1), options)) {
+    // The complete brush already composites the background.
+  } else if (background?.kind === 'radial' && !drawingGradientCircle(background, document.width, document.height)) {
     ctx.save();
     ctx.scale(document.width, document.height);
     const fill = ctx.createRadialGradient(...background.center, 0, ...background.center, .5);
@@ -91,6 +102,8 @@ export function paintPresentationSlide<Path, Image>(
         if (object.pattern) {
           ctx.save();
           try { ctx.clip(geometry); const decoded = options.image?.(drawingPatternPicture(object.pattern)); if (decoded) paintDrawingPattern(ctx, decoded.image, width, height, { x: object.matrix[4], y: object.matrix[5] }); } finally { ctx.restore(); }
+        } else if (object.gradient && options.image && paintSlideGradientBrush(ctx, slideGradientBrush(object.gradient, { x: 0, y: 0, width, height }, slideObjectViewport(object.matrix, width, height, document), object.matrix, options.scale ?? 1), options, geometry)) {
+          // The brush fills the shape once, preserving translucent face boundaries.
         } else if (object.gradient?.kind === 'rectangular') {
           ctx.save();
           ctx.clip(geometry);
@@ -132,7 +145,7 @@ export function paintPresentationSlide<Path, Image>(
       ctx.restore();
     }
     if (object.chart && object.chart.status === 'supported')
-      paintChartScene(ctx, layoutChartScene(object.chart, width, height, { patternOrigin: { x: object.matrix[4], y: object.matrix[5] } }), options.path, { image: options.image, picture: (fill, width, height) => picture(ctx, fill, width, height, options) });
+      paintChartScene(ctx, layoutChartScene(object.chart, width, height, { patternOrigin: { x: object.matrix[4], y: object.matrix[5] }, viewport: slideObjectViewport(object.matrix, width, height, document) }), options.path, { image: options.image, picture: (fill, width, height) => picture(ctx, fill, width, height, options) });
     if (object.text) {
       const rect = object.drawingGeometry?.textRect ?? [0, 0, width, height];
       ctx.save();

@@ -1,10 +1,12 @@
+import { drawingGradientTile } from '@tumblerjs/ooxml';
 import type { ChartRect } from './layout.ts';
 import type { ChartMark } from './scene-marks.ts';
 import { chartPathBounds } from './path-bounds.ts';
 
 /** Bind stroke brushes after layout, including curved paths and the outside half of an outline. */
 export function chartStrokeBounds(marks: readonly ChartMark[], clip: ChartRect): readonly ChartMark[] {
-  return marks.map(mark => {
+  return marks.map(original => {
+    const mark = original.fillGradient ? { ...original, fillGradient: { ...original.fillGradient, coverage: intersection(clip, original.fillGradient.bounds) } } : original;
     if (mark.kind === 'group') return { ...mark, marks: chartStrokeBounds(mark.marks, mark.clip ? intersection(clip, mark.clip) : clip) };
     if (!mark.strokeGradient || mark.kind === 'text') return mark;
     const bounds = mark.kind === 'rect' ? mark
@@ -14,7 +16,7 @@ export function chartStrokeBounds(marks: readonly ChartMark[], clip: ChartRect):
     if (!bounds) return mark;
     const width = (mark.kind === 'line' ? mark.width : mark.strokeWidth ?? 1) / 2;
     const strokeBounds = { x: bounds.x - width, y: bounds.y - width, width: bounds.width + width * 2, height: bounds.height + width * 2 };
-    if (mark.strokeGradient.kind !== 'rectangular' && !(mark.strokeGradient.kind === 'radial' && !mark.strokeGradient.path)) return { ...mark, strokeBounds };
+    if (mark.strokeGradient.kind !== 'rectangular' && !(mark.strokeGradient.kind === 'radial' && !mark.strokeGradient.path) && !drawingGradientTile(mark.strokeGradient)) return { ...mark, strokeBounds };
     const extent = width * (mark.kind === 'circle' || mark.kind === 'rect' ? 1 : mark.kind === 'path' && (mark.strokeJoin === undefined || mark.strokeJoin === 'miter') ? Math.max(1, mark.miterLimit ?? 10) : Math.SQRT2);
     const coverage = intersection(clip, { x: bounds.x - extent, y: bounds.y - extent, width: bounds.width + extent * 2, height: bounds.height + extent * 2 });
     if (coverage.width <= 0 || coverage.height <= 0) return { ...mark, strokeBounds };

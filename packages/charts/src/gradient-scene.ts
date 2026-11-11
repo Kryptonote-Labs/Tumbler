@@ -1,4 +1,4 @@
-import type { DrawingGradient } from '@tumblerjs/ooxml';
+import { drawingGradientBrush, drawingGradientTile, type DrawingGradient } from '@tumblerjs/ooxml';
 import type { ChartGradient, ChartModel } from './model.ts';
 import type { ChartColorResolver } from './scene-style.ts';
 import type { ChartRect } from './layout.ts';
@@ -8,6 +8,7 @@ import { resolveChartColor } from './colors.ts';
 export interface ChartGradientPaint {
   readonly gradient: DrawingGradient;
   readonly bounds: ChartRect;
+  readonly coverage?: ChartRect;
 }
 const bindings = new WeakMap<ChartGradient, Map<string, DrawingGradient>>();
 export function resolveChartGradient(gradient: ChartGradient, model: ChartModel, resolve?: ChartColorResolver): DrawingGradient {
@@ -24,4 +25,12 @@ export function resolveChartGradient(gradient: ChartGradient, model: ChartModel,
 export function chartGradientPaint(context: SceneContext, gradient: ChartGradient | undefined, bounds: ChartRect): { readonly fillGradient?: ChartGradientPaint } {
   if (!gradient) return {};
   return { fillGradient: { bounds, gradient: resolveChartGradient(gradient, context.model, context.options.resolveColor) } };
+}
+
+/** Canvas-only paint image, shared by enumeration and drawing through the gradient cache. */
+export function chartGradientBrush(paint: ChartGradientPaint) {
+  if (paint.gradient.kind !== 'rectangular' && !drawingGradientTile(paint.gradient)) return;
+  const bounds = paint.coverage ?? paint.bounds;
+  if (bounds.width <= 0 || bounds.height <= 0) return;
+  return { bounds, ...drawingGradientBrush(paint.gradient, paint.bounds, bounds) };
 }

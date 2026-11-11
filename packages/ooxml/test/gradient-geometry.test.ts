@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { drawingGradientCircle, drawingGradientFocus } from '../src/gradient-geometry.ts';
+import { drawingGradientCircle, drawingGradientFocus, drawingGradientOffset } from '../src/gradient-geometry.ts';
 import type { DrawingGradient } from '../src/gradient.ts';
 const gradient: DrawingGradient = { kind: 'rectangular', path: 'rect', angle: 0, scaled: false, center: [.5, .5], stops: [] };
 
@@ -29,4 +29,26 @@ test('procedural highlights retain their own centre and focus geometry', () => {
   const { path, ...source } = gradient;
   expect(drawingGradientCircle({ ...source, kind: 'radial', center: [.3, .25] }, 120, 120)).toBeUndefined();
   expect(drawingGradientFocus({ ...source, focusRect: [.2, .2, .8, .8] })).toEqual({ center: [.5, .5], focusRect: [.2, .2, .8, .8] });
+});
+
+test('native linear tiles reflect the shading parameter rather than the x and y coordinates', () => {
+  const sample = drawingGradientOffset({ ...gradient, kind: 'linear', angle: 45, tileRect: [.25, .25, .75, .75] }, 260, 160);
+  expect(sample(65, 40)).toBeCloseTo(0);
+  expect(sample(195, 120)).toBeCloseTo(1);
+  expect(sample(0, 80)).toBeCloseTo(25 / 210);
+  expect(sample(130, 80)).toBeCloseTo(.5);
+  const half = drawingGradientOffset({ ...gradient, kind: 'linear', tileRect: [0, 0, .5, 1] }, 260, 160);
+  expect(half(65, 80)).toBeCloseTo(.5);
+  expect(half(195, 80)).toBeCloseTo(.5);
+});
+
+test('native rectangular tiles retain the full-shape focus and repeat without reflection', () => {
+  const half = drawingGradientOffset({ ...gradient, tileRect: [0, 0, .5, 1] }, 260, 160);
+  expect(half(65, 80)).toBeCloseTo(.5);
+  expect(half(129.99, 80)).toBeLessThan(.001);
+  expect(half(130.01, 80)).toBeGreaterThan(.999);
+  expect(half(195, 80)).toBeCloseTo(.5);
+  const inset = drawingGradientOffset({ ...gradient, tileRect: [.25, .1, .75, .9] }, 260, 160);
+  expect(inset(130, 80)).toBeCloseTo(0);
+  expect(inset(0, 80)).toBeCloseTo(0);
 });
