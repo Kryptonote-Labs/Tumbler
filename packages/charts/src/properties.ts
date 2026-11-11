@@ -1,4 +1,4 @@
-import schemaData from './property-schema.json';
+import schemaData from './property-schema.json' with { type: 'json' };
 import { beginLosslessXmlEdit, parseLosslessXml, type LosslessXmlElement } from '@tumblerjs/ooxml';
 import { inspectChartSource, type ChartSourceNode } from './source-edit.ts';
 import { chartXmlText } from './source-xml.ts';
