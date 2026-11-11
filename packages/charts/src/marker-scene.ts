@@ -1,5 +1,5 @@
 import { mergeChartFillLayers } from './fill-style.ts';
-import { chartGradientPaint, chartPointGradient } from './gradient-scene.ts';
+import { chartFillPaint, chartPointFill } from './fill-scene.ts';
 import { chartStrokeMark } from './stroke-scene.ts';
 import { chartStroke } from './scene-style.ts';
 import { resolveChartColor } from './colors.ts';
@@ -20,11 +20,12 @@ export function chartMarkerMarks(context: SceneContext, series: ChartSeries, ser
   if (marker?.lineStyle?.noFill && ['plus', 'x', 'dash'].includes(marker.symbol ?? 'auto')) return [];
   const line = chartStroke('axis', marker?.lineStyle, context.model, context.options.resolveColor);
   const bounds = { x: x - radius, y: y - radius, width: radius * 2, height: radius * 2 };
-  const gradient = marker?.gradient ? chartGradientPaint(context, marker.gradient, bounds) : marker?.noFill || marker?.fill ? {} : chartPointGradient(context, series, index, bounds);
+  const gradient = marker?.gradient || marker?.picture || marker?.noFill || marker?.fill ? chartFillPaint(context, marker, bounds) : chartPointFill(context, series, index, bounds);
   const outline = chartStrokeMark({ ...line, stroke });
   const style = { ...outline, fill, ...gradient };
   const polygon = (points: readonly [number, number][]) => [{ kind: 'path' as const, d: points.map(([dx, dy], i) => `${i ? 'L' : 'M'} ${x + dx} ${y + dy}`).join(' ') + ' Z', ...style }];
   switch (marker?.symbol ?? 'auto') {
+    case 'picture':
     case 'square': return [{ kind: 'rect', x: x - radius, y: y - radius, width: radius * 2, height: radius * 2, ...style }];
     case 'diamond': return polygon([[0, -radius], [radius, 0], [0, radius], [-radius, 0]]);
     case 'triangle': return polygon([[0, -radius], [radius, radius], [-radius, radius]]);

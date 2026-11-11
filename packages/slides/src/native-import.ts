@@ -21,6 +21,7 @@ import {
   presentationInheritedBackground,
 } from './reader.ts';
 import { THEME_COLOR_SLOTS } from '@tumblerjs/ooxml';
+import { presentationChartContent } from './chart-authoring.ts';
 
 /** Compile donor layouts during import; insertion never resolves XML or exports a package. */
 export function compileNativeSlides(artifact: PresentationArtifact): NativeSlide[] {
@@ -66,6 +67,7 @@ export function compileNativeSlides(artifact: PresentationArtifact): NativeSlide
       ...original,
       objects: original.objects.map((o) => ({
         ...o,
+        ...(o.kind === 'chart' ? { chartContent: presentationChartContent(doc, original.id, o.key) } : {}),
         text: nativeText(o.text),
         table: o.table && {
           ...o.table,

@@ -3,7 +3,7 @@ import { chartAreaMesh } from './area-mesh.ts';
 import { chartMeshOutline } from './mesh-outlines.ts';
 import { chartPointStroke } from './stroke-scene.ts';
 import { threeDWallMarks } from './three-d-walls.ts';
-import { chartLegendFill } from './gradient-scene.ts';
+import { chartLegendFill } from './fill-scene.ts';
 import { chartBarMesh } from './bar-mesh.ts';
 import { threeDGeometry } from './three-d-geometry.ts';
 import { threeDPointPaint } from './three-d-paint.ts';

@@ -120,6 +120,7 @@ test("paints charts in CSS pixels within their frame", () => {
   }] };
   const chart: WordDrawing = { ...shape.drawing!, kind: "chart", relationshipId: "rId1", partName: PartName.parse("/word/charts/chart1.xml"), model };
   const page = replaceDrawing(shaped, chart);
+  paintWordPage(recorder().context, page, { viewport: { x: Math.ceil(page.width * 4 / 3) - 4, y: Math.ceil(page.height * 4 / 3) - 4, width: 4, height: 4 }, path: () => { throw Error('offscreen chart painted'); } });
   const { context, calls } = recorder();
   paintWordPage(context, page, { path: d => d });
   expect(calls).toContainEqual(["translate", shape.x, shape.y]);

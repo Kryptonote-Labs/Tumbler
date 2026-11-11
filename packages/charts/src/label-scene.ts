@@ -1,5 +1,5 @@
 import { mergeChartFillLayers } from './fill-style.ts';
-import { chartGradientPaint } from './gradient-scene.ts';
+import { chartFillPaint } from './fill-scene.ts';
 import { chartStrokeMark } from './stroke-scene.ts';
 import { chartStroke } from './scene-style.ts';
 import type { ChartSeries } from './model.ts';
@@ -62,7 +62,7 @@ export function chartDataLabelMarks(context: SceneContext, series: ChartSeries, 
   const marks: ChartMark[] = [];
   const resolve = (color: NonNullable<ChartDataLabelOptions['fill']>) => context.options.resolveColor?.(color) ?? resolveChartColor(color, context.model);
   const stroke = settings.lineStyle ? chartStroke('axis', settings.lineStyle, context.model, context.options.resolveColor) : undefined;
-  if (settings.fill || settings.gradient || stroke?.stroke) marks.push({ kind: 'rect', x: left - 3, y: top - 2, width: width + 6, height: height + 4, fill: settings.noFill ? 'none' : settings.fill ? resolve(settings.fill) ?? 'none' : 'none', ...chartGradientPaint(context, settings.noFill ? undefined : settings.gradient, { x: left - 3, y: top - 2, width: width + 6, height: height + 4 }), ...(stroke ? chartStrokeMark(stroke) : {}) });
+  if (settings.fill || settings.gradient || settings.picture || stroke?.stroke) marks.push({ kind: 'rect', x: left - 3, y: top - 2, width: width + 6, height: height + 4, fill: settings.noFill ? 'none' : settings.fill ? resolve(settings.fill) ?? 'none' : 'none', ...chartFillPaint(context, settings, { x: left - 3, y: top - 2, width: width + 6, height: height + 4 }), ...(stroke ? chartStrokeMark(stroke) : {}) });
   if (settings.showLegendKey) marks.push({ kind: 'rect', x: left - font.size - 4, y: top, width: font.size * .8, height: font.size * .8, fill: chartPointColor(context, series, seriesIndex, point.index) });
   lines.forEach((text, index) => marks.push({ kind: 'text', text, x, y: y + index * font.size * 1.2, anchor, font }));
   return marks;

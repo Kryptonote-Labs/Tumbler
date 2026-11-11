@@ -1,4 +1,4 @@
-import { chartPointGradient } from './gradient-scene.ts';
+import { chartPointFill } from './fill-scene.ts';
 import { chartPointStroke } from './stroke-scene.ts';
 import { chartDataLabelMarks } from './label-scene.ts';
 import { indexChartSequence } from './indexed-data.ts';
@@ -9,6 +9,7 @@ import type { ChartMark, SceneContext } from './scene-marks.ts';
 /** Translate generated subchart marks without changing their authored text or colours. */
 function move(mark: ChartMark, x: number, y: number): ChartMark {
   if (mark.fillGradient) mark = { ...mark, fillGradient: { ...mark.fillGradient, bounds: { ...mark.fillGradient.bounds, x: mark.fillGradient.bounds.x + x, y: mark.fillGradient.bounds.y + y } } };
+  if (mark.fillPicture) mark = { ...mark, fillPicture: { ...mark.fillPicture, bounds: { ...mark.fillPicture.bounds, x: mark.fillPicture.bounds.x + x, y: mark.fillPicture.bounds.y + y } } };
   switch (mark.kind) {
     case 'group': return { ...mark, ...(mark.clip ? { clip: { ...mark.clip, x: mark.clip.x + x, y: mark.clip.y + y } } : {}), marks: mark.marks.map(mark => move(mark, x, y)) };
     case 'text': case 'rect': return { ...mark, x: mark.x + x, y: mark.y + y };
@@ -53,7 +54,7 @@ export function ofPieScene(context: SceneContext): ChartMark[] {
     let top = (height - barHeight) / 2;
     for (const point of secondary) {
       const h = Number(point.value) / other * barHeight;
-      marks.push({ kind: 'rect', x: mainWidth + (minorWidth - barWidth) / 2, y: top, width: barWidth, height: h, fill: chartPointColor(context, first, 0, point.index), ...chartPointGradient(context, first, point.index, { x: mainWidth + (minorWidth - barWidth) / 2, y: top, width: barWidth, height: h }), ...chartPointStroke(context, first, 0, point.index, '#ffffff') });
+      marks.push({ kind: 'rect', x: mainWidth + (minorWidth - barWidth) / 2, y: top, width: barWidth, height: h, fill: chartPointColor(context, first, 0, point.index), ...chartPointFill(context, first, point.index, { x: mainWidth + (minorWidth - barWidth) / 2, y: top, width: barWidth, height: h }), ...chartPointStroke(context, first, 0, point.index, '#ffffff') });
       marks.push(...chartDataLabelMarks(context, first, 0, { index: point.index, x: mainWidth + minorWidth / 2, y: top + h / 2, category: String(indexChartSequence(first.categories).get(point.index) ?? point.index + 1), value: Number(point.value), percent: Number(point.value) / total }));
       top += h;
     }

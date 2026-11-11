@@ -1,5 +1,5 @@
 import { stockScene } from './scene-stock.ts';
-import { chartLegendFill } from './gradient-scene.ts';
+import { chartLegendFill } from './fill-scene.ts';
 import { layoutCombinationChart } from './combination.ts';
 import { cartesianScene } from './scene-cartesian.ts';
 import { legendMarks, type ChartMark, type SceneContext } from './scene-marks.ts';

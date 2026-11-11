@@ -10,7 +10,7 @@ import { DEFAULT_WORD_THEME, resolveWordColour, type WordColour, type WordThemeC
 import { THEME_COLOR_SLOTS, parseThemeColorScheme, type ThemeColorScheme } from '@tumblerjs/ooxml';
 import { readWordShapeTextInsets } from './shape-text-insets.ts';
 import { isWordAuthoredShape } from './shapes.ts';
-import { ChartParseError, parseOoxmlChart, type ChartModel } from "@tumblerjs/charts";
+import { ChartParseError, readChartModel, type ChartModel } from "@tumblerjs/charts";
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { beginPackageTransaction, RelationshipsError, type OpcPackage, type OpcPart, type PartName, type Relationships } from "@tumblerjs/opc";
 import { WordError, type WordDocument, type WordConformance } from "./document.ts";
@@ -213,7 +213,7 @@ function parseDrawing(
     try {
       let model = charts.get(part.name.equivalenceKey);
       if (model === undefined) {
-        const parsed = parseOoxmlChart(input.package.readPart(part), input.conformance);
+        const parsed = readChartModel(input.package, part.name, input.conformance);
         const themeColors = Object.fromEntries(THEME_COLOR_SLOTS.flatMap(slot => {
           const value = theme.color(slot);
           return value === undefined ? [] : [[slot, `#${value}`]];

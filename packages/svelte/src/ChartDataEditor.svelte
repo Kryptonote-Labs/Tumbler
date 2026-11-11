@@ -26,6 +26,7 @@
   let current = $derived(artifact);
   let selection = $state(createGridSelection({ row: 1, column: 1 }));
   let error = $state<string>();
+  $effect(() => { void artifact; void source; error = undefined; });
   let region = $state<HTMLElement>();
   const highlights = $derived(source ? chartDataHighlights(source, current.activeSheet.name, themeColors) : []);
   onMount(() => { void tick().then(() => region?.querySelector<HTMLElement>('[role="grid"]')?.focus()); });

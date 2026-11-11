@@ -4,6 +4,7 @@
   import ChartSeriesProperties from './ChartSeriesProperties.svelte';
   import ChartProperties from './ChartProperties.svelte';
   import ChartDataEditor from './ChartDataEditor.svelte';
+  import ChartPictureEditor from './ChartPictureEditor.svelte';
   import OoxmlChart from './OoxmlChart.svelte';
   import type { ChartTypeChange } from './chart-properties.ts';
   import { chartDataState } from './chart-data-state.ts';
@@ -42,10 +43,10 @@
   const previewModel = $derived.by((): ChartModel => {
     try {
       const xml = sourcePreview ? new TextDecoder().decode(sourcePreview) : preview ? new TextDecoder().decode(convertChartType(bytes, preview, selectedPlot)) : current.xml;
-      return { ...chartContentModel({ xml }), themeColors, themeFonts };
+      return { ...chartContentModel({ ...current, xml }), themeColors, themeFonts };
     } catch (cause) { return { status: 'unsupported', chartType: undefined, reason: cause instanceof Error ? cause.message : 'This data cannot use that chart type.', title: undefined, legend: undefined }; }
   });
-  function publish(content: ChartContent, reason?: 'type' | 'series') { if (disabled) return; onchange(content, reason); current = content; error = undefined; typeError = undefined; sourcePreview = undefined; }
+  function publish(content: ChartContent, reason?: 'type' | 'series') { if (disabled || content === current) return; onchange(content, reason); current = content; error = undefined; typeError = undefined; sourcePreview = undefined; }
   function changeType(change: ChartTypeChange) {
     try {
       const source = convertChartType(bytes, change, selectedPlot);
@@ -81,6 +82,7 @@
     {#if previewModel.status === 'unsupported'}<p class="preview-error" role="status">{previewModel.reason}</p>{/if}
   {/snippet}
   {#snippet viewPreview()}<OoxmlChart model={previewModel} width={previewSize.width} height={previewSize.height} />{/snippet}
+  {#snippet pictureEditor(target, label)}<ChartPictureEditor content={current} {target} {label} {disabled} onchange={(content) => publish(content)} />{/snippet}
   {#snippet dataEditor(returnFocus: () => void)}
     <ChartSeriesProperties bytes={dataBytes} {disabled} onchange={changeSource} />
     {#if error || draft?.error}<p class="error" role="alert">{error ?? draft?.error}</p>{/if}

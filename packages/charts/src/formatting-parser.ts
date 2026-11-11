@@ -1,4 +1,5 @@
 import { parseChartGradient } from './gradient-parser.ts';
+import { parseChartPicture } from './picture-parser.ts';
 import { chartElementMarkup } from './xml-markup.ts';
 import { resolveDrawingColor, readDrawingStrokeProperties, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import type { ChartColor, ChartColorTransform, ChartLineStyle, ChartTextStyle, ChartShapeStyle } from "./model.ts";
@@ -89,7 +90,7 @@ export function chartColorFillXml(color: ChartColor, drawingNamespace?: string):
 /** Shape-level paint is shared by chart/plot areas, titles and legends. */
 export function parseChartShapeStyle(parent: LosslessXmlElement | undefined, ns: string): ChartShapeStyle | undefined {
   if (!parent) return undefined;
-  const gradient = parseChartGradient(parent, ns);
+  const gradient = parseChartGradient(parent, ns), picture = parseChartPicture(parent, ns);
   const fill = parseChartFill(parent, ns), lineStyle = parseChartLine(parent, ns);
-  return { ...(gradient ? { gradient } : {}), ...(fill ? { fill } : {}), ...(child(parent, ns, 'noFill') ? { noFill: true } : {}), ...(lineStyle ? { lineStyle } : {}) };
+  return { ...(picture ? { picture } : {}), ...(gradient ? { gradient } : {}), ...(fill ? { fill } : {}), ...(child(parent, ns, 'noFill') ? { noFill: true } : {}), ...(lineStyle ? { lineStyle } : {}) };
 }

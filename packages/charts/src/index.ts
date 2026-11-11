@@ -36,7 +36,7 @@ export { layoutChartScene } from "./scene.ts";
 export type { ChartMark, ChartScene, ChartSceneOptions } from "./scene-marks.ts";
 export { CHART_STROKE_DEFAULTS, CHART_TEXT_DEFAULTS, chartFont, chartFontShorthand, chartLegendPositions, chartStroke } from "./scene-style.ts";
 export type { ChartColorResolver, ChartFont, ChartStroke, ChartStrokeDecoration, ChartTextRole } from "./scene-style.ts";
-export { paintChartScene, type ChartCanvasContext } from "./canvas.ts";
+export { paintChartScene, type ChartCanvasContext, type ChartCanvasOptions } from "./canvas.ts";
 
 export { updateChartTitle } from './title-edit.ts';
 
@@ -81,4 +81,9 @@ export type { ChartSurfaceBand } from './surface-bands.ts';
 
 export { CHART_BAR_SHAPES, type ChartBarShape } from './bar-shapes.ts';
 export { readChart3DProperties } from './three-d-properties.ts';
+export { readChartModel, bindChartImages } from './picture-binding.ts';
+export type { ChartPictureFill, ChartImage } from './picture-parser.ts';
+export type { ChartPicturePaint } from './fill-scene.ts';
+export { chartScenePictures } from './fill-scene.ts';
+export { setChartPictureFill, canSetChartPicture } from './picture-edit.ts';
 export type { ChartView3D, ChartWall, ChartWalls } from './three-d-properties.ts';

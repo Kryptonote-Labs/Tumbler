@@ -32,6 +32,6 @@ export function surfaceBandPaint(context: SceneContext, index: number, style: Ch
   const mark = chartShapeMarks(context, bounds, style, { fill: color, stroke: context.model.wireframe ? color : chartShade(color, .85) })[0];
   if (!mark || mark.kind !== 'rect') return { fill: 'none' };
   const { kind, x, y, width, height, ...paint } = mark;
-  const { fillGradient, ...outline } = paint;
+  const { fillGradient, fillPicture, ...outline } = paint;
   return context.model.wireframe ? { ...outline, fill: 'none', ...(!style?.lineStyle ? { strokeWidth: 1 } : {}) } : { ...paint, ...(!style?.lineStyle ? { strokeWidth: .3 } : {}) };
 }

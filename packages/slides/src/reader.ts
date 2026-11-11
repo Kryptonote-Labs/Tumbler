@@ -13,7 +13,7 @@ import type {
 } from "./appearance.ts";
 import { resolveDrawingColor } from "./drawing-color.ts";
 import { resolveDrawingGeometry } from "./drawing-geometry.ts";
-import { parseOoxmlChart, bindChartTheme } from "@tumblerjs/charts";
+import { readChartModel, bindChartTheme } from "@tumblerjs/charts";
 import {
   createMarkupCompatibilityView,
   OOXML_NAMESPACES,
@@ -937,7 +937,7 @@ class Reader {
       crop,
       opacity: percentage(attr(this.child(blip, "alphaModFix"), "amt"), 1),
       stretch: rect(this.child(this.child(element, "stretch"), "fillRect")),
-      ...(tile
+      ...(tile || !this.child(element, 'stretch')
         ? {
             tile: {
               x: px(tile, "tx"),
@@ -1416,7 +1416,7 @@ class Reader {
           part =
             id === undefined ? undefined : this.related(source, "chart", id);
         if (part) {
-          chart = bindChartTheme(parseOoxmlChart(this.pkg.readPart(part), this.conformance), contextThemeColours(context), context.fonts);
+          chart = bindChartTheme(readChartModel(this.pkg, part.name, this.conformance), contextThemeColours(context), context.fonts);
           kind = "chart";
           if (chart.status === "unsupported") diagnostics.push(chart.reason);
         }

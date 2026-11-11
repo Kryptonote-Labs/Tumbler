@@ -1,17 +1,19 @@
 <script lang="ts">
   import { presentationImageUrl } from "./presentation-image-url.ts";
   import { metafileSvg } from "./presentation-metafiles.ts";
-  import type { SlideObject } from "@tumblerjs/slides";
+  import { drawingPictureGeometry, type DrawingPictureFill } from "@tumblerjs/ooxml";
   let {
     picture,
     id,
     width,
     height,
+    origin = { x: 0, y: 0 },
   }: {
-    picture: NonNullable<SlideObject["pictureFill"]>;
+    picture: DrawingPictureFill;
     id: string;
     width: number;
     height: number;
+    origin?: { readonly x: number; readonly y: number };
   } = $props();
   let url = $state(""),
     natural = $state({ width: 1, height: 1 });
@@ -62,65 +64,20 @@
     };
   });
 
-  let tile = $derived(picture.tile);
-  let w = $derived(
-    tile ? Math.max(1, natural.width * tile.scaleX) : Math.max(1, width),
-  );
-  let h = $derived(
-    tile ? Math.max(1, natural.height * tile.scaleY) : Math.max(1, height),
-  );
-  let flipX = $derived(tile?.flip === "x" || tile?.flip === "xy"),
-    flipY = $derived(tile?.flip === "y" || tile?.flip === "xy");
-  let crop = $derived(picture.crop),
-    stretch = $derived(tile ? [0, 0, 0, 0] : (picture.stretch ?? [0, 0, 0, 0]));
-  let dx = $derived(stretch[0]! * w),
-    dy = $derived(stretch[1]! * h);
-  let iw = $derived(
-    (w * (1 - stretch[0]! - stretch[2]!)) / (1 - crop[0] - crop[2]),
-  );
-  let ih = $derived(
-    (h * (1 - stretch[1]! - stretch[3]!)) / (1 - crop[1] - crop[3]),
-  );
-  let x = $derived(
-    (tile?.x ?? 0) +
-      (tile && ["r", "tr", "br"].includes(tile.align)
-        ? width - w
-        : tile?.align === "ctr" || tile?.align === "t" || tile?.align === "b"
-          ? (width - w) / 2
-          : 0),
-  );
-  let y = $derived(
-    (tile?.y ?? 0) +
-      (tile && ["b", "bl", "br"].includes(tile.align)
-        ? height - h
-        : tile?.align === "ctr" || tile?.align === "l" || tile?.align === "r"
-          ? (height - h) / 2
-          : 0),
-  );
+  const geometry = $derived(drawingPictureGeometry(picture, width, height, natural));
 </script>
 
-<pattern
-  {id}
-  patternUnits="userSpaceOnUse"
-  {x}
-  {y}
-  width={w * (flipX ? 2 : 1)}
-  height={h * (flipY ? 2 : 1)}
->
-  {#each Array.from( { length: flipY ? 2 : 1 }, ) as _, row}{#each Array.from( { length: flipX ? 2 : 1 }, ) as _, col}
-      <g
-        opacity={picture.opacity ?? 1}
-        transform={`translate(${col ? 2 * w : 0} ${row ? 2 * h : 0}) scale(${col ? -1 : 1} ${row ? -1 : 1})`}
-      >
-        <svg width={w} height={h} overflow="hidden"
-          ><image
-            href={url}
-            x={dx - crop[0] * iw}
-            y={dy - crop[1] * ih}
-            width={iw}
-            height={ih}
-            preserveAspectRatio="none"
-          /></svg
-        >
-      </g>{/each}{/each}
-</pattern>
+{#if geometry}
+  {@const { x, y, width: w, height: h, destination, image, flipX, flipY, reverseX, reverseY } = geometry}
+  <pattern {id} patternUnits="userSpaceOnUse" x={x + origin.x} y={y + origin.y} width={w * (flipX ? 2 : 1)} height={h * (flipY ? 2 : 1)} viewBox={`0 0 ${w * (flipX ? 2 : 1)} ${h * (flipY ? 2 : 1)}`} preserveAspectRatio="none">
+    {#each Array.from({ length: flipY ? 2 : 1 }) as _, row}{#each Array.from({ length: flipX ? 2 : 1 }) as _, column}
+      {@const mirrorX = reverseX !== (column === 1)}
+      {@const mirrorY = reverseY !== (row === 1)}
+      <g opacity={picture.opacity ?? 1} transform={`translate(${column * w + (mirrorX ? w : 0)} ${row * h + (mirrorY ? h : 0)}) scale(${mirrorX ? -1 : 1} ${mirrorY ? -1 : 1})`}>
+        <svg x={destination.x} y={destination.y} width={destination.width} height={destination.height} overflow="hidden">
+          <image href={url} x={image.x} y={image.y} width={image.width} height={image.height} preserveAspectRatio="none" />
+        </svg>
+      </g>
+    {/each}{/each}
+  </pattern>
+{/if}

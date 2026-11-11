@@ -1,11 +1,11 @@
-import { drawingGradientFill, paintDrawingGradient, paintRectangularGradient, type DrawingGradientCanvasContext } from "@tumblerjs/ooxml";
+import { drawingGradientFill, paintDrawingGradient, paintRectangularGradient, paintDrawingPicture, type DrawingPictureFill, type DrawingGradientCanvasContext } from "@tumblerjs/ooxml";
 import { wordFontKerning } from './font-kerning.ts';
 import { wordColumnSeparators } from './section-columns.ts';
 import { paintWordPicture } from './picture-paint.ts';
 import { paintWordInk, type WordInkViewport, type WordInkPixelContext } from './ink-canvas.ts';
 import { wordDrawingCellClip, intersectWordContentBounds, type WordContentBounds } from './table-clipping.ts';
 import { wordImagePaintBounds } from './image-paint.ts';
-import { layoutChartScene, paintChartScene, type ChartCanvasContext } from "@tumblerjs/charts";
+import { layoutChartScene, paintChartScene, chartScenePictures, type ChartCanvasContext } from "@tumblerjs/charts";
 import { canvasWordTextMeasurer, wordCanvasFont, type WordCanvasTextContext } from "./canvas-text.ts";
 import type { WordImageDrawing } from "./drawings.ts";
 import { wordHighlightColor } from "./highlight.ts";
@@ -29,6 +29,7 @@ export interface WordCanvasContext<Image, Path = unknown> extends Omit<DrawingGr
   setLineDash(segments: number[]): void;
   fillRect(x: number, y: number, width: number, height: number): void;
   drawImage(image: Image, x: number, y: number, width: number, height: number): void;
+  drawImage(image: Image, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
 }
 
 export interface WordPagePaintOptions<Image, Path = unknown> {
@@ -46,6 +47,8 @@ export interface WordPagePaintOptions<Image, Path = unknown> {
   readonly background?: string;
   /** Decoded image for a drawing; see wordPageImages. Images without a source paint as placeholders. */
   readonly image?: (drawing: WordImageDrawing) => Image | undefined;
+  /** Decoded chart fill images, enumerated by wordPageChartPictures before painting. */
+  readonly chartImage?: (picture: DrawingPictureFill) => { readonly image: Image; readonly width: number; readonly height: number } | undefined;
   /**
    * Builds the host's Path2D from SVG path data, such as `d => new Path2D(d)`. Shapes and charts
    * paint only when it is supplied; otherwise they paint as placeholders.
@@ -110,6 +113,14 @@ export function wordPageImages(page: WordLayoutPage, regions?: readonly WordInkV
     if (regions && (box.width <= 0 || box.height <= 0 || !regions.some(region => fragment.x + box.x < region.x + region.width && fragment.y + box.y < region.y + region.height
       && fragment.x + box.x + box.width > region.x && fragment.y + box.y + box.height > region.y))) return [];
     return [drawing];
+  }))];
+}
+
+/** Embedded chart picture fills use stable identities between enumeration and painting. */
+export function wordPageChartPictures(page: WordLayoutPage): readonly DrawingPictureFill[] {
+  return [...new Set(pageDrawingFragments(page).flatMap(fragment => {
+    const drawing = fragment.drawing;
+    return drawing?.kind === 'chart' && drawing.model.status === 'supported' ? chartScenePictures(layoutChartScene(drawing.model, fragment.width * 4 / 3, fragment.height * 4 / 3)) : [];
   }))];
 }
 /** Regions whose ink requires composition with the already-painted page. */
@@ -241,6 +252,11 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
     if (box.width <= 0 || box.height <= 0 || (fragment.x + box.x + box.width) * scale <= view.x || (fragment.y + box.y + box.height) * scale <= view.y
       || (fragment.x + box.x) * scale >= view.x + view.width || (fragment.y + box.y) * scale >= view.y + view.height) return;
   }
+  if (drawing?.kind === 'chart' && options.viewport) {
+    const scale = options.scale ?? 4 / 3, view = options.viewport;
+    if (fragment.width <= 0 || fragment.height <= 0 || (fragment.x + fragment.width) * scale <= view.x || (fragment.y + fragment.height) * scale <= view.y
+      || fragment.x * scale >= view.x + view.width || fragment.y * scale >= view.y + view.height) return;
+  }
   if (drawing?.kind === 'image' && drawing.inkRendering === 'raster') options.onInkFallback?.(drawing);
   const image = drawing?.kind === "image" ? options.image?.(drawing) : undefined;
   if (image !== undefined && drawing?.kind === 'image') {
@@ -261,11 +277,15 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
       },
     });
     context.save();
+    try {
     context.translate(fragment.x, fragment.y);
     context.scale(1 / pixels, 1 / pixels);
     for (const mark of scene.marks) if (mark.kind === 'text') options.prepareFont?.(mark.font.family);
-    paintChartScene(context, scene, options.path);
-    context.restore();
+    paintChartScene(context, scene, options.path, { picture: (fill, width, height) => {
+      const decoded = options.chartImage?.(fill);
+      if (decoded) paintDrawingPicture(context, fill, width, height, decoded);
+    } });
+    } finally { context.restore(); }
     return;
   }
   context.fillStyle = PLACEHOLDER;

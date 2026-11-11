@@ -11,6 +11,7 @@ import { runTumbler } from '../src/index.ts';
 import { createPresentation, applyPresentationCommand } from '@tumblerjs/slides';
 import { applySpreadsheetCommand } from '@tumblerjs/sheets';
 import { type ChartResources } from '@tumblerjs/charts';
+import { createCanvas } from '@napi-rs/canvas';
 
 for (const extension of ['docx', 'xlsx', 'pptx']) {
   test(`chart CLI preserves unrelated ${extension} parts and rejects stale edits`, async () => {
@@ -145,11 +146,16 @@ for (const extension of ['docx', 'pptx', 'xlsx'] as const) test(`chart CLI atomi
     expect(changed.resources.parts[0]?.data).toBe('AQID');
     expect(changed.source.children.find(node => node.name === 'c:chart')?.children.find(node => node.name === 'c:autoTitleDeleted')?.attributes).toContainEqual(expect.objectContaining({ name: 'val', value: '0' }));
     await expect(host.editChart!(path, input)).rejects.toThrow('changed');
-    const converted = await host.editChart!(path, { page: changed.page, part, type: 'lineChart' }) as { page: string; resources: ChartResources };
+    const converted = await host.editChart!(path, { page: changed.page, part, type: 'lineChart' }) as { page: string; resources: ChartResources; source: ChartSourceNode };
     expect(converted.resources.parts[0]?.data).toBe('AQID');
+    const picture = createCanvas(2, 2).toBuffer('image/png').toString('base64');
+    const attached = await host.editChart!(path, { page: converted.page, part, picture: { node: converted.source.id, data: picture, contentType: 'image/png' } }) as { page: string; resources: ChartResources };
+    expect(attached.resources.parts).toContainEqual(expect.objectContaining({ contentType: 'image/png', data: picture }));
+    expect(attached.resources.parts[0]?.data).toBe('AQID');
     if (extension !== 'xlsx') {
-      const edited = await host.editChart!(path, { page: converted.page, part, cells: [{ reference: 'B2', value: 8 }] }) as { resources: ChartResources };
+      const edited = await host.editChart!(path, { page: attached.page, part, cells: [{ reference: 'B2', value: 8 }] }) as { resources: ChartResources };
       expect(edited.resources.parts[0]?.data).toBe('AQID');
+      expect(edited.resources.parts).toContainEqual(expect.objectContaining({ contentType: 'image/png', data: picture }));
     }
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

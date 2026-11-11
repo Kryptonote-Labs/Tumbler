@@ -6,8 +6,8 @@ export function mergeChartFillLayers<T extends ChartShapeStyle>(layers: readonly
   for (const layer of layers) {
     if (!layer) continue;
     if (!result) { result = layer; continue; }
-    if (layer.fill || layer.gradient || layer.noFill !== undefined) {
-      const { fill, gradient, noFill, ...rest } = result;
+    if (layer.fill || layer.gradient || layer.picture || layer.noFill !== undefined) {
+      const { fill, gradient, picture, noFill, ...rest } = result;
       result = { ...rest, ...layer };
     } else result = { ...result, ...layer };
   }

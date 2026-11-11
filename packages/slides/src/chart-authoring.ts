@@ -11,7 +11,7 @@ function chartTarget(document: PresentationDocument, slideId: string, objectKey:
   const slide = document.slides.find(slide => slide.id === slideId);
   const object = slide?.objects.find(object => object.key === objectKey);
   const pkg = document.package;
-  const part = slide && pkg.getPart(slide.part);
+  const part = slide && object && pkg.getPart(object.sourcePart);
   if (!slide || !object || object.kind !== 'chart' || !part) throw new TypeError('Select a chart on this slide.');
   const source = parseLosslessXml(pkg.readPart(part));
   const element = source.element(object.elementId);
@@ -25,7 +25,7 @@ function chartTarget(document: PresentationDocument, slideId: string, objectKey:
 
 export function presentationChartContent(document: PresentationDocument, slideId: string, objectKey: string): ChartContent {
   const existing = document.slides.find(slide => slide.id === slideId)?.objects.find(object => object.key === objectKey)?.chartContent;
-  if (existing?.workbook !== undefined && existing.resources !== undefined) return existing;
+  if (existing?.resources !== undefined) return existing;
   const content = readChartContent(document.package, chartTarget(document, slideId, objectKey).partName, { includeWorkbook: existing?.workbook === undefined });
   return existing ? mergeChartContent(content, existing) : content;
 }

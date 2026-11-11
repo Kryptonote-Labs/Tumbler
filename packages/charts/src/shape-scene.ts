@@ -1,4 +1,4 @@
-import { chartGradientPaint } from './gradient-scene.ts';
+import { chartFillPaint } from './fill-scene.ts';
 import type { ChartRect } from './layout.ts';
 import type { ChartShapeStyle } from './model.ts';
 import { resolveChartColor } from './colors.ts';
@@ -11,8 +11,8 @@ export function chartShapeMarks(context: SceneContext, rect: ChartRect, style: C
   const color = style?.fill && (context.options.resolveColor?.(style.fill) ?? resolveChartColor(style.fill, context.model));
   const fill = style?.noFill ? 'none' : color ?? defaults?.fill ?? 'none';
   const stroke = style?.lineStyle ? chartStrokeMark(chartStroke('axis', style.lineStyle, context.model, context.options.resolveColor)) : defaults?.stroke ? { stroke: defaults.stroke, strokeWidth: 1 } : {};
-  if (!style?.gradient && fill === 'none' && !('stroke' in stroke && stroke.stroke)) return [];
-  return [{ kind: 'rect', ...rect, fill, ...(!style?.noFill ? chartGradientPaint(context, style?.gradient, rect) : {}), ...stroke }];
+  if (!style?.gradient && !style?.picture && fill === 'none' && !('stroke' in stroke && stroke.stroke)) return [];
+  return [{ kind: 'rect', ...rect, fill, ...chartFillPaint(context, style, rect), ...stroke }];
 }
 
 /** Text, swatches and simple shapes define the automatic title/legend box. */

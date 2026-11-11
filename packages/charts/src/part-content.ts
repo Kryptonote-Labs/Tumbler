@@ -5,6 +5,7 @@ import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
 import { openOpcPackage, PartName, Relationships, RelationshipsError, type OpcPackage, type PackageTransaction } from '@tumblerjs/opc';
 import { chartXml, chartXmlText } from './source-xml.ts';
 import { chartBase64ToBytes, chartBytesToBase64 } from './base64.ts';
+import { bindChartResourceImages } from './picture-binding.ts';
 import { chartPartRelationships, readChartResources, stageChartResources, type ChartResources } from './resources.ts';
 export { chartBase64ToBytes, chartBytesToBase64 } from './base64.ts';
 
@@ -40,7 +41,7 @@ export function readChartContent(pkg: OpcPackage, partName: PartName | string, o
   const relationship = id && pkg.relationships(part.name).get(id);
   const workbook = relationship && relationship.targetMode === 'Internal' && relationship.type === `${relNs}/package` ? pkg.getPart(relationship.targetPartName) : undefined;
   const resources = readChartResources(pkg, part.name, workbook?.contentType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' && typeof id === 'string' ? id : undefined);
-  return { xml: source.document.source.replace(/^(\s*<\?xml[^?]*?encoding\s*=\s*['"])utf-16(?:le|be)?(?=['"])/i, '$1UTF-8'), ...(resources ? { resources } : {}), ...(options.includeWorkbook !== false && workbook?.contentType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ? { workbook: chartBytesToBase64(pkg.readPart(workbook)) } : {}) };
+  return { xml: source.document.source.replace(/^(\s*<\?xml[^?]*?encoding\s*=\s*['"])utf-16(?:le|be)?(?=['"])/i, '$1UTF-8'), resources: resources ?? { parts: [], relationships: [] }, ...(options.includeWorkbook !== false && workbook?.contentType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ? { workbook: chartBytesToBase64(pkg.readPart(workbook)) } : {}) };
 }
 
 /** Stage the chart and embedded workbook together in the owning host's undo/save transaction. */
@@ -120,7 +121,7 @@ export function addChartContent(transaction: PackageTransaction, partName: PartN
 export function chartContentModel(content: ChartContent): ChartModel {
   const bytes = new TextEncoder().encode(content.xml);
   const source = chartXml(bytes);
-  try { return parseOoxmlChart(bytes, source.namespace.includes('purl.oclc.org') ? 'strict' : 'transitional'); }
+  try { return bindChartResourceImages(parseOoxmlChart(bytes, source.namespace.includes('purl.oclc.org') ? 'strict' : 'transitional'), content.resources); }
   catch (error) {
     if (!(error instanceof ChartParseError)) throw error;
     return { status: 'unsupported', chartType: undefined, reason: error.message, title: undefined, legend: undefined };
