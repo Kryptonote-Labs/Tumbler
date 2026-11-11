@@ -1,5 +1,5 @@
 import { chartSurfaceLevels } from './legend-items.ts';
-import { chartAxisTitleFrame } from './axis-title-scene.ts';
+import { chartAxisTitleFrame, chartContourAxisTitles } from './axis-title-scene.ts';
 import { chartLegendScene } from './legend-scene.ts';
 import { threeDWallMarks } from './three-d-walls.ts';
 import { threeDAxisMarks } from './three-d-axes.ts';
@@ -81,6 +81,7 @@ export function surfaceScene(context: SceneContext): ChartMark[] {
   }
   const marks: ChartMark[] = [...chartShapeMarks(context, layout.plot, model.plotArea), { kind: 'group', clip: layout.plot, marks: [...(model.threeD ? threeDWallMarks(context, layout.plot, project) : []), ...(axes?.grids ?? []), ...polygons.sort((a, b) => b.depth - a.depth).map(polygon => polygon.mark)] }];
   if (axes) marks.push(...axes.marks);
+  else marks.push(...chartContourAxisTitles(axesContext, layout.plot));
   const font = chartFont('category', categoryAxis?.textStyle, model, options.resolveColor);
   const seriesFont = chartFont('category', seriesAxis?.textStyle, model, options.resolveColor);
   const valueFont = chartFont('tick', valueAxis?.textStyle, model, options.resolveColor);

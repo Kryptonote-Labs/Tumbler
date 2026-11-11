@@ -164,6 +164,8 @@ export interface ChartAxis {
   readonly tickMarkSkip?: number;
   readonly labelOffset?: number;
   readonly titleStyle?: ChartTextStyle;
+  readonly titleText?: readonly ChartTextParagraph[];
+  readonly titleShape?: ChartShapeStyle;
   readonly displayUnit?: number;
   readonly displayUnitName?: string;
   readonly showDisplayUnitLabel?: boolean;

@@ -32,8 +32,10 @@ export function parseChartAxisProperties(element: LosslessXmlElement, ns: string
   if ([tickLabelSkip, tickMarkSkip].some(value => value !== undefined && (!Number.isInteger(value) || value < 1))) throw new ChartParseError('Axis tick skips must be positive integers.');
   const minor = child(element, 'minorGridlines');
   const minorGridlineStyle = parseChartLine(child(minor, 'spPr'), drawing);
-  const titleStyle = parseChartTextStyle(child(element, 'title'), ns, drawing);
-  const titleLayout = parseChartManualLayout(child(element, 'title'), ns);
+  const title = child(element, 'title');
+  const titleStyle = parseChartTextStyle(title, ns, drawing), titleText = readChartLabelText(title, ns, drawing);
+  const titleShape = parseChartShapeStyle(child(title, 'spPr'), drawing);
+  const titleLayout = parseChartManualLayout(title, ns);
   const units = child(element, 'dispUnits');
   const unitLabel = child(units, 'dispUnitsLbl'), displayUnitLayout = parseChartManualLayout(unitLabel, ns), displayUnitText = readChartLabelText(unitLabel, ns, drawing), displayUnitStyle = parseChartTextStyle(unitLabel, ns, drawing), displayUnitShape = parseChartShapeStyle(child(unitLabel, 'spPr'), drawing);
   const custom = number(child(units, 'custUnit'));
@@ -59,6 +61,7 @@ export function parseChartAxisProperties(element: LosslessXmlElement, ns: string
     ...(tickLabelSkip === undefined ? {} : { tickLabelSkip }), ...(tickMarkSkip === undefined ? {} : { tickMarkSkip }),
     ...(offset === undefined ? {} : { labelOffset: offset }),
     ...(titleStyle ? { titleStyle } : {}),
+    ...(titleText ? { titleText } : {}), ...(titleShape ? { titleShape } : {}),
     ...(titleLayout ? { titleLayout } : {}),
     ...(units ? { displayUnit: custom ?? factors[builtIn], displayUnitName: custom === undefined ? builtIn : String(custom), showDisplayUnitLabel: !!child(units, 'dispUnitsLbl') } : {}),
     ...(displayUnitLayout ? { displayUnitLayout } : {}), ...(displayUnitText ? { displayUnitText } : {}), ...(displayUnitStyle ? { displayUnitStyle } : {}), ...(displayUnitShape ? { displayUnitShape } : {}),

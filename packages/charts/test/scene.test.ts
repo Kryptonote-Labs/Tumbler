@@ -142,13 +142,13 @@ test('visible Cartesian value labels survive missing gridlines and use the host 
   }
 });
 
-test('deleted XY axes suppress their labels, titles, strokes and gridlines without hiding the other axis', () => {
+test('hidden XY axis spines keep their titles while suppressing ticks, strokes and gridlines', () => {
   const base = model({ kind: 'scatter', legend: undefined, axisIds: [1, 2], axes: [
     { id: 1, kind: 'value', position: 'bottom', title: 'Deleted X', majorGridlines: true, deleted: true, minimum: undefined, maximum: undefined, numberFormatCode: 'X' },
     { id: 2, kind: 'value', position: 'left', title: 'Visible Y', majorGridlines: false, deleted: false, minimum: undefined, maximum: undefined, numberFormatCode: 'Y' },
   ] });
   const scene = layoutChartScene(base, 600, 400, { formatNumber: (value, code) => `${code}:${value}` });
-  expect(texts(scene.marks)).not.toContain('Deleted X');
+  expect(texts(scene.marks)).toContain('Deleted X');
   expect(texts(scene.marks).some(text => text.startsWith('X:'))).toBe(false);
   expect(texts(scene.marks).some(text => text.startsWith('Y:'))).toBe(true);
   expect(scene.marks.filter(mark => mark.kind === 'line')).toHaveLength(1);

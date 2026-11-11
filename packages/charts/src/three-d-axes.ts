@@ -1,6 +1,6 @@
 import { chartDisplayUnitMarks } from './display-unit-scene.ts';
 import { chartAxisTitleMarks } from './axis-title-scene.ts';
-import { chartAxisTitleSide } from './axis-title-space.ts';
+import { chartAxisTitleRotation, chartAxisTitleSide } from './axis-title-space.ts';
 import { chart3DCorner } from './three-d-walls.ts';
 import { chartAxisCrossing, chartMinorTicks } from './axis-scale.ts';
 import { chartFont, chartStroke, type ChartStroke } from './scene-style.ts';
@@ -59,10 +59,10 @@ export function threeDAxisMarks(context: SceneContext, layout: CartesianChartLay
     layout.ticks.forEach(value => draw(value, false));
     if (valueAxis.minorGridlines || valueAxis.minorTickMark && valueAxis.minorTickMark !== 'none') chartMinorTicks(layout.minimum, layout.maximum, valueAxis, layout.ticks).forEach(value => draw(value, true));
     marks.push(...chartDisplayUnitMarks(context, valueAxis, { x: valueEnd.x - 4, y: valueEnd.y - 8, anchor: 'end' }));
-    if (valueAxis.title) {
-      const titleFont = chartFont('axisTitle', valueAxis.titleStyle, model, options.resolveColor);
-      marks.push(...chartAxisTitleMarks(context, valueAxis, [{ kind: 'text', text: valueAxis.title, x: (valueStart.x + valueEnd.x) / 2 + valueDirection.x * 42, y: (valueStart.y + valueEnd.y) / 2 + valueDirection.y * 36, anchor: 'middle', rotate: valueAxis.titleStyle?.rotation ?? Math.atan2(valueEnd.y - valueStart.y, valueEnd.x - valueStart.x) * 180 / Math.PI, font: titleFont }], chartAxisTitleSide(model, valueAxis).side));
-    }
+  }
+  if (valueAxis?.title) {
+    const titleFont = chartFont('axisTitle', valueAxis.titleStyle, model, options.resolveColor);
+    marks.push(...chartAxisTitleMarks(context, valueAxis, [{ kind: 'text', text: valueAxis.title, x: (valueStart.x + valueEnd.x) / 2 + valueDirection.x * 42, y: (valueStart.y + valueEnd.y) / 2 + valueDirection.y * 36, anchor: 'middle', rotate: chartAxisTitleRotation(model, valueAxis), font: titleFont }], chartAxisTitleSide(model, valueAxis).side));
   }
   if (!categoryAxis?.deleted) {
     const font = chartFont('category', categoryAxis?.textStyle, model, options.resolveColor), skip = categoryAxis?.tickLabelSkip ?? 1;
@@ -77,21 +77,21 @@ export function threeDAxisMarks(context: SceneContext, layout: CartesianChartLay
       const anchor = project(point(entry.coordinate, edge, near));
       marks.push({ kind: 'text', text: entry.text, x: anchor.x + direction.x * 7, y: anchor.y + direction.y * font.size * (categoryAxis?.labelOffset ?? 100) / 100 + font.size * .4, anchor: horizontal ? direction.x < 0 ? 'end' : 'start' : 'middle', ...(categoryAxis?.labelRotation === undefined ? {} : { rotate: categoryAxis.labelRotation }), font });
     });
-    if (categoryAxis?.title) marks.push(...chartAxisTitleMarks(context, categoryAxis, [{ kind: 'text', text: categoryAxis.title, x: (categoryStart.x + categoryEnd.x) / 2 + categoryDirection.x * 34, y: (categoryStart.y + categoryEnd.y) / 2 + categoryDirection.y * 34, anchor: 'middle', rotate: categoryAxis.titleStyle?.rotation ?? 0, font: chartFont('axisTitle', categoryAxis.titleStyle, model, options.resolveColor) }], chartAxisTitleSide(model, categoryAxis).side));
   }
-  if (depthAxis && !depthAxis.deleted && (model.grouping === 'standard' || model.kind === 'surface')) {
+  if (categoryAxis?.title) marks.push(...chartAxisTitleMarks(context, categoryAxis, [{ kind: 'text', text: categoryAxis.title, x: (categoryStart.x + categoryEnd.x) / 2 + categoryDirection.x * 34, y: (categoryStart.y + categoryEnd.y) / 2 + categoryDirection.y * 34, anchor: 'middle', rotate: chartAxisTitleRotation(model, categoryAxis), font: chartFont('axisTitle', categoryAxis.titleStyle, model, options.resolveColor) }], chartAxisTitleSide(model, categoryAxis).side));
+  if (depthAxis && (model.grouping === 'standard' || model.kind === 'surface')) {
     const edge = depthAxis.position === 'left' ? 0 : 1, floor = valueAxis?.reversed ? layout.maximum : layout.minimum;
     const depthPoint = (depth: number) => horizontal ? point(0, (edge === 1) !== !!valueAxis?.reversed ? layout.maximum : layout.minimum, depth) : point(edge, floor, depth);
     const a = project(depthPoint(0)), b = project(depthPoint(1)), style = chartStroke('axis', depthAxis.lineStyle, model, options.resolveColor), font = chartFont('category', depthAxis.textStyle, model, options.resolveColor);
     const direction = normal(a, b, { x: edge ? 1 : -1, y: 1 });
-    marks.push(...line(a.x, a.y, b.x, b.y, style));
-    model.series.forEach((series, index) => {
+    if (!depthAxis.deleted) marks.push(...line(a.x, a.y, b.x, b.y, style));
+    if (!depthAxis.deleted) model.series.forEach((series, index) => {
       const band = geometry.depthBand(index), depth = model.kind === 'surface' ? geometry.depth(index / Math.max(1, model.series.length - 1)) : (band.start + band.end) / 2;
       const at = project(depthPoint(depth));
       if (index % (depthAxis.tickMarkSkip ?? 1) === 0) marks.push(...tick(at, direction, depthAxis.majorTickMark, style));
       if (depthAxis.tickLabelPosition !== 'none' && index % (depthAxis.tickLabelSkip ?? 1) === 0) marks.push({ kind: 'text', text: series.title ?? `Series ${index + 1}`, x: at.x + direction.x * 8, y: at.y + direction.y * font.size + font.size * .3, anchor: edge ? 'start' : 'end', font });
     });
-    if (depthAxis.title) marks.push(...chartAxisTitleMarks(context, depthAxis, [{ kind: 'text', text: depthAxis.title, x: (a.x + b.x) / 2 + direction.x * 30, y: (a.y + b.y) / 2 + direction.y * 30, anchor: 'middle', rotate: depthAxis.titleStyle?.rotation ?? 0, font: chartFont('axisTitle', depthAxis.titleStyle, model, options.resolveColor) }], chartAxisTitleSide(model, depthAxis).side));
+    if (depthAxis.title) marks.push(...chartAxisTitleMarks(context, depthAxis, [{ kind: 'text', text: depthAxis.title, x: (a.x + b.x) / 2 + direction.x * 30, y: (a.y + b.y) / 2 + direction.y * 30, anchor: 'middle', rotate: chartAxisTitleRotation(model, depthAxis), font: chartFont('axisTitle', depthAxis.titleStyle, model, options.resolveColor) }], chartAxisTitleSide(model, depthAxis).side));
   }
   return { grids, marks };
 }
