@@ -117,3 +117,14 @@ test('foreign colour lookalikes stay separate from native colour and opacity edi
   expect(text(changed)).toContain('<u:schemeClr val="accent1">');
   expect(text(changed)).toContain('<u:alpha val="10000"/>');
 });
+
+test('adding a stop materializes native implicit defaults without moving the shading element', () => {
+  const { source, node } = fixture('<a:gradFill rotWithShape="0"><a:lin ang="1200000"/><a:tileRect r="50000"/></a:gradFill>');
+  expect(readChartGradientFill(source, node)!.stops).toHaveLength(0);
+  const changed = editChartGradientFill(source, node, { kind: 'add', position: .25, color: { kind: 'scheme', value: 'accent3' } });
+  const gradient = readChartGradientFill(changed, node)!;
+  expect(gradient.stops.map(stop => stop.position)).toEqual([0, 1, .25]);
+  expect(gradient.angle).toBe(20);
+  expect(text(changed)).toContain('<a:tileRect r="50000"/>');
+  expect(text(changed).indexOf('<a:gsLst')).toBeLessThan(text(changed).indexOf('<a:lin'));
+});
