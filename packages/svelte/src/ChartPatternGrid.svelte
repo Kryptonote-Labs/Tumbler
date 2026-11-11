@@ -24,6 +24,7 @@
     else if (event.key === 'End') move(options.length - 1);
     else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onclose(); }
     else if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
       const now = Date.now(); typed = (now - lastTyped < 700 ? typed : '') + event.key.toLowerCase(); lastTyped = now;
       const query = [...typed].every(character => character === typed[0]) ? typed[0]! : typed;
       const match = [...options.slice(index + 1), ...options.slice(0, index + 1)].find(option => option.getAttribute('aria-label')?.toLowerCase().startsWith(query));

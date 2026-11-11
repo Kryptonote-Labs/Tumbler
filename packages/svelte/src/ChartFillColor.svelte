@@ -8,11 +8,12 @@
   const css = $derived(resolveChartColor(color, { themeColors }) ?? '#000000');
   const hex = $derived(css.startsWith('#') ? css.slice(0, 7) : '#' + (css.match(/[\d.]+/g)?.slice(0, 3) ?? [0, 0, 0]).map(value => Math.round(Number(value)).toString(16).padStart(2, '0')).join(''));
   function pick(next: ChartColor) { onchange(next); open = false; trigger?.focus(); }
+  function keydown(event: KeyboardEvent) { if (open && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); open = false; trigger?.focus(); } }
 </script>
 <svelte:window onpointerdown={(event) => { if (open && !root?.contains(event.target as Node)) open = false; }} />
 <div bind:this={root} class="color-control" onfocusout={(event) => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) open = false; }}>
-  <div class="row"><span>{label}</span><button bind:this={trigger} type="button" {disabled} aria-expanded={open} aria-haspopup="dialog" aria-controls={id} aria-label={`${label} colour for ${target}`} onclick={() => open = !open}><span class="swatch" style:background={css}></span><span class="value">{color.kind === 'scheme' ? names[color.value] ?? color.value : hex.toUpperCase()}</span></button></div>
-  {#if open}<div id={id} class="choices" role="dialog" tabindex="-1" aria-label={`${label} colour`} onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); open = false; trigger?.focus(); } }}>
+  <div class="row"><span>{label}</span><button bind:this={trigger} type="button" {disabled} aria-expanded={open} aria-haspopup="dialog" aria-controls={id} aria-label={`${label} colour for ${target}`} onkeydown={keydown} onclick={() => open = !open}><span class="swatch" style:background={css}></span><span class="value">{color.kind === 'scheme' ? names[color.value] ?? color.value : hex.toUpperCase()}</span></button></div>
+  {#if open}<div id={id} class="choices" role="dialog" tabindex="-1" aria-label={`${label} colour`} onkeydown={keydown}>
       <div class="themes">{#each Object.entries(names) as [value, name]}<button class="theme" type="button" {disabled} title={name} aria-label={name} aria-pressed={color.kind === 'scheme' && color.value === value} style:background={resolveChartColor({ kind: 'scheme', value }, { themeColors })} onclick={() => pick({ kind: 'scheme', value })}></button>{/each}</div>
       <label class="custom"><span>Custom…</span><input type="color" {disabled} aria-label={`Custom ${label.toLowerCase()} colour for ${target}`} value={hex} onchange={(event) => pick({ kind: 'rgb', value: event.currentTarget.value.toUpperCase() })} /></label>
     </div>{/if}
