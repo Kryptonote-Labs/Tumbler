@@ -1,5 +1,5 @@
 import { chartCreateInput, runChartCreation, type ChartCreationHost } from './chart-create.ts';
-import { OOXML_CHART_TYPES } from '@tumblerjs/charts';
+import { CHART_BAR_SHAPES, OOXML_CHART_TYPES } from '@tumblerjs/charts';
 import { z } from 'zod';
 
 const address = { node: z.number().int().nonnegative() };
@@ -21,7 +21,7 @@ const seriesEdit = z.discriminatedUnion('action', [
 ]);
 export const chartEditInput = z.union([
   z.object({ ...chartTarget, edits: z.array(chartSourceEdit).min(1) }).strict(),
-  z.object({ ...chartTarget, plot: z.number().int().nonnegative().optional(), type: z.enum(OOXML_CHART_TYPES), direction: z.enum(['bar', 'col']).optional(), grouping: z.enum(['standard', 'clustered', 'stacked', 'percentStacked']).optional(), radarStyle: z.enum(['standard', 'marker', 'filled']).optional(), scatterStyle: z.enum(['none', 'line', 'lineMarker', 'marker', 'smooth', 'smoothMarker']).optional(), splitType: z.enum(['pie', 'bar']).optional(), wireframe: z.boolean().optional() }).strict(),
+  z.object({ ...chartTarget, plot: z.number().int().nonnegative().optional(), type: z.enum(OOXML_CHART_TYPES), direction: z.enum(['bar', 'col']).optional(), grouping: z.enum(['standard', 'clustered', 'stacked', 'percentStacked']).optional(), radarStyle: z.enum(['standard', 'marker', 'filled']).optional(), scatterStyle: z.enum(['none', 'line', 'lineMarker', 'marker', 'smooth', 'smoothMarker']).optional(), splitType: z.enum(['pie', 'bar']).optional(), wireframe: z.boolean().optional(), shape: z.enum(CHART_BAR_SHAPES).optional() }).strict(),
   z.object({ ...chartTarget, series: seriesEdit }).strict(),
   z.object({ ...chartTarget, data: z.array(z.object({ type: z.enum(OOXML_CHART_TYPES), series: z.array(seriesData.extend({ index: z.number().int().nonnegative() })) }).strict()) }).strict(),
   z.object({ ...chartTarget, cells: z.array(z.object({ sheet: z.string().optional(), reference: z.string().min(1), value: z.union([z.string(), z.number().finite(), z.boolean(), z.null()]).optional(), formula: z.string().optional() }).strict().refine(cell => (cell.value !== undefined) !== (cell.formula !== undefined), 'Supply a value or a formula.')).min(1) }).strict(),

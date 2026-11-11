@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { createOoxmlChart, inspectChartSource, OOXML_CHART_TYPES, parseOoxmlChart } from '../src/index.ts';
+import { CHART_BAR_SHAPES, convertChartType, createOoxmlChart, inspectChartSource, OOXML_CHART_TYPES, parseOoxmlChart } from '../src/index.ts';
 
 for (const conformance of ['strict', 'transitional'] as const) {
   for (const type of OOXML_CHART_TYPES) {
@@ -34,3 +34,12 @@ for (const value of ['\ufffe', '\uffff', '\ud800', '\u0000']) {
     expect(() => createOoxmlChart({ ...options, categories: ['A'], series: [{ name: value, values: [1] }] })).toThrow('XML text');
   });
 }
+
+
+for (const shape of CHART_BAR_SHAPES) test(`create and convert the native ${shape} bar shape with depth grouping`, () => {
+  const options = { type: 'bar3DChart' as const, shape, grouping: 'standard' as const, categories: ['A'], series: [{ name: 'Data', values: [2] }] };
+  const bytes = createOoxmlChart(options);
+  expect(parseOoxmlChart(bytes, 'transitional')).toMatchObject({ grouping: 'standard', barShape: shape });
+  const converted = convertChartType(bytes, { type: 'bar3DChart', direction: 'bar', shape: 'cylinder' });
+  expect(parseOoxmlChart(converted, 'transitional')).toMatchObject({ grouping: 'standard', kind: 'bar', barShape: 'cylinder' });
+});

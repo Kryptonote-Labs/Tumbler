@@ -5,7 +5,7 @@ import { chartPropertyTree, chartPropertyDefinition, type ChartPropertyNode } fr
 import { chartXml, chartXmlText, standaloneChartElement as standalone } from './source-xml.ts';
 import { isOoxmlChartType } from './chart-types.ts';
 
-export type ChartTypeChange = Pick<CreateChartOptions, 'type' | 'direction' | 'grouping' | 'radarStyle' | 'scatterStyle' | 'splitType' | 'wireframe'>;
+export type ChartTypeChange = Pick<CreateChartOptions, 'type' | 'direction' | 'grouping' | 'radarStyle' | 'scatterStyle' | 'splitType' | 'wireframe' | 'shape'>;
 const HISTORY_NS = 'urn:tumblerjs:chart-authoring';
 const IDENTITY_URI = 'https://tumblerjs.org/chart-authoring/plot-identity/v1';
 const HISTORY_URI = 'https://tumblerjs.org/chart-authoring/type-history/v1';
@@ -27,6 +27,7 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
   const original = plots[plotIndex];
   const data = readChartData(bytes)[plotIndex];
   if (!original || !data) throw new RangeError('Chart plot is missing.');
+  const originalBar = original.localName.startsWith('bar');
   const count = Math.max(0, ...data.series.map(series => Math.max(series.values?.values.length ?? 0, series.categories?.values.length ?? 0, series.xValues?.values.length ?? 0)));
   const categories = data.series[0]?.categories?.values ?? data.series[0]?.xValues?.values ?? [];
   const numeric = (values: readonly (string | number | null)[] | undefined) => Array.from({ length: count }, (_, i) => typeof values?.[i] === 'number' ? values[i] as number : null);
@@ -61,6 +62,7 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
   if (change.radarStyle !== undefined) overrides.add('radarStyle');
   if (change.scatterStyle !== undefined) overrides.add('scatterStyle');
   if (change.splitType !== undefined) overrides.add('ofPieType');
+  if (change.shape !== undefined) overrides.add('shape');
   if (change.wireframe !== undefined) overrides.add('wireframe');
   const readChildren = (document: LosslessXmlDocument, element: LosslessXmlElement | undefined) => ({ document, children: elementChildren(element) });
   function merge(template: LosslessXmlElement, definition: ChartPropertyNode, current: LosslessXmlElement | undefined, saved: LosslessXmlElement | undefined, series = false): string {
@@ -84,7 +86,7 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
         // Grouping is type-specific even though its element name is shared.
         if (!series && name === 'grouping') {
           const value = candidates[0]!.attributes.find(attribute => attribute.localName === 'val')?.value;
-          if (change.type.startsWith('bar') && value === 'standard' || !change.type.startsWith('bar') && value === 'clustered') return generated.map(element => standalone(created.document, element));
+          if (change.type.startsWith('bar') && value === 'standard' && !originalBar || !change.type.startsWith('bar') && value === 'clustered') return generated.map(element => standalone(created.document, element));
         }
         return candidates.map(element => element.localName === name ? standalone(document, element) : renamed(document, element, name));
       }

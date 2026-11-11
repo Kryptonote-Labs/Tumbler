@@ -1,3 +1,4 @@
+import { parseChart3DProperties, parseBarShape } from './three-d-properties.ts';
 import { parseSurfaceBands } from './surface-bands.ts';
 import { parsePlotDecorations } from './plot-decorations.ts';
 import { parseChartGradient } from './gradient-parser.ts';
@@ -113,7 +114,7 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
   ).map((element) => parseAxis(element, chartNamespace, drawingNamespace));
   if (series.length > MAX_SERIES) throw new ChartPreviewLimitError(`Chart exceeds ${MAX_SERIES} series.`);
   if (axes.length > MAX_AXES) throw new ChartPreviewLimitError(`Chart exceeds ${MAX_AXES} axes.`);
-  const rawGrouping = val(children(chartType, chartNamespace, "grouping")[0]) ?? "standard";
+  const rawGrouping = val(children(chartType, chartNamespace, "grouping")[0]) ?? (["bar", "column"].includes(kind) ? "clustered" : "standard");
   const grouping = rawGrouping === "stacked" ? "stacked" as const
     : rawGrouping === "percentStacked" ? "percent-stacked" as const
     : rawGrouping === "clustered" ? "clustered" as const
@@ -155,7 +156,7 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
     varyColors: booleanVal(children(chartType, chartNamespace, "varyColors")[0], ["pie", "doughnut", "of-pie"].includes(kind)),
     ...(parseChartDataLabels(children(chartType, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace) ? { dataLabels: parseChartDataLabels(children(chartType, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace)! } : {}),
     sourceType: chartType.localName,
-    ...(chartType.localName.includes('3D') ? { threeD: parseView3D(children(chart, chartNamespace, 'view3D')[0], chartNamespace) } : {}),
+    ...parseChart3DProperties(chart, chartType, chartNamespace, drawingNamespace),
     ...(kind === 'radar' ? { radarStyle: radarStyle(val(children(chartType, chartNamespace, 'radarStyle')[0]) ?? 'standard') } : {}),
     ...(kind === 'surface' ? { wireframe: booleanVal(children(chartType, chartNamespace, 'wireframe')[0], false), ...(parseSurfaceBands(chartType, chartNamespace, drawingNamespace) ? { bandFormats: parseSurfaceBands(chartType, chartNamespace, drawingNamespace)! } : {}) } : {}),
     ...(kind === 'of-pie' ? { splitType: val(children(chartType, chartNamespace, 'ofPieType')[0]) === 'bar' ? 'bar' as const : 'pie' as const,
@@ -163,7 +164,7 @@ function parseChart(bytes: Uint8Array, conformance: "strict" | "transitional", o
       splitBy: splitBy(val(children(chartType, chartNamespace, 'splitType')[0]) ?? 'auto'),
       splitPosition: Number(val(children(chartType, chartNamespace, 'splitPos')[0]) ?? 2),
       secondPieSize: Number(val(children(chartType, chartNamespace, 'secondPieSize')[0]) ?? 75) } : {}),
-    ...(kind === 'pie' || kind === 'doughnut' ? { firstSliceAngle: Number(val(children(chartType, chartNamespace, 'firstSliceAng')[0]) ?? 0) } : {}),
+    ...(chartType.localName !== 'pie3DChart' && (kind === 'pie' || kind === 'doughnut') ? { firstSliceAngle: Number(val(children(chartType, chartNamespace, 'firstSliceAng')[0]) ?? 0) } : {}),
     ...textStyleProperties(document.root, chartNamespace, drawingNamespace),
     ...titleStyleProperties(children(chart, chartNamespace, "title")[0], chartNamespace, drawingNamespace),
     ...(readChartTitleText(titleElement, chartNamespace, drawingNamespace) ? { titleText: readChartTitleText(titleElement, chartNamespace, drawingNamespace)! } : {}),
@@ -211,17 +212,6 @@ function radarStyle(value: string): 'standard' | 'marker' | 'filled' {
   throw new ChartParseError('Invalid radar chart style.');
 }
 
-function parseView3D(view: LosslessXmlElement | undefined, namespace: string) {
-  const number = (name: string, fallback: number) => {
-    const value = view && val(children(view, namespace, name)[0]);
-    const parsed = value === undefined ? fallback : Number(value.replace(/%$/, ''));
-    if (!Number.isFinite(parsed)) throw new ChartParseError('Invalid 3D chart view.');
-    return parsed;
-  };
-  return { rotationX: number('rotX', 15), rotationY: number('rotY', 20), perspective: number('perspective', 30),
-    rightAngleAxes: view ? booleanVal(children(view, namespace, 'rAngAx')[0], true) : true, depthPercent: number('depthPercent', 100) };
-}
-
 function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespace: string, drawingNamespace: string): ChartSeries {
   const tx = children(element, chartNamespace, "tx")[0];
   const titleRef = tx === undefined ? undefined : children(tx, chartNamespace, "strRef")[0];
@@ -240,6 +230,7 @@ function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespac
     ...(gradient ? { gradient } : {}),
     ...(parseChartDataLabels(children(element, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace) ? { dataLabels: parseChartDataLabels(children(element, chartNamespace, 'dLbls')[0], chartNamespace, drawingNamespace)! } : {}),
     ...parseChartAnalytics(element, chartNamespace, drawingNamespace, node => parseData(node, chartNamespace)),
+    ...(parseBarShape(children(element, chartNamespace, 'shape')[0]) ? { barShape: parseBarShape(children(element, chartNamespace, 'shape')[0])! } : {}),
     explosion: Number(val(children(element, chartNamespace, 'explosion')[0]) ?? 0),
     pointFormats: points.map(point => {
       const shape = children(point, chartNamespace, 'spPr')[0], gradient = parseChartGradient(shape, drawingNamespace);

@@ -95,6 +95,7 @@ export interface ChartPointFormat {
 }
 
 export interface ChartSeries {
+  readonly barShape?: import('./bar-shapes.ts').ChartBarShape;
   readonly gradient?: ChartGradient;
   readonly trendlines?: readonly import('./analytics-parser.ts').ChartTrendline[];
   readonly errorBars?: readonly import('./analytics-parser.ts').ChartErrorBars[];
@@ -204,7 +205,10 @@ export interface SupportedChartModel extends ChartModelBase {
   readonly sourceType?: string;
   readonly varyColors?: boolean;
   readonly dataLabels?: import('./data-labels.ts').ChartDataLabels;
-  readonly threeD?: { readonly rotationX: number; readonly rotationY: number; readonly perspective: number; readonly rightAngleAxes: boolean; readonly depthPercent: number };
+  readonly threeD?: import('./three-d-properties.ts').ChartView3D;
+  readonly walls?: import('./three-d-properties.ts').ChartWalls;
+  readonly gapDepth?: number;
+  readonly barShape?: import('./bar-shapes.ts').ChartBarShape;
   readonly radarStyle?: 'standard' | 'marker' | 'filled';
   readonly bandFormats?: readonly import('./surface-bands.ts').ChartSurfaceBand[];
   readonly wireframe?: boolean;

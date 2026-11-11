@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { OOXML_CHART_TYPES, createOoxmlChart, chartBytesToBase64 } from '@tumblerjs/charts';
+import { CHART_BAR_SHAPES, OOXML_CHART_TYPES, createOoxmlChart, chartBytesToBase64 } from '@tumblerjs/charts';
 import { createChartWorkbook } from '@tumblerjs/sheets';
 import type { OperationHost } from './registry.ts';
 
@@ -19,7 +19,7 @@ export const chartCreateInput = z.object({
     series: z.array(z.object({ name: z.string(), values: numbers, xValues: numbers.optional(), bubbleSizes: numbers.optional() }).strict()),
     direction: z.enum(['bar', 'col']).optional(), grouping: z.enum(['standard', 'clustered', 'stacked', 'percentStacked']).optional(),
     radarStyle: z.enum(['standard', 'marker', 'filled']).optional(), scatterStyle: z.enum(['none', 'line', 'lineMarker', 'marker', 'smooth', 'smoothMarker']).optional(),
-    splitType: z.enum(['pie', 'bar']).optional(), wireframe: z.boolean().optional(),
+    splitType: z.enum(['pie', 'bar']).optional(), wireframe: z.boolean().optional(), shape: z.enum(CHART_BAR_SHAPES).optional(),
   }).strict(),
 }).strict();
 export type ChartCreateInput = z.infer<typeof chartCreateInput>;
