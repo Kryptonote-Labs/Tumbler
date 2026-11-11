@@ -19,7 +19,7 @@ function runXml(run: ChartTextParagraph['runs'][number], ns: string) {
   const source = run.sourceWrapper;
   const name = source?.localName === 'fld' ? 'fld' : source?.localName === 'br' && run.text === '\n' ? 'br' : 'r';
   const properties = chartRunPropertiesXml(run.style ?? {}, ns);
-  const text = name === 'br' ? '' : `<a:t xmlns:a="${ns}" xml:space="preserve">${chartXmlText(run.text)}</a:t>`;
+  const text = name === 'br' ? '' : `<a:t xmlns:a="${ns}" xml:space="preserve">${chartXmlText(run.text).replaceAll('\r', '&#xD;')}</a:t>`;
   return wrap(name, source, ns, properties + retained(source, ns) + text);
 }
 
