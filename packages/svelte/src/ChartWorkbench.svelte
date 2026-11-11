@@ -13,7 +13,7 @@
     themeColors?: Readonly<Record<string, string>>;
     embeddedData?: boolean;
     oneditdata?: () => void;
-    onchange: (content: ChartContent) => void;
+    onchange: (content: ChartContent, reason?: 'type' | 'series') => void;
   } = $props();
   let current = $derived(content);
   const bytes = $derived(new TextEncoder().encode(current.xml));
@@ -36,14 +36,14 @@
       return { ...chartContentModel({ xml }), themeColors };
     } catch (cause) { return { status: 'unsupported', chartType: undefined, reason: cause instanceof Error ? cause.message : 'This data cannot use that chart type.', title: undefined, legend: undefined }; }
   });
-  function publish(content: ChartContent) { if (disabled) return; current = content; error = undefined; onchange(content); }
+  function publish(content: ChartContent, reason?: 'type' | 'series') { if (disabled) return; current = content; error = undefined; onchange(content, reason); }
   function changeType(change: ChartTypeChange) {
     try {
       const source = convertChartType(bytes, change, selectedPlot);
       if (embeddedData && workbook) {
         const bound = extendChartWorkbook(source, workbook);
-        publish({ xml: new TextDecoder().decode(bound.source), workbook: chartBytesToBase64(bound.artifact.bytes()) });
-      } else publish({ ...current, xml: new TextDecoder().decode(source) });
+        publish({ xml: new TextDecoder().decode(bound.source), workbook: chartBytesToBase64(bound.artifact.bytes()) }, 'type');
+      } else publish({ ...current, xml: new TextDecoder().decode(source) }, 'type');
     } catch (cause) { error = cause instanceof Error ? cause.message : 'This chart type could not be applied.'; }
   }
   function openData() {
@@ -61,8 +61,8 @@
       if (embeddedData && workbook) {
         const bound = extendChartWorkbook(source, workbook);
         const refreshed = refreshChartWorkbook(bound.source, bound.artifact);
-        publish({ xml: new TextDecoder().decode(refreshed), workbook: chartBytesToBase64(bound.artifact.bytes()) });
-      } else publish({ ...current, xml: new TextDecoder().decode(source) });
+        publish({ xml: new TextDecoder().decode(refreshed), workbook: chartBytesToBase64(bound.artifact.bytes()) }, 'series');
+      } else publish({ ...current, xml: new TextDecoder().decode(source) }, 'series');
     } catch (cause) { error = cause instanceof Error ? cause.message : 'The series could not be changed.'; }
   }
   function changeData(artifact: SpreadsheetArtifact) {

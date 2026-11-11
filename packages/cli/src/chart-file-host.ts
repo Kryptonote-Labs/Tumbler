@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chmodSync, closeSync, openSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { extname } from 'node:path';
 import { editChartSource, inspectChartSource, readChartData, readChartContent, writeChartContent } from '@tumblerjs/charts';
-import { applyChartContentEdit, refreshChartWorkbook, openSpreadsheetArtifact } from '@tumblerjs/sheets';
+import { applyChartContentEdit, refreshChartWorkbook, openSpreadsheetArtifact, spreadsheetDrawingObjectId, applySpreadsheetCommand } from '@tumblerjs/sheets';
 import { beginPackageTransaction, openOpcPackage, type OpcPackage, type OpcPart } from '@tumblerjs/opc';
 import { chartEditInput, type ChartOperationHost } from './charts.ts';
 
@@ -20,6 +20,16 @@ function chartPart(pkg: OpcPackage, name: string) {
   const part = pkg.getPart(name);
   if (!part || !chartContentTypes.has(part.contentType)) throw new Error(`Chart part ${name} is missing.`);
   return part;
+}
+function spreadsheetOwner(bytes: Uint8Array, part: OpcPart) {
+  const artifact = openSpreadsheetArtifact(bytes);
+  for (const sheet of artifact.workbook.sheets) {
+    const selected = artifact.selectSheet(sheet.sheetId), drawing = selected.worksheet.drawing;
+    const frame = drawing?.charts.find(chart => chart.partName?.equivalenceKey === part.name.equivalenceKey);
+    const objectId = frame && spreadsheetDrawingObjectId(drawing!, frame.anchor);
+    if (objectId !== undefined) return { artifact: selected, objectId };
+  }
+  throw new TypeError('The chart is not attached to a worksheet drawing.');
 }
 function liveSource(bytes: Uint8Array, pkg: OpcPackage, part: OpcPart): Uint8Array {
   const source = pkg.readPart(part);
@@ -64,10 +74,17 @@ export function chartFileHost(): Required<ChartOperationHost> {
         const pkg = open(path, original);
         const part = chartPart(pkg, input.part);
         if ('cells' in input && extname(path).toLowerCase() === '.xlsx') throw new TypeError('Edit source cells with sheets commands in the owning workbook.');
-        const transaction = beginPackageTransaction(pkg);
-        if ('edits' in input) transaction.replacePart(part.name, editChartSource(pkg.readPart(part), input.edits));
-        else writeChartContent(transaction, part.name, applyChartContentEdit({ ...readChartContent(pkg, part.name), xml: new TextDecoder().decode(liveSource(original, pkg, part)) }, input));
-        const bytes = transaction.commit();
+        let bytes: Uint8Array;
+        if (!('edits' in input) && extname(path).toLowerCase() === '.xlsx') {
+          const { artifact, objectId } = spreadsheetOwner(original, part);
+          const content = applyChartContentEdit({ ...readChartContent(pkg, part.name), xml: new TextDecoder().decode(refreshChartWorkbook(pkg.readPart(part), artifact)) }, input);
+          bytes = applySpreadsheetCommand(artifact, { name: 'edit-chart', sheetId: String(artifact.activeSheet.sheetId), objectId, content, bindUnboundData: true }).bytes();
+        } else {
+          const transaction = beginPackageTransaction(pkg);
+          if ('edits' in input) transaction.replacePart(part.name, editChartSource(pkg.readPart(part), input.edits));
+          else writeChartContent(transaction, part.name, applyChartContentEdit(readChartContent(pkg, part.name), input));
+          bytes = transaction.commit();
+        }
         const result = inspect(bytes, open(path, bytes), input.part);
         const mode = statSync(path).mode;
         writeFileSync(temporary, bytes, { flag: 'wx', mode });

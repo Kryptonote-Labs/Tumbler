@@ -1,3 +1,4 @@
+import { extendChartWorkbook } from './chart-workbook.ts';
 import { addChartContent, writeChartContent } from '@tumblerjs/charts';
 import { z } from 'zod';
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, parseLosslessXml, presetGeometries, type LosslessXmlElement } from '@tumblerjs/ooxml';
@@ -12,8 +13,8 @@ const position = { x: z.number().finite(), y: z.number().finite(), width: z.numb
 const chartContent = z.object({ xml: z.string(), workbook: z.string().optional() }).strict();
 const target = { sheetId: id, objectId: z.number().int().nonnegative() };
 export const spreadsheetDrawingCommand = z.discriminatedUnion('name', [
-  z.object({ name: z.literal('insert-chart'), sheetId: id, ...position, content: chartContent }).strict(),
-  z.object({ name: z.literal('edit-chart'), ...target, content: chartContent }).strict(),
+  z.object({ name: z.literal('insert-chart'), sheetId: id, ...position, content: chartContent, bindUnboundData: z.boolean().optional() }).strict(),
+  z.object({ name: z.literal('edit-chart'), ...target, content: chartContent, bindUnboundData: z.boolean().optional() }).strict(),
   z.object({ name: z.literal('insert-shape'), sheetId: id, ...position, preset: id, text: z.string().optional(), fill: z.string().optional(), stroke: z.string().optional() }).strict(),
   z.object({ name: z.literal('insert-image'), sheetId: id, ...position, data: id, contentType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']), alt: z.string().optional() }).strict(),
   z.object({ name:z.literal('align-drawing'), ...target, range:id, action:z.enum(['left','center','right','top','middle','bottom']) }).strict(),
@@ -38,12 +39,17 @@ export function applySpreadsheetDrawingCommand(artifact: SpreadsheetArtifact, in
   const sheet = artifact.workbook.sheets.find(s => String(s.sheetId) === command.sheetId || s.name === command.sheetId);
   if (!sheet) throw new Error('Worksheet does not exist.');
   const worksheet = artifact.selectSheet(sheet.sheetId).worksheet;
+  if (command.name === 'insert-chart' && command.bindUnboundData) {
+    const bound = extendChartWorkbook(new TextEncoder().encode(command.content.xml), artifact.selectSheet(sheet.sheetId));
+    return applySpreadsheetDrawingCommand(bound.artifact.selectSheet(artifact.activeSheet.sheetId), { ...command, content: { ...command.content, xml: new TextDecoder().decode(bound.source) }, bindUnboundData: false });
+  }
   if (command.name === 'edit-chart') {
     const drawing = worksheet.drawing;
     const frame = drawing?.charts.find(frame => spreadsheetDrawingObjectId(drawing, frame.anchor) === command.objectId);
     if (!frame?.partName) throw new TypeError('Select an editable chart.');
-    const transaction = beginPackageTransaction(artifact.workbook.package);
-    writeChartContent(transaction, frame.partName, command.content);
+    const bound = command.bindUnboundData ? extendChartWorkbook(new TextEncoder().encode(command.content.xml), artifact.selectSheet(sheet.sheetId)) : undefined;
+    const transaction = beginPackageTransaction(bound?.artifact.workbook.package ?? artifact.workbook.package);
+    writeChartContent(transaction, frame.partName, bound ? { ...command.content, xml: new TextDecoder().decode(bound.source) } : command.content);
     const workbook = openSpreadsheet(transaction.commitPackage());
     return new SpreadsheetArtifact(workbook, workbook.sheet(artifact.activeSheet.sheetId)!);
   }

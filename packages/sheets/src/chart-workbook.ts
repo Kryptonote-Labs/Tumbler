@@ -1,3 +1,4 @@
+import { parseLosslessXml } from '@tumblerjs/ooxml';
 import { bindChartData, readChartData, updateChartData, type ChartEditablePlot, type ChartEditableSequence } from '@tumblerjs/charts';
 import { createSpreadsheet, applySpreadsheetCommand } from './commands.ts';
 import { SpreadsheetArtifact, openSpreadsheetArtifact } from './artifact.ts';
@@ -18,11 +19,23 @@ function bindWorkbook(source: Uint8Array, input: SpreadsheetArtifact, onlyUnboun
   const reference = onlyUnbound ? data.flatMap(plot => plot.series.flatMap(series => [series.categories, series.values, series.xValues, series.bubbleSizes])).flatMap(sequence => sequence?.formula ? [parseSpreadsheetChartReference(sequence.formula, input.activeSheet.name)] : []).find(reference => reference && input.workbook.sheet(reference.sheet)) : undefined;
   let artifact = reference ? input.selectSheet(reference.sheet) : input;
   let column = 1;
-  if (onlyUnbound) for (const row of artifact.worksheet.rows) for (const cell of row.cells) column = Math.max(column, cell.address.column + 1);
+  if (onlyUnbound) {
+    for (const row of artifact.worksheet.rows) for (const cell of row.cells) column = Math.max(column, cell.address.column + 1);
+    // Blank source cells still belong to their bound ranges. Reserve chart/title/error references before appending roles.
+    const sources = [source, ...artifact.workbook.package.parts.filter(part => part.contentType === 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml').map(part => artifact.workbook.package.readPart(part))];
+    for (const bytes of sources) {
+      const xml = parseLosslessXml(bytes);
+      for (const formula of xml.elements(xml.root.namespaceUri, 'f')) {
+        const reference = parseSpreadsheetChartReference(xml.textContent(formula), artifact.activeSheet.name);
+        if (reference && artifact.workbook.sheet(reference.sheet)?.sheetId === artifact.activeSheet.sheetId) column = Math.max(column, reference.range.end.column + 1);
+      }
+    }
+  }
   const required = data.flatMap(plot => plot.series.flatMap(series => [series.categories, series.xValues, series.values, series.bubbleSizes, ...(series.errorBars?.flatMap(errors => [errors.plus, errors.minus]) ?? [])])).reduce((count, sequence) => count + (sequence && (!onlyUnbound || !sequence.formula) ? sequence.levels?.length ?? 1 : 0), 0);
-  if (column + required > EXCEL_MAX_COLUMNS + 1) {
+  const titleColumns = onlyUnbound ? data.reduce((total, plot) => total + plot.series.filter(series => series.values?.formula !== undefined && series.nameFormula === undefined).length, 0) : 0;
+  if (column + required + titleColumns > EXCEL_MAX_COLUMNS + 1) {
     let name = 'Chart data';
-    for (let suffix = 2; artifact.workbook.sheets.some(sheet => sheet.name === name); suffix++) name = `Chart data ${suffix}`;
+    for (let suffix = 2; artifact.workbook.sheets.some(sheet => sheet.name.toLowerCase() === name.toLowerCase()); suffix++) name = `Chart data ${suffix}`;
     artifact = applySpreadsheetCommand(artifact, { name: 'add-sheet', nameValue: name });
     artifact = artifact.selectSheet(name);
     column = 1;
