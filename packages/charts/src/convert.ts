@@ -1,4 +1,5 @@
 import { applyScatterStyle } from './scatter-style.ts';
+import { convertChartAxes, CHART_AUTHORING_NS } from './convert-axes.ts';
 import { beginLosslessXmlEdit, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from '@tumblerjs/ooxml';
 import { createOoxmlChart, type CreateChartOptions } from './create.ts';
 import { readChartData } from './data-edit.ts';
@@ -7,7 +8,7 @@ import { chartXml, chartXmlText, standaloneChartElement as standalone } from './
 import { isOoxmlChartType } from './chart-types.ts';
 
 export type ChartTypeChange = Pick<CreateChartOptions, 'type' | 'direction' | 'grouping' | 'radarStyle' | 'scatterStyle' | 'splitType' | 'wireframe' | 'shape' | 'bubble3D'>;
-const HISTORY_NS = 'urn:tumblerjs:chart-authoring';
+const HISTORY_NS = CHART_AUTHORING_NS;
 const IDENTITY_URI = 'https://tumblerjs.org/chart-authoring/plot-identity/v1';
 const HISTORY_URI = 'https://tumblerjs.org/chart-authoring/type-history/v1';
 
@@ -101,46 +102,7 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
   let converted = merge(target, properties, original, archived?.root);
   if (change.type === 'scatterChart' && change.scatterStyle !== undefined) converted = applyScatterStyle(converted, change.scatterStyle);
   const edit = beginLosslessXmlEdit(source.document);
-  // Reuse compatible axes so bounds, number formats and text styling survive.
-  const axes = source.children(source.plotArea).filter(element => ['catAx', 'valAx', 'dateAx', 'serAx'].includes(element.localName));
-  let nextId = Math.max(0, ...axes.map(axis => Number(source.children(axis, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value ?? 0))) + 1;
-  const generatedAxes = created.children(created.plotArea).filter(element => ['catAx', 'valAx', 'serAx'].includes(element.localName));
-  const originalAxisIds = source.children(original, 'axId').map(axis => Number(axis.attributes.find(attribute => attribute.localName === 'val')?.value));
-  const archivedAxisIds = elementChildren(archived?.root).filter(axis => axis.localName === 'axId').map(axis => Number(axis.attributes.find(attribute => attribute.localName === 'val')?.value));
-  const archivedAxes = archivedAxisIds.map(id => axes.find(axis => Number(source.children(axis, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value) === id));
-  const otherAxisIds = new Set(plots.filter(plot => plot !== original).flatMap(plot => source.children(plot, 'axId').map(axis => Number(axis.attributes.find(attribute => attribute.localName === 'val')?.value))));
-  const originalAxes = originalAxisIds.map(id => axes.find(axis => Number(source.children(axis, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value) === id));
-  const used = new Set<number>();
-  const mapping = new Map<number, number>();
-  const additions: string[] = [];
-  for (const axis of generatedAxes) {
-    const originalId = Number(created.children(axis, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value);
-    const position = created.children(axis, 'axPos')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value;
-    const owned = originalAxes[generatedAxes.indexOf(axis)];
-    const savedAxis = archivedAxes[generatedAxes.indexOf(axis)];
-    const existing = owned?.localName === axis.localName && !used.has(owned.id) ? owned : savedAxis?.localName === axis.localName && !used.has(savedAxis.id) ? savedAxis : axes.find(candidate => !originalAxisIds.length && !otherAxisIds.has(Number(source.children(candidate, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value)) && candidate.localName === axis.localName && !used.has(candidate.id) && source.children(candidate, 'axPos')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value === position);
-    if (existing) {
-      used.add(existing.id);
-      mapping.set(originalId, Number(source.children(existing, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value));
-    } else { mapping.set(originalId, nextId++); additions.push(standalone(created.document, axis)); }
-  }
-  const remap = (xml: string) => {
-    const document = parseLosslessXml(new TextEncoder().encode(xml)), edit = beginLosslessXmlEdit(document);
-    for (const element of document.elements(source.namespace)) if (['axId', 'crossAx'].includes(element.localName)) {
-      const val = element.attributes.find(attribute => attribute.localName === 'val');
-      const mapped = val && mapping.get(Number(val.value));
-      if (val && mapped !== undefined) edit.setAttribute(val, String(mapped));
-    }
-    return new TextDecoder().decode(edit.commit().bytes);
-  };
-  for (const axis of generatedAxes) {
-    const id = Number(created.children(axis, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value);
-    const cross = Number(created.children(axis, 'crossAx')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value);
-    const existing = axes.find(axis => Number(source.children(axis, 'axId')[0]?.attributes.find(attribute => attribute.localName === 'val')?.value) === mapping.get(id));
-    const reference = existing && source.children(existing, 'crossAx')[0]?.attributes.find(attribute => attribute.localName === 'val');
-    const targetId = mapping.get(cross);
-    if (reference && targetId !== undefined && reference.value !== String(targetId)) edit.setAttribute(reference, String(targetId));
-  }
+  const axes = convertChartAxes({ source, created, original, archived, peers: plots.filter(plot => plot !== original), historyExtension, edit });
   {
     const document = parseLosslessXml(new TextEncoder().encode(converted));
     if (!document.elements(HISTORY_NS, 'identity').length) {
@@ -153,17 +115,13 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
       converted = new TextDecoder().decode(edit.commit().bytes);
     }
   }
-  converted = remap(converted);
+  converted = axes.remapPlot(converted);
   edit.replaceElementMarkup(original, converted);
-  for (const axis of additions) {
-    const extension = source.children(source.plotArea, 'extLst')[0];
-    if (extension) edit.insertMarkupBefore(extension, remap(axis)); else edit.appendMarkup(source.plotArea, remap(axis));
-  }
   if ((change.type.includes('3D') || change.type === 'surfaceChart') && !source.children(source.chart, 'view3D').length) {
     const view = created.children(created.chart, 'view3D')[0];
     if (view) edit.insertMarkupBefore(source.plotArea, standalone(created.document, view));
   }
-  const history = `<c:ext xmlns:c="${source.namespace}" uri="${HISTORY_URI}"><tb:history xmlns:tb="${HISTORY_NS}">${[...histories].map(([key, xml]) => { const [plot, type] = key.split('/'); return `<tb:plot plot="${chartXmlText(plot!)}" type="${chartXmlText(type!)}">${chartXmlText(xml)}</tb:plot>`; }).join('')}</tb:history></c:ext>`;
+  const history = `<c:ext xmlns:c="${source.namespace}" uri="${HISTORY_URI}"><tb:history xmlns:tb="${HISTORY_NS}">${[...histories].map(([key, xml]) => { const [plot, type] = key.split('/'); return `<tb:plot plot="${chartXmlText(plot!)}" type="${chartXmlText(type!)}">${chartXmlText(xml)}</tb:plot>`; }).join('')}${axes.history}</tb:history></c:ext>`;
   if (historyExtension) edit.replaceElementMarkup(historyExtension, history);
   else if (historyContainer && !historyContainer.selfClosing) edit.appendMarkup(historyContainer, history);
   else if (historyContainer) edit.replaceElementMarkup(historyContainer, `<c:extLst xmlns:c="${source.namespace}">${history}</c:extLst>`);
