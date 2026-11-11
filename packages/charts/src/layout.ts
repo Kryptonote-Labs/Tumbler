@@ -1,4 +1,5 @@
 import type { ChartSceneOptions } from './scene-marks.ts';
+import { chartPieData, chartPieSlices } from './pie-data.ts';
 import { layoutChartLegend } from './legend-layout.ts';
 import { chartAxisTitleSpace } from './axis-title-space.ts';
 import { chartSurfaceLevels } from './legend-items.ts';
@@ -288,17 +289,8 @@ export function chartValueCoordinate(value: number, minimum: number, maximum: nu
 }
 
 export function layoutPieSlices(model: SupportedChartModel): readonly PieSlice[] {
-  const values = model.series[0]?.values?.points.flatMap((point) =>
-    typeof point.value === "number" && point.value > 0 ? [{ index: point.index, value: point.value }] : []
-  ) ?? [];
-  const total = values.reduce((sum, point) => sum + point.value, 0);
-  if (total <= 0) return Object.freeze([]);
-  let angle = -Math.PI / 2 + (model.firstSliceAngle ?? model.threeD?.rotationY ?? 0) * Math.PI / 180;
-  return Object.freeze(values.map((point) => {
-    const startAngle = angle;
-    angle += point.value / total * Math.PI * 2;
-    return Object.freeze({ ...point, startAngle, endAngle: angle });
-  }));
+  const { points: values, fractions } = chartPieData(model.series[0]);
+  return chartPieSlices(values, fractions, model.firstSliceAngle ?? model.threeD?.rotationY ?? 0);
 }
 
 export function pieArcPath(cx: number, cy: number, outerRadius: number, startAngle: number, endAngle: number, innerRadius = 0): string {
