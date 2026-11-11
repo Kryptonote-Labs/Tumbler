@@ -79,6 +79,11 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
   const overrides = new Set<string>(['ser', 'axId']);
   if (change.direction !== undefined) overrides.add('barDir');
   if (change.grouping !== undefined) overrides.add('grouping');
+  if (change.grouping !== undefined && change.type === 'barChart') {
+    const previous = original.localName === change.type ? original : archived?.root;
+    const grouping = elementChildren(previous).find(child => child.localName === 'grouping')?.attributes.find(attribute => attribute.localName === 'val')?.value ?? 'clustered';
+    if (grouping !== change.grouping) overrides.add('overlap');
+  }
   if (change.radarStyle !== undefined) overrides.add('radarStyle');
   if (change.scatterStyle !== undefined) overrides.add('scatterStyle');
   if (change.splitType !== undefined) overrides.add('ofPieType');
