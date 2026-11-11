@@ -3,7 +3,7 @@
   import { editChartGradientFill, mergeChartFillDraft, readChartGradientFill, type ChartContent, type ChartGradientEdit, type ChartGradientType, type ChartPropertyNode } from '@tumblerjs/charts';
   import ChartFillColor from './ChartFillColor.svelte';
   import ChartGradientStops from './ChartGradientStops.svelte';
-  import { chartGradientStopAt } from './chart-gradient-ramp.ts';
+  import { chartGradientStopAt, chartPercent } from './chart-gradient-ramp.ts';
   let { content, target, targetKey, label, themeColors, disabled = false, open = $bindable(false), showTrigger = true, preview, onpreview, onchange, onclose }: {
     content: ChartContent; target: ChartPropertyNode; targetKey: string; label: string; themeColors: Readonly<Record<string, string>>; disabled?: boolean; open?: boolean; showTrigger?: boolean;
     preview?: Snippet | undefined; onpreview?: ((bytes: Uint8Array | undefined) => void) | undefined; onchange: (content: ChartContent) => void; onclose?: () => void;
@@ -80,12 +80,12 @@
       {#if gradient}
         {#if preview}<div class="preview">{@render preview()}</div>{/if}
         <label class="row"><span>Type</span><select {disabled} aria-label={`Gradient type for ${label}`} value={gradient.type} onchange={(event) => run({ kind: 'settings', type: event.currentTarget.value as ChartGradientType })}><option value="linear">Linear</option><option value="circle">Circular</option><option value="rect">Rectangular</option>{#if gradient.type === 'shape'}<option value="shape">Shape</option>{/if}</select></label>
-        {#if gradient.type === 'linear'}<label class="row"><span>Angle</span><input type="number" {disabled} step="1" aria-label={`Gradient angle for ${label}`} value={gradient.angle} onchange={(event) => { if (event.currentTarget.value !== '' && event.currentTarget.validity.valid) run({ kind: 'settings', angle: event.currentTarget.valueAsNumber }); }} /></label>{/if}
+        {#if gradient.type === 'linear'}<label class="row"><span>Angle</span><input type="number" {disabled} step="any" aria-label={`Gradient angle for ${label}`} value={gradient.angle} onchange={(event) => { if (event.currentTarget.value !== '' && event.currentTarget.validity.valid) run({ kind: 'settings', angle: event.currentTarget.valueAsNumber }); }} /></label>{/if}
         <ChartGradientStops bind:this={stopEditor} stops={gradient.stops} {keys} bind:selected {label} {themeColors} {disabled} onposition={(index, position) => { selected = index; stop({ position }); }} onadd={add} onremove={(index) => { const item = gradient?.stops[index]; if (item) run({ kind: 'remove', node: item.node }); }} />
         {#if current}
-          <label class="row"><span>Position</span><input type="number" {disabled} min="0" max="100" step="0.1" aria-label={`Gradient stop position for ${label}`} value={Math.round(current.position * 10000) / 100} onchange={(event) => { if (event.currentTarget.value !== '' && event.currentTarget.validity.valid) stop({ position: event.currentTarget.valueAsNumber / 100 }); }} /></label>
+          <label class="row"><span>Position</span><input type="number" {disabled} min="0" max="100" step="any" aria-label={`Gradient stop position for ${label}`} value={chartPercent(current.position)} onchange={(event) => { if (event.currentTarget.value !== '' && event.currentTarget.validity.valid) stop({ position: event.currentTarget.valueAsNumber / 100 }); }} /></label>
           <ChartFillColor label="Colour" target={`${label} gradient stop ${selectedNumber}`} color={current.color ?? { kind: 'scheme', value: 'accent1' }} unresolved={!current.color} {themeColors} {disabled} onchange={(color) => stop({ color })} />
-          <label class="row"><span>Opacity</span><input type="number" {disabled} min="0" max="100" step="1" aria-label={`Gradient stop opacity for ${label}`} value={Math.round(current.opacity * 10000) / 100} onchange={(event) => { if (event.currentTarget.value !== '' && event.currentTarget.validity.valid) stop({ opacity: event.currentTarget.valueAsNumber / 100 }); }} /></label>
+          <label class="row"><span>Opacity</span><input type="number" {disabled} min="0" max="100" step="any" aria-label={`Gradient stop opacity for ${label}`} value={chartPercent(current.opacity)} onchange={(event) => { if (event.currentTarget.value !== '' && event.currentTarget.validity.valid) stop({ opacity: event.currentTarget.valueAsNumber / 100 }); }} /></label>
         {/if}
           <div class="buttons"><button type="button" {disabled} onclick={() => add()}>Add stop</button><button type="button" disabled={disabled || gradient.stops.length <= 2} onclick={() => current && run({ kind: 'remove', node: current.node })}>Remove stop</button></div>
       {/if}

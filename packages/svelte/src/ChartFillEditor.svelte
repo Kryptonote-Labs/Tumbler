@@ -3,7 +3,7 @@
   import { chartColorOpacity, readChartGradientFill, setChartSolidFill, clearChartFill, readChartFill, resolveChartColor, setChartNoFill, setChartPatternFill, type ChartColor, type ChartContent, type ChartPropertyNode } from '@tumblerjs/charts';
   import type { DrawingPatternPreset } from '@tumblerjs/ooxml';
   import DrawingGradientPaint from './DrawingGradientPaint.svelte';
-  import { chartGradientRamp } from './chart-gradient-ramp.ts';
+  import { chartGradientRamp, chartPercent } from './chart-gradient-ramp.ts';
   import ChartGradientEditor from './ChartGradientEditor.svelte';
   import ChartPatternGrid from './ChartPatternGrid.svelte';
   import ChartPatternSwatch from './ChartPatternSwatch.svelte';
@@ -73,7 +73,7 @@
       </div></div>
     {#if !gradientOpen && fill.kind === 'solid'}
       <ChartFillColor label="Colour" target={label} color={fill.foreground} {themeColors} {disabled} onchange={(color) => solid(color)} />
-      <label class="row"><span>Opacity</span><input type="number" {disabled} min="0" max="100" step="1" aria-label={`Solid fill opacity for ${label}`} value={Math.round(chartColorOpacity(fill.foreground) * 10000) / 100} onchange={(event) => { if (event.currentTarget.value !== '' && event.currentTarget.validity.valid) solid(undefined, event.currentTarget.valueAsNumber / 100); }} /></label>
+      <label class="row"><span>Opacity</span><input type="number" {disabled} min="0" max="100" step="any" aria-label={`Solid fill opacity for ${label}`} value={chartPercent(chartColorOpacity(fill.foreground))} onchange={(event) => { if (event.currentTarget.value !== '' && event.currentTarget.validity.valid) solid(undefined, event.currentTarget.valueAsNumber / 100); }} /></label>
     {:else if !gradientOpen && fill.pattern}
       <ChartFillColor label="Foreground" target={label} color={fill.foreground} {themeColors} {disabled} onchange={(value) => color('foreground', value)} />
       <ChartFillColor label="Background" target={label} color={fill.background} {themeColors} {disabled} onchange={(value) => color('background', value)} />

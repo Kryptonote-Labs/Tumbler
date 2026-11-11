@@ -18,3 +18,6 @@ export function chartGradientStopAt(stops: readonly ChartGradientStop[], themeCo
   const amount = first === last ? 0 : Math.max(0, Math.min(1, (position - first.offset) / (last.offset - first.offset)));
   return { color: { kind: 'rgb', value: '#' + [0, 1, 2].map(channel => Math.round(low[channel]! * (1 - amount) + high[channel]! * amount).toString(16).padStart(2, '0')).join('').toUpperCase() }, opacity: low[3] * (1 - amount) + high[3] * amount };
 }
+
+/** Keep native percentage precision without displaying binary floating-point noise. */
+export function chartPercent(value: number) { return Number((value * 100).toPrecision(12)); }

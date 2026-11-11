@@ -2,7 +2,7 @@
   import { onDestroy, tick } from 'svelte';
   import { resolveChartColor } from '@tumblerjs/charts';
   import DrawingGradientPaint from './DrawingGradientPaint.svelte';
-  import { chartGradientRamp, type ChartGradientStop } from './chart-gradient-ramp.ts';
+  import { chartGradientRamp, chartPercent, type ChartGradientStop } from './chart-gradient-ramp.ts';
   let { stops, keys, selected = $bindable(0), label, themeColors, disabled = false, onposition, onadd, onremove }: {
     stops: readonly ChartGradientStop[]; keys: readonly string[]; selected?: number; label: string; themeColors: Readonly<Record<string, string>>; disabled?: boolean;
     onposition: (index: number, position: number) => void; onadd: (position: number) => void; onremove: (index: number) => void;
@@ -44,12 +44,12 @@
   </button>
   {#each handles as item (item.key)}
     {@const rank = ranks.get(item.key) ?? item.index}
-    <button class="stop" class:selected={selected === item.index} data-stop={item.key} type="button" role="slider" tabindex={selected === item.index ? 0 : -1} {disabled} aria-label={`Gradient stop ${rank + 1} for ${label}`} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(item.position * 10000) / 100} aria-valuetext={`${Math.round(item.position * 10000) / 100}%, ${item.color ? resolveChartColor(item.color, { themeColors }) ?? 'Choose a colour' : 'Choose a colour'}`} style:left={`${item.position * 100}%`} style:background={item.color ? resolveChartColor(item.color, { themeColors }) : 'transparent'} onclick={() => selected = item.index} onkeydown={(event) => key(event, item.index)}
+    <button class="stop" class:selected={selected === item.index} data-stop={item.key} type="button" role="slider" tabindex={selected === item.index ? 0 : -1} {disabled} aria-label={`Gradient stop ${rank + 1} for ${label}`} aria-valuemin="0" aria-valuemax="100" aria-valuenow={chartPercent(item.position)} aria-valuetext={`${chartPercent(item.position)}%, ${item.color ? resolveChartColor(item.color, { themeColors }) ?? 'Choose a colour' : 'Choose a colour'}`} style:left={`${item.position * 100}%`} style:background={item.color ? resolveChartColor(item.color, { themeColors }) : 'transparent'} onclick={() => selected = item.index} onkeydown={(event) => key(event, item.index)}
       onpointerdown={(event) => { const rect = track?.getBoundingClientRect(); selected = item.index; drag = { pointer: event.pointerId, index: item.index, start: event.clientX, offset: event.clientX - (rect?.left ?? 0) - item.position * (rect?.width ?? 1), moved: false }; event.currentTarget.setPointerCapture(event.pointerId); }}
       onpointermove={move} onpointerup={() => { flush(); drag = undefined; }} onpointercancel={() => { pending = undefined; if (frame !== undefined) cancelAnimationFrame(frame); frame = undefined; drag = undefined; }}></button>
   {/each}
 </div>
-<label class="row"><span>Stop</span><select {disabled} aria-label={`Selected gradient stop for ${label}`} value={selected} onchange={(event) => selected = Number(event.currentTarget.value)}>{#each ordered as item, rank (item.key)}<option value={item.index}>{rank + 1} · {Math.round(item.position * 10000) / 100}%</option>{/each}</select></label>
+<label class="row"><span>Stop</span><select {disabled} aria-label={`Selected gradient stop for ${label}`} value={selected} onchange={(event) => selected = Number(event.currentTarget.value)}>{#each ordered as item, rank (item.key)}<option value={item.index}>{rank + 1} · {chartPercent(item.position)}%</option>{/each}</select></label>
 <style>
   .track { position: relative; height: 44px; margin: 4px 7px 0; }
   button, select { box-sizing: border-box; font: inherit; color: inherit; background: var(--tumbler-control-bg, var(--surface, #181818)); border: 1px solid var(--tumbler-control-border, var(--border, #303030)); border-radius: 4px; }
