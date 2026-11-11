@@ -11,7 +11,11 @@
   const locatePlot: ChartPropertyLocator = root => child(child(root, 'chart'), 'plotArea')?.children.filter(node => isOoxmlChartType(node.name.split(':').at(-1) ?? ''))[plotIndex];
   const plot = $derived(locatePlot(root)), type = $derived(plot?.name.split(':').at(-1));
   const visible = $derived(type?.includes('3D') || type === 'surfaceChart');
-  const resolved = $derived(visible ? readChart3DProperties(current, plotIndex) : undefined), view = $derived(resolved?.threeD);
+  const viewState = $derived.by(() => {
+    try { return { value: visible ? readChart3DProperties(current, plotIndex) : undefined, error: undefined }; }
+    catch (cause) { return { value: undefined, error: cause instanceof Error ? cause.message : 'The 3-D view could not be read.' }; }
+  });
+  const resolved = $derived(viewState.value), view = $derived(resolved?.threeD);
   const shapes = { box: 'Box', cylinder: 'Cylinder', cone: 'Cone', coneToMax: 'Cone to axis maximum', pyramid: 'Pyramid', pyramidToMax: 'Pyramid to axis maximum' } as const;
   const shape = $derived.by(() => {
     const fallback = value(child(plot, 'shape')) ?? 'box';
@@ -40,7 +44,7 @@
     return source;
   }
   function set(name: string, definition: string, next: string | undefined, plot = false) {
-    try { current = transform(name, definition, next, plot); error = undefined; onpreview?.(undefined); onchange(current); return true; }
+    try { const source = transform(name, definition, next, plot); onchange(source); current = source; error = undefined; onpreview?.(undefined); return true; }
     catch (cause) { error = cause instanceof Error ? cause.message : 'This property could not be changed.'; return false; }
   }
   function draft(name: string, definition: string, next: number | undefined, plot = false) {
@@ -76,6 +80,7 @@
     {#if error}<p role="alert">{error}</p>{/if}
   </fieldset>
 {/if}
+{#if viewState.error}<p role="alert">{viewState.error}</p>{/if}
 
 <style>
   .view { display: flex; flex-direction: column; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; font-size: 12px; }

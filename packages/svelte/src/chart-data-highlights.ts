@@ -1,4 +1,4 @@
-import { readChartData } from '@tumblerjs/charts';
+import { chartDataState } from './chart-data-state.ts';
 import { parseSpreadsheetChartReference } from '@tumblerjs/sheets';
 import type { GridSelection } from '@tumblerjs/core';
 
@@ -6,7 +6,7 @@ import type { GridSelection } from '@tumblerjs/core';
 export function chartDataHighlights(source: Uint8Array, sheet: string, colors: Readonly<Record<string, string>> = {}): readonly { readonly range: GridSelection['range']; readonly color: string }[] {
   const palette = ['#4472c4', '#ed7d31', '#a5a5a5', '#ffc000', '#5b9bd5', '#70ad47'];
   const seen = new Set<string>();
-  return readChartData(source).flatMap(plot => plot.series).flatMap((series, index) => {
+  return chartDataState(source).plots.flatMap(plot => plot.series).flatMap((series, index) => {
     const color = colors[`accent${index % 6 + 1}`] ?? palette[index % palette.length]!;
     return [
       { formula: series.nameFormula, color }, { formula: series.categories?.formula, color: colors.tx1 ?? '#a0a0a0' },

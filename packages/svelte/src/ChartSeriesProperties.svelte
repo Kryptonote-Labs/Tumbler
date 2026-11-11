@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { bindChartData, editChartSeries, readChartData, type ChartEditableSeries, type ChartEditableSequence, type ChartSeriesEdit } from '@tumblerjs/charts';
+  import { bindChartData, editChartSeries, type ChartEditableSeries, type ChartEditableSequence, type ChartSeriesEdit } from '@tumblerjs/charts';
+  import { chartDataState } from './chart-data-state.ts';
   let { bytes, disabled = false, onchange }: { bytes: Uint8Array; disabled?: boolean; onchange: (bytes: Uint8Array) => void } = $props();
-  const plots = $derived(readChartData(bytes));
+  const plots = $derived(chartDataState(bytes).plots);
   let error = $state<string>();
   const sequences = [ ['categories', 'Categories'], ['xValues', 'X values'], ['values', 'Values'], ['bubbleSizes', 'Bubble sizes'] ] as const;
   function commit(run: () => Uint8Array) {
