@@ -32,17 +32,20 @@ context, so editor charts and rendered previews agree. Pass `measureText` to cen
 legends with real text widths; otherwise widths are estimated.
 
 Hosts can bind document colours through `model.themeColors`; `resolveChartColor`
-resolves these bindings while preserving authored scheme references. Word imports
-bind their document theme for all chart views.
+resolves these bindings while preserving authored scheme references. Word, slide
+and spreadsheet imports bind their host template colours and Latin fonts, including
+slide colour-map overrides.
 
 Bar and column layouts honour authored `gapWidth` and `overlap`, including
 negative overlap. `layoutBarBand` shares this geometry between standalone and
 combination charts.
 
 Chart text retains font size, Latin typeface, bold/italic flags and solid colour;
-Word binds theme Latin fonts. Axis and major-gridline strokes retain `noFill`,
-solid colour and width. Luminance modulation/offset transforms are resolved in
-source order. Other text effects and colour transforms remain unsupported.
+Theme Latin fonts follow the host document. Axis and gridline strokes retain
+`noFill`, solid colour and width. Colours retain the DrawingML preset, system,
+HSL, linear RGB and scheme choices, with ordered transforms and transparency.
+These source choices survive title edits, including merged editor runs with
+different opacity. Other text effects remain incomplete.
 
 An existing chart title without text uses Office-compatible default text, or the
 name of its single series. Pass `{ defaultTitle: "…" }` as the parser's third
@@ -54,9 +57,24 @@ This is a Word-parity policy, not an ECMA-prescribed automatic scale. Explicit
 axis bounds and `majorUnit` take precedence; percentage stacks retain their
 normalized bounds. Very dense grids sample whole major units for rendering.
 
-Per-point bubble formatting, data labels, trendlines, error bars,
-and exact Office bubble-size normalization remain incomplete in the preview.
-Three-dimensional bubble effects remain unsupported. Unknown source XML is preserved by the owning OOXML
+Per-point fills, markers, line widths, smoothing and pie explosion are rendered.
+Data labels support value/category/series/percentage/bubble-size flags, custom text,
+point deletion and number formats. Rich label text, leader lines, exact Office
+bubble-size normalization and three-dimensional bubble effects remain incomplete.
+
+Unstacked categorical and XY plots support linear, exponential, logarithmic,
+polynomial, power and moving-average trendlines. Forecasts reserve visible domain
+space; equation and R² annotations remain outside the clipped data geometry.
+`fitChartTrendline` uses scaled QR fitting and the documented Excel 2104+ R²
+convention. Error bars support fixed, percentage, sample deviation, standard error
+and custom amounts, caps and direction. Custom error formulas refresh from live
+source cells. Stacked errors use visible stack endpoints and normalize percentage
+magnitudes. Combination bar/line/area plots share these rendering paths.
+
+Value axes support logarithmic/reversed scales, crossings, minor grids/ticks,
+label-side/skip settings and display units. Date categories preserve calendar gaps
+and equal month/year units. Manual layout, full depth-axis geometry and several
+other axis properties still need compatibility work. Unknown source XML is preserved by the owning OOXML
 package even when a chart falls back rather than rendering.
 
 Tumbler is developed at
@@ -103,7 +121,7 @@ unsupported chart so the host document can still open. Cartesian previews allow 
 most 20,000 category positions and 20,000 total series/category cells, including
 combination plots and sparse gaps. Preview input is also limited to 100,000 stored
 points, 256 series/axes per plot, and 16 combination plots. Combination accounting
-includes the root model and each plot. These are product limits, not OOXML schema
+includes the root model and each plot. These are rendering budgets, not authoring or OOXML schema
 restrictions; documents exceeding them cannot be previewed in full.
 
 `layoutChartScene` returns a two-mark "Chart preview unavailable" scene when a
@@ -186,3 +204,15 @@ formats with `bun scripts/generate-chart-editing-fixtures.ts <output-directory>`
 These fixtures exercise formulas, conversion history and series membership before
 schema and LibreOffice validation. Schema validation and successful PDF conversion
 are interoperability evidence; neither proves pixel parity.
+
+`convertChartConformance` changes standard namespace declarations while retaining
+literal text and extension namespaces. Native chart insertion and writes reconcile
+these declarations with the owning package profile. Embedded XLSX packages retain
+their own independent profile.
+
+Generate native property references with
+`bun scripts/generate-chart-property-fixtures.ts <dir>`. The fixture set covers all
+six trendline types, five error amount modes, date categories, log/reversed axes,
+axis crossings, ticks and display units in DOCX, PPTX and XLSX. Schema validation
+and successful LibreOffice export establish interoperability evidence; visual
+parity still needs separate measurement.
