@@ -13,9 +13,25 @@ bun scripts/generate-chart-text-fixtures.ts /tmp/chart-text/input
 bash scripts/validate-openxml.sh /tmp/chart-text/input/*.docx /tmp/chart-text/input/*.pptx /tmp/chart-text/input/*.xlsx
 ```
 
-The generator writes 22 samples in all three formats. All 66 files passed Open
+The generator writes 29 samples in all three formats. All 87 files passed Open
 XML SDK validation and converted to PDF with LibreOffice during implementation.
 The title samples cover all 16 classic chart types.
+
+## Text rotation
+
+Native `bodyPr/@rot` now rotates chart and axis titles, point labels, trendline
+labels and display-unit labels. Explicit zero degrees overrides automatic axis
+orientation. Rich runs, highlights and text decorations rotate together, and
+label backgrounds fit the resulting text bounds. Automatic placement uses the
+rotated bounds when positioning text and reserving plot and legend space.
+
+Tests also check that axis titles clear the main title and legends on every
+physical side. Manual placement takes precedence over those automatic positions.
+
+The seven rotation samples passed package validation and LibreOffice conversion.
+LibreOffice wraps the quarter-turn title into two columns and treats the negative
+angle sample's manual position differently. Tumbler currently keeps the authored
+line breaks, so these samples do not yet establish rotated-text pixel parity.
 
 ## Native layout rules
 

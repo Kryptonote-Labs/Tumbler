@@ -4,6 +4,7 @@ import type { ChartShapeStyle } from './model.ts';
 import { resolveChartColor } from './colors.ts';
 import { chartStroke } from './scene-style.ts';
 import { chartStrokeMark } from './stroke-scene.ts';
+import { chartPathBounds } from './path-bounds.ts';
 import type { ChartMark, SceneContext } from './scene-marks.ts';
 
 export function chartShapeMarks(context: SceneContext, rect: ChartRect, style: ChartShapeStyle | undefined, defaults?: { readonly fill: string; readonly stroke?: string }) : ChartMark[] {
@@ -20,6 +21,7 @@ export function chartMarksBounds(context: Pick<SceneContext, 'measure'>, marks: 
   const boxes = marks.flatMap((mark): ChartRect[] => {
     if (mark.kind === 'group') { const bounds = chartMarksBounds(context, mark.marks); return bounds ? [bounds] : []; }
     if (mark.kind === 'rect') return [mark];
+    if (mark.kind === 'path') { const bounds = chartPathBounds(mark.d); return bounds ? [bounds] : []; }
     if (mark.kind === 'circle') return [{ x: mark.cx - mark.r, y: mark.cy - mark.r, width: mark.r * 2, height: mark.r * 2 }];
     if (mark.kind === 'line') return [{ x: Math.min(mark.x1, mark.x2), y: Math.min(mark.y1, mark.y2), width: Math.abs(mark.x2 - mark.x1), height: Math.abs(mark.y2 - mark.y1) }];
     if (mark.kind === 'text') {

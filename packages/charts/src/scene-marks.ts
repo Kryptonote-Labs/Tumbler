@@ -53,6 +53,8 @@ export interface SceneContext {
   readonly options: ChartSceneOptions;
   /** Subplots retain the full chart frame for native manual text coordinates. */
   readonly textFrame?: ChartRect;
+  /** Root title/legend bands survive combination contexts and fixed surface band lists. */
+  readonly axisTitleFrame?: ChartRect;
   /** Series colour, falling back to the theme accent cycle as Office does. */
   color(series: ChartSeries, index: number, line?: boolean): string;
   pointFormat(series: ChartSeries, index: number): ChartPointFormat | undefined;

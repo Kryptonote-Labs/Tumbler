@@ -3,6 +3,7 @@ import type { SupportedChartModel } from './model.ts';
 import { chartFont, type ChartColorResolver, type ChartFont } from './scene-style.ts';
 import { chartLegendEntries } from './legend-style.ts';
 import { chartLegendItems } from './legend-items.ts';
+import { chartTitleHeight } from './title-scene.ts';
 
 type Measure = (text: string, font: ChartFont) => number;
 
@@ -49,8 +50,9 @@ export function layoutChartLegend(model: SupportedChartModel, width: number, hei
   }
   const rowsHeight = rows.reduce((sum, row) => sum + row.advance, 0);
   const last = rows.at(-1), inkHeight = rowsHeight - (last?.advance ?? 0) + (last?.inkHeight ?? 0);
-  const titleHeight = model.title === undefined || model.titleOverlay ? 16 : 36;
-  const topBaseline = pie ? titleHeight + Math.max(16, rows[0]?.fontSize ?? 0) : (model.title === undefined ? 18 : 48) + Math.max(0, fontSize - 40 / 3);
+  const rotatedTitle = model.titleStyle?.rotation && !model.titleOverlay ? chartTitleHeight(model, measure) : undefined;
+  const titleHeight = model.title === undefined || model.titleOverlay ? 16 : rotatedTitle === undefined ? 36 : rotatedTitle + 28;
+  const topBaseline = pie ? titleHeight + Math.max(16, rows[0]?.fontSize ?? 0) : (model.title === undefined ? 18 : rotatedTitle === undefined ? 48 : rotatedTitle + 40) + Math.max(0, fontSize - 40 / 3);
   let top = position === 'bottom' ? pie ? height - rowsHeight - 24 + Math.max(0, 16 - (rows[0]?.fontSize ?? 0)) : height - 16 - inkHeight
     : position === 'top' || position === 'top-right' ? topBaseline - (rows[0]?.fontSize ?? 0)
     : pie ? titleHeight + Math.max(16, rows[0]?.fontSize ?? 0) - (rows[0]?.fontSize ?? 0) : (height - rowsHeight) / 2;

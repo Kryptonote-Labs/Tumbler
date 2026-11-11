@@ -1,5 +1,6 @@
 import { chartDisplayUnitMarks } from './display-unit-scene.ts';
-import { positionChartText } from './text-position.ts';
+import { chartAxisTitleMarks } from './axis-title-scene.ts';
+import { chartAxisTitleSide } from './axis-title-space.ts';
 import { chart3DCorner } from './three-d-walls.ts';
 import { chartAxisCrossing, chartMinorTicks } from './axis-scale.ts';
 import { chartFont, chartStroke, type ChartStroke } from './scene-style.ts';
@@ -60,7 +61,7 @@ export function threeDAxisMarks(context: SceneContext, layout: CartesianChartLay
     marks.push(...chartDisplayUnitMarks(context, valueAxis, { x: valueEnd.x - 4, y: valueEnd.y - 8, anchor: 'end' }));
     if (valueAxis.title) {
       const titleFont = chartFont('axisTitle', valueAxis.titleStyle, model, options.resolveColor);
-      marks.push(...positionChartText(context, [{ kind: 'text', text: valueAxis.title, x: (valueStart.x + valueEnd.x) / 2 + valueDirection.x * 42, y: (valueStart.y + valueEnd.y) / 2 + valueDirection.y * 36, anchor: 'middle', rotate: Math.atan2(valueEnd.y - valueStart.y, valueEnd.x - valueStart.x) * 180 / Math.PI, font: titleFont }], valueAxis.titleLayout));
+      marks.push(...chartAxisTitleMarks(context, valueAxis, [{ kind: 'text', text: valueAxis.title, x: (valueStart.x + valueEnd.x) / 2 + valueDirection.x * 42, y: (valueStart.y + valueEnd.y) / 2 + valueDirection.y * 36, anchor: 'middle', rotate: valueAxis.titleStyle?.rotation ?? Math.atan2(valueEnd.y - valueStart.y, valueEnd.x - valueStart.x) * 180 / Math.PI, font: titleFont }], chartAxisTitleSide(model, valueAxis).side));
     }
   }
   if (!categoryAxis?.deleted) {
@@ -76,7 +77,7 @@ export function threeDAxisMarks(context: SceneContext, layout: CartesianChartLay
       const anchor = project(point(entry.coordinate, edge, near));
       marks.push({ kind: 'text', text: entry.text, x: anchor.x + direction.x * 7, y: anchor.y + direction.y * font.size * (categoryAxis?.labelOffset ?? 100) / 100 + font.size * .4, anchor: horizontal ? direction.x < 0 ? 'end' : 'start' : 'middle', ...(categoryAxis?.labelRotation === undefined ? {} : { rotate: categoryAxis.labelRotation }), font });
     });
-    if (categoryAxis?.title) marks.push(...positionChartText(context, [{ kind: 'text', text: categoryAxis.title, x: (categoryStart.x + categoryEnd.x) / 2 + categoryDirection.x * 34, y: (categoryStart.y + categoryEnd.y) / 2 + categoryDirection.y * 34, anchor: 'middle', font: chartFont('axisTitle', categoryAxis.titleStyle, model, options.resolveColor) }], categoryAxis.titleLayout));
+    if (categoryAxis?.title) marks.push(...chartAxisTitleMarks(context, categoryAxis, [{ kind: 'text', text: categoryAxis.title, x: (categoryStart.x + categoryEnd.x) / 2 + categoryDirection.x * 34, y: (categoryStart.y + categoryEnd.y) / 2 + categoryDirection.y * 34, anchor: 'middle', rotate: categoryAxis.titleStyle?.rotation ?? 0, font: chartFont('axisTitle', categoryAxis.titleStyle, model, options.resolveColor) }], chartAxisTitleSide(model, categoryAxis).side));
   }
   if (depthAxis && !depthAxis.deleted && (model.grouping === 'standard' || model.kind === 'surface')) {
     const edge = depthAxis.position === 'left' ? 0 : 1, floor = valueAxis?.reversed ? layout.maximum : layout.minimum;
@@ -90,7 +91,7 @@ export function threeDAxisMarks(context: SceneContext, layout: CartesianChartLay
       if (index % (depthAxis.tickMarkSkip ?? 1) === 0) marks.push(...tick(at, direction, depthAxis.majorTickMark, style));
       if (depthAxis.tickLabelPosition !== 'none' && index % (depthAxis.tickLabelSkip ?? 1) === 0) marks.push({ kind: 'text', text: series.title ?? `Series ${index + 1}`, x: at.x + direction.x * 8, y: at.y + direction.y * font.size + font.size * .3, anchor: edge ? 'start' : 'end', font });
     });
-    if (depthAxis.title) marks.push(...positionChartText(context, [{ kind: 'text', text: depthAxis.title, x: (a.x + b.x) / 2 + direction.x * 30, y: (a.y + b.y) / 2 + direction.y * 30, anchor: 'middle', font: chartFont('axisTitle', depthAxis.titleStyle, model, options.resolveColor) }], depthAxis.titleLayout));
+    if (depthAxis.title) marks.push(...chartAxisTitleMarks(context, depthAxis, [{ kind: 'text', text: depthAxis.title, x: (a.x + b.x) / 2 + direction.x * 30, y: (a.y + b.y) / 2 + direction.y * 30, anchor: 'middle', rotate: depthAxis.titleStyle?.rotation ?? 0, font: chartFont('axisTitle', depthAxis.titleStyle, model, options.resolveColor) }], chartAxisTitleSide(model, depthAxis).side));
   }
   return { grids, marks };
 }

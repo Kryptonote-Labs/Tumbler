@@ -1,4 +1,4 @@
-import type { ChartTextParagraph, ChartTextStyle } from './model.ts';
+import type { ChartModel, ChartTextParagraph, ChartTextStyle } from './model.ts';
 import { chartFont, type ChartTextRole } from './scene-style.ts';
 import type { ChartMark, SceneContext } from './scene-marks.ts';
 
@@ -14,7 +14,7 @@ export function chartTextLines(paragraphs: readonly ChartTextParagraph[]): reado
 }
 
 /** Measure native rich runs once, including script size and authored character spacing. */
-export function layoutChartText(context: SceneContext, role: ChartTextRole, style: ChartTextStyle | undefined, paragraphs: readonly ChartTextParagraph[]) {
+export function layoutChartText(context: Pick<SceneContext, 'options' | 'measure'> & { readonly model: ChartModel }, role: ChartTextRole, style: ChartTextStyle | undefined, paragraphs: readonly ChartTextParagraph[]) {
   const lines = chartTextLines(paragraphs).map(paragraph => {
     const runs = paragraph.runs.map(run => {
       const original = chartFont(role, { ...style, ...run.style }, context.model, context.options.resolveColor);

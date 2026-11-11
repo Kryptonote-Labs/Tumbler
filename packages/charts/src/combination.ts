@@ -6,7 +6,7 @@ import { chartAxisTicks, chartAxisCoordinate, chartLogarithmicScale } from "./ax
 import {
   layoutCartesianChart,
 } from "./layout.ts";
-import type { SupportedChartModel } from "./model.ts";
+import type { ChartAxis, SupportedChartModel } from "./model.ts";
 /** Rebind each plot to current host values and share domains only where the authored axes match. */
 export function layoutCombinationChart(
   model: SupportedChartModel,
@@ -22,6 +22,10 @@ export function layoutCombinationChart(
       (series) => model.series.find((s) => s.index === series.index) ?? series,
     ),
   }));
+  const axisOwners = new Map<number, ChartAxis>();
+  for (const plot of plots) for (const axis of plot.axes) if (!axisOwners.has(axis.id)) axisOwners.set(axis.id, axis);
+  for (const axis of model.axes) if (!axisOwners.has(axis.id)) axisOwners.set(axis.id, axis);
+  const frameModel = { ...model, axes: [...axisOwners.values()] };
   const layouts = plots.map((plot) =>
     layoutCartesianChart(
       {
@@ -35,7 +39,7 @@ export function layoutCombinationChart(
       measure,
     ),
   );
-  const common = layoutCartesianChart(model, width, height, measure);
+  const common = layoutCartesianChart(frameModel, width, height, measure);
   const categoryDomain = {
     minimum: Math.min(...layouts.map(layout => layout.categoryDomain?.minimum ?? .5)),
     maximum: Math.max(...layouts.map(layout => layout.categoryDomain?.maximum ?? common.categories.length + .5)),
@@ -49,7 +53,7 @@ export function layoutCombinationChart(
         plot.axisIds?.includes(axis.id),
     ),
   );
-  const { plotLayout: _manual, ...automaticModel } = model;
+  const { plotLayout: _manual, ...automaticModel } = frameModel;
   const automatic = layoutCartesianChart(automaticModel, width, height, measure);
   const inner = { ...automatic.plot, width: Math.max(1, automatic.plot.width - (rightAxis ? 40 : 0)) };
   const outer = chartOuterPlot(model, { ...automatic, plot: inner }, measure ?? ((text, font) => text.length * font.size * .55));

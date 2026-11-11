@@ -1,5 +1,6 @@
 import type { ChartSceneOptions } from './scene-marks.ts';
 import { layoutChartLegend } from './legend-layout.ts';
+import { chartAxisTitleSpace } from './axis-title-space.ts';
 import { chartSurfaceLevels } from './legend-items.ts';
 import { chartManualPlot, chartOuterPlot, chartOuterXYPlot } from './manual-layout.ts';
 import { fitBubbleAxis } from './bubble-axis.ts';
@@ -94,13 +95,14 @@ function cartesianFrame(model: SupportedChartModel, width: number, height: numbe
   const categoryFont = chartFont("category", categoryAxis?.textStyle, model);
   const labelWidth = Math.max(0, ...categories.map(label => measure(label, categoryFont)));
   const legend = layoutChartLegend(model, width, height, measure, surfaceScale && chartSurfaceLevels(surfaceScale), options.resolveColor, options);
-  const bottomLegend = legend.space.bottom || 8;
-  const left = legend.space.left + (horizontal ? labelWidth + 16 : 30);
-  const plotWidth = Math.max(1, width - left - 16 - legend.space.right);
+  const titleSpace = chartAxisTitleSpace(model, measure);
+  const bottomLegend = (legend.space.bottom || 8) + titleSpace.bottom;
+  const left = legend.space.left + (horizontal ? labelWidth + 16 : 30) + titleSpace.left;
+  const plotWidth = Math.max(1, width - left - 16 - legend.space.right - titleSpace.right);
   const categoryRotation = horizontal ? 0 : categoryAxis?.labelRotation ?? (labelWidth + 8 > plotWidth / Math.max(1, categories.length) ? -45 : 0);
   const radians = Math.abs(categoryRotation) * Math.PI / 180;
   const categoryHeight = horizontal ? 20 : Math.abs(Math.sin(radians)) * labelWidth + Math.abs(Math.cos(radians)) * categoryFont.size + 14;
-  const top = (model.title === undefined || model.titleOverlay ? 16 : chartTitleHeight(model) + 28) + legend.space.top;
+  const top = (model.title === undefined || model.titleOverlay ? 16 : chartTitleHeight(model, measure) + 28) + legend.space.top + titleSpace.top;
   const automaticPlot = { x: left, y: top, width: plotWidth, height: Math.max(1, height - top - bottomLegend - categoryHeight) };
   let plot = chartManualPlot(model.plotLayout, automaticPlot, { x: legend.space.left, y: top, width: width - 16 - legend.space.left - legend.space.right, height: height - top - bottomLegend }, width, height);
   const axis = model.axes.find((candidate) => candidate.kind === "value");
@@ -133,10 +135,11 @@ function cartesianFrame(model: SupportedChartModel, width: number, height: numbe
 export function layoutScatterChart(model: SupportedChartModel, width: number, height: number, measure: (text: string, font: ChartFont) => number = (text, font) => text.length * font.size * .55): ScatterChartLayout {
   finiteSize(width, "chart width");
   finiteSize(height, "chart height");
-  const titleHeight = model.title === undefined || model.titleOverlay ? 10 : Math.min(34, Math.max(20, height * 0.12));
+  const titleHeight = model.title === undefined || model.titleOverlay ? 10 : model.titleStyle?.rotation ? chartTitleHeight(model, measure) + 8 : Math.min(34, Math.max(20, height * 0.12));
   const legend = layoutChartLegend(model, width, height, measure);
-  const leftLegend = legend.space.left, rightLegend = legend.space.right;
-  const topLegend = legend.space.top, bottomLegend = legend.space.bottom;
+  const titleSpace = chartAxisTitleSpace(model, measure, true);
+  const leftLegend = legend.space.left + titleSpace.left, rightLegend = legend.space.right + titleSpace.right;
+  const topLegend = legend.space.top + titleSpace.top, bottomLegend = legend.space.bottom + titleSpace.bottom;
   const automaticPlot = {
     x: leftLegend + 58,
     y: titleHeight + topLegend + 8,

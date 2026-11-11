@@ -7,6 +7,7 @@ import { line, type ChartMark, type SceneContext } from './scene-marks.ts';
 import { chartRichTextMarks, layoutChartText } from './text-layout.ts';
 import { positionChartText } from './text-position.ts';
 import { chartMarksBounds, chartShapeMarks } from './shape-scene.ts';
+import { rotateChartText } from './text-rotation.ts';
 
 export interface ChartProjection {
   (x: number, y: number): { readonly x: number; readonly y: number };
@@ -43,11 +44,11 @@ export function chartAnalyticsMarks(context: SceneContext, series: ChartSeries, 
     const last = projected.at(-1)!;
     const font = chartFont('dataLabel', trend.labelStyle, context.model, context.options.resolveColor);
     const rich = trend.labelText?.length ? layoutChartText(context, 'dataLabel', trend.labelStyle, trend.labelText) : undefined;
-    const label: ChartMark[] = rich ? chartRichTextMarks(rich, last.x - 6 - rich.width, last.y - 6 - rich.height, rich.width)
-      : annotation.map((text, index) => ({ kind: 'text', text, x: last.x - 6, y: last.y - 6 - (annotation.length - index - 1) * font.size * 1.2, anchor: 'end', font }));
+    const label = rotateChartText(context, rich ? chartRichTextMarks(rich, last.x - 6 - rich.width, last.y - 6 - rich.height, rich.width)
+      : annotation.map((text, index): ChartMark => ({ kind: 'text', text, x: last.x - 6, y: last.y - 6 - (annotation.length - index - 1) * font.size * 1.2, anchor: 'end', font })), trend.labelStyle?.rotation);
     const bounds = chartMarksBounds(context, label);
     if (bounds) label.unshift(...chartShapeMarks(context, { x: bounds.x - 3, y: bounds.y - 2, width: bounds.width + 6, height: bounds.height + 4 }, trend.labelShape));
-    annotations.push(...positionChartText(context, label, trend.labelLayout));
+    annotations.push(...positionChartText(context, label, trend.labelLayout, !!trend.labelStyle?.rotation));
   }
   return { geometry: marks, annotations };
 }
