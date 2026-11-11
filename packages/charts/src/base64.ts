@@ -5,6 +5,9 @@ export function chartBytesToBase64(bytes: Uint8Array): string {
 }
 
 export function chartBase64ToBytes(value: string): Uint8Array {
-  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) throw new TypeError('Invalid base64 encoding.');
-  return Uint8Array.from(atob(value), character => character.charCodeAt(0));
+  const padding = value.indexOf('='), end = padding < 0 ? value.length : padding;
+  if (value.length % 4 || value.length - end > 2 || /[^A-Za-z0-9+/]/.test(value.slice(0, end)) || /[^=]/.test(value.slice(end))) throw new TypeError('Invalid base64 encoding.');
+  const binary = atob(value), bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  return bytes;
 }
