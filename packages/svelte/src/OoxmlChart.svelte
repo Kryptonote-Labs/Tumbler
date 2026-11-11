@@ -12,7 +12,8 @@
     readonly clipId?: string;
   }
 
-  let { model, width, height, resolveColor, formatNumber, clipId = "tumbler-chart-clip" }: Props = $props();
+  const generatedClipId = $props.id();
+  let { model, width, height, resolveColor, formatNumber, clipId = generatedClipId }: Props = $props();
   // Legends are laid out with measured text, so they re-measure once web fonts arrive.
   let fonts = $state(0);
   $effect(() => {
