@@ -81,7 +81,8 @@ test('connector style honors native paint, width, dash and explicit no fill', ()
   expect(lines).toHaveLength(2);
   expect(lines.every(mark => mark.stroke === '#123456' && mark.width === 2 && mark.strokeDash?.join(',') === '8,6')).toBe(true);
   expect(flat(layoutChartScene({ ...original, seriesLines: { noFill: true } }, 600, 400).marks).filter(mark => mark.kind === 'line')).toHaveLength(0);
-  expect(flat(layoutChartScene({ ...original, seriesLines: undefined }, 600, 400).marks).filter(mark => mark.kind === 'line')).toHaveLength(0);
+  const { seriesLines: _lines, ...withoutLines } = original;
+  expect(flat(layoutChartScene(withoutLines, 600, 400).marks).filter(mark => mark.kind === 'line')).toHaveLength(0);
 });
 
 test('connectors follow an exploded combined slice for series and point overrides', () => {
