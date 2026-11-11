@@ -13,7 +13,7 @@ export type { SlideCanvasContext, SlideCanvasOptions } from './canvas-types.ts';
 
 /** Embedded images and paint brushes. Pass the document size to include viewport-bounded native gradient brushes. */
 export function presentationSlideImages(slide: PresentationSlide, viewport?: Pick<PresentationDocument, 'width' | 'height'>, outputScale = 1): readonly DrawingPictureFill[] {
-  const backgroundBounds = viewport && { x: 0, y: 0, ...viewport }, background = backgroundBounds && slideGradientBrush(slide.backgroundGradient, backgroundBounds, backgroundBounds, undefined, outputScale);
+  const backgroundBounds = viewport && { x: 0, y: 0, width: viewport.width, height: viewport.height }, background = backgroundBounds && slideGradientBrush(slide.backgroundGradient, backgroundBounds, backgroundBounds, undefined, outputScale);
   return [
     ...(background ? [background.picture] : []), slide.backgroundPicture, ...(slide.backgroundPattern ? [drawingPatternPicture(slide.backgroundPattern)] : []),
     ...slide.objects.flatMap(o => {
