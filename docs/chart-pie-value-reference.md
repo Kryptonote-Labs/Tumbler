@@ -45,7 +45,10 @@ remove coloured pixels, so these shares differ slightly from the exact slice
 fractions. The largest difference between renderers is 0.19 percentage points;
 this checks weighting and does not establish complete plot-layout pixel parity.
 
-The installed LibreOffice imports split-pie samples as ordinary pies, including
-explicit position splits. It does not validate the secondary plot's pixel
-layout. Focused tests cover both split variants, custom negative points, split
-criteria, zero slots and underflowing primary labels.
+These three-point split-pie samples import as ordinary pies in LibreOffice.
+Its split-pie renderer requires at least four source points; later six-point
+fixtures exercise both split plots in LibreOffice 26.8.2.2. See
+[the split-pie reference](chart-split-pie-reference.md) for the supported evidence
+and the remaining variable-size/gap differences. Focused tests cover both split
+variants, custom negative points, split criteria, zero slots and underflowing
+primary labels.

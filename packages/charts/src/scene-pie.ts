@@ -10,7 +10,7 @@ import { chartDataLabelMarks } from './label-scene.ts';
 import { chartPointColor } from './point-style.ts';
 import { chartShade, chartPolygon } from './projection.ts';
 import { indexChartSequence } from './indexed-data.ts';
-import { layoutPieSlices, pieArcPath, type PieSlice } from "./layout.ts";
+import { layoutPieSlices, pieArcPath, type ChartRect, type PieSlice } from "./layout.ts";
 import { chartPieData } from './pie-data.ts';
 import { type ChartMark, type SceneContext } from "./scene-marks.ts";
 
@@ -30,9 +30,9 @@ export function pieChartFrame(context: SceneContext) {
 }
 
 /** Pie and doughnut charts. The legend lists categories of the first series, one entry per slice. */
-export function pieScene(context: SceneContext, labels?: { readonly fractions?: ReadonlyMap<number, number>; readonly slices?: readonly PieSlice[] }): ChartMark[] {
+export function pieScene(context: SceneContext, labels?: { readonly fractions?: ReadonlyMap<number, number>; readonly slices?: readonly PieSlice[]; readonly categories?: ReadonlyMap<number, string>; readonly frame?: ChartRect }): ChartMark[] {
   const { model, width, height, options } = context;
-  const { plot } = pieChartFrame(context);
+  const plot = labels?.frame ?? pieChartFrame(context).plot;
   const left = plot.x, right = left + plot.width, top = plot.y, bottom = top + plot.height;
   const tilt = model.threeD ? Math.sin(Math.abs(model.threeD.rotationX) * Math.PI / 180) : 1;
   const available = Math.max(1, bottom - top);
@@ -79,7 +79,7 @@ export function pieScene(context: SceneContext, labels?: { readonly fractions?: 
       marks.push({ kind: 'path', d, fill: chartPointColor(context, series, ring, slice.index), ...fill, ...chartPointStroke(context, series, ring, slice.index, '#ffffff') });
       const angle = (slice.startAngle + slice.endAngle) / 2;
       const labelRadius = inner + (outer - inner) * .65;
-      const category = String(categories.get(slice.index) ?? slice.index + 1);
+      const category = labels?.categories?.get(slice.index) ?? String(categories.get(slice.index) ?? slice.index + 1);
       marks.push(...chartDataLabelMarks(context, series, ring, { index: slice.index,
         x: cx + dx + Math.cos(angle) * labelRadius, y: cy + dy + Math.sin(angle) * labelRadius * tilt,
         category, value: slice.value, percent: fractions.get(slice.index) ?? 0 }));

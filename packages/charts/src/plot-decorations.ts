@@ -15,14 +15,14 @@ export interface ChartUpDownBars {
 }
 const child = (parent: LosslessXmlElement | undefined, ns: string, name: string) => parent?.children.find((node): node is LosslessXmlElement => node.kind === 'element' && node.namespaceUri === ns && node.localName === name);
 
-/** Line and stock plots share native drop lines, high-low lines and up/down bars. */
-export function parsePlotDecorations(plot: LosslessXmlElement, c: string, a: string): Pick<SupportedChartModel, 'dropLines' | 'highLowLines' | 'upDownBars'> {
-  const drop = child(plot, c, 'dropLines'), highLow = child(plot, c, 'hiLowLines'), bars = child(plot, c, 'upDownBars');
+/** Read native plot lines and up/down bars without losing explicit hidden strokes. */
+export function parsePlotDecorations(plot: LosslessXmlElement, c: string, a: string): Pick<SupportedChartModel, 'dropLines' | 'highLowLines' | 'seriesLines' | 'upDownBars'> {
+  const drop = child(plot, c, 'dropLines'), highLow = child(plot, c, 'hiLowLines'), series = child(plot, c, 'serLines'), bars = child(plot, c, 'upDownBars');
   const stroke = (parent: LosslessXmlElement) => parseChartLine(child(parent, c, 'spPr'), a) ?? {};
   const width = child(bars, c, 'gapWidth')?.attributes.find(attribute => !attribute.namespaceUri && attribute.localName === 'val')?.value;
   const gapWidth = width?.endsWith('%') ? Number(width.slice(0, -1)) : Number(width ?? 150);
   const upBars = parseChartShapeStyle(child(child(bars, c, 'upBars'), c, 'spPr'), a), downBars = parseChartShapeStyle(child(child(bars, c, 'downBars'), c, 'spPr'), a);
-  return { ...(drop ? { dropLines: stroke(drop) } : {}), ...(highLow ? { highLowLines: stroke(highLow) } : {}),
+  return { ...(drop ? { dropLines: stroke(drop) } : {}), ...(highLow ? { highLowLines: stroke(highLow) } : {}), ...(series ? { seriesLines: stroke(series) } : {}),
     ...(bars ? { upDownBars: { gapWidth, ...(upBars ? { upBars } : {}), ...(downBars ? { downBars } : {}) } } : {}) };
 }
 

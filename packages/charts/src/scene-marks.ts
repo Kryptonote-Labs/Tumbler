@@ -44,6 +44,8 @@ export interface ChartSceneOptions {
   /** Host colour binding; takes precedence over the model's theme colours. */
   readonly resolveColor?: ChartColorResolver;
   readonly formatNumber?: (value: number, formatCode: string | undefined) => string;
+  /** Localized category name for the combined slice in a split-pie chart. */
+  readonly otherLabel?: string;
   /**
    * Width of `text` in a CSS `font` shorthand. Legends use it to centre their entries; without it,
    * or when it returns undefined, widths are estimated from character count.

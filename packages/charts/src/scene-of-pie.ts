@@ -8,7 +8,9 @@ import { chartPointColor } from './point-style.ts';
 import { chartShapeMarks } from './shape-scene.ts';
 import { pieScene, pieChartFrame } from './scene-pie.ts';
 import { chartPieData, chartPieSlices } from './pie-data.ts';
-import type { ChartMark, SceneContext } from './scene-marks.ts';
+import { splitPieFrames, splitPieConnectors } from './split-pie-layout.ts';
+import { chartStroke } from './scene-style.ts';
+import { line, type ChartMark, type SceneContext } from './scene-marks.ts';
 
 export function ofPieScene(context: SceneContext): ChartMark[] {
   const { plot } = pieChartFrame(context);
@@ -33,31 +35,37 @@ function splitPieScene(context: SceneContext): ChartMark[] {
   if (!secondary.length) return pieScene({ ...context, model: { ...model, kind: 'pie' } });
   const other = secondary.reduce((sum, point) => sum + Math.abs(point.value), 0);
   const otherFraction = secondary.reduce((sum, point) => sum + fractions.get(point.index)!, 0);
-  const otherIndex = values.reduce((maximum, point) => Math.max(maximum, point.index), -1) + 1;
-  const mainWidth = width * 0.63;
-  const minorWidth = width - mainWidth;
-  const minorHeight = height * Math.max(0.1, Math.min(2, (model.secondPieSize ?? 75) / 100));
+  const otherIndex = count;
+  const frame = splitPieFrames(model, width, height);
   const secondarySeries = { ...first, values: { kind: 'number' as const, formula: undefined, formatCode: first.values?.formatCode, points: secondary } };
   const secondaryFractions = chartPieData(secondarySeries).fractions;
   const primaryPoints = [...primary, { index: otherIndex, value: other }], primaryFractions = new Map([...fractions, [otherIndex, otherFraction]]);
-  const main = pieScene({ ...context, width: mainWidth, model: { ...model, kind: 'pie', legend: undefined, series: [{ ...first, values: { ...secondarySeries.values, points: primaryPoints } }] } }, {
-    fractions: primaryFractions, slices: chartPieSlices(primaryPoints, primaryFractions, model.firstSliceAngle ?? model.threeD?.rotationY ?? 0),
+  const main = pieScene({ ...context, model: { ...model, kind: 'pie', legend: undefined, series: [{ ...first, values: { ...secondarySeries.values, points: primaryPoints } }] } }, {
+    frame: frame.primary, fractions: primaryFractions, categories: new Map([[otherIndex, context.options.otherLabel ?? 'Other']]),
+    // The combined slice faces the secondary plot; ofPieChart has no firstSliceAng.
+    slices: chartPieSlices(primaryPoints, primaryFractions, 90 + 180 * otherFraction),
   });
   const marks: ChartMark[] = [...main];
   if (model.splitType === 'bar') {
-    const barWidth = minorWidth * 0.3, barHeight = height * 0.55;
-    let top = (height - barHeight) / 2;
+    const bar = frame.secondary;
+    let bottom = bar.y + bar.height;
     for (const point of secondary) {
-      const h = secondaryFractions.get(point.index)! * barHeight;
-      marks.push({ kind: 'rect', x: mainWidth + (minorWidth - barWidth) / 2, y: top, width: barWidth, height: h, fill: chartPointColor(context, first, 0, point.index), ...chartPointFill(context, first, point.index, { x: mainWidth + (minorWidth - barWidth) / 2, y: top, width: barWidth, height: h }), ...chartPointStroke(context, first, 0, point.index, '#ffffff') });
-      marks.push(...chartDataLabelMarks(context, first, 0, { index: point.index, x: mainWidth + minorWidth / 2, y: top + h / 2, category: String(indexChartSequence(first.categories).get(point.index) ?? point.index + 1), value: point.value, percent: fractions.get(point.index)! }));
-      top += h;
+      const h = secondaryFractions.get(point.index)! * bar.height;
+      const rect = { x: bar.x, y: bottom - h, width: bar.width, height: h };
+      marks.push({ kind: 'rect', ...rect, fill: chartPointColor(context, first, 0, point.index), ...chartPointFill(context, first, point.index, rect), ...chartPointStroke(context, first, 0, point.index, '#ffffff') });
+      marks.push(...chartDataLabelMarks(context, first, 0, { index: point.index, x: bar.x + bar.width / 2, y: rect.y + h / 2, category: String(indexChartSequence(first.categories).get(point.index) ?? point.index + 1), value: point.value, percent: fractions.get(point.index)! }));
+      bottom -= h;
     }
   } else {
-    const frame = context.textFrame ?? { x: 0, y: 0, width, height };
-    const minor = pieScene({ ...context, width: minorWidth, height: minorHeight, textFrame: { ...frame, x: frame.x + mainWidth, y: frame.y + (height - minorHeight) / 2 }, model: { ...model, kind: 'pie', title: undefined, legend: undefined, series: [secondarySeries] } }, { fractions });
-    marks.push(...minor.map(mark => translateChartMark(mark, mainWidth, (height - minorHeight) / 2)));
+    marks.push(...pieScene({ ...context, model: { ...model, kind: 'pie', title: undefined, legend: undefined, series: [secondarySeries] } }, { fractions, frame: frame.secondary }));
   }
-  marks.push(...chartLegendScene(context));
+  if (model.seriesLines) {
+    const stroke = chartStroke('axis', model.seriesLines, model, context.options.resolveColor);
+    const explosion = context.pointFormat(first, otherIndex)?.explosion ?? first.explosion ?? 0;
+    const combined = { ...frame.primary, x: frame.primary.x + frame.primary.width / 2 * explosion / 100 };
+    for (const connector of splitPieConnectors(combined, frame.secondary, otherFraction, model.splitType === 'bar')) {
+      marks.push(...line(connector.x1, connector.y1, connector.x2, connector.y2, stroke));
+    }
+  }
   return marks;
 }

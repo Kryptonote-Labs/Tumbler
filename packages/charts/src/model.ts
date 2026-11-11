@@ -230,6 +230,7 @@ export interface SupportedChartModel extends ChartModelBase {
   readonly plotLayout?: import('./manual-layout.ts').ChartManualLayout;
   readonly dropLines?: ChartLineStyle;
   readonly highLowLines?: ChartLineStyle;
+  readonly seriesLines?: ChartLineStyle;
   readonly upDownBars?: import('./plot-decorations.ts').ChartUpDownBars;
   readonly plotArea?: ChartShapeStyle;
   readonly plots?: readonly SupportedChartModel[];
@@ -252,7 +253,7 @@ export interface SupportedChartModel extends ChartModelBase {
   readonly secondPieSize?: number;
   readonly firstSliceAngle?: number;
   readonly grouping: "clustered" | "stacked" | "percent-stacked" | "standard";
-  /** Bar-width percentages, independent of the chart frame size. */
+  /** Percent of a bar width, or the primary pie radius for split-pie charts. */
   readonly gapWidth?: number;
   readonly overlap?: number;
   readonly holeSize: number | undefined;
