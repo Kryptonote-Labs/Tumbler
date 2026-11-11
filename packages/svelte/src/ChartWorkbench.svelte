@@ -83,7 +83,7 @@
     {#if previewModel.status === 'unsupported'}<p class="preview-error" role="status">{previewModel.reason}</p>{/if}
   {/snippet}
   {#snippet viewPreview()}<OoxmlChart {patternOrigin} model={previewModel} width={previewSize.width} height={previewSize.height} />{/snippet}
-  {#snippet fillEditor(target, label)}<ChartFillEditor content={current} {target} {label} {themeColors} {disabled} preview={viewPreview} onpreview={(source) => { sourcePreview = source; }} onchange={(content) => publish(content)} />{/snippet}
+  {#snippet fillEditor(target, label, targetKey)}<ChartFillEditor {targetKey} content={current} {target} {label} {themeColors} {disabled} preview={viewPreview} onpreview={(source) => { sourcePreview = source; }} onchange={(content) => publish(content)} />{/snippet}
   {#snippet dataEditor(returnFocus: () => void)}
     <ChartSeriesProperties bytes={dataBytes} {disabled} onchange={changeSource} />
     {#if error || draft?.error}<p class="error" role="alert">{error ?? draft?.error}</p>{/if}

@@ -9,12 +9,12 @@ export function chartPropertyPath(node: ChartPropertyNode, id: number): readonly
   return undefined;
 }
 export function chartPropertyAt(root: ChartPropertyNode, path: readonly number[]) { return path.reduce((node, index) => node.children[index]!, root); }
-export function canSetChartFill(node: ChartPropertyNode, kind: 'blipFill' | 'pattFill'): boolean {
+export function canSetChartFill(node: ChartPropertyNode, kind: 'blipFill' | 'pattFill' | 'solidFill' | 'gradFill'): boolean {
   const shape = chartPropertyLocalName(node) === 'spPr' ? node : node.children.find(child => chartPropertyLocalName(child) === 'spPr');
   return shape ? shape.children.some(child => chartPropertyLocalName(child) === kind) || shape.availableChildren.some(child => child.definition.endsWith(`/a:${kind}`)) : node.availableChildren.some(child => child.definition.endsWith('/c:spPr'));
 }
 /** Resolve a snapshot target before schema insertion shifts node ids. */
-export function prepareChartFill(input: Uint8Array, nodeId: number, kind: 'blipFill' | 'pattFill') {
+export function prepareChartFill(input: Uint8Array, nodeId: number, kind: 'blipFill' | 'pattFill' | 'solidFill' | 'gradFill') {
   let source = input, tree = chartPropertyTree(source);
   const path = chartPropertyPath(tree, nodeId);
   if (!path) throw new RangeError('The chart fill target changed. Read the chart again.');
@@ -32,4 +32,18 @@ export function prepareChartFill(input: Uint8Array, nodeId: number, kind: 'blipF
     shapePath = [...path, index];
   }
   return { source, tree, shapePath, shape: chartPropertyAt(tree, shapePath) };
+}
+
+/** Insert a fill choice through the schema, retaining its owner address through sibling edits. */
+export function ensureChartFillNode(bytes: Uint8Array, nodeId: number, kind: 'solidFill' | 'gradFill') {
+  let { source, tree, shapePath, shape } = prepareChartFill(bytes, nodeId, kind);
+  let fill = shape.children.find(child => chartPropertyLocalName(child) === kind);
+  if (!fill) {
+    const definition = shape.availableChildren.find(child => child.definition.endsWith(`/a:${kind}`));
+    if (!definition) throw new TypeError('This chart property has no fill.');
+    source = insertChartProperty(source, shape.id, definition.definition);
+    tree = chartPropertyTree(source); shape = chartPropertyAt(tree, shapePath);
+    fill = shape.children.find(child => chartPropertyLocalName(child) === kind)!;
+  }
+  return { source, shape, fill };
 }

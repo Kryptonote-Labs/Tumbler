@@ -74,7 +74,7 @@ export function resolveDrawingColor(
 ): string | undefined {
   const node = element?.children.find(
     (n): n is LosslessXmlElement =>
-      n.kind === "element" &&
+      n.kind === "element" && ['http://schemas.openxmlformats.org/drawingml/2006/main', 'http://purl.oclc.org/ooxml/drawingml/main'].includes(n.namespaceUri) &&
       [
         "srgbClr",
         "scrgbClr",
@@ -116,7 +116,7 @@ export function resolveDrawingColor(
   let color = base.rgb,
     alpha = base.alpha;
   for (const tr of node.children) {
-    if (tr.kind !== "element") continue;
+    if (tr.kind !== "element" || tr.namespaceUri !== node.namespaceUri) continue;
     const name = tr.localName,
       n = numeric(attr(tr, "val")),
       v = n / 100000;

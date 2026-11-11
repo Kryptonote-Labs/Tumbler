@@ -89,3 +89,10 @@ export { setChartPictureFill, canSetChartPicture } from './picture-edit.ts';
 export type { ChartView3D, ChartWall, ChartWalls } from './three-d-properties.ts';
 export { readChartFill, setChartPatternFill, setChartNoFill, clearChartFill } from './pattern-edit.ts';
 export { DRAWING_PATTERN_PRESETS, type DrawingPatternPreset } from '@tumblerjs/ooxml';
+
+export { readChartGradientFill, editChartGradientFill, setChartSolidFill, type ChartGradientEdit, type ChartGradientType } from './gradient-edit.ts';
+export { chartColorOpacity } from './chart-color-markup.ts';
+
+export { editChartFill, type ChartFillEdit } from './fill-edit.ts';
+
+export { mergeChartFillDraft, type ChartFillSnapshot } from './fill-draft.ts';

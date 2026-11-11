@@ -16,3 +16,11 @@ test('colour percentage lexical values retain their magnitude and alpha', () => 
   const document = parseLosslessXml(new TextEncoder().encode('<a:solidFill xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:scrgbClr r="100%" g="0%" b="0%"><a:alpha val="50%"/></a:scrgbClr></a:solidFill>'));
   expect(resolveDrawingColor(document.root, () => undefined)).toBe('rgba(255,0,0,0.5)');
 });
+
+
+for (const profile of ['transitional', 'strict'] as const) test(`${profile} background references resolve native DrawingML children in PresentationML containers`, () => {
+  const drawing = profile === 'strict' ? 'http://purl.oclc.org/ooxml/drawingml/main' : 'http://schemas.openxmlformats.org/drawingml/2006/main';
+  const presentation = profile === 'strict' ? 'http://purl.oclc.org/ooxml/presentationml/main' : 'http://schemas.openxmlformats.org/presentationml/2006/main';
+  const document = parseLosslessXml(new TextEncoder().encode(`<p:bgRef xmlns:p="${presentation}" xmlns:a="${drawing}" xmlns:u="urn:ignored-colour" idx="1001"><u:schemeClr val="accent1"/><a:schemeClr val="accent2"><a:alpha val="50000"/><u:alpha val="10000"/></a:schemeClr></p:bgRef>`));
+  expect(resolveDrawingColor(document.root, name => name === 'accent2' ? '#FF0000' : '#0000FF')).toBe('rgba(255,0,0,0.5)');
+});

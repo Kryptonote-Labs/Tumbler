@@ -194,7 +194,7 @@ export function chartFormatTargets(root: ChartPropertyNode): readonly ChartForma
   plots.forEach((plot, plotIndex) => {
     if (plots.length > 1) add(`plot:${plotIndex}`, plot.label, plot);
     plot.children.filter((node) => localName(node) === "ser").forEach((series, index) =>
-      add(`series:${plotIndex}:${index}`, seriesName(series) ?? `Series ${index + 1}`, series));
+      add(`series:${plotIndex}:${chartPropertyValue(child(series, "idx")) ?? index}`, seriesName(series) ?? `Series ${index + 1}`, series));
   });
   const axisCounts = new Map<string, number>();
   for (const axis of plotArea?.children ?? []) {
@@ -203,7 +203,7 @@ export function chartFormatTargets(root: ChartPropertyNode): readonly ChartForma
     if (!label) continue;
     const count = (axisCounts.get(name) ?? 0) + 1;
     axisCounts.set(name, count);
-    add(`${name}:${count}`, count > 1 ? `Secondary ${label.toLowerCase()}` : label, axis);
+    add(`${name}:${chartPropertyValue(child(axis, "axId")) ?? count}`, count > 1 ? `Secondary ${label.toLowerCase()}` : label, axis);
   }
   return targets;
 }

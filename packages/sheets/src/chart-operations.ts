@@ -1,9 +1,9 @@
-import { chartBase64ToBytes, chartBytesToBase64, convertChartType, editChartSource, editChartSeries, bindChartData, parseChartResources, setChartPictureFill, setChartPatternFill, setChartNoFill, clearChartFill, type DrawingPatternPreset, type ChartColor, type ChartResources, type ChartContent, type ChartSourceEdit, type ChartTypeChange, type ChartSeriesEdit, type ChartEditablePlot } from '@tumblerjs/charts';
+import { chartBase64ToBytes, chartBytesToBase64, convertChartType, editChartSource, editChartSeries, bindChartData, parseChartResources, setChartPictureFill, editChartFill, type ChartFillEdit, type ChartResources, type ChartContent, type ChartSourceEdit, type ChartTypeChange, type ChartSeriesEdit, type ChartEditablePlot } from '@tumblerjs/charts';
 import { createChartWorkbook, extendChartWorkbook, refreshChartWorkbook } from './chart-workbook.ts';
 import { openSpreadsheetArtifact } from './artifact.ts';
 import { beginSpreadsheetEdit } from './editor.ts';
 
-export type ChartContentEdit = { readonly fill: { readonly node: number } & ({ readonly kind: 'pattern'; readonly preset: DrawingPatternPreset; readonly foreground?: ChartColor | undefined; readonly background?: ChartColor | undefined } | { readonly kind: 'automatic' | 'none' }) } | { readonly picture: { readonly node: number; readonly data: string; readonly contentType: string } } | { readonly resources: ChartResources; readonly edits?: readonly ChartSourceEdit[] | undefined } | { readonly edits: readonly ChartSourceEdit[] } | (ChartTypeChange & { readonly plot?: number | undefined }) | { readonly series: ChartSeriesEdit } | { readonly data: readonly ChartEditablePlot[] } | {
+export type ChartContentEdit = { readonly fill: ChartFillEdit } | { readonly picture: { readonly node: number; readonly data: string; readonly contentType: string } } | { readonly resources: ChartResources; readonly edits?: readonly ChartSourceEdit[] | undefined } | { readonly edits: readonly ChartSourceEdit[] } | (ChartTypeChange & { readonly plot?: number | undefined }) | { readonly series: ChartSeriesEdit } | { readonly data: readonly ChartEditablePlot[] } | {
   readonly cells: readonly { readonly sheet?: string | undefined; readonly reference: string; readonly value?: string | number | boolean | null | undefined; readonly formula?: string | undefined }[];
 };
 
@@ -11,8 +11,7 @@ export type ChartContentEdit = { readonly fill: { readonly node: number } & ({ r
 export function applyChartContentEdit(content: ChartContent, input: ChartContentEdit): ChartContent {
   let source: Uint8Array = new TextEncoder().encode(content.xml);
   if ('fill' in input) {
-    const fill = input.fill;
-    const next = fill.kind === 'pattern' ? setChartPatternFill(source, fill.node, fill) : fill.kind === 'none' ? setChartNoFill(source, fill.node) : clearChartFill(source, fill.node);
+    const next = editChartFill(source, input.fill);
     return next === source ? content : { ...content, xml: new TextDecoder().decode(next) };
   }
   if ('picture' in input) return setChartPictureFill(content, input.picture.node, input.picture);

@@ -49,7 +49,7 @@
     readonly dataExpanded?: boolean;
     readonly dataEditor?: Snippet<[() => void]>;
     readonly pictureEditor?: Snippet<[ChartPropertyNode, string]>;
-    readonly fillEditor?: Snippet<[ChartPropertyNode, string]>;
+    readonly fillEditor?: Snippet<[ChartPropertyNode, string, string]>;
     readonly plotIndex?: number;
     readonly onplotselect?: (index: number) => void;
   }
@@ -84,6 +84,7 @@
   const plots = $derived(data.plots);
   const type = $derived(parsed && currentChartType(parsed, plotIndex));
   const targets = $derived(parsed ? chartFormatTargets(parsed) : []);
+  $effect(() => { if (targets.length && !targets.some(entry => entry.key === targetKey)) targetKey = targets[0]!.key; });
   const target = $derived(targets.find((entry) => entry.key === targetKey) ?? targets[0]);
   const labels = $derived(parsed ? chartPropertyLabels(parsed) : new Map<number, string>());
   const removable = $derived(parsed ? removableChartProperties(parsed) : new Set<number>());
@@ -243,7 +244,7 @@
       <select class="tumbler-select target" aria-label="Format target" value={target?.key} onchange={(event) => { targetKey = event.currentTarget.value; }}>
         {#each targets as entry (entry.key)}<option value={entry.key}>{entry.label}</option>{/each}
       </select>
-      {#if target && fillEditor}{@render fillEditor(target.node, target.label)}{:else if target && pictureEditor}{@render pictureEditor(target.node, target.label)}{/if}
+      {#if target && fillEditor}{@render fillEditor(target.node, target.label, target.key)}{:else if target && pictureEditor}{@render pictureEditor(target.node, target.label)}{/if}
       <input class="search" type="search" placeholder="Search properties" aria-label="Search properties" bind:value={query} />
       {#if shown}
         {#key target?.key}

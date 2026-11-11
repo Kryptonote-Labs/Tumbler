@@ -25,7 +25,15 @@ const fillColor = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('scheme'), value: z.enum(['bg1', 'tx1', 'bg2', 'tx2', 'lt1', 'dk1', 'lt2', 'dk2', 'accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6', 'hlink', 'folHlink', 'phClr']), ...colorTransforms }).strict(),
 ]);
 const normalizedFillColor = fillColor.transform(({ transforms, ...color }) => transforms === undefined ? color : { ...color, transforms });
+const gradientEdit = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('settings'), type: z.enum(['linear', 'circle', 'rect', 'shape']).optional(), angle: z.number().finite().optional() }).strict(),
+  z.object({ kind: z.literal('stop'), ...address, position: z.number().min(0).max(1).optional(), color: normalizedFillColor.optional(), opacity: z.number().min(0).max(1).optional() }).strict(),
+  z.object({ kind: z.literal('add'), position: z.number().min(0).max(1), color: normalizedFillColor, opacity: z.number().min(0).max(1).optional() }).strict(),
+  z.object({ kind: z.literal('remove'), ...address }).strict(),
+]);
 const fillEdit = z.discriminatedUnion('kind', [
+  z.object({ ...address, kind: z.literal('solid'), color: normalizedFillColor.optional(), opacity: z.number().min(0).max(1).optional() }).strict(),
+  z.object({ ...address, kind: z.literal('gradient'), edit: gradientEdit }).strict(),
   z.object({ ...address, kind: z.literal('pattern'), preset: z.enum(DRAWING_PATTERN_PRESETS), foreground: normalizedFillColor.optional(), background: normalizedFillColor.optional() }).strict(),
   z.object({ ...address, kind: z.enum(['automatic', 'none']) }).strict(),
 ]);
@@ -55,7 +63,7 @@ export function chartHelp(commandName = 'tumbler', command?: string): string {
     'Source edits retain unknown properties and theme references. They validate XML, not chart schema, formulas, or referenced workbook consistency. Update linked workbook data through the sheet engine in the same host transaction.',
     'edit changes source properties, convert changes a plot type while retaining data and inactive formatting, and data changes embedded workbook cells and refreshes the chart. For XLSX source cells use sheets operations.',
     'Resource edits replace the complete related-part snapshot. Internal targets use resource keys; $chart refers to the owning chart. Each part contains base64 bytes, contentType and optional relationships. External URLs are retained and never fetched. Combine resources and source edits in one atomic edit.',
-    'Fill edits select any native pattern preset with optional theme/RGB colours, restore automatic inheritance, or author an explicit no-fill. Pattern selection retains existing colours and transforms unless new colours are supplied.',
+    'Fill edits select solid theme/RGB colours and opacity, gradient settings and source-addressed stops, any native pattern preset, automatic inheritance, or explicit no-fill. Gradient stop operations set position/colour/opacity, add a stop, or remove one while retaining at least two. Positions and opacity are fractions from 0 to 1. Unedited theme references, transforms and advanced geometry survive.',
     'A picture edit takes a snapshot node ID for a fill owner plus base64 image data and contentType. It attaches the native image and retains existing crop, tiling, effects and other resources.',
     JSON.stringify(z.toJSONSchema(command === 'create' ? chartCreateInput : chartEditInput, { io: 'input' }), null, 2),
   ].join('\n') + '\n';
