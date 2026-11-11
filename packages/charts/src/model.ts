@@ -196,9 +196,16 @@ export interface ChartAxis {
 }
 
 export interface ChartTextParagraph {
+  /** Native wrapper metadata, excluding the separately modeled paragraph properties and runs. */
+  readonly sourceWrapper?: import('@tumblerjs/ooxml').LosslessXmlElement;
   readonly sourceProperties?: import('@tumblerjs/ooxml').LosslessXmlElement;
   readonly alignment?: "start" | "center" | "end" | "justify";
-  readonly runs: readonly { readonly text: string; readonly style?: ChartTextStyle }[];
+  readonly runs: readonly {
+    readonly text: string;
+    readonly style?: ChartTextStyle;
+    /** Field/break identity and unmodeled children, excluding the modeled text and run properties. */
+    readonly sourceWrapper?: import('@tumblerjs/ooxml').LosslessXmlElement;
+  }[];
 }
 
 interface ChartModelBase {

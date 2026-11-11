@@ -48,7 +48,9 @@ export function chartRunPropertiesXml(style: ChartTextStyle, ns: string): string
   const sorted = [...children].sort((a, b) => (order.indexOf(a.localName) < 0 ? order.length : order.indexOf(a.localName)) - (order.indexOf(b.localName) < 0 ? order.length : order.indexOf(b.localName)));
   if (sorted.some((child, index) => child !== children[index])) {
     const attributes = ordered.source.slice(ordered.root.startTagSpan.start, ordered.root.startTagSpan.end);
-    orderedEdit.replaceElementMarkup(ordered.root, attributes + sorted.map(child => chartElementMarkup(child, ns)).join('') + `</${ordered.root.qualified}>`);
+    let index = 0;
+    const content = ordered.root.children.map(child => child.kind === 'element' ? chartElementMarkup(sorted[index++]!, ns) : ordered.source.slice(child.span.start, child.span.end)).join('');
+    orderedEdit.replaceElementMarkup(ordered.root, attributes + content + `</${ordered.root.qualified}>`);
     return new TextDecoder().decode(orderedEdit.commit().bytes);
   }
   return new TextDecoder().decode(value);
