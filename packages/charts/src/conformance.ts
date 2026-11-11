@@ -1,11 +1,16 @@
-import { beginLosslessXmlEdit, OOXML_NAMESPACES } from '@tumblerjs/ooxml';
+import { beginLosslessXmlEdit, OOXML_NAMESPACES, type LosslessXmlDocument } from '@tumblerjs/ooxml';
 import { chartXml } from './source-xml.ts';
 
 /** Reconcile standard namespace declarations with the owning package without changing formula/text literals or extensions. */
 export function convertChartConformance(bytes: Uint8Array, conformance: 'strict' | 'transitional'): Uint8Array {
   const { document, namespace } = chartXml(bytes);
+  if (namespace === OOXML_NAMESPACES[conformance].chart) return bytes;
+  return normalizeChartNamespaceDeclarations(document, conformance);
+}
+
+/** Also reconciles known XML fragments retained inside authoring extensions. */
+export function normalizeChartNamespaceDeclarations(document: LosslessXmlDocument, conformance: 'strict' | 'transitional'): Uint8Array {
   const target = OOXML_NAMESPACES[conformance];
-  if (namespace === target.chart) return bytes;
   const other = OOXML_NAMESPACES[conformance === 'strict' ? 'transitional' : 'strict'];
   const relationships = conformance === 'strict' ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
   const previousRelationships = conformance === 'strict' ? 'http://schemas.openxmlformats.org/officeDocument/2006/relationships' : 'http://purl.oclc.org/ooxml/officeDocument/relationships';

@@ -39,7 +39,7 @@ function numericData(name: string, values: readonly (number | null)[]): string {
 }
 
 function axis(kind: 'catAx' | 'valAx' | 'serAx', id: number, cross: number, position: 'b' | 'l' | 'r'): string {
-  return `<c:${kind}><c:axId val="${id}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:axPos val="${position}"/>${kind === 'valAx' && position === 'l' ? '<c:majorGridlines/>' : ''}<c:tickLblPos val="nextTo"/><c:crossAx val="${cross}"/><c:crosses val="autoZero"/>${kind === 'valAx' ? '<c:crossBetween val="between"/>' : ''}</c:${kind}>`;
+  return `<c:${kind}><c:axId val="${id}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${position}"/>${kind === 'valAx' && position === 'l' ? '<c:majorGridlines/>' : ''}<c:tickLblPos val="nextTo"/><c:crossAx val="${cross}"/><c:crosses val="autoZero"/>${kind === 'valAx' ? '<c:crossBetween val="between"/>' : ''}</c:${kind}>`;
 }
 
 /** Create a standalone chart part with inline source data and theme-relative series colours.
@@ -85,19 +85,24 @@ export function createOoxmlChart(options: CreateChartOptions): Uint8Array {
       if (values && values.length !== series.values.length) throw new TypeError('X, Y and bubble-size counts must match.');
     if (type === 'bubbleChart' && !series.bubbleSizes) throw new TypeError('Bubble charts require bubble sizes.');
     const color = `accent${index % 6 + 1}`;
-    const style = `<c:spPr><a:solidFill><a:schemeClr val="${color}"/></a:solidFill><a:ln>${type === 'stockChart' ? '<a:noFill/>' : `<a:solidFill><a:schemeClr val="${color}"/></a:solidFill>`}</a:ln></c:spPr>`;
+    const scatterStyle = options.scatterStyle ?? 'marker';
+    const hiddenLine = type === 'stockChart' || type === 'scatterChart' && ['marker', 'none'].includes(scatterStyle);
+    const style = pie ? '<c:spPr><a:ln><a:noFill/></a:ln></c:spPr>' : `<c:spPr><a:solidFill><a:schemeClr val="${color}"/></a:solidFill><a:ln>${hiddenLine ? '<a:noFill/>' : `<a:solidFill><a:schemeClr val="${color}"/></a:solidFill>`}</a:ln></c:spPr>`;
+    const marker = type === 'scatterChart' ? `<c:marker><c:symbol val="${['marker', 'lineMarker', 'smoothMarker'].includes(scatterStyle) ? 'circle' : 'none'}"/><c:size val="5"/></c:marker>` : '';
+    const smooth = type === 'scatterChart' ? `<c:smooth val="${scatterStyle.startsWith('smooth') ? 1 : 0}"/>` : '';
     const categories = `<c:cat><c:strLit><c:ptCount val="${options.categories.length}"/>${options.categories.map((value, i) => `<c:pt idx="${i}"><c:v>${escape(value)}</c:v></c:pt>`).join('')}</c:strLit></c:cat>`;
     const values = xy
       ? numericData('xVal', series.xValues ?? series.values.map((_, i) => i + 1)) + numericData('yVal', series.values) + (type === 'bubbleChart' ? numericData('bubbleSize', series.bubbleSizes!) : '')
       : categories + numericData('val', series.values);
-    return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/><c:tx><c:v>${escape(series.name)}</c:v></c:tx>${style}${type === 'stockChart' ? `<c:marker><c:symbol val="${options.series.length === 3 && index === 2 ? 'dash' : 'none'}"/>${options.series.length === 3 && index === 2 ? '<c:spPr><a:ln><a:solidFill><a:schemeClr val="tx1"/></a:solidFill></a:ln></c:spPr>' : ''}</c:marker>` : ''}${values}</c:ser>`;
+    return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/><c:tx><c:v>${escape(series.name)}</c:v></c:tx>${style}${type === 'stockChart' ? `<c:marker><c:symbol val="${options.series.length === 3 && index === 2 ? 'dash' : 'none'}"/>${options.series.length === 3 && index === 2 ? '<c:spPr><a:ln><a:solidFill><a:schemeClr val="tx1"/></a:solidFill></a:ln></c:spPr>' : ''}</c:marker>` : ''}${marker}${values}${smooth}</c:ser>`;
   }).join('');
   let before = '';
   let after = '';
   if (bar) before += `<c:barDir val="${options.direction ?? 'col'}"/>`;
   if (bar || line || area) before += `<c:grouping val="${grouping}"/>`;
   if (type === 'radarChart') before += `<c:radarStyle val="${options.radarStyle ?? 'standard'}"/>`;
-  if (type === 'scatterChart') before += `<c:scatterStyle val="${options.scatterStyle ?? 'marker'}"/>`;
+  // MS-OI29500 2.1.1594 rejects the ECMA 'none' shortcut. Explicit hidden series is equivalent.
+  if (type === 'scatterChart') before += `<c:scatterStyle val="${options.scatterStyle === 'none' ? 'lineMarker' : options.scatterStyle ?? 'marker'}"/>`;
   if (type === 'ofPieChart') before += `<c:ofPieType val="${options.splitType ?? 'pie'}"/>`;
   if (type.startsWith('surface')) before += `<c:wireframe val="${options.wireframe ? 1 : 0}"/>`;
   else if (type !== 'stockChart') before += `<c:varyColors val="${pie ? 1 : 0}"/>`;
@@ -108,7 +113,7 @@ export function createOoxmlChart(options: CreateChartOptions): Uint8Array {
   const ids = pie ? [] : depth ? [1, 2, 3] : [1, 2];
   after += ids.map(id => `<c:axId val="${id}"/>`).join('');
   const horizontal = bar && options.direction === 'bar';
-  const axes = pie ? '' : axis(xy ? 'valAx' : 'catAx', 1, 2, horizontal ? 'l' : 'b') + axis('valAx', 2, 1, horizontal ? 'b' : 'l').replace('<c:axPos', type === 'surfaceChart' ? '<c:delete val="1"/><c:axPos' : '<c:axPos') + (depth ? axis('serAx', 3, 2, 'r') : '');
+  const axes = pie ? '' : axis(xy ? 'valAx' : 'catAx', 1, 2, horizontal ? 'l' : 'b') + axis('valAx', 2, 1, horizontal ? 'b' : 'l').replace('<c:delete val="0"/>', `<c:delete val="${type === 'surfaceChart' ? 1 : 0}"/>`) + (depth ? axis('serAx', 3, 2, 'r') : '');
   const strict = options.conformance === 'strict';
   const ns = strict ? 'http://purl.oclc.org/ooxml/drawingml/' : 'http://schemas.openxmlformats.org/drawingml/2006/';
   const view = type === 'surfaceChart' ? '<c:view3D><c:rotX val="90"/><c:rotY val="0"/><c:rAngAx val="0"/><c:perspective val="0"/></c:view3D>' : type.includes('3D') ? '<c:view3D><c:rotX val="15"/><c:rotY val="20"/><c:rAngAx val="1"/></c:view3D>' : '';

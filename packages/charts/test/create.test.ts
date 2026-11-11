@@ -11,7 +11,10 @@ for (const conformance of ['strict', 'transitional'] as const) {
       expect(inspectChartSource(bytes).namespace).toContain(conformance === 'strict' ? 'purl.oclc.org' : 'schemas.openxmlformats.org');
       const xml = new TextDecoder().decode(bytes);
       expect(xml).toContain(`<c:${type}>`);
-      expect(xml).toContain('<a:schemeClr val="accent1"/>');
+      const model = parseOoxmlChart(bytes, conformance);
+      if (['pieChart', 'pie3DChart', 'ofPieChart', 'doughnutChart'].includes(type)) {
+        expect(model.status === 'supported' && model.series[0]?.fill).toBeUndefined();
+      } else expect(xml).toContain('<a:schemeClr val="accent1"/>');
       expect(xml).toContain('<c:ptCount val="3"/><c:pt idx="0"><c:v>1</c:v></c:pt><c:pt idx="2"><c:v>3</c:v></c:pt>');
       expect(parseOoxmlChart(bytes, conformance).title).toBe('Revenue & growth');
     });

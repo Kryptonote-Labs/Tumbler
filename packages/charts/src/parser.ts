@@ -251,7 +251,7 @@ function parseSeries(element: LosslessXmlElement, kind: ChartKind, chartNamespac
     fill: parseSolidFill(children(element, chartNamespace, "spPr")[0], drawingNamespace),
     line: parseLine(children(element, chartNamespace, "spPr")[0], drawingNamespace),
     ...(marker === undefined ? {} : { marker }),
-    ...(["scatter", "line"].includes(kind) ? { smooth: booleanVal(children(element, chartNamespace, "smooth")[0], false) } : {}),
+    ...(["scatter", "line"].includes(kind) && children(element, chartNamespace, "smooth").length ? { smooth: booleanVal(children(element, chartNamespace, "smooth")[0], true) } : {}),
   });
 }
 

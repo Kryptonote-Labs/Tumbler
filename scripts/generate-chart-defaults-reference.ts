@@ -4,18 +4,19 @@ import { createChartWorkbook } from '../packages/sheets/src/index.ts';
 import { createPresentation, applyPresentationCommand } from '../packages/slides/src/index.ts';
 
 const output = resolve(process.argv[2] ?? 'packages/charts/test/fixtures/chart-defaults-reference.pptx');
-const base = new TextDecoder().decode(createOoxmlChart({ type: 'barChart', title: 'Source defaults', categories: ['A', 'B', 'C'], series: [{ name: 'Data', values: [2, 4, 3] }] }));
+const base = new TextDecoder().decode(createOoxmlChart({ type: 'barChart', title: 'Source defaults', categories: ['A', 'B', 'C'], series: [{ name: 'Data', values: [2, 4, 3] }] })).replaceAll('<c:delete val="0"/>', '');
 const axisFont = '<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:latin typeface="+mn-lt"/></a:defRPr></a:pPr><a:endParaRPr lang="en-US"/></a:p></c:txPr>';
 const deleted = (xml: string) => xml.replaceAll('<c:axPos', '<c:delete val="0"/><c:axPos');
 const number = (xml: string) => xml.replaceAll('<c:tickLblPos', '<c:numFmt formatCode="General" sourceLinked="0"/><c:tickLblPos');
 const font = (xml: string) => xml.replace(/<\/c:(catAx|valAx)>/g, `${axisFont}</c:$1>`);
-const pie = new TextDecoder().decode(createOoxmlChart({ type: 'pieChart', title: 'Pie source defaults', categories: ['A', 'B', 'C'], series: [{ name: 'Data', values: [2, 4, 3] }] }));
+const pie = new TextDecoder().decode(createOoxmlChart({ type: 'pieChart', title: 'Pie source defaults', categories: ['A', 'B', 'C'], series: [{ name: 'Data', values: [2, 4, 3] }] })).replace(/<c:spPr>[\s\S]*?<\/c:spPr>/, '<c:spPr><a:solidFill><a:schemeClr val="accent1"/></a:solidFill><a:ln><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:ln></c:spPr>');
 const scatter = new TextDecoder().decode(createOoxmlChart({ type: 'scatterChart', title: 'Scatter marker style', categories: [], series: [{ name: 'Data', values: [2, 4, 3], xValues: [1, 2, 3] }] }));
+const rawScatter = scatter.replaceAll('<c:delete val="0"/>', '').replace(/<c:marker>[\s\S]*?<\/c:marker>/g, '').replace(/<c:smooth[^>]*\/>/g, '').replace('<a:ln><a:noFill/></a:ln>', '<a:ln><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:ln>');
 const samples = [
   ['axis-default', base], ['axis-delete', deleted(base)], ['axis-number', number(base)], ['axis-font', font(base)], ['axis-all', font(number(deleted(base)))],
   ['chart-font', base.replace('</c:chartSpace>', `${axisFont}</c:chartSpace>`)],
   ['pie-series-fill', pie], ['pie-automatic-fill', pie.replace(/<c:spPr>[\s\S]*?<\/c:spPr>/g, '')],
-  ['scatter-authored-line', scatter], ['scatter-hidden-line', scatter.replace(/<a:ln>[\s\S]*?<\/a:ln>/g, '<a:ln><a:noFill/></a:ln>')],
+  ['scatter-authored-line', rawScatter], ['scatter-hidden-line', rawScatter.replace(/<a:ln>[\s\S]*?<\/a:ln>/g, '<a:ln><a:noFill/></a:ln>')],
 ] as const;
 let presentation = createPresentation();
 for (const [index, [name, xml]] of samples.entries()) {

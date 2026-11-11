@@ -1,3 +1,4 @@
+import { applyScatterStyle } from './scatter-style.ts';
 import { beginLosslessXmlEdit, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from '@tumblerjs/ooxml';
 import { createOoxmlChart, type CreateChartOptions } from './create.ts';
 import { readChartData } from './data-edit.ts';
@@ -95,6 +96,7 @@ export function convertChartType(bytes: Uint8Array, change: ChartTypeChange, plo
     return `<c:${template.localName} xmlns:c="${source.namespace}">${content}</c:${template.localName}>`;
   }
   let converted = merge(target, properties, original, archived?.root);
+  if (change.type === 'scatterChart' && change.scatterStyle !== undefined) converted = applyScatterStyle(converted, change.scatterStyle);
   const edit = beginLosslessXmlEdit(source.document);
   // Reuse compatible axes so bounds, number formats and text styling survive.
   const axes = source.children(source.plotArea).filter(element => ['catAx', 'valAx', 'dateAx', 'serAx'].includes(element.localName));
