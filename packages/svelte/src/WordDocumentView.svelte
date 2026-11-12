@@ -45,7 +45,8 @@
   let { wordDocument, onlayoutprogress, onlayouterror, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, oninkchange, inkMaxPixels, displayMode = "light", scale = $bindable(1) }: Props = $props();
   let scroller = $state<HTMLDivElement>();
   let viewportWidth = $state(0);
-  let layout = $state<WordLayout>();
+  let layout = $state.raw<WordLayout>();
+  let layoutDocument: WordDocument | undefined;
   let viewport = $state<WordPageViewport>();
   let mounted = $state(false);
   let selectedDrawing = $state<number>();
@@ -151,6 +152,8 @@
     cancelLayout?.();
     if (destroyed) return;
     const document = wordDocument;
+    // Keep the existing editing surface intact until the replacement pagination completes.
+    const retainEditor = editable && layout !== undefined;
     const canvas = globalThis.document.createElement("canvas");
     const context = canvas.getContext("2d");
     if (context === null) {
@@ -161,7 +164,12 @@
       layoutWordDocumentProgressively(document, browserWordTextMeasurer(context)),
       (next, complete) => {
         if (destroyed || document !== wordDocument) return;
+        if (retainEditor && !complete) {
+          onlayoutprogress?.({ document, pages: next.pages.length, complete });
+          return;
+        }
         layout = next;
+        layoutDocument = document;
         updateViewport();
         onlayoutprogress?.({ document, pages: next.pages.length, complete });
         void tick().then(() => { if (!destroyed && layout === next) restoreBrowserSelection(); });
@@ -228,7 +236,7 @@
   }
 
   function readBrowserSelection() {
-    if (!editable || mouseSelection !== undefined || composition !== undefined || pendingInput !== undefined) return;
+    if (!editable || layoutDocument !== wordDocument || mouseSelection !== undefined || composition !== undefined || pendingInput !== undefined) return;
     const next = browserTextSelection();
     if (next !== undefined && !sameWordTextSelection(selection, next)) onselectionchange?.(next);
   }
@@ -243,10 +251,12 @@
   }
 
   function restoreBrowserSelection() {
-    if (composition !== undefined || pendingInput !== undefined || !editable || !editingFocused || selection === undefined || scroller === undefined || mouseSelection !== undefined) return;
+    if (layoutDocument !== wordDocument || composition !== undefined || pendingInput !== undefined || !editable || !editingFocused || selection === undefined || scroller === undefined || mouseSelection !== undefined) return;
     const anchor = browserPoint(selection.anchor);
     const focus = browserPoint(selection.focus);
     if (anchor === undefined || focus === undefined) return;
+    const element = anchor.node instanceof Element ? anchor.node : anchor.node.parentElement;
+    element?.closest<HTMLElement>('[contenteditable]')?.focus({ preventScroll: true });
     globalThis.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
   }
 
@@ -306,7 +316,7 @@
       composition ??= { document: wordDocument, selection: browserTextSelection() ?? selection };
       return;
     }
-    const activeSelection = inputSelectionOverride ?? (event.getTargetRanges().length > 0
+    const activeSelection = inputSelectionOverride ?? (layoutDocument !== wordDocument ? selection : event.getTargetRanges().length > 0
       ? targetSelection(event)
       : browserTextSelection() ?? selection);
     inputSelectionOverride = undefined;
