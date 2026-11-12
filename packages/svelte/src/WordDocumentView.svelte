@@ -313,7 +313,7 @@
     // Every browser mutation needs a model operation, including unsupported intents and missing selections.
     if (!editable) { event.preventDefault(); return; }
     if (composition !== undefined || event.isComposing || event.inputType === "insertCompositionText") {
-      composition ??= { document: wordDocument, selection: browserTextSelection() ?? selection };
+      composition ??= { document: wordDocument, selection: layoutDocument !== wordDocument ? selection : browserTextSelection() ?? selection };
       return;
     }
     const activeSelection = inputSelectionOverride ?? (layoutDocument !== wordDocument ? selection : event.getTargetRanges().length > 0
@@ -359,7 +359,7 @@
   function handleCompositionStart(event: CompositionEvent) {
     if (!editable || !bodyInput(event)) return;
     pendingInput = undefined;
-    composition = { document: wordDocument, selection: inputSelectionOverride ?? browserTextSelection() ?? selection };
+    composition = { document: wordDocument, selection: inputSelectionOverride ?? (layoutDocument !== wordDocument ? selection : browserTextSelection() ?? selection) };
     inputSelectionOverride = undefined;
   }
 
