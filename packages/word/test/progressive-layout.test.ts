@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { NativeWordDocument, createWordArtifact, type WordContentBlock, type WordTextMeasurer } from '../src/index.ts';
+import { layoutWordDocument, layoutWordDocumentProgressively, NativeWordDocument, createWordArtifact, type WordContentBlock, type WordTextMeasurer } from '../src/index.ts';
 
 const measurer: WordTextMeasurer = {
   measure: (text, format) => ({ width: text.length * format.fontSizePoints / 2, ascent: format.fontSizePoints * .8, descent: format.fontSizePoints * .2 }),
@@ -61,6 +61,21 @@ test('progressive layout resolves total-page fields on completion', () => {
   let step = iterator.next();
   while (!step.done) step = iterator.next();
   expect(step.value).toEqual(doc.layout(measurer));
+  expect(step.value.pages.map(page => page.footerLines.flatMap(line => line.fragments.map(fragment => fragment.text)).join('')))
+    .toEqual(step.value.pages.map((_, i) => `${i + 1} of ${step.value.pages.length}`));
+});
+
+test('package-backed pagination converges total-page fields to synchronous output', () => {
+  const native = new NativeWordDocument({ content: Array.from({ length: 100 }, () => paragraph('Body text '.repeat(50))) });
+  native.updateStory({ section: 0, kind: 'footer', type: 'default' }, [{ kind: 'paragraph', runs: [
+    { text: '\uFFFC', field: 'PAGE' }, { text: ' of ' }, { text: '\uFFFC', field: 'NUMPAGES' },
+  ] }]);
+  const document = native.artifact().document;
+  const iterator = layoutWordDocumentProgressively(document, measurer);
+  let step = iterator.next();
+  expect(step.done).toBe(false);
+  while (!step.done) step = iterator.next();
+  expect(step.value).toEqual(layoutWordDocument(document, measurer));
   expect(step.value.pages.map(page => page.footerLines.flatMap(line => line.fragments.map(fragment => fragment.text)).join('')))
     .toEqual(step.value.pages.map((_, i) => `${i + 1} of ${step.value.pages.length}`));
 });

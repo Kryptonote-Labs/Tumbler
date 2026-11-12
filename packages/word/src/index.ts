@@ -37,6 +37,7 @@ export {
 } from "./styles.ts";
 export {
   layoutWordDocument,
+  layoutWordDocumentProgressively,
   wordPointsToCssPixels,
 } from "./layout.ts";
 export { paintWordPage, wordPageImages, wordPageChartPictures, wordPageInkBounds } from "./canvas-paint.ts";

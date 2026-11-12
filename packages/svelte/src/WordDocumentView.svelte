@@ -12,7 +12,7 @@
   import WordParagraphDecorations from "./WordParagraphDecorations.svelte";
   import { flushSync, onDestroy, onMount, tick, untrack } from "svelte";
   import { WordImageUrls } from "./word-image-urls.ts";
-  import { wordImagePaintBounds, wordClippedLineAtPoint, layoutWordDocument, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
+  import { wordImagePaintBounds, wordClippedLineAtPoint, layoutWordDocumentProgressively, wordParagraphText, wordPointsToCssPixels, type WordDocument, type WordImageDrawing, type WordDrawingResize, type WordDrawingChange, type WordLayout, type WordTextPosition, type WordTextSelection } from "@tumblerjs/word";
   import { zoomGesture } from "./zoom-gesture.ts";
   import OoxmlChart from "./OoxmlChart.svelte";
   import WordDrawingView from "./WordDrawingView.svelte";
@@ -21,8 +21,12 @@
   import { calculateWordPageViewport, type WordPageViewport } from "./word-page-viewport.ts";
   import { sameWordTextSelection, wordDocumentParagraphs, wordInputEdit, type WordDocumentEdit } from "./word-editing.ts";
 
+  import { startWordLayoutJob, type WordLayoutProgress, type WordLayoutError } from "./word-layout-job.ts";
+
   interface Props {
     readonly wordDocument: WordDocument;
+    readonly onlayoutprogress?: (progress: WordLayoutProgress) => void;
+    readonly onlayouterror?: (failure: WordLayoutError) => void;
     readonly onhyperlink?: (target: string) => void;
     readonly editable?: boolean;
     readonly selection?: WordTextSelection;
@@ -38,10 +42,11 @@
     readonly displayMode?: "light" | "dark";
   }
 
-  let { wordDocument, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, oninkchange, inkMaxPixels, displayMode = "light", scale = $bindable(1) }: Props = $props();
+  let { wordDocument, onlayoutprogress, onlayouterror, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, oninkchange, inkMaxPixels, displayMode = "light", scale = $bindable(1) }: Props = $props();
   let scroller = $state<HTMLDivElement>();
   let viewportWidth = $state(0);
-  let layout = $state<WordLayout>();
+  let layout = $state.raw<WordLayout>();
+  let layoutDocument: WordDocument | undefined;
   let viewport = $state<WordPageViewport>();
   let mounted = $state(false);
   let selectedDrawing = $state<number>();
@@ -72,17 +77,17 @@
   });
   const imageUrls = new WordImageUrls();
   let destroyed = false;
+  let cancelLayout: (() => void) | undefined;
 
   onDestroy(() => {
     destroyed = true;
+    cancelLayout?.();
     void tick().then(() => imageUrls.destroy());
     finishMouseSelection();
   });
 
   onMount(() => {
     mounted = true;
-    void globalThis.document.fonts?.ready.then(reflow);
-    reflow();
     const fonts = globalThis.document.fonts;
     fonts?.addEventListener("loadingdone", reflow);
     globalThis.document.addEventListener("selectionchange", readBrowserSelection);
@@ -97,6 +102,7 @@
     if (mounted) {
       // Reflow reads its freshly-written layout to derive the viewport; that output is not an input dependency.
       untrack(reflow);
+      return () => cancelLayout?.();
     }
   });
 
@@ -143,11 +149,33 @@
   }
 
   function reflow() {
+    cancelLayout?.();
+    if (destroyed) return;
+    const document = wordDocument;
+    // Keep the existing editing surface intact until the replacement pagination completes.
+    const retainEditor = editable && layout !== undefined;
     const canvas = globalThis.document.createElement("canvas");
     const context = canvas.getContext("2d");
-    if (context === null) return;
-    layout = layoutWordDocument(wordDocument, browserWordTextMeasurer(context));
-    updateViewport();
+    if (context === null) {
+      onlayouterror?.({ document, error: new Error("Word layout requires a 2D canvas context.") });
+      return;
+    }
+    cancelLayout = startWordLayoutJob(
+      layoutWordDocumentProgressively(document, browserWordTextMeasurer(context)),
+      (next, complete) => {
+        if (destroyed || document !== wordDocument) return;
+        if (retainEditor && !complete) {
+          onlayoutprogress?.({ document, pages: next.pages.length, complete });
+          return;
+        }
+        layout = next;
+        layoutDocument = document;
+        updateViewport();
+        onlayoutprogress?.({ document, pages: next.pages.length, complete });
+        void tick().then(() => { if (!destroyed && layout === next) restoreBrowserSelection(); });
+      },
+      error => onlayouterror?.({ document, error }),
+    );
   }
 
   function updateViewport() {
@@ -208,7 +236,7 @@
   }
 
   function readBrowserSelection() {
-    if (!editable || mouseSelection !== undefined || composition !== undefined || pendingInput !== undefined) return;
+    if (!editable || layoutDocument !== wordDocument || mouseSelection !== undefined || composition !== undefined || pendingInput !== undefined) return;
     const next = browserTextSelection();
     if (next !== undefined && !sameWordTextSelection(selection, next)) onselectionchange?.(next);
   }
@@ -223,10 +251,12 @@
   }
 
   function restoreBrowserSelection() {
-    if (composition !== undefined || pendingInput !== undefined || !editable || !editingFocused || selection === undefined || scroller === undefined || mouseSelection !== undefined) return;
+    if (layoutDocument !== wordDocument || composition !== undefined || pendingInput !== undefined || !editable || !editingFocused || selection === undefined || scroller === undefined || mouseSelection !== undefined) return;
     const anchor = browserPoint(selection.anchor);
     const focus = browserPoint(selection.focus);
     if (anchor === undefined || focus === undefined) return;
+    const element = anchor.node instanceof Element ? anchor.node : anchor.node.parentElement;
+    element?.closest<HTMLElement>('[contenteditable]')?.focus({ preventScroll: true });
     globalThis.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
   }
 
@@ -283,10 +313,10 @@
     // Every browser mutation needs a model operation, including unsupported intents and missing selections.
     if (!editable) { event.preventDefault(); return; }
     if (composition !== undefined || event.isComposing || event.inputType === "insertCompositionText") {
-      composition ??= { document: wordDocument, selection: browserTextSelection() ?? selection };
+      composition ??= { document: wordDocument, selection: layoutDocument !== wordDocument ? selection : browserTextSelection() ?? selection };
       return;
     }
-    const activeSelection = inputSelectionOverride ?? (event.getTargetRanges().length > 0
+    const activeSelection = inputSelectionOverride ?? (layoutDocument !== wordDocument ? selection : event.getTargetRanges().length > 0
       ? targetSelection(event)
       : browserTextSelection() ?? selection);
     inputSelectionOverride = undefined;
@@ -329,7 +359,7 @@
   function handleCompositionStart(event: CompositionEvent) {
     if (!editable || !bodyInput(event)) return;
     pendingInput = undefined;
-    composition = { document: wordDocument, selection: inputSelectionOverride ?? browserTextSelection() ?? selection };
+    composition = { document: wordDocument, selection: inputSelectionOverride ?? (layoutDocument !== wordDocument ? selection : browserTextSelection() ?? selection) };
     inputSelectionOverride = undefined;
   }
 

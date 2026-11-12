@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { layoutWordDocument, openWordArtifact, wordParagraphText } from "../src/index.ts";
+import { layoutWordDocumentProgressively, layoutWordDocument, openWordArtifact, wordParagraphText } from "../src/index.ts";
 import { buildWordDocumentFixture } from "./document-fixture.ts";
 
 const word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -25,6 +25,14 @@ describe("WordprocessingML notes", () => {
     expect(wordParagraphText(artifact.document, firstBody)).toBe("Page one\uFFFC\n");
 
     const layout = layoutWordDocument(artifact.document, { measure: (text) => ({ width: text.length * 5, ascent: 8, descent: 2 }) });
+    const iterator = layoutWordDocumentProgressively(artifact.document, { measure: text => ({ width: text.length * 5, ascent: 8, descent: 2 }) });
+    let step = iterator.next();
+    expect(step.done).toBe(false);
+    const provisional = JSON.stringify(step.value);
+    const first = step.value;
+    while (!step.done) step = iterator.next();
+    expect(step.value).toEqual(layout);
+    expect(JSON.stringify(first)).toBe(provisional);
     expect(layout.pages).toHaveLength(2);
     expect(layout.pages[0]?.noteLines.flatMap((line) => line.fragments.map((fragment) => fragment.text))).toContain("First note");
     expect(layout.pages[1]?.noteLines.flatMap((line) => line.fragments.map((fragment) => fragment.text))).toEqual(expect.arrayContaining(["Second note", "Final note"]));

@@ -79,3 +79,5 @@ export { default as ChartDataEditor } from "./ChartDataEditor.svelte";
 export { CHART_TYPE_FAMILIES } from "./chart-properties.ts";
 export type { ChartTypeChange, ChartTypeFamily, ChartTypeOption, ChartPropertyApply, ChartPropertyChange } from "./chart-properties.ts";
 export { default as ChartWorkbench } from './ChartWorkbench.svelte';
+
+export type { WordLayoutProgress, WordLayoutError } from "./word-layout-job.ts";
