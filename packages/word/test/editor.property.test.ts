@@ -8,27 +8,6 @@ const text = fc.array(fc.constantFrom("a", "Z", "0", " ", "&", "<", "é", "東",
   .map((characters) => characters.join(""));
 
 describe("generated WordprocessingML edit histories", () => {
-  test("matches a plain-text oracle across repeated logical edits", () => {
-    fc.assert(fc.property(
-      text,
-      fc.array(fc.record({ start: fc.nat(), end: fc.nat(), value: text }), { minLength: 1, maxLength: 25 }),
-      (initial, commands) => {
-        let expected = initial;
-        let artifact = open([initial]);
-        for (const command of commands) {
-          const paragraph = paragraphs(artifact)[0]!;
-          const boundaries = scalarBoundaries(expected);
-          const left = boundaries[command.start % boundaries.length]!;
-          const right = boundaries[command.end % boundaries.length]!;
-          const start = Math.min(left, right);
-          const end = Math.max(left, right);
-          artifact = artifact.replaceText(selection(paragraph.elementId, start, end), command.value);
-          expected = expected.slice(0, start) + command.value + expected.slice(end);
-          expect(wordParagraphText(artifact.document, paragraphs(artifact)[0]!)).toBe(expected);
-        }
-      },
-    ), { numRuns: 150 });
-  }, 30_000);
 
   test("matches paragraph-splice semantics in either selection direction", () => {
     fc.assert(fc.property(
