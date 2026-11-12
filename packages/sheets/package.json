@@ -1,6 +1,6 @@
 {
   "name": "@tumblerjs/sheets",
-  "version": "0.1.0-alpha.26",
+  "version": "0.1.0-alpha.27",
   "description": "Headless SpreadsheetML reading, editing, and rendering models for Tumbler.",
   "type": "module",
   "exports": "./src/index.ts",
@@ -20,11 +20,11 @@
     "tag": "latest"
   },
   "dependencies": {
-    "@tumblerjs/charts": "0.1.0-alpha.26",
-    "@tumblerjs/core": "0.1.0-alpha.26",
-    "@tumblerjs/formulas": "0.1.0-alpha.26",
-    "@tumblerjs/ooxml": "0.1.0-alpha.26",
-    "@tumblerjs/opc": "0.1.0-alpha.26",
+    "@tumblerjs/charts": "0.1.0-alpha.27",
+    "@tumblerjs/core": "0.1.0-alpha.27",
+    "@tumblerjs/formulas": "0.1.0-alpha.27",
+    "@tumblerjs/ooxml": "0.1.0-alpha.27",
+    "@tumblerjs/opc": "0.1.0-alpha.27",
     "zod": "4.6.5"
   }
 }
