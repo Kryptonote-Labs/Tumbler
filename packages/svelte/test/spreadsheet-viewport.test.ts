@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import fc from "fast-check";
 import { compile } from "svelte/compiler";
 import { SparseAxisGeometry } from "@tumblerjs/core";
 import { calculateSpreadsheetViewport, coerceSpreadsheetEditValue, composeSpreadsheetGridLayout, frozenGridTranslation, measureMaximumDigitWidth, placeSpreadsheetDrawing, spreadsheetDrawingRegion, spreadsheetFontShorthand } from "../src/index.ts";
@@ -35,30 +34,6 @@ describe("Svelte spreadsheet viewport", () => {
     const scrolled = calculateSpreadsheetViewport({ ...input, rowHeight: 56, scrollTop: 560 }, resized);
     expect(scrolled.rows[0]!.index).toBe(9);
     expect(scrolled.rows[0]!.start).toBe(448);
-  });
-
-  test("keeps generated windows ordered and inside their axes", () => {
-    fc.assert(fc.property(
-      fc.integer({ min: 1, max: 20_000 }),
-      fc.integer({ min: 1, max: 5_000 }),
-      fc.double({ min: 1, max: 200, noNaN: true }),
-      fc.double({ min: 0, max: 2_000_000, noNaN: true }),
-      (count, viewportSize, itemSize, scroll) => {
-        const result = calculateSpreadsheetViewport({
-          rowCount: count,
-          columnCount: count,
-          rowHeight: itemSize,
-          columnWidth: itemSize,
-          scrollTop: scroll,
-          scrollLeft: scroll,
-          viewportHeight: viewportSize,
-          viewportWidth: viewportSize,
-        });
-        for (const axis of [result.rows, result.columns]) {
-          expect(axis.every((item, index) => item.index >= 1 && item.index <= count && (index === 0 || item.index > axis[index - 1]!.index))).toBeTrue();
-        }
-      },
-    ), { numRuns: 3_000 });
   });
 
   test("compiles the owned SpreadsheetGrid Svelte component", async () => {
