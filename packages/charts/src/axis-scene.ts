@@ -1,3 +1,4 @@
+import { axisTickText } from './axis-tick-text.ts';
 import { chartDisplayUnitMarks } from './display-unit-scene.ts';
 import { chartAxisTitleMarks } from './axis-title-scene.ts';
 import { chartAxisFormat, chartCategoryAxisLabels } from './axis-labels.ts';
@@ -41,8 +42,8 @@ export function cartesianAxisMarks(context: SceneContext, layout: CartesianChart
       marks.push(...ticks(valueAxis, minor, at, categoryPosition, horizontal, labelSide, valueLine));
       if (minor || valueAxis?.tickLabelPosition === 'none') return;
       const text = chartTickLabel(tick / (valueAxis?.displayUnit ?? 1), format, options);
-      marks.push(horizontal ? { kind: 'text', text, x: at, y: numericLabelEdge + (labelSide > 0 ? font.size + 5 : -5), anchor: 'middle', font }
-        : { kind: 'text', text, x: numericLabelEdge + labelSide * 6, y: at + font.size * .3, anchor: labelSide > 0 ? 'start' : 'end', font });
+      marks.push(...axisTickText(context, valueAxis, horizontal ? { kind: 'text', text, x: at, y: numericLabelEdge + (labelSide > 0 ? font.size + 5 : -5), anchor: 'middle', font }
+        : { kind: 'text', text, x: numericLabelEdge + labelSide * 6, y: at + font.size * .3, anchor: labelSide > 0 ? 'start' : 'end', font }, horizontal, labelSide));
     };
     if (valueAxis && (valueAxis.minorGridlines || valueAxis.minorTickMark !== undefined && valueAxis.minorTickMark !== 'none')) chartMinorTicks(minimum, maximum, valueAxis, layout.ticks).forEach(tick => drawTick(tick, true));
     layout.ticks.forEach(tick => drawTick(tick, false));
@@ -107,8 +108,8 @@ export function xyAxisMarks(context: SceneContext, layout: import('./layout.ts')
       marks.push(...ticks(axis, minor, position, spine, horizontal, side, axisLine));
       if (minor || axis?.tickLabelPosition === 'none') return;
       const text = chartTickLabel(tick / (axis?.displayUnit ?? 1), format, options);
-      marks.push(horizontal ? { kind: 'text', text, x: position, y: edge + (side > 0 ? font.size + 5 : -5), anchor: 'middle', font }
-        : { kind: 'text', text, x: edge + side * 6, y: position + font.size * .3, anchor: side > 0 ? 'start' : 'end', font });
+      marks.push(...axisTickText(context, axis, horizontal ? { kind: 'text', text, x: position, y: edge + (side > 0 ? font.size + 5 : -5), anchor: 'middle', font }
+        : { kind: 'text', text, x: edge + side * 6, y: position + font.size * .3, anchor: side > 0 ? 'start' : 'end', font }, horizontal, side));
     };
     if (axis && (axis.minorGridlines || axis.minorTickMark !== undefined && axis.minorTickMark !== 'none')) chartMinorTicks(minimum, maximum, axis, positions).forEach(value => drawTick(value, true));
     positions.forEach(value => drawTick(value, false));

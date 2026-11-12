@@ -131,16 +131,16 @@ function cartesianFrame(model: SupportedChartModel, width: number, height: numbe
   const categoryMaximum = Math.max(count + inset, ...analytic.map(bounds => bounds.xMaximum + inset));
   const categoryDomain = { minimum: categoryMinimum, maximum: categoryMaximum > categoryMinimum ? categoryMaximum : categoryMinimum + 1 };
   const layout = { plot, categories, stacks, categoryRotation, ...scale, categoryDomain, ...(categoryScale ? { categoryScale } : {}) };
-  const limits = { left: legend.space.left + titleSpace.left + 6, right: width - legend.space.right - titleSpace.right - 6 };
+  const limits = { left: legend.space.left + titleSpace.left + 6, right: width - legend.space.right - titleSpace.right - 6, top: top - 12, bottom: height - legend.space.bottom - titleSpace.bottom - 4 };
   const fitted = fitValueAxisLabels(model, layout, measure, options, limits);
   const rotation = !model.plotLayout && !model.threeD && model.kind !== 'radar' && !horizontal && categoryAxis?.labelRotation === undefined
     ? labelWidth + 8 > fitted.width / Math.max(1, categories.length) ? -45 : 0 : categoryRotation;
-  if (rotation === categoryRotation) return Object.freeze({ ...layout, plot: fitted });
+  if (rotation === categoryRotation && (horizontal ? fitted.width === plot.width : fitted.height === plot.height)) return Object.freeze({ ...layout, plot: fitted });
   const angle = Math.abs(rotation) * Math.PI / 180;
   const reserved = Math.abs(Math.sin(angle)) * labelWidth + Math.abs(Math.cos(angle)) * categoryFont.size + 14;
   const resized = { ...fitted, height: Math.max(1, fitted.height + categoryHeight - reserved) };
   const finalScale = surfaceScale ?? (axis?.logBase ? scale : cartesianAxisScale(minimum, maximum, axis, model.grouping === 'percent-stacked', {
-    length: resized.height, labelSize: chartFont('tick', axis?.textStyle, model).size,
+    length: horizontal ? resized.width : resized.height, labelSize: chartFont('tick', axis?.textStyle, model).size * (horizontal ? 2 : 1),
   }));
   const final = { ...layout, ...finalScale, categoryRotation: rotation, plot: resized };
   return Object.freeze({ ...final, plot: fitValueAxisLabels(model, final, measure, options, limits) });
