@@ -19,12 +19,13 @@
   import WordDrawingView from "./WordDrawingView.svelte";
   import WordLayoutTableView from "./WordLayoutTableView.svelte";
   import { browserWordTextMeasurer, wordTextCss, wordTextTop } from "./word-font-metrics.ts";
-  import { calculateWordPageViewport, type WordPageViewport } from "./word-page-viewport.ts";
+  import type { WordPageViewport } from "./word-page-viewport.ts";
   import { sameWordTextSelection, wordDocumentParagraphs, wordInputEdit, type WordDocumentEdit } from "./word-editing.ts";
 
   import { startWordLayoutJob, type WordLayoutProgress, type WordLayoutError } from "./word-layout-job.ts";
   import { clearWordBaselineCache } from "./word-baseline.ts";
   import type { EmbeddedFontContext } from "./embedded-fonts.ts";
+  import { WordViewState, type WordFitMode, type WordViewLayout, type WordViewViewport } from "./word-view-state.ts";
 
   interface Props {
     /** Document-scoped CSS families and optional font-settlement signal. */
@@ -44,15 +45,22 @@
     /** Maximum retained ink overlay pixels per page; finite and at most 1,048,576. */
     readonly inkMaxPixels?: number;
     readonly scale?: number;
+    readonly onlayoutchange?: (layout: WordViewLayout) => void;
+    readonly onviewportchange?: (viewport: WordViewViewport) => void;
     readonly displayMode?: "light" | "dark";
   }
 
-  let { wordDocument, fontContext, onlayoutprogress, onlayouterror, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, oninkchange, inkMaxPixels, displayMode = "light", scale = $bindable(1) }: Props = $props();
+  let { onlayoutchange, onviewportchange, wordDocument, fontContext, onlayoutprogress, onlayouterror, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, oninkchange, inkMaxPixels, displayMode = "light", scale = $bindable(1) }: Props = $props();
   const fontFamily = $derived(fontContext?.family ?? wordFontFamily);
   let scroller = $state<HTMLDivElement>();
   let viewportWidth = $state(0);
+  let viewportHeight = $state(0);
+  const viewState = new WordViewState();
+  let hostLayout = $state<WordViewLayout>();
+  let hostViewport = $state<WordViewViewport>();
   let layout = $state.raw<WordLayout>();
   let layoutDocument: WordDocument | undefined;
+  let layoutComplete = false;
   let viewport = $state<WordPageViewport>();
   let mounted = $state(false);
   let selectedDrawing = $state<number>();
@@ -127,6 +135,8 @@
 
   $effect(() => {
     scale;
+    viewportWidth;
+    viewportHeight;
     if (mounted) untrack(updateViewport);
   });
 
@@ -144,6 +154,41 @@
     selection;
     if (mounted) queueMicrotask(restoreBrowserSelection);
   });
+
+  $effect(() => {
+    const snapshot = hostLayout;
+    const callback = onlayoutchange;
+    if (snapshot?.document !== wordDocument) return;
+    let active = true;
+    void tick().then(() => { if (active && !destroyed) callback?.(snapshot); });
+    return () => { active = false; };
+  });
+
+  $effect(() => {
+    const snapshot = hostViewport;
+    const callback = onviewportchange;
+    if (snapshot?.document !== wordDocument) return;
+    let active = true;
+    void tick().then(() => { if (active && !destroyed) callback?.(snapshot); });
+    return () => { active = false; };
+  });
+
+  /** Fit all page sizes, retaining the mode across resize and document replacement. */
+  export function fit(mode: WordFitMode): boolean {
+    if (!layout || !scroller || !layout.pages.length || !scroller.clientWidth || !scroller.clientHeight) return false;
+    viewState.fit(mode);
+    updateViewport();
+    return true;
+  }
+
+  /** Navigate by zero-based page index without depending on mounted virtual pages. */
+  export async function scrollToPage(index: number): Promise<boolean> {
+    await tick();
+    if (destroyed || !layout || !scroller || !viewport) return false;
+    const moved = viewState.scrollToPage(index, viewport, scroller, scale);
+    if (moved) updateViewport();
+    return moved;
+  }
 
   /** Keep the document point under the gesture stationary as pages resize and recenter. */
   function zoomAt(next: number, x: number, y: number, targetX = x, targetY = y) {
@@ -174,6 +219,12 @@
     const document = wordDocument;
     // Keep the existing editing surface intact until the replacement pagination completes.
     const retainEditor = editable && layout !== undefined;
+    if (layoutDocument !== document && !editable) {
+      layout = undefined;
+      viewport = undefined;
+      hostLayout = undefined;
+      hostViewport = undefined;
+    }
     const canvas = globalThis.document.createElement("canvas");
     const context = canvas.getContext("2d");
     if (context === null) {
@@ -190,6 +241,7 @@
         }
         layout = next;
         layoutDocument = document;
+        layoutComplete = complete;
         updateViewport();
         onlayoutprogress?.({ document, pages: next.pages.length, complete });
         void tick().then(() => { if (!destroyed && layout === next) restoreBrowserSelection(); });
@@ -199,8 +251,12 @@
   }
 
   function updateViewport() {
-    if (layout === undefined || scroller === undefined) return;
-    viewport = calculateWordPageViewport(layout, scroller.scrollTop / scale, scroller.clientHeight / scale);
+    if (layout === undefined || scroller === undefined || layoutDocument !== wordDocument) return;
+    const next = viewState.update(layoutDocument, layout, scroller, scale, layoutComplete, editable);
+    scale = next.scale;
+    viewport = next.viewport;
+    hostLayout = viewState.layout;
+    hostViewport = next.snapshot;
   }
 
   /** Returns keyboard input to the controlled caret after a host toolbar action. */
@@ -613,6 +669,7 @@
   style:color-scheme={displayMode}
   bind:this={scroller}
   bind:clientWidth={viewportWidth}
+  bind:clientHeight={viewportHeight}
   use:zoomGesture={(gesture) => { finishMouseSelection(); zoomAt(scale * gesture.factor, gesture.x, gesture.y, gesture.targetX, gesture.targetY); }}
   aria-label="Document pages"
   onscroll={updateViewport}

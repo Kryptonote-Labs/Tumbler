@@ -21,3 +21,5 @@ export { default as WordPageLayoutDecorations } from './WordPageLayoutDecoration
 export { loadEmbeddedFonts, type EmbeddedFont, type EmbeddedFontContext, type EmbeddedFontLoadResult } from './embedded-fonts.ts';
 
 export type { WordLayoutProgress, WordLayoutError } from "./word-layout-job.ts";
+
+export type { WordFitMode, WordViewHandle, WordViewLayout, WordViewViewport } from "./word-view-state.ts";

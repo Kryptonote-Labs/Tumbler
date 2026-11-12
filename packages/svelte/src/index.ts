@@ -81,3 +81,4 @@ export type { ChartTypeChange, ChartTypeFamily, ChartTypeOption, ChartPropertyAp
 export { default as ChartWorkbench } from './ChartWorkbench.svelte';
 
 export type { WordLayoutProgress, WordLayoutError } from "./word-layout-job.ts";
+export type { WordFitMode, WordViewHandle, WordViewLayout, WordViewViewport } from "./word-view-state.ts";
