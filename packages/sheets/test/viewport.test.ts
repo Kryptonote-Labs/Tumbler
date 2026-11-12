@@ -6,9 +6,13 @@ import { applySpreadsheetCommand, createSpreadsheet, layoutSpreadsheetViewport, 
 import { buildWorkbookFixture } from './workbook-fixture.ts';
 
 const namespace = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
-function worksheet(xml: string) {
+function worksheet(xml: string, table?: string) {
   const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
-    sheets: [{ name: 'Sheet1', sheetId: 1, relationshipId: 'sheet1', xml: `<worksheet xmlns="${namespace}">${xml}</worksheet>` }],
+    sheets: [{
+      name: 'Sheet1', sheetId: 1, relationshipId: 'sheet1',
+      xml: `<worksheet xmlns="${namespace}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${xml}${table ? '<tableParts count="1"><tablePart r:id="table"/></tableParts>' : ''}</worksheet>`,
+      ...(table ? { tables: [{ relationshipId: 'table', target: '../tables/table1.xml', xml: table }] } : {}),
+    }],
   })));
   return openWorksheet(workbook, workbook.sheets[0]!);
 }
@@ -50,14 +54,23 @@ describe('spreadsheet viewport', () => {
   });
 
   test('lets frozen-row merges extend across frozen columns', () => {
-    const sheet = worksheet(`<sheetViews><sheetView workbookViewId="0"><pane xSplit="1" ySplit="1" topLeftCell="B2" state="frozen"/></sheetView></sheetViews><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Title</t></is></c></row></sheetData><mergeCells count="1"><mergeCell ref="A1:C1"/></mergeCells>`);
+    const sheet = worksheet(`<sheetViews><sheetView workbookViewId="0"><pane xSplit="1" ySplit="2" topLeftCell="D3" state="frozen"/></sheetView></sheetViews><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Fixed</t></is></c></row><row r="2"><c r="B2" t="inlineStr"><is><t>Scrolled</t></is></c></row></sheetData><mergeCells count="2"><mergeCell ref="A1:C1"/><mergeCell ref="B2:C2"/></mergeCells>`);
     const layout = layoutSpreadsheetViewport(sheet, { width: 600, height: 200 });
-    expect(layout.cells.find(cell => cell.paint.text === 'Title')?.clip?.width).toBe(600);
+    expect(layout.cells.find(cell => cell.paint.text === 'Fixed')?.clip?.width).toBe(600);
+    // B2:C2 has scrolled behind column A, which the frozen-row pane still shows.
+    expect(layout.cells.find(cell => cell.paint.text === 'Scrolled')?.clip?.width).toBe(600);
   });
 
   test('shows hyperlink display text', () => {
     const sheet = worksheet(`<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>source</t></is></c></row></sheetData><hyperlinks><hyperlink ref="A1" location="Sheet1!B1" display="Go to B1"/></hyperlinks>`);
     expect(layoutSpreadsheetViewport(sheet, { width: 400, height: 200 }).cells[0]?.paint.text).toBe('Go to B1');
+  });
+
+  test('applies saved table sorts', () => {
+    const rows = ['Item', 'Zulu', 'Alpha'].map((text, index) => `<row r="${index + 1}"><c r="A${index + 1}" t="inlineStr"><is><t>${text}</t></is></c></row>`).join('');
+    const sheet = worksheet(`<sheetData>${rows}</sheetData>`, `<table xmlns="${namespace}" id="1" name="Data" displayName="Data" ref="A1:A3"><autoFilter ref="A1:A3"><sortState ref="A2:A3"><sortCondition ref="A2:A3"/></sortState></autoFilter><tableColumns count="1"><tableColumn id="1" name="Item"/></tableColumns></table>`);
+    const layout = layoutSpreadsheetViewport(sheet, { width: 400, height: 200 });
+    expect(layout.cells.filter(cell => cell.frame.x === 0 && cell.paint.text).map(cell => cell.paint.text)).toEqual(['Item', 'Alpha', 'Zulu']);
   });
 
   test('stacks charts and shapes in drawing order', () => {

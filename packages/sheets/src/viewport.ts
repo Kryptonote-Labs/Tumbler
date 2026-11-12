@@ -9,6 +9,7 @@ import { readSpreadsheetDrawingObjects, type SpreadsheetDrawingObject } from './
 import { spreadsheetDrawingBounds, spreadsheetDrawingRegion, type SpreadsheetDrawingAnchor, type SpreadsheetDrawingBounds } from './drawings.ts';
 import { formatSpreadsheetCellValue } from './number-format.ts';
 import { EXCEL_MAX_COLUMNS, EXCEL_MAX_ROWS, type CellAddress } from './references.ts';
+import { projectSpreadsheetTable } from './table-view.ts';
 import { spreadsheetTextOverflowWidth } from './text-overflow.ts';
 import type { SpreadsheetWorksheet } from './worksheet.ts';
 
@@ -61,7 +62,7 @@ export interface SpreadsheetViewportLayout {
   readonly gridlines: boolean;
   readonly rows: readonly SpreadsheetViewportAxisItem[];
   readonly columns: readonly SpreadsheetViewportAxisItem[];
-  /** Merged ranges are single cells covering their visible span. */
+  /** Merged ranges are single cells, clipped to the pane of their first cell. */
   readonly cells: readonly SpreadsheetViewportCell[];
   /** Stacked in Drawing part order, as the editor stacks them. */
   readonly drawings: readonly SpreadsheetViewportDrawing[];
@@ -88,7 +89,8 @@ function paneSpan(axis: Axis, frozen: boolean) {
 export function layoutSpreadsheetViewport(worksheet: SpreadsheetWorksheet, options: SpreadsheetViewportOptions): SpreadsheetViewportLayout {
   const { calculation } = options;
   const rowHeaderWidth = options.headings ? 52 : 0, columnHeaderHeight = options.headings ? 28 : 0;
-  const rowGeometry = worksheet.rowGeometry(EXCEL_MAX_ROWS), columnGeometry = worksheet.columnGeometry(EXCEL_MAX_COLUMNS, options.maximumDigitWidth);
+  const projectedRows = savedTableRows(worksheet, calculation);
+  const rowGeometry = worksheet.rowGeometry(EXCEL_MAX_ROWS, projectedRows), columnGeometry = worksheet.columnGeometry(EXCEL_MAX_COLUMNS, options.maximumDigitWidth);
   const pane = worksheet.panes.find(p => p.state === 'frozen' || p.state === 'frozenSplit');
   const view = worksheet.views[0];
   const topLeft = pane?.topLeftCell ?? view?.topLeftCell;
@@ -105,7 +107,9 @@ export function layoutSpreadsheetViewport(worksheet: SpreadsheetWorksheet, optio
   };
   const cells: SpreadsheetViewportCell[] = [];
   for (const row of rows.items) for (const column of columns.items) {
-    const address = { row: row.index, column: column.index };
+    const source = projectedRows.has(row.index) ? projectedRows.get(row.index) : row.index;
+    if (source === undefined) continue;
+    const address = { row: source, column: column.index };
     if (worksheet.mergedRange(address)) continue;
     const overflowWidth = spreadsheetTextOverflowWidth({ worksheet, calculation, ...address, columnGeometry, maximumColumn: lastColumn, frozenColumns: columns.frozen });
     cells.push({ frame: { x: column.start, y: row.start, width: column.size, height: row.size, overflowWidth }, paint: resolve(address) });
@@ -113,18 +117,18 @@ export function layoutSpreadsheetViewport(worksheet: SpreadsheetWorksheet, optio
   // Merges keep their full rectangle in the pane of their first cell, clipped to that pane.
   // As with drawings, the frozen-row pane spans the full width.
   for (const range of worksheet.merges) {
-    const span = (geometry: SparseAxisGeometry, axis: Axis, first: number, last: number) => {
-      const { offset, start, end } = paneSpan(axis, first <= axis.frozen);
-      const from = offset + geometry.start(first), to = offset + geometry.start(last) + geometry.size(last);
+    const span = (geometry: SparseAxisGeometry, axis: Axis, first: number, last: number, fullWidth = false) => {
+      const pane = paneSpan(axis, first <= axis.frozen);
+      const { start, end } = fullWidth ? { start: axis.header, end: axis.extent } : pane;
+      const from = pane.offset + geometry.start(first), to = pane.offset + geometry.start(last) + geometry.size(last);
       return from < end && to > start && to > from ? { from, to, start, end } : undefined;
     };
-    const x = span(columnGeometry, columns, range.start.column, range.end.column);
+    const x = span(columnGeometry, columns, range.start.column, range.end.column, range.start.row <= rows.frozen);
     const y = span(rowGeometry, rows, range.start.row, range.end.row);
     if (!x || !y) continue;
-    const clipX = range.start.row <= rows.frozen ? { start: rowHeaderWidth, end: options.width } : x;
     cells.push({
       frame: { x: x.from, y: y.from, width: x.to - x.from, height: y.to - y.from },
-      clip: { x: clipX.start, y: y.start, width: clipX.end - clipX.start, height: y.end - y.start },
+      clip: { x: x.start, y: y.start, width: x.end - x.start, height: y.end - y.start },
       paint: resolve(range.start),
     });
   }
@@ -180,6 +184,21 @@ export function layoutSpreadsheetViewport(worksheet: SpreadsheetWorksheet, optio
     cells,
     drawings: drawings.sort((a, b) => a.order - b.order),
   };
+}
+
+/** Visual rows mapped to source rows by saved table sorts and filters, as the editor first shows them. */
+function savedTableRows(worksheet: SpreadsheetWorksheet, calculation: SpreadsheetCalculationSnapshot | undefined) {
+  const rows = new Map<number, number | undefined>();
+  const values = calculation && {
+    value: (row: number, column: number) => calculation.value({ row, column }),
+    displayText: (row: number, column: number) => calculation.displayText({ row, column }),
+  };
+  for (const table of worksheet.tables) {
+    const projection = projectSpreadsheetTable(worksheet, table, undefined, values);
+    const bodyStart = table.range.start.row + table.headerRowCount;
+    for (let row = bodyStart; row <= table.range.end.row - table.totalsRowCount; row++) rows.set(row, projection.rows[row - bodyStart]);
+  }
+  return rows;
 }
 
 /** Frozen items, then the scrolling pane from `first`, until `extent` is filled. Hidden items are skipped. */
