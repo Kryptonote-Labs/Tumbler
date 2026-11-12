@@ -324,6 +324,17 @@ column in both modes, including inside table cells. These settings serialize to 
 Word drawing anchors and use the same geometry in headless layout. Inline image
 alignment is controlled by the containing paragraph.
 
+### Progressive pagination
+
+`layoutWordDocumentProgressively(document, measurer, options)` returns a generator
+using the same paginator as `layoutWordDocument`. Each yielded layout is a
+provisional snapshot; consume the generator's return value for the final layout,
+including notes and total-page fields. Schedule `next()` calls in separate host
+tasks to allow input and painting between steps, and call `return()` to abandon
+a job. Generator creation is lazy. Steps yield at page boundaries, with eager
+numbering, story/table preparation and finalization inside steps, so they have no
+fixed time bound. The Svelte view provides this scheduling and cancellation.
+
 ### Painting pages
 
 `paintWordPage(context, page, options)` paints a laid-out page onto any Canvas 2D

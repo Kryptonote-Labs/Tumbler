@@ -423,15 +423,30 @@ export function layoutWordDocument(
   measurer: WordTextMeasurer,
   options: WordLayoutOptions = {},
 ): WordLayout {
+  const iterator = layoutWordDocumentProgressively(document, measurer, options, false);
+  let step = iterator.next();
+  while (!step.done) step = iterator.next();
+  return step.value;
+}
+
+/** Package-backed progressive pagination. Preparation starts on the first next() call.
+ * Yielded layouts are provisional; only the return value includes resolved notes and page totals.
+ * Steps are page-based, not time-bounded: table preparation and finalization can be eager. */
+export function* layoutWordDocumentProgressively(
+  document: WordDocument,
+  measurer: WordTextMeasurer,
+  options: WordLayoutOptions = {},
+  emitProgress = true,
+): Generator<WordLayout, WordLayout, void> {
   const markerBudget = new WordMarkerBudget(options.maxMarkerCharacters);
-  return layoutWordSource({
+  return yield* layoutWordSourceProgressively({
     background: document.background === undefined ? undefined : resolveWordColour(document.background, document.styles.themeColors),
     lineNumberFormat: document.styles.resolveStyledRun('Normal', 'LineNumber'),
     blocks: document.blocks, drawings: document.drawings, finalSection: document.finalSection, wrapTrailSpaces: document.wrapTrailSpaces, doNotExpandShiftReturn: document.doNotExpandShiftReturn,
     listMarkers: document.numbering.markers(document, {}, markerBudget),
     paragraphFormat: paragraph => document.styles.paragraphFormat(document, paragraph),
     runFormat: (paragraph, run) => document.styles.runFormat(document, paragraph, run),
-  }, measurer, options, wordLayoutStories(document, {}, markerBudget));
+  }, measurer, options, wordLayoutStories(document, {}, markerBudget), emitProgress);
 }
 
 /** Shared pagination for package-backed and native document models. */

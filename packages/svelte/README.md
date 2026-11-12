@@ -447,3 +447,43 @@ The root entry remains supported. The Word entry avoids the spreadsheet entry
 graph while retaining Word charts, ink, and lazy EMF/WMF decoding through rtf.js.
 Shared controls such as `FormattingToolbar` remain available from the root.
 See the [packed consumer comparison](../../tools/word-entry-consumer/README.md).
+
+### Word pagination progress
+
+`WordDocumentView` paginates cooperatively on the main thread. It starts the first
+step in a timer task, then advances the existing progressive paginator once per
+task. The browser can process input and paint between those steps. The initial
+reactive mount starts one job. Document replacement, font `loadingdone`, and
+component destruction cancel pending steps and close the old iterator.
+
+Optional `onlayoutprogress` receives `{ document, pages, complete }` after each
+published snapshot. `pages` is the snapshot's page count, not an estimated total
+or a percentage. It can reset when total-page fields require another pass.
+Snapshots are provisional until `complete` is true. The final result replaces
+all pages, including resolved `NUMPAGES`, notes, and column balancing. A completed
+job emits `complete: true` once. Cancellation is silent. `onlayouterror` receives
+`{ document, error }` on layout failure, including unavailable canvas metrics;
+that job stops without emitting completion. The callback types are exported as
+`WordLayoutProgress` and `WordLayoutError`.
+
+These are page-based yield points, not a frame-time guarantee. Cancellation takes
+effect between steps, not during synchronous work. Numbering/story setup, table
+and keep-chain preparation, page snapshots, note placement, and final column
+balancing still do eager work. A single very large table or finalization step can
+block the host. The view also retains the growing full layout; viewport mounting
+only limits DOM nodes. No worker or document-size-independent memory bound is
+provided.
+
+For a repeatable headless benchmark using native canvas font metrics, run from
+the repository root:
+
+```sh
+NODE_ENV=production bun scripts/benchmark-word-pagination.ts 2000
+```
+
+It reports synchronous and progressive elapsed time, first snapshot latency,
+longest scheduled task, task count, and independent timer heartbeats. It checks
+final output equality after timing. Document creation and a font warmup are
+outside the timings. This measures pagination without a development server, DOM,
+or rendering. Browser latency depends on fonts, device, and document structure;
+these numbers are not a browser frame-time target.
