@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@tumblerjs/svelte": "file:./packs/tumblerjs-svelte-0.1.0-alpha.27.tgz",
+    "@tumblerjs/slides": "0.1.0-alpha.27",
+    "svelte": "5.57.3",
+    "vite": "7.3.8",
+    "@sveltejs/vite-plugin-svelte": "6.2.1"
+  }
+}

@@ -419,3 +419,17 @@ Arrow keys select a suggestion; Enter or Tab inserts the function and keeps the 
 Escape dismisses suggestions before cancelling the edit. Text-formatted cells and quoted text do not trigger suggestions.
 
 Spreadsheet cells resolve General alignment from the displayed calculation result, while explicit alignment remains authoritative. Grid text uses the font's normal line box and one-pixel vertical padding; retained canvas rows use matching font metrics.
+
+## Word package entry
+
+Word-only applications can import the viewer, artifact loader, editing helpers,
+font metrics, and decoration components from `@tumblerjs/svelte/word`:
+
+```ts
+import { WordDocumentView, openWordArtifact } from "@tumblerjs/svelte/word";
+```
+
+The root entry remains supported. The Word entry avoids the spreadsheet entry
+graph while retaining Word charts, ink, and lazy EMF/WMF decoding through rtf.js.
+Shared controls such as `FormattingToolbar` remain available from the root.
+See the [packed consumer comparison](../../tools/word-entry-consumer/README.md).
