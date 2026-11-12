@@ -43,6 +43,7 @@
   import { spreadsheetCellLayer } from "./spreadsheet-cell-layer.ts";
   import SpreadsheetDrawingObject from "./SpreadsheetDrawingObject.svelte";
   import SpreadsheetChart from "./SpreadsheetChart.svelte";
+  import { drawingHandles, resizeDrawingBounds, type DrawingHandle } from "./spreadsheet-drawing-handles.ts";
   import SpreadsheetFormulaAutocomplete from "./SpreadsheetFormulaAutocomplete.svelte";
 
   interface RenderableChart {
@@ -202,31 +203,34 @@
     const placement = placeSpreadsheetDrawing({ anchor: frame.anchor, bounds, frozenRows, frozenColumns, frozenRowsHeight, frozenColumnsWidth, scrollTop, scrollLeft, viewportWidth, viewportHeight, rowHeaderWidth, columnHeaderHeight });
     return placement.visible ? [{ ...frame, bounds, placement }] : [];
   }));
-  let drawingDrag = $state<{id:number;pointer:number;startX:number;startY:number;bounds:SpreadsheetDrawingBounds;resize:boolean}>();
-  let dragOffset=$state({x:0,y:0});
-  function drawingTransform(id:number|undefined) {
-    const drag=drawingDrag;
-    if(!drag || drag.id!==id)return undefined;
-    return drag.resize?`scale(${Math.max(1,drag.bounds.width+dragOffset.x)/drag.bounds.width},${Math.max(1,drag.bounds.height+dragOffset.y)/drag.bounds.height})`:`translate(${dragOffset.x}px,${dragOffset.y}px)`;
+  // A drawing being moved, or resized by one of its handles. While it lasts the drawing renders at
+  // its previewed bounds, so charts redraw at their new size rather than stretching.
+  let drawingDrag = $state<{id:number;pointer:number;startX:number;startY:number;bounds:SpreadsheetDrawingBounds;handle?:DrawingHandle}>();
+  let dragPointer = $state({x:0,y:0,keepAspect:false});
+  function draggedBounds(drag: NonNullable<typeof drawingDrag>): SpreadsheetDrawingBounds {
+    const {x:dx,y:dy,keepAspect}=dragPointer;
+    return drag.handle ? resizeDrawingBounds(drag.bounds,drag.handle,dx,dy,keepAspect) : {...drag.bounds,x:drag.bounds.x+dx,y:drag.bounds.y+dy};
   }
-  function drawingPointerMove(event:PointerEvent){const drag=drawingDrag;if(drag && drag.pointer===event.pointerId)dragOffset={x:(event.clientX-drag.startX)/scale,y:(event.clientY-drag.startY)/scale};}
-  function drawingPointerDown(event: PointerEvent, id: number, bounds: SpreadsheetDrawingBounds) {
+  function previewBounds(id:number|undefined,bounds:SpreadsheetDrawingBounds):SpreadsheetDrawingBounds {
+    const drag=drawingDrag;
+    return drag && drag.id===id ? draggedBounds(drag) : bounds;
+  }
+  function drawingPointerMove(event:PointerEvent){const drag=drawingDrag;if(drag && drag.pointer===event.pointerId)dragPointer={x:(event.clientX-drag.startX)/scale,y:(event.clientY-drag.startY)/scale,keepAspect:event.shiftKey};}
+  function drawingPointerDown(event: PointerEvent, id: number, bounds: SpreadsheetDrawingBounds, handle?: DrawingHandle) {
     event.stopPropagation();
     if(event.button !== 0) return;
     onobjectselectionchange?.(id);
     if(readonly) return;
-    const target = event.currentTarget as HTMLElement;
-    target.setPointerCapture(event.pointerId);
-    dragOffset={x:0,y:0};
-    drawingDrag = {id,pointer:event.pointerId,startX:event.clientX,startY:event.clientY,bounds,resize:event.target instanceof Element && !!event.target.closest('[data-resize]')};
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    dragPointer={x:0,y:0,keepAspect:false};
+    drawingDrag = {id,pointer:event.pointerId,startX:event.clientX,startY:event.clientY,bounds,handle};
   }
   function drawingPointerUp(event: PointerEvent) {
     const drag = drawingDrag;
     if(!drag || drag.pointer !== event.pointerId) return;
     drawingDrag = undefined;
-    const dx=(event.clientX-drag.startX)/scale,dy=(event.clientY-drag.startY)/scale;
-    if(Math.abs(dx)+Math.abs(dy)<2) return;
-    onobjectmove?.(drag.id,drag.resize?{...drag.bounds,width:Math.max(1,drag.bounds.width+dx),height:Math.max(1,drag.bounds.height+dy)}:{...drag.bounds,x:drag.bounds.x+dx,y:drag.bounds.y+dy});
+    if(Math.abs(dragPointer.x)+Math.abs(dragPointer.y)<2) return;
+    onobjectmove?.(drag.id,draggedBounds(drag));
   }
   let frozenPane = $derived(worksheet.panes.find((pane) => pane.state === "frozen" || pane.state === "frozenSplit"));
   let frozenRows = $derived(Math.min(rowCount, Math.max(0, Math.floor(frozenPane?.ySplit ?? 0))));
@@ -334,7 +338,7 @@
   }
 
   function emptyCellAt(event: MouseEvent) {
-    if (scroller === undefined || !(event.target instanceof Element) || event.target.closest('.cell, .chart-frame')) return undefined;
+    if (scroller === undefined || !(event.target instanceof Element) || event.target.closest('.cell, .chart-frame, .drawing-selection')) return undefined;
     const rect = scroller.getBoundingClientRect();
     const x = (event.clientX - rect.left) / scale + scrollLeft - rowHeaderWidth;
     const y = (event.clientY - rect.top) / scale + scrollTop - columnHeaderHeight;
@@ -779,7 +783,7 @@
 
 </script>
 
-<svelte:window onpointermove={drawingPointerMove} onpointerup={event=>{finishPointerSelection(event);drawingPointerUp(event);}} onpointercancel={event=>{finishPointerSelection(event);drawingDrag=undefined;dragOffset={x:0,y:0};}} />
+<svelte:window onpointermove={drawingPointerMove} onpointerup={event=>{finishPointerSelection(event);drawingPointerUp(event);}} onpointercancel={event=>{finishPointerSelection(event);drawingDrag=undefined;}} />
 
 {#snippet gridCell(reference: string, sourceRow: number, column: number, left: number, top: number, width: number, height: number, zIndex: number)}
   {@const header = tableHeader(sourceRow, column)}
@@ -854,34 +858,63 @@
 {/snippet}
 
 {#snippet chartFrame(chart: RenderableChart, left: number, top: number)}
+  {@const id = worksheet.drawing ? spreadsheetDrawingObjectId(worksheet.drawing, chart.frame.anchor) : undefined}
+  {@const shown = previewBounds(id, chart.bounds)}
   <button
     class="chart-frame"
-    style:transform-origin="top left" style:transform={drawingTransform(worksheet.drawing?spreadsheetDrawingObjectId(worksheet.drawing,chart.frame.anchor):undefined)}
-    onpointerdown={event=>{if(worksheet.drawing){const id=spreadsheetDrawingObjectId(worksheet.drawing,chart.frame.anchor);if(id!==undefined)drawingPointerDown(event,id,chart.bounds);}}}
-    data-drawing-id={worksheet.drawing ? spreadsheetDrawingObjectId(worksheet.drawing,chart.frame.anchor) : undefined}
+    onpointerdown={event=>{if(id!==undefined)drawingPointerDown(event,id,chart.bounds);}}
+    data-drawing-id={id}
     style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === chart.frame.anchor.elementId) ?? 0)}
-    class:selected={chartSelection === chart.frame.anchor.elementId}
+    class:selected={chartSelection === chart.frame.anchor.elementId && (readonly || objectSelection !== id)}
     type="button"
     aria-label={`Select ${chart.model.title ?? "chart"}`}
-    style:left={`${left}px`}
-    style:top={`${top}px`}
-    style:width={`${Math.max(1, chart.bounds.width)}px`}
-    style:height={`${Math.max(1, chart.bounds.height)}px`}
+    style:left={`${left + shown.x - chart.bounds.x}px`}
+    style:top={`${top + shown.y - chart.bounds.y}px`}
+    style:width={`${Math.max(1, shown.width)}px`}
+    style:height={`${Math.max(1, shown.height)}px`}
     onclick={(event) => {
       selectChart(event, chart.frame);
-      if(worksheet.drawing) onobjectselectionchange?.(spreadsheetDrawingObjectId(worksheet.drawing,chart.frame.anchor));
+      onobjectselectionchange?.(id);
     }}
   >
-    {#if !readonly && worksheet.drawing && objectSelection===spreadsheetDrawingObjectId(worksheet.drawing,chart.frame.anchor)}<span class="drawing-resize" data-resize></span>{/if}
     <SpreadsheetChart
-      patternOrigin={{ x: chart.bounds.x, y: chart.bounds.y }}
+      patternOrigin={{ x: shown.x, y: shown.y }}
       {worksheet}
       model={chart.model}
-      width={Math.max(1, chart.bounds.width)}
-      height={Math.max(1, chart.bounds.height)}
+      width={Math.max(1, shown.width)}
+      height={Math.max(1, shown.height)}
       clipId={`tumbler-scatter-clip-${chart.frame.anchor.elementId}`}
     />
   </button>
+  {#if id !== undefined}{@render drawingSelection(id, chart.bounds, shown, left, top)}{/if}
+{/snippet}
+
+{#snippet drawingFrame(frame: (typeof visibleObjects)[number], left: number, top: number)}
+  {@const id = frame.object.objectId}
+  {@const shown = previewBounds(id, frame.bounds)}
+  <button type="button" aria-label={`Select ${frame.object.name}`} class="drawing-object" data-drawing-id={id} onclick={(event)=>{event.stopPropagation();onobjectselectionchange?.(id);}} class:selected={readonly && objectSelection===id} onpointerdown={event=>drawingPointerDown(event,id,frame.bounds)} style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${left + shown.x - frame.bounds.x}px`} style:top={`${top + shown.y - frame.bounds.y}px`} style:width={`${Math.max(1, shown.width)}px`} style:height={`${Math.max(1, shown.height)}px`}>
+    <SpreadsheetDrawingObject object={frame.object} />
+  </button>
+  {@render drawingSelection(id, frame.bounds, shown, left, top)}
+{/snippet}
+
+<!-- The selected drawing's outline and resize handles, drawn above every drawing as Office does. -->
+{#snippet drawingSelection(id: number, bounds: SpreadsheetDrawingBounds, shown: SpreadsheetDrawingBounds, left: number, top: number)}
+  {#if !readonly && objectSelection === id}
+    <div class="drawing-selection" style:left={`${left + shown.x - bounds.x}px`} style:top={`${top + shown.y - bounds.y}px`} style:width={`${Math.max(1, shown.width)}px`} style:height={`${Math.max(1, shown.height)}px`}>
+      {#each drawingHandles as handle (handle.name)}
+        <span
+          class="drawing-handle"
+          aria-hidden="true"
+          data-handle={handle.name}
+          style:left={`${((handle.x + 1) / 2) * 100}%`}
+          style:top={`${((handle.y + 1) / 2) * 100}%`}
+          style:cursor={handle.cursor}
+          onpointerdown={(event) => drawingPointerDown(event, id, bounds, handle)}
+        ></span>
+      {/each}
+    </div>
+  {/if}
 {/snippet}
 
 <div class="grid-viewport" use:zoomGesture={zoomGrid}>
@@ -979,10 +1012,7 @@
         {/if}
       {/each}
       {#each visibleObjects.filter(frame => frame.placement.region === "body") as frame (frame.object.elementId)}
-        <button type="button" aria-label={`Select ${frame.object.name}`} class="drawing-object" style:transform-origin="top left" style:transform={drawingTransform(frame.object.objectId)} data-drawing-id={frame.object.objectId} onclick={(event)=>{event.stopPropagation();onobjectselectionchange?.(frame.object.objectId);}} class:selected={objectSelection===frame.object.objectId} onpointerdown={event=>drawingPointerDown(event,frame.object.objectId,frame.bounds)} style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${frame.placement.left - columnOrigin}px`} style:top={`${frame.placement.top - rowOrigin}px`} style:width={`${Math.max(1, frame.bounds.width)}px`} style:height={`${Math.max(1, frame.bounds.height)}px`}>
-          <SpreadsheetDrawingObject object={frame.object} />
-          {#if !readonly && objectSelection===frame.object.objectId}<span class="drawing-resize" data-resize></span>{/if}
-        </button>
+        {@render drawingFrame(frame, frame.placement.left - columnOrigin, frame.placement.top - rowOrigin)}
       {/each}
       {#each visibleCharts.filter((chart) => chart.placement.region === "body") as chart (chart.frame.anchor.elementId)}
         {@render chartFrame(chart, chart.placement.left - columnOrigin, chart.placement.top - rowOrigin)}
@@ -1006,10 +1036,7 @@
         {@render gridCell(reference, merge.range.start.row, merge.range.start.column, merge.left - (merge.range.start.column <= frozenColumns ? 0 : scrollLeft), merge.top, merge.width, merge.height, 2)}
       {/each}
       {#each visibleObjects.filter(frame => frame.placement.region === "frozen-row") as frame (frame.object.elementId)}
-        <button type="button" aria-label={`Select ${frame.object.name}`} class="drawing-object" style:transform-origin="top left" style:transform={drawingTransform(frame.object.objectId)} data-drawing-id={frame.object.objectId} onclick={(event)=>{event.stopPropagation();onobjectselectionchange?.(frame.object.objectId);}} class:selected={objectSelection===frame.object.objectId} onpointerdown={event=>drawingPointerDown(event,frame.object.objectId,frame.bounds)} style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${frame.placement.left}px`} style:top={`${frame.placement.top}px`} style:width={`${Math.max(1, frame.bounds.width)}px`} style:height={`${Math.max(1, frame.bounds.height)}px`}>
-          <SpreadsheetDrawingObject object={frame.object} />
-          {#if !readonly && objectSelection===frame.object.objectId}<span class="drawing-resize" data-resize></span>{/if}
-        </button>
+        {@render drawingFrame(frame, frame.placement.left, frame.placement.top)}
       {/each}
       {#each visibleCharts.filter((chart) => chart.placement.region === "frozen-row") as chart (chart.frame.anchor.elementId)}
         {@render chartFrame(chart, chart.placement.left, chart.placement.top)}
@@ -1032,10 +1059,7 @@
         {@render gridCell(reference, merge.range.start.row, merge.range.start.column, merge.left, merge.top - scrollTop - frozenRowsHeight, merge.width, merge.height, 2)}
       {/each}
       {#each visibleObjects.filter(frame => frame.placement.region === "frozen-column") as frame (frame.object.elementId)}
-        <button type="button" aria-label={`Select ${frame.object.name}`} class="drawing-object" style:transform-origin="top left" style:transform={drawingTransform(frame.object.objectId)} data-drawing-id={frame.object.objectId} onclick={(event)=>{event.stopPropagation();onobjectselectionchange?.(frame.object.objectId);}} class:selected={objectSelection===frame.object.objectId} onpointerdown={event=>drawingPointerDown(event,frame.object.objectId,frame.bounds)} style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${frame.placement.left}px`} style:top={`${frame.placement.top}px`} style:width={`${Math.max(1, frame.bounds.width)}px`} style:height={`${Math.max(1, frame.bounds.height)}px`}>
-          <SpreadsheetDrawingObject object={frame.object} />
-          {#if !readonly && objectSelection===frame.object.objectId}<span class="drawing-resize" data-resize></span>{/if}
-        </button>
+        {@render drawingFrame(frame, frame.placement.left, frame.placement.top)}
       {/each}
       {#each visibleCharts.filter((chart) => chart.placement.region === "frozen-column") as chart (chart.frame.anchor.elementId)}
         {@render chartFrame(chart, chart.placement.left, chart.placement.top)}
@@ -1157,8 +1181,9 @@
   .empty-selection { position: absolute; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(0, 0, 0, 0.16)); }
   .empty-focus { pointer-events: none; }
   .tumbler-grid :global(.cell.active.selected::after) { background: transparent; }
-  .drawing-resize { position:absolute;right:0;bottom:0;width:10px;height:10px;background:var(--tumbler-grid-accent,#42ff53);cursor:nwse-resize;z-index:1; }
   .drawing-object.selected { outline:2px solid var(--tumbler-grid-accent,#42ff53); }
+  .drawing-selection { position:absolute;z-index:10000;box-sizing:border-box;pointer-events:none;outline:1.5px solid var(--tumbler-drawing-handle-stroke,#278044); }
+  .drawing-handle { position:absolute;width:9px;height:9px;margin:-5px 0 0 -5px;box-sizing:border-box;pointer-events:auto;touch-action:none;background:#fff;border:1px solid var(--tumbler-drawing-handle-stroke,#278044); }
   .drawing-object { padding:0;border:0;background:transparent;pointer-events:auto; }
   .drawing-object:focus-visible { outline:2px solid var(--tumbler-grid-accent,#42ff53); }
   .canvas { isolation: isolate; position: relative; overflow: clip; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
