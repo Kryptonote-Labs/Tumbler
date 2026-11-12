@@ -461,7 +461,9 @@ published snapshot. `pages` is the snapshot's page count, not an estimated total
 or a percentage. It can reset when total-page fields require another pass.
 Snapshots are provisional until `complete` is true. When replacing an existing
 editable layout, the view keeps that surface until the final result to preserve
-focus and avoid clamping a later-page caret to a provisional shorter document. The final result replaces
+focus and avoid clamping a later-page caret to a provisional shorter document.
+While that replacement is pending, IME composition uses the controlled selection
+instead of offsets from the previous revision's DOM. The final result replaces
 all pages, including resolved `NUMPAGES`, notes, and column balancing. A completed
 job emits `complete: true` once. Cancellation is silent. `onlayouterror` receives
 `{ document, error }` on layout failure, including unavailable canvas metrics;
