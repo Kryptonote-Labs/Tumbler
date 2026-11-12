@@ -4,18 +4,18 @@ import { browserWordLineMetrics } from './word-line-metrics.ts';
 import { browserWordBaselineOffset } from './word-baseline.ts';
 
 /** Browser-backed shaping measurements, including the CSS leading that Canvas TextMetrics omits. */
-export function browserWordTextMeasurer(context: WordCanvasTextContext): WordTextMeasurer {
-  return canvasWordTextMeasurer(context, browserWordLineMetrics(context));
+export function browserWordTextMeasurer(context: WordCanvasTextContext, fontFamily = wordFontFamily): WordTextMeasurer {
+  return canvasWordTextMeasurer(context, browserWordLineMetrics(context), fontFamily);
 }
 
-export function wordTextCss(format: ComputedWordTextFormat, background = '#ffffff'): string {
+export function wordTextCss(format: ComputedWordTextFormat, background = '#ffffff', fontFamily = wordFontFamily): string {
   const highlight = wordHighlightColor(format.highlight);
   const fill = highlight === 'transparent' ? format.shading ?? 'transparent' : highlight;
   const surface = fill === 'transparent' ? background : fill;
   const separateStrike = format.strike && format.underline === "double";
   const decoration = [format.underline === "none" ? "" : "underline", format.strike && !separateStrike ? "line-through" : ""].filter(Boolean).join(" ") || "none";
   return [
-    `font-family:${wordFontFamily(format.fontFamily)}`,
+    `font-family:${fontFamily(format.fontFamily)}`,
     `font-size:${wordPointsToCssPixels(format.fontSizePoints)}px`,
     `font-weight:${format.bold ? 700 : 400}`,
     `font-style:${format.italic ? "italic" : "normal"}`,

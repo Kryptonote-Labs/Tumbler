@@ -1,5 +1,6 @@
 import {
   resolveWordColour,
+  wordFontFamily,
   type NativeWordDocument,
   type WordTextParagraph,
 } from '@tumblerjs/word';
@@ -10,6 +11,7 @@ export function renderShapeText(
   root: HTMLDivElement,
   paragraphs: readonly WordTextParagraph[],
   model: NativeWordDocument,
+  fontFamily = wordFontFamily,
 ) {
   model.update(paragraphs.map((p) => ({ kind: 'paragraph', ...p })));
   root.replaceChildren();
@@ -38,6 +40,7 @@ export function renderShapeText(
     }
     const marker = model.listMarkers.get(block.elementId);
     if (marker) {
+      element.style.fontFamily = fontFamily(model.runFormat(block, undefined).fontFamily);
       element.style.display = 'list-item';
       element.style.listStyleType = JSON.stringify(marker.text + ' ');
     }
@@ -45,7 +48,7 @@ export function renderShapeText(
     p.runs.forEach((r, i) => {
       const span = document.createElement('span');
       const format = model.runFormat(block, runs[i]);
-      span.style.cssText = wordTextCss(format);
+      span.style.cssText = wordTextCss(format, undefined, fontFamily);
       if (format.verticalAlign !== 'baseline') {
         span.style.verticalAlign = format.verticalAlign === 'superscript' ? 'super' : 'sub';
         span.style.fontSize = `${format.fontSizePoints}px`;

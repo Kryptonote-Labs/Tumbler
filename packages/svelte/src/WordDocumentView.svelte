@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { wordFontFamily } from "@tumblerjs/word";
   import { wordDisplaySurfaces } from './word-display-surfaces.ts';
   import { wordDisplayInkSvg } from './word-display-ink.ts';
   import { wordDisplayColour } from './word-display-colour.ts';
@@ -22,8 +23,12 @@
   import { sameWordTextSelection, wordDocumentParagraphs, wordInputEdit, type WordDocumentEdit } from "./word-editing.ts";
 
   import { startWordLayoutJob, type WordLayoutProgress, type WordLayoutError } from "./word-layout-job.ts";
+  import { clearWordBaselineCache } from "./word-baseline.ts";
+  import type { EmbeddedFontContext } from "./embedded-fonts.ts";
 
   interface Props {
+    /** Document-scoped CSS families and optional font-settlement signal. */
+    readonly fontContext?: EmbeddedFontContext;
     readonly wordDocument: WordDocument;
     readonly onlayoutprogress?: (progress: WordLayoutProgress) => void;
     readonly onlayouterror?: (failure: WordLayoutError) => void;
@@ -42,7 +47,8 @@
     readonly displayMode?: "light" | "dark";
   }
 
-  let { wordDocument, onlayoutprogress, onlayouterror, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, oninkchange, inkMaxPixels, displayMode = "light", scale = $bindable(1) }: Props = $props();
+  let { wordDocument, fontContext, onlayoutprogress, onlayouterror, onhyperlink, editable = false, selection, onselectionchange, onedit, oncommand, ondrawingresize, ondrawingchange, oninkchange, inkMaxPixels, displayMode = "light", scale = $bindable(1) }: Props = $props();
+  const fontFamily = $derived(fontContext?.family ?? wordFontFamily);
   let scroller = $state<HTMLDivElement>();
   let viewportWidth = $state(0);
   let layout = $state.raw<WordLayout>();
@@ -99,11 +105,24 @@
 
   $effect(() => {
     wordDocument;
+    fontFamily;
     if (mounted) {
       // Reflow reads its freshly-written layout to derive the viewport; that output is not an input dependency.
       untrack(reflow);
       return () => cancelLayout?.();
     }
+  });
+
+  $effect(() => {
+    const current = wordDocument;
+    const fonts = fontContext;
+    let active = true;
+    if (mounted && fonts?.ready) void fonts.ready.then(() => {
+      if (active && !destroyed && wordDocument === current && fontContext === fonts) reflow();
+    }, () => {
+      if (active && !destroyed && wordDocument === current && fontContext === fonts) reflow();
+    });
+    return () => { active = false; };
   });
 
   $effect(() => {
@@ -151,6 +170,7 @@
   function reflow() {
     cancelLayout?.();
     if (destroyed) return;
+    clearWordBaselineCache(globalThis.document);
     const document = wordDocument;
     // Keep the existing editing surface intact until the replacement pagination completes.
     const retainEditor = editable && layout !== undefined;
@@ -161,7 +181,7 @@
       return;
     }
     cancelLayout = startWordLayoutJob(
-      layoutWordDocumentProgressively(document, browserWordTextMeasurer(context)),
+      layoutWordDocumentProgressively(document, browserWordTextMeasurer(context, fontFamily)),
       (next, complete) => {
         if (destroyed || document !== wordDocument) return;
         if (retainEditor && !complete) {
@@ -565,7 +585,7 @@
   }
 
   function fragmentStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0, background = layout?.background ?? '#ffffff') {
-    return `${wordTextCss(fragment.format, background)};word-spacing:${wordPointsToCssPixels(fragment.wordSpacing ?? 0)}px;left:${wordPointsToCssPixels(fragment.x - offsetX)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - offsetY)}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
+    return `${wordTextCss(fragment.format, background, fontFamily)};word-spacing:${wordPointsToCssPixels(fragment.wordSpacing ?? 0)}px;left:${wordPointsToCssPixels(fragment.x - offsetX)}px;top:${wordPointsToCssPixels(wordTextTop(fragment, fontFamily(fragment.format.fontFamily)) - offsetY)}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 
   /** Inline runs keep browser word boundaries intact across formatting changes. */
@@ -573,7 +593,7 @@
     const fragment = line.fragments[index]!;
     const previous = line.fragments.slice(0, index).findLast(item => item.kind !== "drawing");
     const gap = fragment.x - (previous === undefined ? line.x : previous.x + previous.width);
-    return `${wordTextCss(fragment.format, lineSurfaces.get(line))};word-spacing:${wordPointsToCssPixels(fragment.wordSpacing ?? 0)}px;${fragment.format.verticalAlign === "baseline" ? "vertical-align:top;" : ""}margin-left:${wordPointsToCssPixels(gap)}px;top:${wordPointsToCssPixels(wordTextTop(fragment) - line.y)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
+    return `${wordTextCss(fragment.format, lineSurfaces.get(line), fontFamily)};word-spacing:${wordPointsToCssPixels(fragment.wordSpacing ?? 0)}px;${fragment.format.verticalAlign === "baseline" ? "vertical-align:top;" : ""}margin-left:${wordPointsToCssPixels(gap)}px;top:${wordPointsToCssPixels(wordTextTop(fragment, fontFamily(fragment.format.fontFamily)) - line.y)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 
   function drawingStyle(fragment: NonNullable<WordLayout["pages"][number]["columns"][number]["lines"][number]["fragments"][number]>, offsetX = 0, offsetY = 0, paintImage = false, order?: ReadonlyMap<import('@tumblerjs/word').WordDrawing, number>, interactive = false) {
@@ -636,15 +656,15 @@
             style={`--word-ink-layer-z-index:${wordDrawingOverlayOrder(drawingOrder)};width:${wordPointsToCssPixels(page.width)}px;height:${wordPointsToCssPixels(page.height)}px;transform:scale(${scale});transform-origin:top left`}
           >
             <!-- Canvas decoding owns its URLs until the asynchronous paint completes. -->
-            <WordInkPageLayer {page} {scale} maxPixels={inkMaxPixels} background={layout.background} />
-            <WordPageLayoutDecorations {page} background={layout.background} />
+            <WordInkPageLayer fontFamily={fontContext?.family} {page} {scale} maxPixels={inkMaxPixels} background={layout.background} />
+            <WordPageLayoutDecorations {fontFamily} {page} background={layout.background} />
             <WordParagraphDecorations lines={[...page.columns.flatMap(column => column.lines), ...page.headerLines, ...page.footerLines, ...page.noteLines]} />
             {#if page.noteSeparatorY !== undefined}
               <div class="note-separator" style={`left:${wordPointsToCssPixels(page.section.marginLeftTwips / 20)}px;top:${wordPointsToCssPixels(page.noteSeparatorY)}px`}></div>
             {/if}
             {#each [...page.headerLines, ...page.footerLines, ...page.noteLines] as line}
               {#if line.marker !== undefined}
-                <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format, lineSurfaces.get(line))};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
+                <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format, lineSurfaces.get(line), fontFamily)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker, fontFamily(line.marker.format.fontFamily)))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
               {/if}
               {#each line.fragments as fragment}
                 {#if fragment.kind === "drawing" && fragment.drawing?.kind === "image"}
@@ -656,9 +676,9 @@
                     <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageUrl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment, 0, 0, true, drawingOrder)} />
                   {/if}
                 {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "shape"}
-                  <div class="document-drawing shape-drawing" style={drawingStyle(fragment, 0, 0, false, drawingOrder)}><WordShapeView shape={fragment.drawing.shape} /></div>
+                  <div class="document-drawing shape-drawing" style={drawingStyle(fragment, 0, 0, false, drawingOrder)}><WordShapeView {fontFamily} shape={fragment.drawing.shape} /></div>
                 {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
-                  <div class="document-drawing" style={drawingStyle(fragment, 0, 0, false, drawingOrder)}><OoxmlChart patternOrigin={{ x: wordPointsToCssPixels(fragment.x), y: wordPointsToCssPixels(fragment.y) }} model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-chart-${page.index}-${fragment.contentElementId}`} /></div>
+                  <div class="document-drawing" style={drawingStyle(fragment, 0, 0, false, drawingOrder)}><OoxmlChart fontFamily={fontContext?.family} patternOrigin={{ x: wordPointsToCssPixels(fragment.x), y: wordPointsToCssPixels(fragment.y) }} model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-chart-${page.index}-${fragment.contentElementId}`} /></div>
                 {:else if fragment.kind === "drawing"}
                   <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment, 0, 0, false, drawingOrder)}></div>
                 {:else if fragment.hyperlink === undefined}
@@ -669,17 +689,17 @@
               {/each}
             {/each}
             {#each [...page.headerTables, ...page.footerTables, ...page.noteTables] as table}
-              <WordLayoutTableView {table} {drawingOrder} background={layout.background} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} story="auxiliary" />
+              <WordLayoutTableView fontFamily={fontContext?.family} {table} {drawingOrder} background={layout.background} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} story="auxiliary" />
             {/each}
             {#each page.columns as column}
               {#each column.tables as table}
-                <WordLayoutTableView {table} {drawingOrder} background={layout.background} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} decorationsOnly />
+                <WordLayoutTableView fontFamily={fontContext?.family} {table} {drawingOrder} background={layout.background} pageIndex={page.index} imageurl={imageUrl} onactivate={activateHyperlink} decorationsOnly />
               {/each}
             {/each}
             {#each bodyLines(page) as { line, clip }}
               {#each line.fragments as fragment}
                 {#if fragment.kind === "drawing" && fragment.drawing !== undefined}
-                  <WordDrawingView background={lineSurfaces.get(line)} drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, 0, 0, false, drawingOrder, true)} pageX={fragment.x} pageY={fragment.y} clip={wordDrawingCellClip(fragment.drawing, clip)} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
+                  <WordDrawingView fontFamily={fontContext?.family} background={lineSurfaces.get(line)} drawing={fragment.drawing} width={fragment.width} height={fragment.height} position={drawingStyle(fragment, 0, 0, false, drawingOrder, true)} pageX={fragment.x} pageY={fragment.y} clip={wordDrawingCellClip(fragment.drawing, clip)} {scale} {editable} selected={selectedDrawing === fragment.drawing.elementId} imageurl={imageUrl} inlinePosition={pointerPosition} onselect={(id) => { finishMouseSelection(); selectedDrawing = id; }} onresize={ondrawingresize} onchange={ondrawingchange} {oninkchange} />
                 {/if}
               {/each}
               <WordContentClip {clip} layer={1}>
@@ -687,7 +707,7 @@
                 <span
                   class="list-marker"
                   aria-hidden="true"
-                  style={`${wordTextCss(line.marker.format, lineSurfaces.get(line))};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}
+                  style={`${wordTextCss(line.marker.format, lineSurfaces.get(line), fontFamily)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker, fontFamily(line.marker.format.fontFamily)))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}
                 >{line.marker.text}</span>
               {/if}
 

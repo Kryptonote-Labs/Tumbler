@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { wordFontFamily } from "@tumblerjs/word";
   import { wordDisplaySurfaces } from './word-display-surfaces.ts';
   import { wordDisplayInkSvg } from './word-display-ink.ts';
   import { wordDisplayColour, wordDisplaySurface } from './word-display-colour.ts';
@@ -12,6 +13,7 @@
   import { wordTextCss, wordTextTop } from "./word-font-metrics.ts";
 
   interface Props {
+    readonly fontFamily?: (name: string) => string;
     readonly drawingOrder?: ReadonlyMap<import('@tumblerjs/word').WordDrawing, number>;
     readonly table: WordLayoutTable;
     readonly pageIndex: number;
@@ -22,12 +24,12 @@
     readonly background?: string;
   }
 
-  let { table, drawingOrder, pageIndex, imageurl, onactivate, story, decorationsOnly = false, background = '#ffffff' }: Props = $props();
+  let { fontFamily, table, drawingOrder, pageIndex, imageurl, onactivate, story, decorationsOnly = false, background = '#ffffff' }: Props = $props();
 
   const lineSurfaces = $derived(wordDisplaySurfaces([], [table], background));
 
   function fragmentStyle(fragment: WordLayoutFragment, surface: string) {
-    return `${wordTextCss(fragment.format, surface)};word-spacing:${wordPointsToCssPixels(fragment.wordSpacing ?? 0)}px;left:${wordPointsToCssPixels(fragment.x)}px;top:${wordPointsToCssPixels(wordTextTop(fragment))}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
+    return `${wordTextCss(fragment.format, surface, fontFamily)};word-spacing:${wordPointsToCssPixels(fragment.wordSpacing ?? 0)}px;left:${wordPointsToCssPixels(fragment.x)}px;top:${wordPointsToCssPixels(wordTextTop(fragment, (fontFamily ?? wordFontFamily)(fragment.format.fontFamily)))}px;width:${wordPointsToCssPixels(fragment.width)}px;height:${wordPointsToCssPixels(fragment.height)}px;line-height:${wordPointsToCssPixels(fragment.height)}px`;
   }
 
   function drawingStyle(fragment: WordLayoutFragment) {
@@ -62,7 +64,7 @@
     {#if !decorationsOnly}
       {#each cell.lines as line}
         {#if line.marker !== undefined}
-          <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format, wordDisplaySurface(line.paragraphDecoration?.shading, cell.shading, surface))};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
+          <span class="list-marker" aria-hidden="true" style={`${wordTextCss(line.marker.format, wordDisplaySurface(line.paragraphDecoration?.shading, cell.shading, surface), fontFamily)};left:${wordPointsToCssPixels(line.marker.x)}px;top:${wordPointsToCssPixels(wordTextTop(line.marker, (fontFamily ?? wordFontFamily)(line.marker.format.fontFamily)))}px;width:${wordPointsToCssPixels(line.marker.width)}px;height:${wordPointsToCssPixels(line.marker.height)}px;line-height:${wordPointsToCssPixels(line.marker.height)}px`}>{line.marker.text}</span>
         {/if}
         {#if line.fragments.length === 0 || line.fragments.at(-1)?.endOffset !== line.endOffset}
           <span
@@ -109,9 +111,9 @@
               <img data-word-ink-rendering={fragment.drawing.inkRendering} class="document-drawing" src={imageurl(fragment.drawing)} alt={fragment.drawing.altText ?? ""} style={drawingStyle(fragment)} />
             {/if}
           {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "shape"}
-            <div class="document-drawing shape-drawing" style={drawingStyle(fragment)}><WordShapeView shape={fragment.drawing.shape} /></div>
+            <div class="document-drawing shape-drawing" style={drawingStyle(fragment)}><WordShapeView {fontFamily} shape={fragment.drawing.shape} /></div>
           {:else if fragment.kind === "drawing" && fragment.drawing?.kind === "chart"}
-            <div class="document-drawing" style={drawingStyle(fragment)}><OoxmlChart patternOrigin={{ x: wordPointsToCssPixels(fragment.x), y: wordPointsToCssPixels(fragment.y) }} model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-table-chart-${pageIndex}-${fragment.contentElementId}`} /></div>
+            <div class="document-drawing" style={drawingStyle(fragment)}><OoxmlChart {fontFamily} patternOrigin={{ x: wordPointsToCssPixels(fragment.x), y: wordPointsToCssPixels(fragment.y) }} model={fragment.drawing.model} width={wordPointsToCssPixels(fragment.width)} height={wordPointsToCssPixels(fragment.height)} clipId={`word-table-chart-${pageIndex}-${fragment.contentElementId}`} /></div>
           {:else if fragment.kind === "drawing"}
             <div class="document-drawing drawing-fallback" role="img" aria-label={fragment.drawing?.altText ?? "Drawing preview unavailable"} style={drawingStyle(fragment)}></div>
           {/if}

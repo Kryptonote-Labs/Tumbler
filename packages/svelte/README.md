@@ -250,8 +250,38 @@ layout's number gutter, so browser advance rounding does not shift individual la
 family names, shared until the last consumer calls `destroy()`. `family(name)`
 resolves a document family to its private alias, and `ready` resolves after all
 font loads settle. Failed faces keep the supplied fallback available. Use the same
-resolver for layout measurements, text CSS and baseline probes. The loader does
-not install fonts on the system or affect another document's font family.
+resolver for layout measurements, text CSS and baseline probes. Pass the returned
+context to `WordDocumentView`; it reflows when `ready` settles and ignores an old
+context's completion after a document change. Without a context, Word keeps its
+standard font stack. `results` resolves to face-level `loaded` or `failed` outcomes,
+including the original font and failure error; `ready` remains a `Promise<void>`.
+
+```svelte
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { loadEmbeddedFonts, WordDocumentView, type EmbeddedFontContext } from '@tumblerjs/svelte';
+  let fontContext = $state<EmbeddedFontContext>();
+  onMount(() => {
+    const loaded = loadEmbeddedFonts(embeddedFonts);
+    fontContext = loaded;
+    void loaded.results.then(results => {
+      for (const result of results) {
+        if (result.status === 'failed') console.warn(result.font.family, result.error);
+      }
+    });
+    return () => loaded.destroy();
+  });
+</script>
+
+<WordDocumentView {wordDocument} {fontContext} />
+```
+
+Keep the context alive while the view uses its faces. For a custom canvas renderer,
+use `canvasWordTextMeasurer(context, undefined, fontContext.family)` and
+`paintWordPage(context, page, { fontFamily: fontContext.family })`. Await `ready`
+before layout, or recreate the measurer and layout after it settles.
+
+The loader does not install fonts on the system or affect another document's font family.
 
 ## Themed native controls
 

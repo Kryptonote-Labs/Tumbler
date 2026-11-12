@@ -10,9 +10,10 @@
   import OoxmlChart from './OoxmlChart.svelte';
   import { resizeWordDrawingBox, type WordDrawingBox, type WordDrawingHandle } from './word-drawing-geometry.ts';
 
-  let { drawing, background = '#ffffff', width, height, position, clip, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo, oncharttitlechange, oncharttitletextchange, oninkchange }: {
+  let { fontFamily, drawing, background = '#ffffff', width, height, position, clip, scale, editable, selected, pageX, pageY, imageurl, imageLoading = "lazy", layoutControl = true, inlinePosition, onselect, onresize, onchange, ontextchange, ontexteditor, ontextselection, ontextundo, oncharttitlechange, oncharttitletextchange, oninkchange }: {
     /** Original visible surface behind vector ink. */
     background?: string;
+    fontFamily?: (name: string) => string;
     drawing: WordDrawing; width: number; height: number; position: string; scale: number;
     editable: boolean; selected: boolean;
     pageX: number; pageY: number;
@@ -171,7 +172,7 @@
 
 {#snippet content()}
   {#if drawing.kind === 'shape'}
-    <WordShapeView shape={drawing.shape} width={preview?.width ?? width} height={preview?.height ?? height} {selected} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} editing={editingText !== undefined} initialText={editingText} oncommit={finishText} />
+    <WordShapeView {fontFamily} shape={drawing.shape} width={preview?.width ?? width} height={preview?.height ?? height} {selected} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} editing={editingText !== undefined} initialText={editingText} oncommit={finishText} />
   {:else if drawing.kind === 'image'}
     {@const painted = wordImagePaintBounds(drawing)}
     {#if drawing.picture}
@@ -184,7 +185,7 @@
       <img data-word-ink-rendering={drawing.inkRendering} src={imageurl(drawing)} alt={drawing.altText ?? ''} draggable="false" loading={imageLoading} decoding="async" style={`position:absolute;left:${painted.x / drawing.widthPoints * 100}%;top:${painted.y / drawing.heightPoints * 100}%;width:${painted.width / drawing.widthPoints * 100}%;height:${painted.height / drawing.heightPoints * 100}%`} />
     {/if}
   {:else if drawing.kind === 'chart'}
-    <OoxmlChart patternOrigin={{ x: wordPointsToCssPixels(preview?.x ?? pageX), y: wordPointsToCssPixels(preview?.y ?? pageY) }} model={drawing.model} width={displayWidth} height={displayHeight} clipId={`word-drawing-${drawing.elementId}`} />
+    <OoxmlChart {fontFamily} patternOrigin={{ x: wordPointsToCssPixels(preview?.x ?? pageX), y: wordPointsToCssPixels(preview?.y ?? pageY) }} model={drawing.model} width={displayWidth} height={displayHeight} clipId={`word-drawing-${drawing.elementId}`} />
   {:else}
     <div class="fallback" role="img" aria-label={drawing.altText ?? 'Drawing preview unavailable'}></div>
   {/if}
@@ -192,7 +193,7 @@
 
 <div class="drawing" class:ink={inkSvg !== undefined} class:moving={preview !== undefined} class:behind={currentLayout === 'behind'} class:selected={editable && selected} data-word-drawing={drawing.elementId} contenteditable="false" style={`${position};width:${displayWidth}px;height:${displayHeight}px;translate:${preview === undefined ? 'none' : `${wordPointsToCssPixels(preview.x - pageX)}px ${wordPointsToCssPixels(preview.y - pageY)}px`};--handle-size:${10 / scale}px;--outline-size:${1 / scale}px;--inverse-scale:${1 / scale}`}>
   {#if editingTitle && editable && drawing.kind === 'chart'}
-    <ChartTitleEditor model={drawing.model} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} oncommit={(paragraphs) => { if (oncharttitletextchange) oncharttitletextchange(paragraphs); else oncharttitlechange?.(paragraphs.map(p => p.runs.map(r => r.text).join('')).join('\n')); }} oncancel={() => { editingTitle = false; onselect(drawing.elementId); }} />
+    <ChartTitleEditor {fontFamily} model={drawing.model} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} oncommit={(paragraphs) => { if (oncharttitletextchange) oncharttitletextchange(paragraphs); else oncharttitlechange?.(paragraphs.map(p => p.runs.map(r => r.text).join('')).join('\n')); }} oncancel={() => { editingTitle = false; onselect(drawing.elementId); }} />
   {/if}
   {#if editable && drawing.kind !== 'unsupported' && (onresize !== undefined || onchange !== undefined)}
     {#if editingText !== undefined}
