@@ -49,6 +49,17 @@ describe('spreadsheet viewport', () => {
     expect(merged?.frame.width).toBe(columns.start(5));
   });
 
+  test('lets frozen-row merges extend across frozen columns', () => {
+    const sheet = worksheet(`<sheetViews><sheetView workbookViewId="0"><pane xSplit="1" ySplit="1" topLeftCell="B2" state="frozen"/></sheetView></sheetViews><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Title</t></is></c></row></sheetData><mergeCells count="1"><mergeCell ref="A1:C1"/></mergeCells>`);
+    const layout = layoutSpreadsheetViewport(sheet, { width: 600, height: 200 });
+    expect(layout.cells.find(cell => cell.paint.text === 'Title')?.clip?.width).toBe(600);
+  });
+
+  test('shows hyperlink display text', () => {
+    const sheet = worksheet(`<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>source</t></is></c></row></sheetData><hyperlinks><hyperlink ref="A1" location="Sheet1!B1" display="Go to B1"/></hyperlinks>`);
+    expect(layoutSpreadsheetViewport(sheet, { width: 400, height: 200 }).cells[0]?.paint.text).toBe('Go to B1');
+  });
+
   test('stacks charts and shapes in drawing order', () => {
     const chart = createOoxmlChart({ type: 'barChart', categories: ['A'], series: [{ name: 'Sales', values: [2] }] });
     let artifact = applySpreadsheetCommand(createSpreadsheet(), { name: 'insert-chart', sheetId: '1', x: 40, y: 40, width: 320, height: 200, content: { xml: new TextDecoder().decode(chart) } });

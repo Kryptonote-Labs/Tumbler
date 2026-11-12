@@ -100,7 +100,8 @@ export function layoutSpreadsheetViewport(worksheet: SpreadsheetWorksheet, optio
   const resolve = (address: CellAddress) => {
     const value = calculation?.value(address) ?? worksheet.cell(address)?.value;
     const style = spreadsheetPaintStyle(worksheet, address, conditional.formats(address), value);
-    return resolveSpreadsheetCellPaint(worksheet, style, calculation?.displayText(address) ?? worksheet.displayText(address));
+    const text = worksheet.hyperlink(address)?.display ?? calculation?.displayText(address) ?? worksheet.displayText(address);
+    return resolveSpreadsheetCellPaint(worksheet, style, text);
   };
   const cells: SpreadsheetViewportCell[] = [];
   for (const row of rows.items) for (const column of columns.items) {
@@ -110,6 +111,7 @@ export function layoutSpreadsheetViewport(worksheet: SpreadsheetWorksheet, optio
     cells.push({ frame: { x: column.start, y: row.start, width: column.size, height: row.size, overflowWidth }, paint: resolve(address) });
   }
   // Merges keep their full rectangle in the pane of their first cell, clipped to that pane.
+  // As with drawings, the frozen-row pane spans the full width.
   for (const range of worksheet.merges) {
     const span = (geometry: SparseAxisGeometry, axis: Axis, first: number, last: number) => {
       const { offset, start, end } = paneSpan(axis, first <= axis.frozen);
@@ -118,9 +120,11 @@ export function layoutSpreadsheetViewport(worksheet: SpreadsheetWorksheet, optio
     };
     const x = span(columnGeometry, columns, range.start.column, range.end.column);
     const y = span(rowGeometry, rows, range.start.row, range.end.row);
-    if (x && y) cells.push({
+    if (!x || !y) continue;
+    const clipX = range.start.row <= rows.frozen ? { start: rowHeaderWidth, end: options.width } : x;
+    cells.push({
       frame: { x: x.from, y: y.from, width: x.to - x.from, height: y.to - y.from },
-      clip: { x: x.start, y: y.start, width: x.end - x.start, height: y.end - y.start },
+      clip: { x: clipX.start, y: y.start, width: clipX.end - clipX.start, height: y.end - y.start },
       paint: resolve(range.start),
     });
   }
