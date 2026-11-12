@@ -25,7 +25,8 @@ export interface SpreadsheetDrawingObject {
   readonly text: string;
   readonly image: { readonly bytes: Uint8Array; readonly contentType: string } | undefined;
   readonly children: readonly SpreadsheetDrawingObject[];
-  readonly groupTransform: string;
+  /** Group child space: children are offset by -child and scaled into the group's extent. */
+  readonly groupChild: { readonly scaleX: number; readonly scaleY: number; readonly x: number; readonly y: number };
 }
 export interface SpreadsheetDrawingObjectFrame {
   readonly anchor: SpreadsheetDrawingAnchor;
@@ -82,7 +83,7 @@ export function readSpreadsheetDrawingObjects(workbook: SpreadsheetWorkbook, dra
       fill: color(properties, child(child(e, 'style'), 'fillRef')), stroke: color(line, child(child(e, 'style'), 'lnRef')), strokeWidth: Math.max(1, number(line, 'w', 9525) / 9525),
       text: body ? children(body, 'p').map(text).join('\n') : '', image,
       children: group ? children(e).flatMap(e => { const result = object(e); return result ? [result] : []; }) : [],
-      groupTransform: `scale(${Number.isFinite(sx) ? sx : 1} ${Number.isFinite(sy) ? sy : 1}) translate(${-number(chOff, 'x') / 9525} ${-number(chOff, 'y') / 9525})`,
+      groupChild: { scaleX: Number.isFinite(sx) ? sx : 1, scaleY: Number.isFinite(sy) ? sy : 1, x: number(chOff, 'x') / 9525, y: number(chOff, 'y') / 9525 },
     };
   }
   const rows = worksheet?.rowGeometry();

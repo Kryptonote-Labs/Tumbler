@@ -164,6 +164,7 @@ export type {
   SpreadsheetCellValue,
   SpreadsheetColumn,
   SpreadsheetPane,
+  SpreadsheetSheetView,
   SpreadsheetRow,
 } from "./worksheet.ts";
 
@@ -194,3 +195,7 @@ export { spreadsheetTextOverflowWidth } from './text-overflow.ts';
 export type { SpreadsheetTextOverflowInput } from './text-overflow.ts';
 export { invalidateSpreadsheetPaintFonts, paintSpreadsheetCell, resolveSpreadsheetCellPaint, spreadsheetPaintStyle } from './canvas-cell.ts';
 export type { SpreadsheetBorderPaint, SpreadsheetBorderSide, SpreadsheetCellCanvasContext, SpreadsheetCellFrame, SpreadsheetCellPaint, SpreadsheetPaintColours } from './canvas-cell.ts';
+export { layoutSpreadsheetViewport } from './viewport.ts';
+export type { SpreadsheetViewportAxisItem, SpreadsheetViewportCell, SpreadsheetViewportDrawing, SpreadsheetViewportLayout, SpreadsheetViewportOptions, SpreadsheetViewportRect } from './viewport.ts';
+export { paintSpreadsheetViewport, spreadsheetViewportImages } from './canvas.ts';
+export type { SpreadsheetCanvasContext, SpreadsheetDecodedImage, SpreadsheetImageSource, SpreadsheetViewportPaintOptions } from './canvas.ts';
