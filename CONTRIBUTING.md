@@ -47,9 +47,24 @@ License in this repository.
 
 ## Alpha releases
 
-Public packages use one lockstep `0.1.0-alpha.N` version and exact versions for
-dependencies within the Tumbler package graph. Releases are deliberately
-maintainer-operated while npm requires web authentication for each package.
+Public packages use one exact lockstep version. Version bumps are committed
+manifest changes; `release:next` and `release:publish` do not bump versions.
+Update every public package version and every internal reference in
+`dependencies`, `optionalDependencies`, `peerDependencies`, and `devDependencies`.
+This includes optional peers declared through `peerDependenciesMeta`.
+Internal dev dependencies may use `workspace:*`; Bun replaces that with the
+workspace package's exact version when packing. Keep external dependency ranges
+unchanged unless the release requires an update.
+
+Run `bun run release:verify` after editing manifests. It checks the source graph,
+packs all public packages, and checks the resulting manifests, including dev
+references rewritten by Bun. It rejects stale internal versions and unresolved
+workspace references in archives. The same source validation runs before the
+publisher selects a package, and qualification runs the packed checks before
+stamping a commit.
+
+
+Releases are maintainer-operated while npm requires web authentication for each package.
 
 After committing a release candidate, qualify the exact packed artifacts against
 Tumbler and the local Kryptonote checkout:

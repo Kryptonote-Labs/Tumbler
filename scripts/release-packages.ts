@@ -16,11 +16,16 @@ export const RELEASE_PACKAGE_DIRECTORIES = [
   "cli",
 ] as const;
 
+export const DEPENDENCY_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies", "devDependencies"] as const;
+
 export interface ReleasePackage {
   readonly directory: (typeof RELEASE_PACKAGE_DIRECTORIES)[number];
   readonly name: string;
   readonly version: string;
   readonly dependencies: Readonly<Record<string, string>>;
+  readonly optionalDependencies?: Readonly<Record<string, string>>;
+  readonly peerDependencies?: Readonly<Record<string, string>>;
+  readonly devDependencies?: Readonly<Record<string, string>>;
 }
 
 interface PackageManifest {
@@ -31,6 +36,9 @@ interface PackageManifest {
   readonly license?: unknown;
   readonly files?: unknown;
   readonly dependencies?: unknown;
+  readonly optionalDependencies?: unknown;
+  readonly peerDependencies?: unknown;
+  readonly devDependencies?: unknown;
   readonly publishConfig?: unknown;
 }
 
@@ -45,6 +53,7 @@ function stringRecord(value: unknown): Readonly<Record<string, string>> | undefi
 
 export function validateReleasePackageGraph(
   packages: readonly ReleasePackage[],
+  { packed = false }: { readonly packed?: boolean } = {},
 ): readonly string[] {
   const errors: string[] = [];
   const byName = new Map(packages.map((pkg) => [pkg.name, pkg]));
@@ -56,18 +65,24 @@ export function validateReleasePackageGraph(
   }
 
   for (const [index, pkg] of packages.entries()) {
-    for (const [dependency, requestedVersion] of Object.entries(pkg.dependencies)) {
-      if (!dependency.startsWith("@tumblerjs/")) continue;
-      const target = byName.get(dependency);
-      if (target === undefined) {
-        errors.push(`${pkg.name} depends on unlisted public package ${dependency}.`);
-        continue;
-      }
-      if (requestedVersion !== target.version) {
-        errors.push(`${pkg.name} requests ${dependency}@${requestedVersion}, but its release version is ${target.version}.`);
-      }
-      if ((order.get(dependency) ?? index) >= index) {
-        errors.push(`${dependency} must be published before ${pkg.name}.`);
+    for (const field of DEPENDENCY_FIELDS) {
+      for (const [dependency, requestedVersion] of Object.entries(pkg[field] ?? {})) {
+        if (!dependency.startsWith("@tumblerjs/")) continue;
+        const target = byName.get(dependency);
+        if (target === undefined) {
+          errors.push(`${pkg.name} ${field} references unlisted public package ${dependency}.`);
+          continue;
+        }
+        // Bun replaces workspace:* with the workspace version when packing dev dependencies.
+        const version = !packed && field === "devDependencies" && requestedVersion === "workspace:*"
+          ? target.version
+          : requestedVersion;
+        if (version !== target.version) {
+          errors.push(`${pkg.name} ${field} requests ${dependency}@${requestedVersion}, but its release version is ${target.version}.`);
+        }
+        if (field !== "devDependencies" && (order.get(dependency) ?? index) >= index) {
+          errors.push(`${dependency} must be published before ${pkg.name}.`);
+        }
       }
     }
   }
@@ -75,7 +90,7 @@ export function validateReleasePackageGraph(
   return errors;
 }
 
-export async function readReleasePackages(root: string): Promise<readonly ReleasePackage[]> {
+export async function readReleasePackages(root: string, options: { readonly packed?: boolean } = {}): Promise<readonly ReleasePackage[]> {
   const errors: string[] = [];
   const packages: ReleasePackage[] = [];
 
@@ -89,7 +104,14 @@ export async function readReleasePackages(root: string): Promise<readonly Releas
     }
     const manifest: PackageManifest = parsed;
     const expectedName = `@tumblerjs/${directory}`;
-    const dependencies = stringRecord(manifest.dependencies);
+    const dependencyFields: Partial<Record<(typeof DEPENDENCY_FIELDS)[number], Readonly<Record<string, string>>>> = {};
+    for (const field of DEPENDENCY_FIELDS) {
+      const versions = stringRecord(manifest[field]);
+      if (versions === undefined && manifest[field] !== undefined) {
+        errors.push(`${expectedName} ${field} must be string versions.`);
+      }
+      dependencyFields[field] = versions ?? {};
+    }
     const publishConfig = isRecord(manifest.publishConfig) ? manifest.publishConfig : undefined;
     const files = Array.isArray(manifest.files) ? manifest.files : [];
 
@@ -109,22 +131,13 @@ export async function readReleasePackages(root: string): Promise<readonly Releas
       if (!files.includes(requiredFile)) errors.push(`${expectedName} must include ${requiredFile} in files.`);
       if (!existsSync(resolve(packageRoot, requiredFile))) errors.push(`${expectedName} is missing ${requiredFile}.`);
     }
-    if (dependencies === undefined && manifest.dependencies !== undefined) {
-      errors.push(`${expectedName} dependencies must be string versions.`);
-    }
-    const dependencyVersions = dependencies ?? {};
-    for (const [dependency, version] of Object.entries(dependencyVersions)) {
-      if (dependency.startsWith("@tumblerjs/") && version.startsWith("workspace:")) {
-        errors.push(`${expectedName} cannot publish workspace protocol dependency ${dependency}.`);
-      }
-    }
 
     if (typeof manifest.name === "string" && typeof manifest.version === "string") {
-      packages.push({ directory, name: manifest.name, version: manifest.version, dependencies: dependencyVersions });
+      packages.push({ directory, name: manifest.name, version: manifest.version, ...dependencyFields, dependencies: dependencyFields.dependencies ?? {} });
     }
   }
 
-  errors.push(...validateReleasePackageGraph(packages));
+  errors.push(...validateReleasePackageGraph(packages, options));
   if (errors.length > 0) throw new Error(`Tumbler release validation failed:\n- ${errors.join("\n- ")}`);
   return packages;
 }
