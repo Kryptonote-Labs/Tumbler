@@ -190,3 +190,7 @@ export type { ChartWorkbookEdit } from './chart-workbook.ts';
 export { spreadsheetChartContent } from './chart-content.ts';
 export { applyChartContentEdit } from './chart-operations.ts';
 export type { ChartContentEdit } from './chart-operations.ts';
+export { spreadsheetTextOverflowWidth } from './text-overflow.ts';
+export type { SpreadsheetTextOverflowInput } from './text-overflow.ts';
+export { invalidateSpreadsheetPaintFonts, paintSpreadsheetCell, resolveSpreadsheetCellPaint, spreadsheetPaintStyle } from './canvas-cell.ts';
+export type { SpreadsheetBorderPaint, SpreadsheetBorderSide, SpreadsheetCellCanvasContext, SpreadsheetCellFrame, SpreadsheetCellPaint, SpreadsheetPaintColours } from './canvas-cell.ts';

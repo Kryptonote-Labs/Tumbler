@@ -19,6 +19,7 @@
     spreadsheetTableDistinctValues,
     spreadsheetDrawingBounds,
     spreadsheetDrawingObjectId,
+    spreadsheetTextOverflowWidth,
     readSpreadsheetDrawingObjects,
     type SpreadsheetChartFrame,
     type SpreadsheetCellValue,
@@ -34,7 +35,6 @@
   import { coerceSpreadsheetEditValue, spreadsheetCellUsesTextFormat, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
   import { measureMaximumDigitWidth, spreadsheetFontShorthand } from "./spreadsheet-font-metrics.ts";
   import { spreadsheetCellContentCss, spreadsheetCellCss } from "./spreadsheet-cell-style.ts";
-  import { spreadsheetTextOverflowWidth } from "./spreadsheet-text-overflow.ts";
   import { spreadsheetEmptyRegionStart } from "./spreadsheet-empty-region.ts";
   import { zoomGesture, type ZoomGesture } from "./zoom-gesture.ts";
   import { spreadsheetWheelScroll } from "./spreadsheet-wheel.ts";
