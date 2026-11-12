@@ -6,13 +6,18 @@ import { applySpreadsheetCommand, createSpreadsheet, layoutSpreadsheetViewport, 
 import { buildWorkbookFixture } from './workbook-fixture.ts';
 
 const namespace = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
-function worksheet(xml: string, table?: string) {
+const relationships = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+/** A one-sheet workbook, optionally with one table part and one Drawing part body. */
+function worksheet(xml: string, parts: { readonly table?: string; readonly drawing?: string } = {}) {
+  const { table, drawing } = parts;
   const workbook = openSpreadsheet(openOpcPackage(buildWorkbookFixture({
     sheets: [{
       name: 'Sheet1', sheetId: 1, relationshipId: 'sheet1',
-      xml: `<worksheet xmlns="${namespace}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${xml}${table ? '<tableParts count="1"><tablePart r:id="table"/></tableParts>' : ''}</worksheet>`,
+      xml: `<worksheet xmlns="${namespace}" xmlns:r="${relationships}">${xml}${drawing ? '<drawing r:id="drawing1"/>' : ''}${table ? '<tableParts count="1"><tablePart r:id="table"/></tableParts>' : ''}</worksheet>`,
       ...(table ? { tables: [{ relationshipId: 'table', target: '../tables/table1.xml', xml: table }] } : {}),
+      ...(drawing ? { relationships: [{ id: 'drawing1', type: `${relationships}/drawing`, target: '../drawings/drawing1.xml' }] } : {}),
     }],
+    ...(drawing ? { parts: [{ itemName: 'xl/drawings/drawing1.xml', contentType: 'application/vnd.openxmlformats-officedocument.drawing+xml', xml: `<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">${drawing}</xdr:wsDr>` }] } : {}),
   })));
   return openWorksheet(workbook, workbook.sheets[0]!);
 }
@@ -68,9 +73,30 @@ describe('spreadsheet viewport', () => {
 
   test('applies saved table sorts', () => {
     const rows = ['Item', 'Zulu', 'Alpha'].map((text, index) => `<row r="${index + 1}"><c r="A${index + 1}" t="inlineStr"><is><t>${text}</t></is></c></row>`).join('');
-    const sheet = worksheet(`<sheetData>${rows}</sheetData>`, `<table xmlns="${namespace}" id="1" name="Data" displayName="Data" ref="A1:A3"><autoFilter ref="A1:A3"><sortState ref="A2:A3"><sortCondition ref="A2:A3"/></sortState></autoFilter><tableColumns count="1"><tableColumn id="1" name="Item"/></tableColumns></table>`);
+    const sheet = worksheet(`<sheetData>${rows}</sheetData>`, { table: `<table xmlns="${namespace}" id="1" name="Data" displayName="Data" ref="A1:A3"><autoFilter ref="A1:A3"><sortState ref="A2:A3"><sortCondition ref="A2:A3"/></sortState></autoFilter><tableColumns count="1"><tableColumn id="1" name="Item"/></tableColumns></table>` });
     const layout = layoutSpreadsheetViewport(sheet, { width: 400, height: 200 });
     expect(layout.cells.filter(cell => cell.frame.x === 0 && cell.paint.text).map(cell => cell.paint.text)).toEqual(['Item', 'Alpha', 'Zulu']);
+  });
+
+  test('anchors drawings to source rows under table filters', () => {
+    const rows = ['Item', 'Drop', 'Keep'].map((text, index) => `<row r="${index + 1}"><c r="A${index + 1}" t="inlineStr"><is><t>${text}</t></is></c></row>`).join('');
+    const sheet = worksheet(`<sheetData>${rows}</sheetData>`, {
+      table: `<table xmlns="${namespace}" id="1" name="Data" displayName="Data" ref="A1:A3"><autoFilter ref="A1:A3"><filterColumn colId="0"><filters><filter val="Keep"/></filters></filterColumn></autoFilter><tableColumns count="1"><tableColumn id="1" name="Item"/></tableColumns></table>`,
+      drawing: '<xdr:oneCellAnchor><xdr:from><xdr:col>1</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>4</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="952500" cy="952500"/><xdr:sp><xdr:nvSpPr><xdr:cNvPr id="1" name="Box"/><xdr:cNvSpPr/></xdr:nvSpPr><xdr:spPr><a:prstGeom prst="rect"/></xdr:spPr></xdr:sp><xdr:clientData/></xdr:oneCellAnchor>',
+    });
+    const layout = layoutSpreadsheetViewport(sheet, { width: 400, height: 300 });
+    expect(layout.rows.find(row => row.index === 3)).toBeUndefined();
+    expect(layout.drawings[0]?.bounds.y).toBe(sheet.rowGeometry().start(5));
+  });
+
+  test('paints merges over the cells they scroll across', () => {
+    const sheet = worksheet(`<sheetViews><sheetView workbookViewId="0"><pane xSplit="1" ySplit="1" topLeftCell="C2" state="frozen"/></sheetView></sheetViews><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Covered</t></is></c></row></sheetData><mergeCells count="1"><mergeCell ref="B1:C1"/></mergeCells>`);
+    const layout = layoutSpreadsheetViewport(sheet, { width: 400, height: 200 });
+    const a1 = layout.cells.find(cell => cell.paint.text === 'Covered')!.frame;
+    const canvas = createCanvas(400, 200);
+    paintSpreadsheetViewport(canvas.getContext('2d'), layout, { path: d => new Path2D(d) });
+    const { data } = canvas.getContext('2d').getImageData(a1.x + 2, a1.y + 2, a1.width - 4, a1.height - 4);
+    expect(data.some((channel, index) => index % 4 !== 3 && channel < 128)).toBe(false);
   });
 
   test('stacks charts and shapes in drawing order', () => {

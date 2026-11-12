@@ -62,7 +62,7 @@ export interface SpreadsheetViewportLayout {
   readonly gridlines: boolean;
   readonly rows: readonly SpreadsheetViewportAxisItem[];
   readonly columns: readonly SpreadsheetViewportAxisItem[];
-  /** Merged ranges are single cells, clipped to the pane of their first cell. */
+  /** Merged ranges are single cells, clipped to the pane of their first cell, after the plain cells they cover. */
   readonly cells: readonly SpreadsheetViewportCell[];
   /** Stacked in Drawing part order, as the editor stacks them. */
   readonly drawings: readonly SpreadsheetViewportDrawing[];
@@ -149,15 +149,17 @@ export function layoutSpreadsheetViewport(worksheet: SpreadsheetWorksheet, optio
   const drawings: SpreadsheetViewportDrawing[] = [];
   const drawing = worksheet.drawing;
   if (drawing) {
+    // As in the editor, table views reorder cells but drawings keep their source-row anchors.
+    const drawingRows = projectedRows.size ? worksheet.rowGeometry(EXCEL_MAX_ROWS) : rowGeometry;
     const order = new Map(drawing.anchors.map((anchor, index) => [anchor.elementId, index]));
     for (const { anchor, object } of readSpreadsheetDrawingObjects(worksheet.workbook, drawing, worksheet)) {
-      const placed = placeDrawing(anchor, spreadsheetDrawingBounds(anchor, rowGeometry, columnGeometry));
+      const placed = placeDrawing(anchor, spreadsheetDrawingBounds(anchor, drawingRows, columnGeometry));
       if (placed) drawings.push({ kind: 'object', order: order.get(anchor.elementId) ?? 0, ...placed, object });
     }
     const models = resolveSpreadsheetChartDataSet(worksheet, drawing.charts.map(frame => frame.model));
     for (const [index, frame] of drawing.charts.entries()) {
       const model = models[index];
-      const sheetBounds = spreadsheetDrawingBounds(frame.anchor, rowGeometry, columnGeometry);
+      const sheetBounds = spreadsheetDrawingBounds(frame.anchor, drawingRows, columnGeometry);
       const placed = placeDrawing(frame.anchor, sheetBounds);
       if (!placed || model?.status !== 'supported') continue;
       const { bounds, clip } = placed;

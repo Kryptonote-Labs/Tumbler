@@ -3,7 +3,7 @@ import { paintDrawingPicture, type DrawingPictureCanvasContext, type DrawingPict
 import { paintSpreadsheetCell, wrapSpreadsheetText, type SpreadsheetCellCanvasContext, type SpreadsheetPaintColours } from './canvas-cell.ts';
 import type { SpreadsheetDrawingObject } from './drawing-objects.ts';
 import { formatCellReference } from './references.ts';
-import type { SpreadsheetViewportLayout } from './viewport.ts';
+import type { SpreadsheetViewportCell, SpreadsheetViewportLayout } from './viewport.ts';
 
 /** Portable Canvas 2D subset for worksheet viewports, satisfied by browser and server canvases. */
 export type SpreadsheetCanvasContext<Path, Image> = SpreadsheetCellCanvasContext & ChartCanvasContext<Path, Image> & DrawingPictureCanvasContext<Path, Image> & {
@@ -69,17 +69,21 @@ export function paintSpreadsheetViewport<Path, Image>(
   context.beginPath();
   context.rect(left, top, layout.width - left, layout.height - top);
   context.clip();
-  for (const phase of ['background', 'text'] as const)
-    for (const cell of layout.cells) {
-      context.save();
-      if (cell.clip) {
-        context.beginPath();
-        context.rect(cell.clip.x, cell.clip.y, cell.clip.width, cell.clip.height);
-        context.clip();
-      }
-      paintSpreadsheetCell(context, cell.paint, cell.frame, colours, layout.gridlines, phase, { opaque: true, ...(options.prepareFont ? { prepareFont: options.prepareFont } : {}) });
-      context.restore();
+  const paint = (cell: SpreadsheetViewportCell, phase: 'background' | 'text') => {
+    context.save();
+    if (cell.clip) {
+      context.beginPath();
+      context.rect(cell.clip.x, cell.clip.y, cell.clip.width, cell.clip.height);
+      context.clip();
     }
+    paintSpreadsheetCell(context, cell.paint, cell.frame, colours, layout.gridlines, phase, { opaque: true, ...(options.prepareFont ? { prepareFont: options.prepareFont } : {}) });
+    context.restore();
+  };
+  // Plain cells paint backgrounds first so overflowing text spans its neighbours.
+  // Merges then paint whole, covering any cells they scroll over, as in the editor.
+  const plain = layout.cells.filter(cell => !cell.clip), merged = layout.cells.filter(cell => cell.clip);
+  for (const phase of ['background', 'text'] as const) for (const cell of plain) paint(cell, phase);
+  for (const cell of merged) for (const phase of ['background', 'text'] as const) paint(cell, phase);
   context.restore();
 
   if (left || top) {
