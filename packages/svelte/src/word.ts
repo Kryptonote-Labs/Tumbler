@@ -1,0 +1,21 @@
+/** Word viewer and helpers without the spreadsheet or PDF entry graph. */
+export { default as WordInkPageLayer } from "./WordInkPageLayer.svelte";
+export { default as WordDrawingView } from "./WordDrawingView.svelte";
+export { default as WordDocumentView } from "./WordDocumentView.svelte";
+export { browserWordTextMeasurer, wordTextCss, wordTextTop } from "./word-font-metrics.ts";
+export { browserWordLineMetrics } from './word-line-metrics.ts';
+export { browserWordBaselineOffset } from './word-baseline.ts';
+export { calculateWordPageViewport } from "./word-page-viewport.ts";
+export type { WordPageViewport } from "./word-page-viewport.ts";
+export { wordDocumentParagraphs, wordInputEdit } from "./word-editing.ts";
+export type { WordDocumentEdit, WordInputEdit } from "./word-editing.ts";
+export { openWordArtifact, openWordEditingSession, WordArtifact, WordEditingSession, WORD_FORMATTING_CAPABILITIES } from "@tumblerjs/word";
+export type { WordDocument, WordTextPosition, WordTextSelection } from "@tumblerjs/word";
+export { wordTableBorderCss } from './word-table-style.ts';
+export { wordHighlightColor } from '@tumblerjs/word';
+export { default as WordParagraphDecorations } from './WordParagraphDecorations.svelte';
+export { default as WordShapeView } from './WordShapeView.svelte';
+export type { ShapeTextEditor } from './word-shape-text-editor.ts';
+export { wordDarkColour, wordDisplayColour, wordDisplaySurface } from './word-display-colour.ts';
+export { default as WordPageLayoutDecorations } from './WordPageLayoutDecorations.svelte';
+export { loadEmbeddedFonts, type EmbeddedFont, type EmbeddedFontContext } from './embedded-fonts.ts';
