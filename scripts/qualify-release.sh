@@ -11,6 +11,12 @@ if [[ -f "$consumer_root/apps/web/package.json" ]]; then
   consumer_workspace="$consumer_root/apps/web"
 fi
 consumer_modules="$consumer_workspace/node_modules/@tumblerjs"
+# Workspace consumers may also import source helpers through their vendor path.
+# Replace that single package root so direct imports and package aliases share
+# the same class identities. The exit trap restores the original vendor tree.
+if [[ -d "$consumer_root/vendor/tumbler/packages" ]]; then
+  consumer_modules="$consumer_root/vendor/tumbler/packages"
+fi
 consumer_modules_backup="$archive_root/consumer-registry-packages"
 consumer_modules_mounted=false
 
@@ -66,6 +72,11 @@ done
 mv -- "$consumer_modules" "$consumer_modules_backup"
 mkdir -p -- "$consumer_modules"
 consumer_modules_mounted=true
+# Vendor roots are outside node_modules, so provide one shared package lookup.
+mkdir -p -- "$consumer_modules/node_modules/@tumblerjs"
+for package in "${packages[@]}"; do
+  ln -s -- "$consumer_modules/$package" "$consumer_modules/node_modules/@tumblerjs/$package"
+done
 for index in "${!packages[@]}"; do
   package=${packages[$index]}
   mounted_package="$consumer_modules/$package"
