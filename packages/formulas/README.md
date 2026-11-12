@@ -3,6 +3,11 @@
 A headless parser and calculation engine for a deliberately small, growing
 subset of spreadsheet formulas.
 
+This package exports TypeScript source. Use ES2024 library typings, including
+`DOM` and `DOM.Iterable`, with a bundler that handles `.ts` imports. Your output
+`target` can remain ES2022; `lib` adds typings, not runtime polyfills. See the
+[consumer configuration and runtime API requirements](https://github.com/Kryptonote-Labs/Tumbler#typescript-and-runtime-requirements).
+
 > **Extremely early alpha.** Formula coverage is incomplete and APIs can change
 > without notice. Do not assume Excel-compatible calculation beyond documented
 > and tested behavior.

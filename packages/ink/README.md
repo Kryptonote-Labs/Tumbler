@@ -4,6 +4,11 @@ Shared InkML decoding, lossless source editing and Office ink rendering. This
 package depends on `@tumblerjs/ooxml`, with no Word, Slides, Sheets or UI dependency.
 The format packages own package relationships, placement and cached previews.
 
+This package exports TypeScript source. Use ES2024 library typings, including
+`DOM` and `DOM.Iterable`, with a bundler that handles `.ts` imports. Your output
+`target` can remain ES2022; `lib` adds typings, not runtime polyfills. See the
+[consumer configuration and runtime API requirements](https://github.com/Kryptonote-Labs/Tumbler#typescript-and-runtime-requirements).
+
 ```ts
 import {
   readOfficeInk,

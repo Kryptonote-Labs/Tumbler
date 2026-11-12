@@ -3,13 +3,21 @@
 Headless WordprocessingML reading, preservation, page layout, and editing for
 browser-owned document experiences.
 
+This package exports TypeScript source. Use ES2024 library typings, including
+`DOM` and `DOM.Iterable`, with a bundler that handles `.ts` imports. Your output
+`target` can remain ES2022; `lib` adds typings, not runtime polyfills. See the
+[consumer configuration and runtime API requirements](https://github.com/Kryptonote-Labs/Tumbler#typescript-and-runtime-requirements).
+
 > **Extremely early alpha.** This is a bounded WordprocessingML slice, not a
 > replacement for Microsoft Word. APIs and layout behavior can change without
 > notice. Keep original copies of important files.
 
 ```sh
-bun add @tumblerjs/word
+bun add @tumblerjs/word yjs
 ```
+
+Yjs is an optional runtime peer, but the public entry point exposes collaboration
+types, so TypeScript consumers need it installed even for a basic Word import.
 
 Create a blank or formatted document without a template:
 
