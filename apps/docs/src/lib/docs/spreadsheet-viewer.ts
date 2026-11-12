@@ -4,6 +4,15 @@ export const spreadsheetViewerDoc: Doc = {
   title: 'Open a spreadsheet',
   description: 'Render an XLSX worksheet and switch sheets without discarding edits.',
   sections: [
+    { id: 'headless', title: 'Render without a browser', blocks: [
+      { kind: 'code', code: `import { openSpreadsheetArtifact, layoutSpreadsheetViewport } from '@tumblerjs/sheets';
+
+const artifact = openSpreadsheetArtifact(bytes);
+const layout = layoutSpreadsheetViewport(artifact.worksheet, {
+  width: 1024, height: 768, calculation: artifact.calculation,
+});` },
+      { kind: 'text', text: 'The layout contains plain paint data for cells, frozen panes, merges and drawings, including charts. Transfer it to a worker or pass it to paintSpreadsheetViewport with a Canvas 2D context and a path factory. Decode spreadsheetViewportImages first and provide an image lookup. Hosts own canvas creation, fonts and output encoding.' },
+    ] },
     { id: 'render', title: 'Render a worksheet', blocks: [
         { kind: 'code', language: 'Svelte', code: `<script lang="ts">
   import { createGridSelection } from '@tumblerjs/core';

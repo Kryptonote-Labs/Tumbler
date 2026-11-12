@@ -10,6 +10,11 @@ export const installationDoc: Doc = {
         { kind: 'code', language: 'Terminal', code: `bun add @tumblerjs/svelte @tumblerjs/word @tumblerjs/sheets @tumblerjs/slides @tumblerjs/core` },
         { kind: 'note', text: 'Tumbler is early alpha. The latest distribution tag points to the current alpha release. APIs and format coverage are still changing.' },
     ] },
+    { id: 'pdf-cli', title: 'PDF and the CLI', blocks: [
+      { kind: 'text', text: 'Add @tumblerjs/pdf for PDF processing or install @tumblerjs/cli globally for the tumbler command. The CLI requires Bun 1.3 or later.' },
+      { kind: 'link', href: '/docs/pdf', label: 'PDF engine and viewer' },
+      { kind: 'link', href: '/docs/cli', label: 'CLI installation and usage' },
+    ] },
     { id: 'first-document', title: 'Render a Word document', blocks: [
         { kind: 'text', text: 'Open a file as a Uint8Array, then pass the parsed document to WordDocumentView. Give the viewer a constrained height so its pages can scroll.' },
         { kind: 'code', language: 'Svelte', code: `<script lang="ts">

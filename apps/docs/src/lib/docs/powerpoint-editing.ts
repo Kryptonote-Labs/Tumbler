@@ -4,6 +4,12 @@ export const powerpointEditingDoc: Doc = {
   title: 'Edit slides',
   description: 'Connect text, table-cell, formatting, and object-transform edits to a session.',
   sections: [
+    { id: 'native-authoring', title: 'Create and structure a deck', blocks: [
+      { kind: 'text', text: 'Native presentation commands create decks, insert slides using real layout placeholders, duplicate, delete, reorder and hide slides. Table commands edit row and column structure. Notes, links and picture metadata use the same semantic commands in the editor and CLI.' },
+      { kind: 'text', text: 'The editor supports multi-object selection and transforms, native ink, rounded-corner controls, gradients and source-aware chart editing. Hosts connect presence and update transport. Concurrent commands rebase through the presentation engine; continuous typing is grouped for undo.' },
+      { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/packages/slides/README.md', label: 'Command schemas, native archives and host integration' },
+    ] },
+
     { id: 'edits', title: 'Connect editing', blocks: [
         { kind: 'text', text: 'Use an editing session instead of a read-only artifact. Set editable on the view and connect its callbacks to the session. Reassign the returned artifact after each edit so the view updates.' },
         { kind: 'code', language: 'Svelte', code: `<script lang="ts">

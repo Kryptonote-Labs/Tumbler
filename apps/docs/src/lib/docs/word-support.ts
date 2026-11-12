@@ -17,7 +17,7 @@ export const wordSupportDoc: Doc = {
           ['Headers and footers', 'Edit shared stories and section variants. Live PAGE/NUMPAGES fields work in header/footer layout. Section numbering restarts and numeral formats are not evaluated.'],
           ['Fields', 'Supported simple and complex page fields are editable. General field recalculation, including contents pages and cross-references, is not implemented. Other cached results have partial rendering support.'],
           ['Images and placement', 'Inline, front, and behind authoring; image and chart movement/resizing. Polygon wrapping remains incomplete.'],
-          ['Editable shapes', 'Seven presets with solid fills, outlines, placement, and plain text. WordDrawingView offers in-place text editing through a host callback. Imported groups, transformed shapes, and unsupported fills/wrapping remain opaque. Rich text boxes and shape effects are incomplete.'],
+          ['Editable shapes', 'Nine presets with solid/gradient fills, outlines, placement, rich text, rounded-corner controls and drawing order. WordDrawingView offers in-place text editing through a host callback. Imported groups, transformed shapes, and unsupported fills/wrapping remain opaque. Broader shape effects remain incomplete.'],
           ['Notes and pagination', 'Footnotes/endnotes render, but note numbering and body repagination remain incomplete. Fonts, paragraph keep rules, and complex layouts can differ from Word.'],
         ] },
     ] },

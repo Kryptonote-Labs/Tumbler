@@ -4,6 +4,12 @@ export const wordLayoutDoc: Doc = {
   title: 'Page layout and positions',
   description: 'Insert breaks, align tabs, and map text positions to page geometry.',
   sections: [
+    { id: 'sections', title: 'Page setup and section layout', blocks: [
+      { kind: 'text', text: 'Native authoring supports page colours, section page setup and line numbering. Layout and export share section geometry. Embedded font programs and source kerning improve measurement; missing fonts and unsupported Office layout behavior can still change pagination.' },
+      { kind: 'text', text: 'paragraphPositioning describes direct source declarations, including explicit tab clears. Use paragraphFormat for effective inherited positioning. Canvas page painting shares layout with UI views; hosts provide text measurement, paths, fonts and decoded images. Progressive pagination can stop after a requested page limit for previews.' },
+      { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/packages/word/README.md', label: 'Headless layout, canvas painting and native persistence APIs' },
+    ] },
+
     { id: 'breaks', title: 'Insert an explicit break', blocks: [
         { kind: 'code', code: `import { NativeWordDocument } from '@tumblerjs/word';
 

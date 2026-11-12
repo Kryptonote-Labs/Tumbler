@@ -15,12 +15,12 @@ export const spreadsheetSupportDoc: Doc = {
         { kind: 'text', text: 'Ordinary formulas use a bounded calculation engine. Unsupported functions and formula structures fall back to producer caches with diagnostics.' },
         { kind: 'list', items: [
           'Shared, array, data-table, dynamic-array, and external-workbook formulas are not editable.',
-          'Structural row and column edits are not available.',
+          'Native commands support worksheet, row and column structural edits. Formula translation coverage remains bounded.',
           'Editing rich/shared strings replaces the value with plain inline text.',
         ] },
     ] },
     { id: 'charts', title: 'Charts and qualification', blocks: [
-        { kind: 'text', text: 'Supported embedded charts render as native overlays. Chart-data authoring, pivots, non-chart drawings, and broader workbook features remain incomplete.' },
+        { kind: 'text', text: 'Supported embedded charts render as native overlays. Shared chart commands support source/data authoring. Imported pictures, shapes and groups render on the grid; drawing commands manipulate supported objects. Pivots and broader workbook coverage remain incomplete.' },
         { kind: 'link', href: '/docs/compatibility-reports', label: 'Understand compatibility evidence' },
     ] },
   ],

@@ -4,6 +4,12 @@ export const powerpointDoc: Doc = {
   title: 'PowerPoint',
   description: 'Read PPTX slide scenes, build a viewer, and connect supported editing operations.',
   sections: [
+    { id: 'alpha-27', title: 'New in alpha.27', blocks: [
+      { kind: 'link', href: '/docs/releases', label: 'Authoring additions and migration notes' },
+      { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/packages/slides/README.md', label: 'Native commands and package API' },
+      { kind: 'link', href: '/docs/charts', label: 'Shared chart authoring and rendering' },
+      { kind: 'link', href: '/docs/cli', label: 'Command-line operations' },
+    ] },
     { id: 'view', title: 'Build a presentation viewer', blocks: [
       { kind: 'text', text: 'Open PPTX bytes with openPresentationArtifact and render a slide with PresentationSlideView. Add thumbnails and internal slide navigation with PresentationSlideRail.' },
       { kind: 'link', href: '/docs/powerpoint-viewer', label: 'Open and render a presentation' },

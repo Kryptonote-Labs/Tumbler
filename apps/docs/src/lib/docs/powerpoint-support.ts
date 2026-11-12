@@ -8,8 +8,8 @@ export const powerpointSupportDoc: Doc = {
         { kind: 'table', headers: ['Content', 'Support and limits'], rows: [
           ['Text and fonts', 'Rich text, bullets, hyperlinks, tab stops, autofit, and embedded fonts. Browser text layout can differ from Office, especially with missing fonts.'],
           ['Shapes and pictures', 'Preset and custom shapes, grouped transforms, theme colours, gradients, cropping, tiling, common drawing effects, and supported raster, SVG, EMF, and WMF images. 3D effects are not supported.'],
-          ['Tables', 'Built-in Office styles, merged cells, cell text and formatting edits, and table resizing. Inserting or deleting rows and columns is not supported.'],
-          ['Charts', 'Supported OOXML chart types include stacked, percentage-stacked, and combination charts. Chart-data editing is not provided by the slide editor.'],
+          ['Tables', 'Built-in Office styles, merged cells, cell text and formatting edits, and table resizing. Native commands support table row and column structure edits.'],
+          ['Charts', 'Supported OOXML chart types include stacked, percentage-stacked, and combination charts. Shared chart commands and property panes support chart source and data editing.'],
           ['Navigation and media', 'Slide links, speaker notes, and browser playback for embedded audio and video. Media playback depends on browser codec support.'],
           ['Animations', 'Preview controls for fade, appear, and wipe. Complex timing and full PowerPoint playback are not supported.'],
         ] },

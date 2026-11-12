@@ -4,6 +4,12 @@ export const wordDoc: Doc = {
   title: 'Word documents',
   description: 'Choose a viewer, edit a DOCX, or build on the native content model.',
   sections: [
+    { id: 'alpha-27', title: 'New in alpha.27', blocks: [
+      { kind: 'link', href: '/docs/releases', label: 'Authoring additions and migration notes' },
+      { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/packages/word/README.md', label: 'Native commands and package API' },
+      { kind: 'link', href: '/docs/charts', label: 'Shared chart authoring and rendering' },
+      { kind: 'link', href: '/docs/cli', label: 'Command-line operations' },
+    ] },
     { id: 'models', title: 'Choose an integration', blocks: [
         { kind: 'text', text: 'Use WordDocumentView and a Word editing session to render and edit an existing DOCX.' },
         { kind: 'link', href: '/docs/word-editing', label: 'Open and edit a document' },

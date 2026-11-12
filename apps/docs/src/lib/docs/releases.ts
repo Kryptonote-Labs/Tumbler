@@ -1,35 +1,105 @@
-import { version } from '../site';
 import type { Doc } from './types';
 
 export const releasesDoc: Doc = {
-  title: `Release ${version}`,
-  description: 'The current alpha release, its Word authoring additions, and the checks behind it.',
-  sections: [
-    { id: 'install', title: 'Install this release', blocks: [
-        { kind: 'text', text: `All nine public @tumblerjs packages share version ${version} and publish under latest. Keep packages on the same version. The sidebar also identifies the source commit used by this site; playground examples run that source.` },
-        { kind: 'code', language: 'Terminal', code: `bun add @tumblerjs/svelte@${version} @tumblerjs/word@${version} @tumblerjs/sheets@${version} @tumblerjs/slides@${version} @tumblerjs/core@${version}` },
-    ] },
-    { id: 'word', title: 'New Word capabilities', blocks: [
-        { kind: 'list', items: [
-          'Character formatting adds strike, Word highlight colours, superscript/subscript, and character spacing.',
-          'Paragraph formatting adds spacing, pagination rules, shading, and basic borders.',
-          'Authoring supports letter/Roman and multilevel lists, hyperlinks, named paragraph styles, and explicit line/page/column breaks.',
-          'Seven editable shape types support fills, outlines, placement, and plain text. WordDrawingView can report in-place shape text edits to the host.',
-          'The collaboration adapter adds literal find/replace and atomic text replacement with formatting.',
-          'Style reapplication resets omitted direct overrides while retaining inherited character styles. Table grid and geometry handling have also improved.',
-        ] },
-        { kind: 'link', href: '/docs/word', label: 'Authoring examples and limitations' },
-        { kind: 'link', href: '/changelog', label: 'Browse the full changelog' },
-        { kind: 'link', href: '/docs/word-search#search', label: 'Find and replace with anchored transactions' },
-        { kind: 'note', text: 'These APIs need host integration. The Word playground demonstrates package-backed text editing, basic formatting, and drawing movement/resizing. It does not currently provide native list/style/table insertion controls, rich clipboard paste, find/replace, heading navigation, or shape text editing.' },
-    ] },
-    { id: 'evidence', title: 'Compatibility evidence', blocks: [
-        { kind: 'text', text: 'Word CI now produces standards coverage, preservation, reference-geometry, authoring, and everyday-task reports. Some checks use Open XML SDK and LibreOffice. A green workflow means its configured gates passed; individual everyday tasks can still report failed or blocked.' },
-        { kind: 'text', text: 'Passing headless operations does not establish browser support or complete Office compatibility.' },
-        { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/actions/workflows/word-compatibility.yml', label: 'Word compatibility runs and downloadable reports' },
-        { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/tools/word-compatibility/README.md', label: 'How standards coverage and everyday tasks are scored' },
-        { kind: 'link', href: '/docs/compatibility', label: 'Current format support and remaining gaps' },
-    ] },
+  "title": "Release 0.1.0-alpha.27",
+  "description": "All 12 packages, changes since alpha.26, and migration notes.",
+  "sections": [
+    {
+      "id": "install",
+      "title": "Install this release",
+      "blocks": [
+        {
+          "kind": "text",
+          "text": "All 12 public @tumblerjs packages share version 0.1.0-alpha.27 and publish under latest. Upgrade all installed Tumbler packages together."
+        },
+        {
+          "kind": "code",
+          "language": "sh",
+          "code": "bun add \\\n  @tumblerjs/word@0.1.0-alpha.27 \\\n  @tumblerjs/sheets@0.1.0-alpha.27 \\\n  @tumblerjs/slides@0.1.0-alpha.27 \\\n  @tumblerjs/svelte@0.1.0-alpha.27 \\\n  @tumblerjs/core@0.1.0-alpha.27"
+        },
+        {
+          "kind": "code",
+          "language": "sh",
+          "code": "bun add @tumblerjs/pdf@0.1.0-alpha.27\nbun add --global @tumblerjs/cli@0.1.0-alpha.27"
+        }
+      ]
+    },
+    {
+      "id": "changes",
+      "title": "Changes since alpha.26",
+      "blocks": [
+        {
+          "kind": "list",
+          "items": [
+            "Publish the shared InkML engine, source-preserving PDF engine and Bun CLI as public packages. All 12 packages use one lockstep version.",
+            "Word adds native ink, shared typed operations, section/page setup, embedded fonts, canvas rendering and progressive pagination. Improve preservation, concurrent edits and export performance.",
+            "Spreadsheets add native authoring and structure commands, drawings, formula discovery and autocomplete, printable views, remote selections and headless worksheet canvas rendering.",
+            "PowerPoint adds deck and slide authoring, table structure edits, notes and links, native ink, multi-object manipulation, collaboration, canvas previews and PDF export.",
+            "Charts add cross-format source and property editing, related-part preservation, native pattern/picture/gradient fills, 3D geometry, manual layout, rich titles and corrected axes and labels.",
+            "PDF adds rendering, selectable text, search, collaborative text formatting and annotations, page extraction/deletion/insertion/merging, images, links and bookmarks. Unsupported content still has explicit limits.",
+            "CLI adds shared format operations, chart authoring, rendered inspection, registry-derived help and exact file/stdin replacement input."
+          ]
+        },
+        {
+          "kind": "link",
+          "href": "/changelog/0.1.0-alpha.27",
+          "label": "Full changelog"
+        },
+        {
+          "kind": "link",
+          "href": "/docs/pdf",
+          "label": "PDF rendering and editing"
+        },
+        {
+          "kind": "link",
+          "href": "/docs/charts",
+          "label": "Shared chart authoring"
+        },
+        {
+          "kind": "link",
+          "href": "/docs/cli",
+          "label": "CLI usage"
+        }
+      ]
+    },
+    {
+      "id": "migration",
+      "title": "Migration notes",
+      "blocks": [
+        {
+          "kind": "text",
+          "text": "Word shapes now default to page-fixed placement in front of text. Set layout: 'inline' to retain the old default. paragraphPositioning retains direct source declarations; paragraphFormat supplies effective inherited values. Explicit resets no longer reintroduce removed formatting on export."
+        },
+        {
+          "kind": "text",
+          "text": "The shared ink decoder is now in @tumblerjs/ink. Code using internal Word ink modules should use its public exports. CLI --value interprets \\n, \\r, \\t and \\\\ once; --literal preserves backslashes and --value-file reads exact UTF-8 content."
+        }
+      ]
+    },
+    {
+      "id": "qualification",
+      "title": "Release qualification",
+      "blocks": [
+        {
+          "kind": "text",
+          "text": "Releases must pass package metadata validation, TypeScript, package tests, docs checks and production docs build. Pack all 12 packages and qualify the archives against the consumer. Publish only the exact qualified commit after it reaches origin/main."
+        },
+        {
+          "kind": "text",
+          "text": "The publisher sends one package at a time under latest in dependency order and skips existing versions. Verify all 12 versions and latest tags afterwards."
+        },
+        {
+          "kind": "link",
+          "href": "https://github.com/Kryptonote-Labs/Tumbler/blob/main/CONTRIBUTING.md",
+          "label": "Release procedure"
+        },
+        {
+          "kind": "link",
+          "href": "/docs/compatibility",
+          "label": "Format limitations"
+        }
+      ]
+    }
   ],
-  source: 'apps/docs/src/lib/docs/releases.ts',
+  "source": "apps/docs/src/lib/docs/releases.ts"
 };

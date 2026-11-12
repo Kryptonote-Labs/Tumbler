@@ -14,6 +14,11 @@ storage, and downloads. No hosted Office editor or PDF conversion is required.
 > Tumbler is early alpha. APIs and format coverage are still changing. Keep
 > original files and test edited documents in the Office applications you use.
 
+## Latest release
+
+[Alpha.27](docs/releases/0.1.0-alpha.27.md) includes 12 public packages, published
+under `latest`. See the release notes for changes and migration.
+
 ## Install
 
 Install the format packages you need:
@@ -76,6 +81,8 @@ Office layout. Legacy binary `.doc`, `.xls`, and `.ppt` files are not supported.
 | `@tumblerjs/sheets` | SpreadsheetML reading, calculation, preservation, and editing |
 | `@tumblerjs/word` | WordprocessingML reading, page layout, preservation, and editing |
 | `@tumblerjs/slides` | PresentationML reading, slide scenes, preservation, and editing |
+| `@tumblerjs/pdf` | Source-preserving PDF parsing, rendering, editing and page assembly |
+| `@tumblerjs/cli` | Bun CLI for document operations and chart authoring |
 | `@tumblerjs/svelte` | Replaceable Svelte document heads |
 
 ## Develop

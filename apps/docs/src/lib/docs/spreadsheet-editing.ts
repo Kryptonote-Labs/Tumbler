@@ -4,6 +4,11 @@ export const spreadsheetEditingDoc: Doc = {
   title: 'Cells and formulas',
   description: 'Write values and formulas, apply range formatting, and export XLSX bytes.',
   sections: [
+    { id: 'native', title: 'Native authoring and structure', blocks: [
+      { kind: 'text', text: 'createSpreadsheet starts an editable workbook. applySpreadsheetCommand validates cell, formula, range, formatting, worksheet, row, column, merge and freeze actions. Structural edits translate supported formulas. Native edits do not serialize an XLSX until bytes() is called.' },
+      { kind: 'text', text: 'Drawing commands insert and manipulate shapes and pictures. Shared chart commands author chart data and source. formulaFunctionCatalog and formulaFunctionCategories in @tumblerjs/formulas expose discovery metadata; external-service functions require host services.' },
+      { kind: 'link', href: '/docs/charts', label: 'Chart source and data editing' },
+    ] },
     { id: 'formulas', title: 'Values and formulas', blocks: [
         { kind: 'text', text: 'Inline grid edits are literal values. SpreadsheetFormulaBar interprets a leading equals sign as a formula. The headless API takes formula source without that leading sign.' },
         { kind: 'code', code: `import { openSpreadsheetArtifact } from '@tumblerjs/sheets';

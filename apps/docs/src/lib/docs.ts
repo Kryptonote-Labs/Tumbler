@@ -28,9 +28,15 @@ import { powerpointSupportDoc } from './docs/powerpoint-support';
 import { compatibilityDoc } from './docs/compatibility';
 import { compatibilityReportsDoc } from './docs/compatibility-reports';
 import { releasesDoc } from './docs/releases';
+import { pdfDoc } from './docs/pdf';
+import { cliDoc } from './docs/cli';
+import { chartsDoc } from './docs/charts';
 import type { Doc } from './docs/types';
 
 export const docs: Record<string, Doc> = {
+  "pdf": pdfDoc,
+  "cli": cliDoc,
+  "charts": chartsDoc,
   "pdf-merge": pdfMergeDoc,
   "installation": installationDoc,
   "architecture": architectureDoc,

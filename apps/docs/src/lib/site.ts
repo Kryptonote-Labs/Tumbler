@@ -40,11 +40,15 @@ export const navigation: NavigationGroup[] = [
     { href: '/docs/powerpoint-export', label: 'Export' },
     { href: '/docs/powerpoint-support', label: 'Compatibility' },
   ] },
-  { title: 'PDF', links: [
+  { title: 'PDF', overview: '/docs/pdf', links: [
+    { href: '/docs/pdf', label: 'Render and edit' },
     { href: '/docs/pdf-merge', label: 'Merge pages' },
-    { href: '/playground/pdf-merge', label: 'PDF merge playground' },
+    { href: '/playground/pdf-merge', label: 'Merge playground' },
   ] },
   { title: 'Resources', links: [
+    { href: '/docs/releases', label: 'Current release' },
+    { href: '/docs/cli', label: 'Command-line editing' },
+    { href: '/docs/charts', label: 'Charts' },
     { href: '/docs/compatibility', label: 'Format support' },
     { href: '/docs/compatibility-reports', label: 'Compatibility reports' },
     { href: '/changelog', label: 'Changelog' },
