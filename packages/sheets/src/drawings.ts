@@ -307,3 +307,18 @@ export function spreadsheetDrawingObjectId(drawing: SpreadsheetDrawing, anchor: 
   const element = drawing.document.element(anchor.elementId);
   return element ? visit(element) : undefined;
 }
+
+/** The pane that owns a drawing: anchors starting in frozen rows, then frozen columns, stay fixed there. */
+export function spreadsheetDrawingRegion(
+  anchor: SpreadsheetDrawingAnchor,
+  frozenRows: number,
+  frozenColumns: number,
+): "body" | "frozen-row" | "frozen-column" {
+  if (![frozenRows, frozenColumns].every((value) => Number.isSafeInteger(value) && value >= 0)) {
+    throw new RangeError("Frozen row and column counts must be non-negative integers.");
+  }
+  if (anchor.kind === "absolute") return "body";
+  if (anchor.from.row < frozenRows) return "frozen-row";
+  if (anchor.from.column < frozenColumns) return "frozen-column";
+  return "body";
+}

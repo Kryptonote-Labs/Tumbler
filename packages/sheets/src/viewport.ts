@@ -6,7 +6,7 @@ import { resolveSpreadsheetChartDataSet } from './chart-data.ts';
 import { resolveSpreadsheetChartColor } from './chart-colors.ts';
 import { projectSpreadsheetConditionalStyles } from './conditional-formatting.ts';
 import { readSpreadsheetDrawingObjects, type SpreadsheetDrawingObject } from './drawing-objects.ts';
-import { spreadsheetDrawingBounds, type SpreadsheetDrawingAnchor, type SpreadsheetDrawingBounds } from './drawings.ts';
+import { spreadsheetDrawingBounds, spreadsheetDrawingRegion, type SpreadsheetDrawingAnchor, type SpreadsheetDrawingBounds } from './drawings.ts';
 import { formatSpreadsheetCellValue } from './number-format.ts';
 import { EXCEL_MAX_COLUMNS, EXCEL_MAX_ROWS, type CellAddress } from './references.ts';
 import { spreadsheetTextOverflowWidth } from './text-overflow.ts';
@@ -34,12 +34,20 @@ export interface SpreadsheetViewportAxisItem {
 }
 export interface SpreadsheetViewportCell {
   readonly frame: SpreadsheetCellFrame;
+  /** Pane bounds for merges that extend beyond the visible span. */
+  readonly clip?: SpreadsheetViewportRect;
   readonly paint: SpreadsheetCellPaint;
 }
 export interface SpreadsheetViewportRect { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+interface PlacedDrawing {
+  readonly bounds: SpreadsheetViewportRect;
+  readonly clip: SpreadsheetViewportRect;
+  /** Anchor position in the Drawing part, which sets stacking order. */
+  readonly order: number;
+}
 export type SpreadsheetViewportDrawing =
-  | { readonly kind: 'chart'; readonly bounds: SpreadsheetViewportRect; readonly clip: SpreadsheetViewportRect; readonly scene: ChartScene }
-  | { readonly kind: 'object'; readonly bounds: SpreadsheetViewportRect; readonly clip: SpreadsheetViewportRect; readonly object: SpreadsheetDrawingObject };
+  | (PlacedDrawing & { readonly kind: 'chart'; readonly scene: ChartScene })
+  | (PlacedDrawing & { readonly kind: 'object'; readonly object: SpreadsheetDrawingObject });
 
 /**
  * A worksheet view resolved to plain paint data, from the saved scroll position and frozen panes.
@@ -55,7 +63,7 @@ export interface SpreadsheetViewportLayout {
   readonly columns: readonly SpreadsheetViewportAxisItem[];
   /** Merged ranges are single cells covering their visible span. */
   readonly cells: readonly SpreadsheetViewportCell[];
-  /** Paint order: shapes and pictures, then charts, as the editor stacks them. */
+  /** Stacked in Drawing part order, as the editor stacks them. */
   readonly drawings: readonly SpreadsheetViewportDrawing[];
 }
 
@@ -65,6 +73,15 @@ interface Axis {
   readonly frozenExtent: number;
   /** Sheet pixels scrolled out of the unfrozen pane. */
   readonly scroll: number;
+  readonly header: number;
+  readonly extent: number;
+}
+
+/** Viewport offset and visible span of the frozen or scrolling pane along one axis. */
+function paneSpan(axis: Axis, frozen: boolean) {
+  return frozen
+    ? { offset: axis.header, start: axis.header, end: axis.header + axis.frozenExtent }
+    : { offset: axis.header - axis.scroll, start: axis.header + axis.frozenExtent, end: axis.extent };
 }
 
 /** Lays out the worksheet as the editor first shows it, without selection or editing chrome. */
@@ -77,8 +94,6 @@ export function layoutSpreadsheetViewport(worksheet: SpreadsheetWorksheet, optio
   const topLeft = pane?.topLeftCell ?? view?.topLeftCell;
   const rows = axis(rowGeometry, Math.floor(pane?.ySplit ?? 0), topLeft?.row ?? 1, columnHeaderHeight, options.height);
   const columns = axis(columnGeometry, Math.floor(pane?.xSplit ?? 0), topLeft?.column ?? 1, rowHeaderWidth, options.width);
-  const rowItems = new Map(rows.items.map(item => [item.index, item]));
-  const columnItems = new Map(columns.items.map(item => [item.index, item]));
   const lastColumn = columns.items.at(-1)?.index ?? 1;
   const conditional = projectSpreadsheetConditionalStyles(worksheet, calculation);
 
@@ -94,51 +109,48 @@ export function layoutSpreadsheetViewport(worksheet: SpreadsheetWorksheet, optio
     const overflowWidth = spreadsheetTextOverflowWidth({ worksheet, calculation, ...address, columnGeometry, maximumColumn: lastColumn, frozenColumns: columns.frozen });
     cells.push({ frame: { x: column.start, y: row.start, width: column.size, height: row.size, overflowWidth }, paint: resolve(address) });
   }
+  // Merges keep their full rectangle in the pane of their first cell, clipped to that pane.
   for (const range of worksheet.merges) {
-    const span = (from: number, to: number, items: ReadonlyMap<number, SpreadsheetViewportAxisItem>) => {
-      let start = Infinity, end = -Infinity;
-      for (let index = from; index <= to; index++) {
-        const item = items.get(index);
-        if (item) { start = Math.min(start, item.start); end = Math.max(end, item.start + item.size); }
-      }
-      return start < end ? { start, size: end - start } : undefined;
+    const span = (geometry: SparseAxisGeometry, axis: Axis, first: number, last: number) => {
+      const { offset, start, end } = paneSpan(axis, first <= axis.frozen);
+      const from = offset + geometry.start(first), to = offset + geometry.start(last) + geometry.size(last);
+      return from < end && to > start && to > from ? { from, to, start, end } : undefined;
     };
-    const y = span(range.start.row, range.end.row, rowItems), x = span(range.start.column, range.end.column, columnItems);
-    if (x && y) cells.push({ frame: { x: x.start, y: y.start, width: x.size, height: y.size }, paint: resolve(range.start) });
+    const x = span(columnGeometry, columns, range.start.column, range.end.column);
+    const y = span(rowGeometry, rows, range.start.row, range.end.row);
+    if (x && y) cells.push({
+      frame: { x: x.from, y: y.from, width: x.to - x.from, height: y.to - y.from },
+      clip: { x: x.start, y: y.start, width: x.end - x.start, height: y.end - y.start },
+      paint: resolve(range.start),
+    });
   }
 
-  const placeDrawing = (anchor: SpreadsheetDrawingAnchor) => {
-    const place = (start: number, size: number, marker: number | undefined, axis: Axis, header: number, extent: number) => {
-      const frozen = marker !== undefined && marker < axis.frozen;
-      return {
-        start: header + start - (frozen ? 0 : axis.scroll),
-        size,
-        clipStart: header + (frozen ? 0 : axis.frozenExtent),
-        clipEnd: frozen ? header + axis.frozenExtent : extent,
-      };
-    };
-    return (bounds: SpreadsheetDrawingBounds) => {
-      const from = anchor.kind === 'absolute' ? undefined : anchor.from;
-      const x = place(bounds.x, bounds.width, from?.column, columns, rowHeaderWidth, options.width);
-      const y = place(bounds.y, bounds.height, from?.row, rows, columnHeaderHeight, options.height);
-      const clip = { x: x.clipStart, y: y.clipStart, width: x.clipEnd - x.clipStart, height: y.clipEnd - y.clipStart };
-      const placed = { x: x.start, y: y.start, width: bounds.width, height: bounds.height };
-      const visible = placed.x < clip.x + clip.width && placed.x + placed.width > clip.x && placed.y < clip.y + clip.height && placed.y + placed.height > clip.y;
-      return visible && placed.width > 0 && placed.height > 0 ? { bounds: placed, clip } : undefined;
-    };
+  // Mirrors the editor's drawing panes: frozen-row drawings scroll horizontally across the full width.
+  const placeDrawing = (anchor: SpreadsheetDrawingAnchor, bounds: SpreadsheetDrawingBounds) => {
+    const region = spreadsheetDrawingRegion(anchor, rows.frozen, columns.frozen);
+    const fixedColumn = anchor.kind !== 'absolute' && anchor.from.column < columns.frozen;
+    const x = paneSpan(columns, region === 'frozen-column' || (region === 'frozen-row' && fixedColumn));
+    const y = paneSpan(rows, region === 'frozen-row');
+    const clip = region === 'frozen-row'
+      ? { x: rowHeaderWidth, y: y.start, width: options.width - rowHeaderWidth, height: y.end - y.start }
+      : { x: x.start, y: y.start, width: x.end - x.start, height: y.end - y.start };
+    const placed = { x: x.offset + bounds.x, y: y.offset + bounds.y, width: bounds.width, height: bounds.height };
+    const visible = placed.x < clip.x + clip.width && placed.x + placed.width > clip.x && placed.y < clip.y + clip.height && placed.y + placed.height > clip.y;
+    return visible && placed.width > 0 && placed.height > 0 ? { bounds: placed, clip } : undefined;
   };
   const drawings: SpreadsheetViewportDrawing[] = [];
   const drawing = worksheet.drawing;
   if (drawing) {
+    const order = new Map(drawing.anchors.map((anchor, index) => [anchor.elementId, index]));
     for (const { anchor, object } of readSpreadsheetDrawingObjects(worksheet.workbook, drawing, worksheet)) {
-      const placed = placeDrawing(anchor)(spreadsheetDrawingBounds(anchor, rowGeometry, columnGeometry));
-      if (placed) drawings.push({ kind: 'object', ...placed, object });
+      const placed = placeDrawing(anchor, spreadsheetDrawingBounds(anchor, rowGeometry, columnGeometry));
+      if (placed) drawings.push({ kind: 'object', order: order.get(anchor.elementId) ?? 0, ...placed, object });
     }
     const models = resolveSpreadsheetChartDataSet(worksheet, drawing.charts.map(frame => frame.model));
     for (const [index, frame] of drawing.charts.entries()) {
       const model = models[index];
       const sheetBounds = spreadsheetDrawingBounds(frame.anchor, rowGeometry, columnGeometry);
-      const placed = placeDrawing(frame.anchor)(sheetBounds);
+      const placed = placeDrawing(frame.anchor, sheetBounds);
       if (!placed || model?.status !== 'supported') continue;
       const { bounds, clip } = placed;
       const left = Math.max(0, clip.x - bounds.x), top = Math.max(0, clip.y - bounds.y);
@@ -150,7 +162,7 @@ export function layoutSpreadsheetViewport(worksheet: SpreadsheetWorksheet, optio
         formatNumber: (value, formatCode) => formatSpreadsheetCellValue({ type: 'number', value, lexical: String(value) }, { ...(formatCode === undefined ? {} : { numberFormatCode: formatCode }), dateSystem: worksheet.workbook.dateSystem }),
         ...(options.measureText ? { measureText: options.measureText } : {}),
       });
-      drawings.push({ kind: 'chart', bounds, clip, scene });
+      drawings.push({ kind: 'chart', order: order.get(frame.anchor.elementId) ?? 0, bounds, clip, scene });
     }
   }
   return {
@@ -162,7 +174,7 @@ export function layoutSpreadsheetViewport(worksheet: SpreadsheetWorksheet, optio
     rows: rows.items,
     columns: columns.items,
     cells,
-    drawings,
+    drawings: drawings.sort((a, b) => a.order - b.order),
   };
 }
 
@@ -180,5 +192,5 @@ function axis(geometry: SparseAxisGeometry, frozen: number, first: number, heade
   const frozenExtent = position - header;
   const start = Math.min(Math.max(first, frozen + 1), geometry.count);
   for (let index = start; index <= geometry.count && position < extent; index++) visit(index);
-  return { items, frozen, frozenExtent, scroll: start > geometry.count ? 0 : geometry.start(start) - frozenExtent };
+  return { items, frozen, frozenExtent, scroll: start > geometry.count ? 0 : geometry.start(start) - frozenExtent, header, extent };
 }

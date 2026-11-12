@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { createCanvas, Path2D } from '@napi-rs/canvas';
 import { createOoxmlChart } from '@tumblerjs/charts';
 import { openOpcPackage } from '@tumblerjs/opc';
-import { applySpreadsheetCommand, createSpreadsheet, layoutSpreadsheetViewport, openSpreadsheet, openWorksheet, paintSpreadsheetViewport } from '../src/index.ts';
+import { applySpreadsheetCommand, createSpreadsheet, layoutSpreadsheetViewport, openSpreadsheetArtifact, openSpreadsheet, openWorksheet, paintSpreadsheetViewport } from '../src/index.ts';
 import { buildWorkbookFixture } from './workbook-fixture.ts';
 
 const namespace = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
@@ -38,6 +38,31 @@ describe('spreadsheet viewport', () => {
     expect(merged).toHaveLength(1);
     expect(merged[0]?.frame.width).toBe(b!.size + c!.size + d!.size);
     expect(merged[0]?.frame.height).toBe(layout.rows[0]!.size + layout.rows[1]!.size);
+  });
+
+  test('keeps the full rectangle of merges scrolled partly out of view', () => {
+    const sheet = worksheet(`<sheetViews><sheetView workbookViewId="0" topLeftCell="C1"/></sheetViews><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Title</t></is></c></row></sheetData><mergeCells count="1"><mergeCell ref="A1:D1"/></mergeCells>`);
+    const layout = layoutSpreadsheetViewport(sheet, { width: 600, height: 200 });
+    const columns = sheet.columnGeometry();
+    const merged = layout.cells.find(cell => cell.paint.text === 'Title');
+    expect(merged?.frame.x).toBe(-(columns.size(1) + columns.size(2)));
+    expect(merged?.frame.width).toBe(columns.start(5));
+  });
+
+  test('stacks charts and shapes in drawing order', () => {
+    const chart = createOoxmlChart({ type: 'barChart', categories: ['A'], series: [{ name: 'Sales', values: [2] }] });
+    let artifact = applySpreadsheetCommand(createSpreadsheet(), { name: 'insert-chart', sheetId: '1', x: 40, y: 40, width: 320, height: 200, content: { xml: new TextDecoder().decode(chart) } });
+    artifact = applySpreadsheetCommand(artifact, { name: 'insert-shape', sheetId: '1', x: 60, y: 60, width: 100, height: 80, preset: 'rect' });
+    expect(layoutSpreadsheetViewport(artifact.worksheet, { width: 480, height: 320 }).drawings.map(drawing => drawing.kind)).toEqual(['chart', 'object']);
+  });
+
+  test('lets frozen-row drawings extend across frozen columns', async () => {
+    // The first fixture drawing is anchored in A3 and extends into column B.
+    const bytes = new Uint8Array(await Bun.file(new URL('./fixtures/drawings.xlsx', import.meta.url)).arrayBuffer());
+    const artifact = applySpreadsheetCommand(openSpreadsheetArtifact(bytes), { name: 'freeze-panes', sheetId: '1', rows: 3, columns: 1 });
+    const layout = layoutSpreadsheetViewport(artifact.worksheet, { width: 480, height: 320, headings: true });
+    const frozenHeight = layout.rows.slice(0, 3).reduce((total, row) => total + row.size, 0);
+    expect(layout.drawings[0]?.clip).toEqual({ x: layout.rowHeaderWidth, y: layout.columnHeaderHeight, width: 480 - layout.rowHeaderWidth, height: frozenHeight });
   });
 
   test('paints charts anchored in the view', () => {

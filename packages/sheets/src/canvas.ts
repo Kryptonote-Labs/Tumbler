@@ -70,8 +70,16 @@ export function paintSpreadsheetViewport<Path, Image>(
   context.rect(left, top, layout.width - left, layout.height - top);
   context.clip();
   for (const phase of ['background', 'text'] as const)
-    for (const cell of layout.cells)
+    for (const cell of layout.cells) {
+      context.save();
+      if (cell.clip) {
+        context.beginPath();
+        context.rect(cell.clip.x, cell.clip.y, cell.clip.width, cell.clip.height);
+        context.clip();
+      }
       paintSpreadsheetCell(context, cell.paint, cell.frame, colours, layout.gridlines, phase, { opaque: true, ...(options.prepareFont ? { prepareFont: options.prepareFont } : {}) });
+      context.restore();
+    }
   context.restore();
 
   if (left || top) {
