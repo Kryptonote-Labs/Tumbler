@@ -11,7 +11,7 @@ import type { ChartMark, SceneContext } from './scene-marks.ts';
 /** Stock prices retain their source markers and shared date/value axis geometry. */
 export function stockScene(context: SceneContext, suppliedLayout?: CartesianChartLayout): ChartMark[] {
   const { model, width, height } = context;
-  const layout = suppliedLayout ?? layoutCartesianChart(model, width, height, context.measure);
+  const layout = suppliedLayout ?? layoutCartesianChart(model, width, height, context.measure, context.options);
   const marks = cartesianScene(context, false, layout), geometry = cartesianGeometry(model, layout);
   const data: ChartMark[] = cartesianDecorationMarks(context, layout), labels: ChartMark[] = [];
   model.series.forEach((source, seriesIndex) => {
