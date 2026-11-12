@@ -3,6 +3,11 @@
 Headless OOXML chart semantics and deterministic layout shared by Tumbler's
 document formats and UI heads.
 
+This package exports TypeScript source. Use ES2024 library typings, including
+`DOM` and `DOM.Iterable`, with a bundler that handles `.ts` imports. Your output
+`target` can remain ES2022; `lib` adds typings, not runtime polyfills. See the
+[consumer configuration and runtime API requirements](https://github.com/Kryptonote-Labs/Tumbler#typescript-and-runtime-requirements).
+
 > **Extremely early alpha.** Chart coverage and visual fidelity are incomplete,
 > and APIs can change without notice.
 

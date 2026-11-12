@@ -3,6 +3,11 @@
 Headless SpreadsheetML reading, preservation, calculation, editing, and view
 models for browser-based spreadsheet experiences.
 
+This package exports TypeScript source. Use ES2024 library typings, including
+`DOM` and `DOM.Iterable`, with a bundler that handles `.ts` imports. Your output
+`target` can remain ES2022; `lib` adds typings, not runtime polyfills. See the
+[consumer configuration and runtime API requirements](https://github.com/Kryptonote-Labs/Tumbler#typescript-and-runtime-requirements).
+
 > **Extremely early alpha.** Spreadsheet and formula coverage is incomplete,
 > APIs can change without notice, and unsupported workbook content may not yet
 > survive every edit. Keep original copies of important files.

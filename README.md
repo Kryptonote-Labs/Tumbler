@@ -36,6 +36,50 @@ bun add @tumblerjs/svelte @tumblerjs/core
 Releases use the default `latest` tag, including alpha versions. Keep Tumbler
 packages on the same release.
 
+## TypeScript and runtime requirements
+
+Packages export TypeScript source. Use a bundler or runtime that handles `.ts`
+modules. Configure TypeScript with ES2024 library typings, even when emitting
+ES2022 JavaScript. This minimal consumer config works with TypeScript 5.9.3:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"]
+}
+```
+
+For a Word consumer, install `yjs` alongside `@tumblerjs/word`. Although Yjs is
+an optional runtime peer, the current public Word entry point also exposes
+collaboration types that TypeScript must resolve.
+
+`skipLibCheck` skips declaration-file checks; it does not skip the published `.ts`
+sources. An ES2022-only `lib` therefore fails on newer built-in APIs. `target`
+controls syntax emission and can remain ES2022. `lib` supplies typings only;
+neither setting installs polyfills or rewrites calls to newer built-ins.
+
+The runtime must provide `String.prototype.isWellFormed`,
+`Array.prototype.toSorted`, `toReversed`, `findLast` and `findLastIndex`.
+Text editing/search also uses `Intl.Segmenter`, and model operations use
+`structuredClone`. Check these APIs in every browser, embedded webview, or server
+runtime you support, or load suitable polyfills before importing Tumbler.
+See MDN's [string API compatibility](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/isWellFormed#browser_compatibility),
+[array API compatibility](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/toSorted#browser_compatibility),
+[segmenter compatibility](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Segmenter#browser_compatibility),
+and [structured clone compatibility](https://developer.mozilla.org/en-US/docs/Web/API/Window/structuredClone#browser_compatibility).
+These are API prerequisites, not a tested minimum browser-version guarantee.
+Browser rendering also needs the DOM, Canvas and font APIs. The CLI requires
+Bun 1.3 or later.
+
 ## Open, edit, and save
 
 This spreadsheet example reads a browser File, changes a cell, and creates the

@@ -3,6 +3,20 @@
 Replaceable Svelte 5 UI heads for Tumbler document models. Applications retain
 complete ownership of their surrounding interface and styling.
 
+This package exports TypeScript source. Use ES2024 library typings, including
+`DOM` and `DOM.Iterable`, with a bundler that handles `.ts` imports. Your output
+`target` can remain ES2022; `lib` adds typings, not runtime polyfills. See the
+[consumer configuration and runtime API requirements](https://github.com/Kryptonote-Labs/Tumbler#typescript-and-runtime-requirements).
+
+## Host styles
+
+Scope application button rules to your own controls, for example
+`.app-toolbar button`, instead of global `button` selectors. Global resets that
+set `min-height`
+or padding can stretch the document's inline hyperlink buttons and distort text
+layout. Check the viewer inside your application's actual CSS reset and theme.
+
+
 > **Extremely early alpha.** Components and props can change without notice,
 > and Office-format coverage remains incomplete.
 
