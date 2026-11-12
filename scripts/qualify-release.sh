@@ -72,24 +72,24 @@ for index in "${!packages[@]}"; do
   mkdir -p -- "$mounted_package"
   tar -xzf "${archives[$index]}" -C "$mounted_package" --strip-components=1
 
-  # Packed packages do not contain dependencies. Mount the workspace's resolved
-  # external dependencies while the packed @tumblerjs graph occupies the scope.
-  source_modules="$repository_root/packages/$package/node_modules"
-  if [[ -d "$source_modules" ]]; then
-    for dependency in "$source_modules"/*; do
-      if [[ ! -L "$dependency" ]]; then
-        continue
-      fi
-      mkdir -p -- "$mounted_package/node_modules"
-      dependency_name=${dependency##*/}
-      dependency_source=$dependency
-      # Resolve peers from the consumer, as a normal package installation does.
-      if bun -e 'const manifest = await Bun.file(process.argv[1]).json(); process.exit(Object.hasOwn(manifest.peerDependencies ?? {}, process.argv[2]) ? 0 : 1)' "$mounted_package/package.json" "$dependency_name"; then
-        dependency_source="$consumer_workspace/node_modules/$dependency_name"
-      fi
-      ln -s -- "$(readlink -f -- "$dependency_source")" "$mounted_package/node_modules/$dependency_name"
-    done
-  fi
+  # Packed packages omit dependencies. Mount each external dependency by its
+  # manifest name so scoped packages and their type declarations resolve too.
+  source_package="$repository_root/packages/$package"
+  mapfile -t dependencies < <(bun -e 'const p = await Bun.file(process.argv[1]).json(); for (const name of Object.keys({ ...p.dependencies, ...p.peerDependencies })) if (!name.startsWith("@tumblerjs/")) console.log(name)' "$source_package/package.json")
+  for dependency_name in "${dependencies[@]}"; do
+    dependency_source="$source_package/node_modules/$dependency_name"
+    # Resolve peers from the consumer, as a normal package installation does.
+    if bun -e 'const p = await Bun.file(process.argv[1]).json(); process.exit(Object.hasOwn(p.peerDependencies ?? {}, process.argv[2]) ? 0 : 1)' "$source_package/package.json" "$dependency_name"; then
+      dependency_source="$consumer_workspace/node_modules/$dependency_name"
+    fi
+    if [[ ! -d "$dependency_source" ]]; then
+      printf 'Install dependency %s before qualification: %s\n' "$dependency_name" "$dependency_source" >&2
+      exit 1
+    fi
+    mkdir -p -- "$(dirname -- "$mounted_package/node_modules/$dependency_name")"
+    ln -s -- "$(readlink -f -- "$dependency_source")" "$mounted_package/node_modules/$dependency_name"
+  done
+
 done
 
 bun run --cwd "$consumer_workspace" check
