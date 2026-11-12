@@ -19,7 +19,7 @@ import { type ChartMark, type SceneContext } from "./scene-marks.ts";
 /** Bar, column and line charts over shared categories. */
 export function cartesianScene(context: SceneContext, drawSeries = true, suppliedLayout?: ReturnType<typeof layoutCartesianChart>): ChartMark[] {
   const { model, width, height } = context;
-  const layout = suppliedLayout ?? layoutCartesianChart(model, width, height, context.measure);
+  const layout = suppliedLayout ?? layoutCartesianChart(model, width, height, context.measure, context.options);
   const { plot } = layout;
   const { horizontal, count, value: coordinate, category, categoryBand, band } = cartesianGeometry(model, layout);
   const x = coordinate, y = coordinate;
