@@ -7,7 +7,7 @@
 {#snippet node(item: SpreadsheetDrawingObject, root = false)}
   <g transform={`translate(${root ? 0 : item.x} ${root ? 0 : item.y}) rotate(${item.rotation} ${item.width / 2} ${item.height / 2}) translate(${item.flipX ? item.width : 0} ${item.flipY ? item.height : 0}) scale(${item.flipX ? -1 : 1} ${item.flipY ? -1 : 1})`}>
     {#if item.kind === 'group'}
-      <g transform={item.groupTransform}>
+      <g transform={`scale(${item.groupChild.scaleX} ${item.groupChild.scaleY}) translate(${-item.groupChild.x} ${-item.groupChild.y})`}>
         {#each item.children as child (child.elementId)}{@render node(child)}{/each}
       </g>
     {:else if item.kind === 'picture'}

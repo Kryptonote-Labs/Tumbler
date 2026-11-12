@@ -45,8 +45,6 @@ export type {
   SpreadsheetFormulaReferencePick,
   SpreadsheetFormulaTextSpan,
 } from "./spreadsheet-formula-reference.ts";
-export { spreadsheetTextOverflowWidth } from "./spreadsheet-text-overflow.ts";
-export type { SpreadsheetTextOverflowInput } from "./spreadsheet-text-overflow.ts";
 export {
   colorFormatting,
   fontFamilyFormatting,

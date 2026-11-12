@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { SparseAxisGeometry } from "@tumblerjs/core";
-import { calculateSpreadsheetWorksheet, openSpreadsheet, openWorksheet } from "@tumblerjs/sheets";
+import { calculateSpreadsheetWorksheet, openSpreadsheet, openWorksheet, spreadsheetTextOverflowWidth } from "../src/index.ts";
 import { openOpcPackage } from "../../opc/src/index.ts";
-import { buildWorkbookFixture } from "../../sheets/test/workbook-fixture.ts";
-import { spreadsheetTextOverflowWidth } from "../src/index.ts";
+import { buildWorkbookFixture } from "./workbook-fixture.ts";
 
 const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 

@@ -120,7 +120,11 @@ Worksheet drawings retain their original XML, relationships and media when cells
 
 `applySpreadsheetCommand` supports `insert-shape` with optional text, `insert-image` with base64 data and a content type, `move-drawing` with pixel bounds, `style-drawing`, `align-drawing` to a cell range, `order-drawing`, `duplicate-drawing` and `delete-drawing`. These commands also apply to imported chart placement; chart creation is not provided. CLI sheet reads include drawing IDs and bounds, and the same command schemas drive the CLI and interactive editor.
 
-Spreadsheet interaction commands include `replace-text` with literal, case-sensitive and whole-word search options, `set-sheet-state` for hide and unhide, and `set-tab-color` for RGB colours or removal. Replacement edits cell source, including formulas, rather than calculated results. Hiding the last visible sheet is rejected. `SpreadsheetGrid` hosts can toggle `showGridlines` and `showHeadings`; row and column headers expose their source indices for host menus.
+Spreadsheet interaction commands include `replace-text` with literal, case-sensitive and whole-word search options, `set-sheet-state` for hide and unhide, and `set-tab-color` for RGB colours or removal. Replacement edits cell source, including formulas, rather than calculated results. Hiding the last visible sheet is rejected. `SpreadsheetGrid` follows the sheet view's gridline setting unless the host passes `showGridlines`, and can toggle `showHeadings`; row and column headers expose their source indices for host menus.
+
+### Headless rendering
+
+`layoutSpreadsheetViewport(worksheet, { width, height })` lays out the worksheet as the editor first shows it: from the saved scroll position, with frozen panes, hidden rows and columns, merged cells, text spill, conditional formats, shapes, pictures and charts. Pass `calculation` to show calculated values and `headings` to include row and column headings. The layout is plain data with no workbook references, so it can be transferred to a worker. There, `paintSpreadsheetViewport(context, layout, { path })` paints it into any Canvas 2D context. Decode `spreadsheetViewportImages(layout)` first and return them from the `image` option. The editor grid paints its cells with the same `paintSpreadsheetCell`.
 
 ### Printing
 

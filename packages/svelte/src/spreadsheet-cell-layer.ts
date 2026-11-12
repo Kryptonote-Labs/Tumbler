@@ -1,20 +1,19 @@
 import type { GridSelection, SparseAxisGeometry } from '@tumblerjs/core';
 import {
   formatCellReference,
-  type CellAddress,
-  type SpreadsheetCalculationSnapshot,
-  type SpreadsheetConditionalStyleProjection,
-  type SpreadsheetWorksheet,
-} from '@tumblerjs/sheets';
-import {
   invalidateSpreadsheetPaintFonts,
   paintSpreadsheetCell,
+  resolveSpreadsheetCellPaint,
   spreadsheetPaintStyle,
-  type SpreadsheetPaintCell,
+  spreadsheetTextOverflowWidth,
+  type CellAddress,
+  type SpreadsheetCalculationSnapshot,
+  type SpreadsheetCellPaint,
+  type SpreadsheetConditionalStyleProjection,
   type SpreadsheetPaintColours,
-} from './spreadsheet-row-paint.ts';
+  type SpreadsheetWorksheet,
+} from '@tumblerjs/sheets';
 import type { VirtualGridItem } from './spreadsheet-viewport.ts';
-import { spreadsheetTextOverflowWidth } from './spreadsheet-text-overflow.ts';
 
 export interface SpreadsheetCellLayerInput {
   readonly scrollTop: number;
@@ -42,7 +41,9 @@ export interface SpreadsheetCellLayerInput {
 }
 interface PaintedCell {
   readonly address: CellAddress;
-  readonly paint: Omit<SpreadsheetPaintCell, 'left' | 'selected' | 'overflowWidth'>;
+  readonly width: number;
+  readonly height: number;
+  readonly paint: SpreadsheetCellPaint;
   readonly canOverflow: boolean;
   overflowWidth: number | undefined;
 }
@@ -235,30 +236,23 @@ export function spreadsheetCellLayer(host: HTMLDivElement, initial: SpreadsheetC
             if (skipped(input, address, item.index)) continue;
             const reference = formatCellReference(address);
             const value = input.calculation?.value(address) ?? input.worksheet.cell(address)?.value;
-            const base = spreadsheetPaintStyle(
+            const style = spreadsheetPaintStyle(
               input.worksheet,
               reference,
               input.conditional.formats(reference),
-              value?.type === 'number' || value?.type === 'date',
+              value,
             );
-            const alignment = input.worksheet.cellStyle(reference).alignment.horizontal;
-            const style =
-              (value?.type === 'boolean' || value?.type === 'error') &&
-              (alignment === undefined || alignment === 'general')
-                ? { ...base, alignment: { ...base.alignment, horizontal: 'center' } }
-                : base;
             const cell: PaintedCell = {
               address,
               canOverflow: value?.type === 'string',
               overflowWidth: undefined,
-              paint: {
-                width: column.size,
-                height: item.size,
-                text:
-                  input.calculation?.displayText(reference) ??
-                  input.worksheet.displayText(reference),
+              width: column.size,
+              height: item.size,
+              paint: resolveSpreadsheetCellPaint(
+                input.worksheet,
                 style,
-              },
+                input.calculation?.displayText(reference) ?? input.worksheet.displayText(reference),
+              ),
             };
             cell.overflowWidth = overflow(cell, input);
             row.cells.set(column.index, cell);
@@ -290,17 +284,19 @@ export function spreadsheetCellLayer(host: HTMLDivElement, initial: SpreadsheetC
             !(sourceRow === selection.anchor.row && column === selection.anchor.column);
           paintSpreadsheetCell(
             row.context,
-            input.worksheet,
+            cell.paint,
             {
-              ...cell.paint,
-              left: columns.get(column)!.start - row.origin,
+              x: columns.get(column)!.start - row.origin,
+              y: 0,
+              width: cell.width,
+              height: cell.height,
               selected,
               overflowWidth: cell.overflowWidth,
             },
             colours,
             input.gridlines,
             phase,
-            row.opaque,
+            { opaque: row.opaque },
           );
         }
       if (creating || returning || positionChanged || originMoved) {

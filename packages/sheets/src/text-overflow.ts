@@ -1,8 +1,6 @@
-import { SparseAxisGeometry } from "@tumblerjs/core";
-import {
-  type SpreadsheetCalculationSnapshot,
-  type SpreadsheetWorksheet,
-} from "@tumblerjs/sheets";
+import type { SparseAxisGeometry } from "@tumblerjs/core";
+import type { SpreadsheetCalculationSnapshot } from "./calculation.ts";
+import type { SpreadsheetWorksheet } from "./worksheet.ts";
 
 export interface SpreadsheetTextOverflowInput {
   readonly worksheet: SpreadsheetWorksheet;

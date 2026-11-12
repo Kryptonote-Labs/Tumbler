@@ -19,6 +19,7 @@
     spreadsheetTableDistinctValues,
     spreadsheetDrawingBounds,
     spreadsheetDrawingObjectId,
+    spreadsheetTextOverflowWidth,
     readSpreadsheetDrawingObjects,
     type SpreadsheetChartFrame,
     type SpreadsheetCellValue,
@@ -34,7 +35,6 @@
   import { coerceSpreadsheetEditValue, spreadsheetCellUsesTextFormat, type SpreadsheetGridEdit } from "./spreadsheet-edit.ts";
   import { measureMaximumDigitWidth, spreadsheetFontShorthand } from "./spreadsheet-font-metrics.ts";
   import { spreadsheetCellContentCss, spreadsheetCellCss } from "./spreadsheet-cell-style.ts";
-  import { spreadsheetTextOverflowWidth } from "./spreadsheet-text-overflow.ts";
   import { spreadsheetEmptyRegionStart } from "./spreadsheet-empty-region.ts";
   import { zoomGesture, type ZoomGesture } from "./zoom-gesture.ts";
   import { spreadsheetWheelScroll } from "./spreadsheet-wheel.ts";
@@ -89,7 +89,7 @@
   }
 
   let {
-    showGridlines = true,
+    showGridlines,
     showHeadings = true,
     worksheet,
     remoteSelections = [],
@@ -362,6 +362,8 @@
 
   let hasActiveProjection = $derived(tableProjections.some(({ projection }) => projection.state.filters.length > 0 || projection.state.sorts.length > 0));
   let editable = $derived(!readonly && !hasActiveProjection && onedit !== undefined);
+  // Hosts may override the sheet view's own gridline setting.
+  let gridlines = $derived(showGridlines ?? worksheet.views[0]?.showGridLines ?? true);
   let conditionalStyles = $derived(projectSpreadsheetConditionalStyles(worksheet, viewCalculation));
 
   $effect(() => {
@@ -921,7 +923,7 @@
 <div
   class="tumbler-grid"
   style={`transform:scale(${scale});width:${100 / scale}%;height:${100 / scale}%;--tumbler-header-width:${rowHeaderWidth}px;--tumbler-header-height:${columnHeaderHeight}px`}
-  class:no-gridlines={!showGridlines}
+  class:no-gridlines={!gridlines}
   class:no-headings={!showHeadings}
   role="grid"
   aria-activedescendant={activeCellId}
@@ -982,7 +984,7 @@
       <!-- Ordinary cells use delegated interaction and no per-cell reactive subscriptions. -->
       <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
       <div class="body-cells"
-        use:spreadsheetCellLayer={{ scrollTop, scrollLeft, viewportWidth, viewportHeight, scale, gridlines: showGridlines, worksheet, calculation: viewCalculation, conditional: conditionalStyles,
+        use:spreadsheetCellLayer={{ scrollTop, scrollLeft, viewportWidth, viewportHeight, scale, gridlines, worksheet, calculation: viewCalculation, conditional: conditionalStyles,
           rows: renderedRows, columns: renderedColumns, columnGeometry, projectedRows, selection, editing,
           frozenRows, frozenColumns, rowOrigin, columnOrigin, rowHeaderWidth, columnHeaderHeight, emptyRegion: emptyRegionStart }}
         onpointerdown={event => { const cell = bodyCell(event); if (cell) cellPointerDown(event, cell.row, cell.column); }}

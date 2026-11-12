@@ -66,6 +66,13 @@ export interface SpreadsheetPane {
   readonly state: "frozen" | "frozenSplit" | "split";
 }
 
+export interface SpreadsheetSheetView {
+  readonly workbookViewId: number;
+  readonly showGridLines: boolean;
+  /** First visible cell of the scrolling pane. */
+  readonly topLeftCell: CellAddress | undefined;
+}
+
 export class SpreadsheetWorksheet {
   readonly workbook: SpreadsheetWorkbook;
   readonly sheet: SpreadsheetSheet;
@@ -76,6 +83,7 @@ export class SpreadsheetWorksheet {
   readonly columns: readonly SpreadsheetColumn[];
   readonly merges: readonly CellRange[];
   readonly panes: readonly SpreadsheetPane[];
+  readonly views: readonly SpreadsheetSheetView[];
   readonly tables: readonly SpreadsheetTable[];
   readonly autoFilter: SpreadsheetAutoFilter | undefined;
   readonly hyperlinks: readonly SpreadsheetHyperlink[];
@@ -99,6 +107,7 @@ export class SpreadsheetWorksheet {
     columns: readonly SpreadsheetColumn[];
     merges: readonly CellRange[];
     panes: readonly SpreadsheetPane[];
+    views: readonly SpreadsheetSheetView[];
     tables: readonly SpreadsheetTable[];
     autoFilter: SpreadsheetAutoFilter | undefined;
     hyperlinks: readonly SpreadsheetHyperlink[];
@@ -117,6 +126,7 @@ export class SpreadsheetWorksheet {
     this.columns = Object.freeze([...input.columns]);
     this.merges = Object.freeze([...input.merges]);
     this.panes = Object.freeze([...input.panes]);
+    this.views = Object.freeze([...input.views]);
     this.tables = Object.freeze([...input.tables]);
     this.autoFilter = input.autoFilter;
     this.hyperlinks = Object.freeze([...input.hyperlinks]);
@@ -298,6 +308,7 @@ export function openWorksheet(workbook: SpreadsheetWorkbook, sheet: SpreadsheetS
     rows,
     merges: parseMerges(document.root, namespace),
     panes: parsePanes(document.root, namespace),
+    views: parseViews(document.root, namespace),
     tables: readSpreadsheetTables({ workbook, worksheetPart: part, worksheetRoot: document.root, spreadsheetNamespace: namespace, relationshipsNamespace }),
     autoFilter: parseSpreadsheetAutoFilter(document.root, namespace),
     hyperlinks: readSpreadsheetHyperlinks({
@@ -542,6 +553,17 @@ function parsePanes(root: LosslessXmlElement, namespace: string): SpreadsheetPan
     }
   }
   return result;
+}
+
+function parseViews(root: LosslessXmlElement, namespace: string): SpreadsheetSheetView[] {
+  return children(root, namespace, "sheetViews").flatMap((views) => children(views, namespace, "sheetView").map((view) => {
+    const topLeft = attr(view, "topLeftCell");
+    return Object.freeze({
+      workbookViewId: unsignedInteger(attr(view, "workbookViewId") ?? "0", "workbookViewId"),
+      showGridLines: attr(view, "showGridLines") !== "0" && attr(view, "showGridLines") !== "false",
+      topLeftCell: topLeft === undefined ? undefined : cellReference(topLeft),
+    });
+  }));
 }
 
 function children(parent: LosslessXmlElement, namespace: string, name: string): LosslessXmlElement[] {

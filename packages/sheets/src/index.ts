@@ -37,7 +37,7 @@ export {
   rowHeightToPixels,
   SpreadsheetWorksheet,
 } from "./worksheet.ts";
-export { emuToCssPixels, spreadsheetDrawingBounds } from "./drawings.ts";
+export { emuToCssPixels, spreadsheetDrawingBounds, spreadsheetDrawingRegion } from "./drawings.ts";
 export { parseSpreadsheetChartReference, resolveSpreadsheetChartData, resolveSpreadsheetChartDataSet } from "./chart-data.ts";
 export { resolveSpreadsheetChartColor } from "./chart-colors.ts";
 export type { SpreadsheetChartReference } from "./chart-data.ts";
@@ -164,6 +164,7 @@ export type {
   SpreadsheetCellValue,
   SpreadsheetColumn,
   SpreadsheetPane,
+  SpreadsheetSheetView,
   SpreadsheetRow,
 } from "./worksheet.ts";
 
@@ -190,3 +191,11 @@ export type { ChartWorkbookEdit } from './chart-workbook.ts';
 export { spreadsheetChartContent } from './chart-content.ts';
 export { applyChartContentEdit } from './chart-operations.ts';
 export type { ChartContentEdit } from './chart-operations.ts';
+export { spreadsheetTextOverflowWidth } from './text-overflow.ts';
+export type { SpreadsheetTextOverflowInput } from './text-overflow.ts';
+export { invalidateSpreadsheetPaintFonts, paintSpreadsheetCell, resolveSpreadsheetCellPaint, spreadsheetPaintStyle } from './canvas-cell.ts';
+export type { SpreadsheetBorderPaint, SpreadsheetBorderSide, SpreadsheetCellCanvasContext, SpreadsheetCellFrame, SpreadsheetCellPaint, SpreadsheetPaintColours } from './canvas-cell.ts';
+export { layoutSpreadsheetViewport } from './viewport.ts';
+export type { SpreadsheetViewportAxisItem, SpreadsheetViewportCell, SpreadsheetViewportDrawing, SpreadsheetViewportLayout, SpreadsheetViewportOptions, SpreadsheetViewportRect } from './viewport.ts';
+export { paintSpreadsheetViewport, spreadsheetViewportImages } from './canvas.ts';
+export type { SpreadsheetCanvasContext, SpreadsheetDecodedImage, SpreadsheetImageSource, SpreadsheetViewportPaintOptions } from './canvas.ts';
