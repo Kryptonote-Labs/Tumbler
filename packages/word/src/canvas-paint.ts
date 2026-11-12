@@ -1,3 +1,4 @@
+import { wordChartFont, wordChartSceneFonts } from "./chart-fonts.ts";
 import { drawingGradientFill, paintDrawingGradient, paintRectangularGradient, paintDrawingPicture, type DrawingPictureFill, type DrawingGradientCanvasContext } from "@tumblerjs/ooxml";
 import { wordFontKerning } from './font-kerning.ts';
 import { wordColumnSeparators } from './section-columns.ts';
@@ -56,6 +57,8 @@ export interface WordPagePaintOptions<Image, Path = unknown> {
   readonly path?: (d: string) => Path;
   /** Lays out shape text; pass the page's measurer so both agree. Defaults to measuring with `context`. */
   readonly measurer?: WordTextMeasurer;
+  /** Resolve document font names to CSS family stacks, shared with layout. */
+  readonly fontFamily?: (name: string) => string;
   /** Make document and chart fonts available before canvas measures or paints them. */
   readonly prepareFont?: (family: string) => void;
 }
@@ -273,7 +276,7 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
       patternOrigin: { x: fragment.x * pixels, y: fragment.y * pixels },
       measureText: (text, font) => {
         options.prepareFont?.(font);
-        context.font = font;
+        context.font = wordChartFont(font, options.fontFamily);
         return context.measureText(text).width;
       },
     });
@@ -282,7 +285,7 @@ function paintDrawing<Image, Path>(context: WordCanvasContext<Image, Path>, frag
     context.translate(fragment.x, fragment.y);
     context.scale(1 / pixels, 1 / pixels);
     for (const mark of scene.marks) if (mark.kind === 'text') options.prepareFont?.(mark.font.family);
-    paintChartScene(context, scene, options.path, { image: options.chartImage, picture: (fill, width, height) => {
+    paintChartScene(context, wordChartSceneFonts(scene, options.fontFamily), options.path, { image: options.chartImage, picture: (fill, width, height) => {
       const decoded = options.chartImage?.(fill);
       if (decoded) paintDrawingPicture(context, fill, width, height, decoded);
     } });
@@ -317,7 +320,7 @@ function paintShape<Image, Path>(context: WordCanvasContext<Image, Path>, shape:
     context.stroke(outlinePath);
   }
   context.restore();
-  const text = layoutWordShapeText(shape, fragment.width, fragment.height, options.measurer ?? canvasWordTextMeasurer(context));
+  const text = layoutWordShapeText(shape, fragment.width, fragment.height, options.measurer ?? canvasWordTextMeasurer(context, undefined, options.fontFamily));
   if (text.lines.length > 0 || text.tables.length > 0) {
     // Overflowing text is clipped to the text box, as in the editor.
     context.beginPath();
@@ -343,7 +346,7 @@ function paintText<Image, Path>(context: WordCanvasContext<Image, Path>, item: W
   if (text.trim() === "" && !("wordSpacing" in item)) return;
   // The context is already scaled to points, so the font is sized in points.
   options.prepareFont?.(format.fontFamily);
-  context.font = wordCanvasFont(format, 1);
+  context.font = wordCanvasFont(format, 1, options.fontFamily);
   context.fontKerning = wordFontKerning(format);
   context.direction = format.rightToLeft ? "rtl" : "ltr";
   context.letterSpacing = `${format.characterSpacingPoints ?? 0}px`;

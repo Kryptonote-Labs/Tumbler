@@ -208,3 +208,5 @@ export { wordVerticalTextMetrics } from './vertical-align.ts';
 
 export { isWordAuthoredChart, isWordChartContent } from './authored-chart.ts';
 export type { WordAuthoredChart } from './authored-chart.ts';
+
+export { wordChartFont, wordChartFontFamily, wordChartSceneFonts } from './chart-fonts.ts';

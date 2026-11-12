@@ -1,3 +1,4 @@
+import { wordFontFamily } from "@tumblerjs/word";
 import {
   isShapeTextBody,
   NativeWordDocument,
@@ -47,6 +48,7 @@ export class ShapeTextEditorView implements ShapeTextEditor {
     private undo: (redo: boolean) => void,
     private layout?: (root: HTMLDivElement) => void,
     private formatPatch?: (patch: WordFormatPatch) => WordFormatPatch,
+    private fontFamily = wordFontFamily,
   ) {
     this.story = new WordShapeText(shape);
     this.signature = JSON.stringify(shapeTextParagraphs(shape));
@@ -60,7 +62,11 @@ export class ShapeTextEditorView implements ShapeTextEditor {
     root.ownerDocument.addEventListener('selectionchange', this.selection);
     this.render();
   }
-  update(shape: WordAuthoredShape, editing: boolean, initialText?: string) {
+  update(shape: WordAuthoredShape, editing: boolean, initialText?: string, fontFamily = this.fontFamily) {
+    if (fontFamily !== this.fontFamily) {
+      this.fontFamily = fontFamily;
+      this.render();
+    }
     const signature = JSON.stringify(shapeTextParagraphs(shape));
     if (signature !== this.signature) {
       this.signature = signature;
@@ -342,7 +348,7 @@ export class ShapeTextEditorView implements ShapeTextEditor {
     if (this.composing) return;
     const focused = this.root.ownerDocument.activeElement === this.root;
     const paragraphs = this.story.paragraphs();
-    renderShapeText(this.root, paragraphs, this.model);
+    renderShapeText(this.root, paragraphs, this.model, this.fontFamily);
     this.layout?.(this.root);
     if (focused) this.restore();
   }

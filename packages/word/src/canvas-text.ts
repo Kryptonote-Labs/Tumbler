@@ -50,16 +50,17 @@ export function measureWordCanvasText(context: WordCanvasTextContext, text: stri
 /**
  * Canvas-backed shaping measurements converted into the point geometry used by Word layout.
  * Without line metrics, the font bounding box is used, which omits any external leading.
+ * Pass the same document family resolver to layout and painting for embedded fonts.
  * Results are memoised for the measurer's lifetime, so create a new one when fonts change.
  */
-export function canvasWordTextMeasurer(context: WordCanvasTextContext, lineMetrics?: WordLineMetrics): WordTextMeasurer {
+export function canvasWordTextMeasurer(context: WordCanvasTextContext, lineMetrics?: WordLineMetrics, fontFamily = wordFontFamily): WordTextMeasurer {
   const measured = new Map<string, Map<string, WordTextMeasurement>>();
   const formats = new WeakMap<ComputedWordTextFormat, { family: string; values: Map<string, WordTextMeasurement> }>();
   const measurements = (format: ComputedWordTextFormat) => {
     const previous = formats.get(format);
     if (previous) return previous;
-    const family = wordFontFamily(format.fontFamily);
-    const key = `${wordFontKerning(format)}\u0000${wordCanvasFont(format)}\u0000${format.rightToLeft ? 'rtl' : 'ltr'}\u0000${format.characterSpacingPoints ?? 0}`;
+    const family = fontFamily(format.fontFamily);
+    const key = `${wordFontKerning(format)}\u0000${format.italic}/${format.bold}/${format.fontSizePoints}/${family}\u0000${format.rightToLeft ? 'rtl' : 'ltr'}\u0000${format.characterSpacingPoints ?? 0}`;
     let values = measured.get(key);
     if (!values) measured.set(key, values = new Map());
     const result = { family, values };
@@ -89,8 +90,8 @@ export function canvasWordTextMeasurer(context: WordCanvasTextContext, lineMetri
 }
 
 /** CSS font shorthand for a run. Sizes are CSS pixels unless `pixelsPerPoint` is given. */
-export function wordCanvasFont(format: Pick<ComputedWordTextFormat, "fontFamily" | "fontSizePoints" | "bold" | "italic">, pixelsPerPoint = wordPointsToCssPixels(1)): string {
-  return `${format.italic ? "italic" : "normal"} normal ${format.bold ? 700 : 400} ${format.fontSizePoints * pixelsPerPoint}px ${wordFontFamily(format.fontFamily)}`;
+export function wordCanvasFont(format: Pick<ComputedWordTextFormat, "fontFamily" | "fontSizePoints" | "bold" | "italic">, pixelsPerPoint = wordPointsToCssPixels(1), fontFamily = wordFontFamily): string {
+  return `${format.italic ? "italic" : "normal"} normal ${format.bold ? 700 : 400} ${format.fontSizePoints * pixelsPerPoint}px ${fontFamily(format.fontFamily)}`;
 }
 
 /** A quoted Word font family with the generic fallback used by every Tumbler renderer. */

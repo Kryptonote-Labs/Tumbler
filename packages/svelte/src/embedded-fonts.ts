@@ -1,6 +1,8 @@
 import { cssFontFamily } from "./font-family.ts";
 export interface EmbeddedFontContext {
   family: (name: string) => string;
+  /** Settles when this document's faces have loaded or failed. */
+  readonly ready?: Promise<void>;
 }
 export interface EmbeddedFont {
   readonly family: string;
@@ -8,8 +10,13 @@ export interface EmbeddedFont {
   readonly italic: boolean;
   readonly bytes: Uint8Array;
 }
+/** A face-level outcome; failures include malformed and empty font data. */
+export type EmbeddedFontLoadResult =
+  | { readonly font: EmbeddedFont; readonly status: "loaded" }
+  | { readonly font: EmbeddedFont; readonly status: "failed"; readonly error: unknown };
 interface LoadedFonts extends EmbeddedFontContext {
   ready: Promise<void>;
+  results: Promise<readonly EmbeddedFontLoadResult[]>;
   references: number;
   faces: FontFace[];
 }
@@ -26,19 +33,28 @@ export function loadEmbeddedFonts(fonts: readonly EmbeddedFont[]) {
   let loaded = cache.get(fonts);
   if (!loaded) {
     const families = new Map<string, string>();
-    const faces = fonts.filter(font => font.bytes.length > 0).map((font) => {
-      const name = families.get(font.family.toLowerCase()) ?? `TumblerEmbedded${++serial}`;
-      families.set(font.family.toLowerCase(), name);
-      const face = new FontFace(name, Uint8Array.from(font.bytes).buffer, {
-        weight: font.bold ? "700" : "400",
-        style: font.italic ? "italic" : "normal",
-      });
-      owner.fonts.add(face);
-      return face;
-    });
+    const faces: FontFace[] = [];
+    const results = Promise.all(fonts.map(async (font): Promise<EmbeddedFontLoadResult> => {
+      try {
+        if (font.bytes.length === 0) throw new Error("Empty embedded font data");
+        const name = families.get(font.family.toLowerCase()) ?? `TumblerEmbedded${++serial}`;
+        const face = new FontFace(name, Uint8Array.from(font.bytes).buffer, {
+          weight: font.bold ? "700" : "400",
+          style: font.italic ? "italic" : "normal",
+        });
+        owner.fonts.add(face);
+        faces.push(face);
+        families.set(font.family.toLowerCase(), name);
+        await face.load();
+        return { font, status: "loaded" };
+      } catch (error) {
+        return { font, status: "failed", error };
+      }
+    }));
     loaded = {
       references: 0,
-      ready: Promise.allSettled(faces.map((face) => face.load())).then(() => {}),
+      ready: results.then(() => {}),
+      results,
       faces,
       family: (name) =>
         families.has(name.toLowerCase())
@@ -53,6 +69,7 @@ export function loadEmbeddedFonts(fonts: readonly EmbeddedFont[]) {
   return {
     family: shared.family,
     ready: shared.ready,
+    results: shared.results,
     destroy() {
       if (released) return;
       released = true;

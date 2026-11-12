@@ -282,3 +282,17 @@ test('empty painted image bounds never require decoding for an overlay', () => {
   expect(wordPageImages(page, [region])).toEqual([]);
   paintWordPage(recorder().context, page, { scale: 1, viewport: { ...region, width: Math.ceil(region.width), height: Math.ceil(region.height) }, image: () => { throw Error('empty image decoded'); } });
 });
+
+
+test('document font aliases paint body text, table text, markers and shape text', () => {
+  const page = layout([
+    { kind: 'paragraph', runs: [{ text: 'Body' }], list: { id: 'items', kind: 'decimal' } },
+    { kind: 'table', rows: [[{ blocks: [{ kind: 'paragraph', runs: [{ text: 'Cell' }] }] }]] },
+    { kind: 'paragraph', runs: [{ text: '\uFFFC', shape: { preset: 'rect', width: 120, height: 60, fill: 'none', outline: 'none', outlineWidth: 0, text: 'Shape' } }] },
+  ]);
+  const { context, calls } = recorder();
+  paintWordPage(context, page, { path: d => d, fontFamily: () => '"PrivateDocument", serif' });
+  const text = calls.filter(call => call[0] === 'fillText');
+  expect(text.map(call => call[1])).toEqual(['Cell', '1.', 'Body', 'Shape']);
+  expect(text.every(call => String(call[4]).includes('"PrivateDocument", serif'))).toBe(true);
+});

@@ -2,6 +2,11 @@ import { wordPointsToCssPixels, type ComputedWordTextFormat } from '@tumblerjs/w
 
 const documents = new WeakMap<Document, Map<string, number>>();
 
+/** Font settlement can change a previously measured fallback baseline. */
+export function clearWordBaselineCache(owner: Document): void {
+  documents.get(owner)?.clear();
+}
+
 /** CSS centres leading and rounds font metrics at the rendered size. Measure its
  * baseline so a positioned text span can honour the document engine's baseline. */
 export function browserWordBaselineOffset(

@@ -84,3 +84,17 @@ test('measurement caches follow mutable public formats and external canvas state
   expect(measure.measure('bb', format).width).toBe(48);
   expect(context).toHaveProperty('direction', 'ltr');
 });
+
+
+test('document aliases reach canvas shaping and line-metric preparation and probes', () => {
+  const context = { font: '', direction: 'ltr' as const, measureText: () => ({ width: 100 }) };
+  const families: string[] = [];
+  const format = { fontFamily: 'Example', fontSizePoints: 12, bold: false, italic: false, underline: 'none' as const, strike: false, color: '#000', highlight: undefined, verticalAlign: 'baseline' as const, rightToLeft: false };
+  const measure = canvasWordTextMeasurer(context, {
+    prepare: family => { families.push(family); },
+    measure: (_, family) => { families.push(family); return { ascent: 9, descent: 3 }; },
+  }, () => '"PrivateDocument", serif');
+  expect(measure.measure('Text', format).ascent).toBe(9);
+  expect(context.font).toContain('"PrivateDocument", serif');
+  expect(families).toEqual(['"PrivateDocument", serif', '"PrivateDocument", serif']);
+});

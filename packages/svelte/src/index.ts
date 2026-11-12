@@ -66,7 +66,7 @@ export type { ShapeTextEditor } from './word-shape-text-editor.ts';
 export { wordDarkColour, wordDisplayColour, wordDisplaySurface } from './word-display-colour.ts';
 export { default as WordPageLayoutDecorations } from './WordPageLayoutDecorations.svelte';
 
-export { loadEmbeddedFonts, type EmbeddedFont, type EmbeddedFontContext } from './embedded-fonts.ts';
+export { loadEmbeddedFonts, type EmbeddedFont, type EmbeddedFontContext, type EmbeddedFontLoadResult } from './embedded-fonts.ts';
 
 export { default as SpreadsheetPrintView } from './SpreadsheetPrintView.svelte';
 

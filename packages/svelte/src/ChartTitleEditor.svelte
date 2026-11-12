@@ -1,10 +1,11 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { ChartModel } from '@tumblerjs/charts';
-  import { wordChartTitleText, type WordAuthoredShape, type WordTextParagraph } from '@tumblerjs/word';
+  import { wordFontFamily, wordChartTitleText, type WordAuthoredShape, type WordTextParagraph } from '@tumblerjs/word';
   import { ShapeTextEditorView, type ShapeTextEditor } from './word-shape-text-editor.ts';
-  let { model, oncommit, oncancel, oneditor, onselection, onundo }: {
+  let { fontFamily = wordFontFamily, model, oncommit, oncancel, oneditor, onselection, onundo }: {
     model: ChartModel;
+    fontFamily?: (name: string) => string;
     oncommit: (paragraphs: readonly WordTextParagraph[]) => void;
     oncancel: () => void;
     oneditor?: (view: ShapeTextEditor | undefined) => void;
@@ -33,11 +34,11 @@
     }
   }
   function mount(root: HTMLDivElement) {
-    const current = new ShapeTextEditorView(root, shape, oncommit, () => onselection?.(), oncancel, redo => onundo?.(redo), alignBaselines, patch => patch.highlight === undefined ? patch : { ...patch, shading: null });
+    const current = new ShapeTextEditorView(root, shape, oncommit, () => onselection?.(), oncancel, redo => onundo?.(redo), alignBaselines, patch => patch.highlight === undefined ? patch : { ...patch, shading: null }, fontFamily);
     view = current;
     return { destroy() { view = undefined; current.destroy(); } };
   }
-  $effect(() => { const current = view, value = shape; untrack(() => current?.update(value, true)); });
+  $effect(() => { const current = view, value = shape, family = fontFamily; untrack(() => current?.update(value, true, undefined, family)); });
   $effect(() => { const current = view; if (!current) return; untrack(() => oneditor?.(current)); return () => untrack(() => oneditor?.(undefined)); });
 </script>
 

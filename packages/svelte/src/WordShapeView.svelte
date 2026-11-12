@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { wordFontFamily } from "@tumblerjs/word";
   import PresentationGradient from './PresentationGradient.svelte';
   import { drawingGradientFill } from '@tumblerjs/ooxml';
   const gradientId = $props.id();
@@ -14,6 +15,7 @@
   } from '@tumblerjs/word';
   import { ShapeTextEditorView, type ShapeTextEditor } from './word-shape-text-editor.ts';
   let {
+    fontFamily = wordFontFamily,
     shape,
     width = shape.width,
     height = shape.height,
@@ -25,6 +27,7 @@
     onselection,
     onundo,
   }: {
+    fontFamily?: (name: string) => string;
     shape: WordAuthoredShape;
     /** Current preview size in document points, independent of page zoom. */
     width?: number;
@@ -51,6 +54,7 @@
       () => onselection?.(),
       () => oncommit?.(shapeTextParagraphs(shape), 'escape'),
       (redo) => onundo?.(redo),
+      undefined, undefined, fontFamily,
     );
     view = current;
     return {
@@ -64,8 +68,9 @@
     const current = view,
       value = shape,
       active = editing,
-      initial = initialText;
-    untrack(() => current?.update(value, active, initial));
+      initial = initialText,
+      family = fontFamily;
+    untrack(() => current?.update(value, active, initial, family));
   });
   $effect(() => {
     if (!selected || !view) return;

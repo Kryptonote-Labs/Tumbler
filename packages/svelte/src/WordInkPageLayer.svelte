@@ -4,8 +4,9 @@
   import { metafileSvg } from './presentation-metafiles.ts';
   import { reserveWordInkPixels, wordInkTiles, WORD_INK_PAGE_PIXELS, WORD_INK_TILE_PIXELS } from './word-ink-tiles.ts';
 
-  let { page, scale = 1, background = '#fff', maxPixels = WORD_INK_PAGE_PIXELS, imageurl, onerror }: {
+  let { page, scale = 1, background = '#fff', maxPixels = WORD_INK_PAGE_PIXELS, imageurl, onerror, fontFamily }: {
     page: WordLayoutPage;
+    fontFamily?: (name: string) => string;
     scale?: number;
     background?: string;
     /** Retained pixels per page, at most 1,048,576. Resolution falls to fit. */
@@ -17,7 +18,7 @@
   const regions = $derived(wordPageInkBounds(page));
 
   $effect(() => {
-    const current = page, boxes = regions, paper = background, source = imageurl, budget = maxPixels;
+    const current = page, boxes = regions, paper = background, source = imageurl, budget = maxPixels, family = fontFamily;
     const resolution = 4 / 3 * scale * (window.devicePixelRatio || 1);
     if (!boxes.length || !host) return;
     const target = host;
@@ -90,7 +91,7 @@
           const context = buffer.getContext('2d'), underneath = backdrop.getContext('2d');
           if (!context || !underneath) throw new Error('The ink canvas is unavailable.');
           const options = {
-            scale: plan.scale, viewport: tile, inkMaxPixels: WORD_INK_TILE_PIXELS, background: paper,
+            fontFamily: family, scale: plan.scale, viewport: tile, inkMaxPixels: WORD_INK_TILE_PIXELS, background: paper,
             onInkFallback: () => { throw new Error('Native ink could not be composed within the tile budget.'); },
             image: (drawing: WordImageDrawing) => {
               if (failures.has(drawing)) throw failures.get(drawing);
