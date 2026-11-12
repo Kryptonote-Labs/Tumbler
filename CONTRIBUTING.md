@@ -55,10 +55,14 @@ After committing a release candidate, qualify the exact packed artifacts against
 Tumbler and the local Kryptonote checkout:
 
 ```sh
-bun run release:qualify
+bun run release:qualify /path/to/consumer
 ```
 
-This validates package metadata, runs Tumbler's checks and tests, verifies each
+Use the consumer checkout path explicitly when it differs from the historical
+default, or set `TUMBLER_CONSUMER_ROOT`. Also run `bun run docs:check` and
+`bun run docs:build` when preparing release documentation.
+
+Qualification validates package metadata, runs Tumbler's checks and tests, verifies each
 tarball contains its README, license, manifest, and source entry point, mounts
 the packed packages in Kryptonote, and runs Kryptonote's frontend check. A
 successful run records the qualified commit locally.

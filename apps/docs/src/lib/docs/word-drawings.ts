@@ -4,6 +4,11 @@ export const wordDrawingsDoc: Doc = {
   title: 'Images and shapes',
   description: 'Author drawings and connect movement, resizing, and shape text edits.',
   sections: [
+    { id: 'ink', title: 'Native Office ink', blocks: [
+      { kind: 'text', text: 'The shared @tumblerjs/ink engine decodes Office InkML, retains source traces and brush semantics, and supplies vector previews. Word supports native stroke authoring and editing with retained picture fallbacks. A multi-stroke drawing uses shared coordinates so strokes retain their relative placement.' },
+      { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/packages/ink/README.md', label: 'Ink decoding, preservation and conformance limits' },
+    ] },
+
     { id: 'images', title: 'Inline and floating images', blocks: [
         { kind: 'code', code: `import { createWordArtifact } from '@tumblerjs/word';
 
@@ -39,12 +44,12 @@ model.update([{
   } }],
 }]);
 const output = model.artifact().bytes();` },
-        { kind: 'text', text: 'The seven presets are rect, roundRect, ellipse, triangle, diamond, rightArrow, and line. Shapes use one U+FFFC object character, point dimensions, solid RGB or none fills/outlines, and plain text. Placement is inline, front, or behind, using the same positioning properties as images.' },
-        { kind: 'text', text: 'Exports contain editable DrawingML shapes.' },
+        { kind: 'text', text: 'The presets include rect, roundRect, ellipse, triangle, diamond, rightArrow, chevron, star5, and line. Shapes use one U+FFFC object character, point dimensions, solid or gradient fills, outlines, and editable rich text. Placement is inline, front, or behind, using the same positioning properties as images.' },
+        { kind: 'text', text: 'Exports contain editable DrawingML shapes. Without explicit layout, new shapes use fixed page placement in front of text. Set layout to inline to retain the alpha.26 default. Optional gradient, cornerRadius and zOrder control fill, rounded corners and drawing order.' },
         { kind: 'text', text: 'textInsets sets internal text margins in points on each side. Omitted sides use 3.6pt top/bottom and 7.2pt left/right. Explicit zero is supported. The editor, canvas rendering, and DOCX import/export use the same margins.' },
         { kind: 'text', text: 'WordDrawingView reports in-place text edits through ontextchange when editable and a callback is connected. Double-click a shape or type while it is selected; Escape or blur commits the text. The host updates its native content model.' },
         { kind: 'text', text: 'Set layoutControl to false when the host supplies placement controls. WordDocumentView renders shapes, but does not connect this text callback itself.' },
-        { kind: 'note', text: 'Imported groups, transformed shapes, theme/effect fills, and text-wrapped shapes remain opaque source drawings. Neighbouring edits retain their markup. Full preset geometry, rich text boxes, and shape effects are not supported by this editable model.' },
+        { kind: 'note', text: 'Imported groups, transformed shapes, theme/effect fills, and text-wrapped shapes remain opaque source drawings. Neighbouring edits retain their markup. Full preset geometry and shape effects remain incomplete.' },
     ] },
     { id: 'controls', title: 'Move and resize drawings', blocks: [
         { kind: 'text', text: 'Pass ondrawingchange to WordDocumentView in Edit mode. Apply changes with session.updateDrawing(change) for undo, redo, and DOCX export.' },

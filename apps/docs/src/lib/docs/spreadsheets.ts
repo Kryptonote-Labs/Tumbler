@@ -4,6 +4,12 @@ export const spreadsheetsDoc: Doc = {
   title: 'Spreadsheets',
   description: 'Read, render, and edit XLSX workbooks with a headless model or a Svelte grid.',
   sections: [
+    { id: 'alpha-27', title: 'New in alpha.27', blocks: [
+      { kind: 'link', href: '/docs/releases', label: 'Authoring additions and migration notes' },
+      { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/packages/sheets/README.md', label: 'Native commands and package API' },
+      { kind: 'link', href: '/docs/charts', label: 'Shared chart authoring and rendering' },
+      { kind: 'link', href: '/docs/cli', label: 'Command-line operations' },
+    ] },
     { id: 'start', title: 'Open a workbook', blocks: [
       { kind: 'text', text: 'Open XLSX bytes with openSpreadsheetArtifact. Use the worksheet model directly, or render it with SpreadsheetGrid.' },
       { kind: 'link', href: '/docs/spreadsheet-viewer', label: 'Render a worksheet and switch sheets' },

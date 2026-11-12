@@ -13,6 +13,10 @@ export const architectureDoc: Doc = {
   → updated artifact and file bytes` },
         { kind: 'text', text: 'An artifact is the application boundary. It contains the document model and exposes operations for editing, formatting, and exporting. Svelte components display that model and report user actions back to your application.' },
     ] },
+    { id: 'pdf', title: 'PDF source and editing', blocks: [
+      { kind: 'text', text: 'PDF has its own source object reader and interpreter rather than the OPC/XML pipeline. Source-aware scenes feed canvas painting and text selection. Collaborative text models and page models retain source identity while hosts own fonts, persistence and update transport.' },
+      { kind: 'link', href: '/docs/pdf', label: 'PDF rendering, editing and limitations' },
+    ] },
     { id: 'native-word', title: 'Word without a package', blocks: [
         { kind: 'text', text: 'NativeWordDocument also accepts an authored block tree directly. Reconciliation preserves unchanged paragraph identities; the shared Word layout engine caches geometry. DOCX packaging occurs when the application requests an artifact for export. Persistence and collaboration remain application responsibilities.' },
         { kind: 'link', href: '/docs/native-word', label: 'Build with the native Word model' },
@@ -21,13 +25,16 @@ export const architectureDoc: Doc = {
         { kind: 'table', headers: ['Package', 'Responsibility'], rows: [
           ['@tumblerjs/opc', 'ZIP archives, package parts, relationships, and transactions.'],
           ['@tumblerjs/ooxml', 'Shared Office XML infrastructure.'],
+          ['@tumblerjs/ink', 'Shared Office InkML decoding, brush semantics and source preservation.'],
           ['@tumblerjs/core', 'Selection, formatting contracts, sparse geometry, and editing history.'],
           ['@tumblerjs/formulas', 'Bounded spreadsheet formula parsing and evaluation.'],
           ['@tumblerjs/charts', 'DrawingML chart models shared by document formats.'],
           ['@tumblerjs/word', 'Word parsing, page layout, text editing, and formatting.'],
           ['@tumblerjs/sheets', 'Workbook models, calculations, cell edits, and formatting.'],
           ['@tumblerjs/slides', 'Presentation models, slide layouts, text and table-cell edits, and object transforms.'],
-          ['@tumblerjs/svelte', 'Word, spreadsheet, presentation, chart, and formatting components.'],
+          ['@tumblerjs/pdf', 'PDF objects, source-preserving edits, page scenes and assembly.'],
+          ['@tumblerjs/cli', 'Bun command-line operations using the shared document engines.'],
+          ['@tumblerjs/svelte', 'Word, spreadsheet, presentation, PDF, chart, and formatting components.'],
         ] },
     ] },
     { id: 'ownership', title: 'What the application owns', blocks: [

@@ -3,13 +3,13 @@
   import { repository, version } from '$lib/site';
   let { data } = $props();
 </script>
-<svelte:head><title>Tumbler docs</title><meta name="description" content="Read, render, and edit Office documents with TypeScript and Svelte. Tumbler documentation and a live document playground." /></svelte:head>
+<svelte:head><title>Tumbler docs</title><meta name="description" content="Read, render, and edit Office documents and PDFs with TypeScript and Svelte. Tumbler documentation and a live document playground." /></svelte:head>
 <div class="doc-layout">
   <article>
     <h1>Office documents, in your app.</h1>
-    <p class="lead">Tumbler gives you TypeScript models and Svelte components for reading, rendering, and editing Word documents, spreadsheets, and PowerPoint presentations.</p>
+    <p class="lead">Tumbler gives you TypeScript models and Svelte components for reading, rendering, and editing Word documents, spreadsheets, PowerPoint presentations, and PDFs.</p>
     <div class="note"><p>Early alpha. APIs are still changing and Office compatibility is incomplete. Keep original copies of important documents.</p></div>
-    <p><a href="/docs/releases">Release {version}</a> adds Word styles, lists, links, paragraph formatting, explicit breaks, and editable shapes. Explore the <a href="/docs/word">Word guides</a> for examples.</p>
+    <p><a href="/docs/releases">Release {version}</a> adds PDF rendering and editing, native document authoring, shared chart editing, and a public CLI. Read the release guide for changes and migration notes.</p>
     <h2 id="start">Start with a document</h2>
     <p>Install the components alongside the document formats you need.</p>
     <Code {...data.install} />
@@ -19,6 +19,7 @@
       <a href="/docs/word"><strong>Word</strong><span>Paginated documents, rich authoring, tables, drawings, and optional collaboration.</span><span class="arrow" aria-hidden="true">→</span></a>
       <a href="/docs/spreadsheets"><strong>Spreadsheets</strong><span>Virtualized worksheets, formulas, cell edits, and formatting.</span><span class="arrow" aria-hidden="true">→</span></a>
       <a href="/docs/powerpoint"><strong>PowerPoint</strong><span>Slide navigation, text and table editing, formatting, and object transforms.</span><span class="arrow" aria-hidden="true">→</span></a>
+      <a href="/docs/pdf"><strong>PDF</strong><span>Source-preserving rendering, text editing, annotations, and page assembly.</span><span class="arrow" aria-hidden="true">→</span></a>
     </div>
     <h2 id="model">Keep control of your application</h2>
     <p>The format packages work without Svelte. The components render those models and emit edit events, leaving file storage, permissions, and the surrounding UI to you.</p>

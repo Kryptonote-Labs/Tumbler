@@ -1,7 +1,7 @@
 # Tumbler
 
-Read, render, and edit Word documents, spreadsheets, and PowerPoint presentations
-in the browser. Use the headless TypeScript packages with your own UI, or add the
+Read, render, and edit Word documents, spreadsheets, PowerPoint presentations
+and PDFs in the browser. Use the headless TypeScript packages with your own UI, or add the
 Svelte 5 components.
 
 [Documentation](https://oss.kryptonote.com/) ·
@@ -13,6 +13,11 @@ storage, and downloads. No hosted Office editor or PDF conversion is required.
 
 > Tumbler is early alpha. APIs and format coverage are still changing. Keep
 > original files and test edited documents in the Office applications you use.
+
+## Latest release
+
+[Alpha.27](docs/releases/0.1.0-alpha.27.md) includes 12 public packages, published
+under `latest`. See the release notes for changes and migration.
 
 ## Install
 
@@ -58,6 +63,7 @@ Call `bytes()` when saving or downloading, rather than after every interaction.
 | Word `.docx` | Render pages, edit and format text, move and resize supported drawings, undo and save. | [Word documents](https://oss.kryptonote.com/docs/word) |
 | Excel `.xlsx` | Render a virtualized grid, edit cells and supported formulas, format ranges, and save. | [Spreadsheets](https://oss.kryptonote.com/docs/spreadsheets) |
 | PowerPoint `.pptx` | Navigate thumbnails, edit text and table cells, format shapes, move, resize and rotate supported objects, undo and save. | [PowerPoint](https://oss.kryptonote.com/docs/powerpoint) |
+| PDF `.pdf` | Render source pages, select and edit text, annotate, search, and assemble pages. | [PDF documents](https://oss.kryptonote.com/docs/pdf) |
 
 Format coverage is incomplete. See [compatibility](https://oss.kryptonote.com/docs/compatibility)
 for limitations, including unsupported editing operations and differences from
@@ -76,6 +82,8 @@ Office layout. Legacy binary `.doc`, `.xls`, and `.ppt` files are not supported.
 | `@tumblerjs/sheets` | SpreadsheetML reading, calculation, preservation, and editing |
 | `@tumblerjs/word` | WordprocessingML reading, page layout, preservation, and editing |
 | `@tumblerjs/slides` | PresentationML reading, slide scenes, preservation, and editing |
+| `@tumblerjs/pdf` | Source-preserving PDF parsing, rendering, editing and page assembly |
+| `@tumblerjs/cli` | Bun CLI for document operations and chart authoring |
 | `@tumblerjs/svelte` | Replaceable Svelte document heads |
 
 ## Develop
