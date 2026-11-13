@@ -1,6 +1,6 @@
 {
   "name": "@tumblerjs/ink",
-  "version": "0.1.0-alpha.27",
+  "version": "0.1.0-alpha.28",
   "description": "Lossless InkML reading and shared Office ink semantics for Tumbler.",
   "type": "module",
   "exports": "./src/index.ts",
@@ -21,6 +21,6 @@
     "tag": "latest"
   },
   "dependencies": {
-    "@tumblerjs/ooxml": "0.1.0-alpha.27"
+    "@tumblerjs/ooxml": "0.1.0-alpha.28"
   }
 }

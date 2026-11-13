@@ -1,15 +1,15 @@
 {
   "name": "@tumblerjs/slides",
-  "version": "0.1.0-alpha.27",
+  "version": "0.1.0-alpha.28",
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
     "@noble/hashes": "^2.4.0",
-    "@tumblerjs/charts": "0.1.0-alpha.27",
-    "@tumblerjs/core": "0.1.0-alpha.27",
-    "@tumblerjs/ink": "0.1.0-alpha.27",
-    "@tumblerjs/ooxml": "0.1.0-alpha.27",
-    "@tumblerjs/opc": "0.1.0-alpha.27",
+    "@tumblerjs/charts": "0.1.0-alpha.28",
+    "@tumblerjs/core": "0.1.0-alpha.28",
+    "@tumblerjs/ink": "0.1.0-alpha.28",
+    "@tumblerjs/ooxml": "0.1.0-alpha.28",
+    "@tumblerjs/opc": "0.1.0-alpha.28",
     "diff": "^9.0.0",
     "mtx-decompressor": "1.6.0",
     "zod": "^4.6.5"
