@@ -91,8 +91,8 @@ export class NativeWordEditor {
     let offset = 0;
     const template = first.runs.find(run => {
       offset += run.text.length;
-      return offset >= start.offset;
-    });
+      return start.affinity === 'before' ? offset > start.offset : offset >= start.offset;
+    }) ?? first.runs.at(-1);
     // New text inherits formatting and links, never drawing/field/tab payloads.
     const inserted = (text: string): WordTextRun => patchWordRunFormat({
       text,
@@ -112,6 +112,7 @@ export class NativeWordEditor {
     }));
     const caret: WordNativePosition = {
       paragraphId: replacement.at(-1)!.id,
+      affinity: 'after',
       offset: lines.length === 1 ? start.offset + normalized.length : lines.at(-1)!.length,
     };
     const blocks = replaceNativeParagraphs(this.blocks, paragraphs.map(paragraph => paragraph.id), replacement);
@@ -147,7 +148,8 @@ export class NativeWordEditor {
       block.kind === 'paragraph' ? [block] : block.kind === 'table' ? block.rows.flatMap(row => row.cells.flatMap(cell => visit(cell.blocks))) : []);
     const paragraph = visit(this.document.blocks)[index]!;
     const segments = wordParagraphTextSegments(undefined, paragraph);
-    const segment = segments.find(segment => segment.start <= position.offset && position.offset < segment.end) ?? segments.at(-1);
+    const preceding = position.affinity === 'after' ? segments.findLast(segment => segment.start < position.offset && position.offset <= segment.end) : undefined;
+    const segment = preceding ?? segments.find(segment => segment.start <= position.offset && position.offset < segment.end) ?? segments.at(-1);
     const runs = paragraph.inlines.flatMap(inline => inline.kind === 'run' ? [inline] : inline.kind === 'hyperlink' || inline.kind === 'insertion' ? inline.runs : []);
     return this.document.runFormat(paragraph, runs.find(run => run.elementId === segment?.runElementId));
   }

@@ -1,4 +1,5 @@
 import type { WordNativePosition, WordNativeSelection } from './native-edit.ts';
+import { wordDomPoint } from './browser-dom.ts';
 
 /** DOM paragraphs are host-owned elements carrying their stable native paragraph ID. */
 export function wordPositionFromDom(root: HTMLElement, node: Node, offset: number): WordNativePosition | undefined {
@@ -12,13 +13,14 @@ export function wordPositionFromDom(root: HTMLElement, node: Node, offset: numbe
     const paragraphs = [...root.querySelectorAll<HTMLElement>('[data-word-paragraph]')];
     const next = paragraphs.find(element => boundary.comparePoint(element, 0) >= 0);
     const target = next ?? paragraphs.at(-1);
-    return target ? { paragraphId: target.dataset.wordParagraph!, offset: Number(target.dataset.wordStart ?? 0) + (next ? 0 : target.textContent?.length ?? 0) } : undefined;
+    return target ? { paragraphId: target.dataset.wordParagraph!, offset: Number(target.dataset.wordStart ?? 0) + (next ? 0 : target.textContent?.length ?? 0), affinity: next ? 'before' : 'after' } : undefined;
   }
   if (!root.contains(paragraph)) return;
   const range = root.ownerDocument.createRange();
   range.selectNodeContents(paragraph);
   range.setEnd(node, offset);
-  return { paragraphId: paragraph.dataset.wordParagraph!, offset: Number(paragraph.dataset.wordStart ?? 0) + range.toString().length };
+  const local = range.toString().length;
+  return { paragraphId: paragraph.dataset.wordParagraph!, offset: Number(paragraph.dataset.wordStart ?? 0) + local, affinity: local === 0 ? 'before' : 'after' };
 }
 
 export function wordBrowserSelection(root: HTMLElement): WordNativeSelection | undefined {
@@ -36,19 +38,12 @@ function domPosition(root: HTMLElement, position: WordNativePosition) {
   const fragments = candidates.filter(element => !element.querySelector('[data-word-paragraph]'));
   const start = (element: HTMLElement) => Number(element.dataset.wordStart ?? 0);
   const end = (element: HTMLElement) => start(element) + (element.textContent?.length ?? 0);
-  const paragraph = fragments.find(element => start(element) <= position.offset && position.offset < end(element))
+  const preceding = () => fragments.findLast(element => start(element) < position.offset && position.offset <= end(element));
+  const following = () => fragments.find(element => start(element) <= position.offset && position.offset < end(element));
+  const paragraph = (position.affinity === 'after' ? preceding() ?? following() : following() ?? preceding())
     ?? fragments.findLast(element => end(element) === position.offset);
   if (!paragraph) return;
-  const walker = root.ownerDocument.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
-  let remaining = position.offset - start(paragraph);
-  let node: Node | null;
-  while ((node = walker.nextNode())) {
-    const length = node.textContent?.length ?? 0;
-    if (remaining <= length) return { node, offset: remaining };
-    remaining -= length;
-  }
-  if (remaining === 0) return { node: paragraph, offset: 0 };
-  return;
+  return wordDomPoint(paragraph, position.offset - start(paragraph));
 }
 
 /** Call after the framework has committed the updated paragraph DOM. Retains backward selections. */
@@ -74,13 +69,9 @@ export function wordBrowserSelectionRects(root: HTMLElement, selection: WordNati
   return [...range.getClientRects()];
 }
 
-export function wordBrowserPositionAtPoint(root: HTMLElement, x: number, y: number): WordNativePosition | undefined {
-  const document = root.ownerDocument as Document & {
-    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
-    caretRangeFromPoint?: (x: number, y: number) => Range | null;
-  };
-  const caret = document.caretPositionFromPoint?.(x, y);
-  if (caret) return wordPositionFromDom(root, caret.offsetNode, caret.offset);
-  const range = document.caretRangeFromPoint?.(x, y);
-  return range ? wordPositionFromDom(root, range.startContainer, range.startOffset) : undefined;
+/** Unspecified affinity accepts either visual caret at the same logical position. */
+export function sameWordBrowserSelection(left: WordNativeSelection | undefined, right: WordNativeSelection): boolean {
+  const same = (left: WordNativePosition, right: WordNativePosition) => left.paragraphId === right.paragraphId && left.offset === right.offset &&
+    (left.affinity === undefined || right.affinity === undefined || left.affinity === right.affinity);
+  return left !== undefined && same(left.anchor, right.anchor) && same(left.focus, right.focus);
 }

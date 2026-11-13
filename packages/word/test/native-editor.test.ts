@@ -93,3 +93,19 @@ test('undo restores the supplied command range even before a host selection noti
   expect(editor.selection).toEqual(range);
   expect(text(editor)).toEqual(['Hello']);
 });
+
+test('caret affinity samples and inherits the intended side of a formatting boundary', () => {
+  for (const affinity of ['before', 'after'] as const) {
+    const editor = new NativeWordEditor({ content: [{ kind: 'paragraph', id: 'a', runs: [
+      { text: 'A', format: { bold: true } }, { text: 'B', format: { italic: true } },
+    ] }] });
+    const position = { paragraphId: 'a', offset: 1, affinity };
+    expect(editor.formatAt(position).bold).toBe(affinity === 'after');
+    expect(editor.formatAt(position).italic).toBe(affinity === 'before');
+    editor.replaceText('X', { anchor: position, focus: position });
+    expect(editor.formatAt().bold).toBe(affinity === 'after');
+    expect(editor.formatAt().italic).toBe(affinity === 'before');
+    editor.undo();
+    expect(editor.selection).toEqual({ anchor: position, focus: position });
+  }
+});

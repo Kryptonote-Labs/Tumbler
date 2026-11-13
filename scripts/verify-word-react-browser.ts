@@ -1,14 +1,15 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { chromium, type Page } from 'playwright-core';
+import { chromium, firefox, type Page } from 'playwright-core';
+import { verifyWordPointerBrowser, textPoint, dragText, showLine } from './verify-word-pointer-browser.ts';
 
-/** Exercise the built, packed consumer in Chromium without a development server. */
-export async function verifyWordReactBrowser(directory: string) {
-  const browser = await chromium.launch({ headless: true });
+/** Exercise the built, packed consumer in a real browser without a development server. */
+export async function verifyWordReactBrowser(directory: string, engine: 'chromium' | 'firefox' = 'chromium', launchOptions: Parameters<typeof chromium.launch>[0] = { headless: true }) {
+  const browser = await (engine === 'firefox' ? firefox : chromium).launch(launchOptions);
   try {
     const page = await browser.newPage();
     const errors: Error[] = [];
-    page.on('pageerror', error => errors.push(error));
+    page.on('pageerror', error => { errors.push(error); console.error(`Browser error: ${error.message}`); });
     await page.route('http://tumbler.test/**', async route => {
       const path = new URL(route.request().url()).pathname;
       const file = Bun.file(join(directory, 'dist', path === '/' ? 'index.html' : path));
@@ -21,6 +22,7 @@ export async function verifyWordReactBrowser(directory: string) {
     assert.equal(await editor.innerText(), 'Edit this highlighted text.');
     assert.equal(await page.locator('[contenteditable="true"]').count(), 1);
     assert.equal(await editor.locator('.word-page').count(), 1);
+    await verifyWordPointerBrowser(page);
     const paper = await editor.locator('.word-page').boundingBox();
     const textBounds = await editor.locator('p').first().boundingBox();
     assert(paper && textBounds && textBounds.x >= paper.x + 90 && textBounds.y >= paper.y + 90);
@@ -68,27 +70,50 @@ export async function verifyWordReactBrowser(directory: string) {
     assert.equal(await editor.innerText(), '👩‍💻');
     await page.keyboard.press('Backspace');
     assert.equal((await editor.innerText()).trim(), '');
-    await editor.evaluate(root => {
-      const clipboard = new DataTransfer();
-      clipboard.setData('text/plain', 'Pasted\r\nsecond line');
-      root.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }));
-    });
+    await pasteText(page, 'Pasted\r\nsecond line');
     assert.equal(await editor.locator('p').count(), 2);
     assert.equal(await editor.locator('p').nth(1).innerText(), 'second line');
     await page.keyboard.press('Control+a');
-    const copied = await editor.evaluate(root => {
-      const clipboard = new DataTransfer();
-      root.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: clipboard }));
-      return clipboard.getData('text/plain');
-    });
+    const copied = await copyText(page);
     assert.equal(copied, 'Pasted\nsecond line');
     const longText = 'Wrapped words '.repeat(600) + 'end';
-    await editor.evaluate((root, text) => {
-      const clipboard = new DataTransfer();
-      clipboard.setData('text/plain', text);
-      root.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }));
-    }, longText);
+    await pasteText(page, longText);
     assert(await editor.locator('.word-page').count() > 1);
+    const firstLine = editor.locator('p').nth(0);
+    const secondLine = editor.locator('p').nth(1);
+    await showLine(firstLine);
+    const lineEnd = await firstLine.evaluate(element => element.textContent!.length);
+    const wrapPoint = await textPoint(firstLine, lineEnd);
+    await page.mouse.click(wrapPoint.x, wrapPoint.y);
+    assert(await firstLine.evaluate(element => element.contains(getSelection()!.focusNode)));
+    const firstPoint = await textPoint(firstLine, 2);
+    const secondPoint = await textPoint(secondLine, 5);
+    await dragText(page, firstPoint, secondPoint);
+    const secondStart = Number(await secondLine.getAttribute('data-word-start'));
+    assert.equal(await copyText(page), longText.slice(2, secondStart + 5));
+    await dragText(page, secondPoint, firstPoint);
+    assert.equal(await copyText(page), longText.slice(2, secondStart + 5));
+
+    const lastOnPage = editor.locator('.word-page').nth(0).locator('p').last();
+    const firstOnNextPage = editor.locator('.word-page').nth(1).locator('p').first();
+    await showLine(lastOnPage);
+    const beforeGap = await textPoint(lastOnPage, 3);
+    const afterGap = await textPoint(firstOnNextPage, 6);
+    const pageStart = Number(await lastOnPage.getAttribute('data-word-start')) + 3;
+    const pageEnd = Number(await firstOnNextPage.getAttribute('data-word-start')) + 6;
+    await dragText(page, beforeGap, afterGap);
+    assert.equal(await copyText(page), longText.slice(pageStart, pageEnd));
+    await dragText(page, afterGap, beforeGap);
+    assert.equal(await copyText(page), longText.slice(pageStart, pageEnd));
+
+    await showLine(firstLine);
+    const scrollStart = await page.evaluate(() => scrollY);
+    const topPoint = await textPoint(firstLine, 0);
+    await page.mouse.move(topPoint.x, topPoint.y);
+    await page.mouse.down();
+    await page.mouse.move(topPoint.x + 20, page.viewportSize()!.height - 2, { steps: 15 });
+    await page.waitForFunction(start => scrollY > start + 60, scrollStart, { timeout: 3000 });
+    await page.mouse.up();
     // The same native paragraph continues across line and page DOM boundaries.
     await editor.locator('.word-page').nth(1).locator('p').first().click({ position: { x: 20, y: 6 } });
     await page.keyboard.type('Z');
@@ -105,7 +130,7 @@ export async function verifyWordReactBrowser(directory: string) {
     await page.keyboard.press('Control+a');
     assert.equal(await copyText(page), longText);
     assert.deepEqual(errors, []);
-    console.log('React browser checks passed: formatting/export, typing, paragraph split, undo/redo, IME deduplication, grapheme deletion, select-all, clipboard, in-page pointer input, wrapped paragraph/page selection.');
+    console.log(`${engine} React browser checks passed: formatting/export, typing, paragraph split, undo/redo, IME deduplication, grapheme deletion, select-all, clipboard, forward/backward/margin drag, word/paragraph/shift selection, wrapped lines/pages, drag scrolling.`);
   } finally { await browser.close(); }
 }
 
@@ -132,8 +157,17 @@ async function select(page: Page, start: number, end = start) {
 
 async function copyText(page: Page) {
   return page.getByRole('textbox', { name: 'Document text' }).evaluate(root => {
-    const clipboard = new DataTransfer();
-    root.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: clipboard }));
-    return clipboard.getData('text/plain');
+    const event = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: new DataTransfer() });
+    root.dispatchEvent(event);
+    return event.clipboardData!.getData('text/plain');
   });
+}
+
+async function pasteText(page: Page, text: string) {
+  await page.getByRole('textbox', { name: 'Document text' }).evaluate((root, text) => {
+    const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: new DataTransfer() });
+    // Firefox creates its own clipboard store for synthetic events.
+    event.clipboardData!.setData('text/plain', text);
+    root.dispatchEvent(event);
+  }, text);
 }

@@ -30,7 +30,11 @@ await import('node:fs/promises').then(({ rm }) => rm(join(example, 'node_modules
 await run(['bun', 'run', 'check'], example);
 await run(['bun', 'run', 'build'], example);
 console.log(`Verified React consumer without Yjs: ${example}`);
-if (process.argv.includes('--browser')) {
+if (process.argv.includes('--browser') || process.argv.includes('--firefox')) {
   const { verifyWordReactBrowser } = await import('./verify-word-react-browser.ts');
-  await verifyWordReactBrowser(example);
+  if (process.argv.includes('--browser')) await verifyWordReactBrowser(example);
+  if (process.argv.includes('--firefox')) {
+    const executablePath = process.env.PLAYWRIGHT_FIREFOX_EXECUTABLE;
+    await verifyWordReactBrowser(example, 'firefox', { headless: true, ...(executablePath ? { executablePath } : {}) });
+  }
 }

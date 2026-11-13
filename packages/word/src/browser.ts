@@ -1,5 +1,6 @@
-export { WordBrowserInput } from './browser-input.ts';
+export { WordBrowserInput, type WordBrowserInputOptions } from './browser-input.ts';
 export {
   wordBrowserSelection, restoreWordBrowserSelection, wordBrowserSelectionRects,
-  wordBrowserPositionAtPoint, wordPositionFromDom,
+  wordPositionFromDom,
 } from './browser-selection.ts';
+export { wordBrowserPositionAtPoint } from './browser-hit-testing.ts';

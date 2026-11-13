@@ -12,7 +12,9 @@ bun scripts/verify-word-consumer.ts --browser
 
 This packs the local packages and installs this example outside the workspace,
 then runs strict TypeScript checking without Yjs, a Vite production build,
-and Chromium editing checks. Omit `--browser` to run only the typecheck and build.
+and Chromium editing checks, including real mouse dragging. Add `--firefox` to
+check Firefox too. Omit the browser flags to run only the typecheck and build.
+If needed, install browsers with `bunx playwright-core install chromium firefox`.
 It prints the consumer directory. Run `bun run dev` there to use the example.
 After these APIs are released, set this example's Word dependency to that release
 and use `bun install`, `bun run check`, and `bun run dev` here directly.
@@ -27,6 +29,10 @@ formatting. The page itself is editable: Tumbler computes line wrapping and
 pagination, and React positions editable text at those layout coordinates. There
 is one document view, with the browser caret and selection inside the pages.
 Wrapped lines and page continuations map back to stable native paragraph offsets.
+The shared adapter owns mouse hit testing, forward/backward dragging, shift-click,
+double-click word selection, triple-click paragraph selection, and drag scrolling.
+The example has no pointer-selection handlers. Inline text spans keep keyboard
+word navigation continuous across formatting changes.
 It is not a full document UI for tables, drawings, or mixed-format toolbar state. The browser adapter uses browser DOM selection geometry and
 expects the host to call `restoreSelection` after committing a render. The keyed
 editable children replace provisional DOM when composition ends; ordinary

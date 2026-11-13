@@ -558,22 +558,38 @@ UTF-16 paragraph offset. Multiple elements may share a paragraph ID across wraps
 and page continuations; selection restoration resolves the matching offset range.
 
 Native positions use stable `paragraphId` strings and UTF-16 offsets at grapheme boundaries.
-Selections preserve anchor/focus direction. Each command is one undo step, including a
+Selections preserve anchor/focus direction. Optional `affinity: 'after'` keeps a caret
+at the end of the preceding run/line; `'before'` keeps it at the start of the following
+run/line. Pointer input supplies affinity automatically, including at page continuations.
+Each command is one undo step, including a
 multi-paragraph paste or completed IME composition. History restores the selection too.
 `formatAt(position)` resolves character formatting without layout; `typingFormat` holds
 pending caret overrides. `formatAt` samples one position, not mixed formatting across a range.
 
 The optional browser adapter owns event listeners, plain-text copy/cut/paste, IME commits,
-and selection mapping/restoration. The host owns rendering and styles. Browser selection
+and selection mapping/restoration. It also owns mouse dragging, shift-click extension,
+word/paragraph selection, select-all, and drag scrolling. Hosts do not need pointer handlers.
+Hit testing clamps page-margin clicks to the nearest grapheme rather than relying on the
+browser to select positioned text. It preserves the drag anchor through host renders.
+Touch retains the browser's native selection handles. The host owns rendering and styles. Browser selection
 rectangles and point hit testing use rendered DOM text, including wrapping and bidirectional
 text. They are viewport CSS pixels, not native page points. This adapter does not provide
 canvas character geometry or rich HTML clipboard conversion. Text replacement works across
 adjacent paragraphs in one body/cell block list; crossing cells or structural blocks requires
 a structural editing command and is rejected before the model changes. Formatting can span cells.
 
+Render text fragments as inline spans rather than inline blocks, so native keyboard
+word navigation can continue across formatting boundaries. Set the root contenteditable
+and mark controls/decorations `contenteditable="false"`. The default mouse selection can
+be disabled with `{ pointerSelection: false }`. Hosts with additional clipping or custom
+geometry can supply `positionAtPoint(x, y)`; `scrollElement` chooses a drag-scroll container
+instead of automatic ancestor/window detection.
+
 See `examples/react-word` for a React editor with editable native-layout pages, and run
 `bun scripts/verify-word-consumer.ts` to install packed local packages in an isolated
-consumer, typecheck without Yjs, and build it.
+consumer, typecheck without Yjs, and build it. Add `--browser --firefox` for Chromium
+and Firefox input and real mouse-drag checks. Install the matching browser binaries with
+`bunx playwright-core install chromium firefox` if needed.
 
 ### Set, clear, and inherit native run formatting
 

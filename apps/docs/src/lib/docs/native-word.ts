@@ -71,7 +71,7 @@ const output = model.artifact().bytes();` },
       { kind: 'link', href: '/docs/word-stories#stories', label: 'Edit shared headers and footers' },
     ] },
     { id: 'custom-editor', title: 'Build a custom browser editor', blocks: [
-      { kind: 'text', text: '`NativeWordEditor` connects rich text replacement, paragraph splits and joins, formatting, pending typing marks and selection-aware undo to `NativeWordDocument.update`. It needs no Yjs. Its `document` supplies native layout and export. Use the optional `@tumblerjs/word/browser` adapter for host-rendered contenteditable paragraphs and plain-text clipboard input.' },
+      { kind: 'text', text: '`NativeWordEditor` connects rich text replacement, paragraph splits and joins, formatting, pending typing marks and selection-aware undo to `NativeWordDocument.update`. It needs no Yjs. Its `document` supplies native layout and export. Use the optional `@tumblerjs/word/browser` adapter for host-rendered contenteditable paragraphs, plain-text clipboard input and shared pointer selection. It handles mouse dragging, shift-click, word/paragraph selection and drag scrolling.' },
       { kind: 'code', code: `import { NativeWordEditor } from '@tumblerjs/word';
 import { WordBrowserInput } from '@tumblerjs/word/browser';
 

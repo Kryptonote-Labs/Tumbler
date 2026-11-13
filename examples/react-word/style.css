@@ -6,6 +6,6 @@ button { padding: 6px 10px; }
 .document-editor { padding: 12px 4px; outline: none; overflow-x: auto; caret-color: #205bc6; }
 .word-page { position: relative; margin: 0 auto 24px; background: white; box-shadow: 0 1px 6px #0002; cursor: text; }
 .text-line { position: absolute; margin: 0; padding: 0; border: 0; white-space: pre; font-size: 0; line-height: 0; }
-.text-fragment { display: inline-block; position: relative; vertical-align: top; }
+.text-fragment { display: inline; position: relative; vertical-align: top; }
 .empty-line { display: inline-block; width: 1px; }
 ::selection { background: #b5d1fa; }

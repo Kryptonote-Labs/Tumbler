@@ -1,14 +1,22 @@
+import { WordBrowserPointer, type WordBrowserPointerOptions } from './browser-pointer.ts';
 import type { NativeWordEditor } from './native-editor.ts';
 import { nativeParagraphs, paragraphText, orderedNativeSelection, type WordNativeSelection } from './native-edit.ts';
-import { restoreWordBrowserSelection, wordBrowserSelection, wordPositionFromDom } from './browser-selection.ts';
+import { restoreWordBrowserSelection, wordBrowserSelection, wordPositionFromDom, sameWordBrowserSelection } from './browser-selection.ts';
+
+export interface WordBrowserInputOptions extends WordBrowserPointerOptions {
+  /** Defaults to shared mouse selection. Set false to retain native mouse selection instead. */
+  readonly pointerSelection?: boolean;
+}
 
 /** Optional DOM adapter for host-rendered contenteditable paragraphs. Clipboard input is plain text. */
 export class WordBrowserInput {
+  private readonly pointer: WordBrowserPointer | undefined;
   private composition: WordNativeSelection | undefined;
   private compositionCommit: string | undefined;
   private commitTimer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(private readonly root: HTMLElement, private readonly editor: NativeWordEditor) {
+  constructor(private readonly root: HTMLElement, private readonly editor: NativeWordEditor, options: WordBrowserInputOptions = {}) {
+    this.pointer = options.pointerSelection === false ? undefined : new WordBrowserPointer(root, editor, { ...options, enabled: () => !this.composing });
     root.addEventListener('beforeinput', this.beforeInput);
     root.addEventListener('keydown', this.keyDown);
     root.addEventListener('paste', this.paste);
@@ -23,13 +31,14 @@ export class WordBrowserInput {
 
   /** Restore after the host commits its render, never during IME composition. */
   restoreSelection() {
-    if (!this.composing && this.root.contains(this.root.ownerDocument.activeElement) &&
-      JSON.stringify(wordBrowserSelection(this.root)) !== JSON.stringify(this.editor.selection))
+    if (!this.composing && !this.pointer?.dragging && this.root.contains(this.root.ownerDocument.activeElement) &&
+      !sameWordBrowserSelection(wordBrowserSelection(this.root), this.editor.selection))
       restoreWordBrowserSelection(this.root, this.editor.selection);
   }
 
   destroy() {
     clearTimeout(this.commitTimer);
+    this.pointer?.destroy();
     this.root.removeEventListener('beforeinput', this.beforeInput);
     this.root.removeEventListener('keydown', this.keyDown);
     this.root.removeEventListener('paste', this.paste);
@@ -41,9 +50,9 @@ export class WordBrowserInput {
   }
 
   private selectionChange = () => {
-    if (this.composing) return;
+    if (this.composing || this.pointer?.dragging) return;
     const selection = wordBrowserSelection(this.root);
-    if (selection && JSON.stringify(selection) !== JSON.stringify(this.editor.selection)) this.editor.setSelection(selection);
+    if (selection && !sameWordBrowserSelection(selection, this.editor.selection)) this.editor.setSelection(selection);
   };
 
   private beforeInput = (event: InputEvent) => {
@@ -111,6 +120,19 @@ export class WordBrowserInput {
 
   private keyDown = (event: KeyboardEvent) => {
     if (this.composing || event.isComposing || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+    if (event.key.toLowerCase() === 'a') {
+      const paragraphs = nativeParagraphs(this.editor.blocks);
+      const first = paragraphs[0]!;
+      const last = paragraphs.at(-1)!;
+      event.preventDefault();
+      const selection = {
+        anchor: { paragraphId: first.id, offset: 0 },
+        focus: { paragraphId: last.id, offset: paragraphText(last).length },
+      };
+      this.editor.setSelection(selection);
+      restoreWordBrowserSelection(this.root, selection);
+      return;
+    }
     if (event.key.toLowerCase() !== 'z' && event.key.toLowerCase() !== 'y') return;
     event.preventDefault();
     if (event.shiftKey || event.key.toLowerCase() === 'y') this.editor.redo(); else this.editor.undo();

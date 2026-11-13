@@ -2,7 +2,12 @@ import type { WordContentBlock } from './create-content.ts';
 import type { WordTextParagraph, WordTextRun } from './create.ts';
 
 export type WordNativeParagraph = Extract<WordContentBlock, { kind: 'paragraph' }> & { readonly id: string };
-export interface WordNativePosition { readonly paragraphId: string; readonly offset: number }
+export interface WordNativePosition {
+  readonly paragraphId: string;
+  readonly offset: number;
+  /** At a wrap/run boundary, before uses following text and after uses preceding text. */
+  readonly affinity?: 'before' | 'after';
+}
 export interface WordNativeSelection { readonly anchor: WordNativePosition; readonly focus: WordNativePosition }
 
 export function nativeParagraphs(blocks: readonly WordContentBlock[]): WordNativeParagraph[] {
