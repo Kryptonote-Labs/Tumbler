@@ -9,14 +9,17 @@ export const spreadsheetViewerDoc: Doc = {
       { kind: 'text', text: '`@tumblerjs/sheets` opens an XLSX file from `Uint8Array` bytes and gives you the methods for editing it. `@tumblerjs/svelte` displays the result, and `@tumblerjs/core` holds types both of them share, such as `GridSelection`. Because the input is plain bytes, the file can come from an upload, `fetch` or your own storage.' },
       { kind: 'text', text: 'Each example below is a component that takes the file as a `bytes` prop. To run the first one, save it as `GridPreview.svelte`, put your workbook in `static/`, and load it from `+page.svelte`:' },
       { kind: 'code', language: 'Svelte', code: `<script lang="ts">
+  import { onMount } from 'svelte';
   import GridPreview from './GridPreview.svelte';
 
-  const file = fetch('/project-budget.xlsx')
-    .then((response) => response.arrayBuffer())
-    .then((buffer) => new Uint8Array(buffer));
+  let bytes = $state<Uint8Array>();
+  onMount(async () => {
+    const response = await fetch('/project-budget.xlsx');
+    bytes = new Uint8Array(await response.arrayBuffer());
+  });
 </script>
 
-{#await file then bytes}<GridPreview {bytes} />{/await}` },
+{#if bytes}<GridPreview {bytes} />{/if}` },
     ] },
     { id: 'render', title: 'Render a worksheet', blocks: [
       { kind: 'text', text: '`openSpreadsheetArtifact(bytes)` opens the workbook as an artifact, with its first visible sheet selected.' },

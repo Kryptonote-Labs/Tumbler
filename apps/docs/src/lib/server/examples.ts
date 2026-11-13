@@ -6,19 +6,22 @@ export function highlightExample(id: ExampleId) {
   return highlight(examples[id].source, 'Svelte');
 }
 
-/** Caller code for an example that takes document bytes: fetch the file, then pass `bytes`. */
+/** Caller code for an example that takes document bytes: fetch the file in the browser, then pass `bytes`. */
 export async function highlightLoader(id: ExampleId) {
   const { file, sample } = examples[id];
   if (!sample) return undefined;
   const name = file.replace('.svelte', '');
   const code = `<script lang="ts">
+  import { onMount } from 'svelte';
   import ${name} from './${file}';
 
-  const file = fetch('/${sample}')
-    .then((response) => response.arrayBuffer())
-    .then((buffer) => new Uint8Array(buffer));
+  let bytes = $state<Uint8Array>();
+  onMount(async () => {
+    const response = await fetch('/${sample}');
+    bytes = new Uint8Array(await response.arrayBuffer());
+  });
 </script>
 
-{#await file then bytes}<${name} {bytes} />{/await}`;
+{#if bytes}<${name} {bytes} />{/if}`;
   return { code, html: await highlight(code, 'Svelte'), title: '+page.svelte', file, sample };
 }
