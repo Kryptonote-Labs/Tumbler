@@ -2,36 +2,39 @@ import type { Doc } from './types';
 
 export const compatibilityDoc: Doc = {
   title: 'Format support',
-  description: 'Find the right compatibility guide and check an edited file.',
+  description: 'Which formats Tumbler handles today, and how to check a file of your own.',
   sections: [
-    { id: 'formats', title: 'Current scope', blocks: [
-        { kind: 'table', headers: ['Format', 'Available today', 'Limits'], rows: [
-          ['DOCX', 'Paginated rendering, text edits, formatting, tables, embedded images, and supported charts.', 'Incomplete Word layout and feature coverage. Font availability affects pagination.'],
-          ['XLSX', 'Virtualized grid, cell and ordinary formula edits, formatting, tables, and supported charts.', 'Formula and workbook feature coverage remains incomplete.'],
-          ['DOC / XLS / PPT', 'Not supported.', 'Convert legacy binary files to DOCX, XLSX, or PPTX first.'],
-          ['PPTX', 'Slide viewing, thumbnail navigation, text and table-cell editing, formatting, and object movement, resizing, and rotation.', 'SmartArt relayout, complete shape effects, and full animation/layout fidelity remain unsupported.'],
-          ['PDF', 'Source-preserving rendering, text selection, search, collaborative text editing, annotations and page assembly.', 'Incomplete ISO 32000-1 coverage. Unsupported rendering structures fail explicitly. Editing needs host fonts; assembly can reject unsupported structures.'],
-        ] },
+    { id: 'formats', title: 'Formats', blocks: [
+      { kind: 'table', headers: ['Format', 'Works today', 'Missing'], rows: [
+        ['DOCX', 'Pages, text editing, formatting, tables, images and supported charts.', 'Some Word layout features. Missing fonts change where pages break.'],
+        ['XLSX', 'Large grids, values and ordinary formulas, formatting, tables and supported charts.', 'Some formulas and workbook features.'],
+        ['PPTX', 'Slides and thumbnails, text and table editing, formatting, and moving, resizing and rotating objects.', 'SmartArt layout, some shape effects, and full animation.'],
+        ['PDF', 'Pages, text selection, search, collaborative text editing, annotations and combining pages.', 'Parts of the PDF standard. Unsupported content raises an error instead of being skipped. Editing needs fonts from your app.'],
+        ['DOC, XLS, PPT', 'Not supported.', 'Convert older binary files to DOCX, XLSX or PPTX first.'],
+      ] },
     ] },
-    { id: 'formats-guides', title: 'Support by format', blocks: [
-        { kind: 'link', href: '/docs/pdf', label: 'PDF support and limitations' },
-        { kind: 'link', href: '/docs/word-support', label: 'Word support and limitations' },
-        { kind: 'link', href: '/docs/spreadsheet-support', label: 'Spreadsheet support and limitations' },
-        { kind: 'link', href: '/docs/powerpoint-support', label: 'PowerPoint support and limitations' },
+    { id: 'formats-guides', title: 'Details by format', blocks: [
+      { kind: 'link', href: '/docs/word-support', label: 'Word compatibility' },
+      { kind: 'link', href: '/docs/spreadsheet-support', label: 'Spreadsheet compatibility' },
+      { kind: 'link', href: '/docs/powerpoint-support', label: 'PowerPoint compatibility' },
+      { kind: 'link', href: '/docs/pdf#limits', label: 'PDF limits' },
     ] },
-    { id: 'checking', title: 'Check a real document', blocks: [
-        { kind: 'list', items: [
-          'Keep an unchanged original.',
-          'Open the file in the playground and inspect the content, page edges, and fonts.',
-          'Make a small edit and download the result.',
-          'Reopen the exported file in the application that will consume it.',
-          'Report a minimal, non-confidential example when something differs.',
-        ] },
-        { kind: 'text', text: 'The repository includes package tests and compatibility workflows using LibreOffice and the Open XML SDK. Passing those checks is evidence for the exercised cases, not a guarantee for all Office files.' },
+    { id: 'checking', title: 'Check one of your files', blocks: [
+      { kind: 'list', items: [
+        'Keep an unchanged copy of the original.',
+        'Open the file in the playground and check the content, page edges and fonts.',
+        'Make a small edit and download the result.',
+        'Open the download in the app that will use it.',
+        'If something differs, report it with a small example that contains nothing confidential.',
+      ] },
+      { kind: 'text', text: 'Tumbler\'s tests also check files with LibreOffice and the Open XML SDK. Passing those checks shows the tested cases work, not that every Office file will.' },
     ] },
-    { id: 'privacy', title: 'Local files', blocks: [
-        { kind: 'text', text: 'The playground reads selected files into browser memory. It does not upload them or save them to a server. Downloads are generated from the current in-memory artifact. Refreshing the page discards edits.' },
-        { kind: 'text', text: 'The playground accepts DOCX, XLSX, and PPTX files up to 20 MB. External links in presentations can open in a new tab in View mode; clicking linked text in Edit mode edits the text.' },
+    { id: 'privacy', title: 'Your files stay local', blocks: [
+      { kind: 'text', text: 'The playground reads files into browser memory. It never uploads them or saves them to a server. Downloads are built from what is in memory, and reloading the page throws away your edits.' },
+      { kind: 'list', items: [
+        'The playground accepts DOCX, XLSX and PPTX files up to 20 MB.',
+        'In a presentation, external links open in a new tab in View mode. In Edit mode, clicking a link edits its text.',
+      ] },
     ] },
   ],
   source: 'apps/docs/src/lib/docs/compatibility.ts',

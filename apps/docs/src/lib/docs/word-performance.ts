@@ -2,22 +2,44 @@ import type { Doc } from './types';
 
 export const wordPerformanceDoc: Doc = {
   title: 'Layout caching and projections',
-  description: 'Reuse unchanged native geometry and collaborative content projections.',
+  description: 'Keep editing fast by reusing layout and content that did not change.',
   sections: [
     { id: 'layout', title: 'Reuse layout work', blocks: [
-        { kind: 'text', text: 'Unchanged paragraphs retain their objects. Layout caches prepared paragraph geometry and reuses positioned lines and pages when their geometry and content remain unchanged. Wrapping, list markers, available width, and measurer identity participate in invalidation.' },
-        { kind: 'text', text: 'Keep one measurer object while its font metrics remain valid; replace it when fonts or measurement behavior change.' },
-        { kind: 'text', text: 'cache.measuredParagraphs is a cumulative measurement counter for diagnostics. Updates still walk the authored tree and pagination still visits content. This API does not promise constant-time edits or viewport-only pagination. A small edit can move following content and require new page geometry.' },
-        { kind: 'text', text: 'layout returns WordLayout, with page, column, line, table, and fragment geometry in points. The application owns rendering, input, selection, and converting points to screen coordinates. Optional maxPages and maxFragments are caller-controlled layout work budgets; exceeding them throws rather than truncating content.' },
+      { kind: 'text', text: '`NativeWordDocument` keeps the objects for paragraphs that did not change. Layout caches each paragraph\'s measured geometry, and reuses lines and pages whose content and geometry are the same as last time.' },
+      { kind: 'text', text: 'A paragraph is laid out again when any of these change:' },
+      { kind: 'list', items: [
+        'its content or wrapping;',
+        'its list marker;',
+        'the width available to it;',
+        'the measurer object.',
+      ] },
+      { kind: 'text', text: 'So keep one measurer object for as long as its font metrics are valid, and create a new one only when fonts or measurement change.' },
+      { kind: 'note', text: 'Caching does not make edits constant-time. Every update still walks the whole document, and pagination still visits all of it. A small edit can push the following content onto new pages.' },
+      { kind: 'text', text: '`cache.measuredParagraphs` counts how many paragraphs have been measured in total. Use it to check that caching is working.' },
+      { kind: 'text', text: '`layout` returns a `WordLayout` with page, column, line, table and fragment geometry in points. Your app draws it, handles input and selection, and converts points to screen coordinates.' },
+      { kind: 'link', href: '/docs/word-layout#limits', label: 'Layout budgets' },
     ] },
-    { id: 'projection', title: 'Reuse unchanged paragraphs and tables', blocks: [
-        { kind: 'text', text: 'WordParagraphProjection(body, project) consumes transaction deltas and calls project only for changed slices when paragraphs is read. Slices include stable terminator identity, UTF-16 length, formatted parts, and the terminating newline when present. Call destroy when finished. wordParagraphIdentity exposes the underlying terminator identity.' },
-        { kind: 'text', text: 'WordTableProjection.update(paragraphs) reuses unchanged table trees while checking table contiguity. Treat slices and projected values as immutable. NativeWordDocument({ immutableContent: true }) additionally caches authored signatures by object identity; every supplied descendant must remain immutable.' },
-        { kind: 'text', text: 'Updates still require document traversal for offsets, numbering, and source continuations. Export at download or persistence boundaries rather than rebuilding and reparsing DOCX on every keystroke.' },
+    { id: 'projection', title: 'Reuse unchanged collaborative content', blocks: [
+      { kind: 'text', text: 'When the document lives in Yjs, two classes from `@tumblerjs/word/collaboration` turn the shared text into your own values and redo only the parts that changed.' },
+      { kind: 'table', headers: ['Class', 'Does'], rows: [
+        ['`WordParagraphProjection(body, project)`', 'Watches the shared text and calls `project` only for paragraphs that changed, when you next read `paragraphs`. Call `destroy` when you are done.'],
+        ['`WordTableProjection`', 'Its `update(paragraphs)` rebuilds only the tables that changed.'],
+      ] },
+      { kind: 'text', text: 'Each paragraph slice has a stable identity, its UTF-16 length, its formatted parts and its closing newline, if any. `wordParagraphIdentity` returns that identity. Treat slices and your projected values as read-only.' },
+      { kind: 'text', text: 'Pass `immutableContent: true` to `NativeWordDocument` to skip re-checking blocks it has seen before. It compares blocks by object, so every block you pass, and everything inside it, must never change afterwards.' },
+      { kind: 'note', text: 'Build the DOCX only when the user downloads or you save. Exporting and reopening it on every keystroke throws away all of this reuse.' },
     ] },
-    { id: 'placement', title: 'Composed placement and page numbers', blocks: [
-        { kind: 'text', text: 'positionedWordEdit stages a composed placement edit. wordPageNumberRange and wordItemAlignment inspect existing content; pageNumberEdit and alignWordItem create edits for numbering and alignment. clickAndTypeEdit applies the intent returned by wordClickAndTypeTarget. Use these shared operations for human gestures and agent edits.' },
-        { kind: 'link', href: '/docs/word-layout#positioning', label: 'Positioning and page geometry' },
+    { id: 'placement', title: 'Page numbers and alignment', blocks: [
+      { kind: 'text', text: '`@tumblerjs/word/collaboration` also has helpers for edits that combine several changes. Use them for both user gestures and automated edits, so both behave the same way.' },
+      { kind: 'table', headers: ['Function', 'Does'], rows: [
+        ['`wordPageNumberRange`', 'Finds the page number at the caret, if there is one.'],
+        ['`pageNumberEdit`', 'Updates the selected page number, or inserts a new one at the caret.'],
+        ['`wordItemAlignment`', 'Reads how an inline item is aligned in its paragraph.'],
+        ['`alignWordItem`', 'Aligns an inline item left, centre or right.'],
+        ['`positionedWordEdit`', 'Runs your own structural edit on a staged copy and returns it as one checked change.'],
+        ['`clickAndTypeEdit`', 'Applies the result of `wordClickAndTypeTarget`.'],
+      ] },
+      { kind: 'link', href: '/docs/word-layout#hit-testing', label: 'Points and lines' },
     ] },
   ],
   source: 'apps/docs/src/lib/docs/word-performance.ts',

@@ -2,11 +2,11 @@ import type { Doc } from './types';
 
 export const powerpointNavigationDoc: Doc = {
   title: 'Slide navigation',
-  description: 'Connect thumbnails and internal slide links to the active slide.',
+  description: 'Add thumbnails, and follow links from one slide to another.',
   sections: [
-    { id: 'navigation', title: 'Add slide navigation', blocks: [
-        { kind: 'text', text: 'Bind PresentationSlideRail to an index and use that index for the main view. Handle onslide so links inside the presentation can switch slides too.' },
-        { kind: 'code', language: 'Svelte', code: `<script lang="ts">
+    { id: 'navigation', title: 'Add thumbnails', blocks: [
+      { kind: 'text', text: '`PresentationSlideRail` shows a thumbnail of every slide. Bind its `index` to a variable, and use the same variable to choose the slide in the main view. Clicking a thumbnail then changes the slide.' },
+      { kind: 'code', language: 'Svelte', code: `<script lang="ts">
   import type { PresentationDocument } from '@tumblerjs/slides';
   import { PresentationSlideRail, PresentationSlideView } from '@tumblerjs/svelte/slides';
 
@@ -31,6 +31,9 @@ export const powerpointNavigationDoc: Doc = {
     {/if}
   </div>
 </div>` },
+    ] },
+    { id: 'links', title: 'Follow links between slides', blocks: [
+      { kind: 'text', text: 'When the user clicks a link to another slide, the view calls `onslide` with that slide\'s `part`. Find the slide with that `part` and set `index`, as in the example above. Without `onslide`, these links do nothing.' },
     ] },
   ],
   source: 'apps/docs/src/lib/docs/powerpoint-navigation.ts',

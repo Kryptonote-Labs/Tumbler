@@ -2,32 +2,32 @@ import type { Doc } from './types';
 
 export const wordDoc: Doc = {
   title: 'Word documents',
-  description: 'Choose a viewer, edit a DOCX, or build on the native content model.',
+  description: 'Show and edit DOCX files, or build documents from your own content.',
   sections: [
-    { id: 'alpha-27', title: 'New in alpha.27', blocks: [
-      { kind: 'link', href: '/docs/releases', label: 'Authoring additions and migration notes' },
-      { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/packages/word/README.md', label: 'Native commands and package API' },
-      { kind: 'link', href: '/docs/charts', label: 'Shared chart authoring and rendering' },
-      { kind: 'link', href: '/docs/cli', label: 'Command-line operations' },
+    { id: 'models', title: 'Choose an approach', blocks: [
+      { kind: 'text', text: 'There are two ways to work with Word documents. Pick the one that matches who owns the content.' },
+      { kind: 'table', headers: ['If', 'Use', 'Read'], rows: [
+        ['Users open a DOCX file and edit it', '`WordDocumentView` with an editing session', '[Open and edit](/docs/word-editing)'],
+        ['Your app holds the content and builds the DOCX', '`NativeWordDocument`', '[Native content model](/docs/native-word)'],
+        ['Several people edit the same document', '`NativeWordDocument` with the Yjs adapter', '[Collaborative editing](/docs/word-collaboration)'],
+      ] },
     ] },
-    { id: 'models', title: 'Choose an integration', blocks: [
-        { kind: 'text', text: 'Use WordDocumentView and a Word editing session to render and edit an existing DOCX.' },
-        { kind: 'link', href: '/docs/word-editing', label: 'Open and edit a document' },
-        { kind: 'text', text: 'Use NativeWordDocument when your application owns rich content, input, and rendering. Add the optional Yjs adapter for anchored human and agent operations.' },
-        { kind: 'link', href: '/docs/native-word', label: 'Create and update native content' },
-        { kind: 'link', href: '/docs/word-collaboration', label: 'Connect collaborative editing' },
+    { id: 'topics', title: 'Document content', blocks: [
+      { kind: 'table', headers: ['Topic', 'Covers'], rows: [
+        ['[Text and styles](/docs/word-formatting)', 'Fonts, emphasis, spacing and named styles.'],
+        ['[Lists and links](/docs/word-lists)', 'Bulleted, numbered and multilevel lists, and hyperlinks.'],
+        ['[Tables](/docs/word-tables)', 'Nested tables, column widths, row heights and cell formatting.'],
+        ['[Images and shapes](/docs/word-drawings)', 'Inline and floating images, editable shapes, and moving and resizing.'],
+        ['[Page layout and positions](/docs/word-layout)', 'Breaks, indents, tabs and text positions.'],
+        ['[Headers and page numbers](/docs/word-stories)', 'Headers, footers and live page numbers.'],
+      ] },
     ] },
-    { id: 'topics', title: 'Author document content', blocks: [
-        { kind: 'link', href: '/docs/word-formatting', label: 'Text, paragraphs, and styles' },
-        { kind: 'link', href: '/docs/word-lists', label: 'Lists and hyperlinks' },
-        { kind: 'link', href: '/docs/word-tables', label: 'Tables and cell formatting' },
-        { kind: 'link', href: '/docs/word-drawings', label: 'Images and editable shapes' },
-        { kind: 'link', href: '/docs/word-layout', label: 'Breaks, tabs, and text positions' },
-        { kind: 'link', href: '/docs/word-stories', label: 'Headers, footers, and page numbers' },
-    ] },
-    { id: 'try', title: 'Try a document', blocks: [
-        { kind: 'link', href: '/playground/word-brief', label: 'Open the Word playground' },
-        { kind: 'link', href: '/docs/word-support', label: 'Check Word support and limitations' },
+    { id: 'try', title: 'Try it', blocks: [
+      { kind: 'text', text: 'The playground opens a sample document. You can edit its text, format it, and move and resize its images.' },
+      { kind: 'link', href: '/playground/word-brief', label: 'Open the Word playground' },
+      { kind: 'link', href: '/docs/word-support', label: 'What is and is not supported' },
+      { kind: 'link', href: '/docs/releases', label: 'What changed in this release' },
+      { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/packages/word/README.md', label: 'Full @tumblerjs/word API' },
     ] },
   ],
   source: 'apps/docs/src/lib/docs/word.ts',

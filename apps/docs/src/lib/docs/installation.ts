@@ -3,15 +3,26 @@ import type { Doc } from './types';
 
 export const installationDoc: Doc = {
   title: 'Installation',
-  description: 'Add Tumbler to a Svelte 5 application. Parsing and editing run in the browser; your application owns loading and saving files.',
+  description: 'Add Tumbler to a Svelte 5 app and show your first document.',
   sections: [
     { id: 'packages', title: 'Install the packages', blocks: [
-        { kind: 'text', text: `Install the packages you need. The current release is ${version}. Keep all Tumbler packages on the same version.` },
-        { kind: 'code', language: 'Terminal', code: `bun add @tumblerjs/svelte @tumblerjs/word @tumblerjs/sheets @tumblerjs/slides @tumblerjs/core` },
-        { kind: 'note', text: 'Tumbler is early alpha. The latest distribution tag points to the current alpha release. APIs and format coverage are still changing.' },
+      { kind: 'text', text: `Install the packages for the formats you need. The current release is ${version}.` },
+      { kind: 'code', language: 'Terminal', code: `bun add @tumblerjs/svelte @tumblerjs/word @tumblerjs/sheets @tumblerjs/slides @tumblerjs/core` },
+      { kind: 'table', headers: ['Package', 'For'], rows: [
+        ['`@tumblerjs/svelte`', 'The Svelte components.'],
+        ['`@tumblerjs/word`', 'Word documents (DOCX).'],
+        ['`@tumblerjs/sheets`', 'Spreadsheets (XLSX).'],
+        ['`@tumblerjs/slides`', 'Presentations (PPTX).'],
+        ['`@tumblerjs/core`', 'Types the others share, such as selections.'],
+        ['`@tumblerjs/pdf`', 'PDF files. Optional.'],
+        ['`@tumblerjs/cli`', 'The `tumbler` command. Install it globally; it needs Bun 1.3 or later.'],
+      ] },
+      { kind: 'note', text: 'Tumbler is in early alpha, and its APIs are still changing. Keep every Tumbler package on the same version.' },
+      { kind: 'text', text: 'Tumbler does not read or write files itself. Your app decides where files come from and where they are saved.' },
     ] },
     { id: 'typescript-runtime', title: 'TypeScript and runtime requirements', blocks: [
-      { kind: 'text', text: 'Tumbler packages export TypeScript source. Use a bundler or runtime that handles .ts modules and ES2024 library typings. This minimal consumer tsconfig works with TypeScript 5.9.3; target can remain ES2022.' },
+      { kind: 'text', text: 'Tumbler packages publish TypeScript source. Your bundler or runtime must handle `.ts` modules and ES2024 library typings.' },
+      { kind: 'text', text: 'This minimal tsconfig works with TypeScript 5.9.3:' },
       { kind: 'code', language: 'JSON', code: `{
   "compilerOptions": {
     "target": "ES2022",
@@ -25,24 +36,32 @@ export const installationDoc: Doc = {
   },
   "include": ["src/**/*.ts"]
 }` },
-      { kind: 'note', text: 'For TypeScript consumers of @tumblerjs/word, also install yjs. It is an optional runtime peer, but the current public entry point exposes collaboration types that TypeScript must resolve even for a basic Word import.' },
-      { kind: 'text', text: 'Merge the lib setting into your framework tsconfig when it already provides module and file-inclusion settings. skipLibCheck skips declaration files, so it does not hide errors in published .ts sources. lib provides typings only; target controls syntax emission. Neither setting adds polyfills for newer built-ins.' },
-      { kind: 'text', text: 'Your runtime must provide String.prototype.isWellFormed, Array.prototype.toSorted, toReversed, findLast and findLastIndex. Text editing/search also uses Intl.Segmenter, and model operations use structuredClone. Check these APIs in your supported browsers, webviews and server runtimes, or load suitable polyfills before importing Tumbler. Browser rendering also requires DOM, Canvas and font APIs. These API prerequisites are not a tested minimum browser-version guarantee.' },
+      { kind: 'list', items: [
+        'If your framework already has a tsconfig, merge in the `lib` setting.',
+        '`lib` provides typings only, and `target` controls the syntax that is emitted. Neither adds polyfills.',
+        '`skipLibCheck` skips declaration files only, so errors in Tumbler\'s `.ts` sources are still reported.',
+      ] },
+      { kind: 'note', text: 'If you use `@tumblerjs/word` from TypeScript, also install `yjs`. It is an optional runtime peer, but the public entry point exposes collaboration types that TypeScript must resolve even for a basic Word import.' },
+      { kind: 'text', text: 'Your runtime must provide these APIs, or load polyfills before importing Tumbler:' },
+      { kind: 'list', items: [
+        '`String.prototype.isWellFormed`;',
+        '`Array.prototype.toSorted`, `toReversed`, `findLast` and `findLastIndex`;',
+        '`Intl.Segmenter`, for text editing and search;',
+        '`structuredClone`, for model operations;',
+        'DOM, Canvas and font APIs, for rendering in the browser.',
+      ] },
+      { kind: 'text', text: 'Check them in the browsers, webviews and server runtimes you support. This is a list of required APIs, not a tested minimum browser version.' },
       { kind: 'link', href: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/isWellFormed#browser_compatibility', label: 'String API compatibility' },
       { kind: 'link', href: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/toSorted#browser_compatibility', label: 'Array API compatibility' },
       { kind: 'link', href: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Segmenter#browser_compatibility', label: 'Intl.Segmenter compatibility' },
     ] },
-    { id: 'host-styles', title: 'Scope host styles', blocks: [
-      { kind: 'text', text: 'Scope application button styles to your own controls, such as .app-toolbar button. Global button min-height or padding rules can stretch inline document hyperlink buttons and distort text layout. Check the viewer with your application CSS reset and theme.' },
+    { id: 'host-styles', title: 'Scope your button styles', blocks: [
+      { kind: 'text', text: 'Scope your app\'s button styles to your own controls, for example `.app-toolbar button`. A global `min-height` or `padding` on `button` also stretches the buttons Tumbler uses for links inside documents, which distorts the text layout.' },
+      { kind: 'text', text: 'Check the viewer with your app\'s CSS reset and theme applied.' },
     ] },
-    { id: 'pdf-cli', title: 'PDF and the CLI', blocks: [
-      { kind: 'text', text: 'Add @tumblerjs/pdf for PDF processing or install @tumblerjs/cli globally for the tumbler command. The CLI requires Bun 1.3 or later.' },
-      { kind: 'link', href: '/docs/pdf', label: 'PDF engine and viewer' },
-      { kind: 'link', href: '/docs/cli', label: 'CLI installation and usage' },
-    ] },
-    { id: 'first-document', title: 'Render a Word document', blocks: [
-        { kind: 'text', text: 'Open a file as a Uint8Array, then pass the parsed document to WordDocumentView. Give the viewer a constrained height so its pages can scroll.' },
-        { kind: 'code', language: 'Svelte', code: `<script lang="ts">
+    { id: 'first-document', title: 'Show a Word document', blocks: [
+      { kind: 'text', text: 'This component lets the user pick a DOCX file and shows it as pages. `openWordArtifact` takes the file\'s bytes as a `Uint8Array` and throws if it cannot read them.' },
+      { kind: 'code', language: 'Svelte', code: `<script lang="ts">
   import { openWordArtifact, type WordArtifact } from '@tumblerjs/word';
   import { WordDocumentView } from '@tumblerjs/svelte';
 
@@ -69,16 +88,19 @@ export const installationDoc: Doc = {
     <WordDocumentView wordDocument={artifact.document} />
   </div>
 {/if}` },
+      { kind: 'text', text: 'Give the view\'s container a height. The pages scroll inside it instead of making the page taller.' },
     ] },
-    { id: 'headless', title: 'Use the model without Svelte', blocks: [
-        { kind: 'text', text: 'The document models do not depend on a UI framework. Use the Word, Sheets, or Slides package directly when building another renderer, inspecting documents, or applying edits.' },
-        { kind: 'code', code: `import { openSpreadsheetArtifact } from '@tumblerjs/sheets';
+    { id: 'headless', title: 'Use Tumbler without Svelte', blocks: [
+      { kind: 'text', text: 'The format packages do not depend on Svelte or the browser. Use them on their own to inspect files, edit them in a script or on a server, or build a different UI.' },
+      { kind: 'code', code: `import { openSpreadsheetArtifact } from '@tumblerjs/sheets';
 
 const artifact = openSpreadsheetArtifact(bytes);
 const edited = artifact.editCell('B2', 42);
 const output = edited.bytes();` },
+      { kind: 'link', href: '/docs/pdf', label: 'PDF documents' },
+      { kind: 'link', href: '/docs/cli', label: 'Command-line editing' },
     ] },
   ],
   source: 'apps/docs/src/lib/docs/installation.ts',
-  next: { href: '/docs/word', label: 'Word overview' },
+  next: { href: '/docs/word', label: 'Word documents' },
 };

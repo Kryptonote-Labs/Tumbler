@@ -2,28 +2,55 @@ import type { Doc } from './types';
 
 export const pdfMergeDoc: Doc = {
   title: 'Merge PDF pages',
-  description: 'Combine documents and selected pages with one API, a CLI, or the Svelte merge tool.',
+  description: 'Combine whole PDFs or chosen pages, in the browser, from the command line or in code.',
   sections: [
-    { id: 'try', title: 'Arrange pages in your browser', blocks: [
+    { id: 'selection', title: 'Choosing pages', blocks: [
+      { kind: 'text', text: 'All three tools use the same page syntax. Page numbers start at 1.' },
+      { kind: 'table', headers: ['You type', 'You get'], rows: [
+        ['(empty)', 'Every page.'],
+        ['`5,2-4`', 'Page 5, then pages 2, 3 and 4.'],
+        ['`3-1`', 'Pages 3, 2 and 1, in that order.'],
+        ['`1,1`', 'Page 1 twice.'],
+      ] },
+    ] },
+    { id: 'try', title: 'In the browser', blocks: [
+      { kind: 'list', ordered: true, items: [
+        'Add your PDFs. Each one becomes a block.',
+        'Arrange the blocks in the order you want.',
+        'For each block, type the pages to include. To use pages from one file in two places, duplicate its block.',
+        'Enter a password for any encrypted file.',
+        'Name the result and download it.',
+      ] },
+      { kind: 'text', text: 'Everything happens in your browser. Files are not uploaded, and the originals are not changed.' },
       { kind: 'link', href: '/playground/pdf-merge', label: 'Open the PDF merge playground' },
-      { kind: 'text', text: 'Add local PDFs and arrange source blocks in output order. Leave Pages empty to include every page, or enter one-based page numbers and inclusive ranges such as 5,2-4 or 3-1,1. Descending ranges and repeats are supported. Duplicate a block, choose another selection, and move it to insert pages from that PDF elsewhere. Passwords unlock the corresponding source. Choose the output filename and download a new PDF.' },
-      { kind: 'text', text: 'All processing happens in browser memory. Input files stay unchanged. The CLI and browser use the same page-selection parser and merge API.' },
     ] },
-    { id: 'cli', title: 'Use the CLI', blocks: [
+    { id: 'cli', title: 'From the command line', blocks: [
       { kind: 'code', language: 'bash', code: 'tumbler first.pdf pdf merge --pages 3,1-2,1 \\\n  --source second.pdf --pages 2-1 \\\n  --source first.pdf --pages 4 --output merged.pdf' },
-      { kind: 'text', text: 'The first file starts the first block. Each --source starts another block. --pages and --password apply to the most recent source. Omit --pages to include all its pages. Repeat a source to interleave its pages with another document. The output must be a new .pdf file; an existing destination is never overwritten.' },
+      { kind: 'list', items: [
+        'The first file starts the first block. Each `--source` starts another.',
+        '`--pages` and `--password` apply to the source just before them. Leave out `--pages` to include every page.',
+        'Name a file twice, as `first.pdf` is above, to interleave its pages with another file.',
+        '`--output` must be a new `.pdf` file. An existing file is never overwritten.',
+      ] },
     ] },
-    { id: 'api', title: 'Use the shared API', blocks: [
+    { id: 'api', title: 'In code', blocks: [
       { kind: 'code', language: 'typescript', code: "import { mergePdfDocuments, openPdfDocument, parsePdfPageSelection } from '@tumblerjs/pdf';\n\nconst first = openPdfDocument(firstBytes);\nconst second = openPdfDocument(secondBytes, { password: 'source-password' });\nconst output = mergePdfDocuments([\n  { document: first, pages: parsePdfPageSelection('3,1-2,1', first.pages.length) },\n  { document: second, pages: [1, 0] },\n  { document: first, pages: [3] },\n]);" },
-      { kind: 'text', text: 'API page indices are zero-based. The parser accepts the same one-based selections as the CLI and graphical tool. Omit pages to include the full document. Save the returned Uint8Array as a new PDF.' },
+      { kind: 'note', text: 'In code, page indexes start at 0. `parsePdfPageSelection` converts the 1-based syntax above into indexes.' },
+      { kind: 'text', text: 'Leave out `pages` to include the whole document. `mergePdfDocuments` returns the new PDF as a `Uint8Array`.' },
     ] },
-    { id: 'svelte', title: 'Embed the graphical tool', blocks: [
+    { id: 'svelte', title: 'In your app', blocks: [
+      { kind: 'text', text: '`PdfMerge` is the same tool as the playground: choosing files, passwords, pages, block order, duplicating and removing blocks, and naming the output.' },
       { kind: 'code', language: 'svelte', code: "<script>\n  import { PdfMerge } from '@tumblerjs/svelte/pdf';\n</script>\n\n<PdfMerge />" },
-      { kind: 'text', text: 'The default action downloads the completed PDF. Pass onmerge={(bytes, filename) => save(bytes, filename)} to handle the output yourself. The component includes file selection, source passwords, page selection, block ordering, duplication, removal, and output naming.' },
+      { kind: 'text', text: 'By default it downloads the merged PDF. To save it yourself, pass `onmerge`, which receives the bytes and the file name.' },
     ] },
-    { id: 'preservation', title: 'Content preservation', blocks: [
-      { kind: 'text', text: 'Merging copies PDF page objects and their resources rather than rasterizing or reconstructing the visible text. Page dimensions, rotation, content streams, embedded fonts and images stay in PDF form. The output is a fresh, unencrypted document. Encryption passwords authenticate the sources; they do not encrypt the result. Digital signatures cannot authenticate a newly merged document.' },
-      { kind: 'note', text: 'Unsupported structures or combinations produce an error before output is written. Check the package README for the supported structure details and limits. Keep your source documents when document-level features or signatures matter.' },
+    { id: 'preservation', title: 'What is kept', blocks: [
+      { kind: 'text', text: 'Pages are copied as PDF, not turned into images. Page size, rotation, fonts and images stay as they were, and text stays selectable.' },
+      { kind: 'list', items: [
+        'The merged file is never encrypted. Passwords only unlock the source files.',
+        'A source with signature fields, scripted forms or form actions is rejected.',
+        'If a source uses something the merge does not support, it fails before writing anything.',
+      ] },
+      { kind: 'note', text: 'Keep the original files if their document-level features matter.' },
     ] },
   ],
   source: 'apps/docs/src/lib/docs/pdf-merge.ts',
