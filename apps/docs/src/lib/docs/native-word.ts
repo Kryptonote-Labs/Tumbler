@@ -9,6 +9,7 @@ export const nativeWordDoc: Doc = {
       { kind: 'table', headers: ['To', 'Use'], rows: [
         ['Edit an existing DOCX and keep everything in it', '`new NativeWordDocument({ source })`'],
         ['Keep your own rich content and export it as DOCX', '`new NativeWordDocument()`'],
+        ['Build a single-user custom editor with rich native edits and undo', '`NativeWordEditor`'],
         ['Make plain-text edits that keep paragraph IDs', '`NativeWordText`'],
         ['Create a DOCX once from content you already have', '`createWordArtifact`'],
       ] },
@@ -68,6 +69,22 @@ const output = model.artifact().bytes();` },
       { kind: 'note', text: 'Keep the original artifact unchanged. Imported blocks refer back to it, not to any later export.' },
       { kind: 'text', text: '`WordPackageDocument` is a compatibility subclass. It requires `source` and exposes the imported blocks as `original`.' },
       { kind: 'link', href: '/docs/word-stories#stories', label: 'Edit shared headers and footers' },
+    ] },
+    { id: 'custom-editor', title: 'Build a custom browser editor', blocks: [
+      { kind: 'text', text: '`NativeWordEditor` connects rich text replacement, paragraph splits and joins, formatting, pending typing marks and selection-aware undo to `NativeWordDocument.update`. It needs no Yjs. Its `document` supplies native layout and export. Use the optional `@tumblerjs/word/browser` adapter for host-rendered contenteditable paragraphs and plain-text clipboard input.' },
+      { kind: 'code', code: `import { NativeWordEditor } from '@tumblerjs/word';
+import { WordBrowserInput } from '@tumblerjs/word/browser';
+
+const editor = new NativeWordEditor({ source });
+const input = new WordBrowserInput(editableElement, editor);
+// Render editor.blocks, using data-word-paragraph={block.id} on paragraphs.
+// Subscribe to editor changes; after each DOM commit, call input.restoreSelection().
+editor.replaceText('Hello');
+editor.applyFormatting({ bold: true });
+editor.undo();
+const output = editor.document.artifact().bytes();
+// Unmount: unsubscribe your listener and call input.destroy().` },
+      { kind: 'text', text: 'Positions use stable paragraph IDs and UTF-16 offsets at grapheme boundaries. Each command is one undo step. Text replacement supports adjacent paragraphs within one body or cell; crossing cells or structural blocks is rejected. The browser adapter uses DOM geometry and does not supply canvas character geometry or rich HTML clipboard conversion. See examples/react-word in the repository for a React editor with native page preview.' },
     ] },
     { id: 'integration', title: 'Save and collaborate', blocks: [
       { kind: 'text', text: 'Store the content blocks, or your own record of changes, as your app\'s state. Apply each edit locally straight away, pass the result to `update`, and send the change to other users however your app syncs data.' },

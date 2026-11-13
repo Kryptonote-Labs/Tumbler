@@ -1,0 +1,8 @@
+body { margin: 0; background: #f4f4f4; color: #202020; font-family: system-ui, sans-serif; }
+main { max-width: 880px; margin: 32px auto; padding: 0 20px; }
+h1 { font-size: 22px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+button { padding: 6px 10px; }
+.editor { padding: 16px; min-height: 120px; background: white; border: 1px solid #aaa; white-space: pre-wrap; overflow-wrap: anywhere; }
+.editor p { margin: 0 0 8px; min-height: 1em; }
+.preview canvas { display: block; width: 100%; height: auto; margin-top: 24px; background: white; box-shadow: 0 1px 5px #0002; }

@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./collaboration": "./src/collaboration/index.ts",
-    "./operations": "./src/operations/index.ts"
+    "./operations": "./src/operations/index.ts",
+    "./browser": "./src/browser.ts"
   },
   "files": [
     "src",
