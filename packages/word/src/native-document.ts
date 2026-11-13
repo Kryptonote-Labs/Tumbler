@@ -656,7 +656,10 @@ export class NativeWordDocument implements WordLayoutSource {
                 propertiesElementId: undefined,
                 contents,
               };
-              this.runFormats.set(run, format(authoredRun.format, authored.styleId ? this.namedStyles.resolveStyledRun(authored.styleId, inherited?.characterStyleId) : inherited?.format ?? original?.textFormat ?? named?.text));
+              const inheritedFormat = authoredRun.resetFormat
+                ? this.namedStyles.resolveStyledRun(authored.styleId ?? original?.format.styleId ?? 'Normal', inherited?.characterStyleId)
+                : authored.styleId ? this.namedStyles.resolveStyledRun(authored.styleId, inherited?.characterStyleId) : inherited?.format ?? original?.textFormat ?? named?.text;
+              this.runFormats.set(run, format(authoredRun.format, inheritedFormat));
               if (authoredRun.link !== undefined) {
                 if (!isWordHyperlink(authoredRun.link)) throw new TypeError('Invalid hyperlink target.');
                 if (authoredRun.link) return { kind: 'hyperlink' as const, elementId: allocate(), relationshipId: undefined, anchor: authoredRun.link.startsWith('#') ? authoredRun.link.slice(1) : undefined, target: authoredRun.link.startsWith('#') ? undefined : authoredRun.link, runs: [run] };

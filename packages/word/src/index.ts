@@ -210,3 +210,8 @@ export { isWordAuthoredChart, isWordChartContent } from './authored-chart.ts';
 export type { WordAuthoredChart } from './authored-chart.ts';
 
 export { wordChartFont, wordChartFontFamily, wordChartSceneFonts } from './chart-fonts.ts';
+
+export { sameWordTextSelection, wordInputEdit, wordDocumentParagraphs, type WordInputEdit, type WordDocumentEdit } from './input.ts';
+export { patchWordRunFormat, type WordNativeFormatPatch } from './native-formatting.ts';
+export { NativeWordEditor } from './native-editor.ts';
+export type { WordNativePosition, WordNativeSelection } from './native-edit.ts';

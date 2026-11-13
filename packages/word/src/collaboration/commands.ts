@@ -11,7 +11,8 @@ import * as Y from 'yjs';
 import { validateText, validateWordText } from './validation.ts';
 import { TEXT_FORMATS, validateAttributes as validateWordAttributes, isList, type TextAttributes } from './formatting.ts';
 
-export type WordFormatPatch = { [Key in keyof TextAttributes]: TextAttributes[Key] | null };
+import type { WordFormatPatch } from '../text-attributes.ts';
+export type { WordFormatPatch } from '../text-attributes.ts';
 export type WordRange = { start: number; end: number };
 export type WordAnchor = { start: Y.RelativePosition; end: Y.RelativePosition };
 export type WordChange =

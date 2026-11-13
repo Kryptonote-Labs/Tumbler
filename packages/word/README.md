@@ -13,11 +13,11 @@ This package exports TypeScript source. Use ES2024 library typings, including
 > notice. Keep original copies of important files.
 
 ```sh
-bun add @tumblerjs/word yjs
+bun add @tumblerjs/word
 ```
 
-Yjs is an optional runtime peer, but the public entry point exposes collaboration
-types, so TypeScript consumers need it installed even for a basic Word import.
+Yjs is optional. Install it only for `@tumblerjs/word/collaboration` or
+`@tumblerjs/word/operations`; the root and browser entry points typecheck without it.
 
 Create a blank or formatted document without a template:
 
@@ -525,6 +525,106 @@ For independent copies of source paragraphs or run fragments, give the copied co
 `sourceCopy` identity. Reusing `source` without a copy identity means continuation, as when
 splitting a paragraph. Repeated source tables and rows are detected as copies automatically.
 
+
+### Single-user custom editors
+
+Use `NativeWordEditor` when your host owns the UI and needs rich native editing without Yjs.
+It imports the immutable source once, applies edits to content blocks, and updates its
+`document` for layout. Export with `editor.document.artifact().bytes()` only when saving.
+`WordEditingSession` remains available for editing immutable package revisions;
+`/operations` and `/collaboration` are the Yjs-backed path.
+
+```ts
+import { NativeWordEditor } from '@tumblerjs/word';
+import { WordBrowserInput } from '@tumblerjs/word/browser';
+
+const editor = new NativeWordEditor({ source });
+const input = new WordBrowserInput(editableElement, editor);
+const unsubscribe = editor.subscribe(() => {
+  // Render editor.blocks as text inside elements with data-word-paragraph={block.id}.
+  // After the host commits its DOM, call input.restoreSelection().
+});
+
+editor.replaceText('Hello');
+editor.applyFormatting({ bold: true }); // At a caret, sets pending typing marks.
+editor.undo();
+// On unmount:
+unsubscribe();
+input.destroy();
+```
+
+For positioned text, set `data-word-start` on each rendered line/fragment to its
+UTF-16 paragraph offset. Multiple elements may share a paragraph ID across wraps
+and page continuations; selection restoration resolves the matching offset range.
+
+Native positions use stable `paragraphId` strings and UTF-16 offsets at grapheme boundaries.
+Selections preserve anchor/focus direction. Optional `affinity: 'after'` keeps a caret
+at the end of the preceding run/line; `'before'` keeps it at the start of the following
+run/line. Pointer input supplies affinity automatically, including at page continuations.
+Each command is one undo step, including a
+multi-paragraph paste or completed IME composition. History restores the selection too.
+`formatAt(position)` resolves character formatting without layout; `typingFormat` holds
+pending caret overrides. `formatAt` samples one position, not mixed formatting across a range.
+
+The optional browser adapter owns event listeners, plain-text copy/cut/paste, IME commits,
+and selection mapping/restoration. It also owns mouse dragging, shift-click extension,
+word/paragraph selection, select-all, and drag scrolling. Hosts do not need pointer handlers.
+Hit testing clamps page-margin clicks to the nearest grapheme rather than relying on the
+browser to select positioned text. It preserves the drag anchor through host renders.
+Touch retains the browser's native selection handles. The host owns rendering and styles. Browser selection
+rectangles and point hit testing use rendered DOM text, including wrapping and bidirectional
+text. They are viewport CSS pixels, not native page points. This adapter does not provide
+canvas character geometry or rich HTML clipboard conversion. Text replacement works across
+adjacent paragraphs in one body/cell block list; crossing cells or structural blocks requires
+a structural editing command and is rejected before the model changes. Formatting can span cells.
+
+The adapter paints a caret above run highlights and other positioned backgrounds by default.
+It uses the focused document text's colour; set `--tumbler-word-caret-color` on the root to choose a
+caret colour for your document display mode. The overlay inherits the focused text's
+colour scheme so `light-dark()` values resolve against the document page. It follows selection, rendering,
+scrolling and font changes, and hides for ranges, blur, composition and printing. During
+composition the browser's native caret is restored. `{ caret: false }` retains native caret
+painting throughout. White document pages should explicitly use `color-scheme: only light`
+even when the surrounding app follows the OS theme. `wordBrowserCaretRect` returns the
+caret's viewport geometry, including empty paragraphs and wrapped-line affinity.
+
+Render text fragments as inline spans rather than inline blocks, so native keyboard
+word navigation can continue across formatting boundaries. Set the root contenteditable
+and mark controls/decorations `contenteditable="false"`. The default mouse selection can
+be disabled with `{ pointerSelection: false }`. Hosts with additional clipping or custom
+geometry can supply `positionAtPoint(x, y)`; `scrollElement` chooses a drag-scroll container
+instead of automatic ancestor/window detection.
+
+See `examples/react-word` for a React editor with editable native-layout pages, and run
+`bun scripts/verify-word-consumer.ts` to install packed local packages in an isolated
+consumer, typecheck without Yjs, and build it. Add `--browser --firefox` for Chromium
+and Firefox input and real mouse-drag checks. Install the matching browser binaries with
+`bunx playwright-core install chromium firefox` if needed.
+
+### Set, clear, and inherit native run formatting
+
+Imported runs retain source XML. An omitted format property preserves the source value on
+export unless `resetFormat: true` is set. Do not clear an imported value by assigning
+`undefined`: that can change preview without removing the source declaration.
+
+Prefer `patchWordRunFormat` with the complete authored run format, as returned by
+`importWordContent`. It handles the export reset when restoring inheritance:
+
+```ts
+import { patchWordRunFormat } from '@tumblerjs/word';
+
+const red = patchWordRunFormat(importedRun, { highlight: 'red' });
+const off = patchWordRunFormat(importedRun, { highlight: 'none' });
+const inherited = patchWordRunFormat(importedRun, { highlight: null });
+// Omitted patch keys preserve the run's other authored values.
+```
+
+`'none'` explicitly disables highlighting even when the style highlights text. `null`
+removes the direct override so the paragraph/character style can supply it again.
+`NativeWordEditor.applyFormatting` accepts the same patch semantics. For complete format
+replacement, use `{ ...run, format: replacement, resetFormat: true }`. Omitted supported
+properties then inherit from styles in both native preview and exported DOCX. Opaque source
+properties remain preserved.
 
 ### Collaborative operations
 

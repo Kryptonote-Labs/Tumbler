@@ -53,8 +53,16 @@ model.update(blocks);` },
     ] },
     { id: 'styles', title: 'Apply or reset a style', blocks: [
       { kind: 'text', text: 'Set `styleId` to `Normal`, `Title`, `Subtitle`, or `Heading1` to `Heading9`. If the document has its own definition of a style, that definition is used instead of the built-in one.' },
-      { kind: 'text', text: 'To clear direct formatting and go back to the style, leave out the paragraph\'s `paragraph` property and each run\'s `format`, then call `update`.' },
+      { kind: 'text', text: 'To clear imported direct formatting and go back to the style, set `resetParagraphFormat: true` on the paragraph and `resetFormat: true` on its runs, then omit the properties you want to inherit. Call `update` with the result. The reset flags also remove the direct properties from DOCX export.' },
       { kind: 'note', text: '`importWordContent` returns the formatting each run actually ends up with. If you pass those blocks back unchanged, that formatting is saved as direct formatting, even where it came from a style.' },
+    ] },
+    { id: 'native-patches', title: 'Set, disable or inherit a run property', blocks: [
+      { kind: 'text', text: 'Imported runs retain source formatting on export. Assigning `undefined` alone does not remove that source value. Use `patchWordRunFormat` with the complete imported run: omitted patch keys preserve its other authored values, `null` restores style inheritance, and an explicit value overrides the style.' },
+      { kind: 'code', code: `import { patchWordRunFormat } from '@tumblerjs/word';
+
+const red = patchWordRunFormat(run, { highlight: 'red' });
+const disabled = patchWordRunFormat(run, { highlight: 'none' });
+const inherited = patchWordRunFormat(run, { highlight: null });` },
     ] },
     { id: 'selection', title: 'Format a selection', blocks: [
       { kind: 'text', text: 'In an editing session, `applyFormatting` formats the user\'s selection and records it as one undo step.' },

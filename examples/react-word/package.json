@@ -1,0 +1,21 @@
+{
+  "name": "tumbler-react-word-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "check": "tsc --noEmit",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@tumblerjs/word": "0.1.0-alpha.28",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "6.0.2",
+    "vite": "7.3.8"
+  }
+}
