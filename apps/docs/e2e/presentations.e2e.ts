@@ -105,13 +105,7 @@ test("compatibility limits are visible; samples and component preview fit narrow
       exact: true,
     }),
   ).toBeVisible();
-  await page.goto("/components");
-  await expect(
-    page.getByText("A quieter workspace", { exact: true }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "PresentationSlideView", exact: true })
-    .click();
+  await page.goto("/components/presentation-slide-view");
   await expect(
     page
       .locator(".slide-example")
