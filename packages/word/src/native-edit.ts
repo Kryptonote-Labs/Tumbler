@@ -64,3 +64,32 @@ export function replaceNativeParagraphs(
     ? { ...block, rows: block.rows.map(row => row.map(cell => ({ ...cell, blocks: replaceNativeParagraphs(cell.blocks, ids, replacement) }))) }
     : block);
 }
+
+/** Browser runs may split one logical grapheme. Normalize carets and range edges against the paragraph. */
+export function normalizeNativeSelection(blocks: readonly WordContentBlock[], selection: WordNativeSelection): WordNativeSelection | undefined {
+  const paragraphs = nativeParagraphs(blocks);
+  const locate = (position: WordNativePosition) => {
+    const index = paragraphs.findIndex(paragraph => paragraph.id === position.paragraphId);
+    const paragraph = paragraphs[index];
+    if (!paragraph) return;
+    const text = paragraphText(paragraph);
+    if (!Number.isSafeInteger(position.offset) || position.offset < 0 || position.offset > text.length) return;
+    const boundaries = [0, ...[...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map(segment => segment.index + segment.segment.length)];
+    return { index, before: boundaries.findLast(offset => offset <= position.offset)!, after: boundaries.find(offset => offset >= position.offset)! };
+  };
+  const anchor = locate(selection.anchor);
+  const focus = locate(selection.focus);
+  if (!anchor || !focus) return;
+  if (anchor.index === focus.index && selection.anchor.offset === selection.focus.offset) {
+    const left = selection.focus.offset - focus.before;
+    const right = focus.after - selection.focus.offset;
+    const offset = left < right || left === right && selection.focus.affinity === 'before' ? focus.before : focus.after;
+    const position = { ...selection.focus, offset };
+    return { anchor: position, focus: position };
+  }
+  const forward = anchor.index < focus.index || anchor.index === focus.index && selection.anchor.offset < selection.focus.offset;
+  return {
+    anchor: { ...selection.anchor, offset: forward ? anchor.before : anchor.after },
+    focus: { ...selection.focus, offset: forward ? focus.after : focus.before },
+  };
+}

@@ -1,7 +1,7 @@
 import type { WordNativePosition } from './native-edit.ts';
 import { wordDomPoint } from './browser-dom.ts';
 
-/** Nearest rendered text position, clamped to visible grapheme boundaries even in page margins. */
+/** Nearest rendered DOM grapheme, including page margins. The input adapter resolves boundaries spanning runs. */
 export function wordBrowserPositionAtPoint(root: HTMLElement, x: number, y: number): WordNativePosition | undefined {
   const range = root.ownerDocument.createRange();
   let target: HTMLElement | undefined;

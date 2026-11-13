@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { chromium, firefox, type Page } from 'playwright-core';
+import { verifyWordGraphemeRuns } from './verify-word-grapheme-browser.ts';
 import { verifyWordNestedControls, verifyWordReplacementRange } from './verify-word-host-browser.ts';
 import { verifyWordCaretBrowser, assertPaintedCaret } from './verify-word-caret-browser.ts';
 import { verifyWordPointerBrowser, textPoint, dragText, showLine } from './verify-word-pointer-browser.ts';
@@ -141,6 +142,7 @@ export async function verifyWordReactBrowser(directory: string, engine: 'chromiu
     await editor.click();
     await page.keyboard.press('Control+a');
     assert.equal(await copyText(page), longText);
+    await verifyWordGraphemeRuns(page, directory);
     assert.deepEqual(errors, []);
     console.log(`${engine} React browser checks passed: formatting/export, typing, paragraph split, undo/redo, IME deduplication, grapheme deletion, select-all, clipboard, forward/backward/margin drag, word/paragraph/shift selection, wrapped lines/pages, drag scrolling, painted caret in light/dark modes and empty lines.`);
   } finally { await browser.close(); }

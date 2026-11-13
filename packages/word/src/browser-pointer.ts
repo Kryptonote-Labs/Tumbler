@@ -1,6 +1,6 @@
 import { wordBrowserOwnsTarget } from './browser-dom.ts';
 import type { NativeWordEditor } from './native-editor.ts';
-import { nativeParagraphs, paragraphText, type WordNativePosition, type WordNativeSelection } from './native-edit.ts';
+import { nativeParagraphs, paragraphText, normalizeNativeSelection, type WordNativePosition, type WordNativeSelection } from './native-edit.ts';
 import { restoreWordBrowserSelection, sameWordBrowserSelection } from './browser-selection.ts';
 import { wordBrowserPositionAtPoint } from './browser-hit-testing.ts';
 
@@ -46,7 +46,8 @@ export class WordBrowserPointer {
   }
 
   private position(x: number, y: number) {
-    return this.options.positionAtPoint ? this.options.positionAtPoint(x, y) : wordBrowserPositionAtPoint(this.root, x, y);
+    const position = this.options.positionAtPoint ? this.options.positionAtPoint(x, y) : wordBrowserPositionAtPoint(this.root, x, y);
+    return position && normalizeNativeSelection(this.editor.blocks, { anchor: position, focus: position })?.focus;
   }
 
   private compare(left: WordNativePosition, right: WordNativePosition) {
