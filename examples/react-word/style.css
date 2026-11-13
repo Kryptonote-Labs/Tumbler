@@ -1,8 +1,11 @@
-body { margin: 0; background: #f4f4f4; color: #202020; font-family: system-ui, sans-serif; }
-main { max-width: 880px; margin: 32px auto; padding: 0 20px; }
-h1 { font-size: 22px; }
-.toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+body { margin: 0; background: #e9e9ec; color: #202020; font-family: system-ui, sans-serif; }
+main { max-width: 1000px; margin: 24px auto; padding: 0 24px 48px; }
+h1 { font-size: 20px; margin: 0 0 16px; }
+.toolbar { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 0; background: #e9e9ec; }
 button { padding: 6px 10px; }
-.editor { padding: 16px; min-height: 120px; background: white; border: 1px solid #aaa; white-space: pre-wrap; overflow-wrap: anywhere; }
-.editor p { margin: 0 0 8px; min-height: 1em; }
-.preview canvas { display: block; width: 100%; height: auto; margin-top: 24px; background: white; box-shadow: 0 1px 5px #0002; }
+.document-editor { padding: 12px 4px; outline: none; overflow-x: auto; caret-color: #205bc6; }
+.word-page { position: relative; margin: 0 auto 24px; background: white; box-shadow: 0 1px 6px #0002; cursor: text; }
+.text-line { position: absolute; margin: 0; padding: 0; border: 0; white-space: pre; font-size: 0; line-height: 0; }
+.text-fragment { display: inline-block; position: relative; vertical-align: top; }
+.empty-line { display: inline-block; width: 1px; }
+::selection { background: #b5d1fa; }

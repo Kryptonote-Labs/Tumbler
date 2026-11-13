@@ -19,6 +19,15 @@ export async function verifyWordReactBrowser(directory: string) {
     const editor = page.getByRole('textbox', { name: 'Document text' });
     await editor.waitFor();
     assert.equal(await editor.innerText(), 'Edit this highlighted text.');
+    assert.equal(await page.locator('[contenteditable="true"]').count(), 1);
+    assert.equal(await editor.locator('.word-page').count(), 1);
+    const paper = await editor.locator('.word-page').boundingBox();
+    const textBounds = await editor.locator('p').first().boundingBox();
+    assert(paper && textBounds && textBounds.x >= paper.x + 90 && textBounds.y >= paper.y + 90);
+    await page.mouse.click(textBounds.x + 30, textBounds.y + textBounds.height / 2);
+    await page.keyboard.type('X');
+    assert((await editor.innerText()).includes('X'));
+    await page.keyboard.press('Control+z');
     await select(page, 0, 'Edit this highlighted text.'.length);
     await page.getByRole('button', { name: 'Clear highlight' }).click();
     await page.getByRole('button', { name: 'Export and reopen' }).click();
@@ -73,8 +82,30 @@ export async function verifyWordReactBrowser(directory: string) {
       return clipboard.getData('text/plain');
     });
     assert.equal(copied, 'Pasted\nsecond line');
+    const longText = 'Wrapped words '.repeat(600) + 'end';
+    await editor.evaluate((root, text) => {
+      const clipboard = new DataTransfer();
+      clipboard.setData('text/plain', text);
+      root.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }));
+    }, longText);
+    assert(await editor.locator('.word-page').count() > 1);
+    // The same native paragraph continues across line and page DOM boundaries.
+    await editor.locator('.word-page').nth(1).locator('p').first().click({ position: { x: 20, y: 6 } });
+    await page.keyboard.type('Z');
+    await page.keyboard.press('Control+a');
+    const continuedText = await copyText(page);
+    assert.equal(continuedText.length, longText.length + 1);
+    assert(continuedText.includes('Z'));
+    assert.equal(continuedText.replace('Z', ''), longText);
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+a');
+    assert.equal(await copyText(page), longText);
+    await page.getByRole('button', { name: 'Export and reopen' }).click();
+    await editor.click();
+    await page.keyboard.press('Control+a');
+    assert.equal(await copyText(page), longText);
     assert.deepEqual(errors, []);
-    console.log('React browser checks passed: formatting/export, typing, paragraph split, undo/redo, IME deduplication, grapheme deletion, select-all, clipboard.');
+    console.log('React browser checks passed: formatting/export, typing, paragraph split, undo/redo, IME deduplication, grapheme deletion, select-all, clipboard, in-page pointer input, wrapped paragraph/page selection.');
   } finally { await browser.close(); }
 }
 
@@ -97,4 +128,12 @@ async function select(page: Page, start: number, end = start) {
     document.getSelection()!.setBaseAndExtent(start.node, start.offset, end.node, end.offset);
     document.dispatchEvent(new Event('selectionchange'));
   }, { start, end });
+}
+
+async function copyText(page: Page) {
+  return page.getByRole('textbox', { name: 'Document text' }).evaluate(root => {
+    const clipboard = new DataTransfer();
+    root.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: clipboard }));
+    return clipboard.getData('text/plain');
+  });
 }

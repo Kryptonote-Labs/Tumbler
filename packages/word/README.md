@@ -553,6 +553,10 @@ unsubscribe();
 input.destroy();
 ```
 
+For positioned text, set `data-word-start` on each rendered line/fragment to its
+UTF-16 paragraph offset. Multiple elements may share a paragraph ID across wraps
+and page continuations; selection restoration resolves the matching offset range.
+
 Native positions use stable `paragraphId` strings and UTF-16 offsets at grapheme boundaries.
 Selections preserve anchor/focus direction. Each command is one undo step, including a
 multi-paragraph paste or completed IME composition. History restores the selection too.
@@ -567,7 +571,7 @@ canvas character geometry or rich HTML clipboard conversion. Text replacement wo
 adjacent paragraphs in one body/cell block list; crossing cells or structural blocks requires
 a structural editing command and is rejected before the model changes. Formatting can span cells.
 
-See `examples/react-word` for a React editor and native canvas preview, and run
+See `examples/react-word` for a React editor with editable native-layout pages, and run
 `bun scripts/verify-word-consumer.ts` to install packed local packages in an isolated
 consumer, typecheck without Yjs, and build it.
 

@@ -12,13 +12,13 @@ export function wordPositionFromDom(root: HTMLElement, node: Node, offset: numbe
     const paragraphs = [...root.querySelectorAll<HTMLElement>('[data-word-paragraph]')];
     const next = paragraphs.find(element => boundary.comparePoint(element, 0) >= 0);
     const target = next ?? paragraphs.at(-1);
-    return target ? { paragraphId: target.dataset.wordParagraph!, offset: next ? 0 : target.textContent?.length ?? 0 } : undefined;
+    return target ? { paragraphId: target.dataset.wordParagraph!, offset: Number(target.dataset.wordStart ?? 0) + (next ? 0 : target.textContent?.length ?? 0) } : undefined;
   }
   if (!root.contains(paragraph)) return;
   const range = root.ownerDocument.createRange();
   range.selectNodeContents(paragraph);
   range.setEnd(node, offset);
-  return { paragraphId: paragraph.dataset.wordParagraph!, offset: range.toString().length };
+  return { paragraphId: paragraph.dataset.wordParagraph!, offset: Number(paragraph.dataset.wordStart ?? 0) + range.toString().length };
 }
 
 export function wordBrowserSelection(root: HTMLElement): WordNativeSelection | undefined {
@@ -30,10 +30,17 @@ export function wordBrowserSelection(root: HTMLElement): WordNativeSelection | u
 }
 
 function domPosition(root: HTMLElement, position: WordNativePosition) {
-  const paragraph = [...root.querySelectorAll<HTMLElement>('[data-word-paragraph]')].find(element => element.dataset.wordParagraph === position.paragraphId);
+  const candidates = [...root.querySelectorAll<HTMLElement>('[data-word-paragraph]')]
+    .filter(element => element.dataset.wordParagraph === position.paragraphId);
+  // Fragment ranges take precedence over line wrappers and may continue on another page.
+  const fragments = candidates.filter(element => !element.querySelector('[data-word-paragraph]'));
+  const start = (element: HTMLElement) => Number(element.dataset.wordStart ?? 0);
+  const end = (element: HTMLElement) => start(element) + (element.textContent?.length ?? 0);
+  const paragraph = fragments.find(element => start(element) <= position.offset && position.offset < end(element))
+    ?? fragments.findLast(element => end(element) === position.offset);
   if (!paragraph) return;
   const walker = root.ownerDocument.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
-  let remaining = position.offset;
+  let remaining = position.offset - start(paragraph);
   let node: Node | null;
   while ((node = walker.nextNode())) {
     const length = node.textContent?.length ?? 0;

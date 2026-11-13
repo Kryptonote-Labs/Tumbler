@@ -84,7 +84,7 @@ editor.applyFormatting({ bold: true });
 editor.undo();
 const output = editor.document.artifact().bytes();
 // Unmount: unsubscribe your listener and call input.destroy().` },
-      { kind: 'text', text: 'Positions use stable paragraph IDs and UTF-16 offsets at grapheme boundaries. Each command is one undo step. Text replacement supports adjacent paragraphs within one body or cell; crossing cells or structural blocks is rejected. The browser adapter uses DOM geometry and does not supply canvas character geometry or rich HTML clipboard conversion. See examples/react-word in the repository for a React editor with native page preview.' },
+      { kind: 'text', text: 'Positions use stable paragraph IDs and UTF-16 offsets at grapheme boundaries. Each command is one undo step. Text replacement supports adjacent paragraphs within one body or cell; crossing cells or structural blocks is rejected. The browser adapter uses DOM geometry and does not supply canvas character geometry or rich HTML clipboard conversion. See examples/react-word in the repository for a React editor with editable native-layout pages.' },
     ] },
     { id: 'integration', title: 'Save and collaborate', blocks: [
       { kind: 'text', text: 'Store the content blocks, or your own record of changes, as your app\'s state. Apply each edit locally straight away, pass the result to `update`, and send the change to other users however your app syncs data.' },

@@ -23,11 +23,14 @@ Undo restores content and selection. Export and reopen checks the edited documen
 through DOCX without downloading it; Download DOCX saves it.
 
 The example starts with imported highlighted text to exercise clearing source
-formatting. It renders paragraphs and a separate native canvas page preview. It
-is not a full document UI for tables, drawings, mixed-format toolbar state, or
-canvas editing. The browser adapter uses browser DOM selection geometry and
+formatting. The page itself is editable: Tumbler computes line wrapping and
+pagination, and React positions editable text at those layout coordinates. There
+is one document view, with the browser caret and selection inside the pages.
+Wrapped lines and page continuations map back to stable native paragraph offsets.
+It is not a full document UI for tables, drawings, or mixed-format toolbar state. The browser adapter uses browser DOM selection geometry and
 expects the host to call `restoreSelection` after committing a render. The keyed
-editable children replace provisional composition DOM after each committed edit.
+editable children replace provisional DOM when composition ends; ordinary
+selection changes preserve the DOM so pointer selection can continue across pages.
 
 The tsconfig supplies ES2024 library types and DOM typings while targeting ES2022.
 It skips checking third-party declaration files; app and package TypeScript source

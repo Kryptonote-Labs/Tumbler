@@ -23,7 +23,8 @@ export class WordBrowserInput {
 
   /** Restore after the host commits its render, never during IME composition. */
   restoreSelection() {
-    if (!this.composing && this.root.contains(this.root.ownerDocument.activeElement))
+    if (!this.composing && this.root.contains(this.root.ownerDocument.activeElement) &&
+      JSON.stringify(wordBrowserSelection(this.root)) !== JSON.stringify(this.editor.selection))
       restoreWordBrowserSelection(this.root, this.editor.selection);
   }
 
