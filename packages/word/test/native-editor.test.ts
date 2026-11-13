@@ -109,3 +109,21 @@ test('caret affinity samples and inherits the intended side of a formatting boun
     expect(editor.selection).toEqual({ anchor: position, focus: position });
   }
 });
+
+test('edits that join graphemes leave a valid caret for the next command', () => {
+  const editor = new NativeWordEditor({ content: [{ kind: 'paragraph', id: 'a', runs: [{ text: '🇺 🇸' }] }] });
+  editor.replaceText('', selection('a', 2, 3));
+  expect(text(editor)).toEqual(['🇺🇸']);
+  expect(editor.selection.focus.offset).toBe(4);
+  expect(() => editor.formatAt()).not.toThrow();
+  editor.replaceText('x');
+  expect(text(editor)).toEqual(['🇺🇸x']);
+  editor.undo();
+  expect(editor.selection.focus.offset).toBe(4);
+
+  const combining = new NativeWordEditor({ content: [{ kind: 'paragraph', id: 'b', runs: [{ text: '\u0301' }] }] });
+  combining.replaceText('e');
+  expect(combining.selection.focus.offset).toBe(2);
+  combining.replaceText('!');
+  expect(text(combining)).toEqual(['é!']);
+});

@@ -110,10 +110,14 @@ export class NativeWordEditor {
       id: index === 0 ? first.id : this.allocateId(),
       runs: [...(index === 0 ? before : []), ...(text ? [inserted(text)] : []), ...(index === lines.length - 1 ? after : [])],
     }));
+    const caretText = paragraphText(replacement.at(-1)!);
+    const insertedEnd = lines.length === 1 ? start.offset + normalized.length : lines.at(-1)!.length;
+    const boundaries = [0, ...[...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(caretText)].map(segment => segment.index + segment.segment.length)];
     const caret: WordNativePosition = {
       paragraphId: replacement.at(-1)!.id,
       affinity: 'after',
-      offset: lines.length === 1 ? start.offset + normalized.length : lines.at(-1)!.length,
+      // Edits can combine neighboring characters into a new grapheme, even with valid endpoints.
+      offset: boundaries.find(offset => offset >= insertedEnd) ?? caretText.length,
     };
     const blocks = replaceNativeParagraphs(this.blocks, paragraphs.map(paragraph => paragraph.id), replacement);
     this.commit({ blocks, selection: { anchor: caret, focus: caret } }, selection);
