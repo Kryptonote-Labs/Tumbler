@@ -5,27 +5,8 @@ import type * as Y from 'yjs';
 // Word rejects DOCX rows with more than 63 cells (MS-OI29500 §17.4.78).
 export const MAX_TABLE_COLUMNS = 63;
 
-export type TableCell = {
-  schema?: 2;
-  format?: WordCellFormat;
-  rowFormat?: WordRowFormat;
-  id: string;
-  row: string;
-  cell: string;
-  column: number;
-  columns: number;
-  widths?: number[];
-  before?: number;
-  after?: number;
-  span?: number;
-  merge?: 'restart' | 'continue';
-  source?: {
-    table: number;
-    row?: number;
-    cell?: number;
-  };
-  parents?: TableCell[];
-};
+import type { TableCell } from '../table-cell-attributes.ts';
+export type { TableCell } from '../table-cell-attributes.ts';
 export function isTableCell(value: unknown): value is TableCell {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   return (

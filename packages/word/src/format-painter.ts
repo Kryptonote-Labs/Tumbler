@@ -1,7 +1,7 @@
 import type { NativeWordDocument } from './native-document.ts';
 import type { WordBlock } from './document.ts';
 import type { WordParagraphPositioning } from './positioning.ts';
-import type { WordFormatPatch } from './collaboration/commands.ts';
+import type { WordFormatPatch } from './text-attributes.ts';
 import { wordParagraphTextSegments } from './text.ts';
 
 export interface WordFormatPainterSample {

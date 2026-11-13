@@ -1,15 +1,8 @@
 import { isWordDrawingPosition, type WordDrawingPosition } from '../drawing-placement.ts';
 import type * as Y from 'yjs';
 
-export type DocumentImage = WordDrawingPosition & {
-  id: string;
-  type: 'image/png' | 'image/jpeg';
-  width: number;
-  height: number;
-  alt: string;
-  alignment?: 'left' | 'center' | 'right';
-  moveWithText?: boolean;
-};
+import type { DocumentImage } from '../image-attributes.ts';
+export type { DocumentImage } from '../image-attributes.ts';
 
 export function normalizeImage(image: DocumentImage): DocumentImage {
   if ((image.layout ?? 'inline') !== 'inline') return image;

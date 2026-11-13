@@ -2,62 +2,24 @@ import { isWordAuthoredChart, isWordChartContent } from '../authored-chart.ts';
 import { wordSectionBoundarySchema } from '../section-format.ts';
 import { isSectionPropertyAttribute, isSectionPropertyValue } from './section-attributes.ts';
 import { isParagraphPropertyAttribute, isParagraphPropertyValue } from './paragraph-attributes.ts';
-import { isWordAuthoredInk, type WordAuthoredInk } from "../authored-ink.ts";
-import { isWordInkTraceOverrides, type WordInkTraceOverride } from "../ink-overrides.ts";
+import { isWordAuthoredInk } from "../authored-ink.ts";
+import { isWordInkTraceOverrides } from "../ink-overrides.ts";
 import { isShapeTextBody } from "../shape-text.ts";
-import { isWordDrawingGeometry, type WordDrawingGeometry } from "../drawing-geometry.ts";
-import { isWordColour, type WordColour } from "../theme-colours.ts";
-import { isWordAuthoredShape, type WordAuthoredShape } from "../shapes.ts";
+import { isWordDrawingGeometry } from "../drawing-geometry.ts";
+import { isWordColour } from "../theme-colours.ts";
+import { isWordAuthoredShape } from "../shapes.ts";
 import {
   isWordParagraphPositioning,
   isWordPositionalTab,
-  type WordParagraphPositioning,
 } from "../positioning.ts";
-import type { WordPositionalTab } from "../document.ts";
 import { WORD_HIGHLIGHTS } from "../text-properties.ts";
-import { isWordParagraphFormat, type WordParagraphFormat } from "../paragraph-format.ts";
-import { isWordAuthoredList, type WordAuthoredList } from "../authored-list.ts";
+import { isWordParagraphFormat } from "../paragraph-format.ts";
+import { isWordAuthoredList } from "../authored-list.ts";
 import { isWordHyperlink } from "../hyperlinks.ts";
-import { isDocumentImage, type DocumentImage } from "./images.ts";
-import { isTableCell, type TableCell } from "./tables.ts";
-export const TEXT_FORMATS = ["bold", "italic", "underline", "strike"] as const;
-export const ALIGNMENTS = ["left", "center", "right", "justify"] as const;
-export type TextFormat = (typeof TEXT_FORMATS)[number];
-export type Alignment = (typeof ALIGNMENTS)[number];
-export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
-  wordSource?: number;
-  wordParagraph?: number;
-  wordCopy?: string;
-  wordSection?: import('../section-format.ts').WordSectionBoundary | { remove: true } | null;
-  fontFamily?: string;
-  wordUnderline?: "single" | "double";
-  align?: Alignment;
-  styleId?: string;
-  paragraph?: WordParagraphFormat;
-  positioning?: WordParagraphPositioning;
-  tab?: WordPositionalTab;
-  highlight?: string;
-  shading?: WordColour;
-  verticalAlign?: "baseline" | "superscript" | "subscript";
-  characterSpacingPoints?: number;
-  breakType?: import("../breaks.ts").WordBreakType;
-  shape?: WordAuthoredShape;
-  drawing?: WordDrawingGeometry;
-  ink?: WordAuthoredInk;
-  inkTraces?: readonly WordInkTraceOverride[];
-  chart?: import('../authored-chart.ts').WordAuthoredChart;
-  chartContent?: import('@tumblerjs/charts').ChartContent;
-  chartTitle?: string;
-  chartTitleText?: readonly import("../create.ts").WordTextParagraph[];
-  link?: string;
-  color?: WordColour;
-  font?: string;
-  fontSize?: number;
-  table?: TableCell;
-  image?: DocumentImage;
-  field?: import("../page-fields.ts").WordPageField;
-  list?: WordAuthoredList & { level: number };
-};
+import { isDocumentImage } from "./images.ts";
+import { isTableCell } from "./tables.ts";
+import { TEXT_FORMATS, ALIGNMENTS, type TextAttributes } from '../text-attributes.ts';
+export { TEXT_FORMATS, ALIGNMENTS, type TextFormat, type Alignment, type TextAttributes } from '../text-attributes.ts';
 
 // Word supports 1–1638 pt in half-point steps:
 // https://support.microsoft.com/en-us/office/fonts/change-the-font-size
