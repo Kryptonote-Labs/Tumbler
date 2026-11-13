@@ -1,3 +1,4 @@
+import { WordBrowserCaret } from './browser-caret.ts';
 import { WordBrowserPointer, type WordBrowserPointerOptions } from './browser-pointer.ts';
 import type { NativeWordEditor } from './native-editor.ts';
 import { nativeParagraphs, paragraphText, orderedNativeSelection, type WordNativeSelection } from './native-edit.ts';
@@ -6,16 +7,20 @@ import { restoreWordBrowserSelection, wordBrowserSelection, wordPositionFromDom,
 export interface WordBrowserInputOptions extends WordBrowserPointerOptions {
   /** Defaults to shared mouse selection. Set false to retain native mouse selection instead. */
   readonly pointerSelection?: boolean;
+  /** Defaults to an overlay above document backgrounds. Set false to use the native caret. */
+  readonly caret?: boolean;
 }
 
 /** Optional DOM adapter for host-rendered contenteditable paragraphs. Clipboard input is plain text. */
 export class WordBrowserInput {
+  private readonly caret: WordBrowserCaret | undefined;
   private readonly pointer: WordBrowserPointer | undefined;
   private composition: WordNativeSelection | undefined;
   private compositionCommit: string | undefined;
   private commitTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly root: HTMLElement, private readonly editor: NativeWordEditor, options: WordBrowserInputOptions = {}) {
+    this.caret = options.caret === false ? undefined : new WordBrowserCaret(root, editor, () => !this.composing);
     this.pointer = options.pointerSelection === false ? undefined : new WordBrowserPointer(root, editor, { ...options, enabled: () => !this.composing });
     root.addEventListener('beforeinput', this.beforeInput);
     root.addEventListener('keydown', this.keyDown);
@@ -34,11 +39,13 @@ export class WordBrowserInput {
     if (!this.composing && !this.pointer?.dragging && this.root.contains(this.root.ownerDocument.activeElement) &&
       !sameWordBrowserSelection(wordBrowserSelection(this.root), this.editor.selection))
       restoreWordBrowserSelection(this.root, this.editor.selection);
+    this.caret?.refresh();
   }
 
   destroy() {
     clearTimeout(this.commitTimer);
     this.pointer?.destroy();
+    this.caret?.destroy();
     this.root.removeEventListener('beforeinput', this.beforeInput);
     this.root.removeEventListener('keydown', this.keyDown);
     this.root.removeEventListener('paste', this.paste);
@@ -161,6 +168,7 @@ export class WordBrowserInput {
 
   private compositionStart = () => {
     this.composition = wordBrowserSelection(this.root) ?? this.editor.selection;
+    this.caret?.hide();
   };
 
   private compositionEnd = (event: CompositionEvent) => {

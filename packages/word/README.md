@@ -578,6 +578,16 @@ canvas character geometry or rich HTML clipboard conversion. Text replacement wo
 adjacent paragraphs in one body/cell block list; crossing cells or structural blocks requires
 a structural editing command and is rejected before the model changes. Formatting can span cells.
 
+The adapter paints a caret above run highlights and other positioned backgrounds by default.
+It uses the focused document text's colour; set `--tumbler-word-caret-color` on the root to choose a
+caret colour for your document display mode. The overlay inherits the focused text's
+colour scheme so `light-dark()` values resolve against the document page. It follows selection, rendering,
+scrolling and font changes, and hides for ranges, blur, composition and printing. During
+composition the browser's native caret is restored. `{ caret: false }` retains native caret
+painting throughout. White document pages should explicitly use `color-scheme: only light`
+even when the surrounding app follows the OS theme. `wordBrowserCaretRect` returns the
+caret's viewport geometry, including empty paragraphs and wrapped-line affinity.
+
 Render text fragments as inline spans rather than inline blocks, so native keyboard
 word navigation can continue across formatting boundaries. Set the root contenteditable
 and mark controls/decorations `contenteditable="false"`. The default mouse selection can

@@ -31,7 +31,10 @@ is one document view, with the browser caret and selection inside the pages.
 Wrapped lines and page continuations map back to stable native paragraph offsets.
 The shared adapter owns mouse hit testing, forward/backward dragging, shift-click,
 double-click word selection, triple-click paragraph selection, and drag scrolling.
-The example has no pointer-selection handlers. Inline text spans keep keyboard
+The example has no pointer-selection handlers. The adapter also draws the caret
+above highlighted runs and restores native caret painting during composition.
+The white pages declare their light colour scheme; the caret colour is set through
+`--tumbler-word-caret-color` on the editor root. Inline text spans keep keyboard
 word navigation continuous across formatting changes.
 It is not a full document UI for tables, drawings, or mixed-format toolbar state. The browser adapter uses browser DOM selection geometry and
 expects the host to call `restoreSelection` after committing a render. The keyed

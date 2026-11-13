@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { chromium, firefox, type Page } from 'playwright-core';
+import { verifyWordCaretBrowser, assertPaintedCaret } from './verify-word-caret-browser.ts';
 import { verifyWordPointerBrowser, textPoint, dragText, showLine } from './verify-word-pointer-browser.ts';
 
 /** Exercise the built, packed consumer in a real browser without a development server. */
@@ -22,6 +23,7 @@ export async function verifyWordReactBrowser(directory: string, engine: 'chromiu
     assert.equal(await editor.innerText(), 'Edit this highlighted text.');
     assert.equal(await page.locator('[contenteditable="true"]').count(), 1);
     assert.equal(await editor.locator('.word-page').count(), 1);
+    await verifyWordCaretBrowser(page);
     await verifyWordPointerBrowser(page);
     const paper = await editor.locator('.word-page').boundingBox();
     const textBounds = await editor.locator('p').first().boundingBox();
@@ -70,6 +72,12 @@ export async function verifyWordReactBrowser(directory: string, engine: 'chromiu
     assert.equal(await editor.innerText(), '👩‍💻');
     await page.keyboard.press('Backspace');
     assert.equal((await editor.innerText()).trim(), '');
+    // Firefox may scroll a cleared line behind this example's sticky toolbar.
+    await showLine(editor.locator('p'));
+    await assertPaintedCaret(page);
+    const emptyLine = (await editor.locator('p').boundingBox())!;
+    const emptyCaret = (await page.locator('[data-word-caret]').boundingBox())!;
+    assert(Math.abs(emptyCaret.x - emptyLine.x) <= 1 && Math.abs(emptyCaret.y - emptyLine.y) <= 1);
     await pasteText(page, 'Pasted\r\nsecond line');
     assert.equal(await editor.locator('p').count(), 2);
     assert.equal(await editor.locator('p').nth(1).innerText(), 'second line');
@@ -86,6 +94,7 @@ export async function verifyWordReactBrowser(directory: string, engine: 'chromiu
     const wrapPoint = await textPoint(firstLine, lineEnd);
     await page.mouse.click(wrapPoint.x, wrapPoint.y);
     assert(await firstLine.evaluate(element => element.contains(getSelection()!.focusNode)));
+    await assertPaintedCaret(page);
     const firstPoint = await textPoint(firstLine, 2);
     const secondPoint = await textPoint(secondLine, 5);
     await dragText(page, firstPoint, secondPoint);
@@ -130,7 +139,7 @@ export async function verifyWordReactBrowser(directory: string, engine: 'chromiu
     await page.keyboard.press('Control+a');
     assert.equal(await copyText(page), longText);
     assert.deepEqual(errors, []);
-    console.log(`${engine} React browser checks passed: formatting/export, typing, paragraph split, undo/redo, IME deduplication, grapheme deletion, select-all, clipboard, forward/backward/margin drag, word/paragraph/shift selection, wrapped lines/pages, drag scrolling.`);
+    console.log(`${engine} React browser checks passed: formatting/export, typing, paragraph split, undo/redo, IME deduplication, grapheme deletion, select-all, clipboard, forward/backward/margin drag, word/paragraph/shift selection, wrapped lines/pages, drag scrolling, painted caret in light/dark modes and empty lines.`);
   } finally { await browser.close(); }
 }
 

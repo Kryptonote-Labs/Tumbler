@@ -53,6 +53,29 @@ export function restoreWordBrowserSelection(root: HTMLElement, selection: WordNa
   if (anchor && focus) root.ownerDocument.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
 }
 
+/** Caret geometry at a native position, with a line-box fallback for empty paragraphs. */
+export function wordBrowserCaretRect(root: HTMLElement, position: WordNativePosition): DOMRect | undefined {
+  const point = domPosition(root, position);
+  if (!point) return;
+  const element = point.node instanceof Element ? point.node : point.node.parentElement;
+  const fragment = element?.closest<HTMLElement>('[data-word-paragraph]');
+  if (!fragment) return;
+  const bounds = fragment.getBoundingClientRect();
+  // Gecko can report an origin-relative caret for an empty positioned line.
+  if (!fragment.textContent) return new DOMRect(bounds.left, bounds.top, 0, bounds.height);
+  const range = root.ownerDocument.createRange();
+  range.setStart(point.node, point.offset);
+  range.collapse(true);
+  const caret = range.getBoundingClientRect();
+  if (caret.height > 0) return caret;
+  range.selectNodeContents(fragment);
+  range.setEnd(point.node, point.offset);
+  const prefix = range.getBoundingClientRect();
+  const rtl = root.ownerDocument.defaultView!.getComputedStyle(fragment).direction === 'rtl';
+  const x = prefix.height ? rtl ? prefix.left : prefix.right : bounds.left;
+  return new DOMRect(x, prefix.height ? prefix.top : bounds.top, 0, prefix.height || bounds.height);
+}
+
 /** Browser-shaped DOM geometry, in viewport CSS pixels. Canvas hosts need layout-based geometry. */
 export function wordBrowserSelectionRects(root: HTMLElement, selection: WordNativeSelection): readonly DOMRect[] {
   const anchor = domPosition(root, selection.anchor);
