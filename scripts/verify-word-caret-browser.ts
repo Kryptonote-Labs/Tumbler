@@ -68,12 +68,14 @@ export async function assertPaintedCaret(page: Page, color: readonly number[] = 
     }));
     throw error;
   }
+  // Flush scroll/resize callbacks before sampling the fixed overlay's pixels.
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   assert.equal(await caret.count(), 1);
   await caret.evaluate(element => {
     for (const animation of element.getAnimations()) { animation.pause(); animation.currentTime = 0; }
   });
   const bounds = (await caret.boundingBox())!;
-  const image = await page.screenshot({ clip: { x: Math.floor(bounds.x), y: Math.floor(bounds.y), width: 2, height: Math.ceil(bounds.height) + 2 } });
+  const image = await page.screenshot({ animations: 'disabled', clip: { x: Math.floor(bounds.x), y: Math.floor(bounds.y), width: 2, height: Math.ceil(bounds.height) + 2 } });
   const { data, info } = await sharp(image).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   let painted = 0;
   for (let offset = 0; offset < data.length; offset += info.channels) {
