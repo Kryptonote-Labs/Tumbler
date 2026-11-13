@@ -115,7 +115,7 @@ export class NativeWordEditor {
       offset: lines.length === 1 ? start.offset + normalized.length : lines.at(-1)!.length,
     };
     const blocks = replaceNativeParagraphs(this.blocks, paragraphs.map(paragraph => paragraph.id), replacement);
-    this.commit({ blocks, selection: { anchor: caret, focus: caret } });
+    this.commit({ blocks, selection: { anchor: caret, focus: caret } }, selection);
   }
 
   applyFormatting(patch: WordNativeFormatPatch, selection = this.selection) {
@@ -136,7 +136,7 @@ export class NativeWordEditor {
     const visit = (blocks: readonly WordContentBlock[]): readonly WordContentBlock[] => blocks.map(block =>
       block.kind === 'paragraph' ? replacements.get(block.id!) ?? block
         : block.kind === 'table' ? { ...block, rows: block.rows.map(row => row.map(cell => ({ ...cell, blocks: visit(cell.blocks) }))) } : block);
-    this.commit({ blocks: visit(this.blocks), selection });
+    this.commit({ blocks: visit(this.blocks), selection }, selection);
   }
 
   /** Resolve toolbar values directly from the model, without requiring layout or painting. */
@@ -161,15 +161,15 @@ export class NativeWordEditor {
     return id;
   }
 
-  private captureSelection() {
+  private captureSelection(selection = this.selection) {
     const entries = [...this.history.entries];
-    entries[this.history.index] = { blocks: this.blocks, selection: this.selection };
+    entries[this.history.index] = { blocks: this.blocks, selection };
     return { ...this.history, entries };
   }
 
-  private commit(state: EditorState) {
+  private commit(state: EditorState, previousSelection: WordNativeSelection) {
     this.document.update(state.blocks);
-    this.history = commitEditingHistory(this.captureSelection(), state);
+    this.history = commitEditingHistory(this.captureSelection(previousSelection), state);
     this.currentSelection = state.selection;
     this.emit();
   }

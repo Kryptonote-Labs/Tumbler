@@ -84,3 +84,12 @@ test('imported text edits retain source wrappers and rich formatting through spl
   for (const block of blocks) if (block.kind === 'paragraph') expect(block.runs.every(run => run.format?.italic)).toBe(true);
   expect(exported.document.source.elements('urn:keep', 'keep').length).toBeGreaterThan(0);
 });
+
+test('undo restores the supplied command range even before a host selection notification', () => {
+  const editor = new NativeWordEditor({ content: [{ kind: 'paragraph', id: 'a', runs: [{ text: 'Hello' }] }] });
+  const range = selection('a', 4, 1);
+  editor.replaceText('X', range);
+  editor.undo();
+  expect(editor.selection).toEqual(range);
+  expect(text(editor)).toEqual(['Hello']);
+});

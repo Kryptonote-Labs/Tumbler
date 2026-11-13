@@ -9,4 +9,3 @@ export type DocumentImage = WordDrawingPosition & {
   alignment?: 'left' | 'center' | 'right';
   moveWithText?: boolean;
 };
-

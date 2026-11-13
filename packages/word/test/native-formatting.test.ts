@@ -31,4 +31,3 @@ for (const conformance of ['strict', 'transitional'] as const) {
     }
   });
 }
-
