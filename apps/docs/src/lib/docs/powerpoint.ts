@@ -2,27 +2,23 @@ import type { Doc } from './types';
 
 export const powerpointDoc: Doc = {
   title: 'PowerPoint',
-  description: 'Read PPTX slide scenes, build a viewer, and connect supported editing operations.',
+  description: 'Show PPTX slides, let users edit them, and save the result.',
   sections: [
-    { id: 'alpha-27', title: 'New in alpha.27', blocks: [
-      { kind: 'link', href: '/docs/releases', label: 'Authoring additions and migration notes' },
-      { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/packages/slides/README.md', label: 'Native commands and package API' },
-      { kind: 'link', href: '/docs/charts', label: 'Shared chart authoring and rendering' },
-      { kind: 'link', href: '/docs/cli', label: 'Command-line operations' },
+    { id: 'start', title: 'Where to start', blocks: [
+      { kind: 'text', text: '`openPresentationArtifact` opens PPTX bytes. `PresentationSlideView` shows one slide, and `PresentationSlideRail` adds a column of thumbnails. For editing, open the file as a session instead, so every change can be undone.' },
+      { kind: 'table', headers: ['To', 'Read'], rows: [
+        ['Show a slide', '[Render a presentation](/docs/powerpoint-viewer)'],
+        ['Add thumbnails and follow links between slides', '[Slide navigation](/docs/powerpoint-navigation)'],
+        ['Let users edit text, tables and objects', '[Edit slides](/docs/powerpoint-editing)'],
+        ['Save as PPTX, or export slides as PDF pages', '[Export a presentation](/docs/powerpoint-export)'],
+        ['Check what is supported', '[PowerPoint compatibility](/docs/powerpoint-support)'],
+      ] },
     ] },
-    { id: 'view', title: 'Build a presentation viewer', blocks: [
-      { kind: 'text', text: 'Open PPTX bytes with openPresentationArtifact and render a slide with PresentationSlideView. Add thumbnails and internal slide navigation with PresentationSlideRail.' },
-      { kind: 'link', href: '/docs/powerpoint-viewer', label: 'Open and render a presentation' },
-      { kind: 'link', href: '/docs/powerpoint-navigation', label: 'Connect slide navigation' },
-    ] },
-    { id: 'edit', title: 'Edit and export', blocks: [
-      { kind: 'text', text: 'Use an editing session for text and table-cell edits, formatting, object transforms, and undo. Generate the PPTX archive when saving or downloading.' },
-      { kind: 'link', href: '/docs/powerpoint-editing', label: 'Connect slide editing' },
-      { kind: 'link', href: '/docs/powerpoint-export', label: 'Export a presentation' },
-    ] },
-    { id: 'try', title: 'Try a presentation', blocks: [
+    { id: 'try', title: 'Try it', blocks: [
+      { kind: 'text', text: 'The playground opens a sample deck with thumbnails and editing turned on.' },
       { kind: 'link', href: '/playground/slides-brief', label: 'Open the presentation playground' },
-      { kind: 'link', href: '/docs/powerpoint-support', label: 'PowerPoint support and limitations' },
+      { kind: 'link', href: '/docs/releases', label: 'What changed in this release' },
+      { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/packages/slides/README.md', label: 'Full @tumblerjs/slides API' },
     ] },
   ],
   source: 'apps/docs/src/lib/docs/powerpoint.ts',

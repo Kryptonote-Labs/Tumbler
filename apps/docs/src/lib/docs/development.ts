@@ -2,26 +2,36 @@ import type { Doc } from './types';
 
 export const developmentDoc: Doc = {
   title: 'Local development',
-  description: 'Run the docs and playground against the source packages. No registry release or Kryptonote checkout is needed.',
+  description: 'Run this site and its playground against the package source.',
   sections: [
     { id: 'run', title: 'Start the site', blocks: [
-        { kind: 'code', language: 'Terminal', code: `git clone https://github.com/Kryptonote-Labs/Tumbler.git
+      { kind: 'code', language: 'Terminal', code: `git clone https://github.com/Kryptonote-Labs/Tumbler.git
 cd Tumbler
 bun install
 bun run dev` },
-        { kind: 'text', text: 'The SvelteKit application lives in apps/docs. Its dev command binds to 0.0.0.0, so you can open the network URL printed by Vite from another device on your LAN.' },
+      { kind: 'text', text: 'The site lives in `apps/docs` and uses the packages from the repository directly, so no published release is needed. The dev server listens on all network interfaces; open the network URL Vite prints to test on another device.' },
     ] },
-    { id: 'examples', title: 'Repeatable examples', blocks: [
-        { kind: 'text', text: 'Playground examples have stable URLs. Choose a narrow viewport to investigate overflow, switch to Edit to change content, and use Reset to reopen the original bytes. The sample documents are purpose-built MIT-licensed fixtures, with their generator in apps/docs/scripts.' },
-        { kind: 'code', language: 'Terminal', code: `bun run --cwd apps/docs samples
-bun run docs:check
-bun run docs:build
-bun run docs:test` },
-        { kind: 'text', text: 'Install Playwright Chromium once with bunx playwright install chromium from apps/docs. Browser tests exercise the real viewer, including narrow-page scrolling and downloaded edits.' },
+    { id: 'examples', title: 'Samples and tests', blocks: [
+      { kind: 'table', headers: ['Command', 'Does'], rows: [
+        ['`bun run --cwd apps/docs samples`', 'Regenerates the sample documents.'],
+        ['`bun run docs:check`', 'Type-checks the site.'],
+        ['`bun run docs:build`', 'Builds the site.'],
+        ['`bun run docs:test`', 'Runs the browser tests.'],
+      ] },
+      { kind: 'text', text: 'Before the first test run, install Chromium for Playwright from `apps/docs`:' },
+      { kind: 'code', language: 'Terminal', code: 'bunx playwright install chromium' },
+      { kind: 'text', text: 'The tests drive the real viewers, including scrolling on narrow screens and downloading edited files.' },
+      { kind: 'text', text: 'The sample documents were made for these docs and are MIT-licensed. Their generator is in `apps/docs/scripts`.' },
+      { kind: 'text', text: 'Each playground example has a stable URL. Narrow the window to check overflow, switch to Edit to change the content, and use Reset to reopen the original file.' },
     ] },
-    { id: 'deploy', title: 'Vercel deployment', blocks: [
-        { kind: 'text', text: 'Use apps/docs as the Vercel root directory with the SvelteKit framework preset. Include source files outside the root directory so the workspace packages are available. Install from the repository root using bun install --frozen-lockfile, then build the app with bun run build.' },
-        { kind: 'text', text: 'The site is prerendered. It needs no database, authentication service, or document storage. The displayed package version and commit identify the source used for each build.' },
+    { id: 'deploy', title: 'Deploy to Vercel', blocks: [
+      { kind: 'list', items: [
+        'Set the root directory to `apps/docs` and the framework preset to SvelteKit.',
+        'Include source files outside the root directory, so the workspace packages are available.',
+        'Install from the repository root with `bun install --frozen-lockfile`.',
+        'Build with `bun run build`.',
+      ] },
+      { kind: 'text', text: 'The site is prerendered, so it needs no database, sign-in service or file storage. Each build shows the package version and commit it was built from.' },
     ] },
   ],
   source: 'apps/docs/src/lib/docs/development.ts',

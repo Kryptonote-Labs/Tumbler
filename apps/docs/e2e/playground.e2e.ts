@@ -45,7 +45,7 @@ test('docs topics are reachable on desktop and a narrow screen', async ({ page }
 test('bookmarks to moved Word sections open the focused guide', async ({ page }) => {
   await page.goto('/docs/word-authoring#shapes');
   await expect(page).toHaveURL(/\/docs\/word-drawings#shapes$/);
-  await expect(page.getByRole('heading', { name: 'Editable shapes', exact: true })).toBeInViewport();
+  await expect(page.getByRole('heading', { name: 'Add a shape', exact: true })).toBeInViewport();
 });
 
 test('both page edges are reachable in a narrow viewer at different zoom levels', async ({ page }) => {

@@ -1,3 +1,5 @@
+import { componentDocs } from '$lib/examples/components';
+
 export const version = __TUMBLER_VERSION__;
 export const commit = __TUMBLER_COMMIT__;
 export const repository = 'https://github.com/Kryptonote-Labs/Tumbler';
@@ -14,6 +16,7 @@ export const navigation: NavigationGroup[] = [
     { href: '/docs/installation', label: 'Installation' },
     { href: '/docs/architecture', label: 'How it works' },
   ] },
+  { title: 'Components', overview: '/components', links: componentDocs.map(doc => ({ href: `/components/${doc.slug}`, label: doc.name })) },
   { title: 'Word', overview: '/docs/word', links: [
     { href: '/docs/word-editing', label: 'Open and edit' },
     { href: '/docs/native-word', label: 'Native content model' },
@@ -29,7 +32,7 @@ export const navigation: NavigationGroup[] = [
     { href: '/docs/word-support', label: 'Compatibility' },
   ] },
   { title: 'Spreadsheets', overview: '/docs/spreadsheets', links: [
-    { href: '/docs/spreadsheet-viewer', label: 'Open a workbook' },
+    { href: '/docs/spreadsheet-viewer', label: 'Open a spreadsheet' },
     { href: '/docs/spreadsheet-editing', label: 'Cells and formulas' },
     { href: '/docs/spreadsheet-support', label: 'Compatibility' },
   ] },
@@ -52,8 +55,6 @@ export const navigation: NavigationGroup[] = [
     { href: '/docs/compatibility', label: 'Format support' },
     { href: '/docs/compatibility-reports', label: 'Compatibility reports' },
     { href: '/changelog', label: 'Changelog' },
-    { href: '/components', label: 'Components' },
-    { href: '/playground/word-brief', label: 'Playground' },
     { href: '/docs/development', label: 'Local development' },
   ] },
 ];

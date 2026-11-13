@@ -1,12 +1,15 @@
 <script lang="ts">
+  import PageEnd from '$lib/components/PageEnd.svelte';
   let { data } = $props();
 </script>
 
 <svelte:head><title>Changelog · Tumbler</title><meta name="description" content="Tumbler release history, from the first spreadsheet packages to Word and PowerPoint editing." /></svelte:head>
 <div class="doc-layout">
-  <article>
-    <h1>Changelog</h1>
-    <p class="lead">What changed in each published release.</p>
+  <article class="doc">
+    <header class="doc-header">
+      <h1>Changelog</h1>
+      <p class="lead">What changed in each published release.</p>
+    </header>
     {#each data.groups as group}
       <section aria-labelledby={group.id}>
         <h2 id={group.id}>{group.label}</h2>
@@ -22,6 +25,7 @@
         </ul>
       </section>
     {/each}
+    <PageEnd />
   </article>
   <nav class="contents" aria-label="On this page"><p>On this page</p>{#each data.groups as group}<a href={`#${group.id}`}>{group.label}</a>{/each}</nav>
 </div>

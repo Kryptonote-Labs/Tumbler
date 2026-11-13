@@ -2,17 +2,19 @@ import type { Doc } from './types';
 
 export const powerpointEditingDoc: Doc = {
   title: 'Edit slides',
-  description: 'Connect text, table-cell, formatting, and object-transform edits to a session.',
+  description: 'Let users edit text, tables, shapes and object positions, with undo.',
   sections: [
-    { id: 'native-authoring', title: 'Create and structure a deck', blocks: [
-      { kind: 'text', text: 'Native presentation commands create decks, insert slides using real layout placeholders, duplicate, delete, reorder and hide slides. Table commands edit row and column structure. Notes, links and picture metadata use the same semantic commands in the editor and CLI.' },
-      { kind: 'text', text: 'The editor supports multi-object selection and transforms, native ink, rounded-corner controls, gradients and source-aware chart editing. Hosts connect presence and update transport. Concurrent commands rebase through the presentation engine; continuous typing is grouped for undo.' },
-      { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/packages/slides/README.md', label: 'Command schemas, native archives and host integration' },
-    ] },
-
     { id: 'edits', title: 'Connect editing', blocks: [
-        { kind: 'text', text: 'Use an editing session instead of a read-only artifact. Set editable on the view and connect its callbacks to the session. Reassign the returned artifact after each edit so the view updates.' },
-        { kind: 'code', language: 'Svelte', code: `<script lang="ts">
+      { kind: 'text', text: 'Open the file with `openPresentationEditingSession` instead of `openPresentationArtifact`. The session keeps an undo history, and each method returns the new artifact.' },
+      { kind: 'text', text: 'To connect it, make the view `editable`, pass its callbacks to session methods, and assign each returned artifact back to your state.' },
+      { kind: 'table', headers: ['Callback', 'Called when', 'Apply with'], rows: [
+        ['`onobjectschange`', 'The user moves, resizes or rotates one or more objects.', 'A batch of `update-object` commands'],
+        ['`ontextedit`', 'The user types or deletes text, including in table cells.', '`session.editText`'],
+        ['`onformat`', 'The user formats selected text.', '`session.formatText`'],
+        ['`onshapechange`', 'The user changes a shape\'s fill or outline.', '`session.styleShape`'],
+        ['`onundo`', 'The user presses the undo or redo shortcut.', '`session.undo` or `session.redo`'],
+      ] },
+      { kind: 'code', language: 'Svelte', code: `<script lang="ts">
   import { untrack } from 'svelte';
   import { openPresentationEditingSession, type PresentationArtifact } from '@tumblerjs/slides';
   import { PresentationSlideView } from '@tumblerjs/svelte/slides';
@@ -61,18 +63,34 @@ export const powerpointEditingDoc: Doc = {
     />
   {/if}
 </div>` },
-        { kind: 'text', text: 'The text and shape formatting controls appear when their callbacks are connected. To add the thumbnail rail, pass artifact.document as its presentation and bind the same index used by the view.' },
+      { kind: 'text', text: 'The text and shape formatting controls only appear when `onformat` and `onshapechange` are connected. A session method throws if an edit is not allowed, so catch errors as `apply` does.' },
+      { kind: 'text', text: 'To add thumbnails, pass `artifact.document` to `PresentationSlideRail` and bind it to the same `index`.' },
     ] },
-    { id: 'controls', title: 'Use the editor', blocks: [
-        { kind: 'table', headers: ['Action', 'Control'], rows: [
-          ['Select several objects', 'Drag from empty canvas space to enclose objects. Shift-click adds or removes an object; Shift-drag adds enclosed objects. Escape clears the selection.'],
-          ['Move selected objects', 'Drag it, or select it and use the arrow keys.'],
-          ['Resize or rotate', 'Drag an edge or corner handle to resize. Use the handle above the object to rotate; hold Shift to snap to 15° increments.'],
-          ['Edit text', 'Double-click a text box, or select it and press Enter. Select words to apply formatting with the toolbar.'],
-          ['Edit a table', 'Double-click a cell. Tab and Shift+Tab move between cells.'],
-          ['Finish editing', 'Press Escape or Ctrl+Enter. Click blank slide space to clear the selection.'],
-          ['Change shape colours', 'Select the shape, then use the fill and outline controls.'],
-        ] },
+    { id: 'controls', title: 'Editor controls', blocks: [
+      { kind: 'table', headers: ['To', 'Do this'], rows: [
+        ['Select several objects', 'Drag across empty space to draw a box around them. Shift-click adds or removes one object, and Shift-drag adds the boxed objects. Escape clears the selection.'],
+        ['Move', 'Drag the selection, or use the arrow keys.'],
+        ['Resize', 'Drag an edge or corner handle.'],
+        ['Rotate', 'Drag the handle above the object. Hold Shift to snap to 15° steps.'],
+        ['Edit text', 'Double-click a text box, or select it and press Enter. Select words to format them with the toolbar.'],
+        ['Edit a table', 'Double-click a cell. Tab and Shift+Tab move between cells.'],
+        ['Stop editing', 'Press Escape or Ctrl+Enter. Click empty space to clear the selection.'],
+        ['Change shape colours', 'Select the shape, then use the fill and outline controls.'],
+      ] },
+    ] },
+    { id: 'native-authoring', title: 'Edit with commands', blocks: [
+      { kind: 'text', text: '`session.execute` runs named commands, the same ones the editor and the command-line tool use. Pass one command, or a `batch`.' },
+      { kind: 'table', headers: ['Area', 'Commands'], rows: [
+        ['Slides', '`insert-slide` (from a layout, or a copy with `sourceId`), `move-slide`, `delete-slide`, `set-slide-hidden`, `set-background`, `set-notes`'],
+        ['Objects', '`insert-object`, `update-object`, `duplicate-object`, `delete-object`, `style-shape`, `insert-ink`'],
+        ['Text', '`edit-text`, `format-text`, `replace-all`, `set-link`'],
+        ['Tables', '`edit-table`, with an `action` of `insert-row`, `delete-row`, `insert-column`, `delete-column`, `merge` or `split`; `format-table`'],
+        ['Pictures and charts', '`replace-picture`, `set-alt-text`, `insert-chart`, `edit-chart`'],
+      ] },
+      { kind: 'text', text: 'New slides use the layout\'s real placeholders, so they match the rest of the deck.' },
+      { kind: 'text', text: 'Each command is one undo step. Wrap several commands in a `batch` to undo them together.' },
+      { kind: 'text', text: 'For collaborative editing, your app sends commands between users. When a write is rejected because the deck changed, `rebasePresentationCommands` reapplies the pending commands to the newer deck. Overlapping text edits, or edits to a slide, object or table another user removed or changed, throw `PresentationRebaseConflict` instead of overwriting.' },
+      { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/packages/slides/README.md', label: 'Command schemas and collaboration setup' },
     ] },
   ],
   source: 'apps/docs/src/lib/docs/powerpoint-editing.ts',

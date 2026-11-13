@@ -2,14 +2,22 @@ import type { Doc } from './types';
 
 export const compatibilityReportsDoc: Doc = {
   title: 'Compatibility reports',
-  description: 'Read standards coverage, executable requirements, and everyday task results.',
+  description: 'How Word compatibility is measured, and where to download the latest results.',
   sections: [
-    { id: 'evidence', title: 'Read the compatibility reports', blocks: [
-        { kind: 'text', text: 'Word reports distinguish full standards topic coverage from narrow executable requirements and everyday tasks. Each standards topic has read, preserve, write, edit, render, and interoperability targets; untested obligations remain in the denominator.' },
-        { kind: 'text', text: 'Everyday tasks measure specific headless and browser behavior, with failed and blocked results visible even when the workflow passes its configured gates.' },
-        { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/actions/workflows/word-compatibility.yml', label: 'Download report.md, report.json, and evidence from a Word compatibility run' },
-        { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/tools/word-compatibility/README.md', label: 'Coverage definitions and report interpretation' },
-        { kind: 'text', text: 'Open XML SDK and LibreOffice checks qualify the exercised cases. Full Microsoft Office visual fidelity, general floating wrap, note repagination, comments, tracked-change review, and general field recalculation remain incomplete.' },
+    { id: 'evidence', title: 'What the reports measure', blocks: [
+      { kind: 'text', text: 'Each Word compatibility run produces three kinds of result:' },
+      { kind: 'table', headers: ['Result', 'Measures'], rows: [
+        ['Standards coverage', 'Every topic in the Word file standard, each checked for reading, preserving, writing, editing, rendering and working with other apps. Topics without a test still count against the total.'],
+        ['Requirements', 'Narrow, specific behaviours, each with an automated test.'],
+        ['Everyday tasks', 'Common jobs done headless and in a browser. Failed and blocked tasks are shown even when the run as a whole passes.'],
+      ] },
+      { kind: 'text', text: 'Download `report.md`, `report.json` and the supporting files from any run of the Word compatibility workflow.' },
+      { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/actions/workflows/word-compatibility.yml', label: 'Word compatibility runs' },
+      { kind: 'link', href: 'https://github.com/Kryptonote-Labs/Tumbler/blob/main/tools/word-compatibility/README.md', label: 'How to read a report' },
+    ] },
+    { id: 'limits', title: 'What they do not show', blocks: [
+      { kind: 'text', text: 'The Open XML SDK and LibreOffice checks only cover the cases they test.' },
+      { kind: 'note', text: 'Still incomplete: matching Word\'s look exactly, text wrapping around floating objects, repaginating for footnotes, comments, reviewing tracked changes, and recalculating fields.' },
     ] },
   ],
   source: 'apps/docs/src/lib/docs/compatibility-reports.ts',

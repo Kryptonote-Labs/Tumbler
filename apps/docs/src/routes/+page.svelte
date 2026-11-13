@@ -1,13 +1,16 @@
 <script lang="ts">
   import Code from '$lib/components/Code.svelte';
-  import { repository, version } from '$lib/site';
+  import PageEnd from '$lib/components/PageEnd.svelte';
+  import { version } from '$lib/site';
   let { data } = $props();
 </script>
 <svelte:head><title>Tumbler docs</title><meta name="description" content="Read, render, and edit Office documents and PDFs with TypeScript and Svelte. Tumbler documentation and a live document playground." /></svelte:head>
 <div class="doc-layout">
-  <article>
-    <h1>Office documents, in your app.</h1>
-    <p class="lead">Tumbler gives you TypeScript models and Svelte components for reading, rendering, and editing Word documents, spreadsheets, PowerPoint presentations, and PDFs.</p>
+  <article class="doc">
+    <header class="doc-header">
+      <h1>Office documents, in your app.</h1>
+      <p class="lead">Tumbler gives you TypeScript models and Svelte components for reading, rendering, and editing Word documents, spreadsheets, PowerPoint presentations, and PDFs.</p>
+    </header>
     <div class="note"><p>Early alpha. APIs are still changing and Office compatibility is incomplete. Keep original copies of important documents.</p></div>
     <p><a href="/docs/releases">Release {version}</a> adds PDF rendering and editing, native document authoring, shared chart editing, and a public CLI. Read the release guide for changes and migration notes.</p>
     <h2 id="start">Start with a document</h2>
@@ -25,8 +28,7 @@
     <p>The format packages work without Svelte. The components render those models and emit edit events, leaving file storage, permissions, and the surrounding UI to you.</p>
     <Code {...data.example} />
     <p>Read <a href="/docs/architecture">how the packages fit together</a>, or check the <a href="/docs/compatibility">current limitations</a> before integrating.</p>
-    <a class="doc-next" href="/docs/installation"><span>Next <strong>Installation</strong></span><span aria-hidden="true">→</span></a>
-    <footer class="page-footer"><span>MIT licensed</span><a href={repository}>View source ↗</a></footer>
+    <PageEnd next={{ href: '/docs/installation', label: 'Installation' }} source="apps/docs/src/routes/+page.svelte" />
   </article>
   <nav class="contents" aria-label="On this page"><p>On this page</p><a href="#start">Start with a document</a><a href="#formats">Choose a format</a><a href="#model">Application ownership</a></nav>
 </div>

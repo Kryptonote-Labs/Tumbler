@@ -8,7 +8,7 @@ test('changelog opens dated historical releases and marks partial publications',
   await expect(page.getByRole('heading', { name: '0.1.0-alpha.0', exact: true })).toBeVisible();
   await expect(page.locator('article time')).toHaveText('3 August 2026');
   await expect(page.getByRole('link', { name: 'Registry publication and package metadata' })).toHaveAttribute('href', 'https://registry.npmjs.org/@tumblerjs/opc/0.1.0-alpha.0');
-  await page.getByRole('link', { name: 'Back to changelog' }).click();
+  await page.getByRole('navigation', { name: 'Pages' }).getByRole('link', { name: /Changelog/ }).click();
   await page.getByRole('link', { name: /^0\.1\.0-alpha\.2\b/ }).click();
   await expect(page.getByText('Partial publication', { exact: false })).toBeVisible();
 });

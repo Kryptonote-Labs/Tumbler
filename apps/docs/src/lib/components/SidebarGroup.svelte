@@ -24,7 +24,7 @@
   </div>
   <div class="format-links" {id} hidden={!expanded}>
     {#each links as link}
-      <a href={link.href} class:active={pathname === link.href} aria-current={pathname === link.href ? 'page' : undefined}>{link.label}</a>
+      <a href={link.href} aria-current={pathname === link.href ? 'page' : undefined}>{link.label}</a>
     {/each}
   </div>
 </div>
