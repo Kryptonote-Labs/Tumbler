@@ -3,13 +3,14 @@ import { Window } from 'happy-dom';
 import type { Component, mount, unmount, flushSync, tick } from 'svelte';
 import type { WordDocument } from '@tumblerjs/word';
 import type { EmbeddedFontContext } from '../../src/embedded-fonts.ts';
+import type { WordViewLayout } from '../../src/word-view-state.ts';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 interface Runtime {
   mount: typeof mount; unmount: typeof unmount; flushSync: typeof flushSync; tick: typeof tick;
-  Harness: Component<{ initial: WordDocument; fonts: EmbeddedFontContext }, { setDocument(model: WordDocument, fonts: EmbeddedFontContext): void }>;
+  Harness: Component<{ initial: WordDocument; fonts: EmbeddedFontContext; onlayoutchange?: (layout: WordViewLayout) => void }, { setDocument(model: WordDocument, fonts: EmbeddedFontContext): void }>;
 }
 const globals = ['ResizeObserver', 'window', 'document', 'navigator', 'Node', 'Element', 'HTMLElement', 'SVGElement', 'HTMLMediaElement', 'Text', 'Comment', 'Document', 'DocumentFragment', 'ShadowRoot', 'Event', 'CustomEvent', 'MutationObserver', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame'] as const;
 
