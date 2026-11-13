@@ -10,3 +10,10 @@ export function wordDomPoint(element: HTMLElement, offset: number) {
   }
   return remaining === 0 ? { node: element, offset: 0 } : undefined;
 }
+
+/** Only the root editing host owns Word input; nested controls and editors own their events. */
+export function wordBrowserOwnsTarget(root: HTMLElement, target: EventTarget | null | undefined): boolean {
+  const element = target instanceof Element ? target : target instanceof Node ? target.parentElement : undefined;
+  return !!element && root.contains(element) && element.closest('[contenteditable]') === root &&
+    !element.closest('input,textarea,select,button');
+}

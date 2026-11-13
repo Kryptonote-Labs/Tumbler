@@ -1,3 +1,4 @@
+import { wordBrowserOwnsTarget } from './browser-dom.ts';
 import { WordBrowserCaret } from './browser-caret.ts';
 import { WordBrowserPointer, type WordBrowserPointerOptions } from './browser-pointer.ts';
 import type { NativeWordEditor } from './native-editor.ts';
@@ -36,7 +37,9 @@ export class WordBrowserInput {
 
   /** Restore after the host commits its render, never during IME composition. */
   restoreSelection() {
-    if (!this.composing && !this.pointer?.dragging && this.root.contains(this.root.ownerDocument.activeElement) &&
+    const focus = this.root.ownerDocument.getSelection()?.focusNode;
+    const nestedHost = focus && this.root.contains(focus) && !wordBrowserOwnsTarget(this.root, focus);
+    if (!this.composing && !this.pointer?.dragging && !nestedHost && wordBrowserOwnsTarget(this.root, this.root.ownerDocument.activeElement) &&
       !sameWordBrowserSelection(wordBrowserSelection(this.root), this.editor.selection))
       restoreWordBrowserSelection(this.root, this.editor.selection);
     this.caret?.refresh();
@@ -57,12 +60,13 @@ export class WordBrowserInput {
   }
 
   private selectionChange = () => {
-    if (this.composing || this.pointer?.dragging) return;
+    if (this.composing || this.pointer?.dragging || !wordBrowserOwnsTarget(this.root, this.root.ownerDocument.getSelection()?.focusNode)) return;
     const selection = wordBrowserSelection(this.root);
     if (selection && !sameWordBrowserSelection(selection, this.editor.selection)) this.editor.setSelection(selection);
   };
 
   private beforeInput = (event: InputEvent) => {
+    if (!wordBrowserOwnsTarget(this.root, event.target)) return;
     if (this.composing || event.isComposing) return;
     if (this.compositionCommit !== undefined && (event.inputType === 'insertFromComposition' ||
       event.inputType === 'insertText' && event.data === this.compositionCommit)) {
@@ -72,7 +76,8 @@ export class WordBrowserInput {
     }
     if (!event.cancelable) return;
     event.preventDefault();
-    const selection = wordBrowserSelection(this.root) ?? this.editor.selection;
+    const selection = (event.inputType === 'insertReplacementText' ? this.targetSelection(event) : undefined)
+      ?? wordBrowserSelection(this.root) ?? this.editor.selection;
     if (event.inputType === 'historyUndo') { this.editor.undo(); return; }
     if (event.inputType === 'historyRedo') { this.editor.redo(); return; }
     if (event.inputType === 'insertText' || event.inputType === 'insertReplacementText') {
@@ -80,13 +85,23 @@ export class WordBrowserInput {
     } else if (event.inputType === 'insertParagraph') this.editor.replaceText('\n', selection);
     else if (event.inputType === 'insertLineBreak') this.editor.replaceText('\u2028', selection);
     else if (event.inputType.startsWith('delete')) {
-      const target = event.getTargetRanges?.()[0];
-      const anchor = target && wordPositionFromDom(this.root, target.startContainer, target.startOffset);
-      const focus = target && wordPositionFromDom(this.root, target.endContainer, target.endOffset);
-      const range = anchor && focus && JSON.stringify(anchor) !== JSON.stringify(focus) ? { anchor, focus } : this.deletionRange(selection, event.inputType);
+      const target = this.targetSelection(event);
+      const range = target && !this.collapsed(target) ? target : this.deletionRange(selection, event.inputType);
       if (range) this.editor.replaceText('', this.expandDeletion(range));
     }
   };
+
+  private targetSelection(event: InputEvent): WordNativeSelection | undefined {
+    const target = event.getTargetRanges?.()[0];
+    if (!target || !wordBrowserOwnsTarget(this.root, target.startContainer) || !wordBrowserOwnsTarget(this.root, target.endContainer)) return;
+    const anchor = wordPositionFromDom(this.root, target.startContainer, target.startOffset);
+    const focus = wordPositionFromDom(this.root, target.endContainer, target.endOffset);
+    return anchor && focus ? { anchor, focus } : undefined;
+  }
+
+  private collapsed(selection: WordNativeSelection) {
+    return selection.anchor.paragraphId === selection.focus.paragraphId && selection.anchor.offset === selection.focus.offset;
+  }
 
   /** Browser target ranges can cover only a combining mark or part of an emoji. */
   private expandDeletion(selection: WordNativeSelection): WordNativeSelection {
@@ -107,7 +122,7 @@ export class WordBrowserInput {
   }
 
   private deletionRange(selection: WordNativeSelection, inputType: string): WordNativeSelection | undefined {
-    if (JSON.stringify(selection.anchor) !== JSON.stringify(selection.focus)) return selection;
+    if (!this.collapsed(selection)) return selection;
     if (inputType !== 'deleteContentBackward' && inputType !== 'deleteContentForward' && inputType !== 'deleteWordBackward' && inputType !== 'deleteWordForward') return;
     const paragraphs = nativeParagraphs(this.editor.blocks);
     const index = paragraphs.findIndex(paragraph => paragraph.id === selection.focus.paragraphId);
@@ -126,6 +141,7 @@ export class WordBrowserInput {
   }
 
   private keyDown = (event: KeyboardEvent) => {
+    if (!wordBrowserOwnsTarget(this.root, event.target)) return;
     if (this.composing || event.isComposing || !(event.ctrlKey || event.metaKey) || event.altKey) return;
     if (event.key.toLowerCase() === 'a') {
       const paragraphs = nativeParagraphs(this.editor.blocks);
@@ -146,6 +162,7 @@ export class WordBrowserInput {
   };
 
   private paste = (event: ClipboardEvent) => {
+    if (!wordBrowserOwnsTarget(this.root, event.target)) return;
     if (this.composing) return;
     event.preventDefault();
     const text = event.clipboardData?.getData('text/plain');
@@ -153,6 +170,7 @@ export class WordBrowserInput {
   };
 
   private copy = (event: ClipboardEvent) => {
+    if (!wordBrowserOwnsTarget(this.root, event.target)) return;
     if (this.composing || !event.clipboardData) return;
     const { start, end, paragraphs } = orderedNativeSelection(this.editor.blocks, wordBrowserSelection(this.root) ?? this.editor.selection);
     if (start.paragraphId === end.paragraphId && start.offset === end.offset) return;
@@ -162,16 +180,19 @@ export class WordBrowserInput {
   };
 
   private cut = (event: ClipboardEvent) => {
+    if (!wordBrowserOwnsTarget(this.root, event.target)) return;
     this.copy(event);
     if (event.defaultPrevented) this.editor.replaceText('', wordBrowserSelection(this.root) ?? this.editor.selection);
   };
 
-  private compositionStart = () => {
+  private compositionStart = (event: CompositionEvent) => {
+    if (!wordBrowserOwnsTarget(this.root, event.target)) return;
     this.composition = wordBrowserSelection(this.root) ?? this.editor.selection;
     this.caret?.hide();
   };
 
   private compositionEnd = (event: CompositionEvent) => {
+    if (!wordBrowserOwnsTarget(this.root, event.target)) return;
     const selection = this.composition;
     this.composition = undefined;
     this.compositionCommit = event.data;

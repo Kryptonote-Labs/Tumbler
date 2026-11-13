@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { chromium, firefox, type Page } from 'playwright-core';
+import { verifyWordNestedControls, verifyWordReplacementRange } from './verify-word-host-browser.ts';
 import { verifyWordCaretBrowser, assertPaintedCaret } from './verify-word-caret-browser.ts';
 import { verifyWordPointerBrowser, textPoint, dragText, showLine } from './verify-word-pointer-browser.ts';
 
@@ -25,6 +26,8 @@ export async function verifyWordReactBrowser(directory: string, engine: 'chromiu
     assert.equal(await editor.locator('.word-page').count(), 1);
     await verifyWordCaretBrowser(page);
     await verifyWordPointerBrowser(page);
+    await verifyWordNestedControls(page);
+    await verifyWordReplacementRange(page);
     const paper = await editor.locator('.word-page').boundingBox();
     const textBounds = await editor.locator('p').first().boundingBox();
     assert(paper && textBounds && textBounds.x >= paper.x + 90 && textBounds.y >= paper.y + 90);

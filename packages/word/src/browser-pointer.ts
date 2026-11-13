@@ -1,3 +1,4 @@
+import { wordBrowserOwnsTarget } from './browser-dom.ts';
 import type { NativeWordEditor } from './native-editor.ts';
 import { nativeParagraphs, paragraphText, type WordNativePosition, type WordNativeSelection } from './native-edit.ts';
 import { restoreWordBrowserSelection, sameWordBrowserSelection } from './browser-selection.ts';
@@ -73,7 +74,7 @@ export class WordBrowserPointer {
   private pointerDown = (event: PointerEvent) => { this.pointerType = event.pointerType; };
 
   private mouseDown = (event: MouseEvent) => {
-    if (event.button !== 0 || this.pointerType === 'touch' || !this.options.enabled()) return;
+    if (event.button !== 0 || this.pointerType === 'touch' || !this.options.enabled() || !wordBrowserOwnsTarget(this.root, event.target)) return;
     const target = event.target instanceof Element ? event.target : undefined;
     const blocked = target?.closest('[contenteditable="false"],input,button,select,textarea');
     if (blocked && this.root.contains(blocked)) return;

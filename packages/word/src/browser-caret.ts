@@ -1,3 +1,4 @@
+import { wordBrowserOwnsTarget } from './browser-dom.ts';
 import type { NativeWordEditor } from './native-editor.ts';
 import { wordBrowserCaretRect, wordBrowserSelection } from './browser-selection.ts';
 
@@ -49,7 +50,7 @@ export class WordBrowserCaret {
     const document = this.root.ownerDocument;
     const browser = document.getSelection();
     const selection = wordBrowserSelection(this.root);
-    if (this.printing || !this.enabled() || !document.hasFocus() || !this.root.contains(document.activeElement) || !browser?.isCollapsed || !selection) {
+    if (this.printing || !this.enabled() || !document.hasFocus() || !wordBrowserOwnsTarget(this.root, document.activeElement) || !wordBrowserOwnsTarget(this.root, browser?.focusNode) || !browser?.isCollapsed || !selection) {
       this.hide();
       return;
     }
