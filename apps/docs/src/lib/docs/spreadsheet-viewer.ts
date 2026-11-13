@@ -43,7 +43,7 @@ export const spreadsheetViewerDoc: Doc = {
     ] },
     { id: 'save', title: 'Save', blocks: [
       { kind: 'text', text: '`artifact.bytes()` returns the workbook as XLSX bytes, with your edits included. Tumbler preserves content it cannot edit, but a few features do not survive a save exactly; Spreadsheet compatibility lists them. To offer a download or upload the file, wrap the bytes in a `Blob`:' },
-      { kind: 'code', code: `const file = new Blob([artifact.bytes()], {
+      { kind: 'code', code: `const file = new Blob([Uint8Array.from(artifact.bytes()).buffer], {
   type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 });` },
       { kind: 'link', href: '/docs/spreadsheet-support', label: 'Spreadsheet compatibility' },
