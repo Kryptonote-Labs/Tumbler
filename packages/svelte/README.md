@@ -304,10 +304,9 @@ For a slideshow, pass `playing={true}` to `PresentationSlideView`. Automatic
 animations start on slide entry. Call the component's `advanceAnimation()` method
 on forward navigation; it returns `true` when it consumes a click group and
 `false` when the host should move to the next slide. Changing slides or leaving
-playback resets the effects. Editing and thumbnails remain static. Playback adds
-no animation authoring controls.
+playback resets the effects. Editing and thumbnails remain static. Slide transitions play between the outgoing and incoming slides.
 
-Hosts that omit `PresentationSlideView.playing` retain its built-in read-only playback controls. Passing an explicit `playing` boolean opts into host-controlled playback and hides those controls; forward navigation can call `advanceAnimation()` before changing slides. Pass `stage={true}` for a fullscreen show: the slide fills the view edge to edge on black, with no gutter or hover title, and its text cannot be selected but stays readable by screen readers. No animation authoring controls are provided.
+Hosts that omit `PresentationSlideView.playing` retain its built-in read-only playback controls. Passing an explicit `playing` boolean opts into host-controlled playback and hides those controls; forward navigation can call `advanceAnimation()` before changing slides. Pass `stage={true}` for a fullscreen show: the slide fills the view edge to edge on black, with no gutter or hover title, and its text cannot be selected but stays readable by screen readers. Object animation authoring controls are not provided.
 
 
 `PresentationSlideView.onselectionchange` includes `range`, the same object returned
@@ -521,3 +520,47 @@ final output equality after timing. Document creation and a font warmup are
 outside the timings. This measures pagination without a development server, DOM,
 or rendering. Browser latency depends on fonts, device, and document structure;
 these numbers are not a browser frame-time target.
+
+
+## Slide transition controls and playback
+
+`PresentationTransitionControls` from `@tumblerjs/svelte/slides` is an optional
+editor control. Pass the current `slide` and an `oncommand` callback that executes
+its `set-transition` command through your editing session. The component exposes
+the effect, duration, applicable effect options, click advance and automatic
+advance. It lists every supported non-Morph transition; imported unknown effects
+remain selected until the user explicitly replaces or removes them.
+
+```svelte
+<PresentationTransitionControls
+  {slide}
+  oncommand={command => {
+    artifact = session.execute(command);
+  }}
+/>
+```
+
+Keep one `PresentationSlideView` mounted when navigating, and update its `slide`
+prop. With `playing={true}`, it captures the outgoing rendered slide before the
+DOM changes and animates it together with the incoming slide. First entry,
+thumbnails and editing remain static. Object animations start after the slide
+transition. Rapid navigation finishes the previous transition, and leaving playback
+or unmounting releases its layers and image references. Reduced-motion preference
+changes finish an active transition and skip subsequent transitions.
+
+`advanceAnimation()` consumes an animation click group before navigation. Once
+those groups are exhausted, it also consumes clicks when `advanceOnClick` is
+false. Explicit navigation buttons can call `advanceAnimation('navigation')` to
+bypass that mouse-click setting. A click finishes any active transition first.
+
+For timed slides, provide `onadvance={() => nextSlide()}`. The view waits for the
+final animation group, its effects and the authored `advanceAfter` delay before
+calling it. Pending click groups still require their clicks. If `onadvance` is
+omitted and `onslide` exists, automatic advance uses `onslide` with the next visible
+slide part. Hosts own navigation and the end-of-show behavior. Long delays are
+split at the browser timer boundary rather than clamped.
+
+The browser player uses approximations for complex 3D, particle and page-curl
+effects. It does not reproduce PowerPoint's proprietary renderer or play transition
+sounds. Export retains the actual Office effect settings so PowerPoint can render
+them natively. Morph remains preserved and plays as a cut in the browser.

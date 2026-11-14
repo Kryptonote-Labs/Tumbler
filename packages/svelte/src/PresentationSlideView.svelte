@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { presentationImageUrl } from './presentation-image-url.ts';
+  import { presentationAdvance } from './presentation-advance.ts';
+  import { findVisibleSlideIndex } from '@tumblerjs/slides';
+  import { createPresentationTransitionPlayer } from './presentation-transition-player.ts';
   import { presentationSearchHighlights } from './presentation-search-highlights.ts';
   import type { PresentationSearchMatch } from '@tumblerjs/slides';
   import PresentationRemoteSelections from './PresentationRemoteSelections.svelte';
@@ -77,6 +81,7 @@
     onshapechange,
     onundo,
     onslide,
+    onadvance,
     overlay,
     remoteSelections = [],
   }: {
@@ -106,6 +111,8 @@
     selectedKeys?: string[];
     onobjectschange?: (changes: PresentationObjectChange[]) => void;
     onslide?: (part: string) => void;
+    /** Automatic slide advance after all effects and the authored delay. */
+    onadvance?: () => void;
     ontextedit?: (change: PresentationTextEdit, undoGroup?: string) => void;
     onparagraph?: (command: Extract<PresentationCommand, { name: "paragraph" }>) => void;
     onformat?: (change: PresentationFormatChange) => void;
@@ -409,6 +416,11 @@
     loadedFonts = loaded;
     return loaded.destroy;
   });
+  const transitions = createPresentationTransitionPlayer();
+  $effect.pre(() => {
+    const part = slide.part;
+    untrack(() => transitions.capture(svg, part));
+  });
   let manualPlaying = $state(false);
   const playing = $derived(controlledPlaying ?? manualPlaying);
   $effect(() => { slide.part; manualPlaying = false; });
@@ -419,10 +431,11 @@
     playbackStep = 0;
   });
   /** Consume the next click group; false lets the host advance to another slide. */
-  export function advanceAnimation() {
+  export function advanceAnimation(source: 'click' | 'navigation' = 'click') {
     if (!playing || editable || thumbnail) return false;
+    transitions.finish();
     const next = nextPresentationAnimationStep(slide, playbackStep);
-    if (next === undefined) return false;
+    if (next === undefined) return source === 'click' && slide.transition?.advanceOnClick === false;
     playbackStep = next;
     return true;
   }
@@ -460,31 +473,27 @@
       ? Math.max(object.transform.height, fitted.height)
       : object.transform.height;
   }
-  const images = new Map<Uint8Array, string>();
+  const images = new Map<Uint8Array, ReturnType<typeof presentationImageUrl>>();
   function imageUrl(object: SlideObject) {
     if (!mounted || !object.image?.bytes.length) return "";
     const existing = images.get(object.image.bytes);
-    if (existing) return existing;
-    const url = URL.createObjectURL(
-      new Blob([Uint8Array.from(object.image.bytes).buffer], {
-        type: object.image.contentType,
-      }),
-    );
-    images.set(object.image.bytes, url);
-    return url;
+    if (existing) return existing.url;
+    const resource = presentationImageUrl(object.image.bytes, object.image.contentType);
+    images.set(object.image.bytes, resource);
+    return resource.url;
   }
   $effect(() => {
     const current = new Set(
       slide.objects.flatMap((item) => (item.image ? [item.image.bytes] : [])),
     );
-    for (const [bytes, url] of images)
+    for (const [bytes, resource] of images)
       if (!current.has(bytes)) {
-        URL.revokeObjectURL(url);
+        resource.release();
         images.delete(bytes);
       }
   });
   onDestroy(() => {
-    for (const url of images.values()) URL.revokeObjectURL(url);
+    for (const resource of images.values()) resource.release();
   });
   let slideId = $derived(slide.id);
   $effect(() => {
@@ -860,14 +869,25 @@
       class="slide-space"
       style={`width:${Math.max(width, presentation.width * factor + gutter)}px;min-height:${Math.max(height, presentation.height * factor + gutter)}px`}
     >
+      <div class="slide-frame" style:width={`${presentation.width * factor}px`} style:height={`${presentation.height * factor}px`}>
       <!-- The slide surface handles keyboard manipulation only in Edit mode. -->
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <svg
+        use:transitions.action={{ slide, playing: playing && !thumbnail, editable: editable || thumbnail }}
         use:presentationPlayback={{
           slide,
           playing: playing && !thumbnail,
           step: playbackStep,
           editable: editable || thumbnail,
+          entryDelay: transitions.remaining(),
+        }}
+        use:presentationAdvance={{
+          slide, step: playbackStep, playing: playing && !thumbnail, editable,
+          transitionRemaining: transitions.remaining,
+          onadvance: onadvance ?? (onslide ? () => {
+            const index = findVisibleSlideIndex(presentation.slides, presentation.slides.indexOf(slide) + 1);
+            if (index !== undefined) onslide?.(presentation.slides[index]!.part);
+          } : undefined),
         }}
         bind:this={svg}
         class="slide"
@@ -1272,6 +1292,7 @@
         {/each}
         {#if !thumbnail}{@render overlay?.()}{/if}
       </svg>
+      </div>
     </div>
     {#if !thumbnail && !playing && host && svg}
       <PresentationRemoteSelections {host} {svg} {slide} selections={remoteSelections} />
@@ -1331,6 +1352,7 @@
     padding: 16px;
     box-sizing: border-box;
   }
+  .slide-frame { position: relative; flex: none; overflow: hidden; }
   .slide {
     flex: none;
     display: block;

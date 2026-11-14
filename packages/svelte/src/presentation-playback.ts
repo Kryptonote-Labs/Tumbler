@@ -4,6 +4,7 @@ export interface PlaybackOptions {
   playing: boolean;
   step: number;
   editable: boolean;
+  entryDelay?: number;
 }
 /** Steps are click groups; automatic, with and after effects share their group's step. */
 export function nextPresentationAnimationStep(
@@ -54,47 +55,6 @@ export function presentationPlayback(
       lastStep = -1;
       started = false;
     }
-    if (changed && lastSlide && !options.editable) {
-      const transition = options.slide.transition;
-      if (transition) {
-        const direction = transition.direction,
-          vertical = direction === "u" || direction === "d";
-        const offset =
-          direction === "r" || direction === "d" ? "-100%" : "100%";
-        const frames =
-          transition.kind === "fade"
-            ? [{ opacity: 0 }, { opacity: 1 }]
-            : transition.kind === "wipe"
-              ? [
-                  {
-                    clipPath: wipe(
-                      (
-                        { l: "left", r: "right", u: "up", d: "down" } as Record<
-                          string,
-                          string
-                        >
-                      )[direction] ?? "left",
-                    ),
-                  },
-                  { clipPath: "inset(0)" },
-                ]
-              : ["push", "cover"].includes(transition.kind)
-                ? [
-                    {
-                      transform: `translate${vertical ? "Y" : "X"}(${offset})`,
-                    },
-                    { transform: "translate(0)" },
-                  ]
-                : undefined;
-        if (frames)
-          running.push(
-            node.animate(frames, {
-              duration: transition.duration,
-              easing: "linear",
-            }),
-          );
-      }
-    }
     lastSlide = options.slide.part;
     if (!options.playing || options.editable) return;
     const animations = options.slide.animations ?? [];
@@ -139,7 +99,7 @@ export function presentationPlayback(
       running.push(
         target.animate(frames, {
           duration: effect.duration,
-          delay: effect.delay,
+          delay: effect.delay + (options.entryDelay ?? 0),
           fill: "forwards",
           easing: "linear",
         }),
