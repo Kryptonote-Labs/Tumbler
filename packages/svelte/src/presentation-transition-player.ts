@@ -29,7 +29,8 @@ function snapshot(node: SVGSVGElement): SVGSVGElement {
         if (['href', 'xlink:href'].includes(attribute.name) && value.startsWith('#')) value = `#${ids.get(value.slice(1)) ?? value.slice(1)}`;
         if (['aria-labelledby', 'aria-describedby'].includes(attribute.name)) value = value.split(/\s+/).map(id => ids.get(id) ?? id).join(' ');
       }
-      copy.setAttributeNS(attribute.namespaceURI, attribute.name, value);
+      if (attribute.namespaceURI) copy.setAttributeNS(attribute.namespaceURI, attribute.name, value);
+      else copy.setAttribute(attribute.name, value);
     }
     copy.removeAttribute('tabindex');
     copy.removeAttribute('contenteditable');
@@ -115,7 +116,13 @@ export function createPresentationTransitionPlayer() {
         positioned(outgoing);
         node.style.position = 'relative';
         outgoing.style.pointerEvents = 'none';
-        frame.prepend(outgoing);
+        // HTML inert covers native links and controls inside SVG foreignObject descendants.
+        const snapshots = node.ownerDocument.createElement('div');
+        snapshots.inert = true;
+        snapshots.setAttribute('aria-hidden', 'true');
+        snapshots.style.display = 'contents';
+        snapshots.append(outgoing);
+        frame.prepend(snapshots);
         const seed = Array.from(options.slide.part).reduce((n, c) => n + c.charCodeAt(0), 0);
         const first = presentationTransitionFrame(transition, 0, seed);
         const pieces = (first.pieces ?? []).map(piece => {
@@ -124,7 +131,7 @@ export function createPresentationTransitionPlayer() {
           copy.style.zIndex = '3';
           result.path.setAttribute('d', piece.clip);
           copy.style.clipPath = `url(#${result.clip.id})`;
-          frame.append(copy);
+          snapshots.append(copy);
           return result;
         });
         let raf = 0, done = false;
@@ -135,9 +142,8 @@ export function createPresentationTransitionPlayer() {
           done = true;
           deadline = 0;
           view.cancelAnimationFrame(raf);
-          outgoing.remove();
+          snapshots.remove();
           release();
-          pieces.forEach(piece => piece.svg.remove());
           incoming.defs.remove();
           if (oldStyle === null) node.removeAttribute('style'); else node.setAttribute('style', oldStyle);
           frame.style.background = oldBackground;

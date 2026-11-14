@@ -49,12 +49,12 @@ test('slide changes retain an inaccessible outgoing slide with independent SVG d
 test('rapid navigation and leaving playback remove overlays, frames, and styles', () => {
   const s = stage();
   s.change('second', 'fracture');
-  expect(s.frame.querySelectorAll(':scope > svg')).toHaveLength(26);
+  expect(s.frame.querySelectorAll('svg')).toHaveLength(26);
   s.advance(100);
   s.change('third');
-  expect(s.frame.querySelectorAll(':scope > svg')).toHaveLength(2);
+  expect(s.frame.querySelectorAll('svg')).toHaveLength(2);
   s.action.update({ ...s.options('third'), playing: false });
-  expect(s.frame.querySelectorAll(':scope > svg')).toHaveLength(1);
+  expect(s.frame.querySelectorAll('svg')).toHaveLength(1);
   expect(s.callbacks.size).toBe(0);
   expect(s.node.getAttribute('style')).toBeNull();
   s.action.destroy();
@@ -85,4 +85,27 @@ test('snapshot holds outgoing image resources until cleanup', () => {
   resource.release();
   expect(s.frame.querySelector('svg[aria-hidden="true"] image')?.getAttribute('href')).toBe(resource.url);
   s.action.destroy();
+});
+
+test('outgoing links and controls remain inside an inert HTML subtree, including all fracture fragments', () => {
+  const s = stage();
+  const foreign = s.node.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+  const link = s.node.ownerDocument.createElement('a');
+  link.href = '#example'; link.textContent = 'Open';
+  const button = s.node.ownerDocument.createElement('button'); button.textContent = 'Play';
+  const html = s.node.ownerDocument.createElement('div');
+  html.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+  html.append(link, button); foreign.append(html); s.node.append(foreign);
+  s.change('next', 'fracture');
+  const clones = s.frame.querySelectorAll('svg[aria-hidden="true"]');
+  expect(clones).toHaveLength(25);
+  for (const clone of clones) {
+    for (const target of clone.querySelectorAll('a, button')) {
+      const wrapper = target.closest<HTMLElement>('[inert]');
+      expect(wrapper?.namespaceURI).toBe('http://www.w3.org/1999/xhtml');
+      expect(wrapper?.inert).toBe(true);
+    }
+  }
+  s.action.destroy();
+  expect(s.frame.querySelectorAll('[inert]')).toHaveLength(0);
 });
