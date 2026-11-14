@@ -1,3 +1,5 @@
+import { slideTransition } from './transitions.ts';
+import { setSlideTransition } from './transition-authoring.ts';
 import { editPresentationChart, insertPresentationChart } from './chart-authoring.ts';
 import { chartResourcesSchema } from '@tumblerjs/charts';
 import { formatPresentationTable } from './table-format.ts';
@@ -72,6 +74,7 @@ const patch = z
 const tableBorder = z.object({ color, width: number.nonnegative(), dash: z.enum(['solid', 'dash', 'dot', 'double']) }).strict();
 const chartContent = z.object({ xml: z.string(), workbook: z.string().optional(), resources: chartResourcesSchema.optional() }).strict();
 const singlePresentationCommand = z.discriminatedUnion("name", [
+  z.object({ name: z.literal('set-transition'), slideId: id, transition: slideTransition.nullable() }).strict(),
   z.object({ name: z.literal('edit-chart'), ...target, content: chartContent }).strict(),
   z.object({ name: z.literal('insert-chart'), slideId: id, bounds, content: chartContent }).strict(),
   z.object({ name: z.literal('format-table'), ...target,
@@ -309,6 +312,8 @@ export function applyPresentationCommand(
       return deleteSlide(artifact, command.slideId);
     case "set-notes":
       return setSlideNotes(artifact, command.slideId, command.notes);
+    case "set-transition":
+      return setSlideTransition(artifact, command.slideId, command.transition);
     case "set-slide-hidden":
       return setSlideHidden(artifact, command.slideId, command.hidden);
     case "move-slide":

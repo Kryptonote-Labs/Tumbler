@@ -1,7 +1,8 @@
 # Strict theme validation
 
 The validator uses Open XML SDK **3.5.1**, targeting Office 2007 unless
-`--office2010` is passed. It opens the input package read-only. The SDK translates
+`--office2010` or `--office2013` is passed. Use `--office2013` to validate
+PowerPoint preset transitions, including their selected Markup Compatibility branches. It opens the input package read-only. The SDK translates
 Strict namespaces into its Transitional object model, but its
 [`Miter.Limit` metadata](https://github.com/dotnet/Open-XML-SDK/blob/v3.5.1/generated/DocumentFormat.OpenXml/DocumentFormat.OpenXml.Generator/DocumentFormat.OpenXml.Generator.OpenXmlGenerator/schemas_openxmlformats_org_drawingml_2006_main.g.cs#L7295)
 still expects `Int32Value`. It rejects the schema-valid Strict theme attribute

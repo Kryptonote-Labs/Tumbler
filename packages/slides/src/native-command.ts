@@ -1,3 +1,4 @@
+import { normalizeSlideTransition } from './transitions.ts';
 import { ThemeColorScheme } from '@tumblerjs/ooxml';
 import { chartContentModel, mergeChartContent, bindChartTheme, bindChartImages } from '@tumblerjs/charts';
 import { linkedText } from './authoring-metadata.ts';
@@ -267,6 +268,9 @@ export function applyNativeModelCommand(
     }
     case 'set-notes':
       patchSlide({ ...target!, slide: { ...target!.slide, notes: command.notes } });
+      break;
+    case 'set-transition':
+      patchSlide({ ...target!, slide: { ...target!.slide, transition: command.transition === null ? undefined : normalizeSlideTransition(command.transition), diagnostics: target!.slide.diagnostics.filter(d => !d.message.startsWith('Slide transition ')) } });
       break;
     case 'set-slide-hidden':
       patchSlide({ ...target!, slide: { ...target!.slide, hidden: command.hidden } });

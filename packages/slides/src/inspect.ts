@@ -23,6 +23,7 @@ export function inspectPresentation(artifact: PresentationArtifact, slideId?: st
       objectCount: slide.objects.length,
       title: slide.title,
       notes: slide.notes,
+      transition: slide.transition,
       background: slide.background,
       diagnostics: slide.diagnostics,
       objects: slide.objects.map((o) => ({

@@ -7,17 +7,17 @@ if (args.Length == 0)
     return 2;
 }
 
-var unknownOption = args.FirstOrDefault(arg => arg.StartsWith("--") && arg != "--office2010");
+var unknownOption = args.FirstOrDefault(arg => arg.StartsWith("--") && arg != "--office2010" && arg != "--office2013");
 if (unknownOption is not null)
 {
-    Console.Error.WriteLine($"Unknown option: {unknownOption}. Supported option: --office2010.");
+    Console.Error.WriteLine($"Unknown option: {unknownOption}. Supported options: --office2010, --office2013.");
     return 2;
 }
 var failed = false;
 var office2010 = args.Contains("--office2010");
-var paths = args.Where(arg => arg != "--office2010").ToArray();
+var paths = args.Where(arg => arg != "--office2010" && arg != "--office2013").ToArray();
 if (paths.Length == 0) return 2;
-var validator = new OpenXmlValidator(office2010 ? DocumentFormat.OpenXml.FileFormatVersions.Office2010 : DocumentFormat.OpenXml.FileFormatVersions.Office2007) { MaxNumberOfErrors = 100 };
+var validator = new OpenXmlValidator(args.Contains("--office2013") ? DocumentFormat.OpenXml.FileFormatVersions.Office2013 : office2010 ? DocumentFormat.OpenXml.FileFormatVersions.Office2010 : DocumentFormat.OpenXml.FileFormatVersions.Office2007) { MaxNumberOfErrors = 100 };
 foreach (var path in paths)
 {
     try
