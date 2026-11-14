@@ -353,3 +353,58 @@ This shares the canvas painter's limitations: font substitution can change line
 breaks, and it does not guarantee fidelity for unsupported Office effects,
 SmartArt, embedded objects, animation, or speaker notes. This API does not export
 Word documents or spreadsheets.
+
+## Slide transitions
+
+`set-transition` is shared by native documents, editing sessions, collaboration
+and the presentation CLI. Durations and advance delays use milliseconds.
+
+```ts
+session.execute({
+  name: 'set-transition',
+  slideId: session.artifact.document.slides[1]!.id,
+  transition: { kind: 'push', direction: 'l', duration: 600 },
+});
+
+// Optional timed advance, starting after the slide's final animation.
+session.execute({
+  name: 'set-transition',
+  slideId: session.artifact.document.slides[1]!.id,
+  transition: { kind: 'fade', duration: 400, advanceOnClick: true, advanceAfter: 5000 },
+});
+
+// Remove the transition and its advance settings.
+session.execute({ name: 'set-transition', slideId, transition: null });
+```
+
+`SLIDE_TRANSITIONS` and `slideTransitionKinds` describe the 52 supported effect
+types, including all classic ECMA-376 transitions, the PowerPoint 2010 transition
+extensions, and the twelve PowerPoint 2013 presets. `kind` uses OOXML names:
+`pull` is Uncover, `checker` is Checkerboard, `zoom` is Box, and `prstTrans`
+presets use their preset name, such as `curtains` or `pageCurlSingle`.
+Morph is retained on import and export, but cannot be authored or played.
+
+`slideTransition` validates effect options. Direction values depend on the effect;
+`SLIDE_TRANSITIONS[kind].directions` lists them. Other options are `orientation`,
+`throughBlack`, `spokes`, `pattern`, `bounce`, `content`, `inverted`, `invertX`
+and `invertY`. Invalid combinations fail before an edit is applied. An omitted
+duration defaults to 750 ms; click advance defaults to enabled. `advanceAfter: 0`
+is valid. Advance time follows the unsigned 32-bit millisecond field defined by
+ECMA-376 `CT_SlideTransition/@advTm`.
+
+Export uses `p:transition`, the Microsoft `p14:dur` duration attribute, and
+`mc:AlternateContent` with a standard fallback. Modern presets use
+`p15:prstTrans`. Standard effect options survive the fallback; unsupported modern
+effects fall back to fade in older readers. Editing an effect retains its imported
+sound action and extension list. Unrelated slide animation timing stays intact.
+`inspectPresentation` includes the selected slide's transition for agent reads.
+
+File compatibility and browser rendering are separate. The Svelte player implements
+classic effects with slide layers and masks, and approximates the complex 3D,
+particle and page-deformation effects with browser transforms and fragments.
+PowerPoint renders exported effects using its own implementation. Transition sound
+actions are preserved, but the browser player does not play them.
+
+Specifications: [ECMA-376](https://ecma-international.org/publications-and-standards/standards/ecma-376/),
+[MS-PPTX slide transition extensions](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-pptx/22ebe6b5-2ade-43d9-977a-98fa194725c2),
+[PowerPoint preset transitions](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-pptx/56b22fd1-50b2-4a24-ab96-20a78cac7b06).

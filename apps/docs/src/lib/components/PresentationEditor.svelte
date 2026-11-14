@@ -3,7 +3,9 @@
   import {
     PresentationSlideView,
     PresentationSlideRail,
+    PresentationTransitionControls,
   } from "@tumblerjs/svelte/slides";
+  import { findVisibleSlideIndex } from '@tumblerjs/slides';
   import type {
     PresentationArtifact,
     PresentationEditingSession,
@@ -23,9 +25,9 @@
   } = $props();
   let artifact = $state(untrack(() => session.artifact));
   let index = $state(0);
-  let slideView = $state<{ advanceAnimation: () => boolean }>();
+  let slideView = $state<{ advanceAnimation: (source?: 'click' | 'navigation') => boolean }>();
   function advance() {
-    if (slideView?.advanceAnimation()) return;
+    if (slideView?.advanceAnimation('navigation')) return;
     index = Math.min(index + 1, artifact.document.slides.length - 1);
   }
   let selectedKey = $state<string>();
@@ -76,6 +78,7 @@
         >Redo</button
       >{/if}
   </div>
+  {#if editable && slide}<PresentationTransitionControls {slide} oncommand={command => apply(() => session.execute(command))} />{/if}
   <div class="slide-workspace">
     <aside>
       <PresentationSlideRail
@@ -93,6 +96,10 @@
       {#if slide}<PresentationSlideView
           bind:this={slideView}
           playing={!editable}
+          onadvance={() => {
+            const next = findVisibleSlideIndex(artifact.document.slides, index + 1);
+            if (next !== undefined) index = next;
+          }}
           onslide={(part) => {
             const next = artifact.document.slides.findIndex(
               (slide) => slide.part === part,

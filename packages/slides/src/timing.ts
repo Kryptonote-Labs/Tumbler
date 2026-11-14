@@ -1,3 +1,4 @@
+import { isSlideTransitionKind } from './transitions.ts';
 import type { LosslessXmlElement as Element } from "@tumblerjs/ooxml";
 export interface SlideAnimation {
   readonly target: string;
@@ -8,13 +9,8 @@ export interface SlideAnimation {
   readonly duration: number;
   readonly direction: string;
 }
-export interface SlideTransition {
-  readonly kind: string;
-  readonly direction: string;
-  readonly duration: number;
-  readonly advanceAfter?: number;
-  readonly advanceOnClick: boolean;
-}
+export type { SlideTransition } from './transitions.ts';
+import { readSlideTransition } from './transition-reader.ts';
 const children = (e: Element | undefined) =>
   e?.children.filter((n): n is Element => n.kind === "element") ?? [];
 const attr = (e: Element | undefined, n: string) =>
@@ -28,7 +24,6 @@ const milliseconds = (s: string | undefined, fallback = 0) =>
 /** Read the click/with/after effect sequence, retaining diagnostics for timing we cannot execute. */
 export function readSlideTiming(root: Element) {
   const timing = child(root, "timing"),
-    transition = child(root, "transition"),
     warnings = new Set<string>();
   const animations: SlideAnimation[] = [];
   let step = 0,
@@ -153,31 +148,8 @@ export function readSlideTiming(root: Element) {
     };
     visit(timing, { step: 0, delay: 0 });
   }
-  const effect = children(transition).find(
-    (e) => !["sndAc", "extLst"].includes(e.localName),
-  );
-  const duration = milliseconds(
-    attr(transition, "dur"),
-    attr(transition, "spd") === "fast"
-      ? 500
-      : attr(transition, "spd") === "slow"
-        ? 1000
-        : 750,
-  );
-  const advance = attr(transition, "advTm");
-  const result: SlideTransition | undefined = transition
-    ? {
-        kind: effect?.localName ?? "cut",
-        direction: attr(effect, "dir") ?? "l",
-        duration,
-        advanceOnClick: attr(transition, "advClick") !== "0",
-        ...(advance ? { advanceAfter: milliseconds(advance) } : {}),
-      }
-    : undefined;
-  if (
-    effect &&
-    !["fade", "cut", "wipe", "push", "cover"].includes(effect.localName)
-  )
-    warnings.add(`Slide transition ${effect.localName} is not supported yet.`);
+  const result = readSlideTransition(root);
+  if (result && !isSlideTransitionKind(result.kind))
+    warnings.add(`Slide transition ${result.kind} is preserved but cannot be played.`);
   return { animations, transition: result, warnings: [...warnings] };
 }

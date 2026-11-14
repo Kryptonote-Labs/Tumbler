@@ -24,9 +24,11 @@
       src = "";
     const image = current.tile ? new Image() : undefined;
     let release: (() => void) | undefined;
-    const show = (blob: Blob) => {
+    const show = (svg: string) => {
       if (disposed) return;
-      src = URL.createObjectURL(blob);
+      const resource = presentationImageUrl(new TextEncoder().encode(svg), "image/svg+xml");
+      release = resource.release;
+      src = resource.url;
       url = src;
       if (image) {
         image.onload = () =>
@@ -39,7 +41,7 @@
     };
     if (/(?:emf|wmf)$/.test(current.contentType))
       void metafileSvg(current.bytes, current.contentType)
-        .then((svg) => show(new Blob([svg], { type: "image/svg+xml" })))
+        .then(show)
         .catch(() => {
           if (!disposed) url = "";
         });
@@ -60,7 +62,7 @@
       disposed = true;
       if (image) image.onload = null;
       release?.();
-      if (src) URL.revokeObjectURL(src);
+
     };
   });
 

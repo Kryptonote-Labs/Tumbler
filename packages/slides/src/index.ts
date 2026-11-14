@@ -104,3 +104,6 @@ export { presentationFormatPainterSample, presentationFormatPainterCommands, typ
 export { exportPresentationPdf, type PresentationPdfBackend } from './pdf.ts';
 
 export { presentationChartContent, editPresentationChart, insertPresentationChart } from './chart-authoring.ts';
+
+export { SLIDE_TRANSITIONS, slideTransition, slideTransitionKinds, isSlideTransitionKind, normalizeSlideTransition, ORIENTED_TRANSITIONS } from './transitions.ts';
+export type { SlideTransition, SlideTransitionInput, SlideTransitionKind } from './transitions.ts';
