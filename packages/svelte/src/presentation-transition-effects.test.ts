@@ -1,3 +1,4 @@
+import { transitionMask } from './presentation-transition-masks.ts';
 import { expect, test } from 'bun:test';
 import { normalizeSlideTransition, slideTransitionKinds } from '@tumblerjs/slides';
 import { presentationTransitionFrame } from './presentation-transition-effects.ts';
@@ -63,4 +64,11 @@ test('preset inversion reflects motion without mirroring slide content', () => {
   expect(reflected.outgoing.transform).toContain('scale(1, -1)');
   const curtains = presentationTransitionFrame(normalizeSlideTransition({ kind: 'curtains', invertX: true }), .5);
   expect(curtains.pieces?.[0]?.reflection).toBe('translate(1 0) scale(-1 1)');
+});
+
+test('ripple starts at the selected center or corner', () => {
+  for (const [direction, origin] of [['center', 'M0.5 0.5L'], ['lu', 'M0 0L'], ['ru', 'M1 0L'], ['ld', 'M0 1L'], ['rd', 'M1 1L']] as const) {
+    const effect = normalizeSlideTransition({ kind: 'ripple', direction });
+    expect(transitionMask(effect, .1)?.startsWith(origin)).toBe(true);
+  }
 });

@@ -73,8 +73,8 @@ export function transitionMask(transition: SlideTransition, t: number): string |
       return Array.from({ length: spokes }, (_, i) => radial(.5, .5, 1, -Math.PI / 2 + sign * i * Math.PI * 2 / spokes, -Math.PI / 2 + sign * (i + p) * Math.PI * 2 / spokes, 20)).join('');
     }
     case 'ripple': {
-      const x = direction.includes('l') ? 0 : direction.includes('r') ? 1 : .5;
-      const y = direction.includes('u') ? 0 : direction.includes('d') ? 1 : .5;
+      const x = direction === 'lu' || direction === 'ld' ? 0 : direction === 'ru' || direction === 'rd' ? 1 : .5;
+      const y = direction === 'lu' || direction === 'ru' ? 0 : direction === 'ld' || direction === 'rd' ? 1 : .5;
       return radial(x, y, Math.SQRT2 * p, 0, Math.PI * 2);
     }
     default: return undefined;
