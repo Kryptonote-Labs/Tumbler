@@ -55,7 +55,7 @@ export function threeDAxisMarks(context: SceneContext, layout: CartesianChartLay
       if (minor || valueAxis.tickLabelPosition === 'none') return;
       const edge = valueAxis.tickLabelPosition === 'high' ? 1 : valueAxis.tickLabelPosition === 'low' ? 0 : categoryCross;
       const anchor = project(point(edge, value, near)), direction = edge === categoryCross ? valueDirection : normal(valueStart, valueEnd, horizontal ? { x: 0, y: edge ? -1 : 1 } : { x: edge ? 1 : -1, y: 0 });
-      marks.push({ kind: 'text', text: chartTickLabel(value / (valueAxis.displayUnit ?? 1), valueAxis.numberFormatCode, options), x: anchor.x + direction.x * 6, y: anchor.y + direction.y * (horizontal ? font.size : 0) + font.size * .3, anchor: horizontal ? 'middle' : direction.x < 0 ? 'end' : 'start', font });
+      marks.push({ kind: 'text', text: chartTickLabel(value / (valueAxis.displayUnit ?? 1), valueAxis.numberFormatCode, options), x: anchor.x + direction.x * 6, y: anchor.y + direction.y * (horizontal ? font.size : 0) + font.size * .3, anchor: horizontal ? 'middle' : direction.x < 0 ? 'end' : 'start', ...((valueAxis.textStyle?.rotation ?? valueAxis.labelRotation) === undefined ? {} : { rotate: valueAxis.textStyle?.rotation ?? valueAxis.labelRotation }), font });
     };
     layout.ticks.forEach(value => draw(value, false));
     if (valueAxis.minorGridlines || valueAxis.minorTickMark && valueAxis.minorTickMark !== 'none') chartMinorTicks(layout.minimum, layout.maximum, valueAxis, layout.ticks).forEach(value => draw(value, true));

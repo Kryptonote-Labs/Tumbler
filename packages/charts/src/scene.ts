@@ -61,7 +61,7 @@ function buildChartScene(model: SupportedChartModel, width: number, height: numb
   const possiblyCollapsed = manual && (manual.width === 0 || manual.height === 0 || manual.widthMode === 'edge' || manual.heightMode === 'edge');
   const plot = possiblyCollapsed ? model.kind === 'pie' || model.kind === 'doughnut' || model.kind === 'of-pie'
     ? pieChartFrame(context).plot
-    : model.kind === 'scatter' || model.kind === 'bubble' ? layoutScatterChart(model, width, height, context.measure).plot
+    : model.kind === 'scatter' || model.kind === 'bubble' ? layoutScatterChart(model, width, height, context.measure, context.options).plot
     : layoutCartesianChart(model, width, height, context.measure, context.options).plot : undefined;
   if (plot && (plot.width <= 0 || plot.height <= 0)) {
     const { plotLayout: _manual, ...automatic } = model;

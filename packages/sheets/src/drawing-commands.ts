@@ -1,5 +1,7 @@
+import { createSpreadsheetRangeChart } from './chart-range.ts';
+import { readChartData, isOoxmlChartType, replaceChartData } from '@tumblerjs/charts';
 import { extendChartWorkbook } from './chart-workbook.ts';
-import { addChartContent, writeChartContent, chartResourcesSchema } from '@tumblerjs/charts';
+import { addChartContent, readChartContent, writeChartContent, chartResourcesSchema } from '@tumblerjs/charts';
 import { z } from 'zod';
 import { beginLosslessXmlEdit, OOXML_NAMESPACES, parseLosslessXml, presetGeometries, type LosslessXmlElement } from '@tumblerjs/ooxml';
 import { beginPackageTransaction, PartName, relationshipItemName } from '@tumblerjs/opc';
@@ -13,7 +15,7 @@ const position = { x: z.number().finite(), y: z.number().finite(), width: z.numb
 const chartContent = z.object({ xml: z.string(), workbook: z.string().optional(), resources: chartResourcesSchema.optional() }).strict();
 const target = { sheetId: id, objectId: z.number().int().nonnegative() };
 export const spreadsheetDrawingCommand = z.discriminatedUnion('name', [
-  z.object({ name: z.literal('insert-chart'), sheetId: id, ...position, content: chartContent, bindUnboundData: z.boolean().optional() }).strict(),
+  z.object({ name: z.literal('insert-chart'), sheetId: id, ...position, content: chartContent, bindUnboundData: z.boolean().optional(), sourceRange: z.string().optional() }).strict(),
   z.object({ name: z.literal('edit-chart'), ...target, content: chartContent, bindUnboundData: z.boolean().optional() }).strict(),
   z.object({ name: z.literal('insert-shape'), sheetId: id, ...position, preset: id, text: z.string().optional(), fill: z.string().optional(), stroke: z.string().optional() }).strict(),
   z.object({ name: z.literal('insert-image'), sheetId: id, ...position, data: id, contentType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']), alt: z.string().optional() }).strict(),
@@ -39,6 +41,13 @@ export function applySpreadsheetDrawingCommand(artifact: SpreadsheetArtifact, in
   const sheet = artifact.workbook.sheets.find(s => String(s.sheetId) === command.sheetId || s.name === command.sheetId);
   if (!sheet) throw new Error('Worksheet does not exist.');
   const worksheet = artifact.selectSheet(sheet.sheetId).worksheet;
+  if (command.name === 'insert-chart' && command.sourceRange) {
+    const source = new TextEncoder().encode(command.content.xml);
+    const type = readChartData(source)[0]?.type ?? 'barChart';
+    if (!isOoxmlChartType(type)) throw new Error('Select a supported chart type.');
+    const bound = createSpreadsheetRangeChart(artifact.selectSheet(sheet.sheetId), parseCellRange(command.sourceRange), {}, { type, conformance: artifact.workbook.conformance });
+    return applySpreadsheetDrawingCommand(artifact, { ...command, sourceRange: undefined, bindUnboundData: false, content: { ...command.content, xml: new TextDecoder().decode(replaceChartData(source, readChartData(bound))) } });
+  }
   if (command.name === 'insert-chart' && command.bindUnboundData) {
     const bound = extendChartWorkbook(new TextEncoder().encode(command.content.xml), artifact.selectSheet(sheet.sheetId));
     return applySpreadsheetDrawingCommand(bound.artifact.selectSheet(artifact.activeSheet.sheetId), { ...command, content: { ...command.content, xml: new TextDecoder().decode(bound.source) }, bindUnboundData: false });
@@ -181,6 +190,24 @@ export function applySpreadsheetDrawingCommand(artifact: SpreadsheetArtifact, in
           children(e).forEach(renumber);
         };
         renumber(element);
+        const frame = drawing?.charts.find(frame => frame.anchor.elementId === anchor.elementId);
+        if (frame?.partName) {
+          const part = uniquePart('/xl/charts/chart', 'xml');
+          addChartContent(transaction, part, readChartContent(workbook.package, frame.partName));
+          let relationshipIndex = nextId;
+          const relationships = workbook.package.relationships(drawingPart);
+          while (relationships.get(`chart-clone-${relationshipIndex}`)) relationshipIndex++;
+          const relationshipId = `chart-clone-${relationshipIndex}`;
+          transaction.addRelationship(drawingPart, { id: relationshipId, type: `${rel}/chart`, target: part });
+          const rebind = (node: LosslessXmlElement) => {
+            if (node.localName === 'chart') {
+              const relationship = node.attributes.find(attribute => attribute.localName === 'id' && attribute.namespaceUri === rel);
+              if (relationship) cloneEditor.setAttribute(relationship, relationshipId);
+            }
+            children(node).forEach(rebind);
+          };
+          rebind(element);
+        }
         const cloneDocument = parseLosslessXml(cloneEditor.commit().bytes);
         const cloneElement = cloneDocument.element(element.id)!;
         const clone = children(cloneElement).filter(e => ['sp','pic','cxnSp','grpSp','graphicFrame'].includes(e.localName)).map(e=>cloneDocument.source.slice(e.span.start,e.span.end)).join('');

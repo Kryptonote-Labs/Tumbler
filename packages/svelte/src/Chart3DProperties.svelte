@@ -53,8 +53,7 @@
 </script>
 
 {#if visible && view}
-  <fieldset {disabled} class="view">
-    <legend>3-D view</legend>
+  <details><summary>3-D rotation</summary><fieldset {disabled} class="view">
     {#if preview}<div class="preview">{@render preview()}</div>{/if}
     {#if type === 'bar3DChart'}
       <label><span>Shape</span><select class="tumbler-select" value={shape} onchange={(event) => set('shape', 'c:CT_Shape/c:shape', event.currentTarget.value, true)}>
@@ -80,13 +79,13 @@
       {/if}
     {/if}
     {#if error}<p role="alert">{error}</p>{/if}
-  </fieldset>
+  </fieldset></details>
 {/if}
 {#if viewState.error}<p role="alert">{viewState.error}</p>{/if}
 
 <style>
+  summary { cursor:pointer; padding:5px 0 8px; font-weight:550; }
   .view { display: flex; flex-direction: column; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; font-size: 12px; }
-  legend { padding: 0; margin-bottom: 8px; font-weight: 550; }
   label { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
   select { box-sizing: border-box; height: 28px; min-width: 0; width: 140px; padding: 3px 6px; font: inherit; color: inherit; background: var(--tumbler-control-bg, var(--surface, #181818)); border: 1px solid var(--tumbler-control-border, var(--border, #303030)); border-radius: 4px; }
   :is(select, input):focus-visible { outline: 2px solid var(--tumbler-control-accent, var(--accent, #4fe519)); outline-offset: 1px; }

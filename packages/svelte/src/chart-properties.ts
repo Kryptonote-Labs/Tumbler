@@ -184,26 +184,32 @@ const axisLabels: Readonly<Record<string, string>> = { catAx: "Category axis", v
 export function chartFormatTargets(root: ChartPropertyNode): readonly ChartFormatTarget[] {
   const chart = child(root, "chart");
   const plotArea = child(chart, "plotArea");
-  const targets: ChartFormatTarget[] = [{ key: "chart", label: "Entire chart", node: root }];
+  const targets: ChartFormatTarget[] = [{ key: "chart", label: "Chart area", node: root }];
   const add = (key: string, label: string, node: ChartPropertyNode | undefined) => { if (node) targets.push({ key, label, node }); };
-  add("area", "Chart area", child(root, "spPr"));
   add("title", "Title", child(chart, "title"));
   add("legend", "Legend", child(chart, "legend"));
   add("plotArea", "Plot area", plotArea);
   const plots = plotArea?.children.filter((node) => CHART_TYPE_FAMILIES.some((family) => family.options.some((option) => option.change.type === localName(node)))) ?? [];
   plots.forEach((plot, plotIndex) => {
-    if (plots.length > 1) add(`plot:${plotIndex}`, plot.label, plot);
+    add(`plot:${plotIndex}`, `${currentChartType(root, plotIndex)?.label ?? "Series"} options`, plot);
+    add(`labels:${plotIndex}`, plots.length > 1 ? `Group ${plotIndex + 1} data labels` : 'Data labels', child(plot, 'dLbls'));
     plot.children.filter((node) => localName(node) === "ser").forEach((series, index) =>
       add(`series:${plotIndex}:${chartPropertyValue(child(series, "idx")) ?? index}`, seriesName(series) ?? `Series ${index + 1}`, series));
   });
   const axisCounts = new Map<string, number>();
   for (const axis of plotArea?.children ?? []) {
     const name = localName(axis);
-    const label = axisLabels[name];
-    if (!label) continue;
+    const position = value(child(axis, "axPos"));
+    const label = name === "serAx" ? "Depth axis" : position === "b" || position === "t" ? "Horizontal axis" : "Vertical axis";
+    if (!axisLabels[name]) continue;
     const count = (axisCounts.get(name) ?? 0) + 1;
     axisCounts.set(name, count);
-    add(`${name}:${chartPropertyValue(child(axis, "axId")) ?? count}`, count > 1 ? `Secondary ${label.toLowerCase()}` : label, axis);
+    const key = `${name}:${chartPropertyValue(child(axis, "axId")) ?? count}`;
+    const axisLabel = count > 1 ? `Secondary ${label.toLowerCase()}` : label;
+    add(key, axisLabel, axis);
+    add(`${key}:title`, `${axisLabel} title`, child(axis, 'title'));
+    add(`${key}:majorGridlines`, `${axisLabel} major gridlines`, child(axis, 'majorGridlines'));
+    add(`${key}:minorGridlines`, `${axisLabel} minor gridlines`, child(axis, 'minorGridlines'));
   }
   return targets;
 }

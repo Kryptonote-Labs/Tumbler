@@ -1,31 +1,12 @@
 import { BUBBLE_CHART_POINT_LIMIT, type ChartDataPoint, type ChartDataSequence, type ChartModel, type ChartSeries } from "@tumblerjs/charts";
-import type { CellRange } from "./references.ts";
-import { parseCellRange } from "./references.ts";
-import { calculateSpreadsheetWorksheet, type SpreadsheetCalculationOptions, type SpreadsheetCalculationSnapshot } from "./calculation.ts";
+import { type SpreadsheetCalculationOptions, type SpreadsheetCalculationSnapshot } from "./calculation.ts";
 import { formatSpreadsheetCellValue } from "./number-format.ts";
-import { openWorksheet, type SpreadsheetCellValue, type SpreadsheetWorksheet } from "./worksheet.ts";
+import { type SpreadsheetCellValue, type SpreadsheetWorksheet } from "./worksheet.ts";
 
-const MAX_CHART_RANGE_CELLS = 100_000;
-
-export interface SpreadsheetChartReference {
-  readonly sheet: string;
-  readonly range: CellRange;
-}
-
-/** Resolves the internal A1-reference subset used by ordinary chart formulas. */
-export function parseSpreadsheetChartReference(formula: string, currentSheet: string): SpreadsheetChartReference | undefined {
-  const source = formula.startsWith("=") ? formula.slice(1) : formula;
-  if (source.includes("[") || source.includes("]") || source.includes(",")) return undefined;
-  const split = splitSheetReference(source);
-  const sheet = split?.sheet ?? currentSheet;
-  const reference = (split?.reference ?? source).replaceAll("$", "");
-  try {
-    const range = parseCellRange(reference);
-    return Object.freeze({ sheet, range });
-  } catch {
-    return undefined;
-  }
-}
+export { MAX_CHART_RANGE_CELLS } from './chart-reference.ts';
+import { createSpreadsheetChartResolver } from './chart-reference.ts';
+export { parseSpreadsheetChartReference } from './chart-reference.ts';
+export type { SpreadsheetChartReference } from './chart-reference.ts';
 
 /** Refreshes supported chart series from workbook cells while retaining caches for unsupported references. */
 export function resolveSpreadsheetChartData(worksheet: SpreadsheetWorksheet, model: ChartModel, options: SpreadsheetCalculationOptions = {}): ChartModel {
@@ -38,26 +19,7 @@ export function resolveSpreadsheetChartDataSet(
   models: readonly ChartModel[],
   options: SpreadsheetCalculationOptions = {},
 ): readonly ChartModel[] {
-  const snapshots = new Map<number, SpreadsheetCalculationSnapshot>();
-  if (models.some((model) => model.status === "supported")) {
-    snapshots.set(worksheet.sheet.sheetId, calculateSpreadsheetWorksheet(worksheet, options));
-  }
-
-  const source = (formula: string): { worksheet: SpreadsheetWorksheet; calculation: SpreadsheetCalculationSnapshot; range: CellRange } | undefined => {
-    const reference = parseSpreadsheetChartReference(formula, worksheet.sheet.name);
-    if (reference === undefined) return undefined;
-    const { start, end } = reference.range;
-    if ((end.row - start.row + 1) * (end.column - start.column + 1) > MAX_CHART_RANGE_CELLS) return undefined;
-    const sheet = worksheet.workbook.sheet(reference.sheet);
-    if (sheet === undefined) return undefined;
-    let calculation = snapshots.get(sheet.sheetId);
-    if (calculation === undefined) {
-      const target = openWorksheet(worksheet.workbook, sheet);
-      calculation = calculateSpreadsheetWorksheet(target, options);
-      snapshots.set(sheet.sheetId, calculation);
-    }
-    return { worksheet: calculation.worksheet, calculation, range: reference.range };
-  };
+  const source = createSpreadsheetChartResolver(worksheet,options);
 
   const resolveSequence = (
     sequence: ChartDataSequence | undefined,
@@ -144,29 +106,4 @@ function chartPoint(
   if (value?.type === "boolean") return Object.freeze({ index, value: value.value ? 1 : 0 });
   // Numeric chart series treat text, errors, and blank cells as gaps.
   return undefined;
-}
-
-function splitSheetReference(source: string): { readonly sheet: string; readonly reference: string } | undefined {
-  if (source.startsWith("'")) {
-    let sheet = "";
-    for (let index = 1; index < source.length; index += 1) {
-      if (source[index] !== "'") {
-        sheet += source[index];
-        continue;
-      }
-      if (source[index + 1] === "'") {
-        sheet += "'";
-        index += 1;
-        continue;
-      }
-      return source[index + 1] === "!" && index + 2 < source.length
-        ? { sheet, reference: source.slice(index + 2) }
-        : undefined;
-    }
-    return undefined;
-  }
-  const separator = source.lastIndexOf("!");
-  return separator > 0 && separator + 1 < source.length
-    ? { sheet: source.slice(0, separator), reference: source.slice(separator + 1) }
-    : undefined;
 }

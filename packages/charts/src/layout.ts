@@ -1,3 +1,4 @@
+import { fitXYAxisLabels } from './xy-axis-margins.ts';
 import type { ChartSceneOptions } from './scene-marks.ts';
 import { fitValueAxisLabels } from './value-axis-margins.ts';
 import { chartPieData, chartPieSlices } from './pie-data.ts';
@@ -147,7 +148,7 @@ function cartesianFrame(model: SupportedChartModel, width: number, height: numbe
 }
 
 /** Lays out paired numeric X/Y values without converting them to category positions. */
-export function layoutScatterChart(model: SupportedChartModel, width: number, height: number, measure: (text: string, font: ChartFont) => number = (text, font) => text.length * font.size * .55): ScatterChartLayout {
+export function layoutScatterChart(model: SupportedChartModel, width: number, height: number, measure: (text: string, font: ChartFont) => number = (text, font) => text.length * font.size * .55, options: ChartSceneOptions = {}): ScatterChartLayout {
   finiteSize(width, "chart width");
   finiteSize(height, "chart height");
   const titleHeight = model.title === undefined || model.titleOverlay ? 10 : model.titleStyle?.rotation ? chartTitleHeight(model, measure) + 8 : Math.min(34, Math.max(20, height * 0.12));
@@ -187,6 +188,7 @@ export function layoutScatterChart(model: SupportedChartModel, width: number, he
     const automatic = { plot: automaticPlot, xMinimum: xDomain.minimum, xMaximum: xDomain.maximum, yMinimum: yDomain.minimum, yMaximum: yDomain.maximum, xTicks, yTicks, series: [] };
     plot = chartManualPlot(model.plotLayout, automaticPlot, chartOuterXYPlot(model, automatic, measure), width, height);
   }
+  plot = fitXYAxisLabels(model, { plot, xMinimum:xDomain.minimum,xMaximum:xDomain.maximum,yMinimum:yDomain.minimum,yMaximum:yDomain.maximum,xTicks,yTicks,series:[] }, measure, options, { x:leftLegend+4,y:titleHeight+topLegend+4,width:Math.max(1,width-leftLegend-rightLegend-8),height:Math.max(1,height-titleHeight-topLegend-bottomLegend-8) });
   const series = rawSeries.map((points) => Object.freeze(points.filter(point => (!xAxis?.logBase || point.x > 0) && (!yAxis?.logBase || point.y > 0)).map((point) => Object.freeze({
     ...point,
     plotX: chartAxisCoordinate(point.x, xDomain.minimum, xDomain.maximum, plot.x, plot.width, xAxis),
@@ -204,7 +206,7 @@ export function layoutScatterChart(model: SupportedChartModel, width: number, he
 }
 
 /** Lays out sparse X/Y/size triples with area- or width-proportional bubble radii. */
-export function layoutBubbleChart(model: SupportedChartModel, width: number, height: number, measure?: (text: string, font: ChartFont) => number): BubbleChartLayout {
+export function layoutBubbleChart(model: SupportedChartModel, width: number, height: number, measure?: (text: string, font: ChartFont) => number, options: ChartSceneOptions = {}): BubbleChartLayout {
   const pointUpperBound = model.series.reduce((total, series) => total + Math.min(
     series.xValues?.points.length ?? 0,
     series.values?.points.length ?? 0,
@@ -235,7 +237,7 @@ export function layoutBubbleChart(model: SupportedChartModel, width: number, hei
       };
     }),
   };
-  const xy = layoutScatterChart(projectedModel, width, height, measure);
+  const xy = layoutScatterChart(projectedModel, width, height, measure, options);
   if (xy.plot.width <= 0 || xy.plot.height <= 0) return { ...xy, series: model.series.map(() => []) };
   const visibleMagnitudes = paired.flatMap((points) => points.flatMap((point) =>
     point.size > 0 || (point.size < 0 && model.showNegativeBubbles === true) ? [Math.abs(point.size)] : []

@@ -13,7 +13,8 @@
   "files": [
     "src",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "scripts"
   ],
   "license": "MIT",
   "repository": {

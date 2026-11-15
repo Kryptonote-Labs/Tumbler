@@ -82,3 +82,8 @@ export { default as ChartWorkbench } from './ChartWorkbench.svelte';
 
 export type { WordLayoutProgress, WordLayoutError } from "./word-layout-job.ts";
 export type { WordFitMode, WordViewHandle, WordViewLayout, WordViewViewport } from "./word-view-state.ts";
+export { chartDataHighlights } from './chart-data-highlights.ts';
+
+export { parseSpreadsheetClipboard } from './spreadsheet-clipboard.ts';
+
+export type { ChartDesignControls } from './chart-design-controls.ts';
