@@ -43,7 +43,9 @@
   import { spreadsheetCellLayer } from "./spreadsheet-cell-layer.ts";
   import SpreadsheetDrawingObject from "./SpreadsheetDrawingObject.svelte";
   import SpreadsheetChart from "./SpreadsheetChart.svelte";
-  import { drawingHandles, resizeDrawingBounds, type DrawingHandle } from "./spreadsheet-drawing-handles.ts";
+  import { resizeDrawingBounds } from "./spreadsheet-drawing-handles.ts";
+  import { objectHandles, type ObjectHandle } from "./object-selection.ts";
+  import "./object-selection.css";
   import SpreadsheetFormulaAutocomplete from "./SpreadsheetFormulaAutocomplete.svelte";
 
   interface RenderableChart {
@@ -205,7 +207,7 @@
   }));
   // A drawing being moved, or resized by one of its handles. While it lasts the drawing renders at
   // its previewed bounds, so charts redraw at their new size rather than stretching.
-  let drawingDrag = $state<{id:number;pointer:number;startX:number;startY:number;bounds:SpreadsheetDrawingBounds;handle?:DrawingHandle}>();
+  let drawingDrag = $state<{id:number;pointer:number;startX:number;startY:number;bounds:SpreadsheetDrawingBounds;handle?:ObjectHandle}>();
   let dragPointer = $state({x:0,y:0,keepAspect:false});
   function draggedBounds(drag: NonNullable<typeof drawingDrag>): SpreadsheetDrawingBounds {
     const {x:dx,y:dy,keepAspect}=dragPointer;
@@ -216,7 +218,7 @@
     return drag && drag.id===id ? draggedBounds(drag) : bounds;
   }
   function drawingPointerMove(event:PointerEvent){const drag=drawingDrag;if(drag && drag.pointer===event.pointerId)dragPointer={x:(event.clientX-drag.startX)/scale,y:(event.clientY-drag.startY)/scale,keepAspect:event.shiftKey};}
-  function drawingPointerDown(event: PointerEvent, id: number, bounds: SpreadsheetDrawingBounds, handle?: DrawingHandle) {
+  function drawingPointerDown(event: PointerEvent, id: number, bounds: SpreadsheetDrawingBounds, handle?: ObjectHandle) {
     event.stopPropagation();
     if(event.button !== 0) return;
     onobjectselectionchange?.(id);
@@ -903,10 +905,10 @@
 <!-- The selected drawing's outline and resize handles, drawn above every drawing as Office does. -->
 {#snippet drawingSelection(id: number, bounds: SpreadsheetDrawingBounds, shown: SpreadsheetDrawingBounds, left: number, top: number)}
   {#if !readonly && objectSelection === id}
-    <div class="drawing-selection" style:left={`${left + shown.x - bounds.x}px`} style:top={`${top + shown.y - bounds.y}px`} style:width={`${Math.max(1, shown.width)}px`} style:height={`${Math.max(1, shown.height)}px`}>
-      {#each drawingHandles as handle (handle.name)}
+    <div class="drawing-selection tumbler-selection-outline" style:left={`${left + shown.x - bounds.x}px`} style:top={`${top + shown.y - bounds.y}px`} style:width={`${Math.max(1, shown.width)}px`} style:height={`${Math.max(1, shown.height)}px`}>
+      {#each objectHandles as handle (handle.name)}
         <span
-          class="drawing-handle"
+          class="drawing-handle tumbler-selection-handle"
           aria-hidden="true"
           data-handle={handle.name}
           style:left={`${((handle.x + 1) / 2) * 100}%`}
@@ -922,7 +924,7 @@
 <div class="grid-viewport" use:zoomGesture={zoomGrid}>
 <div
   class="tumbler-grid"
-  style={`transform:scale(${scale});width:${100 / scale}%;height:${100 / scale}%;--tumbler-header-width:${rowHeaderWidth}px;--tumbler-header-height:${columnHeaderHeight}px`}
+  style={`transform:scale(${scale});width:${100 / scale}%;height:${100 / scale}%;--tumbler-header-width:${rowHeaderWidth}px;--tumbler-header-height:${columnHeaderHeight}px;--tumbler-selection-zoom:${scale}`}
   class:no-gridlines={!gridlines}
   class:no-headings={!showHeadings}
   role="grid"
@@ -1183,9 +1185,9 @@
   .empty-selection { position: absolute; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(0, 0, 0, 0.16)); }
   .empty-focus { pointer-events: none; }
   .tumbler-grid :global(.cell.active.selected::after) { background: transparent; }
-  .drawing-object.selected { outline:2px solid var(--tumbler-grid-accent,#42ff53); }
-  .drawing-selection { position:absolute;z-index:10000;box-sizing:border-box;pointer-events:none;outline:1.5px solid var(--tumbler-drawing-handle-stroke,#278044); }
-  .drawing-handle { position:absolute;width:9px;height:9px;margin:-5px 0 0 -5px;box-sizing:border-box;pointer-events:auto;touch-action:none;background:#fff;border:1px solid var(--tumbler-drawing-handle-stroke,#278044); }
+  /* Read-only selection draws the shared outline without handles. */
+  .drawing-object.selected, .chart-frame.selected { outline:calc(1px / var(--tumbler-selection-zoom, 1)) solid var(--tumbler-selection-accent,#278044); }
+  .drawing-selection { z-index:10000; }
   .drawing-object { padding:0;border:0;background:transparent;pointer-events:auto; }
   .drawing-object:focus-visible { outline:2px solid var(--tumbler-grid-accent,#42ff53); }
   .canvas { isolation: isolate; position: relative; overflow: clip; color: var(--tumbler-sheet-fg, #111111); background: var(--tumbler-sheet-bg, #ffffff); }
@@ -1212,7 +1214,7 @@
   .tumbler-grid :global(.cell.text-overflow) { overflow: visible; }
   .tumbler-grid :global(.cell > .overflow-content) { flex: none; max-width: none; overflow: hidden; pointer-events: none; }
   .chart-frame { position: absolute; z-index: 2; overflow: hidden; box-sizing: border-box; padding: 0; border: 0; outline: 0; background: transparent; cursor: default; }
-  .chart-frame.selected, .chart-frame:focus-visible { box-shadow: inset 0 0 0 2px var(--tumbler-grid-accent, #42ff53); }
+  .chart-frame:focus-visible { box-shadow: inset 0 0 0 2px var(--tumbler-grid-accent, #42ff53); }
   .tumbler-grid :global(.cell.selected::after) { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: var(--tumbler-grid-selection-bg, rgba(0, 0, 0, 0.16)); }
   .tumbler-grid :global(.cell.focused) { z-index: 2; }
   .tumbler-grid :global(.cell.active) { z-index: 2; }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { presentationImageUrl } from './presentation-image-url.ts';
+  import { objectHandles, objectSelection } from './object-selection.ts';
   import { presentationAdvance } from './presentation-advance.ts';
   import { findVisibleSlideIndex } from '@tumblerjs/slides';
   import { createPresentationTransitionPlayer } from './presentation-transition-player.ts';
@@ -252,16 +253,7 @@
     editCell(selected, next, {clientX: x, clientY: direction === 1 ? edge.top + 2 : edge.bottom - 2});
     return true;
   }
-  const handles = [
-    { x: -1, y: -1, name: "top left", cursor: "nwse-resize" },
-    { x: 0, y: -1, name: "top", cursor: "ns-resize" },
-    { x: 1, y: -1, name: "top right", cursor: "nesw-resize" },
-    { x: -1, y: 0, name: "left", cursor: "ew-resize" },
-    { x: 1, y: 0, name: "right", cursor: "ew-resize" },
-    { x: -1, y: 1, name: "bottom left", cursor: "nesw-resize" },
-    { x: 0, y: 1, name: "bottom", cursor: "ns-resize" },
-    { x: 1, y: 1, name: "bottom right", cursor: "nwse-resize" },
-  ] as const;
+  const handles = objectHandles;
   type Handle = (typeof handles)[number];
   let previews = $state<PresentationObjectChange[]>([]);
   let marquee = $state<{
@@ -1206,8 +1198,17 @@
                 width={w}
                 height={h}
                 fill="none"
-                stroke="#278044"
-                stroke-width={1.5 / factor}
+                style:stroke="var(--tumbler-selection-accent, #278044)"
+                stroke-width={objectSelection.stroke / factor}
+                pointer-events="none"
+              />
+              <!-- A transparent band around the outline moves the object, even while editing its text. -->
+              <rect
+                width={w}
+                height={h}
+                fill="none"
+                stroke="transparent"
+                stroke-width={objectSelection.grip / factor}
                 class="selection-outline"
                 pointer-events="stroke"
                 class:table-outline={!!object.table}
@@ -1219,8 +1220,8 @@
                     y1="0"
                     x2={w / 2}
                     y2={-26 / factor}
-                    stroke="#278044"
-                    stroke-width={1 / factor}
+                    style:stroke="var(--tumbler-selection-accent, #278044)"
+                    stroke-width={objectSelection.stroke / factor}
                     pointer-events="none"
                   />
                   <circle
@@ -1229,10 +1230,10 @@
                     aria-label={`Rotate ${object.name}`}
                     cx={w / 2}
                     cy={-26 / factor}
-                    r={7 / factor}
+                    r={objectSelection.handle / 2 / factor + objectSelection.stroke / factor}
                     fill="white"
-                    stroke="#278044"
-                    stroke-width={1.5 / factor}
+                    style:stroke="var(--tumbler-selection-accent, #278044)"
+                    stroke-width={objectSelection.stroke / factor}
                     class="rotate"
                     onpointerdown={(event) => start(event, object, "rotate")}
                     onkeydown={(event) => {
@@ -1273,13 +1274,13 @@
                     role="button"
                     tabindex="0"
                     aria-label={`Resize ${object.name} ${handle.name}`}
-                    x={((handle.x + 1) * w) / 2 - 5 / factor}
-                    y={((handle.y + 1) * h) / 2 - 5 / factor}
-                    width={10 / factor}
-                    height={10 / factor}
+                    x={((handle.x + 1) * w) / 2 - objectSelection.handle / 2 / factor}
+                    y={((handle.y + 1) * h) / 2 - objectSelection.handle / 2 / factor}
+                    width={objectSelection.handle / factor}
+                    height={objectSelection.handle / factor}
                     fill="white"
-                    stroke="#278044"
-                    stroke-width={1 / factor}
+                    style:stroke="var(--tumbler-selection-accent, #278044)"
+                    stroke-width={objectSelection.stroke / factor}
                     class="resize"
                     style:cursor={handle.cursor}
                     onpointerdown={(event) => start(event, object, handle)}

@@ -1,24 +1,5 @@
 import type { SpreadsheetDrawingBounds } from "@tumblerjs/sheets";
-
-/** A side or corner of a selected drawing, as -1 (start), 0 (middle) or 1 (end) on each axis. */
-export interface DrawingHandle {
-  readonly x: -1 | 0 | 1;
-  readonly y: -1 | 0 | 1;
-  readonly name: string;
-  readonly cursor: string;
-}
-
-/** The eight resize handles Office shows around a selected drawing. */
-export const drawingHandles: readonly DrawingHandle[] = [
-  { x: -1, y: -1, name: "top left", cursor: "nwse-resize" },
-  { x: 0, y: -1, name: "top", cursor: "ns-resize" },
-  { x: 1, y: -1, name: "top right", cursor: "nesw-resize" },
-  { x: -1, y: 0, name: "left", cursor: "ew-resize" },
-  { x: 1, y: 0, name: "right", cursor: "ew-resize" },
-  { x: -1, y: 1, name: "bottom left", cursor: "nesw-resize" },
-  { x: 0, y: 1, name: "bottom", cursor: "ns-resize" },
-  { x: 1, y: 1, name: "bottom right", cursor: "nwse-resize" },
-];
+import type { ObjectHandle } from "./object-selection.ts";
 
 const minimumSize = 8;
 
@@ -28,7 +9,7 @@ const minimumSize = 8;
  */
 export function resizeDrawingBounds(
   bounds: SpreadsheetDrawingBounds,
-  handle: Pick<DrawingHandle, "x" | "y">,
+  handle: Pick<ObjectHandle, "x" | "y">,
   dx: number,
   dy: number,
   keepAspect = false,

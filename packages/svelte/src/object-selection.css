@@ -1,0 +1,39 @@
+/*
+ * Selection chrome shared by Word, spreadsheet, presentation and PDF objects.
+ * Hosts theme it with --tumbler-selection-accent and set --tumbler-selection-zoom to the CSS
+ * scale applied to the layer, so handles and outlines stay the same size on screen.
+ * Keep the sizes in sync with `objectSelection` in object-selection.ts.
+ */
+.tumbler-selection-outline {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+  outline: calc(1px / var(--tumbler-selection-zoom, 1)) solid var(--tumbler-selection-accent, #278044);
+}
+
+.tumbler-selection-handle {
+  position: absolute;
+  width: calc(8px / var(--tumbler-selection-zoom, 1));
+  height: calc(8px / var(--tumbler-selection-zoom, 1));
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  translate: -50% -50%;
+  box-sizing: border-box;
+  border: calc(1px / var(--tumbler-selection-zoom, 1)) solid var(--tumbler-selection-accent, #278044);
+  border-radius: 0;
+  background: #fff;
+  line-height: 0;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* Fingers need about 44px to land on a handle; keep the drawn handle small and enlarge its hit area. */
+@media (pointer: coarse) {
+  .tumbler-selection-handle::before {
+    content: "";
+    position: absolute;
+    inset: calc(-14px / var(--tumbler-selection-zoom, 1));
+  }
+}

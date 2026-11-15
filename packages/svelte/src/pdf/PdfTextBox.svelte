@@ -292,14 +292,14 @@
   .text-box {
     position: absolute;
     box-sizing: border-box;
-    border: 1px solid #438ef1;
+    border: 1px solid var(--tumbler-selection-accent, #278044);
     pointer-events: none;
     outline: none;
     z-index: 4;
   }
   .text-box:focus {
-    border-color: #146ce0;
-    box-shadow: 0 0 0 1px #438ef144;
+    border-color: var(--tumbler-selection-accent, #278044);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--tumbler-selection-accent, #278044) 27%, transparent);
   }
   .text-box::before {
     content: '';
@@ -326,9 +326,9 @@
   button {
     position: absolute;
     pointer-events: auto;
-    border: 1px solid #438ef1;
+    border: 1px solid var(--tumbler-selection-accent, #278044);
     background: white;
-    color: #146ce0;
+    color: var(--tumbler-selection-accent, #278044);
     padding: 0;
     box-sizing: border-box;
   }
@@ -354,7 +354,7 @@
     top: 100%;
     left: 0;
     font: 9px sans-serif;
-    color: #146ce0;
+    color: var(--tumbler-selection-accent, #278044);
     background: white;
     white-space: nowrap;
   }
