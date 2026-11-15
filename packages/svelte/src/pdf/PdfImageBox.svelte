@@ -2,6 +2,7 @@
   import { onDestroy } from 'svelte';
   import type { PdfTextModel, PdfImagePlacement } from '@tumblerjs/pdf';
   import { beginPdfBoxPreview } from './pdf-box-preview.ts';
+  import '../object-selection.css';
   let { model, id, image, url, selected, group, editable, origins, onselect }: {
     model: PdfTextModel; id: string; image: PdfImagePlacement; url?: string; selected: boolean;
     group: string[]; editable: boolean; origins: ReadonlyMap<string, { x: number; y: number; continuation?: number }>;
@@ -87,12 +88,12 @@
   style:left={`${image.x}px`} style:top={`${image.y}px`} style:width={`${image.width}px`} style:height={`${image.height}px`}
   onpointerdown={(e) => begin(e)} onpointermove={move} onpointerup={() => finish()} onpointercancel={() => finish(true)} onlostpointercapture={() => finish(true)} onkeydown={key}>
   {#if url}<img src={url} alt="" draggable="false" style:width={`${image.rotation % 180 ? image.height : image.width}px`} style:height={`${image.rotation % 180 ? image.width : image.height}px`} style:transform={`translate(-50%, -50%) rotate(${image.rotation}deg)`} />{:else}<span>Image unavailable</span>{/if}
-  {#if selected && editable}<button class="resize" aria-label="Resize image" onpointerdown={(e) => begin(e, true)}></button>{/if}
+  {#if selected && editable}<button class="resize tumbler-selection-handle" aria-label="Resize image" onpointerdown={(e) => begin(e, true)}></button>{/if}
 </div>
 <style>
   div { position: absolute; pointer-events: auto; box-sizing: border-box; cursor: move; outline: none; }
-  div.selected { outline: 1px solid #438ef1; }
+  div.selected { outline: 1px solid var(--tumbler-selection-accent, #278044); }
   img { position: absolute; left: 50%; top: 50%; display: block; pointer-events: none; }
   span { font: 12px sans-serif; color: #666; }
-  .resize { position: absolute; right: -4px; bottom: -4px; width: 8px; height: 8px; background: white; border: 1px solid #438ef1; cursor: nwse-resize; padding: 0; }
+  .resize { left: 100%; top: 100%; cursor: nwse-resize; }
 </style>

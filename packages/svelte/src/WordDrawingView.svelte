@@ -1,5 +1,7 @@
 <script lang="ts">
   import "./controls.css";
+  import "./object-selection.css";
+  import { objectHandles } from "./object-selection.ts";
   import { wordDisplayInkSvg } from './word-display-ink.ts';
   import WordPictureView from "./WordPictureView.svelte";
   import { wordContentClipCss } from "./word-content-clip.ts";
@@ -37,17 +39,13 @@
     ontextchange?: (change: WordShapeTextChange) => void;
   } = $props();
   type Handle = WordDrawingHandle & { label: string; cursor: string };
-  const handles: readonly Handle[] = [
-    { x: -1, y: -1, label: 'Resize drawing top left', cursor: 'nwse-resize' },
-    { x: 0, y: -1, label: 'Resize drawing top', cursor: 'ns-resize' },
-    { x: 1, y: -1, label: 'Resize drawing top right', cursor: 'nesw-resize' },
-    { x: -1, y: 0, label: 'Resize drawing left', cursor: 'ew-resize' },
-    { x: 1, y: 0, label: 'Resize drawing right', cursor: 'ew-resize' },
-    { x: -1, y: 1, label: 'Resize drawing bottom left', cursor: 'nesw-resize' },
-    { x: 0, y: 1, label: 'Resize drawing bottom', cursor: 'ns-resize' },
-    { x: 1, y: 1, label: 'Resize drawing', cursor: 'nwse-resize' },
-  ];
+  // The bottom-right label stays bare: it is the only handle when a host offers resizing alone.
+  const handles: readonly Handle[] = objectHandles.map((handle) => ({
+    ...handle,
+    label: handle.x === 1 && handle.y === 1 ? 'Resize drawing' : `Resize drawing ${handle.name}`,
+  }));
   let preview = $state<WordDrawingBox>();
+  let contentButton = $state<HTMLButtonElement>();
   let drag: { pointer: number; scale: number; target: HTMLElement | undefined; clientX: number; clientY: number; box: WordDrawingBox; handle?: Handle } | undefined;
   let currentLayout: NonNullable<WordDrawingChange['layout']> = $derived(drawing.placement === 'inline' ? 'inline' : drawing.anchor?.behindDocument ? 'behind' : 'front');
   const inkSvg = $derived(wordDisplayInkSvg(drawing, background));
@@ -83,7 +81,8 @@
     event.preventDefault(); event.stopPropagation();
     drag = { pointer: event.pointerId, scale, target: event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined, clientX: event.clientX, clientY: event.clientY, box: box(), handle };
     if (event.currentTarget instanceof HTMLElement) {
-      event.currentTarget.focus({ preventScroll: true });
+      // The move ring cannot take focus; the content button owns movement keys.
+      (handle === undefined ? contentButton ?? event.currentTarget : event.currentTarget).focus({ preventScroll: true });
       event.currentTarget.setPointerCapture(event.pointerId);
     }
   }
@@ -191,7 +190,7 @@
   {/if}
 {/snippet}
 
-<div class="drawing" class:ink={inkSvg !== undefined} class:moving={preview !== undefined} class:behind={currentLayout === 'behind'} class:selected={editable && selected} data-word-drawing={drawing.elementId} contenteditable="false" style={`${position};width:${displayWidth}px;height:${displayHeight}px;translate:${preview === undefined ? 'none' : `${wordPointsToCssPixels(preview.x - pageX)}px ${wordPointsToCssPixels(preview.y - pageY)}px`};--handle-size:${10 / scale}px;--outline-size:${1 / scale}px;--inverse-scale:${1 / scale}`}>
+<div class="drawing" class:ink={inkSvg !== undefined} class:moving={preview !== undefined} class:behind={currentLayout === 'behind'} class:selected={editable && selected} data-word-drawing={drawing.elementId} contenteditable="false" style={`${position};width:${displayWidth}px;height:${displayHeight}px;translate:${preview === undefined ? 'none' : `${wordPointsToCssPixels(preview.x - pageX)}px ${wordPointsToCssPixels(preview.y - pageY)}px`};--outline-size:${1 / scale}px;--inverse-scale:${1 / scale};--tumbler-selection-zoom:${scale}`}>
   {#if editingTitle && editable && drawing.kind === 'chart'}
     <ChartTitleEditor {fontFamily} model={drawing.model} oneditor={ontexteditor} onselection={ontextselection} onundo={ontextundo} oncommit={(paragraphs) => { if (oncharttitletextchange) oncharttitletextchange(paragraphs); else oncharttitlechange?.(paragraphs.map(p => p.runs.map(r => r.text).join('')).join('\n')); }} oncancel={() => { editingTitle = false; onselect(drawing.elementId); }} />
   {/if}
@@ -199,26 +198,27 @@
     {#if editingText !== undefined}
       <div class="content editing" style={contentClip}>{@render content()}</div>
     {:else}
-    <button class="content" style={contentClip} class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)} ondblclick={doubleClick}>{@render content()}</button>
+    <button bind:this={contentButton} class="content" style={contentClip} class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)} ondblclick={doubleClick}>{@render content()}</button>
     {/if}
     {#if selected}
       {#if drawing.kind === 'image' && drawing.inkProjection && oninkchange}
         <div class="ink-controls"><button onclick={() => editingInk = !editingInk}>{editingInk ? 'Done' : 'Edit points'}</button></div>
         {#if editingInk}<WordInkPointEditor {drawing} {scale} onchange={oninkchange} onfinish={() => editingInk = false} />{/if}
       {/if}
-      {#if onchange !== undefined}
+      <!-- The outline ignores the content clip, so its outer band can move a drawing a table cell hides. -->
+      {#if editingText === undefined}
+        <div class="frame tumbler-selection-outline" class:movable={onchange !== undefined} aria-hidden="true" onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel}></div>
+      {/if}
+      {#if onchange !== undefined && layoutControl}
         <div class="controls" role="toolbar" aria-label="Drawing controls">
-          <button aria-label="Move drawing" title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)}>✥</button>
-          {#if layoutControl}
-            <select class="tumbler-select" aria-label="Drawing layout" value={currentLayout} onchange={(event) => { const layout = event.currentTarget.value; if (layout === 'inline' || layout === 'front' || layout === 'behind') commit(box(), layout); }}>
-              <option value="inline">In line with text</option><option value="front">In front of text</option><option value="behind">Behind text</option>
-            </select>
-          {/if}
+          <select class="tumbler-select" aria-label="Drawing layout" value={currentLayout} onchange={(event) => { const layout = event.currentTarget.value; if (layout === 'inline' || layout === 'front' || layout === 'behind') commit(box(), layout); }}>
+            <option value="inline">In line with text</option><option value="front">In front of text</option><option value="behind">Behind text</option>
+          </select>
         </div>
       {/if}
       {#each handles as handle}
         {#if onchange !== undefined || handle.x === 1 && handle.y === 1}
-          <button class="resize" aria-label={handle.label} title={handle.label} style={`left:${(handle.x + 1) * 50}%;top:${(handle.y + 1) * 50}%;cursor:${handle.cursor}`} onpointerdown={(event) => start(event, handle)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event, handle)}></button>
+          <button class="resize tumbler-selection-handle" aria-label={handle.label} title={handle.label} style={`left:${(handle.x + 1) * 50}%;top:${(handle.y + 1) * 50}%;cursor:${handle.cursor}`} onpointerdown={(event) => start(event, handle)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event, handle)}></button>
         {/if}
       {/each}
     {/if}
@@ -234,26 +234,19 @@
   .drawing.moving { z-index: var(--word-drawing-controls-z-index); }
   .drawing.behind .content { z-index: var(--word-drawing-rank, 0); }
   .drawing.ink { color-scheme: inherit; }
-  .drawing.selected { outline: var(--outline-size) solid var(--tumbler-document-accent, #25a735); }
   .content { position: absolute; inset: 0; z-index: var(--word-drawing-rank, 2); display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; touch-action: none; }
   .content.movable { cursor: grab; }
   .content.movable:active { cursor: grabbing; }
-  .content.editing { z-index: var(--word-drawing-controls-z-index); cursor: text; outline: var(--outline-size) dashed var(--tumbler-document-accent, #25a735); }
-  .content:focus-visible { outline: var(--outline-size) solid var(--tumbler-document-accent, #25a735); }
+  .content.editing { z-index: var(--word-drawing-controls-z-index); cursor: text; outline: var(--outline-size) dashed var(--tumbler-selection-accent, #278044); }
+  .content:focus-visible { outline: var(--outline-size) solid var(--tumbler-selection-accent, #278044); }
+  /* A ring just outside the drawing; clip-path limits hits to it so the content stays clickable. */
+  .frame { --grip: calc(5px * var(--inverse-scale)); inset: calc(var(--grip) * -1); z-index: var(--word-drawing-controls-z-index); outline-offset: calc(var(--grip) * -1); clip-path: polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, var(--grip) var(--grip), var(--grip) calc(100% - var(--grip)), calc(100% - var(--grip)) calc(100% - var(--grip)), calc(100% - var(--grip)) var(--grip), var(--grip) var(--grip)); }
+  .frame.movable { pointer-events: auto; cursor: move; touch-action: none; }
   .ink-vector :global(svg) { display: block; width: 100%; height: 100%; }
   img { display: block; width: 100%; height: 100%; }
-  .resize { position: absolute; z-index: var(--word-drawing-controls-z-index); translate: -50% -50%; width: var(--handle-size); height: var(--handle-size); min-width: 0; min-height: 0; box-sizing: border-box; line-height: 0; padding: 0; border: var(--outline-size) solid var(--tumbler-document-accent, #25a735); border-radius: 50%; background: white; touch-action: none; }
-  .controls { position: absolute; z-index: var(--word-drawing-controls-z-index); right: 0; bottom: calc(100% + 10px * var(--inverse-scale)); display: flex; gap: 4px; padding: 4px; border: 1px solid #3b483e; border-radius: 6px; background: #181b18; color: #e2fee7; font: 13px/1.4 system-ui, sans-serif; transform: scale(var(--inverse-scale)); transform-origin: bottom right; }
-  .controls button { position: static; padding: 5px 8px; border: 1px solid #3b483e; border-radius: 4px; background: #202521; color: inherit; font: inherit; }
+  .resize { z-index: var(--word-drawing-controls-z-index); }
+  .controls { position: absolute; z-index: var(--word-drawing-controls-z-index); right: 0; bottom: calc(100% + 10px * var(--inverse-scale)); transform: scale(var(--inverse-scale)); transform-origin: bottom right; }
   .ink-controls { position:absolute; z-index:var(--word-drawing-controls-z-index); left:0; top:calc(100% + 8px); transform:scale(var(--inverse-scale)); transform-origin:top left; }
   .ink-controls button { padding:4px 8px; border:1px solid #3b483e; border-radius:4px; background:#202521; color:#e2fee7; font:13px/1.4 system-ui; }
-  .controls button { cursor: move; touch-action: none; }
-  /* Fingers need about 44px to land on a handle; keep the drawn handle small and enlarge its hit area. */
-  @media (pointer: coarse) {
-    .resize::before, .controls button::before { content: ""; position: absolute; }
-    .resize::before { inset: calc(var(--handle-size) * -1.7); border-radius: 50%; }
-    .controls button { position: relative; }
-    .controls button::before { inset: -7px; }
-  }
   .fallback { width: 100%; height: 100%; background: #eee; }
 </style>

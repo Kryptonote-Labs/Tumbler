@@ -37,11 +37,14 @@ test('drawing controls stay interactive outside the cell while its content stays
   const content = page.getByRole('button', { name: 'Select Clipped drawing', exact: true });
   const bounds = (await content.boundingBox())!;
   await page.mouse.click(bounds.x + 5, bounds.y + 5);
-  const move = page.getByRole('button', { name: 'Move drawing', exact: true });
-  await expect(move).toBeVisible();
-  expect(await move.evaluate(element => {
+  // The selection outline's outer band stays grabbable where the cell clips the content.
+  const frame = page.locator('[data-word-drawing] .frame');
+  await expect(frame).toBeVisible();
+  expect(await frame.evaluate(element => {
     const rect = element.getBoundingClientRect();
-    return document.elementsFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2).includes(element);
+    const band = document.elementsFromPoint(rect.right - 2, rect.y + rect.height / 2).includes(element);
+    const interior = document.elementsFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2).includes(element);
+    return band && !interior;
   })).toBe(true);
   expect(await content.evaluate(element => {
     const rect = element.getBoundingClientRect();
