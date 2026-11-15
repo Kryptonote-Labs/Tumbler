@@ -5,8 +5,7 @@ import { SpreadsheetArtifact, openSpreadsheetArtifact } from './artifact.ts';
 import { beginSpreadsheetEdit } from './editor.ts';
 import { EXCEL_MAX_COLUMNS, formatCellReference } from './references.ts';
 import { parseSpreadsheetChartReference } from './chart-data.ts';
-import { calculateSpreadsheetWorksheet } from './calculation.ts';
-import { openWorksheet } from './worksheet.ts';
+import { createSpreadsheetChartResolver } from './chart-reference.ts';
 
 export interface ChartWorkbookEdit {
   readonly source: Uint8Array;
@@ -82,23 +81,12 @@ function bindWorkbook(source: Uint8Array, input: SpreadsheetArtifact, onlyUnboun
 
 /** Refresh source caches from calculated workbook cells, leaving unresolvable references intact. */
 export function refreshChartWorkbook(source: Uint8Array, artifact: SpreadsheetArtifact): Uint8Array {
-  const calculations = new Map<string, ReturnType<typeof calculateSpreadsheetWorksheet>>();
-  const calculationFor = (name: string) => {
-    let calculation = calculations.get(name);
-    if (!calculation) {
-      const sheet = artifact.workbook.sheet(name);
-      if (!sheet) return undefined;
-      calculation = sheet === artifact.activeSheet ? artifact.calculation : calculateSpreadsheetWorksheet(openWorksheet(artifact.workbook, sheet));
-      calculations.set(name, calculation);
-    }
-    return calculation;
-  };
+  const resolve = createSpreadsheetChartResolver(artifact.worksheet, {}, artifact.calculation);
   function sequence(data: ChartEditableSequence | undefined): ChartEditableSequence | undefined {
     if (!data?.formula) return data;
-    const reference = parseSpreadsheetChartReference(data.formula, artifact.activeSheet.name);
-    const calculation = reference && calculationFor(reference.sheet);
-    if (!reference || !calculation) return data;
-    const { start, end } = reference.range;
+    const resolved = resolve(data.formula);
+    if (!resolved) return data;
+    const { calculation, range: { start,end } } = resolved;
     const point = (row: number, column: number) => {
       const value = calculation.value({ row, column }) ?? calculation.worksheet.cell({ row, column })?.value;
       if (data.kind === 'string') return calculation.displayText({ row, column });
@@ -113,8 +101,8 @@ export function refreshChartWorkbook(source: Uint8Array, artifact: SpreadsheetAr
     return { ...data, values };
   }
   const plots: ChartEditablePlot[] = readChartData(source).map(plot => ({ ...plot, series: plot.series.map(series => {
-    const title = series.nameFormula && parseSpreadsheetChartReference(series.nameFormula, artifact.activeSheet.name);
-    const name = title && calculationFor(title.sheet)?.displayText(title.range.start);
+    const title = series.nameFormula && resolve(series.nameFormula);
+    const name = title && title.calculation.displayText(title.range.start);
     return { ...series, ...(typeof name === 'string' ? { name } : {}), categories: sequence(series.categories), xValues: sequence(series.xValues), values: sequence(series.values), bubbleSizes: sequence(series.bubbleSizes), ...(series.errorBars ? { errorBars: series.errorBars.map(errors => ({ plus: sequence(errors.plus), minus: sequence(errors.minus) })) } : {}) };
   }) }));
   return updateChartData(source, plots);

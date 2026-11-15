@@ -86,10 +86,11 @@ test('an open gradient draft survives a title edit in the chart workbench', asyn
     click('.fill-editor .choices button:nth-child(4)');
     expect(target.querySelector('.gradient-editor [role="dialog"]')).not.toBeNull();
     click('.gradient-editor .buttons:not(.footer) button');
-    const position = target.querySelector<HTMLInputElement>('[aria-label="Gradient stop position for Entire chart"]')!;
+    const position = target.querySelector<HTMLInputElement>('[aria-label="Gradient stop position for Chart area"]')!;
     position.value = '67.5'; position.dispatchEvent(new Event('change', { bubbles: true })); client.flushSync();
-    const title = [...target.querySelectorAll('label')].find(label => label.textContent?.trim() === 'Title')!.querySelector('input')!;
-    title.click(); client.flushSync();
+    const title = target.querySelector<HTMLTextAreaElement>('[aria-label="Title text"]')!;
+    title.value = 'Chart Title';
+    title.dispatchEvent(new Event('change', { bubbles: true })); client.flushSync();
     expect(app.getContent()?.xml).toContain('Chart Title');
     expect(app.getContent()?.xml).not.toContain('gradFill');
     expect(target.querySelector('.gradient-editor [role="dialog"]')).not.toBeNull();

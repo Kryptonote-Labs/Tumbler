@@ -1,16 +1,23 @@
 <script lang="ts">
+  import { untrack, type Snippet } from 'svelte';
   import { chartBase64ToBytes, chartBytesToBase64, chartContentModel, convertChartType, type ChartContent, type ChartModel } from '@tumblerjs/charts';
-  import { createChartWorkbook, extendChartWorkbook, openSpreadsheetArtifact, refreshChartWorkbook, type SpreadsheetArtifact } from '@tumblerjs/sheets';
+  import { applyChartContentEdit, createChartWorkbook, extendChartWorkbook, openSpreadsheetArtifact, refreshChartWorkbook, type SpreadsheetArtifact } from '@tumblerjs/sheets';
   import ChartSeriesProperties from './ChartSeriesProperties.svelte';
   import ChartProperties from './ChartProperties.svelte';
   import ChartDataEditor from './ChartDataEditor.svelte';
+  import ChartAppearance from "./ChartAppearance.svelte";
   import ChartFillEditor from './ChartFillEditor.svelte';
   import OoxmlChart from './OoxmlChart.svelte';
   import type { ChartTypeChange } from './chart-properties.ts';
+  import type { ChartDesignControls } from './chart-design-controls.ts';
   import { chartDataState } from './chart-data-state.ts';
 
-  let { content, disabled = false, themeColors = {}, themeFonts = {}, previewSize = { width: 480, height: 320 }, patternOrigin, embeddedData = true, oneditdata, onchange }: {
+  let { content, oncontrols, request, selectedRange, dataSourceEditor, disabled = false, themeColors = {}, themeFonts = {}, previewSize = { width: 480, height: 320 }, patternOrigin, embeddedData = true, oneditdata, onchange }: {
+    oncontrols?: (controls: ChartDesignControls) => void | (() => void);
+    selectedRange?: string;
+    dataSourceEditor?: Snippet<[close: () => void]>;
     content: ChartContent;
+    request?: { readonly sequence: number; readonly action: 'data' | 'type' | 'elements' | 'format' };
     disabled?: boolean;
     themeColors?: Readonly<Record<string, string>>;
     themeFonts?: Readonly<Record<string, string>>;
@@ -18,7 +25,7 @@
     previewSize?: { readonly width: number; readonly height: number };
     patternOrigin?: { readonly x: number; readonly y: number };
     embeddedData?: boolean;
-    oneditdata?: () => void;
+    oneditdata?: (open?: boolean) => void;
     onchange: (content: ChartContent, reason?: 'type' | 'series') => void;
   } = $props();
   let current = $derived(content);
@@ -26,6 +33,8 @@
   const encoded = $derived(current.workbook);
   let sheet = $state<string>();
   let dataOpen = $state(false);
+  let handledRequest: number | undefined;
+  $effect(() => { const next = request; if (!next || next.sequence === handledRequest) return; handledRequest = next.sequence; if (next.action === 'data') untrack(() => { if (embeddedData) dataOpen = true; else oneditdata?.(true); }); });
   const draft = $derived.by(() => {
     if (!embeddedData || encoded !== undefined || !dataOpen) return undefined;
     try { return { value: createChartWorkbook(bytes) }; }
@@ -50,20 +59,15 @@
   function publish(content: ChartContent, reason?: 'type' | 'series') { if (disabled || content === current) return; onchange(content, reason); current = content; error = undefined; typeError = undefined; sourcePreview = undefined; }
   function changeType(change: ChartTypeChange) {
     try {
-      const source = convertChartType(bytes, change, selectedPlot);
-      if (embeddedData && workbook) {
-        const bound = extendChartWorkbook(source, workbook);
-        publish({ ...current, xml: new TextDecoder().decode(bound.source), workbook: chartBytesToBase64(bound.artifact.bytes()) }, 'type');
-      } else publish({ ...current, xml: new TextDecoder().decode(source) }, 'type');
+      publish(applyChartContentEdit(current, { ...change, plot: selectedPlot }), 'type');
     } catch (cause) { typeError = cause instanceof Error ? cause.message : 'This chart type could not be applied.'; }
   }
-  function openData() { if (!disabled) dataOpen = !dataOpen; }
+  function openData() { if (!disabled) { if (embeddedData) dataOpen = true; else oneditdata?.(true); } }
   function changeSource(source: Uint8Array) {
     try {
       if (embeddedData && workbook) {
         const bound = extendChartWorkbook(source, workbook);
-        const refreshed = refreshChartWorkbook(bound.source, bound.artifact);
-        publish({ ...current, xml: new TextDecoder().decode(refreshed), workbook: chartBytesToBase64(bound.artifact.bytes()) }, 'series');
+        publish({ ...current, xml: new TextDecoder().decode(refreshChartWorkbook(bound.source, bound.artifact)), workbook: chartBytesToBase64(bound.artifact.bytes()) }, 'series');
       } else publish({ ...current, xml: new TextDecoder().decode(source) }, 'series');
     } catch (cause) { error = cause instanceof Error ? cause.message : 'The series could not be changed.'; }
   }
@@ -72,9 +76,21 @@
     publish({ ...current, xml: new TextDecoder().decode(source), workbook: chartBytesToBase64(artifact.bytes()) });
     sheet = artifact.activeSheet.name;
   }
+  $effect(() => oncontrols?.({ type: typeControls, elements: elementControls, appearance: appearanceControls, data: dataControls, editData: openData, embeddedData }));
 </script>
 
-<ChartProperties {bytes} {disabled} {themeColors} plotIndex={selectedPlot} onplotselect={(index) => { plotIndex = index; preview = undefined; }}
+{@render properties(oncontrols ? 'format' : 'all')}
+
+{#snippet typeControls(close: () => void)}{@render properties('type', close)}{/snippet}
+{#snippet elementControls()}{@render properties('elements')}{/snippet}
+{#snippet appearanceControls()}<ChartAppearance inline {bytes} {disabled} {themeColors} onchange={(source) => publish({ ...current, xml: new TextDecoder().decode(source) })} />{/snippet}
+{#snippet dataControls(close: () => void)}
+  {@render dataSourceEditor?.(close)}
+  <ChartSeriesProperties onedit={(input) => { try { publish(applyChartContentEdit(current,input), 'series'); } catch (cause) { error = cause instanceof Error ? cause.message : 'The series could not be changed.'; } }} bytes={dataBytes} ranges={!embeddedData} {selectedRange} {disabled} onchange={changeSource} />
+  {#if error || draft?.error}<p class="error" role="alert">{error ?? draft?.error}</p>{/if}
+{/snippet}
+{#snippet properties(mode: 'all' | 'type' | 'elements' | 'format', close?: () => void)}
+<ChartProperties {mode} onchoose={close} {bytes} {request} {disabled} {themeColors} plotIndex={selectedPlot} onplotselect={(index) => { plotIndex = index; preview = undefined; }}
   {typeError} dataExpanded={embeddedData ? dataOpen : undefined} onsourcepreview={(source) => { sourcePreview = source; }}
   onchange={(source) => publish({ ...current, xml: new TextDecoder().decode(source) })}
   ontypechange={changeType} ontypepreview={(value) => { preview = value; }} oneditdata={embeddedData ? openData : oneditdata}>
@@ -84,12 +100,13 @@
   {/snippet}
   {#snippet viewPreview()}<OoxmlChart {patternOrigin} model={previewModel} width={previewSize.width} height={previewSize.height} />{/snippet}
   {#snippet fillEditor(target, label, targetKey)}<ChartFillEditor {targetKey} content={current} {target} {label} {themeColors} {disabled} preview={viewPreview} onpreview={(source) => { sourcePreview = source; }} onchange={(content) => publish(content)} />{/snippet}
+  {#snippet appearance()}<ChartAppearance {bytes} {disabled} {themeColors} onchange={(source) => publish({ ...current, xml:new TextDecoder().decode(source) })} />{/snippet}
   {#snippet dataEditor(returnFocus: () => void)}
-    <ChartSeriesProperties bytes={dataBytes} {disabled} onchange={changeSource} />
-    {#if error || draft?.error}<p class="error" role="alert">{error ?? draft?.error}</p>{/if}
-    {#if embeddedData && dataOpen && workbook}<ChartDataEditor artifact={workbook} source={dataBytes} {themeColors} {disabled} onchange={changeData} onsheetselect={(name) => { sheet = name; }} onclose={() => { dataOpen = false; returnFocus(); }} />{/if}
+    {@render dataControls(returnFocus)}
   {/snippet}
 </ChartProperties>
+{/snippet}
+{#if embeddedData && dataOpen && workbook}<ChartDataEditor artifact={workbook} source={dataBytes} {themeColors} {disabled} onchange={changeData} onsheetselect={(name) => { sheet = name; }} onclose={() => { dataOpen = false; }} />{/if}
 <style>
   .error { color: var(--tumbler-control-danger, var(--danger, #ff6b6b)); font-size: 12px; margin: 4px 0; }
   .preview-error { position: absolute; inset: auto 6px 4px; margin: 0; padding: 4px; background: var(--surface, #181818); color: var(--text, #e2fee7); font-size: 11px; }

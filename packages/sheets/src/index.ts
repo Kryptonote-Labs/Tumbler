@@ -199,3 +199,6 @@ export { layoutSpreadsheetViewport } from './viewport.ts';
 export type { SpreadsheetViewportAxisItem, SpreadsheetViewportCell, SpreadsheetViewportDrawing, SpreadsheetViewportLayout, SpreadsheetViewportOptions, SpreadsheetViewportRect } from './viewport.ts';
 export { paintSpreadsheetViewport, spreadsheetViewportImages } from './canvas.ts';
 export type { SpreadsheetCanvasContext, SpreadsheetDecodedImage, SpreadsheetImageSource, SpreadsheetViewportPaintOptions } from './canvas.ts';
+
+export { createSpreadsheetRangeChart } from './chart-range.ts';
+export type { ChartRangeOptions } from './chart-range.ts';

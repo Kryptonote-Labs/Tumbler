@@ -176,3 +176,14 @@ export function resolvePresentationResources(
   }
   return visit(value);
 }
+
+const chartContentChecks = new WeakMap<Uint8Array, boolean>();
+/** Compatibility checks inspect each immutable slide block once, without rebuilding the document. */
+export function presentationSlideNeedsChartContent(model: Uint8Array): boolean {
+  const cached = chartContentChecks.get(model);
+  if (cached !== undefined) return cached;
+  const slide = decodeNativeSlide(model, new Map(), true);
+  const needed = slide.slide.objects.some(object => object.kind === 'chart' && object.chartContent?.resources === undefined);
+  chartContentChecks.set(model, needed);
+  return needed;
+}

@@ -1,7 +1,7 @@
 <script lang="ts">
   import "./controls.css";
   import { onMount, tick, untrack } from "svelte";
-  import { createGridSelection, moveGridSelection, type GridDirection, type GridSelection } from "@tumblerjs/core";
+  import { SparseAxisGeometry, createGridSelection, moveGridSelection, type GridDirection, type GridSelection } from "@tumblerjs/core";
   import type { ChartModel } from "@tumblerjs/charts";
   import {
     EXCEL_MAX_COLUMNS,
@@ -88,6 +88,8 @@
     readonly columnCount?: number;
     readonly rowHeight?: number;
     readonly columnWidth?: number;
+    /** View-only readability floor for embedded data editors; hidden columns stay hidden. */
+    readonly minimumColumnWidth?: number;
   }
 
   let {
@@ -113,6 +115,7 @@
     columnCount = EXCEL_MAX_COLUMNS,
     rowHeight = 28,
     columnWidth = 112,
+    minimumColumnWidth,
   }: Props = $props();
 
   const gridId = $props.id();
@@ -169,7 +172,10 @@
     return result;
   });
   let rowGeometry = $derived(worksheet.rowGeometry(rowCount, projectedRows));
-  let columnGeometry = $derived(worksheet.columnGeometry(columnCount, maximumDigitWidth));
+  let columnGeometry = $derived.by(() => {
+    const geometry=worksheet.columnGeometry(columnCount,maximumDigitWidth);
+    return minimumColumnWidth === undefined ? geometry : new SparseAxisGeometry(columnCount,Math.max(geometry.defaultSize,minimumColumnWidth),geometry.overrides.map(column=>({...column,size:column.size===0?0:Math.max(column.size,minimumColumnWidth)})));
+  });
   const horizontalScroll = $derived(spreadsheetScrollAxis(columnGeometry.totalSize + rowHeaderWidth, viewportWidth));
   const verticalScroll = $derived(spreadsheetScrollAxis(rowGeometry.totalSize + columnHeaderHeight, viewportHeight));
   let drawingRowGeometry = $derived(worksheet.rowGeometry(rowCount));

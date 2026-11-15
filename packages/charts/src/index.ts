@@ -99,3 +99,7 @@ export { editChartFill, type ChartFillEdit } from './fill-edit.ts';
 export { mergeChartFillDraft, type ChartFillSnapshot } from './fill-draft.ts';
 
 export type { ChartManualLayout } from './manual-layout.ts';
+
+export { changeChartSeriesType } from './series-type-edit.ts';
+
+export { replaceChartData } from './data-replace.ts';

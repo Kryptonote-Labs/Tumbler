@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { spreadsheetCellUsesTextFormat } from './spreadsheet-edit.ts';
+  import { parseSpreadsheetClipboard } from './spreadsheet-clipboard.ts';
   import { onMount, tick } from 'svelte';
   import { chartDataHighlights } from './chart-data-highlights.ts';
   import { createGridSelection } from "@tumblerjs/core";
-  import { formatCellReference, type SpreadsheetArtifact } from "@tumblerjs/sheets";
+  import { applySpreadsheetCommand, formatCellRange, formatCellReference, type SpreadsheetArtifact } from "@tumblerjs/sheets";
   import SpreadsheetFormulaBar from "./SpreadsheetFormulaBar.svelte";
   import SpreadsheetGrid from "./SpreadsheetGrid.svelte";
   import type { SpreadsheetFormulaBarEdit } from "./spreadsheet-formula-bar.ts";
@@ -26,8 +28,13 @@
   let current = $derived(artifact);
   let selection = $state(createGridSelection({ row: 1, column: 1 }));
   let error = $state<string>();
+  let expanded = $state(false);
   $effect(() => { void artifact; void source; error = undefined; });
   let region = $state<HTMLElement>();
+  function floating(node: HTMLElement) {
+    document.body.append(node);
+    return { destroy() { node.remove(); } };
+  }
   const highlights = $derived(source ? chartDataHighlights(source, current.activeSheet.name, themeColors) : []);
   onMount(() => { void tick().then(() => region?.querySelector<HTMLElement>('[role="grid"]')?.focus()); });
   const reference = $derived(formatCellReference(selection.anchor));
@@ -56,6 +63,13 @@
       ? artifact.editFormulaOnSheet(sheet, edit.reference, edit.formula)
       : artifact.editCellOnSheet(sheet, edit.reference, edit.value));
   }
+  function paste(event: ClipboardEvent) {
+    if (disabled || event.target instanceof Element && event.target.closest('input,textarea,[contenteditable="true"]')) return;
+    const text=event.clipboardData?.getData('text/plain');
+    if(text===undefined)return;
+    event.preventDefault(); event.stopPropagation();
+    apply(artifact=>applySpreadsheetCommand(artifact,{name:'set-range',sheetId:String(artifact.activeSheet.sheetId),reference:formatCellReference(selection.range.start),values:parseSpreadsheetClipboard(text,(row,column)=>spreadsheetCellUsesTextFormat(artifact.worksheet,formatCellReference({row:selection.range.start.row+row,column:selection.range.start.column+column})))}));
+  }
   function selectSheet(name: string) {
     current = current.selectSheet(name);
     selection = createGridSelection({ row: 1, column: 1 });
@@ -64,14 +78,16 @@
   }
 </script>
 
-<section bind:this={region} class="chart-data" aria-label="Chart data">
+<section data-object-tools use:floating bind:this={region} class="chart-data" class:expanded aria-label="Chart data" onpaste={paste}>
   <div class="bar">
     <div class="formula"><SpreadsheetFormulaBar worksheet={current.worksheet} {reference} readonly={disabled} onedit={editFormula} /></div>
+    <button type="button" class="close" aria-label={expanded ? 'Restore chart data size' : 'Expand chart data'} title={expanded ? 'Restore size' : 'Expand'} onclick={() => { expanded = !expanded; }}>⤢</button>
     {#if onclose}<button type="button" class="close" aria-label="Close chart data" title="Close" onclick={onclose}>×</button>{/if}
   </div>
   <div class="grid">
-    <SpreadsheetGrid worksheet={current.worksheet} calculation={current.calculation} {selection} highlightRanges={highlights} readonly={disabled}
-      onselectionchange={(next) => { selection = next; }} onedit={editCell} />
+    <SpreadsheetGrid minimumColumnWidth={152} worksheet={current.worksheet} calculation={current.calculation} {selection} highlightRanges={highlights} readonly={disabled}
+      onselectionchange={(next) => { selection = next; }} onedit={editCell}
+      onclear={(selection) => apply(artifact=>applySpreadsheetCommand(artifact,{name:'clear-range',sheetId:String(artifact.activeSheet.sheetId),range:formatCellRange(selection.range)}))} />
     {#if error}<p class="error" role="alert">{error}</p>{/if}
   </div>
   {#if current.workbook.sheets.filter((sheet) => sheet.state === 'visible').length > 1}
@@ -89,6 +105,8 @@
     display: flex; flex-direction: column; box-sizing: border-box; height: 240px; width: 100%; min-width: 0; overflow: hidden; contain: inline-size; flex-shrink: 0;
     border-top: 1px solid var(--tumbler-control-border, var(--border, #303030)); background: var(--tumbler-control-bg, var(--surface, #181818));
   }
+  .chart-data { position:fixed; z-index:45; bottom:24px; left:max(24px, calc((100vw - 1000px) / 2)); width:min(760px, calc(100vw - 48px)); height:200px; resize:both; min-width:360px; min-height:200px; max-width:calc(100vw - 48px); max-height:70vh; border:1px solid var(--border,#303030); border-radius:8px; box-shadow:0 12px 48px #0006; }
+  .chart-data.expanded { left:24px; width:calc(100vw - 48px); height:55vh; }
   .bar { display: flex; align-items: center; min-width: 0; }
   .sheets { display: flex; overflow-x: auto; flex: 0 0 auto; border-top: 1px solid var(--tumbler-control-border, var(--border, #303030)); }
   .sheets button { border: 0; border-bottom: 2px solid transparent; padding: 4px 10px; white-space: nowrap; color: inherit; background: transparent; font: inherit; font-size: 11px; cursor: pointer; }

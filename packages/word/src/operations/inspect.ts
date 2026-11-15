@@ -1,6 +1,6 @@
 import { readChartContent, mergeChartContent } from '@tumblerjs/charts';
 import { wordChartTitleText } from "../chart-title.ts";
-import type * as Y from "yjs";
+import * as Y from "yjs";
 import * as z from 'zod';
 import type { WordArtifact } from "../artifact.ts";
 import type { TextAttributes } from "../collaboration/formatting.ts";
@@ -71,7 +71,8 @@ export function inspectWordCharts(text: Y.Text, source: WordArtifact | undefined
     const content = attributes.chartContent ? originalContent ? mergeChartContent(originalContent, attributes.chartContent) : attributes.chartContent : originalContent;
     if (content) for (let index = 0; index < item.insert.length; index++) if (item.insert[index] === '\uFFFC') {
       const start = offset + index;
-      charts.push({ part: `chart:${encodeURIComponent(region)}:${start}`, name: original?.name ?? `Chart ${charts.length + 1}`, start, end: start + 1, content });
+      const identity = Array.from(Y.encodeRelativePosition(Y.createRelativePositionFromTypeIndex(text, start)), byte => byte.toString(16).padStart(2, '0')).join('');
+      charts.push({ part: `chart:${encodeURIComponent(region)}:${identity}`, name: original?.name ?? `Chart ${charts.length + 1}`, start, end: start + 1, content });
     }
     offset += item.insert.length;
   }
