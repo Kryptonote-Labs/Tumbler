@@ -23,6 +23,7 @@ describe("public package release graph", () => {
       "@tumblerjs/pdf",
       "@tumblerjs/svelte",
       "@tumblerjs/cli",
+      "@tumblerjs/markdown",
     ]);
   });
 
