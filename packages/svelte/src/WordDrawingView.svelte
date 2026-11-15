@@ -45,6 +45,7 @@
     label: handle.x === 1 && handle.y === 1 ? 'Resize drawing' : `Resize drawing ${handle.name}`,
   }));
   let preview = $state<WordDrawingBox>();
+  let contentButton = $state<HTMLButtonElement>();
   let drag: { pointer: number; scale: number; target: HTMLElement | undefined; clientX: number; clientY: number; box: WordDrawingBox; handle?: Handle } | undefined;
   let currentLayout: NonNullable<WordDrawingChange['layout']> = $derived(drawing.placement === 'inline' ? 'inline' : drawing.anchor?.behindDocument ? 'behind' : 'front');
   const inkSvg = $derived(wordDisplayInkSvg(drawing, background));
@@ -80,7 +81,8 @@
     event.preventDefault(); event.stopPropagation();
     drag = { pointer: event.pointerId, scale, target: event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined, clientX: event.clientX, clientY: event.clientY, box: box(), handle };
     if (event.currentTarget instanceof HTMLElement) {
-      event.currentTarget.focus({ preventScroll: true });
+      // The move ring cannot take focus; the content button owns movement keys.
+      (handle === undefined ? contentButton ?? event.currentTarget : event.currentTarget).focus({ preventScroll: true });
       event.currentTarget.setPointerCapture(event.pointerId);
     }
   }
@@ -196,7 +198,7 @@
     {#if editingText !== undefined}
       <div class="content editing" style={contentClip}>{@render content()}</div>
     {:else}
-    <button class="content" style={contentClip} class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)} ondblclick={doubleClick}>{@render content()}</button>
+    <button bind:this={contentButton} class="content" style={contentClip} class:movable={onchange !== undefined} aria-label={`Select ${label}`} title={currentLayout === 'inline' ? 'Drag to move within text' : 'Drag to move; arrow keys nudge'} onclick={() => onselect(drawing.elementId)} onpointerdown={(event) => start(event)} onpointermove={move} onpointerup={finish} onpointercancel={cancel} onlostpointercapture={cancel} onkeydown={(event) => keydown(event)} ondblclick={doubleClick}>{@render content()}</button>
     {/if}
     {#if selected}
       {#if drawing.kind === 'image' && drawing.inkProjection && oninkchange}
