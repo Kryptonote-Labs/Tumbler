@@ -1,11 +1,6 @@
 import { tick } from 'svelte';
-import {
-  presentationTextTarget,
-  slideTextValue,
-  type PresentationSearchMatch,
-  type PresentationSlide,
-} from '@tumblerjs/slides';
-import { presentationTextPosition } from './presentation-text-position.ts';
+import { type PresentationSearchMatch, type PresentationSlide } from '@tumblerjs/slides';
+import { presentationTextRange } from './presentation-text-range.ts';
 
 const groups = new Map<symbol, { matches: Range[]; current: Range[] }>();
 function paint() {
@@ -37,23 +32,10 @@ export function presentationSearchHighlights(node: HTMLElement, initial: Options
     if (generation !== version || !globalThis.CSS?.highlights || typeof Highlight === 'undefined')
       return;
     const group = { matches: [] as Range[], current: [] as Range[] };
-    const objects = Array.from(node.querySelectorAll<SVGElement>('[data-slide-object]'));
     for (const match of options.matches) {
-      if (match.slideId !== options.slide.id) continue;
-      const object = options.slide.objects.find((object) => object.key === match.objectKey);
-      const element = objects.find((element) => element.dataset.slideObject === match.objectKey);
-      if (!object || !element) continue;
-      const root = match.cell
-        ? Array.from(element.querySelectorAll<SVGElement>('[data-table-cell]')).find(
-            (element) => element.dataset.tableCell === `${match.cell!.row}:${match.cell!.column}`,
-          )
-        : element;
-      const paragraphs = root?.querySelector<HTMLElement>('.paragraphs');
-      if (!paragraphs) continue;
-      const value = slideTextValue(presentationTextTarget(object, match.cell)).split('\n');
-      const range = document.createRange();
-      range.setStart(...presentationTextPosition(paragraphs, value, match.start));
-      range.setEnd(...presentationTextPosition(paragraphs, value, match.end));
+      const resolved = presentationTextRange(node, options.slide, match);
+      if (!resolved) continue;
+      const { range } = resolved;
       group.matches.push(range);
       if (match === options.current) group.current.push(range);
     }

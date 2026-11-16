@@ -4,6 +4,7 @@
   import { presentationAdvance } from './presentation-advance.ts';
   import { findVisibleSlideIndex } from '@tumblerjs/slides';
   import { createPresentationTransitionPlayer } from './presentation-transition-player.ts';
+  import { presentationTextAnnotations, type PresentationTextAnnotation, type PresentationAnnotationActivation } from './presentation-text-annotations.ts';
   import { presentationSearchHighlights } from './presentation-search-highlights.ts';
   import type { PresentationSearchMatch } from '@tumblerjs/slides';
   import PresentationRemoteSelections from './PresentationRemoteSelections.svelte';
@@ -57,6 +58,8 @@
   import { snappedZoom, type SnappedZoom } from "./zoom-snap.ts";
 
   let {
+    textAnnotations = [],
+    onannotationactivate,
     searchMatches = [],
     currentSearchMatch,
     presentation,
@@ -86,6 +89,8 @@
     overlay,
     remoteSelections = [],
   }: {
+    textAnnotations?: readonly PresentationTextAnnotation[];
+    onannotationactivate?: (activation: PresentationAnnotationActivation) => void;
     searchMatches?: readonly PresentationSearchMatch[];
     currentSearchMatch?: PresentationSearchMatch | undefined;
     presentation: PresentationDocument;
@@ -849,6 +854,7 @@
   <div
     class="presentation-view"
     bind:this={host}
+    use:presentationTextAnnotations={{slide, annotations: thumbnail || stage ? [] : textAnnotations, onactivate: onannotationactivate}}
     use:presentationSearchHighlights={{slide, matches: thumbnail ? [] : searchMatches, current: currentSearchMatch}}
     bind:clientWidth={width}
     bind:clientHeight={height}

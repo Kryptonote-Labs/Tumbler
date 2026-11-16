@@ -11,3 +11,5 @@ export { default as PresentationShapePlacement } from "./PresentationShapePlacem
 export { default as PresentationPrintView } from './PresentationPrintView.svelte';
 
 export { default as PresentationTransitionControls } from './PresentationTransitionControls.svelte';
+
+export type { PresentationTextAnnotation, PresentationAnnotationActivation } from './presentation-text-annotations.ts';
