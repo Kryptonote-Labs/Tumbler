@@ -49,7 +49,7 @@ function layer(svg: SVGSVGElement): Layer {
   const doc = svg.ownerDocument;
   const defs = doc.createElementNS(SVG, 'defs'), clip = doc.createElementNS(SVG, 'clipPath'), path = doc.createElementNS(SVG, 'path');
   clip.id = `tumbler-transition-clip-${++snapshotId}`;
-  clip.setAttribute('clipPathUnits', 'objectBoundingBox');
+  clip.setAttribute('clipPathUnits', 'userSpaceOnUse');
   clip.append(path); defs.append(clip); svg.append(defs);
   return { svg, path, clip, defs };
 }
@@ -60,6 +60,8 @@ function paint(layer: Layer, visual: TransitionVisual, complement: boolean, refl
   style.opacity = String(visual.opacity ?? 1);
   style.filter = visual.filter ?? '';
   if (visual.mask) {
+    // Outer SVG clips use CSS pixels. Explicit sizing also follows viewport changes during playback.
+    layer.clip.setAttribute('transform', `scale(${layer.svg.clientWidth} ${layer.svg.clientHeight})`);
     layer.path.setAttribute('d', visual.mask);
     layer.path.setAttribute('clip-rule', complement ? 'evenodd' : 'nonzero');
     layer.path.setAttribute('transform', reflection ?? '');
