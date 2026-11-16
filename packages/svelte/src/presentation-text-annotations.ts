@@ -73,7 +73,21 @@ export function presentationTextAnnotations(node: HTMLElement, initial: Options)
     // A drag selection is editing, not an annotation activation.
     if (event.type === 'pointerup' && (pointer?.moved || (selection && !selection.isCollapsed)))
       return;
+    // Pointer capture retargets events to the slide SVG; hit-test the painted object instead.
+    const paintedObject =
+      event instanceof MouseEvent
+        ? node.ownerDocument
+            .elementFromPoint(event.clientX, event.clientY)
+            ?.closest('[data-slide-object]')
+        : undefined;
     for (const entry of entries) {
+      if (
+        !keyboard &&
+        (!paintedObject ||
+          !node.contains(paintedObject) ||
+          paintedObject.getAttribute('data-slide-object') !== entry.annotation.objectKey)
+      )
+        continue;
       const caret = keyboard && selection?.rangeCount ? selection.getRangeAt(0) : undefined;
       if (
         keyboard &&
