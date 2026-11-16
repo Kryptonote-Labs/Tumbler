@@ -221,6 +221,8 @@ export function presentationTextEdit(
   function keydown(event: KeyboardEvent) {
     if (!active) return;
     capture();
+    // Annotation handlers consume their keys first; hosts handle unclaimed text menus.
+    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) return;
     event.stopPropagation();
     if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", "Tab", "Escape"].includes(event.key) || event.ctrlKey || event.metaKey) history.break();
     if ((event.key === "ArrowUp" || event.key === "ArrowDown") &&

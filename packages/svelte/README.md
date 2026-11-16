@@ -575,3 +575,41 @@ artwork after changing gallery variants or the chart renderer:
 ```sh
 bun packages/svelte/scripts/generate-chart-type-thumbnails.ts
 ```
+
+### Text annotations
+
+Hosts can supply spelling and grammar diagnostics independently of search:
+
+```svelte
+<PresentationSlideView
+  {presentation}
+  {slide}
+  textAnnotations={[
+    {
+      id: 'diagnostic-1',
+      slideId: slide.id,
+      objectKey: textBox.key,
+      start: 3,
+      end: 10,
+      text: 'speling',
+      kind: 'spelling',
+    },
+  ]}
+  onannotationactivate={({ annotation, anchor, source }) => {
+    openCorrections(annotation.id, anchor, source);
+  }}
+/>
+```
+
+Offsets use UTF-16 document text, excluding bullet markers and including paragraph
+separators. Supply `cell: { row, column }` for a table cell. `text` is the expected
+range content; stale ranges and removed targets are ignored. Spelling uses a red
+wavy underline; grammar uses blue. Annotations leave document content, formatting,
+and browser selection unchanged and are omitted from thumbnails and slideshow mode.
+
+A stationary click, right-click, or ContextMenu / Shift+F10 at the caret activates
+an annotation. Shift+right-click retains native behavior. The callback receives
+the actual word rectangle in viewport coordinates, including zoom and transforms.
+Hosts own the corrections UI, checking, source validation, permissions and document
+commands. Close transient UI when its source changes or the viewport moves, and
+use `restoreSelection()` to return the caret after applying a correction.
