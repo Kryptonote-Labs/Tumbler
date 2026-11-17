@@ -135,6 +135,20 @@ EOF_TEXT
 including trailing newlines, and cannot be combined with `--value` or `--literal`. Injected
 hosts implement `readValue(path)` to supply files and stdin from their own environment.
 
+Slide commands `insert-object` (shapes), `edit-text`, and `set-notes` accept the same
+`--value`, `--literal`, and `--value-file` flags. Keep targeting and formatting fields in
+`--input` JSON and omit the corresponding text field (`object.text`, `value`, or `notes`).
+Supplying both inline text and a text flag is an error. For `batch`, include text in each
+command's JSON using normal JSON escaping.
+
+```sh
+tumbler deck.pptx slides insert-object --input '{"slideId":"<slide-id>","bounds":{"x":48,"y":48,"width":300,"height":120},"object":{"kind":"shape"}}' --value 'PROMPT\nState the intended outcome'
+tumbler deck.pptx slides edit-text --input '{"slideId":"<slide-id>","objectKey":"<object-key>","start":0,"end":0}' --value-file - <<'TEXT'
+First line
+Second line, with literal C:\new\test
+TEXT
+```
+
 ### Discovering operations
 
 `--help` lists the live operation registry. `<document> <operation> --help` is
