@@ -96,7 +96,7 @@ export { encodePresentationBlock, decodePresentationBlock, isPresentationBlock }
 export { createPresentationNativeArchive, createPresentationNativeView, encodePresentationNativeState, openPresentationNativeArchive, encodePresentationNativeArchive, decodePresentationNativeArchive, readPresentationNativeManifest } from "./native-archive.ts";
 export type { NativePresentationArchive, NativePresentationManifest } from "./native-archive.ts";
 
-export {presentationSlideNeedsChartContent,presentationSlideResources,presentationResourceHash} from "./native-resources.ts";
+export {presentationSlideNeedsCompiledContent,presentationSlideResources,presentationResourceHash} from "./native-resources.ts";
 
 export {presentationNativeContent} from "./native-archive.ts";
 
@@ -107,3 +107,8 @@ export { presentationChartContent, editPresentationChart, insertPresentationChar
 
 export { SLIDE_TRANSITIONS, slideTransition, slideTransitionKinds, isSlideTransitionKind, normalizeSlideTransition, ORIENTED_TRANSITIONS } from './transitions.ts';
 export type { SlideTransition, SlideTransitionInput, SlideTransitionKind } from './transitions.ts';
+
+export { ENTRANCE_ANIMATIONS, entranceAnimationKinds, entranceAnimation, normalizeEntranceAnimation, animationInput, isEntranceAnimationKind } from './animation.ts';
+export type { EntranceAnimation, EntranceAnimationInput, EntranceAnimationKind, SlideAnimation, AnimationTrack, AnimationBehavior } from './animation.ts';
+export { createPresentationAnimationPlayer, animationProgress } from './animation-program.ts';
+export type { AnimationFrame } from './animation-program.ts';

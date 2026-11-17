@@ -1,3 +1,5 @@
+import { entranceAnimation } from './animation.ts';
+import { authorSlideAnimation } from './animation-authoring.ts';
 import { slideTransition } from './transitions.ts';
 import { setSlideTransition } from './transition-authoring.ts';
 import { editPresentationChart, insertPresentationChart } from './chart-authoring.ts';
@@ -74,6 +76,10 @@ const patch = z
 const tableBorder = z.object({ color, width: number.nonnegative(), dash: z.enum(['solid', 'dash', 'dot', 'double']) }).strict();
 const chartContent = z.object({ xml: z.string(), workbook: z.string().optional(), resources: chartResourcesSchema.optional() }).strict();
 const singlePresentationCommand = z.discriminatedUnion("name", [
+  z.object({ name: z.literal('add-animation'), ...target, animation: entranceAnimation }).strict(),
+  z.object({ name: z.literal('update-animation'), slideId: id, animationId: id, animation: entranceAnimation }).strict(),
+  z.object({ name: z.literal('remove-animation'), slideId: id, animationId: id }).strict(),
+  z.object({ name: z.literal('move-animation'), slideId: id, animationId: id, index: z.number().int().nonnegative() }).strict(),
   z.object({ name: z.literal('set-transition'), slideId: id, transition: slideTransition.nullable() }).strict(),
   z.object({ name: z.literal('edit-chart'), ...target, content: chartContent }).strict(),
   z.object({ name: z.literal('insert-chart'), slideId: id, bounds, content: chartContent }).strict(),
@@ -312,6 +318,11 @@ export function applyPresentationCommand(
       return deleteSlide(artifact, command.slideId);
     case "set-notes":
       return setSlideNotes(artifact, command.slideId, command.notes);
+    case 'add-animation':
+    case 'update-animation':
+    case 'remove-animation':
+    case 'move-animation':
+      return authorSlideAnimation(artifact, command);
     case "set-transition":
       return setSlideTransition(artifact, command.slideId, command.transition);
     case "set-slide-hidden":

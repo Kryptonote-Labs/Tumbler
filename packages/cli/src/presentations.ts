@@ -1,4 +1,4 @@
-import { presentationCommand, type PresentationCommand } from "@tumblerjs/slides";
+import { presentationCommand, ENTRANCE_ANIMATIONS, type PresentationCommand } from "@tumblerjs/slides";
 import { z } from "zod";
 import { replacementValue } from "./replacement-value.ts";
 
@@ -27,6 +27,7 @@ export function presentationHelp(commandName = "tumbler", name?: string) {
       "Without --slide, read returns the first slide. To read another slide, use its id from slides, not its number or title. An empty slide has empty:true, objectCount:0 and objects:[]; notes and background are reported separately.",
       "Commands: " +
         presentationCommand.options.map((option) => option.shape.name.value).join(", "),
+      ...((name === 'add-animation' || name === 'update-animation') ? ['Entrance presets (duration and delay use milliseconds): ' + JSON.stringify(ENTRANCE_ANIMATIONS), 'Use animationId from slides read to update, move or remove an effect.'] : []),
       ...(schema
         ? [JSON.stringify(z.toJSONSchema(schema, { io: "input", unrepresentable: "any" }), null, 2)]
         : [`Use ${commandName} <document> slides <command> --help for fields.`]),

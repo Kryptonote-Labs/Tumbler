@@ -422,6 +422,13 @@
   const playing = $derived(controlledPlaying ?? manualPlaying);
   $effect(() => { slide.part; manualPlaying = false; });
   let playbackStep = $state(0);
+  let animationPreview = $state<{ id?: string; version: number }>();
+  let previewVersion = 0;
+  /** Preview uses the same engine without changing the editing scene or entering the slideshow. */
+  export function previewAnimations(id?: string) {
+    animationPreview = { ...(id ? { id } : {}), version: ++previewVersion };
+  }
+  $effect(() => { slide; animationPreview = undefined; });
   $effect(() => {
     slide.part;
     playing;
@@ -873,6 +880,7 @@
       <svg
         use:transitions.action={{ slide, playing: playing && !thumbnail, editable: editable || thumbnail }}
         use:presentationPlayback={{
+          width: presentation.width, height: presentation.height, preview: animationPreview,
           slide,
           playing: playing && !thumbnail,
           step: playbackStep,

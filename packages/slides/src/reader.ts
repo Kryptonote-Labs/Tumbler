@@ -689,6 +689,8 @@ class Reader {
         .join(" ") || `Slide ${index + 1}`;
     const result: PresentationSlide = {
       id,
+      animationVersion: 1,
+      animationEditingRestriction: playback.editingRestriction,
       animations: playback.animations,
       transition: playback.transition,
       part: slide.part.name.value,
