@@ -1,3 +1,4 @@
+import { animationInput } from './animation.ts';
 import type { PresentationArtifact } from "./artifact.ts";
 import { slideTextValue } from "./editing.ts";
 /** Compact agent reads retain stable slide/object addresses and actual authoring geometry. */
@@ -24,6 +25,19 @@ export function inspectPresentation(artifact: PresentationArtifact, slideId?: st
       title: slide.title,
       notes: slide.notes,
       transition: slide.transition,
+      animations: (slide.animations ?? []).map(cue => ({
+        animationId: cue.id,
+        objectKey: slide.objects.find(object => object.shapeId === cue.target)?.key,
+        kind: cue.kind,
+        entrance: cue.entrance,
+        start: cue.start ?? (cue.step ? 'click' : 'with'),
+        step: cue.step,
+        duration: cue.duration,
+        delay: cue.startDelay ?? cue.delay,
+        direction: cue.direction,
+        editable: !slide.animationEditingRestriction && animationInput(cue) !== undefined,
+      })),
+      animationEditingRestriction: slide.animationEditingRestriction,
       background: slide.background,
       diagnostics: slide.diagnostics,
       objects: slide.objects.map((o) => ({

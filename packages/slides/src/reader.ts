@@ -326,11 +326,14 @@ class Reader {
       ]),
     });
     for (const element of xml.elements()) this.views.set(element, view);
+    // LibreOffice reuses this non-addressable container ID for a real slide shape.
+    const tree = this.p(this.p(xml.root, "cSld"), "spTree");
+    const containerIdentity = this.p(this.p(tree, "nvGrpSpPr"), "cNvPr");
     const shapeIds = new Set<string>();
     for (const metadata of this.descendants(xml.root).filter(
       (item) =>
         item.namespaceUri === this.ns.presentation &&
-        item.localName === "cNvPr",
+        item.localName === "cNvPr" && item !== containerIdentity,
     )) {
       const id = attr(metadata, "id");
       if (!id || shapeIds.has(id))
@@ -686,6 +689,8 @@ class Reader {
         .join(" ") || `Slide ${index + 1}`;
     const result: PresentationSlide = {
       id,
+      animationVersion: 1,
+      animationEditingRestriction: playback.editingRestriction,
       animations: playback.animations,
       transition: playback.transition,
       part: slide.part.name.value,

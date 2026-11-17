@@ -1,3 +1,4 @@
+import { authorSlideAnimation } from './animation-authoring.ts';
 import { beginLosslessXmlEdit } from "@tumblerjs/ooxml";
 import { beginPackageTransaction } from "@tumblerjs/opc";
 import { openPresentationArtifact, type PresentationArtifact } from "./artifact.ts";
@@ -159,6 +160,11 @@ export function appendToTree(
 }
 export function deleteObject(artifact: PresentationArtifact, slideId: string, key: string) {
   editable(artifact);
+  const initial = objectTarget(artifact, slideId, key);
+  if (!initial.slide.animationEditingRestriction)
+    for (const cue of initial.slide.animations ?? [])
+      if (cue.id && cue.target === initial.object.shapeId)
+        artifact = authorSlideAnimation(artifact, { name: 'remove-animation', slideId, animationId: cue.id });
   const { slide, source, element } = objectTarget(artifact, slideId, key);
   const edit = beginLosslessXmlEdit(source);
   edit.replaceElementMarkup(element, "");

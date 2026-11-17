@@ -172,6 +172,8 @@ export interface SlideObject {
   readonly alternateTransformIds?: readonly number[];
 }
 export interface PresentationSlide {
+  readonly animationVersion?: 1;
+  readonly animationEditingRestriction?: string | undefined;
   readonly animations?: readonly import('./timing.ts').SlideAnimation[];
   readonly transition?: import('./timing.ts').SlideTransition | undefined;
   readonly id: string;

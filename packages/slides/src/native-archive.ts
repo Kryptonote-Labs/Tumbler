@@ -186,7 +186,7 @@ export function openPresentationNativeArchive(
     sourceArtifact,
     options,
   );
-  return archive.preservation?.length ? model.completeChartContents() : model;
+  return archive.preservation?.length ? model.completeCompiledContents() : model;
 }
 
 /** Recovery stores the native branch without forcing export preservation to load. */

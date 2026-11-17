@@ -66,6 +66,7 @@ export type NativeChange = {
   before: string;
   command: PresentationCommand;
   createdSlides: readonly string[];
+  createdAnimations?: readonly string[];
   createdObjects: readonly { slideId: string; keys: readonly string[] }[];
 };
 export type NativePresentationState = {
@@ -117,9 +118,9 @@ type Chain = { previous: Chain | undefined; change: NativeChange };
 const importedPresentations = new WeakMap<PresentationArtifact, NativePresentationDocument>();
 /** Immutable native authoring state. Source markup is resolved only for explicit export. */
 export class NativePresentationDocument extends PresentationArtifact {
-  private chartContentsUpgraded = false;
+  private compiledContentsUpgraded = false;
   /** A host may refresh cached compiled views after restoring an older archive. */
-  get requiresChartContentCheckpoint() { return this.chartContentsUpgraded; }
+  get requiresCompiledViewCheckpoint() { return this.compiledContentsUpgraded; }
   private exported: PresentationArtifact | undefined;
   private exportSlides = new Map<string, string>();
   private exportObjects = new Map<string, string>();
@@ -256,17 +257,25 @@ export class NativePresentationDocument extends PresentationArtifact {
   preservationSource() {
     return this.source();
   }
-  /** Upgrade older compiled charts while their full preservation source is available. */
-  completeChartContents(): NativePresentationDocument {
-    if (!this.state.slides.some(({ slide }) => slide.objects.some(object => object.kind === 'chart' && object.chartContent?.resources === undefined))) return this;
+  /** Upgrade older compiled animations and charts while their preservation source is available. */
+  completeCompiledContents(): NativePresentationDocument {
+    if (!this.state.slides.some(({ slide }) => slide.animationVersion !== 1 || slide.objects.some(object => object.kind === 'chart' && object.chartContent?.resources === undefined))) return this;
     const exported = this.exportArtifact();
-    const slides = this.state.slides.map(native => ({ ...native, slide: { ...native.slide, objects: native.slide.objects.map(object => {
+    const slides = this.state.slides.map(native => {
+      const sourceSlide = exported.document.slides.find(slide => slide.id === (this.exportSlides.get(native.slide.id) ?? native.slide.id));
+      const identities = new Map(sourceSlide?.objects.flatMap(object => {
+        const current = native.slide.objects.find(candidate => (this.exportObjects.get(candidate.key) ?? candidate.key) === object.key);
+        return current ? [[object.shapeId, current.shapeId]] : [];
+      }));
+      const animations = native.slide.animationVersion === 1 ? native.slide.animations : sourceSlide?.animations?.map(cue => ({ ...cue, target: identities.get(cue.target) ?? cue.target, ...(cue.tracks ? { tracks: cue.tracks.map(track => ({...track,target:identities.get(track.target) ?? track.target})) } : {}) }));
+      return { ...native, slide: { ...native.slide, animationVersion: 1 as const, animationEditingRestriction: sourceSlide?.animationEditingRestriction, ...(animations ? {animations} : {}), objects: native.slide.objects.map(object => {
       if (object.kind !== 'chart' || object.chartContent?.resources !== undefined) return object;
       const content = presentationChartContent(exported.document, this.exportSlides.get(native.slide.id) ?? native.slide.id, this.exportObjects.get(object.key) ?? object.key);
       return { ...object, chartContent: object.chartContent ? mergeChartContent(content, object.chartContent) : content };
-    }) } }));
+    }) } };
+    });
     const completed = new NativePresentationDocument({ ...this.state, slides }, this.source, this.chain, this.options);
-    completed.chartContentsUpgraded = true;
+    completed.compiledContentsUpgraded = true;
     return completed;
   }
   /** Existing OOXML writers remain the lossless export reconciler, outside the editing path. */
@@ -274,12 +283,14 @@ export class NativePresentationDocument extends PresentationArtifact {
     if (this.exported) return this.exported;
     let artifact = this.source();
     const slides = new Map<string, string>(),
+      animations = new Map<string, string>(),
       objects = new Map<string, string>();
     for (const change of this.snapshot().changes) {
       let command = change.command;
       if (command.name === 'batch') throw new Error('Native changes must be atomic commands.');
       if ('slideId' in command)
         command = { ...command, slideId: slides.get(command.slideId) ?? command.slideId };
+      if ('animationId' in command) command = { ...command, animationId: animations.get(command.animationId) ?? command.animationId };
       if ('objectKey' in command && command.name !== 'paste-object')
         command = { ...command, objectKey: objects.get(command.objectKey) ?? command.objectKey };
       if (command.name === 'insert-slide')
@@ -312,6 +323,11 @@ export class NativePresentationDocument extends PresentationArtifact {
       const added = artifact.document.slides.filter(
         (s) => !before.document.slides.some((p) => p.id === s.id),
       );
+      if (command.name === 'add-animation') {
+        const old = before.document.slides.find(slide => slide.id === command.slideId)?.animations ?? [];
+        const added = artifact.document.slides.find(slide => slide.id === command.slideId)?.animations?.filter(cue => !old.some(previous => previous.id === cue.id)) ?? [];
+        change.createdAnimations?.forEach((id, index) => { const cue = added[index]; if (!cue?.id) throw new Error('Native export animation identity mismatch.'); animations.set(id, cue.id); });
+      }
       change.createdSlides.forEach((id, i) => {
         const slide = added[i];
         if (!slide) throw new Error('Native export slide identity mismatch.');

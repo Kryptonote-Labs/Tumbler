@@ -38,6 +38,7 @@ export function rebasePresentationCommands(
   };
   intervening.forEach(visit);
   const slideIds = new Map<string, string>();
+  const animationIds = new Map<string, string>();
   const objectIds = new Map<string, string>();
   const semantic = (value: unknown) =>
     JSON.stringify(value, (key, item: unknown) =>
@@ -87,6 +88,13 @@ export function rebasePresentationCommands(
     if (command.name === 'insert-slide' && command.layoutSourceId)
       command.layoutSourceId = slideIds.get(command.layoutSourceId) ?? command.layoutSourceId;
     const inputSlideId = 'slideId' in input ? input.slideId : undefined;
+    if ('animationId' in command) {
+      const oldId = command.animationId;
+      command.animationId = animationIds.get(`${inputSlideId}:${oldId}`) ?? oldId;
+      const oldCue = base.document.slides.find(slide => slide.id === inputSlideId)?.animations?.find(cue => cue.id === oldId);
+      const cue = current.document.slides.find(slide => 'slideId' in command && slide.id === command.slideId)?.animations?.find(cue => 'animationId' in command && cue.id === command.animationId);
+      if (!cue || (oldCue && !animationIds.has(`${inputSlideId}:${oldId}`) && semantic(oldCue) !== semantic(cue))) conflict();
+    }
     const inputObjectKey = 'objectKey' in input ? input.objectKey : undefined;
     if (inputSlideId && removedSlides.has(inputSlideId) && !slideIds.has(inputSlideId)) conflict();
     const identity = `${inputSlideId}:${inputObjectKey}`;
@@ -246,6 +254,11 @@ export function rebasePresentationCommands(
       if (newSlides[i]) slideIds.set(slide.id, newSlides[i]!.id);
     });
     for (const slide of base.document.slides) {
+      const oldAnimationIds = new Set(old.document.slides.find(s => s.id === slide.id)?.animations?.map(cue => cue.id));
+      const previousAnimationIds = new Set(previous.document.slides.find(s => s.id === (slideIds.get(slide.id) ?? slide.id))?.animations?.map(cue => cue.id));
+      const addedAnimations = slide.animations?.filter(cue => !oldAnimationIds.has(cue.id)) ?? [];
+      const currentAnimations = current.document.slides.find(s => s.id === (slideIds.get(slide.id) ?? slide.id))?.animations?.filter(cue => !previousAnimationIds.has(cue.id)) ?? [];
+      addedAnimations.forEach((cue,index) => { const target = currentAnimations[index]; if (cue.id && target?.id) animationIds.set(`${slide.id}:${cue.id}`,target.id); });
       const oldKeys = new Set(
         old.document.slides.find((s) => s.id === slide.id)?.objects.map((o) => o.key),
       );

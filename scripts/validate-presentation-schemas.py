@@ -10,7 +10,11 @@ from lxml import etree
 
 root = Path(__file__).resolve().parent.parent
 archive = root / 'docs/reference/vendor/raw/ecma/OfficeOpenXML-XMLSchema-Transitional.zip'
-paths = [Path(path) for path in sys.argv[1:]] or list((root / 'apps/docs/static/samples').glob('*.pptx'))
+arguments = sys.argv[1:]
+if arguments[:1] == ['--schemas']:
+    archive = Path(arguments[1])
+    arguments = arguments[2:]
+paths = [Path(path) for path in arguments] or list((root / 'apps/docs/static/samples').glob('*.pptx'))
 failed = False
 with tempfile.TemporaryDirectory(prefix='tumbler-schemas-') as directory:
     with ZipFile(archive) as package:

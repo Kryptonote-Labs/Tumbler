@@ -1,3 +1,5 @@
+import { sequenceAnimations } from './animation.ts';
+import { changeSlideAnimations } from './animation-authoring.ts';
 import { normalizeSlideTransition } from './transitions.ts';
 import { ThemeColorScheme } from '@tumblerjs/ooxml';
 import { chartContentModel, mergeChartContent, bindChartTheme, bindChartImages } from '@tumblerjs/charts';
@@ -62,6 +64,7 @@ export function applyNativeModelCommand(
       },
     });
   };
+  const createdAnimations: string[] = [];
   const createdSlides: string[] = [],
     createdObjects: { slideId: string; keys: string[] }[] = [];
   const addObjects = (slideId: string, objects: readonly SlideObject[]) => {
@@ -164,7 +167,7 @@ export function applyNativeModelCommand(
     case 'delete-object':
       patchSlide({
         ...target!,
-        slide: { ...target!.slide, objects: target!.slide.objects.filter((o) => o !== selected) },
+        slide: { ...target!.slide, animations: sequenceAnimations((target!.slide.animations ?? []).filter(cue => cue.target !== selected!.shapeId)), objects: target!.slide.objects.filter((o) => o !== selected) },
       });
       break;
     case 'duplicate-object': {
@@ -269,6 +272,17 @@ export function applyNativeModelCommand(
     case 'set-notes':
       patchSlide({ ...target!, slide: { ...target!.slide, notes: command.notes } });
       break;
+    case 'add-animation':
+    case 'update-animation':
+    case 'remove-animation':
+    case 'move-animation': {
+      if (target!.slide.animationEditingRestriction) throw new Error(target!.slide.animationEditingRestriction);
+      const addedId = command.name === 'add-animation' ? nextId() : undefined;
+      if (addedId) createdAnimations.push(addedId);
+      const animations = changeSlideAnimations(target!.slide.animations ?? [], command, selected?.shapeId, addedId);
+      patchSlide({ ...target!, slide: { ...target!.slide, animations } });
+      break;
+    }
     case 'set-transition':
       patchSlide({ ...target!, slide: { ...target!.slide, transition: command.transition === null ? undefined : normalizeSlideTransition(command.transition), diagnostics: target!.slide.diagnostics.filter(d => !d.message.startsWith('Slide transition ')) } });
       break;
@@ -310,6 +324,7 @@ export function applyNativeModelCommand(
         }));
       const slide = {
         ...template,
+        animationVersion: 1 as const,
         id,
         part,
         notes: command.sourceId ? '' : template.notes,
@@ -500,6 +515,7 @@ export function applyNativeModelCommand(
     change: {
       command,
       createdSlides,
+      createdAnimations,
       createdObjects,
       before: state.revisionKey,
     } satisfies NativeChange,
