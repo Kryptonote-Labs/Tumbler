@@ -28,7 +28,7 @@ export function paragraphJoinDelta(text: Y.Text, range: WordRange, replacement: 
   );
   // Changing the paragraph template must not restore its deleted section break.
   // Imported boundaries on the surviving mark remain explicit and keep their geometry.
-  if (before.wordParagraph !== after.wordParagraph)
+  if (!after.table && before.wordParagraph !== after.wordParagraph)
     patch.wordSection = after.wordSection ?? { remove: true };
   if (!Object.keys(patch).length) return [];
   return [

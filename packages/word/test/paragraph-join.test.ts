@@ -102,3 +102,28 @@ for (const keepFollowingSection of [false, true]) {
     } finally { session.destroy(); }
   });
 }
+
+test('joining imported paragraphs inside a table cell preserves formatting and exports without section attributes', () => {
+  const source = createWordArtifact({ blocks: [{ kind: 'table', rows: [[{ blocks: [
+    { kind: 'paragraph', runs: [{ text: 'First' }], styleId: 'Heading2' },
+    { kind: 'paragraph', runs: [{ text: 'Second' }] },
+  ] }]] }] });
+  const session = openWordOperationDocument(source);
+  try {
+    session.commit(session.prepareOperation(
+      { story: 'body', range: { start: 5, end: 6 } },
+      { name: 'replace', input: { value: '' } },
+    ));
+    const text = wordSharedText(session.text).text;
+    expect(text.toString()).toBe('FirstSecond\n\n');
+    expect(commands.wordFormats(text, { start: 5, end: 5 }).styleId).toBe('Heading2');
+    const table = importWordContent(session.artifact())[0];
+    expect(table?.kind).toBe('table');
+    if (table?.kind !== 'table') throw new Error('Missing table');
+    const paragraph = table.rows[0]?.[0]?.blocks[0];
+    expect(paragraph?.kind).toBe('paragraph');
+    if (paragraph?.kind !== 'paragraph') throw new Error('Missing joined paragraph');
+    expect(paragraph.runs.map(run => run.text).join('')).toBe('FirstSecond');
+    expect(paragraph.styleId).toBe('Heading2');
+  } finally { session.destroy(); }
+});
