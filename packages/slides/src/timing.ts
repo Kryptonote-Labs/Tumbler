@@ -25,14 +25,35 @@ export function readSlideTiming(root: LosslessXmlElement) {
       node.localName === 'excl' ||
       ['interactiveSeq', 'clickPar'].includes(animationAttribute(node, 'nodeType') ?? ''),
   );
-  const editingRestriction = unsafe
-    ? 'This slide contains interactive timing that is preserved but cannot be edited yet.'
-    : timing && result.animations.length && !main
-      ? 'This imported timing layout is preserved but cannot be edited yet.'
-      : undefined;
+  const containerRepeats = nodes.some(
+    (node) =>
+      node.localName === 'cTn' &&
+      animationChild(node, 'childTnLst') &&
+      ((animationAttribute(node, 'repeatCount') !== undefined &&
+        animationAttribute(node, 'repeatCount') !== '1000') ||
+        animationAttribute(node, 'repeatDur') !== undefined ||
+        ['1', 'true'].includes(animationAttribute(node, 'autoRev') ?? '')),
+  );
+  const editingRestriction = containerRepeats
+    ? 'This slide contains repeated animation containers that are preserved but cannot be edited yet.'
+    : unsafe
+      ? 'This slide contains interactive timing that is preserved but cannot be edited yet.'
+      : timing && result.animations.length && !main
+        ? 'This imported timing layout is preserved but cannot be edited yet.'
+        : undefined;
   const transition = readSlideTransition(root);
   const warnings = [...result.warnings];
+  if (containerRepeats)
+    warnings.push('Repeated animation containers are preserved but cannot be played yet.');
   if (transition && !isSlideTransitionKind(transition.kind))
     warnings.push(`Slide transition ${transition.kind} is preserved but cannot be played.`);
-  return { ...result, transition, warnings, editingRestriction };
+  return {
+    ...result,
+    animations: containerRepeats
+      ? result.animations.map((cue) => ({ ...cue, editable: false }))
+      : result.animations,
+    transition,
+    warnings,
+    editingRestriction,
+  };
 }

@@ -58,6 +58,22 @@ test('all authored entrances survive PPTX readback with real behaviors and uniqu
     .map((node) => node.attributes.find((a) => a.localName === 'id')?.value);
   expect(new Set(ids).size).toBe(ids.length);
 });
+test('imported container repeats are diagnosed and cannot be rewritten as ordinary entrances', () => {
+  for (const attributes of ['repeatCount="3000"', 'repeatDur="1500"', 'autoRev="true"']) {
+    const source = parseLosslessXml(
+      new TextEncoder().encode(
+        `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:timing><p:tnLst><p:seq><p:cTn id="1" nodeType="mainSeq"><p:childTnLst><p:par><p:cTn id="2" nodeType="clickEffect" presetClass="entr" presetID="10" ${attributes}><p:childTnLst><p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="3" dur="500"/><p:tgtEl><p:spTgt spid="2"/></p:tgtEl></p:cBhvr></p:animEffect></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:seq></p:tnLst></p:timing></p:sld>`,
+      ),
+    );
+    const timing = readSlideTiming(source.root);
+    expect(timing.animations).toHaveLength(1);
+    expect(timing.animations[0]?.editable).toBe(false);
+    expect(timing.editingRestriction).toContain('repeated animation containers');
+    expect(timing.warnings).toContain(
+      'Repeated animation containers are preserved but cannot be played yet.',
+    );
+  }
+});
 test('with previous starts with previous cue and after previous waits for it including delays', () => {
   let artifact = add(deck(), 'fade', 'click', 100);
   artifact = add(artifact, 'fly', 'after', 200);
