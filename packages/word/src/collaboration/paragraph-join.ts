@@ -26,6 +26,10 @@ export function paragraphJoinDelta(text: Y.Text, range: WordRange, replacement: 
       .filter(key => paragraphKeys.has(key) || isParagraphPropertyAttribute(key))
       .map(key => [key, before[key] ?? null]),
   );
+  // Changing the paragraph template must not restore its deleted section break.
+  // Imported boundaries on the surviving mark remain explicit and keep their geometry.
+  if (before.wordParagraph !== after.wordParagraph)
+    patch.wordSection = after.wordSection ?? { remove: true };
   if (!Object.keys(patch).length) return [];
   return [
     ...(last > range.end ? [{ retain: last - range.end }] : []),

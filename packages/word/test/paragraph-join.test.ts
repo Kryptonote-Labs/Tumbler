@@ -1,7 +1,9 @@
 import { expect, test } from 'bun:test';
 import * as Y from 'yjs';
 import { createWordCommands } from '../src/collaboration/index.ts';
-import { createWordParagraphBreak } from '../src/operations/index.ts';
+import { createWordParagraphBreak, inspectWordSections, openWordOperationDocument } from '../src/operations/index.ts';
+import { createWordArtifact, importWordContent, wordSections } from '../src/index.ts';
+import { wordSharedText } from '../src/collaboration/index.ts';
 
 const commands = createWordCommands();
 const paragraphBreak = createWordParagraphBreak(commands);
@@ -71,3 +73,32 @@ test('deleting an entire leading paragraph or empty line keeps the following par
     doc.destroy();
   }
 });
+
+for (const keepFollowingSection of [false, true]) {
+  test(`joining imported paragraphs keeps only the surviving section boundary (${keepFollowingSection})`, () => {
+    const source = createWordArtifact({ paragraphs: [
+      { runs: [{ text: 'First' }], section: { format: { marginLeftTwips: 720 } } },
+      { runs: [{ text: 'Second' }], styleId: 'Heading2', positioning: { indentStartTwips: 700 },
+        ...(keepFollowingSection ? { section: { format: { marginLeftTwips: 900 } } } : {}) },
+      { runs: [{ text: 'Third' }] },
+    ] });
+    const session = openWordOperationDocument(source);
+    try {
+      session.commit(session.prepareOperation(
+        { story: 'body', range: { start: 5, end: 6 } },
+        { name: 'replace', input: { value: '' } },
+      ));
+      expect(session.text.toString()).toBe('FirstSecond\nThird\n');
+      const count = keepFollowingSection ? 2 : 1;
+      expect(inspectWordSections(wordSharedText(session.text).text, source)).toHaveLength(count);
+      const artifact = session.artifact();
+      expect(wordSections(artifact.document)).toHaveLength(count);
+      if (keepFollowingSection) expect(wordSections(artifact.document)[0]?.marginLeftTwips).toBe(900);
+      const joined = importWordContent(artifact)[0];
+      expect(joined?.kind).toBe('paragraph');
+      if (joined?.kind !== 'paragraph') throw new Error('Missing joined paragraph');
+      expect(joined.styleId).toBeUndefined();
+      expect(joined.positioning?.indentStartTwips).toBeUndefined();
+    } finally { session.destroy(); }
+  });
+}
