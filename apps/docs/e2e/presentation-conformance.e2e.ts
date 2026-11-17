@@ -126,19 +126,22 @@ test("animation playback hides entrance targets until their click step, then res
   });
   await expect(page.locator(".playback-controls")).toHaveCount(0);
   const target = page.locator('.slide-stage [data-animation-target="2"]');
-  await expect(target).toHaveCSS("opacity", "0");
+  await expect(target).toBeHidden();
   await page
     .getByRole("button", { name: "Next slide", exact: true })
     .click();
+  await expect(target).toBeVisible();
   await expect(target).toHaveCSS("opacity", "1");
   await expect(page.getByLabel("Slide", { exact: true })).toHaveValue("0");
   await page
     .getByRole("button", { name: "Edit", exact: true })
     .click();
+  await expect(target).toBeVisible();
   await expect(target).toHaveCSS("opacity", "1");
   await page.getByRole("button", { name: "View", exact: true }).click();
-  await expect(target).toHaveCSS("opacity", "0");
+  await expect(target).toBeHidden();
   await page.getByRole("button", { name: "Next slide", exact: true }).click();
+  await expect(target).toBeVisible();
   await expect(target).toHaveCSS("opacity", "1");
   await page.getByRole("button", { name: "Next slide", exact: true }).click();
   await expect(page.getByLabel("Slide", { exact: true })).toHaveValue("1");
