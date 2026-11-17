@@ -74,6 +74,28 @@ test('imported container repeats are diagnosed and cannot be rewritten as ordina
     );
   }
 });
+test('removing the last effect keeps the object and permits a new entrance after export', () => {
+  const animated = add(deck(), 'fade'),
+    original = animated.document.slides[0]!;
+  const removed = applyPresentationCommand(animated, {
+    name: 'remove-animation',
+    slideId: original.id,
+    animationId: original.animations![0]!.id!,
+  });
+  const reopened = openPresentationArtifact(removed.bytes()),
+    slide = reopened.document.slides[0]!;
+  expect(slide.animations).toHaveLength(0);
+  expect(slide.objects.map((object) => object.key)).toEqual(
+    original.objects.map((object) => object.key),
+  );
+  const source = parseLosslessXml(
+    reopened.document.package.readPart(reopened.document.package.getPart(slide.part)!),
+  );
+  for (const list of source.elements(source.root.namespaceUri, 'childTnLst'))
+    expect(list.children.some((node) => node.kind === 'element')).toBe(true);
+  const reanimated = openPresentationArtifact(add(reopened, 'zoom').bytes());
+  expect(reanimated.document.slides[0]!.animations?.map((cue) => cue.kind)).toEqual(['zoom']);
+});
 test('with previous starts with previous cue and after previous waits for it including delays', () => {
   let artifact = add(deck(), 'fade', 'click', 100);
   artifact = add(artifact, 'fly', 'after', 200);

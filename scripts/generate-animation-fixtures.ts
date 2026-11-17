@@ -72,3 +72,27 @@ for (const [index, kind, start] of [
   });
 }
 await Bun.write(join(directory, 'sequence-mixed.pptx'), mixed.bytes());
+// Exercise the empty main sequence and its reuse, as well as object-driven effect removal.
+let removed = mixed;
+for (const cue of mixed.document.slides[0]!.animations ?? [])
+  removed = applyPresentationCommand(removed, {
+    name: 'remove-animation',
+    slideId,
+    animationId: cue.id!,
+  });
+await Bun.write(join(directory, 'effects-removed.pptx'), removed.bytes());
+const readded = applyPresentationCommand(removed, {
+  name: 'add-animation',
+  slideId,
+  objectKey: removed.document.slides[0]!.objects[0]!.key,
+  animation: normalizeEntranceAnimation({ kind: 'fade' }),
+});
+await Bun.write(join(directory, 'effect-readded.pptx'), readded.bytes());
+let deleted = mixed;
+for (const object of mixed.document.slides[0]!.objects)
+  deleted = applyPresentationCommand(deleted, {
+    name: 'delete-object',
+    slideId,
+    objectKey: object.key,
+  });
+await Bun.write(join(directory, 'animated-objects-deleted.pptx'), deleted.bytes());

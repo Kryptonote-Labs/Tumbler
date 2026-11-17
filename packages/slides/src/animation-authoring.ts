@@ -178,9 +178,13 @@ export function authorSlideAnimation(artifact: PresentationArtifact, command: An
   }
   close();
   const edit = beginLosslessXmlEdit(source);
-  if (mainList)
-    edit.replaceElementMarkup(mainList, `<p:childTnLst xmlns:p="${p}">${sequence}</p:childTnLst>`);
-  else {
+  if (main) {
+    const markup = `<p:childTnLst xmlns:p="${p}">${sequence}</p:childTnLst>`;
+    if (mainList) {
+      if (sequence) edit.replaceElementMarkup(mainList, markup);
+      else edit.removeElement(mainList);
+    } else if (sequence) edit.appendMarkup(main, markup);
+  } else {
     const mainId = id++,
       rootId = id++;
     const markup = `<p:tnLst><p:par><p:cTn id="${rootId}" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" nextAc="seek"><p:cTn id="${mainId}" dur="indefinite" nodeType="mainSeq"><p:childTnLst>${sequence}</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq></p:childTnLst></p:cTn></p:par></p:tnLst>`;
