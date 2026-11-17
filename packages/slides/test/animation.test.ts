@@ -18,6 +18,7 @@ import {
 } from '../src/animation.ts';
 import { createPresentationAnimationPlayer, animationProgress } from '../src/animation-program.ts';
 import { animationNumber } from '../src/animation-expression.ts';
+import { commitXml } from '../src/authoring-xml.ts';
 function deck() {
   let artifact = createPresentation();
   artifact = applyPresentationCommand(artifact, {
@@ -95,6 +96,52 @@ test('removing the last effect keeps the object and permits a new entrance after
     expect(list.children.some((node) => node.kind === 'element')).toBe(true);
   const reanimated = openPresentationArtifact(add(reopened, 'zoom').bytes());
   expect(reanimated.document.slides[0]!.animations?.map((cue) => cue.kind)).toEqual(['zoom']);
+});
+test('adding entrances preserves imported timing siblings in schema order', () => {
+  for (const [contents, expected] of [
+    ['<p:bldLst><p:bldP spid="2" grpId="0"/></p:bldLst>', ['tnLst', 'bldLst']],
+    ['<p:extLst/>', ['tnLst', 'extLst']],
+    ['<p:tnLst><p:par><p:cTn id="1" dur="500"/></p:par></p:tnLst>', ['tnLst']],
+    [
+      '<p:tnLst><p:seq><p:cTn id="1" nodeType="mainSeq"><p:subTnLst><p:par><p:cTn id="2" dur="500"/></p:par></p:subTnLst></p:cTn></p:seq></p:tnLst>',
+      ['tnLst'],
+    ],
+  ] as const) {
+    let artifact = deck();
+    const slide = artifact.document.slides[0]!;
+    const xml = new TextDecoder().decode(
+      artifact.document.package.readPart(artifact.document.package.getPart(slide.part)!),
+    );
+    artifact = commitXml(
+      artifact,
+      slide.part,
+      new TextEncoder().encode(xml.replace('</p:sld>', `<p:timing>${contents}</p:timing></p:sld>`)),
+    );
+    const result = add(artifact, 'fade');
+    const parsed = parseLosslessXml(
+      result.document.package.readPart(result.document.package.getPart(slide.part)!),
+    );
+    const timing = parsed.elements(parsed.root.namespaceUri, 'timing')[0]!;
+    expect(
+      timing.children.flatMap((node) => (node.kind === 'element' ? [node.localName] : [])),
+    ).toEqual([...expected]);
+    const common = parsed
+      .elements(parsed.root.namespaceUri, 'cTn')
+      .find((node) =>
+        node.attributes.some(
+          (attribute) => attribute.localName === 'nodeType' && attribute.value === 'mainSeq',
+        ),
+      )!;
+    if (contents.includes('subTnLst'))
+      expect(
+        common.children.flatMap((node) => (node.kind === 'element' ? [node.localName] : [])),
+      ).toEqual(['childTnLst', 'subTnLst']);
+    expect(
+      openPresentationArtifact(result.bytes()).document.slides[0]!.animations?.map(
+        (cue) => cue.kind,
+      ),
+    ).toEqual(['fade']);
+  }
 });
 test('with previous starts with previous cue and after previous waits for it including delays', () => {
   let artifact = add(deck(), 'fade', 'click', 100);

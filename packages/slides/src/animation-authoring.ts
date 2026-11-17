@@ -183,13 +183,28 @@ export function authorSlideAnimation(artifact: PresentationArtifact, command: An
     if (mainList) {
       if (sequence) edit.replaceElementMarkup(mainList, markup);
       else edit.removeElement(mainList);
-    } else if (sequence) edit.appendMarkup(main, markup);
+    } else if (sequence) {
+      const following = child(main, 'subTnLst');
+      if (following) edit.insertMarkupBefore(following, markup);
+      else edit.appendMarkup(main, markup);
+    }
   } else {
     const mainId = id++,
       rootId = id++;
-    const markup = `<p:tnLst><p:par><p:cTn id="${rootId}" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" nextAc="seek"><p:cTn id="${mainId}" dur="indefinite" nodeType="mainSeq"><p:childTnLst>${sequence}</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq></p:childTnLst></p:cTn></p:par></p:tnLst>`;
-    if (timing) edit.appendMarkup(timing, markup);
-    else {
+    const rootMarkup = `<p:par><p:cTn id="${rootId}" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" nextAc="seek"><p:cTn id="${mainId}" dur="indefinite" nodeType="mainSeq"><p:childTnLst>${sequence}</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq></p:childTnLst></p:cTn></p:par>`;
+    const markup = `<p:tnLst>${rootMarkup}</p:tnLst>`;
+    if (timing) {
+      const list = child(timing, 'tnLst');
+      const following = child(timing, 'bldLst') ?? child(timing, 'extLst');
+      if (list) {
+        // LibreOffice reads the first root. Keep the executable main sequence first.
+        const first = children(list)[0];
+        if (first) edit.insertMarkupBefore(first, rootMarkup);
+        else edit.appendMarkup(list, rootMarkup);
+      }
+      else if (following) edit.insertMarkupBefore(following, markup);
+      else edit.appendMarkup(timing, markup);
+    } else {
       const markupTiming = `<p:timing xmlns:p="${p}">${markup}</p:timing>`;
       const extension = child(source.root, 'extLst');
       if (extension) edit.insertMarkupBefore(extension, markupTiming);

@@ -7,6 +7,7 @@ import {
   ENTRANCE_ANIMATIONS,
   normalizeEntranceAnimation,
 } from '../packages/slides/src/index.ts';
+import { commitXml } from '../packages/slides/src/authoring-xml.ts';
 const directory = resolve(process.argv[2] ?? '/tmp/tumbler-animation-fixtures');
 await mkdir(directory, { recursive: true });
 for (const kind of entranceAnimationKinds) {
@@ -96,3 +97,39 @@ for (const object of mixed.document.slides[0]!.objects)
     objectKey: object.key,
   });
 await Bun.write(join(directory, 'animated-objects-deleted.pptx'), deleted.bytes());
+for (const [name, contents] of [
+  ['build-list', '<p:bldLst><p:bldP spid="2" grpId="0"/></p:bldLst>'],
+  ['extension-list', '<p:extLst/>'],
+  ['root-list', '<p:tnLst><p:par><p:cTn id="1" dur="500"/></p:par></p:tnLst>'],
+  [
+    'sub-timing',
+    '<p:tnLst><p:seq><p:cTn id="1" nodeType="mainSeq"><p:subTnLst><p:par><p:cTn id="2" dur="500"/></p:par></p:subTnLst></p:cTn></p:seq></p:tnLst>',
+  ],
+] as const) {
+  let artifact = createPresentation();
+  const id = artifact.document.slides[0]!.id;
+  artifact = applyPresentationCommand(artifact, {
+    name: 'insert-object',
+    slideId: id,
+    bounds: { x: 100, y: 100, width: 100, height: 100 },
+    object: { kind: 'shape', text: name },
+  });
+  const slide = artifact.document.slides[0]!;
+  const source = new TextDecoder().decode(
+    artifact.document.package.readPart(artifact.document.package.getPart(slide.part)!),
+  );
+  artifact = commitXml(
+    artifact,
+    slide.part,
+    new TextEncoder().encode(
+      source.replace('</p:sld>', `<p:timing>${contents}</p:timing></p:sld>`),
+    ),
+  );
+  artifact = applyPresentationCommand(artifact, {
+    name: 'add-animation',
+    slideId: id,
+    objectKey: slide.objects[0]!.key,
+    animation: normalizeEntranceAnimation({ kind: 'fade' }),
+  });
+  await Bun.write(join(directory, `imported-${name}.pptx`), artifact.bytes());
+}
