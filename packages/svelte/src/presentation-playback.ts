@@ -1,14 +1,14 @@
 import { createPresentationAnimationPlayer, type PresentationSlide } from '@tumblerjs/slides';
-export interface PlaybackOptions {
+/** Playback modes are exclusive: an editor preview cannot override a slideshow's timeline. */
+export type PlaybackOptions = {
   slide: PresentationSlide;
   width: number;
   height: number;
-  playing: boolean;
-  step: number;
-  editable: boolean;
-  entryDelay?: number;
-  preview?: { id?: string; version: number } | undefined;
-}
+} & (
+  | { mode: 'static' }
+  | { mode: 'slideshow'; step: number; entryDelay?: number }
+  | { mode: 'preview'; preview: { id?: string; version: number } }
+);
 export function nextPresentationAnimationStep(
   slide: Pick<PresentationSlide, 'animations'>,
   step: number,
@@ -75,7 +75,7 @@ export function presentationPlayback(node: SVGSVGElement, initial: PlaybackOptio
       }
     }
     if (player.running) raf = view.requestAnimationFrame(paint);
-    else if (options.preview) {
+    else if (options.mode === 'preview') {
       completedPreview = options.preview.version;
       clear();
     }
@@ -83,15 +83,16 @@ export function presentationPlayback(node: SVGSVGElement, initial: PlaybackOptio
   function update(next: PlaybackOptions) {
     options = next;
     const enabled =
-      (!!next.preview && next.preview.version !== completedPreview) ||
-      (next.playing && !next.editable);
+      next.mode === 'slideshow' ||
+      (next.mode === 'preview' && next.preview.version !== completedPreview);
     const changed =
       !previous ||
       previous.slide !== next.slide ||
-      previous.playing !== next.playing ||
-      previous.editable !== next.editable ||
-      previous.preview !== next.preview ||
-      next.step < previous.step;
+      previous.mode !== next.mode ||
+      (previous.mode === 'preview' &&
+        next.mode === 'preview' &&
+        previous.preview !== next.preview) ||
+      (previous.mode === 'slideshow' && next.mode === 'slideshow' && next.step < previous.step);
     if (!enabled) {
       clear();
       previous = next;
@@ -108,18 +109,21 @@ export function presentationPlayback(node: SVGSVGElement, initial: PlaybackOptio
             style: element.style.cssText,
           });
       }
-      const slide = next.preview
-        ? {
-            ...next.slide,
-            animations: (next.slide.animations ?? [])
-              .filter((cue) => !next.preview?.id || cue.id === next.preview.id)
-              .map((cue) => ({ ...cue, step: 0, delay: cue.startDelay ?? 0 })),
-          }
-        : next.slide;
+      const slide =
+        next.mode === 'preview'
+          ? {
+              ...next.slide,
+              animations: (next.slide.animations ?? [])
+                .filter((cue) => !next.preview.id || cue.id === next.preview.id)
+                .map((cue) => ({ ...cue, step: 0, delay: cue.startDelay ?? 0 })),
+            }
+          : next.slide;
       player = createPresentationAnimationPlayer(slide, next.width, next.height);
-      player.reset(view.performance.now() + (next.preview ? 0 : (next.entryDelay ?? 0)));
+      player.reset(
+        view.performance.now() + (next.mode === 'slideshow' ? (next.entryDelay ?? 0) : 0),
+      );
     }
-    if (!next.preview)
+    if (next.mode === 'slideshow')
       while (player && player.step < next.step) if (!player.advance(view.performance.now())) break;
     previous = next;
     view.cancelAnimationFrame(raf);

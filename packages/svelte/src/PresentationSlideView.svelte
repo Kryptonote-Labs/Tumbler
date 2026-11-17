@@ -428,7 +428,7 @@
   export function previewAnimations(id?: string) {
     animationPreview = { ...(id ? { id } : {}), version: ++previewVersion };
   }
-  $effect(() => { slide; animationPreview = undefined; });
+  $effect(() => { slide; playing; animationPreview = undefined; });
   $effect(() => {
     slide.part;
     playing;
@@ -880,12 +880,14 @@
       <svg
         use:transitions.action={{ slide, playing: playing && !thumbnail, editable: editable || thumbnail }}
         use:presentationPlayback={{
-          width: presentation.width, height: presentation.height, preview: animationPreview,
+          width: presentation.width,
+          height: presentation.height,
           slide,
-          playing: playing && !thumbnail,
-          step: playbackStep,
-          editable: editable || thumbnail,
-          entryDelay: transitions.remaining(),
+          ...(playing && !editable && !thumbnail
+            ? { mode: 'slideshow' as const, step: playbackStep, entryDelay: transitions.remaining() }
+            : animationPreview && !thumbnail
+              ? { mode: 'preview' as const, preview: animationPreview }
+              : { mode: 'static' as const }),
         }}
         use:presentationAdvance={{
           slide, step: playbackStep, playing: playing && !thumbnail, editable,
