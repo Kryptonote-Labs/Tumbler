@@ -1,6 +1,7 @@
 import { wordTextString, validateWordTextReplacement } from './text-index.ts';
 import { isWordParagraphPositioning } from '../positioning.ts';
 import { wordTextRange } from './text-range.ts';
+import { paragraphJoinDelta } from './paragraph-join.ts';
 import { hasWordParagraphReset, paragraphPropertyPatch, readWordParagraphFormat } from './paragraph-attributes.ts';
 import { wordColoursEqual } from '../theme-colours.ts';
 import { formatTableDelta, type WordTableFormatPatch } from './table-format.ts';
@@ -238,6 +239,7 @@ function replaceWordDelta(
     ...(range.start ? [{ retain: range.start }] : []),
     ...(range.end > range.start ? [{ delete: range.end - range.start }] : []),
     ...inserts,
+    ...paragraphJoinDelta(text, range, value),
   ];
 }
 
