@@ -61,14 +61,20 @@ export function toggleLatexStyle(style: Style): Command {
   };
 }
 
-export function latexHeading(level: number): Command {
+export function latexHeading(level: number, command?: 'part' | 'chapter'): Command {
   return (state, dispatch) => {
     const { from, to } = state.selection;
     const tr = state.tr;
     state.doc.nodesBetween(from, to, (node, position) => {
       if (!node.isTextblock) return;
       const type = schema.nodes[level ? 'heading' : 'paragraph']!;
-      if (node.type === type && (!level || node.attrs.level === level)) return false;
+      const open = command ? '\\' + command + '{' : null;
+      const currentCommand = String(node.attrs.open ?? '').match(/^\\(part|chapter)\b/)?.[1];
+      if (
+        node.type === type &&
+        (!level || (node.attrs.level === level && currentCommand === command))
+      )
+        return false;
       if (
         state.doc
           .resolve(position)
@@ -80,7 +86,7 @@ export function latexHeading(level: number): Command {
       )
         tr.setNodeMarkup(position, type, {
           before: node.attrs.before,
-          ...(level ? { level } : {}),
+          ...(level ? { level, open } : {}),
         });
       return false;
     });
@@ -124,12 +130,16 @@ function latexInputRules() {
   return inputRules({
     rules: [
       new InputRule(
-        /^\\(section|subsection|subsubsection|paragraph|subparagraph)\{([^{}]*)\}$/,
+        /^\\(part|chapter|section|subsection|subsubsection|paragraph|subparagraph)\{([^{}]*)\}$/,
         (state, match, start, end) => {
           const block = state.doc.resolve(start);
           if (end !== block.end() || !block.parent.isTextblock) return null;
           const node = schema.nodes.heading!.create(
-            { level: latexHeadings.indexOf(match[1]!) + 1, before: block.parent.attrs.before },
+            {
+              level: Math.max(1, latexHeadings.indexOf(match[1]!) + 1),
+              before: block.parent.attrs.before,
+              open: '\\' + match[1] + '{',
+            },
             match[2] ? schema.text(match[2]) : undefined,
           );
           return state.tr.replaceWith(block.before(), block.after(), node);

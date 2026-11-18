@@ -140,9 +140,21 @@ function inline(
   return Fragment.fromArray(nodes);
 }
 
+const blockCommands = new Set([
+  '\\maketitle',
+  '\\tableofcontents',
+  '\\listoffigures',
+  '\\listoftables',
+  '\\appendix',
+]);
+
+function headingLevel(command: string) {
+  return command === 'part' || command === 'chapter' ? 1 : latexHeadings.indexOf(command) + 1;
+}
+
 function headingAt(source: string, position: number) {
   const end = commandEnd(source, position);
-  const level = latexHeadings.indexOf(source.slice(position + 1, end)) + 1;
+  const level = headingLevel(source.slice(position + 1, end));
   if (!level) return;
   const group = argumentAt(source, end + Number(source[end] === '*'));
   if (group) return { ...group, level };
@@ -152,7 +164,7 @@ function blockStart(source: string, position: number) {
   if (source.startsWith('$$', position) || source.startsWith('\\[', position)) return true;
   if (source[position] !== '\\') return false;
   const command = source.slice(position, commandEnd(source, position));
-  return command === '\\begin' || latexHeadings.includes(command.slice(1));
+  return command === '\\begin' || blockCommands.has(command) || headingLevel(command.slice(1)) > 0;
 }
 
 function paragraphEnd(source: string, position: number) {
@@ -286,6 +298,12 @@ function blocks(source: string, depth = 0): { nodes: Node[]; tail: string } {
     const start = whitespaceEnd(source, position);
     const before = source.slice(position, start);
     if (start === source.length) return { nodes, tail: before };
+    const command = source.slice(start, commandEnd(source, start));
+    if (blockCommands.has(command)) {
+      nodes.push(schema.nodes.latex_raw!.create({ before, source: command }));
+      position = start + command.length;
+      continue;
+    }
     const heading = source[start] === '\\' ? headingAt(source, start) : undefined;
     if (heading) {
       nodes.push(
