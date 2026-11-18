@@ -15,6 +15,39 @@ export type PdfTextPlacement = {
   continuation?: number;
 };
 
+/** Keep glyph boundaries only where layout needs an occurrence-specific spacing marker. */
+function compactSourceRuns(seed: PdfTextSeed): PdfTextSeed {
+  const anchors = new Map<number, number>();
+  for (const gap of seed.spacing ?? []) {
+    anchors.set(gap.left, -1);
+    anchors.set(gap.right, -1);
+  }
+  const delta: PdfTextSeed['delta'] = [];
+  let previousStyle: string | undefined;
+  for (const [index, run] of seed.delta.entries()) {
+    const style = JSON.stringify(run.attributes);
+    const anchored = anchors.has(index);
+    if (!anchored && previousStyle === style) {
+      delta[delta.length - 1]!.insert += run.insert;
+    } else {
+      if (anchored) anchors.set(index, delta.length);
+      delta.push({ ...run });
+    }
+    previousStyle = anchored ? undefined : style;
+  }
+  return {
+    ...seed,
+    delta,
+    ...(seed.spacing && {
+      spacing: seed.spacing.map((gap) => ({
+        ...gap,
+        left: anchors.get(gap.left)!,
+        right: anchors.get(gap.right)!,
+      })),
+    }),
+  };
+}
+
 export class PdfTextModel {
   private regionVersions = new WeakMap<Y.Map<unknown>, number>();
   private contentStates = new WeakMap<Y.Map<unknown>, { version: number; dirty: boolean }>();
@@ -48,7 +81,7 @@ export class PdfTextModel {
   initialize(seeds: Iterable<PdfTextSeed>) {
     if (this.regions.size) return;
     this.doc.transact(() => {
-      for (const seed of seeds) this.add(seed, false);
+      for (const seed of seeds) this.add(compactSourceRuns(seed), false);
     }, 'import');
   }
   add(seed: PdfTextSeed, local = true) {
