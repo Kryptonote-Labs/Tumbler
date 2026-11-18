@@ -323,12 +323,17 @@
   });
   const activeOwner = $derived(worksheet.mergedRange(selection.focus)?.start ?? selection.focus);
   const activeReference = $derived(formatCellReference(activeOwner));
-  const activeCellId = $derived(denseGrid && (
-    specialCells.some(cell => cell.reference === activeReference) ||
-    renderedMerges.some(merge => formatCellReference(merge.range.start) === activeReference) ||
-    (renderedRows.some(row => sourceRow(row.index) === activeOwner.row) && renderedColumns.some(column => column.index === activeOwner.column) &&
-      (activeOwner.row <= frozenRows || activeOwner.column <= frozenColumns || isEmptyCorner(activeOwner.row, activeOwner.column)))
-  ) ? `${gridId}-${activeReference}` : undefined);
+  const activeCellId = $derived.by(() => {
+    const address = activeOwner;
+    const reference = activeReference;
+    const rendered = specialCells.some(cell => cell.reference === reference) ||
+      renderedMerges.some(merge => formatCellReference(merge.range.start) === reference) ||
+      (renderedRows.some(row => sourceRow(row.index) === address.row &&
+        (!denseGrid || row.index <= frozenRows || address.column <= frozenColumns ||
+          isEmptyCorner(row.index, address.column))) &&
+        renderedColumns.some(column => column.index === address.column));
+    return rendered ? `${gridId}-${reference}` : undefined;
+  });
 
   function bodyCell(event: MouseEvent) {
     const cell = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-reference]') : null;
