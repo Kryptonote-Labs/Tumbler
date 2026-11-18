@@ -16,7 +16,9 @@ function needsSvgText(text: SlideText | undefined) {
     (text.columns ?? 1) > 1 || text.verticalOverflow === 'ellipsis' ||
     text.paragraphs.some((paragraph) =>
       paragraph.rtl || paragraph.distributed || paragraph.align === 'justify' ||
-      paragraph.runs.some((run) => run.spacing || run.capitals === 'all' || run.capitals === 'small')
+      paragraph.runs.some((run) =>
+        run.text.includes('\t') || run.spacing || run.capitals === 'all' || run.capitals === 'small'
+      )
     )
   );
 }
