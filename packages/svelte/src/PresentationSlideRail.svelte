@@ -282,6 +282,8 @@
 <span class="sr-only" aria-live="polite">{announcement}</span>
 <nav class="slide-rail" aria-label="Slides" bind:this={rail}>
   {#each presentation.slides as slide, i (slide.id)}
+    {@const hasTransition = !!slide.transition}
+    {@const hasAnimations = !!slide.animations?.length}
     {#if oninsert}{@render insertionPoint(i)}{/if}
     <button
       style:margin-bottom={oninsert ? '0' : undefined}
@@ -295,7 +297,7 @@
       {@attach onreorder && !drag ? reorderHint : undefined}
       class:hidden={slide.hidden}
       aria-current={index === i && !insertionSelected ? 'true' : undefined}
-      aria-label={`Slide ${i + 1}: ${slide.title}${slide.hidden ? ' (hidden)' : ''}`}
+      aria-label={`Slide ${i + 1}: ${slide.title}${slide.hidden ? ' (hidden)' : ''}${hasTransition ? ', has transition' : ''}${hasAnimations ? ', has animations' : ''}`}
       tabindex={index === i ? 0 : -1}
       onclick={() => {
         if (!suppressClick) index = i;
@@ -322,6 +324,40 @@
             <path
               d="M9.9 5.2A10.8 10.8 0 0 1 12 5c7 0 10 7 10 7a16.8 16.8 0 0 1-3 4M6.5 6.5A18.4 18.4 0 0 0 2 12s3 7 10 7a10.8 10.8 0 0 0 5.5-1.5"
             />
+          </svg>
+        {/if}
+        {#if hasTransition}
+          <svg
+            class="effect-icon"
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <title>Slide transition</title>
+            <path d="M3 15V5h13" />
+            <rect x="7" y="9" width="14" height="10" rx="1" />
+          </svg>
+        {/if}
+        {#if hasAnimations}
+          <svg
+            class="effect-icon"
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <title>Object animations</title>
+            <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z" />
           </svg>
         {/if}
       </span>
@@ -518,6 +554,10 @@
   .hidden-icon {
     display: block;
     margin: 5px 0 0 auto;
+  }
+  .effect-icon {
+    display: block;
+    margin: 4px auto 0;
   }
   .active .preview {
     border-color: #82b68e;
