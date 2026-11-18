@@ -83,7 +83,16 @@ class LatexBoundaryStep extends Step {
   }
 }
 
-Step.jsonID(stepType, LatexBoundaryStep);
+// A hot reload can re-evaluate this module while ProseMirror retains its step registry.
+const registration = Symbol.for('@tumblerjs/markdown/latex-boundary-step');
+const registry: typeof Step & { [registration]?: typeof LatexBoundaryStep } = Step;
+const registered = registry[registration];
+if (registered) {
+  registered.fromJSON = LatexBoundaryStep.fromJSON;
+} else {
+  Step.jsonID(stepType, LatexBoundaryStep);
+  registry[registration] = LatexBoundaryStep;
+}
 
 export function updateLatexBoundary<T extends Transform>(
   transform: T,

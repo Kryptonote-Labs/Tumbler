@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { TextSelection } from 'prosemirror-state';
+import { Step } from 'prosemirror-transform';
 import { noteState, toggleLatexStyle, undo } from '../src/editor';
 import { parseLatex, replaceLatexSource, serializeLatex } from '../src/latex';
 
@@ -74,4 +75,19 @@ test('source edits use the same undo history and leave the rest of the article i
     state = state.apply(transaction);
   });
   expect(serializeLatex(state.doc)).toBe(article);
+});
+
+test('reloading the LaTeX editor keeps preamble changes readable by ProseMirror', async () => {
+  const document = parseLatex(article);
+  const rewritten = article.replace('11pt', '12pt');
+  const edit = replaceLatexSource(document, rewritten);
+  const [step] = edit.steps;
+  expect(step).toBeDefined();
+
+  // A different module URL re-evaluates the codec while ProseMirror keeps its registry.
+  const modulePath = '../src/latex-boundary-step.ts?reload';
+  await import(modulePath);
+  const restored = Step.fromJSON(document.type.schema, step!.toJSON()).apply(document);
+  expect(restored.failed).toBeNull();
+  expect(serializeLatex(restored.doc!)).toBe(rewritten);
 });
