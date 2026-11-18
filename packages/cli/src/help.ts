@@ -25,6 +25,7 @@ export function tumblerHelp(commandName = 'tumbler') {
     [
       `Charts: ${commandName} <document> charts --help`,
       `PDF: ${commandName} <document> pdf --help`,
+      `LaTeX: ${commandName} <document> latex --help`,
       `Presentations: ${commandName} <document> slides --help`,
       `Spreadsheets: ${commandName} <document> sheets --help`,
       `Usage: ${commandName} <document> <operation> [flags]`,

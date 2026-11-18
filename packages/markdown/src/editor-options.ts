@@ -1,7 +1,9 @@
+import type { LatexNodeViews } from './latex-editor';
 import type { MarkViewConstructor } from 'prosemirror-view';
 
 /** Host UI extensions leave document content and operations under the engine's control. */
 export type NoteEditorOptions = {
+  latexNodeViews?: LatexNodeViews;
   wikiLinkView?: MarkViewConstructor;
   codeLogo?: (language: string) => { light: string; dark: string } | undefined;
   codeLanguagePicker?: (

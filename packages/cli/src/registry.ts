@@ -1,3 +1,4 @@
+import type { LatexOperationHost } from './latex.ts';
 import type { ChartOperationHost } from './charts.ts';
 import type { SpreadsheetOperationHost } from './spreadsheets.ts';
 import type { PdfOperationHost } from './pdf.ts';
@@ -53,7 +54,7 @@ export const operationInput = z
 export type OperationInput = z.infer<typeof operationInput>;
 export const selectInput = z.object({ page: z.string().optional(), target: targetSchema }).strict();
 export type SelectInput = z.infer<typeof selectInput>;
-export interface OperationHost extends PresentationOperationHost, SpreadsheetOperationHost, PdfOperationHost, ChartOperationHost {
+export interface OperationHost extends LatexOperationHost, PresentationOperationHost, SpreadsheetOperationHost, PdfOperationHost, ChartOperationHost {
   deletePdfPages?(document: string, input: PdfDeletePagesInput): Promise<unknown>;
   exportPdf?(document: string, input: PdfExportInput): Promise<unknown>;
   render?(document: string, input: RenderInput): Promise<unknown>;

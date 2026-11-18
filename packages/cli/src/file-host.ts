@@ -1,3 +1,4 @@
+import { latexFileHost } from './latex-file-host.ts';
 import { chartFileHost } from './chart-file-host.ts';
 import { spreadsheetFileHost, createSpreadsheetFile } from './spreadsheet-file-host.ts';
 import { extractPdfPages, openPdfDocument, PdfSearchIndex, mergePdfDocuments, parsePdfPageSelection } from '@tumblerjs/pdf';
@@ -228,6 +229,7 @@ export function createFileHost(): OperationHost {
     }
   }
   return {
+    ...latexFileHost,
     ...presentationFileHost(),
     ...spreadsheetFileHost(),
     ...chartFileHost(),
