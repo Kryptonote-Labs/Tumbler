@@ -70,6 +70,7 @@ export function* iteratePdfText(document: PdfDocument): Generator<PdfTextSeed> {
   let count = 0;
   for (const page of document.pages) {
     const blocks: PdfTextSeed[] = [];
+    const lineCounts = new Map<PdfTextSeed, number>();
     const scene = interpreter.page(page.index),
       glyphs = new Map(scene.elements.filter((e) => e.kind === 'glyph').map((e) => [e.id, e]));
     const lines: PdfTextItem[][] = [];
@@ -131,12 +132,18 @@ export function* iteratePdfText(document: PdfDocument): Generator<PdfTextSeed> {
       }
       const sources = [...sourceMap.values()];
 
+      let previousItem = first;
+      let previousFill = glyph?.state.fill;
+      let attributes = style;
       const delta = line.map((item) => {
         const fill = glyphs.get(item.id)?.state.fill;
-        return {
-          insert: item.text,
-          attributes: styleOf(item, typeof fill === 'string' ? fill : style.color),
-        };
+        if (item.font !== previousItem.font || fill !== previousFill ||
+            item.transform[0] !== previousItem.transform[0] ||
+            item.transform[1] !== previousItem.transform[1])
+          attributes = styleOf(item, typeof fill === 'string' ? fill : style.color);
+        previousItem = item;
+        previousFill = fill;
+        return { insert: item.text, attributes };
       });
       const spacing: NonNullable<PdfTextSeed['spacing']> = [];
       for (let i = 1; i < line.length; i++) {
@@ -152,24 +159,16 @@ export function* iteratePdfText(document: PdfDocument): Generator<PdfTextSeed> {
           spacing.push({ left: i - 1, right: i, gap: 0, advance: (a * dx + b * dy) / em });
         else if (Math.abs(gap) > 1e-6) spacing.push({ left: i - 1, right: i, gap });
       }
-      const points = line.flatMap((item) => {
+      const extent = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+      for (const item of line) {
         const [a, b, c, d, e, f] = item.transform;
-        return [0, item.width].flatMap((x) =>
-          [-item.ascent, item.height - item.ascent].map((y) => ({
-            x: a * x + c * y + e,
-            y: b * x + d * y + f,
-          })),
-        );
-      });
-      const extent = points.reduce(
-        (b, p) => ({
-          left: Math.min(b.left, p.x),
-          top: Math.min(b.top, p.y),
-          right: Math.max(b.right, p.x),
-          bottom: Math.max(b.bottom, p.y),
-        }),
-        { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity },
-      );
+        const top = -item.ascent, bottom = item.height - item.ascent;
+        const x = a * item.width, y = b * item.width;
+        extent.left = Math.min(extent.left, e + Math.min(0, x) + Math.min(c * top, c * bottom));
+        extent.right = Math.max(extent.right, e + Math.max(0, x) + Math.max(c * top, c * bottom));
+        extent.top = Math.min(extent.top, f + Math.min(0, y) + Math.min(d * top, d * bottom));
+        extent.bottom = Math.max(extent.bottom, f + Math.max(0, y) + Math.max(d * top, d * bottom));
+      }
       const bounds = {
         x: extent.left,
         y: extent.top,
@@ -188,10 +187,7 @@ export function* iteratePdfText(document: PdfDocument): Generator<PdfTextSeed> {
             )
           )
             return true;
-          const count = block.delta
-            .map((d) => d.insert)
-            .join('')
-            .split('\n').length;
+          const count = lineCounts.get(block)!;
           const gap = y - block.y - (count - 1) * block.lineHeight;
           return (
             Math.abs(first.transform[1]) < 0.01 &&
@@ -205,11 +201,8 @@ export function* iteratePdfText(document: PdfDocument): Generator<PdfTextSeed> {
           );
         });
       const gap = previous ? y - previous.y : 0;
-      const previousLines =
-        previous?.delta
-          .map((d) => d.insert)
-          .join('')
-          .split('\n').length ?? 1;
+      const previousLines = previous ? lineCounts.get(previous)! : 1;
+      const addedLines = 1 + delta.reduce((n, run) => n + run.insert.split('\n').length - 1, 0);
       const sameOperator = previous?.sources.some((a) =>
         sources.some(
           (b) => a.instance === b.instance && a.object === b.object && a.start === b.start,
@@ -222,6 +215,7 @@ export function* iteratePdfText(document: PdfDocument): Generator<PdfTextSeed> {
         gap > 0 &&
         gap / previousLines < style.size * 1.7;
       if (previous && (sameOperator || follows)) {
+        lineCounts.set(previous, previousLines + addedLines);
         const first = previous.delta.length + 1;
         (previous.spacing ??= []).push(
           ...spacing.map((gap) => ({ ...gap, left: gap.left + first, right: gap.right + first })),
@@ -263,6 +257,7 @@ export function* iteratePdfText(document: PdfDocument): Generator<PdfTextSeed> {
           spacing,
         };
         blocks.push(previous);
+        lineCounts.set(previous, addedLines);
       }
     }
     // Keep ordinary paragraph continuation space, but never wrap into a neighbouring column.
