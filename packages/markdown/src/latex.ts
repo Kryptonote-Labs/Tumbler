@@ -146,6 +146,8 @@ const blockCommands = new Set([
   '\\listoffigures',
   '\\listoftables',
   '\\appendix',
+  '\\newpage',
+  '\\clearpage',
 ]);
 
 function headingLevel(command: string) {
