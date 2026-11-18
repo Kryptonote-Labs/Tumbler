@@ -1,5 +1,7 @@
 import { Fragment, type Mark, type Node } from 'prosemirror-model';
 import { Transform } from 'prosemirror-transform';
+import { updateLatexBoundary } from './latex-boundary-step';
+export { updateLatexBoundary } from './latex-boundary-step';
 import { noteSchema as schema } from './index';
 import {
   argumentAt,
@@ -475,9 +477,8 @@ export function serializeLatex(document: Node) {
 export function replaceLatexSource(document: Node, source: string): Transform {
   const next = parseLatex(source);
   const transform = new Transform(document);
-  for (const attr of ['prefix', 'suffix'])
-    if (document.attrs[attr] !== next.attrs[attr])
-      transform.setDocAttribute(attr, next.attrs[attr]);
+  updateLatexBoundary(transform, 'prefix', next.attrs.prefix);
+  updateLatexBoundary(transform, 'suffix', next.attrs.suffix);
 
   const from = document.content.findDiffStart(next.content);
   if (from === null) return transform;
