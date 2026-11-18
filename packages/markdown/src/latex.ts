@@ -58,6 +58,7 @@ function inline(
   const nodes: Node[] = [];
   if (depth > 64) return Fragment.from(schema.nodes.latex_inline!.create({ source }));
   let plain = 0;
+  const unmatched = new Set<string>();
   const flush = (end: number) => {
     if (end > plain) nodes.push(schema.text(source.slice(plain, end), marks));
   };
@@ -69,7 +70,8 @@ function inline(
     let end = Math.max(commandLength, position + 1);
     const command = source.slice(position, end);
     const close = command === '$' ? '$' : command === '\\(' ? '\\)' : undefined;
-    const formulaEnd = close ? mathEnd(source, end, close) : -1;
+    const formulaEnd = close && !unmatched.has(close) ? mathEnd(source, end, close) : -1;
+    if (close && formulaEnd < 0) unmatched.add(close);
     if (close && formulaEnd >= 0) {
       nodes.push(
         schema.nodes.latex_math!.create(
@@ -108,7 +110,7 @@ function inline(
       } else {
         if (character === '%') end = Math.min(source.length, lineEnd(source, end) + 1);
         else if (command === '\\verb') end = verbatimEnd(source, end);
-        else if (character === '{') end = groupAt(source, position)?.end ?? end;
+        else if (character === '{') end = groupAt(source, position)?.end ?? source.length;
         else if (character === '\\' && !escaped.has(command)) {
           if (source[end] === '*') end++;
           for (;;) {
@@ -155,6 +157,7 @@ function blockStart(source: string, position: number) {
 
 function paragraphEnd(source: string, position: number) {
   const blank = /\r?\n[^\S\r\n]*\r?\n/y;
+  const unmatched = new Set<string>();
   for (let next = position; next < source.length; next++) {
     blank.lastIndex = next;
     if (blank.test(source)) return next;
@@ -163,12 +166,14 @@ function paragraphEnd(source: string, position: number) {
     if (character === '%') next = lineEnd(source, next);
     else if (character === '$' || source.startsWith('\\(', next)) {
       const dollar = character === '$';
-      const end = mathEnd(source, next + (dollar ? 1 : 2), dollar ? '$' : '\\)');
+      const close = dollar ? '$' : '\\)';
+      const end = unmatched.has(close) ? -1 : mathEnd(source, next + (dollar ? 1 : 2), close);
       if (end >= 0) next = end + (dollar ? 0 : 1);
+      else unmatched.add(close);
     } else if (character === '\\') {
       const end = commandEnd(source, next);
       next = (source.slice(next, end) === '\\verb' ? verbatimEnd(source, end) : end) - 1;
-    } else if (character === '{') next = (groupAt(source, next)?.end ?? next + 1) - 1;
+    } else if (character === '{') next = (groupAt(source, next)?.end ?? source.length) - 1;
   }
   return source.length;
 }

@@ -120,6 +120,6 @@ export function documentBody(source: string) {
       if (tag?.kind === 'begin' && tag.name === 'document') return environmentAt(source, next);
       const end = commandEnd(source, next);
       next = source.slice(next, end) === '\\verb' ? verbatimEnd(source, end) - 1 : end - 1;
-    } else if (source[next] === '{') next = (groupAt(source, next)?.end ?? next + 1) - 1;
+    } else if (source[next] === '{') next = (groupAt(source, next)?.end ?? source.length) - 1;
   }
 }

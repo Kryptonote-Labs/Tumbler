@@ -1,7 +1,7 @@
 import {
   baseKeymap,
   chainCommands,
-  setBlockType,
+  createParagraphNear,
   splitBlockAs,
   toggleMark,
 } from 'prosemirror-commands';
@@ -11,8 +11,8 @@ import { InputRule, inputRules, undoInputRule, wrappingInputRule } from 'prosemi
 import { keymap } from 'prosemirror-keymap';
 import { Fragment, Slice, type Mark, type Node } from 'prosemirror-model';
 import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-list';
-import { EditorState, Plugin, type Command } from 'prosemirror-state';
-import type { NodeViewConstructor } from 'prosemirror-view';
+import { EditorState, Plugin, TextSelection, type Command } from 'prosemirror-state';
+import type { EditorView, NodeViewConstructor } from 'prosemirror-view';
 import { noteSchema as schema } from './index';
 import { latexHeadings, parseLatex } from './latex';
 import { notePresencePlugin } from './presence';
@@ -109,12 +109,16 @@ function latexInputRules() {
             .removeStoredMark(schema.marks[style]!)
         : null;
     });
-  const math = (pattern: RegExp, display: boolean) =>
+  const math = (pattern: RegExp, display: boolean, open: string, close: string) =>
     new InputRule(pattern, (state, match, start, end) =>
       state.tr.replaceWith(
         start,
         end,
-        schema.nodes[display ? 'latex_display_math' : 'latex_math']!.create({ source: match[1] }),
+        schema.nodes[display ? 'latex_display_math' : 'latex_math']!.create({
+          source: match[1],
+          open,
+          close,
+        }),
       ),
     );
   return inputRules({
@@ -123,11 +127,12 @@ function latexInputRules() {
         /^\\(section|subsection|subsubsection|paragraph|subparagraph)\{([^{}]*)\}$/,
         (state, match, start, end) => {
           const block = state.doc.resolve(start);
+          if (end !== block.end() || !block.parent.isTextblock) return null;
           const node = schema.nodes.heading!.create(
             { level: latexHeadings.indexOf(match[1]!) + 1, before: block.parent.attrs.before },
             match[2] ? schema.text(match[2]) : undefined,
           );
-          return state.tr.replaceWith(block.before(), end + 1, node);
+          return state.tr.replaceWith(block.before(), block.after(), node);
         },
       ),
       new InputRule(/^(#{1,5}) $/, (state, match, start, end) =>
@@ -142,14 +147,40 @@ function latexInputRules() {
       formatting(/\\(?:emph|textit)\{([^{}]+)\}$/, 'em'),
       formatting(/\*\*([^*]+)\*\*$/, 'strong'),
       formatting(/\*([^*]+)\*$/, 'em'),
-      math(/^\$\$([^$]+)\$\$$/, true),
-      math(/^\\\[([^\n]+)\\\]$/, true),
-      math(/\\\(([^\n]+)\\\)$/, false),
-      math(/(?<![\\$])\$([^$\n]+)\$$/, false),
+      math(/^\$\$([^$]+)\$\$$/, true, '$$', '$$'),
+      math(/^\\\[([^\n]+)\\\]$/, true, '\\[', '\\]'),
+      math(/\\\(([^\n]+)\\\)$/, false, '\\(', '\\)'),
+      math(/(?<![\\$])\$([^$\n]+)\$$/, false, '$', '$'),
       wrappingInputRule(/^[-*] $/, schema.nodes.bullet_list!),
       wrappingInputRule(/^1\. $/, schema.nodes.ordered_list!),
     ],
   });
+}
+
+function continueAfterLatexBlock(view: EditorView, event: MouseEvent) {
+  const { state } = view;
+  const last = state.doc.lastChild;
+  if (
+    !view.editable ||
+    event.target !== view.dom ||
+    event.button !== 0 ||
+    event.shiftKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey ||
+    !last?.isAtom ||
+    !last.isBlock
+  )
+    return false;
+  const end = state.doc.content.size;
+  const block = view.nodeDOM(end - last.nodeSize);
+  if (!(block instanceof HTMLElement) || event.clientY < block.getBoundingClientRect().bottom)
+    return false;
+  const tr = state.tr.insert(end, schema.nodes.paragraph!.create());
+  view.dispatch(tr.setSelection(TextSelection.create(tr.doc, end + 1)).scrollIntoView());
+  view.focus();
+  event.preventDefault();
+  return true;
 }
 
 export function latexState(
@@ -177,14 +208,11 @@ export function latexState(
         'Mod-m': insertLatexMath(false),
         'Shift-Mod-m': insertLatexMath(true),
         Backspace: undoInputRule,
-        Enter: chainCommands(splitListItem(schema.nodes.list_item!), split),
+        Enter: chainCommands(splitListItem(schema.nodes.list_item!), createParagraphNear, split),
         Tab: sinkListItem(schema.nodes.list_item!),
         'Shift-Tab': liftListItem(schema.nodes.list_item!),
         ...Object.fromEntries(
-          [0, 1, 2, 3, 4, 5].map((level) => [
-            'Mod-Alt-' + level,
-            level === 0 ? setBlockType(schema.nodes.paragraph!) : latexHeading(level),
-          ]),
+          [0, 1, 2, 3, 4, 5].map((level) => ['Mod-Alt-' + level, latexHeading(level)]),
         ),
       }),
       keymap(baseKeymap),
@@ -193,6 +221,7 @@ export function latexState(
       new Plugin({
         props: {
           ...(nodeViews ? { nodeViews } : {}),
+          handleDOMEvents: { mousedown: continueAfterLatexBlock },
           clipboardTextParser: (text, _context, plain) =>
             plain
               ? Slice.maxOpen(

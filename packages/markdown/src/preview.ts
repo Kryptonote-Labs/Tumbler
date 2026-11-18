@@ -69,12 +69,16 @@ export function paintNotePreview(
         ? child.text!
         : child.type.name === 'image'
           ? '[Image]'
-          : child.textContent;
+          : child.type.name === 'latex_inline'
+            ? (child.attrs.label ?? '')
+            : child.type.name === 'latex_math'
+              ? 'Equation'
+              : child.textContent;
       const marks = child.marks;
       ctx.font = font(
         size,
-        heading || marks.some((m) => m.type.name === 'strong'),
-        marks.some((m) => m.type.name === 'em'),
+        heading || marks.some((m) => m.type.name === 'strong' || m.attrs.style === 'strong'),
+        marks.some((m) => m.type.name === 'em' || m.attrs.style === 'em'),
         marks.some((m) => m.type.name === 'code'),
       );
       const colour = marks.find((m) => m.type.name === 'colour');
