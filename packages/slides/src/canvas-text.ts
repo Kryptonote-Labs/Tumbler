@@ -13,8 +13,13 @@ type Line = {
   bullet?: string;
 };
 
-function font(run: SlideTextRun, prepare?: (family: string) => string) {
-  return `${run.italic ? 'italic ' : ''}${run.bold ? 'bold ' : ''}${run.fontSize}px ${JSON.stringify(prepare?.(run.fontFamily) ?? run.fontFamily)}`;
+function font(
+  run: SlideTextRun,
+  options: Pick<SlideCanvasOptions<unknown, unknown>, 'fontFamily' | 'prepareFont'>,
+) {
+  const family = options.fontFamily?.(run.fontFamily) ??
+    JSON.stringify(options.prepareFont?.(run.fontFamily) ?? run.fontFamily);
+  return `${run.italic ? 'italic ' : ''}${run.bold ? 'bold ' : ''}${run.fontSize}px ${family}`;
 }
 
 /** Wraps styled runs and respects paragraph spacing, insets, bullets and vertical anchoring. */
@@ -54,7 +59,7 @@ export function paintSlideText<Path, Image>(
         fontSize: paragraph.bulletSize ?? base.fontSize,
         color: paragraph.bulletColor ?? base.color,
       };
-      ctx.font = font(bulletRun, options.prepareFont);
+      ctx.font = font(bulletRun, options);
       const marker = paragraph.bullet;
       const markerWidth = Math.max(ctx.measureText(marker).width + size * 0.2, -paragraph.indent);
       line.fragments.push({ text: marker, run: bulletRun, width: markerWidth });
@@ -66,7 +71,7 @@ export function paintSlideText<Path, Image>(
       line = makeLine();
     };
     for (const run of paragraph.runs) {
-      ctx.font = font(run, options.prepareFont);
+      ctx.font = font(run, options);
       for (const token of run.text.split(/(\n|[^\S\n]+|[^\s]+)/u).filter(Boolean)) {
         if (token === '\n') {
           flush();
@@ -138,7 +143,7 @@ export function paintSlideText<Path, Image>(
     y += line.before + line.height;
     for (const fragment of line.fragments) {
       const { run } = fragment;
-      ctx.font = font(run, options.prepareFont);
+      ctx.font = font(run, options);
       ctx.fillStyle = run.color;
       const baseline = y - line.height * 0.2 - ((run.baseline ?? 0) * run.fontSize) / 100000;
       ctx.fillText(fragment.text, x, baseline);

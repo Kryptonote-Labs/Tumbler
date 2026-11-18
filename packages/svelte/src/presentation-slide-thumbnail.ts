@@ -3,11 +3,23 @@ import {
   presentationSlideImages,
   type PresentationDocument,
   type PresentationSlide,
+  type SlideText,
 } from '@tumblerjs/slides';
 import type { DrawingPictureFill } from '@tumblerjs/ooxml';
 import { loadPresentationFonts } from './presentation-fonts.ts';
 import { presentationImageUrl } from './presentation-image-url.ts';
 import { metafileSvg } from './presentation-metafiles.ts';
+
+function needsSvgText(text: SlideText | undefined) {
+  return text && (
+    text.autoFit === 'shape' || text.rotation || (text.direction && text.direction !== 'horz') ||
+    (text.columns ?? 1) > 1 || text.verticalOverflow === 'ellipsis' ||
+    text.paragraphs.some((paragraph) =>
+      paragraph.rtl || paragraph.distributed || paragraph.align === 'justify' ||
+      paragraph.runs.some((run) => run.spacing || run.capitals === 'all' || run.capitals === 'small')
+    )
+  );
+}
 
 async function decodePicture(picture: DrawingPictureFill) {
   if (!picture.bytes.length) throw new Error('Slide picture is not available.');
@@ -41,7 +53,8 @@ export async function renderPresentationSlideThumbnail({
   if (slide.objects.some((object) =>
     object.kind === 'unsupported' || (object.chart && object.chart.status !== 'supported') ||
     object.ink || object.effects?.length || object.shadow || object.reflection ||
-    object.head || object.tail || object.text?.autoFit === 'shape'
+    object.head || object.tail || needsSvgText(object.text) ||
+    object.table?.cells.some((cell) => needsSvgText(cell.text))
   )) return;
   if (embeddedFonts?.some((font) => !font.bytes.length)) return;
   const scale = 320 / Math.max(presentation.width, presentation.height);
@@ -64,7 +77,7 @@ export async function renderPresentationSlideThumbnail({
       scale,
       path: (data) => new Path2D(data),
       image: (picture) => decoded.get(picture),
-      prepareFont: fonts.family,
+      fontFamily: fonts.family,
     });
     return await new Promise<Blob | undefined>((resolve) => {
       canvas.toBlob((blob) => resolve(blob ?? undefined), 'image/png');

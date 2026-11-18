@@ -43,4 +43,6 @@ export interface SlideCanvasOptions<Path, Image> {
     picture: DrawingPictureFill,
   ) => { image: Image; width: number; height: number } | undefined;
   readonly prepareFont?: (family: string) => string;
+  /** A CSS font-family list, including aliases and fallbacks. Takes precedence over prepareFont. */
+  readonly fontFamily?: (family: string) => string;
 }

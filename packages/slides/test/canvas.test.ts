@@ -73,6 +73,14 @@ test('portable painter retains background, authored text styles and object trans
   expect(painted.every((p) => p.font.includes('80px') && p.font.includes('Host font'))).toBe(true);
   expect(transforms[0]).toEqual([...slide.objects[0]!.matrix]);
   expect(presentationSlideImages(slide)).toEqual([]);
+
+  painted.length = 0;
+  paintPresentationSlide(ctx, deck.document, slide, {
+    path: (d) => d,
+    fontFamily: () => '"Embedded title", Arial, sans-serif',
+  });
+  expect(painted.map((p) => p.text).join('')).toBe('A real slide');
+  expect(painted.every((p) => p.font.endsWith('80px "Embedded title", Arial, sans-serif'))).toBe(true);
 });
 
 for (const anchor of ['top', 'center', 'bottom'] as const) {
