@@ -105,6 +105,10 @@ export function insertLatexMath(display: boolean): Command {
   };
 }
 
+// Require a delimiter so a shorter command cannot capture the start of a longer one.
+const mathSymbol =
+  /(?<![\w\\$])(\\(?:infty|alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|rho|sigma|phi|omega|Gamma|Delta|Theta|Lambda|Pi|Sigma|Phi|Omega|times|cdot|pm|leq|geq|neq|approx|to|rightarrow|leftarrow|sum|prod|int|partial|nabla)) $/;
+
 function latexInputRules() {
   const formatting = (pattern: RegExp, style: Style) =>
     new InputRule(pattern, (state, match, start, end) => {
@@ -157,6 +161,19 @@ function latexInputRules() {
       formatting(/\\(?:emph|textit)\{([^{}]+)\}$/, 'em'),
       formatting(/\*\*([^*]+)\*\*$/, 'strong'),
       formatting(/\*([^*]+)\*$/, 'em'),
+      new InputRule(mathSymbol, (state, match, start, end) => {
+        const position = state.doc.resolve(start);
+        const before = position.parent.textBetween(0, position.parentOffset);
+        // Leave unfinished explicit math alone until its closing delimiter arrives.
+        if (
+          (before.match(/(?<!\\)\$\$?/g)?.length ?? 0) % 2 ||
+          before.lastIndexOf('\\(') > before.lastIndexOf('\\)')
+        )
+          return null;
+        return state.tr
+          .replaceWith(start, end, schema.nodes.latex_math!.create({ source: match[1] }))
+          .insertText(' ', start + 1);
+      }),
       math(/^\$\$([^$]+)\$\$$/, true, '$$', '$$'),
       math(/^\\\[([^\n]+)\\\]$/, true, '\\[', '\\]'),
       math(/\\\(([^\n]+)\\\)$/, false, '\\(', '\\)'),
