@@ -67,7 +67,7 @@ class LatexBoundaryStep extends Step {
     return { stepType, boundary: this.boundary, base: this.base, value: this.value };
   }
 
-  static fromJSON(_schema: Schema, json: unknown) {
+  static override fromJSON(_schema: Schema, json: unknown) {
     if (
       !json ||
       typeof json !== 'object' ||
