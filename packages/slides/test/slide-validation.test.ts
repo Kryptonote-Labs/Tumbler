@@ -7,11 +7,16 @@ import {
   type PresentationArtifact,
   type PresentationCommand,
   type PresentationDocument,
+  type SlideValidationOptions,
 } from '../src/index.ts';
-import { createCanvas } from '@napi-rs/canvas';
-
-const measurer = createCanvas(1, 1).getContext('2d');
-/** Measures with the platform's default fonts; checks compare layouts, not exact glyph widths. */
+// A deterministic measurer: each character is 0.55em wide, close to Inter, so results do not depend on installed fonts.
+const measurer: SlideValidationOptions['measurer'] = {
+  font: '',
+  measureText(value: string) {
+    const size = Number(/(\d+(?:\.\d+)?)px/u.exec(this.font)?.[1] ?? 16);
+    return { width: value.length * size * 0.55 } as TextMetrics;
+  },
+};
 function validatePresentationDocument(
   document: PresentationDocument,
   { slideId, reading }: { slideId?: string; reading?: boolean } = {},
@@ -55,13 +60,13 @@ function deck(build: (slideId: string) => PresentationCommand[]) {
 
 test('a slide built to the layout guidance has no warnings', () => {
   const document = deck((slideId) => [
-    text(slideId, { x: 64, y: 72, width: 1100, height: 340 }, 'Support fades as skill grows', {
+    text(slideId, { x: 64, y: 230, width: 1040, height: 200 }, 'Support fades as skill grows', {
       fontSize: 72,
       textColor: '#1c1e24',
     }),
     text(
       slideId,
-      { x: 64, y: 436, width: 1000, height: 220 },
+      { x: 64, y: 450, width: 900, height: 200 },
       'Choose help for the task, then remove it once the learner can explain the work.',
       { fontSize: 32, textColor: '#1c1e24' },
     ),
