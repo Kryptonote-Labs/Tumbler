@@ -1,3 +1,4 @@
+import { latexBlockAttrs, latexDocumentAttrs, latexNodes, latexStructureNodes } from './latex-spec';
 import MarkdownIt from 'markdown-it';
 import { Schema, type MarkSpec, type Node as MarkdownNode } from 'prosemirror-model';
 import {
@@ -105,9 +106,26 @@ nodes = nodes.addToEnd('callout', {
   ],
   toDOM: (node) => ['aside', { 'data-callout': node.attrs.kind }, 0],
 });
+nodes = nodes
+  .update('doc', { ...nodes.get('doc'), attrs: latexDocumentAttrs })
+  .append(latexNodes);
+for (const name of latexStructureNodes) {
+  const node = nodes.get(name)!;
+  nodes = nodes.update(name, { ...node, attrs: { ...node.attrs, ...latexBlockAttrs } });
+}
 export const noteSchema = new Schema({
   nodes,
   marks: baseSchema.spec.marks
+    .addToEnd('latex_style', {
+      attrs: {
+        open: { validate: 'string' },
+        close: { validate: 'string' },
+        style: { validate: 'string' },
+        order: { validate: 'number' },
+      },
+      excludes: '',
+      toDOM: (mark) => [mark.attrs.style === 'strong' ? 'strong' : 'em', 0],
+    })
     .update('code', {
       ...baseSchema.spec.marks.get('code'),
       toDOM: () => ['code', { spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off' }, 0],

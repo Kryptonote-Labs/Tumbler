@@ -1,3 +1,5 @@
+import { runLatex } from './latex.ts';
+export { editLatexSource, latexEditInput, latexHelp, readLatexSource, type LatexEditInput } from './latex.ts';
 export { chartCreateInput } from './chart-create.ts';
 export type { ChartCreateInput } from './chart-create.ts';
 import { runCharts } from './charts.ts';
@@ -40,6 +42,10 @@ export async function runTumbler(
   },
 ): Promise<number> {
   try {
+    if (argv[1] === 'latex') {
+      await runLatex(argv, options);
+      return 0;
+    }
     if (argv[1] === 'charts') {
       await runCharts(argv, options);
       return 0;

@@ -279,3 +279,15 @@ Hosted integrations implement `ChartOperationHost` for reads/edits and the exist
 own permissions, storage and collaboration transactions; an unsupported host
 returns an explicit capability error. Run `tumbler <document> charts --help` for
 the complete edit schema.
+
+## LaTeX
+
+```sh
+tumbler paper.tex latex read
+tumbler paper.tex latex replace --revision '<read revision>' --find 'old text' --value 'new text'
+tumbler paper.tex latex write --revision '<read revision>' --input edited.tex
+```
+
+Read returns the source and revision, with a continuation offset for longer files. Replacement
+requires an exact, unique source match. Source writes accept a file or stdin with `--input -`.
+Edits require the read revision and preserve the rest of a file during replacement.

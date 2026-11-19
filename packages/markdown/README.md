@@ -27,3 +27,12 @@ Code-block node views provide a non-editable language/copy header around the edi
 never enter Markdown or document content. `noteState` accepts an optional `codeLogo` resolver for
 product-owned local assets. `NoteCopyFeedback` shares in-flight writes, extends one success timer,
 and ignores late completions after the content changes or the view is destroyed.
+
+## LaTeX documents
+
+`@tumblerjs/markdown/latex` parses article-style LaTeX into the shared note schema and serializes it
+back to source. Headings, paragraphs, emphasis, lists, quotes and inline and display equations are
+structured. Original command spellings, separators, the preamble, comments and opaque source are
+part of the document tree. `replaceLatexSource(document, source)` produces ProseMirror steps for
+source editing, undo and collaboration. The browser host can supply equation and raw source views
+through `NoteEditorOptions.latexNodeViews`. Parsing never executes TeX.
