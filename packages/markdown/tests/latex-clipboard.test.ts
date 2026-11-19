@@ -23,7 +23,11 @@ test('copy and paste preserves equations, delimiters and opaque LaTeX', async ()
       configurable: true,
       value: key === 'window' ? browser : browser[key],
     });
-  const source = String.raw`Energy $x^2$ and \alpha.
+  const source = String.raw`\chapter{Introduction}
+
+\section*[Short]{Long title}
+
+\textit{Italic with \textbf{nested bold}}. Energy $x^2$ and \alpha.
 
 \[
   \sqrt{x}

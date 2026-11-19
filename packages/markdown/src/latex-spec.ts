@@ -1,5 +1,14 @@
 import type { Node, NodeSpec, TagParseRule } from 'prosemirror-model';
 
+export const latexStructureNodes = [
+  'paragraph',
+  'heading',
+  'bullet_list',
+  'ordered_list',
+  'list_item',
+  'blockquote',
+] as const;
+
 export const latexBlockAttrs = {
   before: { default: null, validate: 'string|null' },
   open: { default: null, validate: 'string|null' },

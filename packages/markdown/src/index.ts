@@ -1,4 +1,4 @@
-import { latexBlockAttrs, latexDocumentAttrs, latexNodes } from './latex-spec';
+import { latexBlockAttrs, latexDocumentAttrs, latexNodes, latexStructureNodes } from './latex-spec';
 import MarkdownIt from 'markdown-it';
 import { Schema, type MarkSpec, type Node as MarkdownNode } from 'prosemirror-model';
 import {
@@ -109,7 +109,7 @@ nodes = nodes.addToEnd('callout', {
 nodes = nodes
   .update('doc', { ...nodes.get('doc'), attrs: latexDocumentAttrs })
   .append(latexNodes);
-for (const name of ['paragraph', 'heading', 'bullet_list', 'ordered_list', 'list_item', 'blockquote']) {
+for (const name of latexStructureNodes) {
   const node = nodes.get(name)!;
   nodes = nodes.update(name, { ...node, attrs: { ...node.attrs, ...latexBlockAttrs } });
 }

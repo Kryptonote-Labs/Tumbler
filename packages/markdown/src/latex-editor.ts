@@ -9,12 +9,12 @@ import { collab } from 'prosemirror-collab';
 import { history, redo, undo } from 'prosemirror-history';
 import { InputRule, inputRules, undoInputRule, wrappingInputRule } from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
-import { DOMParser, Fragment, Slice, type Mark, type Node } from 'prosemirror-model';
+import { Fragment, Slice, type Mark, type Node } from 'prosemirror-model';
 import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-list';
 import { EditorState, Plugin, TextSelection, type Command } from 'prosemirror-state';
 import type { EditorView, NodeViewConstructor } from 'prosemirror-view';
 import { noteSchema as schema } from './index';
-import { latexAtomPasteRules } from './latex-spec';
+import { latexClipboard } from './latex-clipboard';
 import { latexHeadings, parseLatex, serializeLatex } from './latex';
 import { notePresencePlugin } from './presence';
 import { noteProofreadingPlugin } from './proofreading';
@@ -250,10 +250,7 @@ export function latexState(
         props: {
           ...(nodeViews ? { nodeViews } : {}),
           handleDOMEvents: { mousedown: continueAfterLatexBlock },
-          clipboardParser: new DOMParser(schema, [
-            ...latexAtomPasteRules,
-            ...DOMParser.fromSchema(schema).rules,
-          ]),
+          ...latexClipboard(schema),
           clipboardTextSerializer: ({ content }) =>
             serializeLatex(
               schema.topNodeType.create(
