@@ -9,10 +9,11 @@ export function notePresenceLabels(view: EditorView) {
   const labels = new Map<HTMLElement, HTMLSpanElement>();
   let frame: number | undefined;
 
-  function clip(node: HTMLElement | null, bounds: Bounds, stop: HTMLElement | null = null): Bounds {
+  function clip(node: HTMLElement | null, bounds: Bounds, stop: HTMLElement | null = null) {
     let { left, top, right, bottom } = bounds;
     for (; node && node !== stop; node = node.parentElement) {
       const style = window.getComputedStyle(node);
+      if (style.contentVisibility === 'hidden' || style.display === 'none') return;
       const x = /auto|scroll|hidden|clip/.test(style.overflowX || style.overflow);
       const y = /auto|scroll|hidden|clip/.test(style.overflowY || style.overflow);
       if (!x && !y) continue;
@@ -36,6 +37,10 @@ export function notePresenceLabels(view: EditorView) {
       right: window.innerWidth,
       bottom: window.innerHeight,
     });
+    if (!bounds) {
+      for (const label of labels.values()) label.style.visibility = 'hidden';
+      return;
+    }
     const positions = [...labels].map(([caret, label]) => {
       const anchor = caret.getBoundingClientRect();
       const visible = clip(caret.parentElement, bounds, view.dom.parentElement);
@@ -56,6 +61,7 @@ export function notePresenceLabels(view: EditorView) {
         top,
         width,
         visible:
+          !!visible &&
           caret.isConnected &&
           anchor.height > 0 &&
           anchor.right > visible.left &&
