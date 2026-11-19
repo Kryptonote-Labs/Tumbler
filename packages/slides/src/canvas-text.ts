@@ -42,13 +42,18 @@ type Line = {
   gaps: number;
 };
 
-/** Wraps styled runs and respects paragraph spacing, insets, bullets and vertical anchoring. */
-export function paintSlideText<Path, Image>(
-  ctx: SlideCanvasContext<Path, Image>,
+/** Measures text with the alphabetic baseline the painter uses. */
+export type SlideTextMeasurer = Pick<SlideCanvasContext<unknown, unknown>, 'font' | 'measureText'>;
+export type SlideTextLine = Line;
+export type SlideTextLayout = ReturnType<typeof layoutSlideText>;
+
+/** Wraps styled runs into lines with paragraph spacing, insets and bullets, exactly as painted. */
+export function layoutSlideText(
+  ctx: SlideTextMeasurer,
   text: SlideText,
   width: number,
   height: number,
-  options: SlideCanvasOptions<Path, Image>,
+  options: Pick<SlideCanvasOptions<unknown, unknown>, 'prepareFont' | 'fallbackFonts' | 'fontFamily'>,
 ) {
   const [top, right, bottom, left] = text.inset;
   const available = Math.max(1, width - left - right);
@@ -63,8 +68,6 @@ export function paintSlideText<Path, Image>(
     return `${run?.italic ? 'italic ' : ''}${run?.bold ? 'bold ' : ''}${size}px ${stack}`;
   };
   const lines: Line[] = [];
-  ctx.save();
-  ctx.textBaseline = 'alphabetic';
   for (const paragraph of text.paragraphs) {
     const base = paragraph.runs[0] ?? paragraph.endRun;
     const size = slideParagraphFontSize(paragraph);
@@ -170,6 +173,25 @@ export function paintSlideText<Path, Image>(
   }
   const total = lines.reduce((sum, line) => sum + line.before + line.ascent + line.descent + line.after, 0);
   const innerHeight = Math.max(1, height - top - bottom);
+  const offset = top + (text.anchor === 'center'
+    ? (innerHeight - total) / 2
+    : text.anchor === 'bottom'
+      ? innerHeight - total
+      : 0);
+  return { lines, total, innerHeight, offset, left };
+}
+
+/** Wraps styled runs and respects paragraph spacing, insets, bullets and vertical anchoring. */
+export function paintSlideText<Path, Image>(
+  ctx: SlideCanvasContext<Path, Image>,
+  text: SlideText,
+  width: number,
+  height: number,
+  options: SlideCanvasOptions<Path, Image>,
+) {
+  ctx.save();
+  ctx.textBaseline = 'alphabetic';
+  const { lines, total, offset, left } = layoutSlideText(ctx, text, width, height, options);
   // Run sizes already include the saved normAutofit fontScale.
   // Preserve overflow and anchoring instead of applying another display-only fit.
   const clipX = text.horizontalOverflow === 'clip';
@@ -187,15 +209,7 @@ export function paintSlideText<Path, Image>(
     ctx.rect(clipX ? 0 : -extent, clipY ? 0 : -extent, clipX ? width : extent * 2, clipY ? height : extent * 2);
     ctx.clip();
   }
-  ctx.translate(
-    left,
-    top +
-      (text.anchor === 'center'
-        ? (innerHeight - total) / 2
-        : text.anchor === 'bottom'
-          ? innerHeight - total
-          : 0),
-  );
+  ctx.translate(left, offset);
   ctx.textAlign = 'left';
   let y = 0;
   for (const line of lines) {

@@ -1,5 +1,6 @@
 import { multiply, shapeMatrix } from './geometry.ts';
-import { nativePresetGeometry, resizeDrawingGeometry } from './drawing-geometry.ts';
+import { evaluateGeometry, nativePresetGeometry, resizeDrawingGeometry } from './drawing-geometry.ts';
+import { shapePath } from './authoring-objects.ts';
 import type { PresentationCommand } from './commands.ts';
 import type { NewSlideShape } from './authoring-objects.ts';
 import type { SlideObject, SlideParagraph, SlideText } from './model.ts';
@@ -129,6 +130,7 @@ export function insertNativeObject(
 ): SlideObject {
   const { bounds, input } = { bounds: command.bounds, input: command.object };
   const shape = input.kind === 'shape' ? input : undefined;
+  const path = shape && shapePath(shape);
   const object: SlideObject = {
     key,
     shapeId,
@@ -137,13 +139,13 @@ export function insertNativeObject(
     layer: 'slide',
     name:
       input.kind === 'shape'
-        ? `${input.geometry ? 'Shape' : 'Text Box'} ${shapeId}`
+        ? `${input.geometry || path ? 'Shape' : 'Text Box'} ${shapeId}`
         : input.kind === 'image'
           ? `Picture ${shapeId}`
           : `Table ${shapeId}`,
     kind: input.kind === 'image' ? 'picture' : input.kind,
-    geometry: shape?.geometry ?? 'rect',
-    drawingGeometry: nativePresetGeometry(
+    geometry: path ? 'custom' : (shape?.geometry ?? 'rect'),
+    drawingGeometry: path ? evaluateGeometry(path, 100, 100) : nativePresetGeometry(
       shape?.geometry ?? 'rect',
       100,
       100,
@@ -159,7 +161,7 @@ export function insertNativeObject(
     transform: { x: 0, y: 0, width: 100, height: 100, rotation: 0, flipH: false, flipV: false },
     matrix: [1, 0, 0, 1, 0, 0],
     fill: nativeColour(
-      shape?.fill ?? (shape?.geometry && shape.geometry !== 'line' ? '#4472C4' : 'none'),
+      shape?.fill ?? ((shape?.geometry && shape.geometry !== 'line') || path ? '#4472C4' : 'none'),
     ),
     gradient: undefined,
     shadow: undefined,

@@ -4,6 +4,7 @@ import { beginPackageTransaction } from "@tumblerjs/opc";
 import { openPresentationArtifact, type PresentationArtifact } from "./artifact.ts";
 import { children, editable, raw, slideById } from "./authoring-slides.ts";
 import { A, R, commitXml, emu, partXml, xml } from "./authoring-xml.ts";
+import { customGeometryXml, svgPathGeometry } from "./drawing-geometry.ts";
 
 export interface ObjectBounds {
   x: number;
@@ -25,6 +26,15 @@ export type NewSlideObject = Extract<
   import("./commands.ts").PresentationCommand,
   { name: "insert-object" }
 >["object"];
+/** Resolves a shape's SVG path to custom geometry; geometry presets and path data are exclusive. */
+export function shapePath(input: Extract<NewSlideObject, { kind: "shape" }>) {
+  if (input.path === undefined) return undefined;
+  if (typeof input.path === "string")
+    throw new TypeError(`Unresolved shape path reference "${input.path}".`);
+  if (input.geometry || input.cornerRadius !== undefined)
+    throw new TypeError("A shape path replaces geometry and cornerRadius; supply only one.");
+  return svgPathGeometry(input.path.d, input.path.width, input.path.height);
+}
 export function objectTarget(artifact: PresentationArtifact, slideId: string, key: string) {
   const slide = slideById(artifact, slideId),
     object = slide.objects.find((o) => o.key === key);
@@ -94,9 +104,10 @@ export function insertObject(
     if (input.cornerRadius !== undefined && (input.geometry !== "roundRect" ||
       !Number.isFinite(input.cornerRadius) || input.cornerRadius < 0))
       throw new RangeError("Corner radius requires a rounded rectangle and a finite nonnegative value.");
+    const path = shapePath(input);
     const adjustment = input.cornerRadius === undefined ? "" :
       `<a:gd name="adj" fmla="val ${Math.round(Math.min(.5, input.cornerRadius / Math.min(bounds.width, bounds.height)) * 100000)}"/>`;
-    markup = `<p:sp ${ns}><p:nvSpPr><p:cNvPr id="${id}" name="${input.geometry ? "Shape" : "Text Box"} ${id}"/><p:cNvSpPr${input.geometry ? "" : ' txBox="1"'}/><p:nvPr/></p:nvSpPr><p:spPr>${transform}<a:prstGeom prst="${input.geometry ?? "rect"}"><a:avLst>${adjustment}</a:avLst></a:prstGeom>${color(input.fill ?? (input.geometry && input.geometry !== "line" ? "#4472C4" : "none"))}<a:ln>${color(input.stroke ?? (input.geometry === "line" ? "#4472C4" : "none"))}</a:ln></p:spPr><p:txBody>${textBody(input)}</p:txBody></p:sp>`;
+    markup = `<p:sp ${ns}><p:nvSpPr><p:cNvPr id="${id}" name="${input.geometry || path ? "Shape" : "Text Box"} ${id}"/><p:cNvSpPr${input.geometry || path ? "" : ' txBox="1"'}/><p:nvPr/></p:nvSpPr><p:spPr>${transform}${path ? customGeometryXml(path) : `<a:prstGeom prst="${input.geometry ?? "rect"}"><a:avLst>${adjustment}</a:avLst></a:prstGeom>`}${color(input.fill ?? ((input.geometry && input.geometry !== "line") || path ? "#4472C4" : "none"))}<a:ln>${color(input.stroke ?? (input.geometry === "line" ? "#4472C4" : "none"))}</a:ln></p:spPr><p:txBody>${textBody(input)}</p:txBody></p:sp>`;
   } else if (input.kind === "image") {
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(input.data) || input.data.length % 4)
       throw new TypeError("Image data must be base64.");

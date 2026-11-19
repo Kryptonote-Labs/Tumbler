@@ -171,6 +171,13 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
                 "star5",
               ])
               .optional(),
+            /** SVG path data in a width × height viewBox, drawn as editable custom geometry. A string is a host reference the host must resolve first. */
+            path: z
+              .union([
+                z.object({ d: z.string().min(1).max(200_000), width: number.positive(), height: number.positive() }).strict(),
+                z.string().min(1).max(200),
+              ])
+              .optional(),
             text: z.string().optional(),
             cornerRadius: number.nonnegative().optional(),
             fill: color.optional(),
