@@ -3,9 +3,11 @@ import { z } from "zod";
 import { replacementValue } from "./replacement-value.ts";
 
 const textCommands = ["insert-object", "edit-text", "set-notes"];
+const readCommands = ["read", "render", "validate"];
 const textHelp = String.raw`Text input for insert-object (shape), edit-text and set-notes: omit the text field from --input and supply --value <text> to decode \n, \r, \t and \\ once. Add --literal to preserve backslashes, or use --value-file <path|-> for exact UTF-8 text from a file or stdin. Supply only one text source. Structured --input JSON uses JSON escaping only; batch text stays in JSON.`;
 export interface PresentationOperationHost {
   renderPresentation?(document: string, slideId?: string): Promise<unknown>;
+  validatePresentation?(document: string, slideId?: string, options?: { reading?: boolean }): Promise<unknown>;
   readPresentation?(document: string, slideId?: string): Promise<unknown>;
   operatePresentation?(
     document: string,
@@ -16,15 +18,17 @@ export function presentationHelp(commandName = "tumbler", name?: string) {
   const schema = name
     ? presentationCommand.options.find((option) => option.shape.name.value === name)
     : undefined;
-  if (name && name !== "read" && name !== "render" && !schema) throw new Error(`Unknown presentation command: ${name}`);
+  if (name && !readCommands.includes(name) && !schema) throw new Error(`Unknown presentation command: ${name}`);
   return (
     [
       `Usage: ${commandName} <document> slides read [--slide <slide-id>]`,
       `${commandName} <document> slides render [--slide <slide-id>]`,
+      `${commandName} <document> slides validate [--slide <slide-id>] [--reading]`,
+      "validate lays out every slide, or one slide, with the renderer's fonts and lists measurable problems: overflowing or off-slide text, tight margins, small text, type too small for its box, dense slides, empty bands, overlapping text, text crowding shapes, mismatched parallel items, centered text among left-aligned text, mostly empty panels, titles that drift between slides, runs of repeated layouts, decks with too few visuals, icons outside a consistent icon system, low contrast, empty placeholders, manually broken lines and paragraphs that mix type sizes. Each warning names its objectKey. No warnings does not prove a slide looks good; still render it. --reading checks a deck read without a presenter, which allows about twice the words per slide.",
       `${commandName} <document> slides <command> --input JSON [--page <read-handle>]`,
       ...(!name || textCommands.includes(name) ? [textHelp] : []),
       ...(name === "insert-object"
-        ? ["For shapes, set text styling on object. Font size is in points and textInset is [top, right, bottom, left] in slide pixels."]
+        ? ["For shapes, set text styling on object. Font size is in points and textInset is [top, right, bottom, left] in slide pixels.", "A shape may set path to {d, width, height}, SVG path data in a width × height viewBox, instead of geometry; it is saved as editable custom geometry. Hosts may accept a path reference string, such as a library icon name, in its place."]
         : []),
       "Read the slide before editing. Commands use slideId and objectKey from that read. One command is one undo step.",
       "Without --slide, read returns the first slide. To read another slide, use its id from slides, not its number or title. An empty slide has empty:true, objectCount:0 and objects:[]; notes and background are reported separately.",
@@ -56,18 +60,24 @@ export async function runPresentation(
   const values: Record<string, string> = {};
   for (let i = 0; i < flags.length; i++) {
     const key = flags[i]!,
-      value = key === "--literal" ? "true" : flags[++i];
+      value = key === "--literal" || key === "--reading" ? "true" : flags[++i];
     if (
-      !["--input", "--page", "--slide", "--value", "--value-file", "--literal"].includes(key) ||
+      !["--input", "--page", "--slide", "--value", "--value-file", "--literal", "--reading"].includes(key) ||
       value === undefined ||
       Object.hasOwn(values, key)
     )
-      throw new Error("Use --input JSON, --page, --slide, --value, --value-file, or --literal once.");
+      throw new Error("Use --input JSON, --page, --slide, --value, --value-file, --literal, or --reading once.");
     values[key] = value;
   }
-  if (name === "read" || name === "render") {
-    if (Object.keys(values).some((key) => key !== "--slide"))
-      throw new Error("Presentation reads accept only --slide.");
+  if (readCommands.includes(name)) {
+    if (Object.keys(values).some((key) => key !== "--slide" && !(name === "validate" && key === "--reading")))
+      throw new Error(name === "validate" ? "Validation accepts only --slide and --reading." : "Presentation reads accept only --slide.");
+    if (name === "validate") {
+      if (!options.host.validatePresentation) throw new Error("Slide validation is unavailable on this host.");
+      const reading = values["--reading"] === "true";
+      options.stdout(JSON.stringify(await options.host.validatePresentation(document, values["--slide"], reading ? { reading } : undefined)) + "\n");
+      return;
+    }
     if (name === "render") {
       if (!options.host.renderPresentation) throw new Error("Slide rendering is unavailable on this host.");
       options.stdout(JSON.stringify(await options.host.renderPresentation(document, values["--slide"])) + "\n");

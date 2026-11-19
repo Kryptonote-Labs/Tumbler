@@ -1256,7 +1256,7 @@ class Reader {
         )
         .find((item) => item !== undefined);
       const preset = attr(geometryElement, "prst") ?? "rect";
-      const geometry = preset;
+      const geometry = geometryElement?.localName === "custGeom" ? "custom" : preset;
       let drawingGeometry: SlideObject["drawingGeometry"];
       try {
         drawingGeometry = resolveDrawingGeometry(
