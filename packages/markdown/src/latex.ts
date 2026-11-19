@@ -15,6 +15,9 @@ import {
   whitespaceEnd,
 } from './latex-syntax';
 
+export { latexPageLayout, latexPaperSettings, paginateLatex } from './latex-layout';
+export type { LatexPageLayout, PageBlock, PageBreak, PageLine } from './latex-layout';
+
 export const blankLatex =
   '\\documentclass{article}\n\\usepackage{amsmath}\n\n\\begin{document}\n\n\\end{document}\n';
 export const latexHeadings = [
