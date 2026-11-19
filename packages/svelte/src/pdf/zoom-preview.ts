@@ -120,7 +120,8 @@ export function pdfZoomPreview(
   }
   function zoom(next: number, point?: Point) {
     if (!preview) {
-      const root = viewport.querySelector<HTMLElement>('[data-pdf-document]');
+      const root = Array.from(viewport.querySelectorAll<HTMLElement>('[data-pdf-document]'))
+        .find((document) => document.getClientRects().length > 0);
       if (!root) return;
       const bounds = viewport.getBoundingClientRect();
       point ??= {

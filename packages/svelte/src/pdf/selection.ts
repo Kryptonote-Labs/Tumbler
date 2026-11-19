@@ -76,5 +76,5 @@ export function selectPdfWord(event: MouseEvent, content: PdfTextContent, layer:
   const selection = layer.ownerDocument.defaultView?.getSelection();
   selection?.removeAllRanges();
   selection?.addRange(range);
-  event.preventDefault();
+  if (event.type === "dblclick") event.preventDefault();
 }

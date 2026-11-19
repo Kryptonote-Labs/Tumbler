@@ -60,6 +60,8 @@ function computePdfTextLayout(
   );
   let runIndex = 0,
     runStart = 0;
+  let style = { ...seed.style, ...pdfStyleAttributes(runs[0]?.attributes) };
+  const advances = new Map<string, number>();
   const entries = [...segmenter.segment(text)];
   const styles: PdfTextStyle[] = [],
     widths: number[] = [],
@@ -68,13 +70,19 @@ function computePdfTextLayout(
     while (runIndex < runs.length - 1 && entry.index >= runStart + runs[runIndex]!.insert.length) {
       runStart += runs[runIndex]!.insert.length;
       runIndex++;
+      style = { ...seed.style, ...pdfStyleAttributes(runs[runIndex]?.attributes) };
+      advances.clear();
     }
     const attributes = runs[runIndex]?.attributes;
     const source = attributes?.[pdfSourceAttribute];
     originals.push(typeof source === 'number' ? source : undefined);
-    const style = { ...seed.style, ...pdfStyleAttributes(attributes) };
     styles.push(style);
-    widths.push(entry.segment === '\n' ? 0 : fonts.measure(entry.segment, style));
+    let advance = advances.get(entry.segment);
+    if (advance === undefined) {
+      advance = entry.segment === '\n' ? 0 : fonts.measure(entry.segment, style);
+      advances.set(entry.segment, advance);
+    }
+    widths.push(advance);
   }
   const kern = pdfSourceSpacing(
     seed,
@@ -177,6 +185,19 @@ export function layoutPdfTextFlow(model: PdfTextModel, fonts: PdfEditingFonts, p
   if (!model.inTransaction) flows.set(model, { revision: model.revision, fonts, fontRevision: fonts.revision, pages, flow });
   return flow;
 }
+const verticalBounds = new WeakMap<PdfTextLayout, { top: number; bottom: number }>();
+function regionBounds(layout: PdfTextLayout) {
+  const cached = verticalBounds.get(layout);
+  if (cached) return cached;
+  let top = Infinity, bottom = -Infinity;
+  for (const caret of layout.carets) {
+    top = Math.min(top, caret.y - caret.height);
+    bottom = Math.max(bottom, caret.y + caret.height * 0.3);
+  }
+  const bounds = { top, bottom };
+  verticalBounds.set(layout, bounds);
+  return bounds;
+}
 const pageFlows = new WeakMap<PdfTextModel, WeakMap<PdfPage, ReturnType<typeof computePdfPageFlow>>>();
 function layoutPdfPageFlow(model: PdfTextModel, fonts: PdfEditingFonts, page: PdfPage) {
   const layouts = model.ids(page.index).map((id) => layoutPdfText(model, id, fonts));
@@ -209,20 +230,25 @@ function computePdfPageFlow(model: PdfTextModel, page: PdfPage, layouts: PdfText
               .filter((p) => Math.abs(p.x - seed.x) <= Math.max(p.size, seed.style.size) * 2)
               .reduce((sum, p) => sum + p.growth, 0)
           : 0;
-      const originalHeight =
-        (seed.delta
-          .map((d) => d.insert)
-          .join('')
-          .split('\n').length -
-          1) *
-          seed.lineHeight +
-        seed.style.size * 1.25;
-      if (imported && !model.placement(layout.id))
+      if (imported && !model.placement(layout.id) && dirty) {
+        const lines = seed.delta.map((run) => run.insert).join('').split('\n').length;
+        const originalHeight = (lines - 1) * seed.lineHeight + seed.style.size * 1.25;
         earlier.push({
           x: seed.x,
           size: seed.style.size,
-          growth: dirty ? Math.max(0, layout.height - originalHeight) : 0,
+          growth: Math.max(0, layout.height - originalHeight),
         });
+      }
+      if (!dirty && shift === 0) {
+        fragments.push({
+          layout,
+          continuation: 0,
+          origin: { x: seed.x, y: seed.y, continuation: 0 },
+          render: false,
+          preserveSource: model.sourcePreserved(layout.id),
+        });
+        continue;
+      }
       const height = pdfContinuationHeight(page),
         bottom = page.height - Math.min(48, page.height * 0.1);
       const firstContinuation =
@@ -232,9 +258,7 @@ function computePdfPageFlow(model: PdfTextModel, page: PdfPage, layouts: PdfText
       const project = (y: number) => {
         const absolute = y + shift,
           continuation =
-            !dirty && shift === 0
-              ? 0
-              : firstContinuation +
+            firstContinuation +
                 Math.max(0, Math.ceil((absolute - firstContinuation * height - edge) / height));
         count = Math.max(count, continuation);
         return { y: absolute - continuation * height, continuation };
@@ -306,15 +330,14 @@ function computePdfTextFlow(
         rotation: 0,
       });
     for (const fragment of fragments) {
-      const carets = fragment.layout.carets;
+
       regions.push({
         ...fragment.layout,
         page: first + fragment.continuation,
         render: fragment.render,
         preserveSource: fragment.preserveSource,
         origin: fragment.origin,
-        top: Math.min(...carets.map((c) => c.y - c.height)),
-        bottom: Math.max(...carets.map((c) => c.y + c.height * 0.3)),
+        ...regionBounds(fragment.layout),
       });
     }
   }

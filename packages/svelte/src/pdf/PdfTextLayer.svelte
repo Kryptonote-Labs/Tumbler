@@ -30,8 +30,23 @@
         svg.style.opacity = next ? '1' : '0';
       }
     };
+    const selectOnHold = (event: MouseEvent) => {
+      if (!(event instanceof PointerEvent) || event.pointerType !== 'touch') return;
+      if (!(event.target instanceof Element) || !event.target.closest('[data-pdf-text]')) return;
+      const selection = window.getSelection();
+      if (selection?.rangeCount && !selection.isCollapsed) {
+        const rects = selection.getRangeAt(0).getClientRects();
+        if (Array.from(rects).some((rect) => event.clientX >= rect.left && event.clientX <= rect.right &&
+          event.clientY >= rect.top && event.clientY <= rect.bottom)) return;
+      }
+      selectPdfWord(event, content, layer);
+    };
+    layer.addEventListener('contextmenu', selectOnHold);
     document.addEventListener('selectionchange', changed);
-    return () => document.removeEventListener('selectionchange', changed);
+    return () => {
+      layer.removeEventListener('contextmenu', selectOnHold);
+      document.removeEventListener('selectionchange', changed);
+    };
   });
   $effect(() => registerPdfTextLayer(layer, content, bindings));
   const runs = $derived(pdfTextRuns(content).map((run) => ({ ...run, spans: pdfTextSpans(run) })));
@@ -95,7 +110,8 @@
   text {
     white-space: pre;
     font-variant-ligatures: none;
-    fill: none;
+    fill: transparent;
+    pointer-events: all;
     unicode-bidi: isolate;
   }
   tspan::selection {

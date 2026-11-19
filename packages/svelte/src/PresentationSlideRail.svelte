@@ -6,6 +6,7 @@
   let {
     presentation,
     indicator,
+    preview,
     onreorder,
     oninsert,
     oninsertionfocus,
@@ -16,6 +17,8 @@
     presentation: PresentationDocument;
     index?: number;
     indicator?: Snippet<[PresentationSlide]>;
+    /** Optional host preview, with a flag indicating when to start work on a cache miss. */
+    preview?: Snippet<[slide: PresentationSlide, scheduled: boolean]>;
     onreorder?: (slideId: string, index: number) => void;
     oninsert?: (index: number) => void;
     oninsertionfocus?: () => void;
@@ -282,6 +285,8 @@
 <span class="sr-only" aria-live="polite">{announcement}</span>
 <nav class="slide-rail" aria-label="Slides" bind:this={rail}>
   {#each presentation.slides as slide, i (slide.id)}
+    {@const hasTransition = !!slide.transition}
+    {@const hasAnimations = !!slide.animations?.length}
     {#if oninsert}{@render insertionPoint(i)}{/if}
     <button
       style:margin-bottom={oninsert ? '0' : undefined}
@@ -295,7 +300,7 @@
       {@attach onreorder && !drag ? reorderHint : undefined}
       class:hidden={slide.hidden}
       aria-current={index === i && !insertionSelected ? 'true' : undefined}
-      aria-label={`Slide ${i + 1}: ${slide.title}${slide.hidden ? ' (hidden)' : ''}`}
+      aria-label={`Slide ${i + 1}: ${slide.title}${slide.hidden ? ' (hidden)' : ''}${hasTransition ? ', has transition' : ''}${hasAnimations ? ', has animations' : ''}`}
       tabindex={index === i ? 0 : -1}
       onclick={() => {
         if (!suppressClick) index = i;
@@ -324,6 +329,40 @@
             />
           </svg>
         {/if}
+        {#if hasTransition}
+          <svg
+            class="effect-icon"
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <title>Slide transition</title>
+            <path d="M3 15V5h13" />
+            <rect x="7" y="9" width="14" height="10" rx="1" />
+          </svg>
+        {/if}
+        {#if hasAnimations}
+          <svg
+            class="effect-icon"
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <title>Object animations</title>
+            <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z" />
+          </svg>
+        {/if}
       </span>
       <span
         class="preview"
@@ -333,7 +372,9 @@
         style:aspect-ratio={`${presentation.width}/${presentation.height}`}
       >
         <span class="preview-surface"
-          >{#if rendered[slide.id] || index === i}<PresentationSlideView
+          >{#if preview && (visible[slide.id] || index === i)}
+            {@render preview(slide, rendered[slide.id] || index === i)}
+          {:else if rendered[slide.id] || index === i}<PresentationSlideView
               {presentation}
               {slide}
               thumbnail
@@ -357,7 +398,11 @@
     style:width={`${drag.width - 26}px`}
     style:aspect-ratio={`${presentation.width}/${presentation.height}`}
   >
-    <PresentationSlideView {presentation} slide={draggedSlide} thumbnail />
+    {#if preview}
+      {@render preview(draggedSlide, true)}
+    {:else}
+      <PresentationSlideView {presentation} slide={draggedSlide} thumbnail />
+    {/if}
   </div>
 {/if}
 
@@ -518,6 +563,10 @@
   .hidden-icon {
     display: block;
     margin: 5px 0 0 auto;
+  }
+  .effect-icon {
+    display: block;
+    margin: 4px auto 0;
   }
   .active .preview {
     border-color: #82b68e;

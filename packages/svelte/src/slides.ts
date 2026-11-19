@@ -1,6 +1,7 @@
 export { default as PresentationSlideView } from "./PresentationSlideView.svelte";
 
 export { default as PresentationSlideRail } from "./PresentationSlideRail.svelte";
+export { renderPresentationSlideThumbnail } from './presentation-slide-thumbnail.ts';
 
 export { default as PresentationFormattingToolbar } from "./PresentationFormattingToolbar.svelte";
 
