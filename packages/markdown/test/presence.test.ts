@@ -10,12 +10,13 @@ import {
   noteState,
 } from '@tumblerjs/markdown/editor';
 
-test('presence labels escape code clipping, follow scrolling and zoom, and disappear with their editor', async () => {
+test('presence labels escape code clipping, follow scrolling and zoom, and hide with their editor', async () => {
   const window = new Window();
   const stylesheet = window.document.createElement('style');
   stylesheet.textContent = await Bun.file(
     Bun.resolveSync('@tumblerjs/markdown/style.css', import.meta.dir),
   ).text();
+  stylesheet.textContent += '\n.inactive-document { content-visibility: hidden; }';
   window.document.head.append(stylesheet);
   const keys = [
     'window',
@@ -109,6 +110,15 @@ test('presence labels escape code clipping, follow scrolling and zoom, and disap
     flush();
     expect(label.style.left).toBe('150px');
     expect(label.style.top).toBe('160px');
+    expect(label.style.visibility).toBe('visible');
+    // Inactive document tabs keep their editors and last measured caret positions.
+    scroller.classList.add('inactive-document');
+    await window.happyDOM.waitUntilComplete();
+    flush();
+    expect(label.style.visibility).toBe('hidden');
+    scroller.classList.remove('inactive-document');
+    await window.happyDOM.waitUntilComplete();
+    flush();
     expect(label.style.visibility).toBe('visible');
     setNoteCursors(view, [{ ...cursor, focused: false }]);
     expect(window.document.querySelector('.note-peer-label')).toBeNull();
