@@ -6,6 +6,7 @@
   let {
     presentation,
     indicator,
+    preview,
     onreorder,
     oninsert,
     oninsertionfocus,
@@ -16,6 +17,8 @@
     presentation: PresentationDocument;
     index?: number;
     indicator?: Snippet<[PresentationSlide]>;
+    /** Optional host preview, with a flag indicating when to start work on a cache miss. */
+    preview?: Snippet<[slide: PresentationSlide, scheduled: boolean]>;
     onreorder?: (slideId: string, index: number) => void;
     oninsert?: (index: number) => void;
     oninsertionfocus?: () => void;
@@ -369,7 +372,9 @@
         style:aspect-ratio={`${presentation.width}/${presentation.height}`}
       >
         <span class="preview-surface"
-          >{#if rendered[slide.id] || index === i}<PresentationSlideView
+          >{#if preview && (visible[slide.id] || index === i)}
+            {@render preview(slide, rendered[slide.id] || index === i)}
+          {:else if rendered[slide.id] || index === i}<PresentationSlideView
               {presentation}
               {slide}
               thumbnail
@@ -393,7 +398,11 @@
     style:width={`${drag.width - 26}px`}
     style:aspect-ratio={`${presentation.width}/${presentation.height}`}
   >
-    <PresentationSlideView {presentation} slide={draggedSlide} thumbnail />
+    {#if preview}
+      {@render preview(draggedSlide, true)}
+    {:else}
+      <PresentationSlideView {presentation} slide={draggedSlide} thumbnail />
+    {/if}
   </div>
 {/if}
 
