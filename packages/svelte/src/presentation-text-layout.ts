@@ -1,4 +1,31 @@
-import type { SlideText } from "@tumblerjs/slides";
+import { slideLineBox, type SlideText } from "@tumblerjs/slides";
+let metrics: CanvasRenderingContext2D | null | undefined;
+
+function applyLineSpacing(body: HTMLElement, text: SlideText) {
+  metrics ??= document.createElement("canvas").getContext("2d");
+  if (!metrics) return;
+  const canvas = metrics;
+  const updates: { node: HTMLElement; height: string }[] = [];
+  body.querySelectorAll<HTMLElement>("[data-text-paragraph]").forEach((paragraph, index) => {
+    const spacing = text.paragraphs[index]?.lineHeight;
+    if (spacing === undefined) return;
+    const elements = [paragraph, ...paragraph.querySelectorAll<HTMLElement>("[data-text-run], [data-bullet]")];
+    for (const node of elements) {
+      if (typeof spacing === "string") {
+        updates.push({ node, height: node === paragraph ? spacing : "" });
+        continue;
+      }
+      const style = getComputedStyle(node);
+      canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      const { ascent, descent } = slideLineBox(canvas.measureText(" "), parseFloat(style.fontSize), spacing);
+      updates.push({ node, height: `${ascent + descent}px` });
+    }
+  });
+  for (const { node, height } of updates) {
+    if (node.style.lineHeight !== height) node.style.lineHeight = height;
+  }
+}
+
 export interface TextLayoutOptions {
   text: SlideText;
   onheight?: (height: number) => void;
@@ -21,6 +48,7 @@ export function presentationTextLayout(
     body.style.removeProperty("-webkit-line-clamp");
     body.style.removeProperty("display");
     body.style.removeProperty("-webkit-box-orient");
+    applyLineSpacing(body, options.text);
     const style = getComputedStyle(node);
     const padding =
       parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);

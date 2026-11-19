@@ -1,3 +1,4 @@
+import type { SlideFontMetrics } from './text-line-box.ts';
 import type { ChartCanvasContext } from '@tumblerjs/charts';
 import type { DrawingPictureFill } from './appearance.ts';
 
@@ -8,7 +9,7 @@ export interface SlideCanvasContext<Path, Image> extends ChartCanvasContext<Path
   fillRect(x: number, y: number, width: number, height: number): void;
   clip(path?: Path): void;
   setLineDash(segments: number[]): void;
-  measureText(text: string): { width: number };
+  measureText(text: string): { width: number } & SlideFontMetrics;
   createLinearGradient(
     x0: number,
     y0: number,
@@ -45,4 +46,6 @@ export interface SlideCanvasOptions<Path, Image> {
   readonly prepareFont?: (family: string) => string;
   /** A CSS font-family list, including aliases and fallbacks. Takes precedence over prepareFont. */
   readonly fontFamily?: (family: string) => string;
+  /** Registered families the canvas text shaper can use for individual missing glyphs. */
+  readonly fallbackFonts?: readonly string[];
 }

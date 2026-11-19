@@ -4,7 +4,7 @@ import { beginPackageTransaction } from '@tumblerjs/opc';
 import { beginLosslessXmlEdit } from '@tumblerjs/ooxml';
 import { openPresentationArtifact, type PresentationArtifact } from './artifact.ts';
 import { children, editable, slideById } from './authoring-slides.ts';
-import { partXml, A, R } from './authoring-xml.ts';
+import { partXml, type, A, R } from './authoring-xml.ts';
 
 import { DRAWING_PATTERN_PRESETS } from '@tumblerjs/ooxml';
 export const backgroundPatterns = DRAWING_PATTERN_PRESETS;
@@ -58,14 +58,41 @@ export function setSlideBackground(
   input: BackgroundFill,
 ) {
   editable(artifact);
+  const tx = beginPackageTransaction(artifact.document.package);
   const fill = backgroundFill.parse(input);
-  const slide = slideById(artifact, id),
-    source = partXml(artifact, slide.part);
+  if (!writeBackground(artifact, tx, slideById(artifact, id).part, fill)) return artifact;
+  return openPresentationArtifact(tx.commit(), artifact.options);
+}
+
+/** Update all masters and clear overrides so current and future slides inherit the fill. */
+export function setPresentationBackground(artifact: PresentationArtifact, input: BackgroundFill) {
+  editable(artifact);
+  const fill = backgroundFill.parse(input);
+  const tx = beginPackageTransaction(artifact.document.package);
+  const inherit = { kind: 'inherit' } as const;
+  for (const part of artifact.document.package.parts) {
+    if (part.contentType === type('slideMaster') && fill.kind !== 'inherit')
+      writeBackground(artifact, tx, part.name.value, fill);
+    else if (part.contentType === type('slide') ||
+      (fill.kind !== 'inherit' && part.contentType === type('slideLayout')))
+      writeBackground(artifact, tx, part.name.value, inherit);
+  }
+  return openPresentationArtifact(tx.commit(), artifact.options);
+}
+
+const pictureParts = new WeakMap<ReturnType<typeof beginPackageTransaction>, string>();
+
+function writeBackground(
+  artifact: PresentationArtifact,
+  tx: ReturnType<typeof beginPackageTransaction>,
+  owner: string,
+  fill: BackgroundFill,
+) {
+  const source = partXml(artifact, owner);
   const common = children(source.root).find((e) => e.localName === 'cSld')!;
   const bg = children(common).find((e) => e.localName === 'bg');
   const tree = children(common).find((e) => e.localName === 'spTree')!;
-  if (fill.kind === 'inherit' && !bg) return artifact;
-  const tx = beginPackageTransaction(artifact.document.package);
+  if (fill.kind === 'inherit' && !bg) return false;
   const strict = artifact.document.conformance === 'strict';
   let markup = '';
   if (fill.kind === 'solid')
@@ -87,25 +114,30 @@ export function setSlideBackground(
       throw new TypeError('Image bytes do not match the content type.');
     const pkg = artifact.document.package;
     const ext = fill.contentType === 'image/png' ? 'png' : 'jpg';
-    let n = 1;
-    while (pkg.getPart(`/ppt/media/background${n}.${ext}`)) n++;
+
     const existing = pkg.parts.find((part) => {
       if (part.contentType !== fill.contentType) return false;
       const saved = pkg.readPart(part);
       return saved.length === bytes.length && saved.every((v, i) => v === bytes[i]);
     });
-    const part = existing?.name.value ?? `/ppt/media/background${n}.${ext}`;
-    if (!existing) tx.addPart(part, fill.contentType, bytes);
-    const relationships = pkg.relationships(pkg.getPart(slide.part)!.name).items;
+    let part = existing?.name.value ?? pictureParts.get(tx);
+    if (!part) {
+      let n = 1;
+      while (pkg.getPart(`/ppt/media/background${n}.${ext}`)) n++;
+      part = `/ppt/media/background${n}.${ext}`;
+      tx.addPart(part, fill.contentType, bytes);
+      pictureParts.set(tx, part);
+    }
+    const relationships = pkg.relationships(pkg.getPart(owner)!.name).items;
     const related = relationships.find(
       (r) =>
         r.type.endsWith('/image') && r.targetMode !== 'External' && r.targetPartName.value === part,
     );
     const used = new Set(relationships.map((r) => r.id));
-    let rid = related?.id ?? `rIdBackground${n}`;
+    let rid = related?.id ?? 'rIdBackground';
     if (!related) {
       while (used.has(rid)) rid += '_';
-      tx.addRelationship(slide.part, {
+      tx.addRelationship(owner, {
         id: rid,
         type: `${strict ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : R}/image`,
         target: part,
@@ -123,6 +155,6 @@ export function setSlideBackground(
   const edit = beginLosslessXmlEdit(source);
   if (bg) edit.replaceElementMarkup(bg, markup);
   else edit.insertMarkupBefore(tree, markup);
-  tx.replacePart(slide.part, edit.commit().bytes);
-  return openPresentationArtifact(tx.commit(), artifact.options);
+  tx.replacePart(owner, edit.commit().bytes);
+  return true;
 }

@@ -1,7 +1,8 @@
 import { multiply, shapeMatrix } from './geometry.ts';
 import { nativePresetGeometry, resizeDrawingGeometry } from './drawing-geometry.ts';
 import type { PresentationCommand } from './commands.ts';
-import type { SlideObject, SlideText } from './model.ts';
+import type { NewSlideShape } from './authoring-objects.ts';
+import type { SlideObject, SlideParagraph, SlideText } from './model.ts';
 import type { DrawingGradient } from './appearance.ts';
 import type { GradientFill } from './gradient-authoring.ts';
 
@@ -79,13 +80,23 @@ export function moveNativeObject(
   };
 }
 
-export function nativeObjectText(text = '', fontSize = 24, centered = false): SlideText {
+export function nativeObjectText({
+  text = '', fontSize = 24, geometry, fontFamily, bold = false, textColor,
+  horizontalAlignment, verticalAlignment, textInset,
+}: Omit<NewSlideShape, 'kind'> = {}): SlideText {
+  const centered = geometry !== undefined && geometry !== 'line';
+  const alignments = {
+    start: 'left', center: 'center', end: 'right', justify: 'justify',
+  } satisfies Record<NonNullable<NewSlideShape['horizontalAlignment']>, SlideParagraph['align']>;
   const run = {
     text: '',
-    fontFamily: 'Aptos',
+    fontFamily: fontFamily ?? 'Aptos',
+    ...(fontFamily ? {
+      nativeOwnFonts: { latin: fontFamily, eastAsian: fontFamily, complexScript: fontFamily },
+    } : {}),
     fontSize: (fontSize * 4) / 3,
-    color: '#222222',
-    bold: false,
+    color: textColor ? nativeColour(textColor) : '#222222',
+    bold,
     italic: false,
     underline: false,
   };
@@ -95,7 +106,7 @@ export function nativeObjectText(text = '', fontSize = 24, centered = false): Sl
     paragraphs: text.split('\n').map((text) => ({
       runs: text ? [{ ...run, text }] : [],
       endRun: run,
-      align: centered ? 'center' : 'left',
+      align: horizontalAlignment ? alignments[horizontalAlignment] : centered ? 'center' : 'left',
       bullet: '',
       marginLeft: 0,
       indent: 0,
@@ -103,8 +114,8 @@ export function nativeObjectText(text = '', fontSize = 24, centered = false): Sl
       after: 0,
       lineHeight: 1,
     })),
-    inset: [9.6, 4.8, 9.6, 4.8],
-    anchor: centered ? 'center' : 'top',
+    inset: textInset ?? [9.6, 4.8, 9.6, 4.8],
+    anchor: verticalAlignment ?? (centered ? 'center' : 'top'),
     wrap: true,
     textElementId: undefined,
   };
@@ -159,9 +170,7 @@ export function insertNativeObject(
     stroke: nativeColour(shape?.stroke ?? (shape?.geometry === 'line' ? '#4472C4' : 'none')),
     strokeWidth: shape?.stroke && shape.stroke !== 'none' ? 1.3333333333333333 : 0,
     cornerRadius: shape?.cornerRadius ?? 0,
-    text: shape
-      ? nativeObjectText(shape.text, shape.fontSize, !!shape.geometry && shape.geometry !== 'line')
-      : undefined,
+    text: shape ? nativeObjectText(shape) : undefined,
     image: undefined,
     chart: undefined,
     table: undefined,
@@ -203,7 +212,7 @@ export function insertNativeObject(
         width: bounds.width / input.columns,
         height: bounds.height / input.rows,
         fill: nativeColour(row === 0 ? '#E8EEF7' : '#FFFFFF'),
-        text: nativeObjectText('', 18),
+        text: nativeObjectText({ fontSize: 18 }),
         borders: ['left', 'right', 'top', 'bottom'].map(() => ({
           color: '#98A5B5',
           width: 1.3333333333333333,

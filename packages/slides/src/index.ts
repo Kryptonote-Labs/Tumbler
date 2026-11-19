@@ -112,3 +112,4 @@ export { ENTRANCE_ANIMATIONS, entranceAnimationKinds, entranceAnimation, normali
 export type { EntranceAnimation, EntranceAnimationInput, EntranceAnimationKind, SlideAnimation, AnimationTrack, AnimationBehavior } from './animation.ts';
 export { createPresentationAnimationPlayer, animationProgress } from './animation-program.ts';
 export type { AnimationFrame } from './animation-program.ts';
+export { slideLineBox, slideParagraphFontSize } from './text-line-box.ts';
