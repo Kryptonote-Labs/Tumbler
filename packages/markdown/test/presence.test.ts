@@ -10,7 +10,7 @@ import {
   noteState,
 } from '@tumblerjs/markdown/editor';
 
-test('presence labels escape code clipping, follow scrolling and zoom, and hide with their editor', async () => {
+test('presence labels move with the document, escape code clipping, and hide with their editor', async () => {
   const window = new Window();
   const stylesheet = window.document.createElement('style');
   stylesheet.textContent = await Bun.file(
@@ -76,27 +76,38 @@ test('presence labels escape code clipping, follow scrolling and zoom, and hide 
     setNoteCursors(view, [cursor]);
     const label = window.document.querySelector<HappyHTMLElement>('.note-peer-label')!;
     expect(label.textContent).toBe(cursor.name);
-    expect(window.getComputedStyle(label).position).toBe('fixed');
-    // Its ancestor scrollers must no longer be able to clip the name.
-    expect(scroller.contains(label)).toBe(false);
+    // The document scroller moves the label even before JavaScript handles a scroll event.
+    expect(scroller.contains(label)).toBe(true);
+    expect(window.getComputedStyle(label).position).toBe('absolute');
+    const layer = label.parentElement!;
+    expect(window.getComputedStyle(layer).position).toBe('relative');
     const caret = window.document.querySelector<HappyHTMLElement>('.note-peer-caret')!;
     let x = 100;
     let y = 150;
     caret.getBoundingClientRect = () => new window.DOMRect(x, y, 2, 18);
     label.getBoundingClientRect = () => new window.DOMRect(0, 0, 110, 20);
     const pre = window.document.querySelector<HappyHTMLElement>('pre')!;
+    expect(pre.contains(label)).toBe(false);
+    let documentTop = 280;
+    layer.getBoundingClientRect = () => new window.DOMRect(50, documentTop, 0, 0);
     pre.getBoundingClientRect = () => new window.DOMRect(40, 140, 400, 100);
     window.document.querySelector<HappyHTMLElement>('.note-code-block')!.getBoundingClientRect =
       () => new window.DOMRect(40, 110, 400, 150);
     flush();
-    expect(label.style.left).toBe('100px');
-    expect(label.style.top).toBe('130px');
+    expect(label.style.left).toBe('50px');
+    expect(label.style.top).toBe('-150px');
     expect(label.style.visibility).toBe('visible');
+    // During overscroll, both the caret and the label's containing block move together.
+    y += 125;
+    documentTop += 125;
+    expect(documentTop + Number.parseFloat(label.style.top)).toBe(y - 20);
+    y -= 125;
+    documentTop -= 125;
     // A nested code scroller moves the caret, while the name remains outside it.
     x = 70;
     pre.dispatchEvent(new window.Event('scroll'));
     flush();
-    expect(label.style.left).toBe('70px');
+    expect(label.style.left).toBe('20px');
     x = 30;
     pre.dispatchEvent(new window.Event('scroll'));
     flush();
@@ -108,8 +119,9 @@ test('presence labels escape code clipping, follow scrolling and zoom, and hide 
     await Promise.resolve();
     await window.happyDOM.waitUntilComplete();
     flush();
-    expect(label.style.left).toBe('150px');
-    expect(label.style.top).toBe('160px');
+    expect(label.style.left).toBe('100px');
+    expect(label.style.top).toBe('-120px');
+    expect(Number(window.getComputedStyle(layer).zoom) * 1.5).toBe(1);
     expect(label.style.visibility).toBe('visible');
     // Inactive document tabs keep their editors and last measured caret positions.
     scroller.classList.add('inactive-document');
